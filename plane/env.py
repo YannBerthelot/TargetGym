@@ -309,7 +309,7 @@ class Airplane2D(environment.Environment):
         )
         return obs
 
-    def action_space(self, params: Optional[EnvParams] = None) -> spaces.Discrete:
+    def action_space(self, params: Optional[EnvParams] = None) -> spaces.Box:
         """Action space of the environment."""
         return spaces.Box(low=0, high=1.0, shape=())
 

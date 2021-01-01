@@ -3,13 +3,17 @@ from math import cos, sin
 import numpy as np
 import pytest
 
-from plane.dynamics import (compute_air_density_from_altitude, compute_drag,
-                            compute_exposed_surfaces,
-                            compute_initial_x_drag_coefficient,
-                            compute_initial_z_drag_coefficient,
-                            compute_mach_impact_on_x_drag_coefficient,
-                            compute_mach_impact_on_z_drag_coefficient,
-                            compute_weight, newton_second_law)
+from plane.dynamics import (
+    compute_air_density_from_altitude,
+    compute_drag,
+    compute_exposed_surfaces,
+    compute_initial_x_drag_coefficient,
+    compute_initial_z_drag_coefficient,
+    compute_mach_impact_on_x_drag_coefficient,
+    compute_mach_impact_on_z_drag_coefficient,
+    compute_weight,
+    newton_second_law,
+)
 from plane.env import EnvParams, EnvState, compute_next_state
 
 
@@ -98,8 +102,8 @@ def test_compute_exposed_surfaces():
     S_front = 4
     S_wings = 2
     alpha = 5
-    expected_S_x = S_front * sin(alpha) + S_wings * cos(alpha)
-    expected_S_z = S_front * cos(alpha) + S_wings * sin(alpha)
+    expected_S_z = S_front * sin(alpha) + S_wings * cos(alpha)
+    expected_S_x = S_front * cos(alpha) + S_wings * sin(alpha)
     S_x, S_z = compute_exposed_surfaces(S_front, S_wings, alpha)
     assert expected_S_x == S_x
     assert expected_S_z == S_z
