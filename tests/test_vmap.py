@@ -35,3 +35,17 @@ def test_reset():
     env = Airplane2D()
     key = jax.random.PRNGKey(seed=42)
     jax.vmap(env.reset, in_axes=0)(key=jax.random.split(key, num=3))
+
+
+def test_step():
+    N = 3
+    env = Airplane2D()
+    key = jax.random.PRNGKey(seed=42)
+    params = EnvParams()
+    params = list_to_array([params for _ in range(N)])
+    keys = jax.random.split(key, num=N)
+    obs, state = jax.vmap(env.reset, in_axes=0)(key=keys)
+    action = jnp.ones(N)
+    n_obs, state, reward, done, _ = jax.vmap(env.step, in_axes=0)(
+        key=keys, state=state, action=action, params=params
+    )
