@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from flax import struct
 from gymnax.environments import environment, spaces
 from jax import lax
+
 from plane.utils import compute_norm_from_coordinates
 
 Action = Any
