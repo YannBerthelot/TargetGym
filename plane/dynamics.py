@@ -3,9 +3,6 @@ from typing import Sequence
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-from jax import jit
-
-from plane.env import EnvParams, EnvState
 from plane.utils import compute_norm_from_coordinates
 
 
@@ -222,7 +219,9 @@ def check_power(power):
 
 def compute_next_power(requested_power, current_power):
     target_power = requested_power - current_power
-    current_power += jnp.tanh(1) * target_power
+    current_power += (
+        jnp.tanh(1) * target_power
+    )  # TODO : parametrize how fast we reach the desired value
     jax.debug.callback(check_power, current_power)
     return current_power
 
@@ -265,31 +264,42 @@ def compute_exposed_surfaces(
 
 
 def compute_acceleration(
-    thrust: float, state: EnvState, params: EnvParams
+    thrust: float,
+    m: float,
+    gravity: float,
+    x_dot: float,
+    z_dot: float,
+    air_density_at_sea_level: float,
+    atltitude_factor: float,
+    frontal_surface: float,
+    wings_surface: float,
+    alpha: float,
+    M: float,
+    M_crit: float,
+    C_x0: float,
+    C_z0: float,
+    gamma: float,
+    theta: float,
 ) -> tuple[float]:
-    P = compute_weight(state.m, params.gravity)
-    V = compute_norm_from_coordinates([state.x_dot, state.z_dot])
+    P = compute_weight(m, gravity)
+    V = compute_norm_from_coordinates([x_dot, z_dot])
     rho = compute_air_density_from_altitude(
-        initial_rho=params.air_density_at_sea_level,
-        altitude_factor=state.atltitude_factor,
+        initial_rho=air_density_at_sea_level,
+        altitude_factor=atltitude_factor,
     )
     S_x, S_z = compute_exposed_surfaces(
-        S_front=params.frontal_surface, S_wings=params.wings_surface, alpha=state.alpha
+        S_front=frontal_surface, S_wings=wings_surface, alpha=alpha
     )
-    C_x = compute_x_drag_coefficient(
-        alpha=state.alpha, M=state.M, C_x_min=params.C_x0, M_critic=params.M_crit
-    )
-    C_z = compute_z_drag_coefficient(
-        alpha=state.alpha, C_z_max=params.C_z0, M=state.M, M_critic=params.M_crit
-    )
+    C_x = compute_x_drag_coefficient(alpha=alpha, M=M, C_x_min=C_x0, M_critic=M_crit)
+    C_z = compute_z_drag_coefficient(alpha=alpha, C_z_max=C_z0, M=M, M_critic=M_crit)
     drag = compute_drag(S=S_x, C=C_x, V=V, rho=rho)  # TODO : check if it's V or V_x
     lift = compute_drag(S=S_z, C=C_z, V=V, rho=rho)
 
     F_x, F_z = newton_second_law(
-        thrust=thrust, lift=lift, drag=drag, P=P, gamma=state.gamma, theta=state.theta
+        thrust=thrust, lift=lift, drag=drag, P=P, gamma=gamma, theta=theta
     )
 
-    return F_x / state.m, F_z / state.m
+    return F_x / m, F_z / m
 
 
 def compute_speed_and_pos_from_acceleration(V_x, V_z, x, z, a_x, a_z, delta_t):
@@ -300,70 +310,31 @@ def compute_speed_and_pos_from_acceleration(V_x, V_z, x, z, a_x, a_z, delta_t):
     return V_x, V_z, x, z
 
 
-def check_mass_does_not_increase(old_mass, new_mass):
-    assert old_mass >= new_mass
-
-
-def compute_next_state(
-    power_requested: float, state: EnvState, params: EnvParams
-) -> EnvState:
-    # power
-    power = compute_next_power(power_requested, state.power)
-    thrust = compute_thrust_output(
-        power=power,
-        altitude_factor=state.atltitude_factor,
-        thrust_output_at_sea_level=params.thrust_output_at_sea_level,
-    )
-    # acceleration, speed and position
-    a_x, a_z = compute_acceleration(thrust, state, params)
-    (
-        x_dot,
-        z_dot,
-        x,
-        z,
-    ) = compute_speed_and_pos_from_acceleration(
-        state.x_dot, state.z_dot, state.x, state.z, a_x, a_z, params.delta_t
-    )
-
-    # time
-    t = state.t + 1
-
-    # angles
-    gamma = jnp.arcsin(z_dot / compute_norm_from_coordinates([x_dot, z_dot + 1e-6]))
-    alpha = state.theta - gamma
-
-    # mass
-    m = params.initial_mass + state.fuel
-    jax.debug.callback(check_mass_does_not_increase, state.m, m)
-
-    new_state = EnvState(
-        x=x,
-        x_dot=x_dot,
-        z=z,
-        z_dot=z_dot,
-        theta=state.theta,  # no change atm
-        alpha=alpha,
-        gamma=gamma,
-        m=m,  # no change atm
-        power=power,
-        fuel=state.fuel,  # no change atm
-        rho=compute_air_density_from_altitude(
-            params.air_density_at_sea_level, altitude_factor=state.atltitude_factor
-        ),
-        t=t,
-    )
-    return new_state
-
-
 if __name__ == "__main__":
     # experiment with power
-    power = [0.5, 0.5, 0.5, 0.5, 0.3, 0.3, 0.3, 0.3]
+    power = [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.6,
+        0.6,
+        0.6,
+        0.6,
+        0.6,
+        0.5,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+    ]
     current_power = 0
     vals = []
     max_output = 1000
     for i in range(len(power)):
         current_power = compute_next_power(power[i], current_power)
-        print(current_power)
         vals.append(current_power)
 
     plt.plot(vals)
