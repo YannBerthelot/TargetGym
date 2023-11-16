@@ -11,7 +11,6 @@ from plane.dynamics import (
     compute_initial_z_drag_coefficient,
     compute_mach_impact_on_x_drag_coefficient,
     compute_mach_impact_on_z_drag_coefficient,
-    compute_norm_from_coordinates,
     compute_weight,
     newton_second_law,
 )
@@ -99,13 +98,6 @@ def test_newton_second_law():
     assert f_x == expected_f_x
 
 
-def test_compute_norm_from_coordinates():
-    vec = [2, 3]
-    norm = compute_norm_from_coordinates(vec)
-    expected_norm = np.sqrt(np.sum(np.array(vec) ** 2))
-    assert norm == expected_norm
-
-
 def test_compute_exposed_surfaces():
     S_front = 4
     S_wings = 2
@@ -179,6 +171,7 @@ def test_compute_next_state():
         fuel=params.initial_fuel_quantity,
         rho=params.air_density_at_sea_level,
         t=0,
+        target_altitude=0,
     )
     new_state = compute_next_state(1, state, params)
     assert new_state.x > state.x

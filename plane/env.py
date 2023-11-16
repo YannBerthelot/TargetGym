@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 import jax
 import chex
 import jax.numpy as jnp
@@ -16,7 +16,7 @@ from plane.dynamics import (
 )
 
 Action = Any
-SPEED_OF_SOUND = 343
+SPEED_OF_SOUND = 343.0
 
 
 @struct.dataclass
@@ -30,7 +30,7 @@ class EnvState:
     # plane
     x: float  # horizontal position (in neters) relative to the starting position
     x_dot: float  # horizontal velocity (in m.s-1) w.r.t the ground
-    z: float  # altitude (in feet) relative to the ground.
+    z: float  # altitude (in meters) relative to the ground.
     z_dot: float  # altitude variation (in feet per minute), positive is going up.
     theta: float  # pitch angle (in degrees) (angle between ground and plane)
     alpha: float  # angle of attack (in degrees) angle between the relative wind and the plane
@@ -52,10 +52,18 @@ class EnvState:
         """
         The mach number
         """
-        return compute_norm_from_coordinates([self.x_dot, self.z_dot]) / SPEED_OF_SOUND
+        return (
+            compute_norm_from_coordinates(jnp.array([self.x_dot, self.z_dot]))
+            / SPEED_OF_SOUND
+        )
 
     # simulation
     t: int  # the time (in seconds TODO : check this) since starting the simulation.
+
+    # target
+    target_altitude: float  # the altitude (in meters) the plane should try staying at.
+
+    # TODO : add wind.
 
 
 @struct.dataclass
@@ -65,9 +73,9 @@ class EnvParams:
     """
 
     gravity: float = 9.81  # the gravitational acceleration (in m.s-2).
-    initial_mass: float = 73500  # the initial mass (in kilograms) of our plane.
+    initial_mass: float = 73500.0  # the initial mass (in kilograms) of our plane.
     thrust_output_at_sea_level: float = (
-        280000  # the maximal force (in Newtons) deployed by the engine at sea level.
+        280000.0  # the maximal force (in Newtons) deployed by the engine at sea level.
     )
     air_density_at_sea_level: float = 1.225  # the air density (kg.m-3) at sea level.
     frontal_surface: float = 12.6  # the frontal surface (in m^2) of the plane.
@@ -81,6 +89,19 @@ class EnvParams:
     )  # thrust-specific fuel consumption (kg.kN^-1.s-1)
     delta_t: int = 1  # timestep size (in seconds)
     speed_of_sound: float = SPEED_OF_SOUND  # speed of sounds (in m.s-1)
+
+    # Episodes
+    max_steps_in_episode: int = 1000
+    min_alt: float = 1000.0
+    max_alt: float = 15000.0
+    target_altitude_range: tuple[float, float] = (
+        5000.0,
+        10000.0,
+    )  # the min and max values for the target_altitude (in meters)
+    initial_altitude_range: tuple[float, float] = (
+        5000.0,
+        10000.0,
+    )  # the min and max values for the initial altitude (in meters)
 
 
 def check_mass_does_not_increase(old_mass, new_mass):
@@ -129,7 +150,9 @@ def compute_next_state(
     t = state.t + 1
 
     # angles
-    gamma = jnp.arcsin(z_dot / compute_norm_from_coordinates([x_dot, z_dot + 1e-6]))
+    gamma = jnp.arcsin(
+        z_dot / compute_norm_from_coordinates(jnp.array([x_dot, z_dot + 1e-6]))
+    )
     alpha = state.theta - gamma
 
     # mass
@@ -151,12 +174,22 @@ def compute_next_state(
             params.air_density_at_sea_level, altitude_factor=state.atltitude_factor
         ),
         t=t,
+        target_altitude=state.target_altitude,
     )
     return new_state
 
 
-def compute_reward(state: EnvState, params: EnvParams) -> float:
-    raise NotImplementedError
+def compute_reward(state: EnvState, params: EnvParams) -> jnp.float32:
+    done1 = jnp.logical_or(
+        state.z < params.min_alt,
+        state.z > params.max_alt,
+    )
+    reward = jax.lax.select(
+        done1,
+        -jnp.array(1.0) * params.max_steps_in_episode,
+        -(((state.target_altitude - state.z) / params.max_alt) ** 2),
+    )
+    return reward
 
 
 class Airplane2D(environment.Environment):
@@ -167,7 +200,7 @@ class Airplane2D(environment.Environment):
 
     def __init__(self):
         super().__init__()
-        self.obs_shape = (4,)  # TODO : adapt
+        self.obs_shape = (6,)  # TODO : adapt
 
     @property
     def default_params(self) -> EnvParams:
@@ -192,3 +225,82 @@ class Airplane2D(environment.Environment):
             done,
             {"discount": self.discount(state, params)},
         )
+
+    def reset_env(
+        self, key: chex.PRNGKey, params: EnvParams
+    ) -> tuple[chex.Array, EnvState]:
+        """Performs resetting of environment."""
+        initial_x = 0.0
+        key, altitude_key = jax.random.split(key)
+        initial_z = jax.random.uniform(
+            altitude_key,
+            minval=params.initial_altitude_range[0],
+            maxval=params.initial_altitude_range[1],
+        )
+        initial_z_dot = 0.0
+        initial_x_dot = 250.0  # TODO : improve this to have a "stable" start ?
+        initial_theta = 0.0
+        initial_gamma = jnp.arcsin(
+            initial_z_dot
+            / compute_norm_from_coordinates(
+                jnp.array([initial_x_dot, initial_z_dot + 1e-6])
+            )
+        )
+        initial_alpha = initial_theta - initial_gamma
+        initial_m = params.initial_mass + params.initial_fuel_quantity
+        initial_power = 0.5
+        initial_fuel = params.initial_fuel_quantity
+        initial_rho = params.air_density_at_sea_level
+        key, target_key = jax.random.split(key)
+        target_altitude = jax.random.uniform(
+            target_key,
+            minval=params.target_altitude_range[0],
+            maxval=params.target_altitude_range[1],
+        )
+        state = EnvState(
+            x=initial_x,
+            x_dot=initial_x_dot,
+            z=initial_z,
+            z_dot=initial_z_dot,
+            theta=initial_theta,
+            alpha=initial_alpha,
+            gamma=initial_gamma,
+            m=initial_m,
+            power=initial_power,
+            fuel=initial_fuel,
+            rho=initial_rho,
+            t=0,
+            target_altitude=target_altitude,
+        )
+        return self.get_obs(state), state
+
+    def get_obs(self, state: EnvState) -> chex.Array:
+        """Applies observation function to state."""
+        obs = jnp.stack(
+            [
+                state.z,
+                state.x_dot,
+                state.z_dot,
+                state.theta,
+                state.gamma,
+                state.target_altitude,
+            ]
+        )
+        return obs
+
+    def action_space(self, params: Optional[EnvParams] = None) -> spaces.Discrete:
+        """Action space of the environment."""
+        return spaces.Box(low=0, high=1.0, shape=())
+
+    def is_terminal(self, state: EnvState, params: EnvParams) -> bool:
+        """Check whether state is terminal."""
+        # Check termination criteria
+        done1 = jnp.logical_or(
+            state.z < params.min_alt,
+            state.z > params.max_alt,
+        )
+
+        # Check number of steps in episode termination condition
+        done_steps = state.t >= params.max_steps_in_episode
+        done = jnp.logical_or(done1, done_steps)
+        return done
