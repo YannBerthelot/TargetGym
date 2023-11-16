@@ -3,9 +3,9 @@ from typing import Sequence
 import jax.numpy as jnp
 
 
-def compute_norm_from_coordinates(coordinates: Sequence[float]) -> float:
+def compute_norm_from_coordinates(coordinates: jnp.ndarray) -> float:
     """Compute the norm of a vector given its coordinates"""
-    return jnp.linalg.norm(jnp.array(coordinates))
+    return jnp.linalg.norm(coordinates, axis=0)
 
 
 def list_to_array(list):

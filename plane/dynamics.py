@@ -30,9 +30,9 @@ def compute_weight(mass: float, g: float) -> float:
 def compute_initial_z_drag_coefficient(
     alpha: float,
     C_z_max: float,
-    min_alpha: float = -5,
-    threshold_alpha: float = 15,
-    stall_alpha: float = 20,
+    min_alpha: float = -5.0,
+    threshold_alpha: float = 15.0,
+    stall_alpha: float = 20.0,
 ) -> float:
     """
     Compute an *approximated* version of the drag coefficient of the plane on the z-axis.
@@ -47,16 +47,16 @@ def compute_initial_z_drag_coefficient(
     Returns:
         float: The value of the lift coefficient/drag coefficient along the z-axis
     """
-    return jax.lax.cond(
+    return jax.lax.select(
         jnp.logical_or(
             jnp.greater_equal(jnp.abs(alpha), stall_alpha),
             jnp.greater(min_alpha, alpha),
         ),
-        lambda: 0.0,
-        lambda: jax.lax.cond(
+        0.0,
+        jax.lax.select(
             jnp.greater_equal(threshold_alpha, jnp.abs(alpha)),
-            lambda: jnp.abs((alpha + 5) / threshold_alpha) * C_z_max,
-            lambda: 1 - jnp.abs((alpha - threshold_alpha) / threshold_alpha) * C_z_max,
+            jnp.abs((alpha + 5.0) / threshold_alpha) * C_z_max,
+            1.0 - jnp.abs((alpha - threshold_alpha) / threshold_alpha) * C_z_max,
         ),
     )
 
@@ -92,10 +92,10 @@ def compute_mach_impact_on_x_drag_coefficient(
     Returns:
         float: The drag coefficient (no unit).
     """
-    return jax.lax.cond(
+    return jax.lax.select(
         jnp.greater_equal(M_critic, M),
-        lambda: C_x / (jnp.sqrt(1 - jnp.square(M))),
-        lambda: 7 * C_x * (M - M_critic) + C_x / (jnp.sqrt(1 - jnp.square(M))),
+        C_x / (jnp.sqrt(1 - jnp.square(M))),
+        7 * C_x * (M - M_critic) + C_x / (jnp.sqrt(1 - jnp.square(M))),
     )
 
 
@@ -114,13 +114,13 @@ def compute_mach_impact_on_z_drag_coefficient(
         float: The drag coefficient (no unit).
     """
     M_d = M_critic + (1 - M_critic) / 4
-    return jax.lax.cond(
+    return jax.lax.select(
         jnp.greater_equal(M_critic, M),
-        lambda: C_z,
-        lambda: jax.lax.cond(
+        C_z,
+        jax.lax.select(
             jnp.greater(M, M_d),
-            lambda: C_z + 0.1 * (M_d - M_critic) - 0.8 * (M - M_d),
-            lambda: C_z + 0.1 * (M - M_critic),
+            C_z + 0.1 * (M_d - M_critic) - 0.8 * (M - M_d),
+            C_z + 0.1 * (M - M_critic),
         ),
     )
 
@@ -150,9 +150,9 @@ def compute_z_drag_coefficient(
     M: float,
     C_z_max: float,
     M_critic: float,
-    min_alpha: float = -5,
-    threshold_alpha: float = 15,
-    stall_alpha: float = 20,
+    min_alpha: float = -5.0,
+    threshold_alpha: float = 15.0,
+    stall_alpha: float = 20.0,
 ) -> float:
     """
     Compute the drag coefficient on the z-axis. Includes impact of the angle of attack and the Mach number.
@@ -214,7 +214,7 @@ def newton_second_law(
 
 
 def check_power(power):
-    assert 0.0 <= power <= 1.0
+    assert 0.0 <= power <= 1.0, f"Power should be between 0 and 1, got {power}"
 
 
 def compute_next_power(requested_power, current_power):
@@ -282,7 +282,7 @@ def compute_acceleration(
     theta: float,
 ) -> tuple[float]:
     P = compute_weight(m, gravity)
-    V = compute_norm_from_coordinates([x_dot, z_dot])
+    V = compute_norm_from_coordinates(jnp.array([x_dot, z_dot]))
     rho = compute_air_density_from_altitude(
         initial_rho=air_density_at_sea_level,
         altitude_factor=atltitude_factor,
@@ -298,7 +298,6 @@ def compute_acceleration(
     F_x, F_z = newton_second_law(
         thrust=thrust, lift=lift, drag=drag, P=P, gamma=gamma, theta=theta
     )
-
     return F_x / m, F_z / m
 
 
