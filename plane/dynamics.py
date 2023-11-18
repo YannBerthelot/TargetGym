@@ -3,6 +3,7 @@ from typing import Sequence
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+
 from plane.utils import compute_norm_from_coordinates
 
 
@@ -258,8 +259,8 @@ def compute_exposed_surfaces(
         tuple[float,float]: The exposed surface on the x and z-axis
     """
 
-    S_x = S_front * jnp.sin(alpha) + S_wings * jnp.cos(alpha)
-    S_z = S_front * jnp.cos(alpha) + S_wings * jnp.sin(alpha)
+    S_z = S_front * jnp.sin(alpha) + S_wings * jnp.cos(alpha)
+    S_x = S_front * jnp.cos(alpha) + S_wings * jnp.sin(alpha)
     return S_x, S_z
 
 
@@ -298,7 +299,8 @@ def compute_acceleration(
     F_x, F_z = newton_second_law(
         thrust=thrust, lift=lift, drag=drag, P=P, gamma=gamma, theta=theta
     )
-    return F_x / m, F_z / m
+    metrics = (drag, lift, S_x, S_z, C_x, C_z, F_x, F_z)
+    return F_x / m, F_z / m, metrics
 
 
 def compute_speed_and_pos_from_acceleration(V_x, V_z, x, z, a_x, a_z, delta_t):

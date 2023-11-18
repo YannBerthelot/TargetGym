@@ -1,6 +1,7 @@
-from plane.env import Airplane2D, EnvParams, compute_reward
 import jax
 import pytest
+
+from plane.env import Airplane2D, EnvParams, EnvState, compute_reward
 
 
 def test_init():
@@ -51,6 +52,61 @@ def test_step():
     assert new_state.theta == state.theta
     assert new_state.alpha > state.alpha
     assert new_state.gamma < state.gamma
+
+
+def test_is_terminal():
+    env = Airplane2D()
+    key = jax.random.PRNGKey(seed=42)
+    obs, state = env.reset(key)
+    env_params = EnvParams()
+    terminal_state = EnvState(
+        x=0,
+        x_dot=0,
+        z=env_params.max_alt + 0.01,
+        z_dot=0,
+        theta=0,
+        alpha=0,
+        gamma=0,
+        m=0,
+        power=0,
+        fuel=0,
+        rho=0,
+        t=0,
+        target_altitude=0,
+    )
+    assert env.is_terminal(terminal_state, env_params)
+    terminal_state = EnvState(
+        x=0,
+        x_dot=0,
+        z=env_params.min_alt - 0.01,
+        z_dot=0,
+        theta=0,
+        alpha=0,
+        gamma=0,
+        m=0,
+        power=0,
+        fuel=0,
+        rho=0,
+        t=0,
+        target_altitude=0,
+    )
+    assert env.is_terminal(terminal_state, env_params)
+    terminal_state = EnvState(
+        x=0,
+        x_dot=0,
+        z=env_params.max_alt - 0.01,
+        z_dot=0,
+        theta=0,
+        alpha=0,
+        gamma=0,
+        m=0,
+        power=0,
+        fuel=0,
+        rho=0,
+        t=env_params.max_steps_in_episode + 1,
+        target_altitude=0,
+    )
+    assert env.is_terminal(terminal_state, env_params)
 
 
 def test_render():

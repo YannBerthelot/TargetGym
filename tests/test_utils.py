@@ -1,6 +1,7 @@
-from plane.utils import compute_norm_from_coordinates
 import jax.numpy as jnp
 import numpy as np
+
+from plane.utils import compute_norm_from_coordinates
 
 
 def test_compute_norm_from_coordinates():

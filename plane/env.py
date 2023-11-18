@@ -1,22 +1,36 @@
-from typing import Any, Optional
-import jax
+from typing import Any, Optional, Sequence
+import os
 import chex
+import jax
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 from flax import struct
 from gymnax.environments import environment, spaces
 from jax import lax
 
-from plane.utils import compute_norm_from_coordinates
 from plane.dynamics import (
     compute_acceleration,
-    compute_next_power,
-    compute_thrust_output,
-    compute_speed_and_pos_from_acceleration,
     compute_air_density_from_altitude,
+    compute_next_power,
+    compute_speed_and_pos_from_acceleration,
+    compute_thrust_output,
 )
+from plane.utils import compute_norm_from_coordinates, plot_features_from_trajectory
 
 Action = Any
 SPEED_OF_SOUND = 343.0
+
+
+@struct.dataclass
+class EnvMetrics:
+    drag: float
+    lift: float
+    S_x: float
+    S_z: float
+    C_x: float
+    C_z: float
+    F_x: float
+    F_z: float
 
 
 @struct.dataclass
@@ -65,6 +79,9 @@ class EnvState:
 
     # TODO : add wind.
 
+    # Metrics for analysis
+    metrics: Optional[EnvMetrics] = None
+
 
 @struct.dataclass
 class EnvParams:
@@ -75,7 +92,7 @@ class EnvParams:
     gravity: float = 9.81  # the gravitational acceleration (in m.s-2).
     initial_mass: float = 73500.0  # the initial mass (in kilograms) of our plane.
     thrust_output_at_sea_level: float = (
-        280000.0  # the maximal force (in Newtons) deployed by the engine at sea level.
+        240000.0  # the maximal force (in Newtons) deployed by the engine at sea level.
     )
     air_density_at_sea_level: float = 1.225  # the air density (kg.m-3) at sea level.
     frontal_surface: float = 12.6  # the frontal surface (in m^2) of the plane.
@@ -95,12 +112,12 @@ class EnvParams:
     min_alt: float = 1000.0
     max_alt: float = 15000.0
     target_altitude_range: tuple[float, float] = (
+        2000.0,
         5000.0,
-        10000.0,
     )  # the min and max values for the target_altitude (in meters)
     initial_altitude_range: tuple[float, float] = (
+        2000.0,
         5000.0,
-        10000.0,
     )  # the min and max values for the initial altitude (in meters)
 
 
@@ -113,13 +130,14 @@ def compute_next_state(
 ) -> EnvState:
     # power
     power = compute_next_power(power_requested, state.power)
+
     thrust = compute_thrust_output(
         power=power,
         altitude_factor=state.atltitude_factor,
         thrust_output_at_sea_level=params.thrust_output_at_sea_level,
     )
     # acceleration, speed and position
-    a_x, a_z = compute_acceleration(
+    a_x, a_z, metrics = compute_acceleration(
         thrust=thrust,
         m=state.m,
         gravity=params.gravity,
@@ -175,6 +193,7 @@ def compute_next_state(
         ),
         t=t,
         target_altitude=state.target_altitude,
+        metrics=EnvMetrics(*metrics),
     )
     return new_state
 
@@ -194,8 +213,7 @@ def compute_reward(state: EnvState, params: EnvParams) -> jnp.float32:
 
 class Airplane2D(environment.Environment):
     """
-    JAX Compatible version of CartPole-v1 OpenAI gym environment. Source:
-    github.com/openai/gym/blob/master/gym/envs/classic_control/cartpole.py
+    JAX Compatible 2D-Airplane environment.
     """
 
     def __init__(self):
@@ -238,7 +256,7 @@ class Airplane2D(environment.Environment):
             maxval=params.initial_altitude_range[1],
         )
         initial_z_dot = 0.0
-        initial_x_dot = 250.0  # TODO : improve this to have a "stable" start ?
+        initial_x_dot = 200.0  # TODO : improve this to have a "stable" start ?
         initial_theta = 0.0
         initial_gamma = jnp.arcsin(
             initial_z_dot
@@ -271,6 +289,9 @@ class Airplane2D(environment.Environment):
             rho=initial_rho,
             t=0,
             target_altitude=target_altitude,
+            metrics=EnvMetrics(
+                drag=0.0, lift=0.0, S_x=0.0, S_z=0.0, C_x=0.0, C_z=0.0, F_x=0.0, F_z=0.0
+            ),  # TODO : add real values
         )
         return self.get_obs(state), state
 
@@ -304,3 +325,35 @@ class Airplane2D(environment.Environment):
         done_steps = state.t >= params.max_steps_in_episode
         done = jnp.logical_or(done1, done_steps)
         return done
+
+    def visualize(
+        self,
+        states: Sequence[EnvState],
+        params: EnvParams,
+        exp_name: Optional[str] = None,
+    ) -> None:
+        if exp_name is None:
+            folder = "figs"
+            os.makedirs(folder, exist_ok=True)
+
+        else:
+            folder = os.path.join("figs", exp_name)
+            os.makedirs(folder, exist_ok=True)
+
+        plot_features_from_trajectory(states, folder)
+
+
+if __name__ == "__main__":
+    env = Airplane2D()
+    key = jax.random.PRNGKey(seed=42)
+    obs, state = env.reset(key)
+    env_params = EnvParams()
+    for action in range(0, 11):
+        done = False
+        states = []
+        while not done:
+            n_obs, state, reward, done, _ = env.step(
+                key, state, action / 10, env_params
+            )
+            states.append(state)
+        env.visualize(states[:-1], params=env_params, exp_name=f"{action=}")
