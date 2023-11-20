@@ -129,6 +129,7 @@ def compute_next_state(
     power_requested: float, state: EnvState, params: EnvParams
 ) -> EnvState:
     # power
+    power_requested = (power_requested + 1) / 10
     power = compute_next_power(power_requested, state.power)
 
     thrust = compute_thrust_output(
@@ -309,9 +310,14 @@ class Airplane2D(environment.Environment):
         )
         return obs
 
-    def action_space(self, params: Optional[EnvParams] = None) -> spaces.Box:
+    def action_space(self, params: Optional[EnvParams] = None) -> spaces.Discrete:
         """Action space of the environment."""
+        return spaces.Discrete(10)
         return spaces.Box(low=0, high=1.0, shape=())
+
+    def observation_space(self, params: Optional[EnvParams] = None) -> spaces.Box:
+        """Action space of the environment."""
+        return spaces.Box(low=-jnp.inf, high=jnp.inf, shape=self.obs_shape)
 
     def is_terminal(self, state: EnvState, params: EnvParams) -> bool:
         """Check whether state is terminal."""

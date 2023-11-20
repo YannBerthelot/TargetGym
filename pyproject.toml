@@ -6,7 +6,7 @@ authors = ["Yann Berthelot <yannberthelot1@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "<3.13,>=3.9"
+python = "<3.13,>=3.10"
 gymnax = "^0.0.6"
 numpy = "^1.26.1"
 six = "^1.16.0"
@@ -22,6 +22,10 @@ mypy = "^1.6.1"
 codecov = "^2.1.13"
 coverage = "^7.3.2"
 pytest-cov = "^4.1.0"
+
+
+[tool.poetry.group.agent.dependencies]
+jaxppo = {git = "https://github.com/YannBerthelot/jaxppo.git", rev = "multithreading_wandb_logging"}
 
 [build-system]
 requires = ["poetry-core"]
