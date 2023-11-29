@@ -216,7 +216,7 @@ def compute_reward(state: EnvState, params: EnvParams) -> np.float32:
     return (max_alt_diff - np.abs(params.max_alt - state.z)) / max_alt_diff
 
 
-class Airplane2D(gym.Environment):
+class Airplane2D(gym.Env):
     """
     JAX Compatible 2D-Airplane environment.
     """
@@ -224,6 +224,10 @@ class Airplane2D(gym.Environment):
     def __init__(self, params=None):
         super().__init__()
         self.obs_shape = (6,)  # TODO : adapt
+        self.action_space = gym.spaces.Discrete(10)
+        self.observation_space = gym.spaces.Box(
+            low=-np.inf, high=np.inf, shape=self.obs_shape
+        )
         if params is None:
             self.params = self.default_params
         else:
@@ -237,8 +241,8 @@ class Airplane2D(gym.Environment):
     def step(self, action: float):
         """Performs step transitions in the environment."""
         self.state = compute_next_state(action, self.state, self.params)
-        reward = compute_reward(state, self.params)
-        terminated, truncated = self.is_terminal(state, self.params)
+        reward = compute_reward(self.state, self.params)
+        terminated, truncated = self.is_terminal(self.state, self.params)
 
         return (
             self.get_obs(self.state),
@@ -307,15 +311,6 @@ class Airplane2D(gym.Environment):
             ]
         )
         return obs
-
-    def action_space(self, params: Optional[EnvParams] = None) -> gym.spaces.Discrete:
-        """Action space of the environment."""
-        return gym.spaces.Discrete(10)
-        return spaces.Box(low=0, high=1.0, shape=())
-
-    def observation_space(self, params: Optional[EnvParams] = None) -> gym.spaces.Box:
-        """Action space of the environment."""
-        return gym.spaces.Box(low=-np.inf, high=np.inf, shape=self.obs_shape)
 
     def is_terminal(self, state: EnvState, params: EnvParams) -> bool:
         """Check whether state is terminal."""
