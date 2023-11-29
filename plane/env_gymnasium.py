@@ -1,14 +1,10 @@
 from typing import Any, Optional, Sequence
 import os
-import chex
-import jax
-import jax.numpy as jnp
+import gymnasium as gym
+import numpy as np
 import matplotlib.pyplot as plt
-from flax import struct
-from gymnax.environments import environment, spaces
-from jax import lax
 from functools import partial
-
+from dataclasses import dataclass
 from plane.dynamics import (
     compute_acceleration,
     compute_air_density_from_altitude,
@@ -22,7 +18,7 @@ Action = Any
 SPEED_OF_SOUND = 343.0
 
 
-@struct.dataclass
+@dataclass
 class EnvMetrics:
     drag: float
     lift: float
@@ -34,7 +30,7 @@ class EnvMetrics:
     F_z: float
 
 
-@struct.dataclass
+@dataclass
 class EnvState:
     """
     # State variables (as opposed to constants) used for dynamics calculation.
@@ -60,7 +56,7 @@ class EnvState:
     @property
     def atltitude_factor(self):
         const = -9.33e-5
-        return jnp.exp(const * self.z)
+        return np.exp(const * self.z)
 
     @property
     def M(self):
@@ -68,7 +64,7 @@ class EnvState:
         The mach number
         """
         return (
-            compute_norm_from_coordinates(jnp.array([self.x_dot, self.z_dot]))
+            compute_norm_from_coordinates(np.array([self.x_dot, self.z_dot]))
             / SPEED_OF_SOUND
         )
 
@@ -84,7 +80,7 @@ class EnvState:
     metrics: Optional[EnvMetrics] = None
 
 
-@struct.dataclass
+@dataclass
 class EnvParams:
     """
     Constants of the simulation
@@ -126,22 +122,19 @@ def check_mass_does_not_increase(old_mass, new_mass):
     assert old_mass >= new_mass
 
 
-@partial(jax.jit, static_argnames=["params"])
 def check_is_terminal(state: EnvState, params: EnvParams) -> bool:
     """Check whether state is terminal."""
     # Check termination criteria
-    done1 = jnp.logical_or(
+    terminated = np.logical_or(
         state.z < params.min_alt,
         state.z > params.max_alt,
     )
 
     # Check number of steps in episode termination condition
-    done_steps = state.t >= params.max_steps_in_episode
-    done = jnp.logical_or(done1, done_steps)
-    return done
+    truncated = state.t >= params.max_steps_in_episode
+    return terminated, truncated
 
 
-@partial(jax.jit, static_argnames=["params"])
 def compute_next_state(
     power_requested: float, state: EnvState, params: EnvParams
 ) -> EnvState:
@@ -186,14 +179,14 @@ def compute_next_state(
     t = state.t + 1
 
     # angles
-    gamma = jnp.arcsin(
-        z_dot / compute_norm_from_coordinates(jnp.array([x_dot, z_dot + 1e-6]))
+    gamma = np.arcsin(
+        z_dot / compute_norm_from_coordinates(np.array([x_dot, z_dot + 1e-6]))
     )
     alpha = state.theta - gamma
 
     # mass
     m = params.initial_mass + state.fuel
-    jax.debug.callback(check_mass_does_not_increase, state.m, m)
+    check_mass_does_not_increase(state.m, m)
 
     new_state = EnvState(
         x=x,
@@ -216,86 +209,76 @@ def compute_next_state(
     return new_state
 
 
-@partial(jax.jit, static_argnames=["params"])
-def compute_reward(state: EnvState, params: EnvParams) -> jnp.float32:
-    done1 = jnp.logical_or(
-        state.z < params.min_alt,
-        state.z > params.max_alt,
-    )
+def compute_reward(state: EnvState, params: EnvParams) -> np.float32:
     max_alt_diff = params.max_alt - params.min_alt
-    reward = jax.lax.select(
-        done1,
-        -jnp.array(1.0) * params.max_steps_in_episode,
-        (max_alt_diff - jnp.abs(params.max_alt - state.z)) / max_alt_diff,
-    )
-    return reward
+    if state.z < params.min_alt or state.z > params.max_alt:
+        return -np.array(1.0) * params.max_steps_in_episode
+    return (max_alt_diff - np.abs(params.max_alt - state.z)) / max_alt_diff
 
 
-class Airplane2D(environment.Environment):
+class Airplane2D(gym.Env):
     """
     JAX Compatible 2D-Airplane environment.
     """
 
-    def __init__(self):
+    def __init__(self, params=None):
         super().__init__()
         self.obs_shape = (6,)  # TODO : adapt
+        self.action_space = gym.spaces.Discrete(10)
+        self.observation_space = gym.spaces.Box(
+            low=-np.inf, high=np.inf, shape=self.obs_shape
+        )
+        if params is None:
+            self.params = self.default_params
+        else:
+            self.params = params
 
     @property
     def default_params(self) -> EnvParams:
         # Default environment parameters for Airplane2D
         return EnvParams()
 
-    def step_env(
-        self, key: chex.PRNGKey, state: EnvState, action: float, params: EnvParams
-    ) -> tuple[chex.Array, EnvState, float, bool, dict]:
+    def step(self, action: float):
         """Performs step transitions in the environment."""
-        prev_terminal = self.is_terminal(state, params)
-
-        state = compute_next_state(action, state, params)
-        reward = compute_reward(state, params)
-        # Update state dict and evaluate termination conditions
-        done = self.is_terminal(state, params)
+        self.state = compute_next_state(action, self.state, self.params)
+        reward = compute_reward(self.state, self.params)
+        terminated, truncated = self.is_terminal(self.state, self.params)
 
         return (
-            lax.stop_gradient(self.get_obs(state)),
-            lax.stop_gradient(state),
+            self.get_obs(self.state),
             reward,
-            done,
-            {"discount": self.discount(state, params)},
+            terminated,
+            truncated,
+            {"state": self.state},
         )
 
-    def reset_env(
-        self, key: chex.PRNGKey, params: EnvParams
-    ) -> tuple[chex.Array, EnvState]:
+    def reset(self, seed=None, options=None):
         """Performs resetting of environment."""
+        super().reset(seed=seed)
         initial_x = 0.0
-        key, altitude_key = jax.random.split(key)
-        initial_z = jax.random.uniform(
-            altitude_key,
-            minval=params.initial_altitude_range[0],
-            maxval=params.initial_altitude_range[1],
+        initial_z = np.random.uniform(
+            low=self.params.initial_altitude_range[0],
+            high=self.params.initial_altitude_range[1],
         )
         initial_z_dot = 0.0
         initial_x_dot = 200.0  # TODO : improve this to have a "stable" start ?
         initial_theta = 0.0
-        initial_gamma = jnp.arcsin(
+        initial_gamma = np.arcsin(
             initial_z_dot
             / compute_norm_from_coordinates(
-                jnp.array([initial_x_dot, initial_z_dot + 1e-6])
+                np.array([initial_x_dot, initial_z_dot + 1e-6])
             )
         )
         initial_alpha = initial_theta - initial_gamma
-        initial_m = params.initial_mass + params.initial_fuel_quantity
+        initial_m = self.params.initial_mass + self.params.initial_fuel_quantity
         initial_power = 0.5
-        initial_fuel = params.initial_fuel_quantity
-        initial_rho = params.air_density_at_sea_level
-        key, target_key = jax.random.split(key)
-        target_altitude = jax.random.uniform(
-            target_key,
-            minval=params.target_altitude_range[0],
-            maxval=params.target_altitude_range[1],
+        initial_fuel = self.params.initial_fuel_quantity
+        initial_rho = self.params.air_density_at_sea_level
+        target_altitude = np.random.uniform(
+            low=self.params.target_altitude_range[0],
+            high=self.params.target_altitude_range[1],
         )
-        state = EnvState(
+        self.state = EnvState(
             x=initial_x,
             x_dot=initial_x_dot,
             z=initial_z,
@@ -313,11 +296,11 @@ class Airplane2D(environment.Environment):
                 drag=0.0, lift=0.0, S_x=0.0, S_z=0.0, C_x=0.0, C_z=0.0, F_x=0.0, F_z=0.0
             ),  # TODO : add real values
         )
-        return self.get_obs(state), state
+        return self.get_obs(self.state), {"state": self.state}
 
-    def get_obs(self, state: EnvState) -> chex.Array:
+    def get_obs(self, state: EnvState):
         """Applies observation function to state."""
-        obs = jnp.stack(
+        obs = np.stack(
             [
                 state.z,
                 state.x_dot,
@@ -328,15 +311,6 @@ class Airplane2D(environment.Environment):
             ]
         )
         return obs
-
-    def action_space(self, params: Optional[EnvParams] = None) -> spaces.Discrete:
-        """Action space of the environment."""
-        return spaces.Discrete(10)
-        return spaces.Box(low=0, high=1.0, shape=())
-
-    def observation_space(self, params: Optional[EnvParams] = None) -> spaces.Box:
-        """Action space of the environment."""
-        return spaces.Box(low=-jnp.inf, high=jnp.inf, shape=self.obs_shape)
 
     def is_terminal(self, state: EnvState, params: EnvParams) -> bool:
         """Check whether state is terminal."""
@@ -357,19 +331,3 @@ class Airplane2D(environment.Environment):
             os.makedirs(folder, exist_ok=True)
 
         plot_features_from_trajectory(states, folder)
-
-
-if __name__ == "__main__":
-    env = Airplane2D()
-    key = jax.random.PRNGKey(seed=42)
-    obs, state = env.reset(key)
-    env_params = EnvParams()
-    for action in range(0, 11):
-        done = False
-        states = []
-        while not done:
-            n_obs, state, reward, done, _ = env.step(
-                key, state, action / 10, env_params
-            )
-            states.append(state)
-        env.visualize(states[:-1], params=env_params, exp_name=f"{action=}")
