@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from flax import struct
 from gymnax.environments import environment, spaces
 from jax import lax
+from functools import partial
 
 from plane.dynamics import (
     compute_acceleration,
@@ -125,6 +126,22 @@ def check_mass_does_not_increase(old_mass, new_mass):
     assert old_mass >= new_mass
 
 
+@partial(jax.jit, static_argnames=["params"])
+def check_is_terminal(state: EnvState, params: EnvParams) -> bool:
+    """Check whether state is terminal."""
+    # Check termination criteria
+    done1 = jnp.logical_or(
+        state.z < params.min_alt,
+        state.z > params.max_alt,
+    )
+
+    # Check number of steps in episode termination condition
+    done_steps = state.t >= params.max_steps_in_episode
+    done = jnp.logical_or(done1, done_steps)
+    return done
+
+
+@partial(jax.jit, static_argnames=["params"])
 def compute_next_state(
     power_requested: float, state: EnvState, params: EnvParams
 ) -> EnvState:
@@ -199,15 +216,17 @@ def compute_next_state(
     return new_state
 
 
+@partial(jax.jit, static_argnames=["params"])
 def compute_reward(state: EnvState, params: EnvParams) -> jnp.float32:
     done1 = jnp.logical_or(
         state.z < params.min_alt,
         state.z > params.max_alt,
     )
+    max_alt_diff = params.max_alt - params.min_alt
     reward = jax.lax.select(
         done1,
         -jnp.array(1.0) * params.max_steps_in_episode,
-        -(((state.target_altitude - state.z) / params.max_alt) ** 2),
+        (max_alt_diff - jnp.abs(params.max_alt - state.z)) / max_alt_diff,
     )
     return reward
 
@@ -321,16 +340,7 @@ class Airplane2D(environment.Environment):
 
     def is_terminal(self, state: EnvState, params: EnvParams) -> bool:
         """Check whether state is terminal."""
-        # Check termination criteria
-        done1 = jnp.logical_or(
-            state.z < params.min_alt,
-            state.z > params.max_alt,
-        )
-
-        # Check number of steps in episode termination condition
-        done_steps = state.t >= params.max_steps_in_episode
-        done = jnp.logical_or(done1, done_steps)
-        return done
+        return check_is_terminal(state, params)
 
     def visualize(
         self,
