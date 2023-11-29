@@ -11,13 +11,8 @@ Plane is a library offering a gymnasium/gymnax reinforcement learning environmen
 This environment represents an airplane (modeled after an Airbus A320 at the moment) seen from the side evolving in a 2D plane. The goal is to fly to and maintain a target altitude in a fixed window of time. To do so the agent can control the power (and maybe pitch later) of the engines. 
 
 ## Action
-- Power level : float between 0 and 1. The amount of engine power to be used (between 0% and 100% of engine power).
-state.z,
-                state.x_dot,
-                state.z_dot,
-                state.theta,
-                state.gamma,
-                state.target_altitude,
+- Power level : int between 0 and 9. The amount of engine power to be used (between 0% and 100% of engine power in 10% increments).
+
 ## Observation
 - z: float between min_alt and max_alt. The atltitude of the plane (in meters). #TODO : change to feets?
 - z_dot: float between -inf and +inf. The vertical speed of the plane (in meters per second).
