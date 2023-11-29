@@ -166,3 +166,5 @@ wandb
 cuda/
 extraction_configs
 plane/wandb_extraction.py
+videos
+.DS_Store

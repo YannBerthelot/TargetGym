@@ -222,6 +222,11 @@ class Airplane2D(gym.Env):
     JAX Compatible 2D-Airplane environment.
     """
 
+    metadata = {
+        "render_modes": ["human", "rgb_array"],
+        "render_fps": 50,
+    }
+
     def __init__(self, params=None, render_mode: Optional[str] = None):
         super().__init__()
         self.obs_shape = (6,)  # TODO : adapt
@@ -242,6 +247,9 @@ class Airplane2D(gym.Env):
         self.clock = None
         self.isopen = True
         self.state = None
+        self.frames = []
+
+        self.x_threshold = 2.4
 
     @property
     def default_params(self) -> EnvParams:
@@ -372,9 +380,82 @@ class Airplane2D(gym.Env):
         if self.clock is None:
             self.clock = pygame.time.Clock()
 
+        world_width = 343 * 1000
+        scale = self.screen_width / world_width
+        scale_y = self.screen_height / self.params.max_alt
+        plane_width = 50.0
+        plane_height = 10.0
+
+        if self.state is None:
+            return None
+
+        self.surf = pygame.Surface((self.screen_width, self.screen_height))
+        self.surf.fill((255, 255, 255))
+
+        l, r, t, b = (
+            -plane_width / 2,
+            plane_width / 2,
+            plane_height / 2,
+            -plane_height / 2,
+        )
+        axleoffset = plane_height / 4.0
+        planex = self.state.x * scale  # MIDDLE OF CART
+        planey = self.state.z * scale_y  # TOP OF CART
+        plane_coords = [(l, b), (l, t), (r, t), (r, b)]
+        plane_coords = [(c[0] + planex, c[1] + planey) for c in plane_coords]
+        gfxdraw.aapolygon(self.surf, plane_coords, (0, 0, 0))
+        gfxdraw.filled_polygon(self.surf, plane_coords, (0, 0, 0))
+
+        gfxdraw.hline(
+            self.surf,
+            0,
+            self.screen_width,
+            int(self.state.target_altitude * scale_y),
+            (0, 0, 0),
+        )
+
+        self.surf = pygame.transform.flip(self.surf, False, True)
+        self.screen.blit(self.surf, (0, 0))
+
+        frame = np.transpose(
+            np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
+        )
+        self.frames.append(frame)
+        if self.render_mode == "human":
+            pygame.event.pump()
+            self.clock.tick(self.metadata["render_fps"])
+            pygame.display.flip()
+
+        elif self.render_mode == "rgb_array":
+            return frame
+
+        if self.render_mode == "rgb_array_list":
+            return self.frames
+
 
 if __name__ == "__main__":
-    env = Airplane2D(render_mode="human")
+    from gymnasium.utils.save_video import save_video
+
+    env = Airplane2D(render_mode="rgb_array_list")
     env.reset()
-    env.render()
-    print("ok")
+    step_starting_index = 0
+    episode_index = 0
+    step_index = 0
+    done = False
+    while not done:
+        action = 9
+        obs, reward, terminated, truncated, info = env.step(action)
+        done = terminated | truncated
+        frames = env.render()
+        if done:
+            save_video(
+                frames,
+                "videos",
+                fps=env.metadata["render_fps"],
+                step_starting_index=step_starting_index,
+                episode_index=episode_index,
+            )
+            step_starting_index = step_index + 1
+            step_index += 1
+            episode_index += 1
+    env.close()
