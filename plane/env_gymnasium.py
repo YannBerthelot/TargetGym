@@ -4,6 +4,7 @@ import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
 from functools import partial
+from gymnasium.error import DependencyNotInstalled
 from dataclasses import dataclass
 from plane.dynamics import (
     compute_acceleration,
@@ -221,7 +222,7 @@ class Airplane2D(gym.Env):
     JAX Compatible 2D-Airplane environment.
     """
 
-    def __init__(self, params=None):
+    def __init__(self, params=None, render_mode: Optional[str] = None):
         super().__init__()
         self.obs_shape = (6,)  # TODO : adapt
         self.action_space = gym.spaces.Discrete(10)
@@ -232,6 +233,15 @@ class Airplane2D(gym.Env):
             self.params = self.default_params
         else:
             self.params = params
+
+        # Rendering
+        self.render_mode = render_mode
+        self.screen_width = 600
+        self.screen_height = 400
+        self.screen = None
+        self.clock = None
+        self.isopen = True
+        self.state = None
 
     @property
     def default_params(self) -> EnvParams:
@@ -331,3 +341,40 @@ class Airplane2D(gym.Env):
             os.makedirs(folder, exist_ok=True)
 
         plot_features_from_trajectory(states, folder)
+
+    def render(self):
+        if self.render_mode is None:
+            assert self.spec is not None
+            gym.logger.warn(
+                "You are calling render method without specifying any render mode. "
+                "You can specify the render_mode at initialization, "
+                f'e.g. gym.make("{self.spec.id}", render_mode="rgb_array")'
+            )
+            return
+
+        try:
+            import pygame
+            from pygame import gfxdraw
+        except ImportError as e:
+            raise DependencyNotInstalled(
+                "pygame is not installed, run `pip install gymnasium[classic-control]`"
+            ) from e
+
+        if self.screen is None:
+            pygame.init()
+            if self.render_mode == "human":
+                pygame.display.init()
+                self.screen = pygame.display.set_mode(
+                    (self.screen_width, self.screen_height)
+                )
+            else:  # mode == "rgb_array"
+                self.screen = pygame.Surface((self.screen_width, self.screen_height))
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
+
+
+if __name__ == "__main__":
+    env = Airplane2D(render_mode="human")
+    env.reset()
+    env.render()
+    print("ok")
