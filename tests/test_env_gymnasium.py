@@ -107,4 +107,5 @@ def test_is_terminal():
 
 
 def test_render():
-    pass
+    env = Airplane2D(render_mode="human")
+    env.render()

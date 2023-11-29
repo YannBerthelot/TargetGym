@@ -30,6 +30,10 @@ jaxppo = {git = "https://github.com/YannBerthelot/jaxppo.git", rev = "fix_memory
 
 
 
+
+[tool.poetry.group.render.dependencies]
+pygame = "^2.5.2"
+
 [[tool.poetry.source]]
 name = "jax"
 url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
