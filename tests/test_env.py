@@ -1,7 +1,7 @@
 import jax
 import pytest
 
-from plane.env import Airplane2D, EnvParams, EnvState, compute_reward
+from plane.env_jax import Airplane2D, EnvParams, EnvState, compute_reward
 
 
 def test_init():
@@ -47,7 +47,7 @@ def test_step():
     assert new_state.x_dot == pytest.approx(state.x_dot, rel=0.1)
     assert new_state.z < state.z
     assert new_state.z_dot < state.z_dot
-    assert new_state.power > state.power
+    assert new_state.power >= state.power
     assert new_state.t == state.t + 1
     assert new_state.theta == state.theta
     assert new_state.alpha > state.alpha

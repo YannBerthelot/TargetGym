@@ -1,7 +1,8 @@
-from typing import Sequence, Any
-import matplotlib.pyplot as plt
-import jax.numpy as jnp
 import os
+from typing import Any, Sequence
+
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
 
 EnvState = Any
 
