@@ -1,24 +1,26 @@
-from typing import Any, Optional, Sequence
 import os
-import gymnasium as gym
-import numpy as np
-import matplotlib.pyplot as plt
-from functools import partial
-from gymnasium.error import DependencyNotInstalled
 from dataclasses import dataclass
-from plane.dynamics import (
-    compute_acceleration,
-    compute_air_density_from_altitude,
-    compute_next_power,
-    compute_speed_and_pos_from_acceleration,
-    compute_thrust_output,
-)
-from plane.utils import compute_norm_from_coordinates, plot_features_from_trajectory
+from functools import partial
+from typing import Any, Optional, Sequence
+
+import gymnasium as gym
+import matplotlib.pyplot as plt
+import numpy as np
+from gymnasium.error import DependencyNotInstalled
+
+from plane.dynamics import (compute_acceleration,
+                            compute_air_density_from_altitude,
+                            compute_next_power,
+                            compute_speed_and_pos_from_acceleration,
+                            compute_thrust_output)
+from plane.utils import (compute_norm_from_coordinates,
+                         plot_features_from_trajectory)
 
 Action = Any
 SPEED_OF_SOUND = 343.0
 
 
+# FIXME : update the gym env once the jax one is stable
 @dataclass
 class EnvMetrics:
     drag: float

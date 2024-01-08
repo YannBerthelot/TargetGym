@@ -1,22 +1,25 @@
-from typing import Any, Optional, Sequence
 import os
+from functools import partial
+from typing import Any, Callable, Optional, Sequence
+
 import chex
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import numpy as np
 from flax import struct
+from gymnasium.error import DependencyNotInstalled
+from gymnasium.utils.save_video import save_video
 from gymnax.environments import environment, spaces
 from jax import lax
-from functools import partial
 
-from plane.dynamics import (
-    compute_acceleration,
-    compute_air_density_from_altitude,
-    compute_next_power,
-    compute_speed_and_pos_from_acceleration,
-    compute_thrust_output,
-)
-from plane.utils import compute_norm_from_coordinates, plot_features_from_trajectory
+from plane.dynamics import (compute_acceleration,
+                            compute_air_density_from_altitude,
+                            compute_next_power,
+                            compute_speed_and_pos_from_acceleration,
+                            compute_thrust_output)
+from plane.utils import (compute_norm_from_coordinates,
+                         plot_features_from_trajectory)
 
 Action = Any
 SPEED_OF_SOUND = 343.0
@@ -110,16 +113,20 @@ class EnvParams:
 
     # Episodes
     max_steps_in_episode: int = 1000
-    min_alt: float = 1000.0
+    min_alt: float = 0.0
     max_alt: float = 15000.0
     target_altitude_range: tuple[float, float] = (
-        2000.0,
+        3000.0,
         5000.0,
     )  # the min and max values for the target_altitude (in meters)
     initial_altitude_range: tuple[float, float] = (
-        2000.0,
+        3000.0,
         5000.0,
     )  # the min and max values for the initial altitude (in meters)
+    initial_z_dot: float = 0.0
+    initial_x_dot: float = 200.0
+    initial_theta: float = 0.0
+    initial_power: float = 1.0
 
 
 def check_mass_does_not_increase(old_mass, new_mass):
@@ -219,8 +226,8 @@ def compute_next_state(
 @partial(jax.jit, static_argnames=["params"])
 def compute_reward(state: EnvState, params: EnvParams) -> jnp.float32:
     done1 = jnp.logical_or(
-        state.z < params.min_alt,
-        state.z > params.max_alt,
+        state.z <= params.min_alt,
+        state.z >= params.max_alt,
     )
     max_alt_diff = params.max_alt - params.min_alt
     reward = jax.lax.select(
@@ -249,8 +256,6 @@ class Airplane2D(environment.Environment):
         self, key: chex.PRNGKey, state: EnvState, action: float, params: EnvParams
     ) -> tuple[chex.Array, EnvState, float, bool, dict]:
         """Performs step transitions in the environment."""
-        prev_terminal = self.is_terminal(state, params)
-
         state = compute_next_state(action, state, params)
         reward = compute_reward(state, params)
         # Update state dict and evaluate termination conditions
@@ -275,9 +280,11 @@ class Airplane2D(environment.Environment):
             minval=params.initial_altitude_range[0],
             maxval=params.initial_altitude_range[1],
         )
-        initial_z_dot = 0.0
-        initial_x_dot = 200.0  # TODO : improve this to have a "stable" start ?
-        initial_theta = 0.0
+        initial_z_dot = params.initial_z_dot
+        initial_x_dot = (
+            params.initial_x_dot
+        )  # TODO : improve this to have a "stable" start ?
+        initial_theta = params.initial_theta
         initial_gamma = jnp.arcsin(
             initial_z_dot
             / compute_norm_from_coordinates(
@@ -286,7 +293,7 @@ class Airplane2D(environment.Environment):
         )
         initial_alpha = initial_theta - initial_gamma
         initial_m = params.initial_mass + params.initial_fuel_quantity
-        initial_power = 0.5
+        initial_power = params.initial_power
         initial_fuel = params.initial_fuel_quantity
         initial_rho = params.air_density_at_sea_level
         key, target_key = jax.random.split(key)
@@ -341,6 +348,113 @@ class Airplane2D(environment.Environment):
     def is_terminal(self, state: EnvState, params: EnvParams) -> bool:
         """Check whether state is terminal."""
         return check_is_terminal(state, params)
+
+    def visualize(
+        self,
+        states: Sequence[EnvState],
+        params: EnvParams,
+        exp_name: Optional[str] = None,
+    ) -> None:
+        if exp_name is None:
+            folder = "figs"
+            os.makedirs(folder, exist_ok=True)
+
+        else:
+            folder = os.path.join("figs", exp_name)
+            os.makedirs(folder, exist_ok=True)
+
+        plot_features_from_trajectory(states, folder)
+
+    def render(self, screen, state, params, frames, clock):
+        try:
+            import pygame
+            from pygame import gfxdraw
+        except ImportError as e:
+            raise DependencyNotInstalled(
+                "pygame is not installed, run `pip install gymnasium[classic-control]`"
+            ) from e
+
+        if screen is None:
+            pygame.init()
+
+        screen = pygame.Surface((self.screen_width, self.screen_height))
+        if clock is None:
+            clock = pygame.time.Clock()
+
+        world_width = 343 * 1000
+        scale = self.screen_width / world_width
+        scale_y = self.screen_height / params.max_alt
+        plane_width = 50.0
+        plane_height = 10.0
+
+        if state is None:
+            return None
+
+        surf = pygame.Surface((self.screen_width, self.screen_height))
+        surf.fill((255, 255, 255))
+
+        l, r, t, b = (
+            -plane_width / 2,
+            plane_width / 2,
+            plane_height / 2,
+            -plane_height / 2,
+        )
+        planex = state.x * scale  # MIDDLE OF CART
+        planey = state.z * scale_y  # TOP OF CART
+        plane_coords = [(l, b), (l, t), (r, t), (r, b)]
+        plane_coords = [(c[0] + planex, c[1] + planey) for c in plane_coords]
+        gfxdraw.aapolygon(surf, plane_coords, (0, 0, 0))
+        gfxdraw.filled_polygon(surf, plane_coords, (0, 0, 0))
+
+        gfxdraw.hline(
+            surf,
+            0,
+            self.screen_width,
+            int(state.target_altitude * scale_y),
+            (0, 0, 0),
+        )
+
+        surf = pygame.transform.flip(surf, False, True)
+        screen.blit(surf, (0, 0))
+
+        frame = np.transpose(
+            np.array(pygame.surfarray.pixels3d(screen)), axes=(1, 0, 2)
+        )
+        frames.append(frame)
+
+        return frames, screen, clock
+
+    def save_video(
+        self,
+        select_action: Callable[[jnp.ndarray], int],
+        key: jax.random.PRNGKeyArray,
+        folder: str = "videos",
+        episode_index: int = 0,
+    ):
+        obs, state = self.reset(key)
+        step_starting_index = 0
+        step_index = 0
+        done = False
+        screen = None
+        clock = None
+        params = EnvParams()
+        frames = []
+        while not done:
+            action = select_action(obs)
+            obs, state, _, done, _ = self.step(key, state, action, params)
+            frames, screen, clock = self.render(screen, state, params, frames, clock)
+            if done:
+                save_video(
+                    frames,
+                    folder,
+                    fps=50,
+                    step_starting_index=step_starting_index,
+                    episode_index=episode_index,
+                )
+                step_starting_index = step_index + 1
+                step_index += 1
+                episode_index += 1
+        return f"./{folder}/rl-video-episode-0.mp4"
 
     def visualize(
         self,

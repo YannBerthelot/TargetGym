@@ -2,7 +2,7 @@
 import jax
 import jax.numpy as jnp
 
-from plane.env import Airplane2D, EnvParams, EnvState, compute_next_state
+from plane.env_jax import Airplane2D, EnvParams, EnvState, compute_next_state
 from plane.utils import list_to_array
 
 
