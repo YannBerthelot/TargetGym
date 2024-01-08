@@ -11,8 +11,17 @@ gymnax = "^0.0.6"
 numpy = "^1.26.1"
 six = "^1.16.0"
 matplotlib = "^3.8.1"
+jaxlib = [
+    {version = "0.4.20", platform = "darwin", source="pypi"},
+    {version = "0.4.20+cuda12.cudnn89", platform = "linux", source="jax"}
+]
+jax = [
+    {extras = ["cpu"], version = "^0.4.20", platform="darwin", source="pypi"},
+    {extras = ["cuda_12_pip"], version = "^0.4.20", platform="linux", source="jax"}
+]
 gymnasium = "0.28.1"
-jax = "^0.4.20"
+distrax = "^0.1.5"
+jaxppo = {git = "https://github.com/YannBerthelot/jaxppo.git", rev = "fix_memory_leak"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
@@ -26,17 +35,16 @@ pytest-cov = "^4.1.0"
 
 [tool.poetry.group.render.dependencies]
 pygame = "^2.5.2"
-moviepy = "^1.0.3"
+
 
 [[tool.poetry.source]]
 name = "jax"
 url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
-priority = "supplemental"
-
-
+priority = "primary"
+ 
 [[tool.poetry.source]]
 name = "PyPI"
-priority = "primary"
+priority = "supplemental"
 
 [build-system]
 requires = ["poetry-core"]
