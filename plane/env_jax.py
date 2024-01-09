@@ -1,7 +1,7 @@
 import os
 from functools import partial
 from typing import Any, Callable, Optional, Sequence
-
+import wandb
 import chex
 import jax
 import jax.numpy as jnp
@@ -13,13 +13,14 @@ from gymnasium.utils.save_video import save_video
 from gymnax.environments import environment, spaces
 from jax import lax
 
-from plane.dynamics import (compute_acceleration,
-                            compute_air_density_from_altitude,
-                            compute_next_power,
-                            compute_speed_and_pos_from_acceleration,
-                            compute_thrust_output)
-from plane.utils import (compute_norm_from_coordinates,
-                         plot_features_from_trajectory)
+from plane.dynamics import (
+    compute_acceleration,
+    compute_air_density_from_altitude,
+    compute_next_power,
+    compute_speed_and_pos_from_acceleration,
+    compute_thrust_output,
+)
+from plane.utils import compute_norm_from_coordinates, plot_features_from_trajectory
 
 Action = Any
 SPEED_OF_SOUND = 343.0
@@ -233,7 +234,7 @@ def compute_reward(state: EnvState, params: EnvParams) -> jnp.float32:
     reward = jax.lax.select(
         done1,
         -jnp.array(1.0) * params.max_steps_in_episode,
-        (max_alt_diff - jnp.abs(params.max_alt - state.z)) / max_alt_diff,
+        ((max_alt_diff - jnp.abs(state.target_altitude - state.z)) / max_alt_diff) ** 2,
     )
     return reward
 
@@ -246,6 +247,8 @@ class Airplane2D(environment.Environment):
     def __init__(self):
         super().__init__()
         self.obs_shape = (6,)  # TODO : adapt
+        self.screen_width = 600
+        self.screen_height = 400
 
     @property
     def default_params(self) -> EnvParams:
@@ -376,6 +379,7 @@ class Airplane2D(environment.Environment):
 
         if screen is None:
             pygame.init()
+            pygame.font.init()
 
         screen = pygame.Surface((self.screen_width, self.screen_height))
         if clock is None:
@@ -417,6 +421,28 @@ class Airplane2D(environment.Environment):
         surf = pygame.transform.flip(surf, False, True)
         screen.blit(surf, (0, 0))
 
+        BLUE = (0, 0, 255)
+        font = pygame.font.SysFont("dejavuserif", 16)
+        text_init_z = font.render(
+            f"Target Altitude : {int(state.target_altitude)}", True, BLUE
+        )
+
+        screen.blit(
+            text_init_z, (0, self.screen_height - int(state.target_altitude * scale_y))
+        )
+
+        text_z = font.render(f"Altitude : {int(state.z)} ft", True, BLUE)
+        screen.blit(text_z, (0, 0))
+
+        text_x_dot = font.render(
+            f"Horizontal speed : {int(state.x_dot)} knots", True, BLUE
+        )
+        screen.blit(text_x_dot, (0, 16))
+
+        reward = compute_reward(state, params)
+        text_reward = font.render(f"Reward : {np.round(reward,2)}", True, BLUE)
+        screen.blit(text_reward, (0, 32))
+
         frame = np.transpose(
             np.array(pygame.surfarray.pixels3d(screen)), axes=(1, 0, 2)
         )
@@ -439,6 +465,8 @@ class Airplane2D(environment.Environment):
         clock = None
         params = EnvParams()
         frames = []
+        FPS = 50
+        wandb.init()
         while not done:
             action = select_action(obs)
             obs, state, _, done, _ = self.step(key, state, action, params)
@@ -447,14 +475,16 @@ class Airplane2D(environment.Environment):
                 save_video(
                     frames,
                     folder,
-                    fps=50,
+                    fps=FPS,
                     step_starting_index=step_starting_index,
                     episode_index=episode_index,
                 )
                 step_starting_index = step_index + 1
                 step_index += 1
                 episode_index += 1
-        return f"./{folder}/rl-video-episode-0.mp4"
+        frames_correct_order = np.array(frames).swapaxes(1, 3).swapaxes(2, 3)
+        wandb.log({"video": wandb.Video(frames_correct_order, fps=FPS * 2)})
+        return os.path.join(folder, "rl-video-episode-0.mp4")
 
     def visualize(
         self,
@@ -474,16 +504,24 @@ class Airplane2D(environment.Environment):
 
 
 if __name__ == "__main__":
+    # env = Airplane2D()
+    # key = jax.random.PRNGKey(seed=42)
+    # obs, state = env.reset(key)
+    # env_params = EnvParams()
+    # for action in range(0, 11):
+    #     done = False
+    #     states = []
+    #     while not done:
+    #         n_obs, state, reward, done, _ = env.step(
+    #             key, state, action / 10, env_params
+    #         )
+    #         states.append(state)
+    #     env.visualize(states[:-1], params=env_params, exp_name=f"{action=}")
+
     env = Airplane2D()
     key = jax.random.PRNGKey(seed=42)
-    obs, state = env.reset(key)
-    env_params = EnvParams()
-    for action in range(0, 11):
-        done = False
-        states = []
-        while not done:
-            n_obs, state, reward, done, _ = env.step(
-                key, state, action / 10, env_params
-            )
-            states.append(state)
-        env.visualize(states[:-1], params=env_params, exp_name=f"{action=}")
+
+    def select_action(obs):
+        return 8
+
+    env.save_video(select_action, key)
