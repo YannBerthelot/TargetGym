@@ -85,7 +85,7 @@ class EnvState:
     # TODO : add wind.
 
     # Metrics for analysis
-    metrics: Optional[EnvMetrics] = None
+    #metrics: Optional[EnvMetrics] = None
 
 
 @struct.dataclass
@@ -134,7 +134,6 @@ def check_mass_does_not_increase(old_mass, new_mass):
     assert old_mass >= new_mass
 
 
-@partial(jax.jit, static_argnames=["params"])
 def check_is_terminal(state: EnvState, params: EnvParams) -> bool:
     """Check whether state is terminal."""
     # Check termination criteria
@@ -148,8 +147,6 @@ def check_is_terminal(state: EnvState, params: EnvParams) -> bool:
     done = jnp.logical_or(done1, done_steps)
     return done
 
-
-@partial(jax.jit, static_argnames=["params"])
 def compute_next_state(
     power_requested: float, state: EnvState, params: EnvParams
 ) -> EnvState:
@@ -219,12 +216,11 @@ def compute_next_state(
         ),
         t=t,
         target_altitude=state.target_altitude,
-        metrics=EnvMetrics(*metrics),
+        #metrics=EnvMetrics(*metrics),
     )
-    return new_state
+    return new_state, metrics
 
 
-@partial(jax.jit, static_argnames=["params"])
 def compute_reward(state: EnvState, params: EnvParams) -> jnp.float32:
     done1 = jnp.logical_or(
         state.z <= params.min_alt,
@@ -259,7 +255,7 @@ class Airplane2D(environment.Environment):
         self, key: chex.PRNGKey, state: EnvState, action: float, params: EnvParams
     ) -> tuple[chex.Array, EnvState, float, bool, dict]:
         """Performs step transitions in the environment."""
-        state = compute_next_state(action, state, params)
+        state, metrics = compute_next_state(action, state, params)
         reward = compute_reward(state, params)
         # Update state dict and evaluate termination conditions
         done = self.is_terminal(state, params)
@@ -269,7 +265,7 @@ class Airplane2D(environment.Environment):
             lax.stop_gradient(state),
             reward,
             done,
-            {"discount": self.discount(state, params)},
+            {"metrics": metrics},
         )
 
     def reset_env(
@@ -319,9 +315,9 @@ class Airplane2D(environment.Environment):
             rho=initial_rho,
             t=0,
             target_altitude=target_altitude,
-            metrics=EnvMetrics(
-                drag=0.0, lift=0.0, S_x=0.0, S_z=0.0, C_x=0.0, C_z=0.0, F_x=0.0, F_z=0.0
-            ),  # TODO : add real values
+            # metrics=EnvMetrics(
+            #     drag=0.0, lift=0.0, S_x=0.0, S_z=0.0, C_x=0.0, C_z=0.0, F_x=0.0, F_z=0.0
+            # ),  # TODO : add real values
         )
         return self.get_obs(state), state
 
@@ -453,7 +449,7 @@ class Airplane2D(environment.Environment):
     def save_video(
         self,
         select_action: Callable[[jnp.ndarray], int],
-        key: jax.random.PRNGKeyArray,
+        key: jax.Array,
         folder: str = "videos",
         episode_index: int = 0,
     ):

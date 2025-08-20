@@ -169,7 +169,7 @@ def test_compute_next_state():
         t=0,
         target_altitude=0,
     )
-    new_state = compute_next_state(1, state, params)
+    new_state, metrics = compute_next_state(1, state, params)
     assert new_state.x > state.x
     assert new_state.x_dot > state.x_dot
     assert new_state.z < state.z
