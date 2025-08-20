@@ -39,10 +39,9 @@ def test_step():
     env = Airplane2D()
     key = jax.random.PRNGKey(seed=42)
     obs, state = env.reset(key)
-    env_params = EnvParams()
     action = 9
     # Perform the step transition.
-    n_obs, new_state, reward, done, _ = env.step(key, state, action, env_params)
+    n_obs, new_state, reward, done, _ = env.step(key, state, action)
     assert new_state.x > state.x
     assert new_state.x_dot == pytest.approx(state.x_dot, rel=0.1)
     assert new_state.z < state.z
