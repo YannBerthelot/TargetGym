@@ -1,23 +1,26 @@
-from typing import Any, Optional, Sequence
 import os
-import gymnasium as gym
-import numpy as np
-import matplotlib.pyplot as plt
-from functools import partial
 from dataclasses import dataclass
-from plane.dynamics import (
-    compute_acceleration,
-    compute_air_density_from_altitude,
-    compute_next_power,
-    compute_speed_and_pos_from_acceleration,
-    compute_thrust_output,
-)
-from plane.utils import compute_norm_from_coordinates, plot_features_from_trajectory
+from functools import partial
+from typing import Any, Optional, Sequence
+
+import gymnasium as gym
+import matplotlib.pyplot as plt
+import numpy as np
+from gymnasium.error import DependencyNotInstalled
+
+from plane.dynamics import (compute_acceleration,
+                            compute_air_density_from_altitude,
+                            compute_next_power,
+                            compute_speed_and_pos_from_acceleration,
+                            compute_thrust_output)
+from plane.utils import (compute_norm_from_coordinates,
+                         plot_features_from_trajectory)
 
 Action = Any
 SPEED_OF_SOUND = 343.0
 
 
+# FIXME : update the gym env once the jax one is stable
 @dataclass
 class EnvMetrics:
     drag: float
@@ -221,7 +224,12 @@ class Airplane2D(gym.Env):
     JAX Compatible 2D-Airplane environment.
     """
 
-    def __init__(self, params=None):
+    metadata = {
+        "render_modes": ["human", "rgb_array"],
+        "render_fps": 50,
+    }
+
+    def __init__(self, params=None, render_mode: Optional[str] = None):
         super().__init__()
         self.obs_shape = (6,)  # TODO : adapt
         self.action_space = gym.spaces.Discrete(10)
@@ -232,6 +240,18 @@ class Airplane2D(gym.Env):
             self.params = self.default_params
         else:
             self.params = params
+
+        # Rendering
+        self.render_mode = render_mode
+        self.screen_width = 600
+        self.screen_height = 400
+        self.screen = None
+        self.clock = None
+        self.isopen = True
+        self.state = None
+        self.frames = []
+
+        self.x_threshold = 2.4
 
     @property
     def default_params(self) -> EnvParams:
@@ -331,3 +351,113 @@ class Airplane2D(gym.Env):
             os.makedirs(folder, exist_ok=True)
 
         plot_features_from_trajectory(states, folder)
+
+    def render(self):
+        if self.render_mode is None:
+            assert self.spec is not None
+            gym.logger.warn(
+                "You are calling render method without specifying any render mode. "
+                "You can specify the render_mode at initialization, "
+                f'e.g. gym.make("{self.spec.id}", render_mode="rgb_array")'
+            )
+            return
+
+        try:
+            import pygame
+            from pygame import gfxdraw
+        except ImportError as e:
+            raise DependencyNotInstalled(
+                "pygame is not installed, run `pip install gymnasium[classic-control]`"
+            ) from e
+
+        if self.screen is None:
+            pygame.init()
+            if self.render_mode == "human":
+                pygame.display.init()
+                self.screen = pygame.display.set_mode(
+                    (self.screen_width, self.screen_height)
+                )
+            else:  # mode == "rgb_array"
+                self.screen = pygame.Surface((self.screen_width, self.screen_height))
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
+
+        world_width = 343 * 1000
+        scale = self.screen_width / world_width
+        scale_y = self.screen_height / self.params.max_alt
+        plane_width = 50.0
+        plane_height = 10.0
+
+        if self.state is None:
+            return None
+
+        self.surf = pygame.Surface((self.screen_width, self.screen_height))
+        self.surf.fill((255, 255, 255))
+
+        l, r, t, b = (
+            -plane_width / 2,
+            plane_width / 2,
+            plane_height / 2,
+            -plane_height / 2,
+        )
+        axleoffset = plane_height / 4.0
+        planex = self.state.x * scale  # MIDDLE OF CART
+        planey = self.state.z * scale_y  # TOP OF CART
+        plane_coords = [(l, b), (l, t), (r, t), (r, b)]
+        plane_coords = [(c[0] + planex, c[1] + planey) for c in plane_coords]
+        gfxdraw.aapolygon(self.surf, plane_coords, (0, 0, 0))
+        gfxdraw.filled_polygon(self.surf, plane_coords, (0, 0, 0))
+
+        gfxdraw.hline(
+            self.surf,
+            0,
+            self.screen_width,
+            int(self.state.target_altitude * scale_y),
+            (0, 0, 0),
+        )
+
+        self.surf = pygame.transform.flip(self.surf, False, True)
+        self.screen.blit(self.surf, (0, 0))
+
+        frame = np.transpose(
+            np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
+        )
+        self.frames.append(frame)
+        if self.render_mode == "human":
+            pygame.event.pump()
+            self.clock.tick(self.metadata["render_fps"])
+            pygame.display.flip()
+
+        elif self.render_mode == "rgb_array":
+            return frame
+
+        if self.render_mode == "rgb_array_list":
+            return self.frames
+
+
+if __name__ == "__main__":
+    from gymnasium.utils.save_video import save_video
+
+    env = Airplane2D(render_mode="rgb_array_list")
+    env.reset()
+    step_starting_index = 0
+    episode_index = 0
+    step_index = 0
+    done = False
+    while not done:
+        action = 9
+        obs, reward, terminated, truncated, info = env.step(action)
+        done = terminated | truncated
+        frames = env.render()
+        if done:
+            save_video(
+                frames,
+                "videos",
+                fps=env.metadata["render_fps"],
+                step_starting_index=step_starting_index,
+                episode_index=episode_index,
+            )
+            step_starting_index = step_index + 1
+            step_index += 1
+            episode_index += 1
+    env.close()

@@ -1,7 +1,9 @@
-from typing import Sequence, Any
-import matplotlib.pyplot as plt
-import jax.numpy as jnp
 import os
+from typing import Any, Sequence
+
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import numpy as np
 
 EnvState = Any
 
@@ -48,3 +50,8 @@ def array_to_list(array):
         cls(**{k: v(getattr(array, k)[i]) for k, v in cls._field_types.items()})
         for i in range(size)
     ]
+
+
+def convert_frames_from_gym_to_wandb(frames: list) -> np.ndarray:
+    """Convert frames from gym format (time, width, height, channel) to wandb format (time, channel, height, width)"""
+    return np.array(frames).swapaxes(1, 3).swapaxes(2, 3)
