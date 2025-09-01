@@ -24,6 +24,7 @@ mypy = "^1.6.1"
 codecov = "^2.1.13"
 coverage = "^7.3.2"
 pytest-cov = "^4.1.0"
+pytest-readme = "^1.0.2"
 
 [tool.poetry.group.render.dependencies]
 pygame = "^2.5.2"
@@ -39,6 +40,10 @@ moviepy = "^2.2.1"
 [tool.poetry.group.agent.dependencies]
 stable-baselines3 = "^2.7.0"
 tensorboard = "^2.20.0"
+
+
+[tool.poetry.group.readme.dependencies]
+pytest-readme = "^1.0.2"
 
 [[tool.poetry.source]]
 name = "jax"
