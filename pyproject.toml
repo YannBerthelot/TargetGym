@@ -25,6 +25,7 @@ codecov = "^2.1.13"
 coverage = "^7.3.2"
 pytest-cov = "^4.1.0"
 pytest-readme = "^1.0.2"
+flake8 = "^7.3.0"
 
 [tool.poetry.group.render.dependencies]
 pygame = "^2.5.2"
