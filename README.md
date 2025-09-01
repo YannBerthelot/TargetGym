@@ -126,7 +126,7 @@ The agent currently observes all of the state, minus **x** and **t** (as they sh
 * Terminal altitude violations (`z < min_alt` or `z > max_alt`) incur `-max_steps_in_episode`.
 * Otherwise, reward is sthe quared normalized difference to target altitude:
 
-$r_t = \left( \frac{\text{max\_alt} - | \text{target\_altitude} - z_t |}{\text{max\_alt} - \text{min\_alt}} \right)^2$
+$`r_t = \left( \frac{\text{max\_alt} - | \text{target\_altitude} - z_t |}{\text{max\_alt} - \text{min\_alt}} \right)^2`$
 
 
 
