@@ -110,8 +110,8 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         return frames, screen, clock
 
 
-    def save_video(self, select_action: Callable[[jnp.ndarray], jnp.ndarray], key: chex.PRNGKey, params=None, folder="videos", episode_index=0, FPS=60):
-        return save_video(self, select_action, folder, episode_index, FPS, params, seed=key)
+    def save_video(self, select_action: Callable[[jnp.ndarray], jnp.ndarray], key: chex.PRNGKey, params=None, folder="videos", episode_index=0, FPS=60, format="mp4"):
+        return save_video(self, select_action, folder, episode_index, FPS, params, seed=key, format=format)
     
 
     def action_space(self, params: EnvParams | None = None) -> spaces.Discrete:
@@ -148,8 +148,8 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
 if __name__ == "__main__":
     env = Airplane2D()
     seed = 42
-    env_params = EnvParams(max_steps_in_episode=2_000)
+    env_params = EnvParams(max_steps_in_episode=1_000)
     action = (0.8, 0.0)
-    env.save_video(lambda o: action, seed, folder="videos", episode_index=0, params=env_params)
+    env.save_video(lambda o: action, seed, folder="videos", episode_index=0, params=env_params, format="gif")
 
     

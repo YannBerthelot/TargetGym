@@ -184,8 +184,8 @@ class Airplane2D(gym.Env):
             self.frames.extend(frames)
             return self.frames
 
-    def save_video(self, select_action: Callable, folder="videos", episode_index=0, FPS=60, params=None, seed=None):
-        return save_video(self, select_action, folder, episode_index, FPS, params, seed)
+    def save_video(self, select_action: Callable, folder="videos", episode_index=0, FPS=60, params=None, seed=None, format="mp4"):
+        return save_video(self, select_action, folder, episode_index, FPS, params, seed, format=format)
 
 
 if __name__ == "__main__":
