@@ -127,8 +127,9 @@ The agent currently observes all of the state, minus **x** and **t** (as they sh
 * Otherwise, reward is squared normalized difference to target altitude:
 
 $$
-r_t = \left( \frac{\text{max_alt} - | \text{target_altitude} - z_t |}{\text{max_alt} - \text{min_alt}} \right)^2
+r_t = \left( \frac{\text{max\_alt} - | \text{target\_altitude} - z_t |}{\text{max\_alt} - \text{min\_alt}} \right)^2
 $$
+
 
 **Episode Termination**:
 
