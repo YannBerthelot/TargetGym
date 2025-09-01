@@ -9,7 +9,7 @@ import matplotlib.colors as colors
 from scipy.interpolate import interp1d
 
 # Import environment
-from env_jax import Airplane2D, EnvParams
+from plane.env_jax import Airplane2D, EnvParams
 
 
 def run_constant_policy(power: float, stick: float, env: Airplane2D, params: EnvParams, steps: int = 10000):
