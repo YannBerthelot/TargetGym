@@ -186,9 +186,9 @@ def render_plane_scene(screen_width, screen_height, state, params, positions_his
     for wx, wy in passenger_windows_points:
         pygame.draw.circle(surf, (0,0,0), (int(wx), int(wy)), window_radius)
 
-    # # Draw remaining clouds
-    # for cx, cy, scale, shape in cloud_positions[5:]:
-    #     draw_cloud(surf, cx, cy, scale=scale, seed=shape)
+    # Draw remaining clouds
+    for cx, cy, scale, shape in cloud_positions[5:]:
+        draw_cloud(surf, cx, cy, scale=scale, seed=shape)
 
     # Draw target altitude line
     target_y = int(screen_height - (state.target_altitude + ground_buffer) * scale_y)
