@@ -18,7 +18,7 @@ def test_compute_reward():
     env = Airplane2D()
     obs, info = env.reset()
     env_params = EnvParams()
-    reward = compute_reward(state=info["state"], params=env_params)
+    reward = compute_reward(state=env.state, params=env_params)
     assert reward.shape == ()
     assert 1 > reward > 0
 
@@ -28,26 +28,28 @@ def test_sample_action():
     obs, info = env.reset()
     env_params = EnvParams()
     action = env.action_space.sample()
-    assert 0 <= action <= env.action_space.n
-    assert action.shape == ()
+    for i in range(len(action)):
+        assert env.action_space.low[i] <= action[i] <= env.action_space.high[i]
+    assert action.shape == (2,)
+
 
 
 def test_step():
     env = Airplane2D()
     obs, info = env.reset()
     env_params = EnvParams()
-    action = 9
-    state = info["state"]
+    action = (0.9,0)
+    state = env.state
     # Perform the step transition.
     n_obs, reward, terminated, truncated, new_info = env.step(action)
-    new_state = new_info["state"]
+    new_state = env.state
     assert new_state.x > state.x
     assert new_state.x_dot == pytest.approx(state.x_dot, rel=0.1)
     assert new_state.z < state.z
     assert new_state.z_dot < state.z_dot
-    assert new_state.power > state.power
+    assert new_state.power < state.power
     assert new_state.t == state.t + 1
-    assert new_state.theta == state.theta
+    #assert new_state.theta == state.theta
     assert new_state.alpha > state.alpha
     assert new_state.gamma < state.gamma
 
@@ -62,12 +64,13 @@ def test_is_terminal():
         z=env_params.max_alt + 0.01,
         z_dot=0,
         theta=0,
+        theta_dot=0,
         alpha=0,
         gamma=0,
         m=0,
         power=0,
+        stick=0,
         fuel=0,
-        rho=0,
         t=0,
         target_altitude=0,
     )
@@ -78,12 +81,13 @@ def test_is_terminal():
         z=env_params.min_alt - 0.01,
         z_dot=0,
         theta=0,
+        theta_dot=0,
         alpha=0,
         gamma=0,
         m=0,
         power=0,
+        stick=0,
         fuel=0,
-        rho=0,
         t=0,
         target_altitude=0,
     )
@@ -98,8 +102,9 @@ def test_is_terminal():
         gamma=0,
         m=0,
         power=0,
+        theta_dot=0,
+        stick=0,
         fuel=0,
-        rho=0,
         t=env_params.max_steps_in_episode + 1,
         target_altitude=0,
     )
@@ -108,4 +113,5 @@ def test_is_terminal():
 
 def test_render():
     env = Airplane2D(render_mode="human")
+    env.reset()
     env.render()

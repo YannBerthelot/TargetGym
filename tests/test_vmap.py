@@ -8,7 +8,7 @@ from plane.env_jax import Airplane2D
 def test_reset():
     env = Airplane2D()
     key = jax.random.PRNGKey(seed=42)
-    jax.vmap(env.reset, in_axes=0)(key=jax.random.split(key, num=3))
+    jax.vmap(env.reset, in_axes=0)(jax.random.split(key, num=3))
 
 
 def test_step():
@@ -17,7 +17,7 @@ def test_step():
     key = jax.random.PRNGKey(seed=42)
     keys = jax.random.split(key, num=N)
     obs, state = jax.vmap(env.reset, in_axes=0)(key=keys)
-    action = jnp.ones(N)
-    n_obs, state, reward, done, _ = jax.vmap(env.step, in_axes=0)(
+    action = (jnp.ones(N), jnp.zeros(N))
+    n_obs, state, reward, terminated, truncated, _ = jax.vmap(env.step, in_axes=0)(
         key=keys, state=state, action=action
     )
