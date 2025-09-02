@@ -176,3 +176,5 @@ training_videos*
 *.csv
 logs*
 *.png
+test_readme.py
+*.zip

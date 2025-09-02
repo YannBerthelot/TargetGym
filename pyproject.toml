@@ -1,9 +1,23 @@
 [tool.poetry]
-name = "plane"
+name = "plane-env"  # Change this to your desired PyPI package name
 version = "0.1.0"
-description = ""
+description = "A reinforcement learning environment for simulating a plane in 2D available, with gymnasium and gymnax support"  # Add a description
 authors = ["Yann Berthelot <yannberthelot1@gmail.com>"]
 readme = "README.md"
+homepage = "https://github.com/yannberthelot/Plane"  # Add your repository URL
+repository = "https://github.com/yannberthelot/Plane"
+keywords = ["reinforcement-learning", "gymnasium", "jax", "airplane", "simulation"]  # Add relevant keywords
+classifiers = [  # Add relevant classifiers
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+packages = [
+    { include = "plane_env", from = "src" },  # This tells Poetry where to find the package
+]
 
 [tool.poetry.dependencies]
 python = "<3.13,>=3.10"
@@ -15,15 +29,37 @@ gymnasium = "^1.2.0"
 distrax = "^0.1.5"
 jax = "<7.0"
 
+[tool.black]
+line-length = 88
+target-version = ['py310']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
-black = "^23.11.0"
 isort = "^5.12.0"
 pre-commit = "^3.5.0"
 mypy = "^1.6.1"
 codecov = "^2.1.13"
 coverage = "^7.3.2"
 pytest-cov = "^4.1.0"
+pytest-readme = "^1.0.2"
+flake8 = "^7.3.0"
+ruff = "^0.12.11"
+black = "^25.1.0"
 
 [tool.poetry.group.render.dependencies]
 pygame = "^2.5.2"
@@ -39,6 +75,10 @@ moviepy = "^2.2.1"
 [tool.poetry.group.agent.dependencies]
 stable-baselines3 = "^2.7.0"
 tensorboard = "^2.20.0"
+
+
+[tool.poetry.group.readme.dependencies]
+pytest-readme = "^1.0.2"
 
 [[tool.poetry.source]]
 name = "jax"

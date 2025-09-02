@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from plane.utils import compute_norm_from_coordinates
+from plane_env.utils import compute_norm_from_coordinates
 
 
 def test_compute_norm_from_coordinates():

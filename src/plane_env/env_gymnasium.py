@@ -1,12 +1,20 @@
-import pygame
-from typing import Optional, Callable
+from typing import Callable, Optional
+
 import gymnasium as gym
 import numpy as np
-from plane.env import compute_next_state, compute_reward, check_is_terminal, save_video
-from plane.rendering import _render
-from plane.env import get_env_classes
+import pygame
+
+from plane_env.env import (
+    check_is_terminal,
+    compute_next_state,
+    compute_reward,
+    get_env_classes,
+    save_video,
+)
+from plane_env.rendering import _render
 
 EnvState, EnvParams, EnvMetrics = get_env_classes(use_jax=False)
+
 
 class Airplane2D(gym.Env):
     """
@@ -22,13 +30,17 @@ class Airplane2D(gym.Env):
     screen_height = 400
     max_steps = 1_000
 
-    def __init__(self, params=None, render_mode: Optional[str] = None, mode="power_and_stick"):
+    def __init__(
+        self, params=None, render_mode: Optional[str] = None, mode="power_and_stick"
+    ):
         super().__init__()
         self.obs_shape = (10,)  # TODO : adapt
-        #self.action_space = gym.spaces.MultiDiscrete([10,31])  # 10 power levels (0-9) and 30 pitch levels (-15 to 15 degrees)
+        # self.action_space = gym.spaces.MultiDiscrete([10,31])  # 10 power levels (0-9) and 30 pitch levels (-15 to 15 degrees)
         if mode == "power_and_stick":
             self.action_space = gym.spaces.Box(
-                low=np.array([0, -1]),  # Power from 0 to 9, pitch from -15 to 15 degrees
+                low=np.array(
+                    [0, -1]
+                ),  # Power from 0 to 9, pitch from -15 to 15 degrees
                 high=np.array([1, 1]),
                 dtype=np.float32,
             )
@@ -57,7 +69,7 @@ class Airplane2D(gym.Env):
 
         # Rendering
         self.render_mode = render_mode
-        
+
         self.screen = None
         self.clock = None
         self.isopen = True
@@ -69,8 +81,6 @@ class Airplane2D(gym.Env):
         # Add new attribute for rendering
         self.positions_history = []
 
-        
-
     @property
     def _default_params(self) -> EnvParams:
         # Default environment parameters for Airplane2D
@@ -79,31 +89,37 @@ class Airplane2D(gym.Env):
     def step(self, action, params: EnvParams = None):
         state = self.state
         params = self.params if params is None else params
-        power, stick = action # cannot just unpack action because of different modes
+        power, stick = action  # cannot just unpack action because of different modes
         stick = np.deg2rad(stick * 15)
         new_state, metrics = compute_next_state(power, stick, state, params, xp=np)
         reward = compute_reward(new_state, params, xp=np)
         terminated, truncated = check_is_terminal(new_state, params)
         obs = self.get_obs(new_state)
         self.state = new_state
-        return obs, reward, terminated,  truncated, {"metrics": metrics}
+        return obs, reward, terminated, truncated, {"metrics": metrics}
 
     def reset(self, seed=None, options=None):
         """Performs resetting of environment."""
         super().reset(seed=seed)
         rng = np.random.default_rng(seed)
         initial_x = 0.0
-        initial_z = rng.uniform(self.params.initial_altitude_range[0], self.params.initial_altitude_range[1])
+        initial_z = rng.uniform(
+            self.params.initial_altitude_range[0], self.params.initial_altitude_range[1]
+        )
         initial_z_dot = self.params.initial_z_dot
         initial_x_dot = self.params.initial_x_dot
         initial_theta = np.deg2rad(self.params.initial_theta)
-        initial_gamma = np.arcsin(initial_z_dot / np.linalg.norm([initial_x_dot, initial_z_dot + 1e-6]))
+        initial_gamma = np.arcsin(
+            initial_z_dot / np.linalg.norm([initial_x_dot, initial_z_dot + 1e-6])
+        )
         initial_alpha = initial_theta - initial_gamma
         initial_m = self.params.initial_mass + self.params.initial_fuel_quantity
         initial_power = self.params.initial_power
         initial_stick = np.deg2rad(self.params.initial_stick)
         initial_fuel = self.params.initial_fuel_quantity
-        target_altitude = rng.uniform(self.params.target_altitude_range[0], self.params.target_altitude_range[1])
+        target_altitude = rng.uniform(
+            self.params.target_altitude_range[0], self.params.target_altitude_range[1]
+        )
 
         self.state = EnvState(
             x=initial_x,
@@ -122,7 +138,6 @@ class Airplane2D(gym.Env):
             target_altitude=target_altitude,
         )
         return self.get_obs(self.state), self.state
-    
 
     def get_obs(self, state: EnvState):
         """Applies observation function to state."""
@@ -145,7 +160,6 @@ class Airplane2D(gym.Env):
     def is_terminal(self, state: EnvState, params: EnvParams) -> bool:
         """Check whether state is terminal."""
         return check_is_terminal(state, params)
-
 
     def render(self):
         # if self.render_mode is None:
@@ -171,7 +185,6 @@ class Airplane2D(gym.Env):
             self.screen = screen
             self.clock = clock
 
-
         if self.render_mode == "human":
             pygame.event.pump()
             self.clock.tick(self.metadata["render_fps"])
@@ -184,8 +197,19 @@ class Airplane2D(gym.Env):
             self.frames.extend(frames)
             return self.frames
 
-    def save_video(self, select_action: Callable, folder="videos", episode_index=0, FPS=60, params=None, seed=None):
-        return save_video(self, select_action, folder, episode_index, FPS, params, seed)
+    def save_video(
+        self,
+        select_action: Callable,
+        folder="videos",
+        episode_index=0,
+        FPS=60,
+        params=None,
+        seed=None,
+        format="mp4",
+    ):
+        return save_video(
+            self, select_action, folder, episode_index, FPS, params, seed, format=format
+        )
 
 
 if __name__ == "__main__":
@@ -193,7 +217,6 @@ if __name__ == "__main__":
     seed = 42
     env_params = EnvParams(max_steps_in_episode=2_000)
     action = (0.8, 0.0)
-    env.save_video(lambda o: action, seed=seed, folder="videos", episode_index=0, params=env_params)
-
-
-
+    env.save_video(
+        lambda o: action, seed=seed, folder="videos", episode_index=0, params=env_params
+    )

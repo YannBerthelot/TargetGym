@@ -1,10 +1,8 @@
-from typing import Sequence
-
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from plane.utils import compute_norm_from_coordinates
+from plane_env.utils import compute_norm_from_coordinates
 
 
 def compute_drag(S: float, C: float, V: float, rho: float) -> float:
@@ -22,31 +20,33 @@ def compute_drag(S: float, C: float, V: float, rho: float) -> float:
     """
     return 0.5 * rho * S * C * (V**2)
 
+
 def speed_of_sound(h):
     # convert meters to km for clarity
     km = h / 1000.0
-    
+
     # Troposphere 0-11 km: T = 288.15 - 6.5*h
-    T0 = 288.15 - 6.5*km
+    T0 = 288.15 - 6.5 * km
     # Stratosphere 11-20 km: T = 216.65
-    T1 = 216.65 + 0.0*(km - 11)
+    T1 = 216.65 + 0.0 * (km - 11)
     # Stratosphere 20-32 km: T = 216.65 + (km-20)*1.0*10
-    T2 = 216.65 + (km-20)*1.0*10  # simplified linear increase
+    T2 = 216.65 + (km - 20) * 1.0 * 10  # simplified linear increase
     # Stratosphere 32-47 km: T = 228.65 + (km-32)*2.8
-    T3 = 228.65 + (km-32)*2.8
-    
+    T3 = 228.65 + (km - 32) * 2.8
+
     # Smooth weighting using jnp.clip
-    w0 = jnp.clip((11 - km)/11, 0, 1)
-    w1 = jnp.clip((km - 11)/9, 0, 1) * jnp.clip((20 - km)/9, 0, 1)
-    w2 = jnp.clip((km - 20)/12, 0, 1) * jnp.clip((32 - km)/12, 0, 1)
-    w3 = jnp.clip((km - 32)/15, 0, 1) * jnp.clip((47 - km)/15, 0, 1)
-    
-    T = w0*T0 + w1*T1 + w2*T2 + w3*T3
-    
+    w0 = jnp.clip((11 - km) / 11, 0, 1)
+    w1 = jnp.clip((km - 11) / 9, 0, 1) * jnp.clip((20 - km) / 9, 0, 1)
+    w2 = jnp.clip((km - 20) / 12, 0, 1) * jnp.clip((32 - km) / 12, 0, 1)
+    w3 = jnp.clip((km - 32) / 15, 0, 1) * jnp.clip((47 - km) / 15, 0, 1)
+
+    T = w0 * T0 + w1 * T1 + w2 * T2 + w3 * T3
+
     gamma = 1.4
     R = 287.05
-    
+
     return jnp.sqrt(gamma * R * T)
+
 
 def compute_weight(mass: float, g: float) -> float:
     """Compute the weight of the plane given its mass and g"""
@@ -246,7 +246,7 @@ def check_power(power):
 def compute_next_power(requested_power, current_power, delta_t):
     power_diff = requested_power - current_power
     current_power += (
-        0.05 * delta_t*power_diff
+        0.05 * delta_t * power_diff
     )  # TODO : parametrize how fast we reach the desired value
     jax.debug.callback(check_power, current_power)
     return current_power
@@ -255,19 +255,19 @@ def compute_next_power(requested_power, current_power, delta_t):
 def compute_next_stick(requested_stick, current_stick, delta_t):
     stick_diff = requested_stick - current_stick
     current_stick += (
-        0.9 * delta_t*stick_diff
+        0.9 * delta_t * stick_diff
     )  # TODO : parametrize how fast we reach the desired value
     return current_stick
 
 
 def compute_thrust_output(
-    power: float,                  # throttle setting (0–1)
-    thrust_output_at_sea_level: float,       # max thrust at sea level, N
-    M: float,                      # Mach number
-    rho: float,                     # air density at current altitude, kg/m³
-    M_crit: float = 0.85,          # critical Mach number for thrust drop
-    k1: float = 0.5,               # ram drag factor
-    k2: float = 10.0               # shock-induced thrust drop factor
+    power: float,  # throttle setting (0–1)
+    thrust_output_at_sea_level: float,  # max thrust at sea level, N
+    M: float,  # Mach number
+    rho: float,  # air density at current altitude, kg/m³
+    M_crit: float = 0.85,  # critical Mach number for thrust drop
+    k1: float = 0.5,  # ram drag factor
+    k2: float = 10.0,  # shock-induced thrust drop factor
 ) -> float:
     """
     Computes jet engine thrust with Mach and altitude effects.
@@ -281,30 +281,30 @@ def compute_thrust_output(
     mach_loss = 1 / (1 + k1 * M**2)
 
     # Shock-induced thrust drop beyond critical Mach
-    shock_drop = jnp.exp(-k2 * jnp.maximum(M - M_crit, 0)**2)
+    shock_drop = jnp.exp(-k2 * jnp.maximum(M - M_crit, 0) ** 2)
 
     # --- final thrust ---
-    thrust = power * thrust_output_at_sea_level * altitude_factor * mach_loss * shock_drop
+    thrust = (
+        power * thrust_output_at_sea_level * altitude_factor * mach_loss * shock_drop
+    )
     return thrust
 
 
-
-def compute_air_density_from_altitude(
-    altitude: float
-) -> float:
+def compute_air_density_from_altitude(altitude: float) -> float:
     """Compute the air density given the air density value (in kg.m-3) at sea level and a multiplicative factor (no unit) depending on altitude."""
     # ISA up to 11 km, altitude is assumed to be in meters
-    
-    T0 = 288.15      # K
-    P0 = 101325.0    # Pa
-    L = 0.0065       # K/m
-    g = 9.80665      # m/s^2
-    R = 287.05       # J/(kg·K)
+
+    T0 = 288.15  # K
+    P0 = 101325.0  # Pa
+    L = 0.0065  # K/m
+    g = 9.80665  # m/s^2
+    R = 287.05  # J/(kg·K)
 
     T = T0 - L * altitude
     P = P0 * (T / T0) ** (g / (R * L))
     rho = P / (R * T)
     return rho
+
 
 def compute_exposed_surfaces(
     S_front: float, S_wings: float, alpha: float
@@ -325,6 +325,7 @@ def compute_exposed_surfaces(
     S_x = S_front * jnp.cos(alpha) + S_wings * jnp.sin(alpha)
     return S_x, S_z
 
+
 def aero_coefficients(aoa_deg, mach=0.0):
     """
     Compute lift (CL) and drag (CD) coefficients for a given angle of attack (in degrees),
@@ -342,8 +343,8 @@ def aero_coefficients(aoa_deg, mach=0.0):
     q = 25  # slope for sigmoid blending
 
     # Mach correction parameters
-    M_crit = 0.8     # critical Mach for drag rise
-    k_drag = 5.0    # quadratic drag rise factor
+    M_crit = 0.8  # critical Mach for drag rise
+    k_drag = 5.0  # quadratic drag rise factor
 
     def CL(aoa):
         return cl1 + cl2 * aoa
@@ -355,7 +356,7 @@ def aero_coefficients(aoa_deg, mach=0.0):
         return jnp.sin(2 * aoa) + clpOffset
 
     def CDP(aoa):
-        return 0.02 + (1 - jnp.cos(2*aoa)) * 0.02
+        return 0.02 + (1 - jnp.cos(2 * aoa)) * 0.02
 
     def Up(x, pos):
         return 1 / (1 + jnp.exp(-q * (x - pos)))
@@ -374,16 +375,16 @@ def aero_coefficients(aoa_deg, mach=0.0):
 
     # --- blended lift ---
     CLT = (
-        Down(aoa, aoa1_rad) * CLP(aoa) +
-        Win(aoa, aoa1_rad, aoa2_rad) * CL(aoa) +
-        Up(aoa, aoa2_rad) * CLP(aoa)
+        Down(aoa, aoa1_rad) * CLP(aoa)
+        + Win(aoa, aoa1_rad, aoa2_rad) * CL(aoa)
+        + Up(aoa, aoa2_rad) * CLP(aoa)
     )
 
     # --- blended drag ---
     CDT = (
-        Down(aoa, aoa1_rad) * CDP(aoa) +
-        Win(aoa, aoa1_rad, aoa2_rad) * CD(aoa) +
-        Up(aoa, aoa2_rad) * CDP(aoa)
+        Down(aoa, aoa1_rad) * CDP(aoa)
+        + Win(aoa, aoa1_rad, aoa2_rad) * CD(aoa)
+        + Up(aoa, aoa2_rad) * CDP(aoa)
     )
 
     # --- Mach corrections ---
@@ -397,6 +398,7 @@ def aero_coefficients(aoa_deg, mach=0.0):
     CDT = CDT + drag_rise
 
     return CLT, CDT
+
 
 def compute_acceleration(
     thrust: float,
@@ -424,36 +426,36 @@ def compute_acceleration(
     )
     C_x = compute_x_drag_coefficient(alpha=alpha, M=M, C_x_min=C_x0, M_critic=M_crit)
     C_z = compute_z_drag_coefficient(alpha=alpha, C_z_max=C_z0, M=M, M_critic=M_crit)
-    
+
     C_z = 0.6
-    C_x = C_z/16
+    C_x = C_z / 16
     C_z, C_x = aero_coefficients(jnp.rad2deg(alpha), M)
-    #jax.debug.print('C_x: {C_x}, C_z: {C_z}, rho: {rho}, V: {V} m/s, thrust:{thrust} N, M:{M}, AoA {aoa} deg', C_x=C_x, C_z=C_z, rho=rho, V=V, thrust=thrust, M=M, aoa=jnp.rad2deg(alpha))
-    
+    # jax.debug.print('C_x: {C_x}, C_z: {C_z}, rho: {rho}, V: {V} m/s, thrust:{thrust} N, M:{M}, AoA {aoa} deg', C_x=C_x, C_z=C_z, rho=rho, V=V, thrust=thrust, M=M, aoa=jnp.rad2deg(alpha))
+
     wings_surface = 100
     drag_wings = compute_drag(S=wings_surface, C=C_x, V=V, rho=rho)
     lift_wings = compute_drag(S=wings_surface, C=C_z, V=V, rho=rho)
 
-    
-    moment_arm_wings = 1.5  # distance from the center of gravity to the wings (in meters)
+    moment_arm_wings = (
+        1.5  # distance from the center of gravity to the wings (in meters)
+    )
     M_wings = lift_wings * moment_arm_wings  # moment arm for wings (in meters)
 
     stabilizer_surface = 27
-    C_z, C_x = aero_coefficients(jnp.rad2deg(alpha)-3, M)
+    C_z, C_x = aero_coefficients(jnp.rad2deg(alpha) - 3, M)
     lift_stabilizer = compute_drag(S=stabilizer_surface, C=C_z, V=V, rho=rho)
     drag_stabilizer = compute_drag(S=stabilizer_surface, C=C_x, V=V, rho=rho)
     F_m = lift_stabilizer - drag_stabilizer
 
-    
-    
-
-    moment_arm_stabilizer = 15  # distance from the center of gravity to the stabilizer (in meters)
-    M_stabilizer = - F_m * moment_arm_stabilizer
-    
-
+    moment_arm_stabilizer = (
+        15  # distance from the center of gravity to the stabilizer (in meters)
+    )
+    M_stabilizer = -F_m * moment_arm_stabilizer
 
     elevator_surface = 10
-    C_z, C_x = aero_coefficients(jnp.rad2deg(alpha)-jnp.rad2deg(stick)-3, M) # TODO : is it minus stick or + stick?
+    C_z, C_x = aero_coefficients(
+        jnp.rad2deg(alpha) - jnp.rad2deg(stick) - 3, M
+    )  # TODO : is it minus stick or + stick?
     lift_elevator = compute_drag(S=elevator_surface, C=C_z, V=V, rho=rho)
     drag_elevator = compute_drag(S=elevator_surface, C=C_x, V=V, rho=rho)
     F_elevator = lift_elevator * jnp.cos(stick) - drag_elevator * jnp.sin(stick)
@@ -461,18 +463,24 @@ def compute_acceleration(
 
     M_y = M_stabilizer + M_wings + M_elevator
 
-    drag = drag_wings + drag_stabilizer + drag_elevator   # total drag including stabilizer
-    lift = lift_wings + lift_stabilizer + lift_elevator  # total lift including stabilizer
+    drag = (
+        drag_wings + drag_stabilizer + drag_elevator
+    )  # total drag including stabilizer
+    lift = (
+        lift_wings + lift_stabilizer + lift_elevator
+    )  # total lift including stabilizer
 
     F_x, F_z = newton_second_law(
         thrust=thrust, lift=lift, drag=drag, P=P, gamma=gamma, theta=theta
     )
     metrics = (drag, lift, S_x, S_z, C_x, C_z, F_x, F_z)
-    #jax.debug.print("{M_y} Nm, M_stabilizer: {M_stabilizer} Nm, M_wings: {M_wings} Nm", M_y=M_y, M_stabilizer=M_stabilizer, M_wings=M_wings)
+    # jax.debug.print("{M_y} Nm, M_stabilizer: {M_stabilizer} Nm, M_wings: {M_wings} Nm", M_y=M_y, M_stabilizer=M_stabilizer, M_wings=M_wings)
     return F_x / m, F_z / m, M_y / I, metrics
 
 
-def compute_speed_and_pos_from_acceleration(V_x, V_z, theta_dot, x, z, theta, a_x, a_z, alpha_y, delta_t):
+def compute_speed_and_pos_from_acceleration(
+    V_x, V_z, theta_dot, x, z, theta, a_x, a_z, alpha_y, delta_t
+):
     # Update speed
     V_x += a_x * delta_t
     V_z += a_z * delta_t
