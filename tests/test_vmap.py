@@ -1,8 +1,9 @@
 """Make sure that functions are jax jitable/vmapable"""
+
 import jax
 import jax.numpy as jnp
 
-from plane.env_jax import Airplane2D
+from plane_env.env_jax import Airplane2D
 
 
 def test_reset():

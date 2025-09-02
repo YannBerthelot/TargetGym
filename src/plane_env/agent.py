@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from jaxppo.ppo import PPO, LoggingConfig
 from jaxppo.wandb_logging import finish_logging
 
-from plane.env import Airplane2D, EnvParams
+from plane_env.env import Airplane2D, EnvParams
 
 logging_config = LoggingConfig(  # TODO : automate generation of this
     project_name="plane solving",

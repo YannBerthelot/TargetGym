@@ -1,11 +1,19 @@
 from typing import Callable
+
+import chex
 import jax
 import jax.numpy as jnp
-import chex
-from plane.env import compute_next_state, check_is_terminal, compute_reward, compute_norm_from_coordinates, save_video
-from plane.rendering import _render
 from gymnax.environments import environment, spaces
-from plane.env import get_env_classes
+
+from plane_env.env import (
+    check_is_terminal,
+    compute_next_state,
+    compute_norm_from_coordinates,
+    compute_reward,
+    get_env_classes,
+    save_video,
+)
+from plane_env.rendering import _render
 
 EnvState, EnvParams, EnvMetrics = get_env_classes(use_jax=True)
 
@@ -28,7 +36,13 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
     def default_params(self) -> EnvParams:
         return EnvParams(max_steps_in_episode=self.max_steps)
 
-    def step(self, key: chex.PRNGKey, state: EnvState, action: jnp.ndarray, params: EnvParams=None):
+    def step(
+        self,
+        key: chex.PRNGKey,
+        state: EnvState,
+        action: jnp.ndarray,
+        params: EnvParams = None,
+    ):
         """
         Performs step transitions using JAX, returns observation, new state, reward, done, info
         """
@@ -43,7 +57,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
 
         obs = self.get_obs(new_state)
         return obs, new_state, reward, terminated, truncated, {"metrics": metrics}
-    
+
     def is_terminal(self, state: EnvState, params: EnvParams) -> jax.Array:
         return check_is_terminal(state, params, xp=jnp)
 
@@ -56,18 +70,33 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         key, altitude_key, target_key = jax.random.split(key, 3)
 
         initial_x = 0.0
-        initial_z = jax.random.uniform(altitude_key, minval=params.initial_altitude_range[0], maxval=params.initial_altitude_range[1])
+        initial_z = jax.random.uniform(
+            altitude_key,
+            minval=params.initial_altitude_range[0],
+            maxval=params.initial_altitude_range[1],
+        )
         initial_z_dot = params.initial_z_dot
         initial_x_dot = params.initial_x_dot
         initial_theta = jnp.deg2rad(params.initial_theta)
-        initial_gamma = jnp.arcsin(initial_z_dot / (compute_norm_from_coordinates(jnp.array([initial_x_dot, initial_z_dot + 1e-6]))))
+        initial_gamma = jnp.arcsin(
+            initial_z_dot
+            / (
+                compute_norm_from_coordinates(
+                    jnp.array([initial_x_dot, initial_z_dot + 1e-6])
+                )
+            )
+        )
         initial_alpha = initial_theta - initial_gamma
         initial_m = params.initial_mass + params.initial_fuel_quantity
         initial_power = params.initial_power
         initial_stick = jnp.deg2rad(params.initial_stick)
         initial_fuel = params.initial_fuel_quantity
 
-        target_altitude = jax.random.uniform(target_key, minval=params.target_altitude_range[0], maxval=params.target_altitude_range[1])
+        target_altitude = jax.random.uniform(
+            target_key,
+            minval=params.target_altitude_range[0],
+            maxval=params.target_altitude_range[1],
+        )
 
         state = EnvState(
             x=initial_x,
@@ -93,14 +122,16 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         """
         Observation vector
         """
-        return jnp.stack([
-            state.z,
-            state.x_dot,
-            state.z_dot,
-            state.theta,
-            state.gamma,
-            state.target_altitude
-        ])
+        return jnp.stack(
+            [
+                state.z,
+                state.x_dot,
+                state.z_dot,
+                state.theta,
+                state.gamma,
+                state.target_altitude,
+            ]
+        )
 
     def render(self, screen, state: EnvState, params: EnvParams, frames, clock):
         """
@@ -109,20 +140,37 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         frames, screen, clock = self.render_plane(screen, state, params, frames, clock)
         return frames, screen, clock
 
-
-    def save_video(self, select_action: Callable[[jnp.ndarray], jnp.ndarray], key: chex.PRNGKey, params=None, folder="videos", episode_index=0, FPS=60):
-        return save_video(self, select_action, folder, episode_index, FPS, params, seed=key)
-    
+    def save_video(
+        self,
+        select_action: Callable[[jnp.ndarray], jnp.ndarray],
+        key: chex.PRNGKey,
+        params=None,
+        folder="videos",
+        episode_index=0,
+        FPS=60,
+        format="mp4",
+    ):
+        return save_video(
+            self,
+            select_action,
+            folder,
+            episode_index,
+            FPS,
+            params,
+            seed=key,
+            format=format,
+        )
 
     def action_space(self, params: EnvParams | None = None) -> spaces.Discrete:
         """Action space of the environment."""
-        return spaces.Box(jnp.array([0.0, -1.0]), jnp.array([1.0, 1.0]), (2,), dtype=jnp.float32)
+        return spaces.Box(
+            jnp.array([0.0, -1.0]), jnp.array([1.0, 1.0]), (2,), dtype=jnp.float32
+        )
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
         """Observation space of the environment."""
         inf = jnp.finfo(jnp.float32).max
         return spaces.Box(-inf, inf, (10,), dtype=jnp.float32)
-        
 
     def state_space(self, params: EnvParams) -> spaces.Dict:
         """State space of the environment."""
@@ -148,8 +196,13 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
 if __name__ == "__main__":
     env = Airplane2D()
     seed = 42
-    env_params = EnvParams(max_steps_in_episode=2_000)
+    env_params = EnvParams(max_steps_in_episode=1_000)
     action = (0.8, 0.0)
-    env.save_video(lambda o: action, seed, folder="videos", episode_index=0, params=env_params)
-
-    
+    env.save_video(
+        lambda o: action,
+        seed,
+        folder="videos",
+        episode_index=0,
+        params=env_params,
+        format="gif",
+    )

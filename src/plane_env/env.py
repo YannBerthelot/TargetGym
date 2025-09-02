@@ -1,21 +1,20 @@
 import os
+from typing import Callable, Tuple
 
-from typing import Tuple
-from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 import numpy as np
-from typing import Callable
+from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
+
 # Optional: jax imports (only used in jax env)
 try:
+    import chex
     import jax
     import jax.numpy as jnp
-    import chex
 except ImportError:
     jax = None
     jnp = None
     chex = None
 
-from plane.utils import compute_norm_from_coordinates
-from plane.dynamics import (
+from plane_env.dynamics import (
     compute_acceleration,
     compute_air_density_from_altitude,
     compute_next_power,
@@ -23,8 +22,10 @@ from plane.dynamics import (
     compute_speed_and_pos_from_acceleration,
     compute_thrust_output,
 )
+from plane_env.utils import compute_norm_from_coordinates
 
 SPEED_OF_SOUND = 343.0
+
 
 def get_env_classes(use_jax: bool = False) -> Tuple[type, type, type]:
     """
@@ -33,10 +34,12 @@ def get_env_classes(use_jax: bool = False) -> Tuple[type, type, type]:
     """
     if use_jax:
         from flax import struct
+
         dataclass = struct.dataclass
         xp = jnp  # placeholder if you want to pass to properties
     else:
         from dataclasses import dataclass
+
         dataclass = dataclass
         xp = np
 
@@ -85,7 +88,10 @@ def get_env_classes(use_jax: bool = False) -> Tuple[type, type, type]:
 
         @property
         def M(self):
-            return compute_norm_from_coordinates(xp.array([self.x_dot, self.z_dot])) / self.speed_of_sound
+            return (
+                compute_norm_from_coordinates(xp.array([self.x_dot, self.z_dot]))
+                / self.speed_of_sound
+            )
 
     @dataclass
     class EnvParams:
@@ -117,7 +123,10 @@ def get_env_classes(use_jax: bool = False) -> Tuple[type, type, type]:
 
     return EnvState, EnvParams, EnvMetrics
 
-EnvStateGymnasium, EnvParamsGymnasium, EnvMetricsGymnasium = get_env_classes(use_jax=False)
+
+EnvStateGymnasium, EnvParamsGymnasium, EnvMetricsGymnasium = get_env_classes(
+    use_jax=False
+)
 EnvStateJAX, EnvParamsJAX, EnvMetricsJAX = get_env_classes(use_jax=True)
 EnvState = EnvStateGymnasium | EnvStateJAX
 EnvParams = EnvParamsGymnasium | EnvParamsJAX
@@ -127,7 +136,11 @@ EnvMetrics = EnvMetricsGymnasium | EnvMetricsJAX
 def check_mass_does_not_increase(old_mass, new_mass, xp=np):
     """Check that mass does not increase. Safe for JIT if wrapped in callback."""
     if jax is not None and xp is jnp:
-        jax.debug.callback(lambda o, n: None if o >= n else AssertionError("Mass increased"), old_mass, new_mass)
+        jax.debug.callback(
+            lambda o, n: None if o >= n else AssertionError("Mass increased"),
+            old_mass,
+            new_mass,
+        )
     else:
         assert old_mass >= new_mass
 
@@ -137,7 +150,7 @@ def check_is_terminal(state: EnvState, params: EnvParams, xp=np):
     terminated = xp.logical_or(state.z < params.min_alt, state.z > params.max_alt)
     truncated = state.t >= params.max_steps_in_episode
 
-    #done = xp.logical_or(done_alt, done_steps)
+    # done = xp.logical_or(done_alt, done_steps)
     return terminated, truncated
 
 
@@ -153,7 +166,13 @@ def compute_reward(state: EnvState, params: EnvParams, xp=np):
     return reward
 
 
-def compute_next_state(power_requested: float, stick_requested: float, state: EnvState, params: EnvParams, xp=np):
+def compute_next_state(
+    power_requested: float,
+    stick_requested: float,
+    state: EnvState,
+    params: EnvParams,
+    xp=np,
+):
     """Compute next state and metrics."""
     EnvState = EnvStateJAX if xp is jnp else EnvStateGymnasium
     power = compute_next_power(power_requested, state.power, params.delta_t)
@@ -199,7 +218,9 @@ def compute_next_state(power_requested: float, stick_requested: float, state: En
     )
 
     t = state.t + 1
-    gamma = xp.arcsin(z_dot / (compute_norm_from_coordinates(xp.array([x_dot, z_dot + 1e-6]))))
+    gamma = xp.arcsin(
+        z_dot / (compute_norm_from_coordinates(xp.array([x_dot, z_dot + 1e-6])))
+    )
     alpha = theta - gamma
     m = params.initial_mass + state.fuel
     check_mass_does_not_increase(state.m, m, xp=xp)
@@ -231,9 +252,10 @@ def save_video(
     FPS: int = 60,
     params=None,
     seed: int = None,
+    format: str = "mp4",  # "mp4" or "gif"
 ):
     """
-    Runs an episode using `select_action` and saves it as a video.
+    Runs an episode using `select_action` and saves it as a video (mp4 or gif).
     Works for both JAX and Gymnasium environments.
 
     Arguments:
@@ -244,20 +266,25 @@ def save_video(
         FPS: frames per second
         params: optional environment parameters
         seed: optional seed for environment reset
+        format: output format, "mp4" or "gif"
     Returns:
         Path to the saved video.
     """
-    # Reset environment
-
-    if seed is not None:  
-        key=jax.random.PRNGKey(seed=seed)
-        obs_state = env.reset(seed=seed) if not hasattr(env, "default_params") else env.reset(key=key, params=env.default_params)
+    if seed is not None:
+        key = jax.random.PRNGKey(seed=seed)
+        obs_state = (
+            env.reset(seed=seed)
+            if not hasattr(env, "default_params")
+            else env.reset(key=key, params=env.default_params)
+        )
     else:
-        key=jax.random.PRNGKey(seed=42)
-        obs_state = env.reset() if not hasattr(env, "default_params") else env.reset(key=key, params=env.default_params)
+        key = jax.random.PRNGKey(seed=42)
+        obs_state = (
+            env.reset()
+            if not hasattr(env, "default_params")
+            else env.reset(key=key, params=env.default_params)
+        )
 
-
-    # Handle environments that return either (obs, state) or obs only
     if isinstance(obs_state, tuple) and len(obs_state) == 2:
         obs, state = obs_state
     else:
@@ -271,31 +298,41 @@ def save_video(
 
     while not done:
         action = select_action(obs)
-        step_result = env.step(key, obs if state is None else state, action, params) if hasattr(env, "default_params") else env.step(state, action, params)
+        step_result = (
+            env.step(key, obs if state is None else state, action, params)
+            if hasattr(env, "default_params")
+            else env.step(state, action, params)
+        )
         obs, state, reward, terminated, truncated, info = step_result
         done = terminated or truncated
 
-            #done = state.terminated or state.truncated
-
         if hasattr(env, "render"):
             if hasattr(env, "default_params"):
-                frames, screen, clock = env.render(screen, state, params if params is not None else env.default_params, frames, clock)
+                frames, screen, clock = env.render(
+                    screen,
+                    state,
+                    params if params is not None else env.default_params,
+                    frames,
+                    clock,
+                )
             else:
                 frames.append(env.render())
-
 
     if len(frames) == 0:
         raise ValueError("No frames captured. Check that rendering is working.")
 
-    # Ensure folder exists
     os.makedirs(folder, exist_ok=True)
-    video_path = os.path.join(folder, f"episode_{episode_index:03d}.mp4")
+    video_path = os.path.join(folder, f"episode_{episode_index:03d}.{format}")
 
-    # Convert frames to numpy uint8
     frames_np = [np.asarray(frame).astype(np.uint8) for frame in frames]
-
-    # Save video using MoviePy
     clip = ImageSequenceClip(frames_np, fps=FPS)
-    clip.write_videofile(video_path, codec="libx264", audio=False)
+
+    if format == "mp4":
+        clip.write_videofile(video_path, codec="libx264", audio=False)
+    elif format == "gif":
+        clip.write_gif(video_path, fps=30)
+    else:
+        raise ValueError("Unsupported format. Use 'mp4' or 'gif'.")
+
     print(f"Saved video to {video_path}")
     return video_path

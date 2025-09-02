@@ -1,7 +1,6 @@
-import jax
 import pytest
 
-from plane.env_gymnasium import Airplane2D, EnvParams, EnvState, compute_reward
+from plane_env.env_gymnasium import Airplane2D, EnvParams, EnvState, compute_reward
 
 
 def test_init():
@@ -33,12 +32,11 @@ def test_sample_action():
     assert action.shape == (2,)
 
 
-
 def test_step():
     env = Airplane2D()
     obs, info = env.reset()
     env_params = EnvParams()
-    action = (0.9,0)
+    action = (0.9, 0)
     state = env.state
     # Perform the step transition.
     n_obs, reward, terminated, truncated, new_info = env.step(action)
@@ -49,7 +47,7 @@ def test_step():
     assert new_state.z_dot < state.z_dot
     assert new_state.power < state.power
     assert new_state.t == state.t + 1
-    #assert new_state.theta == state.theta
+    # assert new_state.theta == state.theta
     assert new_state.alpha > state.alpha
     assert new_state.gamma < state.gamma
 
