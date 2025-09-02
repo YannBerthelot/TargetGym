@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from plane.env import (
+from plane_env.env import (
     check_is_terminal,
     compute_next_state,
     compute_norm_from_coordinates,
@@ -13,7 +13,7 @@ from plane.env import (
     get_env_classes,
     save_video,
 )
-from plane.rendering import _render
+from plane_env.rendering import _render
 
 EnvState, EnvParams, EnvMetrics = get_env_classes(use_jax=True)
 

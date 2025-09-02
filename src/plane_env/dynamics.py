@@ -1,10 +1,8 @@
-from typing import Sequence
-
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from plane.utils import compute_norm_from_coordinates
+from plane_env.utils import compute_norm_from_coordinates
 
 
 def compute_drag(S: float, C: float, V: float, rho: float) -> float:

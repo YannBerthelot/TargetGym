@@ -4,14 +4,14 @@ import gymnasium as gym
 import numpy as np
 import pygame
 
-from plane.env import (
+from plane_env.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
     get_env_classes,
     save_video,
 )
-from plane.rendering import _render
+from plane_env.rendering import _render
 
 EnvState, EnvParams, EnvMetrics = get_env_classes(use_jax=False)
 

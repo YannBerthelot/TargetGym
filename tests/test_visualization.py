@@ -8,9 +8,9 @@ import pytest
 from gymnasium.utils.save_video import save_video
 from PIL import Image
 
-from plane.env_gymnasium import Airplane2D as GymAirplane2D
-from plane.env_jax import Airplane2D as JaxAirplane2D
-from plane.env_jax import EnvParams, EnvState
+from plane_env.env_gymnasium import Airplane2D as GymAirplane2D
+from plane_env.env_jax import Airplane2D as JaxAirplane2D
+from plane_env.env_jax import EnvParams, EnvState
 
 
 def are_images_similar(

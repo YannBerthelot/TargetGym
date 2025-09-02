@@ -10,7 +10,7 @@ import pandas as pd
 from scipy.interpolate import interp1d
 
 # Import environment
-from plane.env_jax import Airplane2D, EnvParams
+from plane_env.env_jax import Airplane2D, EnvParams
 
 
 def run_constant_policy(

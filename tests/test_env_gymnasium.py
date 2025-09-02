@@ -1,7 +1,6 @@
-import jax
 import pytest
 
-from plane.env_gymnasium import Airplane2D, EnvParams, EnvState, compute_reward
+from plane_env.env_gymnasium import Airplane2D, EnvParams, EnvState, compute_reward
 
 
 def test_init():

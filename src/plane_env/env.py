@@ -14,7 +14,7 @@ except ImportError:
     jnp = None
     chex = None
 
-from plane.dynamics import (
+from plane_env.dynamics import (
     compute_acceleration,
     compute_air_density_from_altitude,
     compute_next_power,
@@ -22,7 +22,7 @@ from plane.dynamics import (
     compute_speed_and_pos_from_acceleration,
     compute_thrust_output,
 )
-from plane.utils import compute_norm_from_coordinates
+from plane_env.utils import compute_norm_from_coordinates
 
 SPEED_OF_SOUND = 343.0
 
