@@ -1,4 +1,5 @@
 """Make sure that functions are jax jitable/vmapable"""
+
 import jax
 import jax.numpy as jnp
 

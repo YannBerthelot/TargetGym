@@ -3,13 +3,17 @@ from math import cos, sin
 import numpy as np
 import pytest
 
-from plane.dynamics import (compute_air_density_from_altitude, compute_drag,
-                            compute_exposed_surfaces,
-                            compute_initial_x_drag_coefficient,
-                            compute_initial_z_drag_coefficient,
-                            compute_mach_impact_on_x_drag_coefficient,
-                            compute_mach_impact_on_z_drag_coefficient,
-                            compute_weight, newton_second_law)
+from plane.dynamics import (
+    compute_air_density_from_altitude,
+    compute_drag,
+    compute_exposed_surfaces,
+    compute_initial_x_drag_coefficient,
+    compute_initial_z_drag_coefficient,
+    compute_mach_impact_on_x_drag_coefficient,
+    compute_mach_impact_on_z_drag_coefficient,
+    compute_weight,
+    newton_second_law,
+)
 from plane.env_jax import EnvParams, EnvState, compute_next_state
 
 
@@ -158,25 +162,25 @@ def test_compute_next_state():
     state = EnvState(
         x=0.0,
         x_dot=250.0,  # Initial speed
-        z=3000.0,     # Initial altitude
+        z=3000.0,  # Initial altitude
         z_dot=0.0,
         theta=0.0,
         theta_dot=0.0,
         alpha=0.0,
         gamma=0.0,
         m=params.initial_mass + params.initial_fuel_quantity,
-        power=0.5,    # Half power
+        power=0.5,  # Half power
         stick=0.0,
         fuel=params.initial_fuel_quantity,
         t=0,
         target_altitude=4000.0,
     )
-    
+
     # Test level flight maintains roughly constant altitude
     new_state, _ = compute_next_state(0.5, 0.0, state, params)
     assert abs(new_state.z - state.z) < 10.0  # Small altitude change
     assert new_state.x > state.x  # Moving forward
-    
+
     # Test pitch up causes climb
     new_state, _ = compute_next_state(1.0, 1.0, state, params)
     assert new_state.power > state.power  # Increased power
