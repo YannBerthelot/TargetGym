@@ -15,6 +15,25 @@ gymnasium = "^1.2.0"
 distrax = "^0.1.5"
 jax = "<7.0"
 
+[tool.black]
+line-length = 88
+target-version = ['py310']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
 isort = "^5.12.0"
