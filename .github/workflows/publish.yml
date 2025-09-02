@@ -9,7 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -21,6 +24,22 @@ jobs:
         version: 1.7.1
         virtualenvs-create: true
         virtualenvs-in-project: true
+
+    - name: Configure Git
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+    - name: Get release tag
+      id: get_tag
+      run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+    - name: Update version
+      run: |
+        poetry version ${TAG#v}
+        git add pyproject.toml
+        git commit -m "chore: bump version to ${TAG#v}"
+        git push
 
     - name: Build package
       run: poetry build
