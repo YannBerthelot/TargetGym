@@ -15,13 +15,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Ensure the latest artifact actions are used
-      - name: Ensure latest artifact actions
-        uses: actions/upload-artifact@v4
-
-      - name: Ensure latest download
-        uses: actions/download-artifact@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -43,7 +36,18 @@ jobs:
           POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
         run: poetry publish --no-interaction
 
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v2
+      # ✅ Use pinned cache-apt-pkgs-action to install GitHub CLI without stale latest tag
+      - name: Install GitHub CLI
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.3
         with:
-          files: dist/*
+          packages: gh
+          version: 1.0
+
+      - name: Authenticate GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Upload release assets
+        run: |
+          for file in dist/*; do
+            gh release upload "${{ github.event.release.tag_name }}" "$file"
+          done
