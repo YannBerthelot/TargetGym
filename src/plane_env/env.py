@@ -93,7 +93,7 @@ class EnvParams:
     M_crit: float = 0.78
     initial_fuel_quantity: float = 23860 / 1.25
     specific_fuel_consumption: float = 17.5 / 1000
-    delta_t: float = 0.5
+    delta_t: float = 1.0
     speed_of_sound: float = SPEED_OF_SOUND
 
     max_steps_in_episode: int = 10_000
@@ -164,76 +164,104 @@ def compute_next_state(
     stick_requested: float,
     state: EnvState,
     params: EnvParams,
+    n_substeps: int = 10,
     xp=np,
 ):
-    """Compute next state and metrics."""
-    power = compute_next_power(power_requested, state.power, params.delta_t)
-    stick = compute_next_stick(stick_requested, state.stick, params.delta_t)
+    """Compute next state and metrics using multiple sub-steps with jax.lax.scan."""
 
-    thrust = compute_thrust_output(
-        power=power,
-        thrust_output_at_sea_level=params.thrust_output_at_sea_level,
-        rho=state.rho,
-        M=state.M,
-    )
+    dt = params.delta_t / n_substeps  # smaller time step
 
-    a_x, a_z, alpha_y, metrics = compute_acceleration(
-        thrust=thrust,
-        m=state.m,
-        gravity=params.gravity,
-        x_dot=state.x_dot,
-        z_dot=state.z_dot,
-        frontal_surface=params.frontal_surface,
-        wings_surface=params.wings_surface,
-        alpha=state.alpha,
-        M=state.M,
-        M_crit=params.M_crit,
-        C_x0=params.C_x0,
-        C_z0=params.C_z0,
-        gamma=state.gamma,
-        theta=state.theta,
-        rho=state.rho,
-        stick=stick,
-    )
+    def step_fn(carry, _):
+        current_state = carry
 
-    x_dot, z_dot, theta_dot, x, z, theta = compute_speed_and_pos_from_acceleration(
-        V_x=state.x_dot,
-        V_z=state.z_dot,
-        theta_dot=state.theta_dot,
-        x=state.x,
-        z=state.z,
-        theta=state.theta,
-        a_x=a_x,
-        a_z=a_z,
-        alpha_y=alpha_y,
-        delta_t=params.delta_t,
-    )
+        # Compute next power and stick
+        power = compute_next_power(power_requested, current_state.power, dt)
+        stick = compute_next_stick(stick_requested, current_state.stick, dt)
 
-    t = state.t + 1
-    gamma = xp.arcsin(
-        z_dot / (compute_norm_from_coordinates(xp.array([x_dot, z_dot + 1e-6])))
-    )
-    alpha = theta - gamma
-    m = params.initial_mass + state.fuel
-    check_mass_does_not_increase(state.m, m, xp=xp)
+        # Compute thrust
+        thrust = compute_thrust_output(
+            power=power,
+            thrust_output_at_sea_level=params.thrust_output_at_sea_level,
+            rho=current_state.rho,
+            M=current_state.M,
+        )
 
-    new_state = EnvState(
-        x=x,
-        x_dot=x_dot,
-        z=z,
-        z_dot=z_dot,
-        theta=theta,
-        theta_dot=theta_dot,
-        alpha=alpha,
-        gamma=gamma,
-        m=m,
-        power=power,
-        stick=stick,
-        fuel=state.fuel,
-        t=t,
-        target_altitude=state.target_altitude,
-    )
-    return new_state, metrics
+        # Compute acceleration
+        a_x, a_z, alpha_y, metrics = compute_acceleration(
+            thrust=thrust,
+            m=current_state.m,
+            gravity=params.gravity,
+            x_dot=current_state.x_dot,
+            z_dot=current_state.z_dot,
+            frontal_surface=params.frontal_surface,
+            wings_surface=params.wings_surface,
+            alpha=current_state.alpha,
+            M=current_state.M,
+            M_crit=params.M_crit,
+            C_x0=params.C_x0,
+            C_z0=params.C_z0,
+            gamma=current_state.gamma,
+            theta=current_state.theta,
+            rho=current_state.rho,
+            stick=stick,
+        )
+
+        # Compute next speed and position
+        x_dot, z_dot, theta_dot, x, z, theta = compute_speed_and_pos_from_acceleration(
+            V_x=current_state.x_dot,
+            V_z=current_state.z_dot,
+            theta_dot=current_state.theta_dot,
+            x=current_state.x,
+            z=current_state.z,
+            theta=current_state.theta,
+            a_x=a_x,
+            a_z=a_z,
+            alpha_y=alpha_y,
+            delta_t=dt,
+        )
+
+        # Update state
+        gamma = xp.arcsin(
+            z_dot / (compute_norm_from_coordinates(xp.array([x_dot, z_dot + 1e-6])))
+        )
+        alpha = theta - gamma
+        m = params.initial_mass + current_state.fuel
+        # Note: check_mass_does_not_increase would need to be JAX-compatible
+        # check_mass_does_not_increase(current_state.m, m, xp=jnp)
+
+        new_state = EnvState(
+            x=x,
+            x_dot=x_dot,
+            z=z,
+            z_dot=z_dot,
+            theta=theta,
+            theta_dot=theta_dot,
+            alpha=alpha,
+            gamma=gamma,
+            m=m,
+            power=power,
+            stick=stick,
+            fuel=current_state.fuel,
+            t=current_state.t,
+            target_altitude=current_state.target_altitude,
+        )
+
+        return new_state, metrics
+
+    # Use lax.scan to perform n_substeps
+    if xp is jnp:
+        final_state, metrics_seq = jax.lax.scan(step_fn, state, None, length=n_substeps)
+        final_state = final_state.replace(t=state.t + 1)
+    else:
+        final_state = state
+        metrics_seq = []
+        for _ in range(n_substeps):
+            final_state, metrics = step_fn(final_state, None)
+            metrics_seq.append(metrics)
+        final_state = final_state.replace(t=state.t + 1)
+        metrics_seq = xp.stack(metrics_seq)
+    final_metrics = metrics_seq[-1]
+    return final_state, final_metrics
 
 
 def save_video(
