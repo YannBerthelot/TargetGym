@@ -248,6 +248,9 @@ def compute_next_power(requested_power, current_power, delta_t):
     current_power += (
         0.05 * delta_t * power_diff
     )  # TODO : parametrize how fast we reach the desired value
+    current_power = jnp.clip(
+        current_power, 0.0, 1.0
+    )  # TODO : check if that's healthy to force that.
     jax.debug.callback(check_power, current_power)
     return current_power
 
