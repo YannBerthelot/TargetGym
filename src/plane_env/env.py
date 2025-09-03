@@ -2,6 +2,7 @@ import os
 from typing import Callable, Tuple
 
 import numpy as np
+from flax import struct
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 
 # Optional: jax imports (only used in jax env)
@@ -27,110 +28,85 @@ from plane_env.utils import compute_norm_from_coordinates
 SPEED_OF_SOUND = 343.0
 
 
-def get_env_classes(use_jax: bool = False) -> Tuple[type, type, type]:
-    """
-    Returns EnvState, EnvParams, EnvMetrics classes with either standard dataclass
-    or flax.struct.dataclass depending on use_jax.
-    """
-    if use_jax:
-        from flax import struct
-
-        dataclass = struct.dataclass
-        xp = jnp  # placeholder if you want to pass to properties
-    else:
-        from dataclasses import dataclass
-
-        dataclass = dataclass
-        xp = np
-
-    @dataclass
-    class EnvMetrics:
-        drag: float
-        lift: float
-        S_x: float
-        S_z: float
-        C_x: float
-        C_z: float
-        F_x: float
-        F_z: float
-
-    @dataclass
-    class EnvState:
-        x: float
-        x_dot: float
-        z: float
-        z_dot: float
-        theta: float
-        theta_dot: float
-        alpha: float
-        gamma: float
-        m: float
-        power: float
-        stick: float
-        fuel: float
-        t: int
-        target_altitude: float
-
-        @property
-        def rho(self):
-            return compute_air_density_from_altitude(self.z)
-
-        @property
-        def speed_of_sound(self):
-            h = self.z
-            gamma_air = 1.4
-            R = 287.0
-            T0 = 288.15
-            L = 0.0065
-            T11 = 216.65
-            T = xp.where(h <= 11000, T0 - L * h, T11)
-            return xp.sqrt(gamma_air * R * T)
-
-        @property
-        def M(self):
-            return (
-                compute_norm_from_coordinates(xp.array([self.x_dot, self.z_dot]))
-                / self.speed_of_sound
-            )
-
-    @dataclass
-    class EnvParams:
-        gravity: float = 9.81
-        initial_mass: float = 73500.0
-        thrust_output_at_sea_level: float = 240_000.0
-        air_density_at_sea_level: float = 1.225
-        frontal_surface: float = 12.6
-        wings_surface: float = 122.6
-        C_x0: float = 0.095
-        C_z0: float = 0.9
-        M_crit: float = 0.78
-        initial_fuel_quantity: float = 23860 / 1.25
-        specific_fuel_consumption: float = 17.5 / 1000
-        delta_t: float = 0.5
-        speed_of_sound: float = SPEED_OF_SOUND
-
-        max_steps_in_episode: int = 10_000
-        min_alt: float = 0.0
-        max_alt: float = 40_000.0 / 3.281
-        target_altitude_range: Tuple[float, float] = (3000.0, 5000.0)
-        initial_altitude_range: Tuple[float, float] = (3000.0, 5000.0)
-        initial_z_dot: float = 0.0
-        initial_x_dot: float = 200.0
-        initial_theta_dot: float = 0.0
-        initial_theta: float = 0.0
-        initial_power: float = 1.0
-        initial_stick: float = 0.0
-
-    return EnvState, EnvParams, EnvMetrics
+@struct.dataclass
+class EnvMetrics:
+    drag: float
+    lift: float
+    S_x: float
+    S_z: float
+    C_x: float
+    C_z: float
+    F_x: float
+    F_z: float
 
 
-EnvStateGymnasium, EnvParamsGymnasium, EnvMetricsGymnasium = get_env_classes(
-    use_jax=False
-)
-EnvStateJAX, EnvParamsJAX, EnvMetricsJAX = get_env_classes(use_jax=True)
-EnvState = EnvStateGymnasium | EnvStateJAX
-EnvParams = EnvParamsGymnasium | EnvParamsJAX
-EnvMetrics = EnvMetricsGymnasium | EnvMetricsJAX
+@struct.dataclass
+class EnvState:
+    x: float
+    x_dot: float
+    z: float
+    z_dot: float
+    theta: float
+    theta_dot: float
+    alpha: float
+    gamma: float
+    m: float
+    power: float
+    stick: float
+    fuel: float
+    t: int
+    target_altitude: float
+
+    @property
+    def rho(self):
+        return compute_air_density_from_altitude(self.z)
+
+    @property
+    def speed_of_sound(self):
+        h = self.z
+        gamma_air = 1.4
+        R = 287.0
+        T0 = 288.15
+        L = 0.0065
+        T11 = 216.65
+        T = jnp.where(h <= 11000, T0 - L * h, T11)
+        return jnp.sqrt(gamma_air * R * T)
+
+    @property
+    def M(self):
+        return (
+            compute_norm_from_coordinates(jnp.array([self.x_dot, self.z_dot]))
+            / self.speed_of_sound
+        )
+
+
+@struct.dataclass
+class EnvParams:
+    gravity: float = 9.81
+    initial_mass: float = 73500.0
+    thrust_output_at_sea_level: float = 240_000.0
+    air_density_at_sea_level: float = 1.225
+    frontal_surface: float = 12.6
+    wings_surface: float = 122.6
+    C_x0: float = 0.095
+    C_z0: float = 0.9
+    M_crit: float = 0.78
+    initial_fuel_quantity: float = 23860 / 1.25
+    specific_fuel_consumption: float = 17.5 / 1000
+    delta_t: float = 0.5
+    speed_of_sound: float = SPEED_OF_SOUND
+
+    max_steps_in_episode: int = 10_000
+    min_alt: float = 0.0
+    max_alt: float = 40_000.0 / 3.281
+    target_altitude_range: Tuple[float, float] = (3000.0, 5000.0)
+    initial_altitude_range: Tuple[float, float] = (3000.0, 5000.0)
+    initial_z_dot: float = 0.0
+    initial_x_dot: float = 200.0
+    initial_theta_dot: float = 0.0
+    initial_theta: float = 0.0
+    initial_power: float = 1.0
+    initial_stick: float = 0.0
 
 
 def check_mass_does_not_increase(old_mass, new_mass, xp=np):
@@ -191,7 +167,6 @@ def compute_next_state(
     xp=np,
 ):
     """Compute next state and metrics."""
-    EnvState = EnvStateJAX if xp is jnp else EnvStateGymnasium
     power = compute_next_power(power_requested, state.power, params.delta_t)
     stick = compute_next_stick(stick_requested, state.stick, params.delta_t)
 
