@@ -5,16 +5,16 @@ import numpy as np
 import pygame
 
 from plane_env.env import (
+    EnvMetrics,
+    EnvParams,
+    EnvState,
     check_is_terminal,
     compute_next_state,
     compute_reward,
-    get_env_classes,
     get_obs,
     save_video,
 )
 from plane_env.rendering import _render
-
-EnvState, EnvParams, EnvMetrics = get_env_classes(use_jax=False)
 
 
 class Airplane2D(gym.Env):
