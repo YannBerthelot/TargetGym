@@ -11,6 +11,7 @@ from plane_env.env import (
     compute_norm_from_coordinates,
     compute_reward,
     get_env_classes,
+    get_obs,
     save_video,
 )
 from plane_env.rendering import _render
@@ -29,7 +30,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
     max_steps = 10_000
 
     def __init__(self):
-        self.obs_shape = (10,)
+        self.obs_shape = (9,)
         self.positions_history = []
 
     @property
@@ -122,16 +123,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         """
         Observation vector
         """
-        return jnp.stack(
-            [
-                state.z,
-                state.x_dot,
-                state.z_dot,
-                state.theta,
-                state.gamma,
-                state.target_altitude,
-            ]
-        )
+        return get_obs(state, xp=jnp)
 
     def render(self, screen, state: EnvState, params: EnvParams, frames, clock):
         """
@@ -170,27 +162,12 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
     def observation_space(self, params: EnvParams) -> spaces.Box:
         """Observation space of the environment."""
         inf = jnp.finfo(jnp.float32).max
-        return spaces.Box(-inf, inf, (10,), dtype=jnp.float32)
+        return spaces.Box(-inf, inf, self.obs_shape, dtype=jnp.float32)
 
-    def state_space(self, params: EnvParams) -> spaces.Dict:
-        """State space of the environment."""
-        high = jnp.array(
-            [
-                params.x_threshold * 2,
-                jnp.finfo(jnp.float32).max,
-                params.theta_threshold_radians * 2,
-                jnp.finfo(jnp.float32).max,
-            ]
-        )
-        return spaces.Dict(
-            {
-                "x": spaces.Box(-high[0], high[0], (), jnp.float32),
-                "x_dot": spaces.Box(-high[1], high[1], (), jnp.float32),
-                "theta": spaces.Box(-high[2], high[2], (), jnp.float32),
-                "theta_dot": spaces.Box(-high[3], high[3], (), jnp.float32),
-                "time": spaces.Discrete(params.max_steps_in_episode),
-            }
-        )
+    def state_space(self, params: EnvParams) -> spaces.Box:
+        """Observation space of the environment."""
+        inf = jnp.finfo(jnp.float32).max
+        return spaces.Box(-inf, inf, len(EnvState.__class_params__), dtype=jnp.float32)
 
 
 if __name__ == "__main__":
