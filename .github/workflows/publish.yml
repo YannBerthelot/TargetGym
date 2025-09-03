@@ -25,6 +25,14 @@ jobs:
         with:
           version: 1.7.1
 
+      - name: Set package version from tag
+        run: |
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          # Remove "v" prefix if present
+          VERSION="${TAG_NAME#v}"
+          echo "Setting package version to $VERSION"
+          poetry version "$VERSION"
+
       - name: Install dependencies
         run: poetry install --no-interaction --no-root
 
@@ -34,11 +42,10 @@ jobs:
       - name: Publish to PyPI
         env:
           POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
-        run: poetry publish --no-interaction
+        run: poetry publish --no-interaction --skip-existing
 
-      # Upload built files to the *existing* release (triggered by release: published)
       - name: Upload release assets with gh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # gh reads this automatically
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber
