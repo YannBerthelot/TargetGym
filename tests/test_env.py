@@ -49,7 +49,7 @@ def test_step():
         0,
     )  # Sample a valid action (e.g., maximum throttle and no pitch change)
     # Perform the step transition.
-    n_obs, new_state, reward, terminated, truncated, _ = env.step(key, state, action)
+    n_obs, new_state, reward, done, _ = env.step(key, state, action)
     assert new_state.x > state.x
     assert new_state.x_dot == pytest.approx(state.x_dot, rel=0.1)
     assert new_state.z < state.z
@@ -136,14 +136,14 @@ def test_environments_compatible():
     action = (0.8, 0.0)  # power, stick
 
     # JAX step
-    jax_obs, jax_next_state, jax_reward, jax_terminated, jax_truncated, _ = (
-        jax_env.step(key, jax_state, action, jax_env.default_params)
+    jax_obs, jax_next_state, jax_reward, jax_terminated, _ = jax_env.step(
+        key, jax_state, action, jax_env.default_params
     )
+    jax_truncated = jax_next_state.t >= jax_env.default_params.max_steps_in_episode
 
     # Gym step
 
     gym_obs, gym_reward, gym_terminated, gym_truncated, _ = gym_env.step(action)
-
     gym_next_state = gym_env.state
 
     # Compare results

@@ -19,6 +19,6 @@ def test_step():
     keys = jax.random.split(key, num=N)
     obs, state = jax.vmap(env.reset, in_axes=0)(key=keys)
     action = (jnp.ones(N), jnp.zeros(N))
-    n_obs, state, reward, terminated, truncated, _ = jax.vmap(env.step, in_axes=0)(
+    n_obs, state, reward, terminated, _ = jax.vmap(env.step, in_axes=0)(
         key=keys, state=state, action=action
     )
