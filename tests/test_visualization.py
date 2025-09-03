@@ -142,7 +142,7 @@ def test_render_trajectory():
         action = (0.8, 0.0)  # power, stick
 
         # Step environments
-        jax_obs, jax_state, reward, terminated, truncated, info = jax_env.step(
+        jax_obs, jax_state, reward, terminated, info = jax_env.step(
             key, jax_state, action, jax_env.default_params
         )
         gym_obs, reward, terminated, truncated, info = gym_env.step(action)

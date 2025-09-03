@@ -123,7 +123,7 @@ def check_mass_does_not_increase(old_mass, new_mass, xp=np):
 
 def check_is_terminal(state: EnvState, params: EnvParams, xp=np):
     """Return True if the episode should terminate."""
-    terminated = xp.logical_or(state.z < params.min_alt, state.z > params.max_alt)
+    terminated = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
     truncated = state.t >= params.max_steps_in_episode
 
     # done = xp.logical_or(done_alt, done_steps)
@@ -295,8 +295,11 @@ def save_video(
             if hasattr(env, "default_params")
             else env.step(state, action, params)
         )
-        obs, state, reward, terminated, truncated, info = step_result
-        done = terminated or truncated
+        obs, state, reward, terminated, info = step_result
+        if params is None and hasattr(env, "default_params"):
+            params = env.default_params
+        truncated = state.t >= params.max_steps_in_episode
+        done = terminated | truncated
 
         if hasattr(env, "render"):
             if hasattr(env, "default_params"):
