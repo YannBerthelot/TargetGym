@@ -109,7 +109,7 @@ def get_env_classes(use_jax: bool = False) -> Tuple[type, type, type]:
         delta_t: float = 0.5
         speed_of_sound: float = SPEED_OF_SOUND
 
-        max_steps_in_episode: int = 1_000
+        max_steps_in_episode: int = 10_000
         min_alt: float = 0.0
         max_alt: float = 40_000.0 / 3.281
         target_altitude_range: Tuple[float, float] = (3000.0, 5000.0)
