@@ -22,9 +22,7 @@ def run_constant_policy(
 
     def step_fn(carry, _):
         key, state, done = carry
-        obs, new_state, reward, new_done, info = env.step_env(
-            key, state, action, params
-        )
+        obs, new_state, reward, new_done, info = env.step(key, state, action, params)
         # Freeze state if already done
         state = jax.lax.cond(done, lambda _: state, lambda _: new_state, operand=None)
         done = jnp.logical_or(done, new_done)
@@ -45,9 +43,7 @@ def run_constant_policy_final_alt(
 
     def step_fn(carry, _):
         key, state, done = carry
-        obs, new_state, reward, new_done, info = env.step_env(
-            key, state, action, params
-        )
+        obs, new_state, reward, new_done, info = env.step(key, state, action, params)
         state = jax.lax.cond(done, lambda _: state, lambda _: new_state, operand=None)
         done = jnp.logical_or(done, new_done)
         return (key, state, done), None

@@ -37,7 +37,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
     def default_params(self) -> EnvParams:
         return EnvParams(max_steps_in_episode=self.max_steps)
 
-    def step(
+    def step_env(
         self,
         key: chex.PRNGKey,
         state: EnvState,
@@ -55,14 +55,15 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         new_state, metrics = compute_next_state(power, stick, state, params, xp=jnp)
         reward = compute_reward(new_state, params, xp=jnp)
         terminated, truncated = check_is_terminal(new_state, params, xp=jnp)
+        done = terminated | truncated
 
         obs = self.get_obs(new_state)
-        return obs, new_state, reward, terminated, truncated, {"metrics": metrics}
+        return obs, new_state, reward, done, {"metrics": metrics}
 
     def is_terminal(self, state: EnvState, params: EnvParams) -> jax.Array:
         return check_is_terminal(state, params, xp=jnp)
 
-    def reset(self, key: chex.PRNGKey, params: EnvParams = None):
+    def reset_env(self, key: chex.PRNGKey, params: EnvParams = None):
         """
         Reset the environment using JAX random keys
         """
@@ -156,7 +157,10 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
     def action_space(self, params: EnvParams | None = None) -> spaces.Discrete:
         """Action space of the environment."""
         return spaces.Box(
-            jnp.array([0.0, -1.0]), jnp.array([1.0, 1.0]), (2,), dtype=jnp.float32
+            low=jnp.array([0.0, -1.0]),
+            high=jnp.array([1.0, 1.0]),
+            shape=(2,),
+            dtype=jnp.float32,
         )
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
