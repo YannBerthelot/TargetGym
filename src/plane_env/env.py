@@ -166,6 +166,23 @@ def compute_reward(state: EnvState, params: EnvParams, xp=np):
     return reward
 
 
+def get_obs(state: EnvState, xp=np):
+    """Applies observation function to state."""
+    return xp.stack(
+        [
+            state.x_dot,
+            state.z,
+            state.z_dot,
+            state.theta,
+            state.theta_dot,
+            state.gamma,
+            state.target_altitude,
+            state.power,
+            state.stick,
+        ]
+    )
+
+
 def compute_next_state(
     power_requested: float,
     stick_requested: float,

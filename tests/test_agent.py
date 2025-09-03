@@ -13,7 +13,7 @@ def test_can_create_env():
     assert isinstance(env, gym.Env)
     obs, info = env.reset()
     assert isinstance(obs, np.ndarray)
-    assert obs.shape == (10,)  # Verify observation space shape
+    assert obs.shape == (9,)  # Verify observation space shape
 
 
 def test_can_step_env():
