@@ -9,6 +9,7 @@ from plane_env.env import (
     compute_next_state,
     compute_reward,
     get_env_classes,
+    get_obs,
     save_video,
 )
 from plane_env.rendering import _render
@@ -28,13 +29,13 @@ class Airplane2D(gym.Env):
     render_plane = classmethod(_render)
     screen_width = 600
     screen_height = 400
-    max_steps = 1_000
+    max_steps = 10_000
 
     def __init__(
         self, params=None, render_mode: Optional[str] = None, mode="power_and_stick"
     ):
         super().__init__()
-        self.obs_shape = (10,)  # TODO : adapt
+        self.obs_shape = (9,)  # TODO : infer automatically ?
         # self.action_space = gym.spaces.MultiDiscrete([10,31])  # 10 power levels (0-9) and 30 pitch levels (-15 to 15 degrees)
         if mode == "power_and_stick":
             self.action_space = gym.spaces.Box(
@@ -141,21 +142,7 @@ class Airplane2D(gym.Env):
 
     def get_obs(self, state: EnvState):
         """Applies observation function to state."""
-        obs = np.stack(
-            [
-                state.x_dot,
-                state.z,
-                state.z_dot,
-                state.theta,
-                state.theta_dot,
-                state.gamma,
-                state.target_altitude,
-                state.power,
-                state.stick,
-                state.z - state.target_altitude,
-            ]
-        )
-        return obs
+        return get_obs(state, xp=np)
 
     def is_terminal(self, state: EnvState, params: EnvParams) -> bool:
         """Check whether state is terminal."""
