@@ -174,11 +174,77 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         return spaces.Box(-inf, inf, len(EnvState.__class_params__), dtype=jnp.float32)
 
 
+def run_timesteps(key, env, env_params, n_timesteps=10_000, action_type="constant"):
+    """Run n_timesteps in the env with constant or random action."""
+    # Reset environment
+    key_reset, key = jax.random.split(key)
+    obs, state = env.reset(key_reset, env_params)
+
+    def step_fn(carry, _):
+        obs, state, key = carry
+        key, key_step, key_action = jax.random.split(key, 3)
+
+        # Choose action
+        if action_type == "constant":
+            action = jnp.array([0.8, 0.0])
+        else:  # random
+            action = jax.random.uniform(key_action, (2,), minval=-1.0, maxval=1.0)
+
+        # Step environment
+        next_obs, next_state, reward, done, _ = env.step(
+            key_step, state, action, env_params
+        )
+
+        carry = (next_obs, next_state, key)
+        return carry, (reward, done)
+
+    # Rollout with lax.scan
+    (_, _, _), (rewards, dones) = jax.lax.scan(
+        step_fn, (obs, state, key), xs=None, length=n_timesteps
+    )
+    return rewards, dones
+
+
+# JIT-compiled version
+run_timesteps_jit = jax.jit(run_timesteps, static_argnums=(1, 2, 3, 4))
+
+
+# ----------------------------
+# Benchmark harness
+# ----------------------------
+def benchmark(
+    env, env_params, n_timesteps=10_000, n_episodes=10, action_type="constant"
+):
+    times = []
+    key = jax.random.PRNGKey(0)
+
+    for i in range(n_episodes):
+        key, subkey = jax.random.split(key)
+
+        start = time.perf_counter()
+        rewards, dones = run_timesteps_jit(
+            subkey, env, env_params, n_timesteps, action_type
+        )
+        # Make sure computation is finished
+        _ = jax.block_until_ready(rewards)
+        end = time.perf_counter()
+
+        t = end - start
+        print(f"Episode {i+1}: {t:.3f} sec")
+        times.append(t)
+
+    times = np.array(times)
+    print("\n=== Benchmark Results ===")
+    print(f"Mean runtime per episode: {times.mean():.3f} sec")
+    print(f"Std dev: {times.std():.3f} sec")
+    print(f"Min: {times.min():.3f} sec, Max: {times.max():.3f} sec")
+
+
 if __name__ == "__main__":
     env = Airplane2D()
     seed = 42
     env_params = EnvParams(max_steps_in_episode=1_000)
-    action = (0.8, 0.0)
+    action = (0.3, 0.0)
     env.save_video(
         lambda o: action,
         seed,
@@ -187,3 +253,19 @@ if __name__ == "__main__":
         params=env_params,
         format="gif",
     )
+
+    # import time
+
+    # import numpy as np
+
+    # # Benchmark parameters
+    # env = Airplane2D()
+    # env_params = EnvParams(max_steps_in_episode=10_000)
+
+    # print("---- Constant action ----")
+    # benchmark(
+    #     env, env_params, n_timesteps=100_000, n_episodes=10, action_type="constant"
+    # )
+
+    # print("\n---- Random action ----")
+    # benchmark(env, env_params, n_timesteps=100_000, n_episodes=10, action_type="random")
