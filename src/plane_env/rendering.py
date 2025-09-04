@@ -356,7 +356,7 @@ def _render(cls, screen, state, params, frames, clock):
             cx = rng.integers(0, cls.screen_width)
             cy = rng.integers(50, cls.screen_height // 2)
             scale = rng.uniform(0.5, 1.5)
-            shape = rng.integers(0, cls.max_steps)
+            shape = rng.integers(0, params.max_steps_in_episode)
             cloud_positions.append((cx, cy, scale, shape))
         cls.cloud_positions = cloud_positions
         cls.screen = screen
@@ -376,11 +376,11 @@ def _render(cls, screen, state, params, frames, clock):
         params,
         cls.positions_history,
         cls.cloud_positions,
-        max_steps=cls.max_steps,
+        max_steps=params.max_steps_in_episode,
     )
 
     # Update position history
-    planex = int(state.x * cls.screen_width / (343 * cls.max_steps))
+    planex = int(state.x * cls.screen_width / (343 * params.max_steps_in_episode))
     planey = int(
         cls.screen_height - (state.z + 500) * cls.screen_height / (params.max_alt + 500)
     )

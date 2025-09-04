@@ -1,5 +1,6 @@
 import os
-from typing import Callable, Tuple
+from functools import partial
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 from flax import struct
@@ -94,6 +95,7 @@ class EnvParams:
     initial_fuel_quantity: float = 23860 / 1.25
     specific_fuel_consumption: float = 17.5 / 1000
     delta_t: float = 1.0
+    n_substeps: int = 5
     speed_of_sound: float = SPEED_OF_SOUND
 
     max_steps_in_episode: int = 10_000
@@ -164,7 +166,7 @@ def compute_next_state(
     stick_requested: float,
     state: EnvState,
     params: EnvParams,
-    n_substeps: int = 10,
+    n_substeps: int = 5,
     xp=np,
 ):
     """Compute next state and metrics using multiple sub-steps with jax.lax.scan."""
