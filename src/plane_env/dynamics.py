@@ -254,6 +254,7 @@ def compute_next_power(requested_power, current_power, delta_t):
 
 
 def compute_next_stick(requested_stick, current_stick, delta_t):
+    requested_stick = jnp.clip(requested_stick, -jnp.deg2rad(15), jnp.deg2rad(15))
     stick_diff = requested_stick - current_stick
     current_stick += (
         0.9 * delta_t * stick_diff
