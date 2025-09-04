@@ -132,6 +132,20 @@ def check_is_terminal(state: EnvState, params: EnvParams, xp=np):
     return terminated, truncated
 
 
+def check_no_nan(x, id=None):
+    """Assert that no NaNs are present in arrays, scalars, or EnvState."""
+    if isinstance(x, EnvState):
+        # Iterate over fields of the dataclass
+        for name, value in x.__dict__.items():
+            try:
+                check_no_nan(value, id=f"{id}.{name}" if id else name)
+            except AssertionError as e:
+                raise AssertionError(str(e)) from None
+    else:
+        if jnp.isnan(x).any():
+            raise AssertionError(f"NaN detected in {id}: {x}")
+
+
 def compute_reward(state: EnvState, params: EnvParams, xp=np):
     """Return reward for a given state. Safe for JIT."""
     done_alt = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
@@ -159,6 +173,19 @@ def get_obs(state: EnvState, xp=np):
             state.stick,
         ]
     )
+
+
+def compute_gamma(x_dot: float, z_dot: float) -> float:
+    """Flight path angle from velocity vector."""
+    return jnp.arctan2(z_dot, x_dot)  # handles negative x_dot safely
+
+
+def compute_alpha(theta: float, x_dot: float, z_dot: float) -> float:
+    """Angle of attack = pitch - flight path angle."""
+    gamma = compute_gamma(x_dot, z_dot)
+    alpha = theta - gamma
+    # wrap into [-π, π] to avoid angle spirals
+    return jnp.arctan2(jnp.sin(alpha), jnp.cos(alpha)), gamma
 
 
 def compute_next_state(
@@ -221,12 +248,7 @@ def compute_next_state(
             alpha_y=alpha_y,
             delta_t=dt,
         )
-
-        # Update state
-        gamma = xp.arcsin(
-            z_dot / (compute_norm_from_coordinates(xp.array([x_dot, z_dot + 1e-6])))
-        )
-        alpha = theta - gamma
+        alpha, gamma = compute_alpha(theta, x_dot, z_dot)
         m = params.initial_mass + current_state.fuel
         # Note: check_mass_does_not_increase would need to be JAX-compatible
         # check_mass_does_not_increase(current_state.m, m, xp=jnp)
@@ -247,6 +269,7 @@ def compute_next_state(
             t=current_state.t,
             target_altitude=current_state.target_altitude,
         )
+        jax.debug.callback(check_no_nan, new_state)
 
         return new_state, metrics
 
