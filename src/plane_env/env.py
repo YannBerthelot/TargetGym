@@ -27,6 +27,7 @@ from plane_env.dynamics import (
 from plane_env.utils import compute_norm_from_coordinates
 
 SPEED_OF_SOUND = 343.0
+DEBUG = True
 
 
 @struct.dataclass
@@ -193,7 +194,7 @@ def compute_next_state(
     stick_requested: float,
     state: EnvState,
     params: EnvParams,
-    n_substeps: int = 5,
+    n_substeps: int = 10,
     xp=np,
 ):
     """Compute next state and metrics using multiple sub-steps with jax.lax.scan."""
@@ -234,6 +235,35 @@ def compute_next_state(
             rho=current_state.rho,
             stick=stick,
         )
+        a_x_clipped = jnp.clip(a_x, -100, 100)  # m/s²
+        a_z_clipped = jnp.clip(a_z, -100, 100)  # m/s²
+        alpha_y_clipped = jnp.clip(alpha_y, -1.5, 1.5)  # rad/s²
+
+        # Check if any clipping occurred
+        clipping_occurred = jnp.logical_or(
+            jnp.logical_or(
+                jnp.not_equal(a_x, a_x_clipped), jnp.not_equal(a_z, a_z_clipped)
+            ),
+            jnp.not_equal(alpha_y, alpha_y_clipped),
+        )
+
+        # Conditionally print warning
+        def print_clip_warning(_):
+            jax.debug.print(
+                "Clipping warning: a_x={:.2f} (was {:.2f}), a_z={:.2f} (was {:.2f}), alpha_y={:.2f} (was {:.2f})",
+                a_x_clipped,
+                a_x,
+                a_z_clipped,
+                a_z,
+                alpha_y_clipped,
+                alpha_y,
+            )
+            return ()
+
+        # jax.lax.cond(clipping_occurred, print_clip_warning, lambda _: (), operand=None)
+
+        # Use clipped values
+        a_x, a_z, alpha_y = a_x_clipped, a_z_clipped, alpha_y_clipped
 
         # Compute next speed and position
         x_dot, z_dot, theta_dot, x, z, theta = compute_speed_and_pos_from_acceleration(
@@ -248,6 +278,7 @@ def compute_next_state(
             alpha_y=alpha_y,
             delta_t=dt,
         )
+
         alpha, gamma = compute_alpha(theta, x_dot, z_dot)
         m = params.initial_mass + current_state.fuel
         # Note: check_mass_does_not_increase would need to be JAX-compatible
@@ -269,7 +300,9 @@ def compute_next_state(
             t=current_state.t,
             target_altitude=current_state.target_altitude,
         )
-        jax.debug.callback(check_no_nan, new_state)
+        # jax.debug.print('Timestep {timestep}', timestep=current_state.t)
+        if DEBUG:
+            jax.debug.callback(check_no_nan, new_state)
 
         return new_state, metrics
 

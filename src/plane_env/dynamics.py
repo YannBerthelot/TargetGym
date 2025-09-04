@@ -234,15 +234,15 @@ def newton_second_law(
     # weight: acts downward
     F_weight = jnp.array([0.0, -P])
 
-    jax.debug.print(
-        "Forces [N]: drag:{drag}, lift:{lift}, thrust:{thrust}, weight:{weight}, gamma: {gamma}, theta: {theta}",
-        drag=F_drag,
-        lift=F_lift,
-        thrust=F_thrust,
-        weight=F_weight,
-        gamma=gamma,
-        theta=theta,
-    )
+    # jax.debug.print(
+    #     "Forces [N]: drag:{drag}, lift:{lift}, thrust:{thrust}, weight:{weight}, gamma: {gamma}, theta: {theta}",
+    #     drag=F_drag,
+    #     lift=F_lift,
+    #     thrust=F_thrust,
+    #     weight=F_weight,
+    #     gamma=gamma,
+    #     theta=theta,
+    # )
 
     # total force
     F_total = F_drag + F_lift + F_thrust + F_weight
@@ -367,12 +367,16 @@ def aero_coefficients(aoa_deg, mach=0.0):
 
     # --- Mach corrections ---
     beta = jnp.sqrt(jnp.maximum(1e-6, 1 - mach**2))
+
     CL = CL / beta
 
     M_crit = 0.82
     k_drag = 5.0
     drag_rise = jnp.where(mach > M_crit, k_drag * (mach - M_crit) ** 2, 0.0)
     CD = CD + drag_rise
+
+    CL = jnp.clip(CL, -2.0, 2.0)  # typical A320: max lift ~1.5-1.7
+    CD = jnp.clip(CD, 0.0, 1.0)  # drag can’t be negative or huge
 
     return CL, CD
 
