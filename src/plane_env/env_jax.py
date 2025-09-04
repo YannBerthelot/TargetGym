@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Callable
 
 import chex
@@ -27,7 +28,6 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
     render_plane = classmethod(_render)
     screen_width = 600
     screen_height = 400
-    max_steps = 10_000
 
     def __init__(self):
         self.obs_shape = (9,)
@@ -35,7 +35,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
 
     @property
     def default_params(self) -> EnvParams:
-        return EnvParams(max_steps_in_episode=self.max_steps)
+        return EnvParams()
 
     def step_env(
         self,

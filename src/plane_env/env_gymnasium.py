@@ -29,7 +29,6 @@ class Airplane2D(gym.Env):
     render_plane = classmethod(_render)
     screen_width = 600
     screen_height = 400
-    max_steps = 10_000
 
     def __init__(
         self, params=None, render_mode: Optional[str] = None, mode="power_and_stick"
