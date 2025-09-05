@@ -27,7 +27,7 @@ from plane_env.dynamics import (
 from plane_env.utils import compute_norm_from_coordinates
 
 SPEED_OF_SOUND = 343.0
-DEBUG = True
+DEBUG = False
 
 
 @struct.dataclass
