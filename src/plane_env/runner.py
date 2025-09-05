@@ -179,4 +179,4 @@ def run_mode(mode: str, power=1.0, stick=0.0):
 
 
 if __name__ == "__main__":
-    run_mode("video")  # or "2d" or "video"
+    run_mode("3d")  # or "2d" or "video"
