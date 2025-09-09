@@ -14,7 +14,7 @@ from plane_env.env_jax import Airplane2D, EnvParams
 
 
 def run_constant_policy(
-    power: float, stick: float, env: Airplane2D, params: EnvParams, steps: int = 10000
+    power: float, stick: float, env: Airplane2D, params: EnvParams, steps: int = 10_000
 ):
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
@@ -26,19 +26,19 @@ def run_constant_policy(
         # Freeze state if already done
         state = jax.lax.cond(done, lambda _: state, lambda _: new_state, operand=None)
         done = jnp.logical_or(done, new_done)
-        return (key, state, done), state.z
+        return (key, state, done), (state.z, done)
 
-    (_, final_state, done), z_history = jax.lax.scan(
+    (_, final_state, done), (z_history, done_history) = jax.lax.scan(
         step_fn, (key, state, False), None, length=steps
     )
-    return final_state.z, z_history
+    return final_state.z, z_history * (1 - done_history)
 
 
 def run_constant_policy_final_alt(
-    power: float, stick: float, env: Airplane2D, params: EnvParams, steps: int = 10000
+    power: float, stick: float, env: Airplane2D, params: EnvParams, steps: int = 10_000
 ):
     key = jax.random.PRNGKey(0)
-    obs, state = env.reset_env(key, params)
+    init_obs, init_state = env.reset_env(key, params)
     action = (power, stick)
 
     def step_fn(carry, _):
@@ -46,12 +46,15 @@ def run_constant_policy_final_alt(
         obs, new_state, reward, new_done, info = env.step(key, state, action, params)
         state = jax.lax.cond(done, lambda _: state, lambda _: new_state, operand=None)
         done = jnp.logical_or(done, new_done)
-        return (key, state, done), None
+        return (key, state, done), (new_state.z, info["last_state"].z, done)
 
-    (_, final_state, done), _ = jax.lax.scan(
-        step_fn, (key, state, False), None, length=steps
+    (_, final_state, done), (alt_hist, last_alt_hist, done_hist) = jax.lax.scan(
+        step_fn, (key, init_state, False), None, length=steps
     )
-    return final_state.z
+    final_alt = last_alt_hist[
+        jnp.argmax(done_hist) - 1
+    ]  # the episode has already reset at done, so take the step before
+    return final_alt
 
 
 def run_power_stick_grid(
@@ -64,23 +67,21 @@ def run_power_stick_grid(
 
     final_altitudes = jax.vmap(run_one_power)(power_levels)
     final_altitudes = jnp.maximum(final_altitudes, 0.0)
-
+    df = pd.DataFrame(
+        {
+            "power": jnp.repeat(power_levels, len(stick_levels)),
+            "stick": jnp.tile(stick_levels, len(power_levels)),
+            "altitude": final_altitudes.flatten(),
+        }
+    )
     if save_csv_path is not None:
-        df = pd.DataFrame(
-            {
-                "power": jnp.repeat(power_levels, len(stick_levels)),
-                "stick": jnp.tile(stick_levels, len(power_levels)),
-                "altitude": final_altitudes.flatten(),
-            }
-        )
         df.to_csv(save_csv_path, index=False)
         print(f"Saved grid results to {save_csv_path}")
 
-    return final_altitudes
+    return final_altitudes, df
 
 
-def build_power_interpolator_from_csv(csv_path, stick=0.0):
-    df = pd.read_csv(csv_path)
+def build_power_interpolator_from_df(df, stick=0.0):
     tol = 1e-6
     df_stick = df[np.abs(df["stick"] - stick) < tol]
 
@@ -106,61 +107,88 @@ def build_power_interpolator_from_csv(csv_path, stick=0.0):
     return interpolator
 
 
-def run_mode(mode: str, power=1.0, stick=0.0):
+def get_interpolator(stick: float = 0.0):
+    df = run_mode(
+        "3d", n_timesteps=20_000, max_alt=20_000, plot=False, save=False, resolution=20
+    )
+    return build_power_interpolator_from_df(df, stick=stick)
+
+
+def run_mode(
+    mode: str,
+    power=1.0,
+    stick=0.0,
+    n_timesteps=10_000,
+    plot: bool = True,
+    save: bool = True,
+    resolution: int = 20,
+    **kwargs,
+):
     env = Airplane2D()
-    params = env.default_params
+    if kwargs is not None:
+        params = EnvParams(**kwargs)
+    else:
+        params = env.default_params
 
     if mode == "2d":
         start_time = time.time()
-        power_levels = jnp.linspace(0.0, 1.0, 11)
-        stick_level = stick
+        power_levels = jnp.linspace(0.0, 1.0, (resolution * 2) + 1)
+        stick_level = jnp.array(stick)
 
         def run_vmapped(powers):
-            return jax.vmap(lambda p: run_constant_policy(p, stick_level, env, params))(
-                powers
-            )
+            return jax.vmap(
+                lambda p: run_constant_policy(
+                    p, stick_level, env, params, steps=n_timesteps
+                )
+            )(powers)
 
         final_alts, trajectories = run_vmapped(power_levels)
         final_alts = jnp.maximum(final_alts, 0.0)
         elapsed = time.time() - start_time
         print(f"Ran in {elapsed:.3f}s ({elapsed / len(power_levels):.3f}s per run)")
+        if plot:
 
-        fig, ax = plt.subplots(figsize=(10, 6))
-        norm = colors.Normalize(vmin=power_levels.min(), vmax=power_levels.max())
-        cmap = cm.viridis
-        for i, traj in enumerate(trajectories):
-            ax.plot(traj, color=cmap(norm(power_levels[i])))
+            fig, ax = plt.subplots(figsize=(10, 6))
+            norm = colors.Normalize(vmin=power_levels.min(), vmax=power_levels.max())
+            cmap = cm.viridis
+            for i, traj in enumerate(trajectories):
+                ax.plot(traj, color=cmap(norm(power_levels[i])))
 
-        sm = cm.ScalarMappable(cmap=cmap, norm=norm)
-        sm.set_array([])
-        fig.colorbar(sm, ax=ax).set_label("Power level")
-        ax.set_xlabel("Time step")
-        ax.set_ylabel("Altitude (m)")
-        ax.set_title("Altitude trajectories for varying power")
-        plt.show()
+            sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+            sm.set_array([])
+            fig.colorbar(sm, ax=ax).set_label("Power level")
+            ax.set_xlabel("Time step")
+            ax.set_ylabel("Altitude (m)")
+            ax.set_title("Altitude trajectories for varying power")
+            plt.savefig("power_trajectories.pdf")
 
     elif mode == "3d":
-        power_levels = jnp.linspace(0.0, 1.0, 21)
-        stick_levels = jnp.linspace(-1.0, 1.0, 21)
-        final_alts = run_power_stick_grid(
+        power_levels = jnp.linspace(0.0, 1.0, resolution + 1)
+        stick_levels = jnp.linspace(-1.0, 1.0, resolution + 1)
+        final_alts, df = run_power_stick_grid(
             power_levels,
             stick_levels,
             env,
             params,
-            steps=20000,
-            save_csv_path="power_stick_altitudes.csv",
+            steps=n_timesteps,
+            save_csv_path="power_stick_altitudes.csv" if save else None,
         )
+        if plot:
+            P, S = jnp.meshgrid(power_levels, stick_levels * 15, indexing="ij")
+            fig = plt.figure(figsize=(10, 7))
+            ax = fig.add_subplot(111, projection="3d")
+            surf = ax.plot_surface(P, S, final_alts, cmap="viridis")
+            fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10, label="Final Altitude (m)")
+            ax.set_xlabel("Power")
+            ax.set_ylabel("Stick position")
+            ax.set_zlabel("Final Altitude (m)")
+            ax.set_title("Final altitude vs Power and Stick")
+            ax.view_init(elev=30, azim=200)
+            fig = plt.gcf()
 
-        P, S = jnp.meshgrid(power_levels, stick_levels * 15, indexing="ij")
-        fig = plt.figure(figsize=(10, 7))
-        ax = fig.add_subplot(111, projection="3d")
-        surf = ax.plot_surface(P, S, final_alts, cmap="viridis")
-        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10, label="Final Altitude (m)")
-        ax.set_xlabel("Power")
-        ax.set_ylabel("Stick position")
-        ax.set_zlabel("Final Altitude (m)")
-        ax.set_title("Final altitude vs Power and Stick")
-        plt.show()
+            fig.savefig("3d_altitude.pdf")
+            plt.show()
+        return df
 
     elif mode == "video":
         key = jax.random.PRNGKey(42)
@@ -179,4 +207,6 @@ def run_mode(mode: str, power=1.0, stick=0.0):
 
 
 if __name__ == "__main__":
-    run_mode("3d")  # or "2d" or "video"
+    run_mode("3d", n_timesteps=20_000, max_alt=20_000)
+    # run_mode("video", power=1.0, stick=-1)
+    run_mode("2d", n_timesteps=5000)  # or "2d" or "video"
