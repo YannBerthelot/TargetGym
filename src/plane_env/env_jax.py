@@ -58,7 +58,13 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         done = terminated | truncated
 
         obs = self.get_obs(new_state)
-        return obs, new_state, reward, done, {"metrics": metrics}
+        return (
+            obs,
+            new_state,
+            reward,
+            done,
+            {"metrics": metrics, "last_state_env": new_state},
+        )
 
     def is_terminal(self, state: EnvState, params: EnvParams) -> jax.Array:
         return check_is_terminal(state, params, xp=jnp)
@@ -243,8 +249,8 @@ def benchmark(
 if __name__ == "__main__":
     env = Airplane2D()
     seed = 42
-    env_params = EnvParams(max_steps_in_episode=1_000)
-    action = (0.3, 0.0)
+    env_params = EnvParams(max_steps_in_episode=10_000)
+    action = (0.8, 0.0)
     env.save_video(
         lambda o: action,
         seed,
