@@ -178,3 +178,4 @@ logs*
 *.png
 test_readme.py
 *.zip
+*.pdf
