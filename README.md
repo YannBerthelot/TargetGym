@@ -49,7 +49,7 @@ poetry add plane-env
 Here’s a minimal example of running an episode and saving a video:
 
 ```python
-from plane_env.env_jax import Airplane2D, EnvParams
+from plane_env.plane.env_jax import Airplane2D, EnvParams
 
 # Create env
 env = Airplane2D()
@@ -66,7 +66,7 @@ env.save_video(lambda o: action, seed, folder="videos", episode_index=0, params=
 Of course you can also directly use it to train an agent using your favorite RL library (here: stable-baselines3)
 
 ```python
-from plane_env.env_gymnasium import Airplane2D, EnvParams
+from plane_env.plane.env_gymnasium import Airplane2D, EnvParams
 from stable_baselines3 import SAC
 
 # Create env

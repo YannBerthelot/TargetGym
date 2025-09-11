@@ -1,10 +1,8 @@
 import os
-from functools import partial
 from typing import Callable, Optional, Tuple
 
 import numpy as np
 from flax import struct
-from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 
 # Optional: jax imports (only used in jax env)
 try:
@@ -16,7 +14,7 @@ except ImportError:
     jnp = None
     chex = None
 
-from plane_env.dynamics import (
+from plane_env.plane.dynamics import (
     compute_acceleration,
     compute_air_density_from_altitude,
     compute_next_power,
@@ -320,100 +318,3 @@ def compute_next_state(
         metrics_seq = xp.stack(metrics_seq)
     final_metrics = metrics_seq[-1]
     return final_state, final_metrics
-
-
-def save_video(
-    env,
-    select_action: Callable,
-    folder: str = "videos",
-    episode_index: int = 0,
-    FPS: int = 60,
-    params=None,
-    seed: int = None,
-    format: str = "mp4",  # "mp4" or "gif"
-):
-    """
-    Runs an episode using `select_action` and saves it as a video (mp4 or gif).
-    Works for both JAX and Gymnasium environments.
-
-    Arguments:
-        env: the environment instance with methods `reset`, `step`, and `render`
-        select_action: callable(obs) -> action
-        folder: folder to save the video
-        episode_index: index for the filename
-        FPS: frames per second
-        params: optional environment parameters
-        seed: optional seed for environment reset
-        format: output format, "mp4" or "gif"
-    Returns:
-        Path to the saved video.
-    """
-    if seed is not None:
-        key = jax.random.PRNGKey(seed=seed)
-        obs_state = (
-            env.reset(seed=seed)
-            if not hasattr(env, "default_params")
-            else env.reset(key=key, params=env.default_params)
-        )
-    else:
-        key = jax.random.PRNGKey(seed=42)
-        obs_state = (
-            env.reset()
-            if not hasattr(env, "default_params")
-            else env.reset(key=key, params=env.default_params)
-        )
-
-    if isinstance(obs_state, tuple) and len(obs_state) == 2:
-        obs, state = obs_state
-    else:
-        obs = obs_state
-        state = None
-
-    done = False
-    frames = []
-    screen = None
-    clock = None
-
-    while not done:
-        action = select_action(obs)
-        step_result = (
-            env.step(key, obs if state is None else state, action, params)
-            if hasattr(env, "default_params")
-            else env.step(state, action, params)
-        )
-        obs, state, reward, terminated, info = step_result
-        if params is None and hasattr(env, "default_params"):
-            params = env.default_params
-        truncated = state.t >= params.max_steps_in_episode
-        done = terminated | truncated
-
-        if hasattr(env, "render"):
-            if hasattr(env, "default_params"):
-                frames, screen, clock = env.render(
-                    screen,
-                    state,
-                    params if params is not None else env.default_params,
-                    frames,
-                    clock,
-                )
-            else:
-                frames.append(env.render())
-
-    if len(frames) == 0:
-        raise ValueError("No frames captured. Check that rendering is working.")
-
-    os.makedirs(folder, exist_ok=True)
-    video_path = os.path.join(folder, f"episode_{episode_index:03d}.{format}")
-
-    frames_np = [np.asarray(frame).astype(np.uint8) for frame in frames]
-    clip = ImageSequenceClip(frames_np, fps=FPS)
-
-    if format == "mp4":
-        clip.write_videofile(video_path, codec="libx264", audio=False)
-    elif format == "gif":
-        clip.write_gif(video_path, fps=30)
-    else:
-        raise ValueError("Unsupported format. Use 'mp4' or 'gif'.")
-
-    print(f"Saved video to {video_path}")
-    return video_path

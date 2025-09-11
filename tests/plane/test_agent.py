@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from stable_baselines3 import PPO
 
-from plane_env.env_gymnasium import Airplane2D
+from plane_env.plane.env_gymnasium import Airplane2D
 
 
 def test_can_create_env():

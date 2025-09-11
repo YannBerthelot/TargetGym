@@ -4,7 +4,7 @@ import gymnasium as gym
 import numpy as np
 import pygame
 
-from plane_env.env import (
+from plane_env.plane.env import (
     EnvMetrics,
     EnvParams,
     EnvState,
@@ -12,9 +12,9 @@ from plane_env.env import (
     compute_next_state,
     compute_reward,
     get_obs,
-    save_video,
 )
-from plane_env.rendering import _render
+from plane_env.plane.rendering import _render
+from plane_env.utils import save_video
 
 
 class Airplane2D(gym.Env):
@@ -96,7 +96,13 @@ class Airplane2D(gym.Env):
         terminated, truncated = check_is_terminal(new_state, params)
         obs = self.get_obs(new_state)
         self.state = new_state
-        return obs, reward, terminated, truncated, {"metrics": metrics}
+        return (
+            obs,
+            reward,
+            terminated,
+            truncated,
+            {"metrics": metrics, "last_state": new_state},
+        )
 
     def reset(self, seed=None, options=None):
         """Performs resetting of environment."""
