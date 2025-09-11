@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import pytest
 
-from plane_env.dynamics import (
+from plane_env.plane.dynamics import (
     aero_coefficients,
     clamp_altitude,
     compute_acceleration,

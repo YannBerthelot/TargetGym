@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from plane_env.env import (
+from plane_env.plane.env import (
     EnvMetrics,
     EnvParams,
     EnvState,
@@ -15,9 +15,9 @@ from plane_env.env import (
     compute_norm_from_coordinates,
     compute_reward,
     get_obs,
-    save_video,
 )
-from plane_env.rendering import _render
+from plane_env.plane.rendering import _render
+from plane_env.utils import save_video
 
 
 class Airplane2D(environment.Environment[EnvState, EnvParams]):
@@ -63,7 +63,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
             new_state,
             reward,
             done,
-            {"metrics": metrics, "last_state_env": new_state},
+            {"metrics": metrics, "last_state": new_state},
         )
 
     def is_terminal(self, state: EnvState, params: EnvParams) -> jax.Array:

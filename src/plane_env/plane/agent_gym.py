@@ -2,7 +2,7 @@ import os
 
 from stable_baselines3 import PPO
 
-from plane_env.env_gymnasium import Airplane2D
+from plane_env.plane.env_gymnasium import Airplane2D
 
 
 def evaluate_and_save_video(

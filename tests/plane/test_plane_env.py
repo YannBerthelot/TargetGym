@@ -3,9 +3,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from plane_env.env import EnvMetrics, EnvParams, EnvState, compute_reward
-from plane_env.env_gymnasium import Airplane2D as GymEnv
-from plane_env.env_jax import Airplane2D as JaxEnv
+from plane_env.plane.env import EnvMetrics, EnvParams, EnvState, compute_reward
+from plane_env.plane.env_gymnasium import Airplane2D as GymEnv
+from plane_env.plane.env_jax import Airplane2D as JaxEnv
 
 
 def test_init():
