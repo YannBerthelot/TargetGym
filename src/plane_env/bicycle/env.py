@@ -276,6 +276,6 @@ def get_obs(state: EnvState, p: EnvParams, xp=jnp):
     ).astype(xp.float32)
 
 
-def compute_next_state(action: Sequence[float], state: EnvState, p: EnvParams, xp=np):
+def compute_next_state(action: Sequence[float], state: EnvState, p: EnvParams, xp=jnp):
     action = xp.clip(action, -1.0, 1.0)
     return rk4_step(state, action, p, xp=xp)

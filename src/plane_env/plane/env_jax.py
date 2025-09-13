@@ -52,7 +52,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         power, stick = action
         stick = jnp.deg2rad(stick * 15)  # radians
 
-        new_state, metrics = compute_next_state(power, stick, state, params, xp=jnp)
+        new_state, metrics = compute_next_state(power, stick, state, params)
         reward = compute_reward(new_state, params, xp=jnp)
         terminated, truncated = check_is_terminal(new_state, params, xp=jnp)
         done = terminated | truncated
