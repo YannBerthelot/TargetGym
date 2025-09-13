@@ -27,9 +27,10 @@ class Car2D(environment.Environment[EnvState, EnvParams]):
     screen_width = 600
     screen_height = 400
 
-    def __init__(self):
+    def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (12,)
         self.positions_history = []
+        self.integration_method = integration_method
 
     @property
     def default_params(self) -> EnvParams:
@@ -49,7 +50,9 @@ class Car2D(environment.Environment[EnvState, EnvParams]):
             params = self.default_params
         throttle = action
 
-        new_state = compute_next_state(throttle, state, params, xp=jnp)
+        new_state, metrics = compute_next_state(
+            throttle, state, params, integration_method=self.integration_method
+        )
         reward = compute_reward(new_state, params, xp=jnp)
         terminated, truncated = check_is_terminal(new_state, params, xp=jnp)
         done = terminated | truncated

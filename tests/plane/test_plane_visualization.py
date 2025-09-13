@@ -178,7 +178,7 @@ def test_save_renders():
         seed = 0
 
         file = jax_env.save_video(
-            lambda x: (0.8, 5.0), seed, folder=temp_dir, episode_index=0
+            lambda x: (0.8, 0.1), seed, folder=temp_dir, episode_index=0
         )
         assert os.path.exists(file)
 
@@ -187,7 +187,7 @@ def test_save_renders():
         gym_env.reset()
         frames = []
         for _ in range(10):
-            obs, _, done, _, _ = gym_env.step((0.8, 5.0))
+            obs, _, done, _, _ = gym_env.step((0.8, 0.1))
             frames = gym_env.render()
             if done:
                 break

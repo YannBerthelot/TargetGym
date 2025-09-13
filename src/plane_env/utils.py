@@ -5,6 +5,8 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+from flax.serialization import to_state_dict
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 
 EnvState = Any
@@ -68,6 +70,7 @@ def save_video(
     params=None,
     seed: int = None,
     format: str = "mp4",  # "mp4" or "gif"
+    save_trajectory: bool = False,
 ):
     """
     Runs an episode using `select_action` and saves it as a video (mp4 or gif).
@@ -110,6 +113,8 @@ def save_video(
     frames = []
     screen = None
     clock = None
+    rewards = 0
+    states = []
 
     while not done:
         action = select_action(obs)
@@ -119,6 +124,8 @@ def save_video(
             else env.step(state, action, params)
         )
         obs, state, reward, terminated, info = step_result
+        states.append(to_state_dict(state))
+        rewards += reward
         if params is None and hasattr(env, "default_params"):
             params = env.default_params
         truncated = state.t >= params.max_steps_in_episode
@@ -153,4 +160,7 @@ def save_video(
         raise ValueError("Unsupported format. Use 'mp4' or 'gif'.")
 
     print(f"Saved video to {video_path}")
+    print(f"total rewards: {rewards}")
+    if save_trajectory:
+        pd.DataFrame(states).to_csv("trajectory.csv")
     return video_path

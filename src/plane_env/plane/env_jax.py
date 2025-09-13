@@ -1,4 +1,3 @@
-from functools import partial
 from typing import Callable
 
 import chex
@@ -12,12 +11,11 @@ from plane_env.plane.env import (
     EnvState,
     check_is_terminal,
     compute_next_state,
-    compute_norm_from_coordinates,
     compute_reward,
     get_obs,
 )
 from plane_env.plane.rendering import _render
-from plane_env.utils import save_video
+from plane_env.utils import compute_norm_from_coordinates, save_video
 
 
 class Airplane2D(environment.Environment[EnvState, EnvParams]):
@@ -29,9 +27,10 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
     screen_width = 600
     screen_height = 400
 
-    def __init__(self):
+    def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (9,)
         self.positions_history = []
+        self.integration_method = integration_method
 
     @property
     def default_params(self) -> EnvParams:
@@ -52,7 +51,9 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         power, stick = action
         stick = jnp.deg2rad(stick * 15)  # radians
 
-        new_state, metrics = compute_next_state(power, stick, state, params, xp=jnp)
+        new_state, metrics = compute_next_state(
+            power, stick, state, params, integration_method=self.integration_method
+        )
         reward = compute_reward(new_state, params, xp=jnp)
         terminated, truncated = check_is_terminal(new_state, params, xp=jnp)
         done = terminated | truncated
@@ -148,6 +149,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         episode_index=0,
         FPS=60,
         format="mp4",
+        save_trajectory: bool = False,
     ):
         return save_video(
             self,
@@ -158,6 +160,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
             params,
             seed=key,
             format=format,
+            save_trajectory=save_trajectory,
         )
 
     def action_space(self, params: EnvParams | None = None) -> spaces.Discrete:
@@ -249,8 +252,13 @@ def benchmark(
 if __name__ == "__main__":
     env = Airplane2D()
     seed = 42
-    env_params = EnvParams(max_steps_in_episode=10_000)
-    action = (0.8, 0.0)
+
+    env_params = EnvParams(
+        max_steps_in_episode=1_000,
+        target_altitude_range=(5000, 5000),
+        initial_altitude_range=(5000, 5000),
+    )
+    action = (0.5, 0.0)
     env.save_video(
         lambda o: action,
         seed,
@@ -258,6 +266,7 @@ if __name__ == "__main__":
         episode_index=0,
         params=env_params,
         format="gif",
+        save_trajectory=True,
     )
 
     # import time

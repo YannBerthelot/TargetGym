@@ -27,12 +27,13 @@ def test_can_step_env():
         obs, reward, terminated, truncated, info = env.step(action)
         assert isinstance(obs, np.ndarray)
         assert isinstance(reward, (jnp.ndarray, np.ndarray, float, np.float_))
-        assert isinstance(terminated, (bool, np.bool_))
-        assert isinstance(truncated, (bool, np.bool_))
+        assert isinstance(terminated, (jnp.ndarray, bool, np.bool_, jnp.bool_))
+        assert isinstance(truncated, (jnp.ndarray, bool, np.bool_, jnp.bool_))
         if terminated or truncated:
             obs, info = env.reset()
 
 
+# @pytest.mark.skip
 def test_sb3_ppo_can_learn():
     """Test that environment works with SB3's PPO"""
     # Create environment
