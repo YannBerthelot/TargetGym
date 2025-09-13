@@ -22,3 +22,7 @@ def test_compute_norm_from_coordinates():
     )
 
     assert norm.shape == (2,)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

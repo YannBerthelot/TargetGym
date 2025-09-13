@@ -1,8 +1,7 @@
-import os
-from typing import Callable, Optional, Tuple
+from typing import Tuple
 
-import numpy as np
 from flax import struct
+from jax.tree_util import Partial as partial
 
 # Optional: jax imports (only used in jax env)
 try:
@@ -14,15 +13,18 @@ except ImportError:
     jnp = None
     chex = None
 
+from plane_env.integration import compute_velocity_and_pos_from_acceleration_integration
 from plane_env.plane.dynamics import (
     compute_acceleration,
     compute_air_density_from_altitude,
+    compute_alpha,
+    compute_Mach_from_velocity_and_speed_of_sound,
     compute_next_power,
     compute_next_stick,
-    compute_speed_and_pos_from_acceleration,
+    compute_speed_of_sound_from_altitude,
     compute_thrust_output,
+    compute_velocity_from_horizontal_and_vertical_speed,
 )
-from plane_env.utils import compute_norm_from_coordinates
 
 SPEED_OF_SOUND = 343.0
 DEBUG = False
@@ -63,27 +65,20 @@ class EnvState:
 
     @property
     def speed_of_sound(self):
-        h = self.z
-        gamma_air = 1.4
-        R = 287.0
-        T0 = 288.15
-        L = 0.0065
-        T11 = 216.65
-        T = jnp.where(h <= 11000, T0 - L * h, T11)
-        return jnp.sqrt(gamma_air * R * T)
+        return compute_speed_of_sound_from_altitude(self.z)
 
     @property
     def M(self):
-        return (
-            compute_norm_from_coordinates(jnp.array([self.x_dot, self.z_dot]))
-            / self.speed_of_sound
+        return compute_Mach_from_velocity_and_speed_of_sound(
+            compute_velocity_from_horizontal_and_vertical_speed(self.x_dot, self.z_dot),
+            self.speed_of_sound,
         )
 
 
 @struct.dataclass
 class EnvParams:
     gravity: float = 9.81
-    initial_mass: float = 73500.0
+    initial_mass: float = 73_500.0
     thrust_output_at_sea_level: float = 240_000.0
     air_density_at_sea_level: float = 1.225
     frontal_surface: float = 12.6
@@ -93,9 +88,9 @@ class EnvParams:
     M_crit: float = 0.78
     initial_fuel_quantity: float = 23860 / 1.25
     specific_fuel_consumption: float = 17.5 / 1000
-    delta_t: float = 1.0
-    n_substeps: int = 5
+
     speed_of_sound: float = SPEED_OF_SOUND
+    I: float = 9_000_000
 
     max_steps_in_episode: int = 10_000
     min_alt: float = 0.0
@@ -109,8 +104,10 @@ class EnvParams:
     initial_power: float = 1.0
     initial_stick: float = 0.0
 
+    delta_t: float = 1.0
 
-def check_mass_does_not_increase(old_mass, new_mass, xp=np):
+
+def check_mass_does_not_increase(old_mass, new_mass, xp=jnp):
     """Check that mass does not increase. Safe for JIT if wrapped in callback."""
     if jax is not None and xp is jnp:
         jax.debug.callback(
@@ -122,7 +119,7 @@ def check_mass_does_not_increase(old_mass, new_mass, xp=np):
         assert old_mass >= new_mass
 
 
-def check_is_terminal(state: EnvState, params: EnvParams, xp=np):
+def check_is_terminal(state: EnvState, params: EnvParams, xp=jnp):
     """Return True if the episode should terminate."""
     terminated = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
     truncated = state.t >= params.max_steps_in_episode
@@ -145,8 +142,9 @@ def check_no_nan(x, id=None):
             raise AssertionError(f"NaN detected in {id}: {x}")
 
 
-def compute_reward(state: EnvState, params: EnvParams, xp=np):
+def compute_reward(state: EnvState, params: EnvParams, xp=jnp):
     """Return reward for a given state. Safe for JIT."""
+    xp = jnp
     done_alt = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
     max_alt_diff = params.max_alt - params.min_alt
     reward = xp.where(
@@ -157,7 +155,7 @@ def compute_reward(state: EnvState, params: EnvParams, xp=np):
     return reward
 
 
-def get_obs(state: EnvState, xp=np):
+def get_obs(state: EnvState, xp=jnp):
     """Applies observation function to state."""
     return xp.stack(
         [
@@ -174,147 +172,58 @@ def get_obs(state: EnvState, xp=np):
     )
 
 
-def compute_gamma(x_dot: float, z_dot: float) -> float:
-    """Flight path angle from velocity vector."""
-    return jnp.arctan2(z_dot, x_dot)  # handles negative x_dot safely
-
-
-def compute_alpha(theta: float, x_dot: float, z_dot: float) -> float:
-    """Angle of attack = pitch - flight path angle."""
-    gamma = compute_gamma(x_dot, z_dot)
-    alpha = theta - gamma
-    # wrap into [-π, π] to avoid angle spirals
-    return jnp.arctan2(jnp.sin(alpha), jnp.cos(alpha)), gamma
-
-
+@partial(jax.jit, static_argnames=["integration_method"])
 def compute_next_state(
     power_requested: float,
     stick_requested: float,
     state: EnvState,
     params: EnvParams,
-    n_substeps: int = 10,
-    xp=np,
+    integration_method: str = "rk4_1",
 ):
     """Compute next state and metrics using multiple sub-steps with jax.lax.scan."""
+    dt = params.delta_t
+    power = compute_next_power(power_requested, state.power, dt)
+    stick = compute_next_stick(stick_requested, state.stick, dt)
 
-    dt = params.delta_t / n_substeps  # smaller time step
-
-    def step_fn(carry, _):
-        current_state = carry
-
-        # Compute next power and stick
-        power = compute_next_power(power_requested, current_state.power, dt)
-        stick = compute_next_stick(stick_requested, current_state.stick, dt)
-
-        # Compute thrust
-        thrust = compute_thrust_output(
-            power=power,
-            thrust_output_at_sea_level=params.thrust_output_at_sea_level,
-            rho=current_state.rho,
-            M=current_state.M,
-        )
-
-        # Compute acceleration
-        a_x, a_z, alpha_y, metrics = compute_acceleration(
-            thrust=thrust,
-            m=current_state.m,
-            gravity=params.gravity,
-            x_dot=current_state.x_dot,
-            z_dot=current_state.z_dot,
-            frontal_surface=params.frontal_surface,
-            wings_surface=params.wings_surface,
-            alpha=current_state.alpha,
-            M=current_state.M,
-            M_crit=params.M_crit,
-            C_x0=params.C_x0,
-            C_z0=params.C_z0,
-            gamma=current_state.gamma,
-            theta=current_state.theta,
-            rho=current_state.rho,
-            stick=stick,
-        )
-        a_x_clipped = jnp.clip(a_x, -100, 100)  # m/s²
-        a_z_clipped = jnp.clip(a_z, -100, 100)  # m/s²
-        alpha_y_clipped = jnp.clip(alpha_y, -1.5, 1.5)  # rad/s²
-
-        # Check if any clipping occurred
-        clipping_occurred = jnp.logical_or(
-            jnp.logical_or(
-                jnp.not_equal(a_x, a_x_clipped), jnp.not_equal(a_z, a_z_clipped)
-            ),
-            jnp.not_equal(alpha_y, alpha_y_clipped),
-        )
-
-        # Conditionally print warning
-        def print_clip_warning(_):
-            jax.debug.print(
-                "Clipping warning: a_x={:.2f} (was {:.2f}), a_z={:.2f} (was {:.2f}), alpha_y={:.2f} (was {:.2f})",
-                a_x_clipped,
-                a_x,
-                a_z_clipped,
-                a_z,
-                alpha_y_clipped,
-                alpha_y,
-            )
-            return ()
-
-        # jax.lax.cond(clipping_occurred, print_clip_warning, lambda _: (), operand=None)
-
-        # Use clipped values
-        a_x, a_z, alpha_y = a_x_clipped, a_z_clipped, alpha_y_clipped
-
-        # Compute next speed and position
-        x_dot, z_dot, theta_dot, x, z, theta = compute_speed_and_pos_from_acceleration(
-            V_x=current_state.x_dot,
-            V_z=current_state.z_dot,
-            theta_dot=current_state.theta_dot,
-            x=current_state.x,
-            z=current_state.z,
-            theta=current_state.theta,
-            a_x=a_x,
-            a_z=a_z,
-            alpha_y=alpha_y,
+    # Compute thrustx
+    thrust = compute_thrust_output(
+        power=power,
+        thrust_output_at_sea_level=params.thrust_output_at_sea_level,
+        rho=state.rho,
+        M=state.M,
+    )
+    positions = jnp.array([state.x, state.z, state.theta])
+    velocities = jnp.array([state.x_dot, state.z_dot, state.theta_dot])
+    _compute_acceleration = partial(
+        compute_acceleration, action=(thrust, stick), params=params
+    )
+    (x_dot, z_dot, theta_dot), (x, z, theta), metrics = (
+        compute_velocity_and_pos_from_acceleration_integration(
+            velocities=velocities,
+            positions=positions,
             delta_t=dt,
+            compute_acceleration=_compute_acceleration,
+            method=integration_method,
         )
+    )
 
-        alpha, gamma = compute_alpha(theta, x_dot, z_dot)
-        m = params.initial_mass + current_state.fuel
-        # Note: check_mass_does_not_increase would need to be JAX-compatible
-        # check_mass_does_not_increase(current_state.m, m, xp=jnp)
+    alpha, gamma = compute_alpha(theta, x_dot, z_dot)
+    m = params.initial_mass + state.fuel
 
-        new_state = EnvState(
-            x=x,
-            x_dot=x_dot,
-            z=z,
-            z_dot=z_dot,
-            theta=theta,
-            theta_dot=theta_dot,
-            alpha=alpha,
-            gamma=gamma,
-            m=m,
-            power=power,
-            stick=stick,
-            fuel=current_state.fuel,
-            t=current_state.t,
-            target_altitude=current_state.target_altitude,
-        )
-        # jax.debug.print('Timestep {timestep}', timestep=current_state.t)
-        if DEBUG:
-            jax.debug.callback(check_no_nan, new_state)
-
-        return new_state, metrics
-
-    # Use lax.scan to perform n_substeps
-    if xp is jnp:
-        final_state, metrics_seq = jax.lax.scan(step_fn, state, None, length=n_substeps)
-        final_state = final_state.replace(t=state.t + 1)
-    else:
-        final_state = state
-        metrics_seq = []
-        for _ in range(n_substeps):
-            final_state, metrics = step_fn(final_state, None)
-            metrics_seq.append(metrics)
-        final_state = final_state.replace(t=state.t + 1)
-        metrics_seq = xp.stack(metrics_seq)
-    final_metrics = metrics_seq[-1]
-    return final_state, final_metrics
+    new_state = EnvState(
+        x=x,
+        x_dot=x_dot,
+        z=z,
+        z_dot=z_dot,
+        theta=theta,
+        theta_dot=theta_dot,
+        alpha=alpha,
+        gamma=gamma,
+        m=m,
+        power=power,
+        stick=stick,
+        fuel=state.fuel,
+        t=state.t + 1,
+        target_altitude=state.target_altitude,
+    )
+    return new_state, metrics

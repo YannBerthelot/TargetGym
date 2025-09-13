@@ -1,6 +1,12 @@
+# from jax.tree_util import Partial as partial
+from functools import partial
+from typing import Any, Callable, Tuple
+
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import numpy as np
+from gymnax.environments import EnvParams
 
 from plane_env.utils import compute_norm_from_coordinates
 
@@ -203,50 +209,31 @@ def compute_z_drag_coefficient(
     return compute_mach_impact_on_z_drag_coefficient(C_z, M, M_critic)
 
 
-def newton_second_law(
-    thrust: float,
-    lift: float,
-    drag: float,
-    P: float,
-    gamma: float,  # flight path angle [rad]
-    theta: float,  # pitch angle [rad]
-) -> tuple[float, float]:
-    """
-    Newton's second law (vectorized form). Computes net aerodynamic, thrust, and weight forces.
-    Returns (F_x, F_z) in world coordinates.
-    """
-    eps = 1e-8
+def newton_second_law(thrust, lift, drag, P, gamma, theta):
+    # v_hat = [cos(gamma), sin(gamma)]
+    vhat_x = jnp.cos(gamma)
+    vhat_z = jnp.sin(gamma)
+    # drag opposite velocity
+    F_drag_x = -drag * vhat_x
+    F_drag_z = -drag * vhat_z
 
-    # velocity direction from gamma
-    v_hat = jnp.array([jnp.cos(gamma), jnp.sin(gamma)])  # unit vector along velocity
+    # perp_v = [-sin(gamma), cos(gamma)]
+    F_lift_x = -lift * jnp.sin(gamma)
+    F_lift_z = lift * jnp.cos(gamma)
 
-    # drag: always opposite velocity
-    F_drag = -drag * v_hat
+    # thrust along body axis
+    t_hat_x = jnp.cos(theta)
+    t_hat_z = jnp.sin(theta)
+    F_thrust_x = thrust * t_hat_x
+    F_thrust_z = thrust * t_hat_z
 
-    # lift: perpendicular to velocity (90° CCW rotation)
-    perp_v = jnp.array([-v_hat[1], v_hat[0]])
-    F_lift = lift * perp_v
+    # weight
+    F_weight_x = 0.0
+    F_weight_z = -P
 
-    # thrust: along body axis (theta is pitch angle)
-    t_hat = jnp.array([jnp.cos(theta), jnp.sin(theta)])
-    F_thrust = thrust * t_hat
-
-    # weight: acts downward
-    F_weight = jnp.array([0.0, -P])
-
-    # jax.debug.print(
-    #     "Forces [N]: drag:{drag}, lift:{lift}, thrust:{thrust}, weight:{weight}, gamma: {gamma}, theta: {theta}",
-    #     drag=F_drag,
-    #     lift=F_lift,
-    #     thrust=F_thrust,
-    #     weight=F_weight,
-    #     gamma=gamma,
-    #     theta=theta,
-    # )
-
-    # total force
-    F_total = F_drag + F_lift + F_thrust + F_weight
-    return F_total[0], F_total[1]
+    F_total_x = F_drag_x + F_lift_x + F_thrust_x + F_weight_x
+    F_total_z = F_drag_z + F_lift_z + F_thrust_z + F_weight_z
+    return F_total_x, F_total_z
 
 
 def check_power(power):
@@ -353,10 +340,6 @@ def aero_coefficients(aoa_deg, mach=0.0):
     aoa_stall = 15.0  # deg
     CL_max = 1.5
 
-    # --- Convert to radians ---
-    aoa_rad = jnp.deg2rad(aoa_deg)
-    aoa_stall_rad = jnp.deg2rad(aoa_stall)
-
     # --- Lift coefficient ---
     CL_linear = cl0 + cl_alpha * aoa_deg
     CL = CL_linear / (1 + jnp.exp((aoa_deg - aoa_stall) * 1.5))
@@ -381,39 +364,70 @@ def aero_coefficients(aoa_deg, mach=0.0):
     return CL, CD
 
 
+def compute_gamma(x_dot: float, z_dot: float) -> float:
+    """Flight path angle from velocity vector."""
+    return jnp.arctan2(z_dot, x_dot)  # handles negative x_dot safely
+
+
+def compute_alpha(theta: float, x_dot: float, z_dot: float) -> float:
+    """Angle of attack = pitch - flight path angle."""
+    gamma = compute_gamma(x_dot, z_dot)
+    alpha = theta - gamma
+    # wrap into [-π, π] to avoid angle spirals
+    return jnp.arctan2(jnp.sin(alpha), jnp.cos(alpha)), gamma
+
+
+def compute_speed_of_sound_from_altitude(z):
+    h = z
+    gamma_air = 1.4
+    R = 287.0
+    T0 = 288.15
+    L = 0.0065
+    T11 = 216.65
+    T = jnp.where(h <= 11000, T0 - L * h, T11)
+    return jnp.sqrt(gamma_air * R * T)
+
+
+def compute_Mach_from_velocity_and_speed_of_sound(velocity, speed_of_sound):
+    return velocity / speed_of_sound
+
+
+def compute_velocity_from_horizontal_and_vertical_speed(x_dot, z_dot):
+    return compute_norm_from_coordinates(jnp.array((x_dot, z_dot)))
+
+
+@partial(jax.jit)
 def compute_acceleration(
-    thrust: float,
-    stick: float,
-    m: float,
-    gravity: float,
-    x_dot: float,
-    z_dot: float,
-    frontal_surface: float,
-    wings_surface: float,
-    alpha: float,
-    M: float,
-    M_crit: float,
-    C_x0: float,
-    C_z0: float,
-    gamma: float,
-    theta: float,
-    rho: float,
-    I: float = 9_000_000,
+    velocities: jnp.ndarray, positions: jnp.ndarray, action: tuple, params: EnvParams
 ) -> tuple[float]:
     """
     Compute linear and angular accelerations for the aircraft.
     Returns: (a_x, a_z, alpha_y, metrics)
     """
+    xp = jnp
+    thrust, stick = action
+    x_dot, z_dot, _ = velocities
+
+    _, z, theta = positions
+    alpha, gamma = compute_alpha(theta, x_dot, z_dot)
+    m = (
+        params.initial_mass
+    )  # TODO : make it the actual mass when we start considering fuel consumption
+    rho = compute_air_density_from_altitude(z)
+    M = compute_Mach_from_velocity_and_speed_of_sound(
+        velocity=compute_velocity_from_horizontal_and_vertical_speed(x_dot, z_dot),
+        speed_of_sound=compute_speed_of_sound_from_altitude(z),
+    )
     # --- Weight & velocity ---
-    P = compute_weight(m, gravity)
-    V = compute_norm_from_coordinates(jnp.array([x_dot, z_dot]))
+    P = compute_weight(m, params.gravity)
+    V = compute_norm_from_coordinates(xp.array([x_dot, z_dot]))
 
     # ====================================================
     # WINGS
     # ====================================================
-    C_z_w, C_x_w = aero_coefficients(jnp.rad2deg(alpha), M)
-    lift_wings = compute_drag(S=wings_surface, C=C_z_w, V=V, rho=rho)
-    drag_wings = compute_drag(S=wings_surface, C=C_x_w, V=V, rho=rho)
+    C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M)
+    lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
+    drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
     moment_arm_wings = 1.5
     M_wings = lift_wings * moment_arm_wings
 
@@ -421,7 +435,7 @@ def compute_acceleration(
     # STABILIZER
     # ====================================================
     stabilizer_surface = 27
-    C_z_s, C_x_s = aero_coefficients(jnp.rad2deg(alpha) - 3.0, M)
+    C_z_s, C_x_s = aero_coefficients(xp.rad2deg(alpha) - 3.0, M)
     lift_stab = compute_drag(S=stabilizer_surface, C=C_z_s, V=V, rho=rho)
     drag_stab = compute_drag(S=stabilizer_surface, C=C_x_s, V=V, rho=rho)
     F_stab = lift_stab - drag_stab
@@ -432,10 +446,10 @@ def compute_acceleration(
     # ELEVATOR
     # ====================================================
     elevator_surface = 10
-    C_z_e, C_x_e = aero_coefficients(jnp.rad2deg(alpha) - jnp.rad2deg(stick) - 3.0, M)
+    C_z_e, C_x_e = aero_coefficients(xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0, M)
     lift_elev = compute_drag(S=elevator_surface, C=C_z_e, V=V, rho=rho)
     drag_elev = compute_drag(S=elevator_surface, C=C_x_e, V=V, rho=rho)
-    F_elev = lift_elev * jnp.cos(stick) - drag_elev * jnp.sin(stick)
+    F_elev = lift_elev * xp.cos(stick) - drag_elev * xp.sin(stick)
     M_elevator = -F_elev * moment_arm_stabilizer
 
     # ====================================================
@@ -450,7 +464,8 @@ def compute_acceleration(
     )
 
     metrics = (drag_total, lift_total, C_x_e, C_z_e, F_x, F_z)
-    return F_x / m, F_z / m, M_y / I, metrics
+    accelerations = xp.array([F_x / m, F_z / m, M_y / params.I])
+    return accelerations, metrics
 
 
 def clamp_altitude(z, z_dot):
@@ -458,48 +473,6 @@ def clamp_altitude(z, z_dot):
     z_clamped = jnp.maximum(z, 0.0)
     z_dot_clamped = jnp.where((z <= 0.0) & (z_dot < 0.0), 0.0, z_dot)
     return z_clamped, z_dot_clamped
-
-
-def compute_speed_and_pos_from_acceleration(
-    V_x, V_z, theta_dot, x, z, theta, a_x, a_z, alpha_y, delta_t
-):
-    """
-    Semi-implicit Euler integration for aircraft state.
-    Returns updated (V_x, V_z, theta_dot, x, z, theta)
-    """
-    # --------------------------
-    # Linear velocities
-    # --------------------------
-    V_x_new = V_x + a_x * delta_t
-    V_z_new = V_z + a_z * delta_t
-
-    # --------------------------
-    # Positions
-    # --------------------------
-    x_new = x + V_x_new * delta_t
-    z_new = z + V_z_new * delta_t
-    z_new, V_z_new = clamp_altitude(z_new, V_z_new)
-
-    # --------------------------
-    # Angular velocity & angle
-    # --------------------------
-    theta_dot_new = theta_dot + alpha_y * delta_t
-    theta_new = theta + theta_dot_new * delta_t
-    theta_new = jnp.arctan2(jnp.sin(theta_new), jnp.cos(theta_new))
-
-    # # --------------------------
-    # # Debug prints
-    # # --------------------------
-    # jax.debug.print(
-    #     "Pre-integration: a_x={:.6f}, a_z={:.6f}, V_x={:.6f}, V_z={:.6f}",
-    #     a_x, a_z, V_x_new, V_z_new
-    # )
-    # jax.debug.print(
-    #     "Post-integration: x={:.3f}, z={:.3f}, theta_deg={:.2f}, theta_dot={:.6f}",
-    #     x_new, z_new, jnp.rad2deg(theta_new), theta_dot_new
-    # )
-
-    return V_x_new, V_z_new, theta_dot_new, x_new, z_new, theta_new
 
 
 if __name__ == "__main__":

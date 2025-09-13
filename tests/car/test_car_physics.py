@@ -107,11 +107,17 @@ def test_compute_thrust_increases_with_throttle(params):
 
 
 def test_compute_acceleration_with_throttle_and_brake(params):
-    theta = 0.0
+    pos = 0.0
     v = 30.0
-    a_throttle = compute_acceleration(1.0, v, theta, params)
-    a_zero = compute_acceleration(0.0, v, theta, params)
-    a_brake = compute_acceleration(-1.0, v, theta, params)
+    a_throttle, _ = compute_acceleration(
+        action=1.0, velocity=v, position=pos, params=params
+    )
+    a_zero, _ = compute_acceleration(
+        action=0.0, velocity=v, position=pos, params=params
+    )
+    a_brake, _ = compute_acceleration(
+        action=-1.0, velocity=v, position=pos, params=params
+    )
 
     # Positive throttle increases acceleration
     assert a_throttle > a_zero
@@ -120,12 +126,12 @@ def test_compute_acceleration_with_throttle_and_brake(params):
 
 
 def test_compute_next_state_progress(params, state):
-    s_next = compute_next_state(1.0, state, params, n_substeps=5, xp=jnp)
+    s_next, _ = compute_next_state(1.0, state, params)
     assert s_next.t == state.t + 1
     assert s_next.x > state.x
     assert jnp.isfinite(s_next.velocity)
 
-    s_next_brake = compute_next_state(-1.0, state, params, n_substeps=5, xp=jnp)
+    s_next_brake, _ = compute_next_state(-1.0, state, params)
     # Braking should reduce velocity
     assert s_next_brake.velocity <= state.velocity
 
