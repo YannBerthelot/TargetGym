@@ -16,6 +16,8 @@ except ImportError:
 
 from jax import grad
 
+from plane_env.integration import compute_velocity_and_pos_from_acceleration_integration
+
 
 @struct.dataclass
 class EnvState:
@@ -148,7 +150,9 @@ def compute_thrust(throttle: float, velocity: float, params: EnvParams):
     return T_wheel / params.wheel_radius
 
 
-def compute_acceleration(throttle, velocity, theta, params: EnvParams):
+def compute_acceleration(velocity, position, action, params: EnvParams):
+    throttle = action
+    theta = compute_theta_from_position(position, road_profile)
     m, g = params.initial_mass, params.gravity
 
     # Engine thrust (positive throttle)
@@ -166,7 +170,16 @@ def compute_acceleration(throttle, velocity, theta, params: EnvParams):
     F_gravity = m * g * jnp.sin(theta)
 
     F_total = F_thrust - F_drag - F_roll - F_gravity - F_brake
-    return F_total / m
+    metrics = {
+        "F_thrust": F_thrust,
+        "F_brake": F_brake,
+        "F_drag": F_drag,
+        "F_roll": F_roll,
+        "F_gravity": F_gravity,
+        "F_all": F_total,
+    }
+    jax.debug.print("Metrics:{y}", y=metrics)
+    return F_total / m, metrics
 
 
 EPS = 1e-8
@@ -182,38 +195,35 @@ def compute_next_power(requested_power, current_power, delta_t):
     return current_power
 
 
+@partial(jax.jit, static_argnames=["integration_method"])
 def compute_next_state(
     throttle_requested: float,
     state: EnvState,
     params: EnvParams,
-    n_substeps: int = 1,
-    xp=jnp,
+    integration_method: str = "rk4_1",
 ):
-    dt = params.delta_t / n_substeps
+    dt = params.delta_t
     throttle_requested = jnp.clip(throttle_requested, -1.0, 1.0)
+    throttle = compute_next_power(throttle_requested, state.throttle, delta_t=dt)
 
-    def step_fn(current_state, _):
-        throttle = compute_next_power(
-            throttle_requested, current_state.throttle, delta_t=dt
+    _compute_acceleration = partial(
+        compute_acceleration, action=throttle, params=params
+    )
+
+    velocity, position, metrics = (
+        compute_velocity_and_pos_from_acceleration_integration(
+            velocities=state.velocity,
+            positions=state.x,
+            delta_t=dt,
+            compute_acceleration=_compute_acceleration,
+            method=integration_method,
         )
-        theta = compute_theta_from_position(current_state.x, road_profile)
-        acc = compute_acceleration(throttle, current_state.velocity, theta, params)
-        v_new = current_state.velocity + acc * dt
-        v_new = jnp.clip(v_new, -params.max_velocity, params.max_velocity)
-        x_new = current_state.x + v_new * dt
-        new_state = current_state.replace(x=x_new, velocity=v_new, throttle=throttle)
-        return new_state, None
+    )
 
-    if xp is jnp:
-        final_state, _ = jax.lax.scan(step_fn, state, None, length=n_substeps)
-        final_state = final_state.replace(t=state.t + 1)
-    else:
-        final_state = state
-        for _ in range(n_substeps):
-            final_state, _ = step_fn(final_state, None)
-        final_state = final_state.replace(t=state.t + 1)
-
-    return final_state
+    return (
+        state.replace(x=position, velocity=velocity, throttle=throttle, t=state.t + 1),
+        metrics,
+    )
 
 
 @partial(jax.jit, static_argnames=["params", "road_profile", "xp"])

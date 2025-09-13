@@ -1,4 +1,3 @@
-from functools import partial
 from typing import Callable
 
 import chex
@@ -12,12 +11,11 @@ from plane_env.plane.env import (
     EnvState,
     check_is_terminal,
     compute_next_state,
-    compute_norm_from_coordinates,
     compute_reward,
     get_obs,
 )
 from plane_env.plane.rendering import _render
-from plane_env.utils import save_video
+from plane_env.utils import compute_norm_from_coordinates, save_video
 
 
 class Airplane2D(environment.Environment[EnvState, EnvParams]):
@@ -29,7 +27,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
     screen_width = 600
     screen_height = 400
 
-    def __init__(self, integration_method: str = "euler_10"):
+    def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (9,)
         self.positions_history = []
         self.integration_method = integration_method

@@ -35,7 +35,7 @@ class Airplane2D(gym.Env):
         params=None,
         render_mode: Optional[str] = None,
         mode="power_and_stick",
-        integration_method: str = "euler_10",
+        integration_method: str = "rk4_1",
     ):
         super().__init__()
         self.obs_shape = (9,)  # TODO : infer automatically ?
