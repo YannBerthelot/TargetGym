@@ -33,6 +33,7 @@ def test_can_step_env():
             obs, info = env.reset()
 
 
+# @pytest.mark.skip
 def test_sb3_ppo_can_learn():
     """Test that environment works with SB3's PPO"""
     # Create environment
