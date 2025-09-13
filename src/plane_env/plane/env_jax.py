@@ -29,9 +29,10 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
     screen_width = 600
     screen_height = 400
 
-    def __init__(self):
+    def __init__(self, integration_method: str = "euler_10"):
         self.obs_shape = (9,)
         self.positions_history = []
+        self.integration_method = integration_method
 
     @property
     def default_params(self) -> EnvParams:
@@ -52,7 +53,9 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         power, stick = action
         stick = jnp.deg2rad(stick * 15)  # radians
 
-        new_state, metrics = compute_next_state(power, stick, state, params)
+        new_state, metrics = compute_next_state(
+            power, stick, state, params, integration_method=self.integration_method
+        )
         reward = compute_reward(new_state, params, xp=jnp)
         terminated, truncated = check_is_terminal(new_state, params, xp=jnp)
         done = terminated | truncated
