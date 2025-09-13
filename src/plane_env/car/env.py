@@ -114,7 +114,7 @@ def compute_theta_from_position(x, road_profile: Callable[[float], float]):
     return jnp.arctan(slope)
 
 
-def check_is_terminal(state: EnvState, params: EnvParams, xp=np):
+def check_is_terminal(state: EnvState, params: EnvParams, xp=jnp):
     terminated = jnp.logical_or(
         state.velocity <= params.min_velocity, state.velocity >= params.max_velocity
     )
@@ -122,7 +122,7 @@ def check_is_terminal(state: EnvState, params: EnvParams, xp=np):
     return terminated, truncated
 
 
-def compute_reward(state: EnvState, params: EnvParams, xp=np):
+def compute_reward(state: EnvState, params: EnvParams, xp=jnp):
     terminated, _ = check_is_terminal(state, params, xp=xp)
     max_velocity_diff = params.max_velocity - params.min_velocity
     true_reward = (
@@ -187,7 +187,7 @@ def compute_next_state(
     state: EnvState,
     params: EnvParams,
     n_substeps: int = 1,
-    xp=np,
+    xp=jnp,
 ):
     dt = params.delta_t / n_substeps
     throttle_requested = jnp.clip(throttle_requested, -1.0, 1.0)
@@ -217,7 +217,7 @@ def compute_next_state(
 
 
 @partial(jax.jit, static_argnames=["params", "road_profile", "xp"])
-def get_obs(state: EnvState, params: EnvParams, road_profile, xp=np):
+def get_obs(state: EnvState, params: EnvParams, road_profile, xp=jnp):
     sensor_x = state.x + jnp.linspace(0, params.sensors_range, num=params.n_sensors)
     sensor_theta = jax.vmap(compute_theta_from_position, in_axes=(0, None))(
         sensor_x, road_profile

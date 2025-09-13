@@ -19,7 +19,7 @@ from plane_env.utils import save_video
 
 class Airplane2D(gym.Env):
     """
-    JAX Compatible 2D-Airplane environment.
+    2D-Airplane environment.
     """
 
     metadata = {
@@ -91,7 +91,7 @@ class Airplane2D(gym.Env):
         params = self.params if params is None else params
         power, stick = action  # cannot just unpack action because of different modes
         stick = np.deg2rad(stick * 15)
-        new_state, metrics = compute_next_state(power, stick, state, params, xp=np)
+        new_state, metrics = compute_next_state(power, stick, state, params)
         reward = compute_reward(new_state, params, xp=np)
         terminated, truncated = check_is_terminal(new_state, params)
         obs = self.get_obs(new_state)

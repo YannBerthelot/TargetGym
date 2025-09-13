@@ -1,4 +1,6 @@
 import os
+
+# from functools import partial
 from typing import Callable, Optional, Tuple
 
 import numpy as np
@@ -109,7 +111,7 @@ class EnvParams:
     initial_stick: float = 0.0
 
 
-def check_mass_does_not_increase(old_mass, new_mass, xp=np):
+def check_mass_does_not_increase(old_mass, new_mass, xp=jnp):
     """Check that mass does not increase. Safe for JIT if wrapped in callback."""
     if jax is not None and xp is jnp:
         jax.debug.callback(
@@ -121,7 +123,7 @@ def check_mass_does_not_increase(old_mass, new_mass, xp=np):
         assert old_mass >= new_mass
 
 
-def check_is_terminal(state: EnvState, params: EnvParams, xp=np):
+def check_is_terminal(state: EnvState, params: EnvParams, xp=jnp):
     """Return True if the episode should terminate."""
     terminated = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
     truncated = state.t >= params.max_steps_in_episode
@@ -144,8 +146,9 @@ def check_no_nan(x, id=None):
             raise AssertionError(f"NaN detected in {id}: {x}")
 
 
-def compute_reward(state: EnvState, params: EnvParams, xp=np):
+def compute_reward(state: EnvState, params: EnvParams, xp=jnp):
     """Return reward for a given state. Safe for JIT."""
+    xp = jnp
     done_alt = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
     max_alt_diff = params.max_alt - params.min_alt
     reward = xp.where(
@@ -156,7 +159,7 @@ def compute_reward(state: EnvState, params: EnvParams, xp=np):
     return reward
 
 
-def get_obs(state: EnvState, xp=np):
+def get_obs(state: EnvState, xp=jnp):
     """Applies observation function to state."""
     return xp.stack(
         [
@@ -173,16 +176,17 @@ def get_obs(state: EnvState, xp=np):
     )
 
 
+@partial(jax.jit)
 def compute_next_state(
     power_requested: float,
     stick_requested: float,
     state: EnvState,
     params: EnvParams,
     n_substeps: int = 10,
-    xp=np,
 ):
     """Compute next state and metrics using multiple sub-steps with jax.lax.scan."""
     dt = params.delta_t
+    xp = jnp
     power = compute_next_power(power_requested, state.power, dt)
     stick = compute_next_stick(stick_requested, state.stick, dt)
 
@@ -193,12 +197,10 @@ def compute_next_state(
         rho=state.rho,
         M=state.M,
     )
-    positions = jnp.array([state.x, state.z, state.theta])
-    velocities = jnp.array([state.x_dot, state.z_dot, state.theta_dot])
+    positions = xp.array([state.x, state.z, state.theta])
+    velocities = xp.array([state.x_dot, state.z_dot, state.theta_dot])
     _compute_acceleration = partial(
-        compute_acceleration,
-        action=(thrust, stick),
-        params=params,
+        compute_acceleration, action=(thrust, stick), params=params
     )
     (x_dot, z_dot, theta_dot), (x, z, theta), metrics = (
         compute_velocity_and_pos_from_acceleration_integration(
@@ -229,107 +231,3 @@ def compute_next_state(
         target_altitude=state.target_altitude,
     )
     return new_state, metrics
-
-    # def step_fn(carry, _):
-    #     current_state = carry
-
-    #     # Compute next power and stick
-    #     power = compute_next_power(power_requested, current_state.power, dt)
-    #     stick = compute_next_stick(stick_requested, current_state.stick, dt)
-
-    #     # Compute thrustx
-    #     thrust = compute_thrust_output(
-    #         power=power,
-    #         thrust_output_at_sea_level=params.thrust_output_at_sea_level,
-    #         rho=current_state.rho,
-    #         M=current_state.M,
-    #     )
-
-    #     # Compute acceleration
-    #     # (a_x, a_z, alpha_y), metrics = compute_acceleration(
-    #     #     thrust=thrust,
-    #     #     m=current_state.m,
-    #     #     gravity=params.gravity,
-    #     #     x_dot=current_state.x_dot,
-    #     #     z_dot=current_state.z_dot,
-    #     #     frontal_surface=params.frontal_surface,
-    #     #     wings_surface=params.wings_surface,
-    #     #     alpha=current_state.alpha,
-    #     #     M=current_state.M,
-    #     #     M_crit=params.M_crit,
-    #     #     C_x0=params.C_x0,
-    #     #     C_z0=params.C_z0,
-    #     #     gamma=current_state.gamma,
-    #     #     theta=current_state.theta,
-    #     #     rho=current_state.rho,
-    #     #     stick=stick,
-    #     # )
-    #     # a_x_clipped = jnp.clip(a_x, -100, 100)  # m/s²
-    #     # a_z_clipped = jnp.clip(a_z, -100, 100)  # m/s²
-    #     # alpha_y_clipped = jnp.clip(alpha_y, -1.5, 1.5)  # rad/s²
-
-    #     # # Use clipped values
-    #     # a_x, a_z, alpha_y = a_x_clipped, a_z_clipped, alpha_y_clipped
-
-    #     # Compute next speed and position
-    #     # accelerations = jnp.array([a_x, a_z, alpha_y])
-    #     velocities = jnp.array(
-    #         [current_state.x_dot, current_state.z_dot, current_state.theta_dot]
-    #     )
-    #     positions = jnp.array([current_state.x, current_state.z, current_state.theta])
-
-    #     _compute_acceleration = partial(
-    #         compute_acceleration,
-    #         action=(thrust, stick),
-    #         params=params,
-    #     )
-    #     (x_dot, z_dot, theta_dot), (x, z, theta), metrics = (
-    #         compute_velocity_and_pos_from_acceleration_integration(
-    #             velocities=velocities,
-    #             positions=positions,
-    #             delta_t=dt,
-    #             compute_acceleration=_compute_acceleration,
-    #         )
-    #     )
-
-    #     alpha, gamma = compute_alpha(theta, x_dot, z_dot)
-    #     m = params.initial_mass + current_state.fuel
-    #     # Note: check_mass_does_not_increase would need to be JAX-compatible
-    #     # check_mass_does_not_increase(current_state.m, m, xp=jnp)
-
-    #     new_state = EnvState(
-    #         x=x,
-    #         x_dot=x_dot,
-    #         z=z,
-    #         z_dot=z_dot,
-    #         theta=theta,
-    #         theta_dot=theta_dot,
-    #         alpha=alpha,
-    #         gamma=gamma,
-    #         m=m,
-    #         power=power,
-    #         stick=stick,
-    #         fuel=current_state.fuel,
-    #         t=current_state.t,
-    #         target_altitude=current_state.target_altitude,
-    #     )
-    #     # jax.debug.print('Timestep {timestep}', timestep=current_state.t)
-    #     if DEBUG:
-    #         jax.debug.callback(check_no_nan, new_state)
-
-    #     return new_state, metrics
-
-    # Use lax.scan to perform n_substeps
-    # if xp is jnp:
-    #     final_state, metrics_seq = jax.lax.scan(step_fn, state, None, length=n_substeps)
-    #     final_state = final_state.replace(t=state.t + 1)
-    # else:
-    #     final_state = state
-    #     metrics_seq = []
-    #     for _ in range(n_substeps):
-    #         final_state, metrics = step_fn(final_state, None)
-    #         metrics_seq.append(metrics)
-    #     final_state = final_state.replace(t=state.t + 1)
-    #     metrics_seq = xp.stack(metrics_seq)
-    # final_metrics = metrics_seq[-1]
-    return final_state, final_metrics
