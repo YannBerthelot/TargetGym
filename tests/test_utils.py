@@ -1,8 +1,9 @@
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from plane_env.utils import compute_norm_from_coordinates
+from plane_env.utils import compute_norm_from_coordinates, integrate_state
 
 
 def test_compute_norm_from_coordinates():
@@ -22,3 +23,7 @@ def test_compute_norm_from_coordinates():
     )
 
     assert norm.shape == (2,)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

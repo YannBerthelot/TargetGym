@@ -5,11 +5,12 @@ from plane_env.plane.dynamics import (
     aero_coefficients,
     clamp_altitude,
     compute_acceleration,
-    compute_speed_and_pos_from_acceleration,
+    compute_velocity_and_pos_from_acceleration_integration,
 )
+from plane_env.plane.env import EnvParams
 
 # Assume your functions are imported:
-# from aircraft_model import aero_coefficients, compute_acceleration, compute_speed_and_pos_from_acceleration, clamp_altitude
+# from aircraft_model import aero_coefficients, compute_acceleration, compute_velocity_and_pos_from_acceleration_integration, clamp_altitude
 
 
 def test_aero_coefficients_cl_cd_ranges():
@@ -28,27 +29,26 @@ def test_aero_coefficients_cl_cd_ranges():
 
 def test_compute_acceleration_consistency():
     """Check that accelerations are reasonable and moments are finite."""
-    F_x, F_z, alpha_y, metrics = compute_acceleration(
-        thrust=50000,
-        stick=0.0,
-        m=70000,
-        gravity=9.81,
-        x_dot=200.0,
-        z_dot=0.0,
-        frontal_surface=20.0,
-        wings_surface=122.6,
-        alpha=jnp.deg2rad(2.0),
-        M=0.6,
-        M_crit=0.82,
-        C_x0=0.02,
-        C_z0=0.3,
-        gamma=0.01,
-        theta=0.02,
-        rho=1.225,
+    thrust = 50000
+    stick = 0.0
+    x_dot = 200.0
+    z_dot = 0.0
+    theta_dot = None  # not needed here
+    velocities = (x_dot, z_dot, theta_dot)
+    positions = (None, 1000, 0.02)
+    params = EnvParams()
+    accelerations, metrics = compute_acceleration(
+        action=(thrust, stick),
+        velocities=velocities,
+        positions=positions,
+        params=params,
     )
+    a_x = accelerations[0]
+    a_z = accelerations[1]
+    alpha_y = accelerations[2]
     # Linear accelerations should be within reason
-    assert -50 <= F_x <= 50, f"F_x acceleration unreasonable: {F_x}"
-    assert -50 <= F_z <= 50, f"F_z acceleration unreasonable: {F_z}"
+    assert -50 <= a_x <= 50, f"F_x acceleration unreasonable: {a_x}"
+    assert -50 <= a_z <= 50, f"F_z acceleration unreasonable: {a_z}"
     # Angular acceleration should be finite
     assert jnp.isfinite(alpha_y), "Angular acceleration is not finite"
 
@@ -66,17 +66,16 @@ def test_clamp_altitude():
 
 def test_compute_speed_and_pos_integration():
     """Check semi-implicit Euler integration produces reasonable outputs."""
-    V_x, V_z, theta_dot, x, z, theta = compute_speed_and_pos_from_acceleration(
-        V_x=200.0,
-        V_z=0.0,
-        theta_dot=0.01,
-        x=0.0,
-        z=1000.0,
-        theta=0.05,
-        a_x=1.0,
-        a_z=-9.8,
-        alpha_y=0.001,
-        delta_t=0.1,
+    # accelerations = jnp.array([1.0, -9.8, 0.001])
+    velocities = jnp.array([200.0, 0.0, 0.01])
+    positions = jnp.array([0.0, 1000.0, 0.05])
+    (V_x, V_z, theta_dot), (x, z, theta), _ = (
+        compute_velocity_and_pos_from_acceleration_integration(
+            velocities=velocities,
+            positions=positions,
+            delta_t=0.1,
+            compute_acceleration=lambda x, y: (jnp.array([1.0, -9.8, 0.001]), None),
+        )
     )
     # velocities updated
     assert 200.0 <= V_x <= 201.0, f"V_x integration unexpected: {V_x}"

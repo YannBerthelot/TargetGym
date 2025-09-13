@@ -1,6 +1,10 @@
+from typing import Any, Callable, Tuple
+
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+from gymnax.environments import EnvParams
+from jax.tree_util import Partial as partial
 
 from plane_env.utils import compute_norm_from_coordinates
 
@@ -381,39 +385,71 @@ def aero_coefficients(aoa_deg, mach=0.0):
     return CL, CD
 
 
+def compute_gamma(x_dot: float, z_dot: float) -> float:
+    """Flight path angle from velocity vector."""
+    return jnp.arctan2(z_dot, x_dot)  # handles negative x_dot safely
+
+
+def compute_alpha(theta: float, x_dot: float, z_dot: float) -> float:
+    """Angle of attack = pitch - flight path angle."""
+    gamma = compute_gamma(x_dot, z_dot)
+    alpha = theta - gamma
+    # wrap into [-π, π] to avoid angle spirals
+    return jnp.arctan2(jnp.sin(alpha), jnp.cos(alpha)), gamma
+
+
+def compute_speed_of_sound_from_altitude(z):
+    h = z
+    gamma_air = 1.4
+    R = 287.0
+    T0 = 288.15
+    L = 0.0065
+    T11 = 216.65
+    T = jnp.where(h <= 11000, T0 - L * h, T11)
+    return jnp.sqrt(gamma_air * R * T)
+
+
+def compute_Mach_from_velocity_and_speed_of_sound(velocity, speed_of_sound):
+    return velocity / speed_of_sound
+
+
+def compute_velocity_from_horizontal_and_vertical_speed(x_dot, z_dot):
+    return compute_norm_from_coordinates(jnp.array([x_dot, z_dot]))
+
+
 def compute_acceleration(
-    thrust: float,
-    stick: float,
-    m: float,
-    gravity: float,
-    x_dot: float,
-    z_dot: float,
-    frontal_surface: float,
-    wings_surface: float,
-    alpha: float,
-    M: float,
-    M_crit: float,
-    C_x0: float,
-    C_z0: float,
-    gamma: float,
-    theta: float,
-    rho: float,
-    I: float = 9_000_000,
+    velocities: float,
+    positions: float,
+    action: tuple,
+    params: EnvParams,
 ) -> tuple[float]:
     """
     Compute linear and angular accelerations for the aircraft.
     Returns: (a_x, a_z, alpha_y, metrics)
     """
+    thrust, stick = action
+    x_dot, z_dot, _ = velocities
+
+    _, z, theta = positions
+    alpha, gamma = compute_alpha(theta, x_dot, z_dot)
+    m = (
+        params.initial_mass
+    )  # TODO : make it the actual mass when we start considering fuel consumption
+    rho = compute_air_density_from_altitude(z)
+    M = compute_Mach_from_velocity_and_speed_of_sound(
+        velocity=compute_velocity_from_horizontal_and_vertical_speed(x_dot, z_dot),
+        speed_of_sound=compute_speed_of_sound_from_altitude(z),
+    )
     # --- Weight & velocity ---
-    P = compute_weight(m, gravity)
+    P = compute_weight(m, params.gravity)
     V = compute_norm_from_coordinates(jnp.array([x_dot, z_dot]))
 
     # ====================================================
     # WINGS
     # ====================================================
     C_z_w, C_x_w = aero_coefficients(jnp.rad2deg(alpha), M)
-    lift_wings = compute_drag(S=wings_surface, C=C_z_w, V=V, rho=rho)
-    drag_wings = compute_drag(S=wings_surface, C=C_x_w, V=V, rho=rho)
+    lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
+    drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
     moment_arm_wings = 1.5
     M_wings = lift_wings * moment_arm_wings
 
@@ -450,7 +486,8 @@ def compute_acceleration(
     )
 
     metrics = (drag_total, lift_total, C_x_e, C_z_e, F_x, F_z)
-    return F_x / m, F_z / m, M_y / I, metrics
+    accelerations = jnp.array([F_x / m, F_z / m, M_y / params.I])
+    return accelerations, metrics
 
 
 def clamp_altitude(z, z_dot):
@@ -460,46 +497,35 @@ def clamp_altitude(z, z_dot):
     return z_clamped, z_dot_clamped
 
 
-def compute_speed_and_pos_from_acceleration(
-    V_x, V_z, theta_dot, x, z, theta, a_x, a_z, alpha_y, delta_t
+@partial(jax.jit, static_argnames=["method", "compute_acceleration"])
+def compute_velocity_and_pos_from_acceleration_integration(
+    velocities: jnp.ndarray,
+    positions: jnp.ndarray,
+    delta_t: float,
+    compute_acceleration: Callable[[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, Any]],
+    method: str = "euler_10",
 ):
     """
     Semi-implicit Euler integration for aircraft state.
     Returns updated (V_x, V_z, theta_dot, x, z, theta)
     """
-    # --------------------------
-    # Linear velocities
-    # --------------------------
-    V_x_new = V_x + a_x * delta_t
-    V_z_new = V_z + a_z * delta_t
+    if "euler" in method:
+        n_substeps = int(method.split("_")[1])
+        delta_t = delta_t / n_substeps
 
-    # --------------------------
-    # Positions
-    # --------------------------
-    x_new = x + V_x_new * delta_t
-    z_new = z + V_z_new * delta_t
-    z_new, V_z_new = clamp_altitude(z_new, V_z_new)
+        def step_fn(carry, _):
+            velocities, positions = carry
+            accelerations, metrics = compute_acceleration(velocities, positions)
 
-    # --------------------------
-    # Angular velocity & angle
-    # --------------------------
-    theta_dot_new = theta_dot + alpha_y * delta_t
-    theta_new = theta + theta_dot_new * delta_t
-    theta_new = jnp.arctan2(jnp.sin(theta_new), jnp.cos(theta_new))
+            new_velocities = velocities + accelerations * delta_t
 
-    # # --------------------------
-    # # Debug prints
-    # # --------------------------
-    # jax.debug.print(
-    #     "Pre-integration: a_x={:.6f}, a_z={:.6f}, V_x={:.6f}, V_z={:.6f}",
-    #     a_x, a_z, V_x_new, V_z_new
-    # )
-    # jax.debug.print(
-    #     "Post-integration: x={:.3f}, z={:.3f}, theta_deg={:.2f}, theta_dot={:.6f}",
-    #     x_new, z_new, jnp.rad2deg(theta_new), theta_dot_new
-    # )
+            new_positions = positions + new_velocities * delta_t
+            return (new_velocities, new_positions), metrics
 
-    return V_x_new, V_z_new, theta_dot_new, x_new, z_new, theta_new
+        (new_velocities, new_positions), metrics = jax.lax.scan(
+            f=step_fn, init=(velocities, positions), xs=None, length=n_substeps
+        )
+    return new_velocities, new_positions, metrics
 
 
 if __name__ == "__main__":
