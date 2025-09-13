@@ -1,11 +1,10 @@
 import jax.numpy as jnp
-import pytest
 
+from plane_env.integration import compute_velocity_and_pos_from_acceleration_integration
 from plane_env.plane.dynamics import (
     aero_coefficients,
     clamp_altitude,
     compute_acceleration,
-    compute_velocity_and_pos_from_acceleration_integration,
 )
 from plane_env.plane.env import EnvParams
 

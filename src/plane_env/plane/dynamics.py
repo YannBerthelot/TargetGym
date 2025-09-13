@@ -340,10 +340,6 @@ def aero_coefficients(aoa_deg, mach=0.0):
     aoa_stall = 15.0  # deg
     CL_max = 1.5
 
-    # --- Convert to radians ---
-    aoa_rad = jnp.deg2rad(aoa_deg)
-    aoa_stall_rad = jnp.deg2rad(aoa_stall)
-
     # --- Lift coefficient ---
     CL_linear = cl0 + cl_alpha * aoa_deg
     CL = CL_linear / (1 + jnp.exp((aoa_deg - aoa_stall) * 1.5))
@@ -402,7 +398,7 @@ def compute_velocity_from_horizontal_and_vertical_speed(x_dot, z_dot):
 
 @partial(jax.jit)
 def compute_acceleration(
-    velocities: float, positions: float, action: tuple, params: EnvParams
+    velocities: jnp.ndarray, positions: jnp.ndarray, action: tuple, params: EnvParams
 ) -> tuple[float]:
     """
     Compute linear and angular accelerations for the aircraft.
@@ -477,36 +473,6 @@ def clamp_altitude(z, z_dot):
     z_clamped = jnp.maximum(z, 0.0)
     z_dot_clamped = jnp.where((z <= 0.0) & (z_dot < 0.0), 0.0, z_dot)
     return z_clamped, z_dot_clamped
-
-
-def compute_velocity_and_pos_from_acceleration_integration(
-    velocities: jnp.ndarray,
-    positions: jnp.ndarray,
-    delta_t: float,
-    compute_acceleration: Callable[[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, Any]],
-    method: str = "euler_10",
-):
-    """
-    Semi-implicit Euler integration for aircraft state.
-    Returns updated (V_x, V_z, theta_dot, x, z, theta)
-    """
-    if "euler" in method:
-        n_substeps = int(method.split("_")[1])
-        delta_t = delta_t / n_substeps
-
-        def step_fn(carry, _):
-            velocities, positions = carry
-            accelerations, metrics = compute_acceleration(velocities, positions)
-
-            new_velocities = velocities + accelerations * delta_t
-
-            new_positions = positions + new_velocities * delta_t
-            return (new_velocities, new_positions), metrics
-
-        (new_velocities, new_positions), metrics = jax.lax.scan(
-            f=step_fn, init=(velocities, positions), xs=None, length=n_substeps
-        )
-    return new_velocities, new_positions, metrics
 
 
 if __name__ == "__main__":

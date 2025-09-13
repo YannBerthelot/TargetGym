@@ -1,9 +1,5 @@
-import os
+from typing import Tuple
 
-# from functools import partial
-from typing import Callable, Optional, Tuple
-
-import numpy as np
 from flax import struct
 from jax.tree_util import Partial as partial
 
@@ -17,6 +13,7 @@ except ImportError:
     jnp = None
     chex = None
 
+from plane_env.integration import compute_velocity_and_pos_from_acceleration_integration
 from plane_env.plane.dynamics import (
     compute_acceleration,
     compute_air_density_from_altitude,
@@ -26,10 +23,8 @@ from plane_env.plane.dynamics import (
     compute_next_stick,
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
-    compute_velocity_and_pos_from_acceleration_integration,
     compute_velocity_from_horizontal_and_vertical_speed,
 )
-from plane_env.utils import compute_norm_from_coordinates
 
 SPEED_OF_SOUND = 343.0
 DEBUG = False
@@ -183,11 +178,10 @@ def compute_next_state(
     stick_requested: float,
     state: EnvState,
     params: EnvParams,
-    integration_method: str = "euler_10",
+    integration_method: str = "rk4_1",
 ):
     """Compute next state and metrics using multiple sub-steps with jax.lax.scan."""
     dt = params.delta_t
-    xp = jnp
     power = compute_next_power(power_requested, state.power, dt)
     stick = compute_next_stick(stick_requested, state.stick, dt)
 
@@ -198,8 +192,8 @@ def compute_next_state(
         rho=state.rho,
         M=state.M,
     )
-    positions = xp.array([state.x, state.z, state.theta])
-    velocities = xp.array([state.x_dot, state.z_dot, state.theta_dot])
+    positions = jnp.array([state.x, state.z, state.theta])
+    velocities = jnp.array([state.x_dot, state.z_dot, state.theta_dot])
     _compute_acceleration = partial(
         compute_acceleration, action=(thrust, stick), params=params
     )
