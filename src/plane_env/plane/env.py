@@ -93,8 +93,7 @@ class EnvParams:
     M_crit: float = 0.78
     initial_fuel_quantity: float = 23860 / 1.25
     specific_fuel_consumption: float = 17.5 / 1000
-    delta_t: float = 1.0
-    n_substeps: int = 5
+
     speed_of_sound: float = SPEED_OF_SOUND
     I: float = 9_000_000
 
@@ -109,6 +108,8 @@ class EnvParams:
     initial_theta: float = 0.0
     initial_power: float = 1.0
     initial_stick: float = 0.0
+
+    delta_t: float = 1.0
 
 
 def check_mass_does_not_increase(old_mass, new_mass, xp=jnp):
@@ -176,13 +177,13 @@ def get_obs(state: EnvState, xp=jnp):
     )
 
 
-@partial(jax.jit)
+@partial(jax.jit, static_argnames=["integration_method"])
 def compute_next_state(
     power_requested: float,
     stick_requested: float,
     state: EnvState,
     params: EnvParams,
-    n_substeps: int = 10,
+    integration_method: str = "euler_10",
 ):
     """Compute next state and metrics using multiple sub-steps with jax.lax.scan."""
     dt = params.delta_t
@@ -208,6 +209,7 @@ def compute_next_state(
             positions=positions,
             delta_t=dt,
             compute_acceleration=_compute_acceleration,
+            method=integration_method,
         )
     )
 
