@@ -47,7 +47,7 @@ def render_bicycle_top_view_fixed(
         pygame.draw.circle(surf, color, (sx, sy), 2)
 
     # --- Compute bike frame (scaled for visibility) ---
-    scale_factor = 1.0  # scale to make bike clearly visible
+    scale_factor = 1.0
     dx = (state.x_f - state.x_b) * scale_factor
     dy = (state.y_f - state.y_b) * scale_factor
     xb, yb = world_to_screen(state.x_b, state.y_b)
@@ -57,22 +57,20 @@ def render_bicycle_top_view_fixed(
     pygame.draw.line(surf, (50, 50, 200), (xb, yb), (xf, yf), 6)
 
     # --- Draw wheels as thin lines perpendicular to frame ---
-    wheel_length = 16  # increase for visibility
+    wheel_length = 16
     frame_angle = np.arctan2(yf - yb, xf - xb)
-    perp_angle = frame_angle
 
     for x, y in [(xb, yb), (xf, yf)]:
-        wx1 = x + np.cos(perp_angle) * wheel_length / 2
-        wy1 = y + np.sin(perp_angle) * wheel_length / 2
-        wx2 = x - np.cos(perp_angle) * wheel_length / 2
-        wy2 = y - np.sin(perp_angle) * wheel_length / 2
+        wx1 = x + np.cos(frame_angle) * wheel_length / 2
+        wy1 = y + np.sin(frame_angle) * wheel_length / 2
+        wx2 = x - np.cos(frame_angle) * wheel_length / 2
+        wy2 = y - np.sin(frame_angle) * wheel_length / 2
         pygame.draw.line(surf, (0, 0, 0), (wx1, wy1), (wx2, wy2), 4)
 
     # --- Draw handlebars at front wheel ---
     handle_length = 60
     theta = -state.theta
     handle_angle = frame_angle + theta
-
     hx1 = xf + np.cos(handle_angle + np.pi / 2) * handle_length / 2
     hy1 = yf + np.sin(handle_angle + np.pi / 2) * handle_length / 2
     hx2 = xf + np.cos(handle_angle - np.pi / 2) * handle_length / 2
@@ -126,6 +124,46 @@ def render_bicycle_top_view_fixed(
                 hud_rect.y + padding + i * line_height,
             ),
         )
+
+    # --- Torque & displacement bars ---
+    a_T, a_d = state.torque, state.displacement
+    bar_width = 150
+    bar_height = 15
+    bar_x = hud_rect.right + 20
+    bar_y = hud_rect.y + 15
+
+    def draw_bar(center_value, label):
+        # Draw label above bar
+        lbl_surf = font.render(label, True, (0, 0, 0))
+        surf.blit(lbl_surf, (bar_x, bar_y - line_height, bar_width, line_height))
+
+        # Background: red left, green right
+        pygame.draw.rect(surf, (180, 0, 0), (bar_x, bar_y, bar_width // 2, bar_height))
+        pygame.draw.rect(
+            surf,
+            (0, 180, 0),
+            (bar_x + bar_width // 2, bar_y, bar_width // 2, bar_height),
+        )
+
+        # Fill based on positive/negative value
+        if center_value >= 0:
+            fill_width = int(bar_width // 2 * np.clip(center_value, 0, 1))
+            pygame.draw.rect(
+                surf,
+                (144, 238, 144),
+                (bar_x + bar_width // 2, bar_y, fill_width, bar_height),
+            )
+        else:
+            fill_width = int(bar_width // 2 * np.clip(-center_value, 0, 1))
+            pygame.draw.rect(
+                surf,
+                (255, 160, 122),
+                (bar_x + bar_width // 2 - fill_width, bar_y, fill_width, bar_height),
+            )
+
+    draw_bar(a_T, "Torque")
+    bar_y += bar_height + 20
+    draw_bar(a_d, "Displacement")
 
     return surf, positions_history
 
