@@ -32,8 +32,8 @@ class EnvState:
     last_d: float  # last displacement action (normalized)
     t: int
     # for rendering
-    torque: float
-    displacement: float
+    torque: float = jnp.nan
+    displacement: float = jnp.nan
 
 
 @struct.dataclass
