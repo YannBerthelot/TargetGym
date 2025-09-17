@@ -1,17 +1,11 @@
 from typing import Tuple
 
+# Optional: jax imports (only used in jax env)
+import chex
+import jax
+import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
-
-# Optional: jax imports (only used in jax env)
-try:
-    import chex
-    import jax
-    import jax.numpy as jnp
-except ImportError:
-    jax = None
-    jnp = None
-    chex = None
 
 from plane_env.integration import compute_velocity_and_pos_from_acceleration_integration
 from plane_env.plane.dynamics import (
@@ -89,14 +83,27 @@ class EnvParams:
     initial_fuel_quantity: float = 23860 / 1.25
     specific_fuel_consumption: float = 17.5 / 1000
 
+    cl_alpha: float = 0.05  # per deg
+    cl0: float = 0.2  # zero-lift AoA
+    cd0: float = 0.02  # zero-lift drag
+    k: float = 0.045  # induced drag factor
+    aoa_stall: float = 15.0  # deg
+    CL_max: float = 1.5
+    M_crit: float = 0.80
+    k_drag: float = 5.0
+
     speed_of_sound: float = SPEED_OF_SOUND
     I: float = 9_000_000
+    moment_arm_stabilizer: float = 15.0
+    moment_arm_wings: float = 1.5
+    stabilizer_surface: float = 27
+    elevator_surface: float = 10
 
     max_steps_in_episode: int = 10_000
     min_alt: float = 0.0
-    max_alt: float = 40_000.0 / 3.281
-    target_altitude_range: Tuple[float, float] = (3000.0, 5000.0)
-    initial_altitude_range: Tuple[float, float] = (3000.0, 5000.0)
+    max_alt: float = 55_000.0 / 3.281
+    target_altitude_range: Tuple[float, float] = (5_000.0, 5_000.0)
+    initial_altitude_range: Tuple[float, float] = (3_000.0, 5_000.0)
     initial_z_dot: float = 0.0
     initial_x_dot: float = 200.0
     initial_theta_dot: float = 0.0
@@ -172,6 +179,11 @@ def get_obs(state: EnvState, xp=jnp):
     )
 
 
+@partial(jax.jit, static_argnames=["min", "max"])
+def clip_acceleration(a: jnp.ndarray, min: tuple, max: tuple):
+    return jnp.clip(a, min=jnp.array(min), max=jnp.array(max))
+
+
 @partial(jax.jit, static_argnames=["integration_method"])
 def compute_next_state(
     power_requested: float,
@@ -195,8 +207,14 @@ def compute_next_state(
     positions = jnp.array([state.x, state.z, state.theta])
     velocities = jnp.array([state.x_dot, state.z_dot, state.theta_dot])
     _compute_acceleration = partial(
-        compute_acceleration, action=(thrust, stick), params=params
+        compute_acceleration,
+        action=(thrust, stick),
+        params=params,
+        clip=True,
+        min_clip_boundaries=(-100, -100, -1.5),
+        max_clip_boundaries=(100, 100, 1.5),
     )
+
     (x_dot, z_dot, theta_dot), (x, z, theta), metrics = (
         compute_velocity_and_pos_from_acceleration_integration(
             velocities=velocities,
