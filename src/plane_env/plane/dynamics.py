@@ -1,6 +1,6 @@
 # from jax.tree_util import Partial as partial
 from functools import partial
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -209,31 +209,50 @@ def compute_z_drag_coefficient(
     return compute_mach_impact_on_z_drag_coefficient(C_z, M, M_critic)
 
 
-def newton_second_law(thrust, lift, drag, P, gamma, theta):
-    # v_hat = [cos(gamma), sin(gamma)]
-    vhat_x = jnp.cos(gamma)
-    vhat_z = jnp.sin(gamma)
-    # drag opposite velocity
-    F_drag_x = -drag * vhat_x
-    F_drag_z = -drag * vhat_z
+def newton_second_law(
+    thrust: float,
+    lift: float,
+    drag: float,
+    P: float,
+    gamma: float,  # flight path angle [rad]
+    theta: float,  # pitch angle [rad]
+) -> tuple[float, float]:
+    """
+    Newton's second law (vectorized form). Computes net aerodynamic, thrust, and weight forces.
+    Returns (F_x, F_z) in world coordinates.
+    """
+    eps = 1e-8
 
-    # perp_v = [-sin(gamma), cos(gamma)]
-    F_lift_x = -lift * jnp.sin(gamma)
-    F_lift_z = lift * jnp.cos(gamma)
+    # velocity direction from gamma
+    v_hat = jnp.array([jnp.cos(gamma), jnp.sin(gamma)])  # unit vector along velocity
 
-    # thrust along body axis
-    t_hat_x = jnp.cos(theta)
-    t_hat_z = jnp.sin(theta)
-    F_thrust_x = thrust * t_hat_x
-    F_thrust_z = thrust * t_hat_z
+    # drag: always opposite velocity
+    F_drag = -drag * v_hat
 
-    # weight
-    F_weight_x = 0.0
-    F_weight_z = -P
+    # lift: perpendicular to velocity (90° CCW rotation)
+    perp_v = jnp.array([-v_hat[1], v_hat[0]])
+    F_lift = lift * perp_v
 
-    F_total_x = F_drag_x + F_lift_x + F_thrust_x + F_weight_x
-    F_total_z = F_drag_z + F_lift_z + F_thrust_z + F_weight_z
-    return F_total_x, F_total_z
+    # thrust: along body axis (theta is pitch angle)
+    t_hat = jnp.array([jnp.cos(theta), jnp.sin(theta)])
+    F_thrust = thrust * t_hat
+
+    # weight: acts downward
+    F_weight = jnp.array([0.0, -P])
+
+    # jax.debug.print(
+    #     "Forces [N]: drag:{drag}, lift:{lift}, thrust:{thrust}, weight:{weight}, gamma: {gamma}, theta: {theta}",
+    #     drag=F_drag,
+    #     lift=F_lift,
+    #     thrust=F_thrust,
+    #     weight=F_weight,
+    #     gamma=gamma,
+    #     theta=theta,
+    # )
+
+    # total force
+    F_total = F_drag + F_lift + F_thrust + F_weight
+    return F_total[0], F_total[1]
 
 
 def check_power(power):
@@ -275,8 +294,8 @@ def compute_thrust_output(
     """
     # --- altitude factor (simple density scaling) ---
     sigma = rho / 1.225  # density ratio
-    altitude_factor = 0.7 * sigma + 0.3  # tunable
-
+    # altitude_factor = 0.8 * sigma + 0.2  # tunable
+    altitude_factor = sigma
     # --- Mach effects ---
     # Ram drag effect (gradual quadratic decrease)
     mach_loss = 1 / (1 + k1 * M**2)
@@ -327,35 +346,28 @@ def compute_exposed_surfaces(
     return S_x, S_z
 
 
-def aero_coefficients(aoa_deg, mach=0.0):
+def aero_coefficients(aoa_deg, mach, params):
     """
     Realistic lift (CL) and drag (CD) coefficients for an A320.
     AoA in degrees. Mach effects included.
     """
-    # --- A320 parameters ---
-    cl_alpha = 0.05  # per deg
-    cl0 = 0.2  # zero-lift AoA
-    cd0 = 0.02  # zero-lift drag
-    k = 0.045  # induced drag factor
-    aoa_stall = 15.0  # deg
-    CL_max = 1.5
 
     # --- Lift coefficient ---
-    CL_linear = cl0 + cl_alpha * aoa_deg
-    CL = CL_linear / (1 + jnp.exp((aoa_deg - aoa_stall) * 1.5))
-    CL = jnp.minimum(CL, CL_max)
+    CL_linear = params.cl0 + params.cl_alpha * aoa_deg
+    CL = CL_linear / (1 + jnp.exp((aoa_deg - params.aoa_stall) * 1.5))
+    CL = jnp.minimum(CL, params.CL_max)
 
     # --- Drag coefficient ---
-    CD = cd0 + k * CL**2
+    CD = params.cd0 + params.k * CL**2
 
     # --- Mach corrections ---
     beta = jnp.sqrt(jnp.maximum(1e-6, 1 - mach**2))
 
     CL = CL / beta
 
-    M_crit = 0.82
-    k_drag = 5.0
-    drag_rise = jnp.where(mach > M_crit, k_drag * (mach - M_crit) ** 2, 0.0)
+    drag_rise = jnp.where(
+        mach > params.M_crit, params.k_drag * (mach - params.M_crit) ** 2, 0.0
+    )
     CD = CD + drag_rise
 
     CL = jnp.clip(CL, -2.0, 2.0)  # typical A320: max lift ~1.5-1.7
@@ -396,9 +408,17 @@ def compute_velocity_from_horizontal_and_vertical_speed(x_dot, z_dot):
     return compute_norm_from_coordinates(jnp.array((x_dot, z_dot)))
 
 
-@partial(jax.jit)
+@partial(
+    jax.jit, static_argnames=["clip", "min_clip_boundaries", "max_clip_boundaries"]
+)
 def compute_acceleration(
-    velocities: jnp.ndarray, positions: jnp.ndarray, action: tuple, params: EnvParams
+    velocities: jnp.ndarray,
+    positions: jnp.ndarray,
+    action: tuple,
+    params: EnvParams,
+    clip: bool = False,
+    min_clip_boundaries: Optional[tuple] = None,
+    max_clip_boundaries: Optional[tuple] = None,
 ) -> tuple[float]:
     """
     Compute linear and angular accelerations for the aircraft.
@@ -410,6 +430,9 @@ def compute_acceleration(
 
     _, z, theta = positions
     alpha, gamma = compute_alpha(theta, x_dot, z_dot)
+    # jax.debug.print(
+    #     "{x} {y} {z}", x=jnp.rad2deg(alpha), y=jnp.rad2deg(gamma), z=jnp.rad2deg(theta)
+    # )
     m = (
         params.initial_mass
     )  # TODO : make it the actual mass when we start considering fuel consumption
@@ -425,32 +448,30 @@ def compute_acceleration(
     # ====================================================
     # WINGS
     # ====================================================
-    C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M)
+    C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M, params=params)
     lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
     drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
-    moment_arm_wings = 1.5
-    M_wings = lift_wings * moment_arm_wings
+    M_wings = lift_wings * params.moment_arm_wings
 
     # ====================================================
     # STABILIZER
     # ====================================================
-    stabilizer_surface = 27
-    C_z_s, C_x_s = aero_coefficients(xp.rad2deg(alpha) - 3.0, M)
-    lift_stab = compute_drag(S=stabilizer_surface, C=C_z_s, V=V, rho=rho)
-    drag_stab = compute_drag(S=stabilizer_surface, C=C_x_s, V=V, rho=rho)
+    C_z_s, C_x_s = aero_coefficients(xp.rad2deg(alpha) - 3.0, M, params=params)
+    lift_stab = compute_drag(S=params.stabilizer_surface, C=C_z_s, V=V, rho=rho)
+    drag_stab = compute_drag(S=params.stabilizer_surface, C=C_x_s, V=V, rho=rho)
     F_stab = lift_stab - drag_stab
-    moment_arm_stabilizer = 15.0
-    M_stabilizer = -F_stab * moment_arm_stabilizer
+    M_stabilizer = -F_stab * params.moment_arm_stabilizer
 
     # ====================================================
     # ELEVATOR
     # ====================================================
-    elevator_surface = 10
-    C_z_e, C_x_e = aero_coefficients(xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0, M)
-    lift_elev = compute_drag(S=elevator_surface, C=C_z_e, V=V, rho=rho)
-    drag_elev = compute_drag(S=elevator_surface, C=C_x_e, V=V, rho=rho)
+    C_z_e, C_x_e = aero_coefficients(
+        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0, M, params=params
+    )
+    lift_elev = compute_drag(S=params.elevator_surface, C=C_z_e, V=V, rho=rho)
+    drag_elev = compute_drag(S=params.elevator_surface, C=C_x_e, V=V, rho=rho)
     F_elev = lift_elev * xp.cos(stick) - drag_elev * xp.sin(stick)
-    M_elevator = -F_elev * moment_arm_stabilizer
+    M_elevator = -F_elev * params.moment_arm_stabilizer
 
     # ====================================================
     # TOTAL MOMENT & FORCES
@@ -465,6 +486,19 @@ def compute_acceleration(
 
     metrics = (drag_total, lift_total, C_x_e, C_z_e, F_x, F_z)
     accelerations = xp.array([F_x / m, F_z / m, M_y / params.I])
+
+    if clip:
+        assert (
+            min_clip_boundaries is not None
+        ), "Clipped without providing min_clip_boundaries"
+        assert (
+            max_clip_boundaries is not None
+        ), "Clipped without providing max_clip_boundaries"
+        accelerations = jnp.clip(
+            accelerations,
+            jnp.array(min_clip_boundaries),
+            jnp.array(max_clip_boundaries),
+        )
     return accelerations, metrics
 
 
