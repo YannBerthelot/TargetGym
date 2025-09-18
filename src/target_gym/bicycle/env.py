@@ -35,6 +35,10 @@ class EnvState:
     torque: float = jnp.nan
     displacement: float = jnp.nan
 
+    @property
+    def distance_from_start(self):
+        return jnp.linalg.norm(jnp.array([self.x_f, self.y_f]))
+
 
 @struct.dataclass
 class EnvParams:
