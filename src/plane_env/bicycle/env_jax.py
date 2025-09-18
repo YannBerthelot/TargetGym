@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from plane_env.utils import save_video
+from plane_env.utils import run_n_steps, save_video
 
 try:
     from gymnax.environments import environment, spaces
@@ -175,16 +175,86 @@ class RandlovBicycle(environment.Environment[EnvState, EnvParams]):
         return frames, screen, clock
 
 
-if __name__ == "__main__":
-    env = RandlovBicycle()
-    seed = 42
-    env_params = EnvParams(max_steps_in_episode=1_000, use_goal=True)
-    action = (0.1, -1.0)
-    env.save_video(
-        lambda o: (np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1)),
-        seed,
-        folder="videos",
-        episode_index=0,
-        params=env_params,
-        format="gif",
+def linear_policy(
+    obs: jnp.ndarray,
+    k_omega: float,
+    k_omega_dot: float,
+    k_theta: float,
+    k_theta_dot: float,
+    k_omega_dot_torque: float,
+) -> jnp.ndarray:
+    """
+    Linear feedback policy with tunable gains.
+
+    obs = [omega, omega_dot, omega_ddot, theta, theta_dot]
+    """
+    omega, omega_dot, omega_ddot, theta, theta_dot = obs
+
+    # Steering displacement (a_d)
+    a_d = -(k_omega * omega + k_omega_dot * omega_dot + k_theta * theta)
+
+    # Torque (a_T)
+    a_T = -(k_theta_dot * theta_dot + k_omega_dot_torque * omega_dot)
+
+    return jnp.clip(jnp.array([a_T, a_d]), -1.0, 1.0)
+
+
+import wandb
+
+
+def make_policy_from_config(config):
+    return lambda obs: linear_policy(
+        obs,
+        k_omega=config["k_omega"],
+        k_omega_dot=config["k_omega_dot"],
+        k_theta=config["k_theta"],
+        k_theta_dot=config["k_theta_dot"],
+        k_omega_dot_torque=config["k_omega_dot_torque"],
     )
+
+
+def sweep_train():
+    wandb.init()
+    env = RandlovBicycle()
+    env_params = EnvParams(max_steps_in_episode=1000, use_goal=False)
+
+    config = wandb.config
+    policy = make_policy_from_config(config)
+
+    score = run_n_steps(env, policy, env_params, n_steps=100_000, seed=0)
+    wandb.log({"mean_return": score})
+
+
+sweep_config = {
+    "method": "bayes",  # Bayesian optimization
+    "metric": {
+        "name": "mean_return",
+        "goal": "maximize",
+    },
+    "parameters": {
+        "k_omega": {"distribution": "uniform", "min": 0.0, "max": 5.0},
+        "k_omega_dot": {"distribution": "uniform", "min": 0.0, "max": 5.0},
+        "k_theta": {"distribution": "uniform", "min": 0.0, "max": 5.0},
+        "k_theta_dot": {"distribution": "uniform", "min": 0.0, "max": 5.0},
+        "k_omega_dot_torque": {"distribution": "uniform", "min": 0.0, "max": 5.0},
+    },
+}
+
+if __name__ == "__main__":
+    sweep_id = wandb.sweep(sweep_config, project="bicycle-rl")
+    wandb.agent(sweep_id, sweep_train, count=1_000)  # run 50 trials
+
+    # env = RandlovBicycle()
+    # seed = 42
+    # env_params = EnvParams(max_steps_in_episode=1_000, use_goal=True)
+    # mean_return = run_n_steps(env, linear_policy, env_params, n_steps=10_000, seed=0)
+    # print(mean_return)
+    # action = (0.1, -1.0)
+    # env.save_video(
+    #     lambda o: linear_policy(o),
+    #     seed,
+    #     folder="videos",
+    #     episode_index=0,
+    #     params=env_params,
+    #     format="gif",
+    # )

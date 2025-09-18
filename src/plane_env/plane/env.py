@@ -101,7 +101,7 @@ class EnvParams:
 
     max_steps_in_episode: int = 10_000
     min_alt: float = 0.0
-    max_alt: float = 55_000.0 / 3.281
+    max_alt: float = 40_000.0 / 3.281
     target_altitude_range: Tuple[float, float] = (5_000.0, 5_000.0)
     initial_altitude_range: Tuple[float, float] = (3_000.0, 5_000.0)
     initial_z_dot: float = 0.0

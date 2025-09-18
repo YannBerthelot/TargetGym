@@ -19,7 +19,7 @@ def test_aero_coefficients_cl_cd_ranges():
 
     for aoa in aoas:
         for M in machs:
-            CL, CD = aero_coefficients(aoa, M)
+            CL, CD = aero_coefficients(aoa, M, params=EnvParams())
             # CL should be within physical limits
             assert -1.0 <= CL <= 2.0, f"CL out of range for AoA {aoa}, M={M}, got {CL}"
             # CD should be positive

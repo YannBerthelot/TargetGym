@@ -124,7 +124,7 @@ def run_mode(
     resolution: int = 20,
     **kwargs,
 ):
-    env = Airplane2D()
+    env = Airplane2D(integration_method="rk4_1")
     if kwargs is not None:
         params = EnvParams(**kwargs)
     else:
@@ -143,7 +143,8 @@ def run_mode(
             )(powers)
 
         final_alts, trajectories = run_vmapped(power_levels)
-        final_alts = jnp.maximum(final_alts, 0.0)
+        final_alts = jnp.maximum(final_alts, 0.0) * 3.28084
+        trajectories *= 3.28084
         elapsed = time.time() - start_time
         print(f"Ran in {elapsed:.3f}s ({elapsed / len(power_levels):.3f}s per run)")
         if plot:
@@ -158,7 +159,7 @@ def run_mode(
             sm.set_array([])
             fig.colorbar(sm, ax=ax).set_label("Power level")
             ax.set_xlabel("Time step")
-            ax.set_ylabel("Altitude (m)")
+            ax.set_ylabel("Altitude (ft)")
             ax.set_title("Altitude trajectories for varying power")
             plt.savefig("power_trajectories.pdf")
 
@@ -177,11 +178,13 @@ def run_mode(
             P, S = jnp.meshgrid(power_levels, stick_levels * 15, indexing="ij")
             fig = plt.figure(figsize=(10, 7))
             ax = fig.add_subplot(111, projection="3d")
-            surf = ax.plot_surface(P, S, final_alts, cmap="viridis")
-            fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10, label="Final Altitude (m)")
+            surf = ax.plot_surface(P, S, final_alts * 3.28084, cmap="viridis")
+            fig.colorbar(
+                surf, ax=ax, shrink=0.5, aspect=10, label="Final Altitude (ft)"
+            )
             ax.set_xlabel("Power")
             ax.set_ylabel("Stick position")
-            ax.set_zlabel("Final Altitude (m)")
+            ax.set_zlabel("Final Altitude (ft)")
             ax.set_title("Final altitude vs Power and Stick")
             ax.view_init(elev=30, azim=200)
             fig = plt.gcf()

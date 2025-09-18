@@ -164,3 +164,82 @@ def save_video(
     if save_trajectory:
         pd.DataFrame(states).to_csv("trajectory.csv")
     return video_path
+
+
+def compute_episode_returns_vectorized(rewards: jnp.ndarray, dones: jnp.ndarray):
+    """
+    Compute per-episode cumulative reward, handling both terminated and truncated episodes.
+
+    Args:
+        rewards: (T,) float array of rewards per timestep
+        dones:   (T,) int/boolean array, 1 if episode ends at that step
+
+    Returns:
+        episode_returns: (num_episodes,) array of total return per episode
+    """
+    # Cumulative rewards
+    cumsum_rewards = jnp.cumsum(rewards)
+
+    # Rewards at episode boundaries (where done=1)
+    final_returns = cumsum_rewards[dones.astype(bool)]
+
+    # Previous boundaries (prepend 0 for the very first episode)
+    prev_final = jnp.concatenate([jnp.array([0.0]), final_returns[:-1]])
+
+    # Proper per-episode returns
+    episode_returns = final_returns - prev_final
+
+    # --- Handle truncated last episode ---
+    last_is_done = dones[-1] > 0
+    if not last_is_done:
+        # Add the return from last boundary (or start) up to end
+        last_return = cumsum_rewards[-1] - (
+            final_returns[-1] if final_returns.size > 0 else 0.0
+        )
+        episode_returns = jnp.concatenate([episode_returns, jnp.array([last_return])])
+
+    return episode_returns
+
+
+def run_n_steps(env, policy, params, n_steps=10_000, seed=0):
+    key = jax.random.PRNGKey(seed)
+    obs, state = env.reset_env(key, params)
+
+    def step_fn(carry, _):
+        obs, state, key = carry
+        key, subkey = jax.random.split(key)
+
+        action = policy(obs)
+        obs, new_state, reward, done, _ = env.step_env(subkey, state, action, params)
+
+        carry = (
+            jax.lax.cond(
+                done,
+                lambda _: env.reset_env(key, params),
+                lambda _: (obs, new_state),
+                operand=None,
+            )[
+                0
+            ],  # new obs
+            jax.lax.cond(
+                done,
+                lambda _: env.reset_env(key, params),
+                lambda _: (obs, new_state),
+                operand=None,
+            )[
+                1
+            ],  # new state
+            key,
+        )
+
+        # If episode ended, mark this reward as last in episode
+        ep_done = done.astype(jnp.float32)
+        return carry, (reward, ep_done)
+
+    # Scan for n_steps
+    (_, _, _), (rewards, ep_dones) = jax.lax.scan(
+        step_fn, (obs, state, key), None, n_steps
+    )
+    valid_returns = compute_episode_returns_vectorized(rewards, ep_dones)
+    mean_return = jnp.mean(valid_returns)
+    return mean_return
