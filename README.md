@@ -34,6 +34,7 @@ Currently included environments:
 
 Below is an example of how stable altitude changes with engine power and pitch in the **Plane** environment:
 
+![3d Stable altitude graph](figures/plane/3d_altitude.png)
 ![Stable altitude graph](figures/plane/power_trajectories.png)
 
 This illustrates **multi-stability**: with fixed power and pitch, the aircraft naturally converges to a stable altitude. Similar properties can be found in Car environment
