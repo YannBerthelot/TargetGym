@@ -10,11 +10,12 @@ Currently included environments:
 
 * 🛩 **Plane** – control of a 2D Airbus A320-like aircraft - Stable-Target-MDP
 * 🚗 **Car** – maintain a desired speed on a road - Stable-Target-MDP
-* 🚲 **Bike** – stabilize and steer a 2D bicycle model - Unstable-Target-MDP (from [Randlov et al.](https://gwern.net/doc/reinforcement-learning/model-free/1998-randlov.pdf)
-)
+* 🚲 **Bike** – stabilize and steer a 2D bicycle model - Unstable-Target-MDP (from [Randlov et al.](https://gwern.net/doc/reinforcement-learning/model-free/1998-randlov.pdf))
 
-![Demo of Plane environment](videos/plane/output.gif)
-![Demo of Car environment](videos/car/output.gif)
+<p align="center">
+  <img src="videos/plane/output.gif" width="40%"/>
+  <img src="videos/car/output.gif" width="40%"/>
+</p>
 
 ---
 
@@ -34,8 +35,10 @@ Currently included environments:
 
 Below is an example of how stable altitude changes with engine power and pitch in the **Plane** environment:
 
-![3d Stable altitude graph](figures/plane/3d_altitude.png)
-![Stable altitude graph](figures/plane/power_trajectories.png)
+<p align="center">
+  <img src="figures/plane/3d_altitude.png" width="40%"/>
+  <img src="figures/plane/power_trajectories.png" width="40%"/>
+</p>
 
 This illustrates **multi-stability**: with fixed power and pitch, the aircraft naturally converges to a stable altitude. Similar properties can be found in Car environment
 
