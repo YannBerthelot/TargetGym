@@ -2,6 +2,7 @@
 
 import jax
 import jax.numpy as jnp
+
 from target_gym.plane.env_jax import Airplane2D
 
 

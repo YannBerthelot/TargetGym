@@ -208,6 +208,7 @@ def run_mode(
             fig = plt.gcf()
             os.makedirs("figures/bike", exist_ok=True)
             fig.savefig("figures/bike/3d_altitude.pdf")
+            fig.savefig("figures/bike/3d_altitude.png")
             plt.show()
         return df
 

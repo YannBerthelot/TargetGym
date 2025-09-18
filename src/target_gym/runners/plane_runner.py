@@ -194,6 +194,7 @@ def run_mode(
             fig = plt.gcf()
             os.makedirs("figures/plane", exist_ok=True)
             fig.savefig("figures/plane/3d_altitude.pdf")
+            fig.savefig("figures/plane/3d_altitude.png")
             plt.show()
         return df
 

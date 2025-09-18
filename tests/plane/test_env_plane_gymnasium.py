@@ -1,4 +1,5 @@
 import pytest
+
 from target_gym.plane.env_gymnasium import (
     Airplane2D,
     EnvParams,

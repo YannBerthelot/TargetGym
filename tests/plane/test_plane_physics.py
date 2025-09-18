@@ -2,6 +2,7 @@ from math import cos, sin
 
 import numpy as np
 import pytest
+
 from target_gym.plane.dynamics import (
     compute_drag,
     compute_exposed_surfaces,

@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from stable_baselines3 import PPO
+
 from target_gym.plane.env_gymnasium import Airplane2D
 
 

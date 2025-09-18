@@ -26,7 +26,7 @@ Currently included environments:
 * 🧪 **Reliable**: Unit-tested for stability and reproducibility.
 * 🎯 **Target MDP focus**: Each task is about reaching and maintaining target states.
 * 🌀 **Challenging dynamics**: Captures irrecoverable states, and momentum effects.
-* 🔄 **Compatible with RL libraries**: Works with JAX-based and Gymnasium-style interfaces.
+* 🔄 **Compatible with RL libraries**: Offers [Gymnax](https://github.com/RobertTLange/gymnax) and [Gymnasium](https://github.com/Farama-Foundation/Gymnasium) interfaces.
 * 🌟 **Upcoming features**: Environmental perturbations (wind, turbulence, bumpy road) and fuel consumption.
 
 ---
@@ -120,6 +120,7 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 * [ ] Easier interface for creating partially-observable variants.
 * [ ] Provide benchmark results for popular RL baselines.
 * [ ] Add fuel consumption and resource constraints.
+* [ ] Add more tasks.
 
 ---
 
