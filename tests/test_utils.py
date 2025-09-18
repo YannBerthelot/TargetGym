@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from target_gym.utils import compute_norm_from_coordinates
 
 

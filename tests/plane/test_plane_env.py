@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from target_gym.plane.env import EnvMetrics, EnvParams, EnvState, compute_reward
 from target_gym.plane.env_gymnasium import Airplane2D as GymEnv
 from target_gym.plane.env_jax import Airplane2D as JaxEnv

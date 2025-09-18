@@ -2,6 +2,7 @@
 import jax
 import jax.numpy as jnp
 import pytest
+
 from target_gym.bicycle.env_jax import RandlovBicycle
 
 
