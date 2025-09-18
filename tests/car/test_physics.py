@@ -68,13 +68,13 @@ def test_theta_computation():
 def test_check_is_terminal_velocity(params, state):
     # Normal speed -> not terminated
     term, trunc = check_is_terminal(state, params)
-    assert term is False
+    assert term.item() is False
     assert trunc is False
 
     # Low velocity -> terminated
     state_low_v = state.replace(velocity=0.0)
     term, _ = check_is_terminal(state_low_v, params)
-    assert term is True
+    assert term.item() is True
 
 
 def test_compute_reward(params, state):
@@ -88,9 +88,9 @@ def test_compute_reward(params, state):
 # ------------------------------
 # Observations
 # ------------------------------
-def test_get_obs_shape(state):
-    obs = get_obs(state)
-    assert obs.shape == (5,)
+def test_get_obs_shape(state, params):
+    obs = get_obs(state, params)
+    assert obs.shape == (12,)
     assert jnp.isfinite(obs).all()
 
 
@@ -105,15 +105,20 @@ def test_compute_thrust_increases_with_throttle(params):
 
 
 def test_compute_acceleration_against_drag(params):
-    theta = 0.0
     v = 30.0
-    a_throttle = compute_acceleration(1.0, v, theta, params)
-    a_zero = compute_acceleration(0.0, v, theta, params)
+    velocity = v
+    position = 0.0
+    a_throttle, _ = compute_acceleration(
+        action=1.0, velocity=velocity, position=position, params=params
+    )
+    a_zero, _ = compute_acceleration(
+        action=0.0, velocity=velocity, position=position, params=params
+    )
     assert a_throttle > a_zero
 
 
 def test_compute_next_state_progress(params, state):
-    s_next = compute_next_state(1.0, state, params, n_substeps=5, xp=jnp)
+    s_next, _ = compute_next_state(1.0, state, params)
     # Time should advance
     assert s_next.t == state.t + 1
     # X should advance forward
