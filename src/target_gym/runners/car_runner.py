@@ -152,7 +152,7 @@ def run_mode(
             return throttle
 
         file = env.save_video(select_action, seed, params=params)
-        from moviepy.video.io.VideoFileClip import VideoFileClip
+        from moviepy.video.io.VideoFileClip import VideoFileClipx
 
         video = VideoFileClip(file)
         os.makedirs("videos/car", exist_ok=True)
@@ -163,5 +163,5 @@ def run_mode(
 
 
 if __name__ == "__main__":
-    run_mode("2d", n_timesteps=5000)  # or "2d" or "video"
+    run_mode("2d", n_timesteps=5_000, max_steps_in_episode=5_000)  # or "2d" or "video"
     run_mode("video", throttle=0.5, max_steps_in_episode=1_000)

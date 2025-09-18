@@ -15,7 +15,6 @@ Currently included environments:
 
 ![Demo of Plane environment](videos/plane/output.gif)
 ![Demo of Car environment](videos/car/output.gif)
-![Demo of Bike environment](videos/bike/output.gif)
 
 ---
 
@@ -99,9 +98,9 @@ while True:
 
 TargetGym tasks are designed to expose RL agents to **realistic control challenges**:
 
-* ⏳ **Delays**: Inputs (like engine power) take time to apply.
-* 👀 **Partial observability**: Some forces cannot be directly measured.
-* 🏁 **Competing objectives**: Reach the target state quickly while minimizing overshoot or cost.![Demo of Plane environment](videos/plane/output.gif)
+* ⏳ **Delays**: Inputs (like engine power) take time to fully apply.
+* 👀 **Partial observability**: Some parts of the state cannot be directly measured.
+* 🏁 **Competing objectives**: Reach the target state quickly while minimizing overshoot or cost.
 * 🌀 **Momentum effects**: Physical inertia delays control effectiveness.
 * ⚠️ **Irrecoverable states**: Certain trajectories inevitably lead to failure.
 
