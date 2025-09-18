@@ -80,7 +80,7 @@ Or train an agent using your favorite RL library (example with stable-baselines3
 from target_gym import PlaneGymnasium, PlaneParams
 from stable_baselines3 import SAC
 
-env = Airplane2D()
+env = PlaneGymnasium()
 model = SAC("MlpPolicy", env, verbose=1)
 model.learn(total_timesteps=10_000, log_interval=4)
 model.save("sac_plane")

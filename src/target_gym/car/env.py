@@ -114,7 +114,7 @@ def road_profile(x):
 
 @partial(jax.jit, static_argnames=["road_profile"])
 def compute_theta_from_position(
-    x, road_profile: Callable[[float], float], use_road_profile: int
+    x, road_profile: Optional[Callable[[float], float]], use_road_profile: int = 0
 ):
     if road_profile is None:
         return 0.0
@@ -233,7 +233,12 @@ def compute_next_state(
 
 
 @partial(jax.jit, static_argnames=["params", "road_profile", "xp"])
-def get_obs(state: EnvState, params: EnvParams, road_profile, xp=jnp):
+def get_obs(
+    state: EnvState,
+    params: EnvParams,
+    road_profile: Callable[[float], float] = None,
+    xp=jnp,
+):
     sensor_x = state.x + jnp.linspace(0, params.sensors_range, num=params.n_sensors)
     sensor_theta = jax.vmap(compute_theta_from_position, in_axes=(0, None, None))(
         sensor_x, road_profile, params.use_road_profile
