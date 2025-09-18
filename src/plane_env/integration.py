@@ -1,7 +1,8 @@
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
+from jax.tree_util import Partial as partial
 
 
 def compute_velocity_and_pos_from_acceleration_integration(
@@ -33,6 +34,7 @@ def compute_velocity_and_pos_from_acceleration_integration(
 
     def euler_step(v, p, h):
         a, metrics = compute_acceleration(v, p)
+
         v_new = v + a * h
         p_new = p + v_new * h
         return v_new, p_new, metrics
