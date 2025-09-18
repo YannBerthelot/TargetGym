@@ -3,8 +3,7 @@
 import jax
 import jax.numpy as jnp
 import pytest
-
-from plane_env.bicycle.env import (  # replace "your_module" with actual file name
+from target_gym.bicycle.env import (  # replace "your_module" with actual file name
     EnvParams,
     EnvState,
     check_is_terminal,

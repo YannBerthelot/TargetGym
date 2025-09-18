@@ -5,7 +5,7 @@ import pygame
 from jax import grad
 from pygame import gfxdraw
 
-from plane_env.car.env import road_profile
+from target_gym.car.env import road_profile
 
 
 def road_slope(x, road_profile):

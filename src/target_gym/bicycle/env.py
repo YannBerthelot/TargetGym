@@ -11,7 +11,7 @@ except Exception:
     jnp = None
 
 # Import your integrator
-from plane_env.integration import (
+from target_gym.integration import (
     compute_velocity_and_pos_from_acceleration_integration,
 )
 

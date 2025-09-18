@@ -1,9 +1,8 @@
 import jax
 import jax.numpy as jnp
 import pytest
-
-from plane_env.car.env import EnvParams, EnvState
-from plane_env.car.env_jax import Car2D
+from target_gym.car.env import EnvParams, EnvState
+from target_gym.car.env_jax import Car2D
 
 # -------------------------------
 # Fixtures

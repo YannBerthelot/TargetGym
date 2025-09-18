@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import numpy as np
 import pygame
 
-from plane_env.bicycle.env import compute_reward
+from target_gym.bicycle.env import compute_reward
 
 
 def render_bicycle_top_view_fixed(

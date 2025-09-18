@@ -3,8 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from stable_baselines3 import PPO
-
-from plane_env.plane.env_gymnasium import Airplane2D
+from target_gym.plane.env_gymnasium import Airplane2D
 
 
 def test_can_create_env():

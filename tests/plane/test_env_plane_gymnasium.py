@@ -1,6 +1,5 @@
 import pytest
-
-from plane_env.plane.env_gymnasium import (
+from target_gym.plane.env_gymnasium import (
     Airplane2D,
     EnvParams,
     EnvState,

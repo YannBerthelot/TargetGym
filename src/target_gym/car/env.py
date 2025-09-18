@@ -1,4 +1,4 @@
-from typing import Callable, Tuple
+from typing import Callable, Optional, Tuple
 
 # Optional: jax imports (only used in jax env)
 import numpy as np
@@ -16,7 +16,9 @@ except ImportError:
 
 from jax import grad
 
-from plane_env.integration import compute_velocity_and_pos_from_acceleration_integration
+from target_gym.integration import (
+    compute_velocity_and_pos_from_acceleration_integration,
+)
 
 
 @struct.dataclass
@@ -44,6 +46,7 @@ class EnvParams:
     initial_throttle: float = 0.0
     n_sensors: int = 10
     sensors_range: int = 100
+    use_road_profile: int = 0
 
     # Drivetrain parameters
     gear_ratio: float = 4.0
@@ -110,10 +113,14 @@ def road_profile(x):
 
 
 @partial(jax.jit, static_argnames=["road_profile"])
-def compute_theta_from_position(x, road_profile: Callable[[float], float]):
+def compute_theta_from_position(
+    x, road_profile: Callable[[float], float], use_road_profile: int
+):
+    if road_profile is None:
+        return 0.0
     dzdx = grad(road_profile)
     slope = dzdx(x)
-    return jnp.arctan(slope)
+    return jnp.arctan(slope) * use_road_profile
 
 
 def check_is_terminal(state: EnvState, params: EnvParams, xp=jnp):
@@ -152,7 +159,7 @@ def compute_thrust(throttle: float, velocity: float, params: EnvParams):
 
 def compute_acceleration(velocity, position, action, params: EnvParams):
     throttle = action
-    theta = compute_theta_from_position(position, road_profile)
+    theta = compute_theta_from_position(position, road_profile, params.use_road_profile)
     m, g = params.initial_mass, params.gravity
 
     # Engine thrust (positive throttle)
@@ -178,7 +185,6 @@ def compute_acceleration(velocity, position, action, params: EnvParams):
         "F_gravity": F_gravity,
         "F_all": F_total,
     }
-    jax.debug.print("Metrics:{y}", y=metrics)
     return F_total / m, metrics
 
 
@@ -229,8 +235,8 @@ def compute_next_state(
 @partial(jax.jit, static_argnames=["params", "road_profile", "xp"])
 def get_obs(state: EnvState, params: EnvParams, road_profile, xp=jnp):
     sensor_x = state.x + jnp.linspace(0, params.sensors_range, num=params.n_sensors)
-    sensor_theta = jax.vmap(compute_theta_from_position, in_axes=(0, None))(
-        sensor_x, road_profile
+    sensor_theta = jax.vmap(compute_theta_from_position, in_axes=(0, None, None))(
+        sensor_x, road_profile, params.use_road_profile
     )
     scalars = xp.stack([state.velocity, state.target_velocity])
     return xp.concatenate([scalars, sensor_theta])

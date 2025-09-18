@@ -7,8 +7,10 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
-from plane_env.integration import compute_velocity_and_pos_from_acceleration_integration
-from plane_env.plane.dynamics import (
+from target_gym.integration import (
+    compute_velocity_and_pos_from_acceleration_integration,
+)
+from target_gym.plane.dynamics import (
     compute_acceleration,
     compute_air_density_from_altitude,
     compute_alpha,

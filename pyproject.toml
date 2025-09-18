@@ -1,12 +1,12 @@
 [tool.poetry]
-name = "plane-env"  # Change this to your desired PyPI package name
+name = "target-gym"
 version = "0.1.0"
-description = "A reinforcement learning environment for simulating a plane in 2D available, with gymnasium and gymnax support"  # Add a description
+description = "A reinforcement learning environment for simulating target-MDP environments (Airplane, Car, Bicycle), with gymnasium and gymnax support"  # Add a description
 authors = ["Yann Berthelot <yannberthelot1@gmail.com>"]
 readme = "README.md"
 homepage = "https://github.com/yannberthelot/Plane"  # Add your repository URL
 repository = "https://github.com/yannberthelot/Plane"
-keywords = ["reinforcement-learning", "gymnasium", "jax", "airplane", "simulation"]  # Add relevant keywords
+keywords = ["reinforcement-learning", "gymnasium", "jax", "airplane", "car", "simulation", "bike"]  # Add relevant keywords
 classifiers = [  # Add relevant classifiers
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -16,7 +16,7 @@ classifiers = [  # Add relevant classifiers
 ]
 
 packages = [
-    { include = "plane_env", from = "src" },  # This tells Poetry where to find the package
+    { include = "target_gym", from = "src" },  # This tells Poetry where to find the package
 ]
 
 [tool.poetry.dependencies]

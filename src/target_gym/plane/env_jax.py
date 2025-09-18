@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from plane_env.plane.env import (
+from target_gym.plane.env import (
     EnvMetrics,
     EnvParams,
     EnvState,
@@ -15,8 +15,8 @@ from plane_env.plane.env import (
     compute_reward,
     get_obs,
 )
-from plane_env.plane.rendering import _render
-from plane_env.utils import compute_norm_from_coordinates, save_video
+from target_gym.plane.rendering import _render
+from target_gym.utils import compute_norm_from_coordinates, save_video
 
 
 class Airplane2D(environment.Environment[EnvState, EnvParams]):

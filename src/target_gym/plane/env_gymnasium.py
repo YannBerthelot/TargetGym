@@ -4,7 +4,7 @@ import gymnasium as gym
 import numpy as np
 import pygame
 
-from plane_env.plane.env import (
+from target_gym.plane.env import (
     EnvMetrics,
     EnvParams,
     EnvState,
@@ -13,8 +13,8 @@ from plane_env.plane.env import (
     compute_reward,
     get_obs,
 )
-from plane_env.plane.rendering import _render
-from plane_env.utils import save_video
+from target_gym.plane.rendering import _render
+from target_gym.utils import save_video
 
 
 class Airplane2D(gym.Env):

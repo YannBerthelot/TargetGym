@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from plane_env.car.env import (
+from target_gym.car.env import (
     EnvParams,
     EnvState,
     check_is_terminal,
@@ -14,8 +14,8 @@ from plane_env.car.env import (
     get_obs,
     road_profile,
 )
-from plane_env.car.rendering import _render
-from plane_env.utils import save_video
+from target_gym.car.rendering import _render
+from target_gym.utils import save_video
 
 
 class Car2D(environment.Environment[EnvState, EnvParams]):
