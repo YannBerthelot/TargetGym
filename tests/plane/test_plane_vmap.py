@@ -2,8 +2,7 @@
 
 import jax
 import jax.numpy as jnp
-
-from plane_env.env_jax import Airplane2D
+from target_gym.plane.env_jax import Airplane2D
 
 
 def test_reset():

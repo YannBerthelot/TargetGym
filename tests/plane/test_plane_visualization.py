@@ -7,10 +7,9 @@ import numpy as np
 import pytest
 from gymnasium.utils.save_video import save_video
 from PIL import Image
-
-from plane_env.env_gymnasium import Airplane2D as GymAirplane2D
-from plane_env.env_jax import Airplane2D as JaxAirplane2D
-from plane_env.env_jax import EnvParams, EnvState
+from target_gym.plane.env_gymnasium import Airplane2D as GymAirplane2D
+from target_gym.plane.env_jax import Airplane2D as JaxAirplane2D
+from target_gym.plane.env_jax import EnvParams, EnvState
 
 
 def are_images_similar(
@@ -172,13 +171,14 @@ def test_save_renders():
     """Test that both environments can save renders to disk"""
     # Create temporary directory
     temp_dir = tempfile.mkdtemp()
+    params = EnvParams(max_steps_in_episode=500)
     try:
         # JAX environment
         jax_env = JaxAirplane2D()
         seed = 0
 
         file = jax_env.save_video(
-            lambda x: (0.8, 5.0), seed, folder=temp_dir, episode_index=0
+            lambda x: (0.8, 0.1), seed, folder=temp_dir, episode_index=0, params=params
         )
         assert os.path.exists(file)
 
@@ -187,7 +187,7 @@ def test_save_renders():
         gym_env.reset()
         frames = []
         for _ in range(10):
-            obs, _, done, _, _ = gym_env.step((0.8, 5.0))
+            obs, _, done, _, _ = gym_env.step((0.8, 0.1), params=params)
             frames = gym_env.render()
             if done:
                 break

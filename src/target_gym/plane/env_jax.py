@@ -1,4 +1,4 @@
-from functools import partial
+import time
 from typing import Callable
 
 import chex
@@ -6,18 +6,17 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from plane_env.env import (
+from target_gym.plane.env import (
     EnvMetrics,
     EnvParams,
     EnvState,
     check_is_terminal,
     compute_next_state,
-    compute_norm_from_coordinates,
     compute_reward,
     get_obs,
-    save_video,
 )
-from plane_env.rendering import _render
+from target_gym.plane.rendering import _render
+from target_gym.utils import compute_norm_from_coordinates, save_video
 
 
 class Airplane2D(environment.Environment[EnvState, EnvParams]):
@@ -29,9 +28,10 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
     screen_width = 600
     screen_height = 400
 
-    def __init__(self):
+    def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (9,)
         self.positions_history = []
+        self.integration_method = integration_method
 
     @property
     def default_params(self) -> EnvParams:
@@ -52,7 +52,9 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         power, stick = action
         stick = jnp.deg2rad(stick * 15)  # radians
 
-        new_state, metrics = compute_next_state(power, stick, state, params, xp=jnp)
+        new_state, metrics = compute_next_state(
+            power, stick, state, params, integration_method=self.integration_method
+        )
         reward = compute_reward(new_state, params, xp=jnp)
         terminated, truncated = check_is_terminal(new_state, params, xp=jnp)
         done = terminated | truncated
@@ -63,7 +65,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
             new_state,
             reward,
             done,
-            {"metrics": metrics, "last_state_env": new_state},
+            {"metrics": metrics, "last_state": new_state},
         )
 
     def is_terminal(self, state: EnvState, params: EnvParams) -> jax.Array:
@@ -142,12 +144,13 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
     def save_video(
         self,
         select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        key: chex.PRNGKey,
+        seed: int,
         params=None,
         folder="videos",
         episode_index=0,
         FPS=60,
         format="mp4",
+        save_trajectory: bool = False,
     ):
         return save_video(
             self,
@@ -156,8 +159,9 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
             episode_index,
             FPS,
             params,
-            seed=key,
+            seed=seed,
             format=format,
+            save_trajectory=save_trajectory,
         )
 
     def action_space(self, params: EnvParams | None = None) -> spaces.Discrete:
@@ -249,8 +253,13 @@ def benchmark(
 if __name__ == "__main__":
     env = Airplane2D()
     seed = 42
-    env_params = EnvParams(max_steps_in_episode=10_000)
-    action = (0.8, 0.0)
+
+    env_params = EnvParams(
+        max_steps_in_episode=1_000,
+        target_altitude_range=(5000, 5000),
+        initial_altitude_range=(5000, 5000),
+    )
+    action = (0.5, 0.0)
     env.save_video(
         lambda o: action,
         seed,
@@ -258,6 +267,7 @@ if __name__ == "__main__":
         episode_index=0,
         params=env_params,
         format="gif",
+        save_trajectory=True,
     )
 
     # import time
