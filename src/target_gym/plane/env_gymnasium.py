@@ -4,7 +4,7 @@ import gymnasium as gym
 import numpy as np
 import pygame
 
-from plane_env.env import (
+from target_gym.plane.env import (
     EnvMetrics,
     EnvParams,
     EnvState,
@@ -12,14 +12,14 @@ from plane_env.env import (
     compute_next_state,
     compute_reward,
     get_obs,
-    save_video,
 )
-from plane_env.rendering import _render
+from target_gym.plane.rendering import _render
+from target_gym.utils import save_video
 
 
 class Airplane2D(gym.Env):
     """
-    JAX Compatible 2D-Airplane environment.
+    2D-Airplane environment.
     """
 
     metadata = {
@@ -31,10 +31,15 @@ class Airplane2D(gym.Env):
     screen_height = 400
 
     def __init__(
-        self, params=None, render_mode: Optional[str] = None, mode="power_and_stick"
+        self,
+        params=None,
+        render_mode: Optional[str] = None,
+        mode="power_and_stick",
+        integration_method: str = "rk4_1",
     ):
         super().__init__()
         self.obs_shape = (9,)  # TODO : infer automatically ?
+        self.integration_method = integration_method
         # self.action_space = gym.spaces.MultiDiscrete([10,31])  # 10 power levels (0-9) and 30 pitch levels (-15 to 15 degrees)
         if mode == "power_and_stick":
             self.action_space = gym.spaces.Box(
@@ -91,12 +96,20 @@ class Airplane2D(gym.Env):
         params = self.params if params is None else params
         power, stick = action  # cannot just unpack action because of different modes
         stick = np.deg2rad(stick * 15)
-        new_state, metrics = compute_next_state(power, stick, state, params, xp=np)
+        new_state, metrics = compute_next_state(
+            power, stick, state, params, integration_method=self.integration_method
+        )
         reward = compute_reward(new_state, params, xp=np)
         terminated, truncated = check_is_terminal(new_state, params)
         obs = self.get_obs(new_state)
         self.state = new_state
-        return obs, reward, terminated, truncated, {"metrics": metrics}
+        return (
+            obs,
+            reward,
+            terminated,
+            truncated,
+            {"metrics": metrics, "last_state": new_state},
+        )
 
     def reset(self, seed=None, options=None):
         """Performs resetting of environment."""
