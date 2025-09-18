@@ -1,3 +1,4 @@
+import os
 import time
 
 import jax
@@ -10,7 +11,7 @@ import pandas as pd
 from scipy.interpolate import interp1d
 
 # Import environment
-from plane_env.plane.env_jax import Airplane2D, EnvParams
+from target_gym.plane.env_jax import Airplane2D, EnvParams
 
 
 def run_constant_policy(
@@ -75,6 +76,7 @@ def run_power_stick_grid(
         }
     )
     if save_csv_path is not None:
+        os.makedirs("/".join(save_csv_path.split("/")[:-1]), exist_ok=True)
         df.to_csv(save_csv_path, index=False)
         print(f"Saved grid results to {save_csv_path}")
 
@@ -161,7 +163,9 @@ def run_mode(
             ax.set_xlabel("Time step")
             ax.set_ylabel("Altitude (ft)")
             ax.set_title("Altitude trajectories for varying power")
-            plt.savefig("power_trajectories.pdf")
+            os.makedirs("figures/plane", exist_ok=True)
+            plt.savefig("figures/plane/power_trajectories.pdf")
+            plt.savefig("figures/plane/power_trajectories.png")
 
     elif mode == "3d":
         power_levels = jnp.linspace(0.0, 1.0, resolution + 1)
@@ -172,7 +176,7 @@ def run_mode(
             env,
             params,
             steps=n_timesteps,
-            save_csv_path="power_stick_altitudes.csv" if save else None,
+            save_csv_path="data/plane/power_stick_altitudes.csv" if save else None,
         )
         if plot:
             P, S = jnp.meshgrid(power_levels, stick_levels * 15, indexing="ij")
@@ -188,8 +192,8 @@ def run_mode(
             ax.set_title("Final altitude vs Power and Stick")
             ax.view_init(elev=30, azim=200)
             fig = plt.gcf()
-
-            fig.savefig("3d_altitude.pdf")
+            os.makedirs("figures/plane", exist_ok=True)
+            fig.savefig("figures/plane/3d_altitude.pdf")
             plt.show()
         return df
 
@@ -199,11 +203,12 @@ def run_mode(
         def select_action(_):
             return (power, stick)
 
-        file = env.save_video(select_action, seed)
+        file = env.save_video(select_action, seed, params=params)
         from moviepy.video.io.VideoFileClip import VideoFileClip
 
         video = VideoFileClip(file)
-        video.write_gif("videos/output.gif", fps=30)
+        os.makedirs("videos/plane", exist_ok=True)
+        video.write_gif("videos/plane/output.gif", fps=30)
 
     else:
         raise ValueError(f"Unknown mode: {mode}")
@@ -211,5 +216,5 @@ def run_mode(
 
 if __name__ == "__main__":
     run_mode("2d", n_timesteps=5000)  # or "2d" or "video"
-    run_mode("video", power=0.5, stick=0, n_timesteps=1_000)
+    run_mode("video", power=0.5, stick=0, max_steps_in_episode=1_000)
     run_mode("3d", n_timesteps=20_000, max_alt=20_000, resolution=40)

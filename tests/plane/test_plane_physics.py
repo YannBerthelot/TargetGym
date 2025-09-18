@@ -2,8 +2,7 @@ from math import cos, sin
 
 import numpy as np
 import pytest
-
-from plane_env.plane.dynamics import (
+from target_gym.plane.dynamics import (
     compute_drag,
     compute_exposed_surfaces,
     compute_initial_x_drag_coefficient,
@@ -13,7 +12,7 @@ from plane_env.plane.dynamics import (
     compute_weight,
     newton_second_law,
 )
-from plane_env.plane.env_jax import EnvParams, EnvState, compute_next_state
+from target_gym.plane.env_jax import EnvParams, EnvState, compute_next_state
 
 
 def test_compute_drag():

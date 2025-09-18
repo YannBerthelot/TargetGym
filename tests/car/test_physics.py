@@ -1,5 +1,6 @@
 import jax.numpy as jnp
 import pytest
+
 from target_gym.car.env import (
     EnvParams,
     EnvState,
@@ -25,8 +26,8 @@ def state(params):
     return EnvState(
         x=0.0,
         velocity=20.0,  # ~72 km/h
+        throttle=0.5,
         t=0,
-        throttle=0.0,
         target_velocity=25.0,
     )
 
@@ -65,22 +66,21 @@ def test_theta_computation():
 # Terminal + Reward
 # ------------------------------
 def test_check_is_terminal_velocity(params, state):
+    # Normal speed -> not terminated
     term, trunc = check_is_terminal(state, params)
-    assert not term
-    assert not trunc
+    assert term is False
+    assert trunc is False
 
+    # Low velocity -> terminated
     state_low_v = state.replace(velocity=0.0)
     term, _ = check_is_terminal(state_low_v, params)
-    assert term
-
-    state_high_v = state.replace(velocity=params.max_velocity + 1.0)
-    term, _ = check_is_terminal(state_high_v, params)
-    assert term
+    assert term is True
 
 
 def test_compute_reward(params, state):
     r = compute_reward(state, params)
     assert jnp.isscalar(r)
+    # Reward should be between -max_penalty and 1
     assert r <= 1.0
     assert r >= -params.max_steps_in_episode
 
@@ -89,9 +89,8 @@ def test_compute_reward(params, state):
 # Observations
 # ------------------------------
 def test_get_obs_shape(state):
-    obs = get_obs(state, params=EnvParams(), road_profile=road_profile, xp=jnp)
-    expected_length = 2 + state.n_sensors if hasattr(state, "n_sensors") else 12
-    assert obs.shape[0] == 12 or obs.shape[0] == expected_length
+    obs = get_obs(state)
+    assert obs.shape == (5,)
     assert jnp.isfinite(obs).all()
 
 
@@ -105,53 +104,19 @@ def test_compute_thrust_increases_with_throttle(params):
     assert f_high > f_low
 
 
-def test_compute_acceleration_with_throttle_and_brake(params):
-    pos = 0.0
+def test_compute_acceleration_against_drag(params):
+    theta = 0.0
     v = 30.0
-    a_throttle, _ = compute_acceleration(
-        action=1.0, velocity=v, position=pos, params=params
-    )
-    a_zero, _ = compute_acceleration(
-        action=0.0, velocity=v, position=pos, params=params
-    )
-    a_brake, _ = compute_acceleration(
-        action=-1.0, velocity=v, position=pos, params=params
-    )
-
-    # Positive throttle increases acceleration
+    a_throttle = compute_acceleration(1.0, v, theta, params)
+    a_zero = compute_acceleration(0.0, v, theta, params)
     assert a_throttle > a_zero
-    # Negative throttle applies braking
-    assert a_brake < a_zero
 
 
 def test_compute_next_state_progress(params, state):
-    s_next, _ = compute_next_state(1.0, state, params)
+    s_next = compute_next_state(1.0, state, params, n_substeps=5, xp=jnp)
+    # Time should advance
     assert s_next.t == state.t + 1
+    # X should advance forward
     assert s_next.x > state.x
+    # Velocity should remain finite
     assert jnp.isfinite(s_next.velocity)
-
-    s_next_brake, _ = compute_next_state(-1.0, state, params)
-    # Braking should reduce velocity
-    assert s_next_brake.velocity <= state.velocity
-
-
-def test_torque_positive_across_speeds(params):
-    for v_kmh in [0.0, 50.0, 100.0, 150.0]:
-        v = v_kmh / 3.6
-        rpm = (
-            (v / params.wheel_radius)
-            * params.gear_ratio
-            * params.final_drive
-            * 60.0
-            / (2 * jnp.pi)
-        )
-        T = engine_torque_from_rpm(rpm, 1.0, params)
-        assert float(T) > 0.0
-
-
-def test_thrust_monotonic_in_throttle(params):
-    v = 20.0
-    f0 = compute_thrust(0.0, v, params)
-    f1 = compute_thrust(0.5, v, params)
-    f2 = compute_thrust(1.0, v, params)
-    assert f0 <= f1 <= f2

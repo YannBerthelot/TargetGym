@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from gymnax.environments import EnvParams
 
-from plane_env.utils import compute_norm_from_coordinates
+from target_gym.utils import compute_norm_from_coordinates
 
 
 def compute_drag(S: float, C: float, V: float, rho: float) -> float:

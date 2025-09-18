@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from plane_env.utils import run_n_steps, save_video
+from target_gym.utils import run_n_steps, save_video
 
 try:
     from gymnax.environments import environment, spaces
@@ -22,7 +22,7 @@ except Exception:
             pass
 
 
-from plane_env.bicycle.env import (
+from target_gym.bicycle.env import (
     EnvParams,
     EnvState,
     check_is_terminal,
@@ -30,7 +30,7 @@ from plane_env.bicycle.env import (
     compute_reward,
     get_obs,
 )
-from plane_env.bicycle.rendering import _render
+from target_gym.bicycle.rendering import _render
 
 
 class RandlovBicycle(environment.Environment[EnvState, EnvParams]):

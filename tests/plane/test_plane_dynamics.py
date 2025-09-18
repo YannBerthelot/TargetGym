@@ -1,12 +1,13 @@
 import jax.numpy as jnp
-
-from plane_env.integration import compute_velocity_and_pos_from_acceleration_integration
-from plane_env.plane.dynamics import (
+from target_gym.integration import (
+    compute_velocity_and_pos_from_acceleration_integration,
+)
+from target_gym.plane.dynamics import (
     aero_coefficients,
     clamp_altitude,
     compute_acceleration,
 )
-from plane_env.plane.env import EnvParams
+from target_gym.plane.env import EnvParams
 
 # Assume your functions are imported:
 # from aircraft_model import aero_coefficients, compute_acceleration, compute_velocity_and_pos_from_acceleration_integration, clamp_altitude
