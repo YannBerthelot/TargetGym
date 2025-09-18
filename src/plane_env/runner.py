@@ -194,12 +194,12 @@ def run_mode(
         return df
 
     elif mode == "video":
-        key = jax.random.PRNGKey(42)
+        seed = 42
 
         def select_action(_):
             return (power, stick)
 
-        file = env.save_video(select_action, key)
+        file = env.save_video(select_action, seed)
         from moviepy.video.io.VideoFileClip import VideoFileClip
 
         video = VideoFileClip(file)
@@ -210,6 +210,6 @@ def run_mode(
 
 
 if __name__ == "__main__":
-    run_mode("3d", n_timesteps=20_000, max_alt=20_000)
-    # run_mode("video", power=1.0, stick=-1)
     run_mode("2d", n_timesteps=5000)  # or "2d" or "video"
+    run_mode("video", power=0.5, stick=0, n_timesteps=1_000)
+    run_mode("3d", n_timesteps=20_000, max_alt=20_000, resolution=40)

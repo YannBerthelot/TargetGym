@@ -83,7 +83,7 @@ class EnvParams:
     initial_fuel_quantity: float = 23860 / 1.25
     specific_fuel_consumption: float = 17.5 / 1000
 
-    cl_alpha: float = 0.05  # per deg
+    cl_alpha: float = 0.04  # per deg
     cl0: float = 0.2  # zero-lift AoA
     cd0: float = 0.02  # zero-lift drag
     k: float = 0.045  # induced drag factor
