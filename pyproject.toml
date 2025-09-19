@@ -72,9 +72,6 @@ tensorboard = "^2.20.0"
 pytest-readme = "^1.0.2"
 
 
-[tool.poetry.group.wandb.dependencies]
-wandb = "^0.21.3"
-
 [[tool.poetry.source]]
 name = "jax"
 url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
