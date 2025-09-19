@@ -200,9 +200,6 @@ def linear_policy(
     return jnp.clip(jnp.array([a_T, a_d]), -1.0, 1.0)
 
 
-import wandb
-
-
 def make_policy_from_config(config):
     return lambda obs: linear_policy(
         obs,
@@ -212,18 +209,6 @@ def make_policy_from_config(config):
         k_theta_dot=config["k_theta_dot"],
         k_omega_dot_torque=config["k_omega_dot_torque"],
     )
-
-
-def sweep_train():
-    wandb.init()
-    env = RandlovBicycle()
-    env_params = EnvParams(max_steps_in_episode=1000, use_goal=False)
-
-    config = wandb.config
-    policy = make_policy_from_config(config)
-
-    score = run_n_steps(env, policy, env_params, n_steps=100_000, seed=0)
-    wandb.log({"mean_return": score})
 
 
 sweep_config = {
@@ -242,20 +227,17 @@ sweep_config = {
 }
 
 if __name__ == "__main__":
-    sweep_id = wandb.sweep(sweep_config, project="bicycle-rl")
-    wandb.agent(sweep_id, sweep_train, count=1_000)  # run 50 trials
-
-    # env = RandlovBicycle()
-    # seed = 42
-    # env_params = EnvParams(max_steps_in_episode=1_000, use_goal=True)
-    # mean_return = run_n_steps(env, linear_policy, env_params, n_steps=10_000, seed=0)
-    # print(mean_return)
-    # action = (0.1, -1.0)
-    # env.save_video(
-    #     lambda o: linear_policy(o),
-    #     seed,
-    #     folder="videos",
-    #     episode_index=0,
-    #     params=env_params,
-    #     format="gif",
-    # )
+    env = RandlovBicycle()
+    seed = 42
+    env_params = EnvParams(max_steps_in_episode=1_000, use_goal=True)
+    mean_return = run_n_steps(env, linear_policy, env_params, n_steps=10_000, seed=0)
+    print(mean_return)
+    action = (0.1, -1.0)
+    env.save_video(
+        lambda o: linear_policy(o),
+        seed,
+        folder="videos",
+        episode_index=0,
+        params=env_params,
+        format="gif",
+    )
