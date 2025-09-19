@@ -6,7 +6,7 @@ authors = ["Yann Berthelot <yannberthelot1@gmail.com>"]
 readme = "README.md"
 homepage = "https://github.com/yannberthelot/Plane"  # Add your repository URL
 repository = "https://github.com/yannberthelot/Plane"
-keywords = ["reinforcement-learning", "gymnasium", "jax", "airplane", "car", "simulation", "bike"]  # Add relevant keywords
+keywords = ["reinforcement-learning", "gymnasium", "jax", "airplane", "car", "simulation", "bike"]
 classifiers = [  # Add relevant classifiers
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -16,7 +16,7 @@ classifiers = [  # Add relevant classifiers
 ]
 
 packages = [
-    { include = "target_gym", from = "src" },  # This tells Poetry where to find the package
+    { include = "target_gym", from = "src" },
 ]
 
 [tool.poetry.dependencies]
@@ -66,10 +66,6 @@ black = "^25.1.0"
 [tool.poetry.group.agent.dependencies]
 stable-baselines3 = "^2.7.0"
 tensorboard = "^2.20.0"
-
-
-[tool.poetry.group.readme.dependencies]
-pytest-readme = "^1.0.2"
 
 
 [[tool.poetry.source]]
