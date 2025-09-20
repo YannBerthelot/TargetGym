@@ -8,7 +8,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym.integration import (
-    compute_velocity_and_pos_from_acceleration_integration,
+    integrate_dynamics,
 )
 from target_gym.plane.dynamics import (
     compute_acceleration,
@@ -217,14 +217,12 @@ def compute_next_state(
         max_clip_boundaries=(100, 100, 1.5),
     )
 
-    (x_dot, z_dot, theta_dot), (x, z, theta), metrics = (
-        compute_velocity_and_pos_from_acceleration_integration(
-            velocities=velocities,
-            positions=positions,
-            delta_t=dt,
-            compute_acceleration=_compute_acceleration,
-            method=integration_method,
-        )
+    (x_dot, z_dot, theta_dot), (x, z, theta), metrics = integrate_dynamics(
+        velocities=velocities,
+        positions=positions,
+        delta_t=dt,
+        compute_acceleration=_compute_acceleration,
+        method=integration_method,
     )
 
     alpha, gamma = compute_alpha(theta, x_dot, z_dot)

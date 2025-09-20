@@ -243,3 +243,13 @@ def run_n_steps(env, policy, params, n_steps=10_000, seed=0):
     valid_returns = compute_episode_returns_vectorized(rewards, ep_dones)
     mean_return = jnp.mean(valid_returns)
     return mean_return
+
+
+def convert_raw_action_to_range(raw_action, min_action, max_action):
+    """
+    Assuming the action is roughly in (-1,1), we rescale to it (min_action,max_action).
+    """
+    action = min_action + 0.5 * (jnp.clip(raw_action, -1, 1) + 1) * (
+        max_action - min_action
+    )
+    return action
