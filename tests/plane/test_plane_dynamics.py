@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 
 from target_gym.integration import (
-    compute_velocity_and_pos_from_acceleration_integration,
+    integrate_dynamics,
 )
 from target_gym.plane.dynamics import (
     aero_coefficients,
@@ -11,7 +11,7 @@ from target_gym.plane.dynamics import (
 from target_gym.plane.env import EnvParams
 
 # Assume your functions are imported:
-# from aircraft_model import aero_coefficients, compute_acceleration, compute_velocity_and_pos_from_acceleration_integration, clamp_altitude
+# from aircraft_model import aero_coefficients, compute_acceleration, integrate_dynamics, clamp_altitude
 
 
 def test_aero_coefficients_cl_cd_ranges():
@@ -70,13 +70,11 @@ def test_compute_speed_and_pos_integration():
     # accelerations = jnp.array([1.0, -9.8, 0.001])
     velocities = jnp.array([200.0, 0.0, 0.01])
     positions = jnp.array([0.0, 1000.0, 0.05])
-    (V_x, V_z, theta_dot), (x, z, theta), _ = (
-        compute_velocity_and_pos_from_acceleration_integration(
-            velocities=velocities,
-            positions=positions,
-            delta_t=0.1,
-            compute_acceleration=lambda x, y: (jnp.array([1.0, -9.8, 0.001]), None),
-        )
+    (V_x, V_z, theta_dot), (x, z, theta), _ = integrate_dynamics(
+        velocities=velocities,
+        positions=positions,
+        delta_t=0.1,
+        compute_acceleration=lambda x, y: (jnp.array([1.0, -9.8, 0.001]), None),
     )
     # velocities updated
     assert 200.0 <= V_x <= 201.0, f"V_x integration unexpected: {V_x}"

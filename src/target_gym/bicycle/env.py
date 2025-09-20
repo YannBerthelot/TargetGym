@@ -12,7 +12,7 @@ except Exception:
 
 # Import your integrator
 from target_gym.integration import (
-    compute_velocity_and_pos_from_acceleration_integration,
+    integrate_dynamics,
 )
 
 EPS = 1e-8
@@ -260,7 +260,7 @@ def compute_next_state(
     )
     positions0 = jnp.array([state.omega, state.theta, state.psi], dtype=jnp.float32)
 
-    v_new, p_new, metrics = compute_velocity_and_pos_from_acceleration_integration(
+    v_new, p_new, metrics = integrate_dynamics(
         velocities=velocities0,
         positions=positions0,
         delta_t=params.delta_t,

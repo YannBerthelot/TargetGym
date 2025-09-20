@@ -16,28 +16,24 @@ except ImportError:
 
 from jax import grad
 
+from target_gym.base import EnvParams, EnvState
 from target_gym.integration import (
-    compute_velocity_and_pos_from_acceleration_integration,
+    integrate_dynamics,
 )
 
 
 @struct.dataclass
-class EnvState:
+class EnvState(EnvState):
     x: float
     velocity: float
-    t: int
     throttle: float
     target_velocity: float
 
 
 @struct.dataclass
-class EnvParams:
+class EnvParams(EnvParams):
     gravity: float = 9.81
     initial_mass: float = 1_000.0
-    delta_t: float = 1.0
-    n_substeps: int = 5
-
-    max_steps_in_episode: int = 1_000
     min_velocity: float = 0.0
     max_velocity: float = 200 / 3.6
     target_velocity_range: Tuple[float, float] = (100 / 3.6, 130 / 3.6)
@@ -216,14 +212,12 @@ def compute_next_state(
         compute_acceleration, action=throttle, params=params
     )
 
-    velocity, position, metrics = (
-        compute_velocity_and_pos_from_acceleration_integration(
-            velocities=state.velocity,
-            positions=state.x,
-            delta_t=dt,
-            compute_acceleration=_compute_acceleration,
-            method=integration_method,
-        )
+    velocity, position, metrics = integrate_dynamics(
+        velocities=state.velocity,
+        positions=state.x,
+        delta_t=dt,
+        compute_acceleration=_compute_acceleration,
+        method=integration_method,
     )
 
     return (
