@@ -20,7 +20,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "<3.13,>=3.10"
+python = ">=3.10"
 gymnax = "^0.0.9"
 numpy = "^1.26.1"
 six = "^1.16.0"
@@ -49,19 +49,34 @@ exclude = '''
   | dist
 )/
 '''
+[tool.poetry.group.dev]
+include-groups = [
+    "test",
+    "lint",
+    "agent",
+]
+optional = true
+
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.4.3"
-isort = "^5.12.0"
 pre-commit = "^3.5.0"
-mypy = "^1.6.1"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.4.3"
 codecov = "^2.1.13"
 coverage = "^7.3.2"
 pytest-cov = "^4.1.0"
 pytest-readme = "^1.0.2"
+
+[tool.poetry.group.lint.dependencies]
+isort = "^5.12.0"
+mypy = "^1.6.1"
 flake8 = "^7.3.0"
 ruff = "^0.12.11"
 black = "^25.1.0"
+
+[tool.poetry.group.agent]
+optional = true
 
 [tool.poetry.group.agent.dependencies]
 stable-baselines3 = "^2.7.0"
@@ -78,5 +93,5 @@ name = "PyPI"
 priority = "supplemental"
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=2.2.0"]
 build-backend = "poetry.core.masonry.api"
