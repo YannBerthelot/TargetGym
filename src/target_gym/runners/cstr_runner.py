@@ -11,12 +11,14 @@ import pandas as pd
 from scipy.interpolate import interp1d
 
 # Import environment
-from target_gym import Car, CarParams
+from target_gym import CSTR, CSTRParams
 from target_gym.utils import truncate_colormap
+
+env_name = "cstr"
 
 
 def run_constant_policy(
-    throttle: float, env: Car, params: CarParams, steps: int = 1_000
+    throttle: float, env: CSTR, params: CSTRParams, steps: int = 1_000
 ):
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
@@ -28,16 +30,16 @@ def run_constant_policy(
         # Freeze state if already done
         state = jax.lax.cond(done, lambda _: state, lambda _: new_state, operand=None)
         done = jnp.logical_or(done, new_done)
-        return (key, state, done), (state.velocity, done)
+        return (key, state, done), (state.T, done)
 
     (_, final_state, _), (velocity_history, done_history) = jax.lax.scan(
         step_fn, (key, state, False), None, length=steps
     )
-    return final_state.velocity, (velocity_history * (1 - done_history))[:-1]
+    return final_state.T, (velocity_history * (1 - done_history))[:-1]
 
 
 def run_constant_policy_final_alt(
-    power: float, stick: float, env: Car, params: CarParams, steps: int = 10_000
+    power: float, stick: float, env: CSTR, params: CSTRParams, steps: int = 10_000
 ):
     key = jax.random.PRNGKey(0)
     init_obs, init_state = env.reset_env(key, params)
@@ -49,8 +51,8 @@ def run_constant_policy_final_alt(
         state = jax.lax.cond(done, lambda _: state, lambda _: new_state, operand=None)
         done = jnp.logical_or(done, new_done)
         return (key, state, done), (
-            new_state.velocity,
-            info["last_state"].velocity,
+            new_state.T,
+            info["last_state"].T,
             done,
         )
 
@@ -107,9 +109,9 @@ def run_mode(
     resolution: int = 20,
     **kwargs,
 ):
-    env = Car(integration_method="rk4_1")
+    env = CSTR(integration_method="rk4_1")
     if kwargs is not None:
-        params = CarParams(**kwargs)
+        params = CSTRParams(**kwargs)
     else:
         params = env.default_params
 
@@ -134,12 +136,12 @@ def run_mode(
             )
             cmap = truncate_colormap(cm.viridis, 0.0, 0.85)
             for i, traj in enumerate(trajectories):
-                ax.plot(traj * 3.6, color=cmap(norm(throttle_levels[i])))
+                ax.plot(traj, color=cmap(norm(throttle_levels[i])))
                 if (i % 4) == 0:
                     ax.text(
                         x=len(traj) - 1,
-                        y=traj[-1] * 3.6,
-                        s=f" {float(throttle_levels[i]):.2f} - {float(traj[-1]* 3.6):.1f}km/h",  # format the throttle value
+                        y=traj[-1],
+                        s=f" {float(throttle_levels[i]):.2f} - {float(traj[-1]):.2f}K",  # format the throttle value
                         color=cmap(norm(throttle_levels[i])),
                         fontsize=8,
                         va="center",
@@ -147,40 +149,42 @@ def run_mode(
                     )
 
             sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+
             sm.set_array([])
             xmin, xmax = plt.xlim()
-            plt.xlim(xmin, xmax + (xmax - xmin) * 0.1)
-            # fig.colorbar(sm, ax=ax).set_label("Throttle level")
+            plt.xlim(xmin, xmax + (xmax - xmin) * 0.08)
             ax.set_xlabel("Time step")
-            ax.set_ylabel("Velocity (km/h)")
-            ax.set_title("Velocity trajectories for varying throttle levels")
-            os.makedirs("figures/car", exist_ok=True)
-            plt.savefig("figures/car/throttle_trajectories.pdf")
-            plt.savefig("figures/car/throttle_trajectories.png")
+            ax.set_ylabel("Temperature (K)")
+            ax.set_title(
+                "Temperature trajectories for varying cooling temperature levels"
+            )
+            os.makedirs(f"figures/{env_name}", exist_ok=True)
+            plt.savefig(f"figures/{env_name}/trajectories.pdf")
+            plt.savefig(f"figures/{env_name}/trajectories.png")
 
     elif mode == "video":
         seed = 42
 
         def select_action(_):
-            return throttle
+            return np.random.uniform(-1, 1)
 
         file = env.save_video(select_action, seed, params=params)
         from moviepy.video.io.VideoFileClip import VideoFileClip
 
         video = VideoFileClip(file)
-        os.makedirs("videos/car", exist_ok=True)
-        video.write_gif("videos/car/output.gif", fps=30)
+        os.makedirs(f"videos/{env_name}", exist_ok=True)
+        video.write_gif(f"videos/{env_name}/output.gif", fps=30)
 
     else:
         raise ValueError(f"Unknown mode: {mode}")
 
 
 def run_all_modes():
-    n_steps = 1_000
+    n_steps = 10_000
     run_mode(
         "2d", n_timesteps=n_steps, max_steps_in_episode=n_steps, resolution=20
     )  # or "2d" or "video"
-    run_mode("video", throttle=0.15, max_steps_in_episode=n_steps)
+    run_mode("video", throttle=0.15, max_steps_in_episode=1_000)
 
 
 if __name__ == "__main__":

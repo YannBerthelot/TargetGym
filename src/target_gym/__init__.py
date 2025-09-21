@@ -4,6 +4,7 @@ from target_gym.bicycle.env import BikeParams
 from target_gym.bicycle.env_jax import RandlovBicycle as Bike
 from target_gym.car.env import CarParams
 from target_gym.car.env_jax import Car2D as Car
+from target_gym.pc_gym.cstr.env_jax import CSTR, CSTRParams
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D as Plane
 from target_gym.wrapper import gym_wrapper_factory
