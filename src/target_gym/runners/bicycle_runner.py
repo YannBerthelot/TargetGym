@@ -135,6 +135,7 @@ def run_mode(
     n_timesteps=10_000,
     plot: bool = True,
     save: bool = True,
+    show: bool = False,
     resolution: int = 20,
     **kwargs,
 ):
@@ -209,7 +210,8 @@ def run_mode(
             os.makedirs("figures/bike", exist_ok=True)
             fig.savefig("figures/bike/3d_altitude.pdf")
             fig.savefig("figures/bike/3d_altitude.png")
-            plt.show()
+            if show:
+                plt.show()
         return df
 
     elif mode == "video":
@@ -229,7 +231,11 @@ def run_mode(
         raise ValueError(f"Unknown mode: {mode}")
 
 
-if __name__ == "__main__":
+def run_all_modes(show: bool = False):
     run_mode("2d", n_timesteps=100)  # or "2d" or "video"
     run_mode("video", power=0.5, stick=0, max_steps_in_episode=100)
-    run_mode("3d", n_timesteps=100, resolution=40)
+    run_mode("3d", n_timesteps=100, resolution=40, show=show)
+
+
+if __name__ == "__main__":
+    run_all_modes(show=True)

@@ -3,6 +3,7 @@ from typing import Any, Callable, Sequence
 
 import jax
 import jax.numpy as jnp
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -234,3 +235,12 @@ def convert_raw_action_to_range(raw_action, min_action, max_action):
         max_action - min_action
     )
     return action
+
+
+def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
+    """Return a truncated colormap from minval to maxval."""
+    new_cmap = cm.colors.LinearSegmentedColormap.from_list(
+        f"trunc({cmap.name},{minval:.2f},{maxval:.2f})",
+        cmap(np.linspace(minval, maxval, n)),
+    )
+    return new_cmap
