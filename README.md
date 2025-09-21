@@ -12,6 +12,9 @@ Currently included environments:
 * 🚗 **Car** – maintain a desired speed on a road - Stable-Target-MDP
 * 🚲 **Bike** – stabilize and steer a 2D bicycle model - Unstable-Target-MDP (from [Randlov et al.](https://gwern.net/doc/reinforcement-learning/model-free/1998-randlov.pdf))
 
+As well as environments adapted from [Process-Control Gym](https://github.com/MaximilianB2/pc-gym):
+* 🧪 **CSTR** - control of a chemical reaction in a continuous stirred-tank reactor (CSTR).
+* **More to come**
 
 <table align="center">
   <tr>
@@ -36,9 +39,7 @@ Currently included environments:
   </tr>
 </table>
 
-As well as environments adapted from [Process-Control Gym](https://github.com/MaximilianB2/pc-gym):
-* 🧪 **CSTR** - control of a chemical reaction in a continuous stirred-tank reactor (CSTR).
-* **More to come**
+
 
 ---
 
