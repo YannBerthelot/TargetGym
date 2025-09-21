@@ -139,7 +139,7 @@ cd TargetGym
 poetry install --with dev
 
 # Using pip
-python -m pip install -e .
+python -m pip install -e ".[dev]"
 
 ```
 
