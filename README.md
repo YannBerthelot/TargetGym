@@ -13,10 +13,28 @@ Currently included environments:
 * 🚲 **Bike** – stabilize and steer a 2D bicycle model - Unstable-Target-MDP (from [Randlov et al.](https://gwern.net/doc/reinforcement-learning/model-free/1998-randlov.pdf))
 
 
-<p align="center">
-  <img src="videos/plane/output.gif" width="40%"/>
-  <img src="videos/car/output.gif" width="40%"/>
-</p>
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="videos/plane/output.gif" width="300px"/><br/>
+      Plane
+    </td>
+    <td align="center">
+      <img src="videos/car/output.gif" width="300px"/><br/>
+      Car
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="videos/bike/output.gif" width="300px"/><br/>
+      Bike
+    </td>
+    <td align="center">
+      <img src="videos/cstr/output.gif" width="300px"/><br/>
+      CSTR
+    </td>
+  </tr>
+</table>
 
 As well as environments adapted from [Process-Control Gym](https://github.com/MaximilianB2/pc-gym):
 * 🧪 **CSTR** - control of a chemical reaction in a continuous stirred-tank reactor (CSTR).
@@ -37,20 +55,48 @@ As well as environments adapted from [Process-Control Gym](https://github.com/Ma
 
 ---
 
-## Example: Stable Altitude in Plane
+## Stability
 
+<!-- 
 Below is an example of how stable altitude changes with engine power and pitch in the **Plane** environment:
 
 <p align="center">
   <img src="figures/plane/3d_altitude.png" width="70%"/>
-</p>
+</p> -->
+
+TargetGym offers a variety of **stable-target-MDPs**. This can be seen in the evolution of the target variable under constant policies for all environments:
+
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="figures/plane/power_trajectories.png" width="80%"/><br/>
+      Plane
+    </td>
+    <td align="center">
+      <img src="figures/bike/power_trajectories.png" width="80%"/><br/>
+      Bike
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="figures/car/throttle_trajectories.png" width="80%"/><br/>
+      Car
+    </td>
+    <td align="center">
+      <img src="figures/cstr/trajectories.png" width="80%"/><br/>
+      CSTR
+    </td>
+  </tr>
+</table>
+
+Some environments like Plane and Bike offer 2D-actions, for example power and stick for Plane:
 
 <p align="center">
-  <img src="figures/plane/power_trajectories.png" width="60%"/>
-</p>
+  <img src="figures/plane/3d_altitude.png" width="70%"/>
+</p> 
 
-
-This illustrates **multi-stability**: with fixed power and pitch, the aircraft naturally converges to a stable altitude. Similar properties can be found in Car environment
+<!-- 
+This illustrates **multi-stability**: with fixed power and pitch, the aircraft naturally converges to a stable altitude. Similar properties can be found in Car environment -->
 
 ---
 
