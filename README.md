@@ -24,7 +24,7 @@ As well as environments adapted from [Process-Control Gym](https://github.com/Ma
 
 ---
 
-## ✨ Features
+## Features
 
 * **Fast & parallelizable** with JAX — scale to thousands of parallel environments on GPU/TPU.
 * **Physics-based**: Derived from modeling equations, not arcade physics.
@@ -33,7 +33,7 @@ As well as environments adapted from [Process-Control Gym](https://github.com/Ma
 * **Challenging dynamics**: Captures irrecoverable states, and momentum effects.
 * **Visualization**: All environments come with visualization.
 * **Compatible with RL libraries**: Offers [Gymnax](https://github.com/RobertTLange/gymnax) and [Gymnasium](https://github.com/Farama-Foundation/Gymnasium) interfaces.
-* 🌟 **Upcoming features**: Environmental perturbations (wind, turbulence, bumpy road) and fuel consumption.
+* 📦 **Upcoming features**: Environmental perturbations (wind, turbulence, bumpy road) and fuel consumption.
 
 ---
 
@@ -120,7 +120,7 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 
 ---
 
-## 📦 Roadmap
+## Roadmap
 
 * [ ] Add perturbations (wind, turbulence, uneven terrain) for non-stationary dynamics.
 * [ ] Easier interface for creating partially-observable variants.
