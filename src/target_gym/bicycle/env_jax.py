@@ -148,7 +148,7 @@ class RandlovBicycle(environment.Environment[EnvState, EnvParams]):
     def save_video(
         self,
         select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        key: chex.PRNGKey,
+        seed: int,
         params=None,
         folder="videos",
         episode_index=0,
@@ -162,7 +162,7 @@ class RandlovBicycle(environment.Environment[EnvState, EnvParams]):
             episode_index,
             FPS,
             params,
-            seed=key,
+            seed=seed,
             format=format,
         )
 
