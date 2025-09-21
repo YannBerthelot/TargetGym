@@ -48,9 +48,9 @@ tests-mypy = ["mypy (>=1.11.1) ; platform_python_implementation == \"CPython\" a
 name = "black"
 version = "25.1.0"
 description = "The uncompromising code formatter."
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "black-25.1.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:759e7ec1e050a15f89b770cefbf91ebee8917aac5c20483bc2d80a6c3a04df32"},
     {file = "black-25.1.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:0e519ecf93120f34243e6b0054db49c00a35f84f195d5bce7e9f5cfc578fc2da"},
@@ -95,9 +95,9 @@ uvloop = ["uvloop (>=0.15.2)"]
 name = "certifi"
 version = "2025.8.3"
 description = "Python package for providing Mozilla's CA Bundle."
-optional = true
+optional = false
 python-versions = ">=3.7"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "certifi-2025.8.3-py3-none-any.whl", hash = "sha256:f6c12493cfb1b06ba2ff328595af9350c65d6644968e5d3a2ffd78699af217a5"},
     {file = "certifi-2025.8.3.tar.gz", hash = "sha256:e564105f78ded564e3ae7c923924435e1daa7463faeab5bb932bc53ffae63407"},
@@ -107,9 +107,9 @@ files = [
 name = "cfgv"
 version = "3.4.0"
 description = "Validate configuration and produce human readable error messages."
-optional = true
+optional = false
 python-versions = ">=3.8"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "cfgv-3.4.0-py2.py3-none-any.whl", hash = "sha256:b7265b1f29fd3316bfcd2b330d63d024f2bfd8bcb8b0272f8e19a504856c48f9"},
     {file = "cfgv-3.4.0.tar.gz", hash = "sha256:e52591d4c5f5dead8e0f673fb16db7949d2cfb3f7da4582893288f0ded8fe560"},
@@ -119,9 +119,9 @@ files = [
 name = "charset-normalizer"
 version = "3.4.3"
 description = "The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet."
-optional = true
+optional = false
 python-versions = ">=3.7"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "charset_normalizer-3.4.3-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:fb7f67a1bfa6e40b438170ebdc8158b78dc465a5a67b6dde178a46987b244a72"},
     {file = "charset_normalizer-3.4.3-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:cc9370a2da1ac13f0153780040f465839e6cccb4a1e44810124b4e22483c93fe"},
@@ -229,9 +229,9 @@ typing_extensions = ">=4.2.0"
 name = "click"
 version = "8.2.1"
 description = "Composable command line interface toolkit"
-optional = true
+optional = false
 python-versions = ">=3.10"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "click-8.2.1-py3-none-any.whl", hash = "sha256:61a3265b914e850b85317d0b3109c7f8cd35a670f963866005d6ef1d5175a12b"},
     {file = "click-8.2.1.tar.gz", hash = "sha256:27c491cc05d968d271d5a1db13e3b5a184636d9d930f148c50b038f0d0646202"},
@@ -256,9 +256,9 @@ files = [
 name = "codecov"
 version = "2.1.13"
 description = "Hosted coverage reports for GitHub, Bitbucket and Gitlab"
-optional = true
+optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "codecov-2.1.13-py2.py3-none-any.whl", hash = "sha256:c2ca5e51bba9ebb43644c43d0690148a55086f7f5e6fd36170858fa4206744d5"},
     {file = "codecov-2.1.13.tar.gz", hash = "sha256:2362b685633caeaf45b9951a9b76ce359cd3581dd515b430c6c3f5dfb4d92a8c"},
@@ -279,7 +279,7 @@ files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
 ]
-markers = {main = "platform_system == \"Windows\"", dev = "sys_platform == \"win32\" or platform_system == \"Windows\"", lint = "platform_system == \"Windows\"", test = "sys_platform == \"win32\""}
+markers = {main = "platform_system == \"Windows\" or sys_platform == \"win32\"", dev = "sys_platform == \"win32\" or platform_system == \"Windows\"", lint = "platform_system == \"Windows\"", test = "sys_platform == \"win32\""}
 
 [[package]]
 name = "contourpy"
@@ -456,9 +456,9 @@ test-no-images = ["pytest", "pytest-cov", "pytest-rerunfailures", "pytest-xdist"
 name = "coverage"
 version = "7.10.4"
 description = "Code coverage measurement for Python"
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "coverage-7.10.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:d92d6edb0ccafd20c6fbf9891ca720b39c2a6a4b4a6f9cf323ca2c986f33e475"},
     {file = "coverage-7.10.4-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:7202da14dc0236884fcc45665ffb2d79d4991a53fbdf152ab22f69f70923cc22"},
@@ -588,9 +588,9 @@ files = [
 name = "distlib"
 version = "0.4.0"
 description = "Distribution utilities"
-optional = true
+optional = false
 python-versions = "*"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "distlib-0.4.0-py2.py3-none-any.whl", hash = "sha256:9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16"},
     {file = "distlib-0.4.0.tar.gz", hash = "sha256:feec40075be03a04501a973d81f633735b4b69f98b05450592310c0f401a4e0d"},
@@ -694,9 +694,9 @@ lazy-imports = ["etils[ecolab]"]
 name = "exceptiongroup"
 version = "1.3.0"
 description = "Backport of PEP 654 (exception groups)"
-optional = true
+optional = false
 python-versions = ">=3.7"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 markers = "python_version == \"3.10\""
 files = [
     {file = "exceptiongroup-1.3.0-py3-none-any.whl", hash = "sha256:4d111e6e0c13d0644cad6ddaa7ed0261a0b36971f6d23e7ec9b4b9097da78a10"},
@@ -725,9 +725,9 @@ files = [
 name = "filelock"
 version = "3.19.1"
 description = "A platform independent file lock."
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "filelock-3.19.1-py3-none-any.whl", hash = "sha256:d38e30481def20772f5baf097c122c3babc4fcdb7e14e57049eb9d88c6dc017d"},
     {file = "filelock-3.19.1.tar.gz", hash = "sha256:66eda1888b0171c998b35be2bcc0f6d75c388a7ce20c3f3f37aa8e96c2dddf58"},
@@ -737,9 +737,9 @@ files = [
 name = "flake8"
 version = "7.3.0"
 description = "the modular source code checker: pep8 pyflakes and co"
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "flake8-7.3.0-py2.py3-none-any.whl", hash = "sha256:b9696257b9ce8beb888cdbe31cf885c90d31928fe202be0889a7cdafad32f01e"},
     {file = "flake8-7.3.0.tar.gz", hash = "sha256:fe044858146b9fc69b551a4b490d69cf960fcb78ad1edcb84e7fbb1b4a8e3872"},
@@ -951,9 +951,9 @@ files = [
 name = "grpcio"
 version = "1.74.0"
 description = "HTTP/2-based RPC framework"
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "grpcio-1.74.0-cp310-cp310-linux_armv7l.whl", hash = "sha256:85bd5cdf4ed7b2d6438871adf6afff9af7096486fcf51818a81b77ef4dd30907"},
     {file = "grpcio-1.74.0-cp310-cp310-macosx_11_0_universal2.whl", hash = "sha256:68c8ebcca945efff9d86d8d6d7bfb0841cf0071024417e2d7f45c5e46b5b08eb"},
@@ -1084,9 +1084,9 @@ tests = ["freezegun", "pytest", "pytest-cov"]
 name = "identify"
 version = "2.6.13"
 description = "File identification library for Python"
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "identify-2.6.13-py2.py3-none-any.whl", hash = "sha256:60381139b3ae39447482ecc406944190f690d4a2997f2584062089848361b33b"},
     {file = "identify-2.6.13.tar.gz", hash = "sha256:da8d6c828e773620e13bfa86ea601c5a5310ba4bcd65edf378198b56a1f9fb32"},
@@ -1099,9 +1099,9 @@ license = ["ukkonen"]
 name = "idna"
 version = "3.10"
 description = "Internationalized Domain Names in Applications (IDNA)"
-optional = true
+optional = false
 python-versions = ">=3.6"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "idna-3.10-py3-none-any.whl", hash = "sha256:946d195a0d259cbba61165e88e65941f16e9b36ea6ddb97f00452bae8b1287d3"},
     {file = "idna-3.10.tar.gz", hash = "sha256:12f65c9b470abda6dc35cf8e63cc574b1c52b11df2c86030af0ac09b01b13ea9"},
@@ -1185,9 +1185,9 @@ type = ["pytest-mypy"]
 name = "iniconfig"
 version = "2.1.0"
 description = "brain-dead simple config-ini parsing"
-optional = true
+optional = false
 python-versions = ">=3.8"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "iniconfig-2.1.0-py3-none-any.whl", hash = "sha256:9deba5723312380e77435581c6bf4935c94cbfab9b1ed33ef8d238ea168eb760"},
     {file = "iniconfig-2.1.0.tar.gz", hash = "sha256:3abbd2e30b36733fee78f9c7f7308f2d0050e88f0087fd25c2645f63c773e1c7"},
@@ -1197,9 +1197,9 @@ files = [
 name = "isort"
 version = "5.13.2"
 description = "A Python utility / library to sort Python imports."
-optional = true
+optional = false
 python-versions = ">=3.8.0"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "isort-5.13.2-py3-none-any.whl", hash = "sha256:8ca5e72a8d85860d5a3fa69b8745237f2939afe12dbf656afbcb47fe72d947a6"},
     {file = "isort-5.13.2.tar.gz", hash = "sha256:48fdfcb9face5d58a4f6dde2e72a1fb8dcaf8ab26f95ab49fab84c2ddefb0109"},
@@ -1340,9 +1340,9 @@ scipy = ">=1.12"
 name = "jinja2"
 version = "3.1.6"
 description = "A very fast and expressive template engine."
-optional = true
+optional = false
 python-versions = ">=3.7"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"},
     {file = "jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d"},
@@ -1469,9 +1469,9 @@ files = [
 name = "markdown"
 version = "3.8.2"
 description = "Python implementation of John Gruber's Markdown."
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "markdown-3.8.2-py3-none-any.whl", hash = "sha256:5c83764dbd4e00bdd94d85a19b8d55ccca20fe35b2e678a1422b380324dd5f24"},
     {file = "markdown-3.8.2.tar.gz", hash = "sha256:247b9a70dd12e27f67431ce62523e675b866d254f900c4fe75ce3dda62237c45"},
@@ -1509,9 +1509,9 @@ testing = ["coverage", "pytest", "pytest-cov", "pytest-regressions", "requests"]
 name = "markupsafe"
 version = "3.0.2"
 description = "Safely add untrusted strings to HTML/XML markup."
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "MarkupSafe-3.0.2-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:7e94c425039cde14257288fd61dcfb01963e658efbc0ff54f5306b06054700f8"},
     {file = "MarkupSafe-3.0.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:9e2d922824181480953426608b81967de705c3cef4d1af983af849d7bd619158"},
@@ -1659,9 +1659,9 @@ dev = ["meson-python (>=0.13.1,<0.17.0)", "pybind11 (>=2.13.2,!=2.13.3)", "setup
 name = "mccabe"
 version = "0.7.0"
 description = "McCabe checker, plugin for flake8"
-optional = true
+optional = false
 python-versions = ">=3.6"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "mccabe-0.7.0-py2.py3-none-any.whl", hash = "sha256:6c2d30ab6be0e4a46919781807b4f0d834ebdd6c6e3dca0bda5a15f863427b6e"},
     {file = "mccabe-0.7.0.tar.gz", hash = "sha256:348e0240c33b60bbdf4e523192ef919f28cb2c3d7d5c7794f74009290f236325"},
@@ -1764,9 +1764,9 @@ test = ["coveralls (>=3.0,<4.0)", "pytest (>=3.0.0,<7.0.0)", "pytest-cov (>=2.5.
 name = "mpmath"
 version = "1.3.0"
 description = "Python library for arbitrary-precision floating-point arithmetic"
-optional = true
+optional = false
 python-versions = "*"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "mpmath-1.3.0-py3-none-any.whl", hash = "sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"},
     {file = "mpmath-1.3.0.tar.gz", hash = "sha256:7a28eb2a9774d00c7bc92411c19a89209d5da7c4c9a9e227be8330a23a25b91f"},
@@ -1851,9 +1851,9 @@ files = [
 name = "mypy"
 version = "1.17.1"
 description = "Optional static typing for Python"
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "mypy-1.17.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:3fbe6d5555bf608c47203baa3e72dbc6ec9965b3d7c318aa9a4ca76f465bd972"},
     {file = "mypy-1.17.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:80ef5c058b7bce08c83cac668158cb7edea692e458d21098c7d3bce35a5d43e7"},
@@ -1912,9 +1912,9 @@ reports = ["lxml"]
 name = "mypy-extensions"
 version = "1.1.0"
 description = "Type system extensions for programs checked with the mypy type checker."
-optional = true
+optional = false
 python-versions = ">=3.8"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "mypy_extensions-1.1.0-py3-none-any.whl", hash = "sha256:1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505"},
     {file = "mypy_extensions-1.1.0.tar.gz", hash = "sha256:52e68efc3284861e772bbcd66823fde5ae21fd2fdb51c62a211403730b916558"},
@@ -1936,9 +1936,9 @@ files = [
 name = "networkx"
 version = "3.4.2"
 description = "Python package for creating and manipulating graphs and networks"
-optional = true
+optional = false
 python-versions = ">=3.10"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "python_version == \"3.10\""
 files = [
     {file = "networkx-3.4.2-py3-none-any.whl", hash = "sha256:df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f"},
@@ -1957,9 +1957,9 @@ test = ["pytest (>=7.2)", "pytest-cov (>=4.0)"]
 name = "networkx"
 version = "3.5"
 description = "Python package for creating and manipulating graphs and networks"
-optional = true
+optional = false
 python-versions = ">=3.11"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "python_version >= \"3.11\""
 files = [
     {file = "networkx-3.5-py3-none-any.whl", hash = "sha256:0030d386a9a06dee3565298b4a734b68589749a544acbb6c412dc9e2489ec6ec"},
@@ -1979,9 +1979,9 @@ test-extras = ["pytest-mpl", "pytest-randomly"]
 name = "nodeenv"
 version = "1.9.1"
 description = "Node.js virtual environment builder"
-optional = true
+optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "nodeenv-1.9.1-py2.py3-none-any.whl", hash = "sha256:ba11c9782d29c27c70ffbdda2d7415098754709be8a7056d79a737cd901155c9"},
     {file = "nodeenv-1.9.1.tar.gz", hash = "sha256:6ec12890a2dab7946721edbfbcd91f3319c6ccc9aec47be7c7e6b7011ee6645f"},
@@ -2037,9 +2037,9 @@ files = [
 name = "nvidia-cublas-cu12"
 version = "12.8.4.1"
 description = "CUBLAS native runtime libraries"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_cublas_cu12-12.8.4.1-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:b86f6dd8935884615a0683b663891d43781b819ac4f2ba2b0c9604676af346d0"},
@@ -2051,9 +2051,9 @@ files = [
 name = "nvidia-cuda-cupti-cu12"
 version = "12.8.90"
 description = "CUDA profiling tools runtime libs."
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_cuda_cupti_cu12-12.8.90-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:4412396548808ddfed3f17a467b104ba7751e6b58678a4b840675c56d21cf7ed"},
@@ -2065,9 +2065,9 @@ files = [
 name = "nvidia-cuda-nvrtc-cu12"
 version = "12.8.93"
 description = "NVRTC native runtime libraries"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_cuda_nvrtc_cu12-12.8.93-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:a7756528852ef889772a84c6cd89d41dfa74667e24cca16bb31f8f061e3e9994"},
@@ -2079,9 +2079,9 @@ files = [
 name = "nvidia-cuda-runtime-cu12"
 version = "12.8.90"
 description = "CUDA Runtime native Libraries"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_cuda_runtime_cu12-12.8.90-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:52bf7bbee900262ffefe5e9d5a2a69a30d97e2bc5bb6cc866688caa976966e3d"},
@@ -2093,9 +2093,9 @@ files = [
 name = "nvidia-cudnn-cu12"
 version = "9.10.2.21"
 description = "cuDNN runtime libraries"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_cudnn_cu12-9.10.2.21-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:c9132cc3f8958447b4910a1720036d9eff5928cc3179b0a51fb6d167c6cc87d8"},
@@ -2110,9 +2110,9 @@ nvidia-cublas-cu12 = "*"
 name = "nvidia-cufft-cu12"
 version = "11.3.3.83"
 description = "CUFFT native runtime libraries"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_cufft_cu12-11.3.3.83-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:848ef7224d6305cdb2a4df928759dca7b1201874787083b6e7550dd6765ce69a"},
@@ -2127,9 +2127,9 @@ nvidia-nvjitlink-cu12 = "*"
 name = "nvidia-cufile-cu12"
 version = "1.13.1.3"
 description = "cuFile GPUDirect libraries"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_cufile_cu12-1.13.1.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:1d069003be650e131b21c932ec3d8969c1715379251f8d23a1860554b1cb24fc"},
@@ -2140,9 +2140,9 @@ files = [
 name = "nvidia-curand-cu12"
 version = "10.3.9.90"
 description = "CURAND native runtime libraries"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_curand_cu12-10.3.9.90-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:dfab99248034673b779bc6decafdc3404a8a6f502462201f2f31f11354204acd"},
@@ -2154,9 +2154,9 @@ files = [
 name = "nvidia-cusolver-cu12"
 version = "11.7.3.90"
 description = "CUDA solver native runtime libraries"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_cusolver_cu12-11.7.3.90-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:db9ed69dbef9715071232caa9b69c52ac7de3a95773c2db65bdba85916e4e5c0"},
@@ -2173,9 +2173,9 @@ nvidia-nvjitlink-cu12 = "*"
 name = "nvidia-cusparse-cu12"
 version = "12.5.8.93"
 description = "CUSPARSE native runtime libraries"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_cusparse_cu12-12.5.8.93-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:9b6c161cb130be1a07a27ea6923df8141f3c295852f4b260c65f18f3e0a091dc"},
@@ -2190,9 +2190,9 @@ nvidia-nvjitlink-cu12 = "*"
 name = "nvidia-cusparselt-cu12"
 version = "0.7.1"
 description = "NVIDIA cuSPARSELt"
-optional = true
+optional = false
 python-versions = "*"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_cusparselt_cu12-0.7.1-py3-none-manylinux2014_aarch64.whl", hash = "sha256:8878dce784d0fac90131b6817b607e803c36e629ba34dc5b433471382196b6a5"},
@@ -2204,9 +2204,9 @@ files = [
 name = "nvidia-nccl-cu12"
 version = "2.27.3"
 description = "NVIDIA Collective Communication Library (NCCL) Runtime"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_nccl_cu12-2.27.3-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:9ddf1a245abc36c550870f26d537a9b6087fb2e2e3d6e0ef03374c6fd19d984f"},
@@ -2217,9 +2217,9 @@ files = [
 name = "nvidia-nvjitlink-cu12"
 version = "12.8.93"
 description = "Nvidia JIT LTO Library"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_nvjitlink_cu12-12.8.93-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:81ff63371a7ebd6e6451970684f916be2eab07321b73c9d244dc2b4da7f73b88"},
@@ -2231,9 +2231,9 @@ files = [
 name = "nvidia-nvtx-cu12"
 version = "12.8.90"
 description = "NVIDIA Tools Extension"
-optional = true
+optional = false
 python-versions = ">=3"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "nvidia_nvtx_cu12-12.8.90-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:d7ad891da111ebafbf7e015d34879f7112832fc239ff0d7d776b6cb685274615"},
@@ -2410,9 +2410,9 @@ xml = ["lxml (>=4.9.2)"]
 name = "pathspec"
 version = "0.12.1"
 description = "Utility library for gitignore style pattern matching of file paths."
-optional = true
+optional = false
 python-versions = ">=3.8"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "pathspec-0.12.1-py3-none-any.whl", hash = "sha256:a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08"},
     {file = "pathspec-0.12.1.tar.gz", hash = "sha256:a482d51503a1ab33b1c67a6c3813a26953dbdc71c31dacaef9a838c4e29f5712"},
@@ -2547,9 +2547,9 @@ xmp = ["defusedxml"]
 name = "platformdirs"
 version = "4.3.8"
 description = "A small Python package for determining appropriate platform-specific dirs, e.g. a `user data dir`."
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "platformdirs-4.3.8-py3-none-any.whl", hash = "sha256:ff7059bb7eb1179e2685604f4aaf157cfd9535242bd23742eadc3c13542139b4"},
     {file = "platformdirs-4.3.8.tar.gz", hash = "sha256:3d512d96e16bcb959a814c9f348431070822a6496326a4be0911c40b5a74c2bc"},
@@ -2564,9 +2564,9 @@ type = ["mypy (>=1.14.1)"]
 name = "pluggy"
 version = "1.6.0"
 description = "plugin and hook calling mechanisms for python"
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746"},
     {file = "pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3"},
@@ -2580,9 +2580,9 @@ testing = ["coverage", "pytest", "pytest-benchmark"]
 name = "pre-commit"
 version = "3.8.0"
 description = "A framework for managing and maintaining multi-language pre-commit hooks."
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "pre_commit-3.8.0-py2.py3-none-any.whl", hash = "sha256:9a90a53bf82fdd8778d58085faf8d83df56e40dfe18f45b19446e26bf1b3a63f"},
     {file = "pre_commit-3.8.0.tar.gz", hash = "sha256:8bb6494d4a20423842e198980c9ecf9f96607a07ea29549e180eef9ae80fe7af"},
@@ -2633,9 +2633,9 @@ files = [
 name = "pycodestyle"
 version = "2.14.0"
 description = "Python style guide checker"
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "pycodestyle-2.14.0-py2.py3-none-any.whl", hash = "sha256:dd6bf7cb4ee77f8e016f9c8e74a35ddd9f67e1d5fd4184d86c3b98e07099f42d"},
     {file = "pycodestyle-2.14.0.tar.gz", hash = "sha256:c4b5b517d278089ff9d0abdec919cd97262a3367449ea1c8b49b91529167b783"},
@@ -2645,9 +2645,9 @@ files = [
 name = "pyflakes"
 version = "3.4.0"
 description = "passive checker of Python programs"
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "pyflakes-3.4.0-py2.py3-none-any.whl", hash = "sha256:f742a7dbd0d9cb9ea41e9a24a918996e8170c799fa528688d40dd582c8265f4f"},
     {file = "pyflakes-3.4.0.tar.gz", hash = "sha256:b24f96fafb7d2ab0ec5075b7350b3d2d2218eab42003821c06344973d3ea2f58"},
@@ -2757,9 +2757,9 @@ diagrams = ["jinja2", "railroad-diagrams"]
 name = "pytest"
 version = "7.4.4"
 description = "pytest: simple powerful testing with Python"
-optional = true
+optional = false
 python-versions = ">=3.7"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "pytest-7.4.4-py3-none-any.whl", hash = "sha256:b090cdf5ed60bf4c45261be03239c2c1c22df034fbffe691abe93cd80cea01d8"},
     {file = "pytest-7.4.4.tar.gz", hash = "sha256:2cf0005922c6ace4a3e2ec8b4080eb0d9753fdc93107415332f50ce9e7994280"},
@@ -2780,9 +2780,9 @@ testing = ["argcomplete", "attrs (>=19.2.0)", "hypothesis (>=3.56)", "mock", "no
 name = "pytest-cov"
 version = "4.1.0"
 description = "Pytest plugin for measuring coverage."
-optional = true
+optional = false
 python-versions = ">=3.7"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "pytest-cov-4.1.0.tar.gz", hash = "sha256:3904b13dfbfec47f003b8e77fd5b589cd11904a21ddf1ab38a64f204d6a10ef6"},
     {file = "pytest_cov-4.1.0-py3-none-any.whl", hash = "sha256:6ba70b9e97e69fcc3fb45bfeab2d0a138fb65c4d0d6a41ef33983ad114be8c3a"},
@@ -2799,9 +2799,9 @@ testing = ["fields", "hunter", "process-tests", "pytest-xdist", "six", "virtuale
 name = "pytest-readme"
 version = "1.0.2"
 description = "Test your README.md file"
-optional = true
+optional = false
 python-versions = "*"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "pytest_readme-1.0.2-py2.py3-none-any.whl", hash = "sha256:167e6e96e99432358f02e01d9dc2d9d8d40a96d13b813e7acaec884db104e413"},
     {file = "pytest_readme-1.0.2.tar.gz", hash = "sha256:03aecebfa5db15cd8da0cdd25dfc78c8a4a850ad2a0f1bcd0919824e62c0e0a2"},
@@ -2919,9 +2919,9 @@ files = [
 name = "requests"
 version = "2.32.4"
 description = "Python HTTP for Humans."
-optional = true
+optional = false
 python-versions = ">=3.8"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "requests-2.32.4-py3-none-any.whl", hash = "sha256:27babd3cda2a6d50b30443204ee89830707d396671944c998b5975b031ac2b2c"},
     {file = "requests-2.32.4.tar.gz", hash = "sha256:27d0316682c8a29834d3264820024b62a36942083d52caf2f14c0591336d3422"},
@@ -2960,9 +2960,9 @@ jupyter = ["ipywidgets (>=7.5.1,<9)"]
 name = "ruff"
 version = "0.12.11"
 description = "An extremely fast Python linter and code formatter, written in Rust."
-optional = true
+optional = false
 python-versions = ">=3.7"
-groups = ["dev", "lint"]
+groups = ["main", "dev", "lint"]
 files = [
     {file = "ruff-0.12.11-py3-none-linux_armv6l.whl", hash = "sha256:93fce71e1cac3a8bf9200e63a38ac5c078f3b6baebffb74ba5274fb2ab276065"},
     {file = "ruff-0.12.11-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:b8e33ac7b28c772440afa80cebb972ffd823621ded90404f29e5ab6d1e2d4b93"},
@@ -3150,14 +3150,13 @@ stats = ["scipy (>=1.7)", "statsmodels (>=0.12)"]
 name = "setuptools"
 version = "80.9.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
-optional = true
+optional = false
 python-versions = ">=3.9"
 groups = ["main", "agent", "dev"]
 files = [
     {file = "setuptools-80.9.0-py3-none-any.whl", hash = "sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922"},
     {file = "setuptools-80.9.0.tar.gz", hash = "sha256:f36b47402ecde768dbfafc46e8e4207b4360c654f1f3bb84475f0a28628fb19c"},
 ]
-markers = {main = "python_version == \"3.12\""}
 
 [package.extras]
 check = ["pytest-checkdocs (>=2.4)", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\"", "ruff (>=0.8.0) ; sys_platform != \"cygwin\""]
@@ -3304,9 +3303,9 @@ files = [
 name = "stable-baselines3"
 version = "2.7.0"
 description = "Pytorch version of Stable Baselines, implementations of reinforcement learning algorithms."
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "stable_baselines3-2.7.0-py3-none-any.whl", hash = "sha256:3de94fab840b3eb379a352c8d9b390998686d2fcb41de36298066935eef94bea"},
     {file = "stable_baselines3-2.7.0.tar.gz", hash = "sha256:5258561e5becd15234274262cf09fcb9a082a73c2c67a85322f5652a05195ec4"},
@@ -3329,9 +3328,9 @@ tests = ["black (>=25.1.0,<26)", "mypy", "pytest", "pytest-cov", "pytest-env", "
 name = "sympy"
 version = "1.14.0"
 description = "Computer algebra system (CAS) in Python"
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"},
     {file = "sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517"},
@@ -3347,9 +3346,9 @@ dev = ["hypothesis (>=6.70.0)", "pytest (>=7.1.0)"]
 name = "tensorboard"
 version = "2.20.0"
 description = "TensorBoard lets you watch Tensors Flow"
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "tensorboard-2.20.0-py3-none-any.whl", hash = "sha256:9dc9f978cb84c0723acf9a345d96c184f0293d18f166bb8d59ee098e6cfaaba6"},
 ]
@@ -3370,9 +3369,9 @@ werkzeug = ">=1.0.1"
 name = "tensorboard-data-server"
 version = "0.7.2"
 description = "Fast data loading for TensorBoard"
-optional = true
+optional = false
 python-versions = ">=3.7"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "tensorboard_data_server-0.7.2-py3-none-any.whl", hash = "sha256:7e0610d205889588983836ec05dc098e80f97b7e7bbff7e994ebb78f578d0ddb"},
     {file = "tensorboard_data_server-0.7.2-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:9fe5d24221b29625dbc7328b0436ca7fc1c23de4acf4d272f1180856e32f9f60"},
@@ -3443,9 +3442,9 @@ numpy = ">=1.22.0"
 name = "tomli"
 version = "2.2.1"
 description = "A lil' TOML parser"
-optional = true
+optional = false
 python-versions = ">=3.8"
-groups = ["dev", "lint", "test"]
+groups = ["main", "dev", "lint", "test"]
 markers = "python_version == \"3.10\""
 files = [
     {file = "tomli-2.2.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:678e4fa69e4575eb77d103de3df8a895e1591b48e740211bd1067378c69e8249"},
@@ -3498,9 +3497,9 @@ files = [
 name = "torch"
 version = "2.8.0"
 description = "Tensors and Dynamic neural networks in Python with strong GPU acceleration"
-optional = true
+optional = false
 python-versions = ">=3.9.0"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "torch-2.8.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:0be92c08b44009d4131d1ff7a8060d10bafdb7ddcb7359ef8d8c5169007ea905"},
     {file = "torch-2.8.0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:89aa9ee820bb39d4d72b794345cccef106b574508dd17dbec457949678c76011"},
@@ -3604,9 +3603,9 @@ test = ["absl-py (>=1.4.0)", "jax (>=0.4.23)", "omegaconf (>=2.0.0)", "pydantic 
 name = "triton"
 version = "3.4.0"
 description = "A language and compiler for custom Deep Learning operations"
-optional = true
+optional = false
 python-versions = "<3.14,>=3.9"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
 files = [
     {file = "triton-3.4.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7ff2785de9bc02f500e085420273bb5cc9c9bb767584a4aa28d6e360cec70128"},
@@ -3654,9 +3653,9 @@ files = [
 name = "urllib3"
 version = "2.5.0"
 description = "HTTP library with thread-safe connection pooling, file post, and more."
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["dev", "test"]
+groups = ["main", "dev", "test"]
 files = [
     {file = "urllib3-2.5.0-py3-none-any.whl", hash = "sha256:e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc"},
     {file = "urllib3-2.5.0.tar.gz", hash = "sha256:3fc47733c7e419d4bc3f6b3dc2b4f890bb743906a30d56ba4a5bfa4bbff92760"},
@@ -3672,9 +3671,9 @@ zstd = ["zstandard (>=0.18.0)"]
 name = "virtualenv"
 version = "20.34.0"
 description = "Virtual Python Environment builder"
-optional = true
+optional = false
 python-versions = ">=3.8"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "virtualenv-20.34.0-py3-none-any.whl", hash = "sha256:341f5afa7eee943e4984a9207c025feedd768baff6753cd660c857ceb3e36026"},
     {file = "virtualenv-20.34.0.tar.gz", hash = "sha256:44815b2c9dee7ed86e387b842a84f20b93f7f417f95886ca1996a72a4138eb1a"},
@@ -3694,9 +3693,9 @@ test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess
 name = "werkzeug"
 version = "3.1.3"
 description = "The comprehensive WSGI web application library."
-optional = true
+optional = false
 python-versions = ">=3.9"
-groups = ["agent", "dev"]
+groups = ["main", "agent", "dev"]
 files = [
     {file = "werkzeug-3.1.3-py3-none-any.whl", hash = "sha256:54b78bf3716d19a65be4fceccc0d1d7b89e608834989dfae50ea87564639213e"},
     {file = "werkzeug-3.1.3.tar.gz", hash = "sha256:60723ce945c19328679790e3282cc758aa4a6040e4bb330f53d30fa546d44746"},
@@ -3820,9 +3819,9 @@ test = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more_it
 type = ["pytest-mypy"]
 
 [extras]
-dev = []
+dev = ["black", "codecov", "coverage", "flake8", "isort", "mypy", "pre-commit", "pytest", "pytest-cov", "pytest-readme", "ruff", "stable-baselines3", "tensorboard"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "654d0158b9fc1b144093980e15f0c0d0deebcbf5dbe971640a0d05f477ebe74f"
+content-hash = "ed8fdf6b8175a0c64078acef35f8bea836b4bd7537715961f3a066f62b4c942b"
