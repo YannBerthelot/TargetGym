@@ -35,6 +35,7 @@ class CSTRParams(EnvParams):
     initial_CA_range: Tuple[float, float] = (0.8, 0.85)
     initial_T: float = 330.0
     delta_t: float = 1e-3
+    max_steps_in_episode: int = 1_000
 
 
 @struct.dataclass

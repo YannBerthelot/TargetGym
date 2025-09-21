@@ -5,19 +5,16 @@ import tempfile
 import jax
 import numpy as np
 import pytest
-from gymnasium.utils.save_video import save_video
 
-from target_gym.bicycle.env_jax import EnvParams as BikeEnvParams
-from target_gym.bicycle.env_jax import EnvState as BikeEnvState
+# from gymnasium.utils.save_video import save_video
+from target_gym.bicycle.env_jax import BikeParams, BikeState
 from target_gym.bicycle.env_jax import RandlovBicycle as JaxBike2D
 from target_gym.car.env_jax import Car2D as JaxCar2D
-from target_gym.car.env_jax import EnvParams as CarEnvParams
-from target_gym.car.env_jax import EnvState as CarEnvState
+from target_gym.car.env_jax import CarParams, CarState
 from target_gym.pc_gym.cstr.env_jax import CSTR as JaxCSTR
 from target_gym.pc_gym.cstr.env_jax import CSTRParams, CSTRState
 from target_gym.plane.env_jax import Airplane2D as JaxPlane2D
-from target_gym.plane.env_jax import EnvParams as PlaneEnvParams
-from target_gym.plane.env_jax import EnvState as PlaneEnvState
+from target_gym.plane.env_jax import PlaneParams, PlaneState
 
 
 # -------------------------
@@ -37,11 +34,33 @@ def are_images_similar(
 # -------------------------
 # Parametrization
 # -------------------------
+
+max_steps_for_video = 100
 ENVIRONMENTS = [
-    (JaxPlane2D, PlaneEnvParams, PlaneEnvState, lambda _: (0.8, 0.0)),  # plane
-    (JaxCar2D, CarEnvParams, CarEnvState, lambda _: 0.5),  # car
-    (JaxBike2D, BikeEnvParams, BikeEnvState, lambda _: (0.6, 0.0)),  # bicycle
-    (JaxCSTR, CSTRParams, CSTRState, lambda _: 0.5),  # cstr
+    (
+        JaxPlane2D,
+        PlaneParams,
+        PlaneState,
+        lambda _: (0.8, 0.0),
+    ),  # plane
+    (
+        JaxCar2D,
+        CarParams,
+        CarState,
+        lambda _: 0.5,
+    ),  # car
+    (
+        JaxBike2D,
+        BikeParams,
+        BikeState,
+        lambda _: (0.6, 0.0),
+    ),  # bicycle
+    (
+        JaxCSTR,
+        CSTRParams,
+        CSTRState,
+        lambda _: 0.5,
+    ),  # cstr
 ]
 
 
@@ -52,7 +71,9 @@ def test_render_trajectory_param(jax_env_cls, EnvParamsCls, EnvStateCls, action_
     # Initialize environment
     key = jax.random.PRNGKey(0)
     obs, state = jax_env.reset(key)
-    env_params = EnvParamsCls()  # default parameters
+    env_params = EnvParamsCls(
+        max_steps_in_episode=max_steps_for_video
+    )  # default parameters
     frames_list = []
     screen = None
     clock = None

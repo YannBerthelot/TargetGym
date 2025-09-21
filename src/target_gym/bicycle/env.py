@@ -19,7 +19,7 @@ EPS = 1e-8
 
 
 @struct.dataclass
-class EnvState:
+class BikeState:
     omega: float  # tilt angle [rad]
     omega_dot: float  # tilt angular velocity
     theta: float  # steering angle [rad]
@@ -41,7 +41,7 @@ class EnvState:
 
 
 @struct.dataclass
-class EnvParams:
+class BikeParams:
     c: float = 0.66
     dCM: float = 0.30
     h: float = 0.94
@@ -59,7 +59,7 @@ class EnvParams:
     delta_t: float = 0.05
 
     max_tilt_deg: float = 12.0
-    max_steps_in_episode: int = 1000
+    max_steps_in_episode: int = 1_000
 
     use_goal: bool = False
     goal_x: float = 0.0
@@ -76,58 +76,58 @@ class EnvParams:
 # -------- Physics helpers (kept same as original) --------
 
 
-def total_mass(p: EnvParams):
+def total_mass(p: BikeParams):
     return p.Mc + p.Mp + 2 * p.Md
 
 
-def inertia_bicycle_and_cyclist(p: EnvParams):
+def inertia_bicycle_and_cyclist(p: BikeParams):
     return (13.0 / 3.0) * p.Mc * (p.h**2) + p.Mp * ((p.h + p.dCM) ** 2)
 
 
-def tyre_inertia_Idc(p: EnvParams):
+def tyre_inertia_Idc(p: BikeParams):
     return p.Md * (p.r**2)
 
 
-def tyre_inertia_Idv(p: EnvParams):
+def tyre_inertia_Idv(p: BikeParams):
     return 1.5 * p.Md * (p.r**2)
 
 
-def tyre_inertia_Idl(p: EnvParams):
+def tyre_inertia_Idl(p: BikeParams):
     return 0.5 * p.Md * (p.r**2)
 
 
-def phi_total(omega, d, p: EnvParams):
+def phi_total(omega, d, p: BikeParams):
     return omega + jnp.arctan(d / p.h)
 
 
-def radius_front(theta, p: EnvParams):
+def radius_front(theta, p: BikeParams):
     s = jnp.abs(jnp.sin(theta))
     return jnp.where(s < p.tiny, 1e6, p.l / s)
 
 
-def radius_back(theta, p: EnvParams):
+def radius_back(theta, p: BikeParams):
     t = jnp.abs(jnp.tan(theta))
     return jnp.where(t < p.tiny, 1e6, p.l / t)
 
 
-def radius_CM(theta, p: EnvParams):
+def radius_CM(theta, p: BikeParams):
     tan_theta = jnp.tan(theta)
     denom = jnp.where(jnp.abs(tan_theta) < p.tiny, p.tiny, tan_theta)
     return jnp.sqrt((p.l - p.c) ** 2 + (p.l**2) / (denom**2))
 
 
-def tyre_angular_velocity(p: EnvParams):
+def tyre_angular_velocity(p: BikeParams):
     return p.v / p.r
 
 
-def theta_ddot_from_eq3(T, omega_dot, p: EnvParams):
+def theta_ddot_from_eq3(T, omega_dot, p: BikeParams):
     Idv = tyre_inertia_Idv(p)
     Idl = tyre_inertia_Idl(p)
     sigma_dot = tyre_angular_velocity(p)
     return (T - Idv * sigma_dot * omega_dot) / (Idl + EPS)
 
 
-def omega_ddot_from_eq2(omega, theta, theta_dot, d, p: EnvParams):
+def omega_ddot_from_eq2(omega, theta, theta_dot, d, p: BikeParams):
     I_tot = inertia_bicycle_and_cyclist(p)
     M = total_mass(p)
     phi = phi_total(omega, d, p)
@@ -158,7 +158,7 @@ def compute_acceleration_bike(
     velocities: jnp.ndarray,
     positions: jnp.ndarray,
     action: Sequence[float],
-    params: EnvParams,
+    params: BikeParams,
 ) -> Tuple[jnp.ndarray, Dict[str, Any]]:
     """
     Returns accelerations and metrics.
@@ -195,7 +195,7 @@ def compute_acceleration_bike(
 
 
 # -------- Utilities: mapping state <-> vectors --------
-def state_to_vec(state: EnvState):
+def state_to_vec(state: BikeState):
     velocities = jnp.array(
         [state.omega_dot, state.theta_dot, (p.v * jnp.sin(state.theta)) / p.l]
     )  # psi_dot computed from state
@@ -204,12 +204,12 @@ def state_to_vec(state: EnvState):
 
 
 def vecs_to_state(
-    state: EnvState,
+    state: BikeState,
     velocities: jnp.ndarray,
     positions: jnp.ndarray,
     metrics: Dict[str, Any],
-    params: EnvParams,
-) -> EnvState:
+    params: BikeParams,
+) -> BikeState:
     omega_dot_new, theta_dot_new, psi_dot_new = velocities
     omega_new, theta_new, psi_new = positions
 
@@ -237,8 +237,8 @@ def vecs_to_state(
 @partial(jax.jit, static_argnames=("integration_method",))
 def compute_next_state(
     action: Sequence[float],
-    state: EnvState,
-    params: EnvParams,
+    state: BikeState,
+    params: BikeParams,
     integration_method: str = "rk4_1",
 ):
     """
@@ -268,7 +268,7 @@ def compute_next_state(
         method=integration_method,
     )
 
-    # map back to EnvState
+    # map back to BikeState
     new_state = vecs_to_state(state, v_new, p_new, metrics, params).replace(
         torque=a_T, displacement=a_d
     )
@@ -276,14 +276,14 @@ def compute_next_state(
 
 
 # -------- Terminal, reward, observation (unchanged semantics) --------
-def check_is_terminal(state: EnvState, params: EnvParams):
+def check_is_terminal(state: BikeState, params: BikeParams):
     max_tilt_rad = jnp.deg2rad(params.max_tilt_deg)
     terminated = jnp.abs(state.omega) > max_tilt_rad
     truncated = state.t >= params.max_steps_in_episode
     return terminated, truncated
 
 
-def compute_reward(state: EnvState, params: EnvParams):
+def compute_reward(state: BikeState, params: BikeParams):
     terminated, truncated = check_is_terminal(state, params)
     default = jnp.where(terminated, -1.0, 0.0)
 
@@ -314,7 +314,7 @@ def compute_reward(state: EnvState, params: EnvParams):
     ) + reward_dense * params.use_dense
 
 
-def get_obs(state: EnvState, params: EnvParams):
+def get_obs(state: BikeState, params: BikeParams):
     omega_ddot = omega_ddot_from_eq2(
         state.omega, state.theta, state.theta_dot, state.last_d, params
     )

@@ -8,7 +8,7 @@ from target_gym.plane.dynamics import (
     clamp_altitude,
     compute_acceleration,
 )
-from target_gym.plane.env import EnvParams
+from target_gym.plane.env import PlaneParams
 
 # Assume your functions are imported:
 # from aircraft_model import aero_coefficients, compute_acceleration, integrate_dynamics, clamp_altitude
@@ -21,7 +21,7 @@ def test_aero_coefficients_cl_cd_ranges():
 
     for aoa in aoas:
         for M in machs:
-            CL, CD = aero_coefficients(aoa, M, params=EnvParams())
+            CL, CD = aero_coefficients(aoa, M, params=PlaneParams())
             # CL should be within physical limits
             assert -1.0 <= CL <= 2.0, f"CL out of range for AoA {aoa}, M={M}, got {CL}"
             # CD should be positive
@@ -37,7 +37,7 @@ def test_compute_acceleration_consistency():
     theta_dot = None  # not needed here
     velocities = (x_dot, z_dot, theta_dot)
     positions = (None, 1000, 0.02)
-    params = EnvParams()
+    params = PlaneParams()
     accelerations, metrics = compute_acceleration(
         action=(thrust, stick),
         velocities=velocities,
