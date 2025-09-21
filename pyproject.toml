@@ -60,6 +60,14 @@ include-groups = [
 ]
 optional = true
 
+[tool.poetry.group.test]
+optional = true
+
+[tool.poetry.group.lint]
+optional = true
+
+[tool.poetry.group.agent]
+optional = true
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.5.0"
@@ -78,13 +86,17 @@ flake8 = "^7.3.0"
 ruff = "^0.12.11"
 black = "^25.1.0"
 
-[tool.poetry.group.agent]
-optional = true
-
 [tool.poetry.group.agent.dependencies]
 stable-baselines3 = "^2.7.0"
 tensorboard = "^2.20.0"
 
+[tool.poetry.extras]
+dev = [
+    "pre-commit",
+    "pytest", "codecov", "coverage", "pytest-cov", "pytest-readme",
+    "isort", "mypy", "flake8", "ruff", "black",
+    "stable-baselines3", "tensorboard"
+]
 
 [[tool.poetry.source]]
 name = "jax"
