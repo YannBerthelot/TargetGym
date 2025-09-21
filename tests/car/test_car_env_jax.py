@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from target_gym.car.env import EnvParams, EnvState
+from target_gym.car.env import CarParams, CarState
 from target_gym.car.env_jax import Car2D
 
 # -------------------------------
@@ -27,7 +27,7 @@ def key():
 
 def test_reset_env(env, key):
     obs, state = env.reset_env(key)
-    assert isinstance(state, EnvState)
+    assert isinstance(state, CarState)
     assert isinstance(obs, jnp.ndarray)
     assert obs.ndim == 1
     assert obs.shape[0] == env.obs_shape[0]
@@ -54,7 +54,7 @@ def test_step_env_returns_correct_types(env, key):
     obs, state = env.reset_env(key)
     action = jnp.array(0.5, dtype=jnp.float32)
     next_obs, next_state, reward, done, info = env.step_env(key, state, action)
-    assert isinstance(next_state, EnvState)
+    assert isinstance(next_state, CarState)
     assert isinstance(next_obs, jnp.ndarray)
     assert next_obs.shape[0] == env.obs_shape[0]
     assert isinstance(reward, jnp.ndarray) or isinstance(reward, float)
@@ -84,11 +84,11 @@ def test_get_obs_shape_and_type(env, key):
 def test_is_terminal_logic(env):
     params = env.default_params
     # velocity below min -> terminated
-    state_low = EnvState(x=0.0, velocity=-1.0, t=0, target_velocity=10.0, throttle=0.0)
+    state_low = CarState(x=0.0, velocity=-1.0, t=0, target_velocity=10.0, throttle=0.0)
     terminated, truncated = env.is_terminal(state_low, params)
     assert terminated
     # velocity above max -> terminated
-    state_high = EnvState(
+    state_high = CarState(
         x=0.0,
         velocity=params.max_velocity + 1.0,
         t=0,
@@ -98,7 +98,7 @@ def test_is_terminal_logic(env):
     terminated, truncated = env.is_terminal(state_high, params)
     assert terminated
     # t >= max_steps -> truncated
-    state_trunc = EnvState(
+    state_trunc = CarState(
         x=0.0,
         velocity=10.0,
         t=params.max_steps_in_episode,

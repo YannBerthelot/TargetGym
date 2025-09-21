@@ -1,17 +1,17 @@
 import jax.numpy as jnp
 
 from target_gym.integration import (
-    compute_velocity_and_pos_from_acceleration_integration,
+    integrate_dynamics,
 )
 from target_gym.plane.dynamics import (
     aero_coefficients,
     clamp_altitude,
     compute_acceleration,
 )
-from target_gym.plane.env import EnvParams
+from target_gym.plane.env import PlaneParams
 
 # Assume your functions are imported:
-# from aircraft_model import aero_coefficients, compute_acceleration, compute_velocity_and_pos_from_acceleration_integration, clamp_altitude
+# from aircraft_model import aero_coefficients, compute_acceleration, integrate_dynamics, clamp_altitude
 
 
 def test_aero_coefficients_cl_cd_ranges():
@@ -21,7 +21,7 @@ def test_aero_coefficients_cl_cd_ranges():
 
     for aoa in aoas:
         for M in machs:
-            CL, CD = aero_coefficients(aoa, M, params=EnvParams())
+            CL, CD = aero_coefficients(aoa, M, params=PlaneParams())
             # CL should be within physical limits
             assert -1.0 <= CL <= 2.0, f"CL out of range for AoA {aoa}, M={M}, got {CL}"
             # CD should be positive
@@ -37,7 +37,7 @@ def test_compute_acceleration_consistency():
     theta_dot = None  # not needed here
     velocities = (x_dot, z_dot, theta_dot)
     positions = (None, 1000, 0.02)
-    params = EnvParams()
+    params = PlaneParams()
     accelerations, metrics = compute_acceleration(
         action=(thrust, stick),
         velocities=velocities,
@@ -70,13 +70,11 @@ def test_compute_speed_and_pos_integration():
     # accelerations = jnp.array([1.0, -9.8, 0.001])
     velocities = jnp.array([200.0, 0.0, 0.01])
     positions = jnp.array([0.0, 1000.0, 0.05])
-    (V_x, V_z, theta_dot), (x, z, theta), _ = (
-        compute_velocity_and_pos_from_acceleration_integration(
-            velocities=velocities,
-            positions=positions,
-            delta_t=0.1,
-            compute_acceleration=lambda x, y: (jnp.array([1.0, -9.8, 0.001]), None),
-        )
+    (V_x, V_z, theta_dot), (x, z, theta), _ = integrate_dynamics(
+        velocities=velocities,
+        positions=positions,
+        delta_t=0.1,
+        compute_acceleration=lambda x, y: (jnp.array([1.0, -9.8, 0.001]), None),
     )
     # velocities updated
     assert 200.0 <= V_x <= 201.0, f"V_x integration unexpected: {V_x}"

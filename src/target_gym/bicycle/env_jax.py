@@ -23,8 +23,8 @@ except Exception:
 
 
 from target_gym.bicycle.env import (
-    EnvParams,
-    EnvState,
+    BikeParams,
+    BikeState,
     check_is_terminal,
     compute_next_state,
     compute_reward,
@@ -33,7 +33,7 @@ from target_gym.bicycle.env import (
 from target_gym.bicycle.rendering import _render
 
 
-class RandlovBicycle(environment.Environment[EnvState, EnvParams]):
+class RandlovBicycle(environment.Environment[BikeState, BikeParams]):
     """
     JAX-compatible Randløv bicycle environment implementing equations from the paper.
     Continuous actions: [-1,1]^2 -> [Torque, Displacement].
@@ -49,15 +49,15 @@ class RandlovBicycle(environment.Environment[EnvState, EnvParams]):
         self.obs_shape = (5,)
 
     @property
-    def default_params(self) -> EnvParams:
-        return EnvParams()
+    def default_params(self) -> BikeParams:
+        return BikeParams()
 
     def step_env(
         self,
         key: chex.PRNGKey,
-        state: EnvState,
+        state: BikeState,
         action: jnp.ndarray,
-        params: EnvParams = None,
+        params: BikeParams = None,
     ):
         """
         Perform one env step (JAX friendly).
@@ -82,19 +82,19 @@ class RandlovBicycle(environment.Environment[EnvState, EnvParams]):
             {"last_state": new_state, "metrics": metrics},
         )
 
-    def get_obs(self, state: EnvState, params: EnvParams = None):
+    def get_obs(self, state: BikeState, params: BikeParams = None):
         """Observation vector per Randløv et al.: [omega, omega_dot, omega_ddot, theta, theta_dot]."""
         if params is None:
             params = self.default_params
         return get_obs(state, params=params)
 
-    def is_terminal(self, state: EnvState, params: EnvParams) -> jax.Array:
+    def is_terminal(self, state: BikeState, params: BikeParams) -> jax.Array:
         terminated, truncated = check_is_terminal(state, params)
         return terminated | truncated
 
     def reset_env(
-        self, key: chex.PRNGKey, params: EnvParams = None
-    ) -> Tuple[jnp.ndarray, EnvState]:
+        self, key: chex.PRNGKey, params: BikeParams = None
+    ) -> Tuple[jnp.ndarray, BikeState]:
         """
         Reset the environment using JAX random keys.
         Starts the bicycle upright, centered, heading along +x.
@@ -109,7 +109,7 @@ class RandlovBicycle(environment.Environment[EnvState, EnvParams]):
         max_initial_lean = jnp.deg2rad(1.0)  # 2 degrees
 
         init_omega = jax.random.uniform(key, minval=-1, maxval=1) * max_initial_lean
-        state = EnvState(
+        state = BikeState(
             omega=init_omega,
             omega_dot=zero,
             theta=zero,
@@ -127,7 +127,7 @@ class RandlovBicycle(environment.Environment[EnvState, EnvParams]):
         obs = self.get_obs(state, params=params)
         return obs, state
 
-    def action_space(self, params: EnvParams | None = None):
+    def action_space(self, params: BikeParams | None = None):
         """Continuous torque and displacement in [-1, 1]^2."""
         return spaces.Box(
             low=jnp.array([-1.0, -1.0]),
@@ -136,19 +136,19 @@ class RandlovBicycle(environment.Environment[EnvState, EnvParams]):
             dtype=jnp.float32,
         )
 
-    def observation_space(self, params: EnvParams | None = None):
+    def observation_space(self, params: BikeParams | None = None):
         inf = jnp.finfo(jnp.float32).max
         return spaces.Box(-inf, inf, self.obs_shape, dtype=jnp.float32)
 
-    def state_space(self, params: EnvParams | None = None):
-        """Box space describing flattened EnvState (11 fields)."""
+    def state_space(self, params: BikeParams | None = None):
+        """Box space describing flattened BikeState (11 fields)."""
         inf = jnp.finfo(jnp.float32).max
         return spaces.Box(-inf, inf, (11,), dtype=jnp.float32)
 
     def save_video(
         self,
         select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        key: chex.PRNGKey,
+        seed: int,
         params=None,
         folder="videos",
         episode_index=0,
@@ -162,11 +162,11 @@ class RandlovBicycle(environment.Environment[EnvState, EnvParams]):
             episode_index,
             FPS,
             params,
-            seed=key,
+            seed=seed,
             format=format,
         )
 
-    def render(self, screen, state: EnvState, params: EnvParams, frames, clock):
+    def render(self, screen, state: BikeState, params: BikeParams, frames, clock):
         """
         JAX-compatible rendering wrapper
         """
@@ -229,7 +229,7 @@ sweep_config = {
 if __name__ == "__main__":
     env = RandlovBicycle()
     seed = 42
-    env_params = EnvParams(max_steps_in_episode=1_000, use_goal=True)
+    env_params = BikeParams(max_steps_in_episode=1_000, use_goal=True)
     mean_return = run_n_steps(env, linear_policy, env_params, n_steps=10_000, seed=0)
     print(mean_return)
     action = (0.1, -1.0)

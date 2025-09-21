@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "target-gym"
-version = "0.1.0"
+version = "0.1.0" # Placeholder, automatically updated based on tags.
 description = "A reinforcement learning environment for simulating target-MDP environments (Airplane, Car, Bicycle), with gymnasium and gymnax support"  # Add a description
 authors = ["Yann Berthelot <yannberthelot1@gmail.com>"]
 readme = "README.md"
@@ -19,8 +19,11 @@ packages = [
     { include = "target_gym", from = "src" },
 ]
 
+[tool.poetry-dynamic-versioning]
+enable = true
+
 [tool.poetry.dependencies]
-python = "<3.13,>=3.10"
+python = ">=3.10,<3.13"
 gymnax = "^0.0.9"
 numpy = "^1.26.1"
 six = "^1.16.0"
@@ -30,6 +33,19 @@ distrax = "^0.1.5"
 jax = "<7.0"
 moviepy = "^2.2.1"
 pygame = "^2.6.1"
+pre-commit = { version = "^3.5.0", optional = true }
+pytest = { version = "^7.4.3", optional = true }
+codecov = { version = "^2.1.13", optional = true }
+coverage = { version = "^7.3.2", optional = true }
+pytest-cov = { version = "^4.1.0", optional = true }
+pytest-readme = { version = "^1.0.2", optional = true }
+isort = { version = "^5.12.0", optional = true }
+mypy = { version = "^1.6.1", optional = true }
+flake8 = { version = "^7.3.0", optional = true }
+ruff = { version = "^0.12.11", optional = true }
+black = { version = "^25.1.0", optional = true }
+stable-baselines3 = { version = "^2.7.0", optional = true }
+tensorboard = { version = "^2.20.0", optional = true }
 
 [tool.black]
 line-length = 88
@@ -49,16 +65,36 @@ exclude = '''
   | dist
 )/
 '''
+[tool.poetry.group.dev]
+include-groups = [
+    "test",
+    "lint",
+    "agent",
+]
+optional = true
+
+[tool.poetry.group.test]
+optional = true
+
+[tool.poetry.group.lint]
+optional = true
+
+[tool.poetry.group.agent]
+optional = true
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.4.3"
-isort = "^5.12.0"
 pre-commit = "^3.5.0"
-mypy = "^1.6.1"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.4.3"
 codecov = "^2.1.13"
 coverage = "^7.3.2"
 pytest-cov = "^4.1.0"
 pytest-readme = "^1.0.2"
+
+[tool.poetry.group.lint.dependencies]
+isort = "^5.12.0"
+mypy = "^1.6.1"
 flake8 = "^7.3.0"
 ruff = "^0.12.11"
 black = "^25.1.0"
@@ -67,6 +103,13 @@ black = "^25.1.0"
 stable-baselines3 = "^2.7.0"
 tensorboard = "^2.20.0"
 
+[tool.poetry.extras]
+dev = [
+    "pre-commit",
+    "pytest", "codecov", "coverage", "pytest-cov", "pytest-readme",
+    "isort", "mypy", "flake8", "ruff", "black",
+    "stable-baselines3", "tensorboard"
+]
 
 [[tool.poetry.source]]
 name = "jax"
@@ -78,5 +121,5 @@ name = "PyPI"
 priority = "supplemental"
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=2.2.0"]
 build-backend = "poetry.core.masonry.api"

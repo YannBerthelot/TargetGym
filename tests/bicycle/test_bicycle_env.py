@@ -5,8 +5,8 @@ import jax.numpy as jnp
 import pytest
 
 from target_gym.bicycle.env import (  # replace "your_module" with actual file name
-    EnvParams,
-    EnvState,
+    BikeParams,
+    BikeState,
     check_is_terminal,
     compute_acceleration_bike,
     compute_next_state,
@@ -17,12 +17,12 @@ from target_gym.bicycle.env import (  # replace "your_module" with actual file n
 
 @pytest.fixture
 def default_params():
-    return EnvParams()
+    return BikeParams()
 
 
 @pytest.fixture
 def default_state(default_params):
-    return EnvState(
+    return BikeState(
         omega=0.0,
         omega_dot=0.0,
         theta=0.01,  # small steering angle so psi evolves

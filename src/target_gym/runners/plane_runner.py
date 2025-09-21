@@ -11,11 +11,16 @@ import pandas as pd
 from scipy.interpolate import interp1d
 
 # Import environment
-from target_gym.plane.env_jax import Airplane2D, EnvParams
+from target_gym.plane.env_jax import Airplane2D, PlaneParams
+from target_gym.utils import truncate_colormap
 
 
 def run_constant_policy(
-    power: float, stick: float, env: Airplane2D, params: EnvParams, steps: int = 10_000
+    power: float,
+    stick: float,
+    env: Airplane2D,
+    params: PlaneParams,
+    steps: int = 10_000,
 ):
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
@@ -36,7 +41,11 @@ def run_constant_policy(
 
 
 def run_constant_policy_final_alt(
-    power: float, stick: float, env: Airplane2D, params: EnvParams, steps: int = 10_000
+    power: float,
+    stick: float,
+    env: Airplane2D,
+    params: PlaneParams,
+    steps: int = 10_000,
 ):
     key = jax.random.PRNGKey(0)
     init_obs, init_state = env.reset_env(key, params)
@@ -116,6 +125,17 @@ def get_interpolator(stick: float = 0.0):
     return build_power_interpolator_from_df(df, stick=stick)
 
 
+def last_zero_array_arg(arrs):
+    """
+    Given an array of arrays, return the index of the last array
+    whose last element equals 0. Return -1 if none.
+    """
+    arrs = np.asarray(arrs)
+    mask = arrs[:, -1] == 0
+    idxs = np.where(mask)[0]
+    return idxs[-1] if idxs.size > 0 else -1
+
+
 def run_mode(
     mode: str,
     power=1.0,
@@ -123,12 +143,13 @@ def run_mode(
     n_timesteps=10_000,
     plot: bool = True,
     save: bool = True,
+    show: bool = False,
     resolution: int = 20,
     **kwargs,
 ):
     env = Airplane2D(integration_method="rk4_1")
     if kwargs is not None:
-        params = EnvParams(**kwargs)
+        params = PlaneParams(**kwargs)
     else:
         params = env.default_params
 
@@ -153,16 +174,29 @@ def run_mode(
 
             fig, ax = plt.subplots(figsize=(10, 6))
             norm = colors.Normalize(vmin=power_levels.min(), vmax=power_levels.max())
-            cmap = cm.viridis
+            cmap = truncate_colormap(cm.viridis, 0.0, 0.85)
+            idx_zero = last_zero_array_arg(trajectories)
             for i, traj in enumerate(trajectories):
                 ax.plot(traj, color=cmap(norm(power_levels[i])))
+                if ((i % 4) == 0 and traj[-1] > 0) or i == idx_zero:
+                    ax.text(
+                        x=len(traj) - 1,
+                        y=traj[-1],
+                        s=f" {float(power_levels[i]):.2f} - {float(traj[-1]):.0f}ft",  # format the throttle value
+                        color=cmap(norm(power_levels[i])),
+                        fontsize=8,
+                        va="center",
+                        ha="left",
+                    )
 
             sm = cm.ScalarMappable(cmap=cmap, norm=norm)
             sm.set_array([])
-            fig.colorbar(sm, ax=ax).set_label("Power level")
+            # fig.colorbar(sm, ax=ax).set_label("Power level")
+            xmin, xmax = plt.xlim()
+            plt.xlim(xmin, xmax + (xmax - xmin) * 0.09)
             ax.set_xlabel("Time step")
             ax.set_ylabel("Altitude (ft)")
-            ax.set_title("Altitude trajectories for varying power")
+            ax.set_title("Altitude trajectories for varying power levels")
             os.makedirs("figures/plane", exist_ok=True)
             plt.savefig("figures/plane/power_trajectories.pdf")
             plt.savefig("figures/plane/power_trajectories.png")
@@ -195,7 +229,8 @@ def run_mode(
             os.makedirs("figures/plane", exist_ok=True)
             fig.savefig("figures/plane/3d_altitude.pdf")
             fig.savefig("figures/plane/3d_altitude.png")
-            plt.show()
+            if show:
+                plt.show()
         return df
 
     elif mode == "video":
@@ -215,7 +250,11 @@ def run_mode(
         raise ValueError(f"Unknown mode: {mode}")
 
 
-if __name__ == "__main__":
-    run_mode("2d", n_timesteps=5000)  # or "2d" or "video"
+def run_all_modes(show: bool = False):
+    run_mode("2d", n_timesteps=5000)
     run_mode("video", power=0.5, stick=0, max_steps_in_episode=1_000)
-    run_mode("3d", n_timesteps=20_000, max_alt=20_000, resolution=40)
+    run_mode("3d", n_timesteps=20_000, max_alt=20_000, resolution=40, show=show)
+
+
+if __name__ == "__main__":
+    run_all_modes(show=True)
