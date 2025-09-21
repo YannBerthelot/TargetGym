@@ -138,6 +138,9 @@ cd TargetGym
 # Using Poetry (recommended)
 poetry install --with dev
 
+# Using pip
+python -m pip install -e .
+
 ```
 
 ---

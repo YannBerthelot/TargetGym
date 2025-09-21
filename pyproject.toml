@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "target-gym"
-version = "0.1.0"
+version = "0.1.0" # Placeholder, automatically updated based on tags.
 description = "A reinforcement learning environment for simulating target-MDP environments (Airplane, Car, Bicycle), with gymnasium and gymnax support"  # Add a description
 authors = ["Yann Berthelot <yannberthelot1@gmail.com>"]
 readme = "README.md"
@@ -18,6 +18,9 @@ classifiers = [  # Add relevant classifiers
 packages = [
     { include = "target_gym", from = "src" },
 ]
+
+[tool.poetry-dynamic-versioning]
+enable = true
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
