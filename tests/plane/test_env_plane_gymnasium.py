@@ -1,9 +1,9 @@
 import pytest
 
-from target_gym.plane.env_gymnasium import (
-    Airplane2D,
-    EnvParams,
-    EnvState,
+from target_gym import GymnasiumPlane as Airplane2D
+from target_gym.plane.env import (
+    PlaneParams,
+    PlaneState,
     compute_reward,
 )
 
@@ -21,7 +21,7 @@ def test_reset():
 def test_compute_reward():
     env = Airplane2D()
     obs, info = env.reset()
-    env_params = EnvParams()
+    env_params = PlaneParams()
     reward = compute_reward(state=env.state, params=env_params)
     assert reward.shape == ()
     assert 1 > reward > 0
@@ -30,7 +30,7 @@ def test_compute_reward():
 def test_sample_action():
     env = Airplane2D()
     obs, info = env.reset()
-    env_params = EnvParams()
+    env_params = PlaneParams()
     action = env.action_space.sample()
     for i in range(len(action)):
         assert env.action_space.low[i] <= action[i] <= env.action_space.high[i]
@@ -40,7 +40,7 @@ def test_sample_action():
 def test_step():
     env = Airplane2D()
     obs, info = env.reset(seed=42)
-    env_params = EnvParams()
+    env_params = PlaneParams()
     action = (0.5, 0)
     state = env.state
     # Perform the step transition.
@@ -64,8 +64,8 @@ def test_step():
 def test_is_terminal():
     env = Airplane2D()
     obs, info = env.reset()
-    env_params = EnvParams()
-    terminal_state = EnvState(
+    env_params = PlaneParams()
+    terminal_state = PlaneState(
         x=0,
         x_dot=0,
         z=env_params.max_alt + 0.01,
@@ -82,7 +82,7 @@ def test_is_terminal():
         target_altitude=0,
     )
     assert env.is_terminal(terminal_state, env_params)
-    terminal_state = EnvState(
+    terminal_state = PlaneState(
         x=0,
         x_dot=0,
         z=env_params.min_alt - 0.01,
@@ -99,7 +99,7 @@ def test_is_terminal():
         target_altitude=0,
     )
     assert env.is_terminal(terminal_state, env_params)
-    terminal_state = EnvState(
+    terminal_state = PlaneState(
         x=0,
         x_dot=0,
         z=env_params.max_alt - 0.01,

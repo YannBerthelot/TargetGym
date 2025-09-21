@@ -6,7 +6,7 @@ import diffrax
 import matplotlib.pyplot as plt
 
 from target_gym.plane.dynamics import (
-    compute_velocity_and_pos_from_acceleration_integration,
+    integrate_dynamics,
     compute_acceleration,
 )
 from target_gym.plane.env import EnvParams
@@ -68,9 +68,7 @@ def benchmark_aircraft(params, initial_action, steps=5000, delta_t=0.1):
 
         @partial(jax.jit, static_argnames=("method_str",))
         def step(v, p, method_str=method_str):
-            return compute_velocity_and_pos_from_acceleration_integration(
-                v, p, delta_t, acceleration_fn, method=method_str
-            )
+            return integrate_dynamics(v, p, delta_t, acceleration_fn, method=method_str)
 
         # Warm-up
         v, p, _ = step(velocities0, positions0)

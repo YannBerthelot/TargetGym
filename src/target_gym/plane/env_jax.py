@@ -8,8 +8,8 @@ from gymnax.environments import environment, spaces
 
 from target_gym.plane.env import (
     EnvMetrics,
-    EnvParams,
-    EnvState,
+    PlaneParams,
+    PlaneState,
     check_is_terminal,
     compute_next_state,
     compute_reward,
@@ -19,7 +19,7 @@ from target_gym.plane.rendering import _render
 from target_gym.utils import compute_norm_from_coordinates, save_video
 
 
-class Airplane2D(environment.Environment[EnvState, EnvParams]):
+class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
     """
     JAX-compatible 2D airplane environment.
     """
@@ -34,15 +34,15 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         self.integration_method = integration_method
 
     @property
-    def default_params(self) -> EnvParams:
-        return EnvParams()
+    def default_params(self) -> PlaneParams:
+        return PlaneParams()
 
     def step_env(
         self,
         key: chex.PRNGKey,
-        state: EnvState,
+        state: PlaneState,
         action: jnp.ndarray,
-        params: EnvParams = None,
+        params: PlaneParams = None,
     ):
         """
         Performs step transitions using JAX, returns observation, new state, reward, done, info
@@ -68,15 +68,15 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
             {"metrics": metrics, "last_state": new_state},
         )
 
-    def is_terminal(self, state: EnvState, params: EnvParams) -> jax.Array:
+    def is_terminal(self, state: PlaneState, params: PlaneParams) -> jax.Array:
         return check_is_terminal(state, params, xp=jnp)
 
-    def reset_env(self, key: chex.PRNGKey, params: EnvParams = None):
+    def reset_env(self, key: chex.PRNGKey, params: PlaneParams = None):
         """
         Reset the environment using JAX random keys
         """
         if params is None:
-            params = EnvParams(max_steps_in_episode=Airplane2D.max_steps)
+            params = PlaneParams(max_steps_in_episode=Airplane2D.max_steps)
         key, altitude_key, target_key = jax.random.split(key, 3)
 
         initial_x = 0.0
@@ -108,7 +108,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
             maxval=params.target_altitude_range[1],
         )
 
-        state = EnvState(
+        state = PlaneState(
             x=initial_x,
             x_dot=initial_x_dot,
             z=initial_z,
@@ -128,13 +128,13 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
         obs = self.get_obs(state)
         return obs, state
 
-    def get_obs(self, state: EnvState):
+    def get_obs(self, state: PlaneState):
         """
         Observation vector
         """
         return get_obs(state, xp=jnp)
 
-    def render(self, screen, state: EnvState, params: EnvParams, frames, clock):
+    def render(self, screen, state: PlaneState, params: PlaneParams, frames, clock):
         """
         JAX-compatible rendering wrapper
         """
@@ -164,7 +164,7 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
             save_trajectory=save_trajectory,
         )
 
-    def action_space(self, params: EnvParams | None = None) -> spaces.Discrete:
+    def action_space(self, params: PlaneParams | None = None) -> spaces.Discrete:
         """Action space of the environment."""
         return spaces.Box(
             low=jnp.array([0.0, -1.0]),
@@ -173,15 +173,17 @@ class Airplane2D(environment.Environment[EnvState, EnvParams]):
             dtype=jnp.float32,
         )
 
-    def observation_space(self, params: EnvParams) -> spaces.Box:
+    def observation_space(self, params: PlaneParams) -> spaces.Box:
         """Observation space of the environment."""
         inf = jnp.finfo(jnp.float32).max
         return spaces.Box(-inf, inf, self.obs_shape, dtype=jnp.float32)
 
-    def state_space(self, params: EnvParams) -> spaces.Box:
+    def state_space(self, params: PlaneParams) -> spaces.Box:
         """Observation space of the environment."""
         inf = jnp.finfo(jnp.float32).max
-        return spaces.Box(-inf, inf, len(EnvState.__class_params__), dtype=jnp.float32)
+        return spaces.Box(
+            -inf, inf, len(PlaneState.__class_params__), dtype=jnp.float32
+        )
 
 
 def run_timesteps(key, env, env_params, n_timesteps=10_000, action_type="constant"):
@@ -218,43 +220,11 @@ def run_timesteps(key, env, env_params, n_timesteps=10_000, action_type="constan
 # JIT-compiled version
 run_timesteps_jit = jax.jit(run_timesteps, static_argnums=(1, 2, 3, 4))
 
-
-# ----------------------------
-# Benchmark harness
-# ----------------------------
-def benchmark(
-    env, env_params, n_timesteps=10_000, n_episodes=10, action_type="constant"
-):
-    times = []
-    key = jax.random.PRNGKey(0)
-
-    for i in range(n_episodes):
-        key, subkey = jax.random.split(key)
-
-        start = time.perf_counter()
-        rewards, dones = run_timesteps_jit(
-            subkey, env, env_params, n_timesteps, action_type
-        )
-        # Make sure computation is finished
-        _ = jax.block_until_ready(rewards)
-        end = time.perf_counter()
-
-        t = end - start
-        print(f"Episode {i+1}: {t:.3f} sec")
-        times.append(t)
-
-    times = np.array(times)
-    print("\n=== Benchmark Results ===")
-    print(f"Mean runtime per episode: {times.mean():.3f} sec")
-    print(f"Std dev: {times.std():.3f} sec")
-    print(f"Min: {times.min():.3f} sec, Max: {times.max():.3f} sec")
-
-
 if __name__ == "__main__":
     env = Airplane2D()
     seed = 42
 
-    env_params = EnvParams(
+    env_params = PlaneParams(
         max_steps_in_episode=1_000,
         target_altitude_range=(5000, 5000),
         initial_altitude_range=(5000, 5000),
@@ -276,7 +246,7 @@ if __name__ == "__main__":
 
     # # Benchmark parameters
     # env = Airplane2D()
-    # env_params = EnvParams(max_steps_in_episode=10_000)
+    # env_params = PlaneParams(max_steps_in_episode=10_000)
 
     # print("---- Constant action ----")
     # benchmark(

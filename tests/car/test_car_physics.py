@@ -2,15 +2,15 @@ import jax.numpy as jnp
 import pytest
 
 from target_gym.car.env import (
-    EnvParams,
-    EnvState,
+    CarParams,
+    CarState,
     check_is_terminal,
     compute_acceleration,
     compute_next_state,
     compute_reward,
     compute_theta_from_position,
     compute_thrust,
-    engine_torque_from_rpm,
+    electric_torque_from_rpm,
     get_obs,
     road_profile,
 )
@@ -18,32 +18,18 @@ from target_gym.car.env import (
 
 @pytest.fixture
 def params():
-    return EnvParams()
+    return CarParams()
 
 
 @pytest.fixture
 def state(params):
-    return EnvState(
+    return CarState(
         x=0.0,
         velocity=20.0,  # ~72 km/h
         t=0,
         throttle=0.0,
         target_velocity=25.0,
     )
-
-
-# ------------------------------
-# Torque curve
-# ------------------------------
-def test_engine_torque_curve_monotonic(params):
-    low = engine_torque_from_rpm(1000, 1.0, params)
-    mid = engine_torque_from_rpm(params.peak_rpm, 1.0, params)
-    high = engine_torque_from_rpm(params.redline_rpm, 1.0, params)
-
-    assert mid > low
-    assert mid > high
-    assert jnp.all(low >= 0.0)
-    assert jnp.all(high >= 0.0)
 
 
 # ------------------------------
@@ -90,7 +76,7 @@ def test_compute_reward(params, state):
 # Observations
 # ------------------------------
 def test_get_obs_shape(state):
-    obs = get_obs(state, params=EnvParams(), road_profile=road_profile, xp=jnp)
+    obs = get_obs(state, params=CarParams(), road_profile=road_profile, xp=jnp)
     expected_length = 2 + state.n_sensors if hasattr(state, "n_sensors") else 12
     assert obs.shape[0] == 12 or obs.shape[0] == expected_length
     assert jnp.isfinite(obs).all()
@@ -146,7 +132,7 @@ def test_torque_positive_across_speeds(params):
             * 60.0
             / (2 * jnp.pi)
         )
-        T = engine_torque_from_rpm(rpm, 1.0, params)
+        T = electric_torque_from_rpm(rpm, 1.0, params)
         assert float(T) > 0.0
 
 

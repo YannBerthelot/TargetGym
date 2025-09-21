@@ -16,28 +16,24 @@ except ImportError:
 
 from jax import grad
 
+from target_gym.base import EnvParams, EnvState
 from target_gym.integration import (
-    compute_velocity_and_pos_from_acceleration_integration,
+    integrate_dynamics,
 )
 
 
 @struct.dataclass
-class EnvState:
+class CarState(EnvState):
     x: float
     velocity: float
-    t: int
     throttle: float
     target_velocity: float
 
 
 @struct.dataclass
-class EnvParams:
+class CarParams(EnvParams):
     gravity: float = 9.81
     initial_mass: float = 1_000.0
-    delta_t: float = 1.0
-    n_substeps: int = 5
-
-    max_steps_in_episode: int = 1_000
     min_velocity: float = 0.0
     max_velocity: float = 200 / 3.6
     target_velocity_range: Tuple[float, float] = (100 / 3.6, 130 / 3.6)
@@ -47,6 +43,7 @@ class EnvParams:
     n_sensors: int = 10
     sensors_range: int = 100
     use_road_profile: int = 0
+    max_steps_in_episode: int = 1_000
 
     # Drivetrain parameters
     gear_ratio: float = 4.0
@@ -64,26 +61,32 @@ class EnvParams:
     braking_force: float = 1_000.0  # Max braking force [N]
     braking_friction: float = 0.5  # Coefficient of friction when braking
 
-    # Engine torque curve
-    idle_rpm: float = 800.0
-    redline_rpm: float = 6000.0
-    peak_rpm: float = 3000.0
-    peak_torque: float = 150.0
+    # Electric engine
+    base_rpm: float = 4000.0
+    max_torque: float = 150.0
 
 
-def engine_torque_from_rpm(rpm: float, throttle: float, params: EnvParams):
+def electric_torque_from_rpm(rpm: float, throttle: float, params: CarParams):
+    """
+    Simple EV motor model:
+    - Constant torque until base_rpm
+    - Then constant power (torque decreases ~ 1/rpm)
+    """
     rpm = jnp.asarray(rpm)
-    rpm_clipped = jnp.clip(rpm, params.idle_rpm, params.redline_rpm)
-    rpm_norm = (rpm_clipped - params.idle_rpm) / (params.redline_rpm - params.idle_rpm)
-    peak_norm = (params.peak_rpm - params.idle_rpm) / (
-        params.redline_rpm - params.idle_rpm
-    )
 
-    sigma = getattr(params, "torque_sigma", 0.30)
-    gauss = jnp.exp(-0.5 * ((rpm_norm - peak_norm) / sigma) ** 2)
+    base_rpm = getattr(params, "base_rpm", 4000.0)
+    max_torque = getattr(params, "max_torque", 300.0)  # [Nm]
+    max_power = (max_torque * base_rpm * 2 * jnp.pi) / 60.0  # [W]
 
-    torque_curve = gauss
-    return throttle * params.peak_torque * torque_curve
+    # Region 1: constant torque
+    torque_const = max_torque * throttle
+
+    # Region 2: constant power (T = P / ω)
+    omega = rpm * 2 * jnp.pi / 60.0
+    torque_power = (max_power / (omega + 1e-8)) * throttle
+
+    torque = jnp.where(rpm <= base_rpm, torque_const, torque_power)
+    return torque
 
 
 def road_profile(x):
@@ -123,7 +126,7 @@ def compute_theta_from_position(
     return jnp.arctan(slope) * use_road_profile
 
 
-def check_is_terminal(state: EnvState, params: EnvParams, xp=jnp):
+def check_is_terminal(state: EnvState, params: CarParams, xp=jnp):
     terminated = jnp.logical_or(
         state.velocity <= params.min_velocity, state.velocity >= params.max_velocity
     )
@@ -131,7 +134,7 @@ def check_is_terminal(state: EnvState, params: EnvParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward(state: EnvState, params: EnvParams, xp=jnp):
+def compute_reward(state: EnvState, params: CarParams, xp=jnp):
     terminated, _ = check_is_terminal(state, params, xp=xp)
     max_velocity_diff = params.max_velocity - params.min_velocity
     true_reward = (
@@ -146,18 +149,18 @@ def compute_reward(state: EnvState, params: EnvParams, xp=jnp):
     return reward
 
 
-def compute_thrust(throttle: float, velocity: float, params: EnvParams):
+def compute_thrust(throttle: float, velocity: float, params: CarParams):
     wheel_omega = velocity / params.wheel_radius
     engine_omega = wheel_omega * params.gear_ratio * params.final_drive
     rpm = engine_omega * 60.0 / (2 * jnp.pi)
-    T_engine = engine_torque_from_rpm(rpm, throttle, params)
+    T_engine = electric_torque_from_rpm(rpm, throttle, params)
     T_wheel = (
         T_engine * params.gear_ratio * params.final_drive * params.drivetrain_efficiency
     )
     return T_wheel / params.wheel_radius
 
 
-def compute_acceleration(velocity, position, action, params: EnvParams):
+def compute_acceleration(velocity, position, action, params: CarParams):
     throttle = action
     theta = compute_theta_from_position(position, road_profile, params.use_road_profile)
     m, g = params.initial_mass, params.gravity
@@ -205,7 +208,7 @@ def compute_next_power(requested_power, current_power, delta_t):
 def compute_next_state(
     throttle_requested: float,
     state: EnvState,
-    params: EnvParams,
+    params: CarParams,
     integration_method: str = "rk4_1",
 ):
     dt = params.delta_t
@@ -216,14 +219,12 @@ def compute_next_state(
         compute_acceleration, action=throttle, params=params
     )
 
-    velocity, position, metrics = (
-        compute_velocity_and_pos_from_acceleration_integration(
-            velocities=state.velocity,
-            positions=state.x,
-            delta_t=dt,
-            compute_acceleration=_compute_acceleration,
-            method=integration_method,
-        )
+    velocity, position, metrics = integrate_dynamics(
+        velocities=state.velocity,
+        positions=state.x,
+        delta_t=dt,
+        compute_acceleration=_compute_acceleration,
+        method=integration_method,
     )
 
     return (
@@ -235,7 +236,7 @@ def compute_next_state(
 @partial(jax.jit, static_argnames=["params", "road_profile", "xp"])
 def get_obs(
     state: EnvState,
-    params: EnvParams,
+    params: CarParams,
     road_profile: Callable[[float], float] = None,
     xp=jnp,
 ):
