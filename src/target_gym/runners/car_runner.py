@@ -12,6 +12,7 @@ from scipy.interpolate import interp1d
 
 # Import environment
 from target_gym import Car, CarParams
+from target_gym.utils import truncate_colormap
 
 
 def run_constant_policy(
@@ -32,7 +33,7 @@ def run_constant_policy(
     (_, final_state, _), (velocity_history, done_history) = jax.lax.scan(
         step_fn, (key, state, False), None, length=steps
     )
-    return final_state.velocity, velocity_history * (1 - done_history)
+    return final_state.velocity, (velocity_history * (1 - done_history))[:-1]
 
 
 def run_constant_policy_final_alt(
@@ -131,16 +132,26 @@ def run_mode(
             norm = colors.Normalize(
                 vmin=throttle_levels.min(), vmax=throttle_levels.max()
             )
-            cmap = cm.viridis
+            cmap = truncate_colormap(cm.viridis, 0.0, 0.85)
             for i, traj in enumerate(trajectories):
-                ax.plot(traj, color=cmap(norm(throttle_levels[i])))
+                ax.plot(traj * 3.6, color=cmap(norm(throttle_levels[i])))
+                if (i % 4) == 0:
+                    ax.text(
+                        x=len(traj) - 1,
+                        y=traj[-1] * 3.6,
+                        s=f" {float(throttle_levels[i]):.2f}",  # format the throttle value
+                        color=cmap(norm(throttle_levels[i])),
+                        fontsize=8,
+                        va="center",
+                        ha="left",
+                    )
 
             sm = cm.ScalarMappable(cmap=cmap, norm=norm)
             sm.set_array([])
-            fig.colorbar(sm, ax=ax).set_label("Throttle level")
+            # fig.colorbar(sm, ax=ax).set_label("Throttle level")
             ax.set_xlabel("Time step")
-            ax.set_ylabel("Velocity (m/s)")
-            ax.set_title("Velocity trajectories for varying throttle")
+            ax.set_ylabel("Velocity (km/h)")
+            ax.set_title("Velocity trajectories for varying throttle levels")
             os.makedirs("figures/car", exist_ok=True)
             plt.savefig("figures/car/throttle_trajectories.pdf")
             plt.savefig("figures/car/throttle_trajectories.png")
@@ -152,7 +163,7 @@ def run_mode(
             return throttle
 
         file = env.save_video(select_action, seed, params=params)
-        from moviepy.video.io.VideoFileClip import VideoFileClipx
+        from moviepy.video.io.VideoFileClip import VideoFileClip
 
         video = VideoFileClip(file)
         os.makedirs("videos/car", exist_ok=True)
@@ -162,6 +173,13 @@ def run_mode(
         raise ValueError(f"Unknown mode: {mode}")
 
 
+def run_all_modes():
+    n_steps = 1_000
+    run_mode(
+        "2d", n_timesteps=n_steps, max_steps_in_episode=n_steps, resolution=20
+    )  # or "2d" or "video"
+    run_mode("video", throttle=0.15, max_steps_in_episode=n_steps)
+
+
 if __name__ == "__main__":
-    run_mode("2d", n_timesteps=5_000, max_steps_in_episode=5_000)  # or "2d" or "video"
-    run_mode("video", throttle=0.5, max_steps_in_episode=1_000)
+    run_all_modes()

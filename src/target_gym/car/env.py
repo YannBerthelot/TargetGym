@@ -61,26 +61,32 @@ class CarParams(EnvParams):
     braking_force: float = 1_000.0  # Max braking force [N]
     braking_friction: float = 0.5  # Coefficient of friction when braking
 
-    # Engine torque curve
-    idle_rpm: float = 800.0
-    redline_rpm: float = 6000.0
-    peak_rpm: float = 3000.0
-    peak_torque: float = 150.0
+    # Electric engine
+    base_rpm: float = 4000.0
+    max_torque: float = 150.0
 
 
-def engine_torque_from_rpm(rpm: float, throttle: float, params: CarParams):
+def electric_torque_from_rpm(rpm: float, throttle: float, params: CarParams):
+    """
+    Simple EV motor model:
+    - Constant torque until base_rpm
+    - Then constant power (torque decreases ~ 1/rpm)
+    """
     rpm = jnp.asarray(rpm)
-    rpm_clipped = jnp.clip(rpm, params.idle_rpm, params.redline_rpm)
-    rpm_norm = (rpm_clipped - params.idle_rpm) / (params.redline_rpm - params.idle_rpm)
-    peak_norm = (params.peak_rpm - params.idle_rpm) / (
-        params.redline_rpm - params.idle_rpm
-    )
 
-    sigma = getattr(params, "torque_sigma", 0.30)
-    gauss = jnp.exp(-0.5 * ((rpm_norm - peak_norm) / sigma) ** 2)
+    base_rpm = getattr(params, "base_rpm", 4000.0)
+    max_torque = getattr(params, "max_torque", 300.0)  # [Nm]
+    max_power = (max_torque * base_rpm * 2 * jnp.pi) / 60.0  # [W]
 
-    torque_curve = gauss
-    return throttle * params.peak_torque * torque_curve
+    # Region 1: constant torque
+    torque_const = max_torque * throttle
+
+    # Region 2: constant power (T = P / ω)
+    omega = rpm * 2 * jnp.pi / 60.0
+    torque_power = (max_power / (omega + 1e-8)) * throttle
+
+    torque = jnp.where(rpm <= base_rpm, torque_const, torque_power)
+    return torque
 
 
 def road_profile(x):
@@ -147,7 +153,7 @@ def compute_thrust(throttle: float, velocity: float, params: CarParams):
     wheel_omega = velocity / params.wheel_radius
     engine_omega = wheel_omega * params.gear_ratio * params.final_drive
     rpm = engine_omega * 60.0 / (2 * jnp.pi)
-    T_engine = engine_torque_from_rpm(rpm, throttle, params)
+    T_engine = electric_torque_from_rpm(rpm, throttle, params)
     T_wheel = (
         T_engine * params.gear_ratio * params.final_drive * params.drivetrain_efficiency
     )
