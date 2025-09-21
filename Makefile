@@ -8,7 +8,7 @@ mypy:
 	mypy ${LINT_PATHS} 
 
 coverage:
-	poetry run coverage run -m pytest tests
+	poetry run coverage run --source target_gym -m pytest tests
 	poetry run coverage report -m --fail-under 80
 
 missing-annotations:
