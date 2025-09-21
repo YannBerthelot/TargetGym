@@ -6,8 +6,8 @@ import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
 from target_gym.car.env import (
-    EnvParams,
-    EnvState,
+    CarParams,
+    CarState,
     check_is_terminal,
     compute_next_state,
     compute_reward,
@@ -18,7 +18,7 @@ from target_gym.car.rendering import _render
 from target_gym.utils import save_video
 
 
-class Car2D(environment.Environment[EnvState, EnvParams]):
+class Car2D(environment.Environment[CarState, CarParams]):
     """
     JAX-compatible 2D car environment.
     """
@@ -33,15 +33,15 @@ class Car2D(environment.Environment[EnvState, EnvParams]):
         self.integration_method = integration_method
 
     @property
-    def default_params(self) -> EnvParams:
-        return EnvParams()
+    def default_params(self) -> CarParams:
+        return CarParams()
 
     def step_env(
         self,
         key: chex.PRNGKey,
-        state: EnvState,
+        state: CarState,
         action: jnp.ndarray,
-        params: EnvParams = None,
+        params: CarParams = None,
     ):
         """
         Performs step transitions using JAX, returns observation, new state, reward, done, info
@@ -66,7 +66,7 @@ class Car2D(environment.Environment[EnvState, EnvParams]):
             {"last_state": new_state},
         )
 
-    def get_obs(self, state: EnvState, params: EnvParams = None):
+    def get_obs(self, state: CarState, params: CarParams = None):
         """
         Observation vector
         """
@@ -76,12 +76,12 @@ class Car2D(environment.Environment[EnvState, EnvParams]):
             )  # TODO : propagate this into the code sometime, as having params given to get_obs is not standard gymnax API
         return get_obs(state, params=params, road_profile=road_profile, xp=jnp)
 
-    def is_terminal(self, state: EnvState, params: EnvParams) -> jax.Array:
+    def is_terminal(self, state: CarState, params: CarParams) -> jax.Array:
         return check_is_terminal(state, params, xp=jnp)
 
     def reset_env(
-        self, key: chex.PRNGKey, params: EnvParams = None
-    ) -> Tuple[jnp.ndarray, EnvState]:
+        self, key: chex.PRNGKey, params: CarParams = None
+    ) -> Tuple[jnp.ndarray, CarState]:
         """
         Reset the environment using JAX random keys
         """
@@ -103,7 +103,7 @@ class Car2D(environment.Environment[EnvState, EnvParams]):
             maxval=params.target_velocity_range[1],
         )
 
-        state = EnvState(
+        state = CarState(
             t=0,
             x=initial_x,
             velocity=initial_velocity,
@@ -114,7 +114,7 @@ class Car2D(environment.Environment[EnvState, EnvParams]):
         obs = self.get_obs(state)
         return obs, state
 
-    def action_space(self, params: EnvParams | None = None) -> spaces.Discrete:
+    def action_space(self, params: CarParams | None = None) -> spaces.Discrete:
         """Action space of the environment."""
         return spaces.Box(
             low=jnp.array([-1.0]),
@@ -123,16 +123,16 @@ class Car2D(environment.Environment[EnvState, EnvParams]):
             dtype=jnp.float32,
         )
 
-    def observation_space(self, params: EnvParams) -> spaces.Box:
+    def observation_space(self, params: CarParams) -> spaces.Box:
         """Observation space of the environment."""
         inf = jnp.finfo(jnp.float32).max
         return spaces.Box(-inf, inf, self.obs_shape, dtype=jnp.float32)
 
-    def state_space(self, params: EnvParams) -> spaces.Box:
+    def state_space(self, params: CarParams) -> spaces.Box:
         """Observation space of the environment."""
         inf = jnp.finfo(jnp.float32).max
         return spaces.Box(
-            -inf, inf, len(EnvState.__dataclass_fields__), dtype=jnp.float32
+            -inf, inf, len(CarState.__dataclass_fields__), dtype=jnp.float32
         )
 
     def save_video(
@@ -156,7 +156,7 @@ class Car2D(environment.Environment[EnvState, EnvParams]):
             format=format,
         )
 
-    def render(self, screen, state: EnvState, params: EnvParams, frames, clock):
+    def render(self, screen, state: CarState, params: CarParams, frames, clock):
         """
         JAX-compatible rendering wrapper
         """
@@ -167,7 +167,7 @@ class Car2D(environment.Environment[EnvState, EnvParams]):
 if __name__ == "__main__":
     env = Car2D()
     seed = 42
-    env_params = EnvParams(max_steps_in_episode=1_000)
+    env_params = CarParams(max_steps_in_episode=1_000)
     action = 1.0
     env.save_video(
         lambda o: 1.0 if o[0] < 120 / 3.6 else -1,

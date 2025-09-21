@@ -84,10 +84,10 @@ env.save_video(lambda o: action, seed, folder="videos", episode_index=0, params=
 Or train an agent using your favorite RL library (example with stable-baselines3):
 
 ```python
-from target_gym import PlaneGymnasium, PlaneParams
+from target_gym import GymnasiumPlane
 from stable_baselines3 import SAC
 
-env = PlaneGymnasium()
+env = GymnasiumPlane()
 model = SAC("MlpPolicy", env, verbose=1)
 model.learn(total_timesteps=10_000, log_interval=4)
 model.save("sac_plane")

@@ -13,7 +13,7 @@ from target_gym.plane.dynamics import (
     compute_weight,
     newton_second_law,
 )
-from target_gym.plane.env_jax import EnvParams, EnvState, compute_next_state
+from target_gym.plane.env_jax import PlaneParams, PlaneState, compute_next_state
 
 
 def test_compute_drag():
@@ -157,8 +157,8 @@ def test_compute_initial_x_drag_coefficient():
 
 def test_compute_next_state():
     """Test state transitions with physics"""
-    params = EnvParams()
-    state = EnvState(
+    params = PlaneParams()
+    state = PlaneState(
         x=0.0,
         x_dot=250.0,  # Initial speed
         z=3000.0,  # Initial altitude

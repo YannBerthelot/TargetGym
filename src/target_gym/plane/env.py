@@ -7,6 +7,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym.base import EnvParams, EnvState
 from target_gym.integration import (
     integrate_dynamics,
 )
@@ -39,7 +40,7 @@ class EnvMetrics:
 
 
 @struct.dataclass
-class EnvState:
+class PlaneState(EnvState):
     x: float
     x_dot: float
     z: float
@@ -52,7 +53,6 @@ class EnvState:
     power: float
     stick: float
     fuel: float
-    t: int
     target_altitude: float
 
     @property
@@ -72,7 +72,7 @@ class EnvState:
 
 
 @struct.dataclass
-class EnvParams:
+class PlaneParams(EnvParams):
     gravity: float = 9.81
     initial_mass: float = 73_500.0
     thrust_output_at_sea_level: float = 240_000.0
@@ -128,7 +128,7 @@ def check_mass_does_not_increase(old_mass, new_mass, xp=jnp):
         assert old_mass >= new_mass
 
 
-def check_is_terminal(state: EnvState, params: EnvParams, xp=jnp):
+def check_is_terminal(state: PlaneState, params: PlaneParams, xp=jnp):
     """Return True if the episode should terminate."""
     terminated = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
     truncated = state.t >= params.max_steps_in_episode
@@ -138,8 +138,8 @@ def check_is_terminal(state: EnvState, params: EnvParams, xp=jnp):
 
 
 def check_no_nan(x, id=None):
-    """Assert that no NaNs are present in arrays, scalars, or EnvState."""
-    if isinstance(x, EnvState):
+    """Assert that no NaNs are present in arrays, scalars, or PlaneState."""
+    if isinstance(x, PlaneState):
         # Iterate over fields of the dataclass
         for name, value in x.__dict__.items():
             try:
@@ -151,7 +151,7 @@ def check_no_nan(x, id=None):
             raise AssertionError(f"NaN detected in {id}: {x}")
 
 
-def compute_reward(state: EnvState, params: EnvParams, xp=jnp):
+def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
     """Return reward for a given state. Safe for JIT."""
     xp = jnp
     done_alt = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
@@ -164,7 +164,7 @@ def compute_reward(state: EnvState, params: EnvParams, xp=jnp):
     return reward
 
 
-def get_obs(state: EnvState, xp=jnp):
+def get_obs(state: PlaneState, xp=jnp):
     """Applies observation function to state."""
     return xp.stack(
         [
@@ -190,8 +190,8 @@ def clip_acceleration(a: jnp.ndarray, min: tuple, max: tuple):
 def compute_next_state(
     power_requested: float,
     stick_requested: float,
-    state: EnvState,
-    params: EnvParams,
+    state: PlaneState,
+    params: PlaneParams,
     integration_method: str = "rk4_1",
 ):
     """Compute next state and metrics using multiple sub-steps with jax.lax.scan."""
@@ -228,7 +228,7 @@ def compute_next_state(
     alpha, gamma = compute_alpha(theta, x_dot, z_dot)
     m = params.initial_mass + state.fuel
 
-    new_state = EnvState(
+    new_state = PlaneState(
         x=x,
         x_dot=x_dot,
         z=z,

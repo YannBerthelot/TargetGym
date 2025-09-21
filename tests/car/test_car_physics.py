@@ -2,8 +2,8 @@ import jax.numpy as jnp
 import pytest
 
 from target_gym.car.env import (
-    EnvParams,
-    EnvState,
+    CarParams,
+    CarState,
     check_is_terminal,
     compute_acceleration,
     compute_next_state,
@@ -18,12 +18,12 @@ from target_gym.car.env import (
 
 @pytest.fixture
 def params():
-    return EnvParams()
+    return CarParams()
 
 
 @pytest.fixture
 def state(params):
-    return EnvState(
+    return CarState(
         x=0.0,
         velocity=20.0,  # ~72 km/h
         t=0,
@@ -90,7 +90,7 @@ def test_compute_reward(params, state):
 # Observations
 # ------------------------------
 def test_get_obs_shape(state):
-    obs = get_obs(state, params=EnvParams(), road_profile=road_profile, xp=jnp)
+    obs = get_obs(state, params=CarParams(), road_profile=road_profile, xp=jnp)
     expected_length = 2 + state.n_sensors if hasattr(state, "n_sensors") else 12
     assert obs.shape[0] == 12 or obs.shape[0] == expected_length
     assert jnp.isfinite(obs).all()

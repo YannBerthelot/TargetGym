@@ -2,8 +2,8 @@ import jax.numpy as jnp
 import pytest
 
 from target_gym.car.env import (
-    EnvParams,
-    EnvState,
+    CarParams,
+    CarState,
     check_is_terminal,
     compute_acceleration,
     compute_next_state,
@@ -18,12 +18,12 @@ from target_gym.car.env import (
 
 @pytest.fixture
 def params():
-    return EnvParams()
+    return CarParams()
 
 
 @pytest.fixture
 def state(params):
-    return EnvState(
+    return CarState(
         x=0.0,
         velocity=20.0,  # ~72 km/h
         throttle=0.5,
