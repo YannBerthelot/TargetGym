@@ -64,7 +64,6 @@ def run_constant_policy_final_alt(
 
 
 def build_power_interpolator_from_df(df, stick=0.0):
-    raise NotImplementedError
     tol = 1e-6
     df_stick = df[np.abs(df["stick"] - stick) < tol]
 
