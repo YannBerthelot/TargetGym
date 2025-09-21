@@ -182,7 +182,7 @@ def run_mode(
                     ax.text(
                         x=len(traj) - 1,
                         y=traj[-1],
-                        s=f" {float(power_levels[i]):.2f}",  # format the throttle value
+                        s=f" {float(power_levels[i]):.2f} - {float(traj[-1]):.0f}ft",  # format the throttle value
                         color=cmap(norm(power_levels[i])),
                         fontsize=8,
                         va="center",
@@ -193,7 +193,7 @@ def run_mode(
             sm.set_array([])
             # fig.colorbar(sm, ax=ax).set_label("Power level")
             xmin, xmax = plt.xlim()
-            plt.xlim(xmin, xmax + 0.05)
+            plt.xlim(xmin, xmax + (xmax - xmin) * 0.09)
             ax.set_xlabel("Time step")
             ax.set_ylabel("Altitude (ft)")
             ax.set_title("Altitude trajectories for varying power levels")
