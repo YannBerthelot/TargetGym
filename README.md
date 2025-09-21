@@ -12,26 +12,32 @@ Currently included environments:
 * 🚗 **Car** – maintain a desired speed on a road - Stable-Target-MDP
 * 🚲 **Bike** – stabilize and steer a 2D bicycle model - Unstable-Target-MDP (from [Randlov et al.](https://gwern.net/doc/reinforcement-learning/model-free/1998-randlov.pdf))
 
+
 <p align="center">
   <img src="videos/plane/output.gif" width="40%"/>
   <img src="videos/car/output.gif" width="40%"/>
 </p>
 
+As well as environments adapted from [Process-Control Gym](https://github.com/MaximilianB2/pc-gym):
+* 🧪 **CSTR** - control of a chemical reaction in a continuous stirred-tank reactor (CSTR).
+* **More to come**
+
 ---
 
 ## ✨ Features
 
-* ⚡ **Fast & parallelizable** with JAX — scale to thousands of parallel environments on GPU/TPU.
-* 📐 **Physics-based**: Derived from modeling equations, not arcade physics.
-* 🧪 **Reliable**: Unit-tested for stability and reproducibility.
-* 🎯 **Target MDP focus**: Each task is about reaching and maintaining target states.
-* 🌀 **Challenging dynamics**: Captures irrecoverable states, and momentum effects.
-* 🔄 **Compatible with RL libraries**: Offers [Gymnax](https://github.com/RobertTLange/gymnax) and [Gymnasium](https://github.com/Farama-Foundation/Gymnasium) interfaces.
+* **Fast & parallelizable** with JAX — scale to thousands of parallel environments on GPU/TPU.
+* **Physics-based**: Derived from modeling equations, not arcade physics.
+* **Reliable**: Unit-tested for stability and reproducibility.
+* **Target MDP focus**: Each task is about reaching and maintaining target states.
+* **Challenging dynamics**: Captures irrecoverable states, and momentum effects.
+* **Visualization**: All environments come with visualization.
+* **Compatible with RL libraries**: Offers [Gymnax](https://github.com/RobertTLange/gymnax) and [Gymnasium](https://github.com/Farama-Foundation/Gymnasium) interfaces.
 * 🌟 **Upcoming features**: Environmental perturbations (wind, turbulence, bumpy road) and fuel consumption.
 
 ---
 
-## 📊 Example: Stable Altitude in Plane
+## Example: Stable Altitude in Plane
 
 Below is an example of how stable altitude changes with engine power and pitch in the **Plane** environment:
 
@@ -48,7 +54,7 @@ This illustrates **multi-stability**: with fixed power and pitch, the aircraft n
 
 ---
 
-## 🚀 Installation
+## Installation
 
 Once released on PyPI, install with:
 
@@ -62,7 +68,7 @@ poetry add target-gym
 
 ---
 
-## 🎮 Usage
+## Usage
 
 Here’s a minimal example of running an episode in the **Plane** environment and saving a video:
 
@@ -102,15 +108,15 @@ while True:
 
 ---
 
-## 🧩 Challenges Modeled
+## Challenges Modeled
 
 TargetGym tasks are designed to expose RL agents to **realistic control challenges**:
 
-* ⏳ **Delays**: Inputs (like engine power) take time to fully apply.
-* 👀 **Partial observability**: Some parts of the state cannot be directly measured.
-* 🏁 **Competing objectives**: Reach the target state quickly while minimizing overshoot or cost.
-* 🌀 **Momentum effects**: Physical inertia delays control effectiveness.
-* ⚠️ **Irrecoverable states**: Certain trajectories inevitably lead to failure.
+* **Delays**: Inputs (like engine power) take time to fully apply.
+* **Partial observability**: Some parts of the state cannot be directly measured.
+* **Competing objectives**: Reach the target state quickly while minimizing overshoot or cost.
+* **Momentum effects**: Physical inertia delays control effectiveness.
+* **Irrecoverable states**: Certain trajectories inevitably lead to failure.
 
 ---
 
