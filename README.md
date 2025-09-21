@@ -129,6 +129,20 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 Contributions are welcome!
 Open an issue or PR if you have suggestions, bug reports, or new features.
 
+For development you need to install the dev dependencies, which include test, lint and agent dependencies. 
+
+```bash
+git clone https://github.com/YannBerthelot/TargetGym.git
+cd TargetGym
+
+# Using Poetry (recommended)
+poetry install --with dev
+
+# Using pip
+python -m pip install -e ".[dev]"
+
+```
+
 ---
 
 
