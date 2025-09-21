@@ -10,7 +10,7 @@ from target_gym.car.env import (
     compute_reward,
     compute_theta_from_position,
     compute_thrust,
-    engine_torque_from_rpm,
+    electric_torque_from_rpm,
     get_obs,
     road_profile,
 )
@@ -30,20 +30,6 @@ def state(params):
         t=0,
         target_velocity=25.0,
     )
-
-
-# ------------------------------
-# Torque curve
-# ------------------------------
-def test_engine_torque_curve_monotonic(params):
-    low = engine_torque_from_rpm(1000, 1.0, params)
-    mid = engine_torque_from_rpm(params.peak_rpm, 1.0, params)
-    high = engine_torque_from_rpm(params.redline_rpm, 1.0, params)
-
-    assert mid > low
-    assert mid > high
-    assert jnp.all(low >= 0.0)
-    assert jnp.all(high >= 0.0)
 
 
 # ------------------------------
