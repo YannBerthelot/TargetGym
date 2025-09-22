@@ -160,8 +160,14 @@ def integrate_dynamics(
         def step_fn(carry, _):
             v, p = carry
             v_new, p_new, metrics = second_order_step(v, p, h)
+            v_new = v_new.reshape(v.shape)
+            p_new = p_new.reshape(p.shape)
             return (v_new, p_new), metrics
 
+        # if jnp.ndim(velocities) == 0:
+        #     velocities = velocities.reshape((1,))
+        # if jnp.ndim(positions) == 0:
+        #     positions = positions.reshape((1,))
         (new_velocities, new_positions), metrics = jax.lax.scan(
             step_fn, (velocities, positions), xs=None, length=n_substeps
         )

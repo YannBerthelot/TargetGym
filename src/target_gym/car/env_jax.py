@@ -48,7 +48,7 @@ class Car2D(environment.Environment[CarState, CarParams]):
         """
         if params is None:
             params = self.default_params
-        throttle = action
+        throttle = action.reshape(())  # to get scalar and not 1D array
 
         new_state, metrics = compute_next_state(
             throttle, state, params, integration_method=self.integration_method
