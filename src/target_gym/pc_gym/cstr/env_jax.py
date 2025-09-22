@@ -45,7 +45,10 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
         """
         if params is None:
             params = self.default_params
+
         T_c = action
+        if not isinstance(action, float):
+            T_c = action.reshape(())
 
         new_state, metrics = compute_next_state(
             T_c, state, params, integration_method=self.integration_method
