@@ -1,20 +1,14 @@
 from typing import Callable, Optional, Tuple
 
+import chex
+import jax
+import jax.numpy as jnp
+
 # Optional: jax imports (only used in jax env)
 import numpy as np
 from flax import struct
-from jax.tree_util import Partial as partial
-
-try:
-    import chex
-    import jax
-    import jax.numpy as jnp
-except ImportError:
-    jax = None
-    jnp = None
-    chex = None
-
 from jax import grad
+from jax.tree_util import Partial as partial
 
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import (
@@ -89,13 +83,14 @@ def electric_torque_from_rpm(rpm: float, throttle: float, params: CarParams):
     return torque
 
 
-def road_profile(x):
+def road_profile(x: float | jax.Array):
     """
     More realistic road profile with alternating climbs, plateaus, and descents.
     Designed to challenge velocity maintenance.
     Elevation changes are on the order of ±100 m.
     """
     # Normalize input to kilometers for readability
+    x = x.squeeze() if isinstance(x, jax.Array) else x
     km = x / 1000.0
 
     # Long-term trend: alternating climbs/descents
@@ -112,7 +107,7 @@ def road_profile(x):
 
     # Small irregularities (avoid perfectly flat sections)
     roughness = jnp.sin(km * 3.5) * 2.0 + jnp.sin(km * 11.0) * 1.0
-    return (trend + plateaus + roughness) * 0
+    return trend + plateaus + roughness
 
 
 @partial(jax.jit, static_argnames=["road_profile"])

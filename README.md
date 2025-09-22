@@ -16,6 +16,13 @@ As well as environments adapted from [Process-Control Gym](https://github.com/Ma
 * 🧪 **CSTR** - control of a chemical reaction in a continuous stirred-tank reactor (CSTR).
 * **More to come**
 
+| Environment | Target Type         | Action Dim | State Dim | Steps / Second (1 env - $10^8$ steps) |
+|-------------|---------------------|------------|-----------|-----------------|
+| 🛩 Plane    | Stable-Target-MDP   | 2 (power, stick) | 9 (z, ż, ẋ, θ, θ̇, …) | ~0.54M (CPU) |
+| 🚗 Car      | Stable-Target-MDP   | 1 (throttle/brake) | 12 (velocity, lidar, …) | ~0.85M |
+| 🚲 Bike     | Unstable-Target-MDP | 2 (torque, displacement) | 5 (angle, angular vel, pos, …) | ~1.77M |
+| 🧪 CSTR     | Stable-Target-MDP   | 1 (coolant temperature) | 3 (concentration, temperature, target temperature) | ~1.49M |
+
 <table align="center">
   <tr>
     <td align="center">
