@@ -36,33 +36,6 @@ def run_constant_policy(
     return final_state.velocity, (velocity_history * (1 - done_history))[:-1]
 
 
-def run_constant_policy_final_alt(
-    power: float, stick: float, env: Car, params: CarParams, steps: int = 10_000
-):
-    key = jax.random.PRNGKey(0)
-    init_obs, init_state = env.reset_env(key, params)
-    action = (power, stick)
-
-    def step_fn(carry, _):
-        key, state, done = carry
-        obs, new_state, reward, new_done, info = env.step(key, state, action, params)
-        state = jax.lax.cond(done, lambda _: state, lambda _: new_state, operand=None)
-        done = jnp.logical_or(done, new_done)
-        return (key, state, done), (
-            new_state.velocity,
-            info["last_state"].velocity,
-            done,
-        )
-
-    (_, final_state, done), (velocity_hist, last_velocity_hist, done_hist) = (
-        jax.lax.scan(step_fn, (key, init_state, False), None, length=steps)
-    )
-    final_velocity = last_velocity_hist[
-        jnp.argmax(done_hist) - 1
-    ]  # the episode has already reset at done, so take the step before
-    return final_velocity
-
-
 def build_power_interpolator_from_df(df, stick=0.0):
     tol = 1e-6
     df_stick = df[np.abs(df["stick"] - stick) < tol]
