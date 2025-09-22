@@ -65,6 +65,44 @@ def run_constant_policy_final_alt(
     return final_velocity
 
 
+def run_single_input_grid(
+    input_levels, env, params, steps=10_000, save_csv_path=None, input_name="input"
+):
+    """
+    Runs a grid of constant inputs on a single-input environment (Car, CSTR, etc.).
+
+    Args:
+        input_levels: 1D array of input values (throttle, T_c, etc.)
+        env: JAX environment
+        params: EnvParams
+        steps: number of timesteps to run
+        save_csv_path: optional path to save results as CSV
+        input_name: name of the input for CSV column
+
+    Returns:
+        final_values: jnp array of final outputs (altitude, velocity, T, etc.)
+        df: pandas DataFrame with input and final outputs
+    """
+
+    def run_one_input(u):
+        # Replace with the appropriate function for this env
+        return jax.vmap(
+            lambda _: run_constant_policy_final_alt(u, 0, env, params, steps)
+        )(jnp.array([0.0]))[0]
+
+    final_values = jax.vmap(run_one_input)(input_levels)
+    final_values = jnp.maximum(final_values, 0.0)  # optional, clip negatives
+
+    df = pd.DataFrame({input_name: input_levels, "final_value": final_values})
+
+    if save_csv_path is not None:
+        os.makedirs(os.path.dirname(save_csv_path), exist_ok=True)
+        df.to_csv(save_csv_path, index=False)
+        print(f"Saved grid results to {save_csv_path}")
+
+    return final_values, df
+
+
 def build_power_interpolator_from_df(df, stick=0.0):
     raise NotImplementedError
     tol = 1e-6

@@ -159,11 +159,12 @@ while True:
 
 TargetGym tasks are designed to expose RL agents to **realistic control challenges**:
 
-* **Delays**: Inputs (like engine power) take time to fully apply.
-* **Partial observability**: Some parts of the state cannot be directly measured.
-* **Competing objectives**: Reach the target state quickly while minimizing overshoot or cost.
-* **Momentum effects**: Physical inertia delays control effectiveness.
-* **Irrecoverable states**: Certain trajectories inevitably lead to failure.
+* [x] **Delays**: Inputs (like engine power) take time to fully apply.
+* [x] **Partial observability**: Some parts of the state cannot be directly measured.
+* [x] **Competing objectives**: Reach the target state quickly while minimizing overshoot or cost.
+* [x] **Momentum effects**: Physical inertia delays control effectiveness.
+* [x] **Irrecoverable states**: Certain trajectories inevitably lead to failure.
+* [ ] **Non-stationarity**: Introduce perturbations in the environments.
 
 ---
 
@@ -173,7 +174,7 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 * [ ] Easier interface for creating partially-observable variants.
 * [ ] Provide benchmark results for popular RL baselines.
 * [ ] Add fuel consumption and resource constraints.
-* [ ] Add more tasks.
+* [ ] Add more PC-gym tasks.
 
 ---
 
