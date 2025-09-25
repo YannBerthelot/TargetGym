@@ -110,7 +110,7 @@ def save_video(
         rewards += reward
         if params is None and hasattr(env, "default_params"):
             params = env.default_params
-        truncated = state.t >= params.max_steps_in_episode
+        truncated = state.time >= params.max_steps_in_episode
         done = terminated | truncated
 
         if hasattr(env, "render"):

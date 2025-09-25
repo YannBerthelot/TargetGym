@@ -55,7 +55,7 @@ def test_step():
     assert new_state.z < state.z
     assert new_state.z_dot < state.z_dot
     assert new_state.power >= state.power
-    assert new_state.t == state.t + 1
+    assert new_state.time == state.time + 1
     assert new_state.alpha > state.alpha
     assert new_state.gamma < state.gamma
 
@@ -78,7 +78,7 @@ def test_is_terminal():
         power=0,
         stick=0,
         fuel=0,
-        t=0,
+        time=0,
         target_altitude=0,
     )
     assert env.is_terminal(terminal_state, env_params)
@@ -95,7 +95,7 @@ def test_is_terminal():
         power=0,
         stick=0,
         fuel=0,
-        t=0,
+        time=0,
         target_altitude=0,
     )
     assert env.is_terminal(terminal_state, env_params)
@@ -112,7 +112,7 @@ def test_is_terminal():
         power=0,
         stick=0,
         fuel=0,
-        t=0,
+        time=0,
         target_altitude=0,
     )
     assert env.is_terminal(terminal_state, env_params)

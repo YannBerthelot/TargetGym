@@ -26,7 +26,7 @@ def run_constant_policy_final_value(
         obs, new_state, reward, new_done, info = env.step_env(
             key, state, action, params
         )
-        truncated = new_state.t >= params.max_steps_in_episode
+        truncated = new_state.time >= params.max_steps_in_episode
         state = jax.lax.cond(done, lambda _: state, lambda _: new_state, operand=None)
         done = jnp.logical_or(done, truncated)
         value = getattr(new_state, state_attr)

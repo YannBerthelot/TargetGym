@@ -125,7 +125,7 @@ def check_is_terminal(state: EnvState, params: CarParams, xp=jnp):
     terminated = jnp.logical_or(
         state.velocity <= params.min_velocity, state.velocity >= params.max_velocity
     )
-    truncated = state.t >= params.max_steps_in_episode
+    truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
 
@@ -223,7 +223,9 @@ def compute_next_state(
     )
 
     return (
-        state.replace(x=position, velocity=velocity, throttle=throttle, t=state.t + 1),
+        state.replace(
+            x=position, velocity=velocity, throttle=throttle, time=state.time + 1
+        ),
         metrics,
     )
 

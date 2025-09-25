@@ -104,7 +104,7 @@ class Car2D(environment.Environment[CarState, CarParams]):
         )
 
         state = CarState(
-            t=0,
+            time=0,
             x=initial_x,
             velocity=initial_velocity,
             target_velocity=target_velocity,

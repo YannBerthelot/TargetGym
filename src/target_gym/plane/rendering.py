@@ -273,11 +273,11 @@ def render_plane_scene(
     text_stick = font.render(
         f"Stick: {np.rad2deg(state.stick):.0f}°", True, (0, 0, 255)
     )
-    time_elapsed = time.strftime("%H:%M:%S", time.gmtime(state.t))
+    time_elapsed = time.strftime("%H:%M:%S", time.gmtime(state.time))
     text_time = font.render(f"Time: {time_elapsed}", True, (0, 0, 255))
     # reward = 1 if abs(state.z - state.target_altitude) < 1_000 else 0
     max_alt_diff = params.max_alt - params.min_alt
-    done1 = state.t >= params.max_steps_in_episode
+    done1 = state.time >= params.max_steps_in_episode
     if done1:
         reward = -1.0 * params.max_steps_in_episode
     else:

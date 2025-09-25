@@ -9,4 +9,4 @@ class EnvParams:
 
 @struct.dataclass
 class EnvState:
-    t: int
+    time: int

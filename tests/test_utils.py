@@ -71,7 +71,7 @@ class DummyState:
     """Simple dummy state for testing save_video."""
 
     def __init__(self):
-        self.t = 0  # timestep counter
+        self.time = 0  # timestep counter
 
 
 class DummyParams:
@@ -92,8 +92,8 @@ class DummyEnv:
 
     def step(self, key, state, action, params=None):
         # Increment timestep to simulate episode progress
-        state.t += 1
-        done = state.t >= self.default_params.max_steps_in_episode
+        state.time += 1
+        done = state.time >= self.default_params.max_steps_in_episode
         reward = 1.0
         return np.zeros((2,)), state, reward, done, {}
 

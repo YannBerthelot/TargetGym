@@ -104,7 +104,7 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
         )
 
         state = CSTRState(
-            t=0,
+            time=0,
             C_a=initial_C_a,
             T=params.initial_T,
             target_CA=initial_target_C_a,
