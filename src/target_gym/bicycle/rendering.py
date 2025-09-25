@@ -91,7 +91,7 @@ def render_bicycle_top_view_fixed(
     left_texts = [
         f"Lean ω: {np.rad2deg(state.omega):.1f}°",
         f"Steer θ: {np.rad2deg(state.theta):.1f}°",
-        f"Step: {state.t}",
+        f"Step: {state.time}",
     ]
     right_texts = [
         f"Heading ψ: {np.rad2deg(state.psi):.1f}°",

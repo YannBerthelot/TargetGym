@@ -120,7 +120,7 @@ class RandlovBicycle(environment.Environment[BikeState, BikeParams]):
             x_b=zero - params.l,
             y_b=zero,
             last_d=zero,
-            t=0,
+            time=0,
             torque=zero,
             displacement=zero,
         )

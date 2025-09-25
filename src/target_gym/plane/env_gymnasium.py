@@ -123,7 +123,7 @@
 #             power=initial_power,
 #             stick=initial_stick,
 #             fuel=initial_fuel,
-#             t=0,
+#             time=0,
 #             target_altitude=target_altitude,
 #         )
 #         return self.get_obs(self.state), self.state
