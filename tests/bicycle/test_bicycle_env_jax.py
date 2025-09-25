@@ -18,7 +18,7 @@ def test_reset_returns_obs_and_state(env):
     # check state has expected attributes
     assert hasattr(state, "omega")
     assert hasattr(state, "x_f")
-    assert state.t == 0
+    assert state.time == 0
 
 
 def test_step_returns_correct_tuple(env):

@@ -47,12 +47,12 @@ def benchmark_env(env, params, steps: int = 1_000_000, batch_size: int = 1024):
 
     # Warmup
     state = step_fn_jit(state)
-    state.t.block_until_ready()
+    state.time.block_until_ready()
 
     # Timing
     t0 = time.time()
     state = step_fn_jit(state)
-    state.t.block_until_ready()
+    state.time.block_until_ready()
     t1 = time.time()
 
     total_steps = steps * batch_size

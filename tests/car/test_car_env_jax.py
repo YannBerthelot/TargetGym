@@ -84,14 +84,16 @@ def test_get_obs_shape_and_type(env, key):
 def test_is_terminal_logic(env):
     params = env.default_params
     # velocity below min -> terminated
-    state_low = CarState(x=0.0, velocity=-1.0, t=0, target_velocity=10.0, throttle=0.0)
+    state_low = CarState(
+        x=0.0, velocity=-1.0, time=0, target_velocity=10.0, throttle=0.0
+    )
     terminated, truncated = env.is_terminal(state_low, params)
     assert terminated
     # velocity above max -> terminated
     state_high = CarState(
         x=0.0,
         velocity=params.max_velocity + 1.0,
-        t=0,
+        time=0,
         target_velocity=10.0,
         throttle=0.5,
     )
@@ -101,7 +103,7 @@ def test_is_terminal_logic(env):
     state_trunc = CarState(
         x=0.0,
         velocity=10.0,
-        t=params.max_steps_in_episode,
+        time=params.max_steps_in_episode,
         target_velocity=10.0,
         throttle=0.5,
     )

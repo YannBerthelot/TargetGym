@@ -11,6 +11,7 @@ except Exception:
     jnp = None
 
 # Import your integrator
+from target_gym.base import EnvParams, EnvState
 from target_gym.integration import (
     integrate_dynamics,
 )
@@ -19,7 +20,7 @@ EPS = 1e-8
 
 
 @struct.dataclass
-class BikeState:
+class BikeState(EnvState):
     omega: float  # tilt angle [rad]
     omega_dot: float  # tilt angular velocity
     theta: float  # steering angle [rad]
@@ -30,7 +31,6 @@ class BikeState:
     x_b: float  # back wheel x
     y_b: float  # back wheel y
     last_d: float  # last displacement action (normalized)
-    t: int
     # for rendering
     torque: float = jnp.nan
     displacement: float = jnp.nan
@@ -41,7 +41,7 @@ class BikeState:
 
 
 @struct.dataclass
-class BikeParams:
+class BikeParams(EnvParams):
     c: float = 0.66
     dCM: float = 0.30
     h: float = 0.94
@@ -59,7 +59,6 @@ class BikeParams:
     delta_t: float = 0.05
 
     max_tilt_deg: float = 12.0
-    max_steps_in_episode: int = 1_000
 
     use_goal: bool = False
     goal_x: float = 0.0
@@ -229,7 +228,7 @@ def vecs_to_state(
         x_b=xb_new,
         y_b=yb_new,
         last_d=metrics.get("d", state.last_d).squeeze(),
-        t=state.t + 1,
+        time=state.time + 1,
     )
 
 
@@ -279,7 +278,7 @@ def compute_next_state(
 def check_is_terminal(state: BikeState, params: BikeParams):
     max_tilt_rad = jnp.deg2rad(params.max_tilt_deg)
     terminated = jnp.abs(state.omega) > max_tilt_rad
-    truncated = state.t >= params.max_steps_in_episode
+    truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
 
