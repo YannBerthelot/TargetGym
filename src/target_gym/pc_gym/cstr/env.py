@@ -87,7 +87,7 @@ def compute_next_state(
         method=integration_method,
     )
     return (
-        state.replace(C_a=C_a, T=T, T_c=T_c_raw, t=state.t + 1),
+        state.replace(C_a=C_a, T=T, T_c=T_c_raw, time=state.time + 1),
         metrics,
     )
 
@@ -106,7 +106,7 @@ def check_is_terminal(state: CSTRState, params: CSTRParams, xp=jnp):
         state.C_a <= params.C_a_min, state.C_a >= params.C_a_max
     )
     terminated = jnp.logical_or(terminated_1, terminated_2)
-    truncated = state.t >= params.max_steps_in_episode
+    truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
 

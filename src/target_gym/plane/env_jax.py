@@ -121,7 +121,7 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
             power=initial_power,
             stick=initial_stick,
             fuel=initial_fuel,
-            t=0,
+            time=0,
             target_altitude=target_altitude,
         )
 

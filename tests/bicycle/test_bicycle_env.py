@@ -33,7 +33,7 @@ def default_state(default_params):
         x_b=-default_params.l,
         y_b=0.0,
         last_d=0.0,
-        t=0,
+        time=0,
     )
 
 

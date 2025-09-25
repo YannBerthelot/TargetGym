@@ -42,7 +42,7 @@ def test_compute_velocity_shape_and_trends():
 def test_compute_next_state_progression(method):
     """State should evolve and time should increment."""
     params = CSTRParams(delta_t=0.1)
-    state = CSTRState(C_a=1.0, T=350.0, T_c=298.0, t=0, target_CA=0.85)
+    state = CSTRState(C_a=1.0, T=350.0, T_c=298.0, time=0, target_CA=0.85)
 
     new_state, metrics = compute_next_state(
         T_c_raw=0.5,
@@ -53,7 +53,7 @@ def test_compute_next_state_progression(method):
 
     # State updates
     assert isinstance(new_state, CSTRState)
-    assert new_state.t == state.t + 1
+    assert new_state.time == state.time + 1
     assert not jnp.allclose(new_state.C_a, state.C_a)
     assert not jnp.allclose(new_state.T, state.T)
 
@@ -71,7 +71,7 @@ def test_compute_next_state_progression(method):
 def test_integration_methods_agree_for_small_dt():
     """RK4 and Euler should give similar results if dt is small."""
     params = CSTRParams(delta_t=1e-4)
-    state = CSTRState(C_a=1.0, T=350.0, T_c=298.0, t=0, target_CA=0.85)
+    state = CSTRState(C_a=1.0, T=350.0, T_c=298.0, time=0, target_CA=0.85)
 
     action = 0.3
     new_state_euler, _ = compute_next_state(
@@ -88,7 +88,7 @@ def test_integration_methods_agree_for_small_dt():
 def test_action_clipping():
     """Raw action should be scaled and then clamped between [T_c_min, T_c_max]."""
     params = CSTRParams(delta_t=0.1)
-    state = CSTRState(C_a=1.0, T=350.0, T_c=298.0, t=0, target_CA=0.85)
+    state = CSTRState(C_a=1.0, T=350.0, T_c=298.0, time=0, target_CA=0.85)
 
     # Very large raw input -> clipped to max
     action = 100.0

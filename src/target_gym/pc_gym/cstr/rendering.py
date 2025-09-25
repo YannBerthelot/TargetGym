@@ -94,7 +94,7 @@ def _render(cls, screen, state, params, frames, clock, stride: int = 10):
     if not hasattr(cls, "history"):
         cls.history = {"t": [], "C_a": [], "T": [], "T_c": [], "reward": []}
 
-    step = state.t
+    step = state.time
     # Only render every `stride` steps
     if step % stride == 0 or step == 1:
         frame, cls.history = render_cstr(state, params, step, cls.history)

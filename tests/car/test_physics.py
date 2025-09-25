@@ -27,7 +27,7 @@ def state(params):
         x=0.0,
         velocity=20.0,  # ~72 km/h
         throttle=0.5,
-        t=0,
+        time=0,
         target_velocity=25.0,
     )
 
@@ -106,7 +106,7 @@ def test_compute_acceleration_against_drag(params):
 def test_compute_next_state_progress(params, state):
     s_next, _ = compute_next_state(1.0, state, params)
     # Time should advance
-    assert s_next.t == state.t + 1
+    assert s_next.time == state.time + 1
     # X should advance forward
     assert s_next.x > state.x
     # Velocity should remain finite

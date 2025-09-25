@@ -16,7 +16,7 @@ def test_reset_env_returns_obs_and_state():
     assert isinstance(state, CSTRState)
 
     # Reset initializes time to 0
-    assert state.t == 0
+    assert state.time == 0
 
     # Initial C_a is within allowed range
     assert (
@@ -52,7 +52,7 @@ def test_step_env_updates_state_and_obs(method):
 
     # State updated and time advanced
     assert isinstance(state2, CSTRState)
-    assert state2.t == state.t + 1
+    assert state2.time == state.time + 1
 
     # Reward is finite
     assert jnp.isfinite(reward)
@@ -82,14 +82,14 @@ def test_action_and_observation_space():
 
 def test_is_terminal_propagates_logic():
     env = CSTR()
-    state = CSTRState(t=0, C_a=0.5, T=350.0, target_CA=0.6, T_c=298.0)
+    state = CSTRState(time=0, C_a=0.5, T=350.0, target_CA=0.6, T_c=298.0)
     term, trunc = env.is_terminal(state, env.default_params)
     # assert isinstance(result, jnp.ndarray)
 
 
 def test_get_obs_matches_manual_call():
     env = CSTR()
-    state = CSTRState(t=0, C_a=0.5, T=350.0, target_CA=0.6, T_c=298.0)
+    state = CSTRState(time=0, C_a=0.5, T=350.0, target_CA=0.6, T_c=298.0)
 
     obs1 = env.get_obs(state)
     obs2 = env.get_obs(state, env.default_params)

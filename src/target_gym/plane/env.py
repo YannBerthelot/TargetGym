@@ -131,7 +131,7 @@ def check_mass_does_not_increase(old_mass, new_mass, xp=jnp):
 def check_is_terminal(state: PlaneState, params: PlaneParams, xp=jnp):
     """Return True if the episode should terminate."""
     terminated = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
-    truncated = state.t >= params.max_steps_in_episode
+    truncated = state.time >= params.max_steps_in_episode
 
     # done = xp.logical_or(done_alt, done_steps)
     return terminated, truncated
@@ -241,7 +241,7 @@ def compute_next_state(
         power=power,
         stick=stick,
         fuel=state.fuel,
-        t=state.t + 1,
+        time=state.time + 1,
         target_altitude=state.target_altitude,
     )
     return new_state, metrics

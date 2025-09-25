@@ -26,7 +26,7 @@ def state(params):
     return CarState(
         x=0.0,
         velocity=20.0,  # ~72 km/h
-        t=0,
+        time=0,
         throttle=0.0,
         target_velocity=25.0,
     )
@@ -113,7 +113,7 @@ def test_compute_acceleration_with_throttle_and_brake(params):
 
 def test_compute_next_state_progress(params, state):
     s_next, _ = compute_next_state(1.0, state, params)
-    assert s_next.t == state.t + 1
+    assert s_next.time == state.time + 1
     assert s_next.x > state.x
     assert jnp.isfinite(s_next.velocity)
 

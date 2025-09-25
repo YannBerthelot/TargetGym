@@ -171,7 +171,7 @@ def test_compute_next_state():
         power=0.5,  # Half power
         stick=0.0,
         fuel=params.initial_fuel_quantity,
-        t=0,
+        time=0,
         target_altitude=4000.0,
     )
 
