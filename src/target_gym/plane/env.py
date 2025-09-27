@@ -1,7 +1,5 @@
 from typing import Tuple
 
-# Optional: jax imports (only used in jax env)
-import chex
 import jax
 import jax.numpy as jnp
 from flax import struct
@@ -104,8 +102,8 @@ class PlaneParams(EnvParams):
     max_steps_in_episode: int = 10_000
     min_alt: float = 0.0
     max_alt: float = 40_000.0 / 3.281
-    target_altitude_range: Tuple[float, float] = (5_000.0, 5_000.0)
-    initial_altitude_range: Tuple[float, float] = (3_000.0, 5_000.0)
+    target_altitude_range: Tuple[float, float] = (3_000.0, 8_000.0)
+    initial_altitude_range: Tuple[float, float] = (3_000.0, 8_000.0)
     initial_z_dot: float = 0.0
     initial_x_dot: float = 200.0
     initial_theta_dot: float = 0.0
@@ -159,7 +157,7 @@ def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
     reward = xp.where(
         done_alt,
         -1.0 * params.max_steps_in_episode,
-        ((max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff) ** 2,
+        ((max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff) ** 10,
     )
     return reward
 
