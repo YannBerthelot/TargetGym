@@ -37,6 +37,9 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
     def default_params(self) -> PlaneParams:
         return PlaneParams()
 
+    def compute_reward(self, state, params):
+        return compute_reward(state, params)
+
     def step_env(
         self,
         key: chex.PRNGKey,
@@ -55,7 +58,7 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
         new_state, metrics = compute_next_state(
             power, stick, state, params, integration_method=self.integration_method
         )
-        reward = compute_reward(new_state, params, xp=jnp)
+        reward = self.compute_reward(new_state, params)
         terminated, truncated = check_is_terminal(new_state, params, xp=jnp)
         done = terminated | truncated
 
