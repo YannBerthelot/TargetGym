@@ -26,7 +26,7 @@ def test_can_step_env():
         action = (np.random.uniform(0, 1), np.random.uniform(-15, 15))
         obs, reward, terminated, truncated, info = env.step(action)
         assert isinstance(obs, np.ndarray)
-        assert isinstance(reward, (jnp.ndarray, np.ndarray, float, np.float_))
+        assert isinstance(reward, (jnp.ndarray, np.ndarray, float, np.float64))
         assert isinstance(terminated, (jnp.ndarray, bool, np.bool_, jnp.bool_))
         assert isinstance(truncated, (jnp.ndarray, bool, np.bool_, jnp.bool_))
         if terminated or truncated:
@@ -57,8 +57,8 @@ def test_sb3_ppo_can_learn():
     action, _states = model.predict(obs, deterministic=True)
     assert isinstance(action, (tuple, list, np.ndarray))
     assert len(action) == 2
-    assert isinstance(action[0].item(), (float, int, np.int_, np.float_))  # power
-    assert isinstance(action[1].item(), (float, int, np.int_, np.float_))  # stick
+    assert isinstance(action[0].item(), (float, int, np.int_, np.float64))  # power
+    assert isinstance(action[1].item(), (float, int, np.int_, np.float64))  # stick
 
     # Test action bounds
     for _ in range(10):
