@@ -75,7 +75,9 @@ def render_bicycle_top_view_fixed(
     hy1 = yf + np.sin(handle_angle + np.pi / 2) * handle_length / 2
     hx2 = xf + np.cos(handle_angle - np.pi / 2) * handle_length / 2
     hy2 = yf + np.sin(handle_angle - np.pi / 2) * handle_length / 2
-    pygame.draw.line(surf, (200, 0, 0), (hx1, hy1), (hx2, hy2), 3)
+    pygame.draw.line(
+        surf, (200, 0, 0), (hx1.item(), hy1.item()), (hx2.item(), hy2.item()), 3
+    )
 
     # --- HUD ---
     font = pygame.font.SysFont("Arial", 16)
