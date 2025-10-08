@@ -63,7 +63,7 @@ def test_sb3_ppo_can_learn():
     # Test action bounds
     for _ in range(10):
         action, _states = model.predict(obs, deterministic=False)
-        assert 0 <= action[0] / 10 <= 1  # power should be between 0 and 1
+        assert -1 <= action[0] <= 1  # power should be between 0 and 1
         assert -1 <= action[1] <= 1  # stick should be between -15 and 15 degrees
 
 

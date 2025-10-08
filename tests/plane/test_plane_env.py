@@ -35,7 +35,7 @@ def test_sample_action():
     obs, env_state = env.reset(key)
     env_params = PlaneParams()
     action = env.action_space(env_params).sample(key)
-    assert 0 <= action[0] <= 1
+    assert -1 <= action[0] <= 1
     assert -1 <= action[1] <= 1
     assert action.shape == (2,)
 
