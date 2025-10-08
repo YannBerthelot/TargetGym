@@ -52,7 +52,9 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
         """
         if params is None:
             params = self.default_params
+
         power, stick = action
+        power = (power + 1) / 2  # map from [-1, 1] to [0, 1]
         stick = jnp.deg2rad(stick * 15)  # radians
 
         new_state, metrics = compute_next_state(
@@ -170,7 +172,7 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
     def action_space(self, params: PlaneParams | None = None) -> spaces.Discrete:
         """Action space of the environment."""
         return spaces.Box(
-            low=jnp.array([0.0, -1.0]),
+            low=jnp.array([-1.0, -1.0]),
             high=jnp.array([1.0, 1.0]),
             shape=(2,),
             dtype=jnp.float32,
