@@ -33,7 +33,7 @@ def test_interpolator_round_trip(env_class, env_params):
     if len(input_names) == 2:
 
         if env_class == Plane:
-            first_input = jnp.linspace(0, 1.0, RESOLUTION)
+            first_input = jnp.linspace(-1.0, 1.0, RESOLUTION)
             second_input = jnp.zeros(1)
         else:
             first_input = jnp.linspace(-1.0, 1.0, RESOLUTION)

@@ -149,7 +149,7 @@ def get_interpolator(env_class, env_params, resolution: int = 100, steps: int = 
 
     if len(input_names) == 2:
         if env_class == Plane:
-            first_input = jnp.linspace(0, 1.0, resolution)
+            first_input = jnp.linspace(-1.0, 1.0, resolution)
             second_input = jnp.zeros(1)
         else:
             first_input = jnp.linspace(-1.0, 1.0, resolution)
