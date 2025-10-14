@@ -36,6 +36,9 @@ class Car2D(environment.Environment[CarState, CarParams]):
     def default_params(self) -> CarParams:
         return CarParams()
 
+    def compute_reward(self, state, params):
+        return compute_reward(state, params)
+
     def step_env(
         self,
         key: chex.PRNGKey,

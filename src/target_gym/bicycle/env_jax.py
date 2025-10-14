@@ -52,6 +52,9 @@ class RandlovBicycle(environment.Environment[BikeState, BikeParams]):
     def default_params(self) -> BikeParams:
         return BikeParams()
 
+    def compute_reward(self, state, params):
+        return compute_reward(state, params)
+
     def step_env(
         self,
         key: chex.PRNGKey,
