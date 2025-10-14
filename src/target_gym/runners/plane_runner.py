@@ -155,7 +155,7 @@ def run_mode(
 
     if mode == "2d":
         start_time = time.time()
-        power_levels = jnp.linspace(0.0, 1.0, (resolution * 2) + 1)
+        power_levels = jnp.linspace(-1.0, 1.0, (resolution * 2) + 1)
         stick_level = jnp.array(stick)
 
         def run_vmapped(powers):
@@ -182,7 +182,7 @@ def run_mode(
                     ax.text(
                         x=len(traj) - 1,
                         y=traj[-1],
-                        s=f" {float(power_levels[i]):.2f} - {float(traj[-1]):.0f}ft",  # format the throttle value
+                        s=f" {float((power_levels[i]+1)/2):.2f} - {float(traj[-1]):.0f}ft",  # format the throttle value
                         color=cmap(norm(power_levels[i])),
                         fontsize=8,
                         va="center",
@@ -202,7 +202,7 @@ def run_mode(
             plt.savefig("figures/plane/power_trajectories.png")
 
     elif mode == "3d":
-        power_levels = jnp.linspace(0.0, 1.0, resolution + 1)
+        power_levels = jnp.linspace(-1.0, 1.0, resolution + 1)
         stick_levels = jnp.linspace(-1.0, 1.0, resolution + 1)
         final_alts, df = run_power_stick_grid(
             power_levels,
@@ -216,7 +216,7 @@ def run_mode(
             P, S = jnp.meshgrid(power_levels, stick_levels * 15, indexing="ij")
             fig = plt.figure(figsize=(10, 7))
             ax = fig.add_subplot(111, projection="3d")
-            surf = ax.plot_surface(P, S, final_alts * 3.28084, cmap="viridis")
+            surf = ax.plot_surface((P + 1) / 2, S, final_alts * 3.28084, cmap="viridis")
             fig.colorbar(
                 surf, ax=ax, shrink=0.5, aspect=10, label="Final Altitude (ft)"
             )
