@@ -33,6 +33,9 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
     def default_params(self) -> CSTRParams:
         return CSTRParams()
 
+    def compute_reward(self, state, params):
+        return compute_reward(state, params)
+
     def step_env(
         self,
         key: chex.PRNGKey,
