@@ -64,10 +64,6 @@ def benchmark_env(env, params, steps: int = 1_000_000, batch_size: int = 1024):
 if __name__ == "__main__":
     from target_gym import (
         CSTR,
-        Bike,
-        BikeParams,
-        Car,
-        CarParams,
         CSTRParams,
         Plane,
         PlaneParams,
@@ -78,26 +74,12 @@ if __name__ == "__main__":
 
     plane_env = Plane()
     plane_params = PlaneParams(max_steps_in_episode=max_steps_in_episode)
-    car_env = Car()
-    car_params = CarParams(max_steps_in_episode=max_steps_in_episode)
-
-    bike_env = Bike()
-    bike_params = BikeParams(max_steps_in_episode=max_steps_in_episode)
-
     cstr_env = CSTR()
     cstr_params = CSTRParams(max_steps_in_episode=max_steps_in_episode)
 
     print(
         "Plane M-steps/sec:",
         benchmark_env(plane_env, plane_params, steps=N_steps, batch_size=1) / int(1e6),
-    )
-    print(
-        "Car M-steps/sec:",
-        benchmark_env(car_env, car_params, steps=N_steps, batch_size=1) / int(1e6),
-    )
-    print(
-        "Bike M-steps/sec:",
-        benchmark_env(bike_env, bike_params, steps=N_steps, batch_size=1) / int(1e6),
     )
     print(
         "CSTR M-steps/sec:",

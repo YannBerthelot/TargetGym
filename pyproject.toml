@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "target-gym"
 version = "0.1.0" # Placeholder, automatically updated based on tags.
-description = "A reinforcement learning environment for simulating target-MDP environments (Airplane, Car, Bicycle), with gymnasium and gymnax support"  # Add a description
+description = "A reinforcement learning environment for simulating target-MDP environments (Airplane, Car, Process Control), with gymnasium and gymnax support"  # Add a description
 authors = ["Yann Berthelot <yannberthelot1@gmail.com>"]
 readme = "README.md"
 homepage = "https://github.com/yannberthelot/Plane"  # Add your repository URL
 repository = "https://github.com/yannberthelot/Plane"
-keywords = ["reinforcement-learning", "gymnasium", "jax", "airplane", "car", "simulation", "bike"]
+keywords = ["reinforcement-learning", "gymnasium", "jax", "airplane", "car", "simulation", "process-control"]
 classifiers = [  # Add relevant classifiers
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -46,6 +46,8 @@ ruff = { version = ">=0.12.11", optional = true }
 black = { version = ">=25.1.0", optional = true }
 stable-baselines3 = { version = ">=2.7.0", optional = true }
 tensorboard = { version = ">=2.20.0", optional = true }
+casadi = "^3.7.2"
+do-mpc = "^5.1.1"
 
 [tool.black]
 line-length = 88

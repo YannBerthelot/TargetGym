@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-from target_gym.pc_gym.cstr.env import compute_reward, convert_raw_action_to_range
+from target_gym.pc_gym.cstr.env import compute_reward
 
 
 def render_cstr(state, params, step, history):
@@ -35,13 +35,10 @@ def render_cstr(state, params, step, history):
     axs[1].grid(alpha=0.3)
     axs[1].axhline(params.T_max, color="red", ls="--", lw=1, alpha=0.6)
     axs[1].axhline(params.T_min, color="blue", ls="--", lw=1, alpha=0.6)
-    converted_history = convert_raw_action_to_range(
-        np.array(history["T_c"]), params.T_c_min, params.T_c_max
-    )
     # Plot T_c
     axs[2].plot(
         history["t"],
-        converted_history,
+        history["T_c"],
         color="blue",
         lw=2,
     )
@@ -91,7 +88,7 @@ def _render(cls, screen, state, params, frames, clock, stride: int = 10):
         state = cls.state
 
     # Initialize histories
-    if not hasattr(cls, "history"):
+    if not hasattr(cls, "history") or state.time == 1:
         cls.history = {"t": [], "C_a": [], "T": [], "T_c": [], "reward": []}
 
     step = state.time

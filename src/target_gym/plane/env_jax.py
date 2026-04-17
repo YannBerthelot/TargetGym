@@ -1,4 +1,3 @@
-import time
 from typing import Callable
 
 import chex
@@ -7,7 +6,6 @@ import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
 from target_gym.plane.env import (
-    EnvMetrics,
     PlaneParams,
     PlaneState,
     check_is_terminal,
@@ -27,6 +25,10 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
     render_plane = classmethod(_render)
     screen_width = 600
     screen_height = 400
+
+    # obs = [x_dot, z, z_dot, theta, theta_dot, gamma, target_altitude, power, stick]
+    obs_value_index: int = 1  # z (altitude)
+    obs_target_index: int = 6  # target_altitude
 
     def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (9,)
@@ -169,6 +171,20 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
             save_trajectory=save_trajectory,
         )
 
+    def make_pid(self):
+        """Return a ready-to-use StatefulMIMOPID controlling both power and stick."""
+        from target_gym.experts.pid import make_plane_stateful_pid
+
+        return make_plane_stateful_pid()
+
+    def make_mpc(self, params=None, **kwargs):
+        """Return a GradientMPC oracle optimising both power and stick."""
+        from target_gym.experts.mpc import make_plane_mpc
+
+        if params is None:
+            params = self.default_params
+        return make_plane_mpc(self, params, **kwargs)
+
     def action_space(self, params: PlaneParams | None = None) -> spaces.Discrete:
         """Action space of the environment."""
         return spaces.Box(
@@ -198,7 +214,7 @@ def run_timesteps(key, env, env_params, n_timesteps=10_000, action_type="constan
     obs, state = env.reset(key_reset, env_params)
 
     def step_fn(carry, _):
-        obs, state, key = carry
+        _obs, state, key = carry
         key, key_step, key_action = jax.random.split(key, 3)
 
         # Choose action
@@ -236,7 +252,7 @@ if __name__ == "__main__":
     )
     action = (0.5, 0.0)
     env.save_video(
-        lambda o: action,
+        lambda _: action,
         seed,
         folder="videos",
         episode_index=0,

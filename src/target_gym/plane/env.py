@@ -157,7 +157,10 @@ def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
     reward = xp.where(
         done_alt,
         -1.0 * params.max_steps_in_episode,
-        ((max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff) ** 10,
+        xp.float_power(
+            (max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff,
+            10.0,
+        ),
     )
     return reward
 

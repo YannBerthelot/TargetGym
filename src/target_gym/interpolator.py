@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import pandas as pd
 
-from target_gym import CSTR, Bike, Car, Plane
+from target_gym import CSTR, Plane
 from target_gym.runners.utils import run_input_grid
 
 
@@ -100,8 +100,6 @@ def get_interpolator_from_run(
 # Map each env to its input(s) and output state attribute
 ENV_IO_MAPPING = {
     Plane: {"input_names": ["power", "stick"], "state_attr": "z"},
-    Bike: {"input_names": ["power", "stick"], "state_attr": "z"},
-    Car: {"input_names": ["throttle"], "state_attr": "velocity"},
     CSTR: {"input_names": ["T_c"], "state_attr": "T"},
 }
 
@@ -160,8 +158,6 @@ def get_interpolator(env_class, env_params, resolution: int = 100, steps: int = 
             bounds = env_instance.action_space(env_params)
             min_val = float(bounds.low[0])
             max_val = float(bounds.high[0])
-            if env_class == Car:
-                min_val = max(min_val, 0.0)
         except Exception:
             min_val, max_val = -1.0, 1.0
         first_input = jnp.linspace(min_val, max_val, resolution)

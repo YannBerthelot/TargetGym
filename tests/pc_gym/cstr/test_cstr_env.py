@@ -9,7 +9,6 @@ from target_gym.pc_gym.cstr.env import (
     compute_next_state,
     compute_velocity,
 )
-from target_gym.utils import convert_raw_action_to_range
 
 
 def test_compute_velocity_shape_and_trends():
@@ -57,12 +56,8 @@ def test_compute_next_state_progression(method):
     assert not jnp.allclose(new_state.C_a, state.C_a)
     assert not jnp.allclose(new_state.T, state.T)
 
-    # T_c is clamped to [min, max]
-    assert (
-        params.T_c_min
-        <= convert_raw_action_to_range(new_state.T_c, params.T_c_min, params.T_c_max)
-        <= params.T_c_max
-    )
+    # T_c is the actual converted temperature, clamped to [T_c_min, T_c_max]
+    assert params.T_c_min <= new_state.T_c <= params.T_c_max
 
     # metrics is None (first-order dynamics mode)
     assert metrics is None
@@ -98,16 +93,10 @@ def test_action_clipping():
         params=params,
         integration_method="euler_1",
     )
-    assert (
-        convert_raw_action_to_range(new_state.T_c, params.T_c_min, params.T_c_max)
-        == params.T_c_max
-    )
+    assert new_state.T_c == params.T_c_max
 
     # Very negative raw input -> clipped to min
     new_state, _ = compute_next_state(
         T_c_raw=-action, state=state, params=params, integration_method="euler_1"
     )
-    assert (
-        convert_raw_action_to_range(new_state.T_c, params.T_c_min, params.T_c_max)
-        == params.T_c_min
-    )
+    assert new_state.T_c == params.T_c_min

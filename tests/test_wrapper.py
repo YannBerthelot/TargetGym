@@ -3,10 +3,6 @@ import os
 import numpy as np
 import pytest
 
-from target_gym.bicycle.env import BikeParams
-from target_gym.bicycle.env_jax import RandlovBicycle
-from target_gym.car.env import CarParams
-from target_gym.car.env_jax import Car2D
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
 from target_gym.wrapper import gym_wrapper_factory
@@ -21,16 +17,6 @@ max_steps_for_video = 100
             Airplane2D,
             PlaneParams(max_steps_in_episode=max_steps_for_video),
             lambda obs: np.array([0.8, 0.0]),
-        ),
-        (
-            Car2D,
-            CarParams(max_steps_in_episode=max_steps_for_video),
-            lambda obs: np.array(0.5),
-        ),
-        (
-            RandlovBicycle,
-            BikeParams(max_steps_in_episode=max_steps_for_video),
-            lambda obs: np.array([0.2, 0.0]),
         ),
     ],
 )
@@ -70,7 +56,7 @@ def test_wrapper_reset_step_render(jax_env_class, env_params, dummy_action, tmp_
 
 @pytest.mark.parametrize(
     "jax_env_class",
-    [Airplane2D, Car2D, RandlovBicycle],
+    [Airplane2D],
 )
 def test_wrapper_reset_random_consistency(jax_env_class):
     """Resetting with same seed produces same observation"""
@@ -88,8 +74,6 @@ def test_wrapper_reset_random_consistency(jax_env_class):
     "jax_env_class, dummy_action",
     [
         (Airplane2D, lambda obs: np.array([0.8, 0.0])),
-        (Car2D, lambda obs: np.array(0.5)),
-        (RandlovBicycle, lambda obs: np.array([0.2, 0.0])),
     ],
 )
 def test_wrapper_multi_step(jax_env_class, dummy_action):
