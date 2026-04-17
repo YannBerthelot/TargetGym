@@ -452,6 +452,11 @@ def compute_revenue_rate(state: ReactorState, params: ReactorParams):
     P_MW = params.P_electric_GW * 1000.0 * state.n
     revenue = P_MW * params.spot_price_per_MWh  # $/h
     imbalance_price = params.spot_price_per_MWh * params.imbalance_factor
-    penalty = jnp.abs(state.n - state.target_n) * params.P_electric_GW * 1000.0 * imbalance_price
+    penalty = (
+        jnp.abs(state.n - state.target_n)
+        * params.P_electric_GW
+        * 1000.0
+        * imbalance_price
+    )
     net = revenue - penalty
     return net / 1000.0  # k$/h

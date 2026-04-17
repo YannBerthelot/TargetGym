@@ -1259,10 +1259,15 @@ class StatefulPlane3DFigureEightPID:
         alt_err = nearest_dz  # positive = curve is above → climb
         self._alt_int += alt_err * self.dt
         alt_d = (alt_err - self._alt_prev) / self.dt
-        stick = float(np.clip(
-            self.Kp_alt * alt_err + self.Ki_alt * self._alt_int + self.Kd_alt * alt_d,
-            -1.0, 1.0,
-        ))
+        stick = float(
+            np.clip(
+                self.Kp_alt * alt_err
+                + self.Ki_alt * self._alt_int
+                + self.Kd_alt * alt_d,
+                -1.0,
+                1.0,
+            )
+        )
         if abs(stick) >= 1.0:
             self._alt_int -= alt_err * self.dt
         self._alt_prev = alt_err
@@ -1270,22 +1275,26 @@ class StatefulPlane3DFigureEightPID:
         # ── Heading: blend tangent (on-curve) with correction (off-curve) ──
         lateral_dist = float(np.sqrt(nearest_dx**2 + nearest_dy**2 + 1e-6))
         # blend: 0 = on curve (follow tangent), 1 = far off (chase nearest)
-        blend = float(np.clip(lateral_dist / (0.05 * max(target_radius, 1.0)), 0.0, 1.0))
+        blend = float(
+            np.clip(lateral_dist / (0.05 * max(target_radius, 1.0)), 0.0, 1.0)
+        )
         correction_heading = float(np.arctan2(nearest_dy, nearest_dx))
         # Blend unit vectors to avoid angle wrapping issues
-        bx = blend * np.cos(correction_heading) + (1.0 - blend) * np.cos(tangent_heading)
-        by = blend * np.sin(correction_heading) + (1.0 - blend) * np.sin(tangent_heading)
+        bx = blend * np.cos(correction_heading) + (1.0 - blend) * np.cos(
+            tangent_heading
+        )
+        by = blend * np.sin(correction_heading) + (1.0 - blend) * np.sin(
+            tangent_heading
+        )
         desired_heading = float(np.arctan2(by, bx))
 
-        hdg_err = float(np.arctan2(
-            np.sin(desired_heading - psi), np.cos(desired_heading - psi)
-        ))
+        hdg_err = float(
+            np.arctan2(np.sin(desired_heading - psi), np.cos(desired_heading - psi))
+        )
         self._hdg_int += hdg_err * self.dt
         hdg_d = (hdg_err - self._hdg_prev) / self.dt
         desired_bank = (
-            self.Kp_hdg * hdg_err
-            + self.Ki_hdg * self._hdg_int
-            + self.Kd_hdg * hdg_d
+            self.Kp_hdg * hdg_err + self.Ki_hdg * self._hdg_int + self.Kd_hdg * hdg_d
         )
         desired_bank = float(
             np.clip(desired_bank, -self.max_bank_rad, self.max_bank_rad)

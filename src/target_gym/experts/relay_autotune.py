@@ -207,17 +207,14 @@ def relay_experiment(
 
     for step in range(max_steps):
         measured = (
-            float(measure_fn(obs)) if measure_fn is not None
+            float(measure_fn(obs))
+            if measure_fn is not None
             else float(obs[state_index])
         )
         sp = (
-            fixed_setpoint if fixed_setpoint is not None
-            else float(obs[setpoint_index])
+            fixed_setpoint if fixed_setpoint is not None else float(obs[setpoint_index])
         )
-        error = (
-            float(error_fn(measured, sp)) if error_fn is not None
-            else sp - measured
-        )
+        error = float(error_fn(measured, sp)) if error_fn is not None else sp - measured
         error_history.append(error)
 
         # Relay with hysteresis

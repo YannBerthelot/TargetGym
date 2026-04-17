@@ -56,7 +56,9 @@ class PlaneState3D(EnvState):
     fuel: float
     # Task targets — semantics depend on the task variant
     target_altitude: float
-    target_heading: float  # heading: desired heading; fig8: orientation angle; circle: unused
+    target_heading: (
+        float  # heading: desired heading; fig8: orientation angle; circle: unused
+    )
     target_x: float  # circle/fig8: center x; heading: unused (0)
     target_y: float  # circle/fig8: center y; heading: unused (0)
     target_radius: float  # circle: radius; fig8: lobe radius; heading: unused (0)
@@ -257,7 +259,7 @@ def nearest_point_on_twisted_lemniscate(state: PlaneState3D, params: PlaneParams
     dx = curve_x - state.x
     dy = curve_y - state.y
     dz = curve_z - state.z
-    dists_sq = dx ** 2 + dy ** 2 + dz ** 2
+    dists_sq = dx**2 + dy**2 + dz**2
     idx = jnp.argmin(dists_sq)
 
     nearest_dx = dx[idx]

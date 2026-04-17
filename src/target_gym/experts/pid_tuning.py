@@ -943,17 +943,20 @@ def tune_plane3d_figure8_pid(
                 alt_d = (alt_err - alt_prev) / dt
                 stick = jnp.clip(
                     Kp_alt * alt_err + Ki_alt * new_alt_int + Kd_alt * alt_d,
-                    -1.0, 1.0,
+                    -1.0,
+                    1.0,
                 )
                 # Anti-windup
                 new_alt_int = jnp.where(
-                    jnp.abs(stick) >= 1.0, alt_int, new_alt_int,
+                    jnp.abs(stick) >= 1.0,
+                    alt_int,
+                    new_alt_int,
                 )
 
                 # Heading: blend tangent (obs[15]) with correction (obs[12:14])
                 nearest_dx, nearest_dy = obs[12], obs[13]
                 tangent_hdg = obs[15]
-                lat_dist = jnp.sqrt(nearest_dx ** 2 + nearest_dy ** 2 + 1e-6)
+                lat_dist = jnp.sqrt(nearest_dx**2 + nearest_dy**2 + 1e-6)
                 blend = jnp.clip(lat_dist / (0.05 * t_rad + 1e-3), 0.0, 1.0)
                 corr_hdg = jnp.arctan2(nearest_dy, nearest_dx)
                 bx = blend * jnp.cos(corr_hdg) + (1.0 - blend) * jnp.cos(tangent_hdg)
@@ -962,21 +965,26 @@ def tune_plane3d_figure8_pid(
 
                 psi = obs[9]
                 hdg_err = jnp.arctan2(
-                    jnp.sin(desired_hdg - psi), jnp.cos(desired_hdg - psi),
+                    jnp.sin(desired_hdg - psi),
+                    jnp.cos(desired_hdg - psi),
                 )
                 desired_bank = jnp.clip(Kp_hdg * hdg_err, -max_bank_rad, max_bank_rad)
                 aileron = jnp.clip(Kp_bank * (obs[6] - desired_bank), -1.0, 1.0)
 
                 action = jnp.array([cruise_power * 2.0 - 1.0, stick, aileron])
                 _, new_env_state, _, new_done, _ = _safe_step_env(
-                    env, key, env_state, action, params, done, st,
+                    env,
+                    key,
+                    env_state,
+                    action,
+                    params,
+                    done,
+                    st,
                 )
                 done = jnp.logical_or(done, new_done)
 
                 # Cost: 3D distance to curve
-                curve_dist = jnp.sqrt(
-                    obs[12] ** 2 + obs[13] ** 2 + obs[14] ** 2 + 1e-8
-                )
+                curve_dist = jnp.sqrt(obs[12] ** 2 + obs[13] ** 2 + obs[14] ** 2 + 1e-8)
                 curve_err = curve_dist / (r_hi + 1e-3)
                 raw_cost = jnp.minimum(curve_err, cost_cap)
                 step_cost = jnp.where(done, 2.0, raw_cost)
