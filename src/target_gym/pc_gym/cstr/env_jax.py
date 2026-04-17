@@ -24,6 +24,10 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
     screen_width = 600
     screen_height = 400
 
+    # obs = [C_a, T, target_CA]
+    obs_value_index: int = 0  # C_a (concentration)
+    obs_target_index: int = 2  # target_CA
+
     def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (3,)
         self.positions_history = []
@@ -95,7 +99,7 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
         key, target_key, C_a_key = jax.random.split(key, 3)
 
         initial_C_a = jax.random.uniform(
-            target_key,
+            C_a_key,
             minval=params.initial_CA_range[0],
             maxval=params.initial_CA_range[1],
         )
@@ -165,6 +169,20 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
         """
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
+
+    def make_pid(self):
+        """Return a ready-to-use StatefulPID for concentration tracking."""
+        from target_gym.experts.pid import make_cstr_stateful_pid
+
+        return make_cstr_stateful_pid()
+
+    def make_mpc(self, params=None, **kwargs):
+        """Return a GradientMPC oracle for concentration tracking."""
+        from target_gym.experts.mpc import make_cstr_mpc
+
+        if params is None:
+            params = self.default_params
+        return make_cstr_mpc(self, params, **kwargs)
 
 
 if __name__ == "__main__":

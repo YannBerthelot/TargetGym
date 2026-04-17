@@ -1,5 +1,42 @@
 SHELL=/bin/bash
-LINT_PATHS=src/ tests/ 
+LINT_PATHS=src/ tests/
+
+.PHONY: all all-% figures figures-% videos videos-% tuning tuning-% clear-tuning clear-mpc short-gifs test mypy coverage missing-annotations type lint format check-codestyle commit-checks
+
+all:
+	poetry run python -m target_gym.runners.runners
+
+all-%:
+	poetry run python -m target_gym.runners.runners --env $*
+
+figures:
+	poetry run python -m target_gym.runners.runners --only figures
+
+figures-%:
+	poetry run python -m target_gym.runners.runners --only figures --env $*
+
+videos:
+	poetry run python -m target_gym.runners.runners --only videos
+
+videos-%:
+	poetry run python -m target_gym.runners.runners --only videos --env $*
+
+tuning:
+	poetry run python scripts/tune_pid.py
+
+tuning-%:
+	poetry run python scripts/tune_pid.py --envs $*
+
+clear-tuning:
+	rm -f data/pid_gains.json
+	@echo "Cleared PID gains cache (data/pid_gains.json)."
+
+short-gifs:
+	poetry run python scripts/shorten_gifs.py
+
+clear-mpc:
+	rm -rf data/mpc_cache data/interpolators
+	@echo "Cleared MPC trajectory cache (data/mpc_cache/, data/interpolators/)."
 
 test:
 	poetry run pytest --tb=short --disable-warnings
