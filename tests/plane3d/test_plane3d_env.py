@@ -30,12 +30,12 @@ class TestWrapAngle:
         assert abs(float(wrap_angle(jnp.pi))) == pytest.approx(jnp.pi, abs=1e-4)
 
     def test_large_positive(self):
-        result = wrap_angle(3 * jnp.pi)
-        assert -jnp.pi <= float(result) <= jnp.pi
+        result = float(wrap_angle(3 * jnp.pi))
+        assert abs(result) == pytest.approx(jnp.pi, abs=1e-4)
 
     def test_large_negative(self):
-        result = wrap_angle(-5 * jnp.pi)
-        assert -jnp.pi <= float(result) <= jnp.pi
+        result = float(wrap_angle(-5 * jnp.pi))
+        assert abs(result) == pytest.approx(jnp.pi, abs=1e-4)
 
 
 # ─── Heading task ──────────────────────────────────────
