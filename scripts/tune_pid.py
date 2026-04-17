@@ -53,6 +53,7 @@ sys.path.insert(0, str(ROOT / "src"))
 # Per-environment relay tuners
 # ---------------------------------------------------------------------------
 
+
 def _tune_cstr(n_points: int, tuning_rule: str, **kw) -> dict:
     from target_gym import CSTR, CSTRParams
     from target_gym.experts.relay_autotune import relay_sweep
@@ -65,11 +66,17 @@ def _tune_cstr(n_points: int, tuning_rule: str, **kw) -> dict:
         return state.replace(target_CA=t, C_a=t)
 
     result = relay_sweep(
-        env, params, reset_fn,
-        state_index=0, setpoint_index=2,
+        env,
+        params,
+        reset_fn,
+        state_index=0,
+        setpoint_index=2,
         target_range=tuple(params.target_CA_range),
-        n_points=n_points, sign=-1, tuning_rule=tuning_rule,
-        relay_amplitude=0.3, max_steps=5000,
+        n_points=n_points,
+        sign=-1,
+        tuning_rule=tuning_rule,
+        relay_amplitude=0.3,
+        max_steps=5000,
     )
     mid = len(result["operating_points"]) // 2
     return {
@@ -99,11 +106,17 @@ def _tune_first_order(n_points: int, tuning_rule: str, **kw) -> dict:
         return state.replace(target_x=t, x=t)
 
     result = relay_sweep(
-        env, params, reset_fn,
-        state_index=0, setpoint_index=1,
+        env,
+        params,
+        reset_fn,
+        state_index=0,
+        setpoint_index=1,
         target_range=tuple(params.target_x_range),
-        n_points=n_points, sign=1, tuning_rule=tuning_rule,
-        relay_amplitude=0.5, max_steps=5000,
+        n_points=n_points,
+        sign=1,
+        tuning_rule=tuning_rule,
+        relay_amplitude=0.5,
+        max_steps=5000,
     )
     mid = len(result["operating_points"]) // 2
     return {
@@ -134,12 +147,19 @@ def _tune_four_tank(n_points: int, tuning_rule: str, **kw) -> dict:
         return state.replace(target_h1=t, h1=t)
 
     res1 = relay_sweep(
-        env, params, reset_fn_1,
-        state_index=0, setpoint_index=4,
+        env,
+        params,
+        reset_fn_1,
+        state_index=0,
+        setpoint_index=4,
         target_range=tuple(params.target_h1_range),
-        n_points=n_points, sign=1, tuning_rule=tuning_rule,
-        relay_amplitude=0.5, max_steps=5000,
-        action_dim=2, action_index=0,
+        n_points=n_points,
+        sign=1,
+        tuning_rule=tuning_rule,
+        relay_amplitude=0.5,
+        max_steps=5000,
+        action_dim=2,
+        action_index=0,
     )
 
     # Loop 2: pump2 -> h2
@@ -148,12 +168,19 @@ def _tune_four_tank(n_points: int, tuning_rule: str, **kw) -> dict:
         return state.replace(target_h2=t, h2=t)
 
     res2 = relay_sweep(
-        env, params, reset_fn_2,
-        state_index=1, setpoint_index=5,
+        env,
+        params,
+        reset_fn_2,
+        state_index=1,
+        setpoint_index=5,
         target_range=tuple(params.target_h2_range),
-        n_points=n_points, sign=1, tuning_rule=tuning_rule,
-        relay_amplitude=0.5, max_steps=5000,
-        action_dim=2, action_index=1,
+        n_points=n_points,
+        sign=1,
+        tuning_rule=tuning_rule,
+        relay_amplitude=0.5,
+        max_steps=5000,
+        action_dim=2,
+        action_index=1,
     )
 
     mid1 = len(res1["operating_points"]) // 2
@@ -204,11 +231,17 @@ def _tune_glass_furnace(n_points: int, tuning_rule: str, **kw) -> dict:
         )
 
     result = relay_sweep(
-        env, params, reset_fn,
-        state_index=0, setpoint_index=2,
+        env,
+        params,
+        reset_fn,
+        state_index=0,
+        setpoint_index=2,
         target_range=tuple(params.target_T_crown_range),
-        n_points=n_points, sign=1, tuning_rule=tuning_rule,
-        relay_amplitude=0.3, max_steps=10000,
+        n_points=n_points,
+        sign=1,
+        tuning_rule=tuning_rule,
+        relay_amplitude=0.3,
+        max_steps=10000,
     )
     mid = len(result["operating_points"]) // 2
     return {
@@ -248,11 +281,17 @@ def _tune_reactor(n_points: int, tuning_rule: str, **kw) -> dict:
         )
 
     result = relay_sweep(
-        env, params, reset_fn,
-        state_index=0, setpoint_index=3,
+        env,
+        params,
+        reset_fn,
+        state_index=0,
+        setpoint_index=3,
         target_range=tuple(params.target_n_range),
-        n_points=n_points, sign=1, tuning_rule=tuning_rule,
-        relay_amplitude=0.3, max_steps=10000,
+        n_points=n_points,
+        sign=1,
+        tuning_rule=tuning_rule,
+        relay_amplitude=0.3,
+        max_steps=10000,
     )
     mid = len(result["operating_points"]) // 2
     return {
@@ -287,24 +326,36 @@ def _tune_plane(n_points: int, tuning_rule: str, **kw) -> dict:
         return state.replace(target_altitude=t, z=t)
 
     res_stick = relay_sweep(
-        env, params, reset_fn,
-        state_index=1,    # z
-        setpoint_index=6, # target_altitude
+        env,
+        params,
+        reset_fn,
+        state_index=1,  # z
+        setpoint_index=6,  # target_altitude
         target_range=tuple(params.target_altitude_range),
-        n_points=n_points, sign=1, tuning_rule=tuning_rule,
-        relay_amplitude=0.3, max_steps=10000,
-        action_dim=2, action_index=1,
+        n_points=n_points,
+        sign=1,
+        tuning_rule=tuning_rule,
+        relay_amplitude=0.3,
+        max_steps=10000,
+        action_dim=2,
+        action_index=1,
     )
 
     # Power loop: very slow, use conservative fixed gains from relay
     res_power = relay_sweep(
-        env, params, reset_fn,
+        env,
+        params,
+        reset_fn,
         state_index=1,
         setpoint_index=6,
         target_range=tuple(params.target_altitude_range),
-        n_points=n_points, sign=1, tuning_rule=tuning_rule,
-        relay_amplitude=0.2, max_steps=10000,
-        action_dim=2, action_index=0,
+        n_points=n_points,
+        sign=1,
+        tuning_rule=tuning_rule,
+        relay_amplitude=0.2,
+        max_steps=10000,
+        action_dim=2,
+        action_index=0,
     )
 
     mid = len(res_stick["operating_points"]) // 2
@@ -351,6 +402,7 @@ def _tune_plane(n_points: int, tuning_rule: str, **kw) -> dict:
 # experiment at a representative operating point.
 # ---------------------------------------------------------------------------
 
+
 def _plane3d_bank_relay(env, params, tuning_rule, cruise_action, max_steps=3000):
     """Step 1 (common): tune bank P-controller (phi → aileron) via relay."""
     import numpy as np
@@ -366,15 +418,20 @@ def _plane3d_bank_relay(env, params, tuning_rule, cruise_action, max_steps=3000)
         return np.array([cruise_action, 0.0, float(np.clip(relay_out, -1, 1))])
 
     res = relay_experiment(
-        env, params, reset_level,
-        state_index=6, setpoint_index=6,
+        env,
+        params,
+        reset_level,
+        state_index=6,
+        setpoint_index=6,
         operating_point=0.0,
-        fixed_setpoint=0.0,        # desired bank = 0 (level)
+        fixed_setpoint=0.0,  # desired bank = 0 (level)
         relay_amplitude=0.5,
         max_steps=max_steps,
         build_action=build_bank_action,
-        action_bias=0.0, plant_sign=1,
-        n_settle_cycles=1, n_measure_cycles=3,
+        action_bias=0.0,
+        plant_sign=1,
+        n_settle_cycles=1,
+        n_measure_cycles=3,
     )
 
     if res["success"]:
@@ -404,20 +461,27 @@ def _plane3d_altitude_relay(env, params, tuning_rule, cruise_action, max_steps=1
         return np.array([cruise_action, float(np.clip(relay_out, -1, 1)), 0.0])
 
     res = relay_experiment(
-        env, params, reset_at_alt,
-        state_index=2, setpoint_index=10,   # z, target_altitude
+        env,
+        params,
+        reset_at_alt,
+        state_index=2,
+        setpoint_index=10,  # z, target_altitude
         operating_point=mid_alt,
         relay_amplitude=0.3,
         max_steps=max_steps,
         build_action=build_alt_action,
-        action_bias=0.0, plant_sign=1,
-        n_settle_cycles=2, n_measure_cycles=3,
+        action_bias=0.0,
+        plant_sign=1,
+        n_settle_cycles=2,
+        n_measure_cycles=3,
     )
 
     if res["success"]:
         Kp, Ki, Kd = rule_fn(res["Ku"], res["Tu"])
-        print(f"    Ku={res['Ku']:.6f}, Tu={res['Tu']:.2f}s → "
-              f"Kp={Kp:.6f}, Ki={Ki:.6f}, Kd={Kd:.6f}")
+        print(
+            f"    Ku={res['Ku']:.6f}, Tu={res['Tu']:.2f}s → "
+            f"Kp={Kp:.6f}, Ki={Ki:.6f}, Kd={Kd:.6f}"
+        )
     else:
         Kp, Ki, Kd = 0.0005, 1e-5, 0.001
         print("    Altitude relay failed → fallback gains")
@@ -455,25 +519,33 @@ def _tune_plane3d_heading(n_points: int, tuning_rule: str, **kw) -> dict:
         return np.array([cruise_action, 0.0, aileron])
 
     def wrap_error(measured, setpoint):
-        return float(np.arctan2(np.sin(setpoint - measured),
-                                np.cos(setpoint - measured)))
+        return float(
+            np.arctan2(np.sin(setpoint - measured), np.cos(setpoint - measured))
+        )
 
     hdg_res = relay_experiment(
-        env, params, reset_heading,
-        state_index=9, setpoint_index=11,   # psi, target_heading
+        env,
+        params,
+        reset_heading,
+        state_index=9,
+        setpoint_index=11,  # psi, target_heading
         operating_point=0.0,
-        relay_amplitude=0.10,   # ±0.10 rad desired bank (~6°)
+        relay_amplitude=0.10,  # ±0.10 rad desired bank (~6°)
         max_steps=5000,
         build_action=build_heading_action,
         error_fn=wrap_error,
-        action_bias=0.0, plant_sign=1,
-        n_settle_cycles=2, n_measure_cycles=3,
+        action_bias=0.0,
+        plant_sign=1,
+        n_settle_cycles=2,
+        n_measure_cycles=3,
     )
 
     if hdg_res["success"]:
         Kp_hdg, Ki_hdg, Kd_hdg = rule_fn(hdg_res["Ku"], hdg_res["Tu"])
-        print(f"    Ku={hdg_res['Ku']:.4f}, Tu={hdg_res['Tu']:.2f}s → "
-              f"Kp={Kp_hdg:.4f}, Ki={Ki_hdg:.6f}, Kd={Kd_hdg:.4f}")
+        print(
+            f"    Ku={hdg_res['Ku']:.4f}, Tu={hdg_res['Tu']:.2f}s → "
+            f"Kp={Kp_hdg:.4f}, Ki={Ki_hdg:.6f}, Kd={Kd_hdg:.4f}"
+        )
     else:
         Kp_hdg, Ki_hdg, Kd_hdg = 0.5, 0.0, 0.0
         print("    Heading relay failed → fallback gains")
@@ -481,13 +553,16 @@ def _tune_plane3d_heading(n_points: int, tuning_rule: str, **kw) -> dict:
     # ── Step 3: altitude loop (z → stick, level flight) ──
     print("  [3/3] Altitude relay (z → stick)...")
     Kp_alt, Ki_alt, Kd_alt = _plane3d_altitude_relay(
-        env, params, tuning_rule, cruise_action,
+        env,
+        params,
+        tuning_rule,
+        cruise_action,
     )
 
     return {
-        "alt":   {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
-        "hdg":   {"Kp": round(Kp_hdg, 6), "Ki": round(Ki_hdg, 6), "Kd": round(Kd_hdg, 6)},
-        "bank":  {"Kp": round(Kp_bank, 6)},
+        "alt": {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
+        "hdg": {"Kp": round(Kp_hdg, 6), "Ki": round(Ki_hdg, 6), "Kd": round(Kd_hdg, 6)},
+        "bank": {"Kp": round(Kp_bank, 6)},
         "power": 0.6,
         "note": "Sequential relay autotuning: bank → heading → altitude.",
     }
@@ -519,9 +594,11 @@ def _tune_plane3d_circle(n_points: int, tuning_rule: str, **kw) -> dict:
         _, st = env.reset_env(key, p)
         # Position on the circle (east of center, heading north = tangent)
         return st.replace(
-            target_altitude=mid_alt, z=mid_alt,
+            target_altitude=mid_alt,
+            z=mid_alt,
             target_radius=mid_rad,
-            x=st.target_x + mid_rad, y=st.target_y,
+            x=st.target_x + mid_rad,
+            y=st.target_y,
         )
 
     def measure_radial_dist(obs):
@@ -531,29 +608,40 @@ def _tune_plane3d_circle(n_points: int, tuning_rule: str, **kw) -> dict:
     def build_radial_action(relay_out, obs):
         """relay_out = bank correction (rad); add to nominal turn bank."""
         phi = float(obs[6])
-        desired_bank = float(np.clip(
-            target_bank_rad + relay_out, -max_bank_rad, max_bank_rad,
-        ))
+        desired_bank = float(
+            np.clip(
+                target_bank_rad + relay_out,
+                -max_bank_rad,
+                max_bank_rad,
+            )
+        )
         aileron = float(np.clip(Kp_bank * (phi - desired_bank), -1, 1))
         return np.array([cruise_action, 0.0, aileron])
 
     rad_res = relay_experiment(
-        env, params, reset_circle,
-        state_index=11, setpoint_index=13,  # unused when measure_fn provided
+        env,
+        params,
+        reset_circle,
+        state_index=11,
+        setpoint_index=13,  # unused when measure_fn provided
         operating_point=mid_rad,
         measure_fn=measure_radial_dist,
         fixed_setpoint=mid_rad,
-        relay_amplitude=0.08,   # ±0.08 rad bank correction (~5°)
+        relay_amplitude=0.08,  # ±0.08 rad bank correction (~5°)
         max_steps=5000,
         build_action=build_radial_action,
-        action_bias=0.0, plant_sign=-1,  # more bank → smaller radius (neg gain)
-        n_settle_cycles=2, n_measure_cycles=3,
+        action_bias=0.0,
+        plant_sign=-1,  # more bank → smaller radius (neg gain)
+        n_settle_cycles=2,
+        n_measure_cycles=3,
     )
 
     if rad_res["success"]:
         Kp_rad, Ki_rad, Kd_rad = rule_fn(rad_res["Ku"], rad_res["Tu"])
-        print(f"    Ku={rad_res['Ku']:.6f}, Tu={rad_res['Tu']:.2f}s → "
-              f"Kp={Kp_rad:.6f}, Ki={Ki_rad:.8f}, Kd={Kd_rad:.6f}")
+        print(
+            f"    Ku={rad_res['Ku']:.6f}, Tu={rad_res['Tu']:.2f}s → "
+            f"Kp={Kp_rad:.6f}, Ki={Ki_rad:.8f}, Kd={Kd_rad:.6f}"
+        )
     else:
         Kp_rad, Ki_rad, Kd_rad = 1e-5, 0.0, 0.0
         print("    Radial relay failed → fallback gains")
@@ -561,13 +649,16 @@ def _tune_plane3d_circle(n_points: int, tuning_rule: str, **kw) -> dict:
     # ── Step 3: altitude loop ──
     print("  [3/3] Altitude relay (z → stick)...")
     Kp_alt, Ki_alt, Kd_alt = _plane3d_altitude_relay(
-        env, params, tuning_rule, cruise_action,
+        env,
+        params,
+        tuning_rule,
+        cruise_action,
     )
 
     return {
-        "alt":   {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
-        "rad":   {"Kp": round(Kp_rad, 8), "Ki": round(Ki_rad, 8), "Kd": round(Kd_rad, 8)},
-        "bank":  {"Kp": round(Kp_bank, 6)},
+        "alt": {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
+        "rad": {"Kp": round(Kp_rad, 8), "Ki": round(Ki_rad, 8), "Kd": round(Kd_rad, 8)},
+        "bank": {"Kp": round(Kp_bank, 6)},
         "power": 0.6,
         "target_bank_deg": 15.0,
         "note": "Sequential relay autotuning: bank → radial → altitude.",
@@ -599,7 +690,10 @@ def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
     # ── Step 2: altitude loop (relay on z → stick) ──
     print("  [2/3] Altitude relay (z → stick)...")
     Kp_alt, Ki_alt, Kd_alt = _plane3d_altitude_relay(
-        env, params, tuning_rule, cruise_action,
+        env,
+        params,
+        tuning_rule,
+        cruise_action,
     )
 
     # ── Step 3: heading gains via grid search ──
@@ -622,9 +716,13 @@ def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
             alt_err = float(obs[14])  # curve_z - aircraft_z
             alt_int += alt_err * dt
             alt_d = (alt_err - alt_prev) / dt
-            stick = float(np.clip(
-                Kp_alt * alt_err + Ki_alt * alt_int + Kd_alt * alt_d, -1, 1,
-            ))
+            stick = float(
+                np.clip(
+                    Kp_alt * alt_err + Ki_alt * alt_int + Kd_alt * alt_d,
+                    -1,
+                    1,
+                )
+            )
             if abs(stick) >= 1.0:
                 alt_int -= alt_err * dt
             alt_prev = alt_err
@@ -643,9 +741,9 @@ def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
             by = blend * np.sin(corr_hdg) + (1.0 - blend) * np.sin(tangent_hdg)
             desired_hdg = float(np.arctan2(by, bx))
 
-            hdg_err = float(np.arctan2(
-                np.sin(desired_hdg - psi), np.cos(desired_hdg - psi)
-            ))
+            hdg_err = float(
+                np.arctan2(np.sin(desired_hdg - psi), np.cos(desired_hdg - psi))
+            )
             desired_bank = float(np.clip(Kp_hdg * hdg_err, -max_bank_rad, max_bank_rad))
             phi = float(obs[6])
             aileron = float(np.clip(Kp_bank * (phi - desired_bank), -1, 1))
@@ -666,9 +764,9 @@ def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
     print(f"    → best Kp_hdg = {best_Kp_hdg:.2f}")
 
     return {
-        "alt":   {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
-        "hdg":   {"Kp": round(best_Kp_hdg, 6), "Ki": 0.0, "Kd": 0.0},
-        "bank":  {"Kp": round(Kp_bank, 6)},
+        "alt": {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
+        "hdg": {"Kp": round(best_Kp_hdg, 6), "Ki": 0.0, "Kd": 0.0},
+        "bank": {"Kp": round(Kp_bank, 6)},
         "power": 0.6,
         "note": "Sequential relay (bank, altitude) + grid search (Kp_hdg). Twisted 3D lemniscate.",
     }
@@ -679,15 +777,15 @@ def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
 # ---------------------------------------------------------------------------
 
 TUNERS = {
-    "cstr":             (_tune_cstr,             "CSTR"),
-    "first_order":      (_tune_first_order,      "FirstOrder"),
-    "four_tank":        (_tune_four_tank,        "FourTank"),
-    "glass_furnace":    (_tune_glass_furnace,    "GlassFurnace"),
-    "reactor":          (_tune_reactor,          "Reactor"),
-    "plane":            (_tune_plane,            "Airplane2D"),
-    "plane3d_heading":  (_tune_plane3d_heading,  "Plane3DHeading"),
-    "plane3d_circle":   (_tune_plane3d_circle,   "Plane3DCircle"),
-    "plane3d_figure8":  (_tune_plane3d_figure8,  "Plane3DFigureEight"),
+    "cstr": (_tune_cstr, "CSTR"),
+    "first_order": (_tune_first_order, "FirstOrder"),
+    "four_tank": (_tune_four_tank, "FourTank"),
+    "glass_furnace": (_tune_glass_furnace, "GlassFurnace"),
+    "reactor": (_tune_reactor, "Reactor"),
+    "plane": (_tune_plane, "Airplane2D"),
+    "plane3d_heading": (_tune_plane3d_heading, "Plane3DHeading"),
+    "plane3d_circle": (_tune_plane3d_circle, "Plane3DCircle"),
+    "plane3d_figure8": (_tune_plane3d_figure8, "Plane3DFigureEight"),
 }
 
 
@@ -695,21 +793,28 @@ TUNERS = {
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Tune PID gains via relay autotuning and save to data/pid_gains.json"
     )
     parser.add_argument(
-        "--envs", nargs="+", choices=list(TUNERS), default=list(TUNERS),
+        "--envs",
+        nargs="+",
+        choices=list(TUNERS),
+        default=list(TUNERS),
         metavar="ENV",
         help="Environments to tune (default: all). Choices: " + ", ".join(TUNERS),
     )
     parser.add_argument(
-        "--n-points", type=int, default=8,
+        "--n-points",
+        type=int,
+        default=8,
         help="Number of operating points for gain scheduling (default: 8).",
     )
     parser.add_argument(
-        "--tuning-rule", choices=["amigo", "tyreus_luyben", "ziegler_nichols"],
+        "--tuning-rule",
+        choices=["amigo", "tyreus_luyben", "ziegler_nichols"],
         default="amigo",
         help="PID tuning rule applied to Ku/Tu (default: amigo).",
     )
@@ -742,8 +847,10 @@ def main():
     explicit_envs = "--envs" in sys.argv
     for env_name in args.envs:
         if not explicit_envs and env_name in gains and env_name != "_meta":
-            print(f"\n── {env_name}: already tuned (skipped). "
-                  f"Use --envs {env_name} or clear cache to re-tune.")
+            print(
+                f"\n── {env_name}: already tuned (skipped). "
+                f"Use --envs {env_name} or clear cache to re-tune."
+            )
             continue
         tuner_fn, display = TUNERS[env_name]
         print(f"\n{'='*60}")
