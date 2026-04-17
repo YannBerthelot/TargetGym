@@ -86,27 +86,27 @@ Environments are designed to span a wide range of difficulty, making TargetGym s
 <table align="center">
   <tr>
     <td align="center">
-      <img src="videos/plane/pid_output.gif" width="300px"/><br/>
+      <img src="videos/plane/pid_output_short.gif" width="300px"/><br/>
       Plane 2D (PID)
     </td>
     <td align="center">
-      <img src="videos/cstr/pid_output.gif" width="300px"/><br/>
+      <img src="videos/cstr/pid_output_short.gif" width="300px"/><br/>
       CSTR (PID)
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="videos/first_order/pid_output.gif" width="300px"/><br/>
+      <img src="videos/first_order/pid_output_short.gif" width="300px"/><br/>
       First Order System (PID)
     </td>
     <td align="center">
-      <img src="videos/four_tank/pid_output.gif" width="300px"/><br/>
+      <img src="videos/four_tank/pid_output_short.gif" width="300px"/><br/>
       Four Tank (PID)
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="videos/reactor/pid_output.gif" width="300px"/><br/>
+      <img src="videos/reactor/pid_output_short.gif" width="300px"/><br/>
       Nuclear Reactor (PID)
     </td>
   </tr>
