@@ -6,12 +6,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from scipy.interpolate import interp1d
 
 from target_gym.utils import (
     compute_episode_returns_vectorized,
     compute_norm_from_coordinates,
     convert_frames_from_gym_to_wandb,
     convert_raw_action_to_range,
+    load_or_build_interpolator,
     run_n_steps,
     save_video,
 )
@@ -197,3 +199,37 @@ def test_run_n_steps_dummy(n_steps, max_steps):
     assert jnp.isclose(
         mean_return, expected
     ), f"Mean return {mean_return} != expected {expected}"
+
+
+# -------------------------------
+# Test load_or_build_interpolator
+# -------------------------------
+def test_load_or_build_interpolator_builds_on_first_call(tmp_path):
+    build_count = [0]
+
+    def build_fn():
+        build_count[0] += 1
+        return interp1d([0.0, 1.0], [0.0, 2.0])
+
+    cache = str(tmp_path / "test.pkl")
+    result = load_or_build_interpolator(cache, build_fn)
+
+    assert build_count[0] == 1
+    assert os.path.exists(cache)
+    assert abs(float(result(0.5)) - 1.0) < 1e-6
+
+
+def test_load_or_build_interpolator_uses_cache_on_second_call(tmp_path):
+    build_count = [0]
+
+    def build_fn():
+        build_count[0] += 1
+        return interp1d([0.0, 1.0], [0.0, 2.0])
+
+    cache = str(tmp_path / "test.pkl")
+    load_or_build_interpolator(cache, build_fn)
+    assert build_count[0] == 1
+
+    result = load_or_build_interpolator(cache, build_fn)
+    assert build_count[0] == 1  # build_fn not called again
+    assert abs(float(result(0.5)) - 1.0) < 1e-6

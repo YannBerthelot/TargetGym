@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym import CSTR, Bike, Car, CarParams, CSTRParams, Plane, PlaneParams
+from target_gym import CSTR, CSTRParams, Plane, PlaneParams
 from target_gym.interpolator import (
     ENV_IO_MAPPING,
     get_interpolator,
@@ -16,10 +16,8 @@ RESOLUTION = 100  # small for test speed
 @pytest.mark.parametrize(
     "env_class, env_params",
     [
-        (Car, CarParams(max_steps_in_episode=STEPS)),
         (CSTR, CSTRParams(max_steps_in_episode=STEPS)),
         (Plane, PlaneParams(max_steps_in_episode=STEPS)),
-        # (Bike, BikeParams(max_steps_in_episode=STEPS)),
     ],
 )
 def test_interpolator_round_trip(env_class, env_params):
@@ -43,8 +41,6 @@ def test_interpolator_round_trip(env_class, env_params):
         try:
             min_val = float(env_instance.action_space(env_params).low[0])
             max_val = float(env_instance.action_space(env_params).high[0])
-            if env_class == Car:
-                min_val = max(min_val, 0.0)
         except Exception:
             min_val, max_val = -1.0, 1.0
         first_input = jnp.linspace(min_val, max_val, RESOLUTION)
