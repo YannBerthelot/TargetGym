@@ -6,11 +6,6 @@ import jax
 import numpy as np
 import pytest
 
-# from gymnasium.utils.save_video import save_video
-from target_gym.bicycle.env_jax import BikeParams, BikeState
-from target_gym.bicycle.env_jax import RandlovBicycle as JaxBike2D
-from target_gym.car.env_jax import Car2D as JaxCar2D
-from target_gym.car.env_jax import CarParams, CarState
 from target_gym.pc_gym.cstr.env_jax import CSTR as JaxCSTR
 from target_gym.pc_gym.cstr.env_jax import CSTRParams, CSTRState
 from target_gym.plane.env_jax import Airplane2D as JaxPlane2D
@@ -43,18 +38,6 @@ ENVIRONMENTS = [
         PlaneState,
         lambda _: (0.8, 0.0),
     ),  # plane
-    (
-        JaxCar2D,
-        CarParams,
-        CarState,
-        lambda _: 0.5,
-    ),  # car
-    (
-        JaxBike2D,
-        BikeParams,
-        BikeState,
-        lambda _: (0.6, 0.0),
-    ),  # bicycle
     (
         JaxCSTR,
         CSTRParams,

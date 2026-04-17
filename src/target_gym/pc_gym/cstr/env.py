@@ -31,11 +31,11 @@ class CSTRParams(EnvParams):
     C_a_min: float = 0.7
     C_a_max: float = 1.0
 
-    target_CA_range: Tuple[float, float] = (0.85, 0.85)
+    target_CA_range: Tuple[float, float] = (0.84, 0.91)
     initial_CA_range: Tuple[float, float] = (0.8, 0.85)
     initial_T: float = 330.0
-    delta_t: float = 1e-3
-    max_steps_in_episode: int = 1_000
+    delta_t: float = 0.25
+    max_steps_in_episode: int = 100
 
 
 @struct.dataclass
@@ -87,7 +87,7 @@ def compute_next_state(
         method=integration_method,
     )
     return (
-        state.replace(C_a=C_a, T=T, T_c=T_c_raw, time=state.time + 1),
+        state.replace(C_a=C_a, T=T, T_c=T_c, time=state.time + 1),
         metrics,
     )
 

@@ -320,6 +320,11 @@ def compute_air_density_from_altitude(altitude: float) -> float:
     g = 9.80665  # m/s^2
     R = 287.05  # J/(kg·K)
 
+    # Clip to keep T > 0 so (T/T0)**5.26 stays finite. Termination bounds are
+    # well within [-50_000, 40_000]; clipping only matters for divergent
+    # gradient-tuning rollouts past the terminal state, where it prevents NaN
+    # from poisoning the backward pass via jnp.where.
+    altitude = jnp.clip(altitude, -50_000.0, 40_000.0)
     T = T0 - L * altitude
     P = P0 * (T / T0) ** (g / (R * L))
     rho = P / (R * T)

@@ -10,9 +10,23 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
 
+from target_gym.experts.mpc import make_plane_mpc
+from target_gym.experts.pid import (
+    make_plane_pid,
+    make_plane_stateful_gs_pid,
+    mimo_pid_step,
+)
+
 # Import environment
 from target_gym.plane.env_jax import Airplane2D, PlaneParams
-from target_gym.utils import truncate_colormap
+from target_gym.utils import (
+    load_or_build_interpolator,
+    load_or_run_mpc_episode,
+    run_episode_headless_with_state,
+    save_comparison_figure,
+    save_comparison_gif,
+    truncate_colormap,
+)
 
 
 def run_constant_policy(
@@ -28,7 +42,9 @@ def run_constant_policy(
 
     def step_fn(carry, _):
         key, state, done = carry
-        obs, new_state, reward, new_done, info = env.step(key, state, action, params)
+        obs, new_state, reward, new_done, info = env.step_env(
+            key, state, action, params
+        )
         # Freeze state if already done
         state = jax.lax.cond(done, lambda _: state, lambda _: new_state, operand=None)
         done = jnp.logical_or(done, new_done)
@@ -53,7 +69,9 @@ def run_constant_policy_final_alt(
 
     def step_fn(carry, _):
         key, state, done = carry
-        obs, new_state, reward, new_done, info = env.step(key, state, action, params)
+        obs, new_state, reward, new_done, info = env.step_env(
+            key, state, action, params
+        )
         state = jax.lax.cond(done, lambda _: state, lambda _: new_state, operand=None)
         done = jnp.logical_or(done, new_done)
         return (key, state, done), (new_state.z, info["last_state"].z, done)
@@ -136,6 +154,28 @@ def last_zero_array_arg(arrs):
     return idxs[-1] if idxs.size > 0 else -1
 
 
+def run_pid_for_target(
+    target_val, env: Airplane2D, params: PlaneParams, pid_params, pid_state0, steps: int
+):
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, params)
+    state = state.replace(target_altitude=target_val)
+
+    def step_fn(carry, _):
+        env_state, pid_state, done = carry
+        obs = env.get_obs(env_state)
+        action, new_pid_state = mimo_pid_step(pid_params, pid_state, obs)
+        _, new_env_state, _, new_done, _ = env.step_env(key, env_state, action, params)
+        env_state = jax.lax.cond(
+            done, lambda _: env_state, lambda _: new_env_state, operand=None
+        )
+        done = jnp.logical_or(done, new_done)
+        return (env_state, new_pid_state, done), env_state.z * 3.28084  # m → ft
+
+    _, z_history = jax.lax.scan(step_fn, (state, pid_state0, False), None, length=steps)
+    return z_history
+
+
 def run_mode(
     mode: str,
     power=1.0,
@@ -148,7 +188,8 @@ def run_mode(
     **kwargs,
 ):
     env = Airplane2D(integration_method="rk4_1")
-    if kwargs is not None:
+    n_seeds = kwargs.pop("n_seeds", 20)
+    if kwargs:
         params = PlaneParams(**kwargs)
     else:
         params = env.default_params
@@ -233,6 +274,52 @@ def run_mode(
                 plt.show()
         return df
 
+    elif mode == "pid":
+        pid_params, pid_state0 = make_plane_pid()
+        targets = jnp.linspace(
+            params.target_altitude_range[0],
+            params.target_altitude_range[1],
+            resolution,
+        )
+
+        start_time = time.time()
+        trajectories = jax.vmap(
+            lambda t: run_pid_for_target(
+                t, env, params, pid_params, pid_state0, n_timesteps
+            )
+        )(targets)
+        elapsed = time.time() - start_time
+        print(f"PID ran in {elapsed:.3f}s")
+
+        if plot:
+            targets_ft = targets * 3.28084
+            fig, ax = plt.subplots(figsize=(10, 6))
+            norm = colors.Normalize(
+                vmin=float(targets_ft[0]), vmax=float(targets_ft[-1])
+            )
+            cmap = truncate_colormap(cm.viridis, 0.0, 0.85)
+            for i, traj in enumerate(trajectories):
+                c = cmap(norm(float(targets_ft[i])))
+                ax.plot(traj, color=c, alpha=0.85)
+                ax.text(
+                    x=len(traj) - 1,
+                    y=float(traj[-1]),
+                    s=f" {float(targets_ft[i]):.0f} → {float(traj[-1]):.0f}ft",
+                    color=c,
+                    fontsize=8,
+                    va="center",
+                    ha="left",
+                )
+            xmin, xmax = plt.xlim()
+            plt.xlim(xmin, xmax + (xmax - xmin) * 0.15)
+            ax.set_xlabel("Time step")
+            ax.set_ylabel("Altitude (ft)")
+            ax.set_title("PID response for varying altitude setpoints")
+            os.makedirs("figures/plane", exist_ok=True)
+            plt.savefig("figures/plane/pid_response.pdf")
+            plt.savefig("figures/plane/pid_response.png")
+            plt.close()
+
     elif mode == "video":
         seed = 42
 
@@ -246,14 +333,271 @@ def run_mode(
         os.makedirs("videos/plane", exist_ok=True)
         video.write_gif("videos/plane/output.gif", fps=30)
 
+    elif mode == "pid_video":
+        seed = 42
+        pid = make_plane_stateful_gs_pid()
+
+        def select_action(obs):
+            action = pid.step(obs)  # [power, stick]
+            return (float(action[0]), float(action[1]))
+
+        file = env.save_video(select_action, seed, params=params)
+        from moviepy.video.io.VideoFileClip import VideoFileClip
+
+        video = VideoFileClip(file)
+        os.makedirs("videos/plane", exist_ok=True)
+        video.write_gif("videos/plane/pid_output.gif", fps=30)
+
+    elif mode == "mpc_video":
+        seed = 42
+        mpc = make_plane_mpc(env, params)
+        mpc.reset()
+
+        def select_action(obs, state):
+            return mpc.step(obs, state)
+
+        file = env.save_video(select_action, seed, params=params)
+        from moviepy.video.io.VideoFileClip import VideoFileClip
+
+        video = VideoFileClip(file)
+        os.makedirs("videos/plane", exist_ok=True)
+        video.write_gif("videos/plane/mpc_output.gif", fps=30)
+
+    elif mode == "comparison_gif":
+        # Sweep power with neutral stick — altitude equilibrium is power-controlled.
+        power_levels = jnp.linspace(-1.0, 1.0, 40)
+        fixed_stick = 0.0
+
+        def build_interp():
+            final_alts = np.array(
+                jax.vmap(
+                    lambda p: run_constant_policy_final_alt(
+                        p, fixed_stick, env, params, steps=n_timesteps
+                    )
+                )(power_levels)
+            )
+            p_np = np.array(power_levels)
+            sort_idx = np.argsort(final_alts)
+            return interp1d(
+                final_alts[sort_idx],
+                p_np[sort_idx],
+                bounds_error=False,
+                fill_value="extrapolate",
+            )
+
+        interpolator = load_or_build_interpolator(
+            "data/interpolators/plane_comparison.pkl", build_interp
+        )
+        pid = make_plane_stateful_gs_pid()
+        mpc = make_plane_mpc(env, params)
+
+        def build_const(seed):
+            key = jax.random.PRNGKey(seed)
+            _, st = env.reset_env(key, params)
+            bp = float(np.clip(interpolator(float(st.target_altitude)), -1.0, 1.0))
+
+            def action(_obs, _state=None, _bp=bp):
+                return np.array([_bp, fixed_stick])
+
+            return action
+
+        def build_pid(seed):
+            pid.reset()
+
+            def action(obs, _state=None):
+                a = pid.step(obs)
+                return np.array([float(a[0]), float(a[1])])
+
+            return action
+
+        def build_mpc(seed):
+            mpc.reset()
+
+            def action(obs, state):
+                return mpc.step(obs, state)
+
+            return action
+
+        os.makedirs("figures/plane", exist_ok=True)
+        save_comparison_figure(
+            env=env,
+            build_const_action=build_const,
+            build_pid_action=build_pid,
+            build_mpc_action=build_mpc,
+            output_path="figures/plane/comparison.png",
+            get_state_val=lambda s: float(s.z) * 3.28084,
+            get_target_val=lambda s: float(s.target_altitude) * 3.28084,
+            ylabel="Altitude (ft)",
+            const_label="Constant",
+            pid_label="PID",
+            mpc_cache_prefix="data/mpc_cache/plane_mpc",
+            params=params,
+            n_seeds=n_seeds,
+        )
+
+        # Also produce animated GIF for seed 0
+        gif_seed = 0
+        key = jax.random.PRNGKey(gif_seed)
+        _, st = env.reset_env(key, params)
+        gif_p = float(np.clip(interpolator(float(st.target_altitude)), -1.0, 1.0))
+        pid.reset()
+        mpc.reset()
+        os.makedirs("videos/plane", exist_ok=True)
+        save_comparison_gif(
+            env=env,
+            const_select_action=lambda _obs: np.array([gif_p, fixed_stick]),
+            pid_select_action=lambda obs: (
+                lambda a: np.array([float(a[0]), float(a[1])])
+            )(pid.step(obs)),
+            mpc_select_action=lambda obs, state: mpc.step(obs, state),
+            mpc_cache_path=f"data/mpc_cache/plane_mpc_seed{gif_seed}.pkl",
+            output_path="videos/plane/comparison.gif",
+            get_state_val=lambda s: float(s.z) * 3.28084,
+            get_target_val=lambda s: float(s.target_altitude) * 3.28084,
+            ylabel="Altitude (ft)",
+            const_label=f"Constant p={gif_p:.2f}",
+            pid_label="PID",
+            params=params,
+            seed=gif_seed,
+        )
+
+    elif mode == "comparison_multi":
+        fixed_stick = 0.0
+        power_levels = jnp.linspace(-1.0, 1.0, 40)
+
+        def build_interp():
+            final_alts = np.array(
+                jax.vmap(
+                    lambda p: run_constant_policy_final_alt(
+                        p, fixed_stick, env, params, steps=n_timesteps
+                    )
+                )(power_levels)
+            )
+            p_np = np.array(power_levels)
+            sort_idx = np.argsort(final_alts)
+            return interp1d(
+                final_alts[sort_idx],
+                p_np[sort_idx],
+                bounds_error=False,
+                fill_value="extrapolate",
+            )
+
+        interpolator = load_or_build_interpolator(
+            "data/interpolators/plane_comparison.pkl", build_interp
+        )
+
+        pid = make_plane_stateful_gs_pid()
+        mpc = make_plane_mpc(env, params)
+
+        cumulative_rewards = {"Constant": [], "PID": [], "MPC": []}
+
+        for seed in range(n_seeds):
+            print(f"  Seed {seed + 1}/{n_seeds}...", end=" ", flush=True)
+
+            # Determine best constant power for this seed's target altitude
+            key = jax.random.PRNGKey(seed)
+            _, init_state = env.reset_env(key, params)
+            target_alt = float(init_state.target_altitude)
+            best_power = float(np.clip(interpolator(target_alt), -1.0, 1.0))
+
+            def const_action(_obs, _state=None):
+                return np.array([best_power, fixed_stick])
+
+            def pid_action(obs, _state=None):
+                action = pid.step(obs)
+                return np.array([float(action[0]), float(action[1])])
+
+            def mpc_action(obs, state):
+                return mpc.step(obs, state)
+
+            _, rews_c = run_episode_headless_with_state(env, const_action, params, seed)
+            pid.reset()
+            _, rews_p = run_episode_headless_with_state(env, pid_action, params, seed)
+            mpc.reset()
+            cache_path = f"data/mpc_cache/plane_mpc_seed{seed}.pkl"
+            _, rews_m = load_or_run_mpc_episode(
+                cache_path, env, mpc_action, params, seed
+            )
+
+            cumulative_rewards["Constant"].append(sum(rews_c))
+            cumulative_rewards["PID"].append(sum(rews_p))
+            cumulative_rewards["MPC"].append(sum(rews_m))
+            print(
+                f"const={sum(rews_c):.1f}  pid={sum(rews_p):.1f}  mpc={sum(rews_m):.1f}"
+            )
+
+        if plot:
+            labels = ["Constant", "PID", "MPC"]
+            colors_bar = ["steelblue", "darkorange", "seagreen"]
+            means = [np.mean(cumulative_rewards[label]) for label in labels]
+            stds = [np.std(cumulative_rewards[label]) for label in labels]
+
+            fig, ax = plt.subplots(figsize=(7, 5))
+            x = np.arange(len(labels))
+            ax.bar(
+                x,
+                means,
+                yerr=stds,
+                capsize=6,
+                color=colors_bar,
+                alpha=0.8,
+                error_kw={"linewidth": 1.5},
+            )
+            # Overlay individual points
+            rng = np.random.default_rng(0)
+            for i, label in enumerate(labels):
+                jitter = rng.uniform(-0.15, 0.15, size=n_seeds)
+                ax.scatter(
+                    x[i] + jitter,
+                    cumulative_rewards[label],
+                    color="black",
+                    s=20,
+                    alpha=0.5,
+                    zorder=3,
+                )
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels)
+            ax.set_ylabel("Cumulative reward")
+            ax.set_title(f"Plane: cumulative reward over {n_seeds} seeds (mean ± std)")
+            for xi, (m, s) in enumerate(zip(means, stds)):
+                ax.text(
+                    xi,
+                    m + s + max(stds) * 0.05,
+                    f"{m:.1f}±{s:.1f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=9,
+                )
+            os.makedirs("figures/plane", exist_ok=True)
+            plt.tight_layout()
+            plt.savefig("figures/plane/comparison_multi.pdf")
+            plt.savefig("figures/plane/comparison_multi.png")
+            if show:
+                plt.show()
+            plt.close()
+
+        return cumulative_rewards
+
     else:
         raise ValueError(f"Unknown mode: {mode}")
 
 
-def run_all_modes(show: bool = False):
+def run_videos():
+    run_mode("video", power=0.5, stick=0)
+    run_mode("pid_video")
+    run_mode("mpc_video")
+
+
+def run_figures(show: bool = False):
     run_mode("2d", n_timesteps=5000)
-    run_mode("video", power=0.5, stick=0, max_steps_in_episode=1_000)
+    run_mode("pid", n_timesteps=5000, resolution=10)
+    run_mode("comparison_gif")
     run_mode("3d", n_timesteps=20_000, max_alt=20_000, resolution=40, show=show)
+
+
+def run_all_modes(show: bool = False):
+    run_figures(show=show)
+    run_videos()
 
 
 if __name__ == "__main__":

@@ -196,8 +196,12 @@ def render_plane_scene(
     hstab = rotate_and_translate(hstab)
     engine = rotate_and_translate(engine)
 
-    # Draw clouds behind plane
+    # Draw clouds behind plane (skip any cloud whose screen-x is ahead of the
+    # fuselage — per-request, the camera/horizon should only show clouds the
+    # plane has already overflown).
     for cx, cy, scale, shape in cloud_positions[:5]:
+        if cx > planex:
+            continue
         draw_cloud(surf, cx, cy, scale=scale, seed=shape)
 
     # Draw plane parts
@@ -220,8 +224,10 @@ def render_plane_scene(
     for wx, wy in passenger_windows_points:
         pygame.draw.circle(surf, (0, 0, 0), (int(wx), int(wy)), window_radius)
 
-    # Draw remaining clouds
+    # Draw remaining clouds — same front-of-plane filter.
     for cx, cy, scale, shape in cloud_positions[5:]:
+        if cx > planex:
+            continue
         draw_cloud(surf, cx, cy, scale=scale, seed=shape)
 
     # Draw target altitude line

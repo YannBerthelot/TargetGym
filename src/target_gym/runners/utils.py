@@ -68,7 +68,7 @@ def run_input_grid(
 
     Supports:
         - Single-input environments: Car, CSTR
-        - Two-input environments: Plane, Bike
+        - Two-input environments: Plane
 
     Args:
         input_levels: 1D array of first input (throttle, T_c, power)
