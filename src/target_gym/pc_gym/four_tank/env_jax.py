@@ -156,11 +156,12 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
 
-    def make_pid(self):
-        """Return a ready-to-use StatefulMIMOPID for level tracking."""
-        from target_gym.experts.pid import make_four_tank_stateful_pid
+    @property
+    def expert_policy(self):
+        """Tuned gain-scheduled MIMO PID controller for level tracking."""
+        from target_gym.experts.pid import make_four_tank_stateful_gs_pid
 
-        return make_four_tank_stateful_pid()
+        return make_four_tank_stateful_gs_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return a GradientMPC oracle for level tracking."""

@@ -175,6 +175,13 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
             format=format,
         )
 
+    @property
+    def expert_policy(self):
+        """Tuned gain-scheduled PID controller for neutron density tracking."""
+        from target_gym.experts.pid import make_reactor_stateful_gs_pid
+
+        return make_reactor_stateful_gs_pid()
+
     def render(self, screen, state: ReactorState, params: ReactorParams, frames, clock):
         frames, screen, clock = self.render_reactor(
             screen, state, params, frames, clock

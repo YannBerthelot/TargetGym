@@ -305,6 +305,9 @@ class StatefulPID:
         self.prev_error = e
         return u_clipped
 
+    def __call__(self, obs):
+        return self.step(obs)
+
 
 class StatefulGainScheduledPID:
     """Gain-scheduled PID for video/gymnasium rollouts (not JAX-traced).
@@ -357,6 +360,9 @@ class StatefulGainScheduledPID:
         self.prev_error = e
         return u_clipped
 
+    def __call__(self, obs):
+        return self.step(obs)
+
 
 class StatefulMIMOPID:
     """Two independent SISO PIDs packaged as a MIMO controller (e.g. FourTank)."""
@@ -371,6 +377,9 @@ class StatefulMIMOPID:
 
     def step(self, obs) -> np.ndarray:
         return np.array([self.pid1.step(obs), self.pid2.step(obs)])
+
+    def __call__(self, obs):
+        return self.step(obs)
 
 
 # ---------------------------------------------------------------------------
@@ -1112,6 +1121,9 @@ class StatefulPlane3DHeadingPID:
         self._hdg_prev = hdg_err
         return np.array([self.power, stick, aileron])
 
+    def __call__(self, obs):
+        return self.step(obs)
+
 
 class StatefulPlane3DCirclePID:
     """
@@ -1195,6 +1207,9 @@ class StatefulPlane3DCirclePID:
             self._rad_int -= rad_err * self.dt
         self._rad_prev = rad_err
         return np.array([self.power, stick, aileron])
+
+    def __call__(self, obs):
+        return self.step(obs)
 
 
 class StatefulPlane3DFigureEightPID:
@@ -1305,6 +1320,9 @@ class StatefulPlane3DFigureEightPID:
             self._hdg_int -= hdg_err * self.dt
         self._hdg_prev = hdg_err
         return np.array([self.power, stick, aileron])
+
+    def __call__(self, obs):
+        return self.step(obs)
 
 
 def _g3d(task: str, group: str, key: str, default: float) -> float:

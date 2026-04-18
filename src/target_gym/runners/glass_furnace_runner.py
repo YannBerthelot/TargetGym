@@ -30,12 +30,15 @@ from target_gym.experts.pid import (
     pid_step,
 )
 from target_gym.glass_furnace.env import N_SETPOINTS
+from target_gym.runners.utils import (
+    generate_mpc_video,
+    generate_pid_video,
+    generate_video,
+    run_comparison,
+    run_comparison_multi,
+)
 from target_gym.utils import (
     load_or_build_interpolator,
-    load_or_run_mpc_episode,
-    run_episode_headless_with_state,
-    save_comparison_figure,
-    save_comparison_gif,
     truncate_colormap,
 )
 
@@ -150,7 +153,7 @@ def _plot_temperature_sweep(
             ax.text(
                 x=t_hours[-1],
                 y=float(traj[-1]),
-                s=f" raw={float(fuel_levels[i]):.2f} → {float(traj[-1]):.0f}°C",
+                s=f" raw={float(fuel_levels[i]):.2f} -> {float(traj[-1]):.0f}C",
                 color=cmap(norm(float(fuel_levels[i]))),
                 fontsize=8,
                 va="center",
@@ -168,6 +171,32 @@ def _plot_temperature_sweep(
     plt.savefig(f"figures/{env_name}/{save_name}.pdf")
     plt.savefig(f"figures/{env_name}/{save_name}.png")
     plt.close()
+
+
+def _get_interpolator(env, params, n_timesteps):
+    fuel_levels = jnp.linspace(-1.0, 1.0, 40)
+    sweep_steps = min(n_timesteps, 2000)
+
+    def build_interp():
+        final_temps = np.array(
+            jax.vmap(
+                lambda f: run_constant_policy_final_T_crown(
+                    f, env, params, steps=sweep_steps
+                )
+            )(fuel_levels)
+        )
+        f_np = np.array(fuel_levels)
+        sort_idx = np.argsort(final_temps)
+        return interp1d(
+            final_temps[sort_idx],
+            f_np[sort_idx],
+            bounds_error=False,
+            fill_value="extrapolate",
+        )
+
+    return load_or_build_interpolator(
+        f"data/interpolators/{env_name}_comparison.pkl", build_interp
+    )
 
 
 def run_mode(
@@ -208,7 +237,7 @@ def run_mode(
                     fuel_levels,
                     params,
                     title="Crown temperature trajectories for varying constant fuel flows",
-                    ylabel="T_crown (°C)",
+                    ylabel="T_crown (C)",
                     save_name="trajectories_crown",
                     t_hours=t_hours,
                 )
@@ -218,7 +247,7 @@ def run_mode(
                     fuel_levels,
                     params,
                     title="Melt-zone glass temperature trajectories (hidden state)",
-                    ylabel="T_melt (°C)",
+                    ylabel="T_melt (C)",
                     save_name="trajectories_melt",
                     t_hours=t_hours,
                 )
@@ -227,7 +256,7 @@ def run_mode(
                     fuel_levels,
                     params,
                     title="Working-end glass temperature trajectories (hidden state)",
-                    ylabel="T_work (°C)",
+                    ylabel="T_work (C)",
                     save_name="trajectories_work",
                     t_hours=t_hours,
                 )
@@ -261,7 +290,7 @@ def run_mode(
                 ax.text(
                     x=t_hours[-1],
                     y=float(traj[-1]),
-                    s=f" target={float(targets[i]):.0f}°C → {float(traj[-1]):.0f}°C",
+                    s=f" target={float(targets[i]):.0f}C -> {float(traj[-1]):.0f}C",
                     color=c,
                     fontsize=8,
                     va="center",
@@ -270,7 +299,7 @@ def run_mode(
             xmin, xmax = plt.xlim()
             plt.xlim(xmin, xmax + (xmax - xmin) * 0.2)
             ax.set_xlabel("Time (hours)")
-            ax.set_ylabel("T_crown (°C)")
+            ax.set_ylabel("T_crown (C)")
             ax.set_title("PID response for varying crown-temperature setpoints")
             os.makedirs(f"figures/{env_name}", exist_ok=True)
             plt.savefig(f"figures/{env_name}/pid_response.pdf")
@@ -278,255 +307,42 @@ def run_mode(
             plt.close()
 
     elif mode == "video":
-        seed = 42
-
-        def select_action(_):
-            return np.array([fuel_raw])
-
-        file = env.save_video(select_action, seed, params=params)
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-
-        video = VideoFileClip(file)
-        os.makedirs(f"videos/{env_name}", exist_ok=True)
-        video.write_gif(f"videos/{env_name}/output.gif", fps=30)
+        generate_video(env, params, env_name, lambda _: np.array([fuel_raw]))
 
     elif mode == "pid_video":
-        seed = 42
         pid = make_glass_furnace_stateful_gs_pid()
-
-        def select_action(obs):
-            return np.array([pid.step(obs)])
-
-        file = env.save_video(select_action, seed, params=params)
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-
-        video = VideoFileClip(file)
-        os.makedirs(f"videos/{env_name}", exist_ok=True)
-        video.write_gif(f"videos/{env_name}/pid_output.gif", fps=30)
+        generate_pid_video(env, params, env_name, pid)
 
     elif mode == "mpc_video":
-        seed = 42
         mpc = make_glass_furnace_mpc(env, params)
         mpc.reset()
-
-        # Two-arg closure — save_video detects this and threads ``state`` in so
-        # the MPC can read the full setpoint schedule / step counter.
-        def select_action(obs, state):
-            return np.array([mpc.step(obs, state)])
-
-        file = env.save_video(select_action, seed, params=params)
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-
-        video = VideoFileClip(file)
-        os.makedirs(f"videos/{env_name}", exist_ok=True)
-        video.write_gif(f"videos/{env_name}/mpc_output.gif", fps=30)
+        generate_mpc_video(env, params, env_name, mpc)
 
     elif mode == "comparison_gif":
-        # Interpolator: target_T_crown -> best constant raw fuel action.
-        fuel_levels = jnp.linspace(-1.0, 1.0, 40)
-        sweep_steps = min(n_timesteps, 2000)
-
-        def build_interp():
-            final_temps = np.array(
-                jax.vmap(
-                    lambda f: run_constant_policy_final_T_crown(
-                        f, env, params, steps=sweep_steps
-                    )
-                )(fuel_levels)
-            )
-            f_np = np.array(fuel_levels)
-            sort_idx = np.argsort(final_temps)
-            return interp1d(
-                final_temps[sort_idx],
-                f_np[sort_idx],
-                bounds_error=False,
-                fill_value="extrapolate",
-            )
-
-        interpolator = load_or_build_interpolator(
-            f"data/interpolators/{env_name}_comparison.pkl", build_interp
-        )
+        interpolator = _get_interpolator(env, params, n_timesteps)
         pid = make_glass_furnace_stateful_gs_pid()
         mpc = make_glass_furnace_mpc(env, params)
-
-        def build_const(seed):
-            key = jax.random.PRNGKey(seed)
-            _, st = env.reset_env(key, params)
-            bfuel = float(np.clip(interpolator(float(st.target_T_crown)), -1.0, 1.0))
-
-            def action(_obs, _state=None, _f=bfuel):
-                return np.array([_f])
-
-            return action
-
-        def build_pid(seed):
-            pid.reset()
-
-            def action(obs, _state=None):
-                return np.array([pid.step(obs)])
-
-            return action
-
-        def build_mpc(seed):
-            mpc.reset()
-
-            def action(obs, state):
-                return np.array([mpc.step(obs, state)])
-
-            return action
-
-        os.makedirs(f"figures/{env_name}", exist_ok=True)
-        save_comparison_figure(
-            env=env,
-            build_const_action=build_const,
-            build_pid_action=build_pid,
-            build_mpc_action=build_mpc,
-            output_path=f"figures/{env_name}/comparison.png",
+        run_comparison(
+            env, params, env_name, interpolator, pid, mpc,
             get_state_val=lambda s: float(s.T_crown),
             get_target_val=lambda s: float(s.target_T_crown),
-            ylabel="T_crown (°C)",
-            const_label="Constant",
-            pid_label="PID",
-            mpc_cache_prefix=f"data/mpc_cache/{env_name}_mpc",
-            params=params,
+            ylabel="T_crown (C)",
             n_seeds=n_seeds,
         )
 
-        # Animated GIF for seed 0
-        gif_seed = 0
-        key = jax.random.PRNGKey(gif_seed)
-        _, st = env.reset_env(key, params)
-        gif_fuel = float(np.clip(interpolator(float(st.target_T_crown)), -1.0, 1.0))
-        pid.reset()
-        mpc.reset()
-        os.makedirs(f"videos/{env_name}", exist_ok=True)
-        save_comparison_gif(
-            env=env,
-            const_select_action=lambda _obs: np.array([gif_fuel]),
-            pid_select_action=lambda obs: np.array([pid.step(obs)]),
-            mpc_select_action=lambda obs, state: np.array([mpc.step(obs, state)]),
-            mpc_cache_path=f"data/mpc_cache/{env_name}_mpc_seed{gif_seed}.pkl",
-            output_path=f"videos/{env_name}/comparison.gif",
-            get_state_val=lambda s: float(s.T_crown),
-            get_target_val=lambda s: float(s.target_T_crown),
-            ylabel="T_crown (°C)",
-            const_label=f"Constant fuel={gif_fuel:.2f}",
-            pid_label="PID",
-            params=params,
-            seed=gif_seed,
-        )
-
     elif mode == "comparison_multi":
-        fuel_levels = jnp.linspace(-1.0, 1.0, 40)
-        sweep_steps = min(n_timesteps, 2000)
-
-        def build_interp():
-            final_temps = np.array(
-                jax.vmap(
-                    lambda f: run_constant_policy_final_T_crown(
-                        f, env, params, steps=sweep_steps
-                    )
-                )(fuel_levels)
-            )
-            f_np = np.array(fuel_levels)
-            sort_idx = np.argsort(final_temps)
-            return interp1d(
-                final_temps[sort_idx],
-                f_np[sort_idx],
-                bounds_error=False,
-                fill_value="extrapolate",
-            )
-
-        interpolator = load_or_build_interpolator(
-            f"data/interpolators/{env_name}_comparison.pkl", build_interp
-        )
+        interpolator = _get_interpolator(env, params, n_timesteps)
         pid = make_glass_furnace_stateful_gs_pid()
         mpc = make_glass_furnace_mpc(env, params)
-        cumulative_rewards = {"Constant": [], "PID": [], "MPC": []}
-
-        for seed in range(n_seeds):
-            print(f"  Seed {seed + 1}/{n_seeds}...", end=" ", flush=True)
-            key = jax.random.PRNGKey(seed)
-            _, init_state = env.reset_env(key, params)
-            best_fuel = float(
-                np.clip(interpolator(float(init_state.target_T_crown)), -1.0, 1.0)
-            )
-
-            def const_action(_obs, _state=None, _f=best_fuel):
-                return np.array([_f])
-
-            def pid_action(obs, _state=None):
-                return np.array([pid.step(obs)])
-
-            def mpc_action(obs, state):
-                return np.array([mpc.step(obs, state)])
-
-            _, rews_c = run_episode_headless_with_state(env, const_action, params, seed)
-            pid.reset()
-            _, rews_p = run_episode_headless_with_state(env, pid_action, params, seed)
-            mpc.reset()
-            _, rews_m = load_or_run_mpc_episode(
-                f"data/mpc_cache/{env_name}_mpc_seed{seed}.pkl",
-                env,
-                mpc_action,
-                params,
-                seed,
-            )
-            cumulative_rewards["Constant"].append(sum(rews_c))
-            cumulative_rewards["PID"].append(sum(rews_p))
-            cumulative_rewards["MPC"].append(sum(rews_m))
-            print(
-                f"const={sum(rews_c):.1f}  pid={sum(rews_p):.1f}  mpc={sum(rews_m):.1f}"
-            )
-
-        if plot:
-            labels = ["Constant", "PID", "MPC"]
-            colors_bar = ["steelblue", "darkorange", "seagreen"]
-            means = [np.mean(cumulative_rewards[label]) for label in labels]
-            stds = [np.std(cumulative_rewards[label]) for label in labels]
-            fig, ax = plt.subplots(figsize=(7, 5))
-            x = np.arange(len(labels))
-            ax.bar(
-                x,
-                means,
-                yerr=stds,
-                capsize=6,
-                color=colors_bar,
-                alpha=0.8,
-                error_kw={"linewidth": 1.5},
-            )
-            rng = np.random.default_rng(0)
-            for i, label in enumerate(labels):
-                jitter = rng.uniform(-0.15, 0.15, size=n_seeds)
-                ax.scatter(
-                    x[i] + jitter,
-                    cumulative_rewards[label],
-                    color="black",
-                    s=20,
-                    alpha=0.5,
-                    zorder=3,
-                )
-            ax.set_xticks(x)
-            ax.set_xticklabels(labels)
-            ax.set_ylabel("Cumulative reward")
-            ax.set_title(
-                f"GlassFurnace: cumulative reward over {n_seeds} seeds (mean ± std)"
-            )
-            for xi, (m, s) in enumerate(zip(means, stds)):
-                ax.text(
-                    xi,
-                    m + s + max(stds) * 0.05,
-                    f"{m:.1f}±{s:.1f}",
-                    ha="center",
-                    va="bottom",
-                    fontsize=9,
-                )
-            os.makedirs(f"figures/{env_name}", exist_ok=True)
-            plt.tight_layout()
-            plt.savefig(f"figures/{env_name}/comparison_multi.pdf")
-            plt.savefig(f"figures/{env_name}/comparison_multi.png")
-            plt.close()
-        return cumulative_rewards
+        return run_comparison_multi(
+            env, params, env_name, interpolator, pid, mpc,
+            get_state_val=lambda s: float(s.T_crown),
+            get_target_val=lambda s: float(s.target_T_crown),
+            ylabel="T_crown (C)",
+            title_prefix="GlassFurnace",
+            n_seeds=n_seeds,
+            plot=plot,
+        )
 
     else:
         raise ValueError(f"Unknown mode: {mode}")

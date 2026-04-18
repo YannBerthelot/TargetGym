@@ -19,7 +19,12 @@ from target_gym import (
     FirstOrderSystem,
     FourTank,
     FourTankParams,
+    GlassFurnace,
+    GlassFurnaceParams,
+    Reactor,
+    ReactorParams,
 )
+from target_gym.plane3d.env_jax import Plane3DCircle, Plane3DFigureEight, Plane3DHeading
 from target_gym.experts.mpc import (
     CasadiMPC,
     GradientMPC,
@@ -381,21 +386,28 @@ def test_mpc_reset_zeroes_actions():
         (CSTR, CSTRParams),
         (FirstOrderSystem, FirstOrderParams),
         (FourTank, FourTankParams),
+        (Reactor, ReactorParams),
+        (GlassFurnace, GlassFurnaceParams),
+        (Plane3DHeading, None),
+        (Plane3DCircle, None),
+        (Plane3DFigureEight, None),
     ],
 )
-def test_env_make_pid_returns_controller(env_cls, params_cls):
-    """env.make_pid() returns a usable PID controller."""
+def test_env_expert_policy_returns_controller(env_cls, params_cls):
+    """env.expert_policy returns a callable PID controller."""
     env = env_cls()
-    pid = env.make_pid()
+    pid = env.expert_policy
     assert pid is not None
-    # StatefulPID / StatefulMIMOPID both expose a step() method
+    assert callable(pid)
     assert callable(getattr(pid, "step", None))
+    assert callable(getattr(pid, "reset", None))
 
 
-def test_plane_env_make_pid_returns_controller():
+def test_plane_env_expert_policy_returns_controller():
     env = Airplane2D()
-    pid = env.make_pid()
+    pid = env.expert_policy
     assert pid is not None
+    assert callable(pid)
     assert callable(getattr(pid, "step", None))
 
 

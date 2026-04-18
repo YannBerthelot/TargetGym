@@ -142,11 +142,12 @@ class FirstOrderSystem(environment.Environment[FirstOrderState, FirstOrderParams
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
 
-    def make_pid(self):
-        """Return a ready-to-use StatefulPID for state tracking."""
-        from target_gym.experts.pid import make_first_order_stateful_pid
+    @property
+    def expert_policy(self):
+        """Tuned gain-scheduled PID controller for state tracking."""
+        from target_gym.experts.pid import make_first_order_stateful_gs_pid
 
-        return make_first_order_stateful_pid()
+        return make_first_order_stateful_gs_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return a GradientMPC oracle for state tracking."""

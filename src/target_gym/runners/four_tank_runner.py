@@ -289,46 +289,19 @@ def run_mode(
             plt.close()
 
     elif mode == "video":
-        seed = 42
-
-        def select_action(_):
-            return np.array([v1, v2])
-
-        file = env.save_video(select_action, seed, params=params)
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-
-        video = VideoFileClip(file)
-        os.makedirs(f"videos/{env_name}", exist_ok=True)
-        video.write_gif(f"videos/{env_name}/output.gif", fps=30)
+        from target_gym.runners.utils import generate_video
+        generate_video(env, params, env_name, lambda _: np.array([v1, v2]))
 
     elif mode == "pid_video":
-        seed = 42
+        from target_gym.runners.utils import generate_pid_video
         pid = make_four_tank_stateful_gs_pid()
-
-        def select_action(obs):
-            return pid.step(obs)
-
-        file = env.save_video(select_action, seed, params=params)
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-
-        video = VideoFileClip(file)
-        os.makedirs(f"videos/{env_name}", exist_ok=True)
-        video.write_gif(f"videos/{env_name}/pid_output.gif", fps=30)
+        generate_pid_video(env, params, env_name, pid)
 
     elif mode == "mpc_video":
-        seed = 42
+        from target_gym.runners.utils import generate_mpc_video
         mpc = make_four_tank_mpc(env, params)
         mpc.reset()
-
-        def select_action(obs, state):
-            return mpc.step(obs, state)
-
-        file = env.save_video(select_action, seed, params=params)
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-
-        video = VideoFileClip(file)
-        os.makedirs(f"videos/{env_name}", exist_ok=True)
-        video.write_gif(f"videos/{env_name}/mpc_output.gif", fps=30)
+        generate_mpc_video(env, params, env_name, mpc)
 
     elif mode == "comparison_gif":
         v1_levels = jnp.linspace(-1.0, 1.0, 40)

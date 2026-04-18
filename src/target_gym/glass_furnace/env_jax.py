@@ -157,6 +157,13 @@ class GlassFurnace(environment.Environment[GlassFurnaceState, GlassFurnaceParams
             format=format,
         )
 
+    @property
+    def expert_policy(self):
+        """Tuned gain-scheduled PID controller for crown temperature tracking."""
+        from target_gym.experts.pid import make_glass_furnace_stateful_gs_pid
+
+        return make_glass_furnace_stateful_gs_pid()
+
     def render(
         self,
         screen,

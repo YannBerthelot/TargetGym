@@ -253,6 +253,13 @@ class Plane3DHeading(_Airplane3DBase):
         )
         return self.get_obs(state), state
 
+    @property
+    def expert_policy(self):
+        """Tuned PID controller for heading + altitude tracking."""
+        from target_gym.experts.pid import make_plane3d_heading_stateful_pid
+
+        return make_plane3d_heading_stateful_pid()
+
 
 # ─── Circle task ───────────────────────────────────────
 
@@ -331,6 +338,13 @@ class Plane3DCircle(_Airplane3DBase):
             target_radius=target_radius,
         )
         return self.get_obs(state), state
+
+    @property
+    def expert_policy(self):
+        """Tuned PID controller for circular orbit + altitude tracking."""
+        from target_gym.experts.pid import make_plane3d_circle_stateful_pid
+
+        return make_plane3d_circle_stateful_pid()
 
 
 # ─── Figure-8 task ─────────────────────────────────────
@@ -423,6 +437,13 @@ class Plane3DFigureEight(_Airplane3DBase):
             target_radius=target_radius,
         )
         return self.get_obs(state), state
+
+    @property
+    def expert_policy(self):
+        """Tuned PID controller for figure-8 trajectory + altitude tracking."""
+        from target_gym.experts.pid import make_plane3d_figure8_stateful_pid
+
+        return make_plane3d_figure8_stateful_pid()
 
 
 # ─── Backward-compatible alias ─────────────────────────

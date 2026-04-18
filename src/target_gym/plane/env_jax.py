@@ -171,11 +171,12 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
             save_trajectory=save_trajectory,
         )
 
-    def make_pid(self):
-        """Return a ready-to-use StatefulMIMOPID controlling both power and stick."""
-        from target_gym.experts.pid import make_plane_stateful_pid
+    @property
+    def expert_policy(self):
+        """Tuned gain-scheduled MIMO PID controller for altitude tracking."""
+        from target_gym.experts.pid import make_plane_stateful_gs_pid
 
-        return make_plane_stateful_pid()
+        return make_plane_stateful_gs_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return a GradientMPC oracle optimising both power and stick."""

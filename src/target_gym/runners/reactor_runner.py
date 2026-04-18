@@ -109,6 +109,36 @@ def run_pid_for_target(
     return n_history
 
 
+def _get_interpolator(env, params, n_timesteps):
+    from scipy.interpolate import interp1d
+
+    from target_gym.utils import load_or_build_interpolator
+
+    rho_levels = jnp.linspace(-1.0, 1.0, 40)
+    sweep_steps = min(n_timesteps, 500)
+
+    def build_interp():
+        final_ns = np.array(
+            jax.vmap(
+                lambda r: run_constant_policy_final_n(
+                    r, env, params, steps=sweep_steps
+                )
+            )(rho_levels)
+        )
+        r_np = np.array(rho_levels)
+        sort_idx = np.argsort(final_ns)
+        return interp1d(
+            final_ns[sort_idx],
+            r_np[sort_idx],
+            bounds_error=False,
+            fill_value="extrapolate",
+        )
+
+    return load_or_build_interpolator(
+        f"data/interpolators/{env_name}_comparison.pkl", build_interp
+    )
+
+
 def _plot_sweep(
     hist,
     rho_levels,
@@ -243,252 +273,47 @@ def run_mode(
             plt.close()
 
     elif mode == "video":
-        seed = 42
-
-        def select_action(_):
-            return np.array([rho_raw])
-
-        file = env.save_video(select_action, seed, params=params)
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-
-        video = VideoFileClip(file)
-        os.makedirs(f"videos/{env_name}", exist_ok=True)
-        video.write_gif(f"videos/{env_name}/output.gif", fps=30)
+        from target_gym.runners.utils import generate_video
+        generate_video(env, params, env_name, lambda _: np.array([rho_raw]))
 
     elif mode == "pid_video":
-        seed = 42
+        from target_gym.runners.utils import generate_pid_video
         pid = make_reactor_stateful_gs_pid()
-
-        def select_action(obs):
-            return np.array([pid.step(obs)])
-
-        file = env.save_video(select_action, seed, params=params)
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-
-        video = VideoFileClip(file)
-        os.makedirs(f"videos/{env_name}", exist_ok=True)
-        video.write_gif(f"videos/{env_name}/pid_output.gif", fps=30)
+        generate_pid_video(env, params, env_name, pid)
 
     elif mode == "mpc_video":
-        seed = 42
+        from target_gym.runners.utils import generate_mpc_video
         mpc = make_reactor_mpc(env, params)
         mpc.reset()
-
-        def select_action(obs, state):
-            return np.array([mpc.step(obs, state)])
-
-        file = env.save_video(select_action, seed, params=params)
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-
-        video = VideoFileClip(file)
-        os.makedirs(f"videos/{env_name}", exist_ok=True)
-        video.write_gif(f"videos/{env_name}/mpc_output.gif", fps=30)
+        generate_mpc_video(env, params, env_name, mpc)
 
     elif mode == "comparison_gif":
-        # Interpolator: target_n -> best constant raw rod action.
-        rho_levels = jnp.linspace(-1.0, 1.0, 40)
-        sweep_steps = min(n_timesteps, 500)
-
-        def build_interp():
-            final_ns = np.array(
-                jax.vmap(
-                    lambda r: run_constant_policy_final_n(
-                        r, env, params, steps=sweep_steps
-                    )
-                )(rho_levels)
-            )
-            r_np = np.array(rho_levels)
-            sort_idx = np.argsort(final_ns)
-            return interp1d(
-                final_ns[sort_idx],
-                r_np[sort_idx],
-                bounds_error=False,
-                fill_value="extrapolate",
-            )
-
-        interpolator = load_or_build_interpolator(
-            f"data/interpolators/{env_name}_comparison.pkl", build_interp
-        )
+        interpolator = _get_interpolator(env, params, n_timesteps)
         pid = make_reactor_stateful_gs_pid()
         mpc = make_reactor_mpc(env, params)
-
-        def build_const(seed):
-            key = jax.random.PRNGKey(seed)
-            _, st = env.reset_env(key, params)
-            brho = float(np.clip(interpolator(float(st.target_n)), -1.0, 1.0))
-
-            def action(_obs, _state=None, _r=brho):
-                return np.array([_r])
-
-            return action
-
-        def build_pid(seed):
-            pid.reset()
-
-            def action(obs, _state=None):
-                return np.array([pid.step(obs)])
-
-            return action
-
-        def build_mpc(seed):
-            mpc.reset()
-
-            def action(obs, state):
-                return np.array([mpc.step(obs, state)])
-
-            return action
-
-        os.makedirs(f"figures/{env_name}", exist_ok=True)
-        save_comparison_figure(
-            env=env,
-            build_const_action=build_const,
-            build_pid_action=build_pid,
-            build_mpc_action=build_mpc,
-            output_path=f"figures/{env_name}/comparison.png",
+        from target_gym.runners.utils import run_comparison
+        run_comparison(
+            env, params, env_name, interpolator, pid, mpc,
             get_state_val=lambda s: float(s.n),
             get_target_val=lambda s: float(s.target_n),
             ylabel="n (normalised power)",
-            const_label="Constant",
-            pid_label="PID",
-            mpc_cache_prefix=f"data/mpc_cache/{env_name}_mpc",
-            params=params,
             n_seeds=n_seeds,
         )
 
-        gif_seed = 0
-        key = jax.random.PRNGKey(gif_seed)
-        _, st = env.reset_env(key, params)
-        gif_rho = float(np.clip(interpolator(float(st.target_n)), -1.0, 1.0))
-        pid.reset()
-        mpc.reset()
-        os.makedirs(f"videos/{env_name}", exist_ok=True)
-        save_comparison_gif(
-            env=env,
-            const_select_action=lambda _obs: np.array([gif_rho]),
-            pid_select_action=lambda obs: np.array([pid.step(obs)]),
-            mpc_select_action=lambda obs, state: np.array([mpc.step(obs, state)]),
-            mpc_cache_path=f"data/mpc_cache/{env_name}_mpc_seed{gif_seed}.pkl",
-            output_path=f"videos/{env_name}/comparison.gif",
+    elif mode == "comparison_multi":
+        interpolator = _get_interpolator(env, params, n_timesteps)
+        pid = make_reactor_stateful_gs_pid()
+        mpc = make_reactor_mpc(env, params)
+        from target_gym.runners.utils import run_comparison_multi
+        return run_comparison_multi(
+            env, params, env_name, interpolator, pid, mpc,
             get_state_val=lambda s: float(s.n),
             get_target_val=lambda s: float(s.target_n),
             ylabel="n (normalised power)",
-            const_label=f"Constant rho_raw={gif_rho:+.2f}",
-            pid_label="PID",
-            params=params,
-            seed=gif_seed,
+            title_prefix="Reactor",
+            n_seeds=n_seeds,
+            plot=plot,
         )
-
-    elif mode == "comparison_multi":
-        rho_levels = jnp.linspace(-1.0, 1.0, 40)
-        sweep_steps = min(n_timesteps, 500)
-
-        def build_interp():
-            final_ns = np.array(
-                jax.vmap(
-                    lambda r: run_constant_policy_final_n(
-                        r, env, params, steps=sweep_steps
-                    )
-                )(rho_levels)
-            )
-            r_np = np.array(rho_levels)
-            sort_idx = np.argsort(final_ns)
-            return interp1d(
-                final_ns[sort_idx],
-                r_np[sort_idx],
-                bounds_error=False,
-                fill_value="extrapolate",
-            )
-
-        interpolator = load_or_build_interpolator(
-            f"data/interpolators/{env_name}_comparison.pkl", build_interp
-        )
-        pid = make_reactor_stateful_gs_pid()
-        mpc = make_reactor_mpc(env, params)
-        cumulative_rewards = {"Constant": [], "PID": [], "MPC": []}
-
-        for seed in range(n_seeds):
-            print(f"  Seed {seed + 1}/{n_seeds}...", end=" ", flush=True)
-            key = jax.random.PRNGKey(seed)
-            _, init_state = env.reset_env(key, params)
-            best_rho = float(
-                np.clip(interpolator(float(init_state.target_n)), -1.0, 1.0)
-            )
-
-            def const_action(_obs, _state=None, _r=best_rho):
-                return np.array([_r])
-
-            def pid_action(obs, _state=None):
-                return np.array([pid.step(obs)])
-
-            def mpc_action(obs, state):
-                return np.array([mpc.step(obs, state)])
-
-            _, rews_c = run_episode_headless_with_state(env, const_action, params, seed)
-            pid.reset()
-            _, rews_p = run_episode_headless_with_state(env, pid_action, params, seed)
-            mpc.reset()
-            _, rews_m = load_or_run_mpc_episode(
-                f"data/mpc_cache/{env_name}_mpc_seed{seed}.pkl",
-                env,
-                mpc_action,
-                params,
-                seed,
-            )
-            cumulative_rewards["Constant"].append(sum(rews_c))
-            cumulative_rewards["PID"].append(sum(rews_p))
-            cumulative_rewards["MPC"].append(sum(rews_m))
-            print(
-                f"const={sum(rews_c):.1f}  pid={sum(rews_p):.1f}  mpc={sum(rews_m):.1f}"
-            )
-
-        if plot:
-            labels = ["Constant", "PID", "MPC"]
-            colors_bar = ["steelblue", "darkorange", "seagreen"]
-            means = [np.mean(cumulative_rewards[label]) for label in labels]
-            stds = [np.std(cumulative_rewards[label]) for label in labels]
-            fig, ax = plt.subplots(figsize=(7, 5))
-            x = np.arange(len(labels))
-            ax.bar(
-                x,
-                means,
-                yerr=stds,
-                capsize=6,
-                color=colors_bar,
-                alpha=0.8,
-                error_kw={"linewidth": 1.5},
-            )
-            rng = np.random.default_rng(0)
-            for i, label in enumerate(labels):
-                jitter = rng.uniform(-0.15, 0.15, size=n_seeds)
-                ax.scatter(
-                    x[i] + jitter,
-                    cumulative_rewards[label],
-                    color="black",
-                    s=20,
-                    alpha=0.5,
-                    zorder=3,
-                )
-            ax.set_xticks(x)
-            ax.set_xticklabels(labels)
-            ax.set_ylabel("Cumulative reward")
-            ax.set_title(
-                f"Reactor: cumulative reward over {n_seeds} seeds (mean ± std)"
-            )
-            for xi, (m, s) in enumerate(zip(means, stds)):
-                ax.text(
-                    xi,
-                    m + s + max(stds) * 0.05,
-                    f"{m:.1f}±{s:.1f}",
-                    ha="center",
-                    va="bottom",
-                    fontsize=9,
-                )
-            os.makedirs(f"figures/{env_name}", exist_ok=True)
-            plt.tight_layout()
-            plt.savefig(f"figures/{env_name}/comparison_multi.pdf")
-            plt.savefig(f"figures/{env_name}/comparison_multi.png")
-            plt.close()
-        return cumulative_rewards
 
     else:
         raise ValueError(f"Unknown mode: {mode}")

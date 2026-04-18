@@ -170,11 +170,12 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
 
-    def make_pid(self):
-        """Return a ready-to-use StatefulPID for concentration tracking."""
-        from target_gym.experts.pid import make_cstr_stateful_pid
+    @property
+    def expert_policy(self):
+        """Tuned gain-scheduled PID controller for concentration tracking."""
+        from target_gym.experts.pid import make_cstr_stateful_gs_pid
 
-        return make_cstr_stateful_pid()
+        return make_cstr_stateful_gs_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return a GradientMPC oracle for concentration tracking."""
