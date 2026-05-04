@@ -204,10 +204,17 @@ class ReactorParams(EnvParams):
     initial_T_coolant: float = 580.0
 
     # ---- Time discretization ----
-    # 24 hours covers the full xenon cycle: I-135 half-life 6.6 h,
-    # Xe-135 peak at ~6-8 h after a power change, recovery by ~16-20 h.
+    # Physics integrates at delta_t=1.0 s for numerical stability. One control
+    # step applies the action for Reactor.control_period physics sub-steps
+    # (a class-level constant on the Env, not a param, so JIT treats it as
+    # static). Effective control period = delta_t * control_period seconds.
+    # state.time advances by 1 per physics sub-step, so this counter is in
+    # physics-step units to match what gymnax's Environment.step uses for
+    # truncation (info["truncated"] = state.time >= max_steps_in_episode).
+    # 24 h of simulated time = 86400 s = 86400 physics steps × 1 s/step
+    # = 8640 control steps × 10 s/step.
     delta_t: float = 1.0
-    max_steps_in_episode: int = 86400
+    max_steps_in_episode: int = 86400  # in physics steps (86400 × 1 s = 24 h, = 8640 control steps)
 
 
 @struct.dataclass
@@ -254,6 +261,7 @@ def get_target_from_schedule(
     target_schedule: jnp.ndarray, time: int, params: ReactorParams
 ) -> jnp.ndarray:
     """Select the active setpoint from a piecewise-constant schedule."""
+    # state.time and max_steps_in_episode are both in physics-step units.
     slot = jnp.minimum(
         (time * N_SETPOINTS) // params.max_steps_in_episode,
         N_SETPOINTS - 1,
@@ -416,6 +424,7 @@ def check_is_terminal(state: ReactorState, params: ReactorParams, xp=jnp):
         state.T_coolant >= params.T_coolant_max,
     )
     terminated = xp.logical_or(xp.logical_or(n_out, T_fuel_out), T_coolant_out)
+    # state.time and max_steps_in_episode are both in physics-step units.
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 

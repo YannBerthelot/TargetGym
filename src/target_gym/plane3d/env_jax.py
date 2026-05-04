@@ -101,7 +101,7 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
         """Compute shared initial state fields. Returns (remaining_key, base_kwargs)."""
         if params is None:
             params = self.default_params
-        key, altitude_key = jax.random.split(key)
+        key, altitude_key, target_altitude_key = jax.random.split(key, 3)
 
         initial_z = jax.random.uniform(
             altitude_key,
@@ -129,7 +129,7 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
         initial_psi = jnp.arctan2(initial_y_dot, initial_x_dot)
 
         target_altitude = jax.random.uniform(
-            altitude_key,
+            target_altitude_key,
             minval=params.target_altitude_range[0],
             maxval=params.target_altitude_range[1],
         )
@@ -253,6 +253,14 @@ class Plane3DHeading(_Airplane3DBase):
         )
         return self.get_obs(state), state
 
+    @property
+    def expert_policy(self):
+        from target_gym.experts.pid import (
+            FunctionalExpertPolicy, make_plane3d_heading_pid, plane3d_heading_pid_step,
+        )
+        params, zero_state = make_plane3d_heading_pid()
+        return FunctionalExpertPolicy(params, zero_state, plane3d_heading_pid_step)
+
 
 # ─── Circle task ───────────────────────────────────────
 
@@ -331,6 +339,14 @@ class Plane3DCircle(_Airplane3DBase):
             target_radius=target_radius,
         )
         return self.get_obs(state), state
+
+    @property
+    def expert_policy(self):
+        from target_gym.experts.pid import (
+            FunctionalExpertPolicy, make_plane3d_circle_pid, plane3d_circle_pid_step,
+        )
+        params, zero_state = make_plane3d_circle_pid()
+        return FunctionalExpertPolicy(params, zero_state, plane3d_circle_pid_step)
 
 
 # ─── Figure-8 task ─────────────────────────────────────
@@ -423,6 +439,14 @@ class Plane3DFigureEight(_Airplane3DBase):
             target_radius=target_radius,
         )
         return self.get_obs(state), state
+
+    @property
+    def expert_policy(self):
+        from target_gym.experts.pid import (
+            FunctionalExpertPolicy, make_plane3d_figure8_pid, plane3d_figure8_pid_step,
+        )
+        params, zero_state = make_plane3d_figure8_pid()
+        return FunctionalExpertPolicy(params, zero_state, plane3d_figure8_pid_step)
 
 
 # ─── Backward-compatible alias ─────────────────────────

@@ -422,6 +422,11 @@ def relay_sweep(
     max_steps: int = 10_000,
     action_dim: int = 1,
     action_index: int = 0,
+    action_bias: float | None = None,
+    fixed_setpoint: float | None = None,
+    build_action: Callable | None = None,
+    measure_fn: Callable | None = None,
+    error_fn: Callable | None = None,
     verbose: bool = True,
 ) -> dict:
     """Run relay experiments at N operating points and return a gain schedule.
@@ -467,7 +472,12 @@ def relay_sweep(
             seed=i,
             action_dim=action_dim,
             action_index=action_index,
+            action_bias=action_bias,
             plant_sign=sign,
+            fixed_setpoint=fixed_setpoint,
+            build_action=build_action,
+            measure_fn=measure_fn,
+            error_fn=error_fn,
         )
         results.append(res)
 
@@ -509,13 +519,18 @@ def relay_sweep(
 def _interpolate_gaps(values: list, xs: np.ndarray):
     """Fill None entries by linear interpolation from non-None neighbours.
 
-    Modifies *values* in-place. If all entries are None, fills with 0.
+    Modifies *values* in-place. Raises if all entries are None — silently
+    falling back to zeros produced a no-op PID that callers persisted to
+    disk as if it were a real tune (incident: FourTank 2026-05).
     """
     good = [(i, v) for i, v in enumerate(values) if v is not None]
     if not good:
-        for i in range(len(values)):
-            values[i] = 0.0
-        return
+        raise RuntimeError(
+            "relay autotune: every operating point failed (no zero-crossings). "
+            "Plant likely doesn't oscillate under bang-bang relay (e.g. pure "
+            "integrators like FourTank). Use a different tuning method "
+            "(gradient or random search over Kp/Ki/Kd) for this plant."
+        )
     if len(good) == len(values):
         return
     good_idx = np.array([g[0] for g in good])
