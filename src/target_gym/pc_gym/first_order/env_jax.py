@@ -142,6 +142,12 @@ class FirstOrderSystem(environment.Environment[FirstOrderState, FirstOrderParams
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
 
+    @property
+    def expert_policy(self):
+        from target_gym.experts.pid import FunctionalExpertPolicy, make_first_order_pid, pid_step
+        params, zero_state = make_first_order_pid()
+        return FunctionalExpertPolicy(params, zero_state, pid_step)
+
     def make_pid(self):
         """Return a ready-to-use StatefulPID for state tracking."""
         from target_gym.experts.pid import make_first_order_stateful_pid

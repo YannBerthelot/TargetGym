@@ -24,6 +24,12 @@ from target_gym.reactor.rendering import _render
 from target_gym.utils import save_video
 
 
+# Number of physics sub-steps per control step. Constant so JIT can treat it
+# as static in `lax.scan(length=...)`. Change here only — `env.py` reads it
+# via a delayed import in `check_is_terminal` / `get_target_from_schedule`.
+CONTROL_PERIOD: int = 10
+
+
 class Reactor(environment.Environment[ReactorState, ReactorParams]):
     """
     Nuclear reactor (point kinetics + thermal feedback).
@@ -35,6 +41,10 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
     render_reactor = classmethod(_render)
     screen_width = 700
     screen_height = 900
+    # Number of physics sub-steps per env-step. Exposed so external
+    # rollout code (eval scripts) can convert max_steps_in_episode
+    # (physics units) to env-step counts.
+    control_period: int = CONTROL_PERIOD
 
     # obs = [n, T_coolant, rho_ext_norm, target_n]
     obs_value_index: int = 0  # n (neutron density / normalised power)
@@ -65,13 +75,31 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
         if not isinstance(action, float):
             rho_raw = action.reshape(())
 
-        new_state, metrics = compute_next_state(
-            rho_raw, state, params, integration_method=self.integration_method
-        )
+        # Action is held constant for `control_period` physics sub-steps. Reward
+        # is summed across the sub-steps; we freeze the state on termination so
+        # the scan can still run for a fixed length under jit.
+        def sub_step(carry, _):
+            state, cum_reward, done = carry
+            candidate, _metrics = compute_next_state(
+                rho_raw, state, params, integration_method=self.integration_method
+            )
+            r = compute_reward(candidate, params, xp=jnp)
+            term, trunc = check_is_terminal(candidate, params, xp=jnp)
+            new_done = term | trunc
+            # Freeze state once done; still accumulate the final-step reward.
+            next_state = jax.tree.map(
+                lambda a, b: jnp.where(done, a, b), state, candidate
+            )
+            next_reward = cum_reward + jnp.where(done, 0.0, r)
+            next_done = done | new_done
+            return (next_state, next_reward, next_done), None
 
-        reward = compute_reward(new_state, params, xp=jnp)
-        terminated, truncated = check_is_terminal(new_state, params, xp=jnp)
-        done = terminated | truncated
+        (new_state, reward, done), _ = jax.lax.scan(
+            sub_step,
+            (state, jnp.float32(0.0), jnp.bool_(False)),
+            xs=None,
+            length=CONTROL_PERIOD,
+        )
 
         obs = self.get_obs(new_state)
         return (
@@ -154,6 +182,12 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
             -inf, inf, len(ReactorState.__dataclass_fields__), dtype=jnp.float32
         )
 
+    @property
+    def expert_policy(self):
+        from target_gym.experts.pid import FunctionalExpertPolicy, make_reactor_pid, pid_step
+        params, zero_state = make_reactor_pid()
+        return FunctionalExpertPolicy(params, zero_state, pid_step)
+
     def save_video(
         self,
         select_action: Callable[[jnp.ndarray], jnp.ndarray],
@@ -185,7 +219,7 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
 if __name__ == "__main__":
     env = Reactor()
     seed = 42
-    env_params = ReactorParams(max_steps_in_episode=200)
+    env_params = ReactorParams(max_steps_in_episode=2000)  # 2000 physics = 200 control steps
     os.makedirs("videos/reactor", exist_ok=True)
     env.save_video(
         lambda o: np.random.uniform(-1, 1),

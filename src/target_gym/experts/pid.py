@@ -44,6 +44,7 @@ Notes per environment:
 import json
 import pathlib
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 from flax import struct
@@ -58,14 +59,18 @@ _gains_cache: dict | None = None
 
 
 def _load_gains() -> dict:
-    """Load gains from data/pid_gains.json (lazy, cached until process restart)."""
+    """Load gains from data/pid_gains.json, running tuning first if the file is absent."""
     global _gains_cache
     if _gains_cache is None:
-        if _GAINS_FILE.exists():
-            with open(_GAINS_FILE) as f:
-                _gains_cache = json.load(f)
-        else:
-            _gains_cache = {}
+        if not _GAINS_FILE.exists():
+            print(
+                f"[target_gym] No PID gains file found at {_GAINS_FILE}. "
+                "Running gradient-based tuning — this may take a few minutes..."
+            )
+            from target_gym.experts.pid_tuning import tune_all_and_save
+            tune_all_and_save(verbose=True)
+        with open(_GAINS_FILE) as f:
+            _gains_cache = json.load(f)
     return _gains_cache
 
 
@@ -248,6 +253,364 @@ def mimo_pid_step(
 
 
 # ---------------------------------------------------------------------------
+# JAX-functional 3D plane PIDs  (jit/vmap/scan compatible)
+# ---------------------------------------------------------------------------
+
+
+@struct.dataclass
+class Plane3DPIDState:
+    """Carry state shared by all 3D plane PID variants."""
+
+    alt_integral: float
+    alt_prev: float
+    track_integral: float  # heading integral (heading/fig-8) or radial integral (circle)
+    track_prev: float
+    # Separate integrator for the power loop (heading task MIMO altitude control)
+    power_integral: float
+    power_prev: float
+
+
+@struct.dataclass
+class Plane3DHeadingPIDParams:
+    """Static params for the heading and figure-8 task PIDs (identical structure).
+
+    The altitude loop is MIMO: altitude error drives BOTH stick (fast pitch) and
+    power (slow thrust), mirroring the 2D Airplane2D PID. `power` is a cruise
+    bias added on top of the power PID output.
+    """
+
+    Kp_alt: float
+    Ki_alt: float
+    Kd_alt: float
+    Kp_hdg: float
+    Ki_hdg: float
+    Kd_hdg: float
+    Kp_bank: float
+    power: float  # cruise throttle bias, added to Kp_power·err + ...
+    max_bank_rad: float
+    dt: float
+    Kp_power: float
+    Ki_power: float
+    Kd_power: float
+
+
+@struct.dataclass
+class Plane3DCirclePIDParams:
+    """Static params for the circle task PID.
+
+    Altitude is MIMO: alt_err drives both stick and power loops.
+    """
+
+    Kp_alt: float
+    Ki_alt: float
+    Kd_alt: float
+    Kp_rad: float
+    Ki_rad: float
+    Kd_rad: float
+    Kp_bank: float
+    power: float  # cruise throttle bias
+    max_bank_rad: float
+    dt: float
+    gravity: float
+    Kp_power: float
+    Ki_power: float
+    Kd_power: float
+
+
+def plane3d_pid_reset(params) -> Plane3DPIDState:  # noqa: ARG001
+    z = jnp.zeros(())
+    return Plane3DPIDState(
+        alt_integral=z, alt_prev=z,
+        track_integral=z, track_prev=z,
+        power_integral=z, power_prev=z,
+    )
+
+
+def plane3d_heading_pid_step(
+    params: Plane3DHeadingPIDParams,
+    state: Plane3DPIDState,
+    obs: jnp.ndarray,
+) -> tuple[jnp.ndarray, Plane3DPIDState]:
+    """One step of the heading-task PID. obs must be 1-D (vmap handles batching).
+
+    MIMO altitude control: alt_err drives both stick (fast pitch) and power
+    (slow throttle, on top of a cruise bias). Heading controlled via bank.
+    """
+    alt_err = obs[10] - obs[2]
+    new_alt_int = state.alt_integral + alt_err * params.dt
+    alt_d = (alt_err - state.alt_prev) / params.dt
+    stick_u = params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_d
+    stick = jnp.clip(stick_u, -1.0, 1.0)
+    new_alt_int = jnp.where(stick_u == stick, new_alt_int, state.alt_integral)
+
+    # Power loop: separate integrator, same altitude error signal.
+    new_power_int = state.power_integral + alt_err * params.dt
+    power_d = (alt_err - state.power_prev) / params.dt
+    power_u = (
+        params.power
+        + params.Kp_power * alt_err
+        + params.Ki_power * new_power_int
+        + params.Kd_power * power_d
+    )
+    power = jnp.clip(power_u, -1.0, 1.0)
+    new_power_int = jnp.where(power_u == power, new_power_int, state.power_integral)
+
+    psi = obs[9]
+    target_heading = obs[11]
+    phi = obs[6]
+    hdg_err = _wrap_angle_jnp(target_heading - psi)
+    new_hdg_int = state.track_integral + hdg_err * params.dt
+    hdg_d = (hdg_err - state.track_prev) / params.dt
+    desired_bank = jnp.clip(
+        params.Kp_hdg * hdg_err + params.Ki_hdg * new_hdg_int + params.Kd_hdg * hdg_d,
+        -params.max_bank_rad,
+        params.max_bank_rad,
+    )
+    bank_err = phi - desired_bank
+    aileron = jnp.clip(params.Kp_bank * bank_err, -1.0, 1.0)
+    new_hdg_int = jnp.where(jnp.abs(aileron) >= 1.0, state.track_integral, new_hdg_int)
+
+    new_state = Plane3DPIDState(
+        alt_integral=new_alt_int,
+        alt_prev=alt_err,
+        track_integral=new_hdg_int,
+        track_prev=hdg_err,
+        power_integral=new_power_int,
+        power_prev=alt_err,
+    )
+    return jnp.array([power, stick, aileron]), new_state
+
+
+def plane3d_circle_pid_step(
+    params: Plane3DCirclePIDParams,
+    state: Plane3DPIDState,
+    obs: jnp.ndarray,
+) -> tuple[jnp.ndarray, Plane3DPIDState]:
+    """One step of the circle-task PID. obs must be 1-D (vmap handles batching)."""
+    alt_err = obs[10] - obs[2]
+    new_alt_int = state.alt_integral + alt_err * params.dt
+    alt_d = (alt_err - state.alt_prev) / params.dt
+    stick_u = params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_d
+    stick = jnp.clip(stick_u, -1.0, 1.0)
+    new_alt_int = jnp.where(stick_u == stick, new_alt_int, state.alt_integral)
+
+    # Power loop (MIMO altitude control).
+    new_power_int = state.power_integral + alt_err * params.dt
+    power_d = (alt_err - state.power_prev) / params.dt
+    power_u = (
+        params.power
+        + params.Kp_power * alt_err
+        + params.Ki_power * new_power_int
+        + params.Kd_power * power_d
+    )
+    power = jnp.clip(power_u, -1.0, 1.0)
+    new_power_int = jnp.where(power_u == power, new_power_int, state.power_integral)
+
+    x_dot = obs[0]
+    y_dot = obs[1]
+    phi = obs[6]
+    rel_x = obs[11]
+    rel_y = obs[12]
+    radius = obs[13]
+    speed_sq = x_dot**2 + y_dot**2 + 1e-6
+    ideal_bank = jnp.arctan2(speed_sq, params.gravity * jnp.maximum(radius, 1.0))
+    dist = jnp.sqrt(rel_x**2 + rel_y**2)
+    rad_err = dist - radius
+    new_rad_int = state.track_integral + rad_err * params.dt
+    rad_d = (rad_err - state.track_prev) / params.dt
+    bank_corr = params.Kp_rad * rad_err + params.Ki_rad * new_rad_int + params.Kd_rad * rad_d
+    desired_bank = jnp.clip(ideal_bank + bank_corr, -params.max_bank_rad, params.max_bank_rad)
+    bank_err = phi - desired_bank
+    aileron = jnp.clip(params.Kp_bank * bank_err, -1.0, 1.0)
+    new_rad_int = jnp.where(jnp.abs(aileron) >= 1.0, state.track_integral, new_rad_int)
+
+    new_state = Plane3DPIDState(
+        alt_integral=new_alt_int,
+        alt_prev=alt_err,
+        track_integral=new_rad_int,
+        track_prev=rad_err,
+        power_integral=new_power_int,
+        power_prev=alt_err,
+    )
+    return jnp.array([power, stick, aileron]), new_state
+
+
+def plane3d_figure8_pid_step(
+    params: Plane3DHeadingPIDParams,
+    state: Plane3DPIDState,
+    obs: jnp.ndarray,
+) -> tuple[jnp.ndarray, Plane3DPIDState]:
+    """One step of the figure-8 task PID. obs must be 1-D (vmap handles batching)."""
+    psi = obs[9]
+    phi = obs[6]
+    target_radius = obs[11]
+    nearest_dx = obs[12]
+    nearest_dy = obs[13]
+    nearest_dz = obs[14]
+    tangent_heading = obs[15]
+
+    alt_err = nearest_dz
+    new_alt_int = state.alt_integral + alt_err * params.dt
+    alt_d = (alt_err - state.alt_prev) / params.dt
+    stick_u = params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_d
+    stick = jnp.clip(stick_u, -1.0, 1.0)
+    new_alt_int = jnp.where(jnp.abs(stick_u) >= 1.0, state.alt_integral, new_alt_int)
+
+    # Power loop (MIMO altitude control on nearest_dz).
+    new_power_int = state.power_integral + alt_err * params.dt
+    power_d = (alt_err - state.power_prev) / params.dt
+    power_u = (
+        params.power
+        + params.Kp_power * alt_err
+        + params.Ki_power * new_power_int
+        + params.Kd_power * power_d
+    )
+    power = jnp.clip(power_u, -1.0, 1.0)
+    new_power_int = jnp.where(power_u == power, new_power_int, state.power_integral)
+
+    lateral_dist = jnp.sqrt(nearest_dx**2 + nearest_dy**2 + 1e-6)
+    blend = jnp.clip(lateral_dist / (0.05 * jnp.maximum(target_radius, 1.0)), 0.0, 1.0)
+    correction_heading = jnp.arctan2(nearest_dy, nearest_dx)
+    bx = blend * jnp.cos(correction_heading) + (1.0 - blend) * jnp.cos(tangent_heading)
+    by = blend * jnp.sin(correction_heading) + (1.0 - blend) * jnp.sin(tangent_heading)
+    hdg_err = _wrap_angle_jnp(jnp.arctan2(by, bx) - psi)
+    new_hdg_int = state.track_integral + hdg_err * params.dt
+    hdg_d = (hdg_err - state.track_prev) / params.dt
+    desired_bank = jnp.clip(
+        params.Kp_hdg * hdg_err + params.Ki_hdg * new_hdg_int + params.Kd_hdg * hdg_d,
+        -params.max_bank_rad,
+        params.max_bank_rad,
+    )
+    bank_err = phi - desired_bank
+    aileron = jnp.clip(params.Kp_bank * bank_err, -1.0, 1.0)
+    new_hdg_int = jnp.where(jnp.abs(aileron) >= 1.0, state.track_integral, new_hdg_int)
+
+    new_state = Plane3DPIDState(
+        alt_integral=new_alt_int,
+        alt_prev=alt_err,
+        track_integral=new_hdg_int,
+        track_prev=hdg_err,
+        power_integral=new_power_int,
+        power_prev=alt_err,
+    )
+    return jnp.array([power, stick, aileron]), new_state
+
+
+# ---------------------------------------------------------------------------
+# FunctionalExpertPolicy — JAX-compatible, stateless expert wrapper
+# ---------------------------------------------------------------------------
+
+
+# Registry: which PID param fields are learnable gains for each step_fn.
+# Other fields (power, max_bank_rad, dt, gravity) are treated as structural
+# constants. The order here is the canonical ordering used by the gain-policy
+# action pipeline and by anchor_gains.
+_LEARNABLE_GAINS_BY_STEP_FN: dict[str, tuple[str, ...]] = {}
+
+
+def register_learnable_gains(step_fn, fields: tuple[str, ...]) -> None:
+    _LEARNABLE_GAINS_BY_STEP_FN[step_fn.__qualname__] = fields
+
+
+class FunctionalExpertPolicy:
+    """Wraps a functional (params, step_fn) PID pair as a JAX-compatible expert policy.
+
+    Interface::
+
+        policy = FunctionalExpertPolicy(params, zero_state, step_fn)
+        pid_state = policy.init_state(num_envs)         # batched initial state
+        actions, pid_state = policy(pid_state, obs)     # (num_envs, action_dim)
+
+    The step_fn is vmapped over the env batch dimension automatically.
+    Pass as ``eval_expert_policy`` to Ajax agents; thread ``pid_state``
+    through the while-loop carry in ``step_environment_expert``.
+
+    Gain-policy interface (used when SAC's actor outputs PID gains):
+
+        expert.learnable_fields        # tuple of gain field names
+        expert.anchor_gains            # jnp.ndarray of expert gain values
+        expert.step_with_gains(state, obs, gains)  # per-env gains
+    """
+
+    def __init__(self, params, zero_state, step_fn):
+        self._params = params
+        self._zero_state = zero_state
+        self._step_fn = step_fn
+        self._vmapped_step = jax.vmap(step_fn, in_axes=(None, 0, 0))
+        # vmap over (params, state, obs) for per-env gain overrides.
+        self._vmapped_step_per_env_params = jax.vmap(step_fn, in_axes=(0, 0, 0))
+
+    @property
+    def learnable_fields(self) -> tuple[str, ...]:
+        key = self._step_fn.__qualname__
+        if key not in _LEARNABLE_GAINS_BY_STEP_FN:
+            raise ValueError(
+                f"No learnable gain registry entry for step_fn {key}. "
+                "Register with register_learnable_gains(step_fn, fields)."
+            )
+        return _LEARNABLE_GAINS_BY_STEP_FN[key]
+
+    @property
+    def anchor_gains(self) -> jnp.ndarray:
+        return jnp.array(
+            [float(getattr(self._params, f)) for f in self.learnable_fields]
+        )
+
+    def step_with_gains(self, state, obs, gains):
+        """Step the PID with per-env learnable gains.
+
+        state: pytree batched (num_envs, ...)
+        obs:   (num_envs, obs_dim)
+        gains: (num_envs, len(learnable_fields))
+        Returns (actions, new_state).
+        """
+        fields = self.learnable_fields
+        n = len(fields)
+        # Build per-env params by broadcasting self._params and overriding learnable fields.
+        num_envs = gains.shape[0]
+        base = jax.tree.map(
+            lambda x: jnp.broadcast_to(jnp.asarray(x), (num_envs,) + jnp.shape(x)),
+            self._params,
+        )
+        overrides = {fields[i]: gains[:, i] for i in range(n)}
+        per_env_params = base.replace(**overrides)
+        return self._vmapped_step_per_env_params(per_env_params, state, obs)
+
+    def init_state(self, num_envs: int):
+        """Return zero-initialised state with a leading batch dimension."""
+        return jax.tree.map(
+            lambda x: jnp.broadcast_to(x, (num_envs,) + jnp.shape(x)),
+            self._zero_state,
+        )
+
+    def __call__(self, *args):
+        # Two-arg form: (state, obs) -> (action, new_state). State threaded by caller.
+        # One-arg form: (obs,) -> action. Stateless per call (fresh zero state),
+        # matching the pre-state-threading interface still used across Ajax agents.
+        if len(args) == 2:
+            state, obs = args
+            return self._vmapped_step(self._params, state, obs)
+        (obs,) = args
+        batch_shape = obs.shape[:-1]
+        flat_batch = 1
+        for d in batch_shape:
+            flat_batch *= d
+        obs_flat = obs.reshape((flat_batch, obs.shape[-1]))
+        zero = jax.tree.map(
+            lambda x: jnp.broadcast_to(x, (flat_batch,) + jnp.shape(x)),
+            self._zero_state,
+        )
+        action, _ = self._vmapped_step(self._params, zero, obs_flat)
+        return action.reshape(batch_shape + action.shape[1:])
+
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return self is other
+
+
+# ---------------------------------------------------------------------------
 # Python stateful PIDs — for video rollouts (not JAX-traced)
 # ---------------------------------------------------------------------------
 
@@ -289,21 +652,19 @@ class StatefulPID:
         self.integral = 0.0
         self.prev_error = 0.0
 
-    def step(self, obs) -> float:
-        state_val = float(obs[self.state_index])
-        if self.fixed_setpoint is not None:
-            sp = self.fixed_setpoint
-        else:
-            sp = float(obs[self.setpoint_index])
+    def step(self, obs):
+        state_val = obs[..., self.state_index]
+        sp = self.fixed_setpoint if self.fixed_setpoint is not None else obs[..., self.setpoint_index]
         e = sp - state_val
-        self.integral += e * self.dt
+        self.integral = self.integral + e * self.dt
         derivative = (e - self.prev_error) / self.dt
         u = self.Kp * e + self.Ki * self.integral + self.Kd * derivative
-        u_clipped = float(np.clip(u, self.action_min, self.action_max))
-        if u != u_clipped:
-            self.integral -= e * self.dt  # anti-windup
+        u_clipped = jnp.clip(u, self.action_min, self.action_max)
+        self.integral = jnp.where(u != u_clipped, self.integral - e * self.dt, self.integral)
         self.prev_error = e
         return u_clipped
+
+    __call__ = step
 
 
 class StatefulGainScheduledPID:
@@ -341,21 +702,22 @@ class StatefulGainScheduledPID:
         self.integral = 0.0
         self.prev_error = 0.0
 
-    def step(self, obs) -> float:
-        sp = float(obs[self.setpoint_index])
-        Kp = float(np.interp(sp, self.operating_points, self.Kp_table))
-        Ki = float(np.interp(sp, self.operating_points, self.Ki_table))
-        Kd = float(np.interp(sp, self.operating_points, self.Kd_table))
+    def step(self, obs):
+        sp = obs[..., self.setpoint_index]
+        Kp = jnp.interp(sp, self.operating_points, self.Kp_table)
+        Ki = jnp.interp(sp, self.operating_points, self.Ki_table)
+        Kd = jnp.interp(sp, self.operating_points, self.Kd_table)
 
-        e = sp - float(obs[self.state_index])
-        self.integral += e * self.dt
+        e = sp - obs[..., self.state_index]
+        self.integral = self.integral + e * self.dt
         derivative = (e - self.prev_error) / self.dt
         u = Kp * e + Ki * self.integral + Kd * derivative
-        u_clipped = float(np.clip(u, self.action_min, self.action_max))
-        if u != u_clipped:
-            self.integral -= e * self.dt
+        u_clipped = jnp.clip(u, self.action_min, self.action_max)
+        self.integral = jnp.where(u != u_clipped, self.integral - e * self.dt, self.integral)
         self.prev_error = e
         return u_clipped
+
+    __call__ = step
 
 
 class StatefulMIMOPID:
@@ -369,8 +731,10 @@ class StatefulMIMOPID:
         self.pid1.reset()
         self.pid2.reset()
 
-    def step(self, obs) -> np.ndarray:
-        return np.array([self.pid1.step(obs), self.pid2.step(obs)])
+    def step(self, obs):
+        return jnp.stack([self.pid1.step(obs), self.pid2.step(obs)], axis=-1)
+
+    __call__ = step
 
 
 # ---------------------------------------------------------------------------
@@ -496,6 +860,50 @@ def make_four_tank_pid(
     return params, mimo_pid_reset(params)
 
 
+def make_four_tank_gs_pid() -> tuple[MIMOGainSchedulePIDParams, MIMOPIDState]:
+    """Functional gain-scheduled MIMO PID for FourTank.
+
+    Mirrors :func:`make_four_tank_pid` but reads the per-loop
+    ``gain_schedule_pid1`` / ``gain_schedule_pid2`` tables from
+    ``data/pid_gains.json``. Pair this with
+    :func:`mimo_gain_scheduled_pid_step` and wrap in a
+    ``FunctionalExpertPolicy`` to run as a JIT-compatible expert.
+    """
+    _ft = _load_gains().get("four_tank", {})
+    gs1 = _ft.get("gain_schedule_pid1") or {}
+    gs2 = _ft.get("gain_schedule_pid2") or {}
+    if not gs1 or not gs2:
+        raise RuntimeError(
+            "make_four_tank_gs_pid requires four_tank.gain_schedule_pid1 "
+            "and gain_schedule_pid2 in data/pid_gains.json. Run "
+            "`python scripts/tune_pid.py --envs four_tank` first."
+        )
+
+    def _to_gs_params(gs: dict, state_index: int, setpoint_index: int):
+        ops = jnp.asarray(gs["operating_points"], dtype=jnp.float32)
+        return GainSchedulePIDParams(
+            operating_points=ops,
+            Kp_table=jnp.asarray(gs["Kp"], dtype=jnp.float32),
+            Ki_table=jnp.asarray(gs["Ki"], dtype=jnp.float32),
+            Kd_table=jnp.asarray(gs.get("Kd", [0.0] * len(ops)), dtype=jnp.float32),
+            dt=1.0,
+            state_index=state_index,
+            setpoint_index=setpoint_index,
+            action_min=-1.0,
+            action_max=1.0,
+        )
+
+    params = MIMOGainSchedulePIDParams(
+        pid1=_to_gs_params(gs1, state_index=0, setpoint_index=4),
+        pid2=_to_gs_params(gs2, state_index=1, setpoint_index=5),
+    )
+    state = MIMOPIDState(
+        state1=PIDState(integral=jnp.zeros(()), prev_error=jnp.zeros(())),
+        state2=PIDState(integral=jnp.zeros(()), prev_error=jnp.zeros(())),
+    )
+    return params, state
+
+
 def make_glass_furnace_pid(
     Kp: float | None = None,
     Ki: float | None = None,
@@ -544,7 +952,7 @@ def make_reactor_pid(
     when inserting rods than when withdrawing, which is physically
     correct (rod insertion is always authorised, withdrawal is capped
     below prompt-critical).
-    dt = env delta_t = 0.5 s.
+    dt matches the control period (delta_t × control_period = 10 s by default).
     """
     Kp = Kp if Kp is not None else _g("reactor", "Kp", 5.0)
     Ki = Ki if Ki is not None else _g("reactor", "Ki", 0.5)
@@ -553,7 +961,7 @@ def make_reactor_pid(
         Kp=Kp,
         Ki=Ki,
         Kd=Kd,
-        dt=0.5,
+        dt=10.0,
         state_index=0,  # n
         setpoint_index=3,  # target_n
         action_min=-1.0,
@@ -617,6 +1025,77 @@ def make_plane_pid(
         ),
     )
     return params, mimo_pid_reset(params)
+
+
+_PLANE3D_HEADING_LEARNABLE = (
+    "Kp_alt", "Ki_alt", "Kd_alt", "Kp_hdg", "Ki_hdg", "Kd_hdg", "Kp_bank",
+)
+register_learnable_gains(plane3d_heading_pid_step, _PLANE3D_HEADING_LEARNABLE)
+
+
+def make_plane3d_heading_pid() -> tuple[Plane3DHeadingPIDParams, Plane3DPIDState]:
+    """JAX-functional heading-task PID. Gains from data/pid_gains.json.
+
+    Altitude is MIMO-controlled: alt_err drives both stick (pitch) and power
+    (throttle, added on top of a cruise bias), matching the 2D Airplane2D PID.
+    """
+    params = Plane3DHeadingPIDParams(
+        Kp_alt=_g3d("heading", "alt", "Kp", 0.0005),
+        Ki_alt=_g3d("heading", "alt", "Ki", 1e-5),
+        Kd_alt=_g3d("heading", "alt", "Kd", 0.001),
+        Kp_hdg=_g3d("heading", "hdg", "Kp", 0.5),
+        Ki_hdg=_g3d("heading", "hdg", "Ki", 0.0),
+        Kd_hdg=_g3d("heading", "hdg", "Kd", 0.0),
+        Kp_bank=_g3d("heading", "bank", "Kp", -2.0),
+        power=float(_load_gains().get("plane3d_heading", {}).get("power", 0.6)),
+        max_bank_rad=float(np.deg2rad(25.0)),
+        dt=1.0,
+        Kp_power=_g3d("heading", "power_pid", "Kp", 2e-4),
+        Ki_power=_g3d("heading", "power_pid", "Ki", 5e-6),
+        Kd_power=_g3d("heading", "power_pid", "Kd", 0.0),
+    )
+    return params, plane3d_pid_reset(params)
+
+
+def make_plane3d_circle_pid() -> tuple[Plane3DCirclePIDParams, Plane3DPIDState]:
+    """JAX-functional circle-task PID. Gains from data/pid_gains.json."""
+    params = Plane3DCirclePIDParams(
+        Kp_alt=_g3d("circle", "alt", "Kp", 0.0005),
+        Ki_alt=_g3d("circle", "alt", "Ki", 1e-5),
+        Kd_alt=_g3d("circle", "alt", "Kd", 0.001),
+        Kp_rad=_g3d("circle", "rad", "Kp", 1e-5),
+        Ki_rad=_g3d("circle", "rad", "Ki", 0.0),
+        Kd_rad=_g3d("circle", "rad", "Kd", 0.0),
+        Kp_bank=_g3d("circle", "bank", "Kp", -2.0),
+        power=float(_load_gains().get("plane3d_circle", {}).get("power", 0.6)),
+        max_bank_rad=float(np.deg2rad(30.0)),
+        dt=1.0,
+        gravity=9.81,
+        Kp_power=_g3d("circle", "power_pid", "Kp", 2e-4),
+        Ki_power=_g3d("circle", "power_pid", "Ki", 5e-6),
+        Kd_power=_g3d("circle", "power_pid", "Kd", 0.0),
+    )
+    return params, plane3d_pid_reset(params)
+
+
+def make_plane3d_figure8_pid() -> tuple[Plane3DHeadingPIDParams, Plane3DPIDState]:
+    """JAX-functional figure-8 task PID. Gains from data/pid_gains.json."""
+    params = Plane3DHeadingPIDParams(
+        Kp_alt=_g3d("figure8", "alt", "Kp", 0.0005),
+        Ki_alt=_g3d("figure8", "alt", "Ki", 1e-5),
+        Kd_alt=_g3d("figure8", "alt", "Kd", 0.001),
+        Kp_hdg=_g3d("figure8", "hdg", "Kp", 0.5),
+        Ki_hdg=_g3d("figure8", "hdg", "Ki", 0.0),
+        Kd_hdg=_g3d("figure8", "hdg", "Kd", 0.0),
+        Kp_bank=_g3d("figure8", "bank", "Kp", -2.0),
+        power=float(_load_gains().get("plane3d_figure8", {}).get("power", 0.6)),
+        max_bank_rad=float(np.deg2rad(25.0)),
+        dt=1.0,
+        Kp_power=_g3d("figure8", "power_pid", "Kp", 2e-4),
+        Ki_power=_g3d("figure8", "power_pid", "Ki", 5e-6),
+        Kd_power=_g3d("figure8", "power_pid", "Kd", 0.0),
+    )
+    return params, plane3d_pid_reset(params)
 
 
 # ---------------------------------------------------------------------------
@@ -1026,10 +1505,6 @@ def make_plane_stateful_gs_pid() -> StatefulMIMOPID:
 # oscillation period.
 
 
-def _wrap_angle_np(a: float) -> float:
-    return float(np.arctan2(np.sin(a), np.cos(a)))
-
-
 def _wrap_angle_jnp(a):
     return jnp.arctan2(jnp.sin(a), jnp.cos(a))
 
@@ -1089,28 +1564,26 @@ class StatefulPlane3DHeadingPID:
         self._hdg_int = 0.0
         self._hdg_prev = 0.0
 
-    def step(self, obs) -> np.ndarray:
+    def step(self, obs):
         stick = self.alt.step(obs)
-        psi = float(obs[9])
-        target_heading = float(obs[11])
-        phi = float(obs[6])
+        psi = obs[..., 9]
+        target_heading = obs[..., 11]
+        phi = obs[..., 6]
 
-        hdg_err = _wrap_angle_np(target_heading - psi)
-        self._hdg_int += hdg_err * self.dt
+        hdg_err = _wrap_angle_jnp(target_heading - psi)
+        self._hdg_int = self._hdg_int + hdg_err * self.dt
         deriv = (hdg_err - self._hdg_prev) / self.dt
         desired_bank = (
             self.Kp_hdg * hdg_err + self.Ki_hdg * self._hdg_int + self.Kd_hdg * deriv
         )
-        desired_bank = float(
-            np.clip(desired_bank, -self.max_bank_rad, self.max_bank_rad)
-        )
+        desired_bank = jnp.clip(desired_bank, -self.max_bank_rad, self.max_bank_rad)
         bank_err = phi - desired_bank
-        aileron = float(np.clip(self.Kp_bank * bank_err, -1.0, 1.0))
-        # Anti-windup on heading integrator
-        if abs(aileron) >= 1.0:
-            self._hdg_int -= hdg_err * self.dt
+        aileron = jnp.clip(self.Kp_bank * bank_err, -1.0, 1.0)
+        self._hdg_int = jnp.where(jnp.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int)
         self._hdg_prev = hdg_err
-        return np.array([self.power, stick, aileron])
+        return jnp.stack([jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1)
+
+    __call__ = step
 
 
 class StatefulPlane3DCirclePID:
@@ -1162,39 +1635,34 @@ class StatefulPlane3DCirclePID:
         self._rad_int = 0.0
         self._rad_prev = 0.0
 
-    def step(self, obs) -> np.ndarray:
+    def step(self, obs):
         stick = self.alt.step(obs)
-        x_dot = float(obs[0])
-        y_dot = float(obs[1])
-        rel_x = float(obs[11])
-        rel_y = float(obs[12])
-        radius = float(obs[13])
-        phi = float(obs[6])
+        x_dot = obs[..., 0]
+        y_dot = obs[..., 1]
+        rel_x = obs[..., 11]
+        rel_y = obs[..., 12]
+        radius = obs[..., 13]
+        phi = obs[..., 6]
 
-        # Physics-based ideal bank for a coordinated turn at current speed
         speed_sq = x_dot**2 + y_dot**2 + 1e-6
-        ideal_bank = float(np.arctan2(speed_sq, self.gravity * max(radius, 1.0)))
+        ideal_bank = jnp.arctan2(speed_sq, self.gravity * jnp.maximum(radius, 1.0))
 
-        # Signed radial error: positive = outside the circle
-        dist = float(np.sqrt(rel_x**2 + rel_y**2))
+        dist = jnp.sqrt(rel_x**2 + rel_y**2)
         rad_err = dist - radius
 
-        self._rad_int += rad_err * self.dt
+        self._rad_int = self._rad_int + rad_err * self.dt
         deriv = (rad_err - self._rad_prev) / self.dt
-        # PID on radial error → bank correction (outside → bank more)
         bank_correction = (
             self.Kp_rad * rad_err + self.Ki_rad * self._rad_int + self.Kd_rad * deriv
         )
-        desired_bank = ideal_bank + bank_correction
-        desired_bank = float(
-            np.clip(desired_bank, -self.max_bank_rad, self.max_bank_rad)
-        )
+        desired_bank = jnp.clip(ideal_bank + bank_correction, -self.max_bank_rad, self.max_bank_rad)
         bank_err = phi - desired_bank
-        aileron = float(np.clip(self.Kp_bank * bank_err, -1.0, 1.0))
-        if abs(aileron) >= 1.0:
-            self._rad_int -= rad_err * self.dt
+        aileron = jnp.clip(self.Kp_bank * bank_err, -1.0, 1.0)
+        self._rad_int = jnp.where(jnp.abs(aileron) >= 1.0, self._rad_int - rad_err * self.dt, self._rad_int)
         self._rad_prev = rad_err
-        return np.array([self.power, stick, aileron])
+        return jnp.stack([jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1)
+
+    __call__ = step
 
 
 class StatefulPlane3DFigureEightPID:
@@ -1246,65 +1714,50 @@ class StatefulPlane3DFigureEightPID:
         self._hdg_int = 0.0
         self._hdg_prev = 0.0
 
-    def step(self, obs) -> np.ndarray:
-        psi = float(obs[9])
-        phi = float(obs[6])
-        target_radius = float(obs[11])
-        nearest_dx = float(obs[12])
-        nearest_dy = float(obs[13])
-        nearest_dz = float(obs[14])
-        tangent_heading = float(obs[15])
+    def step(self, obs):
+        psi = obs[..., 9]
+        phi = obs[..., 6]
+        target_radius = obs[..., 11]
+        nearest_dx = obs[..., 12]
+        nearest_dy = obs[..., 13]
+        nearest_dz = obs[..., 14]
+        tangent_heading = obs[..., 15]
 
         # ── Altitude: PID on nearest_dz (curve_z - aircraft_z) ──
-        alt_err = nearest_dz  # positive = curve is above → climb
-        self._alt_int += alt_err * self.dt
+        alt_err = nearest_dz
+        self._alt_int = self._alt_int + alt_err * self.dt
         alt_d = (alt_err - self._alt_prev) / self.dt
-        stick = float(
-            np.clip(
-                self.Kp_alt * alt_err
-                + self.Ki_alt * self._alt_int
-                + self.Kd_alt * alt_d,
-                -1.0,
-                1.0,
-            )
+        stick = jnp.clip(
+            self.Kp_alt * alt_err + self.Ki_alt * self._alt_int + self.Kd_alt * alt_d,
+            -1.0,
+            1.0,
         )
-        if abs(stick) >= 1.0:
-            self._alt_int -= alt_err * self.dt
+        self._alt_int = jnp.where(jnp.abs(stick) >= 1.0, self._alt_int - alt_err * self.dt, self._alt_int)
         self._alt_prev = alt_err
 
         # ── Heading: blend tangent (on-curve) with correction (off-curve) ──
-        lateral_dist = float(np.sqrt(nearest_dx**2 + nearest_dy**2 + 1e-6))
-        # blend: 0 = on curve (follow tangent), 1 = far off (chase nearest)
-        blend = float(
-            np.clip(lateral_dist / (0.05 * max(target_radius, 1.0)), 0.0, 1.0)
-        )
-        correction_heading = float(np.arctan2(nearest_dy, nearest_dx))
-        # Blend unit vectors to avoid angle wrapping issues
-        bx = blend * np.cos(correction_heading) + (1.0 - blend) * np.cos(
-            tangent_heading
-        )
-        by = blend * np.sin(correction_heading) + (1.0 - blend) * np.sin(
-            tangent_heading
-        )
-        desired_heading = float(np.arctan2(by, bx))
+        lateral_dist = jnp.sqrt(nearest_dx**2 + nearest_dy**2 + 1e-6)
+        blend = jnp.clip(lateral_dist / (0.05 * jnp.maximum(target_radius, 1.0)), 0.0, 1.0)
+        correction_heading = jnp.arctan2(nearest_dy, nearest_dx)
+        bx = blend * jnp.cos(correction_heading) + (1.0 - blend) * jnp.cos(tangent_heading)
+        by = blend * jnp.sin(correction_heading) + (1.0 - blend) * jnp.sin(tangent_heading)
+        desired_heading = jnp.arctan2(by, bx)
 
-        hdg_err = float(
-            np.arctan2(np.sin(desired_heading - psi), np.cos(desired_heading - psi))
-        )
-        self._hdg_int += hdg_err * self.dt
+        hdg_err = _wrap_angle_jnp(desired_heading - psi)
+        self._hdg_int = self._hdg_int + hdg_err * self.dt
         hdg_d = (hdg_err - self._hdg_prev) / self.dt
-        desired_bank = (
-            self.Kp_hdg * hdg_err + self.Ki_hdg * self._hdg_int + self.Kd_hdg * hdg_d
-        )
-        desired_bank = float(
-            np.clip(desired_bank, -self.max_bank_rad, self.max_bank_rad)
+        desired_bank = jnp.clip(
+            self.Kp_hdg * hdg_err + self.Ki_hdg * self._hdg_int + self.Kd_hdg * hdg_d,
+            -self.max_bank_rad,
+            self.max_bank_rad,
         )
         bank_err = phi - desired_bank
-        aileron = float(np.clip(self.Kp_bank * bank_err, -1.0, 1.0))
-        if abs(aileron) >= 1.0:
-            self._hdg_int -= hdg_err * self.dt
+        aileron = jnp.clip(self.Kp_bank * bank_err, -1.0, 1.0)
+        self._hdg_int = jnp.where(jnp.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int)
         self._hdg_prev = hdg_err
-        return np.array([self.power, stick, aileron])
+        return jnp.stack([jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1)
+
+    __call__ = step
 
 
 def _g3d(task: str, group: str, key: str, default: float) -> float:
