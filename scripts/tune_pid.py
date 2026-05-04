@@ -213,6 +213,177 @@ def _tune_four_tank(n_points: int, tuning_rule: str, **kw) -> dict:
     }
 
 
+def _tune_four_tank_search(n_points: int, tuning_rule: str, **kw) -> dict:
+    """Grid search over (Kp, Ki) per pump-tank loop. Replaces relay autotuning
+    for FourTank: the plant is a pure integrator (water level integrates
+    inflow), so under bang-bang relay it drifts monotonically with no
+    zero-crossings, giving Astrom-Hagglund nothing to extract Ku/Tu from.
+
+    Per operating point ``t`` (target_h1 = target_h2 = t), search runs in
+    two alternating refinement passes (loop1 ↔ loop2) so cross-coupling
+    (γ1=γ2=0.2 → 80% of each pump goes cross-tank) is accounted for. The
+    objective is cumulative env reward on a full 500-step rollout.
+
+    ``tuning_rule`` is ignored (kept for signature compatibility); printed
+    in the output dict as ``"grid_search_max_reward"``.
+    """
+    import jax
+    import jax.numpy as jnp
+    import numpy as np
+    from target_gym import FourTank, FourTankParams
+
+    env = FourTank(integration_method="rk4_1")
+    params = FourTankParams()
+    targets = np.linspace(
+        params.target_h1_range[0], params.target_h1_range[1], n_points
+    )
+    Kps = jnp.array([0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0])
+    Kis = jnp.array([0.0, 0.05, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0])
+    max_steps = int(params.max_steps_in_episode)
+
+    def _pi_with_antiwindup(Kp, Ki, err, integ_prev):
+        """Match the discrete PI semantics of pid.py:pid_step (which is
+        what the expert actually runs). Anti-windup: don't grow the
+        integral while the output is saturated."""
+        candidate_int = integ_prev + err  # dt=1
+        u_raw = Kp * err + Ki * candidate_int
+        u_clip = jnp.clip(u_raw, -1.0, 1.0)
+        new_integ = jnp.where(u_raw == u_clip, candidate_int, integ_prev)
+        return u_clip, new_integ
+
+    def simulate(Kp1, Ki1, Kp2, Ki2, t, key):
+        rk = key
+        _, state = env.reset_env(rk, params)
+        state = state.replace(target_h1=t, target_h2=t)
+
+        def body(carry, _):
+            state, int1, int2, key = carry
+            obs = env.get_obs(state)
+            err1 = obs[4] - obs[0]
+            err2 = obs[5] - obs[1]
+            u1, new_int1 = _pi_with_antiwindup(Kp1, Ki1, err1, int1)
+            u2, new_int2 = _pi_with_antiwindup(Kp2, Ki2, err2, int2)
+            action = jnp.stack([u1, u2])
+            key, sk = jax.random.split(key)
+            _, new_state, r, _, _ = env.step(sk, state, action, params)
+            return (new_state, new_int1, new_int2, key), r
+
+        init = (state, jnp.float32(0.0), jnp.float32(0.0), rk)
+        _, rewards = jax.lax.scan(body, init, xs=None, length=max_steps)
+        return rewards.sum()
+
+    grid_Kp, grid_Ki = jnp.meshgrid(Kps, Kis, indexing="ij")
+    flat_Kp, flat_Ki = grid_Kp.flatten(), grid_Ki.flatten()
+
+    def search_loop1(kp2, ki2, t, key):
+        s = jax.vmap(lambda kp, ki: simulate(kp, ki, kp2, ki2, t, key))(
+            flat_Kp, flat_Ki
+        )
+        idx = jnp.argmax(s)
+        return flat_Kp[idx], flat_Ki[idx], s[idx]
+
+    def search_loop2(kp1, ki1, t, key):
+        s = jax.vmap(lambda kp, ki: simulate(kp1, ki1, kp, ki, t, key))(
+            flat_Kp, flat_Ki
+        )
+        idx = jnp.argmax(s)
+        return flat_Kp[idx], flat_Ki[idx], s[idx]
+
+    Kp1_list, Ki1_list, Kp2_list, Ki2_list = [], [], [], []
+    for t in targets:
+        key = jax.random.PRNGKey(int(round(float(t) * 10000)))
+        kp1, ki1, _ = search_loop1(15.0, 2.0, float(t), key)  # seed loop2 at hand-picked
+        kp2, ki2, _ = search_loop2(float(kp1), float(ki1), float(t), key)
+        kp1, ki1, _ = search_loop1(float(kp2), float(ki2), float(t), key)
+        kp2, ki2, score = search_loop2(float(kp1), float(ki1), float(t), key)
+        kp1, ki1, kp2, ki2 = float(kp1), float(ki1), float(kp2), float(ki2)
+        score = float(score)
+        print(
+            f"    t={t:.3f}: loop1=(Kp={kp1:6.2f}, Ki={ki1:5.2f})  "
+            f"loop2=(Kp={kp2:6.2f}, Ki={ki2:5.2f})  "
+            f"cum_reward={score:5.1f}/{max_steps}"
+        )
+        Kp1_list.append(kp1); Ki1_list.append(ki1)
+        Kp2_list.append(kp2); Ki2_list.append(ki2)
+
+    # The midpoint (top-level pid1/pid2) keys are what the
+    # FunctionalExpertPolicy actually consumes — gain scheduling is
+    # currently not wired into FourTank's expert_policy. So pick the
+    # midpoint by maximizing the average reward across the eval
+    # distribution (uniform random targets, matching env.reset_env),
+    # not just by taking the geometric centre of the operating-point
+    # grid. This is the gain pair that AjaxExperiments actually sees.
+    n_eval_seeds = 32
+    eval_keys = jax.random.split(jax.random.PRNGKey(424242), n_eval_seeds)
+
+    def avg_reward(Kp1, Ki1, Kp2, Ki2):
+        # Per seed, env.reset_env samples a fresh random target. Match
+        # that by re-resetting per seed and using the env-drawn targets
+        # rather than a fixed t.
+        def one_seed(k):
+            _, st = env.reset_env(k, params)
+
+            def body(carry, _):
+                state, int1, int2, key = carry
+                obs = env.get_obs(state)
+                err1 = obs[4] - obs[0]
+                err2 = obs[5] - obs[1]
+                u1, new_int1 = _pi_with_antiwindup(Kp1, Ki1, err1, int1)
+                u2, new_int2 = _pi_with_antiwindup(Kp2, Ki2, err2, int2)
+                action = jnp.stack([u1, u2])
+                key, sk = jax.random.split(key)
+                _, new_state, r, _, _ = env.step(sk, state, action, params)
+                return (new_state, new_int1, new_int2, key), r
+
+            init = (st, jnp.float32(0.0), jnp.float32(0.0), k)
+            _, rewards = jax.lax.scan(body, init, xs=None, length=max_steps)
+            return rewards.sum()
+
+        return jax.vmap(one_seed)(eval_keys).mean()
+
+    # Joint 4D grid search for the midpoint. 8x8x8x8 = 4096 candidates,
+    # each averaged over 32 random seeds. Memory-fits on CPU (no real
+    # state, just 4 floats per candidate).
+    g1, g2, g3, g4 = jnp.meshgrid(Kps, Kis, Kps, Kis, indexing="ij")
+    flat = (g1.flatten(), g2.flatten(), g3.flatten(), g4.flatten())
+    print(f"  Joint 4D midpoint search ({flat[0].size} candidates x "
+          f"{n_eval_seeds} seeds, optimizing for eval distribution)...")
+    scores_mid = jax.vmap(avg_reward)(*flat)
+    scores_mid = jax.device_get(scores_mid)
+    best = int(np.argmax(scores_mid))
+    kp1_mid = float(flat[0][best])
+    ki1_mid = float(flat[1][best])
+    kp2_mid = float(flat[2][best])
+    ki2_mid = float(flat[3][best])
+    print(f"  best midpoint: loop1=(Kp={kp1_mid:.3f}, Ki={ki1_mid:.3f})  "
+          f"loop2=(Kp={kp2_mid:.3f}, Ki={ki2_mid:.3f})  "
+          f"avg_reward={float(scores_mid[best]):.2f}/{max_steps} "
+          f"({100*float(scores_mid[best])/max_steps:.1f}%)")
+
+    return {
+        "pid1": {"Kp": round(kp1_mid, 6), "Ki": round(ki1_mid, 6), "Kd": 0.0},
+        "pid2": {"Kp": round(kp2_mid, 6), "Ki": round(ki2_mid, 6), "Kd": 0.0},
+        "gain_schedule_pid1": {
+            "operating_points": [float(t) for t in targets],
+            "Kp": [round(k, 6) for k in Kp1_list],
+            "Ki": [round(k, 6) for k in Ki1_list],
+            "Kd": [0.0] * len(targets),
+        },
+        "gain_schedule_pid2": {
+            "operating_points": [float(t) for t in targets],
+            "Kp": [round(k, 6) for k in Kp2_list],
+            "Ki": [round(k, 6) for k in Ki2_list],
+            "Kd": [0.0] * len(targets),
+        },
+        "tuning_rule": "grid_search_max_reward",
+        "note": (
+            "Sequential grid search over (Kp, Ki) maximizing cumulative env "
+            "reward, alternating loop1/loop2 refinements. FourTank is a "
+            "pure integrator -> relay autotuning fails (no zero-crossings)."
+        ),
+    }
+
+
 def _tune_glass_furnace(n_points: int, tuning_rule: str, **kw) -> dict:
     import jax.numpy as jnp
     from target_gym import GlassFurnace, GlassFurnaceParams
@@ -445,52 +616,92 @@ def _plane3d_bank_relay(env, params, tuning_rule, cruise_action, max_steps=3000)
     return Kp_bank
 
 
-def _plane3d_altitude_relay(env, params, tuning_rule, cruise_action, max_steps=10000):
-    """Step (common): tune altitude PID (z → stick) via relay at level flight."""
+def _plane3d_altitude_relay(
+    env, params, tuning_rule, cruise_action, n_points=8, max_steps=10000,
+):
+    """Sweep altitude PID (z → stick) across target_altitude_range.
+
+    Matches the 2D Airplane2D methodology (relay_sweep, pick midpoint gain).
+    """
     import numpy as np
-    from target_gym.experts.relay_autotune import relay_experiment, TUNING_RULES
+    from target_gym.experts.relay_autotune import relay_sweep
 
-    rule_fn = TUNING_RULES[tuning_rule]
-    mid_alt = (params.target_altitude_range[0] + params.target_altitude_range[1]) / 2
-
-    def reset_at_alt(key, p, _target):
+    def reset_at_alt(key, p, target):
         _, st = env.reset_env(key, p)
-        return st.replace(target_altitude=mid_alt, z=mid_alt)
+        return st.replace(target_altitude=float(target), z=float(target))
 
     def build_alt_action(relay_out, obs):
         return np.array([cruise_action, float(np.clip(relay_out, -1, 1)), 0.0])
 
-    res = relay_experiment(
+    res = relay_sweep(
         env,
         params,
         reset_at_alt,
         state_index=2,
-        setpoint_index=10,  # z, target_altitude
-        operating_point=mid_alt,
+        setpoint_index=10,
+        target_range=tuple(params.target_altitude_range),
+        n_points=n_points,
+        sign=1,
+        tuning_rule=tuning_rule,
         relay_amplitude=0.3,
         max_steps=max_steps,
-        build_action=build_alt_action,
+        action_dim=3,
+        action_index=1,
         action_bias=0.0,
-        plant_sign=1,
-        n_settle_cycles=2,
-        n_measure_cycles=3,
+        build_action=build_alt_action,
     )
-
-    if res["success"]:
-        Kp, Ki, Kd = rule_fn(res["Ku"], res["Tu"])
-        print(
-            f"    Ku={res['Ku']:.6f}, Tu={res['Tu']:.2f}s → "
-            f"Kp={Kp:.6f}, Ki={Ki:.6f}, Kd={Kd:.6f}"
-        )
-    else:
+    mid = len(res["operating_points"]) // 2
+    Kp, Ki, Kd = res["Kp"][mid], res["Ki"][mid], res["Kd"][mid]
+    if Kp is None:
         Kp, Ki, Kd = 0.0005, 1e-5, 0.001
-        print("    Altitude relay failed → fallback gains")
+        print("    All altitude relays failed → fallback gains")
+    return Kp, Ki, Kd
 
+
+def _plane3d_power_relay(
+    env, params, tuning_rule, cruise_action, n_points=8, max_steps=10000,
+):
+    """Sweep power PID (z → power, stick=0) across target_altitude_range.
+
+    Mirrors the 2D Airplane2D pid1 methodology: altitude-error-to-power loop.
+    """
+    import numpy as np
+    from target_gym.experts.relay_autotune import relay_sweep
+
+    def reset_at_alt(key, p, target):
+        _, st = env.reset_env(key, p)
+        return st.replace(target_altitude=float(target), z=float(target))
+
+    def build_power_action(relay_out, obs):
+        return np.array([float(np.clip(relay_out, -1, 1)), 0.0, 0.0])
+
+    res = relay_sweep(
+        env,
+        params,
+        reset_at_alt,
+        state_index=2,
+        setpoint_index=10,
+        target_range=tuple(params.target_altitude_range),
+        n_points=n_points,
+        sign=1,
+        tuning_rule=tuning_rule,
+        relay_amplitude=0.2,
+        max_steps=max_steps,
+        action_dim=3,
+        action_index=0,
+        action_bias=cruise_action,
+        build_action=build_power_action,
+    )
+    mid = len(res["operating_points"]) // 2
+    Kp, Ki, Kd = res["Kp"][mid], res["Ki"][mid], res["Kd"][mid]
+    if Kp is None:
+        Kp, Ki, Kd = 2e-4, 5e-6, 0.0
+        print("    All power relays failed → fallback gains")
     return Kp, Ki, Kd
 
 
 def _tune_plane3d_heading(n_points: int, tuning_rule: str, **kw) -> dict:
-    """Sequential relay: bank → heading → altitude."""
+    """Sequential relay: bank → heading → altitude (stick) → altitude (power)."""
     import numpy as np
     from target_gym.plane3d.env_jax import Plane3DHeading
     from target_gym.experts.relay_autotune import relay_experiment, TUNING_RULES
@@ -551,20 +762,32 @@ def _tune_plane3d_heading(n_points: int, tuning_rule: str, **kw) -> dict:
         print("    Heading relay failed → fallback gains")
 
     # ── Step 3: altitude loop (z → stick, level flight) ──
-    print("  [3/3] Altitude relay (z → stick)...")
+    print("  [3/4] Altitude stick relay (z → stick)...")
     Kp_alt, Ki_alt, Kd_alt = _plane3d_altitude_relay(
         env,
         params,
         tuning_rule,
         cruise_action,
+        n_points=n_points,
+    )
+
+    # ── Step 4: altitude loop (z → power, level flight) ──
+    print("  [4/4] Altitude power relay (z → power)...")
+    Kp_pow, Ki_pow, Kd_pow = _plane3d_power_relay(
+        env,
+        params,
+        tuning_rule,
+        cruise_action,
+        n_points=n_points,
     )
 
     return {
         "alt": {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
         "hdg": {"Kp": round(Kp_hdg, 6), "Ki": round(Ki_hdg, 6), "Kd": round(Kd_hdg, 6)},
         "bank": {"Kp": round(Kp_bank, 6)},
+        "power_pid": {"Kp": round(Kp_pow, 8), "Ki": round(Ki_pow, 8), "Kd": round(Kd_pow, 8)},
         "power": 0.6,
-        "note": "Sequential relay autotuning: bank → heading → altitude.",
+        "note": "Sequential relay autotuning: bank → heading → altitude stick → altitude power.",
     }
 
 
@@ -646,129 +869,134 @@ def _tune_plane3d_circle(n_points: int, tuning_rule: str, **kw) -> dict:
         Kp_rad, Ki_rad, Kd_rad = 1e-5, 0.0, 0.0
         print("    Radial relay failed → fallback gains")
 
-    # ── Step 3: altitude loop ──
-    print("  [3/3] Altitude relay (z → stick)...")
+    # ── Step 3: altitude loop (stick) ──
+    print("  [3/4] Altitude stick relay (z → stick)...")
     Kp_alt, Ki_alt, Kd_alt = _plane3d_altitude_relay(
         env,
         params,
         tuning_rule,
         cruise_action,
+        n_points=n_points,
+    )
+
+    # ── Step 4: altitude loop (power) ──
+    print("  [4/4] Altitude power relay (z → power)...")
+    Kp_pow, Ki_pow, Kd_pow = _plane3d_power_relay(
+        env,
+        params,
+        tuning_rule,
+        cruise_action,
+        n_points=n_points,
     )
 
     return {
         "alt": {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
         "rad": {"Kp": round(Kp_rad, 8), "Ki": round(Ki_rad, 8), "Kd": round(Kd_rad, 8)},
         "bank": {"Kp": round(Kp_bank, 6)},
+        "power_pid": {"Kp": round(Kp_pow, 8), "Ki": round(Ki_pow, 8), "Kd": round(Kd_pow, 8)},
         "power": 0.6,
         "target_bank_deg": 15.0,
-        "note": "Sequential relay autotuning: bank → radial → altitude.",
+        "note": "Sequential relay autotuning: bank → radial → altitude stick → altitude power.",
     }
 
 
 def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
-    """Sequential relay: bank → altitude, then grid search for Kp_hdg.
+    """Sequential relay: bank → heading (via relay) → altitude stick → altitude power.
 
-    The figure-8 PID tracks the twisted 3D lemniscate.  Obs layout:
+    The figure-8 PID tracks the twisted 3D lemniscate. Obs layout:
       [... psi(9), target_alt(10), target_radius(11),
        nearest_dx(12), nearest_dy(13), nearest_dz(14), tangent_heading(15), ...]
-    Altitude PID drives nearest_dz → 0.  Heading blends tangent with correction.
+    Altitude PID drives nearest_dz → 0; heading loop drives psi → tangent_heading
+    (relay is tuned at a point on the curve, matching the heading-task protocol).
     """
-    import jax
-    import jax.numpy as jnp
     import numpy as np
     from target_gym.plane3d.env_jax import Plane3DFigureEight
+    from target_gym.experts.relay_autotune import relay_experiment, TUNING_RULES
 
     env = Plane3DFigureEight(integration_method="rk4_1")
     params = env.default_params
+    rule_fn = TUNING_RULES[tuning_rule]
     cruise_action = 0.6 * 2.0 - 1.0
-    dt = float(params.delta_t)
 
     # ── Step 1: bank inner loop ──
-    print("  [1/3] Bank relay (phi → aileron)...")
+    print("  [1/4] Bank relay (phi → aileron)...")
     Kp_bank = _plane3d_bank_relay(env, params, tuning_rule, cruise_action)
 
-    # ── Step 2: altitude loop (relay on z → stick) ──
-    print("  [2/3] Altitude relay (z → stick)...")
+    # ── Step 2: heading loop (relay on desired_bank, bank closed) ──
+    # Fig-8's heading tracks a tangent that rotates around the curve; to stay
+    # consistent with the heading task we tune at a point where the tangent is
+    # locally stationary (treat fig-8 as "follow a fixed tangent direction"
+    # during the relay).
+    print("  [2/4] Heading relay (ψ → desired_bank, bank loop closed)...")
+    mid_alt = (params.target_altitude_range[0] + params.target_altitude_range[1]) / 2
+
+    def reset_fig8_heading(key, p, _target):
+        _, st = env.reset_env(key, p)
+        return st.replace(target_altitude=mid_alt, z=mid_alt, target_heading=0.0)
+
+    def build_heading_action(relay_out, obs):
+        phi = float(obs[6])
+        aileron = float(np.clip(Kp_bank * (phi - relay_out), -1, 1))
+        return np.array([cruise_action, 0.0, aileron])
+
+    def wrap_error(measured, setpoint):
+        return float(np.arctan2(np.sin(setpoint - measured), np.cos(setpoint - measured)))
+
+    hdg_res = relay_experiment(
+        env,
+        params,
+        reset_fig8_heading,
+        state_index=9,
+        setpoint_index=15,  # tangent_heading (figure-8 obs layout)
+        operating_point=0.0,
+        fixed_setpoint=0.0,
+        relay_amplitude=0.10,
+        max_steps=5000,
+        build_action=build_heading_action,
+        error_fn=wrap_error,
+        action_bias=0.0,
+        plant_sign=1,
+        n_settle_cycles=2,
+        n_measure_cycles=3,
+    )
+
+    if hdg_res["success"]:
+        Kp_hdg, Ki_hdg, Kd_hdg = rule_fn(hdg_res["Ku"], hdg_res["Tu"])
+        print(
+            f"    Ku={hdg_res['Ku']:.4f}, Tu={hdg_res['Tu']:.2f}s → "
+            f"Kp={Kp_hdg:.4f}, Ki={Ki_hdg:.6f}, Kd={Kd_hdg:.4f}"
+        )
+    else:
+        Kp_hdg, Ki_hdg, Kd_hdg = 0.5, 0.0, 0.0
+        print("    Heading relay failed → fallback gains")
+
+    # ── Step 3: altitude loop (stick) ──
+    print("  [3/4] Altitude stick relay (z → stick)...")
     Kp_alt, Ki_alt, Kd_alt = _plane3d_altitude_relay(
         env,
         params,
         tuning_rule,
         cruise_action,
+        n_points=n_points,
     )
 
-    # ── Step 3: heading gains via grid search ──
-    print("  [3/3] Grid search for heading gains (Kp_hdg)...")
-    hdg_candidates = [0.2, 0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0]
-    max_bank_rad = float(np.deg2rad(25.0))
-    n_eval = 2000
-    best_Kp_hdg, best_reward = 0.5, -float("inf")
-    key = jax.random.PRNGKey(42)
-
-    for Kp_hdg in hdg_candidates:
-        _, state = env.reset_env(key, params)
-        alt_int, alt_prev = 0.0, 0.0
-        total_r = 0.0
-
-        for t in range(n_eval):
-            obs = env.get_obs(state, params)
-
-            # Altitude PID on nearest_dz (obs[14])
-            alt_err = float(obs[14])  # curve_z - aircraft_z
-            alt_int += alt_err * dt
-            alt_d = (alt_err - alt_prev) / dt
-            stick = float(
-                np.clip(
-                    Kp_alt * alt_err + Ki_alt * alt_int + Kd_alt * alt_d,
-                    -1,
-                    1,
-                )
-            )
-            if abs(stick) >= 1.0:
-                alt_int -= alt_err * dt
-            alt_prev = alt_err
-
-            # Heading: blend tangent (obs[15]) with correction (obs[12:14])
-            nearest_dx = float(obs[12])
-            nearest_dy = float(obs[13])
-            tangent_hdg = float(obs[15])
-            psi = float(obs[9])
-            target_radius = float(obs[11])
-
-            lat_dist = float(np.sqrt(nearest_dx**2 + nearest_dy**2 + 1e-6))
-            blend = min(lat_dist / (0.05 * max(target_radius, 1.0)), 1.0)
-            corr_hdg = float(np.arctan2(nearest_dy, nearest_dx))
-            bx = blend * np.cos(corr_hdg) + (1.0 - blend) * np.cos(tangent_hdg)
-            by = blend * np.sin(corr_hdg) + (1.0 - blend) * np.sin(tangent_hdg)
-            desired_hdg = float(np.arctan2(by, bx))
-
-            hdg_err = float(
-                np.arctan2(np.sin(desired_hdg - psi), np.cos(desired_hdg - psi))
-            )
-            desired_bank = float(np.clip(Kp_hdg * hdg_err, -max_bank_rad, max_bank_rad))
-            phi = float(obs[6])
-            aileron = float(np.clip(Kp_bank * (phi - desired_bank), -1, 1))
-
-            action = jnp.array([cruise_action, stick, aileron])
-            obs, state, reward, done, _ = env.step_env(key, state, action, params)
-            total_r += float(reward)
-            if bool(done):
-                total_r += (n_eval - t - 1) * (-1.0)
-                break
-
-        mean_r = total_r / n_eval
-        print(f"    Kp_hdg={Kp_hdg:.2f}  mean_reward={mean_r:.4f}")
-        if mean_r > best_reward:
-            best_reward = mean_r
-            best_Kp_hdg = Kp_hdg
-
-    print(f"    → best Kp_hdg = {best_Kp_hdg:.2f}")
+    # ── Step 4: altitude loop (power) ──
+    print("  [4/4] Altitude power relay (z → power)...")
+    Kp_pow, Ki_pow, Kd_pow = _plane3d_power_relay(
+        env,
+        params,
+        tuning_rule,
+        cruise_action,
+        n_points=n_points,
+    )
 
     return {
         "alt": {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
-        "hdg": {"Kp": round(best_Kp_hdg, 6), "Ki": 0.0, "Kd": 0.0},
+        "hdg": {"Kp": round(Kp_hdg, 6), "Ki": round(Ki_hdg, 6), "Kd": round(Kd_hdg, 6)},
         "bank": {"Kp": round(Kp_bank, 6)},
+        "power_pid": {"Kp": round(Kp_pow, 8), "Ki": round(Ki_pow, 8), "Kd": round(Kd_pow, 8)},
         "power": 0.6,
-        "note": "Sequential relay (bank, altitude) + grid search (Kp_hdg). Twisted 3D lemniscate.",
+        "note": "Sequential relay autotuning: bank → heading → altitude stick → altitude power.",
     }
 
 
@@ -779,7 +1007,7 @@ def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
 TUNERS = {
     "cstr": (_tune_cstr, "CSTR"),
     "first_order": (_tune_first_order, "FirstOrder"),
-    "four_tank": (_tune_four_tank, "FourTank"),
+    "four_tank": (_tune_four_tank_search, "FourTank"),
     "glass_furnace": (_tune_glass_furnace, "GlassFurnace"),
     "reactor": (_tune_reactor, "Reactor"),
     "plane": (_tune_plane, "Airplane2D"),

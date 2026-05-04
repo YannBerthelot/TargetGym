@@ -1,0 +1,320 @@
+{
+  "plane3d_heading": {
+    "alt": {
+      "Kp": 0.00037733,
+      "Ki": 9.45e-06,
+      "Kd": 0.00478834
+    },
+    "hdg": {
+      "Kp": 2.329415,
+      "Ki": 0.456748,
+      "Kd": 3.773652
+    },
+    "bank": {
+      "Kp": -3.235864
+    },
+    "power_pid": {
+      "Kp": 0.00029661,
+      "Ki": 4.33e-06,
+      "Kd": 0.00646023
+    },
+    "power": 0.6,
+    "note": "Sequential relay autotuning: bank \u2192 heading \u2192 altitude stick \u2192 altitude power."
+  },
+  "_meta": {
+    "description": "PID gains tuned via relay autotuning (Astrom-Hagglund). Re-generate with: python scripts/tune_pid.py",
+    "tuned_at": "2026-05-02T10:27:20",
+    "methodology": "Relay feedback experiment: inject relay signal, measure sustained oscillation to extract ultimate gain (Ku) and period (Tu), then compute PID gains via tuning rules. Gain-scheduled across N operating points spanning the target range.",
+    "tuning_rule": "amigo"
+  },
+  "plane": {
+    "pid1": {
+      "Kp": 0.00028411,
+      "Ki": 4.2e-06,
+      "Kd": 0.00611126
+    },
+    "pid2": {
+      "Kp": 0.00055938,
+      "Ki": 1.567e-05,
+      "Kd": 0.00634337
+    },
+    "gain_schedule_pid1": {
+      "operating_points": [
+        3000.0,
+        3714.285714285714,
+        4428.571428571428,
+        5142.857142857143,
+        5857.142857142857,
+        6571.428571428572,
+        7285.714285714286,
+        8000.0
+      ],
+      "Kp": [
+        0.00046066,
+        0.00042758,
+        0.00037724,
+        0.00032622,
+        0.00028411,
+        0.00025287,
+        0.0002841,
+        0.00087153
+      ],
+      "Ki": [
+        6.5e-06,
+        6.09e-06,
+        5.39e-06,
+        4.74e-06,
+        4.2e-06,
+        3.8e-06,
+        4.4e-06,
+        5.75e-06
+      ],
+      "Kd": [
+        0.01036491,
+        0.00954357,
+        0.00838601,
+        0.00713441,
+        0.00611126,
+        0.00534829,
+        0.00582971,
+        0.04196411
+      ]
+    },
+    "gain_schedule_pid2": {
+      "operating_points": [
+        3000.0,
+        3714.285714285714,
+        4428.571428571428,
+        5142.857142857143,
+        5857.142857142857,
+        6571.428571428572,
+        7285.714285714286,
+        8000.0
+      ],
+      "Kp": [
+        0.00049827,
+        0.00048944,
+        0.00057646,
+        0.00042793,
+        0.00055938,
+        0.0005402,
+        0.00060824,
+        0.00080603
+      ],
+      "Ki": [
+        1.503e-05,
+        1.416e-05,
+        1.681e-05,
+        1.136e-05,
+        1.567e-05,
+        1.444e-05,
+        1.651e-05,
+        2.223e-05
+      ],
+      "Kd": [
+        0.00524677,
+        0.00537403,
+        0.00627768,
+        0.00512229,
+        0.00634337,
+        0.00641756,
+        0.00711638,
+        0.00928544
+      ]
+    },
+    "tuning_rule": "amigo",
+    "note": "MIMO relay: pid1=power loop, pid2=stick loop, both on altitude error."
+  },
+  "plane3d_circle": {
+    "alt": {
+      "Kp": 0.00037733,
+      "Ki": 9.45e-06,
+      "Kd": 0.00478836
+    },
+    "rad": {
+      "Kp": 2.8e-06,
+      "Ki": 1e-08,
+      "Kd": 0.00032154
+    },
+    "bank": {
+      "Kp": -3.235864
+    },
+    "power_pid": {
+      "Kp": 0.00029661,
+      "Ki": 4.33e-06,
+      "Kd": 0.00646024
+    },
+    "power": 0.6,
+    "target_bank_deg": 15.0,
+    "note": "Sequential relay autotuning: bank \u2192 radial \u2192 altitude stick \u2192 altitude power."
+  },
+  "plane3d_figure8": {
+    "alt": {
+      "Kp": 0.00037733,
+      "Ki": 9.45e-06,
+      "Kd": 0.00478835
+    },
+    "hdg": {
+      "Kp": 2.743515,
+      "Ki": 0.537944,
+      "Kd": 4.444494
+    },
+    "bank": {
+      "Kp": -3.235865
+    },
+    "power_pid": {
+      "Kp": 0.00029661,
+      "Ki": 4.33e-06,
+      "Kd": 0.00646025
+    },
+    "power": 0.6,
+    "note": "Sequential relay autotuning: bank \u2192 heading \u2192 altitude stick \u2192 altitude power."
+  },
+  "reactor": {
+    "Kp": 2.265556,
+    "Ki": 1.33268,
+    "Kd": 1.2234,
+    "gain_schedule": {
+      "operating_points": [
+        0.3,
+        0.39999999999999997,
+        0.5,
+        0.6,
+        0.7,
+        0.7999999999999999,
+        0.8999999999999999,
+        1.0
+      ],
+      "Kp": [
+        2.45797,
+        2.45797,
+        2.45797,
+        2.351468,
+        2.265556,
+        2.259871,
+        2.243326,
+        2.240856
+      ],
+      "Ki": [
+        1.445865,
+        1.445865,
+        1.445865,
+        1.383216,
+        1.33268,
+        1.329336,
+        1.319603,
+        1.318151
+      ],
+      "Kd": [
+        1.327304,
+        1.327304,
+        1.327304,
+        1.269792,
+        1.2234,
+        1.22033,
+        1.211396,
+        1.210062
+      ]
+    },
+    "tuning_rule": "amigo",
+    "note": "Relay autotuning, positive-gain (rod withdrawal raises power)."
+  },
+  "four_tank": {
+    "pid1": {
+      "Kp": 0.5,
+      "Ki": 10.0,
+      "Kd": 0.0
+    },
+    "pid2": {
+      "Kp": 0.5,
+      "Ki": 10.0,
+      "Kd": 0.0
+    },
+    "gain_schedule_pid1": {
+      "operating_points": [
+        0.5,
+        0.5714285714285714,
+        0.6428571428571428,
+        0.7142857142857143,
+        0.7857142857142857,
+        0.8571428571428571,
+        0.9285714285714286,
+        1.0
+      ],
+      "Kp": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "Ki": [
+        10.0,
+        5.0,
+        5.0,
+        5.0,
+        2.0,
+        2.0,
+        2.0,
+        1.0
+      ],
+      "Kd": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "gain_schedule_pid2": {
+      "operating_points": [
+        0.5,
+        0.5714285714285714,
+        0.6428571428571428,
+        0.7142857142857143,
+        0.7857142857142857,
+        0.8571428571428571,
+        0.9285714285714286,
+        1.0
+      ],
+      "Kp": [
+        5.0,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "Ki": [
+        10.0,
+        10.0,
+        5.0,
+        5.0,
+        5.0,
+        2.0,
+        2.0,
+        2.0
+      ],
+      "Kd": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "tuning_rule": "grid_search_max_reward",
+    "note": "Sequential grid search over (Kp, Ki) maximizing cumulative env reward, alternating loop1/loop2 refinements. FourTank is a pure integrator -> relay autotuning fails (no zero-crossings)."
+  }
+}

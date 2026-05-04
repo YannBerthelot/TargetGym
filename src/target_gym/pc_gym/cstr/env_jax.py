@@ -170,6 +170,12 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
 
+    @property
+    def expert_policy(self):
+        from target_gym.experts.pid import FunctionalExpertPolicy, make_cstr_pid, pid_step
+        params, zero_state = make_cstr_pid()
+        return FunctionalExpertPolicy(params, zero_state, pid_step)
+
     def make_pid(self):
         """Return a ready-to-use StatefulPID for concentration tracking."""
         from target_gym.experts.pid import make_cstr_stateful_pid
