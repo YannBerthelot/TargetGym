@@ -172,7 +172,12 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
 
     @property
     def expert_policy(self):
-        from target_gym.experts.pid import FunctionalExpertPolicy, make_cstr_pid, pid_step
+        from target_gym.experts.pid import (
+            FunctionalExpertPolicy,
+            make_cstr_pid,
+            pid_step,
+        )
+
         params, zero_state = make_cstr_pid()
         return FunctionalExpertPolicy(params, zero_state, pid_step)
 

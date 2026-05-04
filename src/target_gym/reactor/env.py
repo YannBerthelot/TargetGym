@@ -214,7 +214,9 @@ class ReactorParams(EnvParams):
     # 24 h of simulated time = 86400 s = 86400 physics steps × 1 s/step
     # = 8640 control steps × 10 s/step.
     delta_t: float = 1.0
-    max_steps_in_episode: int = 86400  # in physics steps (86400 × 1 s = 24 h, = 8640 control steps)
+    max_steps_in_episode: int = (
+        86400  # in physics steps (86400 × 1 s = 24 h, = 8640 control steps)
+    )
 
 
 @struct.dataclass

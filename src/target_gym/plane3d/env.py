@@ -189,12 +189,13 @@ def compute_reward_heading(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     max_alt_diff = params.max_alt - params.min_alt
     alt_base = xp.clip(
         (max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff,
-        0.0, 1.0,
+        0.0,
+        1.0,
     )
-    alt_r = alt_base ** 10
+    alt_r = alt_base**10
     heading_diff = xp.abs(wrap_angle(state.psi - state.target_heading))
     heading_base = xp.clip(1.0 - heading_diff / jnp.pi, 0.0, 1.0)
-    heading_r = heading_base ** 10
+    heading_r = heading_base**10
     return xp.where(done_alt, -1.0 * params.max_steps_in_episode, alt_r * heading_r)
 
 
