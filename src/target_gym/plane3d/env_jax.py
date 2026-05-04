@@ -432,6 +432,7 @@ class Plane3DFigureEight(_Airplane3DBase):
         base_kwargs.update(
             x=start_x,
             y=start_y,
+            z=base_kwargs["target_altitude"],
             x_dot=x_dot,
             y_dot=y_dot,
             psi=psi,
