@@ -138,7 +138,12 @@ class GlassFurnace(environment.Environment[GlassFurnaceState, GlassFurnaceParams
 
     @property
     def expert_policy(self):
-        from target_gym.experts.pid import FunctionalExpertPolicy, make_glass_furnace_pid, pid_step
+        from target_gym.experts.pid import (
+            FunctionalExpertPolicy,
+            make_glass_furnace_pid,
+            pid_step,
+        )
+
         params, zero_state = make_glass_furnace_pid()
         return FunctionalExpertPolicy(params, zero_state, pid_step)
 

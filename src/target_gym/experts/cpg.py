@@ -94,10 +94,26 @@ def cheetah_cpg_step(
     """
     t = state.time
     omega = 2.0 * jnp.pi * params.frequency
-    amps = jnp.stack([params.amp_0, params.amp_1, params.amp_2,
-                      params.amp_3, params.amp_4, params.amp_5])
-    phases = jnp.stack([params.phase_0, params.phase_1, params.phase_2,
-                        params.phase_3, params.phase_4, params.phase_5])
+    amps = jnp.stack(
+        [
+            params.amp_0,
+            params.amp_1,
+            params.amp_2,
+            params.amp_3,
+            params.amp_4,
+            params.amp_5,
+        ]
+    )
+    phases = jnp.stack(
+        [
+            params.phase_0,
+            params.phase_1,
+            params.phase_2,
+            params.phase_3,
+            params.phase_4,
+            params.phase_5,
+        ]
+    )
     action = amps * jnp.sin(omega * t + phases)
     # Clip to match env action range [-1, 1].
     action = jnp.clip(action, -1.0, 1.0)
@@ -108,7 +124,13 @@ def cheetah_cpg_step(
 # Register gain-policy learnable fields: frequency + 6 amplitudes.
 # Phases stay at anchor values (gait coordination is the expert's contribution).
 _CHEETAH_CPG_LEARNABLE = (
-    "frequency", "amp_0", "amp_1", "amp_2", "amp_3", "amp_4", "amp_5",
+    "frequency",
+    "amp_0",
+    "amp_1",
+    "amp_2",
+    "amp_3",
+    "amp_4",
+    "amp_5",
 )
 register_learnable_gains(cheetah_cpg_step, _CHEETAH_CPG_LEARNABLE)
 
@@ -126,15 +148,22 @@ def make_cheetah_cpg(
         # Hand-tuned fallback (gallop-ish gait, see eval_cpg_expert.py).
         freq = 2.5
         amps = [0.8, 0.8, 0.6, 0.8, 0.8, 0.6]
-        phases = [0.0, 1.0, 2.0, jnp.pi / 2,
-                  jnp.pi / 2 + 1.0, jnp.pi / 2 + 2.0]
+        phases = [0.0, 1.0, 2.0, jnp.pi / 2, jnp.pi / 2 + 1.0, jnp.pi / 2 + 2.0]
     assert len(amps) == _N_CHEETAH and len(phases) == _N_CHEETAH
     params = CheetahCPGParams(
         frequency=freq,
-        amp_0=amps[0], amp_1=amps[1], amp_2=amps[2],
-        amp_3=amps[3], amp_4=amps[4], amp_5=amps[5],
-        phase_0=phases[0], phase_1=phases[1], phase_2=phases[2],
-        phase_3=phases[3], phase_4=phases[4], phase_5=phases[5],
+        amp_0=amps[0],
+        amp_1=amps[1],
+        amp_2=amps[2],
+        amp_3=amps[3],
+        amp_4=amps[4],
+        amp_5=amps[5],
+        phase_0=phases[0],
+        phase_1=phases[1],
+        phase_2=phases[2],
+        phase_3=phases[3],
+        phase_4=phases[4],
+        phase_5=phases[5],
         dt=float(dt),
     )
     return params, cpg_reset(params)
@@ -170,12 +199,30 @@ _N_BARKOUR = 12
 @struct.dataclass
 class BarkourCPGParams:
     frequency: float
-    amp_0: float; amp_1: float; amp_2: float; amp_3: float
-    amp_4: float; amp_5: float; amp_6: float; amp_7: float
-    amp_8: float; amp_9: float; amp_10: float; amp_11: float
-    phase_0: float; phase_1: float; phase_2: float; phase_3: float
-    phase_4: float; phase_5: float; phase_6: float; phase_7: float
-    phase_8: float; phase_9: float; phase_10: float; phase_11: float
+    amp_0: float
+    amp_1: float
+    amp_2: float
+    amp_3: float
+    amp_4: float
+    amp_5: float
+    amp_6: float
+    amp_7: float
+    amp_8: float
+    amp_9: float
+    amp_10: float
+    amp_11: float
+    phase_0: float
+    phase_1: float
+    phase_2: float
+    phase_3: float
+    phase_4: float
+    phase_5: float
+    phase_6: float
+    phase_7: float
+    phase_8: float
+    phase_9: float
+    phase_10: float
+    phase_11: float
     dt: float  # env physics dt (BarkourJoystick = 0.02 s)
 
 
@@ -185,16 +232,38 @@ def barkour_cpg_step(
     """Open-loop sinusoidal CPG. ``obs`` is unused (pure pattern generator)."""
     t = state.time
     omega = 2.0 * jnp.pi * params.frequency
-    amps = jnp.stack([
-        params.amp_0, params.amp_1, params.amp_2, params.amp_3,
-        params.amp_4, params.amp_5, params.amp_6, params.amp_7,
-        params.amp_8, params.amp_9, params.amp_10, params.amp_11,
-    ])
-    phases = jnp.stack([
-        params.phase_0, params.phase_1, params.phase_2, params.phase_3,
-        params.phase_4, params.phase_5, params.phase_6, params.phase_7,
-        params.phase_8, params.phase_9, params.phase_10, params.phase_11,
-    ])
+    amps = jnp.stack(
+        [
+            params.amp_0,
+            params.amp_1,
+            params.amp_2,
+            params.amp_3,
+            params.amp_4,
+            params.amp_5,
+            params.amp_6,
+            params.amp_7,
+            params.amp_8,
+            params.amp_9,
+            params.amp_10,
+            params.amp_11,
+        ]
+    )
+    phases = jnp.stack(
+        [
+            params.phase_0,
+            params.phase_1,
+            params.phase_2,
+            params.phase_3,
+            params.phase_4,
+            params.phase_5,
+            params.phase_6,
+            params.phase_7,
+            params.phase_8,
+            params.phase_9,
+            params.phase_10,
+            params.phase_11,
+        ]
+    )
     action = amps * jnp.sin(omega * t + phases)
     action = jnp.clip(action, -1.0, 1.0)
     new_state = CPGState(time=t + params.dt)
@@ -203,8 +272,18 @@ def barkour_cpg_step(
 
 _BARKOUR_CPG_LEARNABLE = (
     "frequency",
-    "amp_0", "amp_1", "amp_2", "amp_3", "amp_4", "amp_5",
-    "amp_6", "amp_7", "amp_8", "amp_9", "amp_10", "amp_11",
+    "amp_0",
+    "amp_1",
+    "amp_2",
+    "amp_3",
+    "amp_4",
+    "amp_5",
+    "amp_6",
+    "amp_7",
+    "amp_8",
+    "amp_9",
+    "amp_10",
+    "amp_11",
 )
 register_learnable_gains(barkour_cpg_step, _BARKOUR_CPG_LEARNABLE)
 
@@ -219,19 +298,35 @@ def _barkour_trot_anchor() -> tuple[float, list, list]:
     # Amplitudes per actuator: abduction=0, hip=0.3, knee=0.4
     amp_abd, amp_hip, amp_knee = 0.0, 0.3, 0.4
     amps = [
-        amp_abd, amp_hip, amp_knee,  # front-left
-        amp_abd, amp_hip, amp_knee,  # hind-left  (antiphase with front-left)
-        amp_abd, amp_hip, amp_knee,  # front-right (antiphase with front-left)
-        amp_abd, amp_hip, amp_knee,  # hind-right (in phase with front-left)
+        amp_abd,
+        amp_hip,
+        amp_knee,  # front-left
+        amp_abd,
+        amp_hip,
+        amp_knee,  # hind-left  (antiphase with front-left)
+        amp_abd,
+        amp_hip,
+        amp_knee,  # front-right (antiphase with front-left)
+        amp_abd,
+        amp_hip,
+        amp_knee,  # hind-right (in phase with front-left)
     ]
     # Phases. Front-left/hind-right pair: phase 0. Hind-left/front-right: phi.
     pi = float(jnp.pi)
     knee_lead = pi / 4.0
     phases = [
-        0.0,     0.0,     knee_lead,      # front-left  (pair A)
-        0.0,     pi,      pi + knee_lead,  # hind-left   (pair B, antiphase)
-        0.0,     pi,      pi + knee_lead,  # front-right (pair B)
-        0.0,     0.0,     knee_lead,       # hind-right  (pair A)
+        0.0,
+        0.0,
+        knee_lead,  # front-left  (pair A)
+        0.0,
+        pi,
+        pi + knee_lead,  # hind-left   (pair B, antiphase)
+        0.0,
+        pi,
+        pi + knee_lead,  # front-right (pair B)
+        0.0,
+        0.0,
+        knee_lead,  # hind-right  (pair A)
     ]
     return freq, amps, phases
 
@@ -249,12 +344,30 @@ def make_barkour_cpg(dt: float = 0.02) -> tuple[BarkourCPGParams, CPGState]:
     assert len(amps) == _N_BARKOUR and len(phases) == _N_BARKOUR
     params = BarkourCPGParams(
         frequency=freq,
-        amp_0=amps[0], amp_1=amps[1], amp_2=amps[2], amp_3=amps[3],
-        amp_4=amps[4], amp_5=amps[5], amp_6=amps[6], amp_7=amps[7],
-        amp_8=amps[8], amp_9=amps[9], amp_10=amps[10], amp_11=amps[11],
-        phase_0=phases[0], phase_1=phases[1], phase_2=phases[2], phase_3=phases[3],
-        phase_4=phases[4], phase_5=phases[5], phase_6=phases[6], phase_7=phases[7],
-        phase_8=phases[8], phase_9=phases[9], phase_10=phases[10], phase_11=phases[11],
+        amp_0=amps[0],
+        amp_1=amps[1],
+        amp_2=amps[2],
+        amp_3=amps[3],
+        amp_4=amps[4],
+        amp_5=amps[5],
+        amp_6=amps[6],
+        amp_7=amps[7],
+        amp_8=amps[8],
+        amp_9=amps[9],
+        amp_10=amps[10],
+        amp_11=amps[11],
+        phase_0=phases[0],
+        phase_1=phases[1],
+        phase_2=phases[2],
+        phase_3=phases[3],
+        phase_4=phases[4],
+        phase_5=phases[5],
+        phase_6=phases[6],
+        phase_7=phases[7],
+        phase_8=phases[8],
+        phase_9=phases[9],
+        phase_10=phases[10],
+        phase_11=phases[11],
         dt=float(dt),
     )
     return params, cpg_reset(params)
