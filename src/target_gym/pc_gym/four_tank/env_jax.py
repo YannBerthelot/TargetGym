@@ -156,6 +156,28 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
 
+    @property
+    def expert_policy(self):
+        # Prefer gain-scheduled gains (per-operating-point Kp/Ki tables)
+        # when available in data/pid_gains.json — significantly better
+        # than a single midpoint pair across the full target range.
+        # Falls back to the SISO version if no schedule is present.
+        from target_gym.experts.pid import (
+            FunctionalExpertPolicy,
+            make_four_tank_gs_pid,
+            make_four_tank_pid,
+            mimo_gain_scheduled_pid_step,
+            mimo_pid_step,
+        )
+        try:
+            params, zero_state = make_four_tank_gs_pid()
+            return FunctionalExpertPolicy(
+                params, zero_state, mimo_gain_scheduled_pid_step
+            )
+        except RuntimeError:
+            params, zero_state = make_four_tank_pid()
+            return FunctionalExpertPolicy(params, zero_state, mimo_pid_step)
+
     def make_pid(self):
         """Return a ready-to-use StatefulMIMOPID for level tracking."""
         from target_gym.experts.pid import make_four_tank_stateful_pid

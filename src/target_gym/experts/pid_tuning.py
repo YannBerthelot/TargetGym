@@ -1038,26 +1038,143 @@ def tune_plane3d_figure8_pid(
 
 
 # ---------------------------------------------------------------------------
+# Tune all environments and save gains to data/pid_gains.json
+# ---------------------------------------------------------------------------
+
+
+def tune_all_and_save(verbose: bool = True, force: bool = False) -> None:
+    """Run all PID tuning routines and persist the results to data/pid_gains.json.
+
+    Results are saved incrementally after each environment so a crash mid-way
+    does not discard completed work.  Pass ``force=True`` to re-tune envs that
+    already have gains in the file.
+    """
+    import json
+    import time
+
+    from target_gym.experts.pid import _GAINS_FILE
+
+    # Load any partial results that may already exist.
+    _GAINS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if _GAINS_FILE.exists():
+        with open(_GAINS_FILE) as f:
+            gains: dict = json.load(f)
+    else:
+        gains = {}
+
+    def _save():
+        with open(_GAINS_FILE, "w") as f:
+            json.dump(gains, f, indent=2)
+        import target_gym.experts.pid as _pid_mod
+        _pid_mod._gains_cache = gains
+
+    def _run(key, label, tune_fn, encode_fn):
+        if key in gains and not force:
+            if verbose:
+                print(f"[pid_tuning] {label}: already tuned, skipping (use force=True to re-tune)")
+            return
+        if verbose:
+            print(f"\n[pid_tuning] === {label} ===")
+        t0 = time.time()
+        result = tune_fn()
+        elapsed = time.time() - t0
+        gains[key] = encode_fn(result)
+        _save()
+        if verbose:
+            print(f"[pid_tuning] {label} done in {elapsed:.1f}s → saved to {_GAINS_FILE}")
+
+    _run(
+        "cstr", "CSTR",
+        lambda: tune_cstr_pid(verbose=verbose),
+        lambda r: {"Kp": r[0], "Ki": r[1], "Kd": r[2]},
+    )
+    _run(
+        "first_order", "FirstOrder",
+        lambda: tune_first_order_pid(verbose=verbose),
+        lambda r: {"Kp": r[0], "Ki": r[1], "Kd": r[2]},
+    )
+    _run(
+        "four_tank", "FourTank",
+        lambda: tune_four_tank_pid(verbose=verbose),
+        lambda r: {
+            "pid1": {"Kp": r[0][0], "Ki": r[0][1], "Kd": r[0][2]},
+            "pid2": {"Kp": r[1][0], "Ki": r[1][1], "Kd": r[1][2]},
+        },
+    )
+    _run(
+        "plane", "Plane (Airplane2D)",
+        lambda: tune_plane_pid(verbose=verbose),
+        lambda r: {
+            "pid1": {"Kp": r[0][0], "Ki": r[0][1], "Kd": r[0][2]},
+            "pid2": {"Kp": r[1][0], "Ki": r[1][1], "Kd": r[1][2]},
+        },
+    )
+    _run(
+        "plane3d_heading", "Plane3D Heading",
+        lambda: tune_plane3d_heading_pid(verbose=verbose),
+        lambda r: {
+            "alt": {"Kp": r[0][0], "Ki": r[0][1], "Kd": r[0][2]},
+            "hdg": {"Kp": r[1][0], "Ki": r[1][1], "Kd": r[1][2]},
+            "bank": {"Kp": r[2]},
+        },
+    )
+    _run(
+        "plane3d_circle", "Plane3D Circle",
+        lambda: tune_plane3d_circle_pid(verbose=verbose),
+        lambda r: {
+            "alt": {"Kp": r[0][0], "Ki": r[0][1], "Kd": r[0][2]},
+            "rad": {"Kp": r[1][0], "Ki": r[1][1], "Kd": r[1][2]},
+            "bank": {"Kp": r[2]},
+        },
+    )
+    _run(
+        "plane3d_figure8", "Plane3D Figure-8",
+        lambda: tune_plane3d_figure8_pid(verbose=verbose),
+        lambda r: {
+            "alt": {"Kp": r[0][0], "Ki": r[0][1], "Kd": r[0][2]},
+            "hdg": {"Kp": r[1], "Ki": 0.0, "Kd": 0.0},
+            "bank": {"Kp": r[2]},
+        },
+    )
+
+    if verbose:
+        print(f"\n[pid_tuning] All environments tuned. Gains at {_GAINS_FILE}")
+
+
+# ---------------------------------------------------------------------------
 # Run all tuners and print gains ready to paste into pid.py
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("Gradient-based PID tuning (ITAE loss via JAX autodiff)")
-    print("=" * 60)
+    import argparse
 
-    cstr_Kp, cstr_Ki, cstr_Kd = tune_cstr_pid(verbose=True)
-    fo_Kp, fo_Ki, fo_Kd = tune_first_order_pid(verbose=True)
-    (ft_Kp1, ft_Ki1, ft_Kd1), (ft_Kp2, ft_Ki2, ft_Kd2) = tune_four_tank_pid(
-        verbose=True
+    parser = argparse.ArgumentParser(description="Tune PID gains for all target_gym environments.")
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Re-tune envs that already have gains in the file.",
     )
+    parser.add_argument(
+        "--env", type=str, default=None,
+        help="Tune a single env by key (cstr, first_order, four_tank, plane, "
+             "plane3d_heading, plane3d_circle, plane3d_figure8). Omit to tune all.",
+    )
+    args = parser.parse_args()
 
-    print("\n" + "=" * 60)
-    print("Paste these into pid.py factory defaults:")
-    print("=" * 60)
-    print(f"make_cstr_pid        Kp={cstr_Kp:.4f}, Ki={cstr_Ki:.4f}, Kd={cstr_Kd:.6f}")
-    print(f"make_first_order_pid Kp={fo_Kp:.4f}, Ki={fo_Ki:.4f}, Kd={fo_Kd:.6f}")
-    print(
-        f"make_four_tank_pid   Kp1={ft_Kp1:.4f}, Ki1={ft_Ki1:.4f}, Kd1={ft_Kd1:.6f}"
-        f" / Kp2={ft_Kp2:.4f}, Ki2={ft_Ki2:.4f}, Kd2={ft_Kd2:.6f}"
-    )
+    if args.env is not None:
+        # Single-env mode: find and run just the requested tuner.
+        _single_map = {
+            "cstr": tune_cstr_pid,
+            "first_order": tune_first_order_pid,
+            "four_tank": tune_four_tank_pid,
+            "plane": tune_plane_pid,
+            "plane3d_heading": tune_plane3d_heading_pid,
+            "plane3d_circle": tune_plane3d_circle_pid,
+            "plane3d_figure8": tune_plane3d_figure8_pid,
+        }
+        if args.env not in _single_map:
+            print(f"Unknown env '{args.env}'. Choices: {list(_single_map)}")
+        else:
+            print(f"Tuning {args.env} only...")
+            _single_map[args.env](verbose=True)
+    else:
+        tune_all_and_save(verbose=True, force=args.force)
