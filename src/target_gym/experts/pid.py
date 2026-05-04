@@ -68,6 +68,7 @@ def _load_gains() -> dict:
                 "Running gradient-based tuning — this may take a few minutes..."
             )
             from target_gym.experts.pid_tuning import tune_all_and_save
+
             tune_all_and_save(verbose=True)
         with open(_GAINS_FILE) as f:
             _gains_cache = json.load(f)
@@ -263,7 +264,9 @@ class Plane3DPIDState:
 
     alt_integral: float
     alt_prev: float
-    track_integral: float  # heading integral (heading/fig-8) or radial integral (circle)
+    track_integral: (
+        float  # heading integral (heading/fig-8) or radial integral (circle)
+    )
     track_prev: float
     # Separate integrator for the power loop (heading task MIMO altitude control)
     power_integral: float
@@ -320,9 +323,12 @@ class Plane3DCirclePIDParams:
 def plane3d_pid_reset(params) -> Plane3DPIDState:  # noqa: ARG001
     z = jnp.zeros(())
     return Plane3DPIDState(
-        alt_integral=z, alt_prev=z,
-        track_integral=z, track_prev=z,
-        power_integral=z, power_prev=z,
+        alt_integral=z,
+        alt_prev=z,
+        track_integral=z,
+        track_prev=z,
+        power_integral=z,
+        power_prev=z,
     )
 
 
@@ -339,7 +345,9 @@ def plane3d_heading_pid_step(
     alt_err = obs[10] - obs[2]
     new_alt_int = state.alt_integral + alt_err * params.dt
     alt_d = (alt_err - state.alt_prev) / params.dt
-    stick_u = params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_d
+    stick_u = (
+        params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_d
+    )
     stick = jnp.clip(stick_u, -1.0, 1.0)
     new_alt_int = jnp.where(stick_u == stick, new_alt_int, state.alt_integral)
 
@@ -390,7 +398,9 @@ def plane3d_circle_pid_step(
     alt_err = obs[10] - obs[2]
     new_alt_int = state.alt_integral + alt_err * params.dt
     alt_d = (alt_err - state.alt_prev) / params.dt
-    stick_u = params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_d
+    stick_u = (
+        params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_d
+    )
     stick = jnp.clip(stick_u, -1.0, 1.0)
     new_alt_int = jnp.where(stick_u == stick, new_alt_int, state.alt_integral)
 
@@ -418,8 +428,12 @@ def plane3d_circle_pid_step(
     rad_err = dist - radius
     new_rad_int = state.track_integral + rad_err * params.dt
     rad_d = (rad_err - state.track_prev) / params.dt
-    bank_corr = params.Kp_rad * rad_err + params.Ki_rad * new_rad_int + params.Kd_rad * rad_d
-    desired_bank = jnp.clip(ideal_bank + bank_corr, -params.max_bank_rad, params.max_bank_rad)
+    bank_corr = (
+        params.Kp_rad * rad_err + params.Ki_rad * new_rad_int + params.Kd_rad * rad_d
+    )
+    desired_bank = jnp.clip(
+        ideal_bank + bank_corr, -params.max_bank_rad, params.max_bank_rad
+    )
     bank_err = phi - desired_bank
     aileron = jnp.clip(params.Kp_bank * bank_err, -1.0, 1.0)
     new_rad_int = jnp.where(jnp.abs(aileron) >= 1.0, state.track_integral, new_rad_int)
@@ -452,7 +466,9 @@ def plane3d_figure8_pid_step(
     alt_err = nearest_dz
     new_alt_int = state.alt_integral + alt_err * params.dt
     alt_d = (alt_err - state.alt_prev) / params.dt
-    stick_u = params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_d
+    stick_u = (
+        params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_d
+    )
     stick = jnp.clip(stick_u, -1.0, 1.0)
     new_alt_int = jnp.where(jnp.abs(stick_u) >= 1.0, state.alt_integral, new_alt_int)
 
@@ -654,13 +670,19 @@ class StatefulPID:
 
     def step(self, obs):
         state_val = obs[..., self.state_index]
-        sp = self.fixed_setpoint if self.fixed_setpoint is not None else obs[..., self.setpoint_index]
+        sp = (
+            self.fixed_setpoint
+            if self.fixed_setpoint is not None
+            else obs[..., self.setpoint_index]
+        )
         e = sp - state_val
         self.integral = self.integral + e * self.dt
         derivative = (e - self.prev_error) / self.dt
         u = self.Kp * e + self.Ki * self.integral + self.Kd * derivative
         u_clipped = jnp.clip(u, self.action_min, self.action_max)
-        self.integral = jnp.where(u != u_clipped, self.integral - e * self.dt, self.integral)
+        self.integral = jnp.where(
+            u != u_clipped, self.integral - e * self.dt, self.integral
+        )
         self.prev_error = e
         return u_clipped
 
@@ -713,7 +735,9 @@ class StatefulGainScheduledPID:
         derivative = (e - self.prev_error) / self.dt
         u = Kp * e + Ki * self.integral + Kd * derivative
         u_clipped = jnp.clip(u, self.action_min, self.action_max)
-        self.integral = jnp.where(u != u_clipped, self.integral - e * self.dt, self.integral)
+        self.integral = jnp.where(
+            u != u_clipped, self.integral - e * self.dt, self.integral
+        )
         self.prev_error = e
         return u_clipped
 
@@ -1028,7 +1052,13 @@ def make_plane_pid(
 
 
 _PLANE3D_HEADING_LEARNABLE = (
-    "Kp_alt", "Ki_alt", "Kd_alt", "Kp_hdg", "Ki_hdg", "Kd_hdg", "Kp_bank",
+    "Kp_alt",
+    "Ki_alt",
+    "Kd_alt",
+    "Kp_hdg",
+    "Ki_hdg",
+    "Kd_hdg",
+    "Kp_bank",
 )
 register_learnable_gains(plane3d_heading_pid_step, _PLANE3D_HEADING_LEARNABLE)
 
@@ -1579,9 +1609,13 @@ class StatefulPlane3DHeadingPID:
         desired_bank = jnp.clip(desired_bank, -self.max_bank_rad, self.max_bank_rad)
         bank_err = phi - desired_bank
         aileron = jnp.clip(self.Kp_bank * bank_err, -1.0, 1.0)
-        self._hdg_int = jnp.where(jnp.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int)
+        self._hdg_int = jnp.where(
+            jnp.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int
+        )
         self._hdg_prev = hdg_err
-        return jnp.stack([jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1)
+        return jnp.stack(
+            [jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1
+        )
 
     __call__ = step
 
@@ -1655,12 +1689,18 @@ class StatefulPlane3DCirclePID:
         bank_correction = (
             self.Kp_rad * rad_err + self.Ki_rad * self._rad_int + self.Kd_rad * deriv
         )
-        desired_bank = jnp.clip(ideal_bank + bank_correction, -self.max_bank_rad, self.max_bank_rad)
+        desired_bank = jnp.clip(
+            ideal_bank + bank_correction, -self.max_bank_rad, self.max_bank_rad
+        )
         bank_err = phi - desired_bank
         aileron = jnp.clip(self.Kp_bank * bank_err, -1.0, 1.0)
-        self._rad_int = jnp.where(jnp.abs(aileron) >= 1.0, self._rad_int - rad_err * self.dt, self._rad_int)
+        self._rad_int = jnp.where(
+            jnp.abs(aileron) >= 1.0, self._rad_int - rad_err * self.dt, self._rad_int
+        )
         self._rad_prev = rad_err
-        return jnp.stack([jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1)
+        return jnp.stack(
+            [jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1
+        )
 
     __call__ = step
 
@@ -1732,15 +1772,23 @@ class StatefulPlane3DFigureEightPID:
             -1.0,
             1.0,
         )
-        self._alt_int = jnp.where(jnp.abs(stick) >= 1.0, self._alt_int - alt_err * self.dt, self._alt_int)
+        self._alt_int = jnp.where(
+            jnp.abs(stick) >= 1.0, self._alt_int - alt_err * self.dt, self._alt_int
+        )
         self._alt_prev = alt_err
 
         # ── Heading: blend tangent (on-curve) with correction (off-curve) ──
         lateral_dist = jnp.sqrt(nearest_dx**2 + nearest_dy**2 + 1e-6)
-        blend = jnp.clip(lateral_dist / (0.05 * jnp.maximum(target_radius, 1.0)), 0.0, 1.0)
+        blend = jnp.clip(
+            lateral_dist / (0.05 * jnp.maximum(target_radius, 1.0)), 0.0, 1.0
+        )
         correction_heading = jnp.arctan2(nearest_dy, nearest_dx)
-        bx = blend * jnp.cos(correction_heading) + (1.0 - blend) * jnp.cos(tangent_heading)
-        by = blend * jnp.sin(correction_heading) + (1.0 - blend) * jnp.sin(tangent_heading)
+        bx = blend * jnp.cos(correction_heading) + (1.0 - blend) * jnp.cos(
+            tangent_heading
+        )
+        by = blend * jnp.sin(correction_heading) + (1.0 - blend) * jnp.sin(
+            tangent_heading
+        )
         desired_heading = jnp.arctan2(by, bx)
 
         hdg_err = _wrap_angle_jnp(desired_heading - psi)
@@ -1753,9 +1801,13 @@ class StatefulPlane3DFigureEightPID:
         )
         bank_err = phi - desired_bank
         aileron = jnp.clip(self.Kp_bank * bank_err, -1.0, 1.0)
-        self._hdg_int = jnp.where(jnp.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int)
+        self._hdg_int = jnp.where(
+            jnp.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int
+        )
         self._hdg_prev = hdg_err
-        return jnp.stack([jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1)
+        return jnp.stack(
+            [jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1
+        )
 
     __call__ = step
 

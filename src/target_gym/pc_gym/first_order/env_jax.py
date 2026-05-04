@@ -144,7 +144,12 @@ class FirstOrderSystem(environment.Environment[FirstOrderState, FirstOrderParams
 
     @property
     def expert_policy(self):
-        from target_gym.experts.pid import FunctionalExpertPolicy, make_first_order_pid, pid_step
+        from target_gym.experts.pid import (
+            FunctionalExpertPolicy,
+            make_first_order_pid,
+            pid_step,
+        )
+
         params, zero_state = make_first_order_pid()
         return FunctionalExpertPolicy(params, zero_state, pid_step)
 

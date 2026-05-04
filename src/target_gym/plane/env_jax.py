@@ -187,7 +187,12 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
 
     @property
     def expert_policy(self):
-        from target_gym.experts.pid import FunctionalExpertPolicy, make_plane_pid, mimo_pid_step
+        from target_gym.experts.pid import (
+            FunctionalExpertPolicy,
+            make_plane_pid,
+            mimo_pid_step,
+        )
+
         params, zero_state = make_plane_pid()
         return FunctionalExpertPolicy(params, zero_state, mimo_pid_step)
 

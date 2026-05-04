@@ -184,7 +184,12 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
 
     @property
     def expert_policy(self):
-        from target_gym.experts.pid import FunctionalExpertPolicy, make_reactor_pid, pid_step
+        from target_gym.experts.pid import (
+            FunctionalExpertPolicy,
+            make_reactor_pid,
+            pid_step,
+        )
+
         params, zero_state = make_reactor_pid()
         return FunctionalExpertPolicy(params, zero_state, pid_step)
 
@@ -219,7 +224,9 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
 if __name__ == "__main__":
     env = Reactor()
     seed = 42
-    env_params = ReactorParams(max_steps_in_episode=2000)  # 2000 physics = 200 control steps
+    env_params = ReactorParams(
+        max_steps_in_episode=2000
+    )  # 2000 physics = 200 control steps
     os.makedirs("videos/reactor", exist_ok=True)
     env.save_video(
         lambda o: np.random.uniform(-1, 1),
