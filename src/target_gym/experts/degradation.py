@@ -106,9 +106,7 @@ def degrade_expert(
         new_pid1 = _perturb_params(params.pid1, inner_schema, sigma, k1)
         new_pid2 = _perturb_params(params.pid2, inner_schema, sigma, k2)
         new_params = params.replace(pid1=new_pid1, pid2=new_pid2)
-        return FunctionalExpertPolicy(
-            new_params, expert._zero_state, expert._step_fn
-        )
+        return FunctionalExpertPolicy(new_params, expert._zero_state, expert._step_fn)
 
     step_key = expert._step_fn.__qualname__
     if step_key not in _DEGRADATION_SCHEMA:
@@ -124,6 +122,7 @@ def degrade_expert(
 # ---------------------------------------------------------------------------
 # Register schemas for the experts we ship
 # ---------------------------------------------------------------------------
+
 
 def _register_all():
     # Import here to avoid circular imports at module load.
@@ -151,10 +150,16 @@ def _register_all():
     register_degradation_schema(
         plane3d_heading_pid_step,
         {
-            "Kp_alt": "logscale", "Ki_alt": "logscale", "Kd_alt": "logscale",
-            "Kp_hdg": "logscale", "Ki_hdg": "logscale", "Kd_hdg": "logscale",
+            "Kp_alt": "logscale",
+            "Ki_alt": "logscale",
+            "Kd_alt": "logscale",
+            "Kp_hdg": "logscale",
+            "Ki_hdg": "logscale",
+            "Kd_hdg": "logscale",
             "Kp_bank": "logscale",
-            "Kp_power": "logscale", "Ki_power": "logscale", "Kd_power": "logscale",
+            "Kp_power": "logscale",
+            "Ki_power": "logscale",
+            "Kd_power": "logscale",
         },
     )
 
@@ -162,10 +167,16 @@ def _register_all():
     register_degradation_schema(
         plane3d_circle_pid_step,
         {
-            "Kp_alt": "logscale", "Ki_alt": "logscale", "Kd_alt": "logscale",
-            "Kp_rad": "logscale", "Ki_rad": "logscale", "Kd_rad": "logscale",
+            "Kp_alt": "logscale",
+            "Ki_alt": "logscale",
+            "Kd_alt": "logscale",
+            "Kp_rad": "logscale",
+            "Ki_rad": "logscale",
+            "Kd_rad": "logscale",
             "Kp_bank": "logscale",
-            "Kp_power": "logscale", "Ki_power": "logscale", "Kd_power": "logscale",
+            "Kp_power": "logscale",
+            "Ki_power": "logscale",
+            "Kd_power": "logscale",
         },
     )
 
@@ -173,10 +184,16 @@ def _register_all():
     register_degradation_schema(
         plane3d_figure8_pid_step,
         {
-            "Kp_alt": "logscale", "Ki_alt": "logscale", "Kd_alt": "logscale",
-            "Kp_hdg": "logscale", "Ki_hdg": "logscale", "Kd_hdg": "logscale",
+            "Kp_alt": "logscale",
+            "Ki_alt": "logscale",
+            "Kd_alt": "logscale",
+            "Kp_hdg": "logscale",
+            "Ki_hdg": "logscale",
+            "Kd_hdg": "logscale",
             "Kp_bank": "logscale",
-            "Kp_power": "logscale", "Ki_power": "logscale", "Kd_power": "logscale",
+            "Kp_power": "logscale",
+            "Ki_power": "logscale",
+            "Kd_power": "logscale",
         },
     )
 
@@ -185,15 +202,24 @@ def _register_all():
         cheetah_cpg_step,
         {
             "frequency": "logscale",
-            "amp_0": "logscale", "amp_1": "logscale", "amp_2": "logscale",
-            "amp_3": "logscale", "amp_4": "logscale", "amp_5": "logscale",
-            "phase_0": "phase", "phase_1": "phase", "phase_2": "phase",
-            "phase_3": "phase", "phase_4": "phase", "phase_5": "phase",
+            "amp_0": "logscale",
+            "amp_1": "logscale",
+            "amp_2": "logscale",
+            "amp_3": "logscale",
+            "amp_4": "logscale",
+            "amp_5": "logscale",
+            "phase_0": "phase",
+            "phase_1": "phase",
+            "phase_2": "phase",
+            "phase_3": "phase",
+            "phase_4": "phase",
+            "phase_5": "phase",
         },
     )
 
     # BarkourJoystick CPG.
     from target_gym.experts.cpg import barkour_cpg_step
+
     register_degradation_schema(
         barkour_cpg_step,
         {

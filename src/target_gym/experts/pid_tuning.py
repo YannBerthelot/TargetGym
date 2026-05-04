@@ -1066,12 +1066,15 @@ def tune_all_and_save(verbose: bool = True, force: bool = False) -> None:
         with open(_GAINS_FILE, "w") as f:
             json.dump(gains, f, indent=2)
         import target_gym.experts.pid as _pid_mod
+
         _pid_mod._gains_cache = gains
 
     def _run(key, label, tune_fn, encode_fn):
         if key in gains and not force:
             if verbose:
-                print(f"[pid_tuning] {label}: already tuned, skipping (use force=True to re-tune)")
+                print(
+                    f"[pid_tuning] {label}: already tuned, skipping (use force=True to re-tune)"
+                )
             return
         if verbose:
             print(f"\n[pid_tuning] === {label} ===")
@@ -1081,20 +1084,25 @@ def tune_all_and_save(verbose: bool = True, force: bool = False) -> None:
         gains[key] = encode_fn(result)
         _save()
         if verbose:
-            print(f"[pid_tuning] {label} done in {elapsed:.1f}s → saved to {_GAINS_FILE}")
+            print(
+                f"[pid_tuning] {label} done in {elapsed:.1f}s → saved to {_GAINS_FILE}"
+            )
 
     _run(
-        "cstr", "CSTR",
+        "cstr",
+        "CSTR",
         lambda: tune_cstr_pid(verbose=verbose),
         lambda r: {"Kp": r[0], "Ki": r[1], "Kd": r[2]},
     )
     _run(
-        "first_order", "FirstOrder",
+        "first_order",
+        "FirstOrder",
         lambda: tune_first_order_pid(verbose=verbose),
         lambda r: {"Kp": r[0], "Ki": r[1], "Kd": r[2]},
     )
     _run(
-        "four_tank", "FourTank",
+        "four_tank",
+        "FourTank",
         lambda: tune_four_tank_pid(verbose=verbose),
         lambda r: {
             "pid1": {"Kp": r[0][0], "Ki": r[0][1], "Kd": r[0][2]},
@@ -1102,7 +1110,8 @@ def tune_all_and_save(verbose: bool = True, force: bool = False) -> None:
         },
     )
     _run(
-        "plane", "Plane (Airplane2D)",
+        "plane",
+        "Plane (Airplane2D)",
         lambda: tune_plane_pid(verbose=verbose),
         lambda r: {
             "pid1": {"Kp": r[0][0], "Ki": r[0][1], "Kd": r[0][2]},
@@ -1110,7 +1119,8 @@ def tune_all_and_save(verbose: bool = True, force: bool = False) -> None:
         },
     )
     _run(
-        "plane3d_heading", "Plane3D Heading",
+        "plane3d_heading",
+        "Plane3D Heading",
         lambda: tune_plane3d_heading_pid(verbose=verbose),
         lambda r: {
             "alt": {"Kp": r[0][0], "Ki": r[0][1], "Kd": r[0][2]},
@@ -1119,7 +1129,8 @@ def tune_all_and_save(verbose: bool = True, force: bool = False) -> None:
         },
     )
     _run(
-        "plane3d_circle", "Plane3D Circle",
+        "plane3d_circle",
+        "Plane3D Circle",
         lambda: tune_plane3d_circle_pid(verbose=verbose),
         lambda r: {
             "alt": {"Kp": r[0][0], "Ki": r[0][1], "Kd": r[0][2]},
@@ -1128,7 +1139,8 @@ def tune_all_and_save(verbose: bool = True, force: bool = False) -> None:
         },
     )
     _run(
-        "plane3d_figure8", "Plane3D Figure-8",
+        "plane3d_figure8",
+        "Plane3D Figure-8",
         lambda: tune_plane3d_figure8_pid(verbose=verbose),
         lambda r: {
             "alt": {"Kp": r[0][0], "Ki": r[0][1], "Kd": r[0][2]},
@@ -1148,15 +1160,20 @@ def tune_all_and_save(verbose: bool = True, force: bool = False) -> None:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Tune PID gains for all target_gym environments.")
+    parser = argparse.ArgumentParser(
+        description="Tune PID gains for all target_gym environments."
+    )
     parser.add_argument(
-        "--force", action="store_true",
+        "--force",
+        action="store_true",
         help="Re-tune envs that already have gains in the file.",
     )
     parser.add_argument(
-        "--env", type=str, default=None,
+        "--env",
+        type=str,
+        default=None,
         help="Tune a single env by key (cstr, first_order, four_tank, plane, "
-             "plane3d_heading, plane3d_circle, plane3d_figure8). Omit to tune all.",
+        "plane3d_heading, plane3d_circle, plane3d_figure8). Omit to tune all.",
     )
     args = parser.parse_args()
 

@@ -10,7 +10,7 @@ from target_gym.reactor.env import (
     steady_state_precursors,
     steady_state_xenon,
 )
-from target_gym.reactor.env_jax import Reactor
+from target_gym.reactor.env_jax import CONTROL_PERIOD, Reactor
 
 
 def _make_state(params=None, **overrides) -> ReactorState:
@@ -60,7 +60,7 @@ def test_step_env_advances_state():
     obs2, state2, reward, done, info = env.step_env(key, state, jnp.array([0.0]))
     assert obs2.shape == env.obs_shape
     assert isinstance(state2, ReactorState)
-    assert state2.time == state.time + 1
+    assert state2.time == state.time + CONTROL_PERIOD
     assert jnp.isfinite(reward)
     assert done.dtype == jnp.bool_
     assert "last_state" in info

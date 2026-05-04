@@ -256,8 +256,11 @@ class Plane3DHeading(_Airplane3DBase):
     @property
     def expert_policy(self):
         from target_gym.experts.pid import (
-            FunctionalExpertPolicy, make_plane3d_heading_pid, plane3d_heading_pid_step,
+            FunctionalExpertPolicy,
+            make_plane3d_heading_pid,
+            plane3d_heading_pid_step,
         )
+
         params, zero_state = make_plane3d_heading_pid()
         return FunctionalExpertPolicy(params, zero_state, plane3d_heading_pid_step)
 
@@ -343,8 +346,11 @@ class Plane3DCircle(_Airplane3DBase):
     @property
     def expert_policy(self):
         from target_gym.experts.pid import (
-            FunctionalExpertPolicy, make_plane3d_circle_pid, plane3d_circle_pid_step,
+            FunctionalExpertPolicy,
+            make_plane3d_circle_pid,
+            plane3d_circle_pid_step,
         )
+
         params, zero_state = make_plane3d_circle_pid()
         return FunctionalExpertPolicy(params, zero_state, plane3d_circle_pid_step)
 
@@ -426,6 +432,7 @@ class Plane3DFigureEight(_Airplane3DBase):
         base_kwargs.update(
             x=start_x,
             y=start_y,
+            z=base_kwargs["target_altitude"],
             x_dot=x_dot,
             y_dot=y_dot,
             psi=psi,
@@ -443,8 +450,11 @@ class Plane3DFigureEight(_Airplane3DBase):
     @property
     def expert_policy(self):
         from target_gym.experts.pid import (
-            FunctionalExpertPolicy, make_plane3d_figure8_pid, plane3d_figure8_pid_step,
+            FunctionalExpertPolicy,
+            make_plane3d_figure8_pid,
+            plane3d_figure8_pid_step,
         )
+
         params, zero_state = make_plane3d_figure8_pid()
         return FunctionalExpertPolicy(params, zero_state, plane3d_figure8_pid_step)
 

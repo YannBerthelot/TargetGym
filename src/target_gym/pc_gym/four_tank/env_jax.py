@@ -169,6 +169,7 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
             mimo_gain_scheduled_pid_step,
             mimo_pid_step,
         )
+
         try:
             params, zero_state = make_four_tank_gs_pid()
             return FunctionalExpertPolicy(

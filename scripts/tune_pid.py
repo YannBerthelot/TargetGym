@@ -292,7 +292,9 @@ def _tune_four_tank_search(n_points: int, tuning_rule: str, **kw) -> dict:
     Kp1_list, Ki1_list, Kp2_list, Ki2_list = [], [], [], []
     for t in targets:
         key = jax.random.PRNGKey(int(round(float(t) * 10000)))
-        kp1, ki1, _ = search_loop1(15.0, 2.0, float(t), key)  # seed loop2 at hand-picked
+        kp1, ki1, _ = search_loop1(
+            15.0, 2.0, float(t), key
+        )  # seed loop2 at hand-picked
         kp2, ki2, _ = search_loop2(float(kp1), float(ki1), float(t), key)
         kp1, ki1, _ = search_loop1(float(kp2), float(ki2), float(t), key)
         kp2, ki2, score = search_loop2(float(kp1), float(ki1), float(t), key)
@@ -303,8 +305,10 @@ def _tune_four_tank_search(n_points: int, tuning_rule: str, **kw) -> dict:
             f"loop2=(Kp={kp2:6.2f}, Ki={ki2:5.2f})  "
             f"cum_reward={score:5.1f}/{max_steps}"
         )
-        Kp1_list.append(kp1); Ki1_list.append(ki1)
-        Kp2_list.append(kp2); Ki2_list.append(ki2)
+        Kp1_list.append(kp1)
+        Ki1_list.append(ki1)
+        Kp2_list.append(kp2)
+        Ki2_list.append(ki2)
 
     # The midpoint (top-level pid1/pid2) keys are what the
     # FunctionalExpertPolicy actually consumes — gain scheduling is
@@ -346,8 +350,10 @@ def _tune_four_tank_search(n_points: int, tuning_rule: str, **kw) -> dict:
     # state, just 4 floats per candidate).
     g1, g2, g3, g4 = jnp.meshgrid(Kps, Kis, Kps, Kis, indexing="ij")
     flat = (g1.flatten(), g2.flatten(), g3.flatten(), g4.flatten())
-    print(f"  Joint 4D midpoint search ({flat[0].size} candidates x "
-          f"{n_eval_seeds} seeds, optimizing for eval distribution)...")
+    print(
+        f"  Joint 4D midpoint search ({flat[0].size} candidates x "
+        f"{n_eval_seeds} seeds, optimizing for eval distribution)..."
+    )
     scores_mid = jax.vmap(avg_reward)(*flat)
     scores_mid = jax.device_get(scores_mid)
     best = int(np.argmax(scores_mid))
@@ -355,10 +361,12 @@ def _tune_four_tank_search(n_points: int, tuning_rule: str, **kw) -> dict:
     ki1_mid = float(flat[1][best])
     kp2_mid = float(flat[2][best])
     ki2_mid = float(flat[3][best])
-    print(f"  best midpoint: loop1=(Kp={kp1_mid:.3f}, Ki={ki1_mid:.3f})  "
-          f"loop2=(Kp={kp2_mid:.3f}, Ki={ki2_mid:.3f})  "
-          f"avg_reward={float(scores_mid[best]):.2f}/{max_steps} "
-          f"({100*float(scores_mid[best])/max_steps:.1f}%)")
+    print(
+        f"  best midpoint: loop1=(Kp={kp1_mid:.3f}, Ki={ki1_mid:.3f})  "
+        f"loop2=(Kp={kp2_mid:.3f}, Ki={ki2_mid:.3f})  "
+        f"avg_reward={float(scores_mid[best]):.2f}/{max_steps} "
+        f"({100*float(scores_mid[best])/max_steps:.1f}%)"
+    )
 
     return {
         "pid1": {"Kp": round(kp1_mid, 6), "Ki": round(ki1_mid, 6), "Kd": 0.0},
@@ -617,7 +625,12 @@ def _plane3d_bank_relay(env, params, tuning_rule, cruise_action, max_steps=3000)
 
 
 def _plane3d_altitude_relay(
-    env, params, tuning_rule, cruise_action, n_points=8, max_steps=10000,
+    env,
+    params,
+    tuning_rule,
+    cruise_action,
+    n_points=8,
+    max_steps=10000,
 ):
     """Sweep altitude PID (z → stick) across target_altitude_range.
 
@@ -659,7 +672,12 @@ def _plane3d_altitude_relay(
 
 
 def _plane3d_power_relay(
-    env, params, tuning_rule, cruise_action, n_points=8, max_steps=10000,
+    env,
+    params,
+    tuning_rule,
+    cruise_action,
+    n_points=8,
+    max_steps=10000,
 ):
     """Sweep power PID (z → power, stick=0) across target_altitude_range.
 
@@ -785,7 +803,11 @@ def _tune_plane3d_heading(n_points: int, tuning_rule: str, **kw) -> dict:
         "alt": {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
         "hdg": {"Kp": round(Kp_hdg, 6), "Ki": round(Ki_hdg, 6), "Kd": round(Kd_hdg, 6)},
         "bank": {"Kp": round(Kp_bank, 6)},
-        "power_pid": {"Kp": round(Kp_pow, 8), "Ki": round(Ki_pow, 8), "Kd": round(Kd_pow, 8)},
+        "power_pid": {
+            "Kp": round(Kp_pow, 8),
+            "Ki": round(Ki_pow, 8),
+            "Kd": round(Kd_pow, 8),
+        },
         "power": 0.6,
         "note": "Sequential relay autotuning: bank → heading → altitude stick → altitude power.",
     }
@@ -893,7 +915,11 @@ def _tune_plane3d_circle(n_points: int, tuning_rule: str, **kw) -> dict:
         "alt": {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
         "rad": {"Kp": round(Kp_rad, 8), "Ki": round(Ki_rad, 8), "Kd": round(Kd_rad, 8)},
         "bank": {"Kp": round(Kp_bank, 6)},
-        "power_pid": {"Kp": round(Kp_pow, 8), "Ki": round(Ki_pow, 8), "Kd": round(Kd_pow, 8)},
+        "power_pid": {
+            "Kp": round(Kp_pow, 8),
+            "Ki": round(Ki_pow, 8),
+            "Kd": round(Kd_pow, 8),
+        },
         "power": 0.6,
         "target_bank_deg": 15.0,
         "note": "Sequential relay autotuning: bank → radial → altitude stick → altitude power.",
@@ -940,7 +966,9 @@ def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
         return np.array([cruise_action, 0.0, aileron])
 
     def wrap_error(measured, setpoint):
-        return float(np.arctan2(np.sin(setpoint - measured), np.cos(setpoint - measured)))
+        return float(
+            np.arctan2(np.sin(setpoint - measured), np.cos(setpoint - measured))
+        )
 
     hdg_res = relay_experiment(
         env,
@@ -994,7 +1022,11 @@ def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
         "alt": {"Kp": round(Kp_alt, 8), "Ki": round(Ki_alt, 8), "Kd": round(Kd_alt, 8)},
         "hdg": {"Kp": round(Kp_hdg, 6), "Ki": round(Ki_hdg, 6), "Kd": round(Kd_hdg, 6)},
         "bank": {"Kp": round(Kp_bank, 6)},
-        "power_pid": {"Kp": round(Kp_pow, 8), "Ki": round(Ki_pow, 8), "Kd": round(Kd_pow, 8)},
+        "power_pid": {
+            "Kp": round(Kp_pow, 8),
+            "Ki": round(Ki_pow, 8),
+            "Kd": round(Kd_pow, 8),
+        },
         "power": 0.6,
         "note": "Sequential relay autotuning: bank → heading → altitude stick → altitude power.",
     }
