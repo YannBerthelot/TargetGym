@@ -154,13 +154,11 @@ def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
     xp = jnp
     done_alt = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
     max_alt_diff = params.max_alt - params.min_alt
+    base = (max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff
     reward = xp.where(
         done_alt,
         -1.0 * params.max_steps_in_episode,
-        xp.float_power(
-            (max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff,
-            10.0,
-        ),
+        base**10,
     )
     return reward
 
@@ -180,11 +178,6 @@ def get_obs(state: PlaneState, xp=jnp):
             state.stick,
         ]
     )
-
-
-@partial(jax.jit, static_argnames=["min", "max"])
-def clip_acceleration(a: jnp.ndarray, min: tuple, max: tuple):
-    return jnp.clip(a, min=jnp.array(min), max=jnp.array(max))
 
 
 @partial(jax.jit, static_argnames=["integration_method"])

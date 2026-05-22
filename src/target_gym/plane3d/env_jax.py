@@ -23,10 +23,13 @@ from target_gym.plane3d.env import (
     compute_next_state_3d,
     compute_reward_circle,
     compute_reward_figure8,
+    compute_reward_figure8_from_dist,
     compute_reward_heading,
     get_obs_circle,
     get_obs_figure8,
+    get_obs_figure8_from_nearest,
     get_obs_heading,
+    nearest_point_on_twisted_lemniscate,
 )
 from target_gym.plane3d.rendering import _render
 from target_gym.utils import compute_norm_from_coordinates, save_video
@@ -388,6 +391,48 @@ class Plane3DFigureEight(_Airplane3DBase):
         if params is None:
             params = self.default_params
         return get_obs_figure8(state, params, xp=jnp)
+
+    def step_env(
+        self,
+        key: chex.PRNGKey,
+        state: PlaneState3D,
+        action: jnp.ndarray,
+        params: PlaneParams3D = None,
+    ):
+        """Override base step to share nearest-point search between reward and obs."""
+        from target_gym.plane3d.env import compute_next_state_3d as _compute_next
+
+        if params is None:
+            params = self.default_params
+
+        power, stick, aileron = action
+        power = (power + 1) / 2
+        stick = jnp.deg2rad(stick * 15)
+        aileron = jnp.deg2rad(aileron * 25)
+
+        new_state, metrics = _compute_next(
+            power,
+            stick,
+            aileron,
+            state,
+            params,
+            integration_method=self.integration_method,
+        )
+        # Single nearest-point search reused by reward and obs.
+        ndx, ndy, ndz, dist, tang_hdg = nearest_point_on_twisted_lemniscate(
+            new_state, params
+        )
+        reward = compute_reward_figure8_from_dist(new_state, params, dist, xp=jnp)
+        obs = get_obs_figure8_from_nearest(new_state, ndx, ndy, ndz, tang_hdg, xp=jnp)
+        terminated, truncated = check_is_terminal_3d(new_state, params, xp=jnp)
+        done = terminated | truncated
+        return (
+            obs,
+            new_state,
+            reward,
+            done,
+            {"metrics": metrics, "last_state": new_state},
+        )
 
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
         if params is None:

@@ -17,6 +17,8 @@ from gymnax.environments import EnvParams
 from target_gym.plane.dynamics import (
     EPS,
     aero_coefficients,
+    aero_coefficients_with_mach,
+    aero_mach_factors,
     clamp_altitude,
     compute_air_density_from_altitude,
     compute_drag,
@@ -27,7 +29,7 @@ from target_gym.plane.dynamics import (
     compute_thrust_output,
     compute_weight,
 )
-from target_gym.utils import compute_norm_from_coordinates
+from target_gym.utils import compute_norm_from_coordinates, norm2, norm3
 
 
 def compute_next_aileron(requested_aileron, current_aileron, delta_t):
@@ -39,12 +41,12 @@ def compute_next_aileron(requested_aileron, current_aileron, delta_t):
 
 def compute_velocity_3d(x_dot, y_dot, z_dot):
     """Total airspeed from 3D velocity components."""
-    return compute_norm_from_coordinates(jnp.array((x_dot, y_dot, z_dot)))
+    return norm3(x_dot, y_dot, z_dot)
 
 
 def compute_horizontal_speed(x_dot, y_dot):
     """Horizontal speed magnitude."""
-    return compute_norm_from_coordinates(jnp.array((x_dot, y_dot)))
+    return norm2(x_dot, y_dot)
 
 
 def compute_gamma_3d(x_dot, y_dot, z_dot):
@@ -136,9 +138,6 @@ def newton_second_law_3d(
     return F_total[0], F_total[1], F_total[2]
 
 
-@partial(
-    jax.jit, static_argnames=["clip", "min_clip_boundaries", "max_clip_boundaries"]
-)
 def compute_acceleration_3d(
     velocities: jnp.ndarray,
     positions: jnp.ndarray,
@@ -176,10 +175,15 @@ def compute_acceleration_3d(
 
     P = compute_weight(m, params.gravity)
 
+    # Pre-compute Mach factors once; reused across wings/stabilizer/elevator.
+    beta, drag_rise = aero_mach_factors(M, params)
+    alpha_deg = xp.rad2deg(alpha)
+    stick_deg = xp.rad2deg(stick)
+
     # ====================================================
     # WINGS
     # ====================================================
-    C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M, params=params)
+    C_z_w, C_x_w = aero_coefficients_with_mach(alpha_deg, beta, drag_rise, params)
     lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
     drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
     M_wings = lift_wings * params.moment_arm_wings
@@ -187,7 +191,7 @@ def compute_acceleration_3d(
     # ====================================================
     # STABILIZER
     # ====================================================
-    C_z_s, C_x_s = aero_coefficients(xp.rad2deg(alpha) - 3.0, M, params=params)
+    C_z_s, C_x_s = aero_coefficients_with_mach(alpha_deg - 3.0, beta, drag_rise, params)
     lift_stab = compute_drag(S=params.stabilizer_surface, C=C_z_s, V=V, rho=rho)
     drag_stab = compute_drag(S=params.stabilizer_surface, C=C_x_s, V=V, rho=rho)
     F_stab = lift_stab - drag_stab
@@ -196,8 +200,8 @@ def compute_acceleration_3d(
     # ====================================================
     # ELEVATOR
     # ====================================================
-    C_z_e, C_x_e = aero_coefficients(
-        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0, M, params=params
+    C_z_e, C_x_e = aero_coefficients_with_mach(
+        alpha_deg - stick_deg - 3.0, beta, drag_rise, params
     )
     lift_elev = compute_drag(S=params.elevator_surface, C=C_z_e, V=V, rho=rho)
     drag_elev = compute_drag(S=params.elevator_surface, C=C_x_e, V=V, rho=rho)

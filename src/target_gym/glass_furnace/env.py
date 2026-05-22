@@ -298,7 +298,6 @@ def compute_next_state(
     )
 
 
-@partial(jax.jit, static_argnames=["params"])
 def get_obs(state: GlassFurnaceState, params: GlassFurnaceParams):
     """
     Partially observable: only T_crown is visible (plus fuel_flow and the target).

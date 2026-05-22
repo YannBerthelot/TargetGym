@@ -122,7 +122,6 @@ def compute_next_state(
     )
 
 
-@partial(jax.jit, static_argnames=["params"])
 def get_obs(state: FourTankState, params: FourTankParams):
     return jnp.array(
         [state.h1, state.h2, state.h3, state.h4, state.target_h1, state.target_h2]

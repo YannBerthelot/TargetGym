@@ -315,11 +315,14 @@ def compute_velocity(position, action, params: ReactorParams):
         a_coeff * n + b_coeff * I_hat - (LAMBDA_XENON + params.sigma_phi0 * n) * Xe_hat
     )
 
+    # Build the 11-element derivative vector with a single concatenate of three
+    # pre-shaped pieces.  ``dn_dt[None]`` and ``stack`` avoid the small
+    # ``jnp.array([scalar])`` pattern, which traces extra HLO ops.
     dposition = jnp.concatenate(
         [
-            jnp.array([dn_dt]),
+            dn_dt[None],
             dC_dt,
-            jnp.array([dT_fuel_dt, dT_coolant_dt, dI_hat_dt, dXe_hat_dt]),
+            jnp.stack([dT_fuel_dt, dT_coolant_dt, dI_hat_dt, dXe_hat_dt]),
         ]
     )
     return dposition, None
@@ -353,9 +356,9 @@ def compute_next_state(
 
     positions = jnp.concatenate(
         [
-            jnp.array([state.n]),
+            jnp.expand_dims(state.n, 0),
             state.C,
-            jnp.array([state.T_fuel, state.T_coolant, state.I_hat, state.Xe_hat]),
+            jnp.stack([state.T_fuel, state.T_coolant, state.I_hat, state.Xe_hat]),
         ]
     )
     new_positions, metrics = integrate_dynamics(
@@ -402,7 +405,6 @@ def compute_next_state(
     )
 
 
-@partial(jax.jit, static_argnames=["params"])
 def get_obs(state: ReactorState, params: ReactorParams):
     """
     Partially observable: the agent sees only measurable quantities.

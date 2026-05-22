@@ -59,7 +59,6 @@ def compute_next_state(
     return state.replace(x=x, u=u, time=state.time + 1), metrics
 
 
-@partial(jax.jit, static_argnames=["params"])
 def get_obs(state: FirstOrderState, params: FirstOrderParams):
     return jnp.array([state.x, state.target_x])
 

@@ -21,6 +21,20 @@ def compute_norm_from_coordinates(coordinates: jnp.ndarray) -> float:
     return jnp.linalg.norm(coordinates, axis=0)
 
 
+def norm2(x, y) -> float:
+    """Lean 2D norm: sqrt(x*x + y*y).
+
+    Avoids the (abs, square, sum, sqrt) chain that ``jnp.linalg.norm`` lowers
+    to via the general norm path.  Used in the plane hot loop.
+    """
+    return jnp.sqrt(x * x + y * y)
+
+
+def norm3(x, y, z) -> float:
+    """Lean 3D norm: sqrt(x*x + y*y + z*z)."""
+    return jnp.sqrt(x * x + y * y + z * z)
+
+
 def plot_curve(data, name, folder="figs"):
     fig, ax = plt.subplots()
     ax.plot(data)

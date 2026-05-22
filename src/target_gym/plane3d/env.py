@@ -163,10 +163,8 @@ def wrap_angle(angle):
 def altitude_reward(state, params, xp=jnp):
     """Altitude tracking component, shared by all tasks."""
     max_alt_diff = params.max_alt - params.min_alt
-    return xp.float_power(
-        (max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff,
-        10.0,
-    )
+    base = (max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff
+    return base**10
 
 
 def terminal_penalty(state, params, xp=jnp):
@@ -236,6 +234,14 @@ def compute_reward_circle(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
 
 _N_CURVE_SAMPLES = 400
 
+# State-independent lemniscate basis: precomputed once at module load so JIT
+# traces don't have to re-derive linspace/cos/sin/+ on every recompile.  We
+# keep the FP operation order matching the original to stay bit-identical.
+_LEM_TAU = jnp.linspace(0, 2.0 * jnp.pi, _N_CURVE_SAMPLES, endpoint=False)
+_LEM_COS_TAU = jnp.cos(_LEM_TAU)
+_LEM_SIN_TAU = jnp.sin(_LEM_TAU)
+_LEM_DENOM = 1.0 + _LEM_SIN_TAU**2
+
 
 def _sample_twisted_lemniscate(state: PlaneState3D, params: PlaneParams3D):
     """Return (curve_x, curve_y, curve_z) arrays for the twisted lemniscate."""
@@ -245,17 +251,15 @@ def _sample_twisted_lemniscate(state: PlaneState3D, params: PlaneParams3D):
     dz = params.figure8_altitude_amplitude
     orientation = state.target_heading  # repurposed for figure-8
 
-    tau = jnp.linspace(0, 2.0 * jnp.pi, _N_CURVE_SAMPLES, endpoint=False)
-    denom = 1.0 + jnp.sin(tau) ** 2
-    base_x = a * jnp.cos(tau) / denom
-    base_y = a * jnp.sin(tau) * jnp.cos(tau) / denom
+    base_x = a * _LEM_COS_TAU / _LEM_DENOM
+    base_y = a * _LEM_SIN_TAU * _LEM_COS_TAU / _LEM_DENOM
 
     # Rotate by orientation angle
     cos_o = jnp.cos(orientation)
     sin_o = jnp.sin(orientation)
     curve_x = cx + base_x * cos_o - base_y * sin_o
     curve_y = cy + base_x * sin_o + base_y * cos_o
-    curve_z = z_mean + dz * jnp.sin(tau)
+    curve_z = z_mean + dz * _LEM_SIN_TAU
     return curve_x, curve_y, curve_z
 
 
@@ -310,6 +314,16 @@ def distance_to_lemniscate(state: PlaneState3D):
     return jnp.min(dists)
 
 
+def compute_reward_figure8_from_dist(
+    state: PlaneState3D, params: PlaneParams3D, dist, xp=jnp
+):
+    """Figure-8 reward given the precomputed nearest-point distance."""
+    done_alt = terminal_penalty(state, params, xp)
+    sigma = state.target_radius * 0.1
+    track_r = xp.exp(-0.5 * (dist / sigma) ** 2)
+    return xp.where(done_alt, -1.0 * params.max_steps_in_episode, track_r)
+
+
 def compute_reward_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     """Reward: Gaussian on 3D distance to the twisted lemniscate.
 
@@ -317,11 +331,8 @@ def compute_reward_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     twist makes crossovers unambiguous (different altitudes), so the reward
     has a single global optimum: fly along the curve.
     """
-    done_alt = terminal_penalty(state, params, xp)
     _, _, _, dist, _ = nearest_point_on_twisted_lemniscate(state, params)
-    sigma = state.target_radius * 0.1
-    track_r = xp.exp(-0.5 * (dist / sigma) ** 2)
-    return xp.where(done_alt, -1.0 * params.max_steps_in_episode, track_r)
+    return compute_reward_figure8_from_dist(state, params, dist, xp)
 
 
 # ─── Observation helpers ────────────────────────────────
@@ -378,21 +389,8 @@ def get_obs_circle(state: PlaneState3D, xp=jnp):
     )
 
 
-def get_obs_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
-    """
-    Observation for figure-8 task (19 values).
-
-    Provides the vector from aircraft to the nearest point on the 3D
-    twisted lemniscate (nearest_dx, nearest_dy, nearest_dz) plus the
-    tangent heading at that point.
-
-    Layout:
-      [x_dot, y_dot, z, z_dot, theta, theta_dot, phi, phi_dot,
-       gamma, psi, target_altitude, target_radius,
-       nearest_dx, nearest_dy, nearest_dz, tangent_heading,
-       power, stick, aileron]
-    """
-    ndx, ndy, ndz, _, tang_hdg = nearest_point_on_twisted_lemniscate(state, params)
+def get_obs_figure8_from_nearest(state: PlaneState3D, ndx, ndy, ndz, tang_hdg, xp=jnp):
+    """Figure-8 observation given precomputed nearest-point quantities."""
     return xp.stack(
         [
             state.x_dot,
@@ -416,6 +414,24 @@ def get_obs_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
             state.aileron,
         ]
     )
+
+
+def get_obs_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+    """
+    Observation for figure-8 task (19 values).
+
+    Provides the vector from aircraft to the nearest point on the 3D
+    twisted lemniscate (nearest_dx, nearest_dy, nearest_dz) plus the
+    tangent heading at that point.
+
+    Layout:
+      [x_dot, y_dot, z, z_dot, theta, theta_dot, phi, phi_dot,
+       gamma, psi, target_altitude, target_radius,
+       nearest_dx, nearest_dy, nearest_dz, tangent_heading,
+       power, stick, aileron]
+    """
+    ndx, ndy, ndz, _, tang_hdg = nearest_point_on_twisted_lemniscate(state, params)
+    return get_obs_figure8_from_nearest(state, ndx, ndy, ndz, tang_hdg, xp)
 
 
 # ─── Shared state transition ────────────────────────────

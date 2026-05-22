@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from gymnax.environments import EnvParams
 
-from target_gym.utils import compute_norm_from_coordinates
+from target_gym.utils import compute_norm_from_coordinates, norm2
 
 
 def compute_drag(S: float, C: float, V: float, rho: float) -> float:
@@ -25,33 +25,6 @@ def compute_drag(S: float, C: float, V: float, rho: float) -> float:
         float: The drag (in Newtons).
     """
     return 0.5 * rho * S * C * (V**2)
-
-
-def speed_of_sound(h):
-    # convert meters to km for clarity
-    km = h / 1000.0
-
-    # Troposphere 0-11 km: T = 288.15 - 6.5*h
-    T0 = 288.15 - 6.5 * km
-    # Stratosphere 11-20 km: T = 216.65
-    T1 = 216.65 + 0.0 * (km - 11)
-    # Stratosphere 20-32 km: T = 216.65 + (km-20)*1.0*10
-    T2 = 216.65 + (km - 20) * 1.0 * 10  # simplified linear increase
-    # Stratosphere 32-47 km: T = 228.65 + (km-32)*2.8
-    T3 = 228.65 + (km - 32) * 2.8
-
-    # Smooth weighting using jnp.clip
-    w0 = jnp.clip((11 - km) / 11, 0, 1)
-    w1 = jnp.clip((km - 11) / 9, 0, 1) * jnp.clip((20 - km) / 9, 0, 1)
-    w2 = jnp.clip((km - 20) / 12, 0, 1) * jnp.clip((32 - km) / 12, 0, 1)
-    w3 = jnp.clip((km - 32) / 15, 0, 1) * jnp.clip((47 - km) / 15, 0, 1)
-
-    T = w0 * T0 + w1 * T1 + w2 * T2 + w3 * T3
-
-    gamma = 1.4
-    R = 287.05
-
-    return jnp.sqrt(gamma * R * T)
 
 
 def compute_weight(mass: float, g: float) -> float:
@@ -240,16 +213,6 @@ def newton_second_law(
     # weight: acts downward
     F_weight = jnp.array([0.0, -P])
 
-    # jax.debug.print(
-    #     "Forces [N]: drag:{drag}, lift:{lift}, thrust:{thrust}, weight:{weight}, gamma: {gamma}, theta: {theta}",
-    #     drag=F_drag,
-    #     lift=F_lift,
-    #     thrust=F_thrust,
-    #     weight=F_weight,
-    #     gamma=gamma,
-    #     theta=theta,
-    # )
-
     # total force
     F_total = F_drag + F_lift + F_thrust + F_weight
     return F_total[0], F_total[1]
@@ -310,24 +273,27 @@ def compute_thrust_output(
     return thrust
 
 
+_ISA_T0 = 288.15  # K
+_ISA_P0 = 101325.0  # Pa
+_ISA_L = 0.0065  # K/m
+_ISA_R = 287.05  # J/(kg·K)
+# g / (R * L) = 9.80665 / (287.05 * 0.0065) ≈ 5.2558. Hoisted so the JIT
+# trace sees a literal float instead of re-deriving the ratio each compile.
+_ISA_RHO_EXP = 9.80665 / (_ISA_R * _ISA_L)
+
+
 def compute_air_density_from_altitude(altitude: float) -> float:
     """Compute the air density given the air density value (in kg.m-3) at sea level and a multiplicative factor (no unit) depending on altitude."""
     # ISA up to 11 km, altitude is assumed to be in meters
-
-    T0 = 288.15  # K
-    P0 = 101325.0  # Pa
-    L = 0.0065  # K/m
-    g = 9.80665  # m/s^2
-    R = 287.05  # J/(kg·K)
 
     # Clip to keep T > 0 so (T/T0)**5.26 stays finite. Termination bounds are
     # well within [-50_000, 40_000]; clipping only matters for divergent
     # gradient-tuning rollouts past the terminal state, where it prevents NaN
     # from poisoning the backward pass via jnp.where.
     altitude = jnp.clip(altitude, -50_000.0, 40_000.0)
-    T = T0 - L * altitude
-    P = P0 * (T / T0) ** (g / (R * L))
-    rho = P / (R * T)
+    T = _ISA_T0 - _ISA_L * altitude
+    P = _ISA_P0 * (T / _ISA_T0) ** _ISA_RHO_EXP
+    rho = P / (_ISA_R * T)
     return rho
 
 
@@ -351,34 +317,47 @@ def compute_exposed_surfaces(
     return S_x, S_z
 
 
+def aero_mach_factors(mach, params):
+    """Mach-only factors used by ``aero_coefficients_with_mach``.
+
+    Hoisted out so callers that evaluate the aero model at multiple AoAs
+    (wings + stabiliser + elevator) only compute these once.  Returns
+    ``(beta, drag_rise)``.  We pass ``beta`` (not ``1/beta``) so the per-AoA
+    call uses the same ``CL / beta`` as the original ``aero_coefficients``,
+    keeping floating-point output bit-identical.
+    """
+    beta = jnp.sqrt(jnp.maximum(1e-6, 1 - mach**2))
+    drag_rise = jnp.where(
+        mach > params.M_crit, params.k_drag * (mach - params.M_crit) ** 2, 0.0
+    )
+    return beta, drag_rise
+
+
+def aero_coefficients_with_mach(aoa_deg, beta, drag_rise, params):
+    """Lift/drag at a given AoA, given pre-computed Mach factors."""
+    CL_linear = params.cl0 + params.cl_alpha * aoa_deg
+    CL = CL_linear / (1 + jnp.exp((aoa_deg - params.aoa_stall) * 1.5))
+    CL = jnp.minimum(CL, params.CL_max)
+    CD = params.cd0 + params.k * CL**2
+
+    CL = CL / beta
+    CD = CD + drag_rise
+
+    CL = jnp.clip(CL, -2.0, 2.0)
+    CD = jnp.clip(CD, 0.0, 1.0)
+    return CL, CD
+
+
 def aero_coefficients(aoa_deg, mach, params):
     """
     Realistic lift (CL) and drag (CD) coefficients for an A320.
     AoA in degrees. Mach effects included.
+
+    Thin wrapper around ``aero_coefficients_with_mach``; preserved for
+    callers that don't pre-compute Mach factors (tests, MPC).
     """
-
-    # --- Lift coefficient ---
-    CL_linear = params.cl0 + params.cl_alpha * aoa_deg
-    CL = CL_linear / (1 + jnp.exp((aoa_deg - params.aoa_stall) * 1.5))
-    CL = jnp.minimum(CL, params.CL_max)
-
-    # --- Drag coefficient ---
-    CD = params.cd0 + params.k * CL**2
-
-    # --- Mach corrections ---
-    beta = jnp.sqrt(jnp.maximum(1e-6, 1 - mach**2))
-
-    CL = CL / beta
-
-    drag_rise = jnp.where(
-        mach > params.M_crit, params.k_drag * (mach - params.M_crit) ** 2, 0.0
-    )
-    CD = CD + drag_rise
-
-    CL = jnp.clip(CL, -2.0, 2.0)  # typical A320: max lift ~1.5-1.7
-    CD = jnp.clip(CD, 0.0, 1.0)  # drag can’t be negative or huge
-
-    return CL, CD
+    beta, drag_rise = aero_mach_factors(mach, params)
+    return aero_coefficients_with_mach(aoa_deg, beta, drag_rise, params)
 
 
 def compute_gamma(x_dot: float, z_dot: float) -> float:
@@ -410,12 +389,9 @@ def compute_Mach_from_velocity_and_speed_of_sound(velocity, speed_of_sound):
 
 
 def compute_velocity_from_horizontal_and_vertical_speed(x_dot, z_dot):
-    return compute_norm_from_coordinates(jnp.array((x_dot, z_dot)))
+    return norm2(x_dot, z_dot)
 
 
-@partial(
-    jax.jit, static_argnames=["clip", "min_clip_boundaries", "max_clip_boundaries"]
-)
 def compute_acceleration(
     velocities: jnp.ndarray,
     positions: jnp.ndarray,
@@ -442,18 +418,23 @@ def compute_acceleration(
         params.initial_mass
     )  # TODO : make it the actual mass when we start considering fuel consumption
     rho = compute_air_density_from_altitude(z)
+    # --- Weight & velocity (computed once, reused) ---
+    P = compute_weight(m, params.gravity)
+    V = norm2(x_dot, z_dot)
     M = compute_Mach_from_velocity_and_speed_of_sound(
-        velocity=compute_velocity_from_horizontal_and_vertical_speed(x_dot, z_dot),
+        velocity=V,
         speed_of_sound=compute_speed_of_sound_from_altitude(z),
     )
-    # --- Weight & velocity ---
-    P = compute_weight(m, params.gravity)
-    V = compute_norm_from_coordinates(xp.array([x_dot, z_dot]))
+
+    # Pre-compute Mach factors once; reused across wings/stabilizer/elevator.
+    beta, drag_rise = aero_mach_factors(M, params)
+    alpha_deg = xp.rad2deg(alpha)
+    stick_deg = xp.rad2deg(stick)
 
     # ====================================================
     # WINGS
     # ====================================================
-    C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M, params=params)
+    C_z_w, C_x_w = aero_coefficients_with_mach(alpha_deg, beta, drag_rise, params)
     lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
     drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
     M_wings = lift_wings * params.moment_arm_wings
@@ -461,7 +442,7 @@ def compute_acceleration(
     # ====================================================
     # STABILIZER
     # ====================================================
-    C_z_s, C_x_s = aero_coefficients(xp.rad2deg(alpha) - 3.0, M, params=params)
+    C_z_s, C_x_s = aero_coefficients_with_mach(alpha_deg - 3.0, beta, drag_rise, params)
     lift_stab = compute_drag(S=params.stabilizer_surface, C=C_z_s, V=V, rho=rho)
     drag_stab = compute_drag(S=params.stabilizer_surface, C=C_x_s, V=V, rho=rho)
     F_stab = lift_stab - drag_stab
@@ -470,8 +451,8 @@ def compute_acceleration(
     # ====================================================
     # ELEVATOR
     # ====================================================
-    C_z_e, C_x_e = aero_coefficients(
-        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0, M, params=params
+    C_z_e, C_x_e = aero_coefficients_with_mach(
+        alpha_deg - stick_deg - 3.0, beta, drag_rise, params
     )
     lift_elev = compute_drag(S=params.elevator_surface, C=C_z_e, V=V, rho=rho)
     drag_elev = compute_drag(S=params.elevator_surface, C=C_x_e, V=V, rho=rho)
