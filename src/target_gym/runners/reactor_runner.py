@@ -156,7 +156,7 @@ def run_mode(
     resolution: int = 10,
     **kwargs,
 ):
-    env = Reactor(integration_method="rk4_50")
+    env = Reactor(integration_method="tr_bdf2_2")
     n_seeds = kwargs.pop("n_seeds", 20)
     params = ReactorParams(**kwargs) if kwargs else env.default_params
 
