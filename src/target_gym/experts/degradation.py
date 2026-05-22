@@ -141,6 +141,15 @@ def _register_all():
         {"Kp": "logscale", "Ki": "logscale", "Kd": "logscale"},
     )
 
+    # Reacher PD-on-Jacobian: degrade the two controller gains. L1/L2 are
+    # physical link lengths, not controller tuning, so they are left out.
+    from target_gym.experts.pd import reacher_pd_step
+
+    register_degradation_schema(
+        reacher_pd_step,
+        {"kp": "logscale", "kd": "logscale"},
+    )
+
     # MIMO PID (Plane 2D, FourTank): pid1 and pid2 each have (Kp, Ki, Kd).
     # Its params dataclass nests PIDParams, which flax.struct can't replace
     # field-by-field the same way; degrade via a custom path below.
