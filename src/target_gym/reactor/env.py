@@ -325,12 +325,148 @@ def compute_velocity(position, action, params: ReactorParams):
     return dposition, None
 
 
+# TR-BDF2 (Bank et al. 1985): one-step composite of a trapezoidal stage and
+# a BDF2 stage. L-stable + 2nd-order, so it damps stiff modes correctly at any
+# step size. gamma = 2 - sqrt(2) makes both stages share the structure below.
+_TRBDF2_GAMMA = 2.0 - 2.0**0.5
+_TRBDF2_C1 = 1.0 / (_TRBDF2_GAMMA * (2.0 - _TRBDF2_GAMMA))
+_TRBDF2_C2 = (1.0 - _TRBDF2_GAMMA) ** 2 / (_TRBDF2_GAMMA * (2.0 - _TRBDF2_GAMMA))
+_TRBDF2_C3 = (1.0 - _TRBDF2_GAMMA) / (2.0 - _TRBDF2_GAMMA)
+
+
+def _arrowhead_solve(d0, row, col, diag, b0, b):
+    """Solve ``M x = b`` in O(n) for an arrowhead matrix M.
+
+    M is zero except for the scalar (0,0) entry ``d0``, the first row
+    ``M[0,1:] = row``, the first column ``M[1:,0] = col`` and the trailing
+    diagonal ``M[i,i] = diag``. ``row``/``col``/``diag``/``b`` are (6,) arrays,
+    ``d0``/``b0`` scalars. Eliminating the trailing rows against their
+    diagonal reduces the system to a single scalar equation for ``x0``.
+    """
+    inv = 1.0 / diag
+    x0 = (b0 - jnp.sum(row * b * inv)) / (d0 - jnp.sum(row * col * inv))
+    x = (b - col * x0) * inv
+    return x0, x
+
+
+def _fast_block_trbdf2(n, C, rho, params: ReactorParams, h):
+    """One TR-BDF2 step of the linear neutron-precursor block over ``h``.
+
+    The point-kinetics matrix ``A`` (``d[n,C]/dt = A @ [n,C]``) is an
+    *arrowhead* matrix, so both implicit stages — each a solve of
+    ``(I - tau*A) x = b`` — are done in O(n) by ``_arrowhead_solve`` rather
+    than a 7x7 factorisation. Returns ``(n_new, C_new, n_gamma)``; the
+    TR-stage neutron density ``n_gamma`` is handed to the slow block.
+    """
+    Lam = params.Lambda_gen
+    a00 = (rho - BETA_TOT) / Lam  # A[0,0]
+    col_a = BETA_I / Lam  # A[1:,0]; A[0,1:] = LAMBDA_I, A[i,i] = -LAMBDA_I
+
+    def apply_i_plus_tau_a(tau, n_, c_):
+        """Return ``(I + tau*A) @ [n_, c_]``."""
+        out0 = (1.0 + tau * a00) * n_ + tau * jnp.sum(LAMBDA_I * c_)
+        out_c = tau * col_a * n_ + (1.0 - tau * LAMBDA_I) * c_
+        return out0, out_c
+
+    def solve_i_minus_tau_a(tau, b0, b_c):
+        """Solve ``(I - tau*A) x = b``."""
+        return _arrowhead_solve(
+            1.0 - tau * a00,  # d0
+            -tau * LAMBDA_I,  # row  M[0,1:]
+            -tau * col_a,  # col  M[1:,0]
+            1.0 + tau * LAMBDA_I,  # diag M[i,i]
+            b0,
+            b_c,
+        )
+
+    # TR stage -> t + gamma*h.
+    tau1 = 0.5 * _TRBDF2_GAMMA * h
+    rhs0, rhs_c = apply_i_plus_tau_a(tau1, n, C)
+    n_g, C_g = solve_i_minus_tau_a(tau1, rhs0, rhs_c)
+
+    # BDF2 stage -> t + h.
+    tau2 = _TRBDF2_C3 * h
+    n_new, C_new = solve_i_minus_tau_a(
+        tau2,
+        _TRBDF2_C1 * n_g - _TRBDF2_C2 * n,
+        _TRBDF2_C1 * C_g - _TRBDF2_C2 * C,
+    )
+    return n_new, C_new, n_g
+
+
+def _reactor_stiff_step(positions, rho_ext, params: ReactorParams, n_substeps: int):
+    """Operator-split stiff integrator for one ``params.delta_t`` step.
+
+    The 11-state system has a stiffness ratio of ~10**6 (prompt neutrons
+    ~15 ms vs xenon ~9 h), which is why explicit RK4 needs ~50 substeps just
+    to stay numerically stable. This integrator splits it:
+
+    * **Fast block** ``[n, C_1..6]`` — linear in itself given the reactivity
+      ``rho`` — is advanced with TR-BDF2, an L-stable 2nd-order method, solved
+      in O(n) via the arrowhead structure of the point-kinetics matrix. It is
+      unconditionally stable, so ``n_substeps`` sets *accuracy*, not stability.
+    * **Slow block** ``[T_fuel, T_coolant, I_hat, Xe_hat]`` — non-stiff (time
+      constants ~1 s to hours) — is advanced with RK4, driven by the neutron
+      density from the fast solve.
+
+    ``rho`` depends only on the slow variables, so it is refreshed once per
+    substep — cheap, and it removes the within-step reactivity-freezing error.
+    """
+    h = params.delta_t / n_substeps
+    n = positions[0]
+    C = positions[1 : 1 + N_GROUPS]
+    slow0 = positions[1 + N_GROUPS :]  # [T_fuel, T_coolant, I_hat, Xe_hat]
+
+    # ── Slow block RHS (linear in the slow state given neutron density) ──
+    lam_sum = LAMBDA_XENON + params.sigma_phi0
+    a_coeff = params.gamma_ratio * lam_sum / (1.0 + params.gamma_ratio)
+    b_coeff = lam_sum / (1.0 + params.gamma_ratio)
+
+    def slow_rhs(slow, n_val):
+        T_f, T_c, I_h, Xe = slow
+        dT_f = (params.P_thermal_ref * n_val - params.UA * (T_f - T_c)) / params.C_fuel
+        dT_c = (
+            params.UA * (T_f - T_c) - params.m_dot_cp * (T_c - params.T_inlet)
+        ) / params.C_coolant
+        dI = LAMBDA_IODINE * (n_val - I_h)
+        dXe = (
+            a_coeff * n_val
+            + b_coeff * I_h
+            - (LAMBDA_XENON + params.sigma_phi0 * n_val) * Xe
+        )
+        return jnp.array([dT_f, dT_c, dI, dXe])
+
+    def body(carry, _):
+        n_, C_, slow = carry
+        T_f, T_c, _I, Xe = slow
+        # Reactivity from the current slow state (refreshed every substep).
+        rho = (
+            rho_ext
+            + params.alpha_fuel * (T_f - params.T_fuel_ref)
+            + params.alpha_coolant * (T_c - params.T_coolant_ref)
+            - params.rho_Xe_full * (Xe - 1.0)
+        )
+        n_new, C_new, n_g = _fast_block_trbdf2(n_, C_, rho, params, h)
+        # RK4 on the non-stiff slow block; n sampled from the fast solve.
+        k1 = slow_rhs(slow, n_)
+        k2 = slow_rhs(slow + 0.5 * h * k1, n_g)
+        k3 = slow_rhs(slow + 0.5 * h * k2, n_g)
+        k4 = slow_rhs(slow + h * k3, n_new)
+        slow_next = slow + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        return (n_new, C_new, slow_next), None
+
+    (n_f, C_f, slow_f), _ = jax.lax.scan(
+        body, (n, C, slow0), xs=None, length=n_substeps
+    )
+    return jnp.concatenate([jnp.array([n_f]), C_f, slow_f]), None
+
+
 @partial(jax.jit, static_argnames=["integration_method"])
 def compute_next_state(
     rho_raw: float,
     state: ReactorState,
     params: ReactorParams,
-    integration_method: str = "rk4_50",
+    integration_method: str = "tr_bdf2_2",
 ):
     """
     ``rho_raw`` : raw action in [-1, 1] = *desired* rod position.
@@ -349,8 +485,6 @@ def compute_next_state(
     )
 
     # ── Integrate coupled ODEs ──
-    _compute_velocity = partial(compute_velocity, action=rho_ext, params=params)
-
     positions = jnp.concatenate(
         [
             jnp.array([state.n]),
@@ -358,12 +492,23 @@ def compute_next_state(
             jnp.array([state.T_fuel, state.T_coolant, state.I_hat, state.Xe_hat]),
         ]
     )
-    new_positions, metrics = integrate_dynamics(
-        positions=positions,
-        delta_t=params.delta_t,
-        compute_velocity=_compute_velocity,
-        method=integration_method,
-    )
+    if integration_method.startswith("tr_bdf2"):
+        # Stiff operator-split integrator (arrowhead TR-BDF2 + RK4). Accepts
+        # "tr_bdf2" (default substeps) or "tr_bdf2_<N>" to set the substep
+        # count explicitly. Unconditionally stable; N controls accuracy.
+        tail = integration_method.split("_")[-1]
+        n_substeps = int(tail) if tail.isdigit() else 4
+        new_positions, metrics = _reactor_stiff_step(
+            positions, rho_ext, params, n_substeps
+        )
+    else:
+        _compute_velocity = partial(compute_velocity, action=rho_ext, params=params)
+        new_positions, metrics = integrate_dynamics(
+            positions=positions,
+            delta_t=params.delta_t,
+            compute_velocity=_compute_velocity,
+            method=integration_method,
+        )
 
     new_n = new_positions[0]
     new_C = new_positions[1 : 1 + N_GROUPS]
