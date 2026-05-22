@@ -238,5 +238,30 @@ def _register_all():
         },
     )
 
+    # WalkerRun CPG (6 actuators). dt is the timestep, not a tuning param,
+    # so it is excluded from degradation.
+    from target_gym.experts.cpg import walker_cpg_step
+
+    register_degradation_schema(
+        walker_cpg_step,
+        {
+            "frequency": "logscale",
+            **{f"amp_{i}": "logscale" for i in range(6)},
+            **{f"phase_{i}": "phase" for i in range(6)},
+        },
+    )
+
+    # HopperHop CPG (4 actuators).
+    from target_gym.experts.cpg import hopper_cpg_step
+
+    register_degradation_schema(
+        hopper_cpg_step,
+        {
+            "frequency": "logscale",
+            **{f"amp_{i}": "logscale" for i in range(4)},
+            **{f"phase_{i}": "phase" for i in range(4)},
+        },
+    )
+
 
 _register_all()
