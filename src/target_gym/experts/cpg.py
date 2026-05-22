@@ -415,17 +415,38 @@ def walker_cpg_step(
 ) -> tuple[jnp.ndarray, CPGState]:
     t = state.time
     omega = 2.0 * jnp.pi * params.frequency
-    amps = jnp.stack([params.amp_0, params.amp_1, params.amp_2,
-                      params.amp_3, params.amp_4, params.amp_5])
-    phases = jnp.stack([params.phase_0, params.phase_1, params.phase_2,
-                        params.phase_3, params.phase_4, params.phase_5])
+    amps = jnp.stack(
+        [
+            params.amp_0,
+            params.amp_1,
+            params.amp_2,
+            params.amp_3,
+            params.amp_4,
+            params.amp_5,
+        ]
+    )
+    phases = jnp.stack(
+        [
+            params.phase_0,
+            params.phase_1,
+            params.phase_2,
+            params.phase_3,
+            params.phase_4,
+            params.phase_5,
+        ]
+    )
     action = jnp.clip(amps * jnp.sin(omega * t + phases), -1.0, 1.0)
     return action, CPGState(time=t + params.dt)
 
 
 _WALKER_CPG_LEARNABLE = (
     "frequency",
-    "amp_0", "amp_1", "amp_2", "amp_3", "amp_4", "amp_5",
+    "amp_0",
+    "amp_1",
+    "amp_2",
+    "amp_3",
+    "amp_4",
+    "amp_5",
 )
 register_learnable_gains(walker_cpg_step, _WALKER_CPG_LEARNABLE)
 
@@ -447,10 +468,18 @@ def make_walker_cpg(
     assert len(amps) == _N_WALKER and len(phases) == _N_WALKER
     params = WalkerCPGParams(
         frequency=freq,
-        amp_0=amps[0], amp_1=amps[1], amp_2=amps[2],
-        amp_3=amps[3], amp_4=amps[4], amp_5=amps[5],
-        phase_0=phases[0], phase_1=phases[1], phase_2=phases[2],
-        phase_3=phases[3], phase_4=phases[4], phase_5=phases[5],
+        amp_0=amps[0],
+        amp_1=amps[1],
+        amp_2=amps[2],
+        amp_3=amps[3],
+        amp_4=amps[4],
+        amp_5=amps[5],
+        phase_0=phases[0],
+        phase_1=phases[1],
+        phase_2=phases[2],
+        phase_3=phases[3],
+        phase_4=phases[4],
+        phase_5=phases[5],
         dt=float(dt),
     )
     return params, cpg_reset(params)
@@ -494,16 +523,18 @@ def hopper_cpg_step(
 ) -> tuple[jnp.ndarray, CPGState]:
     t = state.time
     omega = 2.0 * jnp.pi * params.frequency
-    amps = jnp.stack([params.amp_0, params.amp_1,
-                      params.amp_2, params.amp_3])
-    phases = jnp.stack([params.phase_0, params.phase_1,
-                        params.phase_2, params.phase_3])
+    amps = jnp.stack([params.amp_0, params.amp_1, params.amp_2, params.amp_3])
+    phases = jnp.stack([params.phase_0, params.phase_1, params.phase_2, params.phase_3])
     action = jnp.clip(amps * jnp.sin(omega * t + phases), -1.0, 1.0)
     return action, CPGState(time=t + params.dt)
 
 
 _HOPPER_CPG_LEARNABLE = (
-    "frequency", "amp_0", "amp_1", "amp_2", "amp_3",
+    "frequency",
+    "amp_0",
+    "amp_1",
+    "amp_2",
+    "amp_3",
 )
 register_learnable_gains(hopper_cpg_step, _HOPPER_CPG_LEARNABLE)
 
@@ -526,9 +557,14 @@ def make_hopper_cpg(
     assert len(amps) == _N_HOPPER and len(phases) == _N_HOPPER
     params = HopperCPGParams(
         frequency=freq,
-        amp_0=amps[0], amp_1=amps[1], amp_2=amps[2], amp_3=amps[3],
-        phase_0=phases[0], phase_1=phases[1],
-        phase_2=phases[2], phase_3=phases[3],
+        amp_0=amps[0],
+        amp_1=amps[1],
+        amp_2=amps[2],
+        amp_3=amps[3],
+        phase_0=phases[0],
+        phase_1=phases[1],
+        phase_2=phases[2],
+        phase_3=phases[3],
         dt=float(dt),
     )
     return params, cpg_reset(params)
