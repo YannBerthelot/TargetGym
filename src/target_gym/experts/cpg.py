@@ -377,3 +377,200 @@ def make_barkour_cpg_expert() -> FunctionalExpertPolicy:
     """Return a FunctionalExpertPolicy-wrapped Barkour trot CPG."""
     params, zero_state = make_barkour_cpg()
     return FunctionalExpertPolicy(params, zero_state, barkour_cpg_step)
+
+
+# ---------------------------------------------------------------------------
+# WalkerRun CPG (6 actuators, bipedal walking gait)
+# ---------------------------------------------------------------------------
+#
+# WalkerRun actuators (dm_control walker): hip, knee, ankle x (right, left).
+# Bipedal walking pairs the legs in antiphase (right phase = 0, left = pi).
+# Defaults seeded from eval_cpg_expert.py:walker_cpg.
+
+_N_WALKER = 6
+
+
+@struct.dataclass
+class WalkerCPGParams:
+    """Static params for the WalkerRun CPG (6 actuators)."""
+
+    frequency: float
+    amp_0: float
+    amp_1: float
+    amp_2: float
+    amp_3: float
+    amp_4: float
+    amp_5: float
+    phase_0: float
+    phase_1: float
+    phase_2: float
+    phase_3: float
+    phase_4: float
+    phase_5: float
+    dt: float
+
+
+def walker_cpg_step(
+    params: WalkerCPGParams, state: CPGState, obs: jnp.ndarray
+) -> tuple[jnp.ndarray, CPGState]:
+    t = state.time
+    omega = 2.0 * jnp.pi * params.frequency
+    amps = jnp.stack(
+        [
+            params.amp_0,
+            params.amp_1,
+            params.amp_2,
+            params.amp_3,
+            params.amp_4,
+            params.amp_5,
+        ]
+    )
+    phases = jnp.stack(
+        [
+            params.phase_0,
+            params.phase_1,
+            params.phase_2,
+            params.phase_3,
+            params.phase_4,
+            params.phase_5,
+        ]
+    )
+    action = jnp.clip(amps * jnp.sin(omega * t + phases), -1.0, 1.0)
+    return action, CPGState(time=t + params.dt)
+
+
+_WALKER_CPG_LEARNABLE = (
+    "frequency",
+    "amp_0",
+    "amp_1",
+    "amp_2",
+    "amp_3",
+    "amp_4",
+    "amp_5",
+)
+register_learnable_gains(walker_cpg_step, _WALKER_CPG_LEARNABLE)
+
+
+def make_walker_cpg(
+    dt: float = 0.025,
+) -> tuple[WalkerCPGParams, CPGState]:
+    """CPG for WalkerRun. Loads tuned params from cpg_tuned_walkerrun.json."""
+    tuned = _load_tuned("walkerrun")
+    if tuned is not None:
+        freq = float(tuned["frequency"])
+        amps = [float(a) for a in tuned["amplitudes"]]
+        phases = [float(p) for p in tuned["phases"]]
+    else:
+        # Hand-tuned fallback (bipedal walk, antiphase legs).
+        freq = 1.5
+        amps = [0.7, 0.9, 0.5, 0.7, 0.9, 0.5]
+        phases = [0.0, 1.5, 2.5, jnp.pi, jnp.pi + 1.5, jnp.pi + 2.5]
+    assert len(amps) == _N_WALKER and len(phases) == _N_WALKER
+    params = WalkerCPGParams(
+        frequency=freq,
+        amp_0=amps[0],
+        amp_1=amps[1],
+        amp_2=amps[2],
+        amp_3=amps[3],
+        amp_4=amps[4],
+        amp_5=amps[5],
+        phase_0=phases[0],
+        phase_1=phases[1],
+        phase_2=phases[2],
+        phase_3=phases[3],
+        phase_4=phases[4],
+        phase_5=phases[5],
+        dt=float(dt),
+    )
+    return params, cpg_reset(params)
+
+
+def make_walker_cpg_expert() -> FunctionalExpertPolicy:
+    """Return a FunctionalExpertPolicy-wrapped Walker CPG."""
+    params, zero_state = make_walker_cpg()
+    return FunctionalExpertPolicy(params, zero_state, walker_cpg_step)
+
+
+# ---------------------------------------------------------------------------
+# HopperHop CPG (4 actuators, single-leg hop gait)
+# ---------------------------------------------------------------------------
+#
+# HopperHop actuators (dm_control hopper): hip, knee, ankle, foot. The hop is
+# a single-leg gait so all four actuators cycle on the same fundamental
+# frequency; phase offsets stagger flexion/extension within the cycle.
+
+_N_HOPPER = 4
+
+
+@struct.dataclass
+class HopperCPGParams:
+    """Static params for the HopperHop CPG (4 actuators)."""
+
+    frequency: float
+    amp_0: float
+    amp_1: float
+    amp_2: float
+    amp_3: float
+    phase_0: float
+    phase_1: float
+    phase_2: float
+    phase_3: float
+    dt: float
+
+
+def hopper_cpg_step(
+    params: HopperCPGParams, state: CPGState, obs: jnp.ndarray
+) -> tuple[jnp.ndarray, CPGState]:
+    t = state.time
+    omega = 2.0 * jnp.pi * params.frequency
+    amps = jnp.stack([params.amp_0, params.amp_1, params.amp_2, params.amp_3])
+    phases = jnp.stack([params.phase_0, params.phase_1, params.phase_2, params.phase_3])
+    action = jnp.clip(amps * jnp.sin(omega * t + phases), -1.0, 1.0)
+    return action, CPGState(time=t + params.dt)
+
+
+_HOPPER_CPG_LEARNABLE = (
+    "frequency",
+    "amp_0",
+    "amp_1",
+    "amp_2",
+    "amp_3",
+)
+register_learnable_gains(hopper_cpg_step, _HOPPER_CPG_LEARNABLE)
+
+
+def make_hopper_cpg(
+    dt: float = 0.02,
+) -> tuple[HopperCPGParams, CPGState]:
+    """CPG for HopperHop. Loads tuned params from cpg_tuned_hopperhop.json."""
+    tuned = _load_tuned("hopperhop")
+    if tuned is not None:
+        freq = float(tuned["frequency"])
+        amps = [float(a) for a in tuned["amplitudes"]]
+        phases = [float(p) for p in tuned["phases"]]
+    else:
+        # Hand-tuned fallback: ~2 Hz hop, all joints near peak amplitude,
+        # small phase stagger from proximal (hip) to distal (foot).
+        freq = 2.0
+        amps = [0.7, 0.9, 0.9, 0.6]
+        phases = [0.0, 0.5, 1.0, 1.5]
+    assert len(amps) == _N_HOPPER and len(phases) == _N_HOPPER
+    params = HopperCPGParams(
+        frequency=freq,
+        amp_0=amps[0],
+        amp_1=amps[1],
+        amp_2=amps[2],
+        amp_3=amps[3],
+        phase_0=phases[0],
+        phase_1=phases[1],
+        phase_2=phases[2],
+        phase_3=phases[3],
+        dt=float(dt),
+    )
+    return params, cpg_reset(params)
+
+
+def make_hopper_cpg_expert() -> FunctionalExpertPolicy:
+    """Return a FunctionalExpertPolicy-wrapped Hopper CPG."""
+    params, zero_state = make_hopper_cpg()
+    return FunctionalExpertPolicy(params, zero_state, hopper_cpg_step)
