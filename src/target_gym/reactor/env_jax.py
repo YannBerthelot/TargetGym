@@ -50,7 +50,7 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
     obs_value_index: int = 0  # n (neutron density / normalised power)
     obs_target_index: int = 3  # target_n
 
-    def __init__(self, integration_method: str = "rk4_50"):
+    def __init__(self, integration_method: str = "tr_bdf2_2"):
         self.obs_shape = (4,)
         self.integration_method = integration_method
 
