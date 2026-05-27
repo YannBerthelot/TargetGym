@@ -1,7 +1,30 @@
 SHELL=/bin/bash
 LINT_PATHS=src/ tests/
 
-.PHONY: all all-% figures figures-% videos videos-% tuning tuning-% clear-tuning clear-mpc short-gifs test mypy coverage missing-annotations type lint format check-codestyle commit-checks
+# Strict CPU isolation -- prevents tests from touching GPU when a live
+# experiment is running on this machine. CUDA_VISIBLE_DEVICES="" hides the
+# GPU from the CUDA driver entirely so CUDA init can't probe it.
+CPU_ENV := CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu JAX_PLATFORM_NAME=cpu
+
+.PHONY: ci ci-format-check ci-test help \
+        all all-% figures figures-% videos videos-% tuning tuning-% \
+        clear-tuning clear-mpc short-gifs test mypy coverage \
+        missing-annotations type lint format check-codestyle commit-checks
+
+help:  ## Show this help message
+	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+
+# ---------------------------------------------------------------------------
+# Canonical local-CI -- mirrors .github/workflows/python-app.yml exactly.
+# ---------------------------------------------------------------------------
+
+ci: ci-format-check ci-test  ## Full local CI (matches .github/workflows/python-app.yml)
+
+ci-format-check:  ## Black --check on the whole tree
+	poetry run black --check .
+
+ci-test:  ## pytest tests/ -v on CPU
+	$(CPU_ENV) poetry run pytest tests/ -v
 
 all:
 	poetry run python -m target_gym.runners.runners
