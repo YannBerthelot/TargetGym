@@ -13,36 +13,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # Full history + tags so poetry-dynamic-versioning can detect
+          # the release tag's version. ``fetch-depth: 0`` alone does NOT
+          # fetch tags in checkout@v4 (fetch-tags defaults to false).
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install Poetry
+      - name: Install Poetry (with dynamic-versioning plugin)
         uses: snok/install-poetry@v1
         with:
           version: 2.2.0
+          # Install poetry-dynamic-versioning as a Poetry plugin (not just
+          # the build-backend declared in pyproject.toml's build-system).
+          # Without this, ``poetry build`` shows the placeholder version
+          # ("Building target-gym (0.1.0)") and the dist/<wheel> ends up
+          # named with that placeholder while the backend produces files
+          # with the real version -- causing publish to find no matching
+          # files and exit with "No files to publish".
+          plugins: "poetry-dynamic-versioning[plugin]"
 
       - name: Build and publish to PyPI
         env:
           POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
-          # Strip the leading "v" so the bypass value is a plain PEP 440
-          # version (e.g. "0.5.0"), not "v0.5.0". The poetry-dynamic-
-          # versioning build backend reads this env var and uses it
-          # verbatim as the version, skipping git-tag detection -- which
-          # avoids the silent-fail mode where the backend can't see the
-          # tag in CI (actions/checkout@v4 doesn't fetch tags by default
-          # even with fetch-depth: 0) and produces no dist files.
-          # ``--build`` keeps build+publish in one step so there's no
-          # state mismatch between them.
+          # Belt-and-suspenders: even with the plugin installed and tags
+          # fetched, the bypass var forces the version explicitly to the
+          # release tag (stripped of the leading "v"). This avoids any
+          # ambiguity from local git state or detached-HEAD checkouts.
           POETRY_DYNAMIC_VERSIONING_BYPASS: ${{ github.event.release.tag_name }}
         run: |
           # Strip leading "v" prefix if present.
           export POETRY_DYNAMIC_VERSIONING_BYPASS="${POETRY_DYNAMIC_VERSIONING_BYPASS#v}"
-          echo "Publishing version: $POETRY_DYNAMIC_VERSIONING_BYPASS"
-          poetry publish --build --no-interaction --skip-existing
+          echo "Bypass version: $POETRY_DYNAMIC_VERSIONING_BYPASS"
+          # Build first so we can ``ls dist/`` for diagnostics if publish
+          # later fails -- catches a silent-no-files build immediately.
+          poetry build
+          ls -la dist/
+          poetry publish --no-interaction --skip-existing
 
       - name: Upload release assets with gh
         env:
