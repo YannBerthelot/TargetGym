@@ -25,24 +25,24 @@ jobs:
         with:
           version: 2.2.0
 
-      - name: Set package version from tag
-        run: |
-          TAG_NAME="${{ github.event.release.tag_name }}"
-          # Remove "v" prefix if present
-          VERSION="${TAG_NAME#v}"
-          echo "Setting package version to $VERSION"
-          poetry version "$VERSION"
-
-      - name: Install dependencies
-        run: poetry install --no-interaction --no-root
-
-      - name: Build the package
-        run: poetry build
-
-      - name: Publish to PyPI
+      - name: Build and publish to PyPI
         env:
           POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
-        run: poetry publish --no-interaction --skip-existing
+          # Strip the leading "v" so the bypass value is a plain PEP 440
+          # version (e.g. "0.5.0"), not "v0.5.0". The poetry-dynamic-
+          # versioning build backend reads this env var and uses it
+          # verbatim as the version, skipping git-tag detection -- which
+          # avoids the silent-fail mode where the backend can't see the
+          # tag in CI (actions/checkout@v4 doesn't fetch tags by default
+          # even with fetch-depth: 0) and produces no dist files.
+          # ``--build`` keeps build+publish in one step so there's no
+          # state mismatch between them.
+          POETRY_DYNAMIC_VERSIONING_BYPASS: ${{ github.event.release.tag_name }}
+        run: |
+          # Strip leading "v" prefix if present.
+          export POETRY_DYNAMIC_VERSIONING_BYPASS="${POETRY_DYNAMIC_VERSIONING_BYPASS#v}"
+          echo "Publishing version: $POETRY_DYNAMIC_VERSIONING_BYPASS"
+          poetry publish --build --no-interaction --skip-existing
 
       - name: Upload release assets with gh
         env:
