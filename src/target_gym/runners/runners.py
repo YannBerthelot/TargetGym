@@ -13,6 +13,9 @@ from target_gym.runners.first_order_runner import run_videos as run_first_order_
 from target_gym.runners.four_tank_runner import run_all_modes as run_four_tank
 from target_gym.runners.four_tank_runner import run_figures as run_four_tank_figures
 from target_gym.runners.four_tank_runner import run_videos as run_four_tank_videos
+from target_gym.runners.patrol_runner import run_all_modes as run_patrol
+from target_gym.runners.patrol_runner import run_figures as run_patrol_figures
+from target_gym.runners.patrol_runner import run_videos as run_patrol_videos
 from target_gym.runners.plane3d_runner import run_all_modes as run_plane3d
 from target_gym.runners.plane3d_runner import run_figures as run_plane3d_figures
 from target_gym.runners.plane3d_runner import run_videos as run_plane3d_videos
@@ -30,6 +33,7 @@ ALL_RUNNERS = {
     "first_order": run_first_order,
     "four_tank": run_four_tank,
     "reactor": run_reactor,
+    "patrol": run_patrol,
 }
 
 VIDEO_RUNNERS = {
@@ -39,6 +43,7 @@ VIDEO_RUNNERS = {
     "first_order": run_first_order_videos,
     "four_tank": run_four_tank_videos,
     "reactor": run_reactor_videos,
+    "patrol": run_patrol_videos,
 }
 
 FIGURE_RUNNERS = {
@@ -48,6 +53,7 @@ FIGURE_RUNNERS = {
     "first_order": run_first_order_figures,
     "four_tank": run_four_tank_figures,
     "reactor": run_reactor_figures,
+    "patrol": run_patrol_figures,
 }
 
 

@@ -19,6 +19,19 @@ Environments are built to be **fast, parallelizable, and physics-based**, enabli
 | Plane 3D -- Circle | Maintain altitude while orbiting a circular path | 3 (power, stick, aileron) | 17 | -- |
 | Plane 3D -- Figure Eight | Follow a 3D twisted lemniscate (figure-8 with altitude crossovers) | 3 (power, stick, aileron) | 19 | -- |
 
+### Multi-Agent / Formation
+
+Close-patrol tasks where the target is a **moving slot** defined relative to a
+lead aircraft — a dynamic target MDP with collision as a new irrecoverable
+state. Both single-agent (scripted lead) and cooperative multi-agent (both
+aircraft learn) variants share the same 3D physics.
+
+| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, 10^8 steps) |
+|---|---|---|---|---|
+| Plane Patrol | Hold a slot behind a scripted (maneuvering) lead | 3 (power, stick, aileron) | 26 | -- |
+| Plane Patrol -- Bearing-only | Same, but the follower sees only range + bearing to the lead (partial obs) | 3 | 21 | -- |
+| Plane Patrol -- MARL / Formation | `1 + num_wingmen` learners (up to 5 planes): lead flies its patrol pattern, wingmen hold slots **evenly spread across both sides** (cooperative team reward, JaxMARL-style API) | 3 per agent | 18 (lead) / 26 (wingman) | -- |
+
 ### Process Control (adapted from [PC-gym](https://github.com/MaximilianB2/pc-gym))
 
 | Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, 10^8 steps) |
@@ -51,63 +64,78 @@ Environments are designed to span a wide range of difficulty, making TargetGym s
 | 5 -- Extreme | Plane 3D -- Heading | 15 | 3 | 3D aerodynamics | Multi-objective (altitude + heading), roll/pitch/yaw coupling |
 | 5 -- Extreme | Plane 3D -- Circle | 17 | 3 | 3D + path following | Sustained coordinated banked turns, km-scale circular path |
 | 6 -- Extreme+ | Plane 3D -- Figure Eight | 19 | 3 | 3D + twisted lemniscate | 3D path with altitude crossovers, direction reversal, MPC >> PID gap |
+| 5 -- Extreme | Plane Patrol | 26 | 3 | 3D + moving target | **Non-stationary maneuvering reference**, relative-frame observation, collision (irrecoverable) |
+| 6 -- Extreme+ | Plane Patrol -- MARL | 18 / 26 | 3 + 3 | 3D two-body | **Multi-agent coordination**, non-stationary co-player, shared collision state |
 
 ---
 
-## Figures
+## Gallery
 
-<table align="center">
-  <tr>
-    <td align="center">
-      <img src="figures/plane/power_trajectories.png" width="400px"/><br/>
-      <b>Plane</b> -- altitude under constant power/stick inputs
-    </td>
-    <td align="center">
-      <img src="figures/cstr/trajectories.png" width="400px"/><br/>
-      <b>CSTR</b> -- reactor temperature under constant coolant temperatures
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="figures/first_order/u_trajectories.png" width="400px"/><br/>
-      <b>First Order System</b> -- state trajectories under constant inputs
-    </td>
-    <td align="center">
-      <img src="figures/four_tank/v1_trajectories.png" width="400px"/><br/>
-      <b>Four Tank</b> -- tank 1 level under varying pump voltages
-    </td>
-  </tr>
-</table>
+Every environment ships with rendering. Aircraft tasks render a physical
+side + top-down scene; process/industrial tasks render the state, action and
+reward evolution (with hidden states shown greyed out). All clips below are
+expert (PID) rollouts.
 
----
-
-## Videos
+### Aircraft
 
 <table align="center">
   <tr>
     <td align="center">
       <img src="videos/plane/pid_output_short.gif" width="300px"/><br/>
-      Plane 2D (PID)
+      <b>Plane 2D</b> -- reach & hold a target altitude
     </td>
     <td align="center">
-      <img src="videos/cstr/pid_output_short.gif" width="300px"/><br/>
-      CSTR (PID)
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="videos/first_order/pid_output_short.gif" width="300px"/><br/>
-      First Order System (PID)
-    </td>
-    <td align="center">
-      <img src="videos/four_tank/pid_output_short.gif" width="300px"/><br/>
-      Four Tank (PID)
+      <img src="videos/plane3d/heading_short.gif" width="300px"/><br/>
+      <b>Plane 3D -- Heading</b> -- track altitude + heading
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="videos/reactor/pid_output_short.gif" width="300px"/><br/>
-      Nuclear Reactor (PID)
+      <img src="videos/plane3d/circle_short.gif" width="300px"/><br/>
+      <b>Plane 3D -- Circle</b> -- sustained banked orbit
+    </td>
+    <td align="center">
+      <img src="videos/plane3d/figure8_short.gif" width="300px"/><br/>
+      <b>Plane 3D -- Figure-8</b> -- 3D twisted lemniscate
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="videos/patrol/pid_formation_short.gif" width="300px"/><br/>
+      <b>Plane Patrol</b> -- wingman (orange) flies parallel in a slot beside the lead (blue)
+    </td>
+    <td align="center">
+      <img src="videos/patrol/formation_5planes_short.gif" width="300px"/><br/>
+      <b>Plane Patrol -- Formation</b> -- a lead + 4 wingmen in a V, evenly spread across both sides
+    </td>
+  </tr>
+</table>
+
+### Process Control & Industrial
+
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="videos/cstr/pid_output_short.gif" width="260px"/><br/>
+      <b>CSTR</b>
+    </td>
+    <td align="center">
+      <img src="videos/first_order/pid_output_short.gif" width="260px"/><br/>
+      <b>First Order System</b>
+    </td>
+    <td align="center">
+      <img src="videos/four_tank/pid_output_short.gif" width="260px"/><br/>
+      <b>Four Tank</b>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="videos/glass_furnace/pid_output_short.gif" width="260px"/><br/>
+      <b>Glass Furnace</b> -- partial obs (hidden zone temps)
+    </td>
+    <td align="center">
+      <img src="videos/reactor/pid_output_short.gif" width="260px"/><br/>
+      <b>Nuclear Reactor</b> -- xenon dynamics, partial obs
     </td>
   </tr>
 </table>
@@ -190,6 +218,23 @@ while True:
         break
 ```
 
+The **multi-agent** close-patrol task exposes a JaxMARL-style dict interface
+(both aircraft learn a cooperative formation):
+
+```python
+import jax
+from target_gym import PlanePatrolMARL
+
+env = PlanePatrolMARL(num_wingmen=4)         # 5 planes: 1 lead + 4 wingmen
+params = env.default_params
+key = jax.random.PRNGKey(0)
+
+obs, state = env.reset(key, params)          # obs = {"lead": ..., "wingman_0": ..., ...}
+actions = {agent: env.action_space(agent).sample(key) for agent in env.agents}
+obs, state, rewards, dones, info = env.step(key, state, actions, params)
+# rewards/dones are dicts keyed by agent (+ dones["__all__"]); reward is shared.
+```
+
 ---
 
 ## Challenges Modeled
@@ -202,7 +247,9 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 * [x] **Momentum effects**: Physical inertia delays control effectiveness.
 * [x] **Irrecoverable states**: Certain trajectories inevitably lead to failure (crash, runaway).
 * [x] **Multi-timescale dynamics**: From millisecond neutronics to hour-long xenon transients (reactor).
-* [ ] **Non-stationarity**: Introduce perturbations in the environments.
+* [x] **Moving / non-stationary targets**: The patrol slot tracks a maneuvering lead aircraft.
+* [x] **Multi-agent coordination**: The MARL patrol task requires two learners to cooperate (formation + trackable flight).
+* [ ] **Non-stationarity**: Introduce perturbations in the environments (wind, turbulence).
 
 ---
 
