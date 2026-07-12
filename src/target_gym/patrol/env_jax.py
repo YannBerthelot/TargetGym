@@ -83,6 +83,7 @@ class _PlanePatrolBase(environment.Environment[PatrolState, PatrolParams]):
             params,
             self._lead_pid_params,
             integration_method=self.integration_method,
+            key=key,
         )
         reward = self.compute_reward(new_state, params)
         terminated, truncated = check_is_terminal_patrol(new_state, params, xp=jnp)

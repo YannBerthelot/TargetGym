@@ -16,12 +16,14 @@ from jax.tree_util import Partial as partial
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.plane.dynamics import (
+    advance_gust,
     compute_air_density_from_altitude,
     compute_Mach_from_velocity_and_speed_of_sound,
     compute_next_power,
     compute_next_stick,
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
+    total_wind_3d,
 )
 from target_gym.plane3d.dynamics import (
     compute_acceleration_3d,
@@ -62,6 +64,10 @@ class PlaneState3D(EnvState):
     target_x: float  # circle/fig8: center x; heading: unused (0)
     target_y: float  # circle/fig8: center y; heading: unused (0)
     target_radius: float  # circle: radius; fig8: lobe radius; heading: unused (0)
+    # Ornstein-Uhlenbeck turbulence gust (m/s); total wind = params.wind_* + gust.
+    gust_x: float = 0.0
+    gust_y: float = 0.0
+    gust_z: float = 0.0
 
     @property
     def rho(self):
@@ -141,6 +147,21 @@ class PlaneParams3D(EnvParams):
     initial_power: float = 1.0
     initial_stick: float = 0.0
     initial_aileron: float = 0.0
+
+    # Steady mean wind (world frame, m/s).  Aerodynamics use the air-relative
+    # velocity V_ground - (wind + gust); wind is not observed (crab in crosswind).
+    wind_x: float = 0.0
+    wind_y: float = 0.0
+    wind_z: float = 0.0
+    # Ornstein-Uhlenbeck turbulence: sigma = gust std (m/s), theta = mean-
+    # reversion rate (1/s).  sigma = 0 (default) => steady wind, no turbulence.
+    turbulence_sigma: float = 0.0
+    turbulence_theta: float = 0.2
+    # Linear wind shear: horizontal wind gains ``wind_shear_x``/``wind_shear_y``
+    # m/s per metre of altitude above ``shear_ref_alt`` (0 => no shear).
+    wind_shear_x: float = 0.0
+    wind_shear_y: float = 0.0
+    shear_ref_alt: float = 0.0
 
     delta_t: float = 1.0
 
@@ -429,18 +450,51 @@ def compute_next_state_3d(
     state: PlaneState3D,
     params: PlaneParams3D,
     integration_method: str = "rk4_1",
+    key=None,
 ):
-    """Compute next state using the 3D dynamics model."""
+    """Compute next state using the 3D dynamics model.
+
+    Wind is a physics-engine property: total wind = steady ``params.wind_x/y/z``
+    plus an Ornstein-Uhlenbeck turbulence gust (advanced with ``key`` when
+    ``params.turbulence_sigma > 0``).  Aerodynamics/engine-Mach use the
+    air-relative velocity while position/observations stay in the ground frame.
+    ``wind = 0`` with ``turbulence_sigma = 0`` reproduces the original behaviour;
+    ``key=None`` freezes the gust (constant wind).
+    """
     dt = params.delta_t
     power = compute_next_power(power_requested, state.power, dt)
     stick = compute_next_stick(stick_requested, state.stick, dt)
     aileron = compute_next_aileron(aileron_requested, state.aileron, dt)
 
+    # Total wind = steady mean + altitude shear + OU turbulence gust.
+    gust = advance_gust(
+        jnp.array([state.gust_x, state.gust_y, state.gust_z]),
+        params.turbulence_theta,
+        params.turbulence_sigma,
+        dt,
+        key,
+    )
+    total_wind_x, total_wind_y, total_wind_z = total_wind_3d(
+        state.z, gust[0], gust[1], gust[2], params
+    )
+    eff_params = params.replace(
+        wind_x=total_wind_x, wind_y=total_wind_y, wind_z=total_wind_z
+    )
+
+    # Engine ram/Mach effects depend on airspeed, not ground speed.
+    air_speed = compute_velocity_3d(
+        state.x_dot - total_wind_x,
+        state.y_dot - total_wind_y,
+        state.z_dot - total_wind_z,
+    )
+    M_air = compute_Mach_from_velocity_and_speed_of_sound(
+        air_speed, state.speed_of_sound
+    )
     thrust = compute_thrust_output(
         power=power,
         thrust_output_at_sea_level=params.thrust_output_at_sea_level,
         rho=state.rho,
-        M=state.M,
+        M=M_air,
     )
 
     positions = jnp.array([state.x, state.y, state.z, state.theta, state.phi])
@@ -457,7 +511,7 @@ def compute_next_state_3d(
     _compute_acceleration = partial(
         compute_acceleration_3d,
         action=(thrust, stick, aileron),
-        params=params,
+        params=eff_params,
         clip=True,
         min_clip_boundaries=(-100, -100, -100, -1.5, -1.5),
         max_clip_boundaries=(100, 100, 100, 1.5, 1.5),
@@ -502,5 +556,8 @@ def compute_next_state_3d(
         target_x=state.target_x,
         target_y=state.target_y,
         target_radius=state.target_radius,
+        gust_x=gust[0],
+        gust_y=gust[1],
+        gust_z=gust[2],
     )
     return new_state, metrics

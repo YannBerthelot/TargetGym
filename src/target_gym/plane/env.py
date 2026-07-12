@@ -10,6 +10,7 @@ from target_gym.integration import (
     integrate_dynamics,
 )
 from target_gym.plane.dynamics import (
+    advance_gust,
     compute_acceleration,
     compute_air_density_from_altitude,
     compute_alpha,
@@ -19,6 +20,7 @@ from target_gym.plane.dynamics import (
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
     compute_velocity_from_horizontal_and_vertical_speed,
+    total_wind_2d,
 )
 
 SPEED_OF_SOUND = 343.0
@@ -52,6 +54,10 @@ class PlaneState(EnvState):
     stick: float
     fuel: float
     target_altitude: float
+    # Ornstein-Uhlenbeck turbulence gust (m/s), mean-reverting to 0.  Total wind
+    # acting on the aircraft is params.wind_* + gust_*.  Default 0 => no gust.
+    gust_x: float = 0.0
+    gust_z: float = 0.0
 
     @property
     def rho(self):
@@ -110,6 +116,21 @@ class PlaneParams(EnvParams):
     initial_theta: float = 0.0
     initial_power: float = 1.0
     initial_stick: float = 0.0
+
+    # Steady mean wind (world frame, m/s).  Aerodynamics use the air-relative
+    # velocity V_ground - (wind + gust).
+    wind_x: float = 0.0
+    wind_z: float = 0.0
+    # Ornstein-Uhlenbeck turbulence on top of the mean wind: sigma is the gust
+    # std (m/s), theta the mean-reversion rate (1/s; correlation time ~ 1/theta).
+    # sigma = 0 (default) => no turbulence, wind is exactly the steady mean.
+    turbulence_sigma: float = 0.0
+    turbulence_theta: float = 0.2
+    # Linear wind shear: the horizontal wind gains ``wind_shear_x`` m/s per metre
+    # of altitude above ``shear_ref_alt`` (0 => no shear).  Makes the wind
+    # altitude-dependent, so climbing/descending is itself a disturbance.
+    wind_shear_x: float = 0.0
+    shear_ref_alt: float = 0.0
 
     delta_t: float = 1.0
 
@@ -194,25 +215,52 @@ def compute_next_state(
     state: PlaneState,
     params: PlaneParams,
     integration_method: str = "rk4_1",
+    key=None,
 ):
-    """Compute next state and metrics using multiple sub-steps with jax.lax.scan."""
+    """Compute next state and metrics using multiple sub-steps with jax.lax.scan.
+
+    Wind is a physics-engine property: the total wind acting on the aircraft is
+    the steady ``params.wind_*`` plus an Ornstein-Uhlenbeck turbulence gust
+    (advanced with ``key`` when ``params.turbulence_sigma > 0``), and the
+    aerodynamics/engine-Mach use the air-relative velocity while
+    position/observations stay in the ground frame.  With ``wind = 0`` and
+    ``turbulence_sigma = 0`` the behaviour is unchanged; ``key=None`` freezes the
+    gust (so callers that don't model turbulence keep a constant wind).
+    """
     dt = params.delta_t
     power = compute_next_power(power_requested, state.power, dt)
     stick = compute_next_stick(stick_requested, state.stick, dt)
 
-    # Compute thrustx
+    # Total wind = steady mean + altitude shear + OU turbulence gust.
+    gust = advance_gust(
+        jnp.array([state.gust_x, state.gust_z]),
+        params.turbulence_theta,
+        params.turbulence_sigma,
+        dt,
+        key,
+    )
+    total_wind_x, total_wind_z = total_wind_2d(state.z, gust[0], gust[1], params)
+    eff_params = params.replace(wind_x=total_wind_x, wind_z=total_wind_z)
+
+    # Engine ram/Mach effects depend on airspeed, not ground speed.
+    air_speed = compute_velocity_from_horizontal_and_vertical_speed(
+        state.x_dot - total_wind_x, state.z_dot - total_wind_z
+    )
+    M_air = compute_Mach_from_velocity_and_speed_of_sound(
+        air_speed, state.speed_of_sound
+    )
     thrust = compute_thrust_output(
         power=power,
         thrust_output_at_sea_level=params.thrust_output_at_sea_level,
         rho=state.rho,
-        M=state.M,
+        M=M_air,
     )
     positions = jnp.array([state.x, state.z, state.theta])
     velocities = jnp.array([state.x_dot, state.z_dot, state.theta_dot])
     _compute_acceleration = partial(
         compute_acceleration,
         action=(thrust, stick),
-        params=params,
+        params=eff_params,
         clip=True,
         min_clip_boundaries=(-100, -100, -1.5),
         max_clip_boundaries=(100, 100, 1.5),
@@ -244,5 +292,7 @@ def compute_next_state(
         fuel=state.fuel,
         time=state.time + 1,
         target_altitude=state.target_altitude,
+        gust_x=gust[0],
+        gust_z=gust[1],
     )
     return new_state, metrics

@@ -11,6 +11,41 @@ from gymnax.environments import EnvParams
 from target_gym.utils import compute_norm_from_coordinates
 
 
+def advance_gust(gust, theta: float, sigma: float, dt: float, key):
+    """Advance an Ornstein-Uhlenbeck turbulence gust one step.
+
+    ``gust`` is a wind-deviation vector (m/s) that mean-reverts to zero:
+    ``g' = g - theta*dt*g + sigma*sqrt(dt)*N``.  With ``key is None`` (e.g. a
+    caller that does not model turbulence) or ``sigma == 0`` the gust is
+    unchanged, so the total wind stays the steady ``params.wind``.  Shared by
+    the 2D and 3D engines so turbulence is a physics-engine property.
+    """
+    if key is None:
+        return gust
+    noise = jax.random.normal(key, jnp.shape(gust))
+    return gust - theta * dt * gust + sigma * jnp.sqrt(dt) * noise
+
+
+def total_wind_2d(z, gust_x, gust_z, params):
+    """Total world-frame wind = steady mean + linear altitude shear + gust.
+
+    Single source of truth used by both the transition and the (optional)
+    wind observation, so they never disagree.
+    """
+    shear = params.wind_shear_x * (z - params.shear_ref_alt)
+    return params.wind_x + shear + gust_x, params.wind_z + gust_z
+
+
+def total_wind_3d(z, gust_x, gust_y, gust_z, params):
+    """Total world-frame 3D wind = mean + linear altitude shear + gust."""
+    dz = z - params.shear_ref_alt
+    return (
+        params.wind_x + params.wind_shear_x * dz + gust_x,
+        params.wind_y + params.wind_shear_y * dz + gust_y,
+        params.wind_z + gust_z,
+    )
+
+
 def compute_drag(S: float, C: float, V: float, rho: float) -> float:
     """
     Compute the drag.
@@ -428,13 +463,25 @@ def compute_acceleration(
     """
     Compute linear and angular accelerations for the aircraft.
     Returns: (a_x, a_z, alpha_y, metrics)
+
+    Aerodynamics act on the **air-relative** velocity ``V_ground - wind`` (wind
+    read from ``params.wind_x``/``params.wind_z`` — a physics-engine property,
+    so any plane-based env that uses these params gets it): the angle of attack,
+    flight-path angle, airspeed, Mach and dynamic pressure all derive from it,
+    so a headwind/tailwind/crosswind changes the forces correctly.  The
+    resulting accelerations still act on the ground velocity (Newton's law is in
+    the inertial frame), and position integrates the ground velocity — so with
+    ``wind = 0`` (the default) the behaviour is unchanged.
     """
     xp = jnp
     thrust, stick = action
     x_dot, z_dot, _ = velocities
 
     _, z, theta = positions
-    alpha, gamma = compute_alpha(theta, x_dot, z_dot)
+    # Air-relative velocity drives all aerodynamics.
+    air_x = x_dot - params.wind_x
+    air_z = z_dot - params.wind_z
+    alpha, gamma = compute_alpha(theta, air_x, air_z)
     # jax.debug.print(
     #     "{x} {y} {z}", x=jnp.rad2deg(alpha), y=jnp.rad2deg(gamma), z=jnp.rad2deg(theta)
     # )
@@ -443,12 +490,12 @@ def compute_acceleration(
     )  # TODO : make it the actual mass when we start considering fuel consumption
     rho = compute_air_density_from_altitude(z)
     M = compute_Mach_from_velocity_and_speed_of_sound(
-        velocity=compute_velocity_from_horizontal_and_vertical_speed(x_dot, z_dot),
+        velocity=compute_velocity_from_horizontal_and_vertical_speed(air_x, air_z),
         speed_of_sound=compute_speed_of_sound_from_altitude(z),
     )
-    # --- Weight & velocity ---
+    # --- Weight & airspeed ---
     P = compute_weight(m, params.gravity)
-    V = compute_norm_from_coordinates(xp.array([x_dot, z_dot]))
+    V = compute_norm_from_coordinates(xp.array([air_x, air_z]))
 
     # ====================================================
     # WINGS

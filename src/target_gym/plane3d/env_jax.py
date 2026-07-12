@@ -16,6 +16,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
+from target_gym.plane.dynamics import total_wind_3d
 from target_gym.plane3d.env import (
     PlaneParams3D,
     PlaneState3D,
@@ -49,10 +50,26 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
     screen_width = 600
     screen_height = 400
 
-    def __init__(self, integration_method: str = "rk4_1"):
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+        # observe_wind=False -> wind is a hidden disturbance (POMDP);
+        # observe_wind=True  -> (wind_x, wind_y, wind_z) appended to the obs
+        #                       (fully-observable baseline).
+        self.observe_wind = observe_wind
         self.positions_history_xz = []
         self.positions_history_xy = []
         self.integration_method = integration_method
+
+    def _append_wind(self, obs, state, params):
+        """Append the realized wind to *obs* when ``observe_wind`` is set."""
+        if not self.observe_wind:
+            return obs
+        if params is None:
+            params = self.default_params
+        # Realized wind = steady mean + altitude shear + current gust.
+        wx, wy, wz = total_wind_3d(
+            state.z, state.gust_x, state.gust_y, state.gust_z, params
+        )
+        return jnp.concatenate([obs, jnp.array([wx, wy, wz])])
 
     @property
     def default_params(self) -> PlaneParams3D:
@@ -80,6 +97,7 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
             state,
             params,
             integration_method=self.integration_method,
+            key=key,
         )
         reward = self.compute_reward(new_state, params)
         terminated, truncated = check_is_terminal_3d(new_state, params, xp=jnp)
@@ -222,15 +240,15 @@ class Plane3DHeading(_Airplane3DBase):
     obs_target_index: int = 10  # target_altitude
     task_type: str = "heading"
 
-    def __init__(self, integration_method: str = "rk4_1"):
-        super().__init__(integration_method)
-        self.obs_shape = (15,)
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+        super().__init__(integration_method, observe_wind)
+        self.obs_shape = (18,) if observe_wind else (15,)
 
     def compute_reward(self, state, params):
         return compute_reward_heading(state, params)
 
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
-        return get_obs_heading(state, xp=jnp)
+        return self._append_wind(get_obs_heading(state, xp=jnp), state, params)
 
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
         if params is None:
@@ -251,7 +269,7 @@ class Plane3DHeading(_Airplane3DBase):
             target_y=0.0,
             target_radius=0.0,
         )
-        return self.get_obs(state), state
+        return self.get_obs(state, params), state
 
     @property
     def expert_policy(self):
@@ -286,15 +304,15 @@ class Plane3DCircle(_Airplane3DBase):
     obs_target_index: int = 10
     task_type: str = "circle"
 
-    def __init__(self, integration_method: str = "rk4_1"):
-        super().__init__(integration_method)
-        self.obs_shape = (17,)
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+        super().__init__(integration_method, observe_wind)
+        self.obs_shape = (20,) if observe_wind else (17,)
 
     def compute_reward(self, state, params):
         return compute_reward_circle(state, params)
 
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
-        return get_obs_circle(state, xp=jnp)
+        return self._append_wind(get_obs_circle(state, xp=jnp), state, params)
 
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
         if params is None:
@@ -341,7 +359,7 @@ class Plane3DCircle(_Airplane3DBase):
             target_y=target_y,
             target_radius=target_radius,
         )
-        return self.get_obs(state), state
+        return self.get_obs(state, params), state
 
     @property
     def expert_policy(self):
@@ -377,9 +395,9 @@ class Plane3DFigureEight(_Airplane3DBase):
     obs_target_index: int = 10
     task_type: str = "figure8"
 
-    def __init__(self, integration_method: str = "rk4_1"):
-        super().__init__(integration_method)
-        self.obs_shape = (19,)
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+        super().__init__(integration_method, observe_wind)
+        self.obs_shape = (22,) if observe_wind else (19,)
 
     def compute_reward(self, state, params):
         return compute_reward_figure8(state, params)
@@ -387,7 +405,7 @@ class Plane3DFigureEight(_Airplane3DBase):
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         if params is None:
             params = self.default_params
-        return get_obs_figure8(state, params, xp=jnp)
+        return self._append_wind(get_obs_figure8(state, params, xp=jnp), state, params)
 
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
         if params is None:
@@ -445,7 +463,7 @@ class Plane3DFigureEight(_Airplane3DBase):
             target_y=target_y,
             target_radius=target_radius,
         )
-        return self.get_obs(state), state
+        return self.get_obs(state, params), state
 
     @property
     def expert_policy(self):

@@ -156,19 +156,33 @@ def compute_acceleration_3d(
     action:     (thrust, stick, aileron)
 
     Returns: (accelerations [a_x, a_y, a_z, alpha_pitch, alpha_roll], metrics)
+
+    Aerodynamics (and the thrust direction) use the **air-relative** velocity
+    ``V_ground - wind`` (wind from ``params.wind_x/y/z`` — a physics-engine
+    property inherited by every plane-based env): angle of attack, flight-path
+    angle, the heading used to orient the forces, airspeed, Mach and dynamic
+    pressure all derive from it.  In coordinated flight the nose points into the
+    air-relative wind, so under a crosswind the ground track differs from the
+    heading (crab).  The accelerations still act on the ground velocity and
+    position integrates it, so ``wind = 0`` reproduces the original behaviour.
     """
     xp = jnp
     thrust, stick, aileron = action
     x_dot, y_dot, z_dot, _, phi_dot = velocities
     _, _, z, theta, phi = positions
 
-    # Derived angles
-    alpha, gamma = compute_alpha_3d(theta, x_dot, y_dot, z_dot)
-    psi = compute_psi(x_dot, y_dot)
+    # Air-relative velocity drives all aerodynamics and the body/thrust axis.
+    air_x = x_dot - params.wind_x
+    air_y = y_dot - params.wind_y
+    air_z = z_dot - params.wind_z
+
+    # Derived angles (air-relative)
+    alpha, gamma = compute_alpha_3d(theta, air_x, air_y, air_z)
+    psi = compute_psi(air_x, air_y)
 
     m = params.initial_mass
     rho = compute_air_density_from_altitude(z)
-    V = compute_velocity_3d(x_dot, y_dot, z_dot)
+    V = compute_velocity_3d(air_x, air_y, air_z)
     M = compute_Mach_from_velocity_and_speed_of_sound(
         velocity=V,
         speed_of_sound=compute_speed_of_sound_from_altitude(z),

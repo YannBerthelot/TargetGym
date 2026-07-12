@@ -41,6 +41,7 @@ from target_gym.patrol.env import (
     slot_error,
 )
 from target_gym.patrol.rendering import _render_scene
+from target_gym.plane.dynamics import advance_gust
 from target_gym.plane3d.env import (
     PlaneState3D,
     compute_next_state_3d,
@@ -65,6 +66,10 @@ class FormationState(EnvState):
     slot_back: jnp.ndarray  # (K,)
     slot_right: jnp.ndarray  # (K,)
     slot_up: jnp.ndarray  # (K,)
+    # Shared formation turbulence gust (m/s) applied to every aircraft.
+    gust_x: float = 0.0
+    gust_y: float = 0.0
+    gust_z: float = 0.0
 
 
 @struct.dataclass
@@ -283,19 +288,40 @@ class PlanePatrolMARL:
             params = self.default_params
         method = self.integration_method
 
+        # One shared turbulence gust for the whole formation (same air mass),
+        # advanced with the step key and folded into eff_params.wind; each
+        # aircraft still gets its own altitude-dependent shear in the engine.
+        gust = advance_gust(
+            jnp.array([state.gust_x, state.gust_y, state.gust_z]),
+            params.turbulence_theta,
+            params.turbulence_sigma,
+            params.delta_t,
+            key,
+        )
+        eff_params = params.replace(
+            wind_x=params.wind_x + gust[0],
+            wind_y=params.wind_y + gust[1],
+            wind_z=params.wind_z + gust[2],
+        )
+
         lp, ls, la = decode_action(actions[LEAD])
         new_lead, _ = compute_next_state_3d(
-            lp, ls, la, state.lead, params, integration_method=method
+            lp, ls, la, state.lead, eff_params, integration_method=method
         )
         new_wingmen = []
         for i, w in enumerate(state.wingmen):
             wp, ws, wa = decode_action(actions[wingman_name(i)])
             nw, _ = compute_next_state_3d(
-                wp, ws, wa, w, params, integration_method=method
+                wp, ws, wa, w, eff_params, integration_method=method
             )
             new_wingmen.append(nw)
         new_state = state.replace(
-            lead=new_lead, wingmen=tuple(new_wingmen), time=state.time + 1
+            lead=new_lead,
+            wingmen=tuple(new_wingmen),
+            time=state.time + 1,
+            gust_x=gust[0],
+            gust_y=gust[1],
+            gust_z=gust[2],
         )
 
         reward, terminated = self._reward_and_terminal(new_state, params)
