@@ -31,6 +31,7 @@ from flax import struct
 
 from target_gym.base import EnvState
 from target_gym.experts.pid import Plane3DPIDState, plane3d_heading_pid_step
+from target_gym.plane.dynamics import advance_gust
 from target_gym.plane3d.dynamics import compute_velocity_3d
 from target_gym.plane3d.env import (
     PlaneParams3D,
@@ -62,6 +63,11 @@ class PatrolState(EnvState):
     slot_right: float
     slot_up: float
     lead_turn_rate: float  # rad per step commanded onto the lead heading
+    # Shared formation turbulence gust (m/s): all aircraft are in the same air
+    # mass, so they feel one common OU gust on top of the steady params.wind.
+    gust_x: float = 0.0
+    gust_y: float = 0.0
+    gust_z: float = 0.0
 
 
 @struct.dataclass
@@ -417,26 +423,52 @@ def compute_next_state_patrol(
     params: PatrolParams,
     lead_pid_params,
     integration_method: str = "rk4_1",
+    key=None,
 ):
-    """One environment step: advance the follower (from ``action``) and the lead."""
-    # Follower (the learner).
+    """One environment step: advance the follower (from ``action``) and the lead.
+
+    A single **shared** turbulence gust (advanced with ``key``) is applied to
+    every aircraft through ``eff_params`` — all planes are in the same air mass —
+    while each still gets its own altitude-dependent wind shear inside
+    :func:`compute_next_state_3d`.  ``key=None`` keeps a constant (steady) wind.
+    """
+    gust = advance_gust(
+        jnp.array([state.gust_x, state.gust_y, state.gust_z]),
+        params.turbulence_theta,
+        params.turbulence_sigma,
+        params.delta_t,
+        key,
+    )
+    eff_params = params.replace(
+        wind_x=params.wind_x + gust[0],
+        wind_y=params.wind_y + gust[1],
+        wind_z=params.wind_z + gust[2],
+    )
+
+    # Follower (the learner) — key=None so it does not advance its own per-plane
+    # gust; the shared gust is already folded into eff_params.wind.
     power, stick, aileron = decode_action(action)
     new_follower, metrics = compute_next_state_3d(
         power,
         stick,
         aileron,
         state.follower,
-        params,
+        eff_params,
         integration_method=integration_method,
     )
 
-    # Lead (scripted autopilot).
-    new_lead, new_pid = step_lead(state, params, lead_pid_params, integration_method)
+    # Lead (scripted autopilot), same shared wind.
+    new_lead, new_pid = step_lead(
+        state, eff_params, lead_pid_params, integration_method
+    )
 
     new_state = state.replace(
         follower=new_follower,
         lead=new_lead,
         lead_pid=new_pid,
         time=state.time + 1,
+        gust_x=gust[0],
+        gust_y=gust[1],
+        gust_z=gust[2],
     )
     return new_state, metrics
