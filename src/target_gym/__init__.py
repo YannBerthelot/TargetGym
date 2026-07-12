@@ -2,6 +2,9 @@ from importlib.metadata import PackageNotFoundError, version
 
 from target_gym.glass_furnace.env import GlassFurnaceParams
 from target_gym.glass_furnace.env_jax import GlassFurnace
+from target_gym.patrol.env import PatrolParams
+from target_gym.patrol.env_jax import PlanePatrol, PlanePatrolBearingOnly
+from target_gym.patrol.marl import PatrolMARLParams, PlanePatrolMARL
 from target_gym.pc_gym.cstr.env_jax import CSTR, CSTRParams
 from target_gym.pc_gym.first_order.env_jax import FirstOrderParams, FirstOrderSystem
 from target_gym.pc_gym.four_tank.env_jax import FourTank, FourTankParams
@@ -30,6 +33,12 @@ __all__ = (
     "Plane3DCircle",
     "Plane3DFigureEight",
     "PlaneParams3D",
+    # Close patrol (formation-keeping)
+    "PlanePatrol",
+    "PlanePatrolBearingOnly",
+    "PlanePatrolMARL",
+    "PatrolParams",
+    "PatrolMARLParams",
     "GymnasiumPlane",
     # PC-Gym environments
     "CSTR",
