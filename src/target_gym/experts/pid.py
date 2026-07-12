@@ -295,6 +295,7 @@ class Plane3DHeadingPIDParams:
     Kp_power: float
     Ki_power: float
     Kd_power: float
+    Kd_bank: float = 1.5  # roll-rate (phi_dot) damping — kills the bank wobble
 
 
 @struct.dataclass
@@ -318,6 +319,7 @@ class Plane3DCirclePIDParams:
     Kp_power: float
     Ki_power: float
     Kd_power: float
+    Kd_bank: float = 1.5  # roll-rate (phi_dot) damping — kills the bank wobble
 
 
 def plane3d_pid_reset(params) -> Plane3DPIDState:  # noqa: ARG001
@@ -366,6 +368,7 @@ def plane3d_heading_pid_step(
     psi = obs[9]
     target_heading = obs[11]
     phi = obs[6]
+    phi_dot = obs[7]  # roll rate
     hdg_err = _wrap_angle_jnp(target_heading - psi)
     new_hdg_int = state.track_integral + hdg_err * params.dt
     hdg_d = (hdg_err - state.track_prev) / params.dt
@@ -375,7 +378,7 @@ def plane3d_heading_pid_step(
         params.max_bank_rad,
     )
     bank_err = phi - desired_bank
-    aileron = jnp.clip(params.Kp_bank * bank_err, -1.0, 1.0)
+    aileron = jnp.clip(params.Kp_bank * bank_err - params.Kd_bank * phi_dot, -1.0, 1.0)
     new_hdg_int = jnp.where(jnp.abs(aileron) >= 1.0, state.track_integral, new_hdg_int)
 
     new_state = Plane3DPIDState(
@@ -419,6 +422,7 @@ def plane3d_circle_pid_step(
     x_dot = obs[0]
     y_dot = obs[1]
     phi = obs[6]
+    phi_dot = obs[7]  # roll rate
     rel_x = obs[11]
     rel_y = obs[12]
     radius = obs[13]
@@ -435,7 +439,7 @@ def plane3d_circle_pid_step(
         ideal_bank + bank_corr, -params.max_bank_rad, params.max_bank_rad
     )
     bank_err = phi - desired_bank
-    aileron = jnp.clip(params.Kp_bank * bank_err, -1.0, 1.0)
+    aileron = jnp.clip(params.Kp_bank * bank_err - params.Kd_bank * phi_dot, -1.0, 1.0)
     new_rad_int = jnp.where(jnp.abs(aileron) >= 1.0, state.track_integral, new_rad_int)
 
     new_state = Plane3DPIDState(
@@ -457,6 +461,7 @@ def plane3d_figure8_pid_step(
     """One step of the figure-8 task PID. obs must be 1-D (vmap handles batching)."""
     psi = obs[9]
     phi = obs[6]
+    phi_dot = obs[7]  # roll rate
     target_radius = obs[11]
     nearest_dx = obs[12]
     nearest_dy = obs[13]
@@ -498,7 +503,7 @@ def plane3d_figure8_pid_step(
         params.max_bank_rad,
     )
     bank_err = phi - desired_bank
-    aileron = jnp.clip(params.Kp_bank * bank_err, -1.0, 1.0)
+    aileron = jnp.clip(params.Kp_bank * bank_err - params.Kd_bank * phi_dot, -1.0, 1.0)
     new_hdg_int = jnp.where(jnp.abs(aileron) >= 1.0, state.track_integral, new_hdg_int)
 
     new_state = Plane3DPIDState(
@@ -510,6 +515,156 @@ def plane3d_figure8_pid_step(
         power_prev=alt_err,
     )
     return jnp.array([power, stick, aileron]), new_state
+
+
+# ---------------------------------------------------------------------------
+# Close-patrol (formation-keeping) pursuit-guidance PID
+# ---------------------------------------------------------------------------
+
+
+@struct.dataclass
+class PatrolPIDParams:
+    """Static params for the close-patrol follower PID (full-obs layout).
+
+    Pursuit guidance drives the follower into the slot:
+      - vertical   : slot up-error -> stick (pitch)
+      - along-track: slot back-error -> power (throttle, on a cruise bias)
+      - horizontal : slot in-plane error -> desired heading -> bank -> aileron
+
+    The horizontal loop is a *pursuit* controller (position error steers a
+    desired heading, not the bank directly), mirroring the circle/figure-8
+    experts — direct position->bank bleeds energy in turns and destabilises
+    formation-keeping.  When the follower is far from the slot it points at
+    it; as it closes (within ``blend_dist``) it blends onto the lead heading
+    so the two fly parallel.
+
+    Reads the full-obs vector from
+    :func:`target_gym.patrol.env.get_obs_full` (indices documented there).
+    """
+
+    Kp_alt: float
+    Ki_alt: float
+    Kd_alt: float
+    Kp_power: float
+    Ki_power: float
+    Kd_power: float
+    cruise: float  # throttle bias (raw [-1, 1])
+    Kp_hdg: float
+    Ki_hdg: float
+    Kd_hdg: float
+    Kp_bank: float
+    Kd_bank: float  # roll-rate (phi_dot) damping — kills the bank wobble
+    max_bank_rad: float
+    blend_dist: float  # in-plane distance (m) over which to blend to lead heading
+    dt: float
+
+
+def patrol_pid_step(
+    params: PatrolPIDParams,
+    state: Plane3DPIDState,
+    obs: jnp.ndarray,
+) -> tuple[jnp.ndarray, Plane3DPIDState]:
+    """One step of the pursuit-guidance formation PID. obs must be 1-D.
+
+    Carries three integrators via :class:`Plane3DPIDState`:
+    ``alt_*`` (vertical), ``power_*`` (along-track), ``track_*`` (heading).
+    """
+    e_back = obs[10]
+    e_right = obs[11]
+    e_up = obs[12]
+    rv_up = obs[15]
+    phi = obs[6]
+    phi_dot = obs[7]  # roll rate
+    psi = obs[9]  # follower heading
+    rel_heading = obs[19]  # wrap(lead.psi - follower.psi)
+
+    # Vertical loop: altitude error is -e_up (positive => must climb).
+    alt_err = -e_up
+    alt_rate = -rv_up  # d(alt_err)/dt
+    new_alt_int = state.alt_integral + alt_err * params.dt
+    stick_u = (
+        params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_rate
+    )
+    stick = jnp.clip(stick_u, -1.0, 1.0)
+    new_alt_int = jnp.where(stick_u == stick, new_alt_int, state.alt_integral)
+
+    # Along-track loop: too far back (e_back > 0) => add power.
+    new_power_int = state.power_integral + e_back * params.dt
+    power_u = (
+        params.cruise
+        + params.Kp_power * e_back
+        + params.Ki_power * new_power_int
+        + params.Kd_power * (e_back - state.power_prev) / params.dt
+    )
+    power = jnp.clip(power_u, -1.0, 1.0)
+    new_power_int = jnp.where(power_u == power, new_power_int, state.power_integral)
+
+    # Horizontal pursuit.  Reconstruct the world-frame vector from follower to
+    # slot from the lead-frame errors: with lead heading psi_L, forward_L =
+    # (cos, sin), right_L = (sin, -cos), the follower->slot vector works out to
+    #   V = e_back * forward_L - e_right * right_L.
+    # Its atan2 gives a desired heading in the same right-handed convention as
+    # the (tuned) bank loop.  Far from the slot we point at it; close in, we
+    # blend onto the lead heading so the pair fly parallel.
+    psi_lead = psi + rel_heading
+    fwd = jnp.array([jnp.cos(psi_lead), jnp.sin(psi_lead)])
+    rgt = jnp.array([jnp.sin(psi_lead), -jnp.cos(psi_lead)])
+    v = e_back * fwd - e_right * rgt
+    dist_h = jnp.sqrt(e_back**2 + e_right**2 + 1e-6)
+    pursuit_err = _wrap_angle_jnp(jnp.arctan2(v[1], v[0]) - psi)
+    parallel_err = rel_heading  # wrap(psi_lead - psi)
+    blend = jnp.clip(dist_h / params.blend_dist, 0.0, 1.0)
+    heading_err = _wrap_angle_jnp(blend * pursuit_err + (1.0 - blend) * parallel_err)
+
+    new_hdg_int = state.track_integral + heading_err * params.dt
+    hdg_d = (heading_err - state.track_prev) / params.dt
+    desired_bank = jnp.clip(
+        params.Kp_hdg * heading_err
+        + params.Ki_hdg * new_hdg_int
+        + params.Kd_hdg * hdg_d,
+        -params.max_bank_rad,
+        params.max_bank_rad,
+    )
+    bank_err = phi - desired_bank
+    aileron = jnp.clip(params.Kp_bank * bank_err - params.Kd_bank * phi_dot, -1.0, 1.0)
+    new_hdg_int = jnp.where(jnp.abs(aileron) >= 1.0, state.track_integral, new_hdg_int)
+
+    new_state = Plane3DPIDState(
+        alt_integral=new_alt_int,
+        alt_prev=alt_err,
+        track_integral=new_hdg_int,
+        track_prev=heading_err,
+        power_integral=new_power_int,
+        power_prev=e_back,
+    )
+    return jnp.array([power, stick, aileron]), new_state
+
+
+def make_patrol_pid() -> tuple[PatrolPIDParams, Plane3DPIDState]:
+    """JAX-functional close-patrol follower PID (pursuit guidance).
+
+    Gains default to hand-set values that hold a trailing slot; they can be
+    overridden from ``data/pid_gains.json`` under the ``patrol`` key.
+    """
+    _p = _load_gains().get("patrol", {})
+    params = PatrolPIDParams(
+        Kp_alt=float(_p.get("Kp_alt", 0.02)),
+        Ki_alt=float(_p.get("Ki_alt", 1e-4)),
+        Kd_alt=float(_p.get("Kd_alt", 0.05)),
+        Kp_power=float(_p.get("Kp_power", 0.003)),
+        Ki_power=float(_p.get("Ki_power", 3e-5)),
+        Kd_power=float(_p.get("Kd_power", 0.15)),
+        cruise=float(_p.get("cruise", 0.6)),
+        Kp_hdg=float(_p.get("Kp_hdg", 0.6)),
+        Ki_hdg=float(_p.get("Ki_hdg", 0.0)),
+        Kd_hdg=float(_p.get("Kd_hdg", 2.5)),
+        Kp_bank=float(_p.get("Kp_bank", -2.0)),
+        Kd_bank=float(_p.get("Kd_bank", 1.5)),
+        max_bank_rad=float(np.deg2rad(30.0)),
+        blend_dist=float(_p.get("blend_dist", 500.0)),
+        dt=1.0,
+    )
+    return params, plane3d_pid_reset(params)
 
 
 # ---------------------------------------------------------------------------
