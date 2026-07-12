@@ -235,6 +235,27 @@ obs, state, rewards, dones, info = env.step(key, state, actions, params)
 # rewards/dones are dicts keyed by agent (+ dones["__all__"]); reward is shared.
 ```
 
+### Wind & turbulence
+
+Every plane-based env (`Plane`, `Plane3D`, `PlanePatrol`, `PlanePatrolMARL`)
+inherits a wind model applied to the air-relative aerodynamics. It is an
+**unobservable** disturbance by default — pass `observe_wind=True` for a
+fully-observable baseline. Formations feel a single shared gust field.
+
+```python
+from target_gym import Plane, PlaneParams
+
+params = PlaneParams(
+    wind_x=-15.0,          # steady mean wind (m/s), world frame
+    wind_shear_x=0.02,     # + linear altitude shear: +0.02 m/s per metre above...
+    shear_ref_alt=5000.0,  # ...this reference altitude
+    turbulence_sigma=3.0,  # + Ornstein-Uhlenbeck gusts (0 = off); theta = turbulence_theta
+)
+
+hidden = Plane()                     # wind is a hidden disturbance (POMDP)
+baseline = Plane(observe_wind=True)  # appends the realized wind to the observation
+```
+
 ---
 
 ## Challenges Modeled
@@ -249,13 +270,13 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 * [x] **Multi-timescale dynamics**: From millisecond neutronics to hour-long xenon transients (reactor).
 * [x] **Moving / non-stationary targets**: The patrol slot tracks a maneuvering lead aircraft.
 * [x] **Multi-agent coordination**: The MARL patrol task requires two learners to cooperate (formation + trackable flight).
-* [ ] **Non-stationarity**: Introduce perturbations in the environments (wind, turbulence).
+* [x] **Non-stationarity / perturbations**: Every plane-based env (2D, 3D, patrol, formation) inherits a full wind model as a physics-engine property — steady wind (`wind_x/y/z`), altitude-dependent **wind shear** (`wind_shear_x/y`), and **Ornstein-Uhlenbeck turbulence** (`turbulence_sigma`), all applied to the air-relative aerodynamics. Formations feel one shared gust field. Wind is an *unobservable* disturbance by default; `Plane(observe_wind=True)` exposes it for a fully-observable baseline.
 
 ---
 
 ## Roadmap
 
-* [ ] Add perturbations (wind, turbulence) for non-stationary dynamics.
+* [ ] Add microburst / spatially-varying wind fields (position-dependent, not just altitude-linear).
 * [ ] Provide benchmark results for popular RL baselines.
 * [ ] Mature glass furnace and reactor environments (shorter episodes, better reward shaping).
 * [ ] Add random orientation variations to circle and heading tasks.
