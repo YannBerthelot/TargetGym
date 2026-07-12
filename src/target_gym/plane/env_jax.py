@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
+from target_gym.plane.dynamics import total_wind_2d
 from target_gym.plane.env import (
     PlaneParams,
     PlaneState,
@@ -30,8 +31,12 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
     obs_value_index: int = 1  # z (altitude)
     obs_target_index: int = 6  # target_altitude
 
-    def __init__(self, integration_method: str = "rk4_1"):
-        self.obs_shape = (9,)
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+        # observe_wind=False -> the wind is a hidden disturbance (POMDP);
+        # observe_wind=True  -> wind (wind_x, wind_z) is appended to the obs
+        #                       (a fully-observable baseline / feedforward case).
+        self.observe_wind = observe_wind
+        self.obs_shape = (11,) if observe_wind else (9,)
         self.positions_history = []
         self.integration_method = integration_method
 
@@ -60,13 +65,18 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
         stick = jnp.deg2rad(stick * 15)  # radians
 
         new_state, metrics = compute_next_state(
-            power, stick, state, params, integration_method=self.integration_method
+            power,
+            stick,
+            state,
+            params,
+            integration_method=self.integration_method,
+            key=key,
         )
         reward = self.compute_reward(new_state, params)
         terminated, truncated = check_is_terminal(new_state, params, xp=jnp)
         done = terminated | truncated
 
-        obs = self.get_obs(new_state)
+        obs = self.get_obs(new_state, params)
         return (
             obs,
             new_state,
@@ -132,14 +142,22 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
             target_altitude=target_altitude,
         )
 
-        obs = self.get_obs(state)
+        obs = self.get_obs(state, params)
         return obs, state
 
-    def get_obs(self, state: PlaneState):
+    def get_obs(self, state: PlaneState, params: PlaneParams = None):
         """
-        Observation vector
+        Observation vector. When ``observe_wind`` is set, the wind components
+        (wind_x, wind_z) are appended so the disturbance is fully observable.
         """
-        return get_obs(state, xp=jnp)
+        obs = get_obs(state, xp=jnp)
+        if self.observe_wind:
+            if params is None:
+                params = self.default_params
+            # Realized wind = steady mean + altitude shear + current gust.
+            wx, wz = total_wind_2d(state.z, state.gust_x, state.gust_z, params)
+            obs = jnp.concatenate([obs, jnp.array([wx, wz])])
+        return obs
 
     def render(self, screen, state: PlaneState, params: PlaneParams, frames, clock):
         """
