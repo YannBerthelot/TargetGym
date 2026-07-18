@@ -10,19 +10,34 @@ from gymnax.environments import EnvParams
 from target_gym.utils import compute_norm_from_coordinates
 
 
-def advance_gust(gust, theta: float, sigma: float, dt: float, key):
-    """Advance an Ornstein-Uhlenbeck turbulence gust one step.
+def advance_gust(
+    gust, theta: float, sigma: float, dt: float, key, impulse_prob: float = 0.0
+):
+    """Advance a turbulence gust one step.
 
-    ``gust`` is a wind-deviation vector (m/s) that mean-reverts to zero:
-    ``g' = g - theta*dt*g + sigma*sqrt(dt)*N``.  With ``key is None`` (e.g. a
-    caller that does not model turbulence) or ``sigma == 0`` the gust is
-    unchanged, so the total wind stays the steady ``params.wind``.  Shared by
-    the 2D and 3D engines so turbulence is a physics-engine property.
+    OU mode (``impulse_prob == 0``, default): ``gust`` mean-reverts to zero,
+    ``g' = g - theta*dt*g + sigma*sqrt(dt)*N``, an autocorrelated gust.
+
+    Impulse mode (``impulse_prob > 0``): a rare memoryless kick. Each step, with
+    per-component probability ``impulse_prob``, a kick of magnitude ``~sigma*N``
+    is added; between kicks the gust decays as ``g' = (1 - theta*dt)*g``. Arrivals
+    carry no autocorrelation, but the kick has temporal extent (its decay), so a
+    lookahead sensor anticipates the onset while memory can only track the decay.
+
+    With ``key is None`` or ``sigma == 0`` the gust is unchanged. Shared by the
+    2D and 3D engines so turbulence is a physics-engine property.
     """
     if key is None:
         return gust
-    noise = jax.random.normal(key, jnp.shape(gust))
-    return gust - theta * dt * gust + sigma * jnp.sqrt(dt) * noise
+    k_ou, k_arr, k_mag = jax.random.split(key, 3)
+    noise = jax.random.normal(k_ou, jnp.shape(gust))
+    ou = gust - theta * dt * gust + sigma * jnp.sqrt(dt) * noise
+    arrive = (jax.random.uniform(k_arr, jnp.shape(gust)) < impulse_prob).astype(
+        gust.dtype
+    )
+    kick = arrive * sigma * jax.random.normal(k_mag, jnp.shape(gust))
+    impulse = (1.0 - theta * dt) * gust + kick
+    return jnp.where(impulse_prob > 0.0, impulse, ou)
 
 
 def step_key(key, time):

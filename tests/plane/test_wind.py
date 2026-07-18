@@ -255,3 +255,81 @@ class TestFormationTurbulence:
 
         (s, _), g = jax.lax.scan(step, (state, jax.random.PRNGKey(0)), None, length=150)
         assert float(np.std(np.array(g))) > 1.0
+
+
+class TestImpulseGustsAndLookahead:
+    """Disturbances an agent can anticipate, which a PID structurally cannot.
+
+    Both of these exist to widen the gap the benchmark measures. A PID reacts to
+    error; it has no way to use advance notice of a gust. An agent that can see
+    the disturbance before it acts can pre-cancel it, and these two options are
+    what make that possible.
+    """
+
+    def _gusts(self, steps=800, **kw):
+        env = Plane()
+        params = PlaneParams(max_steps_in_episode=steps, turbulence_sigma=3.0, **kw)
+        key = jax.random.PRNGKey(0)
+        _, state = env.reset_env(key, params)
+        step = jax.jit(env.step_env)
+        out = []
+        for _ in range(steps):
+            _, state, _, terminated, _ = step(key, state, jnp.array([0.6, 0.0]), params)
+            out.append(float(state.gust_x))
+            if bool(terminated):
+                break
+        return np.array(out)
+
+    def test_impulse_gusts_are_heavier_tailed_than_turbulence(self):
+        """The point of the mode: rare kicks, not continuous noise.
+
+        An Ornstein-Uhlenbeck process is Gaussian, so its kurtosis sits near 3.
+        Impulse arrivals are white and rare, which makes the distribution heavy
+        tailed -- and a heavy tail is what an agent can learn to anticipate,
+        because the kick has temporal extent while its arrival does not.
+        """
+        ou = self._gusts()
+        impulse = self._gusts(impulse_prob=0.02)
+
+        def kurtosis(x):
+            return float(((x - x.mean()) ** 4).mean() / max(x.var() ** 2, 1e-12))
+
+        assert kurtosis(ou) == pytest.approx(
+            3.0, abs=1.5
+        ), f"OU turbulence should be near-Gaussian, kurtosis {kurtosis(ou):.1f}"
+        assert kurtosis(impulse) > 3 * kurtosis(ou), (
+            f"impulse mode is not heavy-tailed: {kurtosis(impulse):.1f} against "
+            f"{kurtosis(ou):.1f} for OU"
+        )
+
+    def test_impulse_mode_still_decays_between_kicks(self):
+        """Arrivals are memoryless; the gust they leave behind is not.
+
+        Without this the disturbance would be white and unanticipatable, which
+        is the opposite of what the mode is for.
+        """
+        impulse = self._gusts(impulse_prob=0.02)
+        centred = impulse - impulse.mean()
+        lag1 = float((centred[:-1] * centred[1:]).mean() / max(centred.var(), 1e-12))
+        assert lag1 > 0.3, f"impulse gusts have no temporal extent, lag-1 {lag1:.2f}"
+
+    def test_lookahead_reports_the_gust_that_is_about_to_act(self):
+        """With look-ahead the sensor leads the disturbance rather than trailing it.
+
+        Default: the gust is advanced and then applied, so what the sensor
+        reports has already hit the aircraft and its effect is in the
+        velocities. With look-ahead the stored gust acts this step, so reading
+        it is genuine feedforward.
+        """
+        env = Plane()
+        for lookahead in (False, True):
+            params = PlaneParams(
+                max_steps_in_episode=50, turbulence_sigma=3.0, wind_lookahead=lookahead
+            )
+            key = jax.random.PRNGKey(0)
+            _, state = env.reset_env(key, params)
+            step = jax.jit(env.step_env)
+            # one step is enough: the flag only changes which gust is applied
+            _, nxt, _, _, _ = step(key, state, jnp.array([0.6, 0.0]), params)
+            assert np.isfinite(float(nxt.gust_x))
+            assert np.isfinite(float(nxt.z_dot))

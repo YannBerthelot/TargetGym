@@ -157,6 +157,14 @@ class PlaneParams(EnvParams):
     max_steps_in_episode: int = 10_000
     min_alt: float = 0.0
     max_alt: float = 40_000.0 / 3.281
+    # Look-ahead wind: apply the gust ALREADY stored in the state this step, so
+    # the sensor that reads it reveals the disturbance *before* it acts. That
+    # makes it genuine feedforward an agent can pre-cancel -- and a disturbance a
+    # PID structurally cannot, which is the kind of gap this benchmark exists to
+    # measure. With False (the default) the gust is advanced then applied, so an
+    # ``observe_wind`` sensor only ever reports what has already hit the
+    # aircraft, whose effect is in the velocities anyway.
+    wind_lookahead: bool = False
     target_altitude_range: Tuple[float, float] = (3_000.0, 8_000.0)
     initial_altitude_range: Tuple[float, float] = (3_000.0, 8_000.0)
     initial_z_dot: float = 0.0
@@ -175,6 +183,13 @@ class PlaneParams(EnvParams):
     # sigma = 0 (default) => no turbulence, wind is exactly the steady mean.
     turbulence_sigma: float = 0.0
     turbulence_theta: float = 0.2
+    # Impulse gust mode. impulse_prob = 0 (default) => the OU turbulence above. When
+    # impulse_prob > 0 the gust is instead a rare, memoryless "kick": each step a kick
+    # arrives with per-step probability impulse_prob and jumps the gust by ~sigma*N,
+    # then it decays at rate theta between kicks. Arrivals are white (no autocorrelation),
+    # but the kick has temporal extent, so a lookahead sensor can anticipate it while
+    # memory can only track its decay -- the impulsive-disturbance analog of a robot shove.
+    impulse_prob: float = 0.0
     # Linear wind shear: the horizontal wind gains ``wind_shear_x`` m/s per metre
     # of altitude above ``shear_ref_alt`` (0 => no shear).  Makes the wind
     # altitude-dependent, so climbing/descending is itself a disturbance.
@@ -288,19 +303,26 @@ def compute_next_state(
         stick_requested, state.stick, dt, params.stick_response_rate
     )
 
-    # Total wind = steady mean + altitude shear + OU turbulence gust.
+    # Total wind = steady mean + altitude shear + OU turbulence gust. `gust` is the
+    # ADVANCED gust (stored for next step). With wind_lookahead we APPLY the gust
+    # already in the state (which the sensor revealed before this action -> the
+    # agent can pre-cancel it); otherwise we apply the advanced gust (post-hoc).
     gust = advance_gust(
         jnp.array([state.gust_x, state.gust_z]),
         params.turbulence_theta,
         params.turbulence_sigma,
         dt,
         step_key(key, state.time),
+        params.impulse_prob,
     )
-    total_wind_x, total_wind_z = total_wind_2d(state.z, gust[0], gust[1], params)
+    # With look-ahead the gust already in the state is the one that acts now;
+    # the freshly advanced one is stored for the next step.
+    applied = jnp.where(
+        params.wind_lookahead, jnp.array([state.gust_x, state.gust_z]), gust
+    )
+    total_wind_x, total_wind_z = total_wind_2d(state.z, applied[0], applied[1], params)
     # All-up mass for this step. ``initial_fuel_quantity`` is a component of
     # ``initial_mass``, not an addition, so burning fuel subtracts from it.
-    # Threaded through ``eff_params`` because the dynamics read
-    # ``params.initial_mass``; this keeps the signature unchanged.
     mass_now = params.initial_mass - (params.initial_fuel_quantity - state.fuel)
     eff_params = params.replace(
         wind_x=total_wind_x, wind_z=total_wind_z, initial_mass=mass_now
