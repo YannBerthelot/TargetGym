@@ -49,7 +49,7 @@ def test_step():
         0,
     )  # Sample a valid action (e.g., maximum throttle and no pitch change)
     # Perform the step transition.
-    n_obs, new_state, reward, done, _ = env.step(key, state, action)
+    n_obs, new_state, reward, terminated, truncated, _ = env.step(key, state, action)
     assert new_state.x > state.x
     assert new_state.x_dot == pytest.approx(state.x_dot, rel=0.1)
     assert new_state.z < state.z
@@ -81,7 +81,7 @@ def test_is_terminal():
         time=0,
         target_altitude=0,
     )
-    assert env.is_terminal(terminal_state, env_params)
+    assert env.is_terminated(terminal_state, env_params)
     terminal_state = PlaneState(
         x=0,
         x_dot=0,
@@ -98,7 +98,7 @@ def test_is_terminal():
         time=0,
         target_altitude=0,
     )
-    assert env.is_terminal(terminal_state, env_params)
+    assert env.is_terminated(terminal_state, env_params)
     terminal_state = PlaneState(
         x=0,
         x_dot=0,
@@ -115,7 +115,7 @@ def test_is_terminal():
         time=0,
         target_altitude=0,
     )
-    assert env.is_terminal(terminal_state, env_params)
+    assert env.is_terminated(terminal_state, env_params)
 
 
 def test_render():

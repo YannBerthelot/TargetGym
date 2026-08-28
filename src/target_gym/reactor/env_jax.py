@@ -79,7 +79,7 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
         # is summed across the sub-steps; we freeze the state on termination so
         # the scan can still run for a fixed length under jit.
         def sub_step(carry, _):
-            state, cum_reward, done = carry
+            state, cum_reward, done, terminated = carry
             candidate, _metrics = compute_next_state(
                 rho_raw, state, params, integration_method=self.integration_method
             )
@@ -92,11 +92,17 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
             )
             next_reward = cum_reward + jnp.where(done, 0.0, r)
             next_done = done | new_done
-            return (next_state, next_reward, next_done), None
+            # Natural termination is tracked apart from `done` so `step_env`
+            # can report it alone -- gymnax >= 1.0 derives `truncated` itself
+            # from the returned state's `time`. The `~done` guard records only
+            # the first crossing: once frozen, `term` keeps firing on the
+            # held state.
+            next_terminated = terminated | (term & jnp.logical_not(done))
+            return (next_state, next_reward, next_done, next_terminated), None
 
-        (new_state, reward, done), _ = jax.lax.scan(
+        (new_state, reward, _done, terminated), _ = jax.lax.scan(
             sub_step,
-            (state, jnp.float32(0.0), jnp.bool_(False)),
+            (state, jnp.float32(0.0), jnp.bool_(False), jnp.bool_(False)),
             xs=None,
             length=CONTROL_PERIOD,
         )
@@ -106,7 +112,7 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
             obs,
             new_state,
             reward,
-            done,
+            terminated,
             {"last_state": new_state},
         )
 
@@ -115,8 +121,10 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
             params = self.default_params
         return get_obs(state, params=params)
 
-    def is_terminal(self, state: ReactorState, params: ReactorParams) -> jnp.ndarray:
-        return check_is_terminal(state, params)
+    def is_terminated(self, state: ReactorState, params: ReactorParams) -> jnp.ndarray:
+        """Natural termination only; the time limit is gymnax's ``is_truncated``."""
+        terminated, _ = check_is_terminal(state, params)
+        return terminated
 
     def reset_env(
         self, key: chex.PRNGKey, params: ReactorParams = None

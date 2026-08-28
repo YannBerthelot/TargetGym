@@ -87,12 +87,13 @@ def test_state_space(env):
 def test_terminal_when_x_out_of_bounds(env, key):
     p = env.default_params
     state = FirstOrderState(time=0, x=p.x_max + 1.0, target_x=1.0, u=0.0)
-    term, _ = env.is_terminal(state, p)
+    term = env.is_terminated(state, p)
     assert term
 
 
 def test_not_terminal_at_reset(env, key):
     _, state = env.reset_env(key)
-    term, trunc = env.is_terminal(state, env.default_params)
+    term = env.is_terminated(state, env.default_params)
+    trunc = env.is_truncated(state, env.default_params)
     assert not term
     assert not trunc

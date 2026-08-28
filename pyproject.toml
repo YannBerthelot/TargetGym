@@ -26,7 +26,11 @@ enable = true
 # Upper bound at <3.14: torch 2.10's triton dependency caps Python at <3.14,
 # which made `poetry lock` fail with a wider range. 3.13 is the current latest.
 python = ">=3.11,<3.14"
-gymnax = ">=0.0.9"
+# gymnax >= 1.0 is required, not merely preferred: the envs implement
+# ``is_terminated`` (0.0.9 dispatches to ``is_terminal`` instead) and
+# their ``step_env`` returns natural termination alone, leaving the time
+# limit to gymnax's six-value step API.
+gymnax = ">=1.0.0"
 numpy = ">=1.26.1"
 six = ">=1.16.0"
 matplotlib = ">=3.8.1"

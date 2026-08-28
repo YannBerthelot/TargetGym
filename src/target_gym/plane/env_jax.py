@@ -73,20 +73,25 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
             key=key,
         )
         reward = self.compute_reward(new_state, params)
-        terminated, truncated = check_is_terminal(new_state, params, xp=jnp)
-        done = terminated | truncated
+        # gymnax >= 1.0 owns truncation: ``step_env`` reports natural
+        # termination only, and the base ``Environment.step`` derives
+        # ``truncated`` from ``state.time >= params.max_steps_in_episode``
+        # -- the very condition ``check_is_terminal`` returns second.
+        terminated, _ = check_is_terminal(new_state, params, xp=jnp)
 
         obs = self.get_obs(new_state, params)
         return (
             obs,
             new_state,
             reward,
-            done,
+            terminated,
             {"metrics": metrics, "last_state": new_state},
         )
 
-    def is_terminal(self, state: PlaneState, params: PlaneParams) -> jax.Array:
-        return check_is_terminal(state, params, xp=jnp)
+    def is_terminated(self, state: PlaneState, params: PlaneParams) -> jax.Array:
+        """Natural termination only; the time limit is gymnax's ``is_truncated``."""
+        terminated, _ = check_is_terminal(state, params, xp=jnp)
+        return terminated
 
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams = None):
         """
