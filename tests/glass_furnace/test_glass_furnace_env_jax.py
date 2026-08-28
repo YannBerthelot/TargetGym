@@ -92,7 +92,8 @@ def test_is_terminal_propagates_logic():
     env = GlassFurnace()
     # A "nice" state shouldn't terminate
     state = _make_state()
-    terminated, truncated = env.is_terminal(state, env.default_params)
+    terminated = env.is_terminated(state, env.default_params)
+    truncated = env.is_truncated(state, env.default_params)
     assert bool(terminated) is False
     assert bool(truncated) is False
 

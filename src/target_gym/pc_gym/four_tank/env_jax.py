@@ -56,19 +56,26 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
         )
 
         reward = compute_reward(new_state, params)
-        terminated, truncated = check_is_terminal(new_state, params)
-        done = terminated | truncated
+        # gymnax >= 1.0 owns truncation: ``step_env`` reports natural
+        # termination only, and the base ``Environment.step`` derives
+        # ``truncated`` from ``state.time >= params.max_steps_in_episode``
+        # -- the very condition ``check_is_terminal`` returns second.
+        terminated, _ = check_is_terminal(new_state, params)
 
         obs = self.get_obs(new_state)
-        return obs, new_state, reward, done, {"last_state": new_state}
+        return obs, new_state, reward, terminated, {"last_state": new_state}
 
     def get_obs(self, state: FourTankState, params: FourTankParams = None):
         if params is None:
             params = self.default_params
         return get_obs(state, params=params)
 
-    def is_terminal(self, state: FourTankState, params: FourTankParams) -> jnp.ndarray:
-        return check_is_terminal(state, params)
+    def is_terminated(
+        self, state: FourTankState, params: FourTankParams
+    ) -> jnp.ndarray:
+        """Natural termination only; the time limit is gymnax's ``is_truncated``."""
+        terminated, _ = check_is_terminal(state, params)
+        return terminated
 
     def reset_env(
         self, key: chex.PRNGKey, params: FourTankParams = None

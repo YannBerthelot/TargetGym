@@ -81,7 +81,7 @@ def test_is_terminal():
         time=0,
         target_altitude=0,
     )
-    assert env.is_terminal(terminal_state, env_params)
+    assert env.is_terminated(terminal_state, env_params)
     terminal_state = PlaneState(
         x=0,
         x_dot=0,
@@ -98,7 +98,7 @@ def test_is_terminal():
         time=0,
         target_altitude=0,
     )
-    assert env.is_terminal(terminal_state, env_params)
+    assert env.is_terminated(terminal_state, env_params)
     terminal_state = PlaneState(
         x=0,
         x_dot=0,
@@ -115,7 +115,11 @@ def test_is_terminal():
         time=env_params.max_steps_in_episode + 1,
         target_altitude=0,
     )
-    assert env.is_terminal(terminal_state, env_params)
+    # Past the time limit with the altitude in range: truncated, not
+    # terminated. gymnax >= 1.0 keeps the two apart, and an agent must still
+    # bootstrap on V(s_T) here.
+    assert env.is_truncated(terminal_state, env_params)
+    assert not env.is_terminated(terminal_state, env_params)
 
 
 def test_render():

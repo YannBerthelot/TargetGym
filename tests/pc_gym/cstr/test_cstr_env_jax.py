@@ -83,7 +83,8 @@ def test_action_and_observation_space():
 def test_is_terminal_propagates_logic():
     env = CSTR()
     state = CSTRState(time=0, C_a=0.5, T=350.0, target_CA=0.6, T_c=298.0)
-    term, trunc = env.is_terminal(state, env.default_params)
+    term = env.is_terminated(state, env.default_params)
+    trunc = env.is_truncated(state, env.default_params)
     # assert isinstance(result, jnp.ndarray)
 
 

@@ -92,7 +92,7 @@ class TestHeadingStep:
         key = jax.random.PRNGKey(42)
         obs, state = env.reset(key)
         action = jnp.array([0.8, 0.0, 0.0])
-        obs2, state2, reward, done, info = env.step(key, state, action)
+        obs2, state2, reward, terminated, truncated, info = env.step(key, state, action)
         assert state2.time == state.time + 1
 
     def test_step_obs_shape(self):

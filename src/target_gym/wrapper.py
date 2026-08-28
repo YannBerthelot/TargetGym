@@ -81,22 +81,30 @@ def gym_wrapper_factory(jax_env_class: Type):
             self.clock = None
             return np.array(obs, dtype=np.float32), {}
 
-        def is_terminal(self, *args, **kwargs):
-            return self.jax_env.is_terminal(*args, **kwargs)
+        def is_terminated(self, *args, **kwargs):
+            return self.jax_env.is_terminated(*args, **kwargs)
+
+        def is_truncated(self, *args, **kwargs):
+            return self.jax_env.is_truncated(*args, **kwargs)
 
         def step(self, action: np.ndarray):
-            obs, new_state, reward, done, info = self.jax_env.step_env(
+            obs, new_state, reward, terminated, info = self.jax_env.step_env(
                 self.key,
                 self.state,
                 jnp.array(action, dtype=jnp.float32),
                 self.env_params,
             )
             self.state = new_state
+            # `step_env` reports natural termination only; the time limit is
+            # the env's `is_truncated`. Gymnasium wants the two apart, so
+            # report the real flag instead of the hardcoded False this used
+            # to return.
+            truncated = self.jax_env.is_truncated(new_state, self.env_params)
             return (
                 np.array(obs, dtype=np.float32),
                 float(reward),
-                bool(done),
-                False,
+                bool(terminated),
+                bool(truncated),
                 info,
             )
 

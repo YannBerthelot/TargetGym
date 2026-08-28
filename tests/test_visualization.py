@@ -63,7 +63,7 @@ def test_render_trajectory_param(jax_env_cls, EnvParamsCls, EnvStateCls, action_
 
     for _ in range(10):
         action = action_fn(None)
-        obs, state, reward, terminated, info = jax_env.step(
+        obs, state, reward, terminated, truncated, info = jax_env.step(
             key, state, action, env_params
         )
 
