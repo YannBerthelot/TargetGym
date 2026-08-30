@@ -354,5 +354,12 @@
     },
     "tuning_rule": "grid_search_max_reward",
     "note": "LV pairing: yD<-L (positive gain), xB<-V (negative -- more boilup strips the bottoms cleaner, lowering xB). Grid search over (Kp, Ki); return rises monotonically to Kp~400 with no instability, but 150 captures 98% of it at a quarter of the control activity, which is the safer margin on a plant with RGA ~50."
+  },
+  "wind_turbine": {
+    "Kp_pitch": 12.0,
+    "Ki_pitch": 0.6,
+    "Kd_pitch": 0.0,
+    "tuning_rule": "grid_search_max_reward",
+    "note": "Pitch PI on rotor-speed error; generator torque is a feedforward for the power setpoint with rotor-speed protection. Return is flat above Kp~12 (392 vs 394 at Kp=25) and all episodes complete without tripping, so 12 keeps a factor-2 gain margin on a rate-limited pitch actuator."
   }
 }

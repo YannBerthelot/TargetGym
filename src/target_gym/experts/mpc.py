@@ -1268,6 +1268,30 @@ def make_reactor_mpc(env, params, horizon: int = 20):
     return ReactorCasadiMPC(env, params, horizon=horizon)
 
 
+def make_wind_turbine_mpc(
+    env, params, horizon: int = 20, n_iter: int = 40, lr: float = 0.10
+):
+    """Gradient MPC for the NREL 5 MW turbine.
+
+    Gradient-based for the same reason as the aircraft and the column: the
+    plant is already differentiable JAX, and the Cp surface is an empirical
+    fit that would gain nothing from symbolic re-expression. Optimising pitch
+    and torque jointly is the point -- the rate-limited pitch actuator means
+    the useful move is often to start pitching *before* the rotor has
+    accelerated, which a reactive loop cannot do.
+    """
+    return GradientMPC(
+        env,
+        params,
+        action_dim=2,
+        action_lb=-1.0,
+        action_ub=1.0,
+        horizon=horizon,
+        n_iter=n_iter,
+        lr=lr,
+    )
+
+
 def make_distillation_mpc(
     env, params, horizon: int = 15, n_iter: int = 40, lr: float = 0.08
 ):
