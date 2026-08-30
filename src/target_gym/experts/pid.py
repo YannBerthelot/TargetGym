@@ -995,24 +995,27 @@ def make_four_tank_pid(
     Kd2: float | None = None,
 ) -> tuple[MIMOPIDParams, MIMOPIDState]:
     """
-    Two independent PID loops for FourTank — h1 via v1, h2 via v2.
+    Two independent PID loops for FourTank on the CROSS pairing.
 
     Observation : [h1, h2, h3, h4, target_h1, target_h2]
     Action      : [raw_v1, raw_v2] each in [-1, 1] → physical [0, 10] V
 
-    Cross-coupling (v1→h4→h2, v2→h3→h1) is ignored; with γ1=γ2=0.2
-    (80 % of each pump goes to the upper cross-tank) independent loops
-    are still a reasonable expert baseline.
+    Pump v1 regulates tank 2 and pump v2 regulates tank 1, because with
+    γ1 + γ2 = 0.4 the steady-state RGA element λ11 is *negative* (−0.067) and
+    the diagonal pairing is unusable: closing one loop reverses the sign of the
+    other. 80 % of each pump goes to the diagonal upper tank, which then drains
+    into the lower tank on the opposite side, so the cross pairing is also the
+    one the plumbing implies. See :func:`make_four_tank_stateful_pid`.
     dt = env delta_t = 1.0.
     """
     _ft = _load_gains().get("four_tank", {})
     _p1 = _ft.get("pid1", {})
     _p2 = _ft.get("pid2", {})
-    Kp1 = Kp1 if Kp1 is not None else float(_p1.get("Kp", 6.74))
-    Ki1 = Ki1 if Ki1 is not None else float(_p1.get("Ki", 1.34))
+    Kp1 = Kp1 if Kp1 is not None else float(_p1.get("Kp", 40.0))
+    Ki1 = Ki1 if Ki1 is not None else float(_p1.get("Ki", 0.6))
     Kd1 = Kd1 if Kd1 is not None else float(_p1.get("Kd", 0.0))
-    Kp2 = Kp2 if Kp2 is not None else float(_p2.get("Kp", 15.29))
-    Ki2 = Ki2 if Ki2 is not None else float(_p2.get("Ki", 2.59))
+    Kp2 = Kp2 if Kp2 is not None else float(_p2.get("Kp", 40.0))
+    Ki2 = Ki2 if Ki2 is not None else float(_p2.get("Ki", 0.6))
     Kd2 = Kd2 if Kd2 is not None else float(_p2.get("Kd", 0.0))
     params = MIMOPIDParams(
         pid1=PIDParams(
@@ -1020,8 +1023,8 @@ def make_four_tank_pid(
             Ki=Ki1,
             Kd=Kd1,
             dt=1.0,
-            state_index=0,  # h1
-            setpoint_index=4,  # target_h1
+            state_index=1,  # h2  -- v1 fills tank 4, which drains into tank 2
+            setpoint_index=5,  # target_h2
             action_min=-1.0,
             action_max=1.0,
         ),
@@ -1030,8 +1033,8 @@ def make_four_tank_pid(
             Ki=Ki2,
             Kd=Kd2,
             dt=1.0,
-            state_index=1,  # h2
-            setpoint_index=5,  # target_h2
+            state_index=0,  # h1  -- v2 fills tank 3, which drains into tank 1
+            setpoint_index=4,  # target_h1
             action_min=-1.0,
             action_max=1.0,
         ),
@@ -1072,9 +1075,10 @@ def make_four_tank_gs_pid() -> tuple[MIMOGainSchedulePIDParams, MIMOPIDState]:
             action_max=1.0,
         )
 
+    # CROSS pairing, as in make_four_tank_pid: v1 regulates h2, v2 regulates h1.
     params = MIMOGainSchedulePIDParams(
-        pid1=_to_gs_params(gs1, state_index=0, setpoint_index=4),
-        pid2=_to_gs_params(gs2, state_index=1, setpoint_index=5),
+        pid1=_to_gs_params(gs1, state_index=1, setpoint_index=5),
+        pid2=_to_gs_params(gs2, state_index=0, setpoint_index=4),
     )
     state = MIMOPIDState(
         state1=PIDState(integral=jnp.zeros(()), prev_error=jnp.zeros(())),
@@ -1314,25 +1318,47 @@ def make_first_order_stateful_pid() -> StatefulPID:
 
 
 def make_four_tank_stateful_pid() -> StatefulMIMOPID:
-    """obs: [h1, h2, h3, h4, target_h1, target_h2]  (full get_obs layout). Gains from data/pid_gains.json."""
+    """Diagonal PID on the CROSS pairing: v1 -> h2 and v2 -> h1.
+
+    obs: [h1, h2, h3, h4, target_h1, target_h2]
+
+    The pairing is the whole point of this plant. With gamma1 + gamma2 = 0.4
+    the process is in Johansson's non-minimum-phase configuration and its
+    steady-state RGA is::
+
+        lambda_11 = gamma1 gamma2 / (gamma1 + gamma2 - 1) = -0.067
+
+    A *negative* RGA element means the sign of the v1 -> h1 loop gain flips
+    once the v2 -> h2 loop is closed, so integral action on the obvious
+    diagonal pairing drives the plant unstable -- which it duly did, tripping
+    on the low-level limit within 40 steps. The measured gain matrix says the
+    same thing directly: at the operating point dh2/dv1 and dh1/dv2 are about
+    four times larger than the diagonal terms.
+
+    So each pump is paired with the tank it actually fills: the flow a pump
+    diverts to the *diagonal* upper tank dominates, and that tank drains into
+    the lower tank on the other side.
+
+    Gains from data/pid_gains.json.
+    """
     _ft = _load_gains().get("four_tank", {})
     _p1 = _ft.get("pid1", {})
     _p2 = _ft.get("pid2", {})
-    pid1 = StatefulPID(
-        Kp=float(_p1.get("Kp", 6.74)),
-        Ki=float(_p1.get("Ki", 1.34)),
+    pid1 = StatefulPID(  # pump v1 regulates tank 2
+        Kp=float(_p1.get("Kp", 40.0)),
+        Ki=float(_p1.get("Ki", 0.6)),
         Kd=float(_p1.get("Kd", 0.0)),
-        dt=1.0,
-        state_index=0,
-        setpoint_index=4,
-    )
-    pid2 = StatefulPID(
-        Kp=float(_p2.get("Kp", 15.29)),
-        Ki=float(_p2.get("Ki", 2.59)),
-        Kd=float(_p2.get("Kd", 0.0)),
         dt=1.0,
         state_index=1,
         setpoint_index=5,
+    )
+    pid2 = StatefulPID(  # pump v2 regulates tank 1
+        Kp=float(_p2.get("Kp", 40.0)),
+        Ki=float(_p2.get("Ki", 0.6)),
+        Kd=float(_p2.get("Kd", 0.0)),
+        dt=1.0,
+        state_index=0,
+        setpoint_index=4,
     )
     return StatefulMIMOPID(pid1, pid2)
 
@@ -1641,16 +1667,20 @@ def _stateful_gs_mimo_from_json(
 
 
 def make_four_tank_stateful_gs_pid() -> StatefulMIMOPID:
-    """Gain-scheduled MIMO PID for FourTank. obs: [h1, h2, h3, h4, target_h1, target_h2]."""
+    """Gain-scheduled MIMO PID for FourTank, on the CROSS pairing.
+
+    obs: [h1, h2, h3, h4, target_h1, target_h2]. See
+    :func:`make_four_tank_stateful_pid` for why the loops are crossed.
+    """
     return _stateful_gs_mimo_from_json(
         "four_tank",
         dt=1.0,
-        state_index_1=0,
-        setpoint_index_1=4,
-        state_index_2=1,
-        setpoint_index_2=5,
-        fallback_pid1=(6.74, 1.34, 0.0),
-        fallback_pid2=(15.29, 2.59, 0.0),
+        state_index_1=1,  # v1 regulates h2
+        setpoint_index_1=5,
+        state_index_2=0,  # v2 regulates h1
+        setpoint_index_2=4,
+        fallback_pid1=(9.0, 0.05, 0.0),
+        fallback_pid2=(9.0, 0.05, 0.0),
     )
 
 

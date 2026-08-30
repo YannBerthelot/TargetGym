@@ -239,3 +239,111 @@ def test_reward_decreases_with_error(params):
 
 def test_reward_is_finite(params, state):
     assert jnp.isfinite(compute_reward(state, params))
+
+
+# ---------------------------------------------------------------------------
+# Reachability and loop pairing
+#
+# Added after the target range was found to sit entirely above what the plant
+# can produce: with both pumps saturated the steady state tops out at
+# h1 = 0.360, h2 = 0.429, while targets were sampled from (0.5, 1.0). Every
+# episode was unwinnable, and the shared effectiveness contract could not see
+# it because the PID still beat every constant action -- both simply sat far
+# from setpoint. These tests make that class of defect impossible to reintroduce.
+# ---------------------------------------------------------------------------
+
+import numpy as _np
+
+
+def _steady_levels(v1, v2, p):
+    """Steady state of the four tanks at constant pump voltages."""
+    g = p.g
+    h3 = ((1 - p.gamma2) * p.k2 * v2 / p.a3) ** 2 / (2 * g)
+    h4 = ((1 - p.gamma1) * p.k1 * v1 / p.a4) ** 2 / (2 * g)
+    h1 = ((p.gamma1 * p.k1 * v1 + p.a3 * _np.sqrt(2 * g * h3)) / p.a1) ** 2 / (2 * g)
+    h2 = ((p.gamma2 * p.k2 * v2 + p.a4 * _np.sqrt(2 * g * h4)) / p.a2) ** 2 / (2 * g)
+    return h1, h2
+
+
+def test_every_target_is_individually_reachable():
+    """No sampled setpoint may lie above what saturated pumps can hold."""
+    p = FourTankParams()
+    h1_max, h2_max = _steady_levels(p.v_max, p.v_max, p)
+    assert p.target_h1_range[1] < h1_max, (
+        f"target h1 up to {p.target_h1_range[1]} exceeds the maximum "
+        f"sustainable level {h1_max:.3f}"
+    )
+    assert p.target_h2_range[1] < h2_max, (
+        f"target h2 up to {p.target_h2_range[1]} exceeds the maximum "
+        f"sustainable level {h2_max:.3f}"
+    )
+
+
+def test_every_target_pair_is_jointly_reachable():
+    """The pumps are cross-coupled, so h1 and h2 must be attainable *together*.
+
+    Targets are sampled independently, so individual reachability is not
+    enough -- the whole box has to lie inside the image of the steady-state
+    map over the admissible voltages.
+    """
+    p = FourTankParams()
+    V = _np.linspace(max(p.v_min, 1e-3), p.v_max, 220)
+    reach = _np.array([_steady_levels(a, b, p) for a in V for b in V])
+    for t1 in _np.linspace(*p.target_h1_range, 6):
+        for t2 in _np.linspace(*p.target_h2_range, 6):
+            d = _np.min((reach[:, 0] - t1) ** 2 + (reach[:, 1] - t2) ** 2)
+            assert (
+                _np.sqrt(d) < 0.006
+            ), f"target pair ({t1:.3f}, {t2:.3f}) is not jointly reachable"
+
+
+def test_targets_leave_voltage_headroom():
+    """Holding the top of the range must not need a saturated pump."""
+    p = FourTankParams()
+    need = None
+    for v in _np.linspace(max(p.v_min, 1e-3), p.v_max, 400):
+        if _steady_levels(v, v, p)[0] >= p.target_h1_range[1]:
+            need = v
+            break
+    assert need is not None
+    assert need < 0.9 * p.v_max, f"top target needs {need:.2f} V of {p.v_max}"
+
+
+def test_initial_levels_start_inside_the_operating_envelope():
+    """An episode must not begin above a level the plant can never hold."""
+    p = FourTankParams()
+    h1_max, h2_max = _steady_levels(p.v_max, p.v_max, p)
+    assert p.initial_h1_range[1] <= h1_max
+    assert p.initial_h2_range[1] <= h2_max
+    for rng in (
+        p.initial_h1_range,
+        p.initial_h2_range,
+        p.initial_h3_range,
+        p.initial_h4_range,
+    ):
+        assert rng[0] > p.h_min, "an episode may not start already tripped"
+
+
+def test_relative_gain_array_demands_the_cross_pairing():
+    """gamma1 + gamma2 < 1 puts the plant in the non-minimum-phase regime.
+
+    Johansson (2000) gives lambda11 = g1 g2 / (g1 + g2 - 1). A negative value
+    means closing one diagonal loop reverses the sign of the other, so integral
+    action on the diagonal pairing is unstable -- which is why the shipped PID
+    drives v1 from h2 and v2 from h1.
+    """
+    p = FourTankParams()
+    assert p.gamma1 + p.gamma2 < 1.0, "expected the non-minimum-phase configuration"
+    lam = p.gamma1 * p.gamma2 / (p.gamma1 + p.gamma2 - 1.0)
+    assert lam < 0.0
+
+    # The same conclusion from the measured gain matrix: the off-diagonal
+    # terms dominate.
+    v0, eps = 7.0, 1e-4
+    G = _np.zeros((2, 2))
+    for j, (d1, d2) in enumerate(((eps, 0.0), (0.0, eps))):
+        plus = _np.array(_steady_levels(v0 + d1, v0 + d2, p))
+        minus = _np.array(_steady_levels(v0 - d1, v0 - d2, p))
+        G[:, j] = (plus - minus) / (2 * eps)
+    assert abs(G[1, 0]) > 2 * abs(G[0, 0]), "v1 should move h2 far more than h1"
+    assert abs(G[0, 1]) > 2 * abs(G[1, 1]), "v2 should move h1 far more than h2"

@@ -423,7 +423,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.pc_gym.four_tank.env", "FourTankParams"),
         make_pid=_pid("make_four_tank_stateful_pid"),
         make_mpc=_mpc("make_four_tank_mpc"),
-        test_params={"max_steps_in_episode": 100},
+        # 500 steps. The lower tanks have a ~58 s time constant at these
+        # levels, so the previous 100-step horizon was under two of them --
+        # every controller was still mid-transient and they all scored alike,
+        # which is why the effectiveness contract could not separate them here.
+        test_params={"max_steps_in_episode": 500},
         tuned_gains_key="four_tank",
     ),
     EnvSpec(

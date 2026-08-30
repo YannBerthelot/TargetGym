@@ -254,38 +254,56 @@ def _tune_four_tank_search(n_points: int, tuning_rule: str, **kw) -> dict:
     def simulate(Kp1, Ki1, Kp2, Ki2, t, key):
         rk = key
         _, state = env.reset_env(rk, params)
+        # loop1 schedules on h2, loop2 on h1; sweep both together.
         state = state.replace(target_h1=t, target_h2=t)
 
         def body(carry, _):
-            state, int1, int2, key = carry
+            state, int1, int2, key, alive = carry
             obs = env.get_obs(state)
-            err1 = obs[4] - obs[0]
-            err2 = obs[5] - obs[1]
+            # CROSS pairing: v1 regulates h2, v2 regulates h1 (lambda11 < 0).
+            err1 = obs[5] - obs[1]
+            err2 = obs[4] - obs[0]
             u1, new_int1 = _pi_with_antiwindup(Kp1, Ki1, err1, int1)
             u2, new_int2 = _pi_with_antiwindup(Kp2, Ki2, err2, int2)
             action = jnp.stack([u1, u2])
             key, sk = jax.random.split(key)
-            _, new_state, r, _, _ = env.step(sk, state, action, params)
-            return (new_state, new_int1, new_int2, key), r
+            _, new_state, r, terminated, _ = env.step_env(sk, state, action, params)
+            # Credit reward only while the plant is still running. The scan is
+            # a fixed length, so without this mask a controller that trips the
+            # level limit keeps accruing reward from a dead episode -- which is
+            # exactly how a Kp of 100 came out "best" while tripping a seed at
+            # step 18.
+            r = r * alive
+            alive = alive * (1.0 - terminated.astype(jnp.float32))
+            return (new_state, new_int1, new_int2, key, alive), r
 
-        init = (state, jnp.float32(0.0), jnp.float32(0.0), rk)
+        init = (state, jnp.float32(0.0), jnp.float32(0.0), rk, jnp.float32(1.0))
         _, rewards = jax.lax.scan(body, init, xs=None, length=max_steps)
         return rewards.sum()
 
     grid_Kp, grid_Ki = jnp.meshgrid(Kps, Kis, indexing="ij")
     flat_Kp, flat_Ki = grid_Kp.flatten(), grid_Ki.flatten()
 
+    # Score each candidate on several initial conditions, not one. A single
+    # rollout rewards knife-edge gains that happen to survive that particular
+    # start: the first schedule tuned this way picked Kp = 100 at three
+    # operating points and tripped two of five evaluation seeds.
+    _ROBUST_KEYS = jax.random.split(jax.random.PRNGKey(20240617), 4)
+
+    def _robust(fn):
+        return jnp.mean(jax.vmap(fn)(_ROBUST_KEYS))
+
     def search_loop1(kp2, ki2, t, key):
-        s = jax.vmap(lambda kp, ki: simulate(kp, ki, kp2, ki2, t, key))(
-            flat_Kp, flat_Ki
-        )
+        s = jax.vmap(
+            lambda kp, ki: _robust(lambda k: simulate(kp, ki, kp2, ki2, t, k))
+        )(flat_Kp, flat_Ki)
         idx = jnp.argmax(s)
         return flat_Kp[idx], flat_Ki[idx], s[idx]
 
     def search_loop2(kp1, ki1, t, key):
-        s = jax.vmap(lambda kp, ki: simulate(kp1, ki1, kp, ki, t, key))(
-            flat_Kp, flat_Ki
-        )
+        s = jax.vmap(
+            lambda kp, ki: _robust(lambda k: simulate(kp1, ki1, kp, ki, t, k))
+        )(flat_Kp, flat_Ki)
         idx = jnp.argmax(s)
         return flat_Kp[idx], flat_Ki[idx], s[idx]
 
@@ -328,18 +346,21 @@ def _tune_four_tank_search(n_points: int, tuning_rule: str, **kw) -> dict:
             _, st = env.reset_env(k, params)
 
             def body(carry, _):
-                state, int1, int2, key = carry
+                state, int1, int2, key, alive = carry
                 obs = env.get_obs(state)
-                err1 = obs[4] - obs[0]
-                err2 = obs[5] - obs[1]
+                # CROSS pairing: v1 regulates h2, v2 regulates h1 (lambda11 < 0).
+                err1 = obs[5] - obs[1]
+                err2 = obs[4] - obs[0]
                 u1, new_int1 = _pi_with_antiwindup(Kp1, Ki1, err1, int1)
                 u2, new_int2 = _pi_with_antiwindup(Kp2, Ki2, err2, int2)
                 action = jnp.stack([u1, u2])
                 key, sk = jax.random.split(key)
-                _, new_state, r, _, _ = env.step(sk, state, action, params)
-                return (new_state, new_int1, new_int2, key), r
+                _, new_state, r, terminated, _ = env.step_env(sk, state, action, params)
+                r = r * alive
+                alive = alive * (1.0 - terminated.astype(jnp.float32))
+                return (new_state, new_int1, new_int2, key, alive), r
 
-            init = (st, jnp.float32(0.0), jnp.float32(0.0), k)
+            init = (st, jnp.float32(0.0), jnp.float32(0.0), k, jnp.float32(1.0))
             _, rewards = jax.lax.scan(body, init, xs=None, length=max_steps)
             return rewards.sum()
 
