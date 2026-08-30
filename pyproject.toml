@@ -83,13 +83,19 @@ dev = [
 ]
 
 # TEMPORARY: released gymnax 1.0.0 pins gymnasium<1.2, which conflicts with
-# newer gymnasium. gymnax PR #117 (YannBerthelot -> RobertTLange) relaxes that
-# to <1.4. Until it merges and a release ships, develop against the PR branch.
+# newer gymnasium. PR #117 relaxing that to <1.4 is now MERGED into gymnax
+# main, but no release carries it yet -- PyPI's latest is still 1.0.0 with the
+# old pin. So this tracks upstream main rather than a fork, which is a strictly
+# better position but still a git dependency.
+#
 # This table is dev-only metadata — uv strips it from the published wheel, so
 # installers of target-gym still see the plain ``gymnax>=1.0.0`` requirement.
-# REMOVE once gymnax > 1.0.0 is on PyPI, then bump the floor above.
+# The cost is that the *tested* configuration cannot be reproduced from PyPI
+# alone, which is why 1.0 should wait for the release.
+#
+# REMOVE once gymnax > 1.0.0 is on PyPI, then bump the floor above to it.
 [tool.uv.sources]
-gymnax = { git = "https://github.com/YannBerthelot/gymnax", branch = "chore/relax-runtime-pins" }
+gymnax = { git = "https://github.com/RobertTLange/gymnax", branch = "main" }
 
 [tool.hatch.version]
 source = "vcs"

@@ -120,6 +120,12 @@ class PlaneParams3D(EnvParams):
     # that lift *peaks at* aoa_stall rather than being halved there.
     aoa_stall_width: float = 3.0
     M_crit: float = 0.80
+    # Shock stall above M_crit (PHYSICS.md D3): the attainable lift falls
+    # once shocks form, rather than rising with the Prandtl-Glauert factor.
+    # k = 4.0 puts CL_max back to its low-speed value by M 0.9 and at 40 %
+    # of it by M 0.95, which is the right order for lift divergence.
+    k_shock_stall: float = 4.0
+    shock_stall_floor: float = 0.25
     k_drag: float = 5.0
 
     I: float = 9_000_000  # Iyy (pitch)

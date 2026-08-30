@@ -24,8 +24,9 @@ What they are *for* is the failure modes that make real control hard:
 | **Multi-timescale** | Millisecond neutronics against hour-long xenon; sub-second flame gas against 30 h glass residence |
 | **Finite budgets** | A battery whose tracking *now* costs the ability to track later |
 
-Sixteen of the eighteen ship PID and MPC baselines, so a learned policy has
-something real to beat -- and the two that do not say so plainly.
+Every environment ships a PID baseline and sixteen of eighteen also ship an
+MPC, so a learned policy has something real to beat -- and where a baseline is
+weak, the docs say how weak.
 
 ---
 
@@ -241,8 +242,8 @@ it is actually up against. A purple dot marks each hidden quantity.
 
 ## Expert Baselines
 
-Sixteen of the eighteen environments ship both expert baselines. The two **Plane Patrol**
-variants currently have neither -- see *Baseline coverage* below.
+All eighteen environments ship a PID. Sixteen also ship an MPC; the two
+**Plane Patrol** variants do not -- see *Baseline coverage* below.
 
 - **PID**: Relay-autotuned or gradient-tuned controllers. Aircraft altitude tracking
   uses a **cascaded autopilot** (altitude -> vertical speed -> pitch -> elevator) with
@@ -279,7 +280,8 @@ vector changed underneath it.
 | Environment | PID | MPC | Note |
 |---|---|---|---|
 | All process, industrial and non-patrol aircraft envs | yes | yes | passes the effectiveness contract |
-| Plane Patrol, Plane Patrol -- Bearing-only | no | no | Only a JAX-functional PID exists, reached via `env.expert_policy`. A cascaded controller was tried and does not transfer: formation flight against a manoeuvring lead needs pursuit guidance toward the slot *position*, not independent error nulling. |
+| Plane Patrol | yes | no | Pursuit guidance toward the slot *position*. Holds formation on roughly half of evaluation seeds; see *Known gaps*. No MPC: the reference is a manoeuvring lead, so a CasADi formulation needs its future trajectory as a time-varying parameter. |
+| Plane Patrol -- Bearing-only | yes | no | A lead-state estimator feeding the same pursuit law. Range with azimuth and elevation is a complete relative-position measurement, so only the lead's *heading* is genuinely unobservable; it is recovered from the lead's motion. Performance matches the full-observation expert, so the partial observation costs almost nothing here. |
 
 ---
 
@@ -349,7 +351,7 @@ now asserted per environment, because a shared contract cannot see it.
   environment (PRNG hygiene, determinism, `jit`/`vmap`/`scan`, numerical health,
   controller effectiveness).
 * **Target MDP focus**: Each task is about reaching and maintaining target states.
-* **Expert baselines**: PID and MPC for sixteen of eighteen environments (see *Baseline coverage*).
+* **Expert baselines**: a PID for every environment and an MPC for sixteen of eighteen (see *Baseline coverage*).
 * **Challenging dynamics**: Captures irrecoverable states, partial observability, and momentum effects.
 * **Control-room rendering**: The twelve non-aircraft environments share one
   toolkit (`target_gym/render_kit.py`) -- a live plant schematic, an instrument
@@ -519,10 +521,13 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 The test suite records these rather than hiding them -- 7 `strict` xfails and
 the patrol skips above:
 
-* **Plane 2D D3**: Prandtl-Glauert compressibility is applied without a
-  corresponding Mach effect on stall onset, so peak lift *rises* with Mach
-  instead of falling. Out of the normal flight envelope, but the sign is wrong.
-* **Plane Patrol**: no PID or MPC baseline (above).
+* **Plane Patrol expert quality**: both patrol variants now ship a PID, but it
+  completes roughly half of evaluation seeds. The failure is a lateral bank
+  oscillation that sets in once the follower overshoots *ahead* of the slot
+  chasing a steeply descending lead: pursuit guidance then commands a turn the
+  bank loop cannot make, and it rings between its limits. No lateral gain
+  combination clears it, so the guidance law needs energy management -- the
+  follower cannot shed speed in a descent -- rather than further tuning.
 * **Four-tank zero is fixed**: the real apparatus is celebrated for letting you
   move the multivariable zero across the imaginary axis by turning two valves.
   Here `gamma1` and `gamma2` are constants, so only the non-minimum-phase

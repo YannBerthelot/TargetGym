@@ -2509,6 +2509,11 @@ def make_plane3d_circle_cascaded_pid() -> StatefulCascadedPlane3DPID:
     )
 
 
+def _wrap_angle_np(a):
+    """Wrap an angle to (-pi, pi] using numpy, for the stateful controllers."""
+    return (a + np.pi) % (2 * np.pi) - np.pi
+
+
 class StatefulPatrolPID:
     """Stateful wrapper around the functional close-patrol expert.
 
@@ -2545,6 +2550,151 @@ class StatefulPatrolPID:
         return jnp.asarray(action)
 
     __call__ = step
+
+
+class StatefulBearingOnlyPatrolPID:
+    """Close-patrol expert for the bearing-only variant, via a lead estimator.
+
+    The full-observation expert reads the slot error already decomposed in the
+    lead body frame (obs 10-12). This variant withholds exactly that: a passive
+    sensor gives range, azimuth and elevation, and no lead heading or velocity.
+    Withholding it is the point of the task, so the fix is not to re-index the
+    other controller but to *estimate what is missing* and then reuse the
+    guidance law that already works.
+
+    What is actually missing turns out to be small. Range with azimuth and
+    elevation is a complete relative-position measurement, so the geometry is
+    recoverable in the follower's own frame:
+
+        horiz = range cos(el),  dz = range sin(el)
+        d_fwd = horiz cos(az),  d_rgt = horiz sin(az)
+
+    and rotating by the follower's own heading (which it does observe) puts the
+    lead in the world frame. The vertical channel then needs no estimation at
+    all: ``e_up = -dz - slot_up`` exactly.
+
+    The one genuinely unobservable quantity is the **lead's heading**, which
+    the commanded slot needs because the slot is expressed in the lead's frame.
+    It is recovered from the lead's motion:
+
+        lead_velocity = follower_velocity + d(relative position)/dt
+
+    differenced across steps and low-pass filtered, since differencing a
+    measurement is noisy. Its heading follows by ``atan2``. The estimator is
+    seeded with the follower's own heading, which is right to within the
+    formation's own angular error at t = 0.
+
+    With that estimate the eight quantities the pursuit law reads are
+    reconstructed and handed to :func:`patrol_pid_step` unchanged.
+    """
+
+    # Indices into the bearing-only observation.
+    _X_DOT, _Y_DOT, _Z_DOT = 0, 1, 3
+    _PHI, _PHI_DOT, _PSI = 6, 7, 9
+    _RANGE, _AZ, _EL = 10, 11, 12
+    _SLOT_BACK, _SLOT_RIGHT, _SLOT_UP = 13, 14, 15
+
+    def __init__(
+        self,
+        params=None,
+        zero_state=None,
+        dt: float = 0.1,
+        psi_tau: float = 0.6,
+        rate_tau: float = 0.4,
+    ):
+        if params is None or zero_state is None:
+            params, zero_state = make_patrol_pid()
+        self.params = params
+        self._zero_state = zero_state
+        self.dt = dt
+        # Filter constants, as fractions of a second of memory.
+        self.psi_alpha = float(np.exp(-dt / max(psi_tau, 1e-6)))
+        self.rate_alpha = float(np.exp(-dt / max(rate_tau, 1e-6)))
+        self.reset()
+
+    def reset(self):
+        self.state = self._zero_state
+        self._prev_rel = None  # (dx, dy, dz) lead minus follower, world frame
+        self._psi_lead = None  # filtered lead-heading estimate
+        self._lead_zdot = 0.0  # filtered lead vertical rate
+
+    @staticmethod
+    def _relative_world(obs):
+        """Lead-minus-follower position in the world frame, from the bearing."""
+        rng = obs[..., StatefulBearingOnlyPatrolPID._RANGE]
+        az = obs[..., StatefulBearingOnlyPatrolPID._AZ]
+        el = obs[..., StatefulBearingOnlyPatrolPID._EL]
+        psi = obs[..., StatefulBearingOnlyPatrolPID._PSI]
+        horiz = rng * jnp.cos(el)
+        d_fwd = horiz * jnp.cos(az)
+        d_rgt = horiz * jnp.sin(az)
+        dz = rng * jnp.sin(el)
+        # Follower body axes, matching patrol.env._lead_frame's convention:
+        # fwd = (cos, sin), rgt = (sin, -cos).
+        dx = d_fwd * jnp.cos(psi) + d_rgt * jnp.sin(psi)
+        dy = d_fwd * jnp.sin(psi) - d_rgt * jnp.cos(psi)
+        return dx, dy, dz
+
+    def step(self, obs):
+        obs = jnp.atleast_1d(jnp.asarray(obs))
+        psi = float(obs[self._PSI])
+        dx, dy, dz = (float(v) for v in self._relative_world(obs))
+
+        # --- estimate the lead's motion -----------------------------------
+        if self._prev_rel is None:
+            psi_lead = psi  # seed: formations start near-parallel
+            lead_zdot = float(obs[self._Z_DOT])
+        else:
+            pdx, pdy, pdz = self._prev_rel
+            rel_rate = ((dx - pdx) / self.dt, (dy - pdy) / self.dt)
+            lead_vx = float(obs[self._X_DOT]) + rel_rate[0]
+            lead_vy = float(obs[self._Y_DOT]) + rel_rate[1]
+            raw_psi = float(np.arctan2(lead_vy, lead_vx))
+            prev = self._psi_lead if self._psi_lead is not None else psi
+            # Filter on the *innovation* so the estimate wraps correctly.
+            innov = float(_wrap_angle_np(raw_psi - prev))
+            psi_lead = prev + (1.0 - self.psi_alpha) * innov
+            lead_zdot = self.rate_alpha * self._lead_zdot + (1.0 - self.rate_alpha) * (
+                float(obs[self._Z_DOT]) + (dz - pdz) / self.dt
+            )
+        self._prev_rel = (dx, dy, dz)
+        self._psi_lead = psi_lead
+        self._lead_zdot = lead_zdot
+
+        # --- rebuild what the pursuit law reads ---------------------------
+        fwd = np.array([np.cos(psi_lead), np.sin(psi_lead)])
+        rgt = np.array([np.sin(psi_lead), -np.cos(psi_lead)])
+        d = np.array([-dx, -dy])  # follower minus lead
+        back = -float(d @ fwd)
+        lateral = float(d @ rgt)
+        up = -dz
+
+        e_back = back - float(obs[self._SLOT_BACK])
+        e_right = lateral - float(obs[self._SLOT_RIGHT])
+        e_up = up - float(obs[self._SLOT_UP])
+        rv_up = float(obs[self._Z_DOT]) - lead_zdot
+        rel_heading = float(_wrap_angle_np(psi_lead - psi))
+
+        full = np.zeros(26, dtype=np.float32)
+        # Indices 0-9 are identical in both observation layouts (own state),
+        # so they pass straight through: the pursuit law reads roll, roll rate
+        # and heading from here directly.
+        full[0:10] = np.asarray(obs[0:10], dtype=np.float32)
+        full[10], full[11], full[12] = e_back, e_right, e_up
+        full[15] = rv_up
+        full[19] = rel_heading
+
+        action, self.state = patrol_pid_step(self.params, self.state, jnp.asarray(full))
+        return jnp.asarray(action)
+
+    __call__ = step
+
+
+def make_patrol_bearing_only_stateful_pid() -> StatefulBearingOnlyPatrolPID:
+    """Close-patrol expert for the bearing-only variant."""
+    from target_gym.patrol.env import PatrolParams
+
+    return StatefulBearingOnlyPatrolPID(dt=float(PatrolParams().delta_t))
 
 
 def make_patrol_stateful_pid() -> StatefulPatrolPID:

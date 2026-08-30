@@ -382,17 +382,22 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="aircraft",
         env_factory=_patrol_bearing_only,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
-        make_pid=None,
+        make_pid=_pid("make_patrol_bearing_only_stateful_pid"),
         make_mpc=None,
         test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
         baselines_note=(
-            "No baseline. The full-observation patrol expert reads the "
-            "*decomposed* slot error (obs indices 10-12), which this variant "
-            "deliberately withholds -- a passive sensor yields only range and "
-            "bearing. Recovering the slot therefore needs the lead's motion "
-            "estimated first, so this requires its own estimator rather than "
-            "a re-indexed copy of the full-observation controller."
+            "PID present -- a lead-state estimator feeding the same pursuit "
+            "law the full-observation variant uses. Range with azimuth and "
+            "elevation is a complete relative-position measurement, so the "
+            "only genuinely unobservable quantity is the lead's HEADING, "
+            "which the commanded slot needs because the slot is expressed in "
+            "the lead's frame; it is recovered by differencing the estimated "
+            "relative position and filtering. Measured performance matches "
+            "the full-observation expert (4 of 8 seeds complete, ~229 m "
+            "settled slot error vs ~260 m), so the partial observation costs "
+            "essentially nothing here. No MPC: the follower's plant is the "
+            "full 3D aircraft and the reference is a manoeuvring lead."
         ),
     ),
     # -- Process control ----------------------------------------------------

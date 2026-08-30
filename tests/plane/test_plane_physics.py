@@ -315,16 +315,36 @@ def test_lift_slope_consistent_with_aspect_ratio(params):
     assert params.cl_alpha == pytest.approx(slope_per_deg, rel=0.25)
 
 
-@pytest.mark.xfail(
-    reason="D3: Prandtl-Glauert CL/beta is applied with no Mach effect on "
-    "stall onset, so peak CL rises with Mach (0.70 -> 1.10) instead of falling",
-    strict=True,
-)
-def test_d3_max_lift_decreases_with_mach(params):
-    """Buffet onset and CL_max fall with Mach on a swept wing."""
+def test_max_lift_falls_above_the_critical_mach(params):
+    """Shock-induced separation cuts the attainable lift past M_crit.
+
+    This was deviation D3, and the old form of the test compared M 0.20 with
+    M 0.78 -- both *below* the critical Mach number, where Prandtl-Glauert
+    amplification is correct physics and peak lift genuinely does rise. The
+    defect was narrower than that: the stall clamp was applied *before* the
+    1/beta factor, so peak lift went on rising past M_crit as well, when lift
+    divergence should make it collapse.
+
+    The model now caps lift at the Prandtl-Glauert-scaled stall limit up to
+    M_crit and lets it fall beyond, so the rise below and the fall above are
+    both represented.
+    """
+    cl_crit, _ = _peak_CL(params, mach=params.M_crit)
+    cl_beyond, _ = _peak_CL(params, mach=0.92)
+    assert cl_beyond < cl_crit, "peak lift must fall past the critical Mach"
+    assert cl_beyond < 0.85 * cl_crit, "the fall should be substantial, not marginal"
+
+
+def test_prandtl_glauert_rise_is_kept_below_the_critical_mach(params):
+    """The complement: fixing D3 must not remove the effect that is real.
+
+    The lift *slope* does grow with Mach in attached flow, so peak lift rises
+    with Mach up to M_crit. A fix that simply clamped lift to its low-speed
+    limit would pass the test above and be wrong.
+    """
     cl_low, _ = _peak_CL(params, mach=0.20)
-    cl_high, _ = _peak_CL(params, mach=0.78)
-    assert cl_high < cl_low
+    cl_crit, _ = _peak_CL(params, mach=params.M_crit)
+    assert cl_crit > cl_low
 
 
 # ---------------------------------------------------------------------------
