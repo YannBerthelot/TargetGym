@@ -2600,3 +2600,104 @@ def make_distillation_stateful_pid() -> StatefulMIMOPID:
         setpoint_index=5,  # target_xB
     )
     return StatefulMIMOPID(pid1, pid2)
+
+
+class StatefulWindTurbinePID:
+    """Standard above-rated wind turbine controller.
+
+    The classical industrial split, and the reason it is the right baseline:
+
+    * **Generator torque sets power.** Above rated, the torque that delivers
+      the setpoint follows directly from ``P = eta N tau w`` -- a feedforward,
+      not a loop, because rotor speed is measured and the relation is exact.
+    * **Collective pitch regulates rotor speed.** Whatever aerodynamic power
+      the torque demand does not absorb has to be spilled, or the rotor
+      accelerates. A PI on rotor-speed error does that.
+
+    obs: [omega_rpm, pitch_deg, torque_pct, P_MW, target_P_MW]
+
+    Sign: rotor above rated means excess aerodynamic power, so pitch must
+    *increase* to spill it -- hence a positive gain on ``omega - omega_rated``.
+    """
+
+    def __init__(
+        self,
+        Kp_pitch: float = 3.0,
+        Ki_pitch: float = 0.6,
+        Kd_pitch: float = 0.0,
+        omega_rated_rpm: float = 12.1,
+        eta_gen: float = 0.944,
+        N_gear: float = 97.0,
+        torque_max: float = 47_400.0,
+        pitch_max: float = 40.0,
+        protect_lo: float = 0.60,
+        protect_hi: float = 0.90,
+        dt: float = 0.25,
+    ):
+        self.Kp_pitch, self.Ki_pitch, self.Kd_pitch = Kp_pitch, Ki_pitch, Kd_pitch
+        self.omega_rated_rpm = omega_rated_rpm
+        self.eta_gen, self.N_gear = eta_gen, N_gear
+        self.torque_max, self.pitch_max = torque_max, pitch_max
+        # Torque is backed off linearly between these fractions of rated speed.
+        self.protect_lo, self.protect_hi = protect_lo, protect_hi
+        self.dt = dt
+        self.reset()
+
+    def reset(self):
+        self._integral = 0.0
+        self._prev_err = 0.0
+
+    def step(self, obs):
+        omega_rpm = obs[..., 0]
+        target_MW = obs[..., 4]
+
+        # --- Torque: power feedforward, limited by the Region 2 law ---
+        omega = omega_rpm * 2.0 * jnp.pi / 60.0
+        torque = (target_MW * 1.0e6) / (
+            self.eta_gen * self.N_gear * jnp.maximum(omega, 1e-3)
+        )
+        # Rotor-speed protection. Below rated wind the setpoint is simply not
+        # available, and demanding it anyway drags the rotor down until it
+        # stalls. Backing the torque demand off as speed falls lets the rotor
+        # re-accelerate. It is scaled to be inactive at and above rated speed,
+        # so it never interferes with normal Region 3 regulation -- capping at
+        # the Region 2 law tau = K omega^2 instead does interfere, because at
+        # rated speed that law sits well below rated torque and the rotor runs
+        # away.
+        speed_ratio = omega / (self.omega_rated_rpm * 2.0 * jnp.pi / 60.0)
+        protection = jnp.clip(
+            (speed_ratio - self.protect_lo) / (self.protect_hi - self.protect_lo),
+            0.0,
+            1.0,
+        )
+        torque = torque * protection
+        torque_raw = 2.0 * jnp.clip(torque / self.torque_max, 0.0, 1.0) - 1.0
+
+        # --- Pitch: PI on rotor-speed error ---
+        err = omega_rpm - self.omega_rated_rpm
+        self._integral = self._integral + err * self.dt
+        deriv = (err - self._prev_err) / self.dt
+        self._prev_err = err
+        pitch = (
+            self.Kp_pitch * err + self.Ki_pitch * self._integral + self.Kd_pitch * deriv
+        )
+        pitch_clipped = jnp.clip(pitch, 0.0, self.pitch_max)
+        # Anti-windup: stop integrating once pitch is against a stop.
+        self._integral = jnp.where(
+            pitch != pitch_clipped, self._integral - err * self.dt, self._integral
+        )
+        pitch_raw = 2.0 * (pitch_clipped / self.pitch_max) - 1.0
+
+        return jnp.stack([pitch_raw, torque_raw], axis=-1)
+
+    __call__ = step
+
+
+def make_wind_turbine_stateful_pid() -> StatefulWindTurbinePID:
+    """Above-rated controller for the NREL 5 MW turbine."""
+    _p = _load_gains().get("wind_turbine", {})
+    return StatefulWindTurbinePID(
+        Kp_pitch=float(_p.get("Kp_pitch", 3.0)),
+        Ki_pitch=float(_p.get("Ki_pitch", 0.6)),
+        Kd_pitch=float(_p.get("Kd_pitch", 0.0)),
+    )

@@ -36,6 +36,7 @@ GROUPS: dict[str, str] = {
     "aircraft": "Aircraft",
     "process": "Process Control",
     "industrial": "Industrial / Energy",
+    "energy": "Renewable Energy",
 }
 
 
@@ -213,6 +214,12 @@ def _reactor():
     from target_gym.reactor.env_jax import Reactor
 
     return Reactor()
+
+
+def _wind_turbine():
+    from target_gym.energy.wind_turbine.env_jax import WindTurbine
+
+    return WindTurbine()
 
 
 def _hvac():
@@ -469,6 +476,20 @@ _SPECS: tuple[EnvSpec, ...] = (
         test_params={"max_steps_in_episode": 192},
         tuned_gains_key="hvac",
         disturbance_fields=("weather_dev",),
+    ),
+    EnvSpec(
+        name="wind_turbine",
+        group="energy",
+        env_factory=_wind_turbine,
+        params_cls=_LazyParams(
+            "target_gym.energy.wind_turbine.env", "WindTurbineParams"
+        ),
+        make_pid=_pid("make_wind_turbine_stateful_pid"),
+        make_mpc=_mpc("make_wind_turbine_mpc"),
+        # 400 steps = 100 s ~ 7 rotor time constants.
+        test_params={"max_steps_in_episode": 400},
+        tuned_gains_key="wind_turbine",
+        disturbance_fields=("v_wind",),
     ),
 )
 
