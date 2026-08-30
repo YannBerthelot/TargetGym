@@ -2520,3 +2520,47 @@ class StatefulPatrolPID:
 def make_patrol_stateful_pid() -> StatefulPatrolPID:
     """Stateful close-patrol expert for PlanePatrol (full observation)."""
     return StatefulPatrolPID()
+
+
+def make_ph_pid(
+    Kp: float | None = None, Ki: float | None = None, Kd: float | None = None
+) -> tuple[PIDParams, PIDState]:
+    """PID for PHNeutralization -- tracks pH by manipulating base flow.
+
+    Observation : [pH, q3_pct, target_pH]
+    Action      : raw in [-1, 1] -> [q3_min, q3_max] mL/s
+
+    Sign: more base raises pH, so Kp > 0. dt = 5 s.
+    Scale: the raw action spans 12 mL/s and the steady gain near neutrality is
+    ~0.5 pH per mL/s, so a 1 pH error calling for ~2 mL/s of base implies
+    Kp ~ 0.35. Deliberately detuned relative to that: the titration gain varies
+    ~45x across the range, so a controller tuned for the steep middle is
+    unstable, and one tuned for the shoulders is sluggish.
+    """
+    Kp = Kp if Kp is not None else _g("ph_neutralization", "Kp", 0.18)
+    Ki = Ki if Ki is not None else _g("ph_neutralization", "Ki", 0.004)
+    Kd = Kd if Kd is not None else _g("ph_neutralization", "Kd", 0.0)
+    params = PIDParams(
+        Kp=Kp,
+        Ki=Ki,
+        Kd=Kd,
+        dt=5.0,
+        state_index=0,
+        setpoint_index=2,
+        action_min=-1.0,
+        action_max=1.0,
+    )
+    return params, pid_reset(params)
+
+
+def make_ph_stateful_pid() -> StatefulPID:
+    """obs: [pH, q3_pct, target_pH]."""
+    _p = _load_gains().get("ph_neutralization", {})
+    return StatefulPID(
+        Kp=float(_p.get("Kp", 0.18)),
+        Ki=float(_p.get("Ki", 0.004)),
+        Kd=float(_p.get("Kd", 0.0)),
+        dt=5.0,
+        state_index=0,
+        setpoint_index=2,
+    )
