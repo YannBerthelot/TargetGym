@@ -58,8 +58,9 @@ def _run_to_steady(fuel_raw, params=None, hours=140.0):
     _, state = env.reset_env(key, p)
     action = jnp.array([fuel_raw])
     terminated = False
+    _jstep = jax.jit(env.step_env)
     for _ in range(p.max_steps_in_episode):
-        _, state, _, terminated, _ = env.step_env(key, state, action, p)
+        _, state, _, terminated, _ = _jstep(key, state, action, p)
         if bool(terminated):
             break
     return state, bool(terminated), p

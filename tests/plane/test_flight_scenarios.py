@@ -80,8 +80,9 @@ def fly(env, params, power_raw, stick_raw, steps, state=None):
     state = state if state is not None else make_state(params)
     action = jnp.array([power_raw, stick_raw])
     z, v, theta, alpha, z_dot = [], [], [], [], []
+    _jstep = jax.jit(env.step_env)
     for _ in range(steps):
-        _, state, _, terminated, _ = env.step_env(KEY, state, action, params)
+        _, state, _, terminated, _ = _jstep(KEY, state, action, params)
         z.append(float(state.z))
         v.append(float(state.x_dot))
         theta.append(float(np.rad2deg(state.theta)))

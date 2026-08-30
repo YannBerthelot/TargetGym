@@ -375,9 +375,10 @@ def test_state_stays_finite_over_an_episode(params):
     p = params.replace(max_steps_in_episode=200)
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, p)
+    _jstep = jax.jit(env.step_env)
     for _ in range(200):
         key, sub = jax.random.split(key)
-        _, state, reward, terminated, _ = env.step_env(sub, state, jnp.zeros(2), p)
+        _, state, reward, terminated, _ = _jstep(sub, state, jnp.zeros(2), p)
         for leaf in jax.tree_util.tree_leaves(state):
             assert np.all(np.isfinite(np.asarray(leaf)))
         assert np.isfinite(float(reward))

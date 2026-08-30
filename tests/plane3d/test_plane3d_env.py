@@ -114,8 +114,9 @@ class TestHeadingStep:
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
         action = jnp.array([0.8, 0.0, 0.0])
+        _jstep = jax.jit(env.step_env)
         for _ in range(10):
-            _, state, *_ = env.step_env(key, state, action)
+            _, state, *_ = _jstep(key, state, action)
         assert abs(float(state.y)) < 10.0
         assert abs(float(state.y_dot)) < 1.0
 
@@ -130,8 +131,9 @@ class TestHeadingStep:
         _, state = env.reset_env(key, params)
         initial_psi = float(state.psi)
         action = jnp.array([0.8, 0.0, 0.5])
+        _jstep = jax.jit(env.step_env)
         for _ in range(50):
-            _, state, *_ = env.step_env(key, state, action, params)
+            _, state, *_ = _jstep(key, state, action, params)
         assert float(state.psi) != pytest.approx(initial_psi, abs=0.01)
 
     def test_bank_causes_lateral_motion(self):
@@ -144,8 +146,9 @@ class TestHeadingStep:
         )
         _, state = env.reset_env(key, params)
         action = jnp.array([0.8, 0.0, 0.5])
+        _jstep = jax.jit(env.step_env)
         for _ in range(50):
-            _, state, *_ = env.step_env(key, state, action, params)
+            _, state, *_ = _jstep(key, state, action, params)
         assert abs(float(state.y)) > 1.0
 
 

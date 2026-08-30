@@ -57,8 +57,9 @@ def _steady_free_float(params, hours, T_out_fixed, T_start=20.0):
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, p)
     state = state.replace(T_mass=T_start, weather_dev=0.0)
+    _jstep = jax.jit(env.step_env)
     for _ in range(steps):
-        _, state, _, terminated, _ = env.step_env(key, state, jnp.array([-1.0]), p)
+        _, state, _, terminated, _ = _jstep(key, state, jnp.array([-1.0]), p)
         if bool(terminated):
             break
     return state

@@ -64,6 +64,7 @@ test = [
     "pytest>=7.4.3",
     "pytest-cov>=4.1.0",
     "pytest-readme>=1.0.2",
+    "pytest-xdist>=3.6",
     "coverage>=7.3.2",
 ]
 lint = [
@@ -74,6 +75,10 @@ lint = [
 agent = [
     "stable-baselines3>=2.7.0",
     "tensorboard>=2.20.0",
+    # Declared explicitly, though stable-baselines3 already requires it: a
+    # [tool.uv.sources] entry only binds to a direct dependency, and the one
+    # below routes Linux to the CPU wheel.
+    "torch>=2.0",
 ]
 dev = [
     { include-group = "test" },
@@ -96,6 +101,21 @@ dev = [
 # REMOVE once gymnax > 1.0.0 is on PyPI, then bump the floor above to it.
 [tool.uv.sources]
 gymnax = { git = "https://github.com/RobertTLange/gymnax", branch = "main" }
+
+# stable-baselines3 (dev-only, one PPO smoke test) pulls torch, and torch's
+# default Linux wheel drags in the whole CUDA runtime -- several GB of
+# nvidia-* wheels that a CPU-only CI runner downloads and never uses. The CPU
+# build is the same torch for our purposes and a fraction of the size.
+#
+# Linux only: macOS and Windows torch wheels are CPU-only already and are not
+# published on this index, so they keep resolving from PyPI.
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+# explicit: nothing resolves from here unless it is named above.
+explicit = true
 
 [tool.hatch.version]
 source = "vcs"

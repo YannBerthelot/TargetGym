@@ -12,17 +12,50 @@ on:
 permissions:
   contents: read
 
+# A new push to a branch makes the run already in flight for it obsolete.
+# Cancelling it frees the runner immediately, which is what a contributor
+# pushing a fixup actually wants -- their new run starts now, not after the
+# stale one finishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+    # Formatting needs no runtime dependencies, so this job skips the heavy
+    # sync entirely and reports in well under a minute.
+    - run: uv run --frozen --only-group lint black --check .
+
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    name: test (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      # A pull request runs the fast suite alone. A push to main additionally
+      # runs the closed-loop controller contracts (PID beats constant, MPC >=
+      # PID, episodes survivable across seeds) -- minutes of rollouts that
+      # exercise the baselines rather than the environments.
+      #
+      # The set is chosen here rather than with a job-level ``if`` because the
+      # ``matrix`` context is not available to one: it would evaluate to empty
+      # and the slow suite would run on every pull request.
+      matrix:
+        include: ${{ github.event_name == 'push'
+          && fromJSON('[{"name":"fast","marker":"not slow"},{"name":"slow","marker":"slow"}]')
+          || fromJSON('[{"name":"fast","marker":"not slow"}]') }}
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y python3-pygame
 
     - name: Install uv
       uses: astral-sh/setup-uv@v5
@@ -36,41 +69,9 @@ jobs:
       # rather than silently resolving something else than what we tested.
       run: uv sync --frozen --group dev
 
-    - name: Check formatting with Black
-      run: uv run black --check .
-
     - name: Test with pytest
-      # `slow` marks the multi-seed closed-loop controller checks; they run in
-      # the nightly job below, not on every push.
-      env:
-        JAX_PLATFORMS: cpu
-      run: uv run pytest tests/ -v -m "not slow"
-
-  slow-test:
-    # Closed-loop controller contracts (PID beats constant, MPC >= PID,
-    # episodes survivable across seeds). Too slow for per-push CI.
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y python3-pygame
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v5
-      with:
-        version: "0.11.28"
-        enable-cache: true
-        cache-dependency-glob: "uv.lock"
-
-    - name: Install dependencies
-      run: uv sync --frozen --group dev
-
-    - name: Run slow closed-loop tests
-      env:
-        JAX_PLATFORMS: cpu
-      run: uv run pytest tests/ -v -m "slow"
+      # -n auto spreads the suite over the runner's cores; tests/conftest.py
+      # pins each worker to one compute thread so they do not fight for them.
+      # --durations keeps the slowest tests visible, so the suite's cost stays
+      # something we notice rather than something that creeps.
+      run: uv run pytest tests/ -q -n auto --durations=10 -m "${{ matrix.marker }}"

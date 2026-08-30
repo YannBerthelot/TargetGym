@@ -549,10 +549,15 @@ For development you need to install the dev dependencies, which include test, li
 git clone https://github.com/YannBerthelot/TargetGym.git
 cd TargetGym
 
-uv sync --group dev     # creates .venv with everything
-uv run pytest -m "not slow"   # fast suite
-uv run pytest                 # everything, including closed-loop checks
+uv sync --group dev                  # creates .venv with everything
+uv run pytest -n auto -m "not slow"  # fast suite, one worker per core
+uv run pytest -n auto                # everything, incl. closed-loop checks
 ```
+
+The suite runs in parallel under [pytest-xdist](https://pytest-xdist.readthedocs.io/);
+`tests/conftest.py` holds each worker to a single compute thread so they do not
+compete for cores. Drop `-n auto` (or pass `-n0`) when you want readable output
+from a single test, or when using `--pdb`.
 
 Development tasks are in the `Makefile`: `make ci`, `make test`, `make test-all`,
 `make figures`, `make videos`, `make tuning`.

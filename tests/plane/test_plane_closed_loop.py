@@ -30,10 +30,9 @@ def _run_pid(seed, steps=STEPS):
     obs, state = env.reset_env(key, params)
     start, target = float(state.z), float(state.target_altitude)
     alts, aoas = [], []
+    _jstep = jax.jit(env.step_env)
     for _ in range(steps):
-        obs, state, _, terminated, _ = env.step_env(
-            key, state, jnp.asarray(pid(obs)), params
-        )
+        obs, state, _, terminated, _ = _jstep(key, state, jnp.asarray(pid(obs)), params)
         alts.append(float(state.z))
         aoas.append(float(np.rad2deg(state.alpha)))
         if bool(terminated):
@@ -83,8 +82,9 @@ def test_airframe_can_reach_the_hardest_target_open_loop():
     target = float(state.target_altitude)
     action = jnp.array([1.0, 0.0])  # full power, neutral elevator
     peak, aoa_max = -np.inf, -np.inf
+    _jstep = jax.jit(env.step_env)
     for _ in range(STEPS):
-        obs, state, _, terminated, _ = env.step_env(key, state, action, params)
+        obs, state, _, terminated, _ = _jstep(key, state, action, params)
         peak = max(peak, float(state.z))
         aoa_max = max(aoa_max, float(np.rad2deg(state.alpha)))
         if bool(terminated):

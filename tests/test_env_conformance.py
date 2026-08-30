@@ -173,25 +173,37 @@ def test_step_is_deterministic_given_key_state_and_action(spec):
     assert float(reward_a) == float(reward_b)
 
 
-def _terminal_disturbance(spec, seed, split_key, steps):
-    """Disturbance values after ``steps``, driving the key one of two ways."""
+def _terminal_disturbances(spec, seeds, split_key, steps):
+    """Disturbance values after ``steps`` for each seed, one key regime.
+
+    The environment, its parameters and the compiled step are built once and
+    reused across every seed. ``jax.jit`` keys its cache on the function it
+    wraps, and ``env.step_env`` is a bound method, so building a fresh
+    environment per seed would compile the same step function again for each
+    one -- which for this parametrised test is where nearly all of its time
+    used to go.
+    """
     env = spec.make_env()
     params = spec.make_test_params(**spec.disturbance_overrides)
-    key = jax.random.PRNGKey(seed)
-    _, state = env.reset_env(key, params)
     action = _zero_action(env, params)
-
     step = jax.jit(env.step_env)
-    rolling = key
-    for _ in range(steps):
-        if split_key:
-            rolling, sub = jax.random.split(rolling)
-        else:
-            sub = key  # constant -- what every rollout helper here actually does
-        _, state, _, terminated, _ = step(sub, state, action, params)
-        if bool(terminated):
-            break
-    return [float(getattr(state, f)) for f in spec.disturbance_fields]
+    reset = jax.jit(env.reset_env)
+
+    out = []
+    for seed in seeds:
+        key = jax.random.PRNGKey(seed)
+        _, state = reset(key, params)
+        rolling = key
+        for _ in range(steps):
+            if split_key:
+                rolling, sub = jax.random.split(rolling)
+            else:
+                sub = key  # constant -- what every rollout helper here does
+            _, state, _, terminated, _ = step(sub, state, action, params)
+            if bool(terminated):
+                break
+        out.append([float(getattr(state, f)) for f in spec.disturbance_fields])
+    return out
 
 
 def test_disturbance_magnitude_is_independent_of_key_splitting(spec):
@@ -217,13 +229,9 @@ def test_disturbance_magnitude_is_independent_of_key_splitting(spec):
     if not spec.disturbance_fields:
         pytest.skip(f"{spec.name} declares no stochastic disturbance")
 
-    steps, seeds = 200, 6
-    constant = np.array(
-        [_terminal_disturbance(spec, s, False, steps) for s in range(seeds)]
-    )
-    split = np.array(
-        [_terminal_disturbance(spec, s, True, steps) for s in range(seeds)]
-    )
+    steps, seeds = 200, range(6)
+    constant = np.array(_terminal_disturbances(spec, seeds, False, steps))
+    split = np.array(_terminal_disturbances(spec, seeds, True, steps))
     rms_constant = float(np.sqrt((constant**2).mean()))
     rms_split = float(np.sqrt((split**2).mean()))
 

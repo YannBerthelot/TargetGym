@@ -47,10 +47,9 @@ class TestBackwardCompatible:
         env = Plane()
         params = PlaneParams(max_steps_in_episode=50, turbulence_sigma=0.0, **FIXED)
         obs, state = env.reset_env(jax.random.PRNGKey(0), params)
+        _jstep = jax.jit(env.step_env)
         for _ in range(20):
-            _, state, *_ = env.step_env(
-                jax.random.PRNGKey(1), state, jnp.zeros(2), params
-            )
+            _, state, *_ = _jstep(jax.random.PRNGKey(1), state, jnp.zeros(2), params)
         assert float(state.gust_x) == 0.0
         assert float(state.gust_z) == 0.0
 

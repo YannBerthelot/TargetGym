@@ -24,10 +24,14 @@ install:  ## Create/refresh the dev environment (.venv) with uv
 ci: ci-format-check ci-test  ## Full local CI (matches .github/workflows/python-app.yml)
 
 ci-format-check:  ## Black --check on the whole tree
-	uv run black --check .
+	# --only-group lint installs black alone: formatting needs no runtime deps.
+	uv run --frozen --only-group lint black --check .
 
+# -n auto spreads the suite over every core; tests/conftest.py holds each
+# worker to one compute thread so they do not fight over them. Pass -n0 to
+# turn that off, which is what you want when reaching for --pdb.
 ci-test:  ## Fast test suite on CPU (skips `slow` closed-loop checks)
-	$(CPU_ENV) uv run pytest tests/ -v -m "not slow"
+	$(CPU_ENV) uv run pytest tests/ -q -n auto --durations=10 -m "not slow"
 
 all:
 	uv run python -m target_gym.runners.runners
@@ -65,16 +69,18 @@ clear-mpc:
 	@echo "Cleared MPC trajectory cache (data/mpc_cache/, data/interpolators/)."
 
 test:  ## Fast tests only
-	$(CPU_ENV) uv run pytest --tb=short --disable-warnings -m "not slow"
+	$(CPU_ENV) uv run pytest --tb=short --disable-warnings -n auto -m "not slow"
 
 test-all:  ## Every test, including the slow closed-loop controller checks
-	$(CPU_ENV) uv run pytest --tb=short --disable-warnings
+	$(CPU_ENV) uv run pytest --tb=short --disable-warnings -n auto
 
 mypy:
 	uv run mypy ${LINT_PATHS}
 
+# Serial on purpose: coverage.py does not aggregate xdist worker data without
+# extra plumbing, and would silently under-report rather than fail.
 coverage:
-	$(CPU_ENV) uv run coverage run --source target_gym -m pytest tests
+	$(CPU_ENV) uv run coverage run --source target_gym -m pytest tests -n0
 	uv run coverage report -m --fail-under 80
 
 missing-annotations:

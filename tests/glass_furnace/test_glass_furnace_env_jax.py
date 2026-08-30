@@ -155,8 +155,9 @@ def test_full_episode_is_finite():
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
 
+    _jstep = jax.jit(env.step_env)
     for _ in range(50):
-        _, state, reward, done, _ = env.step_env(key, state, jnp.array([0.0]), params)
+        _, state, reward, done, _ = _jstep(key, state, jnp.array([0.0]), params)
         assert jnp.isfinite(state.T_crown)
         assert jnp.isfinite(state.T_melt)
         assert jnp.isfinite(state.T_work)

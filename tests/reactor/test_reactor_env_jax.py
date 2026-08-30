@@ -126,8 +126,9 @@ def test_full_short_episode_is_finite():
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
 
+    _jstep = jax.jit(env.step_env)
     for _ in range(40):
-        _, state, reward, done, _ = env.step_env(key, state, jnp.array([0.0]), params)
+        _, state, reward, done, _ = _jstep(key, state, jnp.array([0.0]), params)
         assert jnp.isfinite(state.n)
         assert jnp.all(jnp.isfinite(state.C))
         assert jnp.isfinite(state.T_fuel)
@@ -150,8 +151,9 @@ def test_ou_demand_evolves_target():
 
     # Step for a while and collect targets — they should vary
     targets = [float(state.target_n)]
+    _jstep = jax.jit(env.step_env)
     for _ in range(200):
-        _, state, _, done, _ = env.step_env(key, state, jnp.array([0.0]), params)
+        _, state, _, done, _ = _jstep(key, state, jnp.array([0.0]), params)
         targets.append(float(state.target_n))
         assert params.target_n_range[0] - 1e-6 <= targets[-1]
         assert targets[-1] <= params.target_n_range[1] + 1e-6
