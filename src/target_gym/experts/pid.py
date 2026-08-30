@@ -2693,6 +2693,153 @@ class StatefulWindTurbinePID:
     __call__ = step
 
 
+class StatefulBoilerDrumPID:
+    """Three-element drum level control plus a pressure loop.
+
+    Three-element control is the standard industrial answer to shrink and
+    swell, and it is the right baseline precisely because it does not try to
+    fight the inverse response with tuning:
+
+    * **Feedwater follows measured steam flow directly.** That is the mass
+      balance, closed as a feedforward rather than through the level gauge, so
+      it is immune to the level lying during a transient. This is the element
+      that makes the loop stable.
+    * **The level PI only trims that feedforward.** It is deliberately slow.
+      A fast level loop reacts to swell by *cutting* feedwater exactly when
+      mass is leaving fastest, which is how single-element control drives a
+      boiler into a low-level trip.
+    * **Firing regulates pressure.** Pressure is what the burners actually
+      control; a PI on pressure error suffices because the energy balance has
+      no inverse response.
+
+    obs: [level, pressure, q_steam, fuel_pct, feed_pct, target_level, target_pressure]
+    """
+
+    def __init__(
+        self,
+        Kp_level: float,
+        Ki_level: float,
+        Kp_pressure: float,
+        Ki_pressure: float,
+        Kd_pressure: float,
+        q_feed_max: float,
+        Q_max: float,
+        h_feedwater: float,
+        dt: float = 2.0,
+        trim_max: float = 25.0,
+    ):
+        self.Kp_level, self.Ki_level = Kp_level, Ki_level
+        self.Kp_pressure = Kp_pressure
+        self.Ki_pressure = Ki_pressure
+        self.Kd_pressure = Kd_pressure
+        self.q_feed_max = q_feed_max
+        self.Q_max = Q_max
+        self.h_feedwater = h_feedwater
+        self.dt = dt
+        # The level trim is bounded so the feedforward always dominates.
+        self.trim_max = trim_max
+        self.reset()
+
+    def reset(self):
+        self._level_int = 0.0
+        self._press_int = 0.0
+        self._prev_press_err = 0.0
+
+    def step(self, obs):
+        level = obs[..., 0]
+        pressure = obs[..., 1]
+        q_steam = obs[..., 2]
+        target_level = obs[..., 5]
+        target_pressure = obs[..., 6]
+
+        # --- Feedwater: steam-flow feedforward, trimmed by a slow level PI ---
+        err_l = target_level - level
+        self._level_int = self._level_int + err_l * self.dt
+        trim = self.Kp_level * err_l + self.Ki_level * self._level_int
+        trim_clipped = jnp.clip(trim, -self.trim_max, self.trim_max)
+        self._level_int = jnp.where(
+            trim != trim_clipped, self._level_int - err_l * self.dt, self._level_int
+        )
+        q_feed = jnp.clip(q_steam + trim_clipped, 0.0, self.q_feed_max)
+        feed_raw = 2.0 * (q_feed / self.q_feed_max) - 1.0
+
+        # --- Firing: enthalpy feedforward plus a PI on pressure ---
+        # The heat needed to turn the measured feedwater into steam is known,
+        # so the loop only has to correct the balance rather than find it.
+        Q_ff = q_steam * (2.75e6 - self.h_feedwater)
+        err_p = target_pressure - pressure
+        self._press_int = self._press_int + err_p * self.dt
+        deriv = (err_p - self._prev_press_err) / self.dt
+        self._prev_press_err = err_p
+        Q = Q_ff + self.Q_max * (
+            self.Kp_pressure * err_p
+            + self.Ki_pressure * self._press_int
+            + self.Kd_pressure * deriv
+        )
+        Q_clipped = jnp.clip(Q, 0.0, self.Q_max)
+        self._press_int = jnp.where(
+            Q != Q_clipped, self._press_int - err_p * self.dt, self._press_int
+        )
+        fuel_raw = 2.0 * (Q_clipped / self.Q_max) - 1.0
+
+        return jnp.stack([fuel_raw, feed_raw], axis=-1)
+
+    __call__ = step
+
+
+def make_boiler_drum_stateful_pid() -> StatefulBoilerDrumPID:
+    """Three-element level control plus pressure control for the drum boiler."""
+    from target_gym.boiler_drum.env import BoilerDrumParams
+
+    pr = BoilerDrumParams()
+    _p = _load_gains().get("boiler_drum", {})
+    return StatefulBoilerDrumPID(
+        Kp_level=float(_p.get("Kp_level", 60.0)),
+        Ki_level=float(_p.get("Ki_level", 0.6)),
+        Kp_pressure=float(_p.get("Kp_pressure", 0.05)),
+        Ki_pressure=float(_p.get("Ki_pressure", 0.002)),
+        Kd_pressure=float(_p.get("Kd_pressure", 0.0)),
+        q_feed_max=pr.q_feed_max,
+        Q_max=pr.Q_max,
+        h_feedwater=pr.h_feedwater,
+        dt=pr.delta_t,
+    )
+
+
+def make_boiler_drum_pid():
+    """JAX-functional 2x2 variant, for ``env.expert_policy``.
+
+    Two independent loops: level -> feedwater, pressure -> firing. It has no
+    steam-flow feedforward -- ``PIDParams`` cannot carry one -- so it is the
+    weaker single-element controller, and the stateful three-element version
+    above is the real baseline.
+    """
+    _p = _load_gains().get("boiler_drum", {})
+    params = MIMOPIDParams(
+        pid1=PIDParams(
+            Kp=float(_p.get("Kp_fuel", 0.4)),
+            Ki=float(_p.get("Ki_fuel", 0.01)),
+            Kd=0.0,
+            dt=2.0,
+            state_index=1,  # pressure
+            setpoint_index=6,  # target_pressure
+            action_min=-1.0,
+            action_max=1.0,
+        ),
+        pid2=PIDParams(
+            Kp=float(_p.get("Kp_feed", 4.0)),
+            Ki=float(_p.get("Ki_feed", 0.05)),
+            Kd=0.0,
+            dt=2.0,
+            state_index=0,  # level
+            setpoint_index=5,  # target_level
+            action_min=-1.0,
+            action_max=1.0,
+        ),
+    )
+    return params, mimo_pid_reset(params)
+
+
 def make_wind_turbine_stateful_pid() -> StatefulWindTurbinePID:
     """Above-rated controller for the NREL 5 MW turbine."""
     _p = _load_gains().get("wind_turbine", {})

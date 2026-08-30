@@ -228,6 +228,12 @@ def _wind_turbine():
     return WindTurbine()
 
 
+def _boiler_drum():
+    from target_gym.boiler_drum.env_jax import BoilerDrum
+
+    return BoilerDrum()
+
+
 def _hvac():
     from target_gym.hvac.env_jax import BuildingHVAC
 
@@ -482,6 +488,19 @@ _SPECS: tuple[EnvSpec, ...] = (
         test_params={"max_steps_in_episode": 192},
         tuned_gains_key="hvac",
         disturbance_fields=("weather_dev",),
+    ),
+    EnvSpec(
+        name="boiler_drum",
+        group="industrial",
+        env_factory=_boiler_drum,
+        params_cls=_LazyParams("target_gym.boiler_drum.env", "BoilerDrumParams"),
+        make_pid=_pid("make_boiler_drum_stateful_pid"),
+        make_mpc=_mpc("make_boiler_drum_mpc"),
+        # 400 steps = 800 s at dt = 2 s, about 20 times the ~35 s swell peak,
+        # so a controller has to survive many inverse-response transients.
+        test_params={"max_steps_in_episode": 400},
+        tuned_gains_key="boiler_drum",
+        disturbance_fields=("q_steam",),
     ),
     EnvSpec(
         name="wind_turbine",
