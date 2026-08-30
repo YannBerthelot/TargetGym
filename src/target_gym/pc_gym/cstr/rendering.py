@@ -1,102 +1,183 @@
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+"""Control-room rendering for the jacketed CSTR.
 
+The schematic is the reactor itself: contents tinted by bulk temperature, a
+cooling jacket tinted by coolant temperature, and a reaction bloom whose
+intensity follows conversion. The exothermic loop the controller is fighting --
+hotter contents burn reactant faster, which releases more heat -- is the thing
+the picture is meant to make legible.
+"""
+
+import numpy as np
+
+from target_gym import render_kit as rk
 from target_gym.pc_gym.cstr.env import compute_reward
+
+HISTORY_KEYS = ("t", "C_a", "target", "T", "T_c", "reward")
+
+
+def _draw_reactor(ax, state, params):
+    C_a = float(state.C_a)
+    T = float(state.T)
+    T_c = float(state.T_c)
+
+    vx, vy, vw, vh = 0.26, 0.16, 0.46, 0.62
+    jacket_pad = 0.055
+
+    # Cooling jacket -- the manipulated variable, drawn as the outer shell.
+    # Coolant: deep blue when cold (strong cooling), pale once it has warmed
+    # toward the reactor. Red would read as danger on a cooling jacket.
+    jc_frac = rk.clamp01((T_c - params.T_c_min) / (params.T_c_max - params.T_c_min))
+    jc = rk.duty_hex(jc_frac, "#1565c0", "#8aa8bd")
+    rk.vessel(
+        ax,
+        vx - jacket_pad,
+        vy - jacket_pad * 0.6,
+        vw + 2 * jacket_pad,
+        vh + jacket_pad * 1.2,
+        fc=jc,
+        ec=rk.FRAME,
+        lw=1.8,
+        alpha=0.30,
+    )
+    rk.label(
+        ax,
+        vx - jacket_pad - 0.02,
+        vy + vh * 0.5,
+        "JACKET",
+        color=rk.DIM,
+        size=7,
+        ha="right",
+        rotation=90,
+    )
+
+    # Reactor contents, tinted by bulk temperature.
+    body = rk.duty_hex(
+        (T - params.T_min) / (params.T_max - params.T_min), "#1a3a5c", rk.ORANGE
+    )
+    rk.vessel(ax, vx, vy, vw, vh, fc="#0b1420", ec=rk.FRAME, lw=2.2)
+    rk.fill_level(ax, vx, vy, vw, vh, 0.84, color=body, alpha=0.45)
+
+    # Reaction bloom: how much of the feed has been consumed.
+    conv = rk.clamp01((params.Caf - C_a) / max(params.Caf, 1e-9))
+    rk.glow(ax, vx + vw / 2, vy + vh * 0.42, 0.16, color=rk.AMBER, strength=conv * 2.2)
+
+    # Impeller.
+    cx, cy = vx + vw / 2, vy + vh * 0.40
+    ax.plot([cx, cx], [cy, vy + vh + 0.05], color=rk.DIM, lw=2, zorder=5)
+    for dx in (-0.075, 0.075):
+        ax.plot(
+            [cx, cx + dx], [cy, cy - 0.028], color=rk.TEXT, lw=2.4, alpha=0.75, zorder=5
+        )
+
+    # Feed and product.
+    rk.pipe(
+        ax,
+        [(0.06, 0.90), (cx - 0.14, 0.90), (cx - 0.14, vy + vh - 0.02)],
+        color=rk.FRAME,
+        lw=4,
+    )
+    rk.flow_arrow(
+        ax, cx - 0.14, vy + vh + 0.03, cx - 0.14, vy + vh - 0.03, color=rk.CYAN, lw=1.5
+    )
+    rk.label(
+        ax,
+        0.06,
+        0.945,
+        f"FEED  Caf {params.Caf:.2f}  Ti {params.Ti:.0f}K",
+        color=rk.DIM,
+        size=7,
+        ha="left",
+    )
+
+    rk.pipe(ax, [(cx, vy), (cx, 0.07), (0.90, 0.07)], color=rk.FRAME, lw=4)
+    rk.flow_arrow(ax, 0.80, 0.07, 0.93, 0.07, color=body, lw=1.6)
+    rk.label(
+        ax, 0.93, 0.135, f"PRODUCT  Ca {C_a:.3f}", color=rk.TEXT, size=7.5, ha="right"
+    )
+
+    # Coolant loop.
+    rk.flow_arrow(ax, 0.10, 0.30, 0.10, 0.58, color=jc, lw=1.8)
+    rk.label(ax, 0.10, 0.25, f"Tc {T_c:.1f}K", color=jc, size=7.5)
+
+    rk.label(
+        ax, cx, vy + vh + 0.14, f"T = {T:.1f} K", color=rk.TEXT, size=11, weight="bold"
+    )
+    rk.caption(ax, "exothermic A -> B   ·   jacket removes the heat")
 
 
 def render_cstr(state, params, step, history):
-    """
-    Render CSTR values (C_a, T, T_c, Reward) as time series graphs.
-    Returns an RGB image (numpy array).
-    """
-    # Update history
-    history["t"].append(step)
+    history["t"].append(step * params.delta_t)
     history["C_a"].append(float(state.C_a))
+    history["target"].append(float(state.target_CA))
     history["T"].append(float(state.T))
     history["T_c"].append(float(state.T_c))
     history["reward"].append(float(compute_reward(state, params)))
 
-    # Create figure
-    fig, axs = plt.subplots(4, 1, figsize=(7, 9), sharex=True, dpi=100)
-    fig.subplots_adjust(hspace=0.35)
-    fig.suptitle("CSTR Evolution Over Time", fontsize=16, weight="bold")
+    err = abs(float(state.C_a) - float(state.target_CA))
+    status = rk.NOMINAL if err < 0.01 else (rk.WATCH if err < 0.04 else rk.ALARM)
 
-    # Plot C_a
-    axs[0].plot(history["t"], history["C_a"], color="green", lw=2)
-    axs[0].set_ylabel("C_a (mol/L)")
-    axs[0].set_title("Concentration of A", fontsize=12, pad=8)
-    axs[0].grid(alpha=0.3)
+    ca_span = params.C_a_max - params.C_a_min
+    t_span = params.T_max - params.T_min
+    tc_span = params.T_c_max - params.T_c_min
+    conv = rk.clamp01((params.Caf - float(state.C_a)) / params.Caf)
 
-    # Plot T
-    axs[1].plot(history["t"], history["T"], color="red", lw=2)
-    axs[1].set_ylabel("T (K)")
-    axs[1].set_title("Reactor Temperature", fontsize=12, pad=8)
-    axs[1].grid(alpha=0.3)
-    axs[1].axhline(params.T_max, color="red", ls="--", lw=1, alpha=0.6)
-    axs[1].axhline(params.T_min, color="blue", ls="--", lw=1, alpha=0.6)
-    # Plot T_c
-    axs[2].plot(
-        history["t"],
-        history["T_c"],
-        color="blue",
-        lw=2,
-    )
-    axs[2].set_ylabel("T_c (K)")
-    axs[2].set_title("Cooling Jacket Temperature", fontsize=12, pad=8)
-    axs[2].grid(alpha=0.3)
-    axs[2].axhline(params.T_c_max, color="red", ls="--", lw=1, alpha=0.6)
-    axs[2].axhline(params.T_c_min, color="blue", ls="--", lw=1, alpha=0.6)
-
-    # Plot Reward
-    axs[3].plot(history["t"], history["reward"], color="purple", lw=2)
-    axs[3].set_ylabel("Reward")
-    axs[3].set_xlabel("Time step")
-    axs[3].set_title("Reward Signal", fontsize=12, pad=8)
-    axs[3].grid(alpha=0.3)
-    # axs[3].set_ylim(0, 1.05)
-
-    # Convert to numpy image
-    canvas = FigureCanvas(fig)
-    canvas.draw()
-    w, h = canvas.get_width_height()
-    image = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8).reshape(h, w, 4)[
-        ..., :3
+    gauges = [
+        rk.Gauge(
+            "Ca",
+            f"{float(state.C_a):.4f}",
+            (float(state.C_a) - params.C_a_min) / ca_span,
+            rk.CYAN,
+            target_frac=(float(state.target_CA) - params.C_a_min) / ca_span,
+        ),
+        rk.Gauge(
+            "TARGET Ca",
+            f"{float(state.target_CA):.4f}",
+            (float(state.target_CA) - params.C_a_min) / ca_span,
+            rk.DIM,
+        ),
+        rk.Gauge(
+            "T REACTOR",
+            f"{float(state.T):.1f} K",
+            (float(state.T) - params.T_min) / t_span,
+            rk.ORANGE,
+            limit_frac=1.0,
+        ),
+        rk.Gauge(
+            "T COOLANT",
+            f"{float(state.T_c):.1f} K",
+            (float(state.T_c) - params.T_c_min) / tc_span,
+            rk.BLUE,
+        ),
+        rk.Gauge("CONVERSION", f"{conv * 100:.1f} %", conv, rk.AMBER),
+        rk.Gauge(
+            "REWARD",
+            f"{history['reward'][-1]:.3f}",
+            rk.clamp01(history["reward"][-1]),
+            rk.GREEN,
+        ),
     ]
 
-    plt.close(fig)  # avoid memory leak
+    strip = rk.Strip(
+        history["t"],
+        [
+            rk.Series(history["C_a"], "Ca", rk.CYAN, fill_to=history["target"]),
+            rk.Series(history["target"], "target", "white", ls="--", lw=1.0, alpha=0.6),
+        ],
+        ylabel="Ca  [mol/L]",
+        xlabel="minutes",
+    )
+    fig = rk.frame(
+        title="CSTR  —  JACKETED  REACTOR",
+        step=step,
+        elapsed_s=step * params.delta_t * 60.0,
+        schematic=lambda ax: _draw_reactor(ax, state, params),
+        schematic_title="REACTOR",
+        gauges=gauges,
+        strips=[strip],
+        status=status,
+        subtitle="exothermic first-order reaction  ·  coolant temperature is the input",
+    )
+    return rk.finish(fig), history
 
-    return image, history
 
-
-def _render(cls, screen, state, params, frames, clock, stride: int = 10):
-    """Render function for CSTR environment using matplotlib graphs.
-
-    Args:
-        cls: Environment class reference.
-        screen: Unused (for Gymnax compatibility).
-        state: Current environment state.
-        params: Environment parameters.
-        frames: List of rendered frames.
-        clock: Unused (for Gymnax compatibility).
-        stride: Only render every N steps (default=1 = render every step).
-    """
-
-    if state is None:
-        if cls.state is None:
-            raise ValueError("No state provided")
-        state = cls.state
-
-    # Initialize histories
-    if not hasattr(cls, "history") or state.time == 1:
-        cls.history = {"t": [], "C_a": [], "T": [], "T_c": [], "reward": []}
-
-    step = state.time
-    # Only render every `stride` steps
-    if step % stride == 0 or step == 1:
-        frame, cls.history = render_cstr(state, params, step, cls.history)
-
-        frames.append(frame)
-        cls.frames = frames
-
-    return frames, screen, clock
+_render = rk.make_render_hook(render_cstr, HISTORY_KEYS, stride=10)
