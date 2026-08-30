@@ -23,7 +23,7 @@
   },
   "_meta": {
     "description": "PID gains tuned via relay autotuning (Astrom-Hagglund). Re-generate with: python scripts/tune_pid.py",
-    "tuned_at": "2026-08-30T22:15:05",
+    "tuned_at": "2026-08-30T22:40:05",
     "methodology": "Relay feedback experiment: inject relay signal, measure sustained oscillation to extract ultimate gain (Ku) and period (Tu), then compute PID gains via tuning rules. Gain-scheduled across N operating points spanning the target range.",
     "tuning_rule": "amigo"
   },
@@ -226,40 +226,40 @@
       "Kd": 0.0
     },
     "pid2": {
-      "Kp": 10.0,
-      "Ki": 0.05,
+      "Kp": 100.0,
+      "Ki": 0.5,
       "Kd": 0.0
     },
     "gain_schedule_pid1": {
       "operating_points": [
-        0.1,
-        0.12142857142857144,
-        0.14285714285714285,
-        0.16428571428571428,
-        0.18571428571428572,
-        0.20714285714285716,
-        0.22857142857142856,
-        0.25
+        0.11,
+        0.12142857142857143,
+        0.13285714285714287,
+        0.1442857142857143,
+        0.15571428571428572,
+        0.16714285714285715,
+        0.17857142857142858,
+        0.19
       ],
       "Kp": [
         5.0,
-        10.0,
-        10.0,
-        10.0,
-        50.0,
-        100.0,
-        50.0,
-        50.0
+        5.0,
+        5.0,
+        5.0,
+        5.0,
+        5.0,
+        5.0,
+        5.0
       ],
       "Ki": [
-        0.05,
+        0.0,
+        0.0,
         0.0,
         0.05,
         0.05,
-        0.2,
-        1.0,
-        1.0,
-        0.5
+        0.05,
+        0.05,
+        0.05
       ],
       "Kd": [
         0.0,
@@ -274,34 +274,34 @@
     },
     "gain_schedule_pid2": {
       "operating_points": [
-        0.1,
-        0.12142857142857144,
-        0.14285714285714285,
-        0.16428571428571428,
-        0.18571428571428572,
-        0.20714285714285716,
-        0.22857142857142856,
-        0.25
+        0.11,
+        0.12142857142857143,
+        0.13285714285714287,
+        0.1442857142857143,
+        0.15571428571428572,
+        0.16714285714285715,
+        0.17857142857142858,
+        0.19
       ],
       "Kp": [
-        20.0,
-        20.0,
-        20.0,
-        20.0,
-        20.0,
-        20.0,
-        10.0,
-        20.0
+        50.0,
+        50.0,
+        50.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
       ],
       "Ki": [
         0.2,
         0.2,
         0.2,
-        0.2,
-        0.2,
-        0.2,
-        0.2,
-        0.2
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
       ],
       "Kd": [
         0.0,
@@ -315,7 +315,7 @@
       ]
     },
     "tuning_rule": "grid_search_max_reward",
-    "note": "CROSS pairing: pid1 drives v1 from h2, pid2 drives v2 from h1. gamma1+gamma2 = 0.4 puts the plant in Johansson's non-minimum-phase configuration where the RGA element lambda11 = -0.067, so the diagonal pairing is unusable -- closing one loop reverses the sign of the other and integral action trips the low-level limit within 40 steps. Retuned after the target range was corrected to the reachable envelope; the tuner now stops crediting reward once an episode trips, and scores each candidate on four initial conditions rather than one."
+    "note": "CROSS pairing: pid1 drives v1 from h2, pid2 drives v2 from h1. gamma1+gamma2 = 0.4 puts the plant in Johansson's non-minimum-phase configuration where the RGA element lambda11 = -0.067, so the diagonal pairing is unusable -- closing one loop reverses the sign of the other and integral action trips the low-level limit within 40 steps. Tuned against the corrected target box and the tightened tracking band (0.05 m, was the full 1.45 m tank span). The tuner stops crediting reward once an episode trips and scores each candidate on four initial conditions."
   },
   "patrol": {
     "Kp_alt": 0.01,
