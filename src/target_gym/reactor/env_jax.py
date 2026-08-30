@@ -23,7 +23,6 @@ from target_gym.reactor.env import (
 from target_gym.reactor.rendering import _render
 from target_gym.utils import save_video
 
-
 # Number of physics sub-steps per control step. Constant so JIT can treat it
 # as static in `lax.scan(length=...)`. Change here only — `env.py` reads it
 # via a delayed import in `check_is_terminal` / `get_target_from_schedule`.
