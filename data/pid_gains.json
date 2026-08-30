@@ -361,5 +361,23 @@
     "Kd_pitch": 0.0,
     "tuning_rule": "grid_search_max_reward",
     "note": "Pitch PI on rotor-speed error; generator torque is a feedforward for the power setpoint with rotor-speed protection. Return is flat above Kp~12 (392 vs 394 at Kp=25) and all episodes complete without tripping, so 12 keeps a factor-2 gain margin on a rate-limited pitch actuator."
+  },
+  "cement_kiln": {
+    "Kp_outer": 12000.0,
+    "Ki_outer": 6.0,
+    "Kp_inner": 0.025,
+    "Ki_inner": 5e-06,
+    "T_bz_base": 1765.0,
+    "tuning_rule": "grid_search_max_reward",
+    "note": "Cascade: free lime trims a burning-zone setpoint, fuel holds it, kiln speed follows feed to hold bed depth. The outer loop is strongly proportional with weak integral (Kp 12000 / Ki 6) -- integral action on a measurement half an hour behind the input oscillates at the delay period. Return 176 over 4 seeds against 37 for the best constant action."
+  },
+  "boiler_drum": {
+    "Kp_level": 60.0,
+    "Ki_level": 0.6,
+    "Kp_pressure": 0.05,
+    "Ki_pressure": 0.002,
+    "Kd_pressure": 0.0,
+    "tuning_rule": "hand_tuned_three_element",
+    "note": "Three-element: feedwater tracks measured steam flow as a feedforward and the level PI only trims it, bounded to 25 kg/s. A fast level loop reacts to swell by cutting feedwater exactly when mass is leaving fastest. Return 215-296 against 5 for the best constant action, which trips in 5-117 steps."
   }
 }

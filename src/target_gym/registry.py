@@ -228,6 +228,12 @@ def _wind_turbine():
     return WindTurbine()
 
 
+def _cement_kiln():
+    from target_gym.cement_kiln.env_jax import CementKiln
+
+    return CementKiln()
+
+
 def _boiler_drum():
     from target_gym.boiler_drum.env_jax import BoilerDrum
 
@@ -488,6 +494,20 @@ _SPECS: tuple[EnvSpec, ...] = (
         test_params={"max_steps_in_episode": 192},
         tuned_gains_key="hvac",
         disturbance_fields=("weather_dev",),
+    ),
+    EnvSpec(
+        name="cement_kiln",
+        group="industrial",
+        env_factory=_cement_kiln,
+        params_cls=_LazyParams("target_gym.cement_kiln.env", "CementKilnParams"),
+        make_pid=_pid("make_cement_kiln_stateful_pid"),
+        make_mpc=_mpc("make_cement_kiln_mpc"),
+        # 240 steps = 2 hours at dt = 30 s, about five transport delays -- long
+        # enough that a controller has to live with the consequences of its
+        # own earlier fuel changes.
+        test_params={"max_steps_in_episode": 240},
+        tuned_gains_key="cement_kiln",
+        disturbance_fields=("raw_meal",),
     ),
     EnvSpec(
         name="boiler_drum",

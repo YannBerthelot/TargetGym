@@ -1,7 +1,7 @@
 """
 MPC oracle controllers for target_gym environments.
 
-Two implementations are provided:
+Three implementations are provided:
 
 GradientMPC  (JAX — Car, Plane)
     Single-shooting gradient MPC: differentiates through a JAX scan rollout
@@ -17,6 +17,13 @@ CasadiMPC  (CasADi / IPOPT — CSTR, FirstOrder, Nonsmooth, FourTank)
 
     Even a short horizon (N=5, matching PC-gym's default) produces near-oracle
     performance because the NLP is solved exactly at each step.
+
+SamplingMPC  (JAX, gradient-free — Cement Kiln)
+    Cross-entropy-method shooting: samples action sequences, rolls them out,
+    refits to the elite fraction.  For plants whose forward rollout is well
+    behaved but whose adjoint is not -- the kiln's Arrhenius-coupled advection
+    makes reverse-mode gradients overflow to NaN after about eight steps, while
+    finite differences on the same objective stay clean.
 
 Common API (both classes)::
 
@@ -1338,6 +1345,150 @@ def make_boiler_drum_mpc(
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,
+    )
+
+
+class SamplingMPC:
+    """Cross-entropy-method MPC — a gradient-free shooting controller.
+
+    Exists because some plants are not differentiable in practice even when
+    they are differentiable in principle. On the cement kiln the *forward*
+    rollout is perfectly well behaved, but the adjoint is not: free lime
+    depends on temperature through an Arrhenius term with a 280 kJ/mol
+    activation energy, that temperature is itself advected down the kiln, and
+    the resulting tangent system grows by roughly two orders of magnitude per
+    step. Reverse-mode gradients overflow to NaN after about eight steps --
+    measured at 1.6e-3 over five steps and 8.3e3 over eight -- while finite
+    differences on the same objective stay clean.
+
+    So this samples instead of differentiating: draw action sequences, roll
+    them out, keep the elite fraction, refit, repeat. Everything is vmapped and
+    jitted, so the cost is dominated by forward rollouts, which are cheap.
+    """
+
+    def __init__(
+        self,
+        env,
+        params,
+        objective,
+        action_dim: int = 1,
+        action_lb: float = -1.0,
+        action_ub: float = 1.0,
+        horizon: int = 30,
+        n_samples: int = 96,
+        n_elite: int = 12,
+        n_iter: int = 4,
+        init_std: float = 0.5,
+        min_std: float = 0.05,
+        alpha: float = 0.4,
+        seed: int = 0,
+    ):
+        self.env = env
+        self.params = params
+        self.objective = objective
+        self.action_dim = action_dim
+        self.action_lb, self.action_ub = float(action_lb), float(action_ub)
+        self.horizon = horizon
+        self.n_samples, self.n_elite, self.n_iter = n_samples, n_elite, n_iter
+        self.init_std, self.min_std, self.alpha = init_std, min_std, alpha
+        self._key = jax.random.PRNGKey(seed)
+        self.reset()
+        self._jit_optimize = jax.jit(self._optimize)
+
+    def _env_action(self, u):
+        return u[0] if self.action_dim == 1 else u
+
+    def _score(self, actions, state):
+        """Total objective for one action sequence."""
+        key = jax.random.PRNGKey(0)
+
+        def step_fn(carry, u):
+            _, new_s, _, _, _ = self.env.step_env(
+                key, carry, self._env_action(u), self.params
+            )
+            return new_s, self.objective(new_s, self.params)
+
+        _, rewards = jax.lax.scan(step_fn, state, actions)
+        return jnp.sum(rewards)
+
+    def _optimize(self, mean, std, state, key):
+        batch_score = jax.vmap(self._score, in_axes=(0, None))
+
+        def body(carry, _):
+            mean, std, key = carry
+            key, sub = jax.random.split(key)
+            noise = jax.random.normal(
+                sub, (self.n_samples, self.horizon, self.action_dim)
+            )
+            samples = jnp.clip(
+                mean[None] + std[None] * noise, self.action_lb, self.action_ub
+            )
+            scores = batch_score(samples, state)
+            scores = jnp.where(jnp.isnan(scores), -jnp.inf, scores)
+            elite_idx = jnp.argsort(scores)[-self.n_elite :]
+            elite = samples[elite_idx]
+            new_mean = elite.mean(axis=0)
+            new_std = jnp.maximum(elite.std(axis=0), self.min_std)
+            mean = self.alpha * mean + (1.0 - self.alpha) * new_mean
+            std = self.alpha * std + (1.0 - self.alpha) * new_std
+            return (mean, std, key), None
+
+        (mean, std, _), _ = jax.lax.scan(
+            body, (mean, std, key), None, length=self.n_iter
+        )
+        return mean, std
+
+    def step(self, _obs, state):
+        """Return the next action. ``_obs`` is ignored (kept for API symmetry)."""
+        self._key, sub = jax.random.split(self._key)
+        self._mean, self._std = self._jit_optimize(self._mean, self._std, state, sub)
+        first = np.array(self._mean[0])
+        # Shift the plan forward one step for the next solve.
+        self._mean = jnp.concatenate([self._mean[1:], self._mean[-1:]], axis=0)
+        self._std = jnp.full_like(self._std, self.init_std)
+        return float(first[0]) if self.action_dim == 1 else first
+
+    def reset(self):
+        self._mean = jnp.zeros((self.horizon, self.action_dim))
+        self._std = jnp.full((self.horizon, self.action_dim), self.init_std)
+
+
+def _cement_kiln_objective(state, params):
+    """Quadratic in the free-lime error, sharing the reward's minimiser.
+
+    The environment's reward clips flat once free lime is more than
+    ``lime_band`` from target -- exactly the situation the controller is called
+    on to fix -- so a quadratic that stays informative far from target is what
+    the optimiser needs.
+    """
+    err = (state.lime[-1] - state.target_lime) / params.lime_band
+    fuel = (state.fuel - params.fuel_min) / (params.fuel_max - params.fuel_min)
+    return -(err**2 + 0.02 * fuel)
+
+
+def make_cement_kiln_mpc(
+    env, params, horizon: int = 40, n_samples: int = 96, n_iter: int = 4, **kwargs
+):
+    """Sampling (CEM) MPC for the rotary kiln.
+
+    Gradient-free by necessity, not preference -- see ``SamplingMPC`` for the
+    measured reason.
+
+    A 40-step horizon is 20 minutes at dt = 30 s, most of the ~25 minute
+    transport delay. That is the point: a controller whose horizon is shorter
+    than the delay is choosing fuel whose consequences it cannot see.
+    """
+    return SamplingMPC(
+        env,
+        params,
+        objective=_cement_kiln_objective,
+        action_dim=2,
+        action_lb=-1.0,
+        action_ub=1.0,
+        horizon=horizon,
+        n_samples=n_samples,
+        n_iter=n_iter,
+        **kwargs,
     )
 
 
