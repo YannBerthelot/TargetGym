@@ -49,6 +49,7 @@ aircraft learn) variants share the same 3D physics.
 | Glass Furnace | Hold a crown temperature setpoint in a regenerative float-glass furnace | 1 (fuel flow) | 5 | ~3.9M |
 | Nuclear Reactor | Control neutron power via rod reactivity in a PWR with xenon dynamics | 1 (rod reactivity) | 4 | ~1.5M |
 | Building HVAC | Track a scheduled comfort setpoint against weather and occupancy | 1 (heating power) | 7 | ~17.7M |
+| Boiler Drum | Hold drum level and pressure in a natural-circulation boiler through shrink and swell | 2 (firing, feedwater) | 7 | ~10.8M |
 
 ### Energy
 
@@ -73,6 +74,7 @@ Environments are designed to span a wide range of difficulty, making TargetGym s
 | 4 -- Very Hard | Wind Turbine | 6 | 2 | Nonlinear aero-elastic | Turbulent unmeasured inflow, region switching, drive-train torsion, thrust/power trade-off |
 | 4 -- Very Hard | pH Neutralisation | 3 | 1 | Implicit algebraic | 45x steady-state gain variation across the range, unmeasured buffering, same pH from different states |
 | 4 -- Very Hard | Binary Distillation | 6 | 2 | Stiff nonlinear MIMO | **Ill-conditioned** (condition number ~140): the two purities move together far more easily than apart |
+| 5 -- Extreme | Boiler Drum | 7 | 2 | Nonlinear, two-phase | **Non-minimum phase**: the level's first move is the wrong way. Integrating output (no self-regulation), irrecoverable trips both sides, hidden riser voidage |
 | 4 -- Very Hard | Plane 2D | 9 | 2 | 2D aerodynamics | Coupled nonlinear aerodynamics, very long horizon (10 000 steps) |
 | 4 -- Very Hard | Glass Furnace | 5 | 1 | Nonlinear radiation (T^4) | **Partial observability** (6/9 states hidden), regenerator reversal cycle, multi-hour transients, batch-blanket nonlinearity |
 | 4 -- Very Hard | Nuclear Reactor | 4 | 1 | Stiff multi-timescale | **Partial observability** (7/11 states hidden), xenon memory trap, 86k-step horizon |
@@ -159,7 +161,7 @@ expert (PID) rollouts.
 
 ## Expert Baselines
 
-Fourteen of the sixteen environments ship both expert baselines. The two **Plane Patrol**
+Fifteen of the seventeen environments ship both expert baselines. The two **Plane Patrol**
 variants currently have neither -- see *Baseline coverage* below.
 
 - **PID**: Relay-autotuned or gradient-tuned controllers. Aircraft altitude tracking
@@ -216,6 +218,7 @@ Worked examples of what this catches:
 | Binary Distillation | Skogestad "Column A" (41 stages, alpha = 1.5) | Perturbation-derived gain matrix contradicted the mass balance -- the steps had not converged |
 | Wind Turbine | NREL 5 MW reference turbine definition | A Region 2 torque cap made things worse: it only binds *below* rated speed |
 | Grid Battery | Published Li-ion grid-BESS behaviour (round-trip, voltage window, thermal rise) | Sizing caught three errors before coding: 0.05 ohm gives 79 % round-trip, passive cooling implies a 438 K rise, OCV exceeded the 4.2 V ceiling |
+| Boiler Drum | IAPWS steam tables, Astrom & Bell drum geometry, circulation ratio 5-15 | Tracking riser steam as *quality* rather than mass suppressed the swell entirely -- every coefficient correct, and no inverse response |
 
 A shared **conformance suite** runs the same contract against every registered
 environment: PRNG hygiene, determinism, the gymnax six-value step API,
@@ -234,7 +237,7 @@ effectiveness. A new environment inherits all of it from one registry entry.
   environment (PRNG hygiene, determinism, `jit`/`vmap`/`scan`, numerical health,
   controller effectiveness).
 * **Target MDP focus**: Each task is about reaching and maintaining target states.
-* **Expert baselines**: PID and MPC for fourteen of sixteen environments (see *Baseline coverage*).
+* **Expert baselines**: PID and MPC for fifteen of seventeen environments (see *Baseline coverage*).
 * **Challenging dynamics**: Captures irrecoverable states, partial observability, and momentum effects.
 * **Visualization**: All environments come with rendering and video generation.
 * **Compatible with RL libraries**: Offers [Gymnax](https://github.com/RobertTLange/gymnax) and [Gymnasium](https://github.com/Farama-Foundation/Gymnasium) interfaces.
