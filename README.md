@@ -2,15 +2,36 @@
 
 
 
-**TargetGym** is a lightweight yet realistic collection of **reinforcement learning environments** designed around **target MDPs** -- tasks where the objective is to **reach and maintain a specific subset of states** (target states).
+**TargetGym** is a collection of JAX **reinforcement learning environments** built
+around **target MDPs** -- tasks where the objective is to **reach and maintain a
+subset of states**, not to reach a goal and stop. Holding a setpoint against
+disturbances, forever, is what industrial control actually is.
 
-Environments are built to be **fast, parallelizable, and physics-based**, enabling large-scale RL research while capturing the core challenges of real-world control systems such as **delays, irrecoverable states, partial observability, and competing objectives**.
+Eighteen environments spanning aircraft, process, industrial and energy plants.
+They are fast (0.3-17 M steps/s on CPU, `jit`/`vmap`/`scan` throughout) and
+their physics is a **documented, tested contract** rather than a claim: every
+environment carries a `PHYSICS.md` with a sourced parameter table, published
+validation targets asserted by tests, and quantified known deviations.
+
+What they are *for* is the failure modes that make real control hard:
+
+| | |
+|---|---|
+| **Irrecoverable states** | A boiler drum that carries water into the turbine, a reactor past runaway, a kiln that has gone cold |
+| **Partial observability** | The furnace hides 6 of 9 states, the reactor 7 of 11, the kiln 64 behind 8 measurements |
+| **Non-minimum phase** | Drum level rises as mass *leaves*; the four-tank's obvious loop pairing is unstable |
+| **Transport delay** | Half the kiln's response to a fuel change takes a full 25-minute residence time |
+| **Multi-timescale** | Millisecond neutronics against hour-long xenon; sub-second flame gas against 30 h glass residence |
+| **Finite budgets** | A battery whose tracking *now* costs the ability to track later |
+
+Sixteen of the eighteen ship PID and MPC baselines, so a learned policy has
+something real to beat -- and the two that do not say so plainly.
 
 ---
 
 ## Environments
 
-### Physical Control
+### Aircraft
 
 | Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, 10^8 steps) |
 |---|---|---|---|---|
@@ -32,7 +53,8 @@ aircraft learn) variants share the same 3D physics.
 | Plane Patrol -- Bearing-only | Same, but the follower sees only range + bearing to the lead (partial obs) | 3 | 21 | -- |
 | Plane Patrol -- MARL / Formation | `1 + num_wingmen` learners (up to 5 planes): lead flies its patrol pattern, wingmen hold slots **evenly spread across both sides** (cooperative team reward, JaxMARL-style API) | 3 per agent | 18 (lead) / 26 (wingman) | -- |
 
-### Process Control (adapted from [PC-gym](https://github.com/MaximilianB2/pc-gym))
+### Process  
+*The first three are adapted from [PC-gym](https://github.com/MaximilianB2/pc-gym); their models were verified against its source term for term.*
 
 | Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, 10^8 steps) |
 |---|---|---|---|---|
@@ -221,8 +243,25 @@ variants currently have neither -- see *Baseline coverage* below.
   uses a **cascaded autopilot** (altitude -> vertical speed -> pitch -> elevator) with
   attitude limiting and angle-of-attack protection, since a single loop mapping
   altitude error straight to elevator departs controlled flight on large climbs.
-- **MPC**: Model Predictive Control via CasADi/IPOPT, or gradient-based MPC through
-  JAX autodiff for the aircraft. Near-optimal, but far too slow for real-time use.
+- **MPC**: Three implementations, chosen per plant. **CasADi/IPOPT** where a
+  symbolic NLP is natural; **gradient MPC** through JAX autodiff where the plant
+  is already differentiable; and **cross-entropy sampling** for the cement kiln,
+  which is gradient-free by necessity -- its free lime depends on temperature
+  through a 280 kJ/mol Arrhenius term that is then advected down the kiln, so
+  reverse-mode gradients overflow to NaN after about eight steps while finite
+  differences on the same objective stay clean.
+
+  An MPC objective must share the reward's *minimiser*, not its shape. Copying
+  a clipped tracking reward gives the optimiser no gradient exactly where it is
+  needed; dropping the clip makes large errors score better. Both failures
+  happened here before the objectives became plain quadratics.
+
+The right *structure* usually matters more than the gains, and the baselines are
+chosen to show it: three-element control on the boiler drum, where feedwater
+tracks measured steam flow as a feedforward so the level gauge cannot lie to it;
+a cascade on the kiln, because integral action on a half-hour-old measurement
+oscillates at the delay period; and **crossed** loops on the four-tank, whose
+negative RGA element makes the obvious diagonal pairing unstable.
 
 Every baseline is held to a **controller-effectiveness contract** in the test suite:
 a PID must beat the best constant action on its environment. This is a deliberately
@@ -274,11 +313,24 @@ Worked examples of what this catches:
 | Grid Battery | Published Li-ion grid-BESS behaviour (round-trip, voltage window, thermal rise) | Sizing caught three errors before coding: 0.05 ohm gives 79 % round-trip, passive cooling implies a 438 K rise, OCV exceeded the 4.2 V ceiling |
 | Boiler Drum | IAPWS steam tables, Astrom & Bell drum geometry, circulation ratio 5-15 | Tracking riser steam as *quality* rather than mass suppressed the swell entirely -- every coefficient correct, and no inverse response |
 | Cement Kiln | Published 3.0-3.5 MJ/kg heat consumption, Sullivan residence correlation, 0.5-2 % free lime | An energy audit caught the kiln being fed *raw* meal instead of calcined hot meal, overstating its thermal load by ~50 % |
+| Four Tank | Johansson (2000); RGA, reachability of the target box | The sampled targets sat entirely **above** what the plant can reach -- every episode was unwinnable, and the loops were paired the unstable way round |
+| CSTR | Steady-state multiplicity, branch stability | The 350 K runaway trip sits exactly where the unstable middle steady state does, so termination fires as the reactor ignites |
+| 3D Aircraft | Coordinated-turn relation, load factor | Banked flight reproduces psi_dot = g tan(phi)/V to within 0.5 %, though nothing in the model computes a turn rate |
+
+**All eighteen environments are covered** by fourteen contracts -- the three 3D
+aircraft tasks and both patrol variants share the aircraft ones, since they
+share the dynamics.
 
 A shared **conformance suite** runs the same contract against every registered
 environment: PRNG hygiene, determinism, the gymnax six-value step API,
 `jit`/`vmap`/`scan` compatibility, full-episode numerical health, and controller
 effectiveness. A new environment inherits all of it from one registry entry.
+
+Its limits are worth knowing. The effectiveness contract only asks that the PID
+beat the best constant action, and the four-tank environment passed it for
+months while *every episode was unwinnable* -- both controllers simply sat far
+from a setpoint the plant could never reach. Reachability of the target set is
+now asserted per environment, because a shared contract cannot see it.
 
 ---
 
@@ -294,7 +346,12 @@ effectiveness. A new environment inherits all of it from one registry entry.
 * **Target MDP focus**: Each task is about reaching and maintaining target states.
 * **Expert baselines**: PID and MPC for sixteen of eighteen environments (see *Baseline coverage*).
 * **Challenging dynamics**: Captures irrecoverable states, partial observability, and momentum effects.
-* **Visualization**: All environments come with rendering and video generation.
+* **Control-room rendering**: The twelve non-aircraft environments share one
+  toolkit (`target_gym/render_kit.py`) -- a live plant schematic, an instrument
+  stack with limit and setpoint markers, and strip charts. The schematics are
+  drawn from state the controller *cannot* see, so a frame shows both what the
+  agent measures and what it is up against. The six aircraft tasks render as
+  pygame scene views with a HUD.
 * **Compatible with RL libraries**: Offers [Gymnax](https://github.com/RobertTLange/gymnax) and [Gymnasium](https://github.com/Farama-Foundation/Gymnasium) interfaces.
 
 ---
@@ -445,8 +502,9 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 
 * [x] Mature the glass furnace and reactor environments (physics, reward shaping, episode lengths).
 * [x] Document and test every environment's physics against published data.
+* [x] Rebuild every renderer on a shared control-room toolkit, and regenerate
+      the gallery clips against it.
 * [ ] Restore the Plane Patrol baselines with pursuit guidance (see *Baseline coverage*).
-* [ ] Regenerate the glass furnace gallery clip against the refined physics.
 * [ ] Add microburst / spatially-varying wind fields (position-dependent, not just altitude-linear).
 * [ ] Provide benchmark results for popular RL baselines.
 * [ ] Add random orientation variations to circle and heading tasks.
@@ -460,8 +518,13 @@ the patrol skips above:
   corresponding Mach effect on stall onset, so peak lift *rises* with Mach
   instead of falling. Out of the normal flight envelope, but the sign is wrong.
 * **Plane Patrol**: no PID or MPC baseline (above).
-* **Glass furnace media**: the gallery clip predates the refined regenerative
-  physics. Its gains are now tuned by grid search.
+* **Four-tank zero is fixed**: the real apparatus is celebrated for letting you
+  move the multivariable zero across the imaginary axis by turning two valves.
+  Here `gamma1` and `gamma2` are constants, so only the non-minimum-phase
+  configuration is available.
+* **CSTR target margin**: the bottom of its sampled band needs the coolant
+  within a fraction of a kelvin of its stop. Reachable, but with almost no
+  authority left for disturbance rejection.
 
 ---
 
