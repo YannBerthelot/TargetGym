@@ -340,5 +340,19 @@
     "Kd": 0.05,
     "tuning_rule": "grid_search_max_reward",
     "note": "Grid search over (Kp, Ki, Kd) maximising mean cumulative env reward. Relay autotuning fails on this plant: the crown temperature integrates the firing rate, so under a bang-bang relay it drifts without sustained zero-crossings and Astrom-Hagglund has no Ku/Tu to extract."
+  },
+  "distillation": {
+    "pid1": {
+      "Kp": 150.0,
+      "Ki": 1.0,
+      "Kd": 0.0
+    },
+    "pid2": {
+      "Kp": -150.0,
+      "Ki": -1.0,
+      "Kd": 0.0
+    },
+    "tuning_rule": "grid_search_max_reward",
+    "note": "LV pairing: yD<-L (positive gain), xB<-V (negative -- more boilup strips the bottoms cleaner, lowering xB). Grid search over (Kp, Ki); return rises monotonically to Kp~400 with no instability, but 150 captures 98% of it at a quarter of the control activity, which is the safer margin on a plant with RGA ~50."
   }
 }

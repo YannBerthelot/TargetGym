@@ -1268,6 +1268,30 @@ def make_reactor_mpc(env, params, horizon: int = 20):
     return ReactorCasadiMPC(env, params, horizon=horizon)
 
 
+def make_distillation_mpc(
+    env, params, horizon: int = 15, n_iter: int = 40, lr: float = 0.08
+):
+    """Gradient MPC for the distillation column.
+
+    Gradient-based rather than CasADi: the plant is 41 coupled stage balances
+    that are already differentiable JAX, and re-expressing them symbolically
+    would duplicate the whole model for no gain -- the same rationale as the
+    aircraft. Optimises [L_raw, V_raw] jointly, which is the point on an
+    ill-conditioned plant: the useful move is a *coordinated* change in reflux
+    and boilup, exactly what independent diagonal loops cannot make.
+    """
+    return GradientMPC(
+        env,
+        params,
+        action_dim=2,
+        action_lb=-1.0,
+        action_ub=1.0,
+        horizon=horizon,
+        n_iter=n_iter,
+        lr=lr,
+    )
+
+
 def make_ph_mpc(env, params, horizon: int = 20):
     """CasADi/IPOPT MPC for the pH neutralisation CSTR.
 

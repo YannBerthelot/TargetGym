@@ -9,6 +9,8 @@ from target_gym.patrol.env_jax import PlanePatrol, PlanePatrolBearingOnly
 from target_gym.patrol.marl import PatrolMARLParams, PlanePatrolMARL
 from target_gym.pc_gym.cstr.env_jax import CSTR, CSTRParams
 from target_gym.pc_gym.first_order.env_jax import FirstOrderParams, FirstOrderSystem
+from target_gym.pc_gym.distillation.env import DistillationParams
+from target_gym.pc_gym.distillation.env_jax import DistillationColumn
 from target_gym.pc_gym.four_tank.env_jax import FourTank, FourTankParams
 from target_gym.pc_gym.ph_neutralization.env import PHParams
 from target_gym.pc_gym.ph_neutralization.env_jax import PHNeutralization
@@ -51,6 +53,9 @@ __all__ = (
     "FirstOrderParams",
     "FourTank",
     "FourTankParams",
+    # Distillation
+    "DistillationColumn",
+    "DistillationParams",
     # pH neutralisation
     "PHNeutralization",
     "PHParams",

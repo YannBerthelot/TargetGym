@@ -185,6 +185,12 @@ def _first_order():
     return FirstOrderSystem()
 
 
+def _distillation():
+    from target_gym.pc_gym.distillation.env_jax import DistillationColumn
+
+    return DistillationColumn()
+
+
 def _ph_neutralization():
     from target_gym.pc_gym.ph_neutralization.env_jax import PHNeutralization
 
@@ -407,6 +413,22 @@ _SPECS: tuple[EnvSpec, ...] = (
         test_params={"max_steps_in_episode": 300},
         tuned_gains_key="ph_neutralization",
         disturbance_fields=("q2",),
+    ),
+    EnvSpec(
+        name="distillation",
+        group="process",
+        env_factory=_distillation,
+        params_cls=_LazyParams(
+            "target_gym.pc_gym.distillation.env", "DistillationParams"
+        ),
+        make_pid=_pid("make_distillation_stateful_pid"),
+        make_mpc=_mpc("make_distillation_mpc"),
+        # 200 min ~ one dominant time constant. The column is the slowest
+        # environment per step (41 states, 16 substeps for stability), so the
+        # test episode is kept short.
+        test_params={"max_steps_in_episode": 200},
+        tuned_gains_key="distillation",
+        disturbance_fields=("zF",),
     ),
     # -- Industrial / energy ------------------------------------------------
     EnvSpec(
