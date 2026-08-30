@@ -438,6 +438,83 @@ def _tune_glass_furnace(n_points: int, tuning_rule: str, **kw) -> dict:
     }
 
 
+def _tune_glass_furnace_search(n_points: int, tuning_rule: str, **kw) -> dict:
+    """Grid search over (Kp, Ki, Kd) maximising cumulative env reward.
+
+    Replaces relay autotuning for the glass furnace. Under a bang-bang relay
+    the crown temperature does not produce sustained zero-crossings -- the
+    thermal mass integrates the firing rate, so it drifts rather than
+    oscillating -- and ``relay_sweep`` aborts with "every operating point
+    failed". Same failure mode, and same remedy, as FourTank.
+
+    The objective is mean cumulative reward over several seeds on a full
+    episode, which is the quantity the benchmark actually scores, so it
+    balances crown tracking against the fuel penalty without needing a
+    separate weighting.
+
+    ``tuning_rule`` is ignored (kept for signature compatibility).
+    """
+    import itertools
+
+    import jax
+    import jax.numpy as jnp
+    import numpy as np
+
+    from target_gym import GlassFurnace, GlassFurnaceParams
+    from target_gym.experts.pid import StatefulPID
+
+    env = GlassFurnace()
+    params = GlassFurnaceParams(max_steps_in_episode=kw.get("max_steps", 1920))
+    seeds = range(kw.get("n_seeds", 3))
+
+    def score(Kp, Ki, Kd):
+        totals = []
+        for seed in seeds:
+            pid = StatefulPID(
+                Kp=Kp, Ki=Ki, Kd=Kd, dt=params.delta_t, state_index=0, setpoint_index=4
+            )
+            key = jax.random.PRNGKey(seed)
+            obs, state = env.reset_env(key, params)
+            total = 0.0
+            while int(state.time) < int(params.max_steps_in_episode):
+                key, sub = jax.random.split(key)
+                obs, state, reward, terminated, _ = env.step_env(
+                    sub, state, jnp.asarray(pid(obs)), params
+                )
+                total += float(reward)
+                if bool(terminated):
+                    break
+            totals.append(total)
+        return float(np.mean(totals))
+
+    kp_grid = (0.003, 0.006, 0.010, 0.020, 0.040)
+    ki_grid = (0.0, 2.0e-4, 5.0e-4, 1.0e-3, 2.0e-3)
+    kd_grid = (0.0, 0.02, 0.05)
+
+    best = (-np.inf, None)
+    for Kp, Ki, Kd in itertools.product(kp_grid, ki_grid, kd_grid):
+        value = score(Kp, Ki, Kd)
+        if value > best[0]:
+            best = (value, (Kp, Ki, Kd))
+            print(f"    Kp={Kp:.4f} Ki={Ki:.5f} Kd={Kd:.3f} -> reward {value:8.1f}  *")
+    reward, (Kp, Ki, Kd) = best
+    print(f"  best: Kp={Kp} Ki={Ki} Kd={Kd} (mean reward {reward:.1f})")
+
+    return {
+        "Kp": Kp,
+        "Ki": Ki,
+        "Kd": Kd,
+        "tuning_rule": "grid_search_max_reward",
+        "note": (
+            "Grid search over (Kp, Ki, Kd) maximising mean cumulative env "
+            "reward. Relay autotuning fails on this plant: the crown "
+            "temperature integrates the firing rate, so under a bang-bang "
+            "relay it drifts without sustained zero-crossings and "
+            "Astrom-Hagglund has no Ku/Tu to extract."
+        ),
+    }
+
+
 def _tune_reactor(n_points: int, tuning_rule: str, **kw) -> dict:
     import jax.numpy as jnp
     from target_gym import Reactor, ReactorParams
@@ -1040,7 +1117,7 @@ TUNERS = {
     "cstr": (_tune_cstr, "CSTR"),
     "first_order": (_tune_first_order, "FirstOrder"),
     "four_tank": (_tune_four_tank_search, "FourTank"),
-    "glass_furnace": (_tune_glass_furnace, "GlassFurnace"),
+    "glass_furnace": (_tune_glass_furnace_search, "GlassFurnace"),
     "reactor": (_tune_reactor, "Reactor"),
     "plane": (_tune_plane, "Airplane2D"),
     "plane3d_heading": (_tune_plane3d_heading, "Plane3DHeading"),

@@ -160,7 +160,15 @@ class GlassFurnaceParams(EnvParams):
     tracking_scale: float = 40.0
 
     # ---- Initial / target ranges ----
-    target_T_crown_range: Tuple[float, float] = (1500.0, 1650.0)
+    # Operationally realistic setpoint band. A float furnace is trimmed by
+    # +/-10-20 C around nominal; a 150 C step means re-heating the entire glass
+    # inventory, which takes days (settling time 140-300 h, measured) and is
+    # untrackable inside an episode. With the old 1500-1650 range the schedule
+    # spread, not the controller, decided the score: seeds whose five setpoints
+    # happened to sit close together scored 4413 with 6 C mean error, while a
+    # seed with a 146 C swing scored 734 with 37 C -- a 6x spread from sampling
+    # alone.
+    target_T_crown_range: Tuple[float, float] = (1565.0, 1610.0)
     initial_T_crown_range: Tuple[float, float] = (1572.0, 1602.0)
     # Reset places the furnace on a *consistent operating point* rather than an
     # arbitrary state. Offsets are measured from the settled steady state at

@@ -117,10 +117,13 @@ merely plausible-looking.
 ## 4. Task design
 
 **Setpoint band 1565–1610 °C.** Operationally realistic — a float furnace is
-trimmed ±10–20 °C around nominal. The previous ±75 °C band was untrackable: the
-furnace's settling time is 140–300 h (measured), so a 150 °C step means
-re-heating the whole glass inventory and the controller simply saturates for
-the entire 48 h episode.
+trimmed ±10–20 °C around nominal. The previous 1500–1650 °C band was
+untrackable: the settling time is 140–300 h (measured), so a 150 °C step means
+re-heating the whole glass inventory. Worse, it made the *sampling* decide the
+score rather than the controller — with five setpoints drawn from a 150 °C
+range, a seed whose draws clustered scored 4413 with 6 °C mean error while one
+with a 146 °C swing scored 734 with 37 °C. Narrowing the band cut PID return
+variance from ±1067 to ±286 and mean tracking error from 26.6 °C to 2.5 °C.
 
 **Reward.** `clip(1 - |err|/tracking_scale, 0, 1)² - fuel_cost_weight·fuel_norm`
 with `tracking_scale = 40 °C`. Normalising by the full 250 °C operating span
@@ -163,7 +166,22 @@ flame-length effects.
 
 ---
 
-## 6. Performance
+## 6. Baselines
+
+| controller | mean return (6 seeds) | mean tracking error |
+|---|---|---|
+| PID | **4907 ± 286** | **2.51 °C** |
+| best constant action | 2481 | — |
+
+PID gains come from a grid search maximising mean episode reward
+(`scripts/tune_pid.py --envs glass_furnace`). Relay autotuning does *not* work
+on this plant: the crown temperature integrates the firing rate, so under a
+bang-bang relay it drifts without sustained zero-crossings and Åström–Hägglund
+has no ultimate gain or period to extract — the same failure mode as FourTank.
+
+---
+
+## 7. Performance
 
 9 states integrated with `rk4_2` plus a 6-iteration Newton solve for `T_gas`:
 

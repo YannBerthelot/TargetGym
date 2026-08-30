@@ -23,7 +23,7 @@
   },
   "_meta": {
     "description": "PID gains tuned via relay autotuning (Astrom-Hagglund). Re-generate with: python scripts/tune_pid.py",
-    "tuned_at": "2026-08-30T00:38:35",
+    "tuned_at": "2026-08-30T18:40:49",
     "methodology": "Relay feedback experiment: inject relay signal, measure sustained oscillation to extract ultimate gain (Ku) and period (Tu), then compute PID gains via tuning rules. Gain-scheduled across N operating points spanning the target range.",
     "tuning_rule": "amigo"
   },
@@ -333,5 +333,12 @@
     "blend_dist": 500.0,
     "tuning_rule": "grid_search_max_reward",
     "note": "Re-tuned after the lift-curve correction doubled control authority. Settles ~139 m from the slot against a 60 m tolerance, so the formation tests remain xfail; this is the best of a grid search over altitude/heading/bank scalings."
+  },
+  "glass_furnace": {
+    "Kp": 0.04,
+    "Ki": 0.001,
+    "Kd": 0.05,
+    "tuning_rule": "grid_search_max_reward",
+    "note": "Grid search over (Kp, Ki, Kd) maximising mean cumulative env reward. Relay autotuning fails on this plant: the crown temperature integrates the firing rate, so under a bang-bang relay it drifts without sustained zero-crossings and Astrom-Hagglund has no Ku/Tu to extract."
   }
 }
