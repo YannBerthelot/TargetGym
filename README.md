@@ -39,14 +39,23 @@ aircraft learn) variants share the same 3D physics.
 | CSTR | Control coolant temperature to keep reactant concentration at a target | 1 (coolant temp) | 3 | ~1.49M |
 | First Order System | Drive a first-order lag system to a target setpoint | 1 (input) | 2 | -- |
 | Four Tank | Control water levels in two lower tanks via two pumps in a coupled four-tank network | 2 (pump voltages) | 6 | -- |
+| pH Neutralisation | Hold effluent pH at setpoint against an unmeasured, drifting carbonate buffer | 1 (base flow) | 3 | ~2.1M |
+| Binary Distillation | Hold both product purities in a 32-tray column with strongly coupled inputs | 2 (reflux, boil-up) | 6 | ~0.6M |
 
-### Industrial / Energy
+### Industrial
 
 | Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU) |
 |---|---|---|---|---|
 | Glass Furnace | Hold a crown temperature setpoint in a regenerative float-glass furnace | 1 (fuel flow) | 5 | ~3.9M |
 | Nuclear Reactor | Control neutron power via rod reactivity in a PWR with xenon dynamics | 1 (rod reactivity) | 4 | ~1.5M |
 | Building HVAC | Track a scheduled comfort setpoint against weather and occupancy | 1 (heating power) | 7 | ~17.7M |
+
+### Energy
+
+| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU) |
+|---|---|---|---|---|
+| Wind Turbine | Hold rated power through gusts and turbulence on a NREL 5 MW reference machine | 2 (torque, pitch) | 6 | ~4.0M |
+| Grid Battery | Follow a grid dispatch signal from a finite, degrading energy store | 1 (power) | 5 | ~6.8M |
 
 ---
 
@@ -60,6 +69,10 @@ Environments are designed to span a wide range of difficulty, making TargetGym s
 | 2 -- Medium | CSTR | 3 | 1 | Nonlinear SISO | Exponential Arrhenius kinetics, stiff dynamics, exothermic runaway risk |
 | 3 -- Hard | Building HVAC | 7 | 1 | Linear RC network | **Partial observability** (thermal mass hidden), 43 h time constant, setback anticipation, comfort/energy trade-off |
 | 3 -- Hard | Four Tank | 6 | 2 | Nonlinear MIMO | Multi-objective, cross-coupled inputs, square-root outflow |
+| 3 -- Hard | Grid Battery | 5 | 1 | Nonlinear ECM | **Finite budget**: tracking now costs the ability to track later; irrecoverable charge limits, state-dependent efficiency |
+| 4 -- Very Hard | Wind Turbine | 6 | 2 | Nonlinear aero-elastic | Turbulent unmeasured inflow, region switching, drive-train torsion, thrust/power trade-off |
+| 4 -- Very Hard | pH Neutralisation | 3 | 1 | Implicit algebraic | 45x steady-state gain variation across the range, unmeasured buffering, same pH from different states |
+| 4 -- Very Hard | Binary Distillation | 6 | 2 | Stiff nonlinear MIMO | **Ill-conditioned** (condition number ~140): the two purities move together far more easily than apart |
 | 4 -- Very Hard | Plane 2D | 9 | 2 | 2D aerodynamics | Coupled nonlinear aerodynamics, very long horizon (10 000 steps) |
 | 4 -- Very Hard | Glass Furnace | 5 | 1 | Nonlinear radiation (T^4) | **Partial observability** (6/9 states hidden), regenerator reversal cycle, multi-hour transients, batch-blanket nonlinearity |
 | 4 -- Very Hard | Nuclear Reactor | 4 | 1 | Stiff multi-timescale | **Partial observability** (7/11 states hidden), xenon memory trap, 86k-step horizon |
@@ -146,7 +159,7 @@ expert (PID) rollouts.
 
 ## Expert Baselines
 
-Ten of the twelve environments ship both expert baselines. The two **Plane Patrol**
+Fourteen of the sixteen environments ship both expert baselines. The two **Plane Patrol**
 variants currently have neither -- see *Baseline coverage* below.
 
 - **PID**: Relay-autotuned or gradient-tuned controllers. Aircraft altitude tracking
@@ -199,6 +212,10 @@ Worked examples of what this catches:
 | Plane 2D | ISA atmosphere tables, A320 figures of merit | Lift-curve slope was 54 % below what its own aspect ratio implies, putting clean stall speed at 228 kt instead of ~150 kt |
 | Glass Furnace | Published float-furnace data (4-6 GJ/tonne, 24-30 h residence) | Regenerators were absent entirely, so the energy balance was out by ~2x |
 | Building HVAC | ISO 13790 5R1C; heavyweight-dwelling time constant and design load | Daily temperature cycle was inverted -- coldest at 15:00 |
+| pH Neutralisation | Gustafsson & Waller / Henson & Seborg reaction-invariant benchmark | Nominal design point reproduces pH 7.03, pinning feeds and flows jointly |
+| Binary Distillation | Skogestad "Column A" (41 stages, alpha = 1.5) | Perturbation-derived gain matrix contradicted the mass balance -- the steps had not converged |
+| Wind Turbine | NREL 5 MW reference turbine definition | A Region 2 torque cap made things worse: it only binds *below* rated speed |
+| Grid Battery | Published Li-ion grid-BESS behaviour (round-trip, voltage window, thermal rise) | Sizing caught three errors before coding: 0.05 ohm gives 79 % round-trip, passive cooling implies a 438 K rise, OCV exceeded the 4.2 V ceiling |
 
 A shared **conformance suite** runs the same contract against every registered
 environment: PRNG hygiene, determinism, the gymnax six-value step API,
@@ -217,7 +234,7 @@ effectiveness. A new environment inherits all of it from one registry entry.
   environment (PRNG hygiene, determinism, `jit`/`vmap`/`scan`, numerical health,
   controller effectiveness).
 * **Target MDP focus**: Each task is about reaching and maintaining target states.
-* **Expert baselines**: PID and MPC for ten of twelve environments (see *Baseline coverage*).
+* **Expert baselines**: PID and MPC for fourteen of sixteen environments (see *Baseline coverage*).
 * **Challenging dynamics**: Captures irrecoverable states, partial observability, and momentum effects.
 * **Visualization**: All environments come with rendering and video generation.
 * **Compatible with RL libraries**: Offers [Gymnax](https://github.com/RobertTLange/gymnax) and [Gymnasium](https://github.com/Farama-Foundation/Gymnasium) interfaces.
