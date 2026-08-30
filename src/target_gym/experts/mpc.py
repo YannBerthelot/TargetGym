@@ -1268,6 +1268,29 @@ def make_reactor_mpc(env, params, horizon: int = 20):
     return ReactorCasadiMPC(env, params, horizon=horizon)
 
 
+def make_battery_mpc(
+    env, params, horizon: int = 30, n_iter: int = 40, lr: float = 0.08
+):
+    """Gradient MPC for the grid battery.
+
+    Horizon matters more here than in most environments: the battery has a
+    *finite energy budget*, so the value of discharging now depends on what the
+    dispatch is likely to ask for later. 30 steps is 2.5 min at dt = 5 s --
+    long enough to see the state-of-charge limits coming, which is exactly what
+    a reactive controller cannot do.
+    """
+    return GradientMPC(
+        env,
+        params,
+        action_dim=1,
+        action_lb=-1.0,
+        action_ub=1.0,
+        horizon=horizon,
+        n_iter=n_iter,
+        lr=lr,
+    )
+
+
 def make_wind_turbine_mpc(
     env, params, horizon: int = 20, n_iter: int = 40, lr: float = 0.10
 ):

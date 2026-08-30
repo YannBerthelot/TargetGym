@@ -216,6 +216,12 @@ def _reactor():
     return Reactor()
 
 
+def _battery():
+    from target_gym.energy.battery.env_jax import GridBattery
+
+    return GridBattery()
+
+
 def _wind_turbine():
     from target_gym.energy.wind_turbine.env_jax import WindTurbine
 
@@ -490,6 +496,19 @@ _SPECS: tuple[EnvSpec, ...] = (
         test_params={"max_steps_in_episode": 400},
         tuned_gains_key="wind_turbine",
         disturbance_fields=("v_wind",),
+    ),
+    EnvSpec(
+        name="battery",
+        group="energy",
+        env_factory=_battery,
+        params_cls=_LazyParams("target_gym.energy.battery.env", "BatteryParams"),
+        make_pid=_pid("make_battery_stateful_pid"),
+        make_mpc=_mpc("make_battery_mpc"),
+        # 360 steps = 30 min, a real fraction of the ~96 min it takes to
+        # traverse the usable state-of-charge range at full power.
+        test_params={"max_steps_in_episode": 360},
+        tuned_gains_key="battery",
+        disturbance_fields=("target_power",),
     ),
 )
 
