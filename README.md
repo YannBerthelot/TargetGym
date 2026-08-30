@@ -371,7 +371,7 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 * [x] Mature the glass furnace and reactor environments (physics, reward shaping, episode lengths).
 * [x] Document and test every environment's physics against published data.
 * [ ] Restore the Plane Patrol baselines with pursuit guidance (see *Baseline coverage*).
-* [ ] Regenerate the glass furnace media and tune its PID against the refined physics.
+* [ ] Regenerate the glass furnace gallery clip against the refined physics.
 * [ ] Add microburst / spatially-varying wind fields (position-dependent, not just altitude-linear).
 * [ ] Provide benchmark results for popular RL baselines.
 * [ ] Add random orientation variations to circle and heading tasks.
@@ -385,8 +385,8 @@ the patrol skips above:
   corresponding Mach effect on stall onset, so peak lift *rises* with Mach
   instead of falling. Out of the normal flight envelope, but the sign is wrong.
 * **Plane Patrol**: no PID or MPC baseline (above).
-* **Glass furnace media**: the gallery clip and its tuned gains predate the
-  refined regenerative physics.
+* **Glass furnace media**: the gallery clip predates the refined regenerative
+  physics. Its gains are now tuned by grid search.
 
 ---
 
