@@ -70,7 +70,7 @@ Environments are designed to span a wide range of difficulty, making TargetGym s
 | 1 -- Trivial | First Order System | 2 | 1 | Linear SISO | Baseline sanity-check |
 | 2 -- Medium | CSTR | 3 | 1 | Nonlinear SISO | Exponential Arrhenius kinetics, stiff dynamics, exothermic runaway risk |
 | 3 -- Hard | Building HVAC | 7 | 1 | Linear RC network | **Partial observability** (thermal mass hidden), 43 h time constant, setback anticipation, comfort/energy trade-off |
-| 3 -- Hard | Four Tank | 6 | 2 | Nonlinear MIMO | Multi-objective, cross-coupled inputs, square-root outflow |
+| 3 -- Hard | Four Tank | 6 | 2 | Nonlinear MIMO | **Non-minimum phase** (gamma1+gamma2 = 0.4): the RGA element is *negative*, so the obvious diagonal pairing is unstable and the loops must be crossed. Square-root outflow, cross-coupled pumps |
 | 3 -- Hard | Grid Battery | 5 | 1 | Nonlinear ECM | **Finite budget**: tracking now costs the ability to track later; irrecoverable charge limits, state-dependent efficiency |
 | 4 -- Very Hard | Wind Turbine | 6 | 2 | Nonlinear aero-elastic | Turbulent unmeasured inflow, region switching, drive-train torsion, thrust/power trade-off |
 | 4 -- Very Hard | pH Neutralisation | 3 | 1 | Implicit algebraic | 45x steady-state gain variation across the range, unmeasured buffering, same pH from different states |
@@ -215,6 +215,7 @@ Worked examples of what this catches:
 |---|---|---|
 | Plane 2D | ISA atmosphere tables, A320 figures of merit | Lift-curve slope was 54 % below what its own aspect ratio implies, putting clean stall speed at 228 kt instead of ~150 kt |
 | Glass Furnace | Published float-furnace data (4-6 GJ/tonne, 24-30 h residence) | Regenerators were absent entirely, so the energy balance was out by ~2x |
+| Nuclear Reactor | Keepin 1965 delayed-neutron data, the inhour equation, published Xe-135 behaviour | The reactivity budget leaves only 30 pcm of rod margin at full power -- which is exactly what gives the xenon pit its teeth |
 | Building HVAC | ISO 13790 5R1C; heavyweight-dwelling time constant and design load | Daily temperature cycle was inverted -- coldest at 15:00 |
 | pH Neutralisation | Gustafsson & Waller / Henson & Seborg reaction-invariant benchmark | Nominal design point reproduces pH 7.03, pinning feeds and flows jointly |
 | Binary Distillation | Skogestad "Column A" (41 stages, alpha = 1.5) | Perturbation-derived gain matrix contradicted the mass balance -- the steps had not converged |

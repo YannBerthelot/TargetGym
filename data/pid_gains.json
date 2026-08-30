@@ -23,7 +23,7 @@
   },
   "_meta": {
     "description": "PID gains tuned via relay autotuning (Astrom-Hagglund). Re-generate with: python scripts/tune_pid.py",
-    "tuned_at": "2026-08-30T18:40:49",
+    "tuned_at": "2026-08-30T22:15:05",
     "methodology": "Relay feedback experiment: inject relay signal, measure sustained oscillation to extract ultimate gain (Ku) and period (Tu), then compute PID gains via tuning rules. Gain-scheduled across N operating points spanning the target range.",
     "tuning_rule": "amigo"
   },
@@ -221,45 +221,45 @@
   },
   "four_tank": {
     "pid1": {
-      "Kp": 0.5,
-      "Ki": 10.0,
+      "Kp": 5.0,
+      "Ki": 0.05,
       "Kd": 0.0
     },
     "pid2": {
-      "Kp": 0.5,
-      "Ki": 10.0,
+      "Kp": 10.0,
+      "Ki": 0.05,
       "Kd": 0.0
     },
     "gain_schedule_pid1": {
       "operating_points": [
-        0.5,
-        0.5714285714285714,
-        0.6428571428571428,
-        0.7142857142857143,
-        0.7857142857142857,
-        0.8571428571428571,
-        0.9285714285714286,
-        1.0
+        0.1,
+        0.12142857142857144,
+        0.14285714285714285,
+        0.16428571428571428,
+        0.18571428571428572,
+        0.20714285714285716,
+        0.22857142857142856,
+        0.25
       ],
       "Kp": [
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5
+        5.0,
+        10.0,
+        10.0,
+        10.0,
+        50.0,
+        100.0,
+        50.0,
+        50.0
       ],
       "Ki": [
-        10.0,
-        5.0,
-        5.0,
-        5.0,
-        2.0,
-        2.0,
-        2.0,
-        1.0
+        0.05,
+        0.0,
+        0.05,
+        0.05,
+        0.2,
+        1.0,
+        1.0,
+        0.5
       ],
       "Kd": [
         0.0,
@@ -274,34 +274,34 @@
     },
     "gain_schedule_pid2": {
       "operating_points": [
-        0.5,
-        0.5714285714285714,
-        0.6428571428571428,
-        0.7142857142857143,
-        0.7857142857142857,
-        0.8571428571428571,
-        0.9285714285714286,
-        1.0
+        0.1,
+        0.12142857142857144,
+        0.14285714285714285,
+        0.16428571428571428,
+        0.18571428571428572,
+        0.20714285714285716,
+        0.22857142857142856,
+        0.25
       ],
       "Kp": [
-        5.0,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5
+        20.0,
+        20.0,
+        20.0,
+        20.0,
+        20.0,
+        20.0,
+        10.0,
+        20.0
       ],
       "Ki": [
-        10.0,
-        10.0,
-        5.0,
-        5.0,
-        5.0,
-        2.0,
-        2.0,
-        2.0
+        0.2,
+        0.2,
+        0.2,
+        0.2,
+        0.2,
+        0.2,
+        0.2,
+        0.2
       ],
       "Kd": [
         0.0,
@@ -315,7 +315,7 @@
       ]
     },
     "tuning_rule": "grid_search_max_reward",
-    "note": "Sequential grid search over (Kp, Ki) maximizing cumulative env reward, alternating loop1/loop2 refinements. FourTank is a pure integrator -> relay autotuning fails (no zero-crossings)."
+    "note": "CROSS pairing: pid1 drives v1 from h2, pid2 drives v2 from h1. gamma1+gamma2 = 0.4 puts the plant in Johansson's non-minimum-phase configuration where the RGA element lambda11 = -0.067, so the diagonal pairing is unusable -- closing one loop reverses the sign of the other and integral action trips the low-level limit within 40 steps. Retuned after the target range was corrected to the reachable envelope; the tuner now stops crediting reward once an episode trips, and scores each candidate on four initial conditions rather than one."
   },
   "patrol": {
     "Kp_alt": 0.01,

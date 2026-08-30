@@ -39,15 +39,29 @@ class FourTankParams(EnvParams):
     h_min: float = 0.05
     h_max: float = 1.5
 
-    # Target level ranges for tanks 1 and 2
-    target_h1_range: Tuple[float, float] = (0.5, 1.0)
-    target_h2_range: Tuple[float, float] = (0.5, 1.0)
+    # Target level ranges for tanks 1 and 2.
+    #
+    # These MUST sit inside the plant's reachable envelope. With both pumps
+    # saturated at v_max the steady state tops out at h1 = 0.360, h2 = 0.429,
+    # so the previous (0.5, 1.0) band sat entirely above it and *no* sampled
+    # target was attainable -- every episode was unwinnable, and the shared
+    # effectiveness contract could not see it because the PID still beat every
+    # constant action while both sat far from setpoint.
+    #
+    # The band below is jointly reachable: because the pumps are cross-coupled,
+    # h1 and h2 are sampled independently but must be attainable *together*,
+    # and every pair in this box is. It holds at ~6.0-8.3 V, leaving roughly
+    # 17 % of the voltage range as headroom for disturbance rejection.
+    target_h1_range: Tuple[float, float] = (0.10, 0.25)
+    target_h2_range: Tuple[float, float] = (0.12, 0.30)
 
-    # Initial level ranges for all four tanks
-    initial_h1_range: Tuple[float, float] = (0.2, 0.4)
-    initial_h2_range: Tuple[float, float] = (0.2, 0.4)
-    initial_h3_range: Tuple[float, float] = (0.1, 0.2)
-    initial_h4_range: Tuple[float, float] = (0.1, 0.2)
+    # Initial level ranges. Chosen to start inside the same envelope: the old
+    # h1 upper bound of 0.4 was above the maximum sustainable level, so an
+    # episode could begin at a level the plant can never hold.
+    initial_h1_range: Tuple[float, float] = (0.10, 0.20)
+    initial_h2_range: Tuple[float, float] = (0.12, 0.24)
+    initial_h3_range: Tuple[float, float] = (0.20, 0.40)
+    initial_h4_range: Tuple[float, float] = (0.10, 0.22)
 
     delta_t: float = 1.0
     max_steps_in_episode: int = 500
