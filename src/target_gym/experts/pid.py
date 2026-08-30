@@ -2564,3 +2564,39 @@ def make_ph_stateful_pid() -> StatefulPID:
         state_index=0,
         setpoint_index=2,
     )
+
+
+def make_distillation_stateful_pid() -> StatefulMIMOPID:
+    """Dual-composition PID for the distillation column, LV pairing.
+
+    obs: [yD, xB, L_pct, V_pct, target_yD, target_xB]
+
+    Loop 1: yD -> L (reflux).  dyD/dL ~ +0.92, so the gain is positive.
+    Loop 2: xB -> V (boilup).  dxB/dV ~ -1.03 -- more boilup strips the bottoms
+    cleaner, *lowering* xB -- so the gain is negative.
+
+    Deliberately detuned. The steady-state gain matrix has an RGA around 50 and
+    a condition number around 200: reflux and boilup move both compositions
+    almost identically, and the useful direction is a small difference between
+    two large, nearly-cancelling effects. Diagonal PID on an ill-conditioned
+    plant must be slow, or the loops fight each other.
+    """
+    _p = _load_gains().get("distillation", {})
+    _p1, _p2 = _p.get("pid1", {}), _p.get("pid2", {})
+    pid1 = StatefulPID(
+        Kp=float(_p1.get("Kp", 4.0)),
+        Ki=float(_p1.get("Ki", 0.03)),
+        Kd=float(_p1.get("Kd", 0.0)),
+        dt=1.0,
+        state_index=0,  # yD
+        setpoint_index=4,  # target_yD
+    )
+    pid2 = StatefulPID(
+        Kp=float(_p2.get("Kp", -4.0)),
+        Ki=float(_p2.get("Ki", -0.03)),
+        Kd=float(_p2.get("Kd", 0.0)),
+        dt=1.0,
+        state_index=1,  # xB
+        setpoint_index=5,  # target_xB
+    )
+    return StatefulMIMOPID(pid1, pid2)
