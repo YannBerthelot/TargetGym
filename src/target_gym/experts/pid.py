@@ -2701,3 +2701,74 @@ def make_wind_turbine_stateful_pid() -> StatefulWindTurbinePID:
         Ki_pitch=float(_p.get("Ki_pitch", 0.6)),
         Kd_pitch=float(_p.get("Kd_pitch", 0.0)),
     )
+
+
+class StatefulBatteryPID:
+    """Dispatch-following controller with state-of-charge guarding.
+
+    Power is close to a direct feedthrough -- commanding it delivers it, minus
+    conversion losses -- so the tracking loop is mostly feedforward with a
+    small proportional trim for the losses.
+
+    The interesting part is the guard. A battery cannot hold a setpoint
+    indefinitely, and hitting either state-of-charge limit ends the episode
+    irrecoverably, so the demand is faded out as the pack approaches a limit
+    *in the direction that would breach it*. Discharging is throttled near
+    empty and charging near full; neither is touched in the middle. Without
+    this the controller follows dispatch straight into a terminal state.
+
+    obs: [soc, V_cell, T_cell, P_MW, target_P_MW]
+    """
+
+    def __init__(
+        self,
+        Kp: float = 0.5,
+        Ki: float = 0.02,
+        guard_margin: float = 0.12,
+        soc_min: float = 0.05,
+        soc_max: float = 0.95,
+        power_max_MW: float = 1.0,
+        dt: float = 5.0,
+    ):
+        self.Kp, self.Ki = Kp, Ki
+        self.guard_margin = guard_margin
+        self.soc_min, self.soc_max = soc_min, soc_max
+        self.power_max_MW = power_max_MW
+        self.dt = dt
+        self.reset()
+
+    def reset(self):
+        self._integral = 0.0
+
+    def step(self, obs):
+        soc = obs[..., 0]
+        delivered_MW = obs[..., 3]
+        target_MW = obs[..., 4]
+
+        err = target_MW - delivered_MW
+        self._integral = self._integral + err * self.dt
+        demand = target_MW + self.Kp * err + self.Ki * self._integral
+
+        # Fade the demand out only in the direction that would breach a limit.
+        discharge_room = jnp.clip((soc - self.soc_min) / self.guard_margin, 0.0, 1.0)
+        charge_room = jnp.clip((self.soc_max - soc) / self.guard_margin, 0.0, 1.0)
+        demand = jnp.where(demand > 0.0, demand * discharge_room, demand * charge_room)
+
+        raw = jnp.clip(demand / self.power_max_MW, -1.0, 1.0)
+        # Anti-windup: stop integrating once the demand is clipped or guarded.
+        self._integral = jnp.where(
+            jnp.abs(raw) >= 1.0, self._integral - err * self.dt, self._integral
+        )
+        return raw
+
+    __call__ = step
+
+
+def make_battery_stateful_pid() -> StatefulBatteryPID:
+    """Dispatch-following controller for the grid battery."""
+    _p = _load_gains().get("battery", {})
+    return StatefulBatteryPID(
+        Kp=float(_p.get("Kp", 0.5)),
+        Ki=float(_p.get("Ki", 0.02)),
+        guard_margin=float(_p.get("guard_margin", 0.12)),
+    )
