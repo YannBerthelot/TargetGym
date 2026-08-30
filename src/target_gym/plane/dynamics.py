@@ -97,8 +97,6 @@ def newton_second_law(
     Newton's second law (vectorized form). Computes net aerodynamic, thrust, and weight forces.
     Returns (F_x, F_z) in world coordinates.
     """
-    eps = 1e-8
-
     # velocity direction from gamma
     v_hat = jnp.array([jnp.cos(gamma), jnp.sin(gamma)])  # unit vector along velocity
 
@@ -115,16 +113,6 @@ def newton_second_law(
 
     # weight: acts downward
     F_weight = jnp.array([0.0, -P])
-
-    # jax.debug.print(
-    #     "Forces [N]: drag:{drag}, lift:{lift}, thrust:{thrust}, weight:{weight}, gamma: {gamma}, theta: {theta}",
-    #     drag=F_drag,
-    #     lift=F_lift,
-    #     thrust=F_thrust,
-    #     weight=F_weight,
-    #     gamma=gamma,
-    #     theta=theta,
-    # )
 
     # total force
     F_total = F_drag + F_lift + F_thrust + F_weight

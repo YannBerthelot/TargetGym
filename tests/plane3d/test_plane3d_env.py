@@ -2,12 +2,10 @@
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
 
 from target_gym.plane3d.env import (
     PlaneParams3D,
-    PlaneState3D,
     check_is_terminal_3d,
     compute_reward_circle,
     compute_reward_figure8,

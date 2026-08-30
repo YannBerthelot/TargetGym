@@ -6,13 +6,10 @@ temperatures: the air responds in minutes and the mass the controller is really
 fighting has a ~43 h time constant and is never measured.
 """
 
-import numpy as np
-
 from target_gym import render_kit as rk
 from target_gym.hvac.env import (
     compute_reward,
     hour_of_day,
-    internal_gain,
     is_occupied,
     solar_gain,
 )

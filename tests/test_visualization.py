@@ -79,7 +79,6 @@ def test_save_renders_param(jax_env_cls, EnvParamsCls, EnvStateCls, action_fn):
     temp_dir = tempfile.mkdtemp()
     try:
         jax_env = jax_env_cls()
-        key = jax.random.PRNGKey(0)
         env_params = EnvParamsCls(max_steps_in_episode=100)
 
         file = jax_env.save_video(

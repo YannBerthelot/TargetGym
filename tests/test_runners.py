@@ -33,7 +33,6 @@ from target_gym.experts.pid import (
     make_first_order_pid,
     make_four_tank_pid,
     make_plane_pid,
-    make_plane_stateful_pid,
 )
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D

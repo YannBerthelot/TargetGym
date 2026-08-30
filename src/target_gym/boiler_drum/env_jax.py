@@ -13,7 +13,6 @@ from target_gym.boiler_drum.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
-    drum_level,
     get_obs,
     steady_state,
 )

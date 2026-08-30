@@ -7,8 +7,6 @@ hotter contents burn reactant faster, which releases more heat -- is the thing
 the picture is meant to make legible.
 """
 
-import numpy as np
-
 from target_gym import render_kit as rk
 from target_gym.pc_gym.cstr.env import compute_reward
 

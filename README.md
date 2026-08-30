@@ -31,14 +31,19 @@ something real to beat -- and the two that do not say so plainly.
 
 ## Environments
 
+Throughput is measured with `python -m target_gym.benchmark_speed`: 256 environments
+under `vmap`, stepped 800 deep inside one `jit`-compiled `scan`, on CPU -- the way an
+RL loop actually drives them. Figures scale with batch size and are much higher on GPU.
+
+
 ### Aircraft
 
-| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, 10^8 steps) |
+| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, vmap 256) |
 |---|---|---|---|---|
-| Plane 2D | Reach and hold a target altitude with an A320-like aircraft | 2 (power, stick) | 9 | ~0.54M |
-| Plane 3D -- Heading | Reach and hold a target altitude and heading | 3 (power, stick, aileron) | 15 | -- |
-| Plane 3D -- Circle | Maintain altitude while orbiting a circular path | 3 (power, stick, aileron) | 17 | -- |
-| Plane 3D -- Figure Eight | Follow a 3D twisted lemniscate (figure-8 with altitude crossovers) | 3 (power, stick, aileron) | 19 | -- |
+| Plane 2D | Reach and hold a target altitude with an A320-like aircraft | 2 (power, stick) | 9 | ~5.4M |
+| Plane 3D -- Heading | Reach and hold a target altitude and heading | 3 (power, stick, aileron) | 15 | ~2.8M |
+| Plane 3D -- Circle | Maintain altitude while orbiting a circular path | 3 (power, stick, aileron) | 17 | ~2.6M |
+| Plane 3D -- Figure Eight | Follow a 3D twisted lemniscate (figure-8 with altitude crossovers) | 3 (power, stick, aileron) | 19 | ~2.7M |
 
 ### Multi-Agent / Formation
 
@@ -47,39 +52,39 @@ lead aircraft — a dynamic target MDP with collision as a new irrecoverable
 state. Both single-agent (scripted lead) and cooperative multi-agent (both
 aircraft learn) variants share the same 3D physics.
 
-| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, 10^8 steps) |
+| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, vmap 256) |
 |---|---|---|---|---|
-| Plane Patrol | Hold a slot behind a scripted (maneuvering) lead | 3 (power, stick, aileron) | 26 | -- |
-| Plane Patrol -- Bearing-only | Same, but the follower sees only range + bearing to the lead (partial obs) | 3 | 21 | -- |
-| Plane Patrol -- MARL / Formation | `1 + num_wingmen` learners (up to 5 planes): lead flies its patrol pattern, wingmen hold slots **evenly spread across both sides** (cooperative team reward, JaxMARL-style API) | 3 per agent | 18 (lead) / 26 (wingman) | -- |
+| Plane Patrol | Hold a slot behind a scripted (maneuvering) lead | 3 (power, stick, aileron) | 26 | ~2.2M |
+| Plane Patrol -- Bearing-only | Same, but the follower sees only range + bearing to the lead (partial obs) | 3 | 21 | ~2.2M |
+| Plane Patrol -- MARL / Formation | `1 + num_wingmen` learners (up to 5 planes): lead flies its patrol pattern, wingmen hold slots **evenly spread across both sides** (cooperative team reward, JaxMARL-style API) | 3 per agent | 18 (lead) / 26 (wingman) | see note |
 
 ### Process  
 *The first three are adapted from [PC-gym](https://github.com/MaximilianB2/pc-gym); their models were verified against its source term for term.*
 
-| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, 10^8 steps) |
+| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, vmap 256) |
 |---|---|---|---|---|
-| CSTR | Control coolant temperature to keep reactant concentration at a target | 1 (coolant temp) | 3 | ~1.49M |
-| First Order System | Drive a first-order lag system to a target setpoint | 1 (input) | 2 | -- |
-| Four Tank | Control water levels in two lower tanks via two pumps in a coupled four-tank network | 2 (pump voltages) | 6 | -- |
+| CSTR | Control coolant temperature to keep reactant concentration at a target | 1 (coolant temp) | 3 | ~111M |
+| First Order System | Drive a first-order lag system to a target setpoint | 1 (input) | 2 | ~1670M |
+| Four Tank | Control water levels in two lower tanks via two pumps in a coupled four-tank network | 2 (pump voltages) | 6 | ~101M |
 | pH Neutralisation | Hold effluent pH at setpoint against an unmeasured, drifting carbonate buffer | 1 (base flow) | 3 | ~2.1M |
-| Binary Distillation | Hold both product purities in a 32-tray column with strongly coupled inputs | 2 (reflux, boil-up) | 6 | ~0.6M |
+| Binary Distillation | Hold both product purities in a 32-tray column with strongly coupled inputs | 2 (reflux, boil-up) | 6 | ~0.5M |
 
 ### Industrial
 
-| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU) |
+| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, vmap 256) |
 |---|---|---|---|---|
-| Glass Furnace | Hold a crown temperature setpoint in a regenerative float-glass furnace | 1 (fuel flow) | 5 | ~3.9M |
-| Nuclear Reactor | Control neutron power via rod reactivity in a PWR with xenon dynamics | 1 (rod reactivity) | 4 | ~1.5M |
-| Building HVAC | Track a scheduled comfort setpoint against weather and occupancy | 1 (heating power) | 7 | ~17.7M |
-| Boiler Drum | Hold drum level and pressure in a natural-circulation boiler through shrink and swell | 2 (firing, feedwater) | 7 | ~10.8M |
-| Cement Kiln | Hold clinker free lime on target across a half-hour transport delay | 2 (fuel, kiln speed) | 8 | ~0.65M |
+| Glass Furnace | Hold a crown temperature setpoint in a regenerative float-glass furnace | 1 (fuel flow) | 5 | ~3.0M |
+| Nuclear Reactor | Control neutron power via rod reactivity in a PWR with xenon dynamics | 1 (rod reactivity) | 4 | ~1.3M |
+| Building HVAC | Track a scheduled comfort setpoint against weather and occupancy | 1 (heating power) | 7 | ~17.1M |
+| Boiler Drum | Hold drum level and pressure in a natural-circulation boiler through shrink and swell | 2 (firing, feedwater) | 7 | ~10.0M |
+| Cement Kiln | Hold clinker free lime on target across a half-hour transport delay | 2 (fuel, kiln speed) | 8 | ~0.7M |
 
 ### Energy
 
-| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU) |
+| Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, vmap 256) |
 |---|---|---|---|---|
-| Wind Turbine | Hold rated power through gusts and turbulence on a NREL 5 MW reference machine | 2 (torque, pitch) | 6 | ~4.0M |
-| Grid Battery | Follow a grid dispatch signal from a finite, degrading energy store | 1 (power) | 5 | ~6.8M |
+| Wind Turbine | Hold rated power through gusts and turbulence on a NREL 5 MW reference machine | 2 (torque, pitch) | 6 | ~17.8M |
+| Grid Battery | Follow a grid dispatch signal from a finite, degrading energy store | 1 (power) | 5 | ~7.5M |
 
 ---
 

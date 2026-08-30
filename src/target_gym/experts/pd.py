@@ -7,7 +7,6 @@ gain-policy pipeline (SAC actor outputs per-parameter log-multipliers
 on anchor gains) work out of the box.
 """
 
-import jax
 import jax.numpy as jnp
 from flax import struct
 

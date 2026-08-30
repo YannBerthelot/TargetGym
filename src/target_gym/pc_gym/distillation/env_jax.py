@@ -8,7 +8,6 @@ import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.pc_gym.distillation.env import (
-    N_FEED,
     N_STAGES,
     DistillationParams,
     DistillationState,

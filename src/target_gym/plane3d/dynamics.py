@@ -15,16 +15,11 @@ import jax.numpy as jnp
 from gymnax.environments import EnvParams
 
 from target_gym.plane.dynamics import (
-    EPS,
     aero_coefficients,
-    clamp_altitude,
     compute_air_density_from_altitude,
     compute_drag,
     compute_Mach_from_velocity_and_speed_of_sound,
-    compute_next_power,
-    compute_next_stick,
     compute_speed_of_sound_from_altitude,
-    compute_thrust_output,
     compute_weight,
 )
 from target_gym.utils import compute_norm_from_coordinates

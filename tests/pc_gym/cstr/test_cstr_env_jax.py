@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from target_gym.pc_gym.cstr.env import CSTRParams, CSTRState
+from target_gym.pc_gym.cstr.env import CSTRState
 from target_gym.pc_gym.cstr.env_jax import CSTR
 
 
@@ -81,11 +81,24 @@ def test_action_and_observation_space():
 
 
 def test_is_terminal_propagates_logic():
+    """The assertion here used to be commented out, so the test passed as long
+    as nothing raised. It now checks both limits actually fire."""
     env = CSTR()
-    state = CSTRState(time=0, C_a=0.5, T=350.0, target_CA=0.6, T_c=298.0)
-    term = env.is_terminated(state, env.default_params)
-    trunc = env.is_truncated(state, env.default_params)
-    # assert isinstance(result, jnp.ndarray)
+    p = env.default_params
+
+    # T at the runaway limit, and Ca below its floor: both trip.
+    hot = CSTRState(time=0, C_a=0.5, T=p.T_max, target_CA=0.6, T_c=298.0)
+    assert bool(env.is_terminated(hot, p))
+    assert not bool(env.is_truncated(hot, p))
+
+    # A healthy operating point does not.
+    ok = CSTRState(time=0, C_a=0.87, T=325.0, target_CA=0.87, T_c=298.0)
+    assert not bool(env.is_terminated(ok, p))
+
+    # Truncation is purely the clock.
+    late = ok.replace(time=p.max_steps_in_episode)
+    assert bool(env.is_truncated(late, p))
+    assert not bool(env.is_terminated(late, p))
 
 
 def test_get_obs_matches_manual_call():

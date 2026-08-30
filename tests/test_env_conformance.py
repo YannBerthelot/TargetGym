@@ -127,8 +127,9 @@ def test_time_advances_monotonically(spec):
     _, state = env.reset_env(key, params)
     action = _zero_action(env, params)
     previous = int(state.time)
+    _step = jax.jit(env.step_env)
     for _ in range(5):
-        _, state, _, terminated, _ = env.step_env(key, state, action, params)
+        _, state, _, terminated, _ = _step(key, state, action, params)
         assert int(state.time) > previous
         previous = int(state.time)
         if bool(terminated):
@@ -180,13 +181,14 @@ def _terminal_disturbance(spec, seed, split_key, steps):
     _, state = env.reset_env(key, params)
     action = _zero_action(env, params)
 
+    step = jax.jit(env.step_env)
     rolling = key
     for _ in range(steps):
         if split_key:
             rolling, sub = jax.random.split(rolling)
         else:
             sub = key  # constant -- what every rollout helper here actually does
-        _, state, _, terminated, _ = env.step_env(sub, state, action, params)
+        _, state, _, terminated, _ = step(sub, state, action, params)
         if bool(terminated):
             break
     return [float(getattr(state, f)) for f in spec.disturbance_fields]
@@ -250,9 +252,10 @@ def test_distinct_keys_give_distinct_stochastic_trajectories(spec):
     finals = []
     for seed in (0, 1, 2):
         s, k = state, jax.random.PRNGKey(100 + seed)
+        _step = jax.jit(env.step_env)
         for _ in range(20):
             k, sub = jax.random.split(k)
-            _, s, _, terminated, _ = env.step_env(sub, s, action, params)
+            _, s, _, terminated, _ = _step(sub, s, action, params)
             if bool(terminated):
                 break
         finals.append(tuple(float(getattr(s, f)) for f in spec.disturbance_fields))
@@ -271,9 +274,10 @@ def test_full_episode_stays_finite(spec):
     obs, state = env.reset_env(key, params)
     action = _zero_action(env, params)
 
+    jitted = jax.jit(env.step_env)
     for step in range(400):
         key, sub = jax.random.split(key)
-        obs, state, reward, terminated, _ = env.step_env(sub, state, action, params)
+        obs, state, reward, terminated, _ = jitted(sub, state, action, params)
         assert np.all(np.isfinite(np.asarray(obs))), f"non-finite obs at step {step}"
         assert np.isfinite(float(reward)), f"non-finite reward at step {step}"
         for leaf in _leaves(state):
@@ -290,9 +294,10 @@ def test_reward_is_bounded_over_an_episode(spec):
     _, state = env.reset_env(key, params)
     action = _zero_action(env, params)
     rewards = []
+    _step = jax.jit(env.step_env)
     for _ in range(120):
         key, sub = jax.random.split(key)
-        _, state, reward, terminated, _ = env.step_env(sub, state, action, params)
+        _, state, reward, terminated, _ = _step(sub, state, action, params)
         rewards.append(float(reward))
         if bool(terminated):
             break
@@ -390,13 +395,14 @@ def test_pid_baseline_produces_valid_actions(spec):
     pid = spec.make_pid()
     pid.reset()
     space = env.action_space(params)
+    _step = jax.jit(env.step_env)
     for _ in range(10):
         action = jnp.asarray(pid(obs))
         assert np.all(np.isfinite(np.asarray(action)))
         assert action.shape == space.shape or action.size == int(
             np.prod(space.shape)
         ), f"PID emitted shape {action.shape}, env expects {space.shape}"
-        obs, state, reward, terminated, _ = env.step_env(key, state, action, params)
+        obs, state, reward, terminated, _ = _step(key, state, action, params)
         assert np.isfinite(float(reward))
         if bool(terminated):
             break

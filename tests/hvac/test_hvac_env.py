@@ -9,7 +9,6 @@ node ordering).
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
 
 from target_gym.hvac.env import (

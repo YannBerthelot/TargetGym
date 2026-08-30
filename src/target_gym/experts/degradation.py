@@ -131,7 +131,6 @@ def _register_all():
         plane3d_heading_pid_step,
         plane3d_circle_pid_step,
         plane3d_figure8_pid_step,
-        mimo_pid_step,
     )
     from target_gym.experts.cpg import cheetah_cpg_step
 

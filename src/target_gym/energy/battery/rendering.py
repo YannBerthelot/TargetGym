@@ -7,8 +7,6 @@ task different from every thermal plant here -- tracking now spends the ability
 to track later.
 """
 
-import numpy as np
-
 from target_gym import render_kit as rk
 from target_gym.energy.battery.env import compute_reward, open_circuit_voltage
 
@@ -137,7 +135,6 @@ def render_battery(state, params, step, history):
 
     err = abs(float(state.power) - float(state.target_power)) / 1e6
     status = rk.NOMINAL if err < 0.05 else (rk.WATCH if err < 0.2 else rk.ALARM)
-    pmax = params.power_max / 1e6
 
     gauges = [
         rk.Gauge(

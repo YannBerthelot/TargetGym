@@ -1,6 +1,5 @@
 from typing import Dict, List, Union
 
-import jax
 import jax.numpy as jnp
 import pandas as pd
 

@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from target_gym.pc_gym.first_order.env import FirstOrderParams, FirstOrderState
+from target_gym.pc_gym.first_order.env import FirstOrderState
 from target_gym.pc_gym.first_order.env_jax import FirstOrderSystem
 
 

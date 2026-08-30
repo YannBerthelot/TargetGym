@@ -2,7 +2,6 @@ from typing import Any, Callable, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
-from jax.tree_util import Partial as partial
 
 
 def integrate_dynamics(
@@ -164,10 +163,6 @@ def integrate_dynamics(
             p_new = p_new.reshape(p.shape)
             return (v_new, p_new), metrics
 
-        # if jnp.ndim(velocities) == 0:
-        #     velocities = velocities.reshape((1,))
-        # if jnp.ndim(positions) == 0:
-        #     positions = positions.reshape((1,))
         (new_velocities, new_positions), metrics = jax.lax.scan(
             step_fn, (velocities, positions), xs=None, length=n_substeps
         )

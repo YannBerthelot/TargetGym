@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from target_gym.pc_gym.four_tank.env import FourTankParams, FourTankState
+from target_gym.pc_gym.four_tank.env import FourTankState
 from target_gym.pc_gym.four_tank.env_jax import FourTank
 
 

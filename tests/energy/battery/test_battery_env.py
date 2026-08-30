@@ -16,7 +16,6 @@ from target_gym.energy.battery.env import (
     BatteryParams,
     BatteryState,
     check_is_terminal,
-    compute_next_state,
     compute_reward,
     compute_velocity,
     current_for_power,

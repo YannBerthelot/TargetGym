@@ -27,7 +27,6 @@ from target_gym.cement_kiln.env import (
     residence_time,
     specific_heat_consumption,
     steady_profile,
-    zone_centres,
 )
 from target_gym.cement_kiln.env_jax import CementKiln
 

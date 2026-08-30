@@ -16,7 +16,6 @@ from target_gym.energy.wind_turbine.env import (
     aerodynamic_torque,
     available_power,
     check_is_terminal,
-    compute_next_state,
     compute_reward,
     compute_velocity,
     drivetrain_inertia,
