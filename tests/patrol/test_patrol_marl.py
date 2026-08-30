@@ -160,13 +160,14 @@ class TestCooperativeSolution:
         return float(jnp.mean(rew[-300:]))
 
     @pytest.mark.xfail(
-        reason="Patrol's PID gains are hand-set constants (no tuner entry in "
-        "scripts/tune_pid.py, no `patrol` key in data/pid_gains.json) and were "
-        "calibrated against the pre-fix lift-curve slope. Correcting cl_alpha "
-        "to its derived value (PHYSICS.md D1/D2) roughly doubled lift response, "
-        "so the follower now diverges. Every structural patrol env test still "
-        "passes -- this is stale gains, not broken dynamics. Tracked with the "
-        "deferred patrol baseline rework (registry.py: baselines_note).",
+        reason="The close-patrol expert's gains were re-tuned after the "
+        "lift-curve correction (PHYSICS.md D1/D2) doubled control authority: "
+        "mean return went from 2.9 to 117 and the follower no longer departs. "
+        "But it settles ~139 m from the slot against a 60 m tolerance, so "
+        "formation is held only loosely. A grid search over altitude/heading/"
+        "bank scalings got no closer, which suggests the guidance law needs "
+        "rework rather than further tuning. Every structural patrol test "
+        "passes -- this is expert quality, not broken dynamics.",
         strict=True,
     )
     @pytest.mark.parametrize("k", [1, 2, 4])

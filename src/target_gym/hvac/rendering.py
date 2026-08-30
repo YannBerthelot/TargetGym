@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-from target_gym.hvac.env import compute_reward, hour_of_day
+from target_gym.hvac.env import compute_reward
 
 
 def render_hvac(state, params, step, history):

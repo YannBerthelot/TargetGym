@@ -316,5 +316,22 @@
     },
     "tuning_rule": "grid_search_max_reward",
     "note": "Sequential grid search over (Kp, Ki) maximizing cumulative env reward, alternating loop1/loop2 refinements. FourTank is a pure integrator -> relay autotuning fails (no zero-crossings)."
+  },
+  "patrol": {
+    "Kp_alt": 0.01,
+    "Ki_alt": 5e-05,
+    "Kd_alt": 0.025,
+    "Kp_power": 0.003,
+    "Ki_power": 3e-05,
+    "Kd_power": 0.15,
+    "cruise": 0.6,
+    "Kp_hdg": 0.36,
+    "Ki_hdg": 0.0,
+    "Kd_hdg": 1.5,
+    "Kp_bank": -1.2,
+    "Kd_bank": 0.9,
+    "blend_dist": 500.0,
+    "tuning_rule": "grid_search_max_reward",
+    "note": "Re-tuned after the lift-curve correction doubled control authority. Settles ~139 m from the slot against a 60 m tolerance, so the formation tests remain xfail; this is the best of a grid search over altitude/heading/bank scalings."
   }
 }
