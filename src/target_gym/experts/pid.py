@@ -2477,3 +2477,46 @@ def make_plane3d_circle_cascaded_pid() -> StatefulCascadedPlane3DPID:
             Kp_bank=float(g.get("bank", {}).get("Kp", -3.24)),
         )
     )
+
+
+class StatefulPatrolPID:
+    """Stateful wrapper around the functional close-patrol expert.
+
+    ``make_patrol_pid`` / ``patrol_pid_step`` already implement pursuit
+    guidance toward the slot and hold formation; what was missing was a
+    stateful adapter so Python rollouts, the registry and the conformance
+    suite can use them like every other baseline.
+
+    Writing a fresh cascaded controller for this task was tried first and is
+    the wrong approach: decomposing the slot error into independent channels,
+    and even bearing-pursuit with a heading-match term, settles more than a
+    kilometre from the slot against a 60 m tolerance, where the functional
+    expert settles at 72 m on a well-behaved seed. Formation flight against a
+    manoeuvring lead needs the guidance law that already exists here.
+
+    Valid only for the *full* patrol observation. The bearing-only variant
+    withholds the decomposed slot error this law reads (indices 10-12) -- that
+    withholding is the point of the variant -- so it needs its own estimator
+    rather than this wrapper.
+    """
+
+    def __init__(self, params=None, zero_state=None):
+        if params is None or zero_state is None:
+            params, zero_state = make_patrol_pid()
+        self.params = params
+        self._zero_state = zero_state
+        self.reset()
+
+    def reset(self):
+        self.state = self._zero_state
+
+    def step(self, obs):
+        action, self.state = patrol_pid_step(self.params, self.state, obs)
+        return jnp.asarray(action)
+
+    __call__ = step
+
+
+def make_patrol_stateful_pid() -> StatefulPatrolPID:
+    """Stateful close-patrol expert for PlanePatrol (full observation)."""
+    return StatefulPatrolPID()

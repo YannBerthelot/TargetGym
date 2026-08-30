@@ -327,22 +327,17 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="aircraft",
         env_factory=_patrol,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
-        make_pid=None,
+        make_pid=_pid("make_patrol_stateful_pid"),
         make_mpc=None,
         test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
         baselines_note=(
-            "Only a JAX-functional PID exists (``make_patrol_pid``, reached via "
-            "``env.expert_policy``); there is no stateful wrapper for Python "
-            "rollouts and no MPC. A cascaded controller of the kind that fixed "
-            "the 2D and 3D plane tasks was tried and does NOT transfer: "
-            "decomposing the slot-error vector into three independent channels "
-            "(e_up -> elevator, e_right -> bank, e_back -> throttle), even with "
-            "a relative-heading feedforward, diverges laterally at ~70 m/s and "
-            "exceeds max_slot_error within ~30 steps. Formation flight against "
-            "a manoeuvring lead appears to need pursuit guidance toward the "
-            "slot *position* -- the structure the existing functional PID uses "
-            "-- rather than independent error nulling. Deferred."
+            "PID present -- a stateful wrapper around the functional pursuit "
+            "expert, which already held formation; what was missing was the "
+            "adapter, not the controller. No MPC yet: the follower's plant is "
+            "the full 3D aircraft and the reference is a *manoeuvring lead*, "
+            "so an MPC needs the lead's future trajectory as a time-varying "
+            "parameter, which is not yet wired."
         ),
     ),
     EnvSpec(
@@ -355,9 +350,12 @@ _SPECS: tuple[EnvSpec, ...] = (
         test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
         baselines_note=(
-            "Same as ``patrol``: no stateful PID and no MPC yet. The "
-            "bearing-only observation additionally hides the lead's range "
-            "rate, so a PID needs a different measurement mapping."
+            "No baseline. The full-observation patrol expert reads the "
+            "*decomposed* slot error (obs indices 10-12), which this variant "
+            "deliberately withholds -- a passive sensor yields only range and "
+            "bearing. Recovering the slot therefore needs the lead's motion "
+            "estimated first, so this requires its own estimator rather than "
+            "a re-indexed copy of the full-observation controller."
         ),
     ),
     # -- Process control ----------------------------------------------------
