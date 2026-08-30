@@ -200,6 +200,20 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
         params, zero_state = make_reactor_pid()
         return FunctionalExpertPolicy(params, zero_state, pid_step)
 
+    def make_pid(self):
+        """Return a ready-to-use StatefulPID for neutron-power tracking."""
+        from target_gym.experts.pid import make_reactor_stateful_pid
+
+        return make_reactor_stateful_pid()
+
+    def make_mpc(self, params=None, **kwargs):
+        """Return a CasADi MPC oracle for neutron-power tracking."""
+        from target_gym.experts.mpc import make_reactor_mpc
+
+        if params is None:
+            params = self.default_params
+        return make_reactor_mpc(self, params, **kwargs)
+
     def save_video(
         self,
         select_action: Callable[[jnp.ndarray], jnp.ndarray],
