@@ -1,6 +1,8 @@
 from importlib.metadata import PackageNotFoundError, version
 
 from target_gym.boiler_drum.env import BoilerDrumParams
+from target_gym.cement_kiln.env import CementKilnParams
+from target_gym.cement_kiln.env_jax import CementKiln
 from target_gym.boiler_drum.env_jax import BoilerDrum
 from target_gym.energy.battery.env import BatteryParams
 from target_gym.energy.battery.env_jax import GridBattery
@@ -74,6 +76,9 @@ __all__ = (
     # Boiler drum
     "BoilerDrum",
     "BoilerDrumParams",
+    # Cement kiln
+    "CementKiln",
+    "CementKilnParams",
     # Wind turbine
     "WindTurbine",
     "WindTurbineParams",

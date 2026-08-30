@@ -50,6 +50,7 @@ aircraft learn) variants share the same 3D physics.
 | Nuclear Reactor | Control neutron power via rod reactivity in a PWR with xenon dynamics | 1 (rod reactivity) | 4 | ~1.5M |
 | Building HVAC | Track a scheduled comfort setpoint against weather and occupancy | 1 (heating power) | 7 | ~17.7M |
 | Boiler Drum | Hold drum level and pressure in a natural-circulation boiler through shrink and swell | 2 (firing, feedwater) | 7 | ~10.8M |
+| Cement Kiln | Hold clinker free lime on target across a half-hour transport delay | 2 (fuel, kiln speed) | 8 | ~0.65M |
 
 ### Energy
 
@@ -75,6 +76,7 @@ Environments are designed to span a wide range of difficulty, making TargetGym s
 | 4 -- Very Hard | pH Neutralisation | 3 | 1 | Implicit algebraic | 45x steady-state gain variation across the range, unmeasured buffering, same pH from different states |
 | 4 -- Very Hard | Binary Distillation | 6 | 2 | Stiff nonlinear MIMO | **Ill-conditioned** (condition number ~140): the two purities move together far more easily than apart |
 | 5 -- Extreme | Boiler Drum | 7 | 2 | Nonlinear, two-phase | **Non-minimum phase**: the level's first move is the wrong way. Integrating output (no self-regulation), irrecoverable trips both sides, hidden riser voidage |
+| 6 -- Extreme+ | Cement Kiln | 8 | 2 | Distributed (1D advection + Arrhenius) | **Transport delay**: half the response to a fuel change takes a full 25-min residence time. 64 hidden states behind 8 measurements, one input that moves the delay itself, irrecoverable both hot and cold |
 | 4 -- Very Hard | Plane 2D | 9 | 2 | 2D aerodynamics | Coupled nonlinear aerodynamics, very long horizon (10 000 steps) |
 | 4 -- Very Hard | Glass Furnace | 5 | 1 | Nonlinear radiation (T^4) | **Partial observability** (6/9 states hidden), regenerator reversal cycle, multi-hour transients, batch-blanket nonlinearity |
 | 4 -- Very Hard | Nuclear Reactor | 4 | 1 | Stiff multi-timescale | **Partial observability** (7/11 states hidden), xenon memory trap, 86k-step horizon |
@@ -161,7 +163,7 @@ expert (PID) rollouts.
 
 ## Expert Baselines
 
-Fifteen of the seventeen environments ship both expert baselines. The two **Plane Patrol**
+Sixteen of the eighteen environments ship both expert baselines. The two **Plane Patrol**
 variants currently have neither -- see *Baseline coverage* below.
 
 - **PID**: Relay-autotuned or gradient-tuned controllers. Aircraft altitude tracking
@@ -219,6 +221,7 @@ Worked examples of what this catches:
 | Wind Turbine | NREL 5 MW reference turbine definition | A Region 2 torque cap made things worse: it only binds *below* rated speed |
 | Grid Battery | Published Li-ion grid-BESS behaviour (round-trip, voltage window, thermal rise) | Sizing caught three errors before coding: 0.05 ohm gives 79 % round-trip, passive cooling implies a 438 K rise, OCV exceeded the 4.2 V ceiling |
 | Boiler Drum | IAPWS steam tables, Astrom & Bell drum geometry, circulation ratio 5-15 | Tracking riser steam as *quality* rather than mass suppressed the swell entirely -- every coefficient correct, and no inverse response |
+| Cement Kiln | Published 3.0-3.5 MJ/kg heat consumption, Sullivan residence correlation, 0.5-2 % free lime | An energy audit caught the kiln being fed *raw* meal instead of calcined hot meal, overstating its thermal load by ~50 % |
 
 A shared **conformance suite** runs the same contract against every registered
 environment: PRNG hygiene, determinism, the gymnax six-value step API,
@@ -237,7 +240,7 @@ effectiveness. A new environment inherits all of it from one registry entry.
   environment (PRNG hygiene, determinism, `jit`/`vmap`/`scan`, numerical health,
   controller effectiveness).
 * **Target MDP focus**: Each task is about reaching and maintaining target states.
-* **Expert baselines**: PID and MPC for fifteen of seventeen environments (see *Baseline coverage*).
+* **Expert baselines**: PID and MPC for sixteen of eighteen environments (see *Baseline coverage*).
 * **Challenging dynamics**: Captures irrecoverable states, partial observability, and momentum effects.
 * **Visualization**: All environments come with rendering and video generation.
 * **Compatible with RL libraries**: Offers [Gymnax](https://github.com/RobertTLange/gymnax) and [Gymnasium](https://github.com/Farama-Foundation/Gymnasium) interfaces.

@@ -2840,6 +2840,160 @@ def make_boiler_drum_pid():
     return params, mimo_pid_reset(params)
 
 
+class StatefulCementKilnPID:
+    """Cascade control for the rotary kiln, plus a speed feedforward.
+
+    Cascade is the standard answer to a long dead time, and it is the right
+    baseline for exactly that reason:
+
+    * **Inner loop: fuel -> burning-zone temperature.** The pyrometer responds
+      in minutes and carries no transport delay, so this loop can be tuned
+      reasonably fast.
+    * **Outer loop: free lime -> burning-zone setpoint.** Free lime is what the
+      plant is paid for, but it is half an hour behind the fuel. Closing a fast
+      loop directly around it would oscillate with the delay period; the outer
+      loop is therefore deliberately slow and only trims the inner setpoint.
+    * **Kiln speed follows feed.** Holdup is feed x residence and residence
+      goes as 1/speed, so running speed proportional to the measured feed rate
+      holds the bed depth constant. That is real practice, and it keeps the
+      transport delay from wandering when the feed does.
+
+    obs: [lime_pct, T_bz, T_exhaust, T_back_end, feed, fuel_pct, speed_pct,
+          target_lime_pct]
+    """
+
+    def __init__(
+        self,
+        Kp_outer: float,
+        Ki_outer: float,
+        Kp_inner: float,
+        Ki_inner: float,
+        T_bz_base: float,
+        fuel_min: float,
+        fuel_max: float,
+        fuel_nominal: float,
+        rpm_min: float,
+        rpm_max: float,
+        rpm_nominal: float,
+        feed_nominal: float,
+        dt: float = 30.0,
+        sp_trim_max: float = 120.0,
+    ):
+        self.Kp_outer, self.Ki_outer = Kp_outer, Ki_outer
+        self.Kp_inner, self.Ki_inner = Kp_inner, Ki_inner
+        self.T_bz_base = T_bz_base
+        self.fuel_min, self.fuel_max = fuel_min, fuel_max
+        self.fuel_nominal = fuel_nominal
+        self.rpm_min, self.rpm_max = rpm_min, rpm_max
+        self.rpm_nominal, self.feed_nominal = rpm_nominal, feed_nominal
+        self.dt = dt
+        # The setpoint trim is bounded so the outer loop cannot drive the kiln
+        # to a temperature that would form rings or let it go cold.
+        self.sp_trim_max = sp_trim_max
+        self.reset()
+
+    def reset(self):
+        self._outer_int = 0.0
+        self._inner_int = 0.0
+
+    def step(self, obs):
+        lime = obs[..., 0] / 100.0
+        T_bz = obs[..., 1]
+        feed = obs[..., 4]
+        target_lime = obs[..., 7] / 100.0
+
+        # --- Outer: free lime sets the burning-zone target ---
+        # Lime above target means the charge is under-burnt, so the setpoint
+        # must go UP. Hence a positive gain on (lime - target).
+        err_o = lime - target_lime
+        self._outer_int = self._outer_int + err_o * self.dt
+        trim = self.Kp_outer * err_o + self.Ki_outer * self._outer_int
+        trim_clipped = jnp.clip(trim, -self.sp_trim_max, self.sp_trim_max)
+        self._outer_int = jnp.where(
+            trim != trim_clipped, self._outer_int - err_o * self.dt, self._outer_int
+        )
+        T_bz_sp = self.T_bz_base + trim_clipped
+
+        # --- Inner: fuel holds the burning-zone temperature ---
+        err_i = T_bz_sp - T_bz
+        self._inner_int = self._inner_int + err_i * self.dt
+        fuel = (
+            self.fuel_nominal + self.Kp_inner * err_i + self.Ki_inner * self._inner_int
+        )
+        fuel_clipped = jnp.clip(fuel, self.fuel_min, self.fuel_max)
+        self._inner_int = jnp.where(
+            fuel != fuel_clipped, self._inner_int - err_i * self.dt, self._inner_int
+        )
+        fuel_raw = (
+            2.0 * (fuel_clipped - self.fuel_min) / (self.fuel_max - self.fuel_min) - 1.0
+        )
+
+        # --- Speed follows feed, holding bed depth constant ---
+        rpm = self.rpm_nominal * feed / self.feed_nominal
+        rpm = jnp.clip(rpm, self.rpm_min, self.rpm_max)
+        rpm_raw = 2.0 * (rpm - self.rpm_min) / (self.rpm_max - self.rpm_min) - 1.0
+
+        return jnp.stack([fuel_raw, rpm_raw], axis=-1)
+
+    __call__ = step
+
+
+def make_cement_kiln_stateful_pid() -> StatefulCementKilnPID:
+    """Cascade free-lime / burning-zone controller for the rotary kiln."""
+    from target_gym.cement_kiln.env import CementKilnParams
+
+    pr = CementKilnParams()
+    _p = _load_gains().get("cement_kiln", {})
+    return StatefulCementKilnPID(
+        Kp_outer=float(_p.get("Kp_outer", 12000.0)),
+        Ki_outer=float(_p.get("Ki_outer", 6.0)),
+        Kp_inner=float(_p.get("Kp_inner", 0.025)),
+        Ki_inner=float(_p.get("Ki_inner", 5.0e-6)),
+        T_bz_base=float(_p.get("T_bz_base", 1765.0)),
+        fuel_min=pr.fuel_min,
+        fuel_max=pr.fuel_max,
+        fuel_nominal=pr.fuel_nominal,
+        rpm_min=pr.rpm_min,
+        rpm_max=pr.rpm_max,
+        rpm_nominal=pr.rpm_nominal,
+        feed_nominal=pr.raw_meal_nominal,
+        dt=pr.delta_t,
+    )
+
+
+def make_cement_kiln_pid():
+    """JAX-functional 2x2 variant, for ``env.expert_policy``.
+
+    Single-loop rather than cascade: fuel is driven straight off the delayed
+    free-lime measurement, which is the naive structure the cascade exists to
+    avoid. It is the weaker controller by design.
+    """
+    _p = _load_gains().get("cement_kiln", {})
+    params = MIMOPIDParams(
+        pid1=PIDParams(
+            Kp=float(_p.get("Kp_fuel", -20.0)),
+            Ki=float(_p.get("Ki_fuel", -0.05)),
+            Kd=0.0,
+            dt=30.0,
+            state_index=0,  # lime_pct
+            setpoint_index=7,  # target_lime_pct
+            action_min=-1.0,
+            action_max=1.0,
+        ),
+        pid2=PIDParams(
+            Kp=0.0,
+            Ki=0.0,
+            Kd=0.0,
+            dt=30.0,
+            state_index=6,  # speed_pct -- held at its reset value
+            setpoint_index=6,
+            action_min=-1.0,
+            action_max=1.0,
+        ),
+    )
+    return params, mimo_pid_reset(params)
+
+
 def make_wind_turbine_stateful_pid() -> StatefulWindTurbinePID:
     """Above-rated controller for the NREL 5 MW turbine."""
     _p = _load_gains().get("wind_turbine", {})

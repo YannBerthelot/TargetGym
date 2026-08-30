@@ -115,16 +115,16 @@ class BoilerDrum(environment.Environment[BoilerDrumState, BoilerDrumParams]):
 
         state = BoilerDrumState(
             time=0,
-            pressure=jnp.asarray(params.p_nominal, dtype=jnp.float32),
+            pressure=jnp.asarray(params.p_nominal),
             V_wt=V_wt,
             m_sr=m_sr,
             m_sd=m_sd,
-            level=jnp.asarray(level0, dtype=jnp.float32),
+            level=jnp.asarray(level0),
             q_steam=q_steam,
-            Q_fuel=jnp.asarray(Q, dtype=jnp.float32),
-            q_feed=jnp.asarray(params.q_steam_nominal, dtype=jnp.float32),
+            Q_fuel=jnp.asarray(Q),
+            q_feed=jnp.asarray(params.q_steam_nominal),
             target_pressure=target_pressure,
-            level_ref=jnp.asarray(level_ref, dtype=jnp.float32),
+            level_ref=jnp.asarray(level_ref),
         )
         return self.get_obs(state), state
 
