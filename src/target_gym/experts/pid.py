@@ -1091,7 +1091,7 @@ def make_glass_furnace_pid(
     """
     PID for GlassFurnace — tracks T_crown by controlling fuel flow.
 
-    Observation : [T_crown, fuel_flow, target_T_crown]
+    Observation : [T_crown, T_air_preheat, fuel_pct, reversal_phase, target_T_crown]
     Action      : raw fuel in [-1, 1] → physical [fuel_min, fuel_max] kg/s
 
     Sign: more fuel → more heat → higher T_crown → Kp > 0.
@@ -1106,7 +1106,7 @@ def make_glass_furnace_pid(
         Kd=Kd,
         dt=30.0,
         state_index=0,  # T_crown
-        setpoint_index=2,  # target_T_crown
+        setpoint_index=4,  # target_T_crown
         action_min=-1.0,
         action_max=1.0,
     )
@@ -1338,14 +1338,14 @@ def make_four_tank_stateful_pid() -> StatefulMIMOPID:
 
 
 def make_glass_furnace_stateful_pid() -> StatefulPID:
-    """obs: [T_crown, fuel_flow, target_T_crown]  (full get_obs layout). Gains from data/pid_gains.json."""
+    """obs: [T_crown, T_air_preheat, fuel_pct, reversal_phase, target_T_crown]  (full get_obs layout). Gains from data/pid_gains.json."""
     return StatefulPID(
         Kp=_g("glass_furnace", "Kp", 0.01),
         Ki=_g("glass_furnace", "Ki", 0.001),
         Kd=_g("glass_furnace", "Kd", 0.0),
         dt=30.0,
         state_index=0,
-        setpoint_index=2,
+        setpoint_index=4,
     )
 
 
@@ -1507,7 +1507,7 @@ def make_glass_furnace_gain_scheduled_pid() -> tuple[GainSchedulePIDParams, PIDS
         "glass_furnace",
         dt=30.0,
         state_index=0,
-        setpoint_index=2,
+        setpoint_index=4,
         fallback_Kp=0.01,
         fallback_Ki=0.001,
         fallback_Kd=0.0,
@@ -1556,7 +1556,7 @@ def make_glass_furnace_stateful_gs_pid() -> StatefulGainScheduledPID:
         "glass_furnace",
         dt=30.0,
         state_index=0,
-        setpoint_index=2,
+        setpoint_index=4,
         fallback_Kp=0.01,
         fallback_Ki=0.001,
         fallback_Kd=0.0,
@@ -2021,4 +2021,459 @@ def make_plane3d_figure8_stateful_pid() -> StatefulPlane3DFigureEightPID:
         Kd_hdg=_g3d("figure8", "hdg", "Kd", 0.0),
         Kp_bank=_g3d("figure8", "bank", "Kp", -2.0),
         power=cruise,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cascaded altitude-hold autopilot (2D plane)
+# ---------------------------------------------------------------------------
+
+
+class StatefulCascadedAltitudePID:
+    """Three-loop altitude-hold autopilot with attitude and AoA limiting.
+
+    ``make_plane_stateful_pid`` maps altitude error *directly* to elevator.
+    That is not how an altitude hold works, and it stops being survivable once
+    the aerodynamics are right: a large altitude error saturates the stick,
+    drives angle of attack past the stall and departs controlled flight. The
+    airframe is not the limit -- full power with neutral elevator climbs to
+    12 200 m at 3.1 deg AoA -- the single loop is.
+
+    A real autopilot cascades, with a limit between each stage::
+
+        altitude error -> commanded vertical speed   (limited, |vs| <= vs_max)
+        vertical-speed error -> commanded pitch      (limited, |theta| <= theta_max)
+        pitch error -> elevator                      (with pitch-rate damping)
+
+    Each limit converts an unbounded demand into a bounded one, so a large
+    setpoint change becomes a *sustained* climb at a safe attitude rather than
+    an immediate full-deflection pull. Airspeed is held by a separate throttle
+    loop, since pitching for altitude trades speed away.
+
+    On top of that sits **alpha protection**, the same idea as an A320's
+    alpha-max: angle of attack is ``theta - gamma`` and both are observable, so
+    the commanded pitch is capped at ``gamma + alpha_max``. The aircraft
+    physically cannot be commanded to stall.
+
+    Observation layout (``plane.env.get_obs``)::
+
+        [x_dot, z, z_dot, theta, theta_dot, gamma, target_altitude, power, stick]
+    """
+
+    def __init__(
+        self,
+        Kp_alt: float = 0.03,  # altitude error (m) -> vertical speed (m/s)
+        vs_max: float = 15.0,  # m/s climb/descent limit (~3000 ft/min)
+        Kp_vs: float = 0.010,  # vertical-speed error (m/s) -> pitch (rad)
+        Ki_vs: float = 4.0e-4,
+        theta_trim: float = 0.032,  # rad, ~1.85 deg cruise trim
+        theta_max: float = 0.26,  # rad, ~15 deg pitch limit
+        Kp_theta: float = 4.0,  # pitch error (rad) -> elevator (raw)
+        Kd_theta: float = 3.0,  # pitch-rate damping
+        alpha_max: float = 0.19,  # rad, ~11 deg -- inside the 15 deg stall
+        target_speed: float = 230.0,  # m/s, held by the throttle loop
+        cruise_power: float = -0.65,  # raw, ~0.175 throttle at cruise
+        Kp_speed: float = 0.025,
+        Ki_speed: float = 3.0e-4,
+        dt: float = 1.0,
+    ):
+        self.Kp_alt, self.vs_max = Kp_alt, vs_max
+        self.Kp_vs, self.Ki_vs = Kp_vs, Ki_vs
+        self.theta_trim, self.theta_max = theta_trim, theta_max
+        self.Kp_theta, self.Kd_theta = Kp_theta, Kd_theta
+        self.alpha_max = alpha_max
+        self.target_speed, self.cruise_power = target_speed, cruise_power
+        self.Kp_speed, self.Ki_speed = Kp_speed, Ki_speed
+        self.dt = dt
+        self.reset()
+
+    def reset(self):
+        self._vs_integral = 0.0
+        self._speed_integral = 0.0
+
+    def step(self, obs):
+        x_dot = obs[..., 0]
+        z = obs[..., 1]
+        z_dot = obs[..., 2]
+        theta = obs[..., 3]
+        theta_dot = obs[..., 4]
+        gamma = obs[..., 5]
+        target_altitude = obs[..., 6]
+
+        # --- Outer loop: altitude -> commanded vertical speed -------------
+        vs_cmd = jnp.clip(
+            self.Kp_alt * (target_altitude - z), -self.vs_max, self.vs_max
+        )
+
+        # --- Middle loop: vertical speed -> commanded pitch ----------------
+        vs_err = vs_cmd - z_dot
+        self._vs_integral = self._vs_integral + vs_err * self.dt
+        theta_cmd = (
+            self.theta_trim + self.Kp_vs * vs_err + self.Ki_vs * self._vs_integral
+        )
+        theta_cmd = jnp.clip(theta_cmd, -self.theta_max, self.theta_max)
+
+        # --- Alpha protection: alpha = theta - gamma ----------------------
+        theta_cmd = jnp.minimum(theta_cmd, gamma + self.alpha_max)
+        theta_cmd = jnp.maximum(theta_cmd, gamma - self.alpha_max)
+
+        # Anti-windup: stop integrating once the pitch demand is limited.
+        limited = jnp.abs(theta_cmd - self.theta_trim) >= self.theta_max - 1e-6
+        self._vs_integral = jnp.where(
+            limited, self._vs_integral - vs_err * self.dt, self._vs_integral
+        )
+
+        # --- Inner loop: pitch -> elevator, with rate damping -------------
+        stick = self.Kp_theta * (theta_cmd - theta) - self.Kd_theta * theta_dot
+        stick = jnp.clip(stick, -1.0, 1.0)
+
+        # --- Throttle loop: hold airspeed ---------------------------------
+        speed_err = self.target_speed - x_dot
+        self._speed_integral = self._speed_integral + speed_err * self.dt
+        power = (
+            self.cruise_power
+            + self.Kp_speed * speed_err
+            + self.Ki_speed * self._speed_integral
+        )
+        power_clipped = jnp.clip(power, -1.0, 1.0)
+        self._speed_integral = jnp.where(
+            power != power_clipped,
+            self._speed_integral - speed_err * self.dt,
+            self._speed_integral,
+        )
+
+        return jnp.stack([power_clipped, stick], axis=-1)
+
+    __call__ = step
+
+
+def make_plane_cascaded_pid() -> StatefulCascadedAltitudePID:
+    """Cascaded altitude-hold autopilot for Airplane2D. Gains from JSON if tuned."""
+    _p = _load_gains().get("plane_cascaded", {})
+    return StatefulCascadedAltitudePID(
+        **{k: float(v) for k, v in _p.items() if not isinstance(v, (str, dict, list))}
+    )
+
+
+# ---------------------------------------------------------------------------
+# Building HVAC
+# ---------------------------------------------------------------------------
+
+
+def make_hvac_pid(
+    Kp: float | None = None,
+    Ki: float | None = None,
+    Kd: float | None = None,
+) -> tuple[PIDParams, PIDState]:
+    """PID for BuildingHVAC — tracks zone air temperature with heating power.
+
+    Observation : [T_air, T_out, heat_pct, solar_norm, sin_h, cos_h, target_T]
+    Action      : raw in [-1, 1] -> [0, Q_heat_max] W
+
+    Sign: more heat raises T_air, so Kp > 0. dt = 900 s (15 min).
+    Scale: the envelope loses ~159 W/K, and one raw unit is half of
+    Q_heat_max = 3600 W, so a 1 K error calling for ~20 % of full output
+    implies Kp ~ 0.4.
+    """
+    Kp = Kp if Kp is not None else _g("hvac", "Kp", 0.40)
+    Ki = Ki if Ki is not None else _g("hvac", "Ki", 1.0e-4)
+    Kd = Kd if Kd is not None else _g("hvac", "Kd", 0.0)
+    params = PIDParams(
+        Kp=Kp,
+        Ki=Ki,
+        Kd=Kd,
+        dt=900.0,
+        state_index=0,  # T_air
+        setpoint_index=6,  # target_T
+        action_min=-1.0,
+        action_max=1.0,
+    )
+    return params, pid_reset(params)
+
+
+def make_hvac_stateful_pid() -> StatefulPID:
+    """obs: [T_air, T_out, heat_pct, solar_norm, sin_h, cos_h, target_T]."""
+    _p = _load_gains().get("hvac", {})
+    return StatefulPID(
+        Kp=float(_p.get("Kp", 0.40)),
+        Ki=float(_p.get("Ki", 1.0e-4)),
+        Kd=float(_p.get("Kd", 0.0)),
+        dt=900.0,
+        state_index=0,
+        setpoint_index=6,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cascaded 3D autopilot
+# ---------------------------------------------------------------------------
+
+
+class _Plane3DVerticalChannel:
+    """Altitude -> vertical speed -> pitch -> elevator, with limits.
+
+    The same structural fix as :class:`StatefulCascadedAltitudePID`, for the 3D
+    tasks: the original 3D controllers mapped altitude error *directly* to
+    elevator, which departs controlled flight once the lift curve is correct.
+
+    Two additions the 2D version does not need:
+
+    * **Bank compensation.** Holding altitude in a banked turn needs lift
+      scaled by ``1/cos(phi)``, so the commanded pitch is fed forward by
+      ``k_bank_comp * (1/cos(phi) - 1)``. Without it the aircraft sinks
+      whenever it turns, and the altitude loop has to chase the loss.
+    * **Alpha protection referenced to the flight path**, as in 2D: alpha is
+      ``theta - gamma`` and both are observable, so commanded pitch is capped
+      at ``gamma + alpha_max``.
+
+    All three 3D tasks share observation indices 0-10, so this channel is
+    identical across heading, circle and figure-8.
+    """
+
+    def __init__(
+        self,
+        Kp_alt: float = 0.03,
+        vs_max: float = 12.0,
+        Kp_vs: float = 0.010,
+        Ki_vs: float = 4.0e-4,
+        theta_trim: float = 0.032,
+        theta_max: float = 0.26,
+        Kp_theta: float = 4.0,
+        Kd_theta: float = 3.0,
+        alpha_max: float = 0.19,
+        k_bank_comp: float = 0.15,
+        dt: float = 1.0,
+    ):
+        self.Kp_alt, self.vs_max = Kp_alt, vs_max
+        self.Kp_vs, self.Ki_vs = Kp_vs, Ki_vs
+        self.theta_trim, self.theta_max = theta_trim, theta_max
+        self.Kp_theta, self.Kd_theta = Kp_theta, Kd_theta
+        self.alpha_max, self.k_bank_comp = alpha_max, k_bank_comp
+        self.dt = dt
+        self.reset()
+
+    def reset(self):
+        self._vs_integral = 0.0
+
+    def __call__(self, alt_error, z_dot, theta, theta_dot, gamma, phi):
+        """``alt_error`` is (desired - actual) altitude, in metres.
+
+        Taking an error rather than (z, target) lets the same channel serve
+        absolute altitude tracking and *relative* station keeping, where the
+        reference is a moving slot rather than a fixed altitude.
+        """
+        vs_cmd = jnp.clip(self.Kp_alt * alt_error, -self.vs_max, self.vs_max)
+        vs_err = vs_cmd - z_dot
+        self._vs_integral = self._vs_integral + vs_err * self.dt
+
+        # Extra pitch needed to hold altitude while banked.
+        load_factor = 1.0 / jnp.maximum(jnp.cos(phi), 0.35)
+        bank_comp = self.k_bank_comp * (load_factor - 1.0)
+
+        theta_cmd = (
+            self.theta_trim
+            + bank_comp
+            + self.Kp_vs * vs_err
+            + self.Ki_vs * self._vs_integral
+        )
+        theta_cmd = jnp.clip(theta_cmd, -self.theta_max, self.theta_max)
+        theta_cmd = jnp.clip(theta_cmd, gamma - self.alpha_max, gamma + self.alpha_max)
+
+        limited = jnp.abs(theta_cmd - self.theta_trim) >= self.theta_max - 1e-6
+        self._vs_integral = jnp.where(
+            limited, self._vs_integral - vs_err * self.dt, self._vs_integral
+        )
+
+        return jnp.clip(
+            self.Kp_theta * (theta_cmd - theta) - self.Kd_theta * theta_dot, -1.0, 1.0
+        )
+
+
+class _AirspeedChannel:
+    """Throttle loop holding a target airspeed.
+
+    The 3D controllers previously held a *fixed* cruise throttle. Turning and
+    climbing both bleed speed, so a fixed setting lets the aircraft decelerate
+    toward the stall exactly when it is most loaded.
+    """
+
+    def __init__(
+        self,
+        target_speed: float = 230.0,
+        cruise_power: float = 0.2,
+        Kp: float = 0.025,
+        Ki: float = 3.0e-4,
+        dt: float = 1.0,
+    ):
+        self.target_speed, self.cruise_power = target_speed, cruise_power
+        self.Kp, self.Ki, self.dt = Kp, Ki, dt
+        self.reset()
+
+    def reset(self):
+        self._integral = 0.0
+
+    def __call__(self, speed):
+        err = self.target_speed - speed
+        self._integral = self._integral + err * self.dt
+        power = self.cruise_power + self.Kp * err + self.Ki * self._integral
+        clipped = jnp.clip(power, -1.0, 1.0)
+        self._integral = jnp.where(
+            power != clipped, self._integral - err * self.dt, self._integral
+        )
+        return clipped
+
+
+class StatefulCascadedPlane3DPID:
+    """Cascaded 3D autopilot: shared vertical + airspeed channels, task lateral law.
+
+    ``lateral_fn(obs, phi, phi_dot, state) -> aileron`` supplies the
+    task-specific guidance (hold a heading, hold a circle, follow a
+    lemniscate). Everything else -- the altitude cascade, alpha protection,
+    bank compensation and airspeed hold -- is shared, because all three 3D
+    tasks expose observation indices 0-10 identically.
+    """
+
+    def __init__(self, lateral, vertical=None, airspeed=None):
+        self.lateral = lateral
+        self.vertical = vertical or _Plane3DVerticalChannel()
+        self.airspeed = airspeed or _AirspeedChannel()
+
+    def reset(self):
+        self.vertical.reset()
+        self.airspeed.reset()
+        if hasattr(self.lateral, "reset"):
+            self.lateral.reset()
+
+    def step(self, obs):
+        z, z_dot = obs[..., 2], obs[..., 3]
+        theta, theta_dot = obs[..., 4], obs[..., 5]
+        phi, phi_dot = obs[..., 6], obs[..., 7]
+        gamma = obs[..., 8]
+        target_altitude = obs[..., 10]
+
+        stick = self.vertical(target_altitude - z, z_dot, theta, theta_dot, gamma, phi)
+        speed = jnp.sqrt(obs[..., 0] ** 2 + obs[..., 1] ** 2 + 1e-9)
+        power = self.airspeed(speed)
+        aileron = self.lateral(obs, phi, phi_dot)
+        return jnp.stack([power, stick, aileron], axis=-1)
+
+    __call__ = step
+
+
+class _HeadingLateral:
+    """Heading error -> limited bank command -> aileron."""
+
+    def __init__(
+        self,
+        Kp_hdg,
+        Ki_hdg,
+        Kd_hdg,
+        Kp_bank,
+        Kd_bank=0.5,
+        max_bank_rad=np.deg2rad(25.0),
+        dt=1.0,
+    ):
+        self.Kp_hdg, self.Ki_hdg, self.Kd_hdg = Kp_hdg, Ki_hdg, Kd_hdg
+        self.Kp_bank, self.Kd_bank = Kp_bank, Kd_bank
+        self.max_bank_rad, self.dt = float(max_bank_rad), dt
+        self.reset()
+
+    def reset(self):
+        self._int = 0.0
+        self._prev = 0.0
+
+    def __call__(self, obs, phi, phi_dot):
+        err = _wrap_angle_jnp(obs[..., 11] - obs[..., 9])
+        self._int = self._int + err * self.dt
+        deriv = (err - self._prev) / self.dt
+        self._prev = err
+        desired_bank = jnp.clip(
+            self.Kp_hdg * err + self.Ki_hdg * self._int + self.Kd_hdg * deriv,
+            -self.max_bank_rad,
+            self.max_bank_rad,
+        )
+        aileron = jnp.clip(
+            self.Kp_bank * (phi - desired_bank) + self.Kd_bank * phi_dot, -1.0, 1.0
+        )
+        self._int = jnp.where(
+            jnp.abs(aileron) >= 1.0, self._int - err * self.dt, self._int
+        )
+        return aileron
+
+
+class _CircleLateral:
+    """Coordinated-turn feedforward plus a radial-error correction."""
+
+    def __init__(
+        self,
+        Kp_rad,
+        Ki_rad,
+        Kd_rad,
+        Kp_bank,
+        Kd_bank=0.5,
+        max_bank_rad=np.deg2rad(30.0),
+        gravity=9.81,
+        dt=1.0,
+    ):
+        self.Kp_rad, self.Ki_rad, self.Kd_rad = Kp_rad, Ki_rad, Kd_rad
+        self.Kp_bank, self.Kd_bank = Kp_bank, Kd_bank
+        self.max_bank_rad, self.gravity, self.dt = float(max_bank_rad), gravity, dt
+        self.reset()
+
+    def reset(self):
+        self._int = 0.0
+        self._prev = 0.0
+
+    def __call__(self, obs, phi, phi_dot):
+        speed_sq = obs[..., 0] ** 2 + obs[..., 1] ** 2 + 1e-6
+        radius = jnp.maximum(obs[..., 13], 1.0)
+        # Bank that sustains the turn with no radial error: tan(phi) = v^2/(g r).
+        ideal_bank = jnp.arctan2(speed_sq, self.gravity * radius)
+        dist = jnp.sqrt(obs[..., 11] ** 2 + obs[..., 12] ** 2)
+        err = dist - obs[..., 13]
+        self._int = self._int + err * self.dt
+        deriv = (err - self._prev) / self.dt
+        self._prev = err
+        desired_bank = jnp.clip(
+            ideal_bank
+            + self.Kp_rad * err
+            + self.Ki_rad * self._int
+            + self.Kd_rad * deriv,
+            -self.max_bank_rad,
+            self.max_bank_rad,
+        )
+        aileron = jnp.clip(
+            self.Kp_bank * (phi - desired_bank) + self.Kd_bank * phi_dot, -1.0, 1.0
+        )
+        self._int = jnp.where(
+            jnp.abs(aileron) >= 1.0, self._int - err * self.dt, self._int
+        )
+        return aileron
+
+
+def make_plane3d_heading_cascaded_pid() -> StatefulCascadedPlane3DPID:
+    """Cascaded autopilot for the 3D heading task."""
+    g = _load_gains().get("plane3d_heading", {})
+    hdg = g.get("hdg", {})
+    return StatefulCascadedPlane3DPID(
+        lateral=_HeadingLateral(
+            Kp_hdg=float(hdg.get("Kp", 2.33)),
+            Ki_hdg=float(hdg.get("Ki", 0.0)),
+            Kd_hdg=float(hdg.get("Kd", 3.77)),
+            Kp_bank=float(g.get("bank", {}).get("Kp", -3.24)),
+        )
+    )
+
+
+def make_plane3d_circle_cascaded_pid() -> StatefulCascadedPlane3DPID:
+    """Cascaded autopilot for the 3D circle task."""
+    g = _load_gains().get("plane3d_circle", {})
+    rad = g.get("rad", {})
+    return StatefulCascadedPlane3DPID(
+        lateral=_CircleLateral(
+            Kp_rad=float(rad.get("Kp", 2.8e-6)),
+            Ki_rad=float(rad.get("Ki", 1e-8)),
+            Kd_rad=float(rad.get("Kd", 3.2e-4)),
+            Kp_bank=float(g.get("bank", {}).get("Kp", -3.24)),
+        )
     )

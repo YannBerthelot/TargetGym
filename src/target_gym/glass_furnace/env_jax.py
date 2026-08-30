@@ -8,6 +8,7 @@ import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.glass_furnace.env import (
+    N_REGEN_NODES,
     N_SETPOINTS,
     GlassFurnaceParams,
     GlassFurnaceState,
@@ -26,12 +27,12 @@ class GlassFurnace(environment.Environment[GlassFurnaceState, GlassFurnaceParams
     screen_width = 700
     screen_height = 900
 
-    # obs = [T_crown, fuel_pct (% of fuel_max), target_T_crown]
+    # obs = [T_crown, T_air_preheat, fuel_pct, reversal_phase, target_T_crown]
     obs_value_index: int = 0  # T_crown
-    obs_target_index: int = 2  # target_T_crown
+    obs_target_index: int = 4  # target_T_crown
 
-    def __init__(self, integration_method: str = "rk4_1"):
-        self.obs_shape = (3,)
+    def __init__(self, integration_method: str = "rk4_2"):
+        self.obs_shape = (5,)
         self.positions_history = []
         self.integration_method = integration_method
 
@@ -109,15 +110,29 @@ class GlassFurnace(environment.Environment[GlassFurnaceState, GlassFurnaceParams
         )
         initial_target = get_target_from_schedule(target_schedule, 0, params)
 
+        nominal_fuel = 0.5 * (params.fuel_min + params.fuel_max)
+        regen_profile = jnp.linspace(
+            params.initial_T_regen_hot,
+            params.initial_T_regen_cold,
+            N_REGEN_NODES,
+        )
         state = GlassFurnaceState(
             time=0,
+            T_gas=initial_T_crown + params.initial_T_gas_offset,
             T_crown=initial_T_crown,
-            T_melt=params.initial_T_melt,
-            T_work=params.initial_T_work,
+            T_melt=initial_T_crown + params.initial_T_melt_offset,
+            T_work=initial_T_crown + params.initial_T_work_offset,
+            # Checker stacks start with a linear hot-to-cold gradient, which
+            # is what a running regenerator holds.
+            T_rA=regen_profile,
+            T_rB=regen_profile,
+            m_batch=params.initial_m_batch,
             target_T_crown=initial_target,
             target_schedule=target_schedule,
             m_pull_disturbance=jnp.zeros(()),
-            fuel_flow=0.5 * (params.fuel_min + params.fuel_max),
+            fuel_flow=nominal_fuel,
+            T_air_preheat=params.initial_T_regen_hot,
+            T_stack=params.initial_T_regen_cold,
         )
 
         obs = self.get_obs(state)
@@ -151,6 +166,20 @@ class GlassFurnace(environment.Environment[GlassFurnaceState, GlassFurnaceParams
 
         params, zero_state = make_glass_furnace_pid()
         return FunctionalExpertPolicy(params, zero_state, pid_step)
+
+    def make_pid(self):
+        """Return a ready-to-use StatefulPID for crown-temperature tracking."""
+        from target_gym.experts.pid import make_glass_furnace_stateful_pid
+
+        return make_glass_furnace_stateful_pid()
+
+    def make_mpc(self, params=None, **kwargs):
+        """Return a CasADi MPC oracle for crown-temperature tracking."""
+        from target_gym.experts.mpc import make_glass_furnace_mpc
+
+        if params is None:
+            params = self.default_params
+        return make_glass_furnace_mpc(self, params, **kwargs)
 
     def save_video(
         self,

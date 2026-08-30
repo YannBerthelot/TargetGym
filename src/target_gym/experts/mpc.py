@@ -462,27 +462,31 @@ class FourTankCasadiMPC(CasadiMPC):
 
 class GlassFurnaceCasadiMPC(CasadiMPC):
     """
-    CasADi MPC for the GlassFurnace (3-zone lumped thermal model).
+    CasADi MPC for the regenerative glass furnace.
 
-    States : [T_crown, T_melt, T_work]   (°C)
-    Input  : u_raw ∈ [-1, 1]  →  m_fuel ∈ [fuel_min, fuel_max]  (kg/s)
+    Prediction model (7 states): ``[T_crown, T_melt, T_work, m_batch,
+    T_regen_hot, T_regen_mid, T_regen_cold]``, plus the flame temperature as
+    an *algebraic* variable.
 
-    Mirrors the physics in target_gym.glass_furnace.env.compute_velocity:
-        - combustion heat  Q_comb = m_fuel * LHV
-        - exhaust loss     Q_exh  = (1 + AFR) * m_fuel * c_p_gas * (T_crown - T_amb)
-        - radiation crown→melt/work (Stefan-Boltzmann, Kelvin inside)
-        - convection crown→melt/work
-        - wall losses for each zone
-        - batch fusion (endothermic, constant pull rate)
-        - glass advection between zones at pull rate
+    Deliberately a reduced model of the 11-state plant, and the reductions are
+    chosen so the controller still sees everything that sets the crown's
+    response to fuel:
 
-    Task-hardening hooks:
-        - Setpoint schedule: the target is a time-varying parameter (TVP) so
-          MPC anticipates upcoming step changes over its horizon.
-        - Fuel cost: the objective includes the same normalised fuel penalty
-          used by the environment reward.
-        - Pull-rate disturbance: MPC predicts with the *nominal* pull rate and
-          relies on receding-horizon feedback to reject the noise.
+    * **The regenerator is kept**, collapsed from two alternating 4-node
+      chambers to one 3-node stack at the cycle average. Air preheat supplies
+      ~40 % of the useful heat input, so a controller blind to it mis-predicts
+      the steady-state gain badly -- the same mistake the reactor MPC made by
+      dropping xenon.
+    * **The reversal cycle is averaged out.** Its 25 min period is well inside
+      the 30 min horizon and it is a known, autonomous oscillation the
+      controller cannot influence; predicting its phase buys nothing.
+    * **The flame is algebraic**, matching the plant's quasi-steady treatment,
+      so no stiff fast state enters the NLP.
+    * **The batch blanket is kept** because its shielding sets how much
+      radiation reaches the glass, which is strongly pull-rate dependent.
+
+    The setpoint schedule enters as a time-varying parameter so the MPC
+    anticipates step changes -- the advantage PID structurally cannot have.
     """
 
     def _build_mpc(self):
@@ -490,66 +494,128 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         from target_gym.glass_furnace.env import N_SETPOINTS
 
         model = do_mpc.model.Model("continuous")
+        SB = 5.670374419e-8
+        K = 273.15
 
         T_crown = model.set_variable("_x", "T_crown")
         T_melt = model.set_variable("_x", "T_melt")
         T_work = model.set_variable("_x", "T_work")
+        m_batch = model.set_variable("_x", "m_batch")
+        T_rh = model.set_variable("_x", "T_rh")
+        T_rm = model.set_variable("_x", "T_rm")
+        T_rc = model.set_variable("_x", "T_rc")
+        T_gas = model.set_variable("_z", "T_gas")  # algebraic: quasi-steady flame
         u_raw = model.set_variable("_u", "u_raw")
-        # Target is a TVP so it can step along the schedule within the horizon.
         model.set_variable("_tvp", "target_T_crown")
 
-        # Action scaling: raw ∈ [-1,1] → physical [fuel_min, fuel_max]
         m_fuel = p.fuel_min + 0.5 * (u_raw + 1.0) * (p.fuel_max - p.fuel_min)
+        m_air = p.AFR * (1.0 + p.excess_air) * m_fuel
+        m_gas = m_fuel + m_air
 
-        # Combustion / exhaust
-        Q_comb = m_fuel * p.LHV
-        m_gas = (1.0 + p.AFR) * m_fuel
-        Q_exhaust = m_gas * p.c_p_gas * (T_crown - p.T_ambient)
+        # Cycle-averaged regenerator: air climbs cold -> hot, exhaust descends.
+        eps = p.eps_regen_node
+        Ta1 = p.T_ambient + eps * (T_rc - p.T_ambient)
+        Ta2 = Ta1 + eps * (T_rm - Ta1)
+        T_air = Ta2 + eps * (T_rh - Ta2)
+        Te1 = T_gas - eps * (T_gas - T_rh)
+        Te2 = Te1 - eps * (Te1 - T_rm)
+        T_stack = Te2 - eps * (Te2 - T_rc)
 
-        # Radiation (Stefan-Boltzmann requires absolute Kelvin)
-        SIGMA_SB = 5.670374419e-8
-        K = 273.15
+        # Half the cycle in each role -> average the two duties.
+        Q_rh = 0.5 * (
+            m_gas * p.c_p_gas * (T_gas - Te1) - m_air * p.c_p_air * (T_air - Ta2)
+        )
+        Q_rm = 0.5 * (m_gas * p.c_p_gas * (Te1 - Te2) - m_air * p.c_p_air * (Ta2 - Ta1))
+        Q_rc = 0.5 * (
+            m_gas * p.c_p_gas * (Te2 - T_stack)
+            - m_air * p.c_p_air * (Ta1 - p.T_ambient)
+        )
+        UA_node = p.U_regen * p.A_regen / 3.0
+
+        coverage = m_batch / p.m_batch_full
+        melt_open = 1.0 - p.batch_shield * coverage
+
+        T_gas_K = T_gas + K
         T_crown_K = T_crown + K
         T_melt_K = T_melt + K
         T_work_K = T_work + K
-        Q_rad_CM = p.eps_rad * SIGMA_SB * p.A_melt * (T_crown_K**4 - T_melt_K**4)
-        Q_rad_CW = p.eps_rad * SIGMA_SB * p.A_work * (T_crown_K**4 - T_work_K**4)
 
-        # Convection
-        Q_conv_CM = p.h_conv * p.A_melt * (T_crown - T_melt)
-        Q_conv_CW = p.h_conv * p.A_work * (T_crown - T_work)
+        A_eff = p.A_crown + p.A_melt * melt_open + p.A_work
+        Q_in = m_fuel * p.LHV + m_air * p.c_p_air * (T_air - p.T_ambient)
+        sink_K4 = (
+            p.A_crown * T_crown_K**4
+            + p.A_melt * melt_open * T_melt_K**4
+            + p.A_work * T_work_K**4
+        )
+        sink_T = p.A_crown * T_crown + p.A_melt * melt_open * T_melt + p.A_work * T_work
+        # Algebraic constraint: the flame's own energy balance closes.
+        model.set_alg(
+            "flame_balance",
+            Q_in
+            - p.eps_rad * SB * (A_eff * T_gas_K**4 - sink_K4)
+            - p.h_conv * (A_eff * T_gas - sink_T)
+            - m_gas * p.c_p_gas * (T_gas - p.T_ambient),
+        )
 
-        # Wall losses
-        Q_wall_crown = p.U_wall * p.A_wall_crown * (T_crown - p.T_ambient)
-        Q_wall_melt = p.U_wall * p.A_wall_melt * (T_melt - p.T_ambient)
-        Q_wall_work = p.U_wall * p.A_wall_work * (T_work - p.T_ambient)
+        Q_rad_gc = p.eps_rad * SB * p.A_crown * (T_gas_K**4 - T_crown_K**4)
+        Q_rad_gm = p.eps_rad * SB * p.A_melt * (T_gas_K**4 - T_melt_K**4) * melt_open
+        Q_rad_gw = p.eps_rad * SB * p.A_work * (T_gas_K**4 - T_work_K**4)
+        Q_rad_cm = p.eps_rad * SB * p.A_melt * (T_crown_K**4 - T_melt_K**4) * melt_open
+        Q_rad_cw = p.eps_rad * SB * p.A_work * (T_crown_K**4 - T_work_K**4)
+        Q_conv_gc = p.h_conv * p.A_crown * (T_gas - T_crown)
+        Q_conv_gm = p.h_conv * p.A_melt * (T_gas - T_melt) * melt_open
+        Q_conv_gw = p.h_conv * p.A_work * (T_gas - T_work)
 
-        # Batch fusion + glass advection (use nominal pull rate for prediction)
-        Q_fusion = p.m_pull * p.dH_fusion
-        Q_adv_in_melt = p.m_pull * p.c_p_glass * (p.T_batch_in - T_melt)
-        Q_adv_melt_to_work = p.m_pull * p.c_p_glass * (T_melt - T_work)
+        Q_wall_c = p.U_wall * p.A_wall_crown * (T_crown - p.T_ambient)
+        Q_wall_m = p.U_wall * p.A_wall_melt * (T_melt - p.T_ambient)
+        Q_wall_w = p.U_wall * p.A_wall_work * (T_work - p.T_ambient)
+        Q_cool_w = p.UA_work_cooling * (T_work - p.T_ambient)
+
+        Q_to_batch = (
+            p.batch_shield
+            * coverage
+            * p.eps_rad
+            * SB
+            * p.A_melt
+            * ((T_gas_K**4 - T_melt_K**4) + (T_crown_K**4 - T_melt_K**4))
+        )
+        melt_rate = Q_to_batch / p.dH_fusion
+
+        cp_melt = p.c_p_glass_a + p.c_p_glass_b * T_melt
+        cp_work = p.c_p_glass_a + p.c_p_glass_b * T_work
 
         model.set_rhs(
             "T_crown",
-            (
-                Q_comb
-                - Q_rad_CM
-                - Q_rad_CW
-                - Q_conv_CM
-                - Q_conv_CW
-                - Q_wall_crown
-                - Q_exhaust
-            )
-            / p.C_crown,
+            (Q_rad_gc + Q_conv_gc - Q_rad_cm - Q_rad_cw - Q_wall_c) / p.C_crown,
         )
         model.set_rhs(
             "T_melt",
-            (Q_rad_CM + Q_conv_CM - Q_wall_melt - Q_fusion + Q_adv_in_melt) / p.C_melt,
+            (
+                Q_rad_gm
+                + Q_conv_gm
+                + Q_rad_cm
+                - Q_wall_m
+                - melt_rate * p.dH_fusion
+                + p.m_pull * cp_melt * (p.T_batch_in - T_melt)
+            )
+            / (p.C_melt * cp_melt / p.c_p_glass_a),
         )
         model.set_rhs(
             "T_work",
-            (Q_rad_CW + Q_conv_CW - Q_wall_work + Q_adv_melt_to_work) / p.C_work,
+            (
+                Q_rad_gw
+                + Q_conv_gw
+                + Q_rad_cw
+                - Q_wall_w
+                - Q_cool_w
+                + p.m_pull * cp_work * (T_melt - T_work)
+            )
+            / (p.C_work * cp_work / p.c_p_glass_a),
         )
+        model.set_rhs("m_batch", p.m_pull / p.batch_yield - melt_rate)
+        model.set_rhs("T_rh", (Q_rh - UA_node * (T_rh - p.T_ambient)) / p.C_regen_node)
+        model.set_rhs("T_rm", (Q_rm - UA_node * (T_rm - p.T_ambient)) / p.C_regen_node)
+        model.set_rhs("T_rc", (Q_rc - UA_node * (T_rc - p.T_ambient)) / p.C_regen_node)
         model.setup()
 
         mpc = do_mpc.controller.MPC(model)
@@ -560,35 +626,24 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
             store_full_solution=False,
         )
 
-        # Rebuild the u-dependent expressions from the *post-setup* model handle
-        # (with a TVP present, do-mpc's pre-setup u_raw symbol becomes dangling
-        # for objective construction — see issue in lterm Function build).
-        u_raw_post = model.u["u_raw"]
+        u_post = model.u["u_raw"]
         T_crown_post = model.x["T_crown"]
         target_post = model.tvp["target_T_crown"]
-        m_fuel_post = p.fuel_min + 0.5 * (u_raw_post + 1.0) * (p.fuel_max - p.fuel_min)
+        m_fuel_post = p.fuel_min + 0.5 * (u_post + 1.0) * (p.fuel_max - p.fuel_min)
 
-        # Objective mirrors the environment reward exactly so the MPC isn't
-        # making a different trade-off than the one used for scoring:
-        #     reward = ((scale - |err|) / scale)^2  -  w * (fuel - fuel_min)/fuel_span
-        # lterm = -reward (minimise).  We use a smoothed abs(err) so IPOPT can
-        # take gradients through err=0.
+        # Mirror env.compute_reward so the MPC optimises the scored objective.
         scale = float(p.T_crown_max - p.T_crown_min)
         fuel_span = float(p.fuel_max - p.fuel_min)
         err = target_post - T_crown_post
         err_abs = casadi.sqrt(err * err + 1e-4)  # smooth |err|
-        tracking_reward = ((scale - err_abs) / scale) ** 2  # ∈ [0, 1]
-        fuel_norm = (m_fuel_post - p.fuel_min) / fuel_span  # ∈ [0, 1]
-        fuel_penalty = float(p.fuel_cost_weight) * fuel_norm
-        lterm = -tracking_reward + fuel_penalty
-        # mterm is only a function of x/tvp/p → drop fuel term (and the constant).
-        mpc.set_objective(lterm=lterm, mterm=-tracking_reward)
-        mpc.set_rterm(u_raw=1e-4)
+        tracking = ((scale - err_abs) / scale) ** 2
+        fuel_pen = float(p.fuel_cost_weight) * (m_fuel_post - p.fuel_min) / fuel_span
+        mpc.set_objective(lterm=-tracking + fuel_pen, mterm=-tracking)
+        mpc.set_rterm(u_raw=1e-3)
 
         mpc.bounds["lower", "_u", "u_raw"] = -1.0
         mpc.bounds["upper", "_u", "u_raw"] = 1.0
 
-        # Mutable schedule buffer — refreshed in _update_setpoint from the env state.
         default_target = float(sum(p.target_T_crown_range) / 2.0)
         self._target_schedule = np.full(N_SETPOINTS, default_target)
         self._current_step = 0
@@ -597,12 +652,10 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         tvp_tpl = mpc.get_tvp_template()
 
         def tvp_fun(_t):
-            # For each horizon step k = 0..N, look up which schedule slot the
-            # env will be in and use that target.
             for k in range(self.horizon + 1):
-                future_step = self._current_step + k
+                future = self._current_step + k
                 slot = min(
-                    (future_step * self._n_setpoints) // self._max_steps,
+                    (future * self._n_setpoints) // self._max_steps,
                     self._n_setpoints - 1,
                 )
                 tvp_tpl["_tvp", k, "target_T_crown"] = float(
@@ -616,8 +669,24 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         return mpc
 
     def _extract_x0(self, state):
+        # Collapse the plant's two 4-node chambers onto the model's 3 nodes by
+        # averaging the chambers (they alternate) and resampling the profile.
+        profile = 0.5 * (
+            np.asarray(state.T_rA, dtype=float) + np.asarray(state.T_rB, dtype=float)
+        )
+        resampled = np.interp(
+            np.linspace(0.0, 1.0, 3), np.linspace(0.0, 1.0, len(profile)), profile
+        )
         return np.array(
-            [float(state.T_crown), float(state.T_melt), float(state.T_work)]
+            [
+                float(state.T_crown),
+                float(state.T_melt),
+                float(state.T_work),
+                float(state.m_batch),
+                resampled[0],
+                resampled[1],
+                resampled[2],
+            ]
         )
 
     def _update_setpoint(self, state):
@@ -632,20 +701,38 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
 
 class ReactorCasadiMPC(CasadiMPC):
     """
-    CasADi MPC for the nuclear reactor (point-kinetics + thermal feedback).
+    CasADi MPC for the nuclear reactor (point kinetics + xenon + thermal).
 
-    States : [n, C_1..6, T_fuel, T_coolant]       (9 states)
-    Input  : u_raw in [-1, 1]  →  rho_ext in [rho_ext_min, rho_ext_max]
+    States : [n, C_1..6, T_fuel, T_coolant, I_hat, Xe_hat, rho_ext]  (12)
+    Input  : rho_rate -- the control-rod *speed*, not its position.
 
-    Mirrors ``target_gym.reactor.env.compute_velocity``:
-      - PKE with Lambda_gen, 6 delayed-neutron groups
-      - Doppler + moderator thermal feedback (both negative)
-      - Two-node thermal hydraulics
+    Two modelling choices matter, and the original version got both wrong:
 
-    The target is a time-varying parameter (TVP) so MPC anticipates setpoint
-    changes scheduled later in the episode. Objective mirrors the env reward:
-    quadratic tracking on ``n`` minus a small rod-motion penalty.
+    **Xenon is in the model.** ``I_hat``/``Xe_hat`` and the reactivity term
+    ``-rho_Xe_full * (Xe_hat - 1)`` were previously omitted entirely, so the
+    "oracle" was blind to the multi-hour iodine/xenon swing that the
+    environment docstring calls the dominant control challenge. Equilibrium
+    xenon worth (~2500 pcm) dwarfs total rod authority (500 pcm), so an MPC
+    that cannot see it is not an oracle -- the reported PID-vs-MPC gap was
+    measuring model mismatch rather than controller quality.
+
+    **Rod speed is a rate limit, not a position bound.** The environment moves
+    ``rho_ext`` toward the demanded position at ``rod_speed_withdraw`` /
+    ``rod_speed_insert``, asymmetrically. Treating the action as a position the
+    plant reaches instantly lets the MPC plan trajectories it cannot fly. Here
+    ``rho_ext`` is a *state* and the input is its rate, bounded by the two rod
+    speeds -- an exact, and conveniently linear, encoding of the constraint.
+
+    ``mpc_dt`` defaults to ``delta_t * control_period``: the environment holds
+    one action across ``control_period`` physics sub-steps, so planning at the
+    raw physics step would model a control authority that does not exist.
     """
+
+    def __init__(self, env, params, horizon: int = 20, mpc_dt: float = None):
+        if mpc_dt is None:
+            control_period = getattr(env, "control_period", 1)
+            mpc_dt = float(params.delta_t) * float(control_period)
+        super().__init__(env, params, horizon=horizon, mpc_dt=mpc_dt)
 
     def _build_mpc(self):
         p = self.params
@@ -653,6 +740,8 @@ class ReactorCasadiMPC(CasadiMPC):
             BETA_I,
             BETA_TOT,
             LAMBDA_I,
+            LAMBDA_IODINE,
+            LAMBDA_XENON,
             N_GROUPS,
         )
 
@@ -662,17 +751,21 @@ class ReactorCasadiMPC(CasadiMPC):
         C = [model.set_variable("_x", f"C{i}") for i in range(N_GROUPS)]
         T_fuel = model.set_variable("_x", "T_fuel")
         T_coolant = model.set_variable("_x", "T_coolant")
-        u_raw = model.set_variable("_u", "u_raw")
+        I_hat = model.set_variable("_x", "I_hat")
+        Xe_hat = model.set_variable("_x", "Xe_hat")
+        rho_ext = model.set_variable("_x", "rho_ext")
+        rho_rate = model.set_variable("_u", "rho_rate")
         model.set_variable("_tvp", "target_n")
 
-        # Action scaling: raw ∈ [-1,1] → physical [rho_ext_min, rho_ext_max]
-        rho_ext = p.rho_ext_min + 0.5 * (u_raw + 1.0) * (p.rho_ext_max - p.rho_ext_min)
+        # Rod position integrates the commanded rod speed.
+        model.set_rhs("rho_ext", rho_rate)
 
-        # Thermal feedback on reactivity (Doppler + moderator)
+        # Reactivity: rod + thermal feedback (Doppler + moderator) + xenon.
         rho_feedback = p.alpha_fuel * (T_fuel - p.T_fuel_ref) + p.alpha_coolant * (
             T_coolant - p.T_coolant_ref
         )
-        rho = rho_ext + rho_feedback
+        rho_xenon = -p.rho_Xe_full * (Xe_hat - 1.0)
+        rho = rho_ext + rho_feedback + rho_xenon
 
         # Point kinetics
         sum_lambda_C = sum(float(LAMBDA_I[i]) * C[i] for i in range(N_GROUPS))
@@ -689,13 +782,23 @@ class ReactorCasadiMPC(CasadiMPC):
         Q_flow_out = p.m_dot_cp * (T_coolant - p.T_inlet)
         model.set_rhs("T_fuel", (P_thermal - Q_fuel_to_cool) / p.C_fuel)
         model.set_rhs("T_coolant", (Q_fuel_to_cool - Q_flow_out) / p.C_coolant)
+
+        # Iodine / xenon chain (normalised; matches reactor.env.compute_velocity)
+        lam_sum = LAMBDA_XENON + p.sigma_phi0
+        a_coeff = p.gamma_ratio * lam_sum / (1.0 + p.gamma_ratio)
+        b_coeff = lam_sum / (1.0 + p.gamma_ratio)
+        model.set_rhs("I_hat", LAMBDA_IODINE * (n - I_hat))
+        model.set_rhs(
+            "Xe_hat",
+            a_coeff * n + b_coeff * I_hat - (LAMBDA_XENON + p.sigma_phi0 * n) * Xe_hat,
+        )
         model.setup()
 
         mpc = do_mpc.controller.MPC(model)
         # Collocation is needed: PKE is stiff (|prompt eigenvalue| ~60/s at
         # rho_ext=rho_ext_max), so explicit integrators inside the NLP would
-        # require tiny substeps. do-mpc's default orthogonal collocation is
-        # implicit and A-stable, handling the stiffness without substepping.
+        # require tiny substeps. do-mpc's orthogonal collocation is implicit
+        # and A-stable, handling the stiffness without substepping.
         mpc.set_param(
             n_horizon=self.horizon,
             t_step=self.mpc_dt,
@@ -707,40 +810,36 @@ class ReactorCasadiMPC(CasadiMPC):
             collocation_ni=1,
         )
 
-        # Post-setup handles for the objective
-        u_raw_post = model.u["u_raw"]
         n_post = model.x["n"]
+        rho_ext_post = model.x["rho_ext"]
         target_post = model.tvp["target_n"]
 
-        # Objective mirrors the env reward (minimise = -reward). Tracking term
-        # is quadratic with scale = n_max - n_min so it matches the env's
-        # ((max_diff - |err|) / max_diff)^2. We use a smooth |err| for IPOPT.
-        scale = float(p.n_max - p.n_min)
+        # Objective mirrors env.compute_reward: a Gaussian tracking term and a
+        # rod-position penalty. The environment's reward is
+        # ``exp(-0.5*(err/band)^2) - w*|rho_ext|/rho_scale``; exp() is flat far
+        # from the target and gives IPOPT almost no gradient there, so we
+        # minimise the equivalent quadratic ``(err/band)^2`` instead -- same
+        # minimiser, far better conditioned.
         err = target_post - n_post
-        err_abs = casadi.sqrt(err * err + 1e-6)  # smooth |err|
-        tracking_reward = ((scale - err_abs) / scale) ** 2
-
-        # Rod-motion penalty (matches env.compute_reward)
+        tracking_cost = (err / p.reward_band) ** 2
         rho_scale = float(max(abs(p.rho_ext_min), abs(p.rho_ext_max)))
-        rho_ext_post = p.rho_ext_min + 0.5 * (u_raw_post + 1.0) * (
-            p.rho_ext_max - p.rho_ext_min
-        )
         rod_penalty = (
             float(p.rod_motion_weight)
             * casadi.sqrt(rho_ext_post * rho_ext_post + 1e-12)
             / rho_scale
         )
+        mpc.set_objective(lterm=tracking_cost + rod_penalty, mterm=tracking_cost)
+        mpc.set_rterm(rho_rate=1e2)
 
-        lterm = -tracking_reward + rod_penalty
-        mpc.set_objective(lterm=lterm, mterm=-tracking_reward)
-        mpc.set_rterm(u_raw=1e-4)
+        # Rod *speed* limits (asymmetric: insertion is faster than withdrawal).
+        mpc.bounds["lower", "_u", "rho_rate"] = -float(p.rod_speed_insert)
+        mpc.bounds["upper", "_u", "rho_rate"] = float(p.rod_speed_withdraw)
+        # Rod travel limits.
+        mpc.bounds["lower", "_x", "rho_ext"] = float(p.rho_ext_min)
+        mpc.bounds["upper", "_x", "rho_ext"] = float(p.rho_ext_max)
 
-        mpc.bounds["lower", "_u", "u_raw"] = -1.0
-        mpc.bounds["upper", "_u", "u_raw"] = 1.0
-
-        # Current target — refreshed in _update_setpoint from the env state.
-        # With OU demand the future is unknown; MPC uses the current target
-        # for the entire horizon (no schedule lookahead).
+        # With OU demand the future is unknown; hold the current target across
+        # the horizon.
         self._current_target = float(sum(p.target_n_range) / 2.0)
         tvp_tpl = mpc.get_tvp_template()
 
@@ -759,12 +858,196 @@ class ReactorCasadiMPC(CasadiMPC):
             [
                 np.array([float(state.n)]),
                 np.asarray(state.C, dtype=float),
-                np.array([float(state.T_fuel), float(state.T_coolant)]),
+                np.array(
+                    [
+                        float(state.T_fuel),
+                        float(state.T_coolant),
+                        float(state.I_hat),
+                        float(state.Xe_hat),
+                        float(state.rho_ext),
+                    ]
+                ),
             ]
         )
 
     def _update_setpoint(self, state):
         self._current_target = float(state.target_n)
+
+    def step(self, _obs, state):
+        """Return the raw action in [-1, 1] the environment expects.
+
+        The NLP optimises a rod *rate*, but ``step_env`` takes a demanded rod
+        *position*. Integrating one step of the optimal rate gives the position
+        to demand; because the environment rate-limits toward that demand with
+        the same bounds the NLP respects, the realised motion matches the plan.
+        """
+        self._update_setpoint(state)
+        x0 = self._extract_x0(state)
+        if not self._initialized:
+            self._mpc.x0 = x0
+            self._mpc.set_initial_guess()
+            self._initialized = True
+        rho_rate = float(np.array(self._mpc.make_step(x0)).flatten()[0])
+
+        p = self.params
+        rho_next = float(
+            np.clip(
+                float(state.rho_ext) + rho_rate * self.mpc_dt,
+                p.rho_ext_min,
+                p.rho_ext_max,
+            )
+        )
+        span = p.rho_ext_max - p.rho_ext_min
+        raw = 2.0 * (rho_next - p.rho_ext_min) / span - 1.0
+        return float(np.clip(raw, -1.0, 1.0))
+
+
+# ---------------------------------------------------------------------------
+# Building HVAC
+# ---------------------------------------------------------------------------
+
+
+class HVACCasadiMPC(CasadiMPC):
+    """
+    CasADi MPC for the single-zone building (ISO 13790 5R1C).
+
+    States : [T_mass, Q_emitter]      Input: u_raw in [-1, 1] -> [0, Q_heat_max]
+
+    Only two differential states: the 5R1C air and surface nodes have no
+    capacitance, so they are substituted in closed form exactly as the plant
+    does. The model is therefore an almost-exact copy of the plant rather than
+    a reduction -- unusual here, and possible because the building model is
+    genuinely low-order.
+
+    Where the MPC earns its advantage is **anticipation**. Setpoint schedule,
+    outdoor temperature, solar gain and occupancy gain all enter as
+    time-varying parameters over the horizon, so the controller can pre-heat
+    ahead of the morning setback recovery and back off ahead of a sunny
+    afternoon. A PID sees none of that until it has already happened, and with
+    a 43 h thermal time constant "already happened" is far too late.
+    """
+
+    def __init__(self, env, params, horizon: int = 24, mpc_dt: float = None):
+        super().__init__(
+            env, params, horizon=horizon, mpc_dt=mpc_dt or float(params.delta_t)
+        )
+
+    def _build_mpc(self):
+        p = self.params
+        from target_gym.hvac.env import zone_conductances
+
+        c = zone_conductances(p)
+        H_is, H_ms, H_w, H_em, H_ve = (
+            c["H_tr_is"],
+            c["H_tr_ms"],
+            c["H_tr_w"],
+            c["H_tr_em"],
+            c["H_ve"],
+        )
+        A_tot, A_m, C_m = c["A_tot"], c["A_m"], c["C_m"]
+
+        model = do_mpc.model.Model("continuous")
+        T_mass = model.set_variable("_x", "T_mass")
+        Q_emitter = model.set_variable("_x", "Q_emitter")
+        u_raw = model.set_variable("_u", "u_raw")
+        T_out = model.set_variable("_tvp", "T_out")
+        phi_int = model.set_variable("_tvp", "phi_int")
+        phi_sol = model.set_variable("_tvp", "phi_sol")
+        target_T = model.set_variable("_tvp", "target_T")
+
+        Q_command = 0.5 * (u_raw + 1.0) * p.Q_heat_max
+
+        # Gain split (ISO 13790), mirroring hvac.env.split_gains.
+        phi_ia = 0.5 * phi_int
+        remainder = 0.5 * phi_int + phi_sol
+        phi_m = (A_m / A_tot) * remainder
+        phi_st = (1.0 - A_m / A_tot - H_w / (9.1 * A_tot)) * remainder
+
+        # Algebraic air/surface nodes in closed form (see solve_air_and_surface).
+        denom_air = H_is + H_ve
+        a = H_is / denom_air
+        b = (H_ve * T_out + phi_ia + Q_emitter) / denom_air
+        T_surface = (H_ms * T_mass + H_w * T_out + phi_st + H_is * b) / (
+            H_ms + H_w + H_is * (1.0 - a)
+        )
+        T_air = a * T_surface + b
+
+        model.set_rhs(
+            "T_mass",
+            (H_ms * (T_surface - T_mass) + H_em * (T_out - T_mass) + phi_m) / C_m,
+        )
+        model.set_rhs("Q_emitter", (Q_command - Q_emitter) / p.emitter_tau)
+        model.set_expression("T_air", T_air)
+        model.setup()
+
+        mpc = do_mpc.controller.MPC(model)
+        mpc.set_param(
+            n_horizon=self.horizon,
+            t_step=self.mpc_dt,
+            n_robust=0,
+            store_full_solution=False,
+        )
+
+        # Objective mirrors env.compute_reward: squared comfort band minus
+        # normalised energy. Minimising -reward.
+        T_air_post = model.aux["T_air"]
+        target_post = model.tvp["target_T"]
+        err = target_post - T_air_post
+        # Mirror env.compute_reward *including its clip*. Without the fmax the
+        # quadratic turns back upward past err = 2*comfort_band, so the
+        # objective would reward large errors: at band=1 C an error of 6 C
+        # scored better than an error of 0, and the MPC simply stopped heating.
+        comfort = (
+            casadi.fmax(
+                0.0,
+                1.0 - casadi.sqrt(err * err + 1e-6) / (2.0 * p.comfort_band),
+            )
+            ** 2
+        )
+        energy = model.x["Q_emitter"] / p.Q_heat_max
+        mpc.set_objective(
+            lterm=-comfort + float(p.energy_weight) * energy, mterm=-comfort
+        )
+        mpc.set_rterm(u_raw=1e-3)
+        mpc.bounds["lower", "_u", "u_raw"] = -1.0
+        mpc.bounds["upper", "_u", "u_raw"] = 1.0
+
+        self._current_step = 0
+        self._setpoint_occupied = float(p.setpoint_occupied)
+        tvp_tpl = mpc.get_tvp_template()
+
+        def tvp_fun(_t):
+            from target_gym.hvac.env import (
+                internal_gain,
+                outdoor_temperature,
+                scheduled_setpoint,
+                solar_gain,
+            )
+
+            for k in range(self.horizon + 1):
+                t = self._current_step + k
+                # Forecast uses the deterministic daily cycle; the stochastic
+                # weather deviation is unknown, so it is left at zero and
+                # rejected by receding-horizon feedback.
+                tvp_tpl["_tvp", k, "T_out"] = float(outdoor_temperature(t, 0.0, p))
+                tvp_tpl["_tvp", k, "phi_int"] = float(internal_gain(t, p))
+                tvp_tpl["_tvp", k, "phi_sol"] = float(solar_gain(t, p))
+                tvp_tpl["_tvp", k, "target_T"] = float(
+                    scheduled_setpoint(t, self._setpoint_occupied, p)
+                )
+            return tvp_tpl
+
+        mpc.set_tvp_fun(tvp_fun)
+        mpc.set_param(nlpsol_opts=self._quiet_ipopt())
+        mpc.setup()
+        return mpc
+
+    def _extract_x0(self, state):
+        return np.array([float(state.T_mass), float(state.Q_emitter)])
+
+    def _update_setpoint(self, state):
+        self._current_step = int(state.time)
+        self._setpoint_occupied = float(state.setpoint_occupied)
 
 
 # ============================================================================
@@ -852,6 +1135,16 @@ def make_reactor_mpc(env, params, horizon: int = 20):
     expensive without meaningfully improving near-term tracking.
     """
     return ReactorCasadiMPC(env, params, horizon=horizon)
+
+
+def make_hvac_mpc(env, params, horizon: int = 24):
+    """CasADi/IPOPT MPC for the single-zone building.
+
+    With delta_t = 900 s, horizon = 24 gives 6 h of lookahead -- enough to see
+    the morning setback recovery and the solar peak, which is where the
+    anticipation advantage over PID comes from.
+    """
+    return HVACCasadiMPC(env, params, horizon=horizon)
 
 
 def make_glass_furnace_mpc(env, params, horizon: int = 60):

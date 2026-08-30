@@ -20,10 +20,10 @@ from target_gym.plane.dynamics import (
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
     compute_velocity_from_horizontal_and_vertical_speed,
+    step_key,
     total_wind_2d,
 )
 
-SPEED_OF_SOUND = 343.0
 DEBUG = False
 
 
@@ -85,20 +85,39 @@ class PlaneParams(EnvParams):
     wings_surface: float = 122.6
     C_x0: float = 0.095
     C_z0: float = 0.9
-    M_crit: float = 0.78
     initial_fuel_quantity: float = 23860 / 1.25
     specific_fuel_consumption: float = 17.5 / 1000
 
-    cl_alpha: float = 0.04  # per deg
+    # Finite-wing lift-curve slope, derived (PHYSICS.md 4):
+    #   a = a0 / (1 + a0/(pi*AR*e))  with a0 = 2*pi/rad, AR = 34.1^2/122.6 = 9.48,
+    #   e = 0.85  ->  5.034 /rad = 0.0879 /deg.
+    # Was 0.04 /deg (-54%), which both inflated cruise trim AoA to 4.06 deg
+    # (A320 flies ~2 deg) and disagreed with `k`, which correctly encodes the
+    # same AR. With the derived slope, cl0 + cl_alpha*aoa_stall = 1.52 ~ CL_max,
+    # so cl0/aoa_stall/CL_max/cl_alpha become mutually consistent.
+    cl_alpha: float = 0.08786  # per deg
     cl0: float = 0.2  # zero-lift AoA
     cd0: float = 0.02  # zero-lift drag
     k: float = 0.045  # induced drag factor
     aoa_stall: float = 15.0  # deg
     CL_max: float = 1.5
+    # Negative-stall limit. A cambered wing stalls asymmetrically: the negative
+    # branch bottoms out near -10 deg AoA. Without this the corrected (steeper)
+    # lift slope lets CL run away negative -- it was previously masked by the
+    # too-shallow slope, not actually bounded.
+    CL_min: float = -1.0
+    # Degrees beyond `aoa_stall` at which the separation sigmoid is centred, so
+    # that lift *peaks at* aoa_stall rather than being halved there.
+    aoa_stall_width: float = 3.0
+    # Drag-divergence Mach number. NOTE: this field was previously declared
+    # twice (0.78 above the aero block, 0.80 here). Python keeps the last
+    # definition, so 0.80 was always the effective value and the 0.78 was
+    # dead -- it is the A320 *cruise* Mach, not the drag-divergence Mach,
+    # which is where the confusion came from. Kept at 0.80 so behaviour is
+    # unchanged; see PHYSICS.md for sourcing.
     M_crit: float = 0.80
     k_drag: float = 5.0
 
-    speed_of_sound: float = SPEED_OF_SOUND
     I: float = 9_000_000
     moment_arm_stabilizer: float = 15.0
     moment_arm_wings: float = 1.5
@@ -237,7 +256,7 @@ def compute_next_state(
         params.turbulence_theta,
         params.turbulence_sigma,
         dt,
-        key,
+        step_key(key, state.time),
     )
     total_wind_x, total_wind_z = total_wind_2d(state.z, gust[0], gust[1], params)
     eff_params = params.replace(wind_x=total_wind_x, wind_z=total_wind_z)
@@ -275,7 +294,11 @@ def compute_next_state(
     )
 
     alpha, gamma = compute_alpha(theta, x_dot, z_dot)
-    m = params.initial_mass + state.fuel
+    # Total all-up mass. ``initial_fuel_quantity`` is a *component* of
+    # ``initial_mass``, not an addition to it, and matches the mass the
+    # dynamics actually integrate (see compute_acceleration). Once fuel
+    # burn is implemented this becomes initial_mass - burned.
+    m = params.initial_mass
 
     new_state = PlaneState(
         x=x,

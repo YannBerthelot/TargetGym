@@ -15,6 +15,8 @@ from target_gym.experts.mpc import make_cstr_mpc
 from target_gym.experts.pid import make_cstr_pid, make_cstr_stateful_gs_pid, pid_step
 from target_gym.utils import (
     load_or_build_interpolator,
+    load_or_run_mpc_episode,
+    run_episode_headless_with_state,
     save_comparison_figure,
     save_comparison_gif,
     truncate_colormap,

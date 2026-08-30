@@ -195,10 +195,17 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
         )
 
     def make_pid(self):
-        """Return a ready-to-use StatefulMIMOPID controlling both power and stick."""
-        from target_gym.experts.pid import make_plane_stateful_pid
+        """Return the cascaded altitude-hold autopilot.
 
-        return make_plane_stateful_pid()
+        Three loops (altitude -> vertical speed -> pitch -> elevator) with a
+        limit between each stage plus alpha protection. The older flat PID,
+        which maps altitude error straight to elevator, is still available as
+        ``experts.pid.make_plane_stateful_pid``; it departs controlled flight
+        on large climbs now that the lift curve is correct (PHYSICS.md D1/D2).
+        """
+        from target_gym.experts.pid import make_plane_cascaded_pid
+
+        return make_plane_cascaded_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return a GradientMPC oracle optimising both power and stick."""

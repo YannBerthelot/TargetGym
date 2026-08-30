@@ -1,188 +1,498 @@
-from math import cos, sin
+"""Physics validation for the 2D plane model.
+
+These tests enforce ``src/target_gym/plane/PHYSICS.md``. They assert *emergent*
+behaviour -- ISA table values, figures of merit, monotonicity, integrator
+convergence -- rather than re-stating the formula under test. A test that
+re-implements its subject validates transcription, not correctness: if the
+formula is wrong, the test is wrong the same way. The previous version of this
+module did exactly that (``test_newton_second_law`` recomputed the function's
+own expression), which is why none of the deviations in §5 were caught.
+
+Reference aircraft: Airbus A320-200, clean, cruise.
+"""
 
 import numpy as np
 import pytest
+from scipy.optimize import brentq
 
 from target_gym.plane.dynamics import (
+    aero_coefficients,
+    compute_air_density_from_altitude,
     compute_drag,
-    compute_exposed_surfaces,
-    compute_initial_x_drag_coefficient,
-    compute_initial_z_drag_coefficient,
-    compute_mach_impact_on_x_drag_coefficient,
-    compute_mach_impact_on_z_drag_coefficient,
+    compute_speed_of_sound_from_altitude,
+    compute_thrust_output,
     compute_weight,
-    newton_second_law,
 )
-from target_gym.plane.env_jax import PlaneParams, PlaneState, compute_next_state
+from target_gym.plane.env import PlaneParams
+
+KNOT = 0.514444  # m/s
+
+# A320 geometry used to derive expectations (PHYSICS.md §3).
+A320_SPAN_M = 34.1
+OSWALD_E = 0.85
+
+# Cruise reference condition: FL350, M0.78.
+CRUISE_ALT_M = 10_668.0
+CRUISE_MACH = 0.78
 
 
-def test_compute_drag():
-    S = 2
-    C = 10
-    V = 5
-    rho = 0.01
-    expected_drag = 0.5 * rho * S * C * V**2
-    assert compute_drag(S, C, V, rho) == pytest.approx(expected_drag)
+@pytest.fixture(scope="module")
+def params():
+    return PlaneParams()
 
 
-def test_compute_weight():
-    m = 10
-    g = 9.81
-    expected_weight = m * g
-    assert compute_weight(m, g) == pytest.approx(expected_weight)
+def _CL(aoa_deg, mach, params):
+    return float(aero_coefficients(float(aoa_deg), float(mach), params)[0])
 
 
-def test_compute_initial_z_drag_coefficient():
-    C_z_max = 0.9
-    threshold_alpha = 15
-    stall_alpha = 20
-    min_alpha = 5
-    assert (
-        compute_initial_z_drag_coefficient(
-            alpha=stall_alpha + 0.1,
-            C_z_max=C_z_max,
-            threshold_alpha=threshold_alpha,
-            stall_alpha=stall_alpha,
-            min_alpha=min_alpha,
+def _CD(aoa_deg, mach, params):
+    return float(aero_coefficients(float(aoa_deg), float(mach), params)[1])
+
+
+def _peak_CL(params, mach, lo=-5.0, hi=25.0, n=3001):
+    """Maximum lift coefficient the model can actually produce."""
+    aoas = np.linspace(lo, hi, n)
+    cls = np.array([_CL(a, mach, params) for a in aoas])
+    i = int(cls.argmax())
+    return float(cls[i]), float(aoas[i])
+
+
+# ---------------------------------------------------------------------------
+# 1. Atmosphere -- validated against the ISA table (ISO 2533 / ICAO Doc 7488)
+# ---------------------------------------------------------------------------
+
+# (altitude m, density kg/m^3, speed of sound m/s)
+ISA_TABLE = [
+    (0.0, 1.22500, 340.294),
+    (5_000.0, 0.73643, 320.545),
+    (11_000.0, 0.36392, 295.070),
+]
+
+
+@pytest.mark.parametrize("altitude,rho_ref,a_ref", ISA_TABLE)
+def test_isa_density_matches_published_table(altitude, rho_ref, a_ref):
+    """ISA density within 0.1% of the tabulated standard."""
+    rho = float(compute_air_density_from_altitude(altitude))
+    assert rho == pytest.approx(rho_ref, rel=1e-3)
+
+
+@pytest.mark.parametrize("altitude,rho_ref,a_ref", ISA_TABLE)
+def test_isa_speed_of_sound_matches_published_table(altitude, rho_ref, a_ref):
+    """ISA speed of sound within 0.1% of the tabulated standard."""
+    a = float(compute_speed_of_sound_from_altitude(altitude))
+    assert a == pytest.approx(a_ref, rel=1e-3)
+
+
+def test_density_decreases_monotonically_with_altitude():
+    alts = np.linspace(0.0, 11_000.0, 50)
+    rho = np.array([float(compute_air_density_from_altitude(h)) for h in alts])
+    assert np.all(np.diff(rho) < 0.0)
+
+
+# ---------------------------------------------------------------------------
+# 2. Airframe figures of merit (PHYSICS.md §4)
+# ---------------------------------------------------------------------------
+
+
+def test_max_lift_to_drag_ratio_matches_a320(params):
+    """L/D_max = 1/(2*sqrt(cd0*k)) should land near the A320's published ~17.
+
+    This is the single strongest check that cd0 and k are jointly sane: it is
+    independent of wing area, mass and altitude.
+    """
+    ld_max = 1.0 / (2.0 * np.sqrt(params.cd0 * params.k))
+    assert 15.0 < ld_max < 19.0, f"L/D_max={ld_max:.1f} implausible for an airliner"
+
+
+def test_induced_drag_factor_consistent_with_aspect_ratio(params):
+    """k must correspond to the real wing geometry for a defensible Oswald e.
+
+    k = 1/(pi*AR*e). With AR = 9.48 this pins e; anything outside 0.6-1.0 means
+    k and the wing geometry disagree.
+    """
+    aspect_ratio = A320_SPAN_M**2 / params.wings_surface
+    assert aspect_ratio == pytest.approx(9.48, abs=0.05)
+    implied_e = 1.0 / (np.pi * aspect_ratio * params.k)
+    assert 0.6 < implied_e < 1.0, f"k={params.k} implies Oswald e={implied_e:.2f}"
+
+
+def test_cruise_lift_coefficient_in_typical_jet_range(params):
+    """CL required to hold FL350 at M0.78 should be a typical jet cruise CL."""
+    rho = float(compute_air_density_from_altitude(CRUISE_ALT_M))
+    a = float(compute_speed_of_sound_from_altitude(CRUISE_ALT_M))
+    v = CRUISE_MACH * a
+    weight = compute_weight(params.initial_mass, params.gravity)
+    cl_required = 2.0 * weight / (rho * v**2 * params.wings_surface)
+    assert 0.35 < cl_required < 0.75, f"cruise CL={cl_required:.3f}"
+
+
+def test_level_flight_trim_exists_at_cruise(params):
+    """A level-flight equilibrium must exist at the cruise condition.
+
+    If no AoA in the usable range generates exactly enough lift, the aircraft
+    cannot cruise at all and the whole altitude-hold task is ill-posed.
+    """
+    rho = float(compute_air_density_from_altitude(CRUISE_ALT_M))
+    a = float(compute_speed_of_sound_from_altitude(CRUISE_ALT_M))
+    v = CRUISE_MACH * a
+    weight = compute_weight(params.initial_mass, params.gravity)
+    q_s = 0.5 * rho * v * v * params.wings_surface
+
+    residual = lambda aoa: q_s * _CL(aoa, CRUISE_MACH, params) - weight  # noqa: E731
+    assert residual(-5.0) < 0.0 < residual(12.0), "no sign change: trim bracket invalid"
+    aoa_trim = brentq(residual, -5.0, 12.0)
+    # Well inside the stall boundary, and positive (cambered wing at cruise).
+    assert 0.0 < aoa_trim < params.aoa_stall - 2.0
+
+
+def test_thrust_exceeds_drag_at_cruise(params):
+    """Available thrust at FL350 must exceed cruise drag, or cruise is impossible."""
+    rho = float(compute_air_density_from_altitude(CRUISE_ALT_M))
+    a = float(compute_speed_of_sound_from_altitude(CRUISE_ALT_M))
+    v = CRUISE_MACH * a
+    weight = compute_weight(params.initial_mass, params.gravity)
+    q_s = 0.5 * rho * v * v * params.wings_surface
+
+    residual = lambda aoa: q_s * _CL(aoa, CRUISE_MACH, params) - weight  # noqa: E731
+    aoa_trim = brentq(residual, -5.0, 12.0)
+    drag = q_s * _CD(aoa_trim, CRUISE_MACH, params)
+
+    thrust = float(
+        compute_thrust_output(
+            power=1.0,
+            thrust_output_at_sea_level=params.thrust_output_at_sea_level,
+            M=CRUISE_MACH,
+            rho=rho,
         )
-        == 0
     )
-    assert (
-        compute_initial_z_drag_coefficient(
-            alpha=min_alpha - 0.01,
-            C_z_max=C_z_max,
-            threshold_alpha=threshold_alpha,
-            stall_alpha=stall_alpha,
-            min_alpha=min_alpha,
+    assert thrust > drag, f"thrust {thrust/1e3:.1f} kN < drag {drag/1e3:.1f} kN"
+
+
+# ---------------------------------------------------------------------------
+# 3. Structural / monotonicity properties (first principles, no source needed)
+# ---------------------------------------------------------------------------
+
+
+def test_drag_scales_quadratically_with_speed():
+    """Doubling airspeed must quadruple dynamic-pressure drag."""
+    base = float(compute_drag(S=122.6, C=0.03, V=100.0, rho=1.0))
+    double = float(compute_drag(S=122.6, C=0.03, V=200.0, rho=1.0))
+    assert double == pytest.approx(4.0 * base, rel=1e-6)
+
+
+def test_drag_scales_linearly_with_density():
+    base = float(compute_drag(S=122.6, C=0.03, V=100.0, rho=0.5))
+    double = float(compute_drag(S=122.6, C=0.03, V=100.0, rho=1.0))
+    assert double == pytest.approx(2.0 * base, rel=1e-6)
+
+
+def test_lift_increases_with_angle_of_attack_below_stall(params):
+    aoas = np.linspace(0.0, params.aoa_stall - 5.0, 20)
+    cls = [_CL(a, 0.3, params) for a in aoas]
+    assert np.all(np.diff(cls) > 0.0)
+
+
+def test_lift_collapses_beyond_stall(params):
+    """Past the stall AoA the sigmoid must suppress lift."""
+    cl_peak, aoa_peak = _peak_CL(params, mach=0.3)
+    cl_deep_stall = _CL(aoa_peak + 10.0, 0.3, params)
+    assert cl_deep_stall < 0.35 * cl_peak
+
+
+def test_drag_rises_beyond_critical_mach(params):
+    """Transonic drag divergence: CD must climb once M exceeds M_crit."""
+    aoa = 2.0
+    cd_sub = _CD(aoa, params.M_crit - 0.10, params)
+    cd_at = _CD(aoa, params.M_crit, params)
+    cd_super = _CD(aoa, params.M_crit + 0.05, params)
+    assert cd_at == pytest.approx(cd_sub, rel=0.35)
+    assert cd_super > cd_at
+
+
+def test_thrust_lapses_with_altitude(params):
+    """Turbofan thrust must fall with density; roughly proportional to it."""
+    thrusts = [
+        float(
+            compute_thrust_output(
+                power=1.0,
+                thrust_output_at_sea_level=params.thrust_output_at_sea_level,
+                M=0.5,
+                rho=float(compute_air_density_from_altitude(h)),
+            )
         )
-        == 0
+        for h in (0.0, 5_000.0, 11_000.0)
+    ]
+    assert thrusts[0] > thrusts[1] > thrusts[2]
+    # At 11 km, density is 29.7% of sea level; thrust should be in that region.
+    assert 0.15 < thrusts[2] / thrusts[0] < 0.45
+
+
+def test_thrust_is_proportional_to_throttle(params):
+    kwargs = dict(
+        thrust_output_at_sea_level=params.thrust_output_at_sea_level, M=0.3, rho=1.225
     )
-    assert (
-        compute_initial_z_drag_coefficient(
-            alpha=threshold_alpha - min_alpha,
-            C_z_max=C_z_max,
-            threshold_alpha=threshold_alpha,
-            stall_alpha=stall_alpha,
-            min_alpha=min_alpha,
+    half = float(compute_thrust_output(power=0.5, **kwargs))
+    full = float(compute_thrust_output(power=1.0, **kwargs))
+    assert half == pytest.approx(0.5 * full, rel=1e-6)
+
+
+def test_zero_throttle_gives_zero_thrust(params):
+    thrust = float(
+        compute_thrust_output(
+            power=0.0,
+            thrust_output_at_sea_level=params.thrust_output_at_sea_level,
+            M=0.3,
+            rho=1.225,
         )
-        == C_z_max
     )
+    assert thrust == pytest.approx(0.0, abs=1e-9)
 
 
-def test_newton_second_law():
-    thrust = 10000
-    lift = 20000
-    drag = 5000
-    gamma = 5
-    theta = 5
-    P = 15000
-    f_x, f_z = newton_second_law(
-        thrust=thrust, lift=lift, drag=drag, P=P, gamma=gamma, theta=theta
-    )
-
-    lift_z = cos(theta) * lift
-    drag_z = -sin(gamma) * drag
-    thrust_z = sin(theta) * thrust
-    # Compute the sum
-    expected_f_z = lift_z + drag_z + thrust_z - P
-
-    assert f_z == expected_f_z
-
-    lift_x = -sin(theta) * lift
-    drag_x = -abs(cos(gamma) * drag)
-    thrust_x = cos(theta) * thrust
-    # Compute the sum
-    expected_f_x = lift_x + drag_x + thrust_x
-
-    assert f_x == expected_f_x
+def test_weight_is_mass_times_gravity():
+    assert float(compute_weight(1000.0, 9.81)) == pytest.approx(9810.0)
 
 
-def test_compute_exposed_surfaces():
-    S_front = 4
-    S_wings = 2
-    alpha = 5
-    expected_S_z = S_front * sin(alpha) + S_wings * cos(alpha)
-    expected_S_x = S_front * cos(alpha) + S_wings * sin(alpha)
-    S_x, S_z = compute_exposed_surfaces(S_front, S_wings, alpha)
-    assert expected_S_x == pytest.approx(S_x)
-    assert expected_S_z == pytest.approx(S_z)
+# ---------------------------------------------------------------------------
+# 4. Mass bookkeeping (PHYSICS.md §3)
+# ---------------------------------------------------------------------------
 
 
-def test_compute_mach_impact_on_z_drag_coefficient():
-    C_z = 5.0
-    M_critic = 0.8
-    modified_C_z = compute_mach_impact_on_z_drag_coefficient(
-        C_z, M=0.7, M_critic=M_critic
-    )
-    assert modified_C_z == C_z
+def test_reported_mass_is_physically_possible(params):
+    """The modelled aircraft must not exceed the A320's 78 t MTOW.
 
-    modified_C_z = compute_mach_impact_on_z_drag_coefficient(
-        C_z, M=0.81, M_critic=M_critic
-    )
-    assert modified_C_z > C_z
-
-    modified_C_z = compute_mach_impact_on_z_drag_coefficient(
-        C_z, M=0.9, M_critic=M_critic
-    )
-    assert modified_C_z < C_z
+    ``state.m`` used to report ``initial_mass + fuel`` = 92 588 kg, which both
+    exceeded MTOW and disagreed with the mass the dynamics actually integrate.
+    """
+    A320_MTOW_KG = 78_000.0
+    A320_OEW_KG = 42_600.0
+    assert A320_OEW_KG < params.initial_mass <= A320_MTOW_KG
+    # Fuel is a component of the all-up mass, not additional to it.
+    assert params.initial_fuel_quantity < params.initial_mass - A320_OEW_KG + 1e-6
 
 
-def test_compute_mach_impact_on_x_drag_coefficient():
-    C_x = 5.0
-    M_critic = 0.8
-    modified_C_z = compute_mach_impact_on_x_drag_coefficient(
-        C_x, M=0.7, M_critic=M_critic
-    )
-    assert (
-        compute_mach_impact_on_x_drag_coefficient(C_x, M=0.8, M_critic=M_critic)
-        > modified_C_z
-    )
+def test_mach_crit_declared_once(params):
+    """Guard against the duplicate-field regression fixed in PHYSICS.md §4.
+
+    ``M_crit`` was declared twice in ``PlaneParams`` (0.78 then 0.80); Python
+    kept the last, silently discarding the first.
+    """
+    import re
+    from pathlib import Path
+
+    import target_gym.plane.env as env_mod
+
+    source = Path(env_mod.__file__).read_text()
+    declarations = re.findall(r"^\s+M_crit\s*:\s*float", source, flags=re.MULTILINE)
+    assert len(declarations) == 1, f"M_crit declared {len(declarations)}x"
+    assert 0.7 < params.M_crit < 0.9
 
 
-def test_compute_initial_x_drag_coefficient():
-    C_x_min = 2
-    assert compute_initial_x_drag_coefficient(alpha=0, C_x_min=C_x_min) == C_x_min
-    assert compute_initial_x_drag_coefficient(alpha=5, C_x_min=C_x_min) > C_x_min
+# ---------------------------------------------------------------------------
+# 5. Lift curve: slope, attainable CL_max, stall speed (PHYSICS.md §4)
+#    (formerly deviations D1/D2 -- fixed)
+# ---------------------------------------------------------------------------
 
 
-# def test_compute_air_density_from_altitude():
-#     initial_rho = 2
-#     altitude_factor = 3
-#     expected_air_density = initial_rho * altitude_factor
-#     assert (
-#         compute_air_density_from_altitude(initial_rho, altitude_factor)
-#         == expected_air_density
-#     )
+def test_stall_speed_matches_published_value(params):
+    """Clean stall speed at sea level should be ~145-150 kt."""
+    cl_peak, _ = _peak_CL(params, mach=0.2)
+    weight = compute_weight(params.initial_mass, params.gravity)
+    v_stall = np.sqrt(2.0 * weight / (1.225 * params.wings_surface * cl_peak))
+    assert 135.0 < v_stall / KNOT < 165.0
 
 
-def test_compute_next_state():
-    """Test state transitions with physics"""
-    params = PlaneParams()
-    state = PlaneState(
+def test_cl_max_is_attainable(params):
+    cl_peak, _ = _peak_CL(params, mach=0.2)
+    assert cl_peak == pytest.approx(params.CL_max, rel=0.10)
+
+
+def test_lift_slope_consistent_with_aspect_ratio(params):
+    """Prandtl finite-wing lift slope: a = a0 / (1 + a0/(pi*AR*e))."""
+    aspect_ratio = A320_SPAN_M**2 / params.wings_surface
+    a0 = 2.0 * np.pi  # per radian, thin-airfoil theory
+    slope_per_rad = a0 / (1.0 + a0 / (np.pi * aspect_ratio * OSWALD_E))
+    slope_per_deg = slope_per_rad * np.pi / 180.0
+    assert params.cl_alpha == pytest.approx(slope_per_deg, rel=0.25)
+
+
+@pytest.mark.xfail(
+    reason="D3: Prandtl-Glauert CL/beta is applied with no Mach effect on "
+    "stall onset, so peak CL rises with Mach (0.70 -> 1.10) instead of falling",
+    strict=True,
+)
+def test_d3_max_lift_decreases_with_mach(params):
+    """Buffet onset and CL_max fall with Mach on a swept wing."""
+    cl_low, _ = _peak_CL(params, mach=0.20)
+    cl_high, _ = _peak_CL(params, mach=0.78)
+    assert cl_high < cl_low
+
+
+# ---------------------------------------------------------------------------
+# 6. Integrator convergence (PHYSICS.md §6.5)
+# ---------------------------------------------------------------------------
+
+
+def _cruise_state(params):
+    """A trimmed-ish cruise state to propagate."""
+    from target_gym.plane.env import PlaneState
+
+    return PlaneState(
         x=0.0,
-        x_dot=250.0,  # Initial speed
-        z=3000.0,  # Initial altitude
+        x_dot=230.0,
+        z=CRUISE_ALT_M,
         z_dot=0.0,
-        theta=0.0,
+        theta=np.deg2rad(4.0),
         theta_dot=0.0,
-        alpha=0.0,
+        alpha=np.deg2rad(4.0),
         gamma=0.0,
-        m=params.initial_mass + params.initial_fuel_quantity,
-        power=0.5,  # Half power
+        m=params.initial_mass,
+        power=0.8,
         stick=0.0,
         fuel=params.initial_fuel_quantity,
         time=0,
-        target_altitude=4000.0,
+        target_altitude=CRUISE_ALT_M,
     )
 
-    # Test level flight maintains roughly constant altitude
-    new_state, _ = compute_next_state(0.5, 0.0, state, params)
-    assert abs(new_state.z - state.z) < 10.0  # Small altitude change
-    assert new_state.x > state.x  # Moving forward
 
-    # Test pitch up causes climb
-    new_state, _ = compute_next_state(1.0, 1.0, state, params)
-    assert new_state.power > state.power  # Increased power
-    assert new_state.stick > state.stick  # Increased power
-    # assert new_state.z_dot > 0  # Positive vertical speed
-    # assert new_state.theta > 0  # Positive pitch angle
+@pytest.mark.parametrize("method", ["rk4_2", "rk4_10", "euler_100"])
+def test_trajectory_is_independent_of_integrator(params, method):
+    """The dynamics must be physics, not step-size artefact.
+
+    Propagating the same cruise state with a finer/different integrator must
+    give the same trajectory to within a small tolerance. If it does not, what
+    the environment simulates is the integrator's truncation error.
+    """
+    from target_gym.plane.env import compute_next_state
+
+    def roll(integration_method, n=60):
+        state = _cruise_state(params)
+        for _ in range(n):
+            state, _ = compute_next_state(
+                0.8, 0.0, state, params, integration_method=integration_method
+            )
+        return float(state.z), float(state.x_dot)
+
+    z_ref, v_ref = roll("rk4_1")
+    z_alt, v_alt = roll(method)
+
+    # Altitude drift over 60 s must agree to within 1 m, speed to within 0.1 m/s.
+    assert abs(z_alt - z_ref) < 1.0, f"{method}: dz={z_alt - z_ref:.3f} m"
+    assert abs(v_alt - v_ref) < 0.1, f"{method}: dv={v_alt - v_ref:.4f} m/s"
+
+
+# ---------------------------------------------------------------------------
+# 7. Lift-curve shape after the D1/D2 fix (PHYSICS.md §4)
+# ---------------------------------------------------------------------------
+
+
+def test_measured_lift_slope_matches_declared_cl_alpha(params):
+    """In the linear region the model's dCL/dalpha must equal cl_alpha.
+
+    Guards the stall sigmoid against creeping back down into the linear
+    range, which is precisely the D1 failure mode: the cutoff silently ate
+    the top of the lift curve.
+    """
+    aoas = np.linspace(0.0, 6.0, 25)
+    # Undo the Prandtl-Glauert 1/beta boost so we compare like with like.
+    mach = 0.2
+    beta = np.sqrt(1.0 - mach**2)
+    cls = np.array([_CL(a, mach, params) * beta for a in aoas])
+    measured = np.polyfit(aoas, cls, 1)[0]
+    assert measured == pytest.approx(params.cl_alpha, rel=0.02)
+
+
+def test_peak_lift_occurs_at_stall_angle(params):
+    """CL must be maximal at (not well before) the declared stall AoA."""
+    _, aoa_peak = _peak_CL(params, mach=0.2)
+    assert aoa_peak == pytest.approx(params.aoa_stall, abs=1.5)
+
+
+def test_lift_parameters_are_mutually_consistent(params):
+    """cl0 + cl_alpha*aoa_stall must reproduce CL_max.
+
+    These four constants describe one wing; if the linear curve does not
+    reach CL_max exactly at the stall angle they contradict each other.
+    """
+    implied = params.cl0 + params.cl_alpha * params.aoa_stall
+    assert implied == pytest.approx(params.CL_max, rel=0.05)
+
+
+def test_cruise_trim_angle_matches_a320(params):
+    """The A320 cruises at roughly 2 deg AoA."""
+    rho = float(compute_air_density_from_altitude(CRUISE_ALT_M))
+    a = float(compute_speed_of_sound_from_altitude(CRUISE_ALT_M))
+    v = CRUISE_MACH * a
+    weight = compute_weight(params.initial_mass, params.gravity)
+    q_s = 0.5 * rho * v * v * params.wings_surface
+    residual = lambda aoa: q_s * _CL(aoa, CRUISE_MACH, params) - weight  # noqa: E731
+    aoa_trim = brentq(residual, -5.0, 12.0)
+    assert 1.0 < aoa_trim < 3.5, f"cruise trim AoA {aoa_trim:.2f} deg"
+
+
+def test_lift_curve_is_finite_across_envelope(params):
+    """No NaN/Inf anywhere in the usable AoA x Mach envelope."""
+    for mach in np.linspace(0.05, 0.95, 19):
+        for aoa in np.linspace(-15.0, 30.0, 46):
+            cl, cd = _CL(aoa, mach, params), _CD(aoa, mach, params)
+            assert np.isfinite(cl) and np.isfinite(cd), f"aoa={aoa} M={mach}"
+            assert cd > 0.0
+
+
+def test_drag_polar_is_convex_in_lift(params):
+    """CD = cd0 + k*CL^2 -- drag must grow with |CL| away from zero lift."""
+    mach = 0.3
+    cds = [(_CL(a, mach, params), _CD(a, mach, params)) for a in np.linspace(0, 10, 11)]
+    for (cl_a, cd_a), (cl_b, cd_b) in zip(cds, cds[1:]):
+        assert cl_b > cl_a and cd_b > cd_a
+
+
+# ---------------------------------------------------------------------------
+# 8. Pitch static stability -- the airworthiness property most at risk from
+#    a change in lift-curve slope (the tail is a lifting surface too).
+# ---------------------------------------------------------------------------
+
+
+def _pitch_ang_accel(params, theta_deg, stick=0.0, v=230.0, alt=CRUISE_ALT_M):
+    """Angular acceleration about the pitch axis at a given body attitude."""
+    import jax.numpy as jnp
+
+    from target_gym.plane.dynamics import compute_acceleration
+
+    # Velocity purely horizontal => gamma = 0 => alpha = theta.
+    velocities = jnp.array([v, 0.0, 0.0])
+    positions = jnp.array([0.0, alt, np.deg2rad(theta_deg)])
+    accel, _ = compute_acceleration(
+        velocities, positions, action=(100_000.0, stick), params=params
+    )
+    return float(accel[2])
+
+
+def test_aircraft_is_statically_stable_in_pitch(params):
+    """dM/d(alpha) < 0: a nose-up disturbance must produce a nose-down moment.
+
+    This is the defining condition for longitudinal static stability. The
+    horizontal stabiliser supplies the restoring moment, and it uses the same
+    ``aero_coefficients`` as the wing -- so raising ``cl_alpha`` changes both
+    the destabilising wing moment and the stabilising tail moment. This test
+    is what proves the D2 fix did not make the aircraft divergent.
+    """
+    thetas = np.linspace(0.0, 8.0, 17)
+    moments = np.array([_pitch_ang_accel(params, t) for t in thetas])
+    slope = np.polyfit(thetas, moments, 1)[0]
+    assert slope < 0.0, f"dM/dalpha = {slope:.3e} >= 0 -- statically unstable"
+
+
+def test_elevator_produces_correct_sign_of_pitch_moment(params):
+    """Positive stick must pitch one way and negative stick the other."""
+    up = _pitch_ang_accel(params, theta_deg=2.0, stick=0.15)
+    neutral = _pitch_ang_accel(params, theta_deg=2.0, stick=0.0)
+    down = _pitch_ang_accel(params, theta_deg=2.0, stick=-0.15)
+    assert (up - neutral) * (down - neutral) < 0.0
+    assert abs(up - neutral) > 1e-6
+
+
+def test_elevator_authority_is_bounded(params):
+    """Full elevator must not produce an absurd angular acceleration."""
+    for stick in (-0.3, 0.3):
+        acc = _pitch_ang_accel(params, theta_deg=2.0, stick=stick)
+        assert abs(acc) < 1.0, f"stick={stick}: {acc:.3f} rad/s^2"

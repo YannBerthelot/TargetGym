@@ -1,11 +1,10 @@
 # from jax.tree_util import Partial as partial
 from functools import partial
-from typing import Any, Callable, Optional, Tuple
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import numpy as np
 from gymnax.environments import EnvParams
 
 from target_gym.utils import compute_norm_from_coordinates
@@ -24,6 +23,25 @@ def advance_gust(gust, theta: float, sigma: float, dt: float, key):
         return gust
     noise = jax.random.normal(key, jnp.shape(gust))
     return gust - theta * dt * gust + sigma * jnp.sqrt(dt) * noise
+
+
+def step_key(key, time):
+    """Per-step PRNG key derived from the episode key *and* the step index.
+
+    ``step_env`` receives whatever key the caller supplies, and every rollout
+    helper in this repository -- ``run_episode_headless``, ``save_video``, the
+    ``lax.scan`` bodies in the runners -- supplies the *same* key at every
+    step. Drawing noise straight from it therefore redraws one identical
+    innovation forever, collapsing a zero-mean disturbance into a deterministic
+    ramp toward ``innovation / (1 - rho)``.
+
+    Folding the step index in makes each step's draw distinct regardless of
+    whether the caller splits keys, while staying deterministic given
+    ``(key, time)`` -- so episodes remain exactly reproducible.
+    """
+    if key is None:
+        return None
+    return jax.random.fold_in(key, time)
 
 
 def total_wind_2d(z, gust_x, gust_z, params):
@@ -62,186 +80,9 @@ def compute_drag(S: float, C: float, V: float, rho: float) -> float:
     return 0.5 * rho * S * C * (V**2)
 
 
-def speed_of_sound(h):
-    # convert meters to km for clarity
-    km = h / 1000.0
-
-    # Troposphere 0-11 km: T = 288.15 - 6.5*h
-    T0 = 288.15 - 6.5 * km
-    # Stratosphere 11-20 km: T = 216.65
-    T1 = 216.65 + 0.0 * (km - 11)
-    # Stratosphere 20-32 km: T = 216.65 + (km-20)*1.0*10
-    T2 = 216.65 + (km - 20) * 1.0 * 10  # simplified linear increase
-    # Stratosphere 32-47 km: T = 228.65 + (km-32)*2.8
-    T3 = 228.65 + (km - 32) * 2.8
-
-    # Smooth weighting using jnp.clip
-    w0 = jnp.clip((11 - km) / 11, 0, 1)
-    w1 = jnp.clip((km - 11) / 9, 0, 1) * jnp.clip((20 - km) / 9, 0, 1)
-    w2 = jnp.clip((km - 20) / 12, 0, 1) * jnp.clip((32 - km) / 12, 0, 1)
-    w3 = jnp.clip((km - 32) / 15, 0, 1) * jnp.clip((47 - km) / 15, 0, 1)
-
-    T = w0 * T0 + w1 * T1 + w2 * T2 + w3 * T3
-
-    gamma = 1.4
-    R = 287.05
-
-    return jnp.sqrt(gamma * R * T)
-
-
 def compute_weight(mass: float, g: float) -> float:
     """Compute the weight of the plane given its mass and g"""
     return mass * g
-
-
-def compute_initial_z_drag_coefficient(
-    alpha: float,
-    C_z_max: float,
-    min_alpha: float = -5.0,
-    threshold_alpha: float = 15.0,
-    stall_alpha: float = 20.0,
-) -> float:
-    """
-    Compute an *approximated* version of the drag coefficient of the plane on the z-axis.
-
-    Args:
-        alpha (float): The angle of attack (in degrees).
-        C_z_max (float): The maximum possible value for the drag coefficient (no units) along the z-axis.
-        min_alpha (float, optional): The angle of attack (in degrees) under which the wings create no lift (it stalls). Defaults to -5.
-        threshold_alpha (float, optional): The angle of attack (in degrees) where lift starts to decrease. Defaults to 15.
-        stall_alpha (float, optional): The angle of attack (in degrees) above which where the airplanes stalls (creating no lift). Defaults to 20.
-
-    Returns:
-        float: The value of the lift coefficient/drag coefficient along the z-axis
-    """
-    return jax.lax.select(
-        jnp.logical_or(
-            jnp.greater_equal(jnp.abs(alpha), stall_alpha),
-            jnp.greater(min_alpha, alpha),
-        ),
-        0.0,
-        jax.lax.select(
-            jnp.greater_equal(threshold_alpha, jnp.abs(alpha)),
-            jnp.abs((alpha + 5.0) / threshold_alpha) * C_z_max,
-            1.0 - jnp.abs((alpha - threshold_alpha) / threshold_alpha) * C_z_max,
-        ),
-    )
-
-
-def compute_initial_x_drag_coefficient(
-    alpha: float, C_x_min: float, x_drag_coef: float = 0.02
-) -> float:
-    """
-    Compute an *approximated* version of the drag coefficient of the plane on the x-axis.
-
-    Args:
-        alpha (float): The angle of attack (in degrees).
-        C_x_min (float): The minimal value for the drag coefficient (no units).
-        x_drag_coef (float, optional): Hyperparameter representing how much drag increases with the angle. Defaults to 0.02.
-
-    Returns:
-        float: The value of the drag coefficient along the x-axis
-    """
-    return C_x_min + (x_drag_coef * alpha) ** 2
-
-
-def compute_mach_impact_on_x_drag_coefficient(
-    C_x: float, M: float, M_critic: float
-) -> float:
-    """
-    Compute the impact of the Mach number on the drag coefficient.
-
-    Args:
-        C_x (float): The drag coefficient (no unit) without Mach number impact.
-        M (float): The Mach number (no unit).
-        M_critic (float): The critic Mach number (no unit).
-
-    Returns:
-        float: The drag coefficient (no unit).
-    """
-    return jax.lax.select(
-        jnp.greater_equal(M_critic, M),
-        C_x / (jnp.sqrt(1 - jnp.square(M))),
-        7 * C_x * (M - M_critic) + C_x / (jnp.sqrt(1 - jnp.square(M))),
-    )
-
-
-def compute_mach_impact_on_z_drag_coefficient(
-    C_z: float, M: float, M_critic: float
-) -> float:
-    """
-    Compute the impact of the Mach number on the lift coefficient.
-
-    Args:
-        C_x (float): The drag coefficient (no unit) without Mach number impact.
-        M (float): The Mach number (no unit).
-        M_critic (float): The critic Mach number (no unit).
-
-    Returns:
-        float: The drag coefficient (no unit).
-    """
-    M_d = M_critic + (1 - M_critic) / 4
-    return jax.lax.select(
-        jnp.greater_equal(M_critic, M),
-        C_z,
-        jax.lax.select(
-            jnp.greater(M, M_d),
-            C_z + 0.1 * (M_d - M_critic) - 0.8 * (M - M_d),
-            C_z + 0.1 * (M - M_critic),
-        ),
-    )
-
-
-def compute_x_drag_coefficient(
-    alpha: float, M: float, C_x_min: float, M_critic: float, x_drag_coef: float = 0.02
-) -> float:
-    """
-    Compute the drag coefficient on the x-axis. Includes impact of the angle of attack and the Mach number.
-
-    Args:
-        alpha (float): The angle of attack (in degrees).
-        M (float): The Mach number (no unit).
-        C_x_min (float): Minimal value of the drag coefficient (no unit).
-        M_critic (float): The critical Mach number (no unit).
-        x_drag_coef (float, optional): The approximated drag coefficient. Defaults to 0.02.
-
-    Returns:
-        float: The drag coefficient (no unit) for the x-axis.
-    """
-    C_x = compute_initial_x_drag_coefficient(alpha, C_x_min, x_drag_coef=x_drag_coef)
-    return compute_mach_impact_on_x_drag_coefficient(C_x, M, M_critic)
-
-
-def compute_z_drag_coefficient(
-    alpha: float,
-    M: float,
-    C_z_max: float,
-    M_critic: float,
-    min_alpha: float = -5.0,
-    threshold_alpha: float = 15.0,
-    stall_alpha: float = 20.0,
-) -> float:
-    """
-    Compute the drag coefficient on the z-axis. Includes impact of the angle of attack and the Mach number.
-
-    Args:
-        alpha (float): The angle of attack (in degrees).
-        M (float): The Mach number (no unit).
-        C_x_min (float): Minimal value of the drag coefficient (no unit).
-        M_critic (float): The critical Mach number (no unit).
-        x_drag_coef (float, optional): The approximated drag coefficient. Defaults to 0.02.
-
-    Returns:
-        float: The drag coefficient (no unit) for the x-axis.
-    """
-    C_z = compute_initial_z_drag_coefficient(
-        alpha=alpha,
-        C_z_max=C_z_max,
-        min_alpha=min_alpha,
-        threshold_alpha=threshold_alpha,
-        stall_alpha=stall_alpha,
-    )
-    return compute_mach_impact_on_z_drag_coefficient(C_z, M, M_critic)
 
 
 def newton_second_law(
@@ -366,36 +207,28 @@ def compute_air_density_from_altitude(altitude: float) -> float:
     return rho
 
 
-def compute_exposed_surfaces(
-    S_front: float, S_wings: float, alpha: float
-) -> tuple[float, float]:
-    """
-    Compute the exposed surface (w.r.t. the relative wind) relative to x and z-axis depending on the angle of attack
-
-    Args:
-        S_front (float): Front surface (in m^2) of the plane.
-        S_wings (float): Wings surface (in m^2) of the plane.
-        alpha (float): angle of attack (in degrees).
-
-    Returns:
-        tuple[float,float]: The exposed surface on the x and z-axis
-    """
-
-    S_z = S_front * jnp.sin(alpha) + S_wings * jnp.cos(alpha)
-    S_x = S_front * jnp.cos(alpha) + S_wings * jnp.sin(alpha)
-    return S_x, S_z
-
-
 def aero_coefficients(aoa_deg, mach, params):
     """
     Realistic lift (CL) and drag (CD) coefficients for an A320.
     AoA in degrees. Mach effects included.
+
+    Stall model: lift rises linearly at ``cl_alpha`` and *peaks at*
+    ``aoa_stall``. The separation sigmoid is therefore centred
+    ``aoa_stall_width`` degrees *beyond* the stall angle -- centring it on
+    ``aoa_stall`` itself (as it was originally) halves the lift exactly where
+    it should be maximal, which capped attainable CL at ~0.70 and put the
+    clean stall speed at 228 kt. See ``PHYSICS.md`` §4.
     """
 
     # --- Lift coefficient ---
     CL_linear = params.cl0 + params.cl_alpha * aoa_deg
-    CL = CL_linear / (1 + jnp.exp((aoa_deg - params.aoa_stall) * 1.5))
-    CL = jnp.minimum(CL, params.CL_max)
+    stall_centre = params.aoa_stall + params.aoa_stall_width
+    CL = CL_linear / (1 + jnp.exp((aoa_deg - stall_centre) * 1.5))
+    # Positive and negative stall limits. A cambered transport wing stalls
+    # asymmetrically: CL_max ~ +1.5 near +15 deg, CL_min ~ -1.0 near -10 deg.
+    # Only the positive limit existed before; with the corrected (steeper)
+    # lift slope the negative branch runs away without this clamp.
+    CL = jnp.clip(CL, params.CL_min, params.CL_max)
 
     # --- Drag coefficient ---
     CD = params.cd0 + params.k * CL**2
@@ -585,7 +418,7 @@ if __name__ == "__main__":
     vals = []
     max_output = 1000
     for i in range(len(power)):
-        current_power = compute_next_power(power[i], current_power)
+        current_power = compute_next_power(power[i], current_power, 1.0)
         vals.append(current_power)
 
     plt.plot(vals)
