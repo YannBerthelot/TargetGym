@@ -13,47 +13,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history + tags so poetry-dynamic-versioning can detect
-          # the release tag's version. ``fetch-depth: 0`` alone does NOT
-          # fetch tags in checkout@v4 (fetch-tags defaults to false).
+          # Full history + tags so hatch-vcs can derive the version from the
+          # release tag. ``fetch-depth: 0`` alone does NOT fetch tags in
+          # checkout@v4 (fetch-tags defaults to false).
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
+          version: "0.11.28"
 
-      - name: Install Poetry (with dynamic-versioning plugin)
-        uses: snok/install-poetry@v1
-        with:
-          version: 2.2.0
-          # Install poetry-dynamic-versioning as a Poetry plugin (not just
-          # the build-backend declared in pyproject.toml's build-system).
-          # Without this, ``poetry build`` shows the placeholder version
-          # ("Building target-gym (0.1.0)") and the dist/<wheel> ends up
-          # named with that placeholder while the backend produces files
-          # with the real version -- causing publish to find no matching
-          # files and exit with "No files to publish".
-          plugins: "poetry-dynamic-versioning[plugin]"
-
-      - name: Build and publish to PyPI
+      - name: Build
         env:
-          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
-          # Belt-and-suspenders: even with the plugin installed and tags
-          # fetched, the bypass var forces the version explicitly to the
-          # release tag (stripped of the leading "v"). This avoids any
-          # ambiguity from local git state or detached-HEAD checkouts.
-          POETRY_DYNAMIC_VERSIONING_BYPASS: ${{ github.event.release.tag_name }}
+          # Belt-and-suspenders: even with tags fetched, pin the version
+          # explicitly to the release tag (stripped of a leading "v") so a
+          # detached-HEAD checkout can't produce a ``.devN`` version.
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ github.event.release.tag_name }}
         run: |
-          # Strip leading "v" prefix if present.
-          export POETRY_DYNAMIC_VERSIONING_BYPASS="${POETRY_DYNAMIC_VERSIONING_BYPASS#v}"
-          echo "Bypass version: $POETRY_DYNAMIC_VERSIONING_BYPASS"
-          # Build first so we can ``ls dist/`` for diagnostics if publish
-          # later fails -- catches a silent-no-files build immediately.
-          poetry build
+          export SETUPTOOLS_SCM_PRETEND_VERSION="${SETUPTOOLS_SCM_PRETEND_VERSION#v}"
+          echo "Building version: $SETUPTOOLS_SCM_PRETEND_VERSION"
+          # ``uv build`` strips [tool.uv.sources] from the published metadata,
+          # so the wheel declares the plain ``gymnax>=1.0.0`` requirement even
+          # while development tracks the gymnax PR branch.
+          uv build
           ls -la dist/
-          poetry publish --no-interaction --skip-existing
+
+      - name: Publish to PyPI
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: uv publish
 
       - name: Upload release assets with gh
         env:
