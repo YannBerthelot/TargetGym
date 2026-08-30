@@ -130,34 +130,85 @@ expert (PID) rollouts.
   </tr>
 </table>
 
-### Process Control & Industrial
+### Process Control
 
 <table align="center">
   <tr>
     <td align="center">
-      <img src="videos/cstr/pid_output_short.gif" width="260px"/><br/>
-      <b>CSTR</b>
+      <img src="videos/first_order/pid_output_short.gif" width="260px"/><br/>
+      <b>First Order System</b> -- the suite's sanity check
     </td>
     <td align="center">
-      <img src="videos/first_order/pid_output_short.gif" width="260px"/><br/>
-      <b>First Order System</b>
+      <img src="videos/cstr/pid_output_short.gif" width="260px"/><br/>
+      <b>CSTR</b> -- exothermic, coolant-temperature input
     </td>
     <td align="center">
       <img src="videos/four_tank/pid_output_short.gif" width="260px"/><br/>
-      <b>Four Tank</b>
+      <b>Four Tank</b> -- cross-coupled, negative RGA
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="videos/glass_furnace/pid_output_short.gif" width="260px"/><br/>
-      <b>Glass Furnace</b> -- partial obs (hidden zone temps)
+      <img src="videos/ph_neutralization/pid_output_short.gif" width="260px"/><br/>
+      <b>pH Neutralisation</b> -- 45x gain variation, unmeasured buffering
     </td>
     <td align="center">
-      <img src="videos/reactor/pid_output_short.gif" width="260px"/><br/>
-      <b>Nuclear Reactor</b> -- xenon dynamics, partial obs
+      <img src="videos/distillation/pid_output_short.gif" width="260px"/><br/>
+      <b>Binary Distillation</b> -- ill-conditioned, 41 hidden stages
     </td>
   </tr>
 </table>
+
+### Industrial
+
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="videos/glass_furnace/pid_output_short.gif" width="260px"/><br/>
+      <b>Glass Furnace</b> -- regenerator reversal, 6/9 states hidden
+    </td>
+    <td align="center">
+      <img src="videos/reactor/pid_output_short.gif" width="260px"/><br/>
+      <b>Nuclear Reactor</b> -- xenon memory, 30 pcm of rod margin
+    </td>
+    <td align="center">
+      <img src="videos/hvac/pid_output_short.gif" width="260px"/><br/>
+      <b>Building HVAC</b> -- hidden thermal mass, 43 h time constant
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="videos/boiler_drum/pid_output_short.gif" width="260px"/><br/>
+      <b>Boiler Drum</b> -- non-minimum phase: level rises as mass leaves
+    </td>
+    <td align="center">
+      <img src="videos/cement_kiln/pid_output_short.gif" width="260px"/><br/>
+      <b>Cement Kiln</b> -- half-hour transport delay, 64 hidden states
+    </td>
+  </tr>
+</table>
+
+### Energy
+
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="videos/wind_turbine/pid_output_short.gif" width="260px"/><br/>
+      <b>Wind Turbine</b> -- NREL 5 MW, turbulent unmeasured inflow
+    </td>
+    <td align="center">
+      <img src="videos/battery/pid_output_short.gif" width="260px"/><br/>
+      <b>Grid Battery</b> -- finite budget: tracking now costs tracking later
+    </td>
+  </tr>
+</table>
+
+Every clip above is rendered by the shared control-room toolkit
+(`target_gym/render_kit.py`): a live plant schematic, an instrument stack with
+limit and setpoint markers, and strip charts. The schematics are drawn from
+state the controller usually cannot see -- riser voidage, thermal mass, the
+kiln's axial profile -- so a frame shows both what the agent measures and what
+it is actually up against. A purple dot marks each hidden quantity.
 
 ---
 
