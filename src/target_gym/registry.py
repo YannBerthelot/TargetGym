@@ -1,0 +1,463 @@
+"""Central registry of every single-agent TargetGym environment.
+
+Motivation
+----------
+Before this module existed, each environment was wired into the library by
+hand in several independent places -- ``target_gym.__init__``, the runner
+tables in ``target_gym.runners.runners``, the PID/MPC factory exports in
+``target_gym.experts.__init__``, and the test suite.  Nothing checked that
+those lists agreed, so an environment could silently fall out of one of them:
+``glass_furnace`` was fully implemented, complete with its own runner module,
+yet absent from every runner table, so ``make figures`` and ``make videos``
+never touched it.
+
+The registry is the single source of truth.  Anything that wants to iterate
+over "all environments" -- the conformance test suite, the runner CLI, the
+docs table -- reads it from here, so adding an environment to the library is
+one edit and a missing baseline is a test failure rather than silence.
+
+Multi-agent environments (``PlanePatrolMARL``) are deliberately *not*
+registered: they expose a dict-based JaxMARL-style API rather than the
+single-agent gymnax one, so the shared conformance contract does not apply.
+They are covered by their own tests in ``tests/patrol/``.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Callable, Iterator
+
+# ---------------------------------------------------------------------------
+# Groups
+# ---------------------------------------------------------------------------
+
+#: Human-readable name for each group, in the order they should be presented.
+GROUPS: dict[str, str] = {
+    "aircraft": "Aircraft",
+    "process": "Process Control",
+    "industrial": "Industrial / Energy",
+}
+
+
+@dataclass(frozen=True)
+class EnvSpec:
+    """Everything the library needs to know about one environment.
+
+    Attributes
+    ----------
+    name:
+        Registry key.  Matches the runner module prefix and the key used in
+        ``data/pid_gains.json`` where gains are tuned.
+    group:
+        One of :data:`GROUPS`.
+    env_factory:
+        Zero-argument callable returning a fresh environment instance.
+    params_cls:
+        The ``EnvParams`` subclass for this environment.
+    make_pid:
+        Zero-argument callable returning a *stateful* PID controller -- an
+        object with ``reset()`` and ``__call__(obs) -> action``.  ``None``
+        means no PID baseline exists for this environment yet.
+    make_mpc:
+        Callable ``(env, params) -> controller`` with ``reset()`` and
+        ``step(obs, state) -> action``.  ``None`` means no MPC baseline
+        exists for this environment yet.
+    test_params:
+        Parameter overrides producing an episode short enough for the test
+        suite while still exercising the interesting dynamics.  Applied via
+        ``params_cls(**test_params)``.
+    tuned_gains_key:
+        Key under which this environment's PID gains live in
+        ``data/pid_gains.json``.  ``None`` means the controller is not a
+        single flat SISO loop and the gains are stored per sub-loop.
+    baselines_note:
+        Set when ``make_pid``/``make_mpc`` are ``None``: a short explanation
+        of why, surfaced by the baseline-coverage test so a missing expert is
+        a documented gap rather than a silent one.
+    disturbance_fields:
+        State fields holding a *zero-mean stochastic disturbance* (gusts, load
+        noise). The conformance suite asserts these behave like disturbances --
+        in particular that they do not ratchet monotonically when the
+        environment is stepped with a constant PRNG key, which is how every
+        rollout helper in this repo drives ``step_env``. Deliberately excludes
+        deliberately-drifting processes such as the reactor's OU demand.
+    disturbance_overrides:
+        Parameter overrides that switch the disturbance on, when it is off by
+        default (e.g. the aircraft's ``turbulence_sigma``).
+    effectiveness_overrides:
+        Parameter overrides for the controller-effectiveness contract, when the
+        default ``test_params`` episode is too short to tell a working
+        controller from a constant. The reactor needs this: its xenon transient
+        runs for hours, so a 20-minute episode separates nothing.
+    expert_degraded:
+        Set when a baseline *exists and is well-formed* but does not yet meet
+        the effectiveness contract -- it loses to a constant action. Distinct
+        from ``baselines_note``, which marks a baseline that is absent
+        entirely. Surfaced by the conformance suite so a weak expert is a
+        recorded, explained gap rather than a silently bad benchmark number.
+    """
+
+    name: str
+    group: str
+    env_factory: Callable[[], Any]
+    params_cls: type
+    make_pid: Callable[[], Any] | None
+    make_mpc: Callable[[Any, Any], Any] | None
+    test_params: dict[str, Any] = field(default_factory=dict)
+    tuned_gains_key: str | None = None
+    baselines_note: str | None = None
+    expert_degraded: str | None = None
+    effectiveness_overrides: dict[str, Any] = field(default_factory=dict)
+    disturbance_fields: tuple[str, ...] = ()
+    disturbance_overrides: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def has_pid(self) -> bool:
+        return self.make_pid is not None
+
+    @property
+    def has_mpc(self) -> bool:
+        return self.make_mpc is not None
+
+    def make_env(self):
+        """Instantiate the environment."""
+        return self.env_factory()
+
+    def make_test_params(self, **overrides):
+        """Parameters for a short test episode, plus any extra overrides."""
+        return self.params_cls(**{**self.test_params, **overrides})
+
+
+# ---------------------------------------------------------------------------
+# Lazy factories
+#
+# Importing the environments eagerly would make ``import target_gym.registry``
+# pull in matplotlib, pygame, casadi and do-mpc.  Each factory therefore
+# imports inside the call, so the registry itself stays cheap to import.
+# ---------------------------------------------------------------------------
+
+
+def _plane():
+    from target_gym.plane.env_jax import Airplane2D
+
+    return Airplane2D()
+
+
+def _plane3d_heading():
+    from target_gym.plane3d.env_jax import Plane3DHeading
+
+    return Plane3DHeading()
+
+
+def _plane3d_circle():
+    from target_gym.plane3d.env_jax import Plane3DCircle
+
+    return Plane3DCircle()
+
+
+def _plane3d_figure8():
+    from target_gym.plane3d.env_jax import Plane3DFigureEight
+
+    return Plane3DFigureEight()
+
+
+def _patrol():
+    from target_gym.patrol.env_jax import PlanePatrol
+
+    return PlanePatrol()
+
+
+def _patrol_bearing_only():
+    from target_gym.patrol.env_jax import PlanePatrolBearingOnly
+
+    return PlanePatrolBearingOnly()
+
+
+def _cstr():
+    from target_gym.pc_gym.cstr.env_jax import CSTR
+
+    return CSTR()
+
+
+def _first_order():
+    from target_gym.pc_gym.first_order.env_jax import FirstOrderSystem
+
+    return FirstOrderSystem()
+
+
+def _four_tank():
+    from target_gym.pc_gym.four_tank.env_jax import FourTank
+
+    return FourTank()
+
+
+def _glass_furnace():
+    from target_gym.glass_furnace.env_jax import GlassFurnace
+
+    return GlassFurnace()
+
+
+def _reactor():
+    from target_gym.reactor.env_jax import Reactor
+
+    return Reactor()
+
+
+def _hvac():
+    from target_gym.hvac.env_jax import BuildingHVAC
+
+    return BuildingHVAC()
+
+
+# -- params classes (imported lazily through the same mechanism) -------------
+
+
+def _params_cls(module: str, name: str) -> type:
+    from importlib import import_module
+
+    return getattr(import_module(module), name)
+
+
+class _LazyParams:
+    """Stand-in that resolves to the real params class on first use.
+
+    ``EnvSpec`` is a frozen dataclass, so it stores this proxy rather than the
+    class itself; attribute access and instantiation forward to the real one.
+    """
+
+    def __init__(self, module: str, name: str):
+        self._module = module
+        self._name = name
+        self._cls: type | None = None
+
+    def _resolve(self) -> type:
+        if self._cls is None:
+            self._cls = _params_cls(self._module, self._name)
+        return self._cls
+
+    def __call__(self, *args, **kwargs):
+        return self._resolve()(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self._resolve(), item)
+
+    def __repr__(self):
+        return f"<LazyParams {self._module}.{self._name}>"
+
+
+# -- PID factories ----------------------------------------------------------
+
+
+def _pid(factory_name: str) -> Callable[[], Any]:
+    def make():
+        from importlib import import_module
+
+        return getattr(import_module("target_gym.experts.pid"), factory_name)()
+
+    return make
+
+
+def _mpc(factory_name: str) -> Callable[[Any, Any], Any]:
+    def make(env, params, **kwargs):
+        from importlib import import_module
+
+        return getattr(import_module("target_gym.experts.mpc"), factory_name)(
+            env, params, **kwargs
+        )
+
+    return make
+
+
+# ---------------------------------------------------------------------------
+# The registry
+# ---------------------------------------------------------------------------
+
+_SPECS: tuple[EnvSpec, ...] = (
+    # -- Aircraft -----------------------------------------------------------
+    EnvSpec(
+        name="plane",
+        group="aircraft",
+        env_factory=_plane,
+        params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
+        make_pid=_pid("make_plane_cascaded_pid"),
+        make_mpc=_mpc("make_plane_mpc"),
+        test_params={"max_steps_in_episode": 200},
+        tuned_gains_key="plane",
+        disturbance_fields=("gust_x", "gust_z"),
+        disturbance_overrides={"turbulence_sigma": 3.0},
+    ),
+    EnvSpec(
+        name="plane3d_heading",
+        group="aircraft",
+        env_factory=_plane3d_heading,
+        params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
+        make_pid=_pid("make_plane3d_heading_cascaded_pid"),
+        make_mpc=_mpc("make_plane3d_mpc"),
+        test_params={"max_steps_in_episode": 200},
+        tuned_gains_key="plane3d_heading",
+        disturbance_fields=("gust_x", "gust_y", "gust_z"),
+        disturbance_overrides={"turbulence_sigma": 3.0},
+    ),
+    EnvSpec(
+        name="plane3d_circle",
+        group="aircraft",
+        env_factory=_plane3d_circle,
+        params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
+        make_pid=_pid("make_plane3d_circle_cascaded_pid"),
+        make_mpc=_mpc("make_plane3d_mpc"),
+        test_params={"max_steps_in_episode": 200},
+        tuned_gains_key="plane3d_circle",
+        disturbance_fields=("gust_x", "gust_y", "gust_z"),
+        disturbance_overrides={"turbulence_sigma": 3.0},
+    ),
+    EnvSpec(
+        name="plane3d_figure8",
+        group="aircraft",
+        env_factory=_plane3d_figure8,
+        params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
+        make_pid=_pid("make_plane3d_figure8_stateful_pid"),
+        make_mpc=_mpc("make_plane3d_mpc"),
+        test_params={"max_steps_in_episode": 200},
+        tuned_gains_key="plane3d_figure8",
+        disturbance_fields=("gust_x", "gust_y", "gust_z"),
+        disturbance_overrides={"turbulence_sigma": 3.0},
+    ),
+    EnvSpec(
+        name="patrol",
+        group="aircraft",
+        env_factory=_patrol,
+        params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
+        make_pid=None,
+        make_mpc=None,
+        test_params={"max_steps_in_episode": 200},
+        tuned_gains_key="patrol",
+        baselines_note=(
+            "Only a JAX-functional PID exists (``make_patrol_pid``, reached via "
+            "``env.expert_policy``); there is no stateful wrapper for Python "
+            "rollouts and no MPC. A cascaded controller of the kind that fixed "
+            "the 2D and 3D plane tasks was tried and does NOT transfer: "
+            "decomposing the slot-error vector into three independent channels "
+            "(e_up -> elevator, e_right -> bank, e_back -> throttle), even with "
+            "a relative-heading feedforward, diverges laterally at ~70 m/s and "
+            "exceeds max_slot_error within ~30 steps. Formation flight against "
+            "a manoeuvring lead appears to need pursuit guidance toward the "
+            "slot *position* -- the structure the existing functional PID uses "
+            "-- rather than independent error nulling. Deferred."
+        ),
+    ),
+    EnvSpec(
+        name="patrol_bearing_only",
+        group="aircraft",
+        env_factory=_patrol_bearing_only,
+        params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
+        make_pid=None,
+        make_mpc=None,
+        test_params={"max_steps_in_episode": 200},
+        tuned_gains_key="patrol",
+        baselines_note=(
+            "Same as ``patrol``: no stateful PID and no MPC yet. The "
+            "bearing-only observation additionally hides the lead's range "
+            "rate, so a PID needs a different measurement mapping."
+        ),
+    ),
+    # -- Process control ----------------------------------------------------
+    EnvSpec(
+        name="cstr",
+        group="process",
+        env_factory=_cstr,
+        params_cls=_LazyParams("target_gym.pc_gym.cstr.env", "CSTRParams"),
+        make_pid=_pid("make_cstr_stateful_pid"),
+        make_mpc=_mpc("make_cstr_mpc"),
+        test_params={"max_steps_in_episode": 100},
+        tuned_gains_key="cstr",
+    ),
+    EnvSpec(
+        name="first_order",
+        group="process",
+        env_factory=_first_order,
+        params_cls=_LazyParams("target_gym.pc_gym.first_order.env", "FirstOrderParams"),
+        make_pid=_pid("make_first_order_stateful_pid"),
+        make_mpc=_mpc("make_first_order_mpc"),
+        test_params={"max_steps_in_episode": 100},
+        tuned_gains_key="first_order",
+    ),
+    EnvSpec(
+        name="four_tank",
+        group="process",
+        env_factory=_four_tank,
+        params_cls=_LazyParams("target_gym.pc_gym.four_tank.env", "FourTankParams"),
+        make_pid=_pid("make_four_tank_stateful_pid"),
+        make_mpc=_mpc("make_four_tank_mpc"),
+        test_params={"max_steps_in_episode": 100},
+        tuned_gains_key="four_tank",
+    ),
+    # -- Industrial / energy ------------------------------------------------
+    EnvSpec(
+        name="glass_furnace",
+        group="industrial",
+        env_factory=_glass_furnace,
+        params_cls=_LazyParams("target_gym.glass_furnace.env", "GlassFurnaceParams"),
+        make_pid=_pid("make_glass_furnace_stateful_pid"),
+        make_mpc=_mpc("make_glass_furnace_mpc"),
+        test_params={"max_steps_in_episode": 240},  # 2 h at dt=30 s
+        tuned_gains_key="glass_furnace",
+        disturbance_fields=("m_pull_disturbance",),
+    ),
+    EnvSpec(
+        name="reactor",
+        group="industrial",
+        env_factory=_reactor,
+        params_cls=_LazyParams("target_gym.reactor.env", "ReactorParams"),
+        make_pid=_pid("make_reactor_stateful_pid"),
+        make_mpc=_mpc("make_reactor_mpc"),
+        # max_steps_in_episode is in *physics* steps; the reactor runs
+        # ``control_period`` (10) of them per env step, so this is 120 env steps.
+        test_params={"max_steps_in_episode": 1200},
+        # 8640 physics steps = 864 control steps = 2.4 h, long enough for the
+        # xenon/demand dynamics to actually distinguish a controller.
+        effectiveness_overrides={"max_steps_in_episode": 8640},
+        tuned_gains_key="reactor",
+    ),
+    EnvSpec(
+        name="hvac",
+        group="industrial",
+        env_factory=_hvac,
+        params_cls=_LazyParams("target_gym.hvac.env", "HVACParams"),
+        make_pid=_pid("make_hvac_stateful_pid"),
+        make_mpc=_mpc("make_hvac_mpc"),
+        # 2 days at dt=900 s. Long enough to cover two setback recoveries and
+        # two solar cycles, which is what distinguishes controllers here.
+        test_params={"max_steps_in_episode": 192},
+        tuned_gains_key="hvac",
+        disturbance_fields=("weather_dev",),
+    ),
+)
+
+REGISTRY: dict[str, EnvSpec] = {spec.name: spec for spec in _SPECS}
+
+
+def all_specs() -> Iterator[EnvSpec]:
+    """Iterate over every registered environment spec."""
+    return iter(_SPECS)
+
+
+def specs_in_group(group: str) -> Iterator[EnvSpec]:
+    """Iterate over the specs belonging to ``group``."""
+    if group not in GROUPS:
+        raise KeyError(f"Unknown group {group!r}; expected one of {sorted(GROUPS)}")
+    return (spec for spec in _SPECS if spec.group == group)
+
+
+def get(name: str) -> EnvSpec:
+    """Look up one spec by registry name."""
+    try:
+        return REGISTRY[name]
+    except KeyError:
+        raise KeyError(
+            f"Unknown environment {name!r}; registered: {sorted(REGISTRY)}"
+        ) from None
+
+
+def env_names() -> list[str]:
+    """Names of every registered environment, in registration order."""
+    return [spec.name for spec in _SPECS]
