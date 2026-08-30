@@ -2,6 +2,8 @@ from importlib.metadata import PackageNotFoundError, version
 
 from target_gym.glass_furnace.env import GlassFurnaceParams
 from target_gym.glass_furnace.env_jax import GlassFurnace
+from target_gym.hvac.env import HVACParams
+from target_gym.hvac.env_jax import BuildingHVAC
 from target_gym.patrol.env import PatrolParams
 from target_gym.patrol.env_jax import PlanePatrol, PlanePatrolBearingOnly
 from target_gym.patrol.marl import PatrolMARLParams, PlanePatrolMARL
@@ -50,6 +52,9 @@ __all__ = (
     # Glass furnace
     "GlassFurnace",
     "GlassFurnaceParams",
+    # Building HVAC
+    "BuildingHVAC",
+    "HVACParams",
     # Nuclear reactor
     "Reactor",
     "ReactorParams",
