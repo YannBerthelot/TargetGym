@@ -18,7 +18,6 @@ from target_gym.pc_gym.distillation.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
-    compute_velocity,
     flows,
     separation_factor,
     vle,

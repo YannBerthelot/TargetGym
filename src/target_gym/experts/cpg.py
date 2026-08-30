@@ -19,13 +19,11 @@ Tuned anchor parameters are loaded from ``AjaxExperiments/cpg_tuned_<env>.json``
 import json
 import pathlib
 
-import jax
 import jax.numpy as jnp
 from flax import struct
 
 from target_gym.experts.pid import (
     FunctionalExpertPolicy,
-    _LEARNABLE_GAINS_BY_STEP_FN,
     register_learnable_gains,
 )
 

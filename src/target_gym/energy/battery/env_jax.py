@@ -13,9 +13,7 @@ from target_gym.energy.battery.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
-    current_for_power,
     get_obs,
-    terminal_voltage,
 )
 from target_gym.energy.battery.rendering import _render
 from target_gym.utils import save_video

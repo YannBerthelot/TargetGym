@@ -3,13 +3,16 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym import GymnasiumPlane as GymEnv
-from target_gym.plane.env import EnvMetrics, PlaneParams, PlaneState, compute_reward
+from target_gym.plane.env import PlaneParams, PlaneState, compute_reward
 from target_gym.plane.env_jax import Airplane2D as JaxEnv
 
 
 def test_init():
+    """Constructing the environment must give a usable spec, not just not raise."""
     env = JaxEnv()
+    params = env.default_params
+    assert env.action_space(params).shape == (2,)
+    assert env.observation_space(params).shape == env.obs_shape
 
 
 def test_reset():

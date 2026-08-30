@@ -5,8 +5,6 @@ sets inflow, the tank level is the state, and the drain is the time constant.
 It is the simplest plant in the suite and the frame says so.
 """
 
-import numpy as np
-
 from target_gym import render_kit as rk
 from target_gym.pc_gym.first_order.env import compute_reward
 

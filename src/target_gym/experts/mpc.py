@@ -960,7 +960,7 @@ class HVACCasadiMPC(CasadiMPC):
         T_out = model.set_variable("_tvp", "T_out")
         phi_int = model.set_variable("_tvp", "phi_int")
         phi_sol = model.set_variable("_tvp", "phi_sol")
-        target_T = model.set_variable("_tvp", "target_T")
+        model.set_variable("_tvp", "target_T")
 
         Q_command = 0.5 * (u_raw + 1.0) * p.Q_heat_max
 

@@ -8,7 +8,6 @@ import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.reactor.env import (
-    N_GROUPS,
     N_SETPOINTS,
     ReactorParams,
     ReactorState,
@@ -16,7 +15,6 @@ from target_gym.reactor.env import (
     compute_next_state,
     compute_reward,
     get_obs,
-    get_target_from_schedule,
     steady_state_precursors,
     steady_state_xenon,
 )

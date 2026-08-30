@@ -15,7 +15,6 @@ from target_gym.energy.wind_turbine.env import (
     compute_reward,
     get_obs,
     omega_rated,
-    rated_generator_torque,
 )
 from target_gym.energy.wind_turbine.rendering import _render
 from target_gym.utils import save_video

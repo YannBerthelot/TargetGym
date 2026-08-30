@@ -9,7 +9,10 @@ from target_gym.plane.env import (
 
 
 def test_init():
+    """Constructing the wrapper must expose Gymnasium spaces."""
     env = Airplane2D()
+    assert env.action_space.shape == (2,)
+    assert env.observation_space.shape is not None
 
 
 def test_reset():
@@ -30,7 +33,6 @@ def test_compute_reward():
 def test_sample_action():
     env = Airplane2D()
     obs, info = env.reset()
-    env_params = PlaneParams()
     action = env.action_space.sample()
     for i in range(len(action)):
         assert env.action_space.low[i] <= action[i] <= env.action_space.high[i]
@@ -40,7 +42,6 @@ def test_sample_action():
 def test_step():
     env = Airplane2D()
     obs, info = env.reset(seed=42)
-    env_params = PlaneParams()
     action = (0.5, 0)
     state = env.state
     # Perform the step transition.
@@ -62,9 +63,9 @@ def test_step():
 
 
 def test_is_terminal():
+    env_params = PlaneParams()
     env = Airplane2D()
     obs, info = env.reset()
-    env_params = PlaneParams()
     terminal_state = PlaneState(
         x=0,
         x_dot=0,

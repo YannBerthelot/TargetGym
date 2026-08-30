@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import pathlib
 import sys
 from pathlib import Path
 
@@ -147,6 +148,45 @@ def write_gif(frames: list, out: Path, width: int, fps: int, colors: int) -> int
     return out.stat().st_size
 
 
+def compress_existing(
+    path: pathlib.Path,
+    width: int,
+    fps: int,
+    colors: int,
+    max_mb: float,
+    max_frames: int,
+) -> tuple[int, int]:
+    """Re-encode a GIF already on disk, without re-rendering it.
+
+    For the pygame aircraft clips, which this script does not generate: their
+    content is fine, they are simply large. Trimming frame count and palette
+    is a pure size win with no change to what they show.
+    """
+    im = Image.open(path)
+    frames, durations = [], []
+    try:
+        while True:
+            frames.append(im.convert("RGB").copy())
+            durations.append(im.info.get("duration", 33))
+            im.seek(im.tell() + 1)
+    except EOFError:
+        pass
+    before = path.stat().st_size
+    kept = subsample(frames, max_frames)
+    # Never upscale: enlarging a source and re-encoding it costs bytes and
+    # sharpness for no gain.
+    w, c = min(width, frames[0].width), colors
+    for _ in range(5):
+        size = write_gif(kept, path, w, fps, c)
+        if size <= max_mb * 1e6:
+            break
+        if w > 420:
+            w = max(420, int(w * 0.85))
+        else:
+            c = max(64, c - 16)
+    return before, size
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--envs", nargs="*", default=sorted(CLIPS))
@@ -154,7 +194,24 @@ def main() -> None:
     ap.add_argument("--fps", type=int, default=12)
     ap.add_argument("--colors", type=int, default=96)
     ap.add_argument("--max-mb", type=float, default=2.6)
+    ap.add_argument(
+        "--compress",
+        nargs="*",
+        metavar="GIF",
+        help="re-encode existing GIFs in place instead of rendering",
+    )
     args = ap.parse_args()
+
+    if args.compress is not None:
+        targets = [pathlib.Path(g) for g in args.compress] or sorted(
+            (ROOT / "videos").rglob("*.gif")
+        )
+        for g in targets:
+            before, after = compress_existing(
+                g, args.width, args.fps, args.colors, args.max_mb, 160
+            )
+            print(f"  {str(g):46s} {before / 1e6:6.2f} -> {after / 1e6:5.2f} MB")
+        return
 
     for name in args.envs:
         if name not in CLIPS:

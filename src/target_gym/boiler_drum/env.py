@@ -448,7 +448,6 @@ def steady_state(params: BoilerDrumParams, p_bar=None, q_steam=None):
         m_sr = m_sr - residual(m_sr) / grad(m_sr)
 
     alpha_v = void_fraction(m_sr, p_bar, pr)
-    q_dc = circulation_flow(alpha_v, p_bar, pr)
     q_cd = pr.f_cd * q_f * (h_w - pr.h_feedwater) / h_c
     m_sd = pr.T_d * (pr.f_carry * m_sr / pr.tau_sr - q_cd)
 

@@ -6,8 +6,6 @@ on the other side. That cross-coupling is why independent loops struggle, and
 the picture shows it as plumbing rather than as a gain matrix.
 """
 
-import numpy as np
-
 from target_gym import render_kit as rk
 from target_gym.pc_gym.four_tank.env import compute_reward
 

@@ -1,10 +1,8 @@
 """Tests for the 3D plane dynamics module."""
 
 import jax.numpy as jnp
-import numpy as np
 import pytest
 
-from target_gym.plane.dynamics import aero_coefficients
 from target_gym.plane3d.dynamics import (
     compute_acceleration_3d,
     compute_alpha_3d,
