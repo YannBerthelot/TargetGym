@@ -625,7 +625,7 @@ wheels = [
 [[package]]
 name = "gymnax"
 version = "1.0.0"
-source = { git = "https://github.com/YannBerthelot/gymnax?branch=chore%2Frelax-runtime-pins#13ab5f1479f378c1a0073698ca97a93fc1bbc298" }
+source = { git = "https://github.com/RobertTLange/gymnax?branch=main#31be41d6df3456af37816755406e71a1cbc727c3" }
 dependencies = [
     { name = "flax", version = "0.12.8", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "flax", version = "0.12.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -2225,7 +2225,7 @@ requires-dist = [
     { name = "do-mpc", specifier = ">=5.1.1,<6" },
     { name = "flax", specifier = ">=0.10" },
     { name = "gymnasium", specifier = ">=1.1,<1.4" },
-    { name = "gymnax", git = "https://github.com/YannBerthelot/gymnax?branch=chore%2Frelax-runtime-pins" },
+    { name = "gymnax", git = "https://github.com/RobertTLange/gymnax?branch=main" },
     { name = "jax", specifier = ">=0.6.2" },
     { name = "matplotlib", specifier = ">=3.8.1" },
     { name = "moviepy", specifier = ">=2.2.1" },

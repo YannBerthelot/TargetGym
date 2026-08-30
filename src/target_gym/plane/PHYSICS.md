@@ -141,12 +141,26 @@ Because the horizontal stabiliser and elevator use the same `aero_coefficients`,
 this raises the destabilising wing moment *and* the stabilising tail moment.
 `test_aircraft_is_statically_stable_in_pitch` confirms dM/dα < 0 still holds.
 
-**❌ D3 — compressibility raises max lift instead of lowering it.**
-`CL / β` is applied uniformly, with no Mach effect on stall onset, so peak CL
-*rises* with Mach. Physically, buffet onset and CL_max *fall* with Mach on a
-swept wing; the sign of the effect on maximum lift is inverted. Prandtl–Glauert
-is also only valid below drag divergence, so applying it unmodified at M 0.78 is
-already marginal. Out of scope for the D1/D2 fix; tracked by a `strict` xfail.
+**✅ D3 — FIXED: compressibility no longer raises max lift.**
+The stall clamp was applied *before* the Prandtl–Glauert `1/β` factor, so peak
+CL kept rising with Mach — at M 0.9 the attainable CL reached the model's ±2
+backstop instead of collapsing. Physically, shock-induced separation makes
+CL_max *fall* past the critical Mach number; that is lift divergence, and it is
+why transport aircraft have an overspeed limit at all.
+
+The lift cap is now the Prandtl–Glauert-scaled stall limit up to `M_crit` and
+falls beyond it (`k_shock_stall = 4.0`, floored at 25 %), so peak CL runs
+1.53 → 2.00 → 1.50 → 1.00 across M 0.20 / 0.80 / 0.90 / 0.95. The two branches
+agree at `M_crit`, making the change a **no-op everywhere the model was
+validated** — cruise sits near M 0.7 — and correcting only the regime it
+previously had backwards. Two tests pin it: the fall above `M_crit`, and the
+Prandtl–Glauert rise below it that a naive clamp would have destroyed.
+
+Worth noting what this did *not* fix. It was the leading suspect for the patrol
+follower's departures, since every failed episode crossed `M_crit` 40–50 steps
+beforehand. It made no difference to them: that failure is a lateral
+bank oscillation, and the Mach excursion is a symptom of the thrashing rather
+than its cause.
 
 **⚠️ Post-stall lift decays to zero.** A fully separated wing still behaves
 roughly like a flat plate (CL ≈ 2·sin α·cos α, so ~0.9 at 25°), whereas this
@@ -171,7 +185,7 @@ Specifically, `tests/plane/test_plane_physics.py` asserts:
 7. **Lift curve** — measured dCL/dα equals `cl_alpha`; peak CL at `aoa_stall`;
    the four lift constants mutually consistent; stall speed and cruise trim.
 8. **Pitch static stability** — dM/dα < 0, plus elevator sign and authority.
-9. **Known deviations** — D3 as a `strict` xfail.
+9. **Known deviations** — each asserted, so a fix flips the test rather than passing unnoticed (this is how D3 was closed).
 
 Tests assert *emergent* behaviour, never a re-implementation of the formula
 under test. A test that restates the implementation validates transcription, not

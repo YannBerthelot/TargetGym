@@ -226,6 +226,34 @@ def aero_coefficients(aoa_deg, mach, params):
 
     CL = CL / beta
 
+    # Shock stall (PHYSICS.md D3). Prandtl-Glauert raises the lift *slope* with
+    # Mach, which is right, but on its own it also raises the attainable PEAK
+    # lift -- the opposite of what happens. Past the critical Mach number,
+    # shock-induced separation makes CL_max collapse; that is lift divergence,
+    # and it is why transport aircraft have an overspeed limit at all.
+    #
+    # The cap is therefore the Prandtl-Glauert-scaled stall limit up to
+    # ``M_crit``, and falls beyond it. The two branches agree at ``M_crit``, so
+    # this is a no-op everywhere the model was validated (cruise sits near
+    # M 0.7) and only bites in the regime the model previously got backwards.
+    beta_crit = jnp.sqrt(jnp.maximum(1e-6, 1 - params.M_crit**2))
+    shock = jnp.clip(
+        1.0 - params.k_shock_stall * jnp.maximum(mach - params.M_crit, 0.0),
+        params.shock_stall_floor,
+        1.0,
+    )
+    cl_cap = jnp.where(
+        mach <= params.M_crit,
+        params.CL_max / beta,
+        params.CL_max / beta_crit * shock,
+    )
+    cl_floor = jnp.where(
+        mach <= params.M_crit,
+        params.CL_min / beta,
+        params.CL_min / beta_crit * shock,
+    )
+    CL = jnp.clip(CL, cl_floor, cl_cap)
+
     drag_rise = jnp.where(
         mach > params.M_crit, params.k_drag * (mach - params.M_crit) ** 2, 0.0
     )
