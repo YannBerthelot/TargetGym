@@ -185,6 +185,12 @@ def _first_order():
     return FirstOrderSystem()
 
 
+def _ph_neutralization():
+    from target_gym.pc_gym.ph_neutralization.env_jax import PHNeutralization
+
+    return PHNeutralization()
+
+
 def _four_tank():
     from target_gym.pc_gym.four_tank.env_jax import FourTank
 
@@ -388,6 +394,19 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_four_tank_mpc"),
         test_params={"max_steps_in_episode": 100},
         tuned_gains_key="four_tank",
+    ),
+    EnvSpec(
+        name="ph_neutralization",
+        group="process",
+        env_factory=_ph_neutralization,
+        params_cls=_LazyParams("target_gym.pc_gym.ph_neutralization.env", "PHParams"),
+        make_pid=_pid("make_ph_stateful_pid"),
+        make_mpc=_mpc("make_ph_mpc"),
+        # 300 steps = 25 min ~ 17 residence times, enough for the buffer
+        # disturbance to move the operating point.
+        test_params={"max_steps_in_episode": 300},
+        tuned_gains_key="ph_neutralization",
+        disturbance_fields=("q2",),
     ),
     # -- Industrial / energy ------------------------------------------------
     EnvSpec(

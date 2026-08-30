@@ -10,6 +10,8 @@ from target_gym.patrol.marl import PatrolMARLParams, PlanePatrolMARL
 from target_gym.pc_gym.cstr.env_jax import CSTR, CSTRParams
 from target_gym.pc_gym.first_order.env_jax import FirstOrderParams, FirstOrderSystem
 from target_gym.pc_gym.four_tank.env_jax import FourTank, FourTankParams
+from target_gym.pc_gym.ph_neutralization.env import PHParams
+from target_gym.pc_gym.ph_neutralization.env_jax import PHNeutralization
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D as Plane
 from target_gym.plane3d.env import PlaneParams3D
@@ -49,6 +51,9 @@ __all__ = (
     "FirstOrderParams",
     "FourTank",
     "FourTankParams",
+    # pH neutralisation
+    "PHNeutralization",
+    "PHParams",
     # Glass furnace
     "GlassFurnace",
     "GlassFurnaceParams",
