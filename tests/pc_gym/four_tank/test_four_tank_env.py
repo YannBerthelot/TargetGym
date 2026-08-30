@@ -206,35 +206,22 @@ def test_reward_is_1_at_target(params):
 
 
 def test_reward_decreases_with_error(params):
+    """Errors are compared inside the tracking band.
+
+    Both offsets used to be tenths of a metre, which the band-scaled reward
+    now clips to zero -- indistinguishable, and on a plant whose setpoints
+    live between 0.11 and 0.19 m they were never realistic errors anyway.
+    """
+    common = dict(
+        time=0, h3=0.3, h4=0.12, target_h1=0.15, target_h2=0.20, v1=5.0, v2=7.0
+    )
     r_close = compute_reward(
-        FourTankState(
-            time=0,
-            h1=0.65,
-            h2=0.65,
-            h3=0.3,
-            h4=0.3,
-            target_h1=0.7,
-            target_h2=0.7,
-            v1=5.0,
-            v2=5.0,
-        ),
-        params,
+        FourTankState(h1=0.15 - 0.005, h2=0.20 - 0.005, **common), params
     )
     r_far = compute_reward(
-        FourTankState(
-            time=0,
-            h1=0.3,
-            h2=0.3,
-            h3=0.3,
-            h4=0.3,
-            target_h1=0.7,
-            target_h2=0.7,
-            v1=5.0,
-            v2=5.0,
-        ),
-        params,
+        FourTankState(h1=0.15 - 0.030, h2=0.20 - 0.030, **common), params
     )
-    assert r_close > r_far
+    assert r_close > r_far > 0.0
 
 
 def test_reward_is_finite(params, state):
@@ -347,3 +334,68 @@ def test_relative_gain_array_demands_the_cross_pairing():
         G[:, j] = (plus - minus) / (2 * eps)
     assert abs(G[1, 0]) > 2 * abs(G[0, 0]), "v1 should move h2 far more than h1"
     assert abs(G[0, 1]) > 2 * abs(G[1, 1]), "v2 should move h1 far more than h2"
+
+
+def _voltages_for(t1, t2, p):
+    """Pump voltages that hold a target pair at steady state."""
+    A = _np.array(
+        [
+            [p.gamma1 * p.k1, (1 - p.gamma2) * p.k2],
+            [(1 - p.gamma1) * p.k1, p.gamma2 * p.k2],
+        ]
+    )
+    b = _np.array([p.a1 * _np.sqrt(2 * p.g * t1), p.a2 * _np.sqrt(2 * p.g * t2)])
+    return _np.linalg.solve(A, b)
+
+
+def test_upper_tanks_keep_margin_above_the_low_level_trip():
+    """The subtler reachability constraint, and the one that actually bit.
+
+    A high h1 with a low h2 is held by a *low* v1 and a high v2 -- and v1 is
+    what feeds tank 4. With a wider target box the steady h4 at that corner sat
+    only 16 mm above the trip, so a transient dip ended the episode and one
+    seed in twenty failed regardless of gains. Every corner must leave real
+    margin.
+    """
+    p = FourTankParams()
+    worst = _np.inf
+    for t1 in _np.linspace(*p.target_h1_range, 6):
+        for t2 in _np.linspace(*p.target_h2_range, 6):
+            v1, v2 = _voltages_for(t1, t2, p)
+            assert 0.0 <= v1 <= p.v_max and 0.0 <= v2 <= p.v_max
+            h4 = ((1 - p.gamma1) * p.k1 * v1 / p.a4) ** 2 / (2 * p.g)
+            h3 = ((1 - p.gamma2) * p.k2 * v2 / p.a3) ** 2 / (2 * p.g)
+            assert h3 < p.h_max, "upper tank 3 would overflow"
+            worst = min(worst, h4)
+    assert worst - p.h_min >= 0.030, (
+        f"worst-case steady h4 is {worst:.3f} m, only "
+        f"{worst - p.h_min:.3f} m above the {p.h_min} m trip"
+    )
+
+
+def test_tracking_band_is_scaled_to_the_operating_range():
+    """The reward must discriminate over the levels this plant actually reaches.
+
+    It was previously scaled by the whole tank span (h_max - h_min = 1.45 m),
+    about three times the reachable range, so a half-metre miss still scored
+    0.43 and a saturated controller looked much like a working one.
+    """
+    p = FourTankParams()
+    span = p.target_h1_range[1] - p.target_h1_range[0]
+    assert p.tracking_band < p.h_max - p.h_min
+    assert p.tracking_band <= span, "band is wider than the whole setpoint range"
+
+
+def test_reward_falls_to_zero_outside_the_band():
+    """Clipped, so a larger error can never score better than a smaller one."""
+    p = FourTankParams()
+    base = dict(time=0, h3=0.3, h4=0.12, target_h1=0.15, target_h2=0.20, v1=5.0, v2=7.0)
+    prev = None
+    for err in (0.0, 0.01, 0.03, 0.05, 0.20, 1.0):
+        st = FourTankState(h1=0.15 + err, h2=0.20 + err, **base)
+        r = float(compute_reward(st, p))
+        assert 0.0 <= r <= 1.0
+        if prev is not None:
+            assert r <= prev + 1e-9, "reward must never increase with error"
+        prev = r
+    assert prev == pytest.approx(0.0)

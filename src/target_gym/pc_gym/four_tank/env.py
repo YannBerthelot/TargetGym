@@ -39,6 +39,14 @@ class FourTankParams(EnvParams):
     h_min: float = 0.05
     h_max: float = 1.5
 
+    # Tracking band: the level error at which the tracking reward reaches zero.
+    # Previously the reward was scaled by the full tank span (h_max - h_min =
+    # 1.45 m), roughly three times the plant's entire reachable range, so a
+    # half-metre miss still scored 0.43 and the reward barely distinguished a
+    # working controller from a saturated one. 5 cm is a real miss on a plant
+    # whose setpoints live between 0.10 and 0.30 m.
+    tracking_band: float = 0.05
+
     # Target level ranges for tanks 1 and 2.
     #
     # These MUST sit inside the plant's reachable envelope. With both pumps
@@ -50,18 +58,24 @@ class FourTankParams(EnvParams):
     #
     # The band below is jointly reachable: because the pumps are cross-coupled,
     # h1 and h2 are sampled independently but must be attainable *together*,
-    # and every pair in this box is. It holds at ~6.0-8.3 V, leaving roughly
-    # 17 % of the voltage range as headroom for disturbance rejection.
-    target_h1_range: Tuple[float, float] = (0.10, 0.25)
-    target_h2_range: Tuple[float, float] = (0.12, 0.30)
+    # and every pair in this box is.
+    #
+    # It is also sized against the UPPER tanks, which is the subtler
+    # constraint. A high h1 with a low h2 is held by a low v1 and a high v2 --
+    # and v1 is what feeds tank 4. At the (0.25, 0.12) corner of a wider box
+    # the steady h4 sits only 16 mm above the low-level trip, so any transient
+    # dip ends the episode; one seed in twenty tripped there regardless of
+    # gains. This box keeps at least 50 mm of margin on h4 at every corner.
+    target_h1_range: Tuple[float, float] = (0.11, 0.19)
+    target_h2_range: Tuple[float, float] = (0.14, 0.28)
 
     # Initial level ranges. Chosen to start inside the same envelope: the old
     # h1 upper bound of 0.4 was above the maximum sustainable level, so an
     # episode could begin at a level the plant can never hold.
-    initial_h1_range: Tuple[float, float] = (0.10, 0.20)
-    initial_h2_range: Tuple[float, float] = (0.12, 0.24)
-    initial_h3_range: Tuple[float, float] = (0.20, 0.40)
-    initial_h4_range: Tuple[float, float] = (0.10, 0.22)
+    initial_h1_range: Tuple[float, float] = (0.11, 0.19)
+    initial_h2_range: Tuple[float, float] = (0.14, 0.26)
+    initial_h3_range: Tuple[float, float] = (0.25, 0.45)
+    initial_h4_range: Tuple[float, float] = (0.09, 0.16)
 
     delta_t: float = 1.0
     max_steps_in_episode: int = 500
@@ -151,7 +165,16 @@ def check_is_terminal(state: FourTankState, params: FourTankParams, xp=jnp):
 
 
 def compute_reward(state: FourTankState, params: FourTankParams, xp=jnp):
-    max_diff = params.h_max - params.h_min
-    r1 = ((max_diff - xp.abs(state.target_h1 - state.h1)) / max_diff) ** 2
-    r2 = ((max_diff - xp.abs(state.target_h2 - state.h2)) / max_diff) ** 2
+    """Mean of the two level-tracking scores.
+
+    A squared normalised band, clipped, matching the rest of the suite. The
+    clip matters: the previous form squared an unclipped ratio, so an error
+    larger than the band would have started *increasing* the reward again --
+    harmless while the plant could not produce such an error, but the same
+    defect that broke two MPC objectives elsewhere in this repo.
+    """
+    e1 = xp.abs(state.target_h1 - state.h1)
+    e2 = xp.abs(state.target_h2 - state.h2)
+    r1 = xp.clip(1.0 - e1 / params.tracking_band, 0.0, 1.0) ** 2
+    r2 = xp.clip(1.0 - e2 / params.tracking_band, 0.0, 1.0) ** 2
     return (r1 + r2) / 2.0
