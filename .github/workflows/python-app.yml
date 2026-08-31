@@ -71,12 +71,27 @@ jobs:
       # rather than silently resolving something else than what we tested.
       run: uv sync --frozen --group dev
 
+    - name: Type-check the enforced modules
+      # One interpreter is enough: what this checks is annotations, which do
+      # not vary across versions. The module list lives in the Makefile so CI
+      # and a local `make mypy` cannot drift apart.
+      if: matrix.python-version == '3.13'
+      run: make mypy
+
     - name: Test with pytest
       # -n auto spreads the suite over the runner's cores; tests/conftest.py
       # pins each worker to one compute thread so they do not fight for them.
       # --durations keeps the slowest tests visible, so the suite's cost stays
       # something we notice rather than something that creeps.
+      if: matrix.python-version != '3.13'
       run: uv run pytest tests/ -q -n auto --durations=10 -m "not slow"
+
+    - name: Test with pytest, enforcing coverage
+      # One column carries the coverage gate. pytest-cov aggregates the xdist
+      # workers, so this costs about twenty seconds more than the plain run
+      # rather than requiring a serial one.
+      if: matrix.python-version == '3.13'
+      run: uv run pytest tests/ -q -n auto --durations=10 -m "not slow" --cov=target_gym
 
   slow-test:
     # Closed-loop controller contracts: PID beats the best constant action,
