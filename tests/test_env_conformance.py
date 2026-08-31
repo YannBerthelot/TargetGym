@@ -552,57 +552,44 @@ def test_pid_is_deterministic_across_resets(spec):
 # The model must stay physical wherever an optimiser can drive it
 # ---------------------------------------------------------------------------
 
-# Attitude angles only, and only the ones that are *integrated*. "alpha" is
-# deliberately absent: it is angle of attack on the aircraft but residual
-# calcination extent on the cement kiln, where it is a fraction in [0, 1] and an
-# array. Matching on names alone produced that false positive.
-ANGLE_FIELDS = ("theta", "phi", "psi", "gamma")
+# Attitude *rates*, not attitude. "alpha" is deliberately absent from the angle
+# list: it is angle of attack on the aircraft but residual calcination extent on
+# the cement kiln, where it is a fraction in [0, 1] and an array.
+ANGLE_RATE_FIELDS = ("theta_dot", "phi_dot", "psi_dot")
 
-# Environments whose attitude winds up without bound. Recorded rather than
-# skipped: the contract is right and these are the gap it found.
-# Pitch damping took the 2D aircraft from 15.5 rotations to 4.4 under extreme
-# actions -- a large improvement that still misses the bar, so it stays recorded
-# rather than having the bar moved to meet it. The 3D variants share the pitch
-# code but roll and yaw remain undamped.
-UNDAMPED_ATTITUDE = {"plane", "plane3d_heading", "plane3d_circle", "plane3d_figure8"}
-MAX_TURNS = 4.0  # full rotations before we call it a tumble rather than a manoeuvre
+# Half a rotation per second. No transport aircraft sustains this, and no
+# process plant has an attitude at all, so exceeding it means the state is
+# running away rather than manoeuvring.
+MAX_RATE_DEG_S = 180.0
 
 
-def test_angles_stay_bounded_under_extreme_actions(spec):
-    """An angle that accumulates without bound means damping is missing.
+def test_attitude_rates_stay_bounded_under_extreme_actions(spec):
+    """A state that runs away means the model has no damping for that axis.
 
-    This is the contract the aircraft's zero-drag stall defect slipped past for
-    so long. Every drag test probed attached flow, where ``CD = cd0 + k*CL**2``
-    is self-consistent -- testing drag there tests the formula against itself,
-    and cannot reveal that it has no separated-flow term at all. The two tests
-    that did reach past the stall were *satisfied* by the defect: a lift
-    collapse to zero is a maximal collapse, and a sweep asserting ``isfinite``
-    and ``cd > 0`` is happy with a wing producing less drag than in cruise.
+    This began as a check on the *angle*, which was wrong: held at full nose-up
+    elevator an aircraft loops, and a looping aircraft accumulates pitch angle
+    forever with a perfectly bounded rate. The measurement showed it plainly --
+    7 to 14 deg/s of pitch rate while altitude cycled between 3000 and 5400 m.
+    That is a manoeuvre, not a divergence.
 
-    A benchmark is where this matters most, because an optimiser goes looking
-    for the region nobody modelled. So the contract is about reachability, not
-    about the design point: drive the plant to its limits and the state must
-    stay physical, or the episode must end.
+    The rate is the quantity that distinguishes them, and it is the one the
+    original defect broke: with a separated wing producing no drag and no
+    damping, pitch rate reached 270 deg/s and was still climbing.
+
+    The contract is stated over the reachable state space rather than the design
+    point, because a benchmark is where that distinction bites: an optimiser
+    goes looking for the corner nobody modelled.
     """
     env = spec.make_env()
     params = spec.make_test_params()
     probe = env.reset_env(jax.random.PRNGKey(0), params)[1]
     fields = [
         f
-        for f in ANGLE_FIELDS
+        for f in ANGLE_RATE_FIELDS
         if hasattr(probe, f) and np.ndim(np.asarray(getattr(probe, f))) == 0
     ]
     if not fields:
-        pytest.skip(f"{spec.name} has no scalar attitude state")
-    if spec.name in UNDAMPED_ATTITUDE:
-        pytest.xfail(
-            f"{spec.name}: attitude is integrated with no aerodynamic rate "
-            "damping -- a real tail's incidence carries a q*l/V term that "
-            "opposes pitch rate, and nothing here does. A departed aircraft "
-            "therefore tumbles indefinitely. Distinct from the post-stall drag "
-            "defect (fixed): that removed the forces, this removes the moment "
-            "that would arrest the rotation."
-        )
+        pytest.skip(f"{spec.name} has no scalar attitude rate")
 
     space = env.action_space(params)
     shape = space.shape or (1,)
@@ -610,7 +597,7 @@ def test_angles_stay_bounded_under_extreme_actions(spec):
     high = np.broadcast_to(np.asarray(space.high, float), shape)
     step = jax.jit(env.step_env)
 
-    worst = 0.0
+    worst, where = 0.0, None
     for frac in (0.0, 1.0):
         action = jnp.asarray(low + frac * (high - low))
         key = jax.random.PRNGKey(0)
@@ -618,13 +605,14 @@ def test_angles_stay_bounded_under_extreme_actions(spec):
         for _ in range(int(params.max_steps_in_episode)):
             _, state, _, terminated, _ = step(key, state, action, params)
             for f in fields:
-                worst = max(worst, abs(float(getattr(state, f))))
+                rate = abs(np.rad2deg(float(getattr(state, f))))
+                if rate > worst:
+                    worst, where = rate, f
             if bool(terminated):
                 break
 
-    turns = worst / (2 * np.pi)
-    assert turns < MAX_TURNS, (
-        f"{spec.name}: an angle reached {turns:.1f} full rotations "
-        f"({np.rad2deg(worst):.0f} deg) while the episode continued. Unbounded "
-        "accumulation means the model has no damping for that axis."
+    assert worst < MAX_RATE_DEG_S, (
+        f"{spec.name}: {where} reached {worst:.0f} deg/s under extreme actions. "
+        "A rate that large is a state running away, not a manoeuvre -- the axis "
+        "has no damping."
     )

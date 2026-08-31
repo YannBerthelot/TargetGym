@@ -166,7 +166,7 @@ def compute_acceleration_3d(
     """
     xp = jnp
     thrust, stick, aileron = action
-    x_dot, y_dot, z_dot, _, phi_dot = velocities
+    x_dot, y_dot, z_dot, theta_dot, phi_dot = velocities
     _, _, z, theta, phi = positions
 
     # Air-relative velocity drives all aerodynamics and the body/thrust axis.
@@ -194,26 +194,44 @@ def compute_acceleration_3d(
     C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M, params=params)
     lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
     drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
-    M_wings = lift_wings * params.moment_arm_wings
+    # Body-normal component, not lift alone. Past the stall drag exceeds lift,
+    # so the omitted term is the larger one. Ported from plane/dynamics.py,
+    # which carries the same three corrections; this file is a parallel copy.
+    F_wings = lift_wings * xp.cos(alpha) + drag_wings * xp.sin(alpha)
+    M_wings = F_wings * params.moment_arm_wings
 
     # ====================================================
     # STABILIZER
     # ====================================================
-    C_z_s, C_x_s = aero_coefficients(xp.rad2deg(alpha) - 3.0, M, params=params)
+    # Pitch-rate damping: the tail sweeps at q*l, so it meets the air at
+    # arctan(q*l / V) more incidence and makes a moment opposing the rotation.
+    tail_rate_deg = xp.rad2deg(
+        xp.arctan2(theta_dot * params.moment_arm_stabilizer, xp.maximum(V, 1e-3))
+    )
+    C_z_s, C_x_s = aero_coefficients(
+        xp.rad2deg(alpha) - 3.0 + tail_rate_deg, M, params=params
+    )
     lift_stab = compute_drag(S=params.stabilizer_surface, C=C_z_s, V=V, rho=rho)
     drag_stab = compute_drag(S=params.stabilizer_surface, C=C_x_s, V=V, rho=rho)
-    F_stab = lift_stab - drag_stab
+    # ``lift - drag`` reverses sign once the tail's drag exceeds its lift, which
+    # turned the damping moment into a driving one exactly when it was needed.
+    tail_incidence = xp.deg2rad(xp.rad2deg(alpha) - 3.0 + tail_rate_deg)
+    F_stab = lift_stab * xp.cos(tail_incidence) + drag_stab * xp.sin(tail_incidence)
     M_stabilizer = -F_stab * params.moment_arm_stabilizer
 
     # ====================================================
     # ELEVATOR
     # ====================================================
     C_z_e, C_x_e = aero_coefficients(
-        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0, M, params=params
+        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0 + tail_rate_deg, M, params=params
     )
     lift_elev = compute_drag(S=params.elevator_surface, C=C_z_e, V=V, rho=rho)
     drag_elev = compute_drag(S=params.elevator_surface, C=C_x_e, V=V, rho=rho)
-    F_elev = lift_elev * xp.cos(stick) - drag_elev * xp.sin(stick)
+    # Projected with the elevator's own incidence, not the stick deflection.
+    elev_incidence = xp.deg2rad(
+        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0 + tail_rate_deg
+    )
+    F_elev = lift_elev * xp.cos(elev_incidence) + drag_elev * xp.sin(elev_incidence)
     M_elevator = -F_elev * params.moment_arm_stabilizer
 
     # ====================================================

@@ -414,7 +414,13 @@ def compute_acceleration(
     C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M, params=params)
     lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
     drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
-    M_wings = lift_wings * params.moment_arm_wings
+    # Only the component normal to the body axis makes a pitching moment, and
+    # lift and drag are both defined against the local wind, so both project
+    # onto it. Using lift alone is defensible while drag is a twentieth of it
+    # (CD/CL is 0.08 at the stall) and wrong once the wing separates, where drag
+    # *exceeds* lift -- at 60 deg the omitted term is 1.8x the one kept.
+    F_wings = lift_wings * xp.cos(alpha) + drag_wings * xp.sin(alpha)
+    M_wings = F_wings * params.moment_arm_wings
 
     # ====================================================
     # STABILIZER
@@ -459,7 +465,16 @@ def compute_acceleration(
     )
     lift_elev = compute_drag(S=params.elevator_surface, C=C_z_e, V=V, rho=rho)
     drag_elev = compute_drag(S=params.elevator_surface, C=C_x_e, V=V, rho=rho)
-    F_elev = lift_elev * xp.cos(stick) - drag_elev * xp.sin(stick)
+    # Projected with the elevator's own local incidence, not with the stick
+    # deflection, and with drag adding to the normal force rather than
+    # subtracted from it -- the same correction the stabiliser needed. The two
+    # forms agree near cruise (0.118 against 0.117) and diverge once the tail
+    # is deep in the separated regime: at 80 deg of body incidence with full
+    # stick the old form gave 0.249 where the projection gives 1.148.
+    elev_incidence = xp.deg2rad(
+        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0 + tail_rate_deg
+    )
+    F_elev = lift_elev * xp.cos(elev_incidence) + drag_elev * xp.sin(elev_incidence)
     M_elevator = -F_elev * params.moment_arm_stabilizer
 
     # ====================================================
