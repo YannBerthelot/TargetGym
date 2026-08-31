@@ -45,6 +45,7 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
 
     # obs = [n, T_coolant, rho_ext_norm, target_n]
     obs_value_index: int = 0  # n (neutron density / normalised power)
+    tracked_names: tuple = ("neutron power (normalised)",)
     obs_target_index: int = 3  # target_n
 
     def __init__(self, integration_method: str = "tr_bdf2_2"):

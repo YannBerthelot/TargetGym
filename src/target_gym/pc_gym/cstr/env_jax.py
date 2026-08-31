@@ -26,6 +26,7 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
 
     # obs = [C_a, T, target_CA]
     obs_value_index: int = 0  # C_a (concentration)
+    tracked_names: tuple = ("C_a (mol/L)",)
     obs_target_index: int = 2  # target_CA
 
     def __init__(self, integration_method: str = "rk4_1"):

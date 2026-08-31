@@ -37,6 +37,7 @@ class BuildingHVAC(environment.Environment[HVACState, HVACParams]):
     screen_height = 900
 
     obs_value_index: int = 0  # T_air
+    tracked_names: tuple = ("zone air temperature (deg C)",)
     obs_target_index: int = 6  # target_T
 
     def __init__(self, integration_method: str = "rk4_2"):

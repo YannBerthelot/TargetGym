@@ -33,6 +33,7 @@ class PHNeutralization(environment.Environment[PHState, PHParams]):
     screen_height = 800
 
     obs_value_index: int = 0  # pH
+    tracked_names: tuple = ("pH",)
     obs_target_index: int = 2  # target_pH
 
     def __init__(self, integration_method: str = "rk4_2"):

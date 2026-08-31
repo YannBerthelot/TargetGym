@@ -29,6 +29,7 @@ class GlassFurnace(environment.Environment[GlassFurnaceState, GlassFurnaceParams
 
     # obs = [T_crown, T_air_preheat, fuel_pct, reversal_phase, target_T_crown]
     obs_value_index: int = 0  # T_crown
+    tracked_names: tuple = ("crown temperature (K)",)
     obs_target_index: int = 4  # target_T_crown
 
     def __init__(self, integration_method: str = "rk4_2"):

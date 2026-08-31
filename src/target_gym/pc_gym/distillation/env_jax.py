@@ -34,6 +34,7 @@ class DistillationColumn(
     screen_height = 900
 
     obs_value_index: int = 0  # yD
+    tracked_names: tuple = ("yD (mole fraction)",)
     obs_target_index: int = 4  # target_yD
 
     def __init__(self, integration_method: str = "rk4_16"):

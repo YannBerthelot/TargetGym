@@ -34,6 +34,7 @@ class CementKiln(environment.Environment[CementKilnState, CementKilnParams]):
     screen_height = 900
 
     obs_value_index: int = 0  # discharge free lime
+    tracked_names: tuple = ("discharge free lime (%)",)
     obs_target_index: int = 7  # target free lime
 
     def __init__(self, integration_method: str = "rk4_1"):

@@ -29,6 +29,7 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
 
     # obs = [x_dot, z, z_dot, theta, theta_dot, gamma, target_altitude, power, stick]
     obs_value_index: int = 1  # z (altitude)
+    tracked_names: tuple = ("altitude (m)",)
     obs_target_index: int = 6  # target_altitude
 
     def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):

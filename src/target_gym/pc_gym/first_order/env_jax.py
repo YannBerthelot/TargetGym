@@ -26,6 +26,7 @@ class FirstOrderSystem(environment.Environment[FirstOrderState, FirstOrderParams
 
     # obs = [x, target_x]
     obs_value_index: int = 0  # x
+    tracked_names: tuple = ("x",)
     obs_target_index: int = 1  # target_x
 
     def __init__(self, integration_method: str = "rk4_1"):

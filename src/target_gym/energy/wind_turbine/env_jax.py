@@ -32,6 +32,7 @@ class WindTurbine(environment.Environment[WindTurbineState, WindTurbineParams]):
     screen_height = 800
 
     obs_value_index: int = 3  # electrical power (MW)
+    tracked_names: tuple = ("electrical power (MW)",)
     obs_target_index: int = 4  # target power (MW)
 
     def __init__(self, integration_method: str = "rk4_2"):

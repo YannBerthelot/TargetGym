@@ -258,6 +258,7 @@ class PlanePatrol(_PlanePatrolBase):
     """
 
     obs_value_index: int = 24  # slot_error
+    tracked_names: tuple = ("slot error (m)",)
     obs_target_index: int = 25  # constant 0
     task_type: str = "patrol"
 
@@ -277,6 +278,7 @@ class PlanePatrolBearingOnly(_PlanePatrolBase):
     """
 
     obs_value_index: int = 19  # measured range
+    tracked_names: tuple = ("measured range (m)",)
     obs_target_index: int = 20  # commanded slot range
     task_type: str = "patrol"
 

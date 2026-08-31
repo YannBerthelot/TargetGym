@@ -31,6 +31,7 @@ class GridBattery(environment.Environment[BatteryState, BatteryParams]):
     screen_height = 800
 
     obs_value_index: int = 3  # delivered power (MW)
+    tracked_names: tuple = ("delivered power (MW)",)
     obs_target_index: int = 4  # dispatch (MW)
 
     def __init__(self, integration_method: str = "rk4_2"):

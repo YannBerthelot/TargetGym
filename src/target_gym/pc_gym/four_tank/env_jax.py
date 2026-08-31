@@ -26,6 +26,7 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
 
     # obs = [h1, h2, h3, h4, target_h1, target_h2]
     obs_value_index: tuple = (0, 1)  # h1, h2
+    tracked_names: tuple = ("h1 (m)", "h2 (m)")
     obs_target_index: tuple = (4, 5)  # target_h1, target_h2
 
     def __init__(self, integration_method: str = "rk4_1"):

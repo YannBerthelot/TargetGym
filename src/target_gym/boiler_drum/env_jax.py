@@ -33,6 +33,7 @@ class BoilerDrum(environment.Environment[BoilerDrumState, BoilerDrumParams]):
     screen_height = 900
 
     obs_value_index: tuple = (0, 1)  # level, pressure
+    tracked_names: tuple = ("drum level (m)", "drum pressure (bar)")
     obs_target_index: tuple = (5, 6)  # target_level, target_pressure
 
     def __init__(self, integration_method: str = "rk4_1"):

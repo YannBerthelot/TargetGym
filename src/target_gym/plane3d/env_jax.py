@@ -242,6 +242,7 @@ class Plane3DHeading(_Airplane3DBase):
     """
 
     obs_value_index: int = 2  # z (altitude)
+    tracked_names: tuple = ("altitude (m)",)
     obs_target_index: int = 10  # target_altitude
     task_type: str = "heading"
 
@@ -308,6 +309,7 @@ class Plane3DCircle(_Airplane3DBase):
     obs_value_index: int = 2
     obs_target_index: int = 10
     task_type: str = "circle"
+    tracked_names: tuple = ("altitude (m)",)
 
     def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
@@ -399,6 +401,7 @@ class Plane3DFigureEight(_Airplane3DBase):
     obs_value_index: int = 2
     obs_target_index: int = 10
     task_type: str = "figure8"
+    tracked_names: tuple = ("altitude (m)",)
 
     def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)

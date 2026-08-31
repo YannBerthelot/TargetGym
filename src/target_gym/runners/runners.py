@@ -1,149 +1,368 @@
+"""Figures and videos for every registered environment.
+
+One runner, driven by :data:`target_gym.registry.REGISTRY`. It replaced seven
+per-environment modules that shared an identical six-function skeleton and
+between them covered eight environments; this covers all of them, because
+nothing here names an environment.
+
+Three pieces of the environment interface make that possible:
+
+``obs_value_index`` / ``obs_target_index``
+    Class attributes on every environment giving the observation slots that
+    hold the tracked variable and its setpoint (a tuple of slots for the
+    multi-loop plants). Reading the pair back out of the observation is what
+    lets a plot label itself without knowing which plant it is looking at.
+``action_space(params)``
+    Supplies the bounds a constant-action sweep should span.
+``EnvSpec.make_pid`` / ``make_mpc``
+    The baselines, already registered.
+
+Setpoints are varied by *seed* rather than by writing into a named state
+field: every environment samples its own target on reset, so a handful of
+seeds gives a spread drawn from the distribution the environment actually
+defines, and no per-environment field name is needed.
+
+Usage
+-----
+    python -m target_gym.runners.runners                      # everything
+    python -m target_gym.runners.runners --env cstr reactor
+    python -m target_gym.runners.runners --only figures
+"""
+
+from __future__ import annotations
+
 import argparse
-import glob
+import inspect
 import os
+from typing import Callable, Sequence
 
-from tqdm import tqdm
+import jax
+import jax.numpy as jnp
+import matplotlib
+import numpy as np
 
-from target_gym.runners.cstr_runner import run_all_modes as run_cstr
-from target_gym.runners.cstr_runner import run_figures as run_cstr_figures
-from target_gym.runners.cstr_runner import run_videos as run_cstr_videos
-from target_gym.runners.first_order_runner import run_all_modes as run_first_order
-from target_gym.runners.first_order_runner import run_figures as run_first_order_figures
-from target_gym.runners.first_order_runner import run_videos as run_first_order_videos
-from target_gym.runners.four_tank_runner import run_all_modes as run_four_tank
-from target_gym.runners.four_tank_runner import run_figures as run_four_tank_figures
-from target_gym.runners.four_tank_runner import run_videos as run_four_tank_videos
-from target_gym.runners.glass_furnace_runner import run_all_modes as run_glass_furnace
-from target_gym.runners.glass_furnace_runner import (
-    run_figures as run_glass_furnace_figures,
-)
-from target_gym.runners.glass_furnace_runner import (
-    run_videos as run_glass_furnace_videos,
-)
-from target_gym.runners.patrol_runner import run_all_modes as run_patrol
-from target_gym.runners.patrol_runner import run_figures as run_patrol_figures
-from target_gym.runners.patrol_runner import run_videos as run_patrol_videos
-from target_gym.runners.plane3d_runner import run_all_modes as run_plane3d
-from target_gym.runners.plane3d_runner import run_figures as run_plane3d_figures
-from target_gym.runners.plane3d_runner import run_videos as run_plane3d_videos
-from target_gym.runners.plane_runner import run_all_modes as run_plane
-from target_gym.runners.plane_runner import run_figures as run_plane_figures
-from target_gym.runners.plane_runner import run_videos as run_plane_videos
-from target_gym.runners.reactor_runner import run_all_modes as run_reactor
-from target_gym.runners.reactor_runner import run_figures as run_reactor_figures
-from target_gym.runners.reactor_runner import run_videos as run_reactor_videos
+matplotlib.use("Agg")
+import matplotlib.cm as cm  # noqa: E402
+import matplotlib.colors as mcolors  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
+from tqdm import tqdm  # noqa: E402
 
-ALL_RUNNERS = {
-    "plane": run_plane,
-    "plane3d": run_plane3d,
-    "cstr": run_cstr,
-    "first_order": run_first_order,
-    "four_tank": run_four_tank,
-    "reactor": run_reactor,
-    "glass_furnace": run_glass_furnace,
-    "patrol": run_patrol,
-}
+from target_gym.registry import REGISTRY  # noqa: E402
+from target_gym.utils import truncate_colormap  # noqa: E402
 
-VIDEO_RUNNERS = {
-    "plane": run_plane_videos,
-    "plane3d": run_plane3d_videos,
-    "cstr": run_cstr_videos,
-    "first_order": run_first_order_videos,
-    "four_tank": run_four_tank_videos,
-    "reactor": run_reactor_videos,
-    "glass_furnace": run_glass_furnace_videos,
-    "patrol": run_patrol_videos,
-}
-
-FIGURE_RUNNERS = {
-    "plane": run_plane_figures,
-    "plane3d": run_plane3d_figures,
-    "cstr": run_cstr_figures,
-    "first_order": run_first_order_figures,
-    "four_tank": run_four_tank_figures,
-    "reactor": run_reactor_figures,
-    "glass_furnace": run_glass_furnace_figures,
-    "patrol": run_patrol_figures,
-}
+FIGURE_DIR = "figures"
+VIDEO_DIR = "videos"
 
 
-def _has_outputs(directory: str, ext: str) -> bool:
-    """True if *directory* contains at least one file with the given extension."""
-    return bool(glob.glob(os.path.join(directory, f"*.{ext}")))
+# ---------------------------------------------------------------------------
+# Generic rollout machinery
+# ---------------------------------------------------------------------------
 
 
-def _run_selected(runners, envs, output_dir=None, output_ext=None):
-    """Run selected runners, optionally skipping envs whose outputs exist.
+def _wants_state(policy: Callable) -> bool:
+    """True when *policy* takes ``(obs, state)`` rather than ``(obs,)``.
 
-    When *envs* is ``None`` (i.e. the user did **not** pass ``--env``),
-    existing outputs in ``<output_dir>/<name>/`` cause that env to be
-    skipped.  When *envs* is explicitly provided the runner always runs
-    (the user asked for it specifically, e.g. ``make videos-reactor``).
+    Decided from the signature rather than by calling and catching TypeError,
+    which would also swallow a TypeError raised legitimately inside a
+    single-argument policy and silently call it with the wrong arity.
     """
-    selected = {k: v for k, v in runners.items() if envs is None or k in envs}
-    skip_existing = envs is None and output_dir is not None and output_ext is not None
-    for name, run_fn in tqdm(selected.items(), desc="Environments"):
-        if skip_existing and _has_outputs(f"{output_dir}/{name}", output_ext):
-            tqdm.write(
-                f"\n── {name} ── (skipped, outputs exist in {output_dir}/{name}/)"
-            )
-            continue
+    try:
+        return len(inspect.signature(policy).parameters) >= 2
+    except (TypeError, ValueError):  # builtins and C callables have no signature
+        return False
+
+
+def _as_tuple(index) -> tuple[int, ...]:
+    """Normalise an observation index that may be a scalar or a tuple."""
+    return tuple(index) if isinstance(index, (tuple, list)) else (int(index),)
+
+
+def _action_bounds(env, params) -> tuple[np.ndarray, np.ndarray]:
+    """Low and high action bounds, broadcast to the action shape."""
+    space = env.action_space(params)
+    shape = space.shape if space.shape else (1,)
+    return (
+        np.broadcast_to(np.asarray(space.low, dtype=float), shape).copy(),
+        np.broadcast_to(np.asarray(space.high, dtype=float), shape).copy(),
+    )
+
+
+def rollout(spec, params, policy: Callable, seed: int = 0):
+    """Run one episode, returning tracked values, targets and rewards.
+
+    ``policy`` is called as ``policy(obs)`` or, when it accepts two arguments,
+    ``policy(obs, state)`` -- the MPC baselines need the full state.
+
+    Returns
+    -------
+    values : ``(T, n_tracked)`` array of the tracked variable(s)
+    targets : ``(T, n_tracked)`` array of their setpoint(s)
+    rewards : ``(T,)`` array
+    """
+    env = spec.make_env()
+    value_idx = _as_tuple(env.obs_value_index)
+    target_idx = _as_tuple(env.obs_target_index)
+
+    key = jax.random.PRNGKey(seed)
+    obs, state = env.reset_env(key, params)
+    step = jax.jit(env.step_env)
+
+    values, targets, rewards = [], [], []
+    for _ in range(int(params.max_steps_in_episode)):
+        obs_np = np.asarray(obs)
+        values.append(obs_np[list(value_idx)])
+        targets.append(obs_np[list(target_idx)])
+        action = policy(obs, state) if _wants_state(policy) else policy(obs)
+        obs, state, reward, terminated, _ = step(
+            key, state, jnp.atleast_1d(jnp.asarray(action)), params
+        )
+        rewards.append(float(reward))
+        if bool(terminated):
+            break
+    return np.array(values), np.array(targets), np.array(rewards)
+
+
+def constant_policy(value, env, params) -> Callable:
+    """A policy holding *value*, expressed as a fraction of the action range.
+
+    ``value`` runs -1 to 1 and is mapped onto each dimension's own bounds, so
+    one sweep specification is meaningful across environments whose actions
+    are voltages, valve fractions or degrees of elevator.
+    """
+    low, high = _action_bounds(env, params)
+    mid, half = (high + low) / 2.0, (high - low) / 2.0
+    action = mid + float(value) * half
+    return lambda _obs: jnp.asarray(action)
+
+
+def pid_policy(spec) -> Callable | None:
+    """The registered PID baseline, reset and ready."""
+    if not spec.has_pid:
+        return None
+    pid = spec.make_pid()
+    if hasattr(pid, "reset"):
+        pid.reset()
+    # Some factories return an object exposing ``step``, others a callable.
+    call = pid if callable(pid) else pid.step
+    return lambda obs: call(obs)
+
+
+def mpc_policy(spec, env, params) -> Callable | None:
+    """The registered MPC baseline, reset and ready."""
+    if not spec.has_mpc:
+        return None
+    mpc = spec.make_mpc(env, params)
+    mpc.reset()
+    return lambda obs, state: np.atleast_1d(mpc.step(obs, state))
+
+
+# ---------------------------------------------------------------------------
+# Figures
+# ---------------------------------------------------------------------------
+
+
+def _tracked_labels(env, n: int) -> list[str]:
+    """Axis labels for the tracked channels, if the environment names them."""
+    names = getattr(env, "tracked_names", None)
+    if names and len(names) == n:
+        return list(names)
+    return [f"tracked {i}" for i in range(n)] if n > 1 else ["tracked value"]
+
+
+def figure_sweep(name: str, params=None, resolution: int = 9, plot: bool = True):
+    """Constant-action sweep: what the plant does open-loop, across its range."""
+    spec = REGISTRY[name]
+    env = spec.make_env()
+    params = params or spec.params_cls()
+    levels = np.linspace(-1.0, 1.0, resolution)
+
+    runs = [rollout(spec, params, constant_policy(u, env, params))[0] for u in levels]
+    if not plot:
+        return runs
+
+    n_ch = runs[0].shape[1]
+    fig, axes = plt.subplots(n_ch, 1, figsize=(10, 4 * n_ch), squeeze=False)
+    cmap = truncate_colormap(cm.viridis, 0.0, 0.85)
+    norm = mcolors.Normalize(vmin=-1.0, vmax=1.0)
+    for ch in range(n_ch):
+        ax = axes[ch][0]
+        for u, values in zip(levels, runs):
+            ax.plot(values[:, ch], color=cmap(norm(u)), lw=1.2)
+        ax.set_xlabel("Time step")
+        ax.set_ylabel(_tracked_labels(env, n_ch)[ch])
+    axes[0][0].set_title(f"{name}: open-loop response across the action range")
+    fig.colorbar(
+        cm.ScalarMappable(cmap=cmap, norm=norm),
+        ax=axes.ravel().tolist(),
+        label="action (fraction of range)",
+    )
+    _save(fig, f"{FIGURE_DIR}/{name}/sweep")
+    return runs
+
+
+def figure_pid(name: str, params=None, n_seeds: int = 6, plot: bool = True):
+    """Closed-loop PID response, one trace per sampled setpoint."""
+    spec = REGISTRY[name]
+    if not spec.has_pid:
+        return None
+    env = spec.make_env()
+    params = params or spec.params_cls()
+
+    policy = pid_policy(spec)
+    assert policy is not None  # guarded by has_pid above
+    runs = [rollout(spec, params, policy, seed=s) for s in range(n_seeds)]
+    if not plot:
+        return runs
+
+    n_ch = runs[0][0].shape[1]
+    fig, axes = plt.subplots(n_ch, 1, figsize=(10, 4 * n_ch), squeeze=False)
+    cmap = truncate_colormap(cm.viridis, 0.0, 0.85)
+    for ch in range(n_ch):
+        ax = axes[ch][0]
+        for i, (values, targets, _) in enumerate(runs):
+            c = cmap(i / max(len(runs) - 1, 1))
+            ax.plot(values[:, ch], color=c, lw=1.2)
+            # The setpoint is what the trace is trying to reach; drawing it
+            # dashed in the same colour is what makes tracking error legible.
+            ax.plot(targets[:, ch], color=c, lw=0.8, ls="--", alpha=0.6)
+        ax.set_xlabel("Time step")
+        ax.set_ylabel(_tracked_labels(env, n_ch)[ch])
+    axes[0][0].set_title(f"{name}: PID tracking across {n_seeds} sampled setpoints")
+    _save(fig, f"{FIGURE_DIR}/{name}/pid_response")
+    return runs
+
+
+def figure_comparison(name: str, params=None, n_seeds: int = 5, plot: bool = True):
+    """Cumulative return of the best constant action, the PID and the MPC."""
+    spec = REGISTRY[name]
+    env = spec.make_env()
+    params = params or spec.params_cls()
+
+    # Bracketing constants rather than a fine sweep: the point of the bar is
+    # that the baselines beat open loop, not to find the optimal constant.
+    constants = (-0.5, 0.0, 0.5)
+    scores: dict[str, list[float]] = {"Constant": [], "PID": [], "MPC": []}
+    for seed in range(n_seeds):
+        best = max(
+            float(rollout(spec, params, constant_policy(c, env, params), seed)[2].sum())
+            for c in constants
+        )
+        scores["Constant"].append(best)
+        pid = pid_policy(spec)
+        if pid is not None:
+            scores["PID"].append(float(rollout(spec, params, pid, seed)[2].sum()))
+        mpc = mpc_policy(spec, env, params)
+        if mpc is not None:
+            scores["MPC"].append(float(rollout(spec, params, mpc, seed)[2].sum()))
+    scores = {k: v for k, v in scores.items() if v}
+    if not plot:
+        return scores
+
+    labels = list(scores)
+    means = [float(np.mean(scores[k])) for k in labels]
+    stds = [float(np.std(scores[k])) for k in labels]
+    fig, ax = plt.subplots(figsize=(7, 5))
+    x = np.arange(len(labels))
+    ax.bar(
+        x,
+        means,
+        yerr=stds,
+        capsize=6,
+        color=["steelblue", "darkorange", "seagreen"][: len(labels)],
+        alpha=0.85,
+    )
+    rng = np.random.default_rng(0)
+    for i, k in enumerate(labels):
+        ax.scatter(
+            x[i] + rng.uniform(-0.15, 0.15, len(scores[k])),
+            scores[k],
+            color="black",
+            s=20,
+            alpha=0.5,
+            zorder=3,
+        )
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_ylabel("Cumulative reward")
+    ax.set_title(f"{name}: cumulative reward over {n_seeds} seeds (mean ± std)")
+    _save(fig, f"{FIGURE_DIR}/{name}/comparison")
+    return scores
+
+
+def _save(fig, stem: str) -> None:
+    os.makedirs(os.path.dirname(stem), exist_ok=True)
+    fig.savefig(f"{stem}.png", dpi=120, bbox_inches="tight")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Videos
+# ---------------------------------------------------------------------------
+
+
+def video(name: str, params=None, seed: int = 0) -> str | None:
+    """Render one PID episode to ``videos/<name>/pid_output.gif``."""
+    spec = REGISTRY[name]
+    policy = pid_policy(spec)
+    if policy is None:
+        return None
+    env = spec.make_env()
+    params = params or spec.params_cls()
+    folder = f"{VIDEO_DIR}/{name}"
+    os.makedirs(folder, exist_ok=True)
+    written = env.save_video(policy, seed, params=params, folder=folder, format="gif")
+    # save_video names its output episode_000.gif; the gallery and
+    # scripts/shorten_gifs.py both expect pid_output.gif.
+    final = os.path.join(folder, "pid_output.gif")
+    os.replace(written, final)
+    return final
+
+
+# ---------------------------------------------------------------------------
+# Orchestration
+# ---------------------------------------------------------------------------
+
+
+def run_figures(envs: Sequence[str] | None = None) -> None:
+    for name in tqdm(list(envs or REGISTRY), desc="figures"):
         tqdm.write(f"\n── {name} ──")
-        run_fn()
+        figure_sweep(name)
+        figure_pid(name)
+        figure_comparison(name)
 
 
-def run_all(envs: list[str] | None = None):
-    """Run figures and video generation for the given environments (default: all)."""
-    # When running everything, skip envs that already have BOTH figures and videos.
-    if envs is None:
-        selected = {}
-        for name, run_fn in ALL_RUNNERS.items():
-            has_figs = _has_outputs(f"figures/{name}", "png")
-            has_vids = _has_outputs(f"videos/{name}", "gif")
-            if has_figs and has_vids:
-                tqdm.write(f"── {name} ── (skipped, figures & videos exist)")
-            else:
-                selected[name] = run_fn
-        for name, run_fn in tqdm(selected.items(), desc="Environments"):
-            tqdm.write(f"\n── {name} ──")
-            run_fn()
-    else:
-        _run_selected(ALL_RUNNERS, envs)
+def run_videos(envs: Sequence[str] | None = None) -> None:
+    for name in tqdm(list(envs or REGISTRY), desc="videos"):
+        tqdm.write(f"\n── {name} ──")
+        video(name)
 
 
-def run_videos(envs: list[str] | None = None):
-    """Run only video generation (fast, single-seed)."""
-    _run_selected(VIDEO_RUNNERS, envs, output_dir="videos", output_ext="gif")
+def run_all(envs: Sequence[str] | None = None) -> None:
+    run_figures(envs)
+    run_videos(envs)
 
 
-def run_figures(envs: list[str] | None = None):
-    """Run only figure generation (includes multi-seed comparisons)."""
-    _run_selected(FIGURE_RUNNERS, envs, output_dir="figures", output_ext="png")
-
-
-if __name__ == "__main__":
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate figures and videos for target-gym environments."
     )
     parser.add_argument(
         "--env",
         nargs="*",
-        choices=list(ALL_RUNNERS.keys()),
+        choices=list(REGISTRY),
         default=None,
         metavar="ENV",
-        help=f"Environments to run (default: all). Choices: {', '.join(ALL_RUNNERS)}",
+        help="environments to run (default: all)",
     )
     parser.add_argument(
         "--only",
         choices=["videos", "figures"],
         default=None,
-        help="Run only videos or only figures (default: both)",
+        help="run only videos or only figures (default: both)",
     )
     args = parser.parse_args()
+    {"videos": run_videos, "figures": run_figures}.get(args.only, run_all)(args.env)
 
-    if args.only == "videos":
-        run_videos(args.env)
-    elif args.only == "figures":
-        run_figures(args.env)
-    else:
-        run_all(args.env)
+
+if __name__ == "__main__":
+    main()

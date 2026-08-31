@@ -1,7 +1,7 @@
 """
-Tests for the runner modules: run_pid_for_target, run_mode("pid"),
-save_comparison_gif utility, obs_value_index / obs_target_index attributes,
-and MPC / make_pid / make_mpc env methods.
+Tests for the runner module: generic rollouts and figure modes, the
+save_comparison_gif utility, obs_value_index / obs_target_index /
+tracked_names attributes, and MPC / make_pid / make_mpc env methods.
 """
 
 import os
@@ -28,21 +28,11 @@ from target_gym.experts.mpc import (
     make_four_tank_mpc,
     make_plane_mpc,
 )
-from target_gym.experts.pid import (
-    make_cstr_pid,
-    make_first_order_pid,
-    make_four_tank_pid,
-    make_plane_pid,
-)
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
-from target_gym.runners.cstr_runner import run_pid_for_target as cstr_run_pid
-from target_gym.runners.first_order_runner import (
-    run_pid_for_target as first_order_run_pid,
-)
-from target_gym.runners.four_tank_runner import run_pid_for_target as four_tank_run_pid
-from target_gym.runners.plane_runner import run_constant_policy_final_alt
-from target_gym.runners.plane_runner import run_pid_for_target as plane_run_pid
+from target_gym.registry import REGISTRY
+from target_gym.runners import runners as R
+from target_gym.runners.utils import run_constant_policy_final_value
 from target_gym.utils import (
     load_or_build_interpolator,
     load_or_run_mpc_episode,
@@ -53,85 +43,62 @@ N = 10  # minimal steps for speed
 
 
 # ---------------------------------------------------------------------------
-# run_pid_for_target — one test per runner
+# Generic rollouts and figure modes
+#
+# These used to be four near-identical pairs of tests, one per per-environment
+# runner module. The runner is now registry-driven, so the same coverage is a
+# parametrisation -- and it extends to every environment rather than the four
+# that happened to have a module.
 # ---------------------------------------------------------------------------
 
-
-def test_plane_run_pid_for_target():
-    env = Airplane2D(integration_method="rk4_1")
-    params = PlaneParams(max_steps_in_episode=N)
-    pid_params, pid_state0 = make_plane_pid()
-    target = 5000.0  # m, within (3000, 8000)
-
-    history = plane_run_pid(target, env, params, pid_params, pid_state0, steps=N)
-
-    assert history.shape == (N,)
-    assert np.all(np.isfinite(history))
+RUNNER_ENVS = ["plane", "cstr", "first_order", "four_tank"]
 
 
-def test_cstr_run_pid_for_target():
-    env = CSTR(integration_method="rk4_1")
-    params = CSTRParams(max_steps_in_episode=N)
-    pid_params, pid_state0 = make_cstr_pid()
-    target = 0.875  # mol/L, midpoint of (0.84, 0.91)
+@pytest.mark.parametrize("name", RUNNER_ENVS)
+def test_rollout_with_pid_tracks_shapes_and_stays_finite(name):
+    spec = REGISTRY[name]
+    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": N})
+    values, targets, rewards = R.rollout(spec, params, R.pid_policy(spec), seed=0)
 
-    history = cstr_run_pid(target, env, params, pid_params, pid_state0, steps=N)
-
-    assert history.shape == (N,)
-    assert np.all(np.isfinite(history))
-
-
-def test_first_order_run_pid_for_target():
-    env = FirstOrderSystem(integration_method="rk4_1")
-    params = FirstOrderParams(max_steps_in_episode=N)
-    pid_params, pid_state0 = make_first_order_pid()
-    target = 1.0  # midpoint of (0.5, 1.5)
-
-    history = first_order_run_pid(target, env, params, pid_params, pid_state0, steps=N)
-
-    assert history.shape == (N,)
-    assert np.all(np.isfinite(history))
+    n_tracked = len(R._as_tuple(spec.make_env().obs_value_index))
+    assert values.shape == (N, n_tracked)
+    assert targets.shape == (N, n_tracked)
+    assert rewards.shape == (N,)
+    assert np.all(np.isfinite(values)), f"{name}: non-finite tracked value"
+    assert np.all(np.isfinite(rewards)), f"{name}: non-finite reward"
 
 
-def test_four_tank_run_pid_for_target():
-    env = FourTank(integration_method="rk4_1")
-    params = FourTankParams(max_steps_in_episode=N)
-    pid_params, pid_state0 = make_four_tank_pid()
-    target = 0.75  # midpoint of (0.5, 1.0)
-
-    history = four_tank_run_pid(target, env, params, pid_params, pid_state0, steps=N)
-
-    assert history.shape == (N,)
-    assert np.all(np.isfinite(history))
+@pytest.mark.parametrize("name", RUNNER_ENVS)
+def test_figure_modes_run_headless(name):
+    """The figure modes must complete without a display or a writable figures/."""
+    spec = REGISTRY[name]
+    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": N})
+    assert R.figure_sweep(name, params=params, resolution=3, plot=False)
+    assert R.figure_pid(name, params=params, n_seeds=2, plot=False)
 
 
-# ---------------------------------------------------------------------------
-# run_mode("pid") — smoke tests (no plot, minimal resolution)
-# ---------------------------------------------------------------------------
+def test_every_registered_environment_exposes_a_tracked_label():
+    """tracked_names is what labels a generated figure's axes.
+
+    The runner covers the whole registry, so a new environment that forgets
+    this ships plots labelled with an index instead of a quantity.
+    """
+    missing = [
+        name
+        for name, spec in REGISTRY.items()
+        if not getattr(spec.make_env(), "tracked_names", None)
+    ]
+    assert not missing, f"environments without tracked_names: {missing}"
 
 
-def test_plane_runner_pid_mode():
-    from target_gym.runners.plane_runner import run_mode
-
-    run_mode("pid", n_timesteps=N, plot=False, resolution=3, max_steps_in_episode=N)
-
-
-def test_cstr_runner_pid_mode():
-    from target_gym.runners.cstr_runner import run_mode
-
-    run_mode("pid", n_timesteps=N, plot=False, resolution=3, max_steps_in_episode=N)
-
-
-def test_first_order_runner_pid_mode():
-    from target_gym.runners.first_order_runner import run_mode
-
-    run_mode("pid", n_timesteps=N, plot=False, resolution=3, max_steps_in_episode=N)
-
-
-def test_four_tank_runner_pid_mode():
-    from target_gym.runners.four_tank_runner import run_mode
-
-    run_mode("pid", n_timesteps=N, plot=False, resolution=3, max_steps_in_episode=N)
+def test_tracked_names_matches_the_number_of_tracked_channels():
+    for name, spec in REGISTRY.items():
+        env = spec.make_env()
+        n = len(R._as_tuple(env.obs_value_index))
+        assert len(env.tracked_names) == n, (
+            f"{name}: {len(env.tracked_names)} tracked_names for {n} tracked "
+            "observation slots"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -140,15 +107,17 @@ def test_four_tank_runner_pid_mode():
 
 
 def test_plane_comparison_interpolator_valid_range(tmp_path):
-    """The interpolator built from stick sweep maps altitudes -> stick in [-1,1]."""
+    """The interpolator built from a stick sweep maps altitudes -> stick in [-1,1]."""
     env = Airplane2D(integration_method="rk4_1")
     params = PlaneParams(max_steps_in_episode=N)
     stick_levels = jnp.linspace(-1.0, 1.0, 8)
 
     final_alts = np.array(
-        jax.vmap(lambda s: run_constant_policy_final_alt(0.5, s, env, params, steps=N))(
-            stick_levels
-        )
+        jax.vmap(
+            lambda s: run_constant_policy_final_value(
+                env, params, action=(0.5, s), state_attr="z", steps=N
+            )
+        )(stick_levels)
     )
     s_np = np.array(stick_levels)
     sort_idx = np.argsort(final_alts)

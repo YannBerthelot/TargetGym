@@ -25,7 +25,7 @@ They are covered by their own tests in ``tests/patrol/``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, cast
 
 # ---------------------------------------------------------------------------
 # Groups
@@ -101,7 +101,7 @@ class EnvSpec:
     name: str
     group: str
     env_factory: Callable[[], Any]
-    params_cls: type
+    params_cls: Callable[..., Any]
     make_pid: Callable[[], Any] | None
     make_mpc: Callable[[Any, Any], Any] | None
     test_params: dict[str, Any] = field(default_factory=dict)
@@ -252,7 +252,8 @@ def _hvac():
 def _params_cls(module: str, name: str) -> type:
     from importlib import import_module
 
-    return getattr(import_module(module), name)
+    # getattr is Any-typed; the cast records the contract callers rely on.
+    return cast(type, getattr(import_module(module), name))
 
 
 class _LazyParams:
