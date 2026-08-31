@@ -174,3 +174,41 @@ class TestCooperativeSolution:
     @pytest.mark.xfail(strict=True, reason=_FORMATION_XFAIL)
     def test_experts_earn_high_team_reward(self, k):
         assert np.mean([self._mean_reward(k, s) for s in range(2)]) > 0.7
+
+
+class TestLeadRewardKeepsPayingForPrecision:
+    """The lead tracking term used the same envelope-normalised ``^10`` shape
+    the plane tasks did (see ``docs/model-review-checklist.md``, check 1),
+    which scored a lead holding 1 m and one holding 10 m within 0.0008 of each
+    other. Shifting the whole formation vertically leaves every slot error
+    untouched, so only the lead's own altitude error moves.
+    """
+
+    @staticmethod
+    def _team_reward_at(alt_err):
+        env = PlanePatrolMARL(num_wingmen=2)
+        params = env.default_params
+        _, state = env.reset(jax.random.PRNGKey(0))
+        lead = state.lead.replace(z=state.lead.target_altitude + alt_err)
+        shift = lead.z - state.lead.z
+        wingmen = tuple(w.replace(z=w.z + shift) for w in state.wingmen)
+        reward, terminated = env._reward_and_terminal(
+            state.replace(lead=lead, wingmen=wingmen), params
+        )
+        assert not bool(terminated), f"formation terminated at {alt_err} m offset"
+        return float(reward)
+
+    def test_lead_altitude_error_is_scale_free(self):
+        gains = [
+            self._team_reward_at(b) - self._team_reward_at(a)
+            for a, b in [(800, 400), (200, 100), (50, 25), (12.5, 6.25)]
+        ]
+        assert min(gains) > 0.75 * max(
+            gains
+        ), "lead reward per halving is not scale-free: " + ", ".join(
+            f"{g:.5f}" for g in gains
+        )
+
+    def test_metre_scale_lead_tracking_is_visible(self):
+        gain = self._team_reward_at(1.0) - self._team_reward_at(10.0)
+        assert gain > 0.01, f"lead reward barely sees 10 m -> 1 m: {gain:.5f}"

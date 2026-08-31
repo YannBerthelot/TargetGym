@@ -103,10 +103,38 @@ closer stops being measurable".
 
 ## Status
 
-Applied to the 2D aircraft only. The other seventeen environments still use
-their original shapes — two Gaussians on bands, the rest assorted forms built on
-`abs()` — and converting them is the reward-shaping phase in the roadmap, not a
-sweep: each needs its floor chosen from that plant's own instrumentation.
+Applied to the whole aircraft family: the 2D plane, all three 3D tasks (heading,
+circle, figure-8) and the lead term of the patrol formation, all going through
+one `log_scaled_reward` in `utils.py` rather than four transcriptions of the
+formula. The remaining environments still use their original shapes — two
+Gaussians on bands, the rest assorted forms built on `abs()` — and converting
+them is the reward-shaping phase in the roadmap, not a sweep: each needs its
+floor chosen from that plant's own instrumentation.
+
+Three floors are in use, each a sensor resolution rather than a tolerance:
+
+| Floor | Value | Source |
+| --- | --- | --- |
+| `precision_floor` | 1 m | barometric altimeter resolution |
+| `heading_precision_floor` | 0.0087 rad (0.5°) | AHRS / compass resolution |
+| `position_precision_floor` | 3 m | civil GPS horizontal accuracy |
+
+### What converting the 3D tasks turned up
+
+The two path-following tasks scored proximity with a Gaussian a tenth of the
+path radius wide — σ ≈ 1 km for a 10 km circle. Across the entire band those
+controllers actually operate in, that reward is flat: from a 100 m cross-track
+error down to 0.1 m it moves by 0.005. The log-scaled form moves by 0.43 over
+the same range.
+
+Fixing the shape then exposed a defect underneath it. The figure-8 finds its
+cross-track error by `argmin` over 400 samples of a 44 km curve, so the number
+is quantised by the sample spacing: an aircraft flying the commanded curve
+*exactly* was reported up to **66 m** off it — more than the figure-8 expert's
+own settled error, meaning the reward had been measuring its own discretisation.
+Projecting onto the two adjacent chords brings the floor below a millimetre and
+makes a known 1 m offset read as 1.000 m. A reward can only pay for precision
+its error metric can see; that is now check 11 on the model review checklist.
 
 Two things found while doing the aircraft, recorded so the phase starts from
 them:

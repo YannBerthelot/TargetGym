@@ -19,10 +19,12 @@ tracking was invisible next to coarse approach.
 *limits* rather than by a tolerance. `grep` for `_max - ..._min` inside a
 `compute_reward`.
 
-**What it finds here.** The three 3D aircraft tasks still do this — four sites
-in `plane3d/env.py`, whose docstring says it "mirrors Plane (2D)". The fix
-reached one of four aircraft tasks. The four-tank had the same defect and
-records it as its own D1, so this is the third independent instance.
+**What it finds here.** It found three more instances after the 2D aircraft: the
+three 3D tasks in `plane3d/env.py` — whose docstring claimed it "mirrors Plane
+(2D)" while doing the opposite — and the lead term of the patrol formation. All
+are now on the shared `log_scaled_reward`. The four-tank had the same defect and
+records it as its own D1, so this shape has now appeared in four separate
+places, which is the argument for the check rather than for another one-off fix.
 
 ## 2. Does the reward still pay for precision once you are close?
 
@@ -151,12 +153,50 @@ figure-eight's search converged smoothly (185 → 153 → 110 → 98 → 90 m) a
 gains really were the problem; patrol's did not, and its guidance law was.
 Structure first, then gains.
 
+## 11. Can the error metric resolve what the reward is asking for?
+
+**What went wrong.** Fixing check 1 on the figure-8 exposed a second defect
+*underneath* it. Cross-track error there is an `argmin` over 400 samples of a
+44 km curve with no sub-sample refinement, so the reported distance is quantised
+by the sample spacing: an aircraft flying the commanded curve **exactly** was
+told it was up to 66 m off it. That is larger than the expert's own settled
+error, so the reward had been scoring its own discretisation rather than the
+controller, and no reward shape could have fixed it. Projecting onto the two
+adjacent chords brought the floor under a millimetre.
+
+**How to check.** Feed the metric a state you know is perfect and check it
+returns zero, then feed it known offsets and check it returns them. Any metric
+built on `argmin`, a lookup table, a fixed grid or a finite-difference step has a
+resolution, and it has to be finer than the precision the reward is trying to
+buy.
+
+**What it applies to.** Every reward whose error is *searched for* rather than
+computed in closed form. The circle task is safe because its distance is
+analytic; the figure-8 was not.
+
 ---
 
 ## Open items this produced
 
-- `plane3d`'s three tasks still normalise their reward by the altitude envelope
-  (check 1), with a `^10` exponent, in four places.
+- The patrol slot reward is still a Gaussian on `slot_tolerance`. It is anchored
+  to a real tolerance rather than to the state space, so it is not a check-1
+  defect, but it is precision-blind in the sense of check 2. `max_slot_error`
+  (the error at which the formation is declared lost) is the natural envelope if
+  it is converted.
+- **The circle and figure-8 guidance laws do not hold their path.** Found by
+  measuring the tracking error the reward had never been able to see: over three
+  laps the circle expert wanders 640-1670 m from an 8.4 km circle and the
+  figure-8 expert sits 6-12 km from a curve 8.4 km across. Both altitude loops
+  are fine (0.2-1.5 m), which is what the tuning runs measured -- the
+  cross-track error was never measured. Recorded as a strict xfail in
+  `tests/plane3d/test_plane3d_env.py`. By check 10 this is a structural fault,
+  not a gains fault.
+- **A test episode shorter than the task's own period proves nothing.** These
+  tasks are exercised over `max_steps_in_episode=200`, which at `dt = 1 s` is
+  200 s against a 264 s lap, and the aircraft is initialised exactly on the
+  path -- so a controller that simply flies straight ahead looks correct for the
+  whole episode. Every periodic or path-following task needs an episode of
+  several periods before any expert-quality claim about it means anything.
 - The reward-shaping phase in the roadmap should apply checks 1 and 2 to every
   environment with a band or tolerance parameter.
 - Checks 3, 4 and 6 are automatable and could join the conformance suite.

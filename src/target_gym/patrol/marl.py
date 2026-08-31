@@ -48,6 +48,7 @@ from target_gym.plane3d.env import (
     get_obs_heading,
     wrap_angle,
 )
+from target_gym.utils import log_scaled_reward
 
 LEAD = "lead"
 MAX_WINGMEN = 4
@@ -172,16 +173,20 @@ class PlanePatrolMARL:
     # -- reward & termination ---------------------------------------------
     def _reward_and_terminal(self, state: FormationState, params: PatrolMARLParams):
         lead = state.lead
-        max_alt_diff = params.max_alt - params.min_alt
-        alt_base = jnp.clip(
-            (max_alt_diff - jnp.abs(lead.target_altitude - lead.z)) / max_alt_diff,
-            0.0,
-            1.0,
+        # Log-scaled in both errors, matching the 2D/3D plane tasks: an
+        # envelope-normalised reward spends its whole dynamic range on errors
+        # the lead has already eliminated (see ``log_scaled_reward``).
+        alt_r = log_scaled_reward(
+            jnp.abs(lead.target_altitude - lead.z),
+            params.precision_floor,
+            params.max_alt - params.min_alt,
         )
-        hdg_base = jnp.clip(
-            1.0 - jnp.abs(wrap_angle(lead.psi - lead.target_heading)) / jnp.pi, 0.0, 1.0
+        hdg_r = log_scaled_reward(
+            jnp.abs(wrap_angle(lead.psi - lead.target_heading)),
+            params.heading_precision_floor,
+            jnp.pi,
         )
-        lead_r = (alt_base**10) * (hdg_base**10)
+        lead_r = alt_r * hdg_r
 
         track_terms, errs = [], []
         for i, w in enumerate(state.wingmen):

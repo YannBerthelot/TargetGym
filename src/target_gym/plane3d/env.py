@@ -33,6 +33,7 @@ from target_gym.plane3d.dynamics import (
     compute_psi,
     compute_velocity_3d,
 )
+from target_gym.utils import log_scaled_reward
 
 
 @struct.dataclass
@@ -170,6 +171,12 @@ class PlaneParams3D(EnvParams):
     target_altitude_range: Tuple[float, float] = (3_000.0, 8_000.0)
     target_heading_range: Tuple[float, float] = (-3.14159, 3.14159)
     target_radius_range: Tuple[float, float] = (8_000.0, 12_000.0)  # m
+
+    # Reward precision floors -- the finest error each sensor can resolve.
+    # Below these the reward saturates, because "improving" further is noise.
+    precision_floor: float = 1.0  # m, barometric altimeter resolution
+    heading_precision_floor: float = 0.0087  # rad (~0.5 deg), AHRS/compass
+    position_precision_floor: float = 3.0  # m, civil GPS horizontal accuracy
     # Figure-8: half-amplitude of the altitude twist (meters).  The curve
     # altitude is z_mean ± this value, so the two crossover passes differ
     # by 2× this.  200 m ≈ 660 ft — gentle enough for an A320 but enough
@@ -225,10 +232,34 @@ def wrap_angle(angle):
 
 def altitude_reward(state, params, xp=jnp):
     """Altitude tracking component, shared by all tasks."""
-    max_alt_diff = params.max_alt - params.min_alt
-    return xp.float_power(
-        (max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff,
-        10.0,
+    return log_scaled_reward(
+        xp.abs(state.target_altitude - state.z),
+        params.precision_floor,
+        params.max_alt - params.min_alt,
+        xp,
+    )
+
+
+def heading_reward(state, params, xp=jnp):
+    """Heading tracking component, log-scaled over the full +/-pi range."""
+    return log_scaled_reward(
+        xp.abs(wrap_angle(state.psi - state.target_heading)),
+        params.heading_precision_floor,
+        jnp.pi,
+        xp,
+    )
+
+
+def path_reward(dist, state, params, xp=jnp):
+    """Path-proximity component, normalised by the radius.
+
+    Using ``target_radius`` as the envelope keeps the reward independent of the
+    size of the commanded path, and the aircraft starts *on* the path in both
+    path-following tasks, so the ``dist >= radius`` floor is only reached by a
+    controller that has already lost the shape entirely.
+    """
+    return log_scaled_reward(
+        dist, params.position_precision_floor, state.target_radius, xp
     )
 
 
@@ -241,25 +272,19 @@ def terminal_penalty(state, params, xp=jnp):
 
 
 def compute_reward_heading(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
-    """Reward: multiplicative altitude * heading, both with ^10 sharp shaping.
+    """Reward: multiplicative altitude * heading, both log-scaled in the error.
 
-    Mirrors Plane (2D) altitude reward and extends it with a heading factor,
-    so the task is "Plane + heading" rather than an additive simplification.
-    Multiplicative composition requires both objectives to be met; ^10 makes
-    the reward numerically discriminative. Crash penalty matches Plane 2D.
+    Mirrors the Plane (2D) altitude reward and extends it with a heading
+    factor, so the task is "Plane + heading" rather than an additive
+    simplification.  Multiplicative composition requires *both* objectives to
+    be met.  Each factor is log-scaled (see ``log_scaled_reward``) so the
+    reward keeps discriminating all the way down to sensor resolution instead
+    of saturating a few hundred metres from the target.  Crash penalty matches
+    Plane 2D.
     """
     done_alt = terminal_penalty(state, params, xp)
-    max_alt_diff = params.max_alt - params.min_alt
-    alt_base = xp.clip(
-        (max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff,
-        0.0,
-        1.0,
-    )
-    alt_r = alt_base**10
-    heading_diff = xp.abs(wrap_angle(state.psi - state.target_heading))
-    heading_base = xp.clip(1.0 - heading_diff / jnp.pi, 0.0, 1.0)
-    heading_r = heading_base**10
-    return xp.where(done_alt, -1.0 * params.max_steps_in_episode, alt_r * heading_r)
+    reward = altitude_reward(state, params, xp) * heading_reward(state, params, xp)
+    return xp.where(done_alt, -1.0 * params.max_steps_in_episode, reward)
 
 
 # ─── Circle task reward ─────────────────────────────────
@@ -274,12 +299,11 @@ def distance_to_circle(state: PlaneState3D):
 
 
 def compute_reward_circle(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
-    """Reward: altitude tracking * proximity to the circle path."""
+    """Reward: altitude tracking * proximity to the circle path, both log-scaled."""
     done_alt = terminal_penalty(state, params, xp)
     alt_r = altitude_reward(state, params, xp)
     d = xp.abs(distance_to_circle(state))
-    # Normalize by radius so reward doesn't depend on circle size
-    circle_r = xp.exp(-0.5 * (d / (state.target_radius * 0.1)) ** 2)
+    circle_r = path_reward(d, state, params, xp)
     return xp.where(done_alt, -1.0 * params.max_steps_in_episode, alt_r * circle_r)
 
 
@@ -338,10 +362,33 @@ def nearest_point_on_twisted_lemniscate(state: PlaneState3D, params: PlaneParams
     dists_sq = dx**2 + dy**2 + dz**2
     idx = jnp.argmin(dists_sq)
 
-    nearest_dx = dx[idx]
-    nearest_dy = dy[idx]
-    nearest_dz = dz[idx]
-    dist = jnp.sqrt(dists_sq[idx] + 1e-8)
+    # Sub-sample refinement.  The coarse argmin is quantised by the sample
+    # spacing (~100 m for a 44 km lemniscate at 400 samples), so an aircraft
+    # flying *exactly* along the commanded curve is reported up to half a
+    # spacing off it -- an order of magnitude more than the tracking error the
+    # reward is meant to resolve, which floors how precisely any controller can
+    # be scored.  Projecting onto the two adjacent chords instead leaves only
+    # the curve's sagitta over one segment, which is sub-metre here.
+    pts = jnp.stack([curve_x, curve_y, curve_z], axis=-1)
+    pos = jnp.array([state.x, state.y, state.z])
+    anchor = pts[idx]
+
+    def _project_onto_chord(other):
+        chord = other - anchor
+        t = jnp.clip(
+            jnp.dot(pos - anchor, chord) / (jnp.dot(chord, chord) + 1e-12), 0.0, 1.0
+        )
+        return anchor + t * chord
+
+    idx_fwd = (idx + 1) % _N_CURVE_SAMPLES
+    idx_bwd = (idx - 1) % _N_CURVE_SAMPLES
+    candidates = jnp.stack(
+        [_project_onto_chord(pts[idx_fwd]), _project_onto_chord(pts[idx_bwd])]
+    )
+    delta = candidates[jnp.argmin(jnp.sum((candidates - pos) ** 2, axis=-1))] - pos
+
+    nearest_dx, nearest_dy, nearest_dz = delta[0], delta[1], delta[2]
+    dist = jnp.sqrt(jnp.sum(delta**2) + 1e-8)
 
     # Tangent via central finite differences (wrapping around)
     idx_next = (idx + 1) % _N_CURVE_SAMPLES
@@ -374,7 +421,7 @@ def distance_to_lemniscate(state: PlaneState3D):
 
 
 def compute_reward_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
-    """Reward: Gaussian on 3D distance to the twisted lemniscate.
+    """Reward: log-scaled 3D distance to the twisted lemniscate.
 
     Pure shape tracking — no moving reference, no shape backstop.  The 3D
     twist makes crossovers unambiguous (different altitudes), so the reward
@@ -382,8 +429,7 @@ def compute_reward_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     """
     done_alt = terminal_penalty(state, params, xp)
     _, _, _, dist, _ = nearest_point_on_twisted_lemniscate(state, params)
-    sigma = state.target_radius * 0.1
-    track_r = xp.exp(-0.5 * (dist / sigma) ** 2)
+    track_r = path_reward(dist, state, params, xp)
     return xp.where(done_alt, -1.0 * params.max_steps_in_episode, track_r)
 
 

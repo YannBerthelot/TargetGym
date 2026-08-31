@@ -21,6 +21,28 @@ def compute_norm_from_coordinates(coordinates: jnp.ndarray) -> float:
     return jnp.linalg.norm(coordinates, axis=0)
 
 
+def log_scaled_reward(error, floor, envelope, xp=jnp):
+    """Tracking reward that keeps paying for precision.
+
+    Returns 1.0 at zero error and 0.0 at ``envelope``.
+
+    A reward normalised by the state-space envelope (``1 - e/E``, however
+    sharply exponentiated) spends nearly all of its dynamic range on errors the
+    controller has already eliminated: with ``E`` = 12 km, the gap between a
+    10 m and a 1 m altitude error is under 0.001, so the reward cannot tell a
+    good controller from a great one.  Scaling in ``log(error)`` instead pays a
+    *constant* increment for every halving of the error, all the way down to
+    ``floor`` -- the finest error the corresponding sensor can resolve, below
+    which further "improvement" is measuring noise.
+
+    Args:
+        error: absolute tracking error, in the same units as the other two.
+        floor: sensor resolution; the error scale below which reward saturates.
+        envelope: the error at which the reward reaches 0.
+    """
+    return xp.clip(1.0 - xp.log1p(error / floor) / xp.log1p(envelope / floor), 0.0, 1.0)
+
+
 def plot_curve(data, name, folder="figs"):
     fig, ax = plt.subplots()
     ax.plot(data)
