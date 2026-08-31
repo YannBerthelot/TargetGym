@@ -102,11 +102,34 @@ physics.
 
 ## 5. Known deviations
 
-**⚠️ D1 — no yaw axis.** Turns are coordinated by assumption rather than by a
-rudder. A real aircraft rolling into a turn suffers adverse yaw and needs
-rudder to stay coordinated; here sideslip simply does not exist. This is the
-single largest simplification, and it is why the regime of validity stops
-around 45° of bank.
+**⚠️ D1 — no yaw axis, and it costs less than it appears to.** Turns are
+coordinated by assumption rather than by a rudder: there is no sideslip state,
+so adverse yaw and the fin's response to it are not modelled.
+
+This was recorded as the single largest simplification and as the reason
+validity stops near 45° of bank. Measurement does not support either claim.
+Solving the steady balance a rudderless turn would reach — the fin's
+weathercock moment against yaw damping, `C_nβ·β + C_nr·(r·b/2V) = 0`, with
+transport derivatives `C_nβ = 0.12`, `C_nr = −0.15` — gives a sideslip of
+0.06° at 15° of bank and **0.97° at 60° of bank and 150 m/s**, the most extreme
+corner of the envelope. The drag that sideslip adds, taking the fuselage and fin
+side-on as a flat plate, is at most **0.7 % of cruise drag**. Full-aileron
+adverse yaw contributes a further 1.25°, transiently.
+
+A large transport is strongly weathercock-stable and turns slowly, so the
+coordinated-turn assumption is a good one for *this* aircraft. Adding the axis
+would change the forces by well under a percent while adding a state, a control
+and four unsourced derivatives.
+
+What actually limits steep turns is load factor, and the model already captures
+it: `n = 1/cos φ`, so 60° of bank needs `CL = 1.42` at 150 m/s against a CL_max
+of 1.56, and 75° needs 2.74, which the wing cannot make. The aircraft is refused
+the turn by the lift it cannot generate, not by a missing axis.
+
+The deviation stays open because the axis genuinely is absent — a rudder input,
+a sideslip-induced roll (dihedral effect) and engine-out asymmetry are all
+outside the model. But it is a limit on *scope*, not an error in the regime the
+model claims.
 
 **⚠️ D2 — aileron authority is not calibrated.** `aileron_surface`,
 `moment_arm_aileron` and `aileron_response_rate` are plausible rather than
