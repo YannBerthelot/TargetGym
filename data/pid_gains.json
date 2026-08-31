@@ -150,9 +150,9 @@
   },
   "plane3d_figure8": {
     "alt": {
-      "Kp": 0.00037733,
-      "Ki": 9.45e-06,
-      "Kd": 0.00478835
+      "Kp": 0.001817,
+      "Ki": 3.477e-05,
+      "Kd": 0.0134
     },
     "hdg": {
       "Kp": 2.743515,
@@ -168,7 +168,7 @@
       "Kd": 0.00646025
     },
     "power": 0.6,
-    "note": "Sequential relay autotuning: bank \u2192 heading \u2192 altitude stick \u2192 altitude power."
+    "note": "Altitude loop re-searched against measured tracking error. The previous gains left it oscillating: the signed altitude error averaged only -5 to -28 m while its standard deviation was 67 to 333 m, with no correlation to bank angle, so the loop was neither drifting nor losing height in the turns -- it was swinging. All three gains wanted to rise by three to five times, which is an under-gained loop rather than an under-damped one. Mean tracking error over five seeds falls from 185 m to 90 m. Sequential relay autotuning: bank \u2192 heading \u2192 altitude stick \u2192 altitude power."
   },
   "reactor": {
     "Kp": 2.265556,
