@@ -23,6 +23,7 @@ from target_gym.plane.dynamics import (
     step_key,
     total_wind_2d,
 )
+from target_gym.utils import log_scaled_reward
 
 DEBUG = False
 
@@ -238,20 +239,18 @@ def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
     """Return reward for a given state. Safe for JIT."""
     xp = jnp
     done_alt = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
-    max_alt_diff = params.max_alt - params.min_alt
-    error = xp.abs(state.target_altitude - state.z)
     # Log-scaled tracking: every halving of the error is worth the same, so
     # holding 1 m is rewarded over 2 m exactly as much as 100 m is over 200 m.
-    # ``max_alt_diff`` only normalises the result into [0, 1]; unlike the old
-    # reward it does not set the sensitivity, because the shape is logarithmic
-    # and therefore scale-free.
-    scale = xp.log1p(max_alt_diff / params.precision_floor)
-    reward = xp.where(
-        done_alt,
-        -1.0 * params.max_steps_in_episode,
-        1.0 - xp.log1p(error / params.precision_floor) / scale,
+    # The altitude envelope only normalises the result into [0, 1]; unlike the
+    # old reward it does not set the sensitivity, because the shape is
+    # logarithmic and therefore scale-free.
+    tracking = log_scaled_reward(
+        xp.abs(state.target_altitude - state.z),
+        params.precision_floor,
+        params.max_alt - params.min_alt,
+        xp,
     )
-    return reward
+    return xp.where(done_alt, -1.0 * params.max_steps_in_episode, tracking)
 
 
 def get_obs(state: PlaneState, xp=jnp):

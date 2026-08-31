@@ -98,6 +98,47 @@ Three tasks share these dynamics and differ only in the reference:
 **Patrol** adds a second aircraft and a slot defined relative to it, but no new
 physics.
 
+### The tracking reward
+
+Every task composes its objectives multiplicatively — both must be met, not one
+traded against the other — and each factor is the same log-scaled shape the 2D
+aircraft uses (`plane/PHYSICS.md` §5, `docs/reward-shaping.md`):
+
+```
+reward = 1 - log1p(error / floor) / log1p(envelope / floor)
+```
+
+| Task | Factors | Envelope | Floor |
+| --- | --- | --- | --- |
+| Heading | altitude × heading | 12 191 m, π rad | 1 m, 0.0087 rad |
+| Circle | altitude × cross-track | 12 191 m, `target_radius` | 1 m, 3 m |
+| Figure-8 | 3D distance to the curve | `target_radius` | 3 m |
+
+Normalising the path terms by `target_radius` keeps the reward independent of
+the size of the commanded path, and the aircraft starts *on* the path in both
+path-following tasks, so the point where the reward reaches zero is only reached
+by a controller that has already lost the shape entirely.
+
+Each floor is an instrument resolution rather than a chosen tolerance: 1 m for a
+barometric altimeter, 0.5° for an AHRS, 3 m for civil GPS. The reward pays for
+every halving of the error down to that point and only flattens beneath it,
+where further "improvement" would be chasing measurement noise.
+
+Until the reward was converted, all three tasks divided the error by the
+altitude envelope and raised it to the tenth power, and the two path tasks used
+a Gaussian a tenth of the path radius wide. Both are near-flat over the range a
+working controller occupies — the second scored a 0.1 m and a 100 m cross-track
+error within 0.005 of each other — which makes the PID-versus-RL comparison the
+suite exists for unmeasurable.
+
+**Cross-track error on the figure-8 is searched, not solved.** There is no
+closed form for the nearest point on the twisted lemniscate, so it is an
+`argmin` over 400 samples of the curve refined by projection onto the two
+adjacent chords. Without that refinement the result is quantised by the sample
+spacing (~100 m), and an aircraft flying the curve exactly is reported up to
+66 m off it; with it the residual is the curve's sagitta over one segment, below
+a millimetre. The circle needs none of this — its distance is analytic.
+
 ---
 
 ## 5. Known deviations

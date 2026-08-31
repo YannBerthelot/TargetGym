@@ -162,7 +162,11 @@ target-version = "py311"
 select = ["F", "E4", "E9", "I"]
 
 [tool.mypy]
-python_version = "3.11"
+# No ``python_version`` pin. Pinning it makes mypy parse *every* file it reads
+# under that grammar, including the installed stubs of third-party packages --
+# and jax's ``numpy/__init__.pyi`` uses PEP 695 type parameter lists, which are
+# a syntax error before 3.12. That broke the 3.13 and 3.14 CI jobs while 3.11
+# passed. Each matrix job should type-check against the version it runs on.
 # Most third-party scientific packages ship no stubs (casadi, chex, do_mpc,
 # gymnax, optax, tqdm, moviepy). Their absence is not a defect in this code.
 ignore_missing_imports = true

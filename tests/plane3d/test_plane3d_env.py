@@ -2,6 +2,7 @@
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from target_gym.plane3d.env import (
@@ -11,6 +12,7 @@ from target_gym.plane3d.env import (
     compute_reward_figure8,
     compute_reward_heading,
     distance_to_circle,
+    nearest_point_on_twisted_lemniscate,
     wrap_angle,
 )
 from target_gym.plane3d.env_jax import (
@@ -293,8 +295,6 @@ class TestFigureEightReset:
 
     def test_starts_on_twisted_lemniscate(self):
         """Aircraft starts on the 3D twisted lemniscate."""
-        from target_gym.plane3d.env import nearest_point_on_twisted_lemniscate
-
         env = Plane3DFigureEight()
         key = jax.random.PRNGKey(42)
         params = env.default_params
@@ -486,3 +486,192 @@ def test_aileron_cannot_out_lift_the_wing():
         f"full aileron commands a section lift change of {delta_cl:.2f} against "
         f"a CL_max of {p.CL_max}"
     )
+
+
+# ─── Reward precision (see docs/model-review-checklist.md, check 1) ─────
+
+
+def _heading_reward_at(alt_err=0.0, hdg_err=0.0):
+    """Heading-task reward with one axis perturbed and the other on target."""
+    _, state = Plane3DHeading().reset(jax.random.PRNGKey(0))
+    state = state.replace(
+        z=state.target_altitude + alt_err, psi=state.target_heading + hdg_err
+    )
+    return float(compute_reward_heading(state, PlaneParams3D()))
+
+
+def _circle_reward_at(cross_track):
+    """Circle-task reward at a known radial offset, at the target altitude."""
+    _, state = Plane3DCircle().reset(jax.random.PRNGKey(0))
+    state = state.replace(
+        x=state.target_x + state.target_radius + cross_track,
+        y=state.target_y,
+        z=state.target_altitude,
+    )
+    return float(compute_reward_circle(state, PlaneParams3D()))
+
+
+def _assert_scale_free(reward_at, pairs, axis):
+    """Every halving of the error must be worth about the same."""
+    gains = [reward_at(b) - reward_at(a) for a, b in pairs]
+    assert min(gains) > 0.75 * max(
+        gains
+    ), f"{axis} reward per halving is not scale-free: " + ", ".join(
+        f"{g:.4f}" for g in gains
+    )
+
+
+class TestRewardKeepsPayingForPrecision:
+    """The property the benchmark exists to measure.
+
+    TargetGym asks whether a learned policy can hold a setpoint better than a
+    PID, so every tracking reward has to keep discriminating all the way down
+    to sensor resolution.  These tasks previously normalised the error by the
+    *state-space envelope* (``(1 - e/12 km)**10``) and by a Gaussian a tenth of
+    the path radius wide, which spent the whole dynamic range on errors the
+    controller had already eliminated: the gap between a 10 m and a 1 m
+    altitude error was 0.0008, and between a 10 m and a 1 m cross-track error
+    it was 5e-5.  Both are invisible next to a return of order 1.
+    """
+
+    def test_altitude_error_is_scale_free(self):
+        _assert_scale_free(
+            lambda e: _heading_reward_at(alt_err=e),
+            [(1600, 800), (400, 200), (100, 50), (25, 12.5), (6.25, 3.125)],
+            "altitude",
+        )
+
+    def test_heading_error_is_scale_free(self):
+        _assert_scale_free(
+            lambda e: _heading_reward_at(hdg_err=jnp.deg2rad(e)),
+            [(64, 32), (16, 8), (4, 2)],
+            "heading",
+        )
+
+    def test_cross_track_error_is_scale_free(self):
+        _assert_scale_free(
+            _circle_reward_at,
+            [(1600, 800), (400, 200), (100, 50), (25, 12.5)],
+            "cross-track",
+        )
+
+    def test_metre_scale_tracking_is_visible(self):
+        """A tenfold improvement must move the reward by more than rounding."""
+        alt_gain = _heading_reward_at(alt_err=1.0) - _heading_reward_at(alt_err=10.0)
+        assert (
+            alt_gain > 0.1
+        ), f"altitude reward barely sees a 10 m -> 1 m improvement: {alt_gain:.4f}"
+        track_gain = _circle_reward_at(1.0) - _circle_reward_at(10.0)
+        assert (
+            track_gain > 0.1
+        ), f"cross-track reward barely sees a 10 m -> 1 m improvement: {track_gain:.4f}"
+
+    def test_reward_still_orders_states_far_from_the_path(self):
+        """A drifting agent must still be able to tell it is drifting.
+
+        The Gaussian this replaced underflowed to identically zero out here,
+        leaving nothing but the terminal penalty to follow home.
+        """
+        near, far = _circle_reward_at(1600.0), _circle_reward_at(4000.0)
+        assert near > far > 0.0, f"no ordering far out: {near:.3e} vs {far:.3e}"
+
+
+class TestLemniscateDistanceResolution:
+    def test_distance_is_not_quantised_by_the_curve_sampling(self):
+        """An aircraft flying the curve exactly must be told it is on it.
+
+        The nearest-point search is an argmin over 400 samples of a ~44 km
+        curve, so without sub-sample refinement it reported a perfectly flown
+        aircraft as up to 66 m off -- above the figure-8 expert's own settled
+        error, meaning the reward was scoring its own discretisation rather
+        than the controller.
+        """
+        from target_gym.plane3d.env import _sample_twisted_lemniscate
+
+        params = PlaneParams3D()
+        _, state = Plane3DFigureEight().reset(jax.random.PRNGKey(0))
+        cx, cy, cz = _sample_twisted_lemniscate(state, params)
+        for i in (0, 50, 100, 150, 199):
+            midpoint = state.replace(
+                x=(cx[i] + cx[i + 1]) / 2,
+                y=(cy[i] + cy[i + 1]) / 2,
+                z=(cz[i] + cz[i + 1]) / 2,
+            )
+            dist = float(nearest_point_on_twisted_lemniscate(midpoint, params)[3])
+            assert dist < 1.0, f"on-curve point at sample {i} reported {dist:.1f} m off"
+
+    def test_known_offset_is_measured_accurately(self):
+        from target_gym.plane3d.env import nearest_point_on_twisted_lemniscate
+
+        params = PlaneParams3D()
+        _, state = Plane3DFigureEight().reset(jax.random.PRNGKey(0))
+        for offset in (100.0, 10.0, 1.0):
+            dist = float(
+                nearest_point_on_twisted_lemniscate(
+                    state.replace(z=state.z + offset), params
+                )[3]
+            )
+            assert dist == pytest.approx(
+                offset, rel=0.01
+            ), f"{offset} m vertical offset measured as {dist:.3f} m"
+
+
+_PATH_FOLLOWING_XFAIL = (
+    "The path guidance laws do not hold their path. Over three laps the circle "
+    "expert wanders 640-1670 m from an 8.4 km circle without ever settling, and "
+    "the figure-8 expert is 6-12 km from a curve whose lobes are 8.4 km across, "
+    "i.e. not following it at all. Their altitude loops are fine (0.2-1.5 m), "
+    "which is what the tuning runs measured; the cross-track error was never "
+    "measured. Nothing else sees this: every other test runs the 200-step "
+    "episode from EnvSpec.test_params, which is 200 s against a 264 s lap, and "
+    "the aircraft is initialised exactly on the path -- so a controller that "
+    "simply flies straight ahead looks correct for the whole episode. This is a "
+    "guidance-law fault, not a gains fault (see docs/model-review-checklist.md "
+    "check 10), and is tracked as an open item there."
+)
+
+
+@pytest.mark.slow
+@pytest.mark.xfail(strict=True, reason=_PATH_FOLLOWING_XFAIL)
+@pytest.mark.parametrize(
+    "make_env, error_fn",
+    [
+        (Plane3DCircle, lambda s, p: abs(float(distance_to_circle(s)))),
+        (
+            Plane3DFigureEight,
+            lambda s, p: float(nearest_point_on_twisted_lemniscate(s, p)[3]),
+        ),
+    ],
+    ids=["circle", "figure8"],
+)
+def test_path_experts_hold_their_path_for_three_laps(make_env, error_fn):
+    """A path-following expert must still be on its path after a few laps.
+
+    The bar is 100 m -- about 1% of the path radius, and far looser than the
+    3 m position floor the reward is scaled to -- so it fails only a controller
+    that is not following the path at all.
+    """
+    from target_gym.registry import REGISTRY
+
+    spec = REGISTRY[
+        "plane3d_circle" if make_env is Plane3DCircle else "plane3d_figure8"
+    ]
+    params = PlaneParams3D(max_steps_in_episode=800)
+    env = spec.make_env()
+    step = jax.jit(env.step_env)
+    pid = spec.make_pid()
+    pid.reset()
+    key = jax.random.PRNGKey(0)
+    obs, state = env.reset_env(key, params)
+
+    errors = []
+    for _ in range(int(params.max_steps_in_episode)):
+        obs, state, _, terminated, _ = step(
+            key, state, jnp.atleast_1d(jnp.asarray(pid(obs))), params
+        )
+        errors.append(error_fn(state, params))
+        if bool(terminated):
+            break
+
+    settled = float(np.mean(errors[int(0.8 * len(errors)) :]))
+    assert settled < 100.0, f"settled {settled:.0f} m from the commanded path"
