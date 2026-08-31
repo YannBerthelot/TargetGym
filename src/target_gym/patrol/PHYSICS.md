@@ -121,7 +121,27 @@ records it so the gap is documented rather than silent.
 
 ## 6. Known deviations
 
-**D1 — the expert completes 4 of 8 seeds.** The shipped pursuit expert holds
+**D1 — the expert is geometry-sensitive, not mistuned.**
+
+Retuning was attempted after the aerodynamic corrections, on the theory that
+gains fitted to the old plant were the problem. The measurement says otherwise.
+Holding the gains fixed and varying only the seed — which sets the commanded
+slot and the lead's turn rate — the settled slot error is 12.6 m on one seed,
+151 m on another, and 302 m with a departure on a third. One of those is well
+inside the 60 m tolerance: the controller can hold formation, on some
+geometries.
+
+The objective is chaotic in the gains too. Perturbing `Kp_bank` by **0.1 %**
+moves the three-seed mean from 241 m to 118 m, and a two-stage search found a
+point scoring 91.5 m whose own neighbourhood then scored 257 m. Any gain set
+chosen this way is fitted to which side of a stability boundary each seed lands
+on, not to the plant — which is why none was shipped from the exercise.
+
+The bearing-only variant behaves identically (4.8 m on one seed, departures on
+two others), and so does the figure-eight path follower (63 m to 376 m across
+four seeds). The pattern belongs to the guidance law these three share.
+
+**Original note.** The expert completes 4 of 8 seeds. The shipped pursuit expert holds
 formation on the seeds it completes but departs on the others. The departures
 are a lateral bank pilot-induced oscillation: the roll command and the
 cross-track error feed each other until the bank angle diverges. Two candidate
