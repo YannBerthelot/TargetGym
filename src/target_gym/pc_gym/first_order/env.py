@@ -59,7 +59,12 @@ def compute_next_state(
     return state.replace(x=x, u=u, time=state.time + 1), metrics
 
 
-@partial(jax.jit, static_argnames=["params"])
+# Deliberately not jitted. It was decorated with
+# ``@partial(jax.jit, static_argnames=["params"])``, which keys the compilation
+# cache on the params object: a fresh ``Params(...)`` -- what every sweep, tuner
+# and MPC builds -- was a cache miss and a full recompile, measured at ~1600x the
+# cost of a cached call. Callers that want it fused already jit ``step_env``,
+# which traces this inline.
 def get_obs(state: FirstOrderState, params: FirstOrderParams):
     return jnp.array([state.x, state.target_x])
 

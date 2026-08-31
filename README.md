@@ -454,7 +454,19 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 * [ ] **Drop the git dependency on `gymnax`.** The tested configuration pins
       upstream `main` because the gymnasium bound this project needs is merged
       but unreleased, so that configuration cannot be reproduced from PyPI alone.
-* [ ] **Move off the Alpha classifier** once the three above are settled.
+* [ ] **A performance phase.** Throughput has never been optimised deliberately;
+      the first pass found a nested `jax.jit` keyed on the params object that
+      cost a full recompile per parameter set. Worth a systematic look at the
+      slowest environments (distillation and the cement kiln are under
+      1 M steps/s) before the numbers in the README are published as a claim.
+* [ ] **A reward-shaping phase.** The rewards were written per environment as
+      each was added, and the shaping conventions have drifted -- Gaussian
+      versus quadratic tracking terms, differing crash penalties, differing
+      treatment of the target band. A learned policy's score is only comparable
+      across environments if the shaping is coherent, and `plane-reward-exponent`
+      (a tracking exponent of 10 versus 2, a pseudo-Huber cost) is unfinished
+      work in exactly this area.
+* [ ] **Move off the Alpha classifier** once the others above are settled.
 
 ### Known gaps
 
