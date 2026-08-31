@@ -292,15 +292,21 @@ def aero_coefficients(aoa_deg, mach, params):
     # compressibility effect, and Prandtl-Glauert has no business scaling it.
     separated = 1.0 / (1.0 + jnp.exp(-(jnp.abs(aoa_deg) - stall_centre) * 1.5))
     aoa_rad = jnp.deg2rad(aoa_deg)
-    CL_plate = jnp.sin(2.0 * aoa_rad)
-    CD_plate = params.cd0 + 2.0 * jnp.sin(aoa_rad) ** 2
+    # Peak normal-force coefficient of the separated wing. A 2D flat plate
+    # reaches 2; a finite wing reaches less, because flow relieves around the
+    # tips. Viterna & Corrigan (1981) give CD_max = 1.11 + 0.018 AR for the
+    # fully separated case, which for this wing's AR of 9.48 is 1.28 -- so this
+    # is the wing's own geometry rather than an assumed value.
+    cn_max = 1.11 + 0.018 * params.aspect_ratio
+    CL_plate = 0.5 * cn_max * jnp.sin(2.0 * aoa_rad)
+    CD_plate = params.cd0 + cn_max * jnp.sin(aoa_rad) ** 2
     CL = (1.0 - separated) * CL + separated * CL_plate
     CD = (1.0 - separated) * CD + separated * CD_plate
 
     CL = jnp.clip(CL, -2.0, 2.0)  # typical A320: max lift ~1.5-1.7
     # Upper bound is now the flat plate's ~2.0, not 1.0: the old cap predates
     # there being any post-stall drag to accommodate.
-    CD = jnp.clip(CD, 0.0, 2.1)
+    CD = jnp.clip(CD, 0.0, 2.1)  # headroom over the separated wing's ~1.3
 
     return CL, CD
 

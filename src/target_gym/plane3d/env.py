@@ -104,6 +104,10 @@ class PlaneParams3D(EnvParams):
     stick_response_rate: float = 0.9
     aileron_response_rate: float = 0.9
 
+    # span^2 / S for the A320. PlaneParams3D does not inherit from PlaneParams,
+    # so the shared aerodynamics needs its own copy; the value matches.
+    aspect_ratio: float = 9.48
+
     # Aero coefficients (shared with 2D)
     # Finite-wing lift-curve slope, derived (PHYSICS.md 4):
     #   a = a0 / (1 + a0/(pi*AR*e))  with a0 = 2*pi/rad, AR = 34.1^2/122.6 = 9.48,

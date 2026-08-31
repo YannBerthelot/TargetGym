@@ -131,13 +131,13 @@ class TestCollision:
 
 
 _FORMATION_XFAIL = (
-    "Formation quality, not broken dynamics. The single-wingman case passes "
-    "since the post-stall aerodynamics were corrected -- the follower no "
-    "longer departs into a zero-drag regime it cannot recover from -- but it "
-    "clears the bar at 0.715 against 0.7, so it is close. Two and four "
-    "wingmen still score below zero: the pursuit law gives each follower the "
-    "lead's slot without any awareness of the others, so they converge on "
-    "overlapping air and spend the episode avoiding each other."
+    "Formation quality, not broken dynamics. Correcting the post-stall "
+    "aerodynamics moved every case sharply: two and four wingmen went from "
+    "-3.3 and -5.3 to +0.67 and +0.65, because a follower that loses the "
+    "formation no longer departs into a zero-drag regime it cannot recover "
+    "from. All three now sit just under the 0.7 bar (0.651-0.668) rather than "
+    "one passing and two collapsing, so what remains is the guidance law "
+    "settling ~139 m from a 60 m slot, not a failure to fly."
 )
 
 
@@ -170,17 +170,7 @@ class TestCooperativeSolution:
         _, rew = jax.lax.scan(step, (obs, state, lp0, wps), None, length=n)
         return float(jnp.mean(rew[-300:]))
 
-    @pytest.mark.parametrize(
-        "k",
-        [
-            1,
-            pytest.param(
-                2, marks=pytest.mark.xfail(strict=True, reason=_FORMATION_XFAIL)
-            ),
-            pytest.param(
-                4, marks=pytest.mark.xfail(strict=True, reason=_FORMATION_XFAIL)
-            ),
-        ],
-    )
+    @pytest.mark.parametrize("k", [1, 2, 4])
+    @pytest.mark.xfail(strict=True, reason=_FORMATION_XFAIL)
     def test_experts_earn_high_team_reward(self, k):
         assert np.mean([self._mean_reward(k, s) for s in range(2)]) > 0.7

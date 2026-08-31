@@ -115,9 +115,19 @@ exactly as separation takes it away:
 CL -> sin 2a        CD -> cd0 + 2 sin^2 a
 ```
 
-giving CD ≈ 2 with the wing side-on, CL = 1 at 45°, and a lift curve that peaks
-at 1.56, breaks to 0.57 at 19° (36 % of peak) and recovers to 1.0 at 45° — the
-shape a real wing shows. Incidence is wrapped into ±180° first, because the
+where `C_N_max = 1.11 + 0.018·AR` — Viterna & Corrigan (1981) for a finite
+wing, so the magnitude comes from the aspect ratio the geometry already fixes
+rather than being assumed. A 2D flat plate would reach 2.0; this wing, relieving
+around its tips, reaches 1.28. The result is CD ≈ 1.30 with the wing side-on and
+a lift curve that peaks at 1.56, breaks to 0.38 at 19° (24 % of peak) and
+recovers to 0.64 at 45° — the shape a real wing shows.
+
+Full Viterna was tried for the whole post-stall branch and rejected on evidence:
+anchored at the stall point it is continuous by construction, but it declines
+only to 69 % of peak, so it has no stall *break*. It is built for wind-turbine
+blades, where the transition is gentle. A transport wing breaks sharply, and
+that break is the behaviour that makes a stall dangerous, so only its
+finite-wing magnitude is borrowed. Incidence is wrapped into ±180° first, because the
 integrator does not wrap pitch and a departed aircraft can arrive with several
 thousand degrees of it.
 

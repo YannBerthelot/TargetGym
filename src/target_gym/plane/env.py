@@ -109,6 +109,12 @@ class PlaneParams(EnvParams):
     # Degrees beyond `aoa_stall` at which the separation sigmoid is centred, so
     # that lift *peaks at* aoa_stall rather than being halved there.
     aoa_stall_width: float = 3.0
+    # Wing aspect ratio, span^2 / S = 34.1^2 / 122.6 for the A320. Sourced
+    # geometry (PHYSICS.md section 3), and it sets how much force a *finite*
+    # wing develops once separated: a 2D flat plate reaches a normal-force
+    # coefficient of 2, a finite one less, because the flow relieves around the
+    # tips.
+    aspect_ratio: float = 9.48
     # Drag-divergence Mach number. NOTE: this field was previously declared
     # twice (0.78 above the aero block, 0.80 here). Python keeps the last
     # definition, so 0.80 was always the effective value and the 0.78 was
