@@ -297,7 +297,14 @@ def compute_next_state(
         step_key(key, state.time),
     )
     total_wind_x, total_wind_z = total_wind_2d(state.z, gust[0], gust[1], params)
-    eff_params = params.replace(wind_x=total_wind_x, wind_z=total_wind_z)
+    # All-up mass for this step. ``initial_fuel_quantity`` is a component of
+    # ``initial_mass``, not an addition, so burning fuel subtracts from it.
+    # Threaded through ``eff_params`` because the dynamics read
+    # ``params.initial_mass``; this keeps the signature unchanged.
+    mass_now = params.initial_mass - (params.initial_fuel_quantity - state.fuel)
+    eff_params = params.replace(
+        wind_x=total_wind_x, wind_z=total_wind_z, initial_mass=mass_now
+    )
 
     # Engine ram/Mach effects depend on airspeed, not ground speed.
     air_speed = compute_velocity_from_horizontal_and_vertical_speed(
@@ -332,11 +339,16 @@ def compute_next_state(
     )
 
     alpha, gamma = compute_alpha(theta, x_dot, z_dot)
-    # Total all-up mass. ``initial_fuel_quantity`` is a *component* of
-    # ``initial_mass``, not an addition to it, and matches the mass the
-    # dynamics actually integrate (see compute_acceleration). Once fuel
-    # burn is implemented this becomes initial_mass - burned.
-    m = params.initial_mass
+    # Fuel burned over the step. ``specific_fuel_consumption`` is thrust
+    # specific: kg per kilonewton-second, so 17.5/1000 is 1.75e-5 kg/(N s),
+    # the right order for a modern high-bypass turbofan. Burn is charged
+    # against the thrust actually produced, which already carries the altitude
+    # lapse and the Mach terms.
+    burn = params.specific_fuel_consumption * 1e-3 * thrust * dt
+    fuel = jnp.clip(state.fuel - burn, 0.0, params.initial_fuel_quantity)
+    # Below the tanks running dry the engines cannot produce thrust; the mass
+    # simply stops falling, and the aircraft is a glider from there.
+    m = params.initial_mass - (params.initial_fuel_quantity - fuel)
 
     new_state = PlaneState(
         x=x,
@@ -350,7 +362,7 @@ def compute_next_state(
         m=m,
         power=power,
         stick=stick,
-        fuel=state.fuel,
+        fuel=fuel,
         time=state.time + 1,
         target_altitude=state.target_altitude,
         gust_x=gust[0],

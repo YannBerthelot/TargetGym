@@ -120,7 +120,12 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
             )
         )
         initial_alpha = initial_theta - initial_gamma
-        initial_m = params.initial_mass + params.initial_fuel_quantity
+        # ``initial_fuel_quantity`` is a component of ``initial_mass``, not an
+        # addition to it -- 73 500 kg is the all-up takeoff mass, of which
+        # 19 088 kg is fuel (PHYSICS.md section 3). Adding them counted the
+        # fuel twice, a 20-tonne error that was invisible while the dynamics
+        # ignored ``state.m`` and used ``params.initial_mass`` directly.
+        initial_m = params.initial_mass
         initial_power = params.initial_power
         initial_stick = jnp.deg2rad(params.initial_stick)
         initial_fuel = params.initial_fuel_quantity

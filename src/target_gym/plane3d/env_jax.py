@@ -171,7 +171,7 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
             psi=initial_psi,
             alpha=initial_alpha,
             gamma=initial_gamma,
-            m=params.initial_mass + params.initial_fuel_quantity,
+            m=params.initial_mass,  # fuel is a component of it, not an addition
             power=params.initial_power,
             stick=jnp.deg2rad(params.initial_stick),
             aileron=jnp.deg2rad(params.initial_aileron),

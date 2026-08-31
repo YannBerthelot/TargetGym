@@ -133,7 +133,7 @@ def make_cruise_state(
         psi=psi,
         alpha=theta,  # gamma = 0 at level flight
         gamma=0.0,
-        m=params.initial_mass + params.initial_fuel_quantity,
+        m=params.initial_mass,  # fuel is a component of it, not an addition
         power=params.initial_power,
         stick=jnp.deg2rad(params.initial_stick),
         aileron=jnp.deg2rad(params.initial_aileron),

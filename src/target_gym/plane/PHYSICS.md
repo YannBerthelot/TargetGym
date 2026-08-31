@@ -272,11 +272,21 @@ Tests assert *emergent* behaviour, never a re-implementation of the formula
 under test. A test that restates the implementation validates transcription, not
 correctness, and fails in exactly the same way as a wrong formula.
 
-**⚠️ D4 — mass is constant.** `initial_mass` is used throughout; fuel burn is
-not subtracted, although `initial_fuel_quantity` and
-`specific_fuel_consumption` are carried in the parameters. Over the episode
-lengths here the error is small — an A320 burns on the order of 0.7 % of its
-mass in ten minutes — but it means the model cannot represent a long cruise, and
-that the range implied by the fuel parameters is not something this model
-computes. This was previously a `TODO` in the code; it is a documented
-simplification rather than pending work.
+**✅ D4 — RESOLVED: mass now follows the tanks.** Fuel burn is charged against
+the thrust actually produced, `ṁ = c_T · T`, so the aircraft lightens as it
+flies and `state.m` tracks `state.fuel` exactly. `specific_fuel_consumption` is
+thrust-specific — 17.5 g per kilonewton-second, i.e. 1.75 × 10⁻⁵ kg/(N·s), the
+right order for a high-bypass turbofan.
+
+The figure is anchored rather than asserted. In level cruise thrust equals drag,
+and drag is weight over the lift-to-drag ratio, so the fuel flow follows from
+quantities validated in §4: 2 725 kg/h against an A320's 2 400–2 600. At full
+thrust the model burns 5 007 kg/h, roughly double cruise, as expected.
+
+Wiring it exposed a 20-tonne inconsistency that had been invisible. `reset_env`
+set `state.m = initial_mass + initial_fuel_quantity` = 92 588 kg — above the
+A320's MTOW of 78 000 — while the dynamics integrated `params.initial_mass`
+directly. `state.m` was decorative, so nothing noticed; the moment mass became
+load-bearing it would have stepped 20 tonnes between reset and the first
+update. Fuel is a component of `initial_mass`, not an addition, and all three
+sites (2D, 3D and patrol) now say so.

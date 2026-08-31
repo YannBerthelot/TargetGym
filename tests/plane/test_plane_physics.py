@@ -783,3 +783,61 @@ def test_energy_flow_is_continuous_across_the_stall(params, sweep):
         f"alpha = {alphas[steps.argmax()]:.2f} deg. The regimes do not join, so "
         "energy appears or vanishes at the seam."
     )
+
+
+# ---------------------------------------------------------------------------
+# Fuel burn (PHYSICS.md D4, previously "mass is constant")
+# ---------------------------------------------------------------------------
+
+
+def test_cruise_fuel_flow_matches_an_a320(params):
+    """Anchored to a published figure, not to the model's own arithmetic.
+
+    In level cruise thrust equals drag, and drag is the weight divided by the
+    lift-to-drag ratio. That fixes the fuel flow from quantities validated
+    elsewhere in this file, so the check tests ``specific_fuel_consumption``
+    against the real aircraft rather than against itself.
+    """
+    l_over_d = 1.0 / (2.0 * np.sqrt(params.cd0 * params.k))
+    thrust_cruise = params.initial_mass * params.gravity / l_over_d
+    kg_per_hour = params.specific_fuel_consumption * 1e-3 * thrust_cruise * 3600.0
+
+    assert (
+        2000.0 < kg_per_hour < 3200.0
+    ), f"cruise fuel flow {kg_per_hour:.0f} kg/h; an A320 burns 2400-2600"
+
+
+def test_burning_fuel_lightens_the_aircraft():
+    """Mass must follow the tanks, continuously and only downwards."""
+    import jax
+    import jax.numpy as jnp
+
+    from target_gym.registry import REGISTRY
+
+    spec = REGISTRY["plane"]
+    env = spec.make_env()
+    p = spec.params_cls(max_steps_in_episode=600)
+    step = jax.jit(env.step_env)
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, p)
+
+    masses, fuels = [float(state.m)], [float(state.fuel)]
+    for _ in range(600):
+        _, state, _, terminated, _ = step(key, state, jnp.array([0.8, 0.0]), p)
+        masses.append(float(state.m))
+        fuels.append(float(state.fuel))
+        if bool(terminated):
+            break
+
+    masses, fuels = np.array(masses), np.array(fuels)
+    assert masses[0] == pytest.approx(p.initial_mass), (
+        "the aircraft must start at its takeoff mass; fuel is a component of it, "
+        "and adding the two counted 19 tonnes twice"
+    )
+    assert np.all(np.diff(fuels) <= 1e-6), "fuel went up"
+    assert masses[-1] < masses[0], "burning fuel did not lighten the aircraft"
+    # mass tracks the tanks -- no separate bookkeeping. The tolerance is set by
+    # float32 at 73 500 kg, where the representable step is about 0.01 kg.
+    np.testing.assert_allclose(masses[0] - masses, fuels[0] - fuels, atol=0.1)
+    # and no step change, which a reset/dynamics disagreement would produce
+    assert np.abs(np.diff(masses)).max() < 50.0, "mass jumped between steps"

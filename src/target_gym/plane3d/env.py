@@ -523,8 +523,15 @@ def compute_next_state_3d(
     total_wind_x, total_wind_y, total_wind_z = total_wind_3d(
         state.z, gust[0], gust[1], gust[2], params
     )
+    # All-up mass for this step: fuel is a component of ``initial_mass``, so
+    # burning it subtracts. Threaded through ``eff_params`` because the
+    # dynamics read ``params.initial_mass``.
+    mass_now = params.initial_mass - (params.initial_fuel_quantity - state.fuel)
     eff_params = params.replace(
-        wind_x=total_wind_x, wind_y=total_wind_y, wind_z=total_wind_z
+        wind_x=total_wind_x,
+        wind_y=total_wind_y,
+        wind_z=total_wind_z,
+        initial_mass=mass_now,
     )
 
     # Engine ram/Mach effects depend on airspeed, not ground speed.
@@ -579,7 +586,10 @@ def compute_next_state_3d(
     # ``initial_mass``, not an addition to it, and matches the mass the
     # dynamics actually integrate (see compute_acceleration). Once fuel
     # burn is implemented this becomes initial_mass - burned.
-    m = params.initial_mass
+    # Fuel burned this step, charged against the thrust actually produced.
+    burn = params.specific_fuel_consumption * 1e-3 * thrust * dt
+    fuel = jnp.clip(state.fuel - burn, 0.0, params.initial_fuel_quantity)
+    m = params.initial_mass - (params.initial_fuel_quantity - fuel)
 
     new_state = PlaneState3D(
         x=x,
@@ -599,7 +609,7 @@ def compute_next_state_3d(
         power=power,
         stick=stick,
         aileron=aileron,
-        fuel=state.fuel,
+        fuel=fuel,
         time=state.time + 1,
         target_altitude=state.target_altitude,
         target_heading=state.target_heading,
