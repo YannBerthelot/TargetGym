@@ -184,17 +184,50 @@ def test_lift_supports_aircraft_below_stall(params):
     assert _vertical_accel(params, params.aoa_stall - 2.0) > 0.0
 
 
-def test_stalled_wing_cannot_hold_the_aircraft_up(params):
-    """Past the stall angle lift collapses and the aircraft accelerates downward.
+def test_exceeding_the_stall_angle_reduces_lift(params):
+    """The defining behaviour of a stall, stated so it does not depend on speed.
 
-    This is the defining behaviour of a stall: more angle of attack, *less*
-    lift. Before the D1/D2 fix the lift curve peaked at 0.70 and this margin
-    was far weaker.
+    The previous form asserted that a stalled wing produces *net downward*
+    acceleration at cruise speed. That is not a stall: 23 deg of incidence at
+    cruise speed is an impossible load factor, and at that dynamic pressure even
+    a separated wing lifts far more than the aircraft weighs. It passed only
+    because the old model sent post-stall lift to zero -- the same defect that
+    left a departed aircraft with no drag.
+
+    What is true at any speed is that going past the stall angle *loses* lift.
     """
-    pre_stall = _vertical_accel(params, params.aoa_stall - 2.0)
-    post_stall = _vertical_accel(params, params.aoa_stall + 8.0)
-    assert post_stall < 0.0, "stalled wing still producing net upward force"
-    assert post_stall < pre_stall
+    from target_gym.plane.dynamics import aero_coefficients
+
+    def cl(a):
+        return float(aero_coefficients(jnp.array(float(a)), jnp.array(0.3), params)[0])
+
+    cl_pre = cl(params.aoa_stall - 2.0)
+    # the minimum through the break, since the flat-plate branch recovers and a
+    # single sample past the stall lands at an arbitrary point on that recovery
+    cl_broken = min(
+        cl(a) for a in np.linspace(params.aoa_stall, params.aoa_stall + 15.0, 40)
+    )
+    assert (
+        cl_broken < 0.5 * cl_pre
+    ), f"stall must break the lift curve: CL {cl_pre:.2f} -> {cl_broken:.2f}"
+
+
+def test_a_stalled_wing_cannot_hold_the_aircraft_up_at_stall_speed(params):
+    """And at the speed where the wing is actually working for its living.
+
+    Near the stall speed the aircraft needs most of CL_max to stay level, so
+    losing the lift curve there does put it into a descent -- which is the
+    scenario the original test was reaching for.
+    """
+    from scipy.optimize import brentq
+
+    # the speed at which the pre-stall wing only just holds the aircraft up
+    f = lambda v: _vertical_accel(params, params.aoa_stall - 2.0, speed=v)
+    v_stall = brentq(f, 40.0, CRUISE_SPEED)
+    assert _vertical_accel(params, params.aoa_stall - 2.0, speed=v_stall * 1.02) > 0.0
+    assert (
+        _vertical_accel(params, params.aoa_stall + 8.0, speed=v_stall * 1.02) < 0.0
+    ), "past the stall angle at stall speed the aircraft must descend"
 
 
 def test_stall_recovery_by_lowering_the_nose(params):

@@ -193,10 +193,57 @@ def test_lift_increases_with_angle_of_attack_below_stall(params):
 
 
 def test_lift_collapses_beyond_stall(params):
-    """Past the stall AoA the sigmoid must suppress lift."""
+    """Past the stall AoA, lift collapses -- measured where the collapse is.
+
+    This used to sample 10 deg past the peak and demand under 35 % of it, which
+    the old model satisfied because its lift went to *zero* and stayed there.
+    That was the same defect that left a separated wing with less drag than in
+    cruise. A real wing sheds most of its lift immediately past the stall and
+    then follows the flat-plate curve back up, so the collapse is asserted just
+    past the peak, and the recovery is bounded rather than forbidden.
+    """
     cl_peak, aoa_peak = _peak_CL(params, mach=0.3)
-    cl_deep_stall = _CL(aoa_peak + 10.0, 0.3, params)
-    assert cl_deep_stall < 0.35 * cl_peak
+    # the depth of the break, not the value at an arbitrary angle: a point
+    # assertion lands wherever the flat-plate recovery happens to be
+    break_region = [
+        _CL(a, 0.3, params) for a in np.linspace(aoa_peak, aoa_peak + 15.0, 40)
+    ]
+    assert (
+        min(break_region) < 0.45 * cl_peak
+    ), f"no stall break: lift only fell to {min(break_region)/cl_peak:.0%} of peak"
+    # the flat-plate branch tops out at CL = 1 (sin 2a at 45 deg), so lift must
+    # never return to anything like the attached-flow peak
+    beyond = [_CL(a, 0.3, params) for a in np.linspace(aoa_peak + 5.0, 90.0, 30)]
+    assert max(beyond) < 0.7 * cl_peak, "post-stall lift recovered too far"
+
+
+def test_drag_rises_when_the_wing_separates(params):
+    """The contract the old model was missing entirely.
+
+    ``CD = cd0 + k*CL**2`` ties drag to lift, so a stall sigmoid that collapses
+    CL collapsed CD with it: a fully separated wing came out at CD = cd0, less
+    drag than in cruise. A departed aircraft then had no aerodynamic forces at
+    all -- it fell at 300 m/s and tumbled undamped, because nothing opposed the
+    rotation either.
+    """
+    cd_cruise = _CD(2.0, 0.3, params)
+    cd_stalled = _CD(params.aoa_stall + 15.0, 0.3, params)
+    cd_broadside = _CD(90.0, 0.3, params)
+
+    assert cd_stalled > 3 * cd_cruise, "separation must cost drag"
+    assert (
+        1.5 < cd_broadside < 2.5
+    ), f"a wing side-on to the flow is a flat plate, CD ~ 2, got {cd_broadside:.2f}"
+
+
+def test_aerodynamics_are_defined_at_any_attitude(params):
+    """``theta`` is not wrapped, so incidence can arrive here unbounded."""
+    for aoa in (-720.0, -180.0, 0.0, 180.0, 540.0, 1331.0):
+        cl, cd = _CL(aoa, 0.3, params), _CD(aoa, 0.3, params)
+        assert np.isfinite(cl) and np.isfinite(cd), f"non-finite at {aoa} deg"
+        assert abs(cl) <= 2.0 and 0.0 <= cd <= 2.5, f"out of range at {aoa} deg"
+    # and it must be periodic: 720 deg of incidence is 0 deg of incidence
+    assert _CL(720.0, 0.3, params) == pytest.approx(_CL(0.0, 0.3, params), rel=1e-6)
 
 
 def test_drag_rises_beyond_critical_mach(params):

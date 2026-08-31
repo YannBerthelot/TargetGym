@@ -104,6 +104,29 @@ CD     = cd0 + k·CL²  + k_drag·max(0, M - M_crit)²
 | `M_crit` | 0.80 | Drag-divergence Mach. Was declared **twice** (0.78, 0.80); 0.80 always won. | ✅ |
 | `k_drag` | 5.0 | TUNED — transonic drag-rise strength | ⚠️ |
 
+### Post-stall — the flat-plate branch
+
+Below the stall the wing is an aerofoil and the model above describes it. Well
+past the stall it is a barn door, and a separate branch is blended in with the
+same centre and steepness as the stall sigmoid, so lift is handed to the plate
+exactly as separation takes it away:
+
+```
+CL -> sin 2a        CD -> cd0 + 2 sin^2 a
+```
+
+giving CD ≈ 2 with the wing side-on, CL = 1 at 45°, and a lift curve that peaks
+at 1.56, breaks to 0.57 at 19° (36 % of peak) and recovers to 1.0 at 45° — the
+shape a real wing shows. Incidence is wrapped into ±180° first, because the
+integrator does not wrap pitch and a departed aircraft can arrive with several
+thousand degrees of it.
+
+This is applied after the Mach corrections deliberately: separated flow is not
+a compressibility effect, and Prandtl–Glauert has no business scaling it. Below
+the stall the branch contributes under 2 %, so every figure of merit below is
+unchanged except the clean stall speed, which moves 154 → 154.6 kt and stays
+inside its reference band.
+
 ### Figures of merit
 
 | Quantity | Model | Reference | |

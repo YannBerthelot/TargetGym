@@ -215,6 +215,12 @@ def aero_coefficients(aoa_deg, mach, params):
     clean stall speed at 228 kt. See ``PHYSICS.md`` §4.
     """
 
+    # Wrap into [-180, 180]. ``theta`` is not wrapped by the integrator, so a
+    # departed aircraft can arrive here with an incidence of several thousand
+    # degrees; without this the model would be evaluated at an angle it has no
+    # meaning for.
+    aoa_deg = ((aoa_deg + 180.0) % 360.0) - 180.0
+
     # --- Lift coefficient ---
     CL_linear = params.cl0 + params.cl_alpha * aoa_deg
     stall_centre = params.aoa_stall + params.aoa_stall_width
@@ -266,8 +272,35 @@ def aero_coefficients(aoa_deg, mach, params):
     )
     CD = CD + drag_rise
 
+    # --- Post-stall: blend to a flat plate -------------------------------
+    # Below stall the wing is an aerofoil; well past it, it is a barn door.
+    # The attached-flow model above cannot represent that, and its failure is
+    # not merely a loss of accuracy: ``CD = cd0 + k*CL**2`` ties drag to lift,
+    # so the stall sigmoid that collapses CL collapses CD with it. A fully
+    # separated wing came out at CD = cd0 = 0.02 -- less drag than in cruise --
+    # which left a departed aircraft with no aerodynamic forces at all. It fell
+    # at 300 m/s (the implied terminal velocity is 767 m/s) and tumbled without
+    # damping, because nothing opposed the rotation either.
+    #
+    # A flat plate at incidence gives CL = sin 2a and CD = 2 sin^2 a, so CD is
+    # about 2 at 90 deg rather than 0.02, and the implied terminal velocity is
+    # ~108 m/s. The blend uses the same centre and steepness as the stall
+    # sigmoid above, so lift is handed over to the plate exactly as separation
+    # takes it away, and it is driven by |aoa| so both branches stall.
+    #
+    # Applied after the Mach corrections on purpose: separated flow is not a
+    # compressibility effect, and Prandtl-Glauert has no business scaling it.
+    separated = 1.0 / (1.0 + jnp.exp(-(jnp.abs(aoa_deg) - stall_centre) * 1.5))
+    aoa_rad = jnp.deg2rad(aoa_deg)
+    CL_plate = jnp.sin(2.0 * aoa_rad)
+    CD_plate = params.cd0 + 2.0 * jnp.sin(aoa_rad) ** 2
+    CL = (1.0 - separated) * CL + separated * CL_plate
+    CD = (1.0 - separated) * CD + separated * CD_plate
+
     CL = jnp.clip(CL, -2.0, 2.0)  # typical A320: max lift ~1.5-1.7
-    CD = jnp.clip(CD, 0.0, 1.0)  # drag can’t be negative or huge
+    # Upper bound is now the flat plate's ~2.0, not 1.0: the old cap predates
+    # there being any post-stall drag to accommodate.
+    CD = jnp.clip(CD, 0.0, 2.1)
 
     return CL, CD
 

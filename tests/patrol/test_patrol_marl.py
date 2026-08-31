@@ -130,6 +130,17 @@ class TestCollision:
         assert float(reward) < 0.0
 
 
+_FORMATION_XFAIL = (
+    "Formation quality, not broken dynamics. The single-wingman case passes "
+    "since the post-stall aerodynamics were corrected -- the follower no "
+    "longer departs into a zero-drag regime it cannot recover from -- but it "
+    "clears the bar at 0.715 against 0.7, so it is close. Two and four "
+    "wingmen still score below zero: the pursuit law gives each follower the "
+    "lead's slot without any awareness of the others, so they converge on "
+    "overlapping air and spend the episode avoiding each other."
+)
+
+
 class TestCooperativeSolution:
     """Experts (heading PID lead + pursuit PID wingmen) hold the formation and
     earn near-max team reward for any number of wingmen."""
@@ -159,17 +170,17 @@ class TestCooperativeSolution:
         _, rew = jax.lax.scan(step, (obs, state, lp0, wps), None, length=n)
         return float(jnp.mean(rew[-300:]))
 
-    @pytest.mark.xfail(
-        reason="The close-patrol expert's gains were re-tuned after the "
-        "lift-curve correction (PHYSICS.md D1/D2) doubled control authority: "
-        "mean return went from 2.9 to 117 and the follower no longer departs. "
-        "But it settles ~139 m from the slot against a 60 m tolerance, so "
-        "formation is held only loosely. A grid search over altitude/heading/"
-        "bank scalings got no closer, which suggests the guidance law needs "
-        "rework rather than further tuning. Every structural patrol test "
-        "passes -- this is expert quality, not broken dynamics.",
-        strict=True,
+    @pytest.mark.parametrize(
+        "k",
+        [
+            1,
+            pytest.param(
+                2, marks=pytest.mark.xfail(strict=True, reason=_FORMATION_XFAIL)
+            ),
+            pytest.param(
+                4, marks=pytest.mark.xfail(strict=True, reason=_FORMATION_XFAIL)
+            ),
+        ],
     )
-    @pytest.mark.parametrize("k", [1, 2, 4])
     def test_experts_earn_high_team_reward(self, k):
         assert np.mean([self._mean_reward(k, s) for s in range(2)]) > 0.7
