@@ -375,6 +375,18 @@ uv add target-gym
 
 Python 3.11 through 3.14. CI runs the suite on all four.
 
+### Documentation
+
+| | |
+|---|---|
+| **[Getting started](docs/getting-started.md)** | Run an episode, vectorise it, plug into Gymnasium |
+| **[Environment reference](docs/environments.md)** | All eighteen: shapes, tracked variables, baselines, contracts |
+| **[Public API](docs/api.md)** | What is stable and what is provisional |
+| **[Baselines](docs/baselines.md)** | The shipped PID and MPC controllers, and tuning them |
+| **[Physics methodology](docs/PHYSICS_METHODOLOGY.md)** | How the physics is sourced, validated and bounded |
+
+The full index is at **[docs/](docs/index.md)**.
+
 ---
 
 ## Usage

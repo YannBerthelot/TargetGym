@@ -18,6 +18,8 @@ uv run pre-commit install    # optional: runs the CI checks on each commit
 make ci          # everything CI runs: ruff, black --check, fast tests
 make test        # fast tests only, in parallel
 make test-all    # adds the slow closed-loop controller checks
+make mypy        # type-check the enforced modules
+make coverage    # tests with the coverage threshold
 ```
 
 The suite runs under [pytest-xdist](https://pytest-xdist.readthedocs.io/).
@@ -47,8 +49,18 @@ defects, import errors and import ordering — so that anything it reports is
 worth acting on; the reasoning for what is excluded is in `pyproject.toml`
 next to the `select` list.
 
-`mypy` is available via `make mypy` but is not enforced: the tree does not
-currently pass it.
+`mypy` runs over a deliberately small set of modules -- the ones that pass
+today -- and CI enforces it. The rest of the tree does not pass, for a reason
+recorded next to the config: the environments annotate `struct.dataclass`
+fields as `float` while holding traced JAX `Array` values, which is the
+ordinary flax idiom and produces hundreds of mismatches that are shorthand
+rather than bugs. `make mypy-all` shows the whole picture; widen the enforced
+list by making a module pass and adding it.
+
+Coverage sits at 65%, enforced at 64 by `make coverage` and on one CI column.
+It is a ratchet: raise it as coverage improves, never lower it to make a red
+build green. The shortfall is concentrated in the renderers, which draw
+dashboards and are covered only incidentally.
 
 ## Adding an environment
 
@@ -98,6 +110,22 @@ something real to beat. PID gains are tuned by `scripts/tune_pid.py` and cached
 in `data/pid_gains.json`. When the gradient-based MPC is unusable — the cement
 kiln's adjoint overflows through its transport delay — use the sampling
 (CEM) MPC instead.
+
+## Documentation
+
+`docs/` holds the guides; each environment's physics contract lives in a
+`PHYSICS.md` beside its module. Two parts of it are checked rather than
+trusted, by `tests/test_docs.py`:
+
+- **Every runnable example in `docs/` is executed.** A fenced `python` block
+  runs unless its first line is `# doc: skip`. If you change a signature, the
+  docs fail with the code.
+- **`docs/environments.md` is generated** from the registry by
+  `scripts/generate_env_reference.py`. Adding an environment or a baseline
+  means regenerating it; the test tells you when it is stale.
+
+A new environment also needs a `PHYSICS.md`, which is likewise asserted -- the
+README's claim that every environment carries one is a test, not a hope.
 
 ## Pull requests
 
