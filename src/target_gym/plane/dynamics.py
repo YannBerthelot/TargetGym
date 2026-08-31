@@ -387,7 +387,7 @@ def compute_acceleration(
     """
     xp = jnp
     thrust, stick = action
-    x_dot, z_dot, _ = velocities
+    x_dot, z_dot, theta_dot = velocities
 
     _, z, theta = positions
     # Air-relative velocity drives all aerodynamics.
@@ -419,17 +419,43 @@ def compute_acceleration(
     # ====================================================
     # STABILIZER
     # ====================================================
-    C_z_s, C_x_s = aero_coefficients(xp.rad2deg(alpha) - 3.0, M, params=params)
+    # Pitch-rate damping. The tail sits ``moment_arm_stabilizer`` behind the CG,
+    # so a nose-up rate q sweeps it downwards at q*l and it meets the air at a
+    # higher incidence: arctan(q*l / V). The extra tail lift makes a nose-down
+    # moment that opposes the rotation -- the Cm_q derivative, and the only
+    # thing damping the pitch axis.
+    #
+    # Without it the pitch rate was integrated with nothing to arrest it, so a
+    # departed aircraft tumbled indefinitely: 15 full rotations under extreme
+    # actions. ``theta_dot`` was already being passed in and discarded.
+    #
+    # arctan rather than the small-angle q*l/V because it stays bounded as V
+    # falls, and at V -> 0 the moment vanishes anyway with the dynamic pressure.
+    tail_rate_deg = xp.rad2deg(
+        xp.arctan2(theta_dot * params.moment_arm_stabilizer, xp.maximum(V, 1e-3))
+    )
+    C_z_s, C_x_s = aero_coefficients(
+        xp.rad2deg(alpha) - 3.0 + tail_rate_deg, M, params=params
+    )
     lift_stab = compute_drag(S=params.stabilizer_surface, C=C_z_s, V=V, rho=rho)
     drag_stab = compute_drag(S=params.stabilizer_surface, C=C_x_s, V=V, rho=rho)
-    F_stab = lift_stab - drag_stab
+    # Only the component normal to the body axis makes a pitching moment, and
+    # lift and drag are defined relative to the *local wind*, so both project
+    # onto it. Written as ``lift - drag`` this reversed sign whenever the tail's
+    # drag exceeded its lift -- at 82 deg of local incidence CL - CD = -1.01 --
+    # which turned the damping moment into a driving one exactly when the
+    # aircraft was departing and most needed damping.
+    tail_incidence = xp.deg2rad(xp.rad2deg(alpha) - 3.0 + tail_rate_deg)
+    F_stab = lift_stab * xp.cos(tail_incidence) + drag_stab * xp.sin(tail_incidence)
     M_stabilizer = -F_stab * params.moment_arm_stabilizer
 
     # ====================================================
     # ELEVATOR
     # ====================================================
+    # The elevator rides on the same tail, so it feels the same rate-induced
+    # incidence.
     C_z_e, C_x_e = aero_coefficients(
-        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0, M, params=params
+        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0 + tail_rate_deg, M, params=params
     )
     lift_elev = compute_drag(S=params.elevator_surface, C=C_z_e, V=V, rho=rho)
     drag_elev = compute_drag(S=params.elevator_surface, C=C_x_e, V=V, rho=rho)

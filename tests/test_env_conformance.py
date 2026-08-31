@@ -560,6 +560,10 @@ ANGLE_FIELDS = ("theta", "phi", "psi", "gamma")
 
 # Environments whose attitude winds up without bound. Recorded rather than
 # skipped: the contract is right and these are the gap it found.
+# Pitch damping took the 2D aircraft from 15.5 rotations to 4.4 under extreme
+# actions -- a large improvement that still misses the bar, so it stays recorded
+# rather than having the bar moved to meet it. The 3D variants share the pitch
+# code but roll and yaw remain undamped.
 UNDAMPED_ATTITUDE = {"plane", "plane3d_heading", "plane3d_circle", "plane3d_figure8"}
 MAX_TURNS = 4.0  # full rotations before we call it a tumble rather than a manoeuvre
 

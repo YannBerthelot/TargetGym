@@ -61,7 +61,10 @@ def test_compute_acceleration_consistency():
     stick = 0.0
     x_dot = 200.0
     z_dot = 0.0
-    theta_dot = None  # not needed here
+    # Was ``None  # not needed here``, which held only while the model ignored
+    # pitch rate. The tail's incidence now carries a q*l/V term, so the pitch
+    # rate is part of the state the accelerations depend on.
+    theta_dot = 0.0
     velocities = (x_dot, z_dot, theta_dot)
     positions = (None, 1000, 0.02)
     params = PlaneParams()

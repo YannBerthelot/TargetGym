@@ -56,15 +56,30 @@ class TestBackwardCompatible:
 
 class TestSteadyWindPhysics:
     def test_headwind_climbs_tailwind_sinks(self):
+        """A headwind raises airspeed, so the wing lifts more and the aircraft rises.
+
+        Asserted on the immediate response rather than the altitude after
+        twenty steps. The rollout form passed only while the pitch axis was
+        undamped: with nothing opposing the pitch rate, the phugoid the wind
+        excites persisted and the initial excursion survived to the end of the
+        window. Now that the tail carries a q*l/V term the oscillation decays
+        within those twenty steps, and where the aircraft happens to be when
+        they run out is a property of the phugoid, not of the wind.
+        """
         env = Plane()
-        base = _final_alt_2d(env, PlaneParams(max_steps_in_episode=300, **FIXED))[-1]
-        head = _final_alt_2d(
-            env, PlaneParams(max_steps_in_episode=300, wind_x=-40.0, **FIXED)
-        )[-1]
-        tail = _final_alt_2d(
-            env, PlaneParams(max_steps_in_episode=300, wind_x=40.0, **FIXED)
-        )[-1]
-        assert float(head) > float(base) > float(tail)
+        base_params = dict(max_steps_in_episode=50, turbulence_sigma=0.0, **FIXED)
+        climbs = []
+        for wind_x in (-15.0, 0.0, +15.0):
+            params = PlaneParams(wind_x=wind_x, **base_params)
+            key = jax.random.PRNGKey(0)
+            _, state = env.reset_env(key, params)
+            _, nxt, _, _, _ = env.step_env(key, state, jnp.array([0.5, 0.0]), params)
+            climbs.append(float(nxt.z_dot) - float(state.z_dot))
+
+        head, still, tail = climbs
+        assert (
+            head > still > tail
+        ), f"headwind must climb hardest: {head:.3f} / {still:.3f} / {tail:.3f}"
 
     def test_wind_changes_trajectory_but_hidden_from_obs(self):
         env = Plane(observe_wind=False)
