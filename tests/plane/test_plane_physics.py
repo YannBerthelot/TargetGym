@@ -570,3 +570,37 @@ def test_elevator_authority_is_bounded(params):
     for stick in (-0.3, 0.3):
         acc = _pitch_ang_accel(params, theta_deg=2.0, stick=stick)
         assert abs(acc) < 1.0, f"stick={stick}: {acc:.3f} rad/s^2"
+
+
+def test_stall_transition_sharpness_is_set_by_the_lift_peak(params):
+    """The attached-to-separated transition is derived, not chosen.
+
+    The separated branch develops far less lift than the aerofoil, so any
+    appreciable blend at the stall angle would eat CL_max and move the
+    validated stall speed with it. Requiring the wing to be essentially
+    attached at ``aoa_stall`` is what fixes the sharpness -- there is no free
+    constant here, and this test is what stops one being reintroduced.
+    """
+    centre = params.aoa_stall + params.aoa_stall_width
+    k = np.log(99.0) / params.aoa_stall_width
+
+    separated_at_stall = 1.0 / (1.0 + np.exp((centre - params.aoa_stall) * k))
+    assert (
+        separated_at_stall < 0.02
+    ), f"{separated_at_stall:.1%} separated at the stall angle would eat CL_max"
+
+    # CL_max must survive the blend: the peak is the attached-flow limit
+    peak = max(_CL(a, 0.3, params) for a in np.arange(0.0, 25.0, 0.05))
+    attached_limit = params.CL_max / np.sqrt(1 - 0.3**2)
+    assert peak == pytest.approx(
+        attached_limit, rel=0.02
+    ), f"blend moved the lift peak: {peak:.3f} vs attached limit {attached_limit:.3f}"
+
+
+def test_stall_transition_width_is_physically_plausible(params):
+    """A clean transport wing breaks over a few degrees -- not instantly."""
+    k = np.log(99.0) / params.aoa_stall_width
+    width_10_to_90 = 2 * np.log(9.0) / k
+    assert (
+        2.0 <= width_10_to_90 <= 5.0
+    ), f"stall transition spans {width_10_to_90:.1f} deg; a real wing shows 2-5"

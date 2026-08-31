@@ -122,6 +122,14 @@ around its tips, reaches 1.28. The result is CD ≈ 1.30 with the wing side-on a
 a lift curve that peaks at 1.56, breaks to 0.38 at 19° (24 % of peak) and
 recovers to 0.64 at 45° — the shape a real wing shows.
 
+The sharpness of the attached-to-separated transition is derived rather than
+chosen. The separated branch develops far less lift, so any appreciable blend at
+`aoa_stall` would eat CL_max and move the validated stall speed. Requiring the
+wing to be 1 % separated there, given a sigmoid centred `aoa_stall_width` beyond
+the stall angle, fixes it at `ln(99)/aoa_stall_width` = 1.53 — which is the 1.5
+that was previously written as a literal, rounded. The resulting 10–90 % band is
+2.9°, inside the 2–5° a clean transport wing shows.
+
 Full Viterna was tried for the whole post-stall branch and rejected on evidence:
 anchored at the stall point it is continuous by construction, but it declines
 only to 69 % of peak, so it has no stall *break*. It is built for wind-turbine

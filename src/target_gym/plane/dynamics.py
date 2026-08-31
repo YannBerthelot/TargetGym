@@ -224,7 +224,20 @@ def aero_coefficients(aoa_deg, mach, params):
     # --- Lift coefficient ---
     CL_linear = params.cl0 + params.cl_alpha * aoa_deg
     stall_centre = params.aoa_stall + params.aoa_stall_width
-    CL = CL_linear / (1 + jnp.exp((aoa_deg - stall_centre) * 1.5))
+    # How abruptly attached flow gives way to separated flow. This is not a free
+    # constant: the wing has to reach CL_max essentially *attached* at
+    # ``aoa_stall``, because the separated branch develops far less lift and any
+    # appreciable blend at the peak would eat CL_max and move the validated
+    # stall speed. Requiring the separated fraction to be 1 % there, given that
+    # the sigmoid is centred ``aoa_stall_width`` beyond the stall angle, fixes
+    # it at ln(99)/aoa_stall_width = 1.53 -- which is the 1.5 that used to be
+    # written here, rounded.
+    #
+    # It is bounded from the other side too: much sharper and the wing would
+    # separate over well under a degree, which no wing does. The 10-90 % band
+    # this gives is 2.9 deg, in the 2-5 deg a clean transport wing shows.
+    stall_sharpness = jnp.log(99.0) / params.aoa_stall_width
+    CL = CL_linear / (1 + jnp.exp((aoa_deg - stall_centre) * stall_sharpness))
     # Positive and negative stall limits. A cambered transport wing stalls
     # asymmetrically: CL_max ~ +1.5 near +15 deg, CL_min ~ -1.0 near -10 deg.
     # Only the positive limit existed before; with the corrected (steeper)
@@ -290,7 +303,11 @@ def aero_coefficients(aoa_deg, mach, params):
     #
     # Applied after the Mach corrections on purpose: separated flow is not a
     # compressibility effect, and Prandtl-Glauert has no business scaling it.
-    separated = 1.0 / (1.0 + jnp.exp(-(jnp.abs(aoa_deg) - stall_centre) * 1.5))
+    # Same sharpness as the lift break above: one separation process, so lift is
+    # handed to the plate exactly as it is taken from the aerofoil.
+    separated = 1.0 / (
+        1.0 + jnp.exp(-(jnp.abs(aoa_deg) - stall_centre) * stall_sharpness)
+    )
     aoa_rad = jnp.deg2rad(aoa_deg)
     # Peak normal-force coefficient of the separated wing. A 2D flat plate
     # reaches 2; a finite wing reaches less, because flow relieves around the
