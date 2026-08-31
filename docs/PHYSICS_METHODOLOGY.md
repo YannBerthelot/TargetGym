@@ -195,3 +195,33 @@ What discriminates is an anchor the model does not get to move:
 A useful test for a proposed contract: *could the model be wrong and this still
 pass?* If the assertion is computed from the same expression as the behaviour,
 the answer is yes.
+
+### Energy: bound it, and watch the seams
+
+Two forms of energy check are worth having, and they catch different things.
+
+**Bounds on both sides, not a budget.** Energy may only enter through the
+actuator, so the total cannot rise faster than the actuator can supply it — for
+the aircraft, `ΔE ≤ T·V·Δt` at full thrust. And energy removed has to be
+accounted for too: the only sink is drag, so it cannot fall faster than the
+largest drag the geometry admits, `ΔE ≥ −½ρSC_D,max·V³·Δt`.
+
+Neither side references the model's instantaneous forces, which is what makes
+them independent. A sign error, a bad integration step, a regime switch that
+quietly injects energy, or a clip silently discarding it all break one bound or
+the other, and none of them have to be anticipated. Contrast the weak form,
+`dE/dt = T·V − D·V`, which closes by construction because both sides use the
+model's own drag — it tests the integrator, not the physics.
+
+**Continuity at the seams.** A model assembled from regimes — attached and
+separated flow, laminar and turbulent, charging and discharging — has a
+boundary between them, and that boundary is exactly where an optimiser will
+sit, because it is where the plant is being pushed. If the descriptions do not
+join, the dissipated power steps at the seam and energy appears or vanishes for
+no modelled reason. Measured as the largest step in dissipated power relative
+to the typical step across a fine sweep: the aircraft's blend gives 4.7×, a
+naive piecewise switch gives 32×, and drag collapsing to `cd0` past the stall
+gives infinity.
+
+The second is the more general of the two. Any environment built from more than
+one regime has seams, and they are cheap to sweep.

@@ -658,3 +658,128 @@ def test_glide_ratio_becomes_a_flat_plate_past_stall(params):
     assert ld_plate == pytest.approx(
         1.0, abs=0.25
     ), f"a separated wing at 45 deg has L/D 1 by construction, got {ld_plate:.2f}"
+
+
+# ---------------------------------------------------------------------------
+# Energy bookkeeping
+#
+# The weak form of this check is ``dE/dt == thrust_power - drag_power``, which
+# closes by construction because both sides use the model's own forces: it
+# tests the integrator, not the physics. The strong form never mentions drag.
+# Energy can only *enter* the system through the engine, so whatever the
+# aerodynamics do, the total cannot rise faster than the engine can supply it.
+# That bounds the model from outside without assuming anything about it.
+# ---------------------------------------------------------------------------
+
+
+def _mechanical_energy(state, params):
+    """Total mechanical energy in joules: kinetic plus gravitational potential."""
+    v_sq = float(state.x_dot) ** 2 + float(state.z_dot) ** 2
+    return (
+        0.5 * params.initial_mass * v_sq
+        + params.initial_mass * params.gravity * float(state.z)
+    )
+
+
+@pytest.mark.parametrize(
+    "action",
+    [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0), (0.0, 0.0)],
+    ids=["full-up", "full-down", "idle-up", "idle-down", "neutral"],
+)
+def test_energy_never_exceeds_what_the_engine_can_supply(action):
+    """The system may trade and dissipate energy, never create it.
+
+    Kinetic and potential energy may exchange freely, and drag may remove as
+    much as it likes. What must never happen is the total rising faster than
+    the engine could raise it -- ``P = T·V`` at full thrust is the ceiling, and
+    it holds whatever the aerodynamics are doing.
+
+    This is the check that needs no anchor and no reference model: a sign error
+    in a force, a bad integration step, or a regime switch that quietly injects
+    energy all break it, and none of them need to be anticipated.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    from target_gym.plane.env_jax import Airplane2D
+
+    env = Airplane2D()
+    params = PlaneParams(max_steps_in_episode=300, turbulence_sigma=0.0)
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, params)
+    step = jax.jit(env.step_env)
+
+    dt = float(params.delta_t)
+    for i in range(int(params.max_steps_in_episode)):
+        before = _mechanical_energy(state, params)
+        speed_before = np.hypot(float(state.x_dot), float(state.z_dot))
+        _, state, _, terminated, _ = step(key, state, jnp.asarray(action), params)
+        after = _mechanical_energy(state, params)
+
+        # Ceiling: full thrust acting along the flight path, at the higher of
+        # the two speeds, for one step. Generous on purpose -- it is a bound,
+        # not a budget, and it should never be approached let alone crossed.
+        speed = max(speed_before, np.hypot(float(state.x_dot), float(state.z_dot)))
+        ceiling = params.thrust_output_at_sea_level * speed * dt
+        gained = after - before
+
+        assert gained <= ceiling + 1.0, (
+            f"step {i}: mechanical energy rose by {gained:.3e} J, more than the "
+            f"{ceiling:.3e} J the engine can deliver at {speed:.0f} m/s. "
+            "Something is creating energy."
+        )
+
+        # And the floor. Energy removed has to be accounted for too: the only
+        # sink is aerodynamic drag, and the most of it the airframe can possibly
+        # produce is the broadside coefficient over its whole reference area.
+        # A loss beyond that is energy going somewhere the model does not
+        # describe -- a clip quietly discarding it, or an integration artefact.
+        # Like the ceiling this is anchored outside the model: it uses the
+        # largest CD the geometry admits, never the instantaneous one, so it
+        # cannot close by construction the way ``dE/dt = T·V - D·V`` does.
+        rho = float(compute_air_density_from_altitude(jnp.asarray(state.z)))
+        cd_max = _CD(90.0, 0.3, params)
+        max_dissipation = 0.5 * rho * params.wings_surface * cd_max * speed**3 * dt
+        assert gained >= -(max_dissipation * 2.0) - 1.0, (
+            f"step {i}: mechanical energy fell by {-gained:.3e} J, more than the "
+            f"{max_dissipation:.3e} J that maximum drag could remove at "
+            f"{speed:.0f} m/s. Energy is going somewhere unmodelled."
+        )
+        if bool(terminated):
+            break
+
+
+@pytest.mark.parametrize(
+    "sweep", [(0.0, 45.0), (-45.0, 0.0)], ids=["positive", "negative"]
+)
+def test_energy_flow_is_continuous_across_the_stall(params, sweep):
+    """Crossing between regimes must not step the energy budget.
+
+    The model is two descriptions stitched together -- an aerofoil below the
+    stall, a separated plate above it -- and the seam is the place a benchmark
+    will sit, because that is where a controller pushed to its limits lives. If
+    the two do not join, drag jumps at the boundary, and with it the rate the
+    system dissipates energy: the aircraft loses or gains power for no reason
+    that the physics accounts for.
+
+    Continuity is measured as the largest step in dissipated power relative to
+    the typical step. A rapid transition is expected and fine; a *jump* is not.
+    The shipped blend gives 4.7x. A naive piecewise switch between the two
+    branches gives 32x, and the original defect -- drag collapsing to cd0 past
+    the stall -- gives infinity, so this separates a smooth handover from both
+    ways of getting it wrong.
+    """
+    lo, hi = sweep
+    alphas = np.arange(lo, hi, 0.05)
+    # power dissipated by drag goes as CD at fixed airspeed and density
+    cd = np.array([_CD(a, 0.3, params) for a in alphas])
+
+    steps = np.abs(np.diff(cd)) / np.maximum(cd[:-1], 1e-9)
+    worst, typical = steps.max(), np.median(steps)
+    ratio = worst / max(typical, 1e-12)
+
+    assert ratio < 20.0, (
+        f"dissipated power steps {ratio:.0f}x its typical increment at "
+        f"alpha = {alphas[steps.argmax()]:.2f} deg. The regimes do not join, so "
+        "energy appears or vanishes at the seam."
+    )

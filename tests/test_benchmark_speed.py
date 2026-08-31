@@ -11,6 +11,8 @@ says, not how fast this particular machine is.
 
 from __future__ import annotations
 
+import itertools
+
 import jax.numpy as jnp
 import pytest
 
@@ -30,25 +32,35 @@ def test_benchmark_reports_a_positive_rate(name):
     assert rate > 0.0, f"{name}: non-positive throughput"
 
 
-def test_rate_scales_with_batch_size():
-    """The reported figure must count every environment in the batch.
+def test_rate_counts_every_environment_in_the_batch(monkeypatch):
+    """The reported figure must count the whole batch, not one environment.
 
     A benchmark that timed the batch but divided by ``steps`` alone would
-    under-report by the batch size and still look plausible. Doubling the batch
-    should not halve the reported rate.
+    under-report by the batch size and still look entirely plausible.
+
+    Checked against a controlled clock rather than by comparing two real runs.
+    The wall-clock version of this was flaky: throughput on a machine running
+    the rest of the suite in parallel is not a stable quantity, which is the
+    same reason tests/test_performance_contracts.py refuses to time anything.
     """
+    import target_gym.benchmark_speed as bs
+
+    # the benchmark takes the best of several trials, so the clock is cycled
+    # rather than being a fixed-length list: every trial takes exactly 2 s
+    ticks = itertools.cycle([0.0, 2.0])
+    monkeypatch.setattr(bs.time, "perf_counter", lambda: next(ticks))
+
     spec = REGISTRY["cstr"]
     params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": 50})
     env = spec.make_env()
 
-    small = benchmark_env(env, params, steps=8, batch_size=4)
-    large = benchmark_env(env, params, steps=8, batch_size=32)
+    small = bs.benchmark_env(env, params, steps=8, batch_size=4)
+    large = bs.benchmark_env(env, params, steps=8, batch_size=32)
 
-    # Generous bound: this asserts the batch is counted at all, and is not a
-    # timing assertion -- a loaded CI runner may make either number noisy.
-    assert large > small * 0.5, (
-        f"throughput fell from {small:.0f} to {large:.0f} when the batch grew "
-        "8x; the reported rate is probably not counting the batch"
+    # identical elapsed time, 8x the environments -> 8x the steps per second
+    assert large == pytest.approx(8 * small, rel=1e-6), (
+        f"{small:.0f} -> {large:.0f} steps/s for an 8x larger batch; the batch "
+        "size is not being counted"
     )
 
 
