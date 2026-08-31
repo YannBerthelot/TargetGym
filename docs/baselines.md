@@ -47,6 +47,23 @@ uv run python scripts/tune_pid.py --envs cstr    # or `make tuning-cstr`
 make clear-tuning                                # drop the cache and retune
 ```
 
+The script skips any environment already present in the cache, so re-running it
+without `--envs` or `make clear-tuning` is a no-op for everything already tuned.
+
+Two caveats worth knowing before you re-tune anything:
+
+- **Re-tuning can make an environment worse.** The searches are stochastic and
+  the relay experiment is sensitive to the operating point, so a fresh "best"
+  is not automatically better than what is shipped. Measure both before keeping
+  one: re-running the tuner over the whole registry produced a genuinely better
+  `cstr` and a distinctly worse `first_order` in the same pass.
+- **`plane3d_figure8` cannot currently be tuned by this script.** Its power loop
+  raises *"relay autotune: every operating point failed (no zero-crossings)"* --
+  the altitude/power loop does not sustain a bang-bang oscillation, so the relay
+  experiment has nothing to measure. The shipped gains for that task came from a
+  direct gain search instead. Tuning it needs the gradient/random-search path the
+  four-tank and glass furnace use, which is the fix, not the relay.
+
 ## MPC
 
 Three implementations, chosen per environment by what its dynamics allow:
@@ -71,6 +88,62 @@ MPC rollouts are expensive, so episodes are cached under `data/mpc_cache/`:
 ```bash
 make clear-mpc     # drop the MPC trajectory cache
 ```
+
+### Horizons, and which ones are too short
+
+`scripts/audit_mpc_horizons.py` checks each MPC's horizon against `tau_close`,
+the time a *viable* controller needs to bring the tracking error to 1/e and keep
+it there. A receding-horizon controller can only optimise what it can see, so
+`horizon * mpc_dt` has to cover that transient. Most environments pass with room
+to spare; two groups do not:
+
+| Environment | horizon | `tau_close` | ratio | |
+|---|---|---|---|---|
+| `plane` | 30 | 37 | 0.81 | myopic |
+| `plane3d_heading` | 30 | 40 | 0.75 | myopic |
+| `plane3d_circle` | 30 | 40 | 0.75 | myopic |
+| `four_tank` | 5 | 198 | 0.03 | myopic |
+
+The aircraft cases are **not** fixed by nudging the horizon to meet the
+criterion. Measured on `plane3d_heading` over 150 steps, horizon 30 and horizon
+40 both leave the altitude error *larger* than it started (3228 m and 3168 m
+against an initial 2623 m) for 17% more compute -- the difference is noise. An
+earlier measurement at horizon 80 did help substantially (921 m against 1741 m),
+so the horizon really is the binding constraint, but the useful size is several
+times the audit's minimum and costs roughly 9x. These are `GradientMPC`
+instances, which roll out `step_env` itself, so covered time cannot be bought
+with a coarser `mpc_dt` the way the CasADi controllers allow.
+
+`four_tank` is the CasADi case where that trick does apply: at ratio 0.03 it is
+the worst in the suite, and a coarser prediction step would buy the covered time
+at the same optimisation cost.
+
+Both are open items rather than tuning knobs, and neither is affected by the
+reward shape -- `GradientMPC` sums the environment's reward directly, so it
+picks up reward changes without any objective to re-derive.
+
+## Regenerating the figures and videos
+
+```bash
+make figures          # or figures-<env>
+make videos           # or videos-<env>
+make short-gifs       # lightweight *_short.gif copies, which are what is committed
+```
+
+The committed media does **not** currently round-trip through these targets, and
+that is worth knowing before you regenerate anything:
+
+- The runner writes `sweep.png`, `pid_response.png` and `comparison.png`, none of
+  which are tracked. The five tracked `figures/**/*.png` come from an older
+  script and are not reproduced by `make figures`.
+- `make videos` writes the 3D aircraft tasks to `videos/plane3d_heading/` while
+  the committed gifs live at `videos/plane3d/heading_short.gif`.
+- Regenerating `cstr` produces a 5-frame 1400x750 gif where the committed one is
+  80 frames at 760x407, so the episode length and figure size used for the
+  committed media are not the current defaults.
+
+Until that is reconciled, regenerate media deliberately and compare frame counts
+and sizes before committing, rather than taking whatever the target emits.
 
 ## What the suite guarantees
 

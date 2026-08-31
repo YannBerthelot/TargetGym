@@ -371,7 +371,7 @@ Python 3.11 through 3.14. CI runs the suite on all four.
 | **[Public API](docs/api.md)** | What is stable and what is provisional |
 | **[Baselines](docs/baselines.md)** | The shipped PID and MPC controllers, and tuning them |
 | **[Reward shaping](docs/reward-shaping.md)** | Why the tracking rewards have the shape they do |
-| **[Model review checklist](docs/model-review-checklist.md)** | Ten checks derived from real defects found in these models |
+| **[Model review checklist](docs/model-review-checklist.md)** | Eleven checks derived from real defects found in these models |
 | **[Physics methodology](docs/PHYSICS_METHODOLOGY.md)** | How the physics is sourced, validated and bounded |
 
 The full index is at **[docs/](docs/index.md)**.
@@ -462,11 +462,13 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
       slowest environments (distillation and the cement kiln are under
       1 M steps/s) before the numbers in the README are published as a claim.
 * [ ] **Apply the model review checklist to the other environments.** The
-      aircraft work produced ten checks in
+      aircraft work produced eleven checks in
       [docs/model-review-checklist.md](docs/model-review-checklist.md), derived
       from real defects rather than from good intentions. Running check 1 alone
-      already found that the three 3D aircraft tasks still normalise their
-      reward by the altitude envelope, in four places.
+      found the same envelope-normalised reward in the three 3D aircraft tasks
+      and in the patrol lead term, all since converted; fixing it then exposed
+      check 11 (the figure-8 was scoring its own discretisation) and, underneath
+      that, two guidance laws that do not hold their path.
 * [ ] **A reward-shaping phase.** The rewards were written per environment as
       each was added, and the shaping conventions have drifted -- Gaussian
       versus quadratic tracking terms, differing crash penalties, differing

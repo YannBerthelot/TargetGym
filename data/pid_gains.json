@@ -23,7 +23,7 @@
   },
   "_meta": {
     "description": "PID gains tuned via relay autotuning (Astrom-Hagglund). Re-generate with: python scripts/tune_pid.py",
-    "tuned_at": "2026-08-30T22:40:05",
+    "tuned_at": "2026-08-31T15:30:32",
     "methodology": "Relay feedback experiment: inject relay signal, measure sustained oscillation to extract ultimate gain (Ku) and period (Tu), then compute PID gains via tuning rules. Gain-scheduled across N operating points spanning the target range.",
     "tuning_rule": "amigo"
   },
@@ -379,5 +379,54 @@
     "Kd_pressure": 0.0,
     "tuning_rule": "hand_tuned_three_element",
     "note": "Three-element: feedwater tracks measured steam flow as a feedforward and the level PI only trims it, bounded to 25 kg/s. A fast level loop reacts to swell by cutting feedwater exactly when mass is leaving fastest. Return 215-296 against 5 for the best constant action, which trips in 5-117 steps."
+  },
+  "cstr": {
+    "Kp": -112.216316,
+    "Ki": -88.012797,
+    "Kd": -45.447608,
+    "gain_schedule": {
+      "operating_points": [
+        0.84,
+        0.85,
+        0.86,
+        0.87,
+        0.88,
+        0.89,
+        0.9,
+        0.91
+      ],
+      "Kp": [
+        -93.694982,
+        -74.490578,
+        -85.604186,
+        -91.458914,
+        -112.216316,
+        -123.381295,
+        -136.507586,
+        -153.132488
+      ],
+      "Ki": [
+        -44.091756,
+        -43.817987,
+        -67.140538,
+        -71.732481,
+        -88.012797,
+        -96.769643,
+        -107.064773,
+        -120.103912
+      ],
+      "Kd": [
+        -63.244113,
+        -40.224912,
+        -34.669695,
+        -37.04086,
+        -45.447608,
+        -49.969424,
+        -55.285572,
+        -62.018657
+      ]
+    },
+    "tuning_rule": "amigo",
+    "note": "Relay autotuning, negative-gain system (higher Tc -> lower Ca)."
   }
 }
