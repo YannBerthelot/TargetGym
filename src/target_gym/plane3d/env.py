@@ -97,6 +97,13 @@ class PlaneParams3D(EnvParams):
     initial_fuel_quantity: float = 23860 / 1.25
     specific_fuel_consumption: float = 17.5 / 1000
 
+    # Actuator lags, as first-order rates per second. TUNED -- not sourced.
+    # PlaneParams3D does not inherit from PlaneParams, so these are declared
+    # here as well; the values match the 2D aircraft's.
+    power_response_rate: float = 0.05
+    stick_response_rate: float = 0.9
+    aileron_response_rate: float = 0.9
+
     # Aero coefficients (shared with 2D)
     # Finite-wing lift-curve slope, derived (PHYSICS.md 4):
     #   a = a0 / (1 + a0/(pi*AR*e))  with a0 = 2*pi/rad, AR = 34.1^2/122.6 = 9.48,
@@ -481,8 +488,12 @@ def compute_next_state_3d(
     ``key=None`` freezes the gust (constant wind).
     """
     dt = params.delta_t
-    power = compute_next_power(power_requested, state.power, dt)
-    stick = compute_next_stick(stick_requested, state.stick, dt)
+    power = compute_next_power(
+        power_requested, state.power, dt, params.power_response_rate
+    )
+    stick = compute_next_stick(
+        stick_requested, state.stick, dt, params.stick_response_rate
+    )
     aileron = compute_next_aileron(aileron_requested, state.aileron, dt)
 
     # Total wind = steady mean + altitude shear + OU turbulence gust.

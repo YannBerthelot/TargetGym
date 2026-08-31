@@ -85,7 +85,9 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
         if params is None:
             params = (
                 self.default_params
-            )  # TODO : propagate this into the code sometime, as having params given to get_obs is not standard gymnax API
+            )  # NOTE: gymnax's get_obs takes no params; this environment's
+            # observation needs them, so the signature accepts them and falls
+            # back to the defaults when a caller follows the gymnax shape.
         return get_obs(state, params=params)
 
     def is_terminated(self, state: CSTRState, params: CSTRParams) -> jnp.ndarray:

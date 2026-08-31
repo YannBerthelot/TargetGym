@@ -108,10 +108,11 @@ rudder to stay coordinated; here sideslip simply does not exist. This is the
 single largest simplification, and it is why the regime of validity stops
 around 45° of bank.
 
-**⚠️ D2 — aileron authority is not calibrated.** `aileron_surface` and
-`moment_arm_aileron` are plausible rather than sourced, so the achievable roll
-*rate* is not validated against a real aircraft. The roll *damping* is, and the
-coordinated-turn relation is independent of both.
+**⚠️ D2 — aileron authority is not calibrated.** `aileron_surface`,
+`moment_arm_aileron` and `aileron_response_rate` are plausible rather than
+sourced, so the achievable roll *rate* is not validated against a real
+aircraft. The roll *damping* is, and the coordinated-turn relation is
+independent of all three.
 
 **⚠️ D3 — patrol formation quality.** The physics documented here is shared and
 validated. Both patrol variants now ship a PID baseline, including

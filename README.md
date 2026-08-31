@@ -242,46 +242,28 @@ it is actually up against. A purple dot marks each hidden quantity.
 
 ## Expert Baselines
 
-All eighteen environments ship a PID. Sixteen also ship an MPC; the two
-**Plane Patrol** variants do not -- see *Baseline coverage* below.
-
-- **PID**: Relay-autotuned or gradient-tuned controllers. Aircraft altitude tracking
-  uses a **cascaded autopilot** (altitude -> vertical speed -> pitch -> elevator) with
-  attitude limiting and angle-of-attack protection, since a single loop mapping
-  altitude error straight to elevator departs controlled flight on large climbs.
-- **MPC**: Three implementations, chosen per plant. **CasADi/IPOPT** where a
-  symbolic NLP is natural; **gradient MPC** through JAX autodiff where the plant
-  is already differentiable; and **cross-entropy sampling** for the cement kiln,
-  which is gradient-free by necessity -- its free lime depends on temperature
-  through a 280 kJ/mol Arrhenius term that is then advected down the kiln, so
-  reverse-mode gradients overflow to NaN after about eight steps while finite
-  differences on the same objective stay clean.
-
-  An MPC objective must share the reward's *minimiser*, not its shape. Copying
-  a clipped tracking reward gives the optimiser no gradient exactly where it is
-  needed; dropping the clip makes large errors score better. Both failures
-  happened here before the objectives became plain quadratics.
+All eighteen environments ship a PID; sixteen also ship an MPC. The two
+**Plane Patrol** variants have no MPC, because their reference is a manoeuvring
+lead whose future trajectory an MPC would need as a time-varying parameter --
+recorded in the registry, so a missing baseline is a documented gap rather than
+a silent one.
 
 The right *structure* usually matters more than the gains, and the baselines are
 chosen to show it: three-element control on the boiler drum, where feedwater
-tracks measured steam flow as a feedforward so the level gauge cannot lie to it;
-a cascade on the kiln, because integral action on a half-hour-old measurement
-oscillates at the delay period; and **crossed** loops on the four-tank, whose
-negative RGA element makes the obvious diagonal pairing unstable.
+tracks measured steam flow so the level gauge cannot lie to it; a cascade on the
+kiln, because integral action on a half-hour-old measurement oscillates at the
+delay period; and **crossed** loops on the four-tank, whose negative RGA element
+makes the obvious diagonal pairing unstable.
 
-Every baseline is held to a **controller-effectiveness contract** in the test suite:
-a PID must beat the best constant action on its environment. This is a deliberately
-weak bar, but it is the bar a mis-wired controller fails -- it caught a furnace PID
-that was tracking *fuel percentage* as its temperature setpoint after an observation
-vector changed underneath it.
+Every baseline is held to a **controller-effectiveness contract**: a PID must
+beat the best constant action on its environment. A deliberately weak bar, but
+the bar a mis-wired controller fails -- it caught a furnace PID tracking *fuel
+percentage* as its temperature setpoint after an observation vector changed
+underneath it.
 
-### Baseline coverage
-
-| Environment | PID | MPC | Note |
-|---|---|---|---|
-| All process, industrial and non-patrol aircraft envs | yes | yes | passes the effectiveness contract |
-| Plane Patrol | yes | no | Pursuit guidance toward the slot *position*. Holds formation on roughly half of evaluation seeds; see *Known gaps*. No MPC: the reference is a manoeuvring lead, so a CasADi formulation needs its future trajectory as a time-varying parameter. |
-| Plane Patrol -- Bearing-only | yes | no | A lead-state estimator feeding the same pursuit law. Range with azimuth and elevation is a complete relative-position measurement, so only the lead's *heading* is genuinely unobservable; it is recovered from the lead's motion. Performance matches the full-observation expert, so the partial observation costs almost nothing here. |
+**[docs/baselines.md](docs/baselines.md)** has the details: the three MPC
+implementations and why each plant gets the one it does, the cascaded autopilot,
+tuning and caching, and per-environment baseline coverage.
 
 ---
 
@@ -396,24 +378,19 @@ The full index is at **[docs/](docs/index.md)**.
 
 ## Usage
 
-Here's a minimal example of running an episode in the **Plane** environment and saving a video:
+A minimal episode in the **Plane** environment, saved as a video:
 
 ```python
 from target_gym import Plane, PlaneParams
 
-# Create env
 env = Plane()
-seed = 42
 env_params = PlaneParams(max_steps_in_episode=1_000)
+action = (0.8, 0.0)  # 80 % power, level stick
 
-# Simple constant policy with 80% power and 0 deg stick input
-action = (0.8, 0.0)
-
-# Save the video
-env.save_video(lambda o: action, seed, folder="videos", episode_index=0, params=env_params, format="gif")
+env.save_video(lambda o: action, 42, folder="videos", episode_index=0, params=env_params, format="gif")
 ```
 
-Or train an agent using your favorite RL library (example with stable-baselines3):
+Or train an agent with your favourite RL library (stable-baselines3 here):
 
 ```python
 from target_gym import GymnasiumPlane
@@ -422,7 +399,6 @@ from stable_baselines3 import SAC
 env = GymnasiumPlane()
 model = SAC("MlpPolicy", env, verbose=1)
 model.learn(total_timesteps=10_000, log_interval=4)
-model.save("sac_plane")
 
 obs, info = env.reset()
 while True:
@@ -432,78 +408,10 @@ while True:
         break
 ```
 
-Industrial environments follow the same interface, and expose their baselines
-directly:
-
-```python
-import jax
-import jax.numpy as jnp
-from target_gym import BuildingHVAC, HVACParams
-
-env = BuildingHVAC()
-params = HVACParams(max_steps_in_episode=96)   # one day at 15 min steps
-pid = env.make_pid()                            # tuned PID baseline
-pid.reset()
-
-key = jax.random.PRNGKey(0)
-obs, state = env.reset_env(key, params)
-total = 0.0
-for _ in range(params.max_steps_in_episode):
-    key, sub = jax.random.split(key)
-    obs, state, reward, terminated, _ = env.step_env(sub, state, jnp.asarray(pid(obs)), params)
-    total += float(reward)
-    if bool(terminated):
-        break
-print(f"PID return: {total:.1f}")
-```
-
-Every registered environment is discoverable through the registry, which is what
-the conformance suite and the runner CLI iterate over:
-
-```python
-from target_gym import registry
-
-for spec in registry.all_specs():
-    print(spec.name, spec.group, "PID" if spec.has_pid else "-", "MPC" if spec.has_mpc else "-")
-```
-
-The **multi-agent** close-patrol task exposes a JaxMARL-style dict interface
-(both aircraft learn a cooperative formation):
-
-```python
-import jax
-from target_gym import PlanePatrolMARL
-
-env = PlanePatrolMARL(num_wingmen=4)         # 5 planes: 1 lead + 4 wingmen
-params = env.default_params
-key = jax.random.PRNGKey(0)
-
-obs, state = env.reset(key, params)          # obs = {"lead": ..., "wingman_0": ..., ...}
-actions = {agent: env.action_space(agent).sample(key) for agent in env.agents}
-obs, state, rewards, dones, info = env.step(key, state, actions, params)
-# rewards/dones are dicts keyed by agent (+ dones["__all__"]); reward is shared.
-```
-
-### Wind & turbulence
-
-Every plane-based env (`Plane`, `Plane3D`, `PlanePatrol`, `PlanePatrolMARL`)
-inherits a wind model applied to the air-relative aerodynamics. It is an
-**unobservable** disturbance by default — pass `observe_wind=True` for a
-fully-observable baseline. Formations feel a single shared gust field.
-
-```python
-from target_gym import Plane, PlaneParams
-
-params = PlaneParams(
-    wind_x=-15.0,          # steady mean wind (m/s), world frame
-    wind_shear_x=0.02,     # + linear altitude shear: +0.02 m/s per metre above...
-    shear_ref_alt=5000.0,  # ...this reference altitude
-    turbulence_sigma=3.0,  # + Ornstein-Uhlenbeck gusts (0 = off); theta = turbulence_theta
-)
-
-hidden = Plane()                     # wind is a hidden disturbance (POMDP)
-baseline = Plane(observe_wind=True)  # appends the realized wind to the observation
-```
+**[docs/getting-started.md](docs/getting-started.md)** covers the rest: driving
+`step_env` directly, vectorising rollouts with `vmap` and `scan`, working from
+the registry, the multi-agent patrol interface, and the wind and turbulence
+model.
 
 ---
 

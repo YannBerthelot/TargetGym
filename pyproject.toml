@@ -206,10 +206,11 @@ show_missing = true
 # of the 46 PID factories were never built (pid.py: 70% -> 89%). 86 leaves a
 # point of slack so an unrelated refactor does not fail the build.
 #
-# What remains is mostly experts/pid_tuning.py, whose per-environment tuners run
-# gradient descent through compiled episode scans -- covering them means running
-# real optimisations, which belongs behind the `slow` marker if it is done.
-fail_under = 86
+# The tuners are covered too, by running each for a couple of gradient steps --
+# enough to build a loss, differentiate it and apply an update, which is where
+# their failures live. What is left is error branches and __main__ guards, where
+# a test costs more than it is worth.
+fail_under = 89
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -119,3 +119,42 @@ env.save_video(
     folder="videos", episode_index=0, params=params, format="gif",
 )
 ```
+
+## The multi-agent patrol
+
+(both aircraft learn a cooperative formation):
+
+```python
+import jax
+from target_gym import PlanePatrolMARL
+
+env = PlanePatrolMARL(num_wingmen=4)         # 5 planes: 1 lead + 4 wingmen
+params = env.default_params
+key = jax.random.PRNGKey(0)
+
+obs, state = env.reset(key, params)          # obs = {"lead": ..., "wingman_0": ..., ...}
+actions = {agent: env.action_space(agent).sample(key) for agent in env.agents}
+obs, state, rewards, dones, info = env.step(key, state, actions, params)
+# rewards/dones are dicts keyed by agent (+ dones["__all__"]); reward is shared.
+```
+
+## Wind and turbulence
+
+Every plane-based env (`Plane`, `Plane3D`, `PlanePatrol`, `PlanePatrolMARL`)
+inherits a wind model applied to the air-relative aerodynamics. It is an
+**unobservable** disturbance by default — pass `observe_wind=True` for a
+fully-observable baseline. Formations feel a single shared gust field.
+
+```python
+from target_gym import Plane, PlaneParams
+
+params = PlaneParams(
+    wind_x=-15.0,          # steady mean wind (m/s), world frame
+    wind_shear_x=0.02,     # + linear altitude shear: +0.02 m/s per metre above...
+    shear_ref_alt=5000.0,  # ...this reference altitude
+    turbulence_sigma=3.0,  # + Ornstein-Uhlenbeck gusts (0 = off); theta = turbulence_theta
+)
+
+hidden = Plane()                     # wind is a hidden disturbance (POMDP)
+baseline = Plane(observe_wind=True)  # appends the realized wind to the observation
+```

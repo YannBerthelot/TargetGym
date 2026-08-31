@@ -1,0 +1,30 @@
+name: New environment
+description: Propose an environment to add.
+labels: ["environment"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        See "Adding an environment" in [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md).
+        The bar is a physics contract: sourced parameters, validation targets a
+        test can assert, and honestly stated deviations.
+  - type: input
+    id: name
+    attributes:
+      label: Plant or system
+    validations:
+      required: true
+  - type: textarea
+    id: target
+    attributes:
+      label: What is the target, and what makes holding it hard?
+      description: These are target MDPs -- reach and *maintain*. Transport delay, an irrecoverable state, a non-minimum-phase response, a finite budget?
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources for the dynamics and parameters
+      description: What would the PHYSICS.md cite, and what published figures could the tests assert?
+    validations:
+      required: true

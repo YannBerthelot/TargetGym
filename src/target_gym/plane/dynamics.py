@@ -126,22 +126,29 @@ def check_power(power):
 EPS = 1e-8
 
 
-def compute_next_power(requested_power, current_power, delta_t):
+# First-order actuator lags. The defaults reproduce the behaviour these had as
+# literals; they are parameters so that a slower engine or a stiffer control
+# system is expressible, and so that they appear in the parameter table rather
+# than sitting unsourced in the code.
+POWER_RESPONSE_RATE = 0.05
+STICK_RESPONSE_RATE = 0.9
+
+
+def compute_next_power(
+    requested_power, current_power, delta_t, rate: float = POWER_RESPONSE_RATE
+):
+    """First-order spool-up toward the requested throttle setting."""
     requested_power = jnp.clip(requested_power, 0.0 + EPS, 1.0)
     power_diff = requested_power - current_power
-    current_power += (
-        0.05 * delta_t * power_diff
-    )  # TODO : parametrize how fast we reach the desired value
-    # jax.debug.callback(check_power, current_power)
-    return current_power
+    return current_power + rate * delta_t * power_diff
 
 
-def compute_next_stick(requested_stick, current_stick, delta_t):
+def compute_next_stick(
+    requested_stick, current_stick, delta_t, rate: float = STICK_RESPONSE_RATE
+):
+    """First-order lag toward the requested stick deflection."""
     stick_diff = requested_stick - current_stick
-    current_stick += (
-        0.9 * delta_t * stick_diff
-    )  # TODO : parametrize how fast we reach the desired value
-    return current_stick
+    return current_stick + rate * delta_t * stick_diff
 
 
 def compute_thrust_output(
@@ -334,9 +341,8 @@ def compute_acceleration(
     # jax.debug.print(
     #     "{x} {y} {z}", x=jnp.rad2deg(alpha), y=jnp.rad2deg(gamma), z=jnp.rad2deg(theta)
     # )
-    m = (
-        params.initial_mass
-    )  # TODO : make it the actual mass when we start considering fuel consumption
+    # Constant mass: fuel burn is not modelled (plane/PHYSICS.md, D4).
+    m = params.initial_mass
     rho = compute_air_density_from_altitude(z)
     M = compute_Mach_from_velocity_and_speed_of_sound(
         velocity=compute_velocity_from_horizontal_and_vertical_speed(air_x, air_z),

@@ -24,12 +24,15 @@ from target_gym.plane.dynamics import (
 )
 from target_gym.utils import compute_norm_from_coordinates
 
+AILERON_RESPONSE_RATE = 0.9
 
-def compute_next_aileron(requested_aileron, current_aileron, delta_t):
-    """Smooth aileron response (same dynamics as stick)."""
+
+def compute_next_aileron(
+    requested_aileron, current_aileron, delta_t, rate: float = AILERON_RESPONSE_RATE
+):
+    """First-order lag toward the requested aileron deflection."""
     aileron_diff = requested_aileron - current_aileron
-    current_aileron += 0.9 * delta_t * aileron_diff
-    return current_aileron
+    return current_aileron + rate * delta_t * aileron_diff
 
 
 def compute_velocity_3d(x_dot, y_dot, z_dot):

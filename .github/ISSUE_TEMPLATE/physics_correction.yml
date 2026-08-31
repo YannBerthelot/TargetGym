@@ -1,0 +1,36 @@
+name: Physics correction
+description: An environment's model or a parameter disagrees with a published source.
+labels: ["physics"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every environment carries a `PHYSICS.md` with its parameter sources,
+        validation targets and known deviations. A correction is most useful
+        when it says which of those it contradicts.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: cement_kiln
+    validations:
+      required: true
+  - type: textarea
+    id: claim
+    attributes:
+      label: What the model does now
+      description: Quote the parameter, equation or validation target, and where it appears in PHYSICS.md.
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: The source it should match
+      description: A citation with the figure or value. This is the part that makes the correction actionable.
+    validations:
+      required: true
+  - type: textarea
+    id: consequence
+    attributes:
+      label: What it changes
+      description: Does it move a validation target, invalidate tuned gains, or only matter in a regime the model already excludes?

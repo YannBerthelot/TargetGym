@@ -70,6 +70,8 @@ density path. Harmless at 0.01 %, but the two should be unified.
 | `I` | 9.0 × 10⁶ | kg·m² | TUNED — not sourced. Order-of-magnitude plausible for a 37 m fuselage. | ⚠️ |
 | `moment_arm_stabilizer` | 15.0 | m | TUNED — plausible tail arm for A320 geometry | ⚠️ |
 | `moment_arm_wings` | 1.5 | m | TUNED — wing AC to CG offset | ⚠️ |
+| `power_response_rate` | 0.05 | 1/s | TUNED — first-order spool rate; an airliner reaches ~63 % of a throttle change in ~20 s | ⚠️ |
+| `stick_response_rate` | 0.9 | 1/s | TUNED — control-surface lag, deliberately far faster than the engine | ⚠️ |
 
 **Mass bookkeeping.** `compute_acceleration` integrates `params.initial_mass`.
 `state.m` previously reported `initial_mass + fuel = 92 588 kg`, which both
@@ -190,3 +192,12 @@ Specifically, `tests/plane/test_plane_physics.py` asserts:
 Tests assert *emergent* behaviour, never a re-implementation of the formula
 under test. A test that restates the implementation validates transcription, not
 correctness, and fails in exactly the same way as a wrong formula.
+
+**⚠️ D4 — mass is constant.** `initial_mass` is used throughout; fuel burn is
+not subtracted, although `initial_fuel_quantity` and
+`specific_fuel_consumption` are carried in the parameters. Over the episode
+lengths here the error is small — an A320 burns on the order of 0.7 % of its
+mass in ten minutes — but it means the model cannot represent a long cruise, and
+that the range implied by the fuel parameters is not something this model
+computes. This was previously a `TODO` in the code; it is a documented
+simplification rather than pending work.

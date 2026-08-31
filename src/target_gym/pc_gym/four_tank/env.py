@@ -99,10 +99,10 @@ def compute_velocity(position, action, params: FourTankParams):
     h1, h2, h3, h4 = position[0], position[1], position[2], position[3]
     v1, v2 = action[0], action[1]
 
-    sqrt_h1 = jnp.sqrt(jnp.maximum(h1, 0.0))
-    sqrt_h2 = jnp.sqrt(jnp.maximum(h2, 0.0))
-    sqrt_h3 = jnp.sqrt(jnp.maximum(h3, 0.0))
-    sqrt_h4 = jnp.sqrt(jnp.maximum(h4, 0.0))
+    sqrt_h1 = _safe_sqrt(h1)
+    sqrt_h2 = _safe_sqrt(h2)
+    sqrt_h3 = _safe_sqrt(h3)
+    sqrt_h4 = _safe_sqrt(h4)
 
     dh1dt = (
         -(params.a1 / params.A1) * jnp.sqrt(2 * params.g) * sqrt_h1
@@ -124,6 +124,24 @@ def compute_velocity(position, action, params: FourTankParams):
     )
 
     return jnp.array([dh1dt, dh2dt, dh3dt, dh4dt]), None
+
+
+def _safe_sqrt(x):
+    """``sqrt(max(x, 0))`` with a finite derivative at zero.
+
+    Torricelli outflow goes as the square root of the level, and a tank can sit
+    empty. Written as ``jnp.sqrt(jnp.maximum(h, 0.0))`` the forward value is
+    right, but the reverse-mode derivative is not: d(sqrt)/dx is infinite at
+    zero, and the clamp contributes a zero, so the product is NaN. That NaN then
+    poisons the whole gradient -- which is why gradient-based PID tuning on this
+    plant returned NaN gains while its loss evaluated perfectly well.
+
+    The nested ``where`` is the standard remedy: the inner one keeps the value
+    passed to ``sqrt`` away from zero along the differentiated path, and the
+    outer one restores the exact value. Forward results are unchanged.
+    """
+    positive = x > 0.0
+    return jnp.where(positive, jnp.sqrt(jnp.where(positive, x, 1.0)), 0.0)
 
 
 @partial(jax.jit, static_argnames=["integration_method"])

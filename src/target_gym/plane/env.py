@@ -122,6 +122,13 @@ class PlaneParams(EnvParams):
     # of it by M 0.95, which is the right order for lift divergence.
     k_shock_stall: float = 4.0
     shock_stall_floor: float = 0.25
+
+    # Actuator lags, as first-order rates per second. TUNED -- not sourced.
+    # The engine is deliberately far slower than the control surface: an
+    # airliner spools up over seconds, the stick responds immediately, and it
+    # is that separation the altitude controllers have to work around.
+    power_response_rate: float = 0.05
+    stick_response_rate: float = 0.9
     k_drag: float = 5.0
 
     I: float = 9_000_000
@@ -253,8 +260,12 @@ def compute_next_state(
     gust (so callers that don't model turbulence keep a constant wind).
     """
     dt = params.delta_t
-    power = compute_next_power(power_requested, state.power, dt)
-    stick = compute_next_stick(stick_requested, state.stick, dt)
+    power = compute_next_power(
+        power_requested, state.power, dt, params.power_response_rate
+    )
+    stick = compute_next_stick(
+        stick_requested, state.stick, dt, params.stick_response_rate
+    )
 
     # Total wind = steady mean + altitude shear + OU turbulence gust.
     gust = advance_gust(

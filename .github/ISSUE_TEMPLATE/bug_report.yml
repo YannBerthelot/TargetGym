@@ -1,0 +1,36 @@
+name: Bug report
+description: Something behaves differently from what the documentation or a contract says.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the issue is that an environment's *physics* disagrees with a source,
+        please use "Physics correction" instead -- it asks for the reference.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Registry name, e.g. `boiler_drum`. Leave blank if it is not environment-specific.
+      placeholder: boiler_drum
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Ideally a short script. It is rendered as Python, no backticks needed.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      description: "Output of: `python -c 'import target_gym, jax; print(target_gym.__version__, jax.__version__)'` and your Python version."
+    validations:
+      required: true

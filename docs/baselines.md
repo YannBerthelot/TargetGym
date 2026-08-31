@@ -83,3 +83,36 @@ job:
 
 These are what stop a baseline from silently degrading into a controller that
 is well-formed but not controlling.
+
+## Structure over gains
+
+The right structure usually matters more than the numbers, and the shipped
+baselines are chosen to show it:
+
+- **Three-element control on the boiler drum.** Feedwater tracks measured steam
+  flow as a feedforward, so shrink-and-swell cannot fool the level loop: the
+  drum level *rises* when steam demand increases, and a naive level controller
+  responds by cutting feedwater at exactly the wrong moment.
+- **A cascade on the cement kiln.** Integral action on a measurement half an
+  hour old oscillates at the delay period; an inner loop on a faster
+  measurement is what makes the outer loop tractable.
+- **Crossed loops on the four-tank.** Its relative gain array puts λ11 at
+  −0.067, so pairing each pump with the tank beneath it -- the obvious choice --
+  is unstable. The shipped PID pairs them the other way.
+- **A cascaded autopilot for aircraft altitude** (altitude → vertical speed →
+  pitch → elevator) with attitude limiting and angle-of-attack protection. A
+  single loop mapping altitude error straight to elevator departs controlled
+  flight on large climbs.
+
+## The MPC objective is not the reward
+
+An MPC objective must share the reward's *minimiser*, not its shape. Copying a
+clipped tracking reward gives the optimiser no gradient exactly where it is
+needed; dropping the clip makes large errors score better than they should.
+Both failures happened here before the objectives became plain quadratics.
+
+The cement kiln is the clearest case for choosing the implementation to fit the
+plant: its free lime depends on temperature through a 280 kJ/mol Arrhenius term
+that is then advected down the kiln, so reverse-mode gradients overflow to NaN
+after about eight steps while finite differences on the same objective stay
+clean. Hence cross-entropy sampling rather than a gradient method.
