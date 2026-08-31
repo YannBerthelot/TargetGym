@@ -118,6 +118,44 @@ CD     = cd0 + k·CL²  + k_drag·max(0, M - M_crit)²
 
 ---
 
+## 5. Task design — the tracking reward
+
+Hold a sampled target altitude. Per step:
+
+```
+reward = 1 - log1p(|z - target| / precision_floor) / log1p(span / precision_floor)
+       = -max_steps_in_episode            outside the altitude envelope
+```
+
+1 at the target, 0 at the far edge of the envelope, `precision_floor` = 1 m.
+
+**Why logarithmic.** This benchmark exists to ask whether a learned policy can
+hold a setpoint better than a PID. That question is only askable if the reward
+keeps paying for precision all the way down. Two earlier shapes did not:
+
+`((span - |e|)/span)**10` normalised by the whole 12 km envelope, so over any
+realistic error it is `1 - 10 e/span` — effectively linear, worth 8e-4 per metre
+whether the aircraft is 10 m or 400 m out. Closing the last 9 m gained 0.007
+against 0.26 for halving a 1600 m error.
+
+A band-scaled kernel, `1/(1 + (e/band)^2)`, fixes the mid-range but peaks *at*
+the band and collapses inside it: each halving below the band is worth a
+quarter of the one before, so it rewards reaching a tolerance and then stops
+caring. That is the wrong incentive for a benchmark whose question is "how
+precisely".
+
+The logarithm makes every halving worth the same — 0.083 from 1600 m to 800 m,
+0.082 from 100 m to 50 m, 0.068 from 6.25 m to 3.13 m — which is what "closer is
+better" has to mean if it is to mean the same thing at every scale. It also
+keeps a gradient arbitrarily far out, where a Gaussian on a band is identically
+zero in floating point.
+
+**The floor, not a band.** `precision_floor` is where precision stops being
+meaningful, not where it stops being required: the reward flattens beneath it,
+and it is set to a physical resolution (a barometric altimeter reads to about a
+metre) rather than to a chosen tolerance. It also keeps the reward bounded,
+since an unfloored logarithm diverges at zero error.
+
 ## 5. Known deviations
 
 **✅ D1 and D2 — resolved.** They were one defect, not two.

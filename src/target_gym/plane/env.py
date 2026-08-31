@@ -127,6 +127,17 @@ class PlaneParams(EnvParams):
     # The engine is deliberately far slower than the control surface: an
     # airliner spools up over seconds, the stick responds immediately, and it
     # is that separation the altitude controllers have to work around.
+    # The altitude error below which "more precise" stops being meaningful, in
+    # metres. It is a *resolution*, not a tolerance: the reward keeps paying for
+    # every halving of the error down to this point, and only flattens beneath
+    # it. 1 m is the order of a barometric altimeter's resolution, so tracking
+    # tighter than this would be rewarding the controller for chasing noise.
+    #
+    # This is the parameter that decides how precise the benchmark asks a policy
+    # to be, so it is deliberately a physical limit rather than a comfort band:
+    # a band rewards reaching a tolerance and then stops caring, which cannot
+    # show whether a learned policy holds altitude better than a PID.
+    precision_floor: float = 1.0
     power_response_rate: float = 0.05
     stick_response_rate: float = 0.9
     k_drag: float = 5.0
@@ -207,13 +218,17 @@ def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
     xp = jnp
     done_alt = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
     max_alt_diff = params.max_alt - params.min_alt
+    error = xp.abs(state.target_altitude - state.z)
+    # Log-scaled tracking: every halving of the error is worth the same, so
+    # holding 1 m is rewarded over 2 m exactly as much as 100 m is over 200 m.
+    # ``max_alt_diff`` only normalises the result into [0, 1]; unlike the old
+    # reward it does not set the sensitivity, because the shape is logarithmic
+    # and therefore scale-free.
+    scale = xp.log1p(max_alt_diff / params.precision_floor)
     reward = xp.where(
         done_alt,
         -1.0 * params.max_steps_in_episode,
-        xp.float_power(
-            (max_alt_diff - xp.abs(state.target_altitude - state.z)) / max_alt_diff,
-            10.0,
-        ),
+        1.0 - xp.log1p(error / params.precision_floor) / scale,
     )
     return reward
 

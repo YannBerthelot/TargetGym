@@ -74,15 +74,16 @@ make clear-mpc     # drop the MPC trajectory cache
 
 ## What the suite guarantees
 
-Two contracts, asserted for every registered environment, run in the `slow`
-job:
+One contract, asserted for every registered environment, runs in the `slow`
+job: the PID must beat the **best constant action**. A weak bar, but exactly
+the one a mis-indexed setpoint fails -- it caught a furnace PID tracking fuel
+percentage as its temperature setpoint.
 
-- the PID beats the **best constant action** -- a weak bar, but exactly the
-  one a mis-indexed setpoint fails;
-- the MPC is at least as good as the PID.
-
-These are what stop a baseline from silently degrading into a controller that
-is well-formed but not controlling.
+There is deliberately **no** "MPC beats PID" contract, and it would not pass if
+there were: on the 2D aircraft the shipped MPC settles about 2 400 m from the
+target altitude where the PID settles about 390 m. Writing the contract would
+therefore be asserting something untrue. It is recorded here instead, and in
+the roadmap, as work rather than as a guarantee.
 
 ## Structure over gains
 
