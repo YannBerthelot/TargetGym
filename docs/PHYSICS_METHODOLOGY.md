@@ -135,3 +135,39 @@ approach-and-landing task without fixing D1 first.
 So for each environment, state the **regime of validity**, and check that the
 task's operating envelope sits inside it. An undocumented simplification is a
 bug; a documented one is a design decision.
+
+## Test the regime an optimiser will find, not the one you designed for
+
+The aircraft carried a defect for a long time that every physics test agreed
+with. `CD = cd0 + k·CL²` models drag as a consequence of lift, which is true in
+attached flow and false once the wing separates; past the stall the model
+collapsed lift and so collapsed drag with it, leaving a stalled wing with *less*
+drag than in cruise. A departed aircraft then had almost no aerodynamic forces
+at all.
+
+Thirty-eight physics tests did not catch it, and the reasons generalise.
+
+**Testing a derived quantity where it is derived tests nothing.** All seven drag
+tests probed attached flow, where drag is *defined* from lift. Inside that
+regime the formula is self-consistent, so no amount of testing there can reveal
+that it has no separated-flow term.
+
+**Weak assertions pass degenerate answers.** Two tests did reach past the stall.
+One asserted lift "collapses" — and a collapse to exactly zero is a maximal
+collapse, so the defect satisfied it emphatically. The other swept angle of
+attack to 30°, straight through the broken region, and asserted only `isfinite`
+and `cd > 0`: a wing producing 0.02 of drag is finite and positive. It went to
+the right place and asked the wrong question.
+
+**An optimiser goes looking for the region nobody modelled.** This is what makes
+a benchmark different from ordinary simulation. An engineer drives a model
+around its design point; an MPC or an RL agent searches, finds the unmodelled
+corner where the physics is cheap, and exploits it. The MPC found this one by
+stalling the aircraft and discovering that departure cost nothing.
+
+So contracts should be stated over the **reachable** state space, not the
+intended one. `test_angles_stay_bounded_under_extreme_actions` in the
+conformance suite is the general form: drive each plant to its action limits and
+require that its state stay physical or its episode end. It found the aerodynamic
+gap, and it is still finding one — the aircraft has no pitch-rate damping, so a
+departed airframe tumbles indefinitely even now that the forces are right.

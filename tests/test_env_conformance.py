@@ -546,3 +546,81 @@ def test_pid_is_deterministic_across_resets(spec):
     pid.reset()
     second = _episode_return(spec, lambda o: pid(o), 0)
     assert first == pytest.approx(second, rel=1e-5, abs=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# The model must stay physical wherever an optimiser can drive it
+# ---------------------------------------------------------------------------
+
+# Attitude angles only, and only the ones that are *integrated*. "alpha" is
+# deliberately absent: it is angle of attack on the aircraft but residual
+# calcination extent on the cement kiln, where it is a fraction in [0, 1] and an
+# array. Matching on names alone produced that false positive.
+ANGLE_FIELDS = ("theta", "phi", "psi", "gamma")
+
+# Environments whose attitude winds up without bound. Recorded rather than
+# skipped: the contract is right and these are the gap it found.
+UNDAMPED_ATTITUDE = {"plane", "plane3d_heading", "plane3d_circle", "plane3d_figure8"}
+MAX_TURNS = 4.0  # full rotations before we call it a tumble rather than a manoeuvre
+
+
+def test_angles_stay_bounded_under_extreme_actions(spec):
+    """An angle that accumulates without bound means damping is missing.
+
+    This is the contract the aircraft's zero-drag stall defect slipped past for
+    so long. Every drag test probed attached flow, where ``CD = cd0 + k*CL**2``
+    is self-consistent -- testing drag there tests the formula against itself,
+    and cannot reveal that it has no separated-flow term at all. The two tests
+    that did reach past the stall were *satisfied* by the defect: a lift
+    collapse to zero is a maximal collapse, and a sweep asserting ``isfinite``
+    and ``cd > 0`` is happy with a wing producing less drag than in cruise.
+
+    A benchmark is where this matters most, because an optimiser goes looking
+    for the region nobody modelled. So the contract is about reachability, not
+    about the design point: drive the plant to its limits and the state must
+    stay physical, or the episode must end.
+    """
+    env = spec.make_env()
+    params = spec.make_test_params()
+    probe = env.reset_env(jax.random.PRNGKey(0), params)[1]
+    fields = [
+        f
+        for f in ANGLE_FIELDS
+        if hasattr(probe, f) and np.ndim(np.asarray(getattr(probe, f))) == 0
+    ]
+    if not fields:
+        pytest.skip(f"{spec.name} has no scalar attitude state")
+    if spec.name in UNDAMPED_ATTITUDE:
+        pytest.xfail(
+            f"{spec.name}: attitude is integrated with no aerodynamic rate "
+            "damping -- a real tail's incidence carries a q*l/V term that "
+            "opposes pitch rate, and nothing here does. A departed aircraft "
+            "therefore tumbles indefinitely. Distinct from the post-stall drag "
+            "defect (fixed): that removed the forces, this removes the moment "
+            "that would arrest the rotation."
+        )
+
+    space = env.action_space(params)
+    shape = space.shape or (1,)
+    low = np.broadcast_to(np.asarray(space.low, float), shape)
+    high = np.broadcast_to(np.asarray(space.high, float), shape)
+    step = jax.jit(env.step_env)
+
+    worst = 0.0
+    for frac in (0.0, 1.0):
+        action = jnp.asarray(low + frac * (high - low))
+        key = jax.random.PRNGKey(0)
+        _, state = env.reset_env(key, params)
+        for _ in range(int(params.max_steps_in_episode)):
+            _, state, _, terminated, _ = step(key, state, action, params)
+            for f in fields:
+                worst = max(worst, abs(float(getattr(state, f))))
+            if bool(terminated):
+                break
+
+    turns = worst / (2 * np.pi)
+    assert turns < MAX_TURNS, (
+        f"{spec.name}: an angle reached {turns:.1f} full rotations "
+        f"({np.rad2deg(worst):.0f} deg) while the episode continued. Unbounded "
+        "accumulation means the model has no damping for that axis."
+    )
