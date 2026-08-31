@@ -11,6 +11,7 @@ what industrial control actually is.
 | **[Environment reference](environments.md)** | All eighteen: shapes, tracked variables, baselines, physics contracts |
 | **[Public API](api.md)** | What is stable, what is not, and what changes at 1.0 |
 | **[Baselines](baselines.md)** | The shipped PID and MPC controllers, and how to tune them |
+| **[Reward shaping](reward-shaping.md)** | Why the tracking rewards have the shape they do, with the measurements |
 | **[Physics methodology](PHYSICS_METHODOLOGY.md)** | How each environment's physics is sourced, validated and bounded |
 | **[Contributing](../CONTRIBUTING.md)** | Tests, style, and what adding an environment involves |
 
