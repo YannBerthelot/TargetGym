@@ -12,6 +12,7 @@ what industrial control actually is.
 | **[Public API](api.md)** | What is stable, what is not, and what changes at 1.0 |
 | **[Baselines](baselines.md)** | The shipped PID and MPC controllers, and how to tune them |
 | **[Reward shaping](reward-shaping.md)** | Why the tracking rewards have the shape they do, with the measurements |
+| **[Model review checklist](model-review-checklist.md)** | Ten checks derived from real defects, and what they find across the environments |
 | **[Physics methodology](PHYSICS_METHODOLOGY.md)** | How each environment's physics is sourced, validated and bounded |
 | **[Contributing](../CONTRIBUTING.md)** | Tests, style, and what adding an environment involves |
 
