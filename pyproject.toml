@@ -47,6 +47,10 @@ dependencies = [
     "scipy>=1.11",
     "pandas>=2.0",
     "matplotlib>=3.8.1",
+    # Used directly by the gallery-clip tooling and the patrol runner. It
+    # arrives transitively through matplotlib and moviepy anyway, but an
+    # import in our own code is our own dependency to declare.
+    "pillow>=10.0",
     "moviepy>=2.2.1",
     # pygame's last release (2.6.1, 2024) ships wheels only through CPython
     # 3.13; on 3.14 it builds from source and its font module comes up broken,
