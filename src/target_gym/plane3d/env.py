@@ -108,6 +108,18 @@ class PlaneParams3D(EnvParams):
     # so the shared aerodynamics needs its own copy; the value matches.
     aspect_ratio: float = 9.48
 
+    # Control-surface effectiveness (the flap parameter tau). A surface
+    # deflected by delta does not change the section's incidence by delta: only
+    # the hinged part of the chord turns, so the effective change is tau*delta.
+    # Thin-aerofoil theory gives tau ~ 0.4 for a control surface occupying a
+    # quarter of the chord, which is the usual aileron proportion.
+    #
+    # Without it the model applied the *wing's* lift-curve slope directly to the
+    # deflection, implying a section lift change of 2.20 at full aileron --
+    # larger than the whole wing's CL_max of 1.5, and giving a roll rate of
+    # 84 deg/s against an A320's 25-30.
+    aileron_effectiveness: float = 0.4
+
     # Aero coefficients (shared with 2D)
     # Finite-wing lift-curve slope, derived (PHYSICS.md 4):
     #   a = a0 / (1 + a0/(pi*AR*e))  with a0 = 2*pi/rad, AR = 34.1^2/122.6 = 9.48,

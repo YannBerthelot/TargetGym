@@ -246,6 +246,7 @@ def compute_acceleration_3d(
         q
         * params.aileron_surface
         * params.cl_alpha
+        * params.aileron_effectiveness
         * xp.rad2deg(aileron)
         * params.moment_arm_aileron
     )

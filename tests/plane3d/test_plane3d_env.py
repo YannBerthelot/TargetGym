@@ -424,3 +424,65 @@ class TestActionSpace:
         assert action.shape == (3,)
         for i in range(3):
             assert -1 <= float(action[i]) <= 1
+
+
+def test_roll_authority_matches_a_transport_aircraft():
+    """Full aileron must roll at a transport's rate, not a fighter's.
+
+    This was PHYSICS.md D2 -- "aileron authority is not calibrated" -- and it
+    was not merely unvalidated but wrong by a factor of three. The moment
+    applied the *wing's* lift-curve slope directly to the aileron deflection,
+    implying a section lift change of 2.20 at full throw: larger than the whole
+    wing's CL_max of 1.5, which no control surface can do. The aircraft rolled
+    at 84 deg/s.
+
+    A deflected surface only turns the hinged part of the chord, so the
+    effective incidence change is tau*delta with tau ~ 0.4 for a quarter-chord
+    surface. With that, full aileron gives ~32 deg/s, against an A320's 15 deg/s
+    in normal law and 25-30 deg/s of raw aileron authority.
+    """
+    import jax
+    import jax.numpy as jnp
+    import numpy as np
+
+    from target_gym.registry import REGISTRY
+
+    spec = REGISTRY["plane3d_heading"]
+    env = spec.make_env()
+    params = spec.params_cls(max_steps_in_episode=200)
+    step = jax.jit(env.step_env)
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, params)
+
+    rates = []
+    for _ in range(200):
+        _, state, _, terminated, _ = step(
+            key, state, jnp.array([0.0, 0.0, 1.0]), params
+        )
+        rates.append(abs(float(np.rad2deg(state.phi_dot))))
+        if bool(terminated):
+            break
+
+    steady = float(np.median(rates[-20:]))
+    assert 20.0 < steady < 45.0, (
+        f"full aileron rolls at {steady:.0f} deg/s; a transport aircraft manages "
+        "25-30, and a value far above that means the surface is being credited "
+        "with more lift change than the wing can produce"
+    )
+
+
+def test_aileron_cannot_out_lift_the_wing():
+    """The consistency check behind the number above.
+
+    A control surface changes the section's effective incidence by tau*delta,
+    so the lift it commands must stay inside what the aerofoil can make.
+    """
+    from target_gym.plane3d.env import PlaneParams3D
+
+    p = PlaneParams3D()
+    full_deflection_deg = 25.0
+    delta_cl = p.cl_alpha * p.aileron_effectiveness * full_deflection_deg
+    assert delta_cl < p.CL_max, (
+        f"full aileron commands a section lift change of {delta_cl:.2f} against "
+        f"a CL_max of {p.CL_max}"
+    )
