@@ -57,7 +57,7 @@ ordinary flax idiom and produces hundreds of mismatches that are shorthand
 rather than bugs. `make mypy-all` shows the whole picture; widen the enforced
 list by making a module pass and adding it.
 
-Coverage sits above 80%, enforced at 79 by `make coverage` and on one CI
+Coverage sits near 87%, enforced at 86 by `make coverage` and on one CI
 column. It is a ratchet: raise it as coverage improves, never lower it to make
 a red build green. Nothing is excluded from the measurement -- the tuners and
 the figure runner are things users run, so leaving them out would measure a

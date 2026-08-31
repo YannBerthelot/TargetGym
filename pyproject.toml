@@ -200,14 +200,16 @@ show_missing = true
 # green. The bar sat at 80 for a long time while nothing ran it, and measuring
 # it for the first time gave 65 -- the gate would have failed on contact.
 #
-# It is now genuinely above 80. The gap was almost entirely the renderers:
-# sixteen of the eighteen had no test at all, and covering them took rendering
-# from 32% to 96%. 79 leaves a point of slack so an unrelated refactor does not
-# fail the build.
+# The gaps were all the same shape: user-reachable code with no test at all.
+# Sixteen of the eighteen renderers had none (rendering: 32% -> 96%), twelve of
+# the sixteen MPC baselines were never constructed (mpc.py: 40% -> 99%), and 28
+# of the 46 PID factories were never built (pid.py: 70% -> 89%). 86 leaves a
+# point of slack so an unrelated refactor does not fail the build.
 #
-# What remains uncovered is mostly the optimiser interiors in
-# experts/pid_tuning.py and the per-environment CasADi models in experts/mpc.py.
-fail_under = 79
+# What remains is mostly experts/pid_tuning.py, whose per-environment tuners run
+# gradient descent through compiled episode scans -- covering them means running
+# real optimisations, which belongs behind the `slow` marker if it is done.
+fail_under = 86
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
