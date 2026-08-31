@@ -325,14 +325,14 @@
     "Ki_power": 3e-05,
     "Kd_power": 0.15,
     "cruise": 0.6,
-    "Kp_hdg": 0.36,
+    "Kp_hdg": 0.284,
     "Ki_hdg": 0.0,
-    "Kd_hdg": 1.5,
-    "Kp_bank": -1.2,
-    "Kd_bank": 0.9,
+    "Kd_hdg": 1.808,
+    "Kp_bank": -4.287,
+    "Kd_bank": 3.124,
     "blend_dist": 500.0,
-    "tuning_rule": "grid_search_max_reward",
-    "note": "Re-tuned after the lift-curve correction doubled control authority. Settles ~139 m from the slot against a 60 m tolerance, so the formation tests remain xfail; this is the best of a grid search over altitude/heading/bank scalings."
+    "tuning_rule": "random_search_survival",
+    "note": "Re-searched after the heading loop was changed to command a turn rate rather than a bank angle. Commanding bank left the loop gain proportional to 1/V, a 45% swing across the speeds the follower flies, and every failing encounter spent 13-22% of its episode pinned at the 30 deg bank limit while the one that held formation never reached it. Inverting the coordinated-turn relation removed both. These gains are chosen for survival rather than settled error: 5 of 6 encounters completed against 2 of 6, at 135 m mean slot error against 130 m. Still outside the 60 m tolerance, so the formation tests remain xfail."
   },
   "glass_furnace": {
     "Kp": 0.04,
