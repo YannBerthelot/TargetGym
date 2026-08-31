@@ -604,3 +604,57 @@ def test_stall_transition_width_is_physically_plausible(params):
     assert (
         2.0 <= width_10_to_90 <= 5.0
     ), f"stall transition spans {width_10_to_90:.1f} deg; a real wing shows 2-5"
+
+
+# ---------------------------------------------------------------------------
+# Anchored checks: quantities the model does not get to define for itself
+#
+# Every defect found in this model was found by testing a quantity somewhere
+# other than where it is derived. Drag was tested only in attached flow, where
+# ``CD = cd0 + k*CL**2`` defines it from lift and is self-consistent by
+# construction. The two below are anchored outside the model: one to a
+# published aircraft's descent performance, one to the exact analytic result
+# for a flat plate. Both fail loudly on the zero-drag stall defect.
+# ---------------------------------------------------------------------------
+
+
+def test_terminal_velocity_of_a_falling_aircraft_is_plausible(params):
+    """A falling airframe must reach a survivable-to-state terminal velocity.
+
+    v_term = sqrt(2 m g / (rho S CD)) with the airframe broadside. This is the
+    single cheapest check that would have caught the missing post-stall drag:
+    with a separated wing at CD = cd0 the implied terminal velocity was 693 m/s,
+    past Mach 2 at sea level, and the model would happily integrate an aircraft
+    to it. No hypothesis about *what* was missing is needed -- only that the
+    number is absurd.
+    """
+    rho_sl = params.air_density_at_sea_level
+    cd = _CD(90.0, 0.3, params)
+    v_term = np.sqrt(
+        2 * params.initial_mass * params.gravity / (rho_sl * params.wings_surface * cd)
+    )
+    assert 50.0 < v_term < 200.0, (
+        f"a broadside airframe falls at {v_term:.0f} m/s (CD={cd:.3f}); "
+        "a real one is 100-150"
+    )
+
+
+def test_glide_ratio_becomes_a_flat_plate_past_stall(params):
+    """L/D spans lift and drag together, so it sees defects in either.
+
+    At 45 deg a fully separated surface is a flat plate, and a flat plate's
+    lift-to-drag ratio is exactly 1 -- CL = C_N cos a and CD = C_N sin a are
+    equal there, whatever C_N is. That makes it an anchor the model cannot
+    move: it does not depend on the aspect ratio, the stall angle, or any
+    coefficient this model chose.
+
+    The defect gave CL = 0 and CD = cd0, so L/D was 0. No single-coefficient
+    test noticed, because each looked defensible alone.
+    """
+    ld_cruise = _CL(2.0, 0.3, params) / _CD(2.0, 0.3, params)
+    ld_plate = _CL(45.0, 0.3, params) / _CD(45.0, 0.3, params)
+
+    assert ld_cruise > 8.0, f"cruise L/D is {ld_cruise:.1f}; a jet is well above 8"
+    assert ld_plate == pytest.approx(
+        1.0, abs=0.25
+    ), f"a separated wing at 45 deg has L/D 1 by construction, got {ld_plate:.2f}"

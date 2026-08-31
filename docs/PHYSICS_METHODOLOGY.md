@@ -171,3 +171,27 @@ conformance suite is the general form: drive each plant to its action limits and
 require that its state stay physical or its episode end. It found the aerodynamic
 gap, and it is still finding one — the aircraft has no pitch-rate damping, so a
 departed airframe tumbles indefinitely even now that the forces are right.
+
+### Anchor the check outside the model
+
+The common thread in every defect found this way is that the quantity was
+tested where it is *derived*. Drag was tested only in attached flow, where
+`CD = cd0 + k·CL²` defines it from lift and is self-consistent whatever the
+values. An energy audit has the same weakness in a subtler form: checking
+`dE/dt = T·V − D·V` closes by construction, because `D` is the model's own
+drag. It tests the integrator, not the physics.
+
+What discriminates is an anchor the model does not get to move:
+
+- **A published performance number.** The terminal velocity of a falling
+  airframe, `√(2mg/ρSC_D)`, was 693 m/s under the defect and is 86 m/s now.
+  The check needs no hypothesis about what is missing — only that 693 is absurd.
+- **An exact analytic result.** A flat plate's lift-to-drag ratio at 45° is
+  exactly 1, since `CL = C_N cos α` and `CD = C_N sin α` are equal there
+  whatever `C_N` is. It cannot be moved by any coefficient the model chose.
+- **A quantity spanning several mechanisms.** L/D sees defects in lift or drag;
+  each coefficient looked defensible alone, and the ratio did not.
+
+A useful test for a proposed contract: *could the model be wrong and this still
+pass?* If the assertion is computed from the same expression as the behaviour,
+the answer is yes.
