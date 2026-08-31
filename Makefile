@@ -8,7 +8,7 @@ CPU_ENV := CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu JAX_PLATFORM_NAME=cpu
 
 .PHONY: ci ci-lint ci-format-check ci-test help install \
         all all-% figures figures-% videos videos-% tuning tuning-% \
-        clear-tuning clear-mpc short-gifs test test-all mypy coverage \
+        clear-tuning clear-mpc short-gifs docs docs-build test test-all mypy coverage \
         missing-annotations type lint format check-codestyle commit-checks \
         mypy-all
 
@@ -64,6 +64,12 @@ tuning-%:
 clear-tuning:
 	rm -f data/pid_gains.json
 	@echo "Cleared PID gains cache (data/pid_gains.json)."
+
+docs:  ## Serve the documentation site locally at :8000
+	uv run --group docs mkdocs serve
+
+docs-build:  ## Build the documentation site into site/ (what CI publishes)
+	uv run --group docs mkdocs build --strict
 
 short-gifs:
 	uv run python scripts/shorten_gifs.py

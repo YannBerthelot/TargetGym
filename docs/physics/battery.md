@@ -1,0 +1,1 @@
+--8<-- "src/target_gym/energy/battery/PHYSICS.md"

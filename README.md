@@ -447,10 +447,16 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 
 ### Before 1.0
 
-* [ ] **Host the documentation.** `docs/` is written and its examples are
-      executed by the suite, but it is read as Markdown on GitHub. A GitHub
-      Pages site (MkDocs Material) would give it navigation, search and a
-      versioned URL, built and deployed from the same workflow that tests it.
+* [x] **Host the documentation.** Built with MkDocs Material and deployed to
+      GitHub Pages by `.github/workflows/docs.yml`, which also builds `--strict`
+      on pull requests so a broken link fails review rather than the deploy. The
+      fifteen per-environment physics contracts stay next to the code they
+      describe and are pulled into the site at build time by `docs/hooks.py`.
+      Run it locally with `make docs`.
+
+      Still to do: publish the Pages URL once the repository's Pages source is
+      set to *GitHub Actions*, and decide whether the API reference should be
+      generated from docstrings via `mkdocstrings` rather than hand-written.
 * [ ] **Publish RL baseline results.** The environments claim a learned policy
       has something real to beat; no learned policy's numbers are published yet.
 * [ ] **Drop the git dependency on `gymnax`.** The tested configuration pins

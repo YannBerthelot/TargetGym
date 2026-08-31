@@ -1,0 +1,1 @@
+--8<-- "src/target_gym/pc_gym/cstr/PHYSICS.md"

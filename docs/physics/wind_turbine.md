@@ -1,0 +1,1 @@
+--8<-- "src/target_gym/energy/wind_turbine/PHYSICS.md"

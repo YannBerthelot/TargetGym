@@ -1,0 +1,1 @@
+--8<-- "src/target_gym/glass_furnace/PHYSICS.md"

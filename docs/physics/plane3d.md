@@ -1,0 +1,1 @@
+--8<-- "src/target_gym/plane3d/PHYSICS.md"

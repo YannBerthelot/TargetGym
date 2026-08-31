@@ -1,0 +1,106 @@
+site_name: TargetGym
+site_description: >-
+  JAX reinforcement learning environments for target MDPs: reach a setpoint and
+  hold it, across aircraft, process control and industrial plants.
+site_url: https://yannberthelot.github.io/TargetGym/
+repo_url: https://github.com/YannBerthelot/TargetGym
+repo_name: YannBerthelot/TargetGym
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; Yann Berthelot
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Follow system theme
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.arithmatex:
+      generic: true
+
+hooks:
+  - docs/hooks.py
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            members_order: source
+            separate_signature: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Environments: environments.md
+  - Baselines: baselines.md
+  - Reward shaping: reward-shaping.md
+  - Physics:
+      - Methodology: PHYSICS_METHODOLOGY.md
+      - Model review checklist: model-review-checklist.md
+      - Aircraft (2D): physics/plane.md
+      - Aircraft (3D): physics/plane3d.md
+      - Patrol formation: physics/patrol.md
+      - Boiler drum: physics/boiler_drum.md
+      - Cement kiln: physics/cement_kiln.md
+      - Glass furnace: physics/glass_furnace.md
+      - HVAC: physics/hvac.md
+      - Nuclear reactor: physics/reactor.md
+      - Battery: physics/battery.md
+      - Wind turbine: physics/wind_turbine.md
+      - CSTR: physics/cstr.md
+      - Distillation column: physics/distillation.md
+      - First-order plant: physics/first_order.md
+      - Four-tank: physics/four_tank.md
+      - pH neutralisation: physics/ph_neutralization.md
+  - API reference: api.md
+  - Contributing: contributing.md

@@ -14,6 +14,7 @@ what industrial control actually is.
 | **[Reward shaping](reward-shaping.md)** | Why the tracking rewards have the shape they do, with the measurements |
 | **[Model review checklist](model-review-checklist.md)** | Eleven checks derived from real defects, and what they find across the environments |
 | **[Physics methodology](PHYSICS_METHODOLOGY.md)** | How each environment's physics is sourced, validated and bounded |
+| **[Physics by environment](../src/target_gym/plane/PHYSICS.md)** | The fifteen per-environment contracts: sources, validation targets, known deviations |
 | **[Contributing](../CONTRIBUTING.md)** | Tests, style, and what adding an environment involves |
 
 ## What makes these environments different

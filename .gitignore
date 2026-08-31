@@ -184,3 +184,6 @@ logs*
 test_readme.py
 *.zip
 *.pdf
+
+# MkDocs build output
+site/
