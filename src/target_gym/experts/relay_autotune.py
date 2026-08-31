@@ -495,7 +495,7 @@ def relay_sweep(
             # Relay failed at this point — interpolate later
             Kp, Ki, Kd = None, None, None
             if verbose:
-                print(f"    Relay failed — will interpolate from neighbours")
+                print("    Relay failed — will interpolate from neighbours")
 
         Kp_list.append(Kp)
         Ki_list.append(Ki)

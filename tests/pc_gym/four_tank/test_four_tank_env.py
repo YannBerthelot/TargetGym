@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import numpy as _np
 import pytest
 
 from target_gym.pc_gym.four_tank.env import (
@@ -238,8 +239,6 @@ def test_reward_is_finite(params, state):
 # it because the PID still beat every constant action -- both simply sat far
 # from setpoint. These tests make that class of defect impossible to reintroduce.
 # ---------------------------------------------------------------------------
-
-import numpy as _np
 
 
 def _steady_levels(v1, v2, p):

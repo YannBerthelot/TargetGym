@@ -24,9 +24,10 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-# torch 2.10's triton dependency caps Python at <3.14, and stable-baselines3
-# (dev-only) pulls torch — so the ceiling stays here for a consistent dev env.
-requires-python = ">=3.11,<3.14"
+# The upper bound is a tested ceiling, not caution: it is the newest Python the
+# dependency set resolves and passes against. CI runs every version in this
+# window, so widening it means adding a column to that grid.
+requires-python = ">=3.11,<3.15"
 
 dependencies = [
     # gymnax >= 1.0 is required, not merely preferred: the envs implement
@@ -47,7 +48,14 @@ dependencies = [
     "pandas>=2.0",
     "matplotlib>=3.8.1",
     "moviepy>=2.2.1",
-    "pygame>=2.6.1",
+    # pygame's last release (2.6.1, 2024) ships wheels only through CPython
+    # 3.13; on 3.14 it builds from source and its font module comes up broken,
+    # which takes every renderer down with it. pygame-ce is the maintained
+    # fork of the same code under the same ``import pygame`` namespace, and it
+    # does publish 3.14 wheels. Split by version so the interpreters that
+    # already work keep the implementation they were tested against.
+    "pygame>=2.6.1; python_version < '3.14'",
+    "pygame-ce>=2.5.8; python_version >= '3.14'",
     "tqdm>=4.66",
     # MPC baselines. do-mpc 5.1.1 breaks against casadi 3.8 with
     # "module 'casadi.tools' has no attribute 'SX'", hence the upper bound.
@@ -130,6 +138,24 @@ include = ["src/target_gym", "README.md", "LICENSE"]
 line-length = 88
 target-version = ["py311"]
 include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+# A deliberately narrow set, chosen so that what it reports is always worth
+# acting on: real defects (F -- undefined names, unused imports, f-strings
+# without placeholders), syntax and import errors (E4, E9), and import
+# ordering (I). Formatting is black's job and is not duplicated here.
+#
+# Most of ruff's default style rules are off on purpose rather than by
+# omission. E741 would rename `I` and `l`, which are moment of inertia and
+# length -- the names the physics and the sources use. RUF059 fires on the
+# `_, state, _, terminated, _ = step(...)` unpacking that gymnax's six-value
+# signature forces at nearly every call site. Enabling either would mean 200+
+# suppressions to say nothing.
+select = ["F", "E4", "E9", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

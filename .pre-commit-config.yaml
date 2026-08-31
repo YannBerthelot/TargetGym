@@ -1,0 +1,27 @@
+# Mirrors the checks CI runs, so a push does not fail on something a commit
+# could have caught. Install with: uv run pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        # The gallery clips are the largest thing tracked here and the
+        # generator caps them at 2.6 MB. This leaves headroom for one and
+        # blocks the accidental checkpoint or full-length render.
+        args: [--maxkb=3072]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.11
+    hooks:
+      - id: ruff
+        args: [--fix]
+
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black

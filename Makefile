@@ -6,7 +6,7 @@ LINT_PATHS=src/ tests/
 # GPU from the CUDA driver entirely so CUDA init can't probe it.
 CPU_ENV := CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu JAX_PLATFORM_NAME=cpu
 
-.PHONY: ci ci-format-check ci-test help install \
+.PHONY: ci ci-lint ci-format-check ci-test help install \
         all all-% figures figures-% videos videos-% tuning tuning-% \
         clear-tuning clear-mpc short-gifs test test-all mypy coverage \
         missing-annotations type lint format check-codestyle commit-checks
@@ -21,7 +21,10 @@ install:  ## Create/refresh the dev environment (.venv) with uv
 # Canonical local-CI -- mirrors .github/workflows/python-app.yml exactly.
 # ---------------------------------------------------------------------------
 
-ci: ci-format-check ci-test  ## Full local CI (matches .github/workflows/python-app.yml)
+ci: ci-lint ci-format-check ci-test  ## Full local CI (matches .github/workflows/python-app.yml)
+
+ci-lint:  ## Ruff over the tree, the same set CI enforces
+	uv run --frozen --only-group lint ruff check src/ tests/ scripts/
 
 ci-format-check:  ## Black --check on the whole tree
 	# --only-group lint installs black alone: formatting needs no runtime deps.
@@ -88,12 +91,8 @@ missing-annotations:
 
 type: mypy
 
-lint:
-	# stop the build if there are Python syntax errors or undefined names
-	# see https://www.flake8rules.com/
-	uv run ruff check ${LINT_PATHS} --select=E9,F63,F7,F82 --output-format=full
-	# exit-zero treats all errors as warnings.
-	uv run ruff check ${LINT_PATHS} --exit-zero --output-format=concise
+lint:  ## Ruff over src/ and tests/ (rule set lives in pyproject.toml)
+	uv run ruff check ${LINT_PATHS}
 
 format:
 	# Sort imports

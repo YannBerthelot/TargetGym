@@ -166,7 +166,12 @@ wandb
 cuda/
 extraction_configs
 plane/wandb_extraction.py
-videos
+# Generated renders. The runners write full-length clips here; only the short
+# gallery clips the README embeds are tracked, so name them rather than
+# force-adding past a blanket ignore.
+videos/**/*.mp4
+videos/**/*.gif
+!videos/**/*_short.gif
 .DS_Store
 models
 

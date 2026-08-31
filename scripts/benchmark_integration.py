@@ -1,13 +1,14 @@
 import time
+from functools import partial
+
+import diffrax
 import jax
 import jax.numpy as jnp
-from functools import partial
-import diffrax
 import matplotlib.pyplot as plt
 
 from target_gym.plane.dynamics import (
-    integrate_dynamics,
     compute_acceleration,
+    integrate_dynamics,
 )
 from target_gym.plane.env import EnvParams
 

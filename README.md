@@ -59,7 +59,7 @@ aircraft learn) variants share the same 3D physics.
 | Plane Patrol -- Bearing-only | Same, but the follower sees only range + bearing to the lead (partial obs) | 3 | 21 | ~2.2M |
 | Plane Patrol -- MARL / Formation | `1 + num_wingmen` learners (up to 5 planes): lead flies its patrol pattern, wingmen hold slots **evenly spread across both sides** (cooperative team reward, JaxMARL-style API) | 3 per agent | 18 (lead) / 26 (wingman) | see note |
 
-### Process  
+### Process
 *The first three are adapted from [PC-gym](https://github.com/MaximilianB2/pc-gym); their models were verified against its source term for term.*
 
 | Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, vmap 256) |
@@ -373,6 +373,8 @@ pip install target-gym
 uv add target-gym
 ```
 
+Python 3.11 through 3.14. CI runs the suite on all four.
+
 ---
 
 ## Usage
@@ -540,27 +542,25 @@ the patrol skips above:
 
 ## Contributing
 
-Contributions are welcome!
-Open an issue or PR if you have suggestions, bug reports, or new features.
-
-For development you need to install the dev dependencies, which include test, lint and agent dependencies.
+Contributions are welcome -- bug reports, new environments, better baselines, or
+corrections to the physics.
 
 ```bash
 git clone https://github.com/YannBerthelot/TargetGym.git
 cd TargetGym
 
-uv sync --group dev                  # creates .venv with everything
-uv run pytest -n auto -m "not slow"  # fast suite, one worker per core
-uv run pytest -n auto                # everything, incl. closed-loop checks
+uv sync --group dev   # creates .venv with runtime, test and lint deps
+make ci               # what CI runs: ruff, black --check, fast tests
 ```
 
-The suite runs in parallel under [pytest-xdist](https://pytest-xdist.readthedocs.io/);
-`tests/conftest.py` holds each worker to a single compute thread so they do not
-compete for cores. Drop `-n auto` (or pass `-n0`) when you want readable output
-from a single test, or when using `--pdb`.
+Other tasks live in the `Makefile`: `make test`, `make test-all`, `make figures`,
+`make videos`, `make tuning`.
 
-Development tasks are in the `Makefile`: `make ci`, `make test`, `make test-all`,
-`make figures`, `make videos`, `make tuning`.
+**[CONTRIBUTING.md](CONTRIBUTING.md)** covers the rest: running and profiling the
+parallel test suite, the style rules, and what adding an environment involves --
+registering an `EnvSpec` is what subjects it to the shared conformance contracts,
+and every environment carries a `PHYSICS.md` stating its sourced parameters,
+validation targets and known deviations.
 
 ---
 

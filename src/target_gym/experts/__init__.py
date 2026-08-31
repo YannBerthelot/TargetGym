@@ -10,11 +10,11 @@ from target_gym.experts.mpc import (
     make_reactor_mpc,
 )
 from target_gym.experts.pid import (
-    StatefulPatrolPID,
     GainSchedulePIDParams,
     MIMOGainSchedulePIDParams,
     StatefulGainScheduledPID,
     StatefulMIMOPID,
+    StatefulPatrolPID,
     StatefulPID,
     gain_scheduled_pid_step,
     make_cstr_gain_scheduled_pid,
@@ -40,9 +40,9 @@ from target_gym.experts.pid import (
     make_plane3d_figure8_stateful_pid,
     make_plane3d_heading_cascaded_pid,
     make_plane3d_heading_stateful_pid,
+    make_plane_cascaded_pid,
     make_plane_pid,
     make_plane_stateful_gs_pid,
-    make_plane_cascaded_pid,
     make_plane_stateful_pid,
     make_reactor_gain_scheduled_pid,
     make_reactor_pid,

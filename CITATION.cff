@@ -1,0 +1,26 @@
+# Enables GitHub's "Cite this repository" button. Keep in step with the
+# BibTeX block in README.md.
+cff-version: 1.2.0
+message: "If you use TargetGym in your research, please cite it as below."
+title: "TargetGym: Reinforcement Learning Environments for Target MDPs"
+abstract: >-
+  JAX reinforcement learning environments built around target MDPs -- tasks
+  where the objective is to reach and maintain a subset of states rather than
+  to reach a goal and stop. Eighteen environments spanning aircraft, process,
+  industrial and energy plants, each with a documented and tested physics
+  contract and PID/MPC baselines.
+type: software
+authors:
+  - family-names: Berthelot
+    given-names: Yann
+repository-code: "https://github.com/YannBerthelot/TargetGym"
+url: "https://github.com/YannBerthelot/TargetGym"
+license: MIT
+year: 2025
+keywords:
+  - reinforcement-learning
+  - jax
+  - gymnax
+  - gymnasium
+  - process-control
+  - simulation

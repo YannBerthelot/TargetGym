@@ -95,7 +95,7 @@ def _tune_cstr(n_points: int, tuning_rule: str, **kw) -> dict:
 
 
 def _tune_first_order(n_points: int, tuning_rule: str, **kw) -> dict:
-    from target_gym import FirstOrderSystem, FirstOrderParams
+    from target_gym import FirstOrderParams, FirstOrderSystem
     from target_gym.experts.relay_autotune import relay_sweep
 
     env = FirstOrderSystem(integration_method="rk4_1")
@@ -230,6 +230,7 @@ def _tune_four_tank_search(n_points: int, tuning_rule: str, **kw) -> dict:
     import jax
     import jax.numpy as jnp
     import numpy as np
+
     from target_gym import FourTank, FourTankParams
 
     env = FourTank(integration_method="rk4_1")
@@ -415,6 +416,7 @@ def _tune_four_tank_search(n_points: int, tuning_rule: str, **kw) -> dict:
 
 def _tune_glass_furnace(n_points: int, tuning_rule: str, **kw) -> dict:
     import jax.numpy as jnp
+
     from target_gym import GlassFurnace, GlassFurnaceParams
     from target_gym.experts.relay_autotune import relay_sweep
     from target_gym.glass_furnace.env import N_SETPOINTS
@@ -538,6 +540,7 @@ def _tune_glass_furnace_search(n_points: int, tuning_rule: str, **kw) -> dict:
 
 def _tune_reactor(n_points: int, tuning_rule: str, **kw) -> dict:
     import jax.numpy as jnp
+
     from target_gym import Reactor, ReactorParams
     from target_gym.experts.relay_autotune import relay_sweep
     from target_gym.reactor.env import N_SETPOINTS, steady_state_xenon
@@ -588,9 +591,9 @@ def _tune_reactor(n_points: int, tuning_rule: str, **kw) -> dict:
 
 def _tune_plane(n_points: int, tuning_rule: str, **kw) -> dict:
     """Plane 2D: relay on stick (altitude loop), power fixed at cruise."""
-    from target_gym.plane.env_jax import Airplane2D
-    from target_gym.plane.env import PlaneParams
     from target_gym.experts.relay_autotune import relay_sweep
+    from target_gym.plane.env import PlaneParams
+    from target_gym.plane.env_jax import Airplane2D
 
     env = Airplane2D(integration_method="rk4_1")
     params = PlaneParams()
@@ -683,6 +686,7 @@ def _tune_plane(n_points: int, tuning_rule: str, **kw) -> dict:
 def _plane3d_bank_relay(env, params, tuning_rule, cruise_action, max_steps=3000):
     """Step 1 (common): tune bank P-controller (phi → aileron) via relay."""
     import numpy as np
+
     from target_gym.experts.relay_autotune import relay_experiment
 
     mid_alt = (params.target_altitude_range[0] + params.target_altitude_range[1]) / 2
@@ -735,6 +739,7 @@ def _plane3d_altitude_relay(
     Matches the 2D Airplane2D methodology (relay_sweep, pick midpoint gain).
     """
     import numpy as np
+
     from target_gym.experts.relay_autotune import relay_sweep
 
     def reset_at_alt(key, p, target):
@@ -782,6 +787,7 @@ def _plane3d_power_relay(
     Mirrors the 2D Airplane2D pid1 methodology: altitude-error-to-power loop.
     """
     import numpy as np
+
     from target_gym.experts.relay_autotune import relay_sweep
 
     def reset_at_alt(key, p, target):
@@ -819,8 +825,9 @@ def _plane3d_power_relay(
 def _tune_plane3d_heading(n_points: int, tuning_rule: str, **kw) -> dict:
     """Sequential relay: bank → heading → altitude (stick) → altitude (power)."""
     import numpy as np
+
+    from target_gym.experts.relay_autotune import TUNING_RULES, relay_experiment
     from target_gym.plane3d.env_jax import Plane3DHeading
-    from target_gym.experts.relay_autotune import relay_experiment, TUNING_RULES
 
     env = Plane3DHeading(integration_method="rk4_1")
     params = env.default_params
@@ -914,8 +921,9 @@ def _tune_plane3d_heading(n_points: int, tuning_rule: str, **kw) -> dict:
 def _tune_plane3d_circle(n_points: int, tuning_rule: str, **kw) -> dict:
     """Sequential relay: bank → radial → altitude."""
     import numpy as np
+
+    from target_gym.experts.relay_autotune import TUNING_RULES, relay_experiment
     from target_gym.plane3d.env_jax import Plane3DCircle
-    from target_gym.experts.relay_autotune import relay_experiment, TUNING_RULES
 
     env = Plane3DCircle(integration_method="rk4_1")
     params = env.default_params
@@ -1034,8 +1042,9 @@ def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
     (relay is tuned at a point on the curve, matching the heading-task protocol).
     """
     import numpy as np
+
+    from target_gym.experts.relay_autotune import TUNING_RULES, relay_experiment
     from target_gym.plane3d.env_jax import Plane3DFigureEight
-    from target_gym.experts.relay_autotune import relay_experiment, TUNING_RULES
 
     env = Plane3DFigureEight(integration_method="rk4_1")
     params = env.default_params

@@ -1,7 +1,6 @@
+import jax
 import jax.numpy as jnp
 import pytest
-
-import jax
 
 from target_gym.reactor.env import (
     BETA_I,
