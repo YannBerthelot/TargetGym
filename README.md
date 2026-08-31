@@ -530,6 +530,19 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 * [ ] Provide benchmark results for popular RL baselines.
 * [ ] Add random orientation variations to circle and heading tasks.
 
+### Before 1.0
+
+* [ ] **Host the documentation.** `docs/` is written and its examples are
+      executed by the suite, but it is read as Markdown on GitHub. A GitHub
+      Pages site (MkDocs Material) would give it navigation, search and a
+      versioned URL, built and deployed from the same workflow that tests it.
+* [ ] **Publish RL baseline results.** The environments claim a learned policy
+      has something real to beat; no learned policy's numbers are published yet.
+* [ ] **Drop the git dependency on `gymnax`.** The tested configuration pins
+      upstream `main` because the gymnasium bound this project needs is merged
+      but unreleased, so that configuration cannot be reproduced from PyPI alone.
+* [ ] **Move off the Alpha classifier** once the three above are settled.
+
 ### Known gaps
 
 The test suite records these rather than hiding them -- 7 `strict` xfails and

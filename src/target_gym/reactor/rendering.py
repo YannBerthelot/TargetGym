@@ -680,7 +680,11 @@ def _render(cls, screen, state, params, frames, clock, stride: int = 48):
             raise ValueError("No state provided")
         state = cls.state
 
-    if not hasattr(cls, "history") or state.time == 1:
+    # ``state.time`` advances by ``control_period`` here, not by one, so the
+    # usual ``time == 1`` episode-start signal never fires for this
+    # environment. An empty frame list means the same thing and does not
+    # depend on how time is counted.
+    if not hasattr(cls, "history") or state.time <= 1 or not frames:
         cls.history = {
             "t": [],
             "n": [],
@@ -696,7 +700,7 @@ def _render(cls, screen, state, params, frames, clock, stride: int = 48):
         }
 
     step = state.time
-    if step % stride == 0 or step == 1:
+    if step % stride == 0 or step <= 1 or not frames:
         frame, cls.history = render_reactor(state, params, step, cls.history)
         frames.append(frame)
         cls.frames = frames

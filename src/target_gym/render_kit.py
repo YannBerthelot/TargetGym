@@ -754,9 +754,13 @@ def make_render_hook(render_fn, history_keys, *, stride=10):
             state = getattr(cls, "state", None)
             if state is None:
                 raise ValueError("No state provided")
-        if not hasattr(cls, "history") or state.time == 1:
+        # An empty frame list marks the start of a render, whatever the
+        # environment counts in ``state.time`` -- an environment stepping a
+        # control period at a time never sees ``time == 1`` and would
+        # otherwise emit no first frame and never reset its history.
+        if not hasattr(cls, "history") or state.time <= 1 or not frames:
             cls.history = {k: [] for k in history_keys}
-        if state.time % stride == 0 or state.time == 1:
+        if state.time % stride == 0 or state.time <= 1 or not frames:
             frame_img, cls.history = render_fn(state, params, state.time, cls.history)
             frames.append(frame_img)
             cls.frames = frames

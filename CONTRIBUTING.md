@@ -57,10 +57,11 @@ ordinary flax idiom and produces hundreds of mismatches that are shorthand
 rather than bugs. `make mypy-all` shows the whole picture; widen the enforced
 list by making a module pass and adding it.
 
-Coverage sits at 65%, enforced at 64 by `make coverage` and on one CI column.
-It is a ratchet: raise it as coverage improves, never lower it to make a red
-build green. The shortfall is concentrated in the renderers, which draw
-dashboards and are covered only incidentally.
+Coverage sits above 80%, enforced at 79 by `make coverage` and on one CI
+column. It is a ratchet: raise it as coverage improves, never lower it to make
+a red build green. Nothing is excluded from the measurement -- the tuners and
+the figure runner are things users run, so leaving them out would measure a
+smaller library than the one that ships.
 
 ## Adding an environment
 

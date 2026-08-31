@@ -189,21 +189,25 @@ warn_return_any = true
 
 [tool.coverage.run]
 source = ["target_gym"]
-# The gallery/figure tooling is exercised by running it, not by the suite;
-# measuring it would report the tool's own branches rather than the library's.
-omit = ["*/runners/runners.py"]
+# Nothing is omitted. The tuners and the figure runner are things users run --
+# anyone who changes an environment's parameters has invalidated the shipped
+# gains and has to retune -- so excluding them would measure a smaller library
+# than the one that ships.
 
 [tool.coverage.report]
 show_missing = true
-# A ratchet, not an aspiration. The bar was 80 for a long time while nothing
-# ran it; the real figure is 65, and a gate nobody runs protects nothing.
-# 64 leaves a point of slack so an unrelated refactor does not fail the build,
-# and the number is meant to be raised as coverage improves -- never lowered
-# to make a red build green.
+# A ratchet: raise it as coverage improves, never lower it to turn a red build
+# green. The bar sat at 80 for a long time while nothing ran it, and measuring
+# it for the first time gave 65 -- the gate would have failed on contact.
 #
-# The shortfall is concentrated in the renderers (~32%), which draw dashboards
-# and are covered only incidentally; everything else sits near 71%.
-fail_under = 64
+# It is now genuinely above 80. The gap was almost entirely the renderers:
+# sixteen of the eighteen had no test at all, and covering them took rendering
+# from 32% to 96%. 79 leaves a point of slack so an unrelated refactor does not
+# fail the build.
+#
+# What remains uncovered is mostly the optimiser interiors in
+# experts/pid_tuning.py and the per-environment CasADi models in experts/mpc.py.
+fail_under = 79
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
