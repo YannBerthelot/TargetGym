@@ -296,8 +296,12 @@ assertion. Each carries a `PHYSICS.md` beside its module giving:
   geometry/first principles with the arithmetic shown, or explicitly flagged
   `TUNED - not sourced`.
 * **Validation targets** -- published figures of merit the model must reproduce.
-* **Known deviations** -- quantified, each carried by a `strict` xfail test so a
-  fix flips it to passing and can never be resolved silently.
+* **Known deviations** -- numbered and quantified, and where one shows up as a
+  quantitative check the model currently fails, it is pinned with a `strict`
+  xfail so a fix flips it to passing and can never be resolved silently. Most
+  are deliberate simplifications rather than failing checks -- no yaw axis, a
+  fixed valve split -- which no assertion can express; those are carried by the
+  contract's own text, and closed there when the model changes.
 
 The method is written up in [`docs/PHYSICS_METHODOLOGY.md`](docs/PHYSICS_METHODOLOGY.md).
 Its central rule: **never assert a formula by restating it**. A test that
@@ -324,9 +328,10 @@ Worked examples of what this catches:
 | CSTR | Steady-state multiplicity, branch stability | The 350 K runaway trip sits exactly where the unstable middle steady state does, so termination fires as the reactor ignites |
 | 3D Aircraft | Coordinated-turn relation, load factor | Banked flight reproduces psi_dot = g tan(phi)/V to within 0.5 %, though nothing in the model computes a turn rate |
 
-**All eighteen environments are covered** by fourteen contracts -- the three 3D
-aircraft tasks and both patrol variants share the aircraft ones, since they
-share the dynamics.
+**All eighteen environments are covered** by fifteen contracts -- the three 3D
+aircraft tasks share one, since they share the dynamics, and the two patrol
+variants share a contract of their own that inherits the 3D aircraft's
+aerodynamics verbatim and documents only what formation flight adds.
 
 A shared **conformance suite** runs the same contract against every registered
 environment: PRNG hygiene, determinism, the gymnax six-value step API,
@@ -545,8 +550,8 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 
 ### Known gaps
 
-The test suite records these rather than hiding them -- 7 `strict` xfails and
-the patrol skips above:
+The test suite records these rather than hiding them -- six `strict` xfail
+cases, from two markers, plus the patrol baseline notes above:
 
 * **Plane Patrol expert quality**: both patrol variants now ship a PID, but it
   completes roughly half of evaluation seeds. The failure is a lateral bank

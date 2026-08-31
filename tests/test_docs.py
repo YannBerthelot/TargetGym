@@ -83,3 +83,40 @@ def test_every_environment_has_a_physics_contract():
         if not (ROOT / "src" / module.replace(".", "/") / "PHYSICS.md").exists():
             missing.append(name)
     assert not missing, f"environments without a PHYSICS.md: {missing}"
+
+
+# Written-out numbers, because that is how the README says them.
+_NUMBER_WORDS = {
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+}
+
+
+def test_readme_states_the_right_number_of_physics_contracts():
+    """The README counts the contracts in prose; keep the count true.
+
+    It said "fourteen" for a while after a fifteenth was added. A number in
+    prose has no other way of being checked, and this one is load-bearing --
+    it is how a reader sizes the physics claim.
+    """
+    import re
+
+    readme = (ROOT / "README.md").read_text()
+    match = re.search(r"covered\*{0,2} by (\w+) contracts", readme)
+    assert match, "could not find the 'covered by N contracts' claim in README.md"
+
+    word = match.group(1).lower()
+    assert word in _NUMBER_WORDS, f"unrecognised number word {word!r} in the claim"
+
+    actual = len(list((ROOT / "src").rglob("PHYSICS.md")))
+    assert _NUMBER_WORDS[word] == actual, (
+        f"README says {word} ({_NUMBER_WORDS[word]}) contracts, "
+        f"but there are {actual} PHYSICS.md files"
+    )

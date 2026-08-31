@@ -113,7 +113,10 @@ around 45° of bank.
 *rate* is not validated against a real aircraft. The roll *damping* is, and the
 coordinated-turn relation is independent of both.
 
-**⚠️ D3 — patrol has no working controller.** The physics documented here is
-shared and validated, but `patrol_bearing_only` has no baseline at all
-(episodes end within ~13 steps) and six formation scenarios are `xfail`. That
-is a controller gap, not a physics gap, and is tracked separately.
+**⚠️ D3 — patrol formation quality.** The physics documented here is shared and
+validated. Both patrol variants now ship a PID baseline, including
+`patrol_bearing_only`, which had none when this deviation was written; what
+remains is quality rather than absence. The follower settles roughly 139 m from
+its slot against a 60 m tolerance, so six formation scenarios are `strict`
+xfail. That is a controller gap, not a physics gap; it is tracked in
+[the patrol contract](../patrol/PHYSICS.md).
