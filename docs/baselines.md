@@ -178,9 +178,11 @@ Return, paired per seed, on each environment's own episode.
 
 | | MPC vs PID | |
 | --- | --- | --- |
+| plane3d_figure8 | **+531** | 10/10 |
 | reactor | **+505** | 10/10 |
-| plane3d_figure8 | **+528** | 10/10 |
-| plane3d_circle | +245 | 9/10 |
+| plane3d_heading | **+327** | 10/10 |
+| plane3d_circle | +247 | 10/10 |
+| plane | **+166** | 10/10 |
 | boiler_drum | +83 | 10/10 |
 | four_tank | +69 | 10/10 |
 | ph_neutralization | +29 | 10/10 |
@@ -191,13 +193,25 @@ Return, paired per seed, on each environment's own episode.
 | glass_furnace | -3.1 (median **+1.7**) | 7/10 |
 | wind_turbine | -0.4 | 6/10 |
 | battery | +7.5 (median -11) | 1/10 |
-| **plane** | **-171** | 7/10, three crashes |
-| **plane3d_heading** | **-34** | 7/10, three crashes |
+
+The MPC is the upper bound on thirteen of the sixteen, level on the glass
+furnace and the wind turbine, and behind only on the battery.
 
 Read the last three rows carefully. The battery's positive mean is carried by a
 single seed where lookahead pays enormously (358 against 165) while it trails on
-the other nine; the two aircraft win most seeds and lose the average to
-terminations worth -600 apiece. A mean alone would misreport all three.
+the other nine, so a mean alone misreports it.
+
+**The aircraft rows are the second measurement.** On the previous dynamics the
+2D plane scored -171 and the 3D heading task -34, each winning most seeds and
+losing the average to three terminations worth -600 apiece. A great deal of
+effort went into those crashes -- a stall-margin barrier, an altitude barrier,
+tails out to 240 steps, a crash charge matched to the environment's own penalty,
+and making terminations visible to the planner -- and the one that helped fixed
+a single seed. None of it was the cause. The integrator was: at one RK4 substep
+the plant the MPC plans against and the plant it is stepping through disagree
+enough to fly into the ground. At two substeps both controllers win 10 of 10
+with no terminations at all, and the barrier work is left in place because it
+was measured to help at the time, not because it is still load-bearing.
 
 Two seeds would misreport almost everything. Measuring on two produced three
 wrong conclusions during this work -- the wind turbine at "98% of the PID", the

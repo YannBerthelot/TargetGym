@@ -354,17 +354,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="plane",
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
-        mpc_degraded=(
-            "Wins 7 of 10 seeds and loses the mean: three seeds end in a crash "
-            "at -600 apiece (-170.7 paired over ten seeds, sd 488). The failure "
-            "is a commanded descent the controller cannot arrest -- it dives "
-            "through the target at 265 m/s with the angle of attack small "
-            "throughout, so the stall barrier that fixed the other failing seed "
-            "does not apply. An altitude barrier, tails to 240 steps and a crash "
-            "charge matched to the environment's own penalty were each measured "
-            "against it; none helped. The crash penalty sits behind a boolean, "
-            "so it carries a cost to the planner but no gradient away from it."
-        ),
     ),
     EnvSpec(
         name="plane3d_heading",
@@ -377,13 +366,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="plane3d_heading",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
-        mpc_degraded=(
-            "Wins 7 of 10 seeds and loses the mean (-33.5 paired, sd 455): three "
-            "seeds terminate at -600. Same cause as ``plane`` -- the crash "
-            "penalty is behind a boolean and gives the planner no gradient away "
-            "from the boundary. Note the PID here is itself weak, holding "
-            "altitude while sitting 45.7 deg off the commanded heading."
-        ),
     ),
     EnvSpec(
         name="plane3d_circle",
