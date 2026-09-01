@@ -16,6 +16,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.plane.dynamics import total_wind_3d
 from target_gym.plane3d.env import (
     PlaneParams3D,
@@ -256,6 +257,7 @@ class Plane3DHeading(_Airplane3DBase):
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         return self._append_wind(get_obs_heading(state, xp=jnp), state, params)
 
+    @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
         if params is None:
             params = self.default_params
@@ -321,6 +323,7 @@ class Plane3DCircle(_Airplane3DBase):
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         return self._append_wind(get_obs_circle(state, xp=jnp), state, params)
 
+    @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
         if params is None:
             params = self.default_params
@@ -415,6 +418,7 @@ class Plane3DFigureEight(_Airplane3DBase):
             params = self.default_params
         return self._append_wind(get_obs_figure8(state, params, xp=jnp), state, params)
 
+    @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
         if params is None:
             params = self.default_params

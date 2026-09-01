@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.glass_furnace.env import (
     N_REGEN_NODES,
     N_SETPOINTS,
@@ -90,6 +91,7 @@ class GlassFurnace(environment.Environment[GlassFurnaceState, GlassFurnaceParams
         terminated, _ = check_is_terminal(state, params)
         return terminated
 
+    @canonical_reset
     def reset_env(
         self, key: chex.PRNGKey, params: GlassFurnaceParams = None
     ) -> Tuple[jnp.ndarray, GlassFurnaceState]:

@@ -31,13 +31,45 @@ def _bounds(space, shape):
     return low, high
 
 
+def _cheap_mpc(spec, env, params):
+    """Build the MPC with the smallest horizon its factory will accept.
+
+    What this test checks -- action shape, bounds, finiteness, and a finite
+    plant afterwards -- is independent of how far the controller plans. The
+    shipped horizon is not: it sets the size of the traced rollout, and for the
+    four aircraft that made three closed-loop steps cost 82 s of the fast CI
+    job, more than half of it. A gradient MPC compiles a rollout ``horizon``
+    deep and then runs ``n_iter`` optimiser passes over it, per instance.
+
+    Shrinking both keeps every assertion below meaningful and removes the
+    compile. The shipped configuration is still exercised in full by the slow
+    quality contract further down this file, which is where a bad horizon would
+    show up as bad control rather than as a bad action shape.
+    """
+    # The registry wraps every factory as ``make(env, params, **kwargs)``, so the
+    # signature says nothing about which knobs the underlying builder accepts --
+    # the gradient controllers take all three, the CasADi ones only ``horizon``.
+    # Try the most reduced form first and fall back until one is accepted.
+    for kwargs in (
+        {"horizon": 5, "n_iter": 2, "n_tail": 0},
+        {"horizon": 5, "n_iter": 2},
+        {"horizon": 5},
+        {},
+    ):
+        try:
+            return spec.make_mpc(env, params, **kwargs)
+        except (TypeError, ValueError):
+            continue
+    return spec.make_mpc(env, params)
+
+
 @pytest.mark.parametrize("name", MPC_ENVS)
 def test_registered_mpc_builds_and_controls(name):
     spec = REGISTRY[name]
     env = spec.make_env()
     params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": 20})
 
-    mpc = spec.make_mpc(env, params)
+    mpc = _cheap_mpc(spec, env, params)
     mpc.reset()
 
     space = env.action_space(params)

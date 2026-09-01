@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.plane.dynamics import total_wind_2d
 from target_gym.plane.env import (
     PlaneParams,
@@ -94,6 +95,7 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
         terminated, _ = check_is_terminal(state, params, xp=jnp)
         return terminated
 
+    @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams = None):
         """
         Reset the environment using JAX random keys

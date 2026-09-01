@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.hvac.env import (
     HVACParams,
     HVACState,
@@ -89,6 +90,7 @@ class BuildingHVAC(environment.Environment[HVACState, HVACParams]):
         terminated, _ = check_is_terminal(state, params)
         return terminated
 
+    @canonical_reset
     def reset_env(
         self, key: chex.PRNGKey, params: HVACParams = None
     ) -> Tuple[jnp.ndarray, HVACState]:

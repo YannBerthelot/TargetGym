@@ -20,6 +20,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.experts.pid import make_plane3d_heading_pid
 from target_gym.patrol.env import (
     PatrolParams,
@@ -105,6 +106,7 @@ class _PlanePatrolBase(environment.Environment[PatrolState, PatrolParams]):
         terminated, _ = check_is_terminal_patrol(state, params, xp=jnp)
         return terminated
 
+    @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PatrolParams = None):
         if params is None:
             params = self.default_params

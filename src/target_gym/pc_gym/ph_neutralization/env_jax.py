@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.pc_gym.ph_neutralization.env import (
     PHParams,
     PHState,
@@ -84,6 +85,7 @@ class PHNeutralization(environment.Environment[PHState, PHParams]):
         terminated, _ = check_is_terminal(state, params)
         return terminated
 
+    @canonical_reset
     def reset_env(
         self, key: chex.PRNGKey, params: PHParams = None
     ) -> Tuple[jnp.ndarray, PHState]:
