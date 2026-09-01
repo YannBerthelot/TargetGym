@@ -112,7 +112,12 @@ def rollout(spec, params, policy: Callable, seed: int = 0):
         obs_np = np.asarray(obs)
         values.append(obs_np[list(value_idx)])
         targets.append(obs_np[list(target_idx)])
-        action = policy(obs, state) if _wants_state(policy) else policy(obs)
+        # Hand the policy the NumPy view, which this loop has already paid for.
+        # The stateful PIDs are plain Python doing scalar arithmetic; given a JAX
+        # array every operation -- the indexing, the clip, the anti-windup
+        # ``where`` -- is a separate un-jitted dispatch, and the controller ends
+        # up costing several times the environment step it is controlling.
+        action = policy(obs_np, state) if _wants_state(policy) else policy(obs_np)
         obs, state, reward, terminated, _ = step(
             key, state, jnp.atleast_1d(jnp.asarray(action)), params
         )
