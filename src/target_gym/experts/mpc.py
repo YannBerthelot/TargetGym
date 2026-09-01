@@ -73,6 +73,36 @@ class GradientMPC:
         Dimensionality of the action vector.
     action_lb, action_ub : float
         Lower/upper bounds applied via clip after each gradient step.
+    n_tail : int
+        Extra steps simulated past the optimised horizon, holding the last
+        action, whose reward is added to the objective. This is a terminal cost:
+        it charges the plan for the state it *leaves the plant in*, without
+        adding decision variables, so the controller stops preferring plans that
+        look excellent for ``horizon`` steps and reach a terminal state just
+        after it.
+
+        It assumes holding the last action approximates continuing sensibly.
+        That is true where holding is close to trim and false where the plant
+        needs active stabilisation, so it is enabled per environment on
+        measurement rather than by default -- see ``make_plane_mpc``.
+    done_value : float
+        Per-step objective charged for every step *after* the planned rollout
+        reaches a terminal state. ``step_env`` reports termination and the
+        rollout previously ignored it, summing rewards straight through a plant
+        that had already tripped or crashed -- so a plan that destroyed the
+        plant at step 21 of 60 scored the same as one that flew it to the end.
+        The default of 0.0 is the right charge whenever the objective is
+        positive while the plant is healthy, which makes ending early cost the
+        rest of the horizon. An objective that is negative when healthy has to
+        set this below its own worst per-step value, or terminating early looks
+        like an improvement.
+    objective_fn : callable or None
+        ``f(state, params) -> scalar`` summed over the rollout in place of the
+        environment's own reward. Use it where that reward has a flat or clipped
+        region: the controller descends it, and a gradient of zero is not a
+        statement that the state is good. The surrogate must share the reward's
+        *minimiser* while being smooth -- see ``make_wind_turbine_mpc`` for the
+        case that motivates it.
     """
 
     def __init__(
@@ -85,6 +115,9 @@ class GradientMPC:
         action_dim: int = 1,
         action_lb: float = -1.0,
         action_ub: float = 1.0,
+        n_tail: int = 0,
+        done_value: float = 0.0,
+        objective_fn=None,
     ):
         self.env = env
         self.params = params
@@ -94,6 +127,9 @@ class GradientMPC:
         self.action_dim = action_dim
         self.action_lb = float(action_lb)
         self.action_ub = float(action_ub)
+        self.n_tail = int(n_tail)
+        self.done_value = float(done_value)
+        self.objective_fn = objective_fn
 
         self._actions = jnp.zeros((horizon, action_dim))
         self._jit_optimize = jax.jit(self._optimize)
@@ -108,14 +144,25 @@ class GradientMPC:
         key = jax.random.PRNGKey(0)
 
         def step_fn(carry, u):
-            s = carry
-            _, new_s, r, _, _ = self.env.step_env(
+            s, done = carry
+            _, new_s, r, terminated, _ = self.env.step_env(
                 key, s, self._env_action(u), self.params
             )
-            return new_s, r
+            if self.objective_fn is not None:
+                r = self.objective_fn(new_s, self.params)
+            # Past a terminal state the plant no longer exists; charge the rest
+            # of the horizon rather than pretending it kept earning.
+            r = jnp.where(done, self.done_value, r)
+            return (new_s, jnp.logical_or(done, terminated)), r
 
-        _, rewards = jax.lax.scan(step_fn, state, actions)
-        return jnp.sum(rewards)
+        init = (state, jnp.zeros((), dtype=bool))
+        (final, done), rewards = jax.lax.scan(step_fn, init, actions)
+        total = jnp.sum(rewards)
+        if self.n_tail:
+            held = jnp.broadcast_to(actions[-1], (self.n_tail,) + actions.shape[1:])
+            _, tail_rewards = jax.lax.scan(step_fn, (final, done), held)
+            total = total + jnp.sum(tail_rewards)
+        return total
 
     def _optimize(self, actions_init: jnp.ndarray, state) -> jnp.ndarray:
         cost_grad = jax.grad(lambda a: -self._rollout(a, state))
@@ -638,14 +685,34 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         target_post = model.tvp["target_T_crown"]
         m_fuel_post = p.fuel_min + 0.5 * (u_post + 1.0) * (p.fuel_max - p.fuel_min)
 
-        # Mirror env.compute_reward so the MPC optimises the scored objective.
-        scale = float(p.T_crown_max - p.T_crown_min)
+        # Share the minimiser of env.compute_reward, not its shape.
+        #
+        # This previously normalised the error by the crown's whole 250 K
+        # envelope while the environment scores it against ``tracking_scale``,
+        # 40 K -- so a 40 K error, which the environment scores as zero, entered
+        # the objective at 0.71, six times flatter than the reward being graded.
+        # Against an unchanged fuel penalty the controller duly sold tracking for
+        # fuel, and lost to the PID on 7 of 10 seeds.
+        #
+        # The old form was also non-monotonic: ``((scale - err)/scale)**2`` turns
+        # back upward past ``err = scale``, so beyond twice it the objective
+        # preferred *more* error. A plain squared normalised error is monotone,
+        # smooth, and minimised in the same place as the reward.
+        scale = float(p.tracking_scale)
         fuel_span = float(p.fuel_max - p.fuel_min)
         err = target_post - T_crown_post
         err_abs = casadi.sqrt(err * err + 1e-4)  # smooth |err|
-        tracking = ((scale - err_abs) / scale) ** 2
+        # Bounded rather than a bare quadratic. Normalising by 40 K instead of
+        # 250 K is what fixes the weighting, but it also makes an unbounded
+        # ``e**2`` reach 6.25 at a 100 K error where the old term gave 0.36, and
+        # IPOPT does not cope: one seed of ten went from ~48 s to over 400 s.
+        # ``e**2/(1+e**2)`` has the same minimiser and the same slope near zero,
+        # is monotone in the error, and saturates instead of diverging -- which
+        # also matches the environment's own reward, itself bounded in [0, 1].
+        e_norm = err_abs / scale
+        tracking_cost = e_norm**2 / (1.0 + e_norm**2)
         fuel_pen = float(p.fuel_cost_weight) * (m_fuel_post - p.fuel_min) / fuel_span
-        mpc.set_objective(lterm=-tracking + fuel_pen, mterm=-tracking)
+        mpc.set_objective(lterm=tracking_cost + fuel_pen, mterm=tracking_cost)
         mpc.set_rterm(u_raw=1e-3)
 
         mpc.bounds["lower", "_u", "u_raw"] = -1.0
@@ -1193,18 +1260,64 @@ class PHCasadiMPC(CasadiMPC):
 # ============================================================================
 
 
+_PLANE_STALL_ONSET = 0.5  # fraction of aoa_stall at which the barrier starts
+_PLANE_STALL_WEIGHT = 20.0
+
+
+def _plane_objective(state, params):
+    """Environment reward plus a soft stall-margin barrier.
+
+    The aircraft's irrecoverable event is the stall, not the ground: by the time
+    altitude is low enough for a boundary penalty to bite, a departed aircraft is
+    already descending at 270 m/s and cannot recover. A barrier on altitude was
+    measured and does nothing for that reason.
+
+    The stall itself is invisible to the planner for the usual reason -- the
+    crash penalty sits behind ``where(terminated, ...)`` on a boolean, so it
+    carries a cost but no derivative. Charging the *approach* to the stall angle
+    does carry one, and it converts one of the two failing seeds from a crash
+    (-503) to 422, ahead of the PID's 267 there.
+
+    It does not fix everything: one seed still commands a descent it cannot
+    arrest, diving through the target at 265 m/s with the angle of attack small
+    throughout, so no stall barrier applies to it. Altitude barriers, tails to
+    240 steps and a matched crash charge were all measured against that case and
+    none helped.
+    """
+    from target_gym.plane.env import compute_reward
+
+    reward = compute_reward(state, params)
+    gamma = jnp.arctan2(state.z_dot, jnp.maximum(jnp.abs(state.x_dot), 1e-3))
+    aoa_deg = jnp.rad2deg(state.theta - gamma)
+    margin = jnp.abs(aoa_deg) / params.aoa_stall
+    barrier = jnp.maximum(margin - _PLANE_STALL_ONSET, 0.0) ** 2
+    return reward - _PLANE_STALL_WEIGHT * barrier
+
+
 def make_plane_mpc(
     env,
     params,
     horizon: int = 30,
     n_iter: int = 50,
     lr: float = 0.05,
+    n_tail: int = 60,
+    objective_fn=_plane_objective,
 ):
     """Gradient MPC for Airplane2D — optimises both power and stick in [-1, 1].
 
     Uses gradient-based MPC because the Plane has 9 coupled nonlinear ODEs
     including aerodynamic coefficients that are not expressible in CasADi
     without a full symbolic re-implementation.  dt=1.0 s; horizon=30.
+
+    ``n_tail=60`` is what makes this controller work. Optimising 30 s of flight
+    and being charged for nothing beyond it, the plan climbed hard, ran the
+    airspeed down and left the aircraft outside the altitude envelope just past
+    the horizon: it settled 654x worse than the PID and crashed in one episode
+    of two. Simulating 60 further seconds on the held action -- which for this
+    aircraft is close to trim -- prices that ending into the objective. Measured
+    over 600-step episodes, settled tracking error goes from 2949 m to 0.083 m,
+    which is 55x *better* than the PID rather than 654x worse, with no
+    terminations. Sixty is the knee: 120 is no better (0.092 m) and costs twice.
     """
     return GradientMPC(
         env,
@@ -1215,6 +1328,8 @@ def make_plane_mpc(
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,
+        n_tail=n_tail,
+        objective_fn=objective_fn,
     )
 
 
@@ -1258,9 +1373,25 @@ def make_first_order_mpc(env, params, horizon: int = 5):
     return FirstOrderCasadiMPC(env, params, horizon=horizon)
 
 
-def make_four_tank_mpc(env, params, horizon: int = 5):
-    """CasADi/IPOPT MPC for FourTank — matches the PC-gym oracle (N=5)."""
-    return FourTankCasadiMPC(env, params, horizon=horizon)
+def make_four_tank_mpc(env, params, horizon: int = 10, mpc_dt: float = None):
+    """CasADi/IPOPT MPC for FourTank.
+
+    PC-gym's oracle is N=5 at the environment's own step, and that is what this
+    shipped: a horizon covering 5 s of a plant whose tracking error takes ~198 s
+    to close (``scripts/audit_mpc_horizons.py`` puts it at ratio 0.03, the worst
+    in the suite). It settled 47x worse than the PID and drove a tank to a
+    terminal state in one episode of two.
+
+    The fix is covered *time*, not more decision variables -- measured, raising
+    the horizon to 20 steps at the environment's own step is still 54x worse,
+    while any configuration reaching ~200 s drives the settled error to zero
+    with no terminations. So the prediction step is decoupled from the
+    environment's: ten steps of 20 dt cover 200 s for a tenth of the decision
+    variables that would otherwise take.
+    """
+    if mpc_dt is None:
+        mpc_dt = 20.0 * float(params.delta_t)
+    return FourTankCasadiMPC(env, params, horizon=horizon, mpc_dt=mpc_dt)
 
 
 def make_reactor_mpc(env, params, horizon: int = 20):
@@ -1492,8 +1623,47 @@ def make_cement_kiln_mpc(
     )
 
 
+def _battery_objective(state, params):
+    """Smooth stand-in for the battery's reward, with the same minimiser.
+
+    The environment scores dispatch tracking as ``clip(1 - err/band, 0, 1)**2``,
+    the same clipped form the wind turbine uses, and it fails the same way: once
+    the power error leaves the band the tracking term is flat, and the only
+    gradient left belongs to the degradation and state-of-charge terms, which
+    both pull toward doing nothing. Measured over ten seeds the controller
+    returned 95 against the PID's 157, ahead on 1 seed.
+
+    Replacing the clipped term with a plain quadratic in the normalised error
+    keeps the minimiser and restores a gradient that grows with the error:
+    164 against 157 on the mean.
+
+    That mean is worth reading carefully. It is carried by one seed where
+    lookahead pays enormously (358 against 165); on the other nine the MPC is
+    still behind by 5 to 24, for a median of -11. So this is a large improvement
+    and *not* an upper bound, and horizon, iterations and step size were all
+    swept without closing the remainder.
+    """
+    from target_gym.energy.battery.env import degradation_rate
+
+    err = (state.target_power - state.power) / params.power_band
+    fade = degradation_rate(state.current, state.T_cell, params) * params.delta_t
+    headroom = (state.soc - 0.5) ** 2
+    # Offset so a healthy step scores ~1, matching ``done_value`` = 0.
+    return (
+        1.0
+        - err**2
+        - params.degradation_weight * fade
+        - params.soc_comfort_weight * headroom
+    )
+
+
 def make_battery_mpc(
-    env, params, horizon: int = 30, n_iter: int = 40, lr: float = 0.08
+    env,
+    params,
+    horizon: int = 30,
+    n_iter: int = 40,
+    lr: float = 0.08,
+    objective_fn=_battery_objective,
 ):
     """Gradient MPC for the grid battery.
 
@@ -1512,11 +1682,75 @@ def make_battery_mpc(
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,
+        objective_fn=objective_fn,
+    )
+
+
+_WT_BARRIER_ONSET = 0.85  # fraction of the trip speed at which the barrier starts
+_WT_BARRIER_WEIGHT = 10.0
+
+
+def _wind_turbine_objective(state, params):
+    """Smooth stand-in for the turbine's reward, with the same minimiser.
+
+    The environment scores power tracking as ``clip(1 - err/band, 0, 1)**2``
+    minus a pitch-activity penalty. That is a fine thing to be scored on and a
+    useless thing to descend: one step off the operating point puts the error at
+    nearly four times the band, where the tracking term is clipped flat and the
+    only surviving gradient belongs to the *penalty*. The optimiser is then
+    correctly guided to stop moving the pitch, and the controller returns ~0 for
+    the rest of the episode -- which is what it did, at every horizon tried.
+
+    Replacing the clipped term with a plain quadratic in the normalised error
+    keeps the minimiser (zero error, no activity) and restores a gradient that
+    grows with the error instead of vanishing.
+    """
+    from target_gym.energy.wind_turbine.env import electrical_power, omega_rated
+
+    power = electrical_power(state.omega, state.torque, params)
+    err = (state.target_power - power) / params.power_band
+    activity = jnp.abs(state.pitch_cmd - state.pitch) / params.pitch_max
+
+    # Soft barrier on the rotor-speed trip. The environment terminates outside
+    # [underspeed, overspeed] x rated, and a *hard* stop is invisible to a
+    # gradient planner: ``done`` is a boolean, so masking the reward after it
+    # tells the optimiser what a trip costs while giving it no derivative
+    # pointing away from one. Measured, that is exactly what happened -- the
+    # planned pitch command stayed at 0.000 while the predicted rotor speed ran
+    # past the trip, on every horizon from 60 to 200.
+    #
+    # A differentiable penalty that switches on before the boundary does give a
+    # gradient, and it is what makes this controller stable: over twelve seeds
+    # the worst episode goes from 22 to 307 and the spread from sd 152 to 24.
+    # The onset matters (0.85 beats 0.80); the weight barely does (10, 30 and
+    # 100 land within 0.4 of each other), which is the signature of a term that
+    # is shaping the approach rather than trading against the objective.
+    w_rated = omega_rated(params)
+    over = state.omega / (params.overspeed_factor * w_rated)
+    under = (params.underspeed_factor * w_rated) / jnp.maximum(state.omega, 1e-6)
+    barrier = (
+        jnp.maximum(over - _WT_BARRIER_ONSET, 0.0) ** 2
+        + jnp.maximum(under - _WT_BARRIER_ONSET, 0.0) ** 2
+    )
+
+    # Offset so a healthy step scores ~1 and a terminated one scores
+    # ``done_value`` = 0, making an early trip cost the rest of the horizon.
+    return (
+        1.0
+        - err**2
+        - params.pitch_activity_weight * activity
+        - _WT_BARRIER_WEIGHT * barrier
     )
 
 
 def make_wind_turbine_mpc(
-    env, params, horizon: int = 20, n_iter: int = 40, lr: float = 0.10
+    env,
+    params,
+    horizon: int = 60,
+    n_iter: int = 100,
+    lr: float = 0.02,
+    n_tail: int = 0,
+    objective_fn=_wind_turbine_objective,
 ):
     """Gradient MPC for the NREL 5 MW turbine.
 
@@ -1526,6 +1760,23 @@ def make_wind_turbine_mpc(
     and torque jointly is the point -- the rate-limited pitch actuator means
     the useful move is often to start pitching *before* the rotor has
     accelerated, which a reactive loop cannot do.
+
+    Two changes make it actually control. The objective is the smooth surrogate
+    above rather than the environment's clipped reward, without which the
+    controller scored a return of -0.02 against the PID's 393 at every horizon
+    tried -- identical to two decimals at 20, 40 and 60, which is the signature
+    of an optimiser that is not moving. The horizon is then 60 rather than 20,
+    which only matters once the gradient is informative. Measured over 400-step
+    episodes the return goes from -0.02 to 387, with no terminations.
+
+    Scored over twelve seeds this reaches 385 against the PID's 392 -- 98%, and
+    ahead on 7 of the 12 -- so it is on par with the PID rather than an upper
+    bound over it. The remaining gap is one seed that still drops to ~307.
+
+    Two things that look like explanations and are not, both measured: the wind
+    forecast (the MPC plans with a fixed key while the episode uses its own, and
+    the seed where they disagree scored *higher*), and the inner optimiser
+    (Adam, and a decaying step size, are both worse here than the plain one).
     """
     return GradientMPC(
         env,
@@ -1536,6 +1787,8 @@ def make_wind_turbine_mpc(
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,
+        n_tail=n_tail,
+        objective_fn=objective_fn,
     )
 
 

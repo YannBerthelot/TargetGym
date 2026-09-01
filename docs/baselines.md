@@ -152,11 +152,82 @@ job: the PID must beat the **best constant action**. A weak bar, but exactly
 the one a mis-indexed setpoint fails -- it caught a furnace PID tracking fuel
 percentage as its temperature setpoint.
 
-There is deliberately **no** "MPC beats PID" contract, and it would not pass if
-there were: on the 2D aircraft the shipped MPC settles about 2 400 m from the
-target altitude where the PID settles about 390 m. Writing the contract would
-therefore be asserting something untrue. It is recorded here instead, and in
-the roadmap, as work rather than as a guarantee.
+The MPC now has a contract too, in the same job: it must not end the episode in
+a terminal state, and must not return materially less than the PID. Until it
+existed, `tests/experts/test_mpc_baselines.py` asserted only that a controller
+built and emitted finite, in-bounds actions -- which is exactly what a
+controller that has given up does, so an MPC returning -0.02 against a PID's 393
+passed for as long as it was there.
+
+The bar is deliberately loose (10% of the PID's return, five seeds, episodes
+capped at 250 steps). It is a tripwire against gross regression, not
+the published comparison: the numbers below were measured over ten seeds, and
+the tolerance was set from the real defects rather than chosen. Verified by
+reverting each fix: the wind turbine (terminates at step 20 of 400) and the
+battery (-27.5%) are caught; the glass furnace is *not*, and that is the
+contract's honest limit -- its bug costs -17.6% over ten seeds but only -4.4%
+over five, against +3.7% when fixed, and no sane threshold separates those.
+Subtle objective errors are below its resolution; this table is what finds
+them. Two aircraft are recorded as `EnvSpec.mpc_degraded` and
+xfail with their measured reasons, so a known gap is explicit rather than
+absent.
+
+## MPC against PID, ten seeds
+
+Return, paired per seed, on each environment's own episode.
+
+| | MPC vs PID | |
+| --- | --- | --- |
+| reactor | **+505** | 10/10 |
+| plane3d_figure8 | **+528** | 10/10 |
+| plane3d_circle | +245 | 9/10 |
+| boiler_drum | +83 | 10/10 |
+| four_tank | +69 | 10/10 |
+| ph_neutralization | +29 | 10/10 |
+| cement_kiln | +27 | 10/10 |
+| hvac | +18 | 10/10 |
+| distillation | +13 | 10/10 |
+| cstr, first_order | +0.4, +0.2 | 10/10 |
+| glass_furnace | -3.1 (median **+1.7**) | 7/10 |
+| wind_turbine | -0.4 | 6/10 |
+| battery | +7.5 (median -11) | 1/10 |
+| **plane** | **-171** | 7/10, three crashes |
+| **plane3d_heading** | **-34** | 7/10, three crashes |
+
+Read the last three rows carefully. The battery's positive mean is carried by a
+single seed where lookahead pays enormously (358 against 165) while it trails on
+the other nine; the two aircraft win most seeds and lose the average to
+terminations worth -600 apiece. A mean alone would misreport all three.
+
+Two seeds would misreport almost everything. Measuring on two produced three
+wrong conclusions during this work -- the wind turbine at "98% of the PID", the
+2D aircraft at "no crashes", and an original verdict of MPC ahead on 14 of 16 --
+each overturned by widening the seed count. Nothing here is quoted below ten.
+
+### Why these failed, which was never tuning
+
+Every MPC that lost to its PID was given an objective it could not descend, or
+one that did not share the reward's minimiser:
+
+- **wind_turbine** and **battery** scored tracking as `clip(1 - err/band, 0, 1)**2`.
+  One step outside the band leaves that term flat, so the only surviving gradient
+  belongs to the *penalty* terms -- and the planner is then correctly guided to
+  stop acting. Both were fixed by a smooth surrogate with the same minimiser.
+- **glass_furnace** normalised its error by the crown's whole 250 K envelope
+  where the reward uses 40 K, six times too flat against an unchanged fuel
+  penalty, and its term turned back upward past the band so that beyond twice it
+  the objective preferred *more* error.
+- **plane** and **plane3d_heading** crash, and a crash penalty behind
+  `where(terminated, ...)` is a boolean: it carries a cost but no gradient away
+  from the boundary. A differentiable barrier on the approach is what works; it
+  fixed the wind turbine's overspeed trip and one of the plane's two failing
+  seeds.
+
+The one time the *optimiser* was improved instead -- swapping the aircraft's
+gradient descent for Adam, which tripled the predicted return -- closed-loop
+performance got dramatically worse (737 m to 4527 m, with new crashes). A weak
+optimiser was masking the myopia; pursuing a truncated-horizon objective harder
+just exploited it. Fix the objective first.
 
 ## Structure over gains
 
