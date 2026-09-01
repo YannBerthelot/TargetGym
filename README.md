@@ -8,7 +8,7 @@ subset of states**, not to reach a goal and stop. Holding a setpoint against
 disturbances, forever, is what industrial control actually is.
 
 Eighteen environments spanning aircraft, process, industrial and energy plants.
-They are fast (0.3-17 M steps/s on CPU, `jit`/`vmap`/`scan` throughout) and
+They are fast (0.5-17 M steps/s on CPU, `jit`/`vmap`/`scan` throughout) and
 their physics is a **documented, tested contract** rather than a claim: every
 environment carries a `PHYSICS.md` with a sourced parameter table, published
 validation targets asserted by tests, and quantified known deviations.
@@ -41,10 +41,10 @@ RL loop actually drives them. Figures scale with batch size and are much higher 
 
 | Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, vmap 256) |
 |---|---|---|---|---|
-| Plane 2D | Reach and hold a target altitude with an A320-like aircraft | 2 (power, stick) | 9 | ~5.4M |
-| Plane 3D -- Heading | Reach and hold a target altitude and heading | 3 (power, stick, aileron) | 15 | ~2.8M |
-| Plane 3D -- Circle | Maintain altitude while orbiting a circular path | 3 (power, stick, aileron) | 17 | ~2.6M |
-| Plane 3D -- Figure Eight | Follow a 3D twisted lemniscate (figure-8 with altitude crossovers) | 3 (power, stick, aileron) | 19 | ~2.7M |
+| Plane 2D | Reach and hold a target altitude with an A320-like aircraft | 2 (power, stick) | 9 | ~2.3M |
+| Plane 3D -- Heading | Reach and hold a target altitude and heading | 3 (power, stick, aileron) | 15 | ~1.4M |
+| Plane 3D -- Circle | Maintain altitude while orbiting a circular path | 3 (power, stick, aileron) | 17 | ~1.4M |
+| Plane 3D -- Figure Eight | Follow a 3D twisted lemniscate (figure-8 with altitude crossovers) | 3 (power, stick, aileron) | 19 | ~1.4M |
 
 ### Multi-Agent / Formation
 
@@ -55,8 +55,8 @@ aircraft learn) variants share the same 3D physics.
 
 | Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, vmap 256) |
 |---|---|---|---|---|
-| Plane Patrol | Hold a slot behind a scripted (maneuvering) lead | 3 (power, stick, aileron) | 26 | ~2.2M |
-| Plane Patrol -- Bearing-only | Same, but the follower sees only range + bearing to the lead (partial obs) | 3 | 21 | ~2.2M |
+| Plane Patrol | Hold a slot behind a scripted (maneuvering) lead | 3 (power, stick, aileron) | 26 | ~1.0M |
+| Plane Patrol -- Bearing-only | Same, but the follower sees only range + bearing to the lead (partial obs) | 3 | 21 | ~1.0M |
 | Plane Patrol -- MARL / Formation | `1 + num_wingmen` learners (up to 5 planes): lead flies its patrol pattern, wingmen hold slots **evenly spread across both sides** (cooperative team reward, JaxMARL-style API) | 3 per agent | 18 (lead) / 26 (wingman) | see note |
 
 ### Process
@@ -461,6 +461,19 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
       cost a full recompile per parameter set. Worth a systematic look at the
       slowest environments (distillation and the cement kiln are under
       1 M steps/s) before the numbers in the README are published as a claim.
+
+      The table's throughput column has since been re-measured with
+      `python -m target_gym.benchmark_speed` (batch 256, best of three, after
+      warm-up). Every process plant came back within 10% of its published figure,
+      which is what makes the aircraft rows conclusive: all five were about 2x
+      optimistic, because the post-stall aerodynamics, the three moment
+      decompositions, pitch damping and fuel burn were added to those dynamics
+      after the numbers were taken. They now read as measured.
+
+      Throughput is also strongly batch-dependent for the aircraft, which the
+      single number does not convey: the 3D plane is flat at ~1.4 M steps/s from
+      batch 64 through 1024 and reaches 3.2 M at 16384. Anyone training on these
+      should batch at 4096 or more.
 * [ ] **Apply the model review checklist to the other environments.** The
       aircraft work produced eleven checks in
       [docs/model-review-checklist.md](docs/model-review-checklist.md), derived
