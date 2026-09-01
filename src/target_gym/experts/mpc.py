@@ -1260,40 +1260,6 @@ class PHCasadiMPC(CasadiMPC):
 # ============================================================================
 
 
-_PLANE_STALL_ONSET = 0.5  # fraction of aoa_stall at which the barrier starts
-_PLANE_STALL_WEIGHT = 20.0
-
-
-def _plane_objective(state, params):
-    """Environment reward plus a soft stall-margin barrier.
-
-    The aircraft's irrecoverable event is the stall, not the ground: by the time
-    altitude is low enough for a boundary penalty to bite, a departed aircraft is
-    already descending at 270 m/s and cannot recover. A barrier on altitude was
-    measured and does nothing for that reason.
-
-    The stall itself is invisible to the planner for the usual reason -- the
-    crash penalty sits behind ``where(terminated, ...)`` on a boolean, so it
-    carries a cost but no derivative. Charging the *approach* to the stall angle
-    does carry one, and it converts one of the two failing seeds from a crash
-    (-503) to 422, ahead of the PID's 267 there.
-
-    It does not fix everything: one seed still commands a descent it cannot
-    arrest, diving through the target at 265 m/s with the angle of attack small
-    throughout, so no stall barrier applies to it. Altitude barriers, tails to
-    240 steps and a matched crash charge were all measured against that case and
-    none helped.
-    """
-    from target_gym.plane.env import compute_reward
-
-    reward = compute_reward(state, params)
-    gamma = jnp.arctan2(state.z_dot, jnp.maximum(jnp.abs(state.x_dot), 1e-3))
-    aoa_deg = jnp.rad2deg(state.theta - gamma)
-    margin = jnp.abs(aoa_deg) / params.aoa_stall
-    barrier = jnp.maximum(margin - _PLANE_STALL_ONSET, 0.0) ** 2
-    return reward - _PLANE_STALL_WEIGHT * barrier
-
-
 def make_plane_mpc(
     env,
     params,
@@ -1301,7 +1267,6 @@ def make_plane_mpc(
     n_iter: int = 50,
     lr: float = 0.05,
     n_tail: int = 60,
-    objective_fn=_plane_objective,
 ):
     """Gradient MPC for Airplane2D — optimises both power and stick in [-1, 1].
 
@@ -1329,7 +1294,6 @@ def make_plane_mpc(
         n_iter=n_iter,
         lr=lr,
         n_tail=n_tail,
-        objective_fn=objective_fn,
     )
 
 

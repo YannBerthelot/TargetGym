@@ -456,11 +456,29 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 * [ ] **Drop the git dependency on `gymnax`.** The tested configuration pins
       upstream `main` because the gymnasium bound this project needs is merged
       but unreleased, so that configuration cannot be reproduced from PyPI alone.
-* [ ] **A performance phase.** Throughput has never been optimised deliberately;
-      the first pass found a nested `jax.jit` keyed on the params object that
-      cost a full recompile per parameter set. Worth a systematic look at the
-      slowest environments (distillation and the cement kiln are under
-      1 M steps/s) before the numbers in the README are published as a claim.
+* [x] **A performance phase.** Four defects, all paid by every user and none
+      visible to a throughput benchmark, which measures steady state after
+      compilation. Every environment returned a *weakly typed* reset state, so
+      anything jitted over the state compiled twice. Each new environment
+      instance retained a compiled executable, leaking ~2.6 MB per construction.
+      The pH solver spent its whole runtime on 44 bisection halvings resolving to
+      1e-13. And `runners.rollout` re-jitted the environment on every call, so a
+      warmed rollout still spent 0.222 s of 0.355 s compiling. Fast CI 164 s ->
+      128 s, `tests/experts` 143 s -> 37 s, warm rollouts ~5x, pH throughput 2x.
+
+      Two restructurings were measured and rejected: vectorising the aircraft's
+      three aerodynamic calls into one is 0.76x, and `donate_argnums` on the
+      batched rollout does nothing (the carried state is 0.26 MB). The remaining
+      slow environments are honestly slow -- distillation needs 16 substeps
+      across 41 stages for stability, the cement kiln sweeps 16 zones in
+      sequence.
+
+      Two cautions for whoever picks this up. Benchmarks on a laptop vary 41%
+      across identical trials, so every number here is a min of many; a
+      single-shot measurement produced a confident and wrong conclusion partway
+      through this work. And the pass found a *correctness* bug while looking for
+      speed -- see the integration order note below -- which is the main reason
+      it was worth doing.
 
       The table's throughput column has since been re-measured with
       `python -m target_gym.benchmark_speed` (batch 256, best of three, after

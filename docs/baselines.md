@@ -210,8 +210,15 @@ and making terminations visible to the planner -- and the one that helped fixed
 a single seed. None of it was the cause. The integrator was: at one RK4 substep
 the plant the MPC plans against and the plant it is stepping through disagree
 enough to fly into the ground. At two substeps both controllers win 10 of 10
-with no terminations at all, and the barrier work is left in place because it
-was measured to help at the time, not because it is still load-bearing.
+with no terminations at all.
+
+The machinery was then re-measured rather than left to rot. The 2D aircraft's
+terminal cost still earns its place -- five seeds out of five with it, four
+without, and 61 more return -- so it stays. Its stall-margin barrier does not:
+it adds 1.3%, inside this machine's noise, and it existed only to fight the
+crashes, so it has been removed. The wind turbine's overspeed barrier and the
+battery and furnace surrogates are untouched, because those fixed defects that
+were real and remain fixed.
 
 Two seeds would misreport almost everything. Measuring on two produced three
 wrong conclusions during this work -- the wind turbine at "98% of the PID", the
