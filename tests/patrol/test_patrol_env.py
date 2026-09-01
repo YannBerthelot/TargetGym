@@ -195,18 +195,33 @@ class TestExpert:
         _, (errs, seps) = jax.lax.scan(step, (obs, state, pid0), None, length=n)
         return float(jnp.mean(errs[-500:])), float(jnp.min(seps))
 
-    @pytest.mark.xfail(
-        reason="The close-patrol expert's gains were re-tuned after the "
-        "lift-curve correction (PHYSICS.md D1/D2) doubled control authority: "
-        "mean return went from 2.9 to 117 and the follower no longer departs. "
-        "But it settles ~139 m from the slot against a 60 m tolerance, so "
-        "formation is held only loosely. A grid search over altitude/heading/"
-        "bank scalings got no closer, which suggests the guidance law needs "
-        "rework rather than further tuning. Every structural patrol test "
-        "passes -- this is expert quality, not broken dynamics.",
-        strict=True,
+    @pytest.mark.parametrize(
+        "turn",
+        [
+            0.0,
+            0.002,
+            pytest.param(
+                -0.003,
+                marks=pytest.mark.xfail(
+                    strict=True,
+                    reason=(
+                        "The hardest case -- the lead's maximum left turn -- "
+                        "settles 78 m from the slot against a 60 m tolerance. "
+                        "The other two turn rates now hold it. This whole test "
+                        "used to fail at ~139 m and was attributed to the "
+                        "guidance law needing rework, on the grounds that a grid "
+                        "search over the gains got no closer. That was wrong: it "
+                        "was integration error. Halving the step (rk4_1 -> "
+                        "rk4_2, see plane3d/PHYSICS.md) took the settled error "
+                        "from 98.5 m to 41.2 m averaged over seeds, with no "
+                        "change to the controller at all. What is left here may "
+                        "well be the guidance law, but that claim has not "
+                        "survived a measurement once yet."
+                    ),
+                ),
+            ),
+        ],
     )
-    @pytest.mark.parametrize("turn", [0.0, 0.002, -0.003])
     def test_expert_holds_formation(self, turn):
         # Averaged over a few seeds, the tuned expert holds the slot well
         # within the reward tolerance and never collides.

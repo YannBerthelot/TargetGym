@@ -49,7 +49,7 @@ class _PlanePatrolBase(environment.Environment[PatrolState, PatrolParams]):
     screen_height = 400
     task_type: str = "patrol"
 
-    def __init__(self, integration_method: str = "rk4_1"):
+    def __init__(self, integration_method: str = "rk4_2"):
         self.integration_method = integration_method
         self.positions_history_xz = []
         self.positions_history_xy = []
@@ -264,7 +264,7 @@ class PlanePatrol(_PlanePatrolBase):
     obs_target_index: int = 25  # constant 0
     task_type: str = "patrol"
 
-    def __init__(self, integration_method: str = "rk4_1"):
+    def __init__(self, integration_method: str = "rk4_2"):
         super().__init__(integration_method)
         self.obs_shape = (26,)
 
@@ -284,7 +284,7 @@ class PlanePatrolBearingOnly(_PlanePatrolBase):
     obs_target_index: int = 20  # commanded slot range
     task_type: str = "patrol"
 
-    def __init__(self, integration_method: str = "rk4_1"):
+    def __init__(self, integration_method: str = "rk4_2"):
         super().__init__(integration_method)
         self.obs_shape = (21,)
 

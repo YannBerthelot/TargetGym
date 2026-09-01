@@ -51,7 +51,7 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
     screen_width = 600
     screen_height = 400
 
-    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         # observe_wind=False -> wind is a hidden disturbance (POMDP);
         # observe_wind=True  -> (wind_x, wind_y, wind_z) appended to the obs
         #                       (fully-observable baseline).
@@ -247,7 +247,7 @@ class Plane3DHeading(_Airplane3DBase):
     obs_target_index: int = 10  # target_altitude
     task_type: str = "heading"
 
-    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         self.obs_shape = (18,) if observe_wind else (15,)
 
@@ -313,7 +313,7 @@ class Plane3DCircle(_Airplane3DBase):
     task_type: str = "circle"
     tracked_names: tuple = ("altitude (m)",)
 
-    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         self.obs_shape = (20,) if observe_wind else (17,)
 
@@ -406,7 +406,7 @@ class Plane3DFigureEight(_Airplane3DBase):
     task_type: str = "figure8"
     tracked_names: tuple = ("altitude (m)",)
 
-    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         self.obs_shape = (22,) if observe_wind else (19,)
 

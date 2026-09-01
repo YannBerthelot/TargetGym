@@ -130,17 +130,6 @@ class TestCollision:
         assert float(reward) < 0.0
 
 
-_FORMATION_XFAIL = (
-    "Formation quality, not broken dynamics. Correcting the post-stall "
-    "aerodynamics moved every case sharply: two and four wingmen went from "
-    "-3.3 and -5.3 to +0.67 and +0.65, because a follower that loses the "
-    "formation no longer departs into a zero-drag regime it cannot recover "
-    "from. All three now sit just under the 0.7 bar (0.651-0.668) rather than "
-    "one passing and two collapsing, so what remains is the guidance law "
-    "settling ~139 m from a 60 m slot, not a failure to fly."
-)
-
-
 class TestCooperativeSolution:
     """Experts (heading PID lead + pursuit PID wingmen) hold the formation and
     earn near-max team reward for any number of wingmen."""
@@ -171,7 +160,6 @@ class TestCooperativeSolution:
         return float(jnp.mean(rew[-300:]))
 
     @pytest.mark.parametrize("k", [1, 2, 4])
-    @pytest.mark.xfail(strict=True, reason=_FORMATION_XFAIL)
     def test_experts_earn_high_team_reward(self, k):
         assert np.mean([self._mean_reward(k, s) for s in range(2)]) > 0.7
 

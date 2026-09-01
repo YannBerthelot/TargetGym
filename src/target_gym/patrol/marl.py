@@ -116,7 +116,7 @@ class PlanePatrolMARL:
     ``[power, stick, aileron]`` in [-1, 1]; all share the team reward.
     """
 
-    def __init__(self, num_wingmen: int = 1, integration_method: str = "rk4_1"):
+    def __init__(self, num_wingmen: int = 1, integration_method: str = "rk4_2"):
         if not (1 <= num_wingmen <= MAX_WINGMEN):
             raise ValueError(
                 f"num_wingmen must be in 1..{MAX_WINGMEN} (2..{MAX_WINGMEN + 1} planes)"
