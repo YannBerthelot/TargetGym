@@ -159,12 +159,16 @@ built and emitted finite, in-bounds actions -- which is exactly what a
 controller that has given up does, so an MPC returning -0.02 against a PID's 393
 passed for as long as it was there.
 
-The bar is deliberately loose (15% of the PID's return, three seeds, each
-environment's own short episode). It is a tripwire against gross regression, not
+The bar is deliberately loose (10% of the PID's return, five seeds, episodes
+capped at 250 steps). It is a tripwire against gross regression, not
 the published comparison: the numbers below were measured over ten seeds, and
-the tolerance was chosen so the real defects (-100%, -88%, -39%, -18% of the
-PID's return) fail while environments that legitimately sit level with their PID
-(within 2.4%) pass. Two aircraft are recorded as `EnvSpec.mpc_degraded` and
+the tolerance was set from the real defects rather than chosen. Verified by
+reverting each fix: the wind turbine (terminates at step 20 of 400) and the
+battery (-27.5%) are caught; the glass furnace is *not*, and that is the
+contract's honest limit -- its bug costs -17.6% over ten seeds but only -4.4%
+over five, against +3.7% when fixed, and no sane threshold separates those.
+Subtle objective errors are below its resolution; this table is what finds
+them. Two aircraft are recorded as `EnvSpec.mpc_degraded` and
 xfail with their measured reasons, so a known gap is explicit rather than
 absent.
 

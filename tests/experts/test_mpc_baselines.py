@@ -95,22 +95,42 @@ def test_every_environment_without_an_mpc_says_why():
 # policy is measured against, so "RL beat MPC" on any of those environments was a
 # statement about a broken baseline, not about RL.
 #
-# This is deliberately a tripwire, not a benchmark. It runs few seeds and each
-# environment's own short ``test_params`` episode, so its numbers are not the
-# published ones -- those live in docs/baselines.md and were measured over ten
-# seeds. What it has to catch is gross regression, and the tolerance is set from
-# the real defects: as a fraction of the PID's return those cost -100% (turbine),
-# -88% (four-tank), -39% (battery) and -18% (furnace), while the environments
-# that legitimately sit level with their PID are within 2.4%. A 15% band
-# separates the two populations with room on both sides.
+# What this catches, measured by reverting each fix and re-running:
 #
-# The seed count is low because MPC rollouts are expensive, and that is a real
-# limitation: measuring on two seeds produced three wrong conclusions during the
-# work that motivated this file, so the parity cases here are checked loosely on
-# purpose and the strict comparisons are left to the ten-seed table.
+#   wind turbine surrogate removed  -> caught (terminates at step 20 of 400)
+#   battery surrogate removed       -> caught (-27.5% of the PID)
+#   glass furnace scale reverted    -> NOT caught
+#
+# The furnace case is the honest limit. That bug costs -17.6% of the PID over ten
+# seeds but only -4.4% over the five this can afford, against +3.7% when fixed --
+# an eight-point gap that no sane tolerance separates. Tightening the threshold
+# until it caught this one bug would be fitting the test to a known answer and
+# would make it flaky. A subtle objective error is below this contract's
+# resolution; the ten-seed table in docs/baselines.md is what finds those.
+#
+# The tolerance is set from the defects rather than chosen. As a fraction of the
+# PID's return the gross failures cost -100% (turbine), -88% (four tank) and
+# -27% (battery), while every environment that legitimately sits level with its
+# PID is within 4% once fixed. 10% separates those two populations with room on
+# both sides.
+#
+# Five seeds, not two or three. Two seeds hides the battery entirely -- its MPC
+# scored 277 on seed 0 and 65 on seed 1, so the average of the two looks healthy
+# while the ten-seed truth is -61. That is the same trap that produced three
+# wrong conclusions in the work this file came from, and it applies to the
+# tripwire, not only to the ranking.
+#
+# Episodes are capped at 250 steps to bound the cost. The floor is set by the
+# four-tank, whose tracking error takes ~198 steps to close: capped at 100 it
+# fails not because the MPC is broken but because the episode ends before the
+# controller's advantage exists.
+#
+# Cost: about nine minutes of the slow job's thirteen. It runs only there --
+# CI's matrix build uses -m "not slow" -- so the fast job is untouched.
 
-QUALITY_SEEDS = 3
-PID_SHORTFALL_TOLERANCE = 0.15
+QUALITY_SEEDS = 5
+CONTRACT_STEPS = 250
+PID_SHORTFALL_TOLERANCE = 0.10
 
 
 @pytest.mark.slow
@@ -136,9 +156,9 @@ def test_mpc_controls_at_least_as_well_as_the_pid(name):
     if spec.mpc_degraded:
         pytest.xfail(f"{name}: {spec.mpc_degraded}")
 
-    params = spec.make_test_params()
+    horizon = min(int(spec.make_test_params().max_steps_in_episode), CONTRACT_STEPS)
+    params = spec.make_test_params(max_steps_in_episode=horizon)
     env = spec.make_env()
-    horizon = int(params.max_steps_in_episode)
     pid, mpc = [], []
     for seed in range(QUALITY_SEEDS):
         _, _, r = rollout(spec, params, pid_policy(spec), seed)
