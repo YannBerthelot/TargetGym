@@ -1240,6 +1240,40 @@ class PHCasadiMPC(CasadiMPC):
 # ============================================================================
 
 
+_PLANE_STALL_ONSET = 0.5  # fraction of aoa_stall at which the barrier starts
+_PLANE_STALL_WEIGHT = 20.0
+
+
+def _plane_objective(state, params):
+    """Environment reward plus a soft stall-margin barrier.
+
+    The aircraft's irrecoverable event is the stall, not the ground: by the time
+    altitude is low enough for a boundary penalty to bite, a departed aircraft is
+    already descending at 270 m/s and cannot recover. A barrier on altitude was
+    measured and does nothing for that reason.
+
+    The stall itself is invisible to the planner for the usual reason -- the
+    crash penalty sits behind ``where(terminated, ...)`` on a boolean, so it
+    carries a cost but no derivative. Charging the *approach* to the stall angle
+    does carry one, and it converts one of the two failing seeds from a crash
+    (-503) to 422, ahead of the PID's 267 there.
+
+    It does not fix everything: one seed still commands a descent it cannot
+    arrest, diving through the target at 265 m/s with the angle of attack small
+    throughout, so no stall barrier applies to it. Altitude barriers, tails to
+    240 steps and a matched crash charge were all measured against that case and
+    none helped.
+    """
+    from target_gym.plane.env import compute_reward
+
+    reward = compute_reward(state, params)
+    gamma = jnp.arctan2(state.z_dot, jnp.maximum(jnp.abs(state.x_dot), 1e-3))
+    aoa_deg = jnp.rad2deg(state.theta - gamma)
+    margin = jnp.abs(aoa_deg) / params.aoa_stall
+    barrier = jnp.maximum(margin - _PLANE_STALL_ONSET, 0.0) ** 2
+    return reward - _PLANE_STALL_WEIGHT * barrier
+
+
 def make_plane_mpc(
     env,
     params,
@@ -1247,6 +1281,7 @@ def make_plane_mpc(
     n_iter: int = 50,
     lr: float = 0.05,
     n_tail: int = 60,
+    objective_fn=_plane_objective,
 ):
     """Gradient MPC for Airplane2D — optimises both power and stick in [-1, 1].
 
@@ -1274,6 +1309,7 @@ def make_plane_mpc(
         n_iter=n_iter,
         lr=lr,
         n_tail=n_tail,
+        objective_fn=objective_fn,
     )
 
 
@@ -1567,8 +1603,47 @@ def make_cement_kiln_mpc(
     )
 
 
+def _battery_objective(state, params):
+    """Smooth stand-in for the battery's reward, with the same minimiser.
+
+    The environment scores dispatch tracking as ``clip(1 - err/band, 0, 1)**2``,
+    the same clipped form the wind turbine uses, and it fails the same way: once
+    the power error leaves the band the tracking term is flat, and the only
+    gradient left belongs to the degradation and state-of-charge terms, which
+    both pull toward doing nothing. Measured over ten seeds the controller
+    returned 95 against the PID's 157, ahead on 1 seed.
+
+    Replacing the clipped term with a plain quadratic in the normalised error
+    keeps the minimiser and restores a gradient that grows with the error:
+    164 against 157 on the mean.
+
+    That mean is worth reading carefully. It is carried by one seed where
+    lookahead pays enormously (358 against 165); on the other nine the MPC is
+    still behind by 5 to 24, for a median of -11. So this is a large improvement
+    and *not* an upper bound, and horizon, iterations and step size were all
+    swept without closing the remainder.
+    """
+    from target_gym.energy.battery.env import degradation_rate
+
+    err = (state.target_power - state.power) / params.power_band
+    fade = degradation_rate(state.current, state.T_cell, params) * params.delta_t
+    headroom = (state.soc - 0.5) ** 2
+    # Offset so a healthy step scores ~1, matching ``done_value`` = 0.
+    return (
+        1.0
+        - err**2
+        - params.degradation_weight * fade
+        - params.soc_comfort_weight * headroom
+    )
+
+
 def make_battery_mpc(
-    env, params, horizon: int = 30, n_iter: int = 40, lr: float = 0.08
+    env,
+    params,
+    horizon: int = 30,
+    n_iter: int = 40,
+    lr: float = 0.08,
+    objective_fn=_battery_objective,
 ):
     """Gradient MPC for the grid battery.
 
@@ -1587,6 +1662,7 @@ def make_battery_mpc(
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,
+        objective_fn=objective_fn,
     )
 
 
