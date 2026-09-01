@@ -57,12 +57,28 @@ Two caveats worth knowing before you re-tune anything:
   is not automatically better than what is shipped. Measure both before keeping
   one: re-running the tuner over the whole registry produced a genuinely better
   `cstr` and a distinctly worse `first_order` in the same pass.
-- **`plane3d_figure8` cannot currently be tuned by this script.** Its power loop
-  raises *"relay autotune: every operating point failed (no zero-crossings)"* --
-  the altitude/power loop does not sustain a bang-bang oscillation, so the relay
-  experiment has nothing to measure. The shipped gains for that task came from a
-  direct gain search instead. Tuning it needs the gradient/random-search path the
-  four-tank and glass furnace use, which is the fix, not the relay.
+- **None of the four aircraft can currently be tuned by this script**, which was
+  found by trying, after the integration order was corrected, to re-tune the
+  gains against the changed plant:
+
+  | | what happens |
+  | --- | --- |
+  | `plane` | Runs, reports success, and writes the `plane` key -- which nothing reads. The shipped controller is `StatefulCascadedAltitudePID`, which loads `plane_cascaded`, a key absent from the file. Re-tuning it scores identically to not re-tuning it, per seed. |
+  | `plane3d_heading` | *"relay autotune: every operating point failed (no zero-crossings)"* on the power loop |
+  | `plane3d_circle` | the same |
+  | `plane3d_figure8` | the same; its shipped gains came from a direct gain search |
+
+  The relay experiment needs the loop to sustain a bang-bang oscillation and the
+  aircraft altitude/power loop does not. Fixing this means the gradient or
+  random-search path the four-tank and glass furnace already use, not a better
+  relay. Until then the shipped aircraft gains cannot be reproduced by the
+  documented command, which is worth knowing before trusting them.
+
+  It also means the gains still in the file were identified against the
+  one-substep plant. Measured across the integrator change they mostly held --
+  the 2D aircraft and the circle task are unchanged, the figure-8 lost 5.7%, and
+  patrol *improved* from 98.5 m to 41.2 m of slot error -- with `plane3d_heading`
+  the only real loser at -13%. So a re-tune is wanted rather than urgent.
 
 ## MPC
 
