@@ -32,6 +32,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import functools
 import inspect
 import os
 from typing import Callable, Sequence
@@ -57,6 +58,20 @@ VIDEO_DIR = "videos"
 # ---------------------------------------------------------------------------
 # Generic rollout machinery
 # ---------------------------------------------------------------------------
+
+
+@functools.lru_cache(maxsize=None)
+def _jitted_step(env):
+    """One jitted ``step_env`` per environment, reused across rollouts.
+
+    ``jax.jit`` hands back a fresh wrapper carrying its own cache, so calling it
+    per rollout recompiles every time: profiling a *warmed* rollout put 0.222 s
+    of its 0.355 s in ``backend_compile_and_load``, called once, and every
+    rollout paid it again. Environments are shared singletons now
+    (``EnvSpec.make_env``), so caching on the instance is enough to reuse the
+    executable for the life of the process.
+    """
+    return jax.jit(env.step_env)
 
 
 def _wants_state(policy: Callable) -> bool:
@@ -105,7 +120,7 @@ def rollout(spec, params, policy: Callable, seed: int = 0):
 
     key = jax.random.PRNGKey(seed)
     obs, state = env.reset_env(key, params)
-    step = jax.jit(env.step_env)
+    step = _jitted_step(env)
 
     values, targets, rewards = [], [], []
     for _ in range(int(params.max_steps_in_episode)):

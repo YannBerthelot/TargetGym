@@ -942,7 +942,7 @@ class StatefulMIMOPID:
         self.pid2.reset()
 
     def step(self, obs):
-        return jnp.stack([self.pid1.step(obs), self.pid2.step(obs)], axis=-1)
+        return np.stack([self.pid1.step(obs), self.pid2.step(obs)], axis=-1)
 
     __call__ = step
 
@@ -1829,7 +1829,7 @@ class StatefulPlane3DHeadingPID:
             np.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int
         )
         self._hdg_prev = hdg_err
-        return jnp.stack(
+        return np.stack(
             [jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1
         )
 
@@ -1914,7 +1914,7 @@ class StatefulPlane3DCirclePID:
             np.abs(aileron) >= 1.0, self._rad_int - rad_err * self.dt, self._rad_int
         )
         self._rad_prev = rad_err
-        return jnp.stack(
+        return np.stack(
             [jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1
         )
 
@@ -2021,7 +2021,7 @@ class StatefulPlane3DFigureEightPID:
             np.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int
         )
         self._hdg_prev = hdg_err
-        return jnp.stack(
+        return np.stack(
             [jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1
         )
 
@@ -2201,7 +2201,7 @@ class StatefulCascadedAltitudePID:
             self._speed_integral,
         )
 
-        return jnp.stack([power_clipped, stick], axis=-1)
+        return np.stack([power_clipped, stick], axis=-1)
 
     __call__ = step
 
@@ -2414,7 +2414,7 @@ class StatefulCascadedPlane3DPID:
         speed = np.sqrt(obs[..., 0] ** 2 + obs[..., 1] ** 2 + 1e-9)
         power = self.airspeed(speed)
         aileron = self.lateral(obs, phi, phi_dot)
-        return jnp.stack([power, stick, aileron], axis=-1)
+        return np.stack([power, stick, aileron], axis=-1)
 
     __call__ = step
 
@@ -2576,7 +2576,7 @@ class StatefulPatrolPID:
 
     def step(self, obs):
         action, self.state = patrol_pid_step(self.params, self.state, obs)
-        return jnp.asarray(action)
+        return np.asarray(action)
 
     __call__ = step
 
@@ -2665,7 +2665,7 @@ class StatefulBearingOnlyPatrolPID:
         return dx, dy, dz
 
     def step(self, obs):
-        obs = jnp.atleast_1d(jnp.asarray(obs))
+        obs = np.atleast_1d(np.asarray(obs))
         psi = float(obs[self._PSI])
         dx, dy, dz = (float(v) for v in self._relative_world(obs))
 
@@ -2713,8 +2713,8 @@ class StatefulBearingOnlyPatrolPID:
         full[15] = rv_up
         full[19] = rel_heading
 
-        action, self.state = patrol_pid_step(self.params, self.state, jnp.asarray(full))
-        return jnp.asarray(action)
+        action, self.state = patrol_pid_step(self.params, self.state, np.asarray(full))
+        return np.asarray(action)
 
     __call__ = step
 
@@ -2897,7 +2897,7 @@ class StatefulWindTurbinePID:
         )
         pitch_raw = 2.0 * (pitch_clipped / self.pitch_max) - 1.0
 
-        return jnp.stack([pitch_raw, torque_raw], axis=-1)
+        return np.stack([pitch_raw, torque_raw], axis=-1)
 
     __call__ = step
 
@@ -2991,7 +2991,7 @@ class StatefulBoilerDrumPID:
         )
         fuel_raw = 2.0 * (Q_clipped / self.Q_max) - 1.0
 
-        return jnp.stack([fuel_raw, feed_raw], axis=-1)
+        return np.stack([fuel_raw, feed_raw], axis=-1)
 
     __call__ = step
 
@@ -3142,7 +3142,7 @@ class StatefulCementKilnPID:
         rpm = np.clip(rpm, self.rpm_min, self.rpm_max)
         rpm_raw = 2.0 * (rpm - self.rpm_min) / (self.rpm_max - self.rpm_min) - 1.0
 
-        return jnp.stack([fuel_raw, rpm_raw], axis=-1)
+        return np.stack([fuel_raw, rpm_raw], axis=-1)
 
     __call__ = step
 
