@@ -685,14 +685,34 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         target_post = model.tvp["target_T_crown"]
         m_fuel_post = p.fuel_min + 0.5 * (u_post + 1.0) * (p.fuel_max - p.fuel_min)
 
-        # Mirror env.compute_reward so the MPC optimises the scored objective.
-        scale = float(p.T_crown_max - p.T_crown_min)
+        # Share the minimiser of env.compute_reward, not its shape.
+        #
+        # This previously normalised the error by the crown's whole 250 K
+        # envelope while the environment scores it against ``tracking_scale``,
+        # 40 K -- so a 40 K error, which the environment scores as zero, entered
+        # the objective at 0.71, six times flatter than the reward being graded.
+        # Against an unchanged fuel penalty the controller duly sold tracking for
+        # fuel, and lost to the PID on 7 of 10 seeds.
+        #
+        # The old form was also non-monotonic: ``((scale - err)/scale)**2`` turns
+        # back upward past ``err = scale``, so beyond twice it the objective
+        # preferred *more* error. A plain squared normalised error is monotone,
+        # smooth, and minimised in the same place as the reward.
+        scale = float(p.tracking_scale)
         fuel_span = float(p.fuel_max - p.fuel_min)
         err = target_post - T_crown_post
         err_abs = casadi.sqrt(err * err + 1e-4)  # smooth |err|
-        tracking = ((scale - err_abs) / scale) ** 2
+        # Bounded rather than a bare quadratic. Normalising by 40 K instead of
+        # 250 K is what fixes the weighting, but it also makes an unbounded
+        # ``e**2`` reach 6.25 at a 100 K error where the old term gave 0.36, and
+        # IPOPT does not cope: one seed of ten went from ~48 s to over 400 s.
+        # ``e**2/(1+e**2)`` has the same minimiser and the same slope near zero,
+        # is monotone in the error, and saturates instead of diverging -- which
+        # also matches the environment's own reward, itself bounded in [0, 1].
+        e_norm = err_abs / scale
+        tracking_cost = e_norm**2 / (1.0 + e_norm**2)
         fuel_pen = float(p.fuel_cost_weight) * (m_fuel_post - p.fuel_min) / fuel_span
-        mpc.set_objective(lterm=-tracking + fuel_pen, mterm=-tracking)
+        mpc.set_objective(lterm=tracking_cost + fuel_pen, mterm=tracking_cost)
         mpc.set_rterm(u_raw=1e-3)
 
         mpc.bounds["lower", "_u", "u_raw"] = -1.0
