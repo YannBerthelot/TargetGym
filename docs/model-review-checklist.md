@@ -150,8 +150,22 @@ each seed fell on.
 **The lesson.** A well-conditioned search means a genuine gain problem. A
 chaotic one means a structural fault, and tuning will not fix it. The
 figure-eight's search converged smoothly (185 → 153 → 110 → 98 → 90 m) and its
-gains really were the problem; patrol's did not, and its guidance law was.
-Structure first, then gains.
+gains really were the problem; patrol's did not. Structure first, then gains.
+
+**But the search does not tell you *which* structure.** That last sentence used
+to end "and its guidance law was", and that was wrong. Patrol's expert sat 139 m
+from a 60 m slot, a grid search over every gain scaling got no closer, and the
+conclusion drawn — recorded in a strict xfail and left standing for a long time —
+was that the guidance law needed rework. It did not. The plant was integrated
+with one RK4 substep where two are needed, and correcting that took the settled
+slot error to 41 m with no change to the controller at all.
+
+An unimprovable search is evidence that something upstream of the gains is
+wrong. The guidance law is the nearest candidate and therefore the tempting one,
+but the plant, the observation and the integrator are all upstream too. Before
+concluding it is the controller, check that the *simulation* is converged: the
+cheapest version is to halve the integration step and see whether the controller
+you were about to rewrite suddenly works.
 
 ## 11. Can the error metric resolve what the reward is asking for?
 

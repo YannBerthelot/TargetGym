@@ -141,6 +141,26 @@ a millimetre. The circle needs none of this — its distance is analytic.
 
 ---
 
+### Integration order
+
+``rk4_2`` -- two RK4 substeps per environment step -- rather than one. The
+trajectory is converged there: over 150 steps of a fixed control input the
+altitude moves 20.4 m between one substep and two, then 0.030 m between two and
+four and 0.007 m between four and eight.
+
+One substep was the original setting and it is not defensible for this
+environment. The tracking reward has a ``precision_floor`` of 1 m and the shipped
+controllers settle between 1 and 11 m, so a 20 m integration error is larger than
+the quantity the benchmark scores -- the simulator could not resolve the
+precision the reward was paying for. It is the same failure as check 11 of the
+model review checklist, one level down: there the *metric* could not see what the
+reward asked for, here the *integrator* could not.
+
+It costs throughput, measured at batch 4096: the 3D aircraft goes from 1.88 to
+1.05 M steps/s and the 2D aircraft from 2.71 to 1.61. The 2D aircraft's own
+error at one substep was 0.823 m, inside its 1 m floor rather than outside it,
+but it is set the same way so the family stays consistent.
+
 ## 5. Known deviations
 
 **⚠️ D1 — no yaw axis, and it costs less than it appears to.** Turns are

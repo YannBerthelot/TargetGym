@@ -52,12 +52,19 @@ from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range
 
-# Bisection steps for the pH root-find. The bracket is [0, 14], so 44 halvings
-# resolve to ~1e-12 pH units -- far below any physical relevance, and cheap
-# because each step is a handful of scalar ops. Bisection rather than Newton:
-# the residual is near-vertical at the equivalence point, where Newton
-# overshoots out of the bracket.
-PH_BISECTION_STEPS = 44
+# Bisection steps for the pH root-find. The bracket is [0, 14], so 20 halvings
+# resolve to ~1.3e-5 pH units -- three orders of magnitude finer than a pH
+# electrode, which reads to about 0.01. Bisection rather than Newton: the
+# residual is near-vertical at the equivalence point, where Newton overshoots
+# out of the bracket.
+#
+# This was 44, on the reasoning that each halving is "a handful of scalar ops
+# and cheap". Measured, it is the whole cost of the environment: the scan is
+# sequential, and throughput is exactly linear in the count -- 44 halvings give
+# 2.03 M steps/s, 20 give 4.05, 8 give 8.09. At 44 this environment was ten
+# times slower than its compiled graph size predicts, and the extra 24 halvings
+# were resolving the pH to 1e-13, which nothing downstream can see.
+PH_BISECTION_STEPS = 20
 
 # Ornstein-Uhlenbeck buffer-flow disturbance: mean-reversion rate (1/s).
 # 1/theta ~ 500 s, several residence times, so buffering drifts as a changing

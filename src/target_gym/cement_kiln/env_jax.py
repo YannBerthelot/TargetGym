@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.cement_kiln.env import (
     CementKilnParams,
     CementKilnState,
@@ -84,6 +85,7 @@ class CementKiln(environment.Environment[CementKilnState, CementKilnParams]):
         terminated, _ = check_is_terminal(state, params)
         return terminated
 
+    @canonical_reset
     def reset_env(
         self, key: chex.PRNGKey, params: CementKilnParams = None
     ) -> Tuple[jnp.ndarray, CementKilnState]:

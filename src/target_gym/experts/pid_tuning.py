@@ -345,7 +345,7 @@ def tune_cstr_pid(
     """Tune CSTR PID gains (Kp, Ki, Kd) via gradient descent."""
     from target_gym import CSTR, CSTRParams
 
-    env = CSTR(integration_method="rk4_1")
+    env = CSTR()
     params = CSTRParams()
 
     loss_fn = make_siso_pid_loss_fn(
@@ -385,7 +385,7 @@ def tune_first_order_pid(
     """Tune FirstOrderSystem PID gains via gradient descent."""
     from target_gym import FirstOrderParams, FirstOrderSystem
 
-    env = FirstOrderSystem(integration_method="rk4_1")
+    env = FirstOrderSystem()
     params = FirstOrderParams()
 
     loss_fn = make_siso_pid_loss_fn(
@@ -424,7 +424,7 @@ def tune_four_tank_pid(
     """Tune FourTank MIMO PID gains via gradient descent."""
     from target_gym import FourTank, FourTankParams
 
-    env = FourTank(integration_method="rk4_1")
+    env = FourTank()
     params = FourTankParams()
 
     loss_fn = make_mimo_pid_loss_fn(
@@ -472,7 +472,7 @@ def tune_plane_pid(
     """
     from target_gym.plane.env_jax import Airplane2D, PlaneParams
 
-    env = Airplane2D(integration_method="rk4_1")
+    env = Airplane2D()
     params = PlaneParams()
     n_steps = int(params.max_steps_in_episode)
     dt = float(params.delta_t)
@@ -648,7 +648,7 @@ def tune_plane3d_heading_pid(
     """
     from target_gym.plane3d.env_jax import Plane3DHeading
 
-    env = Plane3DHeading(integration_method="rk4_1")
+    env = Plane3DHeading()
     params = env.default_params
     # Truncate rollout to avoid NaN gradients from BPTT over 10 000 steps.
     n_steps = min(int(params.max_steps_in_episode), 2_000)
@@ -772,7 +772,7 @@ def tune_plane3d_circle_pid(
     """
     from target_gym.plane3d.env_jax import Plane3DCircle
 
-    env = Plane3DCircle(integration_method="rk4_1")
+    env = Plane3DCircle()
     params = env.default_params
     # Truncate rollout: the circle task accumulates state drift over long
     # episodes, and BPTT through the full 10 000 steps produces gradients
@@ -906,7 +906,7 @@ def tune_plane3d_figure8_pid(
     """
     from target_gym.plane3d.env_jax import Plane3DFigureEight
 
-    env = Plane3DFigureEight(integration_method="rk4_1")
+    env = Plane3DFigureEight()
     params = env.default_params
     n_steps = min(int(params.max_steps_in_episode), 2_000)
     dt = float(params.delta_t)

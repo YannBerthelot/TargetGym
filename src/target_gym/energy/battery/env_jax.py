@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.energy.battery.env import (
     BatteryParams,
     BatteryState,
@@ -82,6 +83,7 @@ class GridBattery(environment.Environment[BatteryState, BatteryParams]):
         terminated, _ = check_is_terminal(state, params)
         return terminated
 
+    @canonical_reset
     def reset_env(
         self, key: chex.PRNGKey, params: BatteryParams = None
     ) -> Tuple[jnp.ndarray, BatteryState]:

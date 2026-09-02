@@ -58,7 +58,7 @@ def _tune_cstr(n_points: int, tuning_rule: str, **kw) -> dict:
     from target_gym import CSTR, CSTRParams
     from target_gym.experts.relay_autotune import relay_sweep
 
-    env = CSTR(integration_method="rk4_1")
+    env = CSTR()
     params = CSTRParams()
 
     def reset_fn(key, p, t):
@@ -98,7 +98,7 @@ def _tune_first_order(n_points: int, tuning_rule: str, **kw) -> dict:
     from target_gym import FirstOrderParams, FirstOrderSystem
     from target_gym.experts.relay_autotune import relay_sweep
 
-    env = FirstOrderSystem(integration_method="rk4_1")
+    env = FirstOrderSystem()
     params = FirstOrderParams()
 
     def reset_fn(key, p, t):
@@ -138,7 +138,7 @@ def _tune_four_tank(n_points: int, tuning_rule: str, **kw) -> dict:
     from target_gym import FourTank, FourTankParams
     from target_gym.experts.relay_autotune import relay_sweep
 
-    env = FourTank(integration_method="rk4_1")
+    env = FourTank()
     params = FourTankParams()
 
     # Loop 1: pump1 -> h1
@@ -233,7 +233,7 @@ def _tune_four_tank_search(n_points: int, tuning_rule: str, **kw) -> dict:
 
     from target_gym import FourTank, FourTankParams
 
-    env = FourTank(integration_method="rk4_1")
+    env = FourTank()
     params = FourTankParams()
     targets = np.linspace(
         params.target_h1_range[0], params.target_h1_range[1], n_points
@@ -421,7 +421,7 @@ def _tune_glass_furnace(n_points: int, tuning_rule: str, **kw) -> dict:
     from target_gym.experts.relay_autotune import relay_sweep
     from target_gym.glass_furnace.env import N_SETPOINTS
 
-    env = GlassFurnace(integration_method="rk4_1")
+    env = GlassFurnace()
     params = GlassFurnaceParams(m_pull_noise_std=0.0)
 
     def reset_fn(key, p, t):
@@ -595,7 +595,7 @@ def _tune_plane(n_points: int, tuning_rule: str, **kw) -> dict:
     from target_gym.plane.env import PlaneParams
     from target_gym.plane.env_jax import Airplane2D
 
-    env = Airplane2D(integration_method="rk4_1")
+    env = Airplane2D()
     params = PlaneParams()
 
     # obs: [x_dot, z, z_dot, theta, theta_dot, gamma, target_altitude, power, stick]
@@ -829,7 +829,7 @@ def _tune_plane3d_heading(n_points: int, tuning_rule: str, **kw) -> dict:
     from target_gym.experts.relay_autotune import TUNING_RULES, relay_experiment
     from target_gym.plane3d.env_jax import Plane3DHeading
 
-    env = Plane3DHeading(integration_method="rk4_1")
+    env = Plane3DHeading()
     params = env.default_params
     rule_fn = TUNING_RULES[tuning_rule]
     cruise_action = 0.6 * 2.0 - 1.0  # power 0.6 → action [-1, 1]
@@ -925,7 +925,7 @@ def _tune_plane3d_circle(n_points: int, tuning_rule: str, **kw) -> dict:
     from target_gym.experts.relay_autotune import TUNING_RULES, relay_experiment
     from target_gym.plane3d.env_jax import Plane3DCircle
 
-    env = Plane3DCircle(integration_method="rk4_1")
+    env = Plane3DCircle()
     params = env.default_params
     rule_fn = TUNING_RULES[tuning_rule]
     cruise_action = 0.6 * 2.0 - 1.0
@@ -1046,7 +1046,7 @@ def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
     from target_gym.experts.relay_autotune import TUNING_RULES, relay_experiment
     from target_gym.plane3d.env_jax import Plane3DFigureEight
 
-    env = Plane3DFigureEight(integration_method="rk4_1")
+    env = Plane3DFigureEight()
     params = env.default_params
     rule_fn = TUNING_RULES[tuning_rule]
     cruise_action = 0.6 * 2.0 - 1.0
@@ -1143,16 +1143,173 @@ def _tune_plane3d_figure8(n_points: int, tuning_rule: str, **kw) -> dict:
 # Registry: env_name -> (tuner_fn, display_name)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Derivative-free search, for the aircraft
+# ---------------------------------------------------------------------------
+#
+# Neither existing method works on these plants, and both fail structurally
+# rather than by bad luck:
+#
+#   relay     "every operating point failed (no zero-crossings)" -- the
+#             altitude/power loop does not sustain a bang-bang oscillation, so
+#             Astrom-Hagglund has no Ku/Tu to extract. True of all three 3D tasks
+#             and of the figure-8 for longer.
+#   gradient  returns NaN gains: the loss evaluates and its gradient does not.
+#             Documented in tests/experts/test_pid_tuning.py as an xfail and not
+#             localised; the machinery there is already hardened against the
+#             obvious causes (post-terminal divergence, the where-VJP trap).
+#
+# Coordinate descent needs neither an oscillation nor a derivative -- only
+# forward rollouts, which are finite. It is slower and it is not going to find a
+# global optimum, but it does what the documented command promises: improve the
+# gains that are actually shipped, against the plant that is actually shipped.
+#
+# Scoring is episode return, which is what the benchmark reports, rather than a
+# tracking error that measures one term of a multi-objective reward -- that
+# mistake cost a lot of time when the MPC baselines were being judged.
+
+_SEARCH_FACTORS = (0.5, 0.7, 1.4, 2.0)
+
+
+def _controller_defaults(gains_key):
+    """Starting point for a controller that has never had a tuned entry.
+
+    ``plane_cascaded`` is the case this exists for. The 2D aircraft's shipped
+    autopilot reads that key, it has never been in data/pid_gains.json, and both
+    tuners wrote ``plane`` instead -- a different, no-longer-shipped MIMO
+    controller -- so ``make tuning-plane`` reported success and changed nothing.
+    Seeding from the constructor's own defaults is what the controller has in
+    fact been running on.
+    """
+    import inspect
+
+    import target_gym.experts.pid as pid_mod
+
+    if gains_key != "plane_cascaded":
+        return None
+    sig = inspect.signature(pid_mod.StatefulCascadedAltitudePID.__init__)
+    return {
+        name: float(prm.default)
+        for name, prm in sig.parameters.items()
+        if name not in ("self", "dt") and isinstance(prm.default, (int, float))
+    }
+
+
+def _flat_paths(d, prefix=()):
+    """Every numeric leaf in a nested gains dict, as a path."""
+    for k, v in d.items():
+        if isinstance(v, dict):
+            yield from _flat_paths(v, prefix + (k,))
+        elif isinstance(v, (int, float)) and not isinstance(v, bool):
+            yield prefix + (k,)
+
+
+def _get_path(d, path):
+    for k in path:
+        d = d[k]
+    return d
+
+
+def _set_path(d, path, value):
+    import copy
+
+    d = copy.deepcopy(d)
+    node = d
+    for k in path[:-1]:
+        node = node[k]
+    node[path[-1]] = value
+    return d
+
+
+def _tune_aircraft_search(
+    env_name, gains_key, seeds=3, steps=400, passes=2, verbose=True, **kw
+):
+    """Coordinate descent on the shipped controller's own gains."""
+    import numpy as np
+
+    import target_gym.experts.pid as pid_mod
+    from target_gym.registry import REGISTRY
+    from target_gym.runners.runners import pid_policy, rollout
+
+    spec = REGISTRY[env_name]
+    params = spec.make_test_params(max_steps_in_episode=steps)
+    all_gains = dict(pid_mod._load_gains())
+    start = all_gains.get(gains_key) or _controller_defaults(gains_key)
+    if not start:
+        raise RuntimeError(
+            f"{env_name}: no '{gains_key}' entry and no known defaults to start "
+            f"from. The search refines gains; it does not invent a starting point."
+        )
+
+    def score(candidate):
+        pid_mod._gains_cache = {**all_gains, gains_key: candidate}
+        try:
+            return float(
+                np.mean(
+                    [
+                        np.sum(rollout(spec, params, pid_policy(spec), s)[2])
+                        for s in range(seeds)
+                    ]
+                )
+            )
+        except Exception:
+            return -np.inf
+
+    best, best_score = start, score(start)
+    if verbose:
+        print(f"  baseline return {best_score:.2f}")
+    paths = list(_flat_paths(start))
+    for p in range(passes):
+        for path in paths:
+            current = _get_path(best, path)
+            if current == 0.0:
+                continue
+            for f in _SEARCH_FACTORS:
+                cand = _set_path(best, path, current * f)
+                sc = score(cand)
+                if sc > best_score:
+                    best, best_score = cand, sc
+                    if verbose:
+                        print(f"    {'.'.join(path):22s} x{f:<4} -> {sc:.2f}")
+    pid_mod._gains_cache = all_gains
+    if verbose:
+        print(f"  best return {best_score:.2f}")
+    return {**best, "note": f"coordinate descent on episode return, {seeds} seeds"}
+
+
+GAINS_KEY = {"plane": "plane_cascaded"}
+
+
 TUNERS = {
     "cstr": (_tune_cstr, "CSTR"),
     "first_order": (_tune_first_order, "FirstOrder"),
     "four_tank": (_tune_four_tank_search, "FourTank"),
     "glass_furnace": (_tune_glass_furnace_search, "GlassFurnace"),
     "reactor": (_tune_reactor, "Reactor"),
-    "plane": (_tune_plane, "Airplane2D"),
-    "plane3d_heading": (_tune_plane3d_heading, "Plane3DHeading"),
-    "plane3d_circle": (_tune_plane3d_circle, "Plane3DCircle"),
-    "plane3d_figure8": (_tune_plane3d_figure8, "Plane3DFigureEight"),
+    "plane": (
+        lambda n_points=0, tuning_rule="", _k="plane_cascaded", _e="plane", **kw: _tune_aircraft_search(
+            _e, _k, **kw
+        ),
+        "Airplane2D",
+    ),
+    "plane3d_heading": (
+        lambda n_points=0, tuning_rule="", _k="plane3d_heading", _e="plane3d_heading", **kw: _tune_aircraft_search(
+            _e, _k, **kw
+        ),
+        "Plane3DHeading",
+    ),
+    "plane3d_circle": (
+        lambda n_points=0, tuning_rule="", _k="plane3d_circle", _e="plane3d_circle", **kw: _tune_aircraft_search(
+            _e, _k, **kw
+        ),
+        "Plane3DCircle",
+    ),
+    "plane3d_figure8": (
+        lambda n_points=0, tuning_rule="", _k="plane3d_figure8", _e="plane3d_figure8", **kw: _tune_aircraft_search(
+            _e, _k, **kw
+        ),
+        "Plane3DFigureEight",
+    ),
 }
 
 
@@ -1223,15 +1380,19 @@ def main():
         print(f"\n{'='*60}")
         print(f"Tuning {display}  (n_points={args.n_points}, rule={args.tuning_rule})")
         print("=" * 60)
-        gains[env_name] = tuner_fn(
+        # Some controllers read a different key than their environment name --
+        # the 2D aircraft's autopilot reads ``plane_cascaded`` -- so the tuner
+        # says where its result belongs rather than the caller assuming.
+        save_key = GAINS_KEY.get(env_name, env_name)
+        gains[save_key] = tuner_fn(
             n_points=args.n_points,
             tuning_rule=args.tuning_rule,
         )
         # Print summary
-        gs = gains[env_name].get("gain_schedule")
+        gs = gains[save_key].get("gain_schedule")
         if gs:
             print(f"  Gain schedule: {len(gs['operating_points'])} points")
-        print(f"  Midpoint Kp={gains[env_name].get('Kp', 'N/A')}")
+        print(f"  Midpoint Kp={gains[save_key].get('Kp', 'N/A')}")
 
         # Save after every env so partial results survive interruptions
         GAINS_FILE.parent.mkdir(parents=True, exist_ok=True)

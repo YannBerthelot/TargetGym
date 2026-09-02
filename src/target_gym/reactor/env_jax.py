@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.reactor.env import (
     N_SETPOINTS,
     ReactorParams,
@@ -124,6 +125,7 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
         terminated, _ = check_is_terminal(state, params)
         return terminated
 
+    @canonical_reset
     def reset_env(
         self, key: chex.PRNGKey, params: ReactorParams = None
     ) -> Tuple[jnp.ndarray, ReactorState]:

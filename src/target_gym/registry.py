@@ -40,6 +40,10 @@ GROUPS: dict[str, str] = {
 }
 
 
+# Keyed by spec name: EnvSpec is frozen, so the cache lives beside it.
+_ENV_CACHE: dict[str, Any] = {}
+
+
 @dataclass(frozen=True)
 class EnvSpec:
     """Everything the library needs to know about one environment.
@@ -126,8 +130,30 @@ class EnvSpec:
         return self.make_mpc is not None
 
     def make_env(self):
-        """Instantiate the environment."""
-        return self.env_factory()
+        """The environment for this spec, built once and shared.
+
+        Deliberately not a fresh instance per call. ``env.step_env`` is a *bound
+        method*, so every new instance is a new callable to JAX, which keys its
+        compilation cache on the callable and holds the resulting executable for
+        the life of the process. Building environments in a loop therefore leaks:
+        measured on the 2D aircraft, forty fresh instances retained 104 MB, about
+        2.6 MB apiece, and each one also paid its compile again. Re-wrapping the
+        *same* instance in ``jax.jit`` repeatedly costs nothing, so the instance
+        is what matters.
+
+        Sharing is safe because these environments carry no per-episode state:
+        every field is configuration (``obs_shape``, ``integration_method``,
+        ``observe_wind``), and ``positions_history`` is a render buffer the
+        stepping code never writes. All state lives in the ``EnvState`` passed
+        through each call.
+
+        Anyone constructing an environment directly rather than through the
+        registry should hold onto the instance for the same reason.
+        """
+        cached = _ENV_CACHE.get(self.name)
+        if cached is None:
+            cached = _ENV_CACHE[self.name] = self.env_factory()
+        return cached
 
     def make_test_params(self, **overrides):
         """Parameters for a short test episode, plus any extra overrides."""
@@ -328,17 +354,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="plane",
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
-        mpc_degraded=(
-            "Wins 7 of 10 seeds and loses the mean: three seeds end in a crash "
-            "at -600 apiece (-170.7 paired over ten seeds, sd 488). The failure "
-            "is a commanded descent the controller cannot arrest -- it dives "
-            "through the target at 265 m/s with the angle of attack small "
-            "throughout, so the stall barrier that fixed the other failing seed "
-            "does not apply. An altitude barrier, tails to 240 steps and a crash "
-            "charge matched to the environment's own penalty were each measured "
-            "against it; none helped. The crash penalty sits behind a boolean, "
-            "so it carries a cost to the planner but no gradient away from it."
-        ),
     ),
     EnvSpec(
         name="plane3d_heading",
@@ -351,13 +366,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="plane3d_heading",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
-        mpc_degraded=(
-            "Wins 7 of 10 seeds and loses the mean (-33.5 paired, sd 455): three "
-            "seeds terminate at -600. Same cause as ``plane`` -- the crash "
-            "penalty is behind a boolean and gives the planner no gradient away "
-            "from the boundary. Note the PID here is itself weak, holding "
-            "altitude while sitting 45.7 deg off the commanded heading."
-        ),
     ),
     EnvSpec(
         name="plane3d_circle",

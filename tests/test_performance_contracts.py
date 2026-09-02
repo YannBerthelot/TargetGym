@@ -10,6 +10,7 @@ import importlib
 import pathlib
 import re
 
+import jax
 import pytest
 
 from target_gym.registry import REGISTRY
@@ -66,4 +67,58 @@ def test_get_obs_is_not_a_compiled_wrapper(name):
         "static, every fresh Params(...) recompiles; if it is traced, the "
         "wrapper only adds dispatch overhead to a function the caller's own "
         "jit would inline anyway."
+    )
+
+
+@pytest.mark.parametrize("name", list(REGISTRY))
+def test_reset_returns_strongly_typed_state(name):
+    """A reset state must have the dtypes a stepped state has.
+
+    A state built from Python floats is *weakly typed* -- JAX shows it as
+    ``~float32[]``. One ``step_env`` promotes it, so a freshly reset state and a
+    stepped state are different abstract values and anything jitted over the
+    state compiles twice, once for each. All eighteen environments did this, 187
+    leaves in total; it cost the gradient MPC a second full compile of its
+    optimiser (10.35 s, then another 10.24 s, against 9.65 s and nothing after).
+
+    ``base.canonical_reset`` is what fixes it. This asserts the decorator has not
+    been dropped from a new environment, which is easy to do and silent.
+    """
+    spec = REGISTRY[name]
+    env = spec.make_env()
+    _, state = env.reset_env(jax.random.PRNGKey(0), spec.params_cls())
+    weak = [
+        leaf
+        for leaf in jax.tree_util.tree_leaves(state)
+        if getattr(jax.api_util.shaped_abstractify(leaf), "weak_type", False)
+    ]
+    assert not weak, (
+        f"{name}: {len(weak)} of {len(jax.tree_util.tree_leaves(state))} reset "
+        f"state leaves are weakly typed. Decorate reset_env with "
+        f"@canonical_reset from target_gym.base, or anything jitted over this "
+        f"environment's state will compile once for the reset state and again "
+        f"for every state after it."
+    )
+
+
+@pytest.mark.parametrize("name", list(REGISTRY))
+def test_make_env_shares_one_instance(name):
+    """Building an environment twice must not produce two objects.
+
+    ``step_env`` is a bound method, so a new instance is a new callable to JAX,
+    which keys its compilation cache on the callable and keeps the executable for
+    the life of the process. Forty fresh instances of the 2D aircraft retained
+    104 MB -- about 2.6 MB each -- and re-paid the compile every time. Re-wrapping
+    the *same* instance in ``jax.jit`` costs nothing, so the instance is the thing
+    that has to be shared.
+
+    Safe only while these environments stay free of per-episode state: every
+    attribute is configuration, and all real state travels in the ``EnvState``.
+    An environment that starts keeping state across steps breaks this and must
+    fix the sharing rather than the test.
+    """
+    spec = REGISTRY[name]
+    assert spec.make_env() is spec.make_env(), (
+        f"{name}: make_env returned two different objects. Each one costs JAX a "
+        f"retained compiled executable, so building environments in a loop leaks."
     )

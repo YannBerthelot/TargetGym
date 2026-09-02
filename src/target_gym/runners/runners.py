@@ -32,6 +32,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import functools
 import inspect
 import os
 from typing import Callable, Sequence
@@ -57,6 +58,20 @@ VIDEO_DIR = "videos"
 # ---------------------------------------------------------------------------
 # Generic rollout machinery
 # ---------------------------------------------------------------------------
+
+
+@functools.lru_cache(maxsize=None)
+def _jitted_step(env):
+    """One jitted ``step_env`` per environment, reused across rollouts.
+
+    ``jax.jit`` hands back a fresh wrapper carrying its own cache, so calling it
+    per rollout recompiles every time: profiling a *warmed* rollout put 0.222 s
+    of its 0.355 s in ``backend_compile_and_load``, called once, and every
+    rollout paid it again. Environments are shared singletons now
+    (``EnvSpec.make_env``), so caching on the instance is enough to reuse the
+    executable for the life of the process.
+    """
+    return jax.jit(env.step_env)
 
 
 def _wants_state(policy: Callable) -> bool:
@@ -105,14 +120,19 @@ def rollout(spec, params, policy: Callable, seed: int = 0):
 
     key = jax.random.PRNGKey(seed)
     obs, state = env.reset_env(key, params)
-    step = jax.jit(env.step_env)
+    step = _jitted_step(env)
 
     values, targets, rewards = [], [], []
     for _ in range(int(params.max_steps_in_episode)):
         obs_np = np.asarray(obs)
         values.append(obs_np[list(value_idx)])
         targets.append(obs_np[list(target_idx)])
-        action = policy(obs, state) if _wants_state(policy) else policy(obs)
+        # Hand the policy the NumPy view, which this loop has already paid for.
+        # The stateful PIDs are plain Python doing scalar arithmetic; given a JAX
+        # array every operation -- the indexing, the clip, the anti-windup
+        # ``where`` -- is a separate un-jitted dispatch, and the controller ends
+        # up costing several times the environment step it is controlling.
+        action = policy(obs_np, state) if _wants_state(policy) else policy(obs_np)
         obs, state, reward, terminated, _ = step(
             key, state, jnp.atleast_1d(jnp.asarray(action)), params
         )

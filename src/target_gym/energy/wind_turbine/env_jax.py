@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.energy.wind_turbine.env import (
     WindTurbineParams,
     WindTurbineState,
@@ -81,6 +82,7 @@ class WindTurbine(environment.Environment[WindTurbineState, WindTurbineParams]):
         terminated, _ = check_is_terminal(state, params)
         return terminated
 
+    @canonical_reset
     def reset_env(
         self, key: chex.PRNGKey, params: WindTurbineParams = None
     ) -> Tuple[jnp.ndarray, WindTurbineState]:

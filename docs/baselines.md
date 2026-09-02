@@ -57,12 +57,37 @@ Two caveats worth knowing before you re-tune anything:
   is not automatically better than what is shipped. Measure both before keeping
   one: re-running the tuner over the whole registry produced a genuinely better
   `cstr` and a distinctly worse `first_order` in the same pass.
-- **`plane3d_figure8` cannot currently be tuned by this script.** Its power loop
-  raises *"relay autotune: every operating point failed (no zero-crossings)"* --
-  the altitude/power loop does not sustain a bang-bang oscillation, so the relay
-  experiment has nothing to measure. The shipped gains for that task came from a
-  direct gain search instead. Tuning it needs the gradient/random-search path the
-  four-tank and glass furnace use, which is the fix, not the relay.
+- **The aircraft are tuned by coordinate descent, not by the relay.** Both of the
+  other methods fail on these plants, and structurally rather than by bad luck:
+  the relay reports *"every operating point failed (no zero-crossings)"* because
+  the altitude/power loop will not sustain a bang-bang oscillation, and the
+  gradient tuner returns NaN gains (a documented xfail in
+  `tests/experts/test_pid_tuning.py`, hardened against the obvious causes and
+  still not localised). Coordinate descent on episode return needs neither an
+  oscillation nor a derivative, only forward rollouts.
+
+  It scores **return**, not tracking error. Scoring one term of a
+  multi-objective reward is the mistake that made the MPC baselines look broken
+  for a long time; the same trap applies here.
+
+  Two bugs were fixed alongside it. Every tuner in both systems pinned
+  `integration_method="rk4_1"`, so they would have tuned against the plant as it
+  was before the integration order was corrected. And the 2D aircraft's tuner
+  wrote the `plane` key while its shipped autopilot reads `plane_cascaded` --
+  a key that had never existed in the file. `make tuning-plane` therefore ran,
+  reported success, wrote gains nothing loaded, and left the controller on its
+  constructor defaults. The tuner now seeds from those defaults and writes the
+  key the controller actually reads.
+
+  Gains improved on seeds the search never saw, which is the only number worth
+  quoting (search on seeds 0-2, held out 3-9):
+
+  | | shipped | tuned | |
+  | --- | --- | --- | --- |
+  | plane | 194.62 | 285.20 | +47% |
+  | plane3d_heading | 60.93 | 80.25 | +32% |
+  | plane3d_circle | 67.23 | 84.59 | +26% |
+  | plane3d_figure8 | 34.15 | 81.58 | +139% |
 
 ## MPC
 
@@ -178,9 +203,11 @@ Return, paired per seed, on each environment's own episode.
 
 | | MPC vs PID | |
 | --- | --- | --- |
+| plane3d_figure8 | **+450** | |
 | reactor | **+505** | 10/10 |
-| plane3d_figure8 | **+528** | 10/10 |
-| plane3d_circle | +245 | 9/10 |
+| plane3d_heading | **+242** | |
+| plane3d_circle | +201 | |
+| plane | +42 | |
 | boiler_drum | +83 | 10/10 |
 | four_tank | +69 | 10/10 |
 | ph_neutralization | +29 | 10/10 |
@@ -191,13 +218,42 @@ Return, paired per seed, on each environment's own episode.
 | glass_furnace | -3.1 (median **+1.7**) | 7/10 |
 | wind_turbine | -0.4 | 6/10 |
 | battery | +7.5 (median -11) | 1/10 |
-| **plane** | **-171** | 7/10, three crashes |
-| **plane3d_heading** | **-34** | 7/10, three crashes |
+
+The MPC is the upper bound on thirteen of the sixteen, level on the glass
+furnace and the wind turbine, and behind only on the battery.
+
+The four aircraft margins are quoted without a win count, deliberately. The MPC
+column there is unchanged -- nothing about those controllers moved -- but the PID
+column was re-measured after the aircraft gains were re-tuned, and it rose
+sharply: plane 362 -> 486, heading 104 -> 190, circle 119 -> 165, figure-8 50 ->
+130. The margins above are the difference of the two means, which is exact; the
+per-seed win counts would need the MPC column re-run, which costs hours and would
+say nothing new about the MPC. The direction is what matters and it did not
+change -- the MPC still leads on all four -- but the 2D aircraft's lead is now
++42 rather than +166, and a better PID would close it.
 
 Read the last three rows carefully. The battery's positive mean is carried by a
 single seed where lookahead pays enormously (358 against 165) while it trails on
-the other nine; the two aircraft win most seeds and lose the average to
-terminations worth -600 apiece. A mean alone would misreport all three.
+the other nine, so a mean alone misreports it.
+
+**The aircraft rows are the second measurement.** On the previous dynamics the
+2D plane scored -171 and the 3D heading task -34, each winning most seeds and
+losing the average to three terminations worth -600 apiece. A great deal of
+effort went into those crashes -- a stall-margin barrier, an altitude barrier,
+tails out to 240 steps, a crash charge matched to the environment's own penalty,
+and making terminations visible to the planner -- and the one that helped fixed
+a single seed. None of it was the cause. The integrator was: at one RK4 substep
+the plant the MPC plans against and the plant it is stepping through disagree
+enough to fly into the ground. At two substeps both controllers win 10 of 10
+with no terminations at all.
+
+The machinery was then re-measured rather than left to rot. The 2D aircraft's
+terminal cost still earns its place -- five seeds out of five with it, four
+without, and 61 more return -- so it stays. Its stall-margin barrier does not:
+it adds 1.3%, inside this machine's noise, and it existed only to fight the
+crashes, so it has been removed. The wind turbine's overspeed barrier and the
+battery and furnace surrogates are untouched, because those fixed defects that
+were real and remain fixed.
 
 Two seeds would misreport almost everything. Measuring on two produced three
 wrong conclusions during this work -- the wind turbine at "98% of the PID", the

@@ -6,9 +6,9 @@
       "Kd": 0.00478834
     },
     "hdg": {
-      "Kp": 2.329415,
-      "Ki": 0.456748,
-      "Kd": 3.773652
+      "Kp": 4.65883,
+      "Ki": 0.228374,
+      "Kd": 1.886826
     },
     "bank": {
       "Kp": -3.235864
@@ -19,13 +19,14 @@
       "Kd": 0.00646023
     },
     "power": 0.6,
-    "note": "Sequential relay autotuning: bank \u2192 heading \u2192 altitude stick \u2192 altitude power."
+    "note": "coordinate descent on episode return, 3 seeds"
   },
   "_meta": {
     "description": "PID gains tuned via relay autotuning (Astrom-Hagglund). Re-generate with: python scripts/tune_pid.py",
-    "tuned_at": "2026-08-31T15:30:32",
+    "tuned_at": "2026-09-02T15:16:17",
     "methodology": "Relay feedback experiment: inject relay signal, measure sustained oscillation to extract ultimate gain (Ku) and period (Tu), then compute PID gains via tuning rules. Gain-scheduled across N operating points spanning the target range.",
-    "tuning_rule": "amigo"
+    "tuning_rule": "amigo",
+    "note": "Aircraft gains (plane_cascaded, plane3d_*) come from coordinate descent on episode return; the relay and gradient tuners do not work on these plants. See docs/baselines.md."
   },
   "plane": {
     "pid1": {
@@ -132,12 +133,12 @@
       "Kd": 0.00478836
     },
     "rad": {
-      "Kp": 2.8e-06,
+      "Kp": 7.84e-06,
       "Ki": 1e-08,
-      "Kd": 0.00032154
+      "Kd": 0.00064308
     },
     "bank": {
-      "Kp": -3.235864
+      "Kp": -2.2651047999999996
     },
     "power_pid": {
       "Kp": 0.00029661,
@@ -146,29 +147,29 @@
     },
     "power": 0.6,
     "target_bank_deg": 15.0,
-    "note": "Sequential relay autotuning: bank \u2192 radial \u2192 altitude stick \u2192 altitude power."
+    "note": "coordinate descent on episode return, 3 seeds"
   },
   "plane3d_figure8": {
     "alt": {
-      "Kp": 0.001817,
+      "Kp": 0.007268,
       "Ki": 3.477e-05,
-      "Kd": 0.0134
+      "Kd": 0.00469
     },
     "hdg": {
-      "Kp": 2.743515,
-      "Ki": 0.537944,
-      "Kd": 4.444494
+      "Kp": 3.840921,
+      "Ki": 1.05437024,
+      "Kd": 3.1111457999999996
     },
     "bank": {
-      "Kp": -3.235865
+      "Kp": -6.47173
     },
     "power_pid": {
       "Kp": 0.00029661,
       "Ki": 4.33e-06,
       "Kd": 0.00646025
     },
-    "power": 0.6,
-    "note": "Altitude loop re-searched against measured tracking error. The previous gains left it oscillating: the signed altitude error averaged only -5 to -28 m while its standard deviation was 67 to 333 m, with no correlation to bank angle, so the loop was neither drifting nor losing height in the turns -- it was swinging. All three gains wanted to rise by three to five times, which is an under-gained loop rather than an under-damped one. Mean tracking error over five seeds falls from 185 m to 90 m. Sequential relay autotuning: bank \u2192 heading \u2192 altitude stick \u2192 altitude power."
+    "power": 0.15,
+    "note": "coordinate descent on episode return, 3 seeds"
   },
   "reactor": {
     "Kp": 2.265556,
@@ -428,5 +429,21 @@
     },
     "tuning_rule": "amigo",
     "note": "Relay autotuning, negative-gain system (higher Tc -> lower Ca)."
+  },
+  "plane_cascaded": {
+    "Kp_alt": 0.12,
+    "vs_max": 21.0,
+    "Kp_vs": 0.01,
+    "Ki_vs": 0.0016,
+    "theta_trim": 0.032,
+    "theta_max": 0.26,
+    "Kp_theta": 5.6,
+    "Kd_theta": 3.0,
+    "alpha_max": 0.13299999999999998,
+    "target_speed": 230.0,
+    "cruise_power": -0.22749999999999998,
+    "Kp_speed": 0.05,
+    "Ki_speed": 7.5e-05,
+    "note": "coordinate descent on episode return, 3 seeds"
   }
 }

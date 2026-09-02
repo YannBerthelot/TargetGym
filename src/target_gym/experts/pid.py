@@ -865,8 +865,8 @@ class StatefulPID:
         self.integral = self.integral + e * self.dt
         derivative = (e - self.prev_error) / self.dt
         u = self.Kp * e + self.Ki * self.integral + self.Kd * derivative
-        u_clipped = jnp.clip(u, self.action_min, self.action_max)
-        self.integral = jnp.where(
+        u_clipped = np.clip(u, self.action_min, self.action_max)
+        self.integral = np.where(
             u != u_clipped, self.integral - e * self.dt, self.integral
         )
         self.prev_error = e
@@ -920,8 +920,8 @@ class StatefulGainScheduledPID:
         self.integral = self.integral + e * self.dt
         derivative = (e - self.prev_error) / self.dt
         u = Kp * e + Ki * self.integral + Kd * derivative
-        u_clipped = jnp.clip(u, self.action_min, self.action_max)
-        self.integral = jnp.where(
+        u_clipped = np.clip(u, self.action_min, self.action_max)
+        self.integral = np.where(
             u != u_clipped, self.integral - e * self.dt, self.integral
         )
         self.prev_error = e
@@ -942,7 +942,7 @@ class StatefulMIMOPID:
         self.pid2.reset()
 
     def step(self, obs):
-        return jnp.stack([self.pid1.step(obs), self.pid2.step(obs)], axis=-1)
+        return np.stack([self.pid1.step(obs), self.pid2.step(obs)], axis=-1)
 
     __call__ = step
 
@@ -1822,14 +1822,14 @@ class StatefulPlane3DHeadingPID:
         desired_bank = (
             self.Kp_hdg * hdg_err + self.Ki_hdg * self._hdg_int + self.Kd_hdg * deriv
         )
-        desired_bank = jnp.clip(desired_bank, -self.max_bank_rad, self.max_bank_rad)
+        desired_bank = np.clip(desired_bank, -self.max_bank_rad, self.max_bank_rad)
         bank_err = phi - desired_bank
-        aileron = jnp.clip(self.Kp_bank * bank_err, -1.0, 1.0)
-        self._hdg_int = jnp.where(
-            jnp.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int
+        aileron = np.clip(self.Kp_bank * bank_err, -1.0, 1.0)
+        self._hdg_int = np.where(
+            np.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int
         )
         self._hdg_prev = hdg_err
-        return jnp.stack(
+        return np.stack(
             [jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1
         )
 
@@ -1895,9 +1895,9 @@ class StatefulPlane3DCirclePID:
         phi = obs[..., 6]
 
         speed_sq = x_dot**2 + y_dot**2 + 1e-6
-        ideal_bank = jnp.arctan2(speed_sq, self.gravity * jnp.maximum(radius, 1.0))
+        ideal_bank = np.arctan2(speed_sq, self.gravity * np.maximum(radius, 1.0))
 
-        dist = jnp.sqrt(rel_x**2 + rel_y**2)
+        dist = np.sqrt(rel_x**2 + rel_y**2)
         rad_err = dist - radius
 
         self._rad_int = self._rad_int + rad_err * self.dt
@@ -1905,16 +1905,16 @@ class StatefulPlane3DCirclePID:
         bank_correction = (
             self.Kp_rad * rad_err + self.Ki_rad * self._rad_int + self.Kd_rad * deriv
         )
-        desired_bank = jnp.clip(
+        desired_bank = np.clip(
             ideal_bank + bank_correction, -self.max_bank_rad, self.max_bank_rad
         )
         bank_err = phi - desired_bank
-        aileron = jnp.clip(self.Kp_bank * bank_err, -1.0, 1.0)
-        self._rad_int = jnp.where(
-            jnp.abs(aileron) >= 1.0, self._rad_int - rad_err * self.dt, self._rad_int
+        aileron = np.clip(self.Kp_bank * bank_err, -1.0, 1.0)
+        self._rad_int = np.where(
+            np.abs(aileron) >= 1.0, self._rad_int - rad_err * self.dt, self._rad_int
         )
         self._rad_prev = rad_err
-        return jnp.stack(
+        return np.stack(
             [jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1
         )
 
@@ -1983,45 +1983,45 @@ class StatefulPlane3DFigureEightPID:
         alt_err = nearest_dz
         self._alt_int = self._alt_int + alt_err * self.dt
         alt_d = (alt_err - self._alt_prev) / self.dt
-        stick = jnp.clip(
+        stick = np.clip(
             self.Kp_alt * alt_err + self.Ki_alt * self._alt_int + self.Kd_alt * alt_d,
             -1.0,
             1.0,
         )
-        self._alt_int = jnp.where(
-            jnp.abs(stick) >= 1.0, self._alt_int - alt_err * self.dt, self._alt_int
+        self._alt_int = np.where(
+            np.abs(stick) >= 1.0, self._alt_int - alt_err * self.dt, self._alt_int
         )
         self._alt_prev = alt_err
 
         # ── Heading: blend tangent (on-curve) with correction (off-curve) ──
-        lateral_dist = jnp.sqrt(nearest_dx**2 + nearest_dy**2 + 1e-6)
-        blend = jnp.clip(
-            lateral_dist / (0.05 * jnp.maximum(target_radius, 1.0)), 0.0, 1.0
+        lateral_dist = np.sqrt(nearest_dx**2 + nearest_dy**2 + 1e-6)
+        blend = np.clip(
+            lateral_dist / (0.05 * np.maximum(target_radius, 1.0)), 0.0, 1.0
         )
-        correction_heading = jnp.arctan2(nearest_dy, nearest_dx)
-        bx = blend * jnp.cos(correction_heading) + (1.0 - blend) * jnp.cos(
+        correction_heading = np.arctan2(nearest_dy, nearest_dx)
+        bx = blend * np.cos(correction_heading) + (1.0 - blend) * np.cos(
             tangent_heading
         )
-        by = blend * jnp.sin(correction_heading) + (1.0 - blend) * jnp.sin(
+        by = blend * np.sin(correction_heading) + (1.0 - blend) * np.sin(
             tangent_heading
         )
-        desired_heading = jnp.arctan2(by, bx)
+        desired_heading = np.arctan2(by, bx)
 
         hdg_err = _wrap_angle_jnp(desired_heading - psi)
         self._hdg_int = self._hdg_int + hdg_err * self.dt
         hdg_d = (hdg_err - self._hdg_prev) / self.dt
-        desired_bank = jnp.clip(
+        desired_bank = np.clip(
             self.Kp_hdg * hdg_err + self.Ki_hdg * self._hdg_int + self.Kd_hdg * hdg_d,
             -self.max_bank_rad,
             self.max_bank_rad,
         )
         bank_err = phi - desired_bank
-        aileron = jnp.clip(self.Kp_bank * bank_err, -1.0, 1.0)
-        self._hdg_int = jnp.where(
-            jnp.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int
+        aileron = np.clip(self.Kp_bank * bank_err, -1.0, 1.0)
+        self._hdg_int = np.where(
+            np.abs(aileron) >= 1.0, self._hdg_int - hdg_err * self.dt, self._hdg_int
         )
         self._hdg_prev = hdg_err
-        return jnp.stack(
+        return np.stack(
             [jnp.broadcast_to(self.power, jnp.shape(stick)), stick, aileron], axis=-1
         )
 
@@ -2162,9 +2162,7 @@ class StatefulCascadedAltitudePID:
         target_altitude = obs[..., 6]
 
         # --- Outer loop: altitude -> commanded vertical speed -------------
-        vs_cmd = jnp.clip(
-            self.Kp_alt * (target_altitude - z), -self.vs_max, self.vs_max
-        )
+        vs_cmd = np.clip(self.Kp_alt * (target_altitude - z), -self.vs_max, self.vs_max)
 
         # --- Middle loop: vertical speed -> commanded pitch ----------------
         vs_err = vs_cmd - z_dot
@@ -2172,21 +2170,21 @@ class StatefulCascadedAltitudePID:
         theta_cmd = (
             self.theta_trim + self.Kp_vs * vs_err + self.Ki_vs * self._vs_integral
         )
-        theta_cmd = jnp.clip(theta_cmd, -self.theta_max, self.theta_max)
+        theta_cmd = np.clip(theta_cmd, -self.theta_max, self.theta_max)
 
         # --- Alpha protection: alpha = theta - gamma ----------------------
-        theta_cmd = jnp.minimum(theta_cmd, gamma + self.alpha_max)
-        theta_cmd = jnp.maximum(theta_cmd, gamma - self.alpha_max)
+        theta_cmd = np.minimum(theta_cmd, gamma + self.alpha_max)
+        theta_cmd = np.maximum(theta_cmd, gamma - self.alpha_max)
 
         # Anti-windup: stop integrating once the pitch demand is limited.
-        limited = jnp.abs(theta_cmd - self.theta_trim) >= self.theta_max - 1e-6
-        self._vs_integral = jnp.where(
+        limited = np.abs(theta_cmd - self.theta_trim) >= self.theta_max - 1e-6
+        self._vs_integral = np.where(
             limited, self._vs_integral - vs_err * self.dt, self._vs_integral
         )
 
         # --- Inner loop: pitch -> elevator, with rate damping -------------
         stick = self.Kp_theta * (theta_cmd - theta) - self.Kd_theta * theta_dot
-        stick = jnp.clip(stick, -1.0, 1.0)
+        stick = np.clip(stick, -1.0, 1.0)
 
         # --- Throttle loop: hold airspeed ---------------------------------
         speed_err = self.target_speed - x_dot
@@ -2196,14 +2194,14 @@ class StatefulCascadedAltitudePID:
             + self.Kp_speed * speed_err
             + self.Ki_speed * self._speed_integral
         )
-        power_clipped = jnp.clip(power, -1.0, 1.0)
-        self._speed_integral = jnp.where(
+        power_clipped = np.clip(power, -1.0, 1.0)
+        self._speed_integral = np.where(
             power != power_clipped,
             self._speed_integral - speed_err * self.dt,
             self._speed_integral,
         )
 
-        return jnp.stack([power_clipped, stick], axis=-1)
+        return np.stack([power_clipped, stick], axis=-1)
 
     __call__ = step
 
@@ -2323,12 +2321,12 @@ class _Plane3DVerticalChannel:
         absolute altitude tracking and *relative* station keeping, where the
         reference is a moving slot rather than a fixed altitude.
         """
-        vs_cmd = jnp.clip(self.Kp_alt * alt_error, -self.vs_max, self.vs_max)
+        vs_cmd = np.clip(self.Kp_alt * alt_error, -self.vs_max, self.vs_max)
         vs_err = vs_cmd - z_dot
         self._vs_integral = self._vs_integral + vs_err * self.dt
 
         # Extra pitch needed to hold altitude while banked.
-        load_factor = 1.0 / jnp.maximum(jnp.cos(phi), 0.35)
+        load_factor = 1.0 / np.maximum(np.cos(phi), 0.35)
         bank_comp = self.k_bank_comp * (load_factor - 1.0)
 
         theta_cmd = (
@@ -2337,15 +2335,15 @@ class _Plane3DVerticalChannel:
             + self.Kp_vs * vs_err
             + self.Ki_vs * self._vs_integral
         )
-        theta_cmd = jnp.clip(theta_cmd, -self.theta_max, self.theta_max)
-        theta_cmd = jnp.clip(theta_cmd, gamma - self.alpha_max, gamma + self.alpha_max)
+        theta_cmd = np.clip(theta_cmd, -self.theta_max, self.theta_max)
+        theta_cmd = np.clip(theta_cmd, gamma - self.alpha_max, gamma + self.alpha_max)
 
-        limited = jnp.abs(theta_cmd - self.theta_trim) >= self.theta_max - 1e-6
-        self._vs_integral = jnp.where(
+        limited = np.abs(theta_cmd - self.theta_trim) >= self.theta_max - 1e-6
+        self._vs_integral = np.where(
             limited, self._vs_integral - vs_err * self.dt, self._vs_integral
         )
 
-        return jnp.clip(
+        return np.clip(
             self.Kp_theta * (theta_cmd - theta) - self.Kd_theta * theta_dot, -1.0, 1.0
         )
 
@@ -2377,8 +2375,8 @@ class _AirspeedChannel:
         err = self.target_speed - speed
         self._integral = self._integral + err * self.dt
         power = self.cruise_power + self.Kp * err + self.Ki * self._integral
-        clipped = jnp.clip(power, -1.0, 1.0)
-        self._integral = jnp.where(
+        clipped = np.clip(power, -1.0, 1.0)
+        self._integral = np.where(
             power != clipped, self._integral - err * self.dt, self._integral
         )
         return clipped
@@ -2413,10 +2411,10 @@ class StatefulCascadedPlane3DPID:
         target_altitude = obs[..., 10]
 
         stick = self.vertical(target_altitude - z, z_dot, theta, theta_dot, gamma, phi)
-        speed = jnp.sqrt(obs[..., 0] ** 2 + obs[..., 1] ** 2 + 1e-9)
+        speed = np.sqrt(obs[..., 0] ** 2 + obs[..., 1] ** 2 + 1e-9)
         power = self.airspeed(speed)
         aileron = self.lateral(obs, phi, phi_dot)
-        return jnp.stack([power, stick, aileron], axis=-1)
+        return np.stack([power, stick, aileron], axis=-1)
 
     __call__ = step
 
@@ -2448,16 +2446,16 @@ class _HeadingLateral:
         self._int = self._int + err * self.dt
         deriv = (err - self._prev) / self.dt
         self._prev = err
-        desired_bank = jnp.clip(
+        desired_bank = np.clip(
             self.Kp_hdg * err + self.Ki_hdg * self._int + self.Kd_hdg * deriv,
             -self.max_bank_rad,
             self.max_bank_rad,
         )
-        aileron = jnp.clip(
+        aileron = np.clip(
             self.Kp_bank * (phi - desired_bank) + self.Kd_bank * phi_dot, -1.0, 1.0
         )
-        self._int = jnp.where(
-            jnp.abs(aileron) >= 1.0, self._int - err * self.dt, self._int
+        self._int = np.where(
+            np.abs(aileron) >= 1.0, self._int - err * self.dt, self._int
         )
         return aileron
 
@@ -2487,15 +2485,15 @@ class _CircleLateral:
 
     def __call__(self, obs, phi, phi_dot):
         speed_sq = obs[..., 0] ** 2 + obs[..., 1] ** 2 + 1e-6
-        radius = jnp.maximum(obs[..., 13], 1.0)
+        radius = np.maximum(obs[..., 13], 1.0)
         # Bank that sustains the turn with no radial error: tan(phi) = v^2/(g r).
-        ideal_bank = jnp.arctan2(speed_sq, self.gravity * radius)
-        dist = jnp.sqrt(obs[..., 11] ** 2 + obs[..., 12] ** 2)
+        ideal_bank = np.arctan2(speed_sq, self.gravity * radius)
+        dist = np.sqrt(obs[..., 11] ** 2 + obs[..., 12] ** 2)
         err = dist - obs[..., 13]
         self._int = self._int + err * self.dt
         deriv = (err - self._prev) / self.dt
         self._prev = err
-        desired_bank = jnp.clip(
+        desired_bank = np.clip(
             ideal_bank
             + self.Kp_rad * err
             + self.Ki_rad * self._int
@@ -2503,11 +2501,11 @@ class _CircleLateral:
             -self.max_bank_rad,
             self.max_bank_rad,
         )
-        aileron = jnp.clip(
+        aileron = np.clip(
             self.Kp_bank * (phi - desired_bank) + self.Kd_bank * phi_dot, -1.0, 1.0
         )
-        self._int = jnp.where(
-            jnp.abs(aileron) >= 1.0, self._int - err * self.dt, self._int
+        self._int = np.where(
+            np.abs(aileron) >= 1.0, self._int - err * self.dt, self._int
         )
         return aileron
 
@@ -2578,7 +2576,7 @@ class StatefulPatrolPID:
 
     def step(self, obs):
         action, self.state = patrol_pid_step(self.params, self.state, obs)
-        return jnp.asarray(action)
+        return np.asarray(action)
 
     __call__ = step
 
@@ -2656,18 +2654,18 @@ class StatefulBearingOnlyPatrolPID:
         az = obs[..., StatefulBearingOnlyPatrolPID._AZ]
         el = obs[..., StatefulBearingOnlyPatrolPID._EL]
         psi = obs[..., StatefulBearingOnlyPatrolPID._PSI]
-        horiz = rng * jnp.cos(el)
-        d_fwd = horiz * jnp.cos(az)
-        d_rgt = horiz * jnp.sin(az)
-        dz = rng * jnp.sin(el)
+        horiz = rng * np.cos(el)
+        d_fwd = horiz * np.cos(az)
+        d_rgt = horiz * np.sin(az)
+        dz = rng * np.sin(el)
         # Follower body axes, matching patrol.env._lead_frame's convention:
         # fwd = (cos, sin), rgt = (sin, -cos).
-        dx = d_fwd * jnp.cos(psi) + d_rgt * jnp.sin(psi)
-        dy = d_fwd * jnp.sin(psi) - d_rgt * jnp.cos(psi)
+        dx = d_fwd * np.cos(psi) + d_rgt * np.sin(psi)
+        dy = d_fwd * np.sin(psi) - d_rgt * np.cos(psi)
         return dx, dy, dz
 
     def step(self, obs):
-        obs = jnp.atleast_1d(jnp.asarray(obs))
+        obs = np.atleast_1d(np.asarray(obs))
         psi = float(obs[self._PSI])
         dx, dy, dz = (float(v) for v in self._relative_world(obs))
 
@@ -2715,8 +2713,8 @@ class StatefulBearingOnlyPatrolPID:
         full[15] = rv_up
         full[19] = rel_heading
 
-        action, self.state = patrol_pid_step(self.params, self.state, jnp.asarray(full))
-        return jnp.asarray(action)
+        action, self.state = patrol_pid_step(self.params, self.state, np.asarray(full))
+        return np.asarray(action)
 
     __call__ = step
 
@@ -2863,9 +2861,9 @@ class StatefulWindTurbinePID:
         target_MW = obs[..., 4]
 
         # --- Torque: power feedforward, limited by the Region 2 law ---
-        omega = omega_rpm * 2.0 * jnp.pi / 60.0
+        omega = omega_rpm * 2.0 * np.pi / 60.0
         torque = (target_MW * 1.0e6) / (
-            self.eta_gen * self.N_gear * jnp.maximum(omega, 1e-3)
+            self.eta_gen * self.N_gear * np.maximum(omega, 1e-3)
         )
         # Rotor-speed protection. Below rated wind the setpoint is simply not
         # available, and demanding it anyway drags the rotor down until it
@@ -2875,14 +2873,14 @@ class StatefulWindTurbinePID:
         # the Region 2 law tau = K omega^2 instead does interfere, because at
         # rated speed that law sits well below rated torque and the rotor runs
         # away.
-        speed_ratio = omega / (self.omega_rated_rpm * 2.0 * jnp.pi / 60.0)
-        protection = jnp.clip(
+        speed_ratio = omega / (self.omega_rated_rpm * 2.0 * np.pi / 60.0)
+        protection = np.clip(
             (speed_ratio - self.protect_lo) / (self.protect_hi - self.protect_lo),
             0.0,
             1.0,
         )
         torque = torque * protection
-        torque_raw = 2.0 * jnp.clip(torque / self.torque_max, 0.0, 1.0) - 1.0
+        torque_raw = 2.0 * np.clip(torque / self.torque_max, 0.0, 1.0) - 1.0
 
         # --- Pitch: PI on rotor-speed error ---
         err = omega_rpm - self.omega_rated_rpm
@@ -2892,14 +2890,14 @@ class StatefulWindTurbinePID:
         pitch = (
             self.Kp_pitch * err + self.Ki_pitch * self._integral + self.Kd_pitch * deriv
         )
-        pitch_clipped = jnp.clip(pitch, 0.0, self.pitch_max)
+        pitch_clipped = np.clip(pitch, 0.0, self.pitch_max)
         # Anti-windup: stop integrating once pitch is against a stop.
-        self._integral = jnp.where(
+        self._integral = np.where(
             pitch != pitch_clipped, self._integral - err * self.dt, self._integral
         )
         pitch_raw = 2.0 * (pitch_clipped / self.pitch_max) - 1.0
 
-        return jnp.stack([pitch_raw, torque_raw], axis=-1)
+        return np.stack([pitch_raw, torque_raw], axis=-1)
 
     __call__ = step
 
@@ -2967,11 +2965,11 @@ class StatefulBoilerDrumPID:
         err_l = target_level - level
         self._level_int = self._level_int + err_l * self.dt
         trim = self.Kp_level * err_l + self.Ki_level * self._level_int
-        trim_clipped = jnp.clip(trim, -self.trim_max, self.trim_max)
-        self._level_int = jnp.where(
+        trim_clipped = np.clip(trim, -self.trim_max, self.trim_max)
+        self._level_int = np.where(
             trim != trim_clipped, self._level_int - err_l * self.dt, self._level_int
         )
-        q_feed = jnp.clip(q_steam + trim_clipped, 0.0, self.q_feed_max)
+        q_feed = np.clip(q_steam + trim_clipped, 0.0, self.q_feed_max)
         feed_raw = 2.0 * (q_feed / self.q_feed_max) - 1.0
 
         # --- Firing: enthalpy feedforward plus a PI on pressure ---
@@ -2987,13 +2985,13 @@ class StatefulBoilerDrumPID:
             + self.Ki_pressure * self._press_int
             + self.Kd_pressure * deriv
         )
-        Q_clipped = jnp.clip(Q, 0.0, self.Q_max)
-        self._press_int = jnp.where(
+        Q_clipped = np.clip(Q, 0.0, self.Q_max)
+        self._press_int = np.where(
             Q != Q_clipped, self._press_int - err_p * self.dt, self._press_int
         )
         fuel_raw = 2.0 * (Q_clipped / self.Q_max) - 1.0
 
-        return jnp.stack([fuel_raw, feed_raw], axis=-1)
+        return np.stack([fuel_raw, feed_raw], axis=-1)
 
     __call__ = step
 
@@ -3119,8 +3117,8 @@ class StatefulCementKilnPID:
         err_o = lime - target_lime
         self._outer_int = self._outer_int + err_o * self.dt
         trim = self.Kp_outer * err_o + self.Ki_outer * self._outer_int
-        trim_clipped = jnp.clip(trim, -self.sp_trim_max, self.sp_trim_max)
-        self._outer_int = jnp.where(
+        trim_clipped = np.clip(trim, -self.sp_trim_max, self.sp_trim_max)
+        self._outer_int = np.where(
             trim != trim_clipped, self._outer_int - err_o * self.dt, self._outer_int
         )
         T_bz_sp = self.T_bz_base + trim_clipped
@@ -3131,8 +3129,8 @@ class StatefulCementKilnPID:
         fuel = (
             self.fuel_nominal + self.Kp_inner * err_i + self.Ki_inner * self._inner_int
         )
-        fuel_clipped = jnp.clip(fuel, self.fuel_min, self.fuel_max)
-        self._inner_int = jnp.where(
+        fuel_clipped = np.clip(fuel, self.fuel_min, self.fuel_max)
+        self._inner_int = np.where(
             fuel != fuel_clipped, self._inner_int - err_i * self.dt, self._inner_int
         )
         fuel_raw = (
@@ -3141,10 +3139,10 @@ class StatefulCementKilnPID:
 
         # --- Speed follows feed, holding bed depth constant ---
         rpm = self.rpm_nominal * feed / self.feed_nominal
-        rpm = jnp.clip(rpm, self.rpm_min, self.rpm_max)
+        rpm = np.clip(rpm, self.rpm_min, self.rpm_max)
         rpm_raw = 2.0 * (rpm - self.rpm_min) / (self.rpm_max - self.rpm_min) - 1.0
 
-        return jnp.stack([fuel_raw, rpm_raw], axis=-1)
+        return np.stack([fuel_raw, rpm_raw], axis=-1)
 
     __call__ = step
 
@@ -3262,14 +3260,14 @@ class StatefulBatteryPID:
         demand = target_MW + self.Kp * err + self.Ki * self._integral
 
         # Fade the demand out only in the direction that would breach a limit.
-        discharge_room = jnp.clip((soc - self.soc_min) / self.guard_margin, 0.0, 1.0)
-        charge_room = jnp.clip((self.soc_max - soc) / self.guard_margin, 0.0, 1.0)
-        demand = jnp.where(demand > 0.0, demand * discharge_room, demand * charge_room)
+        discharge_room = np.clip((soc - self.soc_min) / self.guard_margin, 0.0, 1.0)
+        charge_room = np.clip((self.soc_max - soc) / self.guard_margin, 0.0, 1.0)
+        demand = np.where(demand > 0.0, demand * discharge_room, demand * charge_room)
 
-        raw = jnp.clip(demand / self.power_max_MW, -1.0, 1.0)
+        raw = np.clip(demand / self.power_max_MW, -1.0, 1.0)
         # Anti-windup: stop integrating once the demand is clipped or guarded.
-        self._integral = jnp.where(
-            jnp.abs(raw) >= 1.0, self._integral - err * self.dt, self._integral
+        self._integral = np.where(
+            np.abs(raw) >= 1.0, self._integral - err * self.dt, self._integral
         )
         return raw
 

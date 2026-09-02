@@ -422,7 +422,7 @@ def compute_next_state_patrol(
     state: PatrolState,
     params: PatrolParams,
     lead_pid_params,
-    integration_method: str = "rk4_1",
+    integration_method: str = "rk4_2",
     key=None,
 ):
     """One environment step: advance the follower (from ``action``) and the lead.

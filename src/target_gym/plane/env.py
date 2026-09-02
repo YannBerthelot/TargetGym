@@ -281,7 +281,7 @@ def compute_next_state(
     stick_requested: float,
     state: PlaneState,
     params: PlaneParams,
-    integration_method: str = "rk4_1",
+    integration_method: str = "rk4_2",
     key=None,
 ):
     """Compute next state and metrics using multiple sub-steps with jax.lax.scan.

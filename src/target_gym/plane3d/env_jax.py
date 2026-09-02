@@ -16,6 +16,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.plane.dynamics import total_wind_3d
 from target_gym.plane3d.env import (
     PlaneParams3D,
@@ -50,7 +51,7 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
     screen_width = 600
     screen_height = 400
 
-    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         # observe_wind=False -> wind is a hidden disturbance (POMDP);
         # observe_wind=True  -> (wind_x, wind_y, wind_z) appended to the obs
         #                       (fully-observable baseline).
@@ -246,7 +247,7 @@ class Plane3DHeading(_Airplane3DBase):
     obs_target_index: int = 10  # target_altitude
     task_type: str = "heading"
 
-    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         self.obs_shape = (18,) if observe_wind else (15,)
 
@@ -256,6 +257,7 @@ class Plane3DHeading(_Airplane3DBase):
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         return self._append_wind(get_obs_heading(state, xp=jnp), state, params)
 
+    @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
         if params is None:
             params = self.default_params
@@ -311,7 +313,7 @@ class Plane3DCircle(_Airplane3DBase):
     task_type: str = "circle"
     tracked_names: tuple = ("altitude (m)",)
 
-    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         self.obs_shape = (20,) if observe_wind else (17,)
 
@@ -321,6 +323,7 @@ class Plane3DCircle(_Airplane3DBase):
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         return self._append_wind(get_obs_circle(state, xp=jnp), state, params)
 
+    @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
         if params is None:
             params = self.default_params
@@ -403,7 +406,7 @@ class Plane3DFigureEight(_Airplane3DBase):
     task_type: str = "figure8"
     tracked_names: tuple = ("altitude (m)",)
 
-    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         self.obs_shape = (22,) if observe_wind else (19,)
 
@@ -415,6 +418,7 @@ class Plane3DFigureEight(_Airplane3DBase):
             params = self.default_params
         return self._append_wind(get_obs_figure8(state, params, xp=jnp), state, params)
 
+    @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
         if params is None:
             params = self.default_params

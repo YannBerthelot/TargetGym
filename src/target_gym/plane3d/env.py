@@ -537,7 +537,7 @@ def compute_next_state_3d(
     aileron_requested: float,
     state: PlaneState3D,
     params: PlaneParams3D,
-    integration_method: str = "rk4_1",
+    integration_method: str = "rk4_2",
     key=None,
 ):
     """Compute next state using the 3D dynamics model.

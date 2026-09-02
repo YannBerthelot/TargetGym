@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.plane.dynamics import total_wind_2d
 from target_gym.plane.env import (
     PlaneParams,
@@ -32,7 +33,7 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
     tracked_names: tuple = ("altitude (m)",)
     obs_target_index: int = 6  # target_altitude
 
-    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         # observe_wind=False -> the wind is a hidden disturbance (POMDP);
         # observe_wind=True  -> wind (wind_x, wind_z) is appended to the obs
         #                       (a fully-observable baseline / feedforward case).
@@ -94,6 +95,7 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
         terminated, _ = check_is_terminal(state, params, xp=jnp)
         return terminated
 
+    @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams = None):
         """
         Reset the environment using JAX random keys

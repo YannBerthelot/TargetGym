@@ -8,7 +8,7 @@ subset of states**, not to reach a goal and stop. Holding a setpoint against
 disturbances, forever, is what industrial control actually is.
 
 Eighteen environments spanning aircraft, process, industrial and energy plants.
-They are fast (0.3-17 M steps/s on CPU, `jit`/`vmap`/`scan` throughout) and
+They are fast (0.5-17 M steps/s on CPU, `jit`/`vmap`/`scan` throughout) and
 their physics is a **documented, tested contract** rather than a claim: every
 environment carries a `PHYSICS.md` with a sourced parameter table, published
 validation targets asserted by tests, and quantified known deviations.
@@ -41,10 +41,10 @@ RL loop actually drives them. Figures scale with batch size and are much higher 
 
 | Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, vmap 256) |
 |---|---|---|---|---|
-| Plane 2D | Reach and hold a target altitude with an A320-like aircraft | 2 (power, stick) | 9 | ~5.4M |
-| Plane 3D -- Heading | Reach and hold a target altitude and heading | 3 (power, stick, aileron) | 15 | ~2.8M |
-| Plane 3D -- Circle | Maintain altitude while orbiting a circular path | 3 (power, stick, aileron) | 17 | ~2.6M |
-| Plane 3D -- Figure Eight | Follow a 3D twisted lemniscate (figure-8 with altitude crossovers) | 3 (power, stick, aileron) | 19 | ~2.7M |
+| Plane 2D | Reach and hold a target altitude with an A320-like aircraft | 2 (power, stick) | 9 | ~1.4M |
+| Plane 3D -- Heading | Reach and hold a target altitude and heading | 3 (power, stick, aileron) | 15 | ~0.9M |
+| Plane 3D -- Circle | Maintain altitude while orbiting a circular path | 3 (power, stick, aileron) | 17 | ~0.9M |
+| Plane 3D -- Figure Eight | Follow a 3D twisted lemniscate (figure-8 with altitude crossovers) | 3 (power, stick, aileron) | 19 | ~0.9M |
 
 ### Multi-Agent / Formation
 
@@ -55,8 +55,8 @@ aircraft learn) variants share the same 3D physics.
 
 | Environment | Goal | Action Dim | Obs Dim | Steps/s (CPU, vmap 256) |
 |---|---|---|---|---|
-| Plane Patrol | Hold a slot behind a scripted (maneuvering) lead | 3 (power, stick, aileron) | 26 | ~2.2M |
-| Plane Patrol -- Bearing-only | Same, but the follower sees only range + bearing to the lead (partial obs) | 3 | 21 | ~2.2M |
+| Plane Patrol | Hold a slot behind a scripted (maneuvering) lead | 3 (power, stick, aileron) | 26 | ~0.5M |
+| Plane Patrol -- Bearing-only | Same, but the follower sees only range + bearing to the lead (partial obs) | 3 | 21 | ~0.5M |
 | Plane Patrol -- MARL / Formation | `1 + num_wingmen` learners (up to 5 planes): lead flies its patrol pattern, wingmen hold slots **evenly spread across both sides** (cooperative team reward, JaxMARL-style API) | 3 per agent | 18 (lead) / 26 (wingman) | see note |
 
 ### Process
@@ -456,11 +456,46 @@ TargetGym tasks are designed to expose RL agents to **realistic control challeng
 * [ ] **Drop the git dependency on `gymnax`.** The tested configuration pins
       upstream `main` because the gymnasium bound this project needs is merged
       but unreleased, so that configuration cannot be reproduced from PyPI alone.
-* [ ] **A performance phase.** Throughput has never been optimised deliberately;
-      the first pass found a nested `jax.jit` keyed on the params object that
-      cost a full recompile per parameter set. Worth a systematic look at the
-      slowest environments (distillation and the cement kiln are under
-      1 M steps/s) before the numbers in the README are published as a claim.
+* [x] **A performance phase.** Four defects, all paid by every user and none
+      visible to a throughput benchmark, which measures steady state after
+      compilation. Every environment returned a *weakly typed* reset state, so
+      anything jitted over the state compiled twice. Each new environment
+      instance retained a compiled executable, leaking ~2.6 MB per construction.
+      The pH solver spent its whole runtime on 44 bisection halvings resolving to
+      1e-13. And `runners.rollout` re-jitted the environment on every call, so a
+      warmed rollout still spent 0.222 s of 0.355 s compiling. Fast CI 164 s ->
+      128 s, `tests/experts` 143 s -> 37 s, warm rollouts ~5x, pH throughput 2x.
+
+      Two restructurings were measured and rejected: vectorising the aircraft's
+      three aerodynamic calls into one is 0.76x, and `donate_argnums` on the
+      batched rollout does nothing (the carried state is 0.26 MB). The remaining
+      slow environments are honestly slow -- distillation needs 16 substeps
+      across 41 stages for stability, the cement kiln sweeps 16 zones in
+      sequence.
+
+      Two cautions for whoever picks this up. Benchmarks on a laptop vary 41%
+      across identical trials, so every number here is a min of many; a
+      single-shot measurement produced a confident and wrong conclusion partway
+      through this work. And the pass found a *correctness* bug while looking for
+      speed -- see the integration order note below -- which is the main reason
+      it was worth doing.
+
+      The table's throughput column has since been re-measured with
+      `python -m target_gym.benchmark_speed` (batch 256, best of three, after
+      warm-up). Every process plant came back within 10% of its published figure,
+      which is what makes the aircraft rows conclusive: all five were about 2x
+      optimistic, because the post-stall aerodynamics, the three moment
+      decompositions, pitch damping and fuel burn were added to those dynamics
+      after the numbers were taken. They now read as measured.
+
+      Throughput is also strongly batch-dependent for the aircraft, which the
+      single number does not convey: the 3D plane roughly doubles between batch
+      256 and batch 16384. Anyone training on these should batch at 4096 or more.
+
+      The aircraft rows fell again when the integration order was corrected from
+      one RK4 substep to two (see `plane3d/PHYSICS.md`). That is the honest cost
+      of a converged trajectory: at one substep the altitude was 20 m out over
+      150 steps, against a reward that resolves to 1 m.
 * [ ] **Apply the model review checklist to the other environments.** The
       aircraft work produced eleven checks in
       [docs/model-review-checklist.md](docs/model-review-checklist.md), derived

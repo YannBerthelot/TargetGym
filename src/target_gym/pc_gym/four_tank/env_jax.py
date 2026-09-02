@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
+from target_gym.base import canonical_reset
 from target_gym.pc_gym.four_tank.env import (
     FourTankParams,
     FourTankState,
@@ -78,6 +79,7 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
         terminated, _ = check_is_terminal(state, params)
         return terminated
 
+    @canonical_reset
     def reset_env(
         self, key: chex.PRNGKey, params: FourTankParams = None
     ) -> Tuple[jnp.ndarray, FourTankState]:
