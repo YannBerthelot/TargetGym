@@ -64,9 +64,14 @@ def _flatten(gains) -> list[float]:
                         "returns NaN gains: the loss evaluates but its gradient does "
                         "not. The four-tank had the same class of defect -- "
                         "sqrt(max(h, 0)) is exact forward and NaN in reverse at "
-                        "h = 0 -- and is fixed; the aircraft equivalent has not been "
-                        "localised. Relay autotuning (scripts/tune_pid.py) is "
-                        "unaffected and is what produced the shipped gains."
+                        "h = 0 -- and is fixed. The aircraft equivalent is still not "
+                        "localised, but it is not the plant: a plain differentiable "
+                        "rollout of these dynamics gives finite gradients out to 200 "
+                        "steps, so it is somewhere in this module's own loss. Relay "
+                        "autotuning no longer covers for it either -- the relay fails "
+                        "on all three 3D tasks with no zero-crossings -- and the "
+                        "shipped aircraft gains now come from coordinate descent on "
+                        "episode return (scripts/tune_pid.py, _tune_aircraft_search)."
                     ),
                 ),
             )

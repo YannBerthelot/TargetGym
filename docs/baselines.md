@@ -57,28 +57,37 @@ Two caveats worth knowing before you re-tune anything:
   is not automatically better than what is shipped. Measure both before keeping
   one: re-running the tuner over the whole registry produced a genuinely better
   `cstr` and a distinctly worse `first_order` in the same pass.
-- **None of the four aircraft can currently be tuned by this script**, which was
-  found by trying, after the integration order was corrected, to re-tune the
-  gains against the changed plant:
+- **The aircraft are tuned by coordinate descent, not by the relay.** Both of the
+  other methods fail on these plants, and structurally rather than by bad luck:
+  the relay reports *"every operating point failed (no zero-crossings)"* because
+  the altitude/power loop will not sustain a bang-bang oscillation, and the
+  gradient tuner returns NaN gains (a documented xfail in
+  `tests/experts/test_pid_tuning.py`, hardened against the obvious causes and
+  still not localised). Coordinate descent on episode return needs neither an
+  oscillation nor a derivative, only forward rollouts.
 
-  | | what happens |
-  | --- | --- |
-  | `plane` | Runs, reports success, and writes the `plane` key -- which nothing reads. The shipped controller is `StatefulCascadedAltitudePID`, which loads `plane_cascaded`, a key absent from the file. Re-tuning it scores identically to not re-tuning it, per seed. |
-  | `plane3d_heading` | *"relay autotune: every operating point failed (no zero-crossings)"* on the power loop |
-  | `plane3d_circle` | the same |
-  | `plane3d_figure8` | the same; its shipped gains came from a direct gain search |
+  It scores **return**, not tracking error. Scoring one term of a
+  multi-objective reward is the mistake that made the MPC baselines look broken
+  for a long time; the same trap applies here.
 
-  The relay experiment needs the loop to sustain a bang-bang oscillation and the
-  aircraft altitude/power loop does not. Fixing this means the gradient or
-  random-search path the four-tank and glass furnace already use, not a better
-  relay. Until then the shipped aircraft gains cannot be reproduced by the
-  documented command, which is worth knowing before trusting them.
+  Two bugs were fixed alongside it. Every tuner in both systems pinned
+  `integration_method="rk4_1"`, so they would have tuned against the plant as it
+  was before the integration order was corrected. And the 2D aircraft's tuner
+  wrote the `plane` key while its shipped autopilot reads `plane_cascaded` --
+  a key that had never existed in the file. `make tuning-plane` therefore ran,
+  reported success, wrote gains nothing loaded, and left the controller on its
+  constructor defaults. The tuner now seeds from those defaults and writes the
+  key the controller actually reads.
 
-  It also means the gains still in the file were identified against the
-  one-substep plant. Measured across the integrator change they mostly held --
-  the 2D aircraft and the circle task are unchanged, the figure-8 lost 5.7%, and
-  patrol *improved* from 98.5 m to 41.2 m of slot error -- with `plane3d_heading`
-  the only real loser at -13%. So a re-tune is wanted rather than urgent.
+  Gains improved on seeds the search never saw, which is the only number worth
+  quoting (search on seeds 0-2, held out 3-9):
+
+  | | shipped | tuned | |
+  | --- | --- | --- | --- |
+  | plane | 194.62 | 285.20 | +47% |
+  | plane3d_heading | 60.93 | 80.25 | +32% |
+  | plane3d_circle | 67.23 | 84.59 | +26% |
+  | plane3d_figure8 | 34.15 | 81.58 | +139% |
 
 ## MPC
 
