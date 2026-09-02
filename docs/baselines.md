@@ -203,11 +203,11 @@ Return, paired per seed, on each environment's own episode.
 
 | | MPC vs PID | |
 | --- | --- | --- |
-| plane3d_figure8 | **+531** | 10/10 |
+| plane3d_figure8 | **+450** | |
 | reactor | **+505** | 10/10 |
-| plane3d_heading | **+327** | 10/10 |
-| plane3d_circle | +247 | 10/10 |
-| plane | **+166** | 10/10 |
+| plane3d_heading | **+242** | |
+| plane3d_circle | +201 | |
+| plane | +42 | |
 | boiler_drum | +83 | 10/10 |
 | four_tank | +69 | 10/10 |
 | ph_neutralization | +29 | 10/10 |
@@ -221,6 +221,16 @@ Return, paired per seed, on each environment's own episode.
 
 The MPC is the upper bound on thirteen of the sixteen, level on the glass
 furnace and the wind turbine, and behind only on the battery.
+
+The four aircraft margins are quoted without a win count, deliberately. The MPC
+column there is unchanged -- nothing about those controllers moved -- but the PID
+column was re-measured after the aircraft gains were re-tuned, and it rose
+sharply: plane 362 -> 486, heading 104 -> 190, circle 119 -> 165, figure-8 50 ->
+130. The margins above are the difference of the two means, which is exact; the
+per-seed win counts would need the MPC column re-run, which costs hours and would
+say nothing new about the MPC. The direction is what matters and it did not
+change -- the MPC still leads on all four -- but the 2D aircraft's lead is now
++42 rather than +166, and a better PID would close it.
 
 Read the last three rows carefully. The battery's positive mean is carried by a
 single seed where lookahead pays enormously (358 against 165) while it trails on
