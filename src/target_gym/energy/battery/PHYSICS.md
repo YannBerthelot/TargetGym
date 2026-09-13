@@ -187,7 +187,7 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1596 W | closed form: the dispatch target is a block level plus white noise of sd 2 kW drawn after the action, so no controller holds E\|error\| below sd * sqrt(2/pi). The shipped PID and MPC hold 5.6 and 6.1 kW within blocks (`scripts/measure_hold.py`, per dispatch block after settling, 3 seeds). |
+| `e_floor` | 1596 W | closed form: the dispatch target is a block level plus white noise of sd 2 kW drawn after the action, so no controller holds E\|error\| below sd * sqrt(2/pi). The shipped PID and MPC hold 5.6 and 6.4 kW within blocks (`scripts/measure_hold.py`, per dispatch block after settling, 3 seeds). |
 | `e_tol` | 0 | none |
 | `tracking_exponent` | 1 | linear imbalance |
 | `imbalance_price` | 100 $/MWh | dispatch imbalance tariff (as in the audit) |

@@ -2,22 +2,22 @@
   "battery": {
     "burn_in": 0,
     "mpc": {
-      "c_hold": 1.917465675291994e-08,
+      "c_hold": 1.9219904666352662e-08,
       "cycles_per_episode": 7,
       "e_hold": [
-        6065.837888816551
+        6371.060401845467
       ],
       "e_hold_first_half": [
-        5970.342173032407
+        5982.687412090984
       ],
       "e_hold_rms": [
-        8115.241152075626
+        9826.513830648892
       ],
       "e_hold_second_half": [
-        6161.333604600694
+        6755.503172816619
       ],
-      "hold_steps_scored": 1080,
-      "seconds": 12.2,
+      "hold_steps_scored": 1074,
+      "seconds": 12.7,
       "settle": 0.0,
       "terminated": 0
     },
@@ -37,7 +37,7 @@
         5278.685517400319
       ],
       "hold_steps_scored": 1009,
-      "seconds": 0.8,
+      "seconds": 0.7,
       "settle": 4.0,
       "terminated": 0
     },
@@ -970,27 +970,27 @@
   "wind_turbine": {
     "burn_in": 300,
     "mpc": {
-      "c_hold": 0.12941636128506312,
+      "c_hold": 0.0020090647594382363,
       "cycles_per_episode": 1,
       "e_hold": [
-        28744.971041666668
+        2105.1491666666666
       ],
       "e_hold_first_half": [
-        3378.0191666666665
+        2155.5016666666666
       ],
       "e_hold_rms": [
-        128117.33006664996
+        2700.7999752388178
       ],
       "e_hold_second_half": [
-        54111.92291666666
+        2054.7966666666666
       ],
       "hold_steps_scored": 1200,
-      "seconds": 88.3,
-      "settle": 2.0,
+      "seconds": 511.0,
+      "settle": 0.0,
       "terminated": 0
     },
     "pid": {
-      "c_hold": 0.05260191336274147,
+      "c_hold": 0.0013150478340685369,
       "cycles_per_episode": 1,
       "e_hold": [
         4563.393333333333
@@ -1005,7 +1005,7 @@
         4396.5858333333335
       ],
       "hold_steps_scored": 1200,
-      "seconds": 0.7,
+      "seconds": 1.0,
       "settle": 15.0,
       "terminated": 0
     },

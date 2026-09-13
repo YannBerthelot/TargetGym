@@ -138,8 +138,8 @@ class WindTurbineParams(EnvParams):
     # MWh, linear in |error| (p = 1). Floor: the lowest hold error a shipped
     # controller has demonstrated under the shipped OU turbulence -- the MPC's
     # lowest per-seed mean |error| over the 300 hold steps of the test
-    # episode, 1.68 kW on seed 1 of five (mean 2.1 kW; the PID holds 3.5 kW
-    # there and 5.2 kW over a 5 min hold, `scripts/measure_hold.py`). A
+    # episode, 1.68 kW on seed 1 of five (mean 2.1 kW; over a 5 min hold the
+    # MPC holds 2.1 kW and the PID 4.6 kW, `scripts/measure_hold.py`). A
     # per-seed minimum rather than a mean, so that no run of the reference
     # controller sits below it. An upper bound on the achievable floor. Fatigue: pitch
     # activity |cmd - achieved| / pitch_max above the PID's hold-phase level

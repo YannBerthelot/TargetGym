@@ -164,7 +164,7 @@ class BatteryParams(EnvParams):
     # |error|. Floor: the dispatch target is a block level plus white noise of
     # sd ``dispatch_noise_std`` drawn after the action is chosen, so no
     # controller can hold the mean |error| below E|N(0, sd)| = sd * sqrt(2/pi)
-    # = 1596 W (closed form; the shipped PID and MPC hold 5.6 and 6.1 kW,
+    # = 1596 W (closed form; the shipped PID and MPC hold 5.6 and 6.4 kW,
     # `scripts/measure_hold.py`). Degradation: capacity fade above the
     # hold-phase rate (1.92e-8 of capacity per step, PID and MPC alike) at
     # ``fade_price`` per kWh of the 1692 kWh pack -- the avoidable part of
