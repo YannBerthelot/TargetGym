@@ -55,6 +55,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -70,6 +71,29 @@ STEAM_OU_THETA = 5.0e-3
 class BoilerDrumParams(EnvParams):
     delta_t: float = 2.0
     max_steps_in_episode: int = 400  # 800 s at dt = 2 s
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # Two tracked outputs, one term each, summed. Floors are the best shipped
+    # controller's long-run hold error under the shipped steam-demand
+    # disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 60-step
+    # burn-in): level 3.97 mm (MPC; PID 53 mm) and pressure 0.0428 bar (PID;
+    # the MPC drifts to 0.17 bar). Upper bounds on the achievable floors.
+    # Fuel above the hold-phase firing rate (1.566e8 W, MPC) is charged at
+    # weight 1. The level trip (0.25 m) costs (0.25 / 0.00397)^2 = 4.0e3 and
+    # the pressure envelope (40 bar / 0.0428)^2 = 8.7e5; a trip twice the sum.
+    reward_version: int = 2
+    e_floor_level: float = 3.97e-3  # m
+    e_floor_pressure: float = 0.0428  # bar
+    e_tol: float = 0.0
+    tracking_exponent: float = 2.0
+    c_hold: float = 1.566e8  # W fuel while holding (MPC)
+    running_weight: float = 1.0
+    failure_cost: float = 1.76e6
+    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    rho_floor_tracking: float = 2.0
+    rho_floor: float = 2.0
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = False
 
     # -- geometry (Astrom & Bell P16-G16, Oresundsverket 160 MW unit) --------
     V_t: float = 88.0  # m3   total water + steam volume
@@ -411,7 +435,28 @@ def check_is_terminal(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
+def compute_reward_terms(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    terminated, _ = check_is_terminal(state, params, xp)
+    track = R.tracking_cost(
+        state.level, params.e_floor_level, params.e_tol, params.tracking_exponent, xp
+    ) + R.tracking_cost(
+        state.pressure - state.target_pressure,
+        params.e_floor_pressure,
+        params.e_tol,
+        params.tracking_exponent,
+        xp,
+    )
+    return {
+        "tracking": track,
+        "running": R.running_cost(
+            state.Q_fuel, params.c_hold, params.running_weight, xp
+        ),
+        "failure": R.failure_cost(terminated, params.failure_cost, xp),
+    }
+
+
+def compute_reward_v1(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
     """Level and pressure tracking, minus fuel.
 
     Tracking is log-scaled (``utils.log_scaled_reward``): every halving of the
@@ -439,6 +484,15 @@ def compute_reward(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
     fuel = state.Q_fuel / params.Q_max
     return (0.5 * level_score + 0.5 * pressure_score) * (
         1.0 - params.fuel_weight * fuel
+    )
+
+
+def compute_reward(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
     )
 
 

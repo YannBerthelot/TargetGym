@@ -44,6 +44,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -120,6 +121,31 @@ class DistillationParams(EnvParams):
     #: ``delta_t`` is in minutes (Skogestad's model unit); seconds per unit.
     time_unit_seconds: float = 60.0
     max_steps_in_episode: int = 200
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # Two tracked compositions, one term each, summed. Floors are the shipped
+    # MPC's long-run hold errors under the shipped feed-composition
+    # disturbance (`scripts/measure_hold.py`, 1200 hold steps after a
+    # 582-step burn-in): top 4.3e-5, bottom 7.4e-5 mole fraction (PID: 1.2e-4
+    # and 2.2e-4). Upper bounds on the achievable floors. e_tol = 0
+    # provisionally: the product purity specifications a column is run
+    # against come from the sales contract and are to be supplied. Boilup
+    # above the hold-phase rate (3.282 kmol/min, PID; MPC 3.292) is charged
+    # at weight 1. The unit composition span costs (1 / 4.3e-5)^2 = 5.4e8 per
+    # step on the top alone; termination twice the two-end sum.
+    reward_version: int = 2
+    e_floor_top: float = 4.3e-5  # mole fraction, MPC hold error (upper bound)
+    e_floor_bottom: float = 7.4e-5
+    e_tol: float = 0.0  # provisional; purity specs to be supplied
+    tracking_exponent: float = 2.0
+    c_hold: float = 3.282  # boilup while holding (PID)
+    running_weight: float = 1.0
+    failure_cost: float = 1.45e9
+    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    rho_floor_tracking: float = 2.0
+    rho_floor: float = 2.0
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = False
 
 
 @struct.dataclass
@@ -266,7 +292,23 @@ def check_is_terminal(state: DistillationState, params: DistillationParams, xp=j
     return terminated, truncated
 
 
-def compute_reward(state: DistillationState, params: DistillationParams, xp=jnp):
+def compute_reward_terms(state: DistillationState, params: DistillationParams, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    p = params
+    terminated, _ = check_is_terminal(state, p, xp)
+    track = R.tracking_cost(
+        state.target_yD - state.x[-1], p.e_floor_top, p.e_tol, p.tracking_exponent, xp
+    ) + R.tracking_cost(
+        state.target_xB - state.x[0], p.e_floor_bottom, p.e_tol, p.tracking_exponent, xp
+    )
+    return {
+        "tracking": track,
+        "running": R.running_cost(state.V, p.c_hold, p.running_weight, xp),
+        "failure": R.failure_cost(terminated, p.failure_cost, xp),
+    }
+
+
+def compute_reward_v1(state: DistillationState, params: DistillationParams, xp=jnp):
     """Both product purities tracked, minus reboiler duty.
 
     The two terms are *multiplied* rather than summed: hitting one spec while
@@ -279,6 +321,15 @@ def compute_reward(state: DistillationState, params: DistillationParams, xp=jnp)
     bottom = log_scaled_reward(err_bot, params.precision_floor, 1.0, xp)
     boilup = (state.V - params.V_min) / (params.V_max - params.V_min)
     return top * bottom * (1.0 - params.boilup_cost_weight * boilup)
+
+
+def compute_reward(state: DistillationState, params: DistillationParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
+    )
 
 
 def separation_factor(state: DistillationState):

@@ -48,6 +48,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -132,6 +133,30 @@ class PHParams(EnvParams):
     # residence time. 600 steps = 50 min ~ 34 residence times.
     delta_t: float = 5.0
     max_steps_in_episode: int = 300
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # Floor: the shipped MPC's long-run mean |pH error| under the shipped
+    # buffer-flow disturbance (q2 noise), 0.0146 pH over 900 hold steps after a
+    # 108-step burn-in, `scripts/measure_hold.py` -- an upper bound on the
+    # achievable floor (no reduced-model optimum exists for this plant).
+    # e_tol = 0 provisionally: the discharge permit band a plant would use
+    # here is a regulatory number to be supplied (typically pH 6-9 on the
+    # outfall). Reagent above the hold-phase flow (16.24 mL/s, the same for
+    # PID and MPC) is charged at weight 1: one floor-width of pH error is
+    # worth the whole hold-phase reagent flow again. The span costs
+    # (10 / 0.0146)^2 = 4.7e5 per step; off-spec termination twice that.
+    reward_version: int = 2
+    e_floor: float = 0.0146  # pH, MPC hold error (upper bound on the floor)
+    e_tol: float = 0.0  # provisional; permit band to be supplied
+    tracking_exponent: float = 2.0
+    c_hold: float = 16.24  # mL/s reagent while holding (PID = MPC)
+    running_weight: float = 1.0
+    failure_cost: float = 9.4e5
+    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    rho_floor_tracking: float = 1.0
+    rho_floor: float = 1.0
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = False
 
 
 @struct.dataclass
@@ -263,7 +288,23 @@ def check_is_terminal(state: PHState, params: PHParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward(state: PHState, params: PHParams, xp=jnp):
+def compute_reward_terms(state: PHState, params: PHParams, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    terminated, _ = check_is_terminal(state, params, xp)
+    return {
+        "tracking": R.tracking_cost(
+            state.target_pH - state.pH,
+            params.e_floor,
+            params.e_tol,
+            params.tracking_exponent,
+            xp,
+        ),
+        "running": R.running_cost(state.q3, params.c_hold, params.running_weight, xp),
+        "failure": R.failure_cost(terminated, params.failure_cost, xp),
+    }
+
+
+def compute_reward_v1(state: PHState, params: PHParams, xp=jnp):
     """pH tracking minus a small reagent cost."""
     err = xp.abs(state.target_pH - state.pH)
     tracking = log_scaled_reward(
@@ -271,6 +312,15 @@ def compute_reward(state: PHState, params: PHParams, xp=jnp):
     )
     reagent = (state.q3 - params.q3_min) / (params.q3_max - params.q3_min)
     return tracking * (1.0 - params.reagent_cost_weight * reagent)
+
+
+def compute_reward(state: PHState, params: PHParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
+    )
 
 
 def steady_state_invariants(q3, q2, params: PHParams):

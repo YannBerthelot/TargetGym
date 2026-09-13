@@ -11,7 +11,7 @@ Close-patrol (formation-keeping) environment: state, parameters and transition.
 | Tracked variable(s) | measured range (m) |
 | Episode length | 200 steps (200 s at 1 s per step) |
 | Import | `from target_gym import PlanePatrolBearingOnly, PatrolParams` |
-| Cite as | `patrol_bearing_only-v1` |
+| Cite as | `patrol_bearing_only-v2` |
 
 ## Action space
 
@@ -70,5 +70,5 @@ A tuned PID ships with this environment.
 | `specific_fuel_consumption` | 0.0175 |
 | `power_response_rate` | 0.05 |
 | `stick_response_rate` | 0.9 |
-| … | 57 more, see the params dataclass |
+| … | 68 more, see the params dataclass |
 

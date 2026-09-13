@@ -253,3 +253,25 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + failure)`, one quadratic term per tracked output, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor_altitude` | 1 m | documented minimum: barometric altimeter resolution. Zero turbulence in the test configurations, so the achievable hold error is ~0 (the shipped MPC holds 0.1 m, `scripts/measure_hold.py`). |
+| `e_tol_altitude` | 30 m | **provisional** vertical-separation margin |
+| `e_floor_heading` | 0.0087 rad | documented minimum: AHRS / compass resolution |
+| `e_floor_path` | 3 m | documented minimum: civil GPS horizontal accuracy |
+| `tracking_exponent` | 2 | quadratic |
+| `failure_cost` | 3e8 | twice the altitude envelope's cost |
+
+`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
+units (the NEA floor for tracking) and `rho_floor` the full floor including
+consumption charged in full; `floor_is_documented_minimum` records whether
+`e_floor` is a measured/certified floor or a resolution used as a scale;
+`failure_cost` is charged per step in a terminal state and exceeds the largest
+tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

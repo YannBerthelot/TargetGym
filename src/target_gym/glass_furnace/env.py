@@ -62,6 +62,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -270,6 +271,26 @@ class GlassFurnaceParams(EnvParams):
     # ---- Time discretization ----
     delta_t: float = 30.0  # s per step
     max_steps_in_episode: int = 1600  # 13.3 h at dt = 30 s
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # Floor: the shipped MPC's long-run mean |crown error| under the shipped
+    # pull disturbance, 0.199 K over 3600 hold steps (30 h) after a 10 800-step
+    # (90 h) burn-in, 3 seeds, stationary across the window (0.209 / 0.188 K
+    # halves), `scripts/measure_hold.py`; PID 0.504 K. An upper bound on the
+    # achievable floor. Fuel above the hold-phase flow (0.590 kg/s, the same
+    # for PID and MPC) is charged at weight 1 (provisional: no fuel price
+    # supplied). The crown envelope costs (250 / 0.199)^2 = 1.6e6 per step;
+    # a refractory or glass excursion twice that.
+    reward_version: int = 2
+    e_floor: float = 0.199  # K, MPC hold error (upper bound on the floor)
+    e_tol: float = 0.0
+    tracking_exponent: float = 2.0
+    c_hold: float = 0.590  # kg/s fuel while holding (PID = MPC)
+    running_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
+    failure_cost: float = 3.2e6
+    rho_floor_tracking: float = 1.0
+    rho_floor: float = 1.0
+    floor_is_documented_minimum: bool = False
 
 
 @struct.dataclass
@@ -761,7 +782,25 @@ def check_is_terminal(state: GlassFurnaceState, params: GlassFurnaceParams, xp=j
     return terminated, truncated
 
 
-def compute_reward(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp):
+def compute_reward_terms(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    terminated, _ = check_is_terminal(state, params, xp)
+    return {
+        "tracking": R.tracking_cost(
+            state.target_T_crown - state.T_crown,
+            params.e_floor,
+            params.e_tol,
+            params.tracking_exponent,
+            xp,
+        ),
+        "running": R.running_cost(
+            state.fuel_flow, params.c_hold, params.running_weight, xp
+        ),
+        "failure": R.failure_cost(terminated, params.failure_cost, xp),
+    }
+
+
+def compute_reward_v1(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp):
     """Crown-temperature tracking minus a normalised fuel cost.
 
     Tracking is log-scaled (``utils.log_scaled_reward``): every halving of the
@@ -781,6 +820,15 @@ def compute_reward(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp)
     fuel_span = params.fuel_max - params.fuel_min
     fuel_norm = (state.fuel_flow - params.fuel_min) / fuel_span
     return tracking * (1.0 - params.fuel_cost_weight * fuel_norm)
+
+
+def compute_reward(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
+    )
 
 
 def specific_energy_consumption(state: GlassFurnaceState, params: GlassFurnaceParams):

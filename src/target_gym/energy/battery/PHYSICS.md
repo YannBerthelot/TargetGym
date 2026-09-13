@@ -180,3 +180,31 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2), in dollars per step
+
+`compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor` | 1596 W | closed form: the dispatch target is a block level plus white noise of sd 2 kW drawn after the action, so no controller holds E\|error\| below sd * sqrt(2/pi). The shipped PID and MPC hold 5.6 and 6.1 kW within blocks (`scripts/measure_hold.py`, per dispatch block after settling, 3 seeds). |
+| `e_tol` | 0 | none |
+| `tracking_exponent` | 1 | linear imbalance |
+| `imbalance_price` | 100 $/MWh | dispatch imbalance tariff (as in the audit) |
+| `c_hold` | 1.92e-8 | fractional capacity fade per step while holding, PID and MPC alike (`scripts/measure_hold.py`); mostly calendar ageing, which no controller avoids, hence charged only above it |
+| `fade_price` | 300 $/kWh | replacement cost of lost capacity |
+| `pack_kWh` | 1692 | capacity_As x OCV at 50% SOC / 3.6e6 |
+| `failure_cost` | 2 x the 1 MW envelope's imbalance per step | SOC / thermal trip |
+
+The version-1 SOC-comfort term is dropped (**provisional**): it has no owner
+price, and a pack driven to the edge of its window pays through the dispatch
+it can then not follow.
+
+`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
+units (the NEA floor for tracking) and `rho_floor` the full floor including
+consumption charged in full; `floor_is_documented_minimum` records whether
+`e_floor` is a measured/certified floor or a resolution used as a scale;
+`failure_cost` is charged per step in a terminal state and exceeds the largest
+tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

@@ -9,7 +9,7 @@
 | Tracked variable(s) | altitude (m) |
 | Episode length | 480 steps (480 s at 1 s per step) |
 | Import | `from target_gym import Airplane2D, PlaneParams` |
-| Cite as | `plane_sine-v1` |
+| Cite as | `plane_sine-v2` |
 
 ## Action space
 
@@ -28,7 +28,7 @@ reward scores.
 
 ## Rewards
 
-Log-scaled altitude tracking, optionally coupled to an airspeed hold.
+See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract: the reward is
 `(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
@@ -67,5 +67,5 @@ A tuned PID ships with this environment.
 | `specific_fuel_consumption` | 0.0175 |
 | `cl_alpha` | 0.08786 |
 | `cl0` | 0.2 |
-| … | 43 more, see the params dataclass |
+| … | 52 more, see the params dataclass |
 

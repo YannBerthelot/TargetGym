@@ -14,6 +14,7 @@ from target_gym.energy.wind_turbine.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
     omega_rated,
 )
@@ -46,6 +47,9 @@ class WindTurbine(environment.Environment[WindTurbineState, WindTurbineParams]):
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms(state, params)
 
     def step_env(
         self,

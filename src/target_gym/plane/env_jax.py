@@ -13,6 +13,7 @@ from target_gym.plane.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
 )
 
@@ -59,6 +60,9 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms(state, params)
 
     def step_env(
         self,

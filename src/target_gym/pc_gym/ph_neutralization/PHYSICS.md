@@ -176,3 +176,25 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor` | 0.0146 pH | the shipped MPC's long-run mean |error| under the shipped buffer-flow disturbance (`scripts/measure_hold.py`, 900 hold steps after a 108-step burn-in, 3 seeds; PID 0.032). An upper bound on the achievable floor: no reduced-model optimum exists for this plant. |
+| `e_tol` | 0 | **provisional.** The discharge permit band (typically pH 6-9 on an outfall) is a regulatory number the plant would supply. |
+| `tracking_exponent` | 2 | quadratic |
+| `c_hold` | 16.24 mL/s | reagent flow while holding, PID and MPC alike (`scripts/measure_hold.py`) |
+| `running_weight` | 1 | one floor-width of pH error is worth the hold-phase reagent flow again; sweep 0.5 / 1 / 2 |
+| `failure_cost` | 9.4e5 | twice the span's cost, (10 / 0.0146)^2 |
+
+`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
+units (the NEA floor for tracking) and `rho_floor` the full floor including
+consumption charged in full; `floor_is_documented_minimum` records whether
+`e_floor` is a measured/certified floor or a resolution used as a scale;
+`failure_cost` is charged per step in a terminal state and exceeds the largest
+tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

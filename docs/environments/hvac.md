@@ -11,7 +11,7 @@ Building HVAC — single thermal zone, ISO 13790 5R1C reduced-order model.
 | Tracked variable(s) | zone air temperature (deg C) |
 | Episode length | 720 steps (648000 s at 900 s per step) |
 | Import | `from target_gym import BuildingHVAC, HVACParams` |
-| Cite as | `hvac-v1` |
+| Cite as | `hvac-v2` |
 
 ## Action space
 
@@ -29,7 +29,7 @@ reward scores.
 
 ## Rewards
 
-Comfort tracking minus energy use.
+See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract: the reward is
 `(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
@@ -68,5 +68,5 @@ A tuned PID ships with this environment.
 | `U_roof` | 0.18 |
 | `A_window` | 25 |
 | `U_window` | 1.3 |
-| … | 20 more, see the params dataclass |
+| … | 28 more, see the params dataclass |
 

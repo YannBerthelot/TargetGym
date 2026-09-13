@@ -39,7 +39,9 @@ RESIDENCE_RANGE_H = (24.0, 32.0)
 
 @pytest.fixture(scope="module")
 def params():
-    return GlassFurnaceParams()
+    # Version-1 reward: the reward tests in this file describe the capped
+    # log shape; version 2 is covered by tests/test_reward_contract.py.
+    return GlassFurnaceParams(reward_version=1)
 
 
 def _state(params, **overrides):

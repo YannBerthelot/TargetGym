@@ -204,3 +204,25 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2), in dollars per 10 s control step
+
+`compute_reward = -(tracking + running + failure)`; each physics sub-step charges one second and `step_env` sums the ten, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor` | 0.00451 of rated | certified hold floor: `scripts/floor_reactor_hold.py`, a one-state dynamic programme on the error against the demand's within-period random walk (sd 7.9e-3 over 10 s) with the rod-limited power slews; the slew never binds and the floor is the walk. The shipped MPC holds 0.0069 at period boundaries against the 0.0063 boundary floor (`scripts/measure_hold.py`, 2000 hold steps after a 2000-step burn-in); the PID 0.08 over the same 11 h (3% over the 2.4 h test episode). |
+| `e_tol` | 0 | none |
+| `tracking_exponent` | 1 | imbalance energy is settled linearly |
+| `imbalance_multiple` | 3 x `spot_price_per_MWh` on `P_electric_GW` | 240 000 $/h per unit of \|error\|; tracking at the floor costs $3.0 per step |
+| `rod_wear_weight` | 1 | **provisional.** Reactivity asked beyond what the rods can deliver, as a fraction of the rod range, charged per unit at what tracking at the floor costs; the audit found the optimum insensitive to it below ten times the floor. Sweep 0.5 / 1 / 2. |
+| `failure_cost` | 2000 $ per step | twice the 1.49 envelope's imbalance |
+
+`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
+units (the NEA floor for tracking) and `rho_floor` the full floor including
+consumption charged in full; `floor_is_documented_minimum` records whether
+`e_floor` is a measured/certified floor or a resolution used as a scale;
+`failure_cost` is charged per step in a terminal state and exceeds the largest
+tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

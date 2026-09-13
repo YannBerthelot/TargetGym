@@ -49,6 +49,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -157,6 +158,35 @@ class BatteryParams(EnvParams):
     # at 5 s per step exercises a real fraction of the energy budget.
     delta_t: float = 5.0
     max_steps_in_episode: int = 360
+
+    # ---- Reward (docs/reward-shaping.md; version 2), in dollars per step ----
+    # Tracking: dispatch imbalance at ``imbalance_price`` per MWh, linear in
+    # |error|. Floor: the dispatch target is a block level plus white noise of
+    # sd ``dispatch_noise_std`` drawn after the action is chosen, so no
+    # controller can hold the mean |error| below E|N(0, sd)| = sd * sqrt(2/pi)
+    # = 1596 W (closed form; the shipped PID and MPC hold 5.6 and 6.1 kW,
+    # `scripts/measure_hold.py`). Degradation: capacity fade above the
+    # hold-phase rate (1.92e-8 of capacity per step, PID and MPC alike) at
+    # ``fade_price`` per kWh of the 1692 kWh pack -- the avoidable part of
+    # ageing, so the best achievable reward stays near zero. The SOC-comfort
+    # term of version 1 has no owner price and is dropped (provisional): a
+    # pack driven to the edge of its window pays through the dispatch it can
+    # then not follow. A trip costs, per step, twice the 1 MW envelope's
+    # imbalance.
+    reward_version: int = 2
+    e_floor: float = 1596.0  # W, E|noise|, closed form
+    e_tol: float = 0.0
+    tracking_exponent: float = 1.0
+    imbalance_price: float = 100.0  # $/MWh
+    c_hold: float = 1.92e-8  # fractional fade per step while holding
+    fade_price: float = 300.0  # $/kWh of lost capacity
+    pack_kWh: float = 1692.0  # capacity_As * OCV(50%) / 3.6e6
+    failure_cost: float = 2.0 * 100.0 * 1.0 * 5.0 / 3600.0
+    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    rho_floor_tracking: float = 100.0 / 1.0e6 * 5.0 / 3600.0 * 1596.0
+    rho_floor: float = 100.0 / 1.0e6 * 5.0 / 3600.0 * 1596.0
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = False
 
 
 @struct.dataclass
@@ -350,7 +380,32 @@ def check_is_terminal(state: BatteryState, params: BatteryParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward(state: BatteryState, params: BatteryParams, xp=jnp):
+def compute_reward_terms(state: BatteryState, params: BatteryParams, xp=jnp):
+    """The reward's additive cost terms in $ per step (``target_gym.reward``)."""
+    p = params
+    per_W_step = p.imbalance_price / 1.0e6 * p.delta_t / 3600.0
+    tracking = (
+        per_W_step
+        * p.e_floor
+        * R.tracking_cost(
+            state.target_power - state.power,
+            p.e_floor,
+            p.e_tol,
+            p.tracking_exponent,
+            xp,
+        )
+    )
+    fade = degradation_rate(state.current, state.T_cell, p) * p.delta_t
+    degradation = p.fade_price * p.pack_kWh * xp.maximum(fade - p.c_hold, 0.0)
+    terminated, _ = check_is_terminal(state, p, xp)
+    return {
+        "tracking": tracking,
+        "running": degradation,
+        "failure": R.failure_cost(terminated, p.failure_cost, xp),
+    }
+
+
+def compute_reward_v1(state: BatteryState, params: BatteryParams, xp=jnp):
     """Dispatch tracking, minus degradation, minus a gentle pull to mid charge.
 
     The state-of-charge term is deliberately weak: it should bias the
@@ -364,6 +419,15 @@ def compute_reward(state: BatteryState, params: BatteryParams, xp=jnp):
     headroom = (state.soc - 0.5) ** 2
     cost = p.degradation_weight * fade + p.soc_comfort_weight * headroom
     return tracking * (1.0 - jnp.clip(cost / p.max_step_cost, 0.0, 1.0) * p.cost_weight)
+
+
+def compute_reward(state: BatteryState, params: BatteryParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
+    )
 
 
 def round_trip_efficiency(power, soc, params: BatteryParams):

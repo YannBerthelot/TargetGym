@@ -175,3 +175,23 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + failure)`, one tracking term per tank, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor` | 1e-3 m | documented minimum: the level transmitter's 1 mm resolution, both tanks. No disturbance; the shipped MPC holds 1e-5 m on both tanks after settling (`scripts/measure_hold.py`, 900 hold steps after a 270-step burn-in; PID 0.6 and 2.9 mm). |
+| `e_tol` | 0 | no level specification band |
+| `tracking_exponent` | 2 | quadratic |
+| `failure_cost` | 8.4e6 | twice the two-tank span cost, 2 x (1.45 / 1e-3)^2 |
+
+`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
+units (the NEA floor for tracking) and `rho_floor` the full floor including
+consumption charged in full; `floor_is_documented_minimum` records whether
+`e_floor` is a measured/certified floor or a resolution used as a scale;
+`failure_cost` is charged per step in a terminal state and exceeds the largest
+tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

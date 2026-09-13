@@ -11,7 +11,7 @@ Cement rotary kiln — 1-D axial model with counter-current gas.
 | Tracked variable(s) | discharge free lime (%) |
 | Episode length | 700 steps (21000 s at 30 s per step) |
 | Import | `from target_gym import CementKiln, CementKilnParams` |
-| Cite as | `cement_kiln-v1` |
+| Cite as | `cement_kiln-v2` |
 
 ## Action space
 
@@ -30,7 +30,7 @@ reward scores.
 
 ## Rewards
 
-Free-lime tracking minus fuel.
+See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract: the reward is
 `(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
@@ -57,17 +57,17 @@ A tuned PID ships with this environment.
 |---|---|
 | `delta_t` | 30 |
 | `max_steps_in_episode` | 700 |
+| `reward_version` | 2 |
+| `e_floor` | 0.00044 |
+| `e_tol` | 0 |
+| `tracking_exponent` | 2 |
+| `c_hold` | 1.824 |
+| `running_weight` | 1 |
+| `failure_cost` | 1.04e+07 |
+| `rho_floor_tracking` | 1 |
+| `rho_floor` | 1 |
 | `diameter` | 4 |
 | `length` | 60 |
 | `slope` | 0.035 |
-| `n_zones` | 16 |
-| `w_bed_gas` | 2.906 |
-| `w_wall_gas` | 9.313 |
-| `w_wall_bed` | 3.253 |
-| `refractory_thickness` | 0.2 |
-| `rho_refractory` | 2200 |
-| `cp_refractory` | 900 |
-| `U_shell` | 4 |
-| `raw_meal_nominal` | 53.82 |
-| … | 34 more, see the params dataclass |
+| … | 43 more, see the params dataclass |
 

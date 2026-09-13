@@ -114,3 +114,23 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + failure)`, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor` | 6e-3 | documented minimum: a thousandth of the span. The test configuration has no disturbance and a fixed target, so the achievable hold error is zero -- the shipped MPC holds 0.0 after settling (`scripts/measure_hold.py`, 300 hold steps after a 30-step burn-in; PID 2e-6). |
+| `e_tol` | 0 | no specification band on a generic plant |
+| `tracking_exponent` | 2 | quadratic |
+| `failure_cost` | 2e6 | twice the span's cost, (6 / 6e-3)^2 |
+
+`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
+units (the NEA floor for tracking) and `rho_floor` the full floor including
+consumption charged in full; `floor_is_documented_minimum` records whether
+`e_floor` is a measured/certified floor or a resolution used as a scale;
+`failure_cost` is charged per step in a terminal state and exceeds the largest
+tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

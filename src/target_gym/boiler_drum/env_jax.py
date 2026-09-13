@@ -14,6 +14,7 @@ from target_gym.boiler_drum.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
     steady_state,
 )
@@ -47,6 +48,9 @@ class BoilerDrum(environment.Environment[BoilerDrumState, BoilerDrumParams]):
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms(state, params)
 
     def step_env(
         self,

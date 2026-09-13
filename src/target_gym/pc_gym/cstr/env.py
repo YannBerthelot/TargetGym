@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -41,6 +42,23 @@ class CSTRParams(EnvParams):
     #: ``delta_t`` is in minutes (the PC-gym model's unit); seconds per unit.
     time_unit_seconds: float = 60.0
     max_steps_in_episode: int = 100
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # No disturbance and a fixed target: the shipped MPC holds the
+    # concentration to 1e-6 mol/L after settling (`scripts/measure_hold.py`),
+    # so the achievable floor is effectively zero and the normalisation uses a
+    # documented minimum, the online analyser's resolution. The span costs
+    # (0.3 / 1e-4)^2 = 9e6 per step; a runaway twice that.
+    reward_version: int = 2
+    e_floor: float = 1e-4  # mol/L, composition analyser resolution
+    e_tol: float = 0.0
+    tracking_exponent: float = 2.0
+    failure_cost: float = 1.8e7
+    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    rho_floor_tracking: float = 1.0
+    rho_floor: float = 1.0
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = True
 
 
 @struct.dataclass
@@ -120,7 +138,22 @@ def check_is_terminal(state: CSTRState, params: CSTRParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward(state: CSTRState, params: CSTRParams, xp=jnp):
+def compute_reward_terms(state: CSTRState, params: CSTRParams, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    terminated, _ = check_is_terminal(state, params, xp)
+    return {
+        "tracking": R.tracking_cost(
+            state.target_CA - state.C_a,
+            params.e_floor,
+            params.e_tol,
+            params.tracking_exponent,
+            xp,
+        ),
+        "failure": R.failure_cost(terminated, params.failure_cost, xp),
+    }
+
+
+def compute_reward_v1(state: CSTRState, params: CSTRParams, xp=jnp):
     # Log-scaled: every halving of the concentration error is worth the same,
     # down to what the analyser can resolve. The previous form divided the error
     # by the whole 0.3 mol/L envelope and squared it, which is nearly flat over
@@ -129,5 +162,14 @@ def compute_reward(state: CSTRState, params: CSTRParams, xp=jnp):
         xp.abs(state.target_CA - state.C_a),
         params.precision_floor,
         params.C_a_max - params.C_a_min,
+        xp,
+    )
+
+
+def compute_reward(state: CSTRState, params: CSTRParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
         xp,
     )

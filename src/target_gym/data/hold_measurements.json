@@ -1,0 +1,1018 @@
+{
+  "battery": {
+    "burn_in": 0,
+    "mpc": {
+      "c_hold": 1.917465675291994e-08,
+      "cycles_per_episode": 7,
+      "e_hold": [
+        6065.837888816551
+      ],
+      "e_hold_first_half": [
+        5970.342173032407
+      ],
+      "e_hold_rms": [
+        8115.241152075626
+      ],
+      "e_hold_second_half": [
+        6161.333604600694
+      ],
+      "hold_steps_scored": 1080,
+      "seconds": 12.2,
+      "settle": 0.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 1.92727361073864e-08,
+      "cycles_per_episode": 7,
+      "e_hold": [
+        5626.579313522052
+      ],
+      "e_hold_first_half": [
+        5976.981531066934
+      ],
+      "e_hold_rms": [
+        9074.491187490285
+      ],
+      "e_hold_second_half": [
+        5278.685517400319
+      ],
+      "hold_steps_scored": 1009,
+      "seconds": 0.8,
+      "settle": 4.0,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 5.0,
+    "steps": 360,
+    "tau_cost_source": "per dispatch block; thermal 50 min affects fade only",
+    "tau_cost_steps": 0
+  },
+  "boiler_drum": {
+    "burn_in": 60,
+    "mpc": {
+      "c_hold": 156581245.21333334,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.003967371705940555,
+        0.17450826009114584
+      ],
+      "e_hold_first_half": [
+        0.003536826296617619,
+        0.16076450347900392
+      ],
+      "e_hold_rms": [
+        0.005646305421782685,
+        0.2340423022100174
+      ],
+      "e_hold_second_half": [
+        0.004397917115263491,
+        0.18825201670328773
+      ],
+      "hold_steps_scored": 1200,
+      "seconds": 17.3,
+      "settle": 11.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 156768642.10666665,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.0530465816337346,
+        0.04281434377034505
+      ],
+      "e_hold_first_half": [
+        0.05094163354646298,
+        0.04005475362141927
+      ],
+      "e_hold_rms": [
+        0.06627486572765535,
+        0.05283781624254743
+      ],
+      "e_hold_second_half": [
+        0.055151529721006225,
+        0.04557393391927084
+      ],
+      "hold_steps_scored": 1200,
+      "seconds": 1.0,
+      "settle": 14.0,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 2.0,
+    "steps": 460,
+    "tau_cost_source": "riser 18 s at 2 s steps; drum pressure slower",
+    "tau_cost_steps": 20
+  },
+  "cement_kiln": {
+    "burn_in": 180,
+    "mpc": {
+      "c_hold": 1.8402007729579242,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.00043987198523842756
+      ],
+      "e_hold_first_half": [
+        0.00044030884627061775
+      ],
+      "e_hold_rms": [
+        0.0005651760341554022
+      ],
+      "e_hold_second_half": [
+        0.0004394351242062373
+      ],
+      "hold_steps_scored": 1560,
+      "seconds": 55.8,
+      "settle": 3.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 1.8240586448938418,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.0008254192575501899
+      ],
+      "e_hold_first_half": [
+        0.0007356233464983793
+      ],
+      "e_hold_rms": [
+        0.0010814417878098478
+      ],
+      "e_hold_second_half": [
+        0.0009152151686020005
+      ],
+      "hold_steps_scored": 1560,
+      "seconds": 1.5,
+      "settle": 9.0,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 30.0,
+    "steps": 700,
+    "tau_cost_source": "22 min residence + transport delay at 30 s steps",
+    "tau_cost_steps": 60
+  },
+  "cstr": {
+    "burn_in": 12,
+    "mpc": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        1.037499941958231e-06
+      ],
+      "e_hold_first_half": [
+        1.6469339243485592e-06
+      ],
+      "e_hold_rms": [
+        3.131981202386669e-06
+      ],
+      "e_hold_second_half": [
+        4.3710073782676773e-07
+      ],
+      "hold_steps_scored": 283,
+      "seconds": 1.1,
+      "settle": 18.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        7.083462696755305e-05
+      ],
+      "e_hold_first_half": [
+        0.00013422757911030203
+      ],
+      "e_hold_rms": [
+        0.00033988046925514936
+      ],
+      "e_hold_second_half": [
+        2.28916388067546e-08
+      ],
+      "hold_steps_scored": 282,
+      "seconds": 0.1,
+      "settle": 21.0,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 15.0,
+    "steps": 112,
+    "tau_cost_source": "residence ~1 min at 15 s steps",
+    "tau_cost_steps": 4
+  },
+  "distillation": {
+    "burn_in": 582,
+    "mpc": {
+      "c_hold": 3.2920148354768752,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        4.267702500025431e-05,
+        7.435214899790784e-05
+      ],
+      "e_hold_first_half": [
+        4.213809967041016e-05,
+        7.347953040152787e-05
+      ],
+      "e_hold_rms": [
+        5.228301710377008e-05,
+        8.885446857201668e-05
+      ],
+      "e_hold_second_half": [
+        4.3215950330098474e-05,
+        7.52247675942878e-05
+      ],
+      "hold_steps_scored": 1200,
+      "seconds": 226.5,
+      "settle": 7.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 3.281848484277725,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.00012355625629425048,
+        0.00021835501732615133
+      ],
+      "e_hold_first_half": [
+        0.00013070076704025266,
+        0.0002339461414764325
+      ],
+      "e_hold_rms": [
+        0.00015199672675159751,
+        0.00026275444451139414
+      ],
+      "e_hold_second_half": [
+        0.00011641174554824828,
+        0.0002027638931758702
+      ],
+      "hold_steps_scored": 1200,
+      "seconds": 1.3,
+      "settle": 273.0,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 60.0,
+    "steps": 982,
+    "tau_cost_source": "dominant tau ~194 min at 1 min steps",
+    "tau_cost_steps": 194
+  },
+  "first_order": {
+    "burn_in": 30,
+    "mpc": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.0
+      ],
+      "e_hold_first_half": [
+        0.0
+      ],
+      "e_hold_rms": [
+        0.0
+      ],
+      "e_hold_second_half": [
+        0.0
+      ],
+      "hold_steps_scored": 300,
+      "seconds": 0.8,
+      "settle": 11.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        2.4298826701851794e-06
+      ],
+      "e_hold_first_half": [
+        4.859765340370359e-06
+      ],
+      "e_hold_rms": [
+        9.486765520705376e-06
+      ],
+      "e_hold_second_half": [
+        0.0
+      ],
+      "hold_steps_scored": 300,
+      "seconds": 0.2,
+      "settle": 38.0,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 0.05,
+    "steps": 130,
+    "tau_cost_source": "tau = 0.5 s at 0.05 s steps",
+    "tau_cost_steps": 10
+  },
+  "four_tank": {
+    "burn_in": 270,
+    "mpc": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        9.864693311101291e-06,
+        6.556279004144017e-06
+      ],
+      "e_hold_first_half": [
+        1.9414905182202347e-05,
+        1.283804522245191e-05
+      ],
+      "e_hold_rms": [
+        3.113067941740155e-05,
+        2.050661169050727e-05
+      ],
+      "e_hold_second_half": [
+        3.144807294575003e-07,
+        2.745125016190286e-07
+      ],
+      "hold_steps_scored": 900,
+      "seconds": 17.4,
+      "settle": 318.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.0005597699782811105,
+        0.002944470150396228
+      ],
+      "e_hold_first_half": [
+        0.000897899444680661,
+        0.004290569107979536
+      ],
+      "e_hold_rms": [
+        0.0009007595363073051,
+        0.003962122369557619
+      ],
+      "e_hold_second_half": [
+        0.0002216393331764266,
+        0.001598370261490345
+      ],
+      "hold_steps_scored": 900,
+      "seconds": 0.4,
+      "settle": 303.0,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 1.0,
+    "steps": 570,
+    "tau_cost_source": "tank tau ~1.5 min at 1 s steps",
+    "tau_cost_steps": 90
+  },
+  "glass_furnace": {
+    "burn_in": 10800,
+    "mpc": {
+      "c_hold": 0.589887808053246,
+      "cycles_per_episode": 5,
+      "e_hold": [
+        0.1985282450914383
+      ],
+      "e_hold_first_half": [
+        0.20897157490253448
+      ],
+      "e_hold_rms": [
+        0.25927379727363586
+      ],
+      "e_hold_second_half": [
+        0.1880490630865097
+      ],
+      "hold_steps_scored": 10765,
+      "seconds": 5574.9,
+      "settle": 13.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 0.5901713804216185,
+      "cycles_per_episode": 5,
+      "e_hold": [
+        0.5040249824523926
+      ],
+      "e_hold_first_half": [
+        0.516305148601532
+      ],
+      "e_hold_rms": [
+        0.6092499494552612
+      ],
+      "e_hold_second_half": [
+        0.491750031709671
+      ],
+      "hold_steps_scored": 10783,
+      "seconds": 13.4,
+      "settle": 7.0,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 30.0,
+    "steps": 14400,
+    "tau_cost_source": "T_melt, T_work ~30 h at 30 s steps",
+    "tau_cost_steps": 3600
+  },
+  "hvac": {
+    "burn_in": 516,
+    "mpc": {
+      "c_hold": 338.6885775486683,
+      "cycles_per_episode": 26,
+      "e_hold": [
+        1.9100278615951538
+      ],
+      "e_hold_first_half": [
+        2.0667641162872314
+      ],
+      "e_hold_rms": [
+        2.463200092315674
+      ],
+      "e_hold_second_half": [
+        1.7532917261123657
+      ],
+      "hold_steps_scored": 2160,
+      "seconds": 46.6,
+      "settle": 0.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 398.8578830284648,
+      "cycles_per_episode": 26,
+      "e_hold": [
+        2.1536664962768555
+      ],
+      "e_hold_first_half": [
+        2.31317400932312
+      ],
+      "e_hold_rms": [
+        2.672764301300049
+      ],
+      "e_hold_second_half": [
+        1.9887981414794922
+      ],
+      "hold_steps_scored": 2146,
+      "seconds": 0.9,
+      "settle": 0.0,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 900.0,
+    "steps": 1236,
+    "tau_cost_source": "thermal mass 43 h at 15 min steps",
+    "tau_cost_steps": 172
+  },
+  "patrol": {
+    "burn_in": 210,
+    "mpc": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        1.485987524986267,
+        0.0017811727587832137
+      ],
+      "e_hold_first_half": [
+        1.4933660453557969,
+        0.0018286943365819752
+      ],
+      "e_hold_rms": [
+        1.5856841980841014,
+        0.0019585598092842662
+      ],
+      "e_hold_second_half": [
+        1.4786090046167373,
+        0.0017336511809844524
+      ],
+      "hold_steps_scored": 100,
+      "seconds": 1247.7,
+      "settle": 29.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        68.07565952301026,
+        0.02064644581754692
+      ],
+      "e_hold_first_half": [
+        68.72035369873046,
+        0.02151407733792439
+      ],
+      "e_hold_rms": [
+        69.15002656586479,
+        0.023485076152371272
+      ],
+      "e_hold_second_half": [
+        67.43096534729004,
+        0.019778814297169448
+      ],
+      "hold_steps_scored": 100,
+      "seconds": 1.8,
+      "settle": 0.0,
+      "terminated": 0
+    },
+    "seeds": 1,
+    "step_seconds": 1.0,
+    "steps": 200,
+    "tau_cost_source": "phugoid ~1 min",
+    "tau_cost_steps": 70
+  },
+  "ph_neutralization": {
+    "burn_in": 108,
+    "mpc": {
+      "c_hold": 16.23920950465732,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.01460301410406828
+      ],
+      "e_hold_first_half": [
+        0.014114034362137318
+      ],
+      "e_hold_rms": [
+        0.019847283139824867
+      ],
+      "e_hold_second_half": [
+        0.015091992914676666
+      ],
+      "hold_steps_scored": 900,
+      "seconds": 6.5,
+      "settle": 3.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 16.244232432047525,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.031994566321372986
+      ],
+      "e_hold_first_half": [
+        0.024477628991007805
+      ],
+      "e_hold_rms": [
+        0.04345390200614929
+      ],
+      "e_hold_second_half": [
+        0.03951149806380272
+      ],
+      "hold_steps_scored": 900,
+      "seconds": 0.4,
+      "settle": 11.0,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 5.0,
+    "steps": 408,
+    "tau_cost_source": "residence ~3 min at 5 s steps",
+    "tau_cost_steps": 36
+  },
+  "plane": {
+    "burn_in": 210,
+    "mpc": {
+      "c_hold": 50.19740033830915,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.13694894313812256
+      ],
+      "e_hold_first_half": [
+        0.12080077826976776
+      ],
+      "e_hold_rms": [
+        0.17564092576503754
+      ],
+      "e_hold_second_half": [
+        0.15309709310531616
+      ],
+      "hold_steps_scored": 70,
+      "seconds": 207.8,
+      "settle": 30.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 6.091158185686384,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.08039899915456772
+      ],
+      "e_hold_first_half": [
+        0.05219028890132904
+      ],
+      "e_hold_rms": [
+        0.0879926010966301
+      ],
+      "e_hold_second_half": [
+        0.1086077019572258
+      ],
+      "hold_steps_scored": 70,
+      "seconds": 0.6,
+      "settle": 40.0,
+      "terminated": 0
+    },
+    "seeds": 1,
+    "step_seconds": 1.0,
+    "steps": 280,
+    "tau_cost_source": "phugoid ~1 min at 1 s steps",
+    "tau_cost_steps": 70
+  },
+  "plane3d_circle": {
+    "burn_in": 210,
+    "mpc": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.11219618055555555,
+        0.24409722222222222
+      ],
+      "e_hold_first_half": [
+        0.13090277777777778,
+        0.23352864583333333
+      ],
+      "e_hold_rms": [
+        0.14349457166139196,
+        0.3200405879241519
+      ],
+      "e_hold_second_half": [
+        0.09348958333333333,
+        0.2546657986111111
+      ],
+      "hold_steps_scored": 90,
+      "seconds": 105.4,
+      "settle": 25.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        8.265315755208333,
+        50.75442708333333
+      ],
+      "e_hold_first_half": [
+        13.473838975694445,
+        31.327278645833335
+      ],
+      "e_hold_rms": [
+        10.277065454763012,
+        56.20012705389966
+      ],
+      "e_hold_second_half": [
+        3.0567925347222222,
+        70.18157552083333
+      ],
+      "hold_steps_scored": 90,
+      "seconds": 0.5,
+      "settle": 104.0,
+      "terminated": 0
+    },
+    "seeds": 1,
+    "step_seconds": 1.0,
+    "steps": 300,
+    "tau_cost_source": "phugoid ~1 min",
+    "tau_cost_steps": 70
+  },
+  "plane3d_figure8": {
+    "burn_in": 210,
+    "mpc": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.5597444884871182
+      ],
+      "e_hold_first_half": [
+        0.44846734977082203
+      ],
+      "e_hold_rms": [
+        0.7014687904532695
+      ],
+      "e_hold_second_half": [
+        0.6710216272034143
+      ],
+      "hold_steps_scored": 190,
+      "seconds": 174.6,
+      "settle": 21.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        2530.440128376609
+      ],
+      "e_hold_first_half": [
+        2113.409180992528
+      ],
+      "e_hold_rms": [
+        2941.3464991612013
+      ],
+      "e_hold_second_half": [
+        2947.471075760691
+      ],
+      "hold_steps_scored": 190,
+      "seconds": 1.4,
+      "settle": 0.0,
+      "terminated": 0
+    },
+    "seeds": 1,
+    "step_seconds": 1.0,
+    "steps": 400,
+    "tau_cost_source": "phugoid ~1 min",
+    "tau_cost_steps": 70
+  },
+  "plane3d_heading": {
+    "burn_in": 210,
+    "mpc": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.10927734375,
+        0.0002980923667200841
+      ],
+      "e_hold_first_half": [
+        0.098271484375,
+        0.0002788686763960868
+      ],
+      "e_hold_rms": [
+        0.1343008147100646,
+        0.00036133439230880994
+      ],
+      "e_hold_second_half": [
+        0.120283203125,
+        0.00031731605704408137
+      ],
+      "hold_steps_scored": 100,
+      "seconds": 83.0,
+      "settle": 38.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        59.370703125,
+        0.9496940680220723
+      ],
+      "e_hold_first_half": [
+        62.480595703125,
+        0.4126224759966135
+      ],
+      "e_hold_rms": [
+        60.021407133570776,
+        1.1320126384150562
+      ],
+      "e_hold_second_half": [
+        56.260810546875,
+        1.4867656600475312
+      ],
+      "hold_steps_scored": 100,
+      "seconds": 0.6,
+      "settle": 54.0,
+      "terminated": 0
+    },
+    "seeds": 1,
+    "step_seconds": 1.0,
+    "steps": 200,
+    "tau_cost_source": "phugoid ~1 min",
+    "tau_cost_steps": 70
+  },
+  "plane3d_racetrack": {
+    "burn_in": 210,
+    "mpc": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.15063365589488636,
+        0.41132368607954545
+      ],
+      "e_hold_first_half": [
+        0.14718572443181818,
+        0.40886008522727274
+      ],
+      "e_hold_rms": [
+        0.18622939305936578,
+        0.699983100563266
+      ],
+      "e_hold_second_half": [
+        0.15408158735795455,
+        0.41378728693181815
+      ],
+      "hold_steps_scored": 440,
+      "seconds": 173.2,
+      "settle": 27.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": null,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        13.01689453125,
+        3762.614481977983
+      ],
+      "e_hold_first_half": [
+        14.187204811789773,
+        519.993057528409
+      ],
+      "e_hold_rms": [
+        15.404302271161983,
+        6147.222570034825
+      ],
+      "e_hold_second_half": [
+        11.846584250710228,
+        7005.235906427557
+      ],
+      "hold_steps_scored": 440,
+      "seconds": 0.8,
+      "settle": 99.0,
+      "terminated": 0
+    },
+    "seeds": 1,
+    "step_seconds": 1.0,
+    "steps": 650,
+    "tau_cost_source": "phugoid ~1 min",
+    "tau_cost_steps": 70
+  },
+  "plane_energy": {
+    "burn_in": 210,
+    "mpc": {
+      "c_hold": 16.360174419292207,
+      "cycles_per_episode": 9,
+      "e_hold": [
+        15.321965217590332
+      ],
+      "e_hold_first_half": [
+        19.718551635742188
+      ],
+      "e_hold_rms": [
+        66.47935485839844
+      ],
+      "e_hold_second_half": [
+        10.934833526611328
+      ],
+      "hold_steps_scored": 929,
+      "seconds": 848.7,
+      "settle": 10.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 5.557611989256681,
+      "cycles_per_episode": 9,
+      "e_hold": [
+        7.9539899826049805
+      ],
+      "e_hold_first_half": [
+        5.116636753082275
+      ],
+      "e_hold_rms": [
+        31.201017379760742
+      ],
+      "e_hold_second_half": [
+        10.784775733947754
+      ],
+      "hold_steps_scored": 863,
+      "seconds": 0.7,
+      "settle": 21.0,
+      "terminated": 0
+    },
+    "seeds": 1,
+    "step_seconds": 1.0,
+    "steps": 1200,
+    "tau_cost_source": "phugoid ~1 min",
+    "tau_cost_steps": 70
+  },
+  "plane_sine": {
+    "burn_in": 210,
+    "mpc": {
+      "c_hold": 65.08696063006366,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.08868996053934097
+      ],
+      "e_hold_first_half": [
+        0.0997178852558136
+      ],
+      "e_hold_rms": [
+        0.11193111538887024
+      ],
+      "e_hold_second_half": [
+        0.07766203582286835
+      ],
+      "hold_steps_scored": 270,
+      "seconds": 339.2,
+      "settle": 30.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 8.630245123969184,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        45.03770065307617
+      ],
+      "e_hold_first_half": [
+        44.457008361816406
+      ],
+      "e_hold_rms": [
+        49.47713088989258
+      ],
+      "e_hold_second_half": [
+        45.61839294433594
+      ],
+      "hold_steps_scored": 270,
+      "seconds": 0.5,
+      "settle": 40.0,
+      "terminated": 0
+    },
+    "seeds": 1,
+    "step_seconds": 1.0,
+    "steps": 480,
+    "tau_cost_source": "phugoid ~1 min",
+    "tau_cost_steps": 70
+  },
+  "reactor": {
+    "burn_in": 2001,
+    "mpc": {
+      "c_hold": 0.0,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.006906307768076658
+      ],
+      "e_hold_first_half": [
+        0.007408371195197105
+      ],
+      "e_hold_rms": [
+        0.009291105903685093
+      ],
+      "e_hold_second_half": [
+        0.006404820363968611
+      ],
+      "hold_steps_scored": 5998,
+      "seconds": 353.5,
+      "settle": 0.5,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 0.0018922565868203188,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        0.08059944212436676
+      ],
+      "e_hold_first_half": [
+        0.07884376496076584
+      ],
+      "e_hold_rms": [
+        0.10104387998580933
+      ],
+      "e_hold_second_half": [
+        0.08235512673854828
+      ],
+      "hold_steps_scored": 6000,
+      "seconds": 2.7,
+      "settle": 0.5,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 10.0,
+    "steps": 4001,
+    "tau_cost_source": "OU demand 1/theta = 6667 s at 10 s steps (xenon constrains reach only)",
+    "tau_cost_steps": 667
+  },
+  "wind_turbine": {
+    "burn_in": 300,
+    "mpc": {
+      "c_hold": 0.12941636128506312,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        28744.971041666668
+      ],
+      "e_hold_first_half": [
+        3378.0191666666665
+      ],
+      "e_hold_rms": [
+        128117.33006664996
+      ],
+      "e_hold_second_half": [
+        54111.92291666666
+      ],
+      "hold_steps_scored": 1200,
+      "seconds": 88.3,
+      "settle": 2.0,
+      "terminated": 0
+    },
+    "pid": {
+      "c_hold": 0.05260191336274147,
+      "cycles_per_episode": 1,
+      "e_hold": [
+        4563.393333333333
+      ],
+      "e_hold_first_half": [
+        4730.200833333333
+      ],
+      "e_hold_rms": [
+        5987.010735020441
+      ],
+      "e_hold_second_half": [
+        4396.5858333333335
+      ],
+      "hold_steps_scored": 1200,
+      "seconds": 0.7,
+      "settle": 15.0,
+      "terminated": 0
+    },
+    "seeds": 3,
+    "step_seconds": 0.25,
+    "steps": 700,
+    "tau_cost_source": "rotor inertia, tens of seconds at 0.25 s steps",
+    "tau_cost_steps": 100
+  }
+}

@@ -14,6 +14,7 @@ from target_gym.pc_gym.first_order.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
 )
 from target_gym.pc_gym.first_order.rendering import _render
@@ -45,6 +46,9 @@ class FirstOrderSystem(environment.Environment[FirstOrderState, FirstOrderParams
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms(state, params)
 
     def step_env(
         self,

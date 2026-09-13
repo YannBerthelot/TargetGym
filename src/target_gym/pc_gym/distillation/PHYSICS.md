@@ -178,3 +178,25 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + running + failure)`, one tracking term per product, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor_top`, `e_floor_bottom` | 4.3e-5, 7.4e-5 mole fraction | the shipped MPC's long-run mean |error| on each product under the shipped feed-composition disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in, 3 seeds; PID 1.2e-4 and 2.2e-4). Upper bounds on the achievable floors. |
+| `e_tol` | 0 | **provisional.** The purity specifications a column is run against come from the sales contract. |
+| `tracking_exponent` | 2 | quadratic |
+| `c_hold` | 3.282 kmol/min | boilup while holding, PID (MPC 3.292) (`scripts/measure_hold.py`) |
+| `running_weight` | 1 | sweep 0.5 / 1 / 2 |
+| `failure_cost` | 1.45e9 | twice the two-product span cost |
+
+`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
+units (the NEA floor for tracking) and `rho_floor` the full floor including
+consumption charged in full; `floor_is_documented_minimum` records whether
+`e_floor` is a measured/certified floor or a resolution used as a scale;
+`failure_cost` is charged per step in a terminal state and exceeds the largest
+tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

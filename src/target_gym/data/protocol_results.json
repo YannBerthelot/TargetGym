@@ -1,0 +1,643 @@
+{
+  "battery": {
+    "mpc": {
+      "abs_gap": 0.0011634078943021852,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 0.001385074560968852,
+      "gain_ci": 0.0003798202669249859,
+      "reach_cost": -3.2646532082619078e-19,
+      "reach_cost_ci": 5.137501135200732e-19,
+      "reach_fraction": 0.0,
+      "running": 0.0005425970952071818,
+      "seconds": 12.5,
+      "time_in_band": 1.0,
+      "tracking": 0.0008424774668633005
+    },
+    "pid": {
+      "abs_gap": 0.0032430674215204918,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 0.0034647340881871582,
+      "gain_ci": 0.00019400656548537422,
+      "reach_cost": 1.3624807300901172e-18,
+      "reach_cost_ci": 4.262781729541906e-18,
+      "reach_fraction": 0.0,
+      "running": 0.0005892355497247048,
+      "seconds": 0.9,
+      "time_in_band": 1.0,
+      "tracking": 0.0028754986599065237
+    },
+    "rho_floor": 0.00022166666666666664,
+    "seeds": 3
+  },
+  "boiler_drum": {
+    "mpc": {
+      "abs_gap": 26.369616460845368,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 28.369616460845368,
+      "gain_ci": 27.004856643212957,
+      "reach_cost": 4174.77729026588,
+      "reach_cost_ci": 5603.68067245279,
+      "reach_fraction": 0.0,
+      "running": 0.03688395803750894,
+      "seconds": 16.7,
+      "time_in_band": 1.0,
+      "tracking": 28.33273244734201
+    },
+    "pid": {
+      "abs_gap": 236.01358956080844,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 238.01358956080844,
+      "gain_ci": 239.47799562757345,
+      "reach_cost": 3380.1051797635605,
+      "reach_cost_ci": 7700.958058178478,
+      "reach_fraction": 0.0,
+      "running": 0.02757870536197694,
+      "seconds": 1.2,
+      "time_in_band": 1.0,
+      "tracking": 237.98601060957265
+    },
+    "rho_floor": 2.0,
+    "seeds": 3
+  },
+  "cement_kiln": {
+    "mpc": {
+      "abs_gap": 0.7022360824482785,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 1.7022360824482785,
+      "gain_ci": 0.8379341441454771,
+      "reach_cost": 377.5286925443757,
+      "reach_cost_ci": 613.0301599565491,
+      "reach_fraction": 0.20142857142857143,
+      "running": 0.05231902097956407,
+      "seconds": 55.6,
+      "time_in_band": 0.007692307692307693,
+      "tracking": 1.6499170642339325
+    },
+    "pid": {
+      "abs_gap": 5.114058983245225,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 6.114058983245225,
+      "gain_ci": 3.3749130503023004,
+      "reach_cost": 625.0880547216846,
+      "reach_cost_ci": 895.0142945380491,
+      "reach_fraction": 0.5961904761904762,
+      "running": 0.07316886010849909,
+      "seconds": 1.8,
+      "time_in_band": 0.0032051282051282055,
+      "tracking": 6.040890125088803
+    },
+    "rho_floor": 1.0,
+    "seeds": 3
+  },
+  "cstr": {
+    "mpc": {
+      "abs_gap": -0.6831300350784308,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 0.3168699649215692,
+      "gain_ci": 0.5560286725890248,
+      "reach_cost": 611867.8279759795,
+      "reach_cost_ci": 984247.5041599268,
+      "reach_fraction": 0.11333333333333333,
+      "seconds": 1.0,
+      "time_in_band": 0.9772727272727274,
+      "tracking": 0.3168699649215692
+    },
+    "pid": {
+      "abs_gap": 40.23786548601277,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 41.23786548601277,
+      "gain_ci": 32.10771895653447,
+      "reach_cost": 663466.6393362159,
+      "reach_cost_ci": 930652.2618808056,
+      "reach_fraction": 0.25,
+      "seconds": 0.3,
+      "time_in_band": 0.8522727272727274,
+      "tracking": 41.23786548601277
+    },
+    "rho_floor": 1.0,
+    "seeds": 3
+  },
+  "distillation": {
+    "mpc": {
+      "abs_gap": 1.5651816600561141,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 3.565181660056114,
+      "gain_ci": 0.5272727502986437,
+      "reach_cost": 5555.400172893351,
+      "reach_cost_ci": 10358.855890147212,
+      "reach_fraction": 0.0,
+      "running": 0.012239454090595245,
+      "seconds": 47.8,
+      "time_in_band": 1.0,
+      "tracking": 3.5529422054688133
+    },
+    "pid": {
+      "abs_gap": 258.01487636049586,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 260.01487636049586,
+      "gain_ci": 419.8634851054033,
+      "reach_cost": 6095.380108464982,
+      "reach_cost_ci": 11900.658876549574,
+      "reach_fraction": 0.0,
+      "running": 0.002192919133619095,
+      "seconds": 0.6,
+      "time_in_band": 1.0,
+      "tracking": 260.01268316388126
+    },
+    "rho_floor": 2.0,
+    "seeds": 3
+  },
+  "first_order": {
+    "mpc": {
+      "abs_gap": -1.0,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 0.0,
+      "gain_ci": 0.0,
+      "reach_cost": 117125.34987296014,
+      "reach_cost_ci": 159627.43126803456,
+      "reach_fraction": 0.08666666666666667,
+      "seconds": 0.7,
+      "time_in_band": 1.0,
+      "tracking": 0.0
+    },
+    "pid": {
+      "abs_gap": -0.999996428622384,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 3.5713776159847415e-06,
+      "gain_ci": 4.14774606629733e-06,
+      "reach_cost": 118243.94008134038,
+      "reach_cost_ci": 158737.01897195008,
+      "reach_fraction": 0.16333333333333333,
+      "seconds": 0.1,
+      "time_in_band": 1.0,
+      "tracking": 3.5713776159847415e-06
+    },
+    "rho_floor": 1.0,
+    "seeds": 3
+  },
+  "four_tank": {
+    "mpc": {
+      "abs_gap": -1.9925868280589079,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 0.007413171941092113,
+      "gain_ci": 0.009091338992300246,
+      "reach_cost": 192418.02927018263,
+      "reach_cost_ci": 196825.6611687365,
+      "reach_fraction": 0.38133333333333336,
+      "seconds": 15.6,
+      "time_in_band": 1.0,
+      "tracking": 0.007413171941092113
+    },
+    "pid": {
+      "abs_gap": 28.28834361658494,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 30.28834361658494,
+      "gain_ci": 22.137008817280385,
+      "reach_cost": 657495.2384379039,
+      "reach_cost_ci": 510207.690900378,
+      "reach_fraction": 0.764,
+      "seconds": 0.8,
+      "time_in_band": 0.168,
+      "tracking": 30.28834361658494
+    },
+    "rho_floor": 2.0,
+    "seeds": 3
+  },
+  "glass_furnace": {
+    "mpc": {
+      "abs_gap": 18.21870619068577,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 19.21870619068577,
+      "gain_ci": 24.979080525857203,
+      "reach_cost": 1099.0516228685049,
+      "reach_cost_ci": 2156.033051048184,
+      "reach_fraction": 0.015,
+      "running": 0.04374474915607076,
+      "seconds": 507.3,
+      "time_in_band": 0.39916666666666667,
+      "tracking": 19.17496144420238
+    },
+    "pid": {
+      "abs_gap": 49.99330455104471,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 50.99330455104471,
+      "gain_ci": 58.21496200525899,
+      "reach_cost": 488.6789007993272,
+      "reach_cost_ci": 2049.7455983286345,
+      "reach_fraction": 0.013125,
+      "running": 0.07236991975771767,
+      "seconds": 2.9,
+      "time_in_band": 0.1679166666666667,
+      "tracking": 50.92093462153858
+    },
+    "rho_floor": 1.0,
+    "seeds": 3
+  },
+  "hvac": {
+    "mpc": {
+      "abs_gap": 1.593802574327563e-06,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 0.055601593802574324,
+      "gain_ci": 0.017742758666357442,
+      "reach_cost": 2.783350264677631e-18,
+      "reach_cost_ci": 3.817827125626137e-17,
+      "reach_fraction": 0.0,
+      "running": 0.007596231034887939,
+      "seconds": 25.2,
+      "time_in_band": 1.0,
+      "tracking": 0.04800536256826423
+    },
+    "pid": {
+      "abs_gap": 0.019073776206025905,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 0.0746737762060259,
+      "gain_ci": 0.016959975982200778,
+      "reach_cost": 4.099625347495026e-17,
+      "reach_cost_ci": 8.23477994868358e-17,
+      "reach_fraction": 0.0,
+      "running": 0.008633536105082303,
+      "seconds": 1.2,
+      "time_in_band": 1.0,
+      "tracking": 0.06604023990820056
+    },
+    "rho_floor": 0.0556,
+    "seeds": 3
+  },
+  "patrol": {
+    "mpc": {
+      "abs_gap": -1.6699430038407446,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 0.3300569961592555,
+      "gain_ci": null,
+      "reach_cost": 10058.278890170433,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.0,
+      "seconds": 1096.7,
+      "time_in_band": 1.0,
+      "tracking": 0.3300569863244891
+    },
+    "pid": {
+      "abs_gap": 536.5898432922363,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 538.5898432922363,
+      "gain_ci": null,
+      "reach_cost": 527.3570960864636,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.0,
+      "seconds": 1.7,
+      "time_in_band": 1.0,
+      "tracking": 538.5898469543457
+    },
+    "rho_floor": 2.0,
+    "seeds": 1
+  },
+  "patrol_bearing_only": {
+    "pid": {
+      "abs_gap": 500.4063883972168,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 502.4063883972168,
+      "gain_ci": null,
+      "reach_cost": -9.094947017729282e-13,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.0,
+      "seconds": 1.5,
+      "time_in_band": 1.0,
+      "tracking": 502.4063887786865
+    },
+    "rho_floor": 2.0,
+    "seeds": 1
+  },
+  "ph_neutralization": {
+    "mpc": {
+      "abs_gap": 0.4399146057360239,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 1.439914605736024,
+      "gain_ci": 1.6658457663843604,
+      "reach_cost": 9062.482611678477,
+      "reach_cost_ci": 13473.783543902904,
+      "reach_fraction": 0.01888888888888889,
+      "running": 0.006691988231823289,
+      "seconds": 4.8,
+      "time_in_band": 0.7152777777777778,
+      "tracking": 1.4332226105195935
+    },
+    "pid": {
+      "abs_gap": 4.9070574491933145,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 5.9070574491933145,
+      "gain_ci": 8.09778772686646,
+      "reach_cost": 14291.07220472164,
+      "reach_cost_ci": 16759.89776883212,
+      "reach_fraction": 0.13333333333333333,
+      "running": 0.006811846317734509,
+      "seconds": 0.6,
+      "time_in_band": 0.4131944444444444,
+      "tracking": 5.900245595470594
+    },
+    "rho_floor": 1.0,
+    "seeds": 3
+  },
+  "plane": {
+    "mpc": {
+      "abs_gap": 6.9007865871701926,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 7.9007865871701926,
+      "gain_ci": null,
+      "reach_cost": 2054369.850490398,
+      "reach_cost_ci": null,
+      "reach_fraction": 1.0,
+      "running": 7.872460889816284,
+      "seconds": 212.3,
+      "time_in_band": 0.0,
+      "tracking": 0.02832568883895874
+    },
+    "pid": {
+      "abs_gap": -0.9830685318073458,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 0.016931468192654262,
+      "gain_ci": null,
+      "reach_cost": 3350790.888981657,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.14285714285714285,
+      "running": 0.016931468192654262,
+      "seconds": 0.7,
+      "time_in_band": 1.0,
+      "tracking": 0.0
+    },
+    "rho_floor": 1.0,
+    "seeds": 1
+  },
+  "plane3d_circle": {
+    "mpc": {
+      "abs_gap": 1.7994263862632214,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 3.7994263862632214,
+      "gain_ci": null,
+      "reach_cost": 1586972.642335167,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.0,
+      "seconds": 97.1,
+      "time_in_band": 1.0,
+      "tracking": 3.7994547991019982
+    },
+    "pid": {
+      "abs_gap": 1092.2743491024773,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 1094.2743491024773,
+      "gain_ci": null,
+      "reach_cost": 4952581.025357623,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.0,
+      "seconds": 0.5,
+      "time_in_band": 1.0,
+      "tracking": 1094.2741025013725
+    },
+    "rho_floor": 2.0,
+    "seeds": 1
+  },
+  "plane3d_figure8": {
+    "mpc": {
+      "abs_gap": 30.89459599800408,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 32.89459599800408,
+      "gain_ci": null,
+      "reach_cost": 19232.279425380813,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.0,
+      "seconds": 124.7,
+      "time_in_band": 1.0,
+      "tracking": 32.89460758812726
+    },
+    "pid": {
+      "abs_gap": 975353.8793115234,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 975355.8793115234,
+      "gain_ci": null,
+      "reach_cost": -27402643.668187246,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.0,
+      "seconds": 1.3,
+      "time_in_band": 1.0,
+      "tracking": 975355.8629052734
+    },
+    "rho_floor": 2.0,
+    "seeds": 1
+  },
+  "plane3d_heading": {
+    "mpc": {
+      "abs_gap": -1.9408691613810618,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 0.05913083861893824,
+      "gain_ci": null,
+      "reach_cost": 2527433.8493310153,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.0,
+      "seconds": 71.9,
+      "time_in_band": 1.0,
+      "tracking": 0.05913083861893824
+    },
+    "pid": {
+      "abs_gap": 17868.602940673827,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 17870.602940673827,
+      "gain_ci": null,
+      "reach_cost": 7282749.99700099,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.0,
+      "seconds": 0.5,
+      "time_in_band": 1.0,
+      "tracking": 17870.602940673827
+    },
+    "rho_floor": 2.0,
+    "seeds": 1
+  },
+  "plane3d_racetrack": {
+    "mpc": {
+      "abs_gap": -1.352043388545625,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 0.6479566114543751,
+      "gain_ci": null,
+      "reach_cost": 1543522.9175594077,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.0,
+      "seconds": 155.9,
+      "time_in_band": 1.0,
+      "tracking": 0.6479601164403186
+    },
+    "pid": {
+      "abs_gap": 4198703.091541085,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 4198705.091541085,
+      "gain_ci": null,
+      "reach_cost": -74989238.0762676,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.0,
+      "seconds": 0.8,
+      "time_in_band": 1.0,
+      "tracking": 4198705.024456791
+    },
+    "rho_floor": 2.0,
+    "seeds": 1
+  },
+  "plane_energy": {
+    "mpc": {
+      "abs_gap": 1137.7332977656163,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 1138.7332977656163,
+      "gain_ci": null,
+      "reach_cost": 436877.0442408653,
+      "reach_cost_ci": 752230.4359525825,
+      "reach_fraction": 0.2733333333333333,
+      "running": 9.30901098925658,
+      "seconds": 790.6,
+      "time_in_band": 0.011111111111111112,
+      "tracking": 1129.4243029584788
+    },
+    "pid": {
+      "abs_gap": 13672.199940118846,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 13673.199940118846,
+      "gain_ci": null,
+      "reach_cost": 2129770.6613554214,
+      "reach_cost_ci": 952921.5001401473,
+      "reach_fraction": 0.17416666666666666,
+      "running": 0.328046969307182,
+      "seconds": 0.8,
+      "time_in_band": 0.34444444444444444,
+      "tracking": 13672.871893903945
+    },
+    "rho_floor": 1.0,
+    "seeds": 1
+  },
+  "plane_sine": {
+    "mpc": {
+      "abs_gap": 6.776282976291798,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 7.776282976291798,
+      "gain_ci": null,
+      "reach_cost": 1867447.453074646,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.35,
+      "running": 7.486318800184462,
+      "seconds": 322.0,
+      "time_in_band": 0.007407407407407408,
+      "tracking": 0.28996413460484255
+    },
+    "pid": {
+      "abs_gap": 569.4767631241472,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 570.4767631241472,
+      "gain_ci": null,
+      "reach_cost": 5153317.876650591,
+      "reach_cost_ci": null,
+      "reach_fraction": 0.12708333333333333,
+      "running": 0.29520774570632463,
+      "seconds": 0.5,
+      "time_in_band": 0.011111111111111112,
+      "tracking": 570.1815552658505
+    },
+    "rho_floor": 1.0,
+    "seeds": 1
+  },
+  "reactor": {
+    "mpc": {
+      "abs_gap": 0.30149106721635155,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 3.3081577338830184,
+      "gain_ci": 0.09044844239393125,
+      "reach_cost": -3.197442310920451e-14,
+      "reach_cost_ci": 1.7920684157027218e-13,
+      "reach_fraction": 0.0019290123456790122,
+      "running": 5.789991604699121e-05,
+      "seconds": 63.9,
+      "time_in_band": 0.4035493827160494,
+      "tracking": 3.3080998337655156
+    },
+    "pid": {
+      "abs_gap": 53.89072849011716,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 56.89739515678383,
+      "gain_ci": 15.151889953891752,
+      "reach_cost": 2.1411021104237684e-12,
+      "reach_cost_ci": 5.436964400652527e-12,
+      "reach_fraction": 0.037037037037037035,
+      "running": 0.9235981471245097,
+      "seconds": 0.9,
+      "time_in_band": 0.032407407407407406,
+      "tracking": 55.97379691034187
+    },
+    "rho_floor": 3.006666666666667,
+    "seeds": 3
+  },
+  "wind_turbine": {
+    "mpc": {
+      "abs_gap": 1.5521621925403107e-06,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 1.54410510814292e-05,
+      "gain_ci": 3.0678508941457573e-06,
+      "reach_cost": 0.008612765216811051,
+      "reach_cost_ci": 0.007991688654035939,
+      "reach_fraction": 0.0,
+      "running": 0.0,
+      "seconds": 50.9,
+      "time_in_band": 1.0,
+      "tracking": 1.54410510814292e-05
+    },
+    "pid": {
+      "abs_gap": 5.519111331614743e-06,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 1.9408000220503633e-05,
+      "gain_ci": 5.698132546082355e-06,
+      "reach_cost": 0.0002668093382161582,
+      "reach_cost_ci": 0.00036079958432631853,
+      "reach_fraction": 0.0,
+      "running": 0.0,
+      "seconds": 0.7,
+      "time_in_band": 1.0,
+      "tracking": 1.9408000220503633e-05
+    },
+    "rho_floor": 1.388888888888889e-05,
+    "seeds": 3
+  }
+}

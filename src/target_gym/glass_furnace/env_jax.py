@@ -17,6 +17,7 @@ from target_gym.glass_furnace.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
     get_target_from_schedule,
 )
@@ -50,6 +51,9 @@ class GlassFurnace(environment.Environment[GlassFurnaceState, GlassFurnaceParams
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms(state, params)
 
     def step_env(
         self,

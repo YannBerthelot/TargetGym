@@ -24,7 +24,7 @@ def test_reset():
 def test_compute_reward():
     env = Airplane2D()
     obs, info = env.reset()
-    env_params = PlaneParams()
+    env_params = PlaneParams(reward_version=1)
     reward = compute_reward(state=env.state, params=env_params)
     assert reward.shape == ()
     assert 1 > reward > 0
@@ -63,7 +63,7 @@ def test_step():
 
 
 def test_is_terminal():
-    env_params = PlaneParams()
+    env_params = PlaneParams(reward_version=1)
     env = Airplane2D()
     obs, info = env.reset()
     terminal_state = PlaneState(

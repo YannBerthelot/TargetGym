@@ -182,3 +182,23 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + failure)`: slot position plus heading alignment with the lead, see docs/reward-shaping.md. `PatrolParams` inherits the 3D aircraft's reward parameters (`e_floor_altitude`, `e_tol_altitude`, `e_floor_heading`, `e_floor_path`, `tracking_exponent`, `failure_cost`, `rho_floor_tracking`, `rho_floor`, `floor_is_documented_minimum`); the heading term uses `e_floor_heading`, the others are unused here.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor_slot` | 3 m | documented minimum: relative position from differenced GPS fixes. Deterministic lead, zero turbulence: the achievable hold error is ~0. |
+| `e_tol_slot` | 0 | **provisional.** The formation's station-keeping radius is a procedural number to be supplied. |
+| `e_floor_heading` | 0.0087 rad | inherited AHRS resolution |
+| `failure_cost` | 2 x (1500 m / 3 m)^2 = 5e5 per step | losing the formation, a collision or a crash; overrides the inherited aircraft value |
+
+`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
+units (the NEA floor for tracking) and `rho_floor` the full floor including
+consumption charged in full; `floor_is_documented_minimum` records whether
+`e_floor` is a measured/certified floor or a resolution used as a scale;
+`failure_cost` is charged per step in a terminal state and exceeds the largest
+tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

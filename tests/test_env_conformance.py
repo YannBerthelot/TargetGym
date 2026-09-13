@@ -334,9 +334,25 @@ def test_full_episode_stays_finite(spec):
             break
 
 
-def test_reward_is_bounded_over_an_episode(spec):
-    """Per-step reward must stay within a sane magnitude."""
+def test_reward_is_finite_and_a_cost_over_an_episode(spec):
+    """Version 2: every per-step reward is finite and non-positive (a cost);
+    the failure charge is the only step that may exceed the envelope's cost."""
     env, params = spec.make_env(), spec.make_test_params()
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, params)
+    action = _zero_action(env, params)
+    _step = jax.jit(env.step_env)
+    for _ in range(120):
+        key, sub = jax.random.split(key)
+        _, state, reward, terminated, _ = _step(sub, state, action, params)
+        assert np.isfinite(float(reward)) and float(reward) <= 0.0, float(reward)
+        if bool(terminated):
+            break
+
+
+def test_reward_is_bounded_over_an_episode(spec):
+    """Version 1: per-step reward must stay within a sane magnitude."""
+    env, params = spec.make_env(), spec.make_test_params(reward_version=1)
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
     action = _zero_action(env, params)

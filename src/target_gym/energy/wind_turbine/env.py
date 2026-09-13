@@ -47,6 +47,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -131,6 +132,36 @@ class WindTurbineParams(EnvParams):
     # time constant. 1200 steps = 5 min.
     delta_t: float = 0.25
     max_steps_in_episode: int = 400
+
+    # ---- Reward (docs/reward-shaping.md; version 2), in dollars per step ----
+    # Tracking: an electrical imbalance settled at ``imbalance_price`` per
+    # MWh, linear in |error| (p = 1). Floor: the lowest hold error a shipped
+    # controller has demonstrated under the shipped OU turbulence -- the MPC's
+    # 2.5 kW mean |error| over the 300 hold steps of the test episode
+    # (`scripts/evaluate_baselines.py`). Over a 5 min hold the PID holds
+    # 4.6 kW throughout while the MPC drifts from 3.4 kW to 54 kW
+    # (`scripts/measure_hold.py`), so neither is a floor over every window;
+    # the number is an upper bound on the achievable floor. Fatigue: pitch
+    # activity |cmd - achieved| / pitch_max above the PID's hold-phase level
+    # (0.0526) is charged, per unit of avoidable fraction, at
+    # ``fatigue_weight`` times what tracking at the floor costs per step --
+    # a documented stand-in for a maintenance model's price (provisional;
+    # sweep 0.5 / 1 / 2). The $80/MWh imbalance price is the reactor's spot
+    # price (provisional). An overspeed or underspeed trip costs, per step,
+    # twice the 5 MW envelope's imbalance.
+    reward_version: int = 2
+    e_floor: float = 2500.0  # W, MPC hold error on the test episode (upper bound)
+    e_tol: float = 0.0
+    tracking_exponent: float = 1.0
+    imbalance_price: float = 80.0  # $/MWh, provisional
+    c_hold: float = 0.0526  # pitch activity fraction while holding (PID)
+    fatigue_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
+    failure_cost: float = 2.0 * 80.0 * 5.0 * 0.25 / 3600.0
+    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    rho_floor_tracking: float = 80.0 / 1.0e6 * 0.25 / 3600.0 * 2500.0
+    rho_floor: float = 80.0 / 1.0e6 * 0.25 / 3600.0 * 2500.0
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = False
 
 
 @struct.dataclass
@@ -311,7 +342,33 @@ def check_is_terminal(state: WindTurbineState, params: WindTurbineParams, xp=jnp
     return terminated, truncated
 
 
-def compute_reward(state: WindTurbineState, params: WindTurbineParams, xp=jnp):
+def compute_reward_terms(state: WindTurbineState, params: WindTurbineParams, xp=jnp):
+    """The reward's additive cost terms in $ per step (``target_gym.reward``)."""
+    p = params
+    power = electrical_power(state.omega, state.torque, p)
+    per_W_step = p.imbalance_price / 1.0e6 * p.delta_t / 3600.0  # $ per W per step
+    tracking = (
+        per_W_step
+        * p.e_floor
+        * R.tracking_cost(
+            state.target_power - power, p.e_floor, p.e_tol, p.tracking_exponent, xp
+        )
+    )
+    activity = xp.abs(state.pitch_cmd - state.pitch) / p.pitch_max
+    fatigue = (
+        per_W_step
+        * p.e_floor
+        * R.running_cost(activity, p.c_hold, p.fatigue_weight, xp)
+    )
+    terminated, _ = check_is_terminal(state, p, xp)
+    return {
+        "tracking": tracking,
+        "running": fatigue,
+        "failure": R.failure_cost(terminated, p.failure_cost, xp),
+    }
+
+
+def compute_reward_v1(state: WindTurbineState, params: WindTurbineParams, xp=jnp):
     """Power tracking minus a pitch-activity penalty (a fatigue proxy)."""
     power = electrical_power(state.omega, state.torque, params)
     err = xp.abs(state.target_power - power)
@@ -330,6 +387,15 @@ def compute_reward(state: WindTurbineState, params: WindTurbineParams, xp=jnp):
     # holding the rods where the physics requires them.
     activity = xp.abs(state.pitch_cmd - state.pitch) / params.pitch_max
     return tracking * (1.0 - params.pitch_activity_weight * activity)
+
+
+def compute_reward(state: WindTurbineState, params: WindTurbineParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
+    )
 
 
 def available_power(v_wind, omega, params: WindTurbineParams):

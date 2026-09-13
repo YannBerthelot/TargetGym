@@ -11,7 +11,7 @@ Nuclear reactor — point-kinetics with delayed neutrons, xenon poisoning, therm
 | Tracked variable(s) | neutron power (normalised) |
 | Episode length | 864 steps (8640 s at 10 s per step) |
 | Import | `from target_gym import Reactor, ReactorParams` |
-| Cite as | `reactor-v2` |
+| Cite as | `reactor-v3` |
 
 ## Action space
 
@@ -29,7 +29,7 @@ reward scores.
 
 ## Rewards
 
-Flux tracking minus a small rod-motion penalty.
+See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract: the reward is
 `(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
@@ -68,5 +68,5 @@ A tuned PID ships with this environment.
 | `P_thermal_ref` | 3e+09 |
 | `C_fuel` | 3.3e+07 |
 | `C_coolant` | 7e+07 |
-| … | 22 more, see the params dataclass |
+| … | 31 more, see the params dataclass |
 

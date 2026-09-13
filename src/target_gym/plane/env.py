@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import (
     integrate_dynamics,
@@ -159,6 +160,30 @@ class PlaneParams(EnvParams):
     elevator_surface: float = 10
 
     max_steps_in_episode: int = 10_000
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # Altitude: quadratic outside a +-``e_tol`` tolerance about the commanded
+    # altitude (+-30 m, a defensible vertical-separation margin, provisional),
+    # normalised by a documented minimum of 1 m (altimeter resolution): the
+    # test configurations fly with zero turbulence, so the achievable hold
+    # error is ~0 (the shipped PID holds 0.08 m, `scripts/measure_hold.py`).
+    # Airspeed: the deviation from ``target_speed`` above the hold-phase
+    # deviation of the better shipped controller (``c_hold``, m/s; 6.1 for the
+    # altitude hold, 8.6 on the sinusoid, both PID -- the MPC ignores speed
+    # and sits 50-65 m/s off) charged at weight 1, a stand-in for fuel. Flying
+    # out of the altitude envelope costs, per step, twice the envelope.
+    reward_version: int = 2
+    e_floor: float = 1.0  # m, altimeter resolution (documented minimum)
+    e_tol: float = 30.0  # m, provisional
+    tracking_exponent: float = 2.0
+    c_hold: float = 6.1  # m/s airspeed deviation while holding (PID)
+    running_weight: float = 1.0
+    failure_cost: float = 3.0e8
+    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    rho_floor_tracking: float = 1.0
+    rho_floor: float = 1.0
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = True
     min_alt: float = 0.0
     max_alt: float = 40_000.0 / 3.281
     # Look-ahead wind: apply the gust ALREADY stored in the state this step, so
@@ -277,7 +302,23 @@ def check_no_nan(x, id=None):
             raise AssertionError(f"NaN detected in {id}: {x}")
 
 
-def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
+def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    p = params
+    speed = xp.sqrt(state.x_dot**2 + state.z_dot**2)
+    terminated, _ = check_is_terminal(state, p, xp)
+    return {
+        "tracking": R.tracking_cost(
+            state.target_altitude - state.z, p.e_floor, p.e_tol, p.tracking_exponent, xp
+        ),
+        "running": R.running_cost(
+            xp.abs(speed - p.target_speed), p.c_hold, p.running_weight, xp
+        ),
+        "failure": R.failure_cost(terminated, p.failure_cost, xp),
+    }
+
+
+def compute_reward_v1(state: PlaneState, params: PlaneParams, xp=jnp):
     """Log-scaled altitude tracking, optionally coupled to an airspeed hold.
 
     One over the commanded altitude when it is held exactly, decaying so that
@@ -319,6 +360,15 @@ def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
         xp,
     )
     return tracking * (1.0 - params.speed_weight * (1.0 - speed_term))
+
+
+def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
+    )
 
 
 def get_obs(state: PlaneState, params: PlaneParams = None, xp=jnp):

@@ -233,3 +233,25 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor` | 4.4e-4 (free-lime fraction) | the shipped MPC's long-run mean |error| under the shipped raw-meal disturbance (`scripts/measure_hold.py`, 1560 hold steps after a 180-step burn-in, 3 seeds; PID 8.3e-4). Upper bound. |
+| `e_tol` | 0 | **provisional.** The free-lime specification band comes from the plant's quality system. |
+| `tracking_exponent` | 2 | quadratic |
+| `c_hold` | 1.824 kg/s | fuel while holding, PID (MPC 1.840) (`scripts/measure_hold.py`) |
+| `running_weight` | 1 | sweep 0.5 / 1 / 2 |
+| `failure_cost` | 1.04e7 | twice the unit-span cost, (1 / 4.4e-4)^2 |
+
+`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
+units (the NEA floor for tracking) and `rho_floor` the full floor including
+consumption charged in full; `floor_is_documented_minimum` records whether
+`e_floor` is a measured/certified floor or a resolution used as a scale;
+`failure_cost` is charged per step in a terminal state and exceeds the largest
+tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

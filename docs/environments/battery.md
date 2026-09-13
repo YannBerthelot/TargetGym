@@ -11,7 +11,7 @@ Grid battery storage — equivalent-circuit Li-ion pack tracking a dispatch sign
 | Tracked variable(s) | delivered power (MW) |
 | Episode length | 360 steps (1800 s at 5 s per step) |
 | Import | `from target_gym import GridBattery, BatteryParams` |
-| Cite as | `battery-v1` |
+| Cite as | `battery-v2` |
 
 ## Action space
 
@@ -29,7 +29,7 @@ reward scores.
 
 ## Rewards
 
-Dispatch tracking, minus degradation, minus a gentle pull to mid charge.
+See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract: the reward is
 `(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
@@ -68,5 +68,5 @@ A tuned PID ships with this environment.
 | `ocv_c` | 0.3 |
 | `ocv_d` | 12 |
 | `ocv_e` | 0.05 |
-| … | 23 more, see the params dataclass |
+| … | 34 more, see the params dataclass |
 

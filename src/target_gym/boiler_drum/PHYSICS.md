@@ -219,3 +219,26 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + running + failure)`, one tracking term for the level and one for the pressure, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor_level` | 3.97e-3 m | the shipped MPC's long-run mean |level| under the shipped steam-demand disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 60-step burn-in, 3 seeds; PID 53 mm). Upper bound. |
+| `e_floor_pressure` | 0.0428 bar | the shipped PID's long-run mean pressure error (the MPC drifts to 0.17 bar). Upper bound. |
+| `e_tol` | 0 | no specification band |
+| `tracking_exponent` | 2 | quadratic on both |
+| `c_hold` | 1.566e8 W | firing rate while holding, MPC (PID 1.568e8) (`scripts/measure_hold.py`) |
+| `running_weight` | 1 | sweep 0.5 / 1 / 2 |
+| `failure_cost` | 1.76e6 | twice the level-trip plus pressure-envelope cost |
+
+`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
+units (the NEA floor for tracking) and `rho_floor` the full floor including
+consumption charged in full; `floor_is_documented_minimum` records whether
+`e_floor` is a measured/certified floor or a resolution used as a scale;
+`failure_cost` is charged per step in a terminal state and exceeds the largest
+tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

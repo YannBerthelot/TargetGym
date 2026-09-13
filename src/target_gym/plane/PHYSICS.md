@@ -371,3 +371,25 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + running + failure)`, shared by `plane`, `plane_sine` and `plane_energy`, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor` | 1 m | documented minimum: barometric altimeter resolution. The test configurations fly with zero turbulence, so the achievable hold error is ~0 (the shipped PID holds 0.08 m on the altitude hold, `scripts/measure_hold.py`). |
+| `e_tol` | 30 m | **provisional**: a defensible vertical-separation margin; an operator's tolerance would come from the flight rules |
+| `tracking_exponent` | 2 | quadratic outside the tolerance |
+| `c_hold` | 6.1 m/s (`plane`), 8.6 (`plane_sine`), 5.6 (`plane_energy`) | airspeed deviation from `target_speed` while holding, PID (`scripts/measure_hold.py`); the MPC ignores speed and sits 50-65 m/s off, so the better controller sets the reference. Set per task in the registry. |
+| `running_weight` | 1 | the speed term stands in for fuel; sweep 0.5 / 1 / 2 |
+| `failure_cost` | 3e8 | twice the altitude envelope's cost, (12 192 / 1)^2 |
+
+`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
+units (the NEA floor for tracking) and `rho_floor` the full floor including
+consumption charged in full; `floor_is_documented_minimum` records whether
+`e_floor` is a measured/certified floor or a resolution used as a scale;
+`failure_cost` is charged per step in a terminal state and exceeds the largest
+tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

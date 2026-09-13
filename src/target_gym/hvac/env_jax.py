@@ -14,6 +14,7 @@ from target_gym.hvac.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
     internal_gain,
     outdoor_temperature,
@@ -51,6 +52,9 @@ class BuildingHVAC(environment.Environment[HVACState, HVACParams]):
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms(state, params)
 
     def step_env(
         self,

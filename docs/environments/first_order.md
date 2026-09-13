@@ -9,7 +9,7 @@
 | Tracked variable(s) | x |
 | Episode length | 100 steps (5 s at 0.05 s per step) |
 | Import | `from target_gym import FirstOrderSystem, FirstOrderParams` |
-| Cite as | `first_order-v1` |
+| Cite as | `first_order-v2` |
 
 ## Action space
 
@@ -59,6 +59,12 @@ A tuned PID ships with this environment.
 | `u_min` | -2 |
 | `u_max` | 2 |
 | `x_min` | -3 |
-| `precision_floor` | 0.006 |
 | `x_max` | 3 |
+| `reward_version` | 2 |
+| `e_floor` | 0.006 |
+| `e_tol` | 0 |
+| `tracking_exponent` | 2 |
+| `failure_cost` | 2e+06 |
+| `rho_floor_tracking` | 1 |
+| … | 2 more, see the params dataclass |
 

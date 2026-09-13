@@ -171,7 +171,12 @@ class EnvSpec:
     # because the package had no users to preserve results for. Bump it
     # whenever the dynamics, the reward, the parameters or the observation
     # layout change, so that a published number keeps meaning what it meant.
-    version: int = 1
+    #
+    # v2 for every environment: the floor-normalised reward replaced the
+    # capped log-scaled one (docs/reward-shaping.md). The v1 reward is still
+    # constructible with ``reward_version=1`` on any params, and the v1
+    # baselines are kept in ``data/baseline_returns_v1.json``.
+    version: int = 2
     test_params: dict[str, Any] = field(default_factory=dict)
     tuned_gains_key: str | None = None
     baselines_note: str | None = None
@@ -480,6 +485,9 @@ _SPECS: tuple[EnvSpec, ...] = (
             "target_amplitude": 900.0,
             "target_steps": 8,
             "speed_weight": 0.5,
+            # Hold-phase airspeed deviation of the PID on this task
+            # (`scripts/measure_hold.py`); the version-2 running cost's reference.
+            "c_hold": 5.6,
         },
         tuned_gains_key="plane",
         disturbance_fields=("gust_x", "gust_z"),
@@ -509,6 +517,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "target_pattern": 3,
             "target_amplitude": 300.0,
             "target_period": 240.0,
+            "c_hold": 8.6,  # PID hold-phase airspeed deviation on the sinusoid
         },
         tuned_gains_key="plane",
         disturbance_fields=("gust_x", "gust_z"),
@@ -737,7 +746,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # physics sub-steps. The physics within an episode is unchanged, but a
         # return published against v1 was taken over 8640 env steps of which
         # 7776 scored a frozen plant, so its numbers do not carry over.
-        version=2,
+        # v3: the floor-normalised reward, like every other plant's v2.
+        version=3,
     ),
     EnvSpec(
         name="hvac",
@@ -793,6 +803,16 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="wind_turbine",
         noise_fields=("turbulence_std",),
         disturbance_fields=("v_wind",),
+        mpc_degraded=(
+            "Under the version-2 reward the PID beats the MPC on 6 of 10 seeds "
+            "(cost per step 2.6e-5 vs 9.4e-5 $). The MPC's surrogate objective "
+            "mirrors the version-1 log-scaled reward's minimiser and its pitch "
+            "activity is 2.5x the PID's, which the priced fatigue term now "
+            "charges; its power hold also drifts over long horizons "
+            "(scripts/measure_hold.py: 3 kW then 54 kW over two halves of a "
+            "5 min hold, PID 4.6 kW throughout). Recorded, not retuned: the "
+            "objective is the controller's, the reward is the plant's."
+        ),
     ),
     EnvSpec(
         name="battery",

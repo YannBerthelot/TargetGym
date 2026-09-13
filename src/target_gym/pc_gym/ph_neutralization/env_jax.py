@@ -14,6 +14,7 @@ from target_gym.pc_gym.ph_neutralization.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
     solve_pH,
     steady_state_invariants,
@@ -47,6 +48,9 @@ class PHNeutralization(environment.Environment[PHState, PHParams]):
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms(state, params)
 
     def step_env(
         self,

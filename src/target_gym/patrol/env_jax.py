@@ -29,6 +29,7 @@ from target_gym.patrol.env import (
     check_is_terminal_patrol,
     compute_next_state_patrol,
     compute_reward_patrol,
+    compute_reward_terms_patrol,
     desired_slot_position,
     get_obs_bearing_only,
     get_obs_full,
@@ -68,6 +69,9 @@ class _PlanePatrolBase(environment.Environment[PatrolState, PatrolParams]):
     # -- core --------------------------------------------------------------
     def compute_reward(self, state, params):
         return compute_reward_patrol(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms_patrol(state, params)
 
     def step_env(
         self,

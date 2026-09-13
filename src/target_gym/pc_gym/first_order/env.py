@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -17,10 +18,27 @@ class FirstOrderParams(EnvParams):
     u_min: float = -2.0
     u_max: float = 2.0
     x_min: float = -3.0
-    # Generic dimensionless plant: resolve to a thousandth of the span, which
-    # is finer than any sensor this stands in for.
-    precision_floor: float = 6e-3
     x_max: float = 3.0
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # No disturbance and a fixed target: the achievable hold error is zero
+    # (the shipped MPC holds 0.0 after settling, `scripts/measure_hold.py`), so
+    # the floor-normalisation uses a documented minimum instead -- a thousandth
+    # of the span, finer than any sensor this dimensionless plant stands in
+    # for. An error of one such unit costs 1 per step; the span costs
+    # (6 / 6e-3)^2 = 1e6, and a failure twice that.
+    reward_version: int = 2
+    e_floor: float = 6e-3
+    e_tol: float = 0.0
+    tracking_exponent: float = 2.0
+    failure_cost: float = 2.0e6
+    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    rho_floor_tracking: float = 1.0
+    rho_floor: float = 1.0
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = True
+    #: Version-1 reward only: the log-scaling's resolution floor.
+    precision_floor: float = 6e-3
 
     target_x_range: Tuple[float, float] = (0.5, 1.5)
     initial_x_range: Tuple[float, float] = (-0.5, 0.5)
@@ -78,12 +96,35 @@ def check_is_terminal(state: FirstOrderState, params: FirstOrderParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward(state: FirstOrderState, params: FirstOrderParams, xp=jnp):
-    # Log-scaled; the previous form normalised by the whole 6.0 envelope and
-    # squared it, so closing the last tenth was worth almost nothing.
+def compute_reward_terms(state: FirstOrderState, params: FirstOrderParams, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    terminated, _ = check_is_terminal(state, params, xp)
+    return {
+        "tracking": R.tracking_cost(
+            state.target_x - state.x,
+            params.e_floor,
+            params.e_tol,
+            params.tracking_exponent,
+            xp,
+        ),
+        "failure": R.failure_cost(terminated, params.failure_cost, xp),
+    }
+
+
+def compute_reward_v1(state: FirstOrderState, params: FirstOrderParams, xp=jnp):
+    """Version-1 reward: log-scaled tracking, capped at 1."""
     return log_scaled_reward(
         xp.abs(state.target_x - state.x),
         params.precision_floor,
         params.x_max - params.x_min,
+        xp,
+    )
+
+
+def compute_reward(state: FirstOrderState, params: FirstOrderParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
         xp,
     )

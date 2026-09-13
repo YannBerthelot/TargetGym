@@ -1877,6 +1877,16 @@ def make_plane_mpc(
     )
 
 
+def _done_value(params) -> float:
+    """What a planner on the environment's own reward charges per step once
+    the plant has terminated: 0 for the non-negative version-1 reward (the
+    forgone reward is the penalty), the failure cost for version 2, whose
+    healthy steps are negative."""
+    if int(getattr(params, "reward_version", 2)) == 1:
+        return 0.0
+    return -float(getattr(params, "failure_cost", 0.0))
+
+
 def make_plane3d_mpc(
     env,
     params,
@@ -1890,6 +1900,12 @@ def make_plane3d_mpc(
     aerodynamic model with roll, so it remains differentiable JAX but not
     expressible in CasADi. Works for all three task variants (Heading,
     Circle, FigureEight) since they share step_env.
+
+    The objective is the environment's own reward. Under the version-2
+    reward, a cost, a healthy step is negative, so a plan that leaves the
+    envelope must be charged the failure cost for the rest of the horizon or
+    crashing would read as an improvement over flying on; ``done_value`` is
+    set to it (version 1 is non-negative and keeps 0).
     """
     return GradientMPC(
         env,
@@ -1897,6 +1913,7 @@ def make_plane3d_mpc(
         action_dim=3,
         action_lb=-1.0,
         action_ub=1.0,
+        done_value=_done_value(params),
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,
@@ -2487,6 +2504,9 @@ def make_distillation_mpc(
     aircraft. Optimises [L_raw, V_raw] jointly, which is the point on an
     ill-conditioned plant: the useful move is a *coordinated* change in reflux
     and boilup, exactly what independent diagonal loops cannot make.
+
+    The objective is the environment's own reward; see ``make_plane3d_mpc``
+    for why ``done_value`` follows the reward version.
     """
     return GradientMPC(
         env,
@@ -2494,6 +2514,7 @@ def make_distillation_mpc(
         action_dim=2,
         action_lb=-1.0,
         action_ub=1.0,
+        done_value=_done_value(params),
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,

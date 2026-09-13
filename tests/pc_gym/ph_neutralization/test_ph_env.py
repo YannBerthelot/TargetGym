@@ -29,7 +29,9 @@ NOMINAL_Q3, NOMINAL_Q2 = 15.6, 0.55
 
 @pytest.fixture(scope="module")
 def params():
-    return PHParams()
+    # Version-1 reward: the reward tests in this file describe the capped
+    # log shape; version 2 is covered by tests/test_reward_contract.py.
+    return PHParams(reward_version=1)
 
 
 def _steady_pH(q3, q2, params):

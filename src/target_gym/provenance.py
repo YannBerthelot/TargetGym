@@ -60,6 +60,7 @@ _SHARED_SOURCES = (
     _ROOT / "experts" / "mpc.py",
     _ROOT / "utils.py",
     _ROOT / "integration.py",
+    _ROOT / "reward.py",
 )
 
 # Shared *physics*: what a learned policy's score depends on, which is a
@@ -70,6 +71,7 @@ _SHARED_SOURCES = (
 _PHYSICS_SOURCES = (
     _ROOT / "utils.py",
     _ROOT / "integration.py",
+    _ROOT / "reward.py",
 )
 
 

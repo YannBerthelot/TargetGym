@@ -11,7 +11,7 @@ Binary distillation — Skogestad's "Column A".
 | Tracked variable(s) | yD (mole fraction) |
 | Episode length | 200 steps (12000 s at 60 s per step) |
 | Import | `from target_gym import DistillationColumn, DistillationParams` |
-| Cite as | `distillation-v1` |
+| Cite as | `distillation-v2` |
 
 ## Action space
 
@@ -30,7 +30,7 @@ reward scores.
 
 ## Rewards
 
-Both product purities tracked, minus reboiler duty.
+See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract: the reward is
 `(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
@@ -69,5 +69,5 @@ A tuned PID ships with this environment.
 | `L_min` | 2.3 |
 | `L_max` | 3.1 |
 | `V_min` | 2.8 |
-| … | 9 more, see the params dataclass |
+| … | 19 more, see the params dataclass |
 

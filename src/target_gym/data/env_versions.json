@@ -4,95 +4,190 @@
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
   },
+  "battery-v2": {
+    "fingerprint": "c280cf202eb50883",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
+  },
   "boiler_drum-v1": {
     "fingerprint": "24bd471e04585728",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "boiler_drum-v2": {
+    "fingerprint": "79bcc69da64b48b8",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
   },
   "cement_kiln-v1": {
     "fingerprint": "0419d354f296e9f2",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
   },
+  "cement_kiln-v2": {
+    "fingerprint": "ee02d654652b3340",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
+  },
   "cstr-v1": {
     "fingerprint": "1aedfbe4bf2cd1e8",
     "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",
     "stamped": "2026-09-13T09:03:12+00:00"
+  },
+  "cstr-v2": {
+    "fingerprint": "4ed7a92479798462",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
   },
   "distillation-v1": {
     "fingerprint": "a54022227b359ba6",
     "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",
     "stamped": "2026-09-13T09:03:12+00:00"
   },
+  "distillation-v2": {
+    "fingerprint": "540993efc472795b",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
+  },
   "first_order-v1": {
     "fingerprint": "fa0ddbc733bf3f60",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "first_order-v2": {
+    "fingerprint": "e29775704f546d98",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
   },
   "four_tank-v1": {
     "fingerprint": "da38eef254db0f34",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
   },
+  "four_tank-v2": {
+    "fingerprint": "6b8d0fdba23cac57",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
+  },
   "glass_furnace-v1": {
     "fingerprint": "272349cfabc95017",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "glass_furnace-v2": {
+    "fingerprint": "86a7251e8d8f95f8",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
   },
   "hvac-v1": {
     "fingerprint": "5c8e38a6b643c717",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
   },
+  "hvac-v2": {
+    "fingerprint": "ab56346dc0c0251a",
+    "note": "v2 hvac: rho_floor (the MPC's measured cost) added as the NEA reference; reward unchanged",
+    "stamped": "2026-09-13T13:34:03+00:00"
+  },
   "patrol-v1": {
     "fingerprint": "96b9deebac83bd98",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T23:12:20+00:00"
+  },
+  "patrol-v2": {
+    "fingerprint": "072cf3fa1e86f250",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
   },
   "patrol_bearing_only-v1": {
     "fingerprint": "96b9deebac83bd98",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T23:12:20+00:00"
   },
+  "patrol_bearing_only-v2": {
+    "fingerprint": "072cf3fa1e86f250",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
+  },
   "ph_neutralization-v1": {
     "fingerprint": "55f320195cb81ce2",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "ph_neutralization-v2": {
+    "fingerprint": "533f2c884f9d8b7e",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
   },
   "plane-v1": {
     "fingerprint": "e5d0397cd54ac886",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
   },
+  "plane-v2": {
+    "fingerprint": "b26a6862dca56c67",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
+  },
   "plane3d_circle-v1": {
     "fingerprint": "ffcbd44cb289829d",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
+  },
+  "plane3d_circle-v2": {
+    "fingerprint": "da6dad6125a7af8b",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
   },
   "plane3d_figure8-v1": {
     "fingerprint": "925522f0cf3233f4",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
   },
+  "plane3d_figure8-v2": {
+    "fingerprint": "ac8d546e76ce26bf",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
+  },
   "plane3d_heading-v1": {
     "fingerprint": "2961df4b494a5ab7",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
+  },
+  "plane3d_heading-v2": {
+    "fingerprint": "440532a37a376103",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
   },
   "plane3d_racetrack-v1": {
     "fingerprint": "f1f9b8f7b7dcec42",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
   },
+  "plane3d_racetrack-v2": {
+    "fingerprint": "3a14ca0bf3139a99",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
+  },
   "plane_energy-v1": {
     "fingerprint": "3994cf3273f563eb",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
   },
+  "plane_energy-v2": {
+    "fingerprint": "cd72b551b831db03",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
+  },
   "plane_sine-v1": {
     "fingerprint": "01afd0d200bbcfb0",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
+  },
+  "plane_sine-v2": {
+    "fingerprint": "363ea40a1d5c02e1",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
   },
   "reactor-v1": {
     "fingerprint": "da9cd77061a7830c",
@@ -104,9 +199,19 @@
     "note": "v2: max_steps_in_episode and state.time count env steps (10 s), not physics sub-steps; the shipped rollout had run 10x past the limit on a frozen plant, understating the recorded baselines ~5x",
     "stamped": "2026-09-13T09:03:12+00:00"
   },
+  "reactor-v3": {
+    "fingerprint": "efc2dd81a8c574dd",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
+  },
   "wind_turbine-v1": {
     "fingerprint": "889181b62fafcbed",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "wind_turbine-v2": {
+    "fingerprint": "c9ccf4305cb07a36",
+    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
+    "stamped": "2026-09-13T11:58:55+00:00"
   }
 }

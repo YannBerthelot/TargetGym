@@ -28,6 +28,10 @@ from target_gym.plane3d.env import (
     compute_reward_figure8,
     compute_reward_heading,
     compute_reward_racetrack,
+    compute_reward_terms_circle,
+    compute_reward_terms_figure8,
+    compute_reward_terms_heading,
+    compute_reward_terms_racetrack,
     get_obs_circle,
     get_obs_figure8,
     get_obs_heading,
@@ -261,6 +265,9 @@ class Plane3DHeading(_Airplane3DBase):
     def compute_reward(self, state, params):
         return compute_reward_heading(state, params)
 
+    def reward_terms(self, state, params):
+        return compute_reward_terms_heading(state, params)
+
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         return self._append_wind(get_obs_heading(state, xp=jnp), state, params)
 
@@ -345,6 +352,9 @@ class Plane3DRacetrack(_Airplane3DBase):
     def compute_reward(self, state, params):
         return compute_reward_racetrack(state, params)
 
+    def reward_terms(self, state, params):
+        return compute_reward_terms_racetrack(state, params)
+
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         return self._append_wind(get_obs_racetrack(state, xp=jnp), state, params)
 
@@ -418,6 +428,9 @@ class Plane3DCircle(_Airplane3DBase):
 
     def compute_reward(self, state, params):
         return compute_reward_circle(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms_circle(state, params)
 
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         return self._append_wind(get_obs_circle(state, xp=jnp), state, params)
@@ -511,6 +524,9 @@ class Plane3DFigureEight(_Airplane3DBase):
 
     def compute_reward(self, state, params):
         return compute_reward_figure8(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms_figure8(state, params)
 
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         if params is None:

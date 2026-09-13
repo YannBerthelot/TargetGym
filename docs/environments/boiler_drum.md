@@ -11,7 +11,7 @@ Boiler drum — natural-circulation drum boiler with shrink-and-swell.
 | Tracked variable(s) | drum level (m), drum pressure (bar) |
 | Episode length | 400 steps (800 s at 2 s per step) |
 | Import | `from target_gym import BoilerDrum, BoilerDrumParams` |
-| Cite as | `boiler_drum-v1` |
+| Cite as | `boiler_drum-v2` |
 
 ## Action space
 
@@ -30,7 +30,7 @@ reward scores.
 
 ## Rewards
 
-Level and pressure tracking, minus fuel.
+See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract: the reward is
 `(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
@@ -57,17 +57,17 @@ A tuned PID ships with this environment.
 |---|---|
 | `delta_t` | 2 |
 | `max_steps_in_episode` | 400 |
+| `reward_version` | 2 |
+| `e_floor_level` | 0.00397 |
+| `e_floor_pressure` | 0.0428 |
+| `e_tol` | 0 |
+| `tracking_exponent` | 2 |
+| `c_hold` | 1.566e+08 |
+| `running_weight` | 1 |
+| `failure_cost` | 1.76e+06 |
+| `rho_floor_tracking` | 2 |
+| `rho_floor` | 2 |
 | `V_t` | 88 |
 | `V_d` | 40 |
-| `V_r` | 37 |
-| `V_dc` | 11 |
-| `A_d` | 20 |
-| `A_dc` | 0.355 |
-| `L_r` | 11 |
-| `m_metal` | 300000 |
-| `C_metal` | 550 |
-| `k_friction` | 25 |
-| `tau_sr` | 8 |
-| `T_d` | 15 |
-| … | 20 more, see the params dataclass |
+| … | 30 more, see the params dataclass |
 

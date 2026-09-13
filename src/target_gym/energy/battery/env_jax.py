@@ -15,6 +15,7 @@ from target_gym.energy.battery.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
 )
 from target_gym.energy.battery.rendering import _render
@@ -46,6 +47,9 @@ class GridBattery(environment.Environment[BatteryState, BatteryParams]):
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms(state, params)
 
     def step_env(
         self,

@@ -11,7 +11,7 @@ Glass furnace (float-glass process) — regenerative end-port fired furnace.
 | Tracked variable(s) | crown temperature (K) |
 | Episode length | 1600 steps (48000 s at 30 s per step) |
 | Import | `from target_gym import GlassFurnace, GlassFurnaceParams` |
-| Cite as | `glass_furnace-v1` |
+| Cite as | `glass_furnace-v2` |
 
 ## Action space
 
@@ -29,7 +29,7 @@ reward scores.
 
 ## Rewards
 
-Crown-temperature tracking minus a normalised fuel cost.
+See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract: the reward is
 `(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
@@ -68,5 +68,5 @@ A tuned PID ships with this environment.
 | `eps_regen_node` | 0.8 |
 | `reversal_period` | 1500 |
 | `reversal_dead_time` | 40 |
-| … | 46 more, see the params dataclass |
+| … | 55 more, see the params dataclass |
 
