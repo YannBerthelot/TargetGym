@@ -7,7 +7,7 @@
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((10,))` |
 | Tracked variable(s) | altitude (m) |
-| Episode length | 280 steps (280 s at dt = 1 s) |
+| Episode length | 280 steps (280 s at 1 s per step) |
 | Import | `from target_gym import Airplane2D, PlaneParams` |
 | Cite as | `plane-v1` |
 

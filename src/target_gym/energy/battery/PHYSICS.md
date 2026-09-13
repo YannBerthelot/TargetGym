@@ -170,7 +170,7 @@ weakest-cell behaviour that actually determines real pack limits.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `battery` | 360 | 5 | 30 min | 1 in [-1, 1] | 5 | 19 |
 

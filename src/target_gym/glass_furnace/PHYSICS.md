@@ -267,7 +267,7 @@ environment in the library.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `glass_furnace` | 1600 | 30 | 13.3 h | 1 in [-1, 1] | 5 | 26 |
 

@@ -38,6 +38,8 @@ class CSTRParams(EnvParams):
     initial_CA_range: Tuple[float, float] = (0.8, 0.85)
     initial_T: float = 330.0
     delta_t: float = 0.25
+    #: ``delta_t`` is in minutes (the PC-gym model's unit); seconds per unit.
+    time_unit_seconds: float = 60.0
     max_steps_in_episode: int = 100
 
 

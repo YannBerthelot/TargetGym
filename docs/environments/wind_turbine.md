@@ -9,7 +9,7 @@ Wind turbine — NREL 5 MW reference turbine, collective-pitch power regulation.
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((5,))` |
 | Tracked variable(s) | electrical power (MW) |
-| Episode length | 400 steps (100 s at dt = 0.25 s) |
+| Episode length | 400 steps (100 s at 0.25 s per step) |
 | Import | `from target_gym import WindTurbine, WindTurbineParams` |
 | Cite as | `wind_turbine-v1` |
 

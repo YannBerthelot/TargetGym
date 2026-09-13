@@ -9,7 +9,7 @@ Building HVAC — single thermal zone, ISO 13790 5R1C reduced-order model.
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | zone air temperature (deg C) |
-| Episode length | 720 steps (648000 s at dt = 900 s) |
+| Episode length | 720 steps (648000 s at 900 s per step) |
 | Import | `from target_gym import BuildingHVAC, HVACParams` |
 | Cite as | `hvac-v1` |
 

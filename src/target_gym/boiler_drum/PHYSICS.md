@@ -209,7 +209,7 @@ cylindrical drum. Trips at ±25 cm keep the model inside the linear region.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `boiler_drum` | 400 | 2 | 13 min | 2 in [-1, 1] | 7 | 10 |
 

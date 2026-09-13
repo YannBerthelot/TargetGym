@@ -123,7 +123,11 @@ def rollout(spec, params, policy: Callable, seed: int = 0):
     step = _jitted_step(env)
 
     values, targets, rewards = [], [], []
-    for _ in range(int(params.max_steps_in_episode)):
+    # Loop on the environment's own clock rather than on a fixed count, so a
+    # plant whose ``state.time`` ever counted something other than env steps
+    # (the reactor did, until its clock was unified) cannot be scored past its
+    # time limit on a frozen state.
+    while int(state.time) < int(params.max_steps_in_episode):
         obs_np = np.asarray(obs)
         values.append(obs_np[list(value_idx)])
         targets.append(obs_np[list(target_idx)])

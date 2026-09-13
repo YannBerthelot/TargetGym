@@ -359,7 +359,7 @@ sites (2D, 3D and patrol) now say so.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `plane` | 280 | 1 | 5 min | 2 in [-1, 1] | 10 | 16 |
 | `plane_energy` | 1200 | 1 | 20 min | 2 in [-1, 1] | 10 | 16 |

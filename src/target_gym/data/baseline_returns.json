@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "generated": "2026-09-11T20:08:08+00:00",
+    "generated": "2026-09-13T09:05:41+00:00",
     "note": "Regenerate with scripts/record_baselines.py when a test reports a stale fingerprint. Commit the result with the change that invalidated it.",
     "seeds": 10
   },
@@ -98,7 +98,7 @@
     "steps": 700
   },
   "cstr": {
-    "fingerprint": "a7fe71f1e921bdb3",
+    "fingerprint": "c57cdf8b2c4c7e6a",
     "mpc_returns": [
       98.241734,
       94.654251,
@@ -124,7 +124,7 @@
       87.631955,
       90.663478
     ],
-    "seconds": 850.5,
+    "seconds": 5.9,
     "seeds": 10,
     "solver_calls": 1000,
     "solver_capped": 0,
@@ -133,7 +133,7 @@
     "steps": 100
   },
   "distillation": {
-    "fingerprint": "74419811fa110af1",
+    "fingerprint": "4773acbf7854d32a",
     "mpc_returns": [
       143.377365,
       181.03746,
@@ -159,7 +159,7 @@
       106.402988,
       158.821344
     ],
-    "seconds": 846.3,
+    "seconds": 64.4,
     "seeds": 10,
     "steps": 200
   },
@@ -587,39 +587,39 @@
     "steps": 480
   },
   "reactor": {
-    "fingerprint": "df3e61bb0576e3da",
+    "fingerprint": "c3892327394e84fe",
     "mpc_returns": [
-      1084.477361,
-      1086.417269,
-      1079.516787,
-      1094.993554,
-      1081.759635,
-      1080.880688,
-      1078.379317,
-      1061.018885,
-      1079.08226,
-      1080.687467
+      546.060049,
+      550.185125,
+      544.812119,
+      553.090818,
+      546.060539,
+      549.839514,
+      546.067558,
+      554.356021,
+      548.167448,
+      547.193291
     ],
     "mpc_terminated_early": 0,
     "pid_returns": [
-      721.966214,
-      699.57043,
-      688.940112,
-      752.93052,
-      707.216527,
-      696.523285,
-      716.501176,
-      664.914792,
-      705.978987,
-      684.821725
+      295.161935,
+      273.206829,
+      267.955215,
+      312.188617,
+      287.029105,
+      283.974113,
+      300.68037,
+      293.887071,
+      295.458381,
+      264.976421
     ],
-    "seconds": 1933.5,
+    "seconds": 53.8,
     "seeds": 10,
-    "solver_calls": 86400,
+    "solver_calls": 8640,
     "solver_capped": 0,
     "solver_failures": 0,
-    "solver_mean_iters": 5.2,
-    "steps": 8640
+    "solver_mean_iters": 5.4,
+    "steps": 864
   },
   "wind_turbine": {
     "fingerprint": "0ccb2db293b1cbe0",

@@ -9,7 +9,7 @@ Binary distillation — Skogestad's "Column A".
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((6,))` |
 | Tracked variable(s) | yD (mole fraction) |
-| Episode length | 200 steps (200 s at dt = 1 s) |
+| Episode length | 200 steps (12000 s at 60 s per step) |
 | Import | `from target_gym import DistillationColumn, DistillationParams` |
 | Cite as | `distillation-v1` |
 
@@ -69,5 +69,5 @@ A tuned PID ships with this environment.
 | `L_min` | 2.3 |
 | `L_max` | 3.1 |
 | `V_min` | 2.8 |
-| … | 8 more, see the params dataclass |
+| … | 9 more, see the params dataclass |
 

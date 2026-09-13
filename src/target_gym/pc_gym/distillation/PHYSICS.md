@@ -168,9 +168,9 @@ energy balance effects (varying latent heats, subcooling) cannot appear.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `distillation` | 200 | 1 | 3 min | 2 in [-1, 1] | 6 | 46 |
+| `distillation` | 200 | 60 | 3.3 h | 2 in [-1, 1] | 6 | 46 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

@@ -72,6 +72,26 @@ def display_name(name: str) -> str:
 _ENV_CACHE: dict[str, Any] = {}
 
 
+def control_step_seconds(env, params) -> float:
+    """Seconds of simulated time one ``step_env`` call advances.
+
+    ``delta_t`` alone is not it. Two plants carry their models' native minutes
+    (the PC-gym CSTR and distillation column declare ``time_unit_seconds``),
+    and the reactor holds one action across ``control_period`` physics
+    sub-steps. Without both factors the generated facts table labelled a
+    200-minute distillation episode "3 min" and a 25-minute CSTR one "25 s",
+    and the reactor's 2.4 h would read as 864 s.
+
+    Lives here rather than in ``utils.py`` because that module is part of every
+    environment's provenance fingerprint, and a bookkeeping helper must not
+    move twenty-one fingerprints.
+    """
+    dt = float(getattr(params, "delta_t", 1.0))
+    unit = float(getattr(params, "time_unit_seconds", 1.0))
+    period = int(getattr(env, "control_period", 1))
+    return dt * unit * period
+
+
 @dataclass(frozen=True)
 class EnvSpec:
     """Everything the library needs to know about one environment.
@@ -694,24 +714,30 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.reactor.env", "ReactorParams"),
         make_pid=_pid("make_reactor_stateful_pid"),
         make_mpc=_mpc("make_reactor_mpc"),
-        # In *physics* steps; the reactor runs ``control_period`` (10) of them
-        # per env step, so 8640 is 864 env steps, 2.4 h.
+        # Env steps of 10 s (``control_period`` physics sub-steps each): 2.4 h.
         #
-        # This used to be 1200, twenty minutes, with 8640 applied only through
-        # ``effectiveness_overrides`` on the stated grounds that the shorter one
-        # was not long enough "for the xenon/demand dynamics to actually
-        # distinguish a controller". So the recorded baseline and the
-        # conformance check ran different tasks, and the published one was the
-        # one without the environment's headline physics: over twenty minutes
-        # the xenon state moves 2.5%, against a 13.2 h time constant.
+        # This used to be written as 8640 *physics* steps while the shipped
+        # rollout counted env steps, so the recorded baselines ran 8640 env
+        # steps of which the last 7776 scored a frozen plant at a tenth of the
+        # reward (see ReactorParams.max_steps_in_episode). Same task, now
+        # counted in the unit every other plant uses.
         #
-        # 2.4 h is 0.18 xenon time constants, enough that the poison moves
-        # materially while the controller works. Full pit dynamics would need
-        # about ten hours, which alone would cost more to record than the rest
-        # of the suite together. The override is gone: both now measure the
-        # same task.
-        test_params={"max_steps_in_episode": 8640},
+        # Before that it was 1200 physics steps, twenty minutes, with 8640
+        # applied only through ``effectiveness_overrides`` on the stated
+        # grounds that the shorter one was not long enough "for the
+        # xenon/demand dynamics to actually distinguish a controller": over
+        # twenty minutes the xenon state moves 2.5%, against a 13.2 h time
+        # constant. 2.4 h is 0.18 xenon time constants, enough that the poison
+        # moves materially while the controller works. Full pit dynamics would
+        # need about ten hours, which alone would cost more to record than the
+        # rest of the suite together.
+        test_params={"max_steps_in_episode": 864},
         tuned_gains_key="reactor",
+        # v2: ``max_steps_in_episode`` and ``state.time`` count env steps, not
+        # physics sub-steps. The physics within an episode is unchanged, but a
+        # return published against v1 was taken over 8640 env steps of which
+        # 7776 scored a frozen plant, so its numbers do not carry over.
+        version=2,
     ),
     EnvSpec(
         name="hvac",

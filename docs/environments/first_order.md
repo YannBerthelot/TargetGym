@@ -7,7 +7,7 @@
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((2,))` |
 | Tracked variable(s) | x |
-| Episode length | 100 steps (5 s at dt = 0.05 s) |
+| Episode length | 100 steps (5 s at 0.05 s per step) |
 | Import | `from target_gym import FirstOrderSystem, FirstOrderParams` |
 | Cite as | `first_order-v1` |
 

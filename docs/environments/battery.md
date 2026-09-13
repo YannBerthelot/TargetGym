@@ -9,7 +9,7 @@ Grid battery storage — equivalent-circuit Li-ion pack tracking a dispatch sign
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((5,))` |
 | Tracked variable(s) | delivered power (MW) |
-| Episode length | 360 steps (1800 s at dt = 5 s) |
+| Episode length | 360 steps (1800 s at 5 s per step) |
 | Import | `from target_gym import GridBattery, BatteryParams` |
 | Cite as | `battery-v1` |
 

@@ -222,15 +222,23 @@ class ReactorParams(EnvParams):
     # step applies the action for Reactor.control_period physics sub-steps
     # (a class-level constant on the Env, not a param, so JIT treats it as
     # static). Effective control period = delta_t * control_period seconds.
-    # state.time advances by 1 per physics sub-step, so this counter is in
-    # physics-step units to match what gymnax's Environment.step uses for
-    # truncation (info["truncated"] = state.time >= max_steps_in_episode).
-    # 24 h of simulated time = 86400 s = 86400 physics steps × 1 s/step
-    # = 8640 control steps × 10 s/step.
+    #
+    # ``max_steps_in_episode`` counts *environment* steps, as it does on every
+    # other plant and as gymnax's ``is_truncated`` assumes. ``state.time``
+    # advances by 1 per ``step_env`` call; the physics clock lives in
+    # ``state.physics_time`` (sub-steps since reset), so that the OU demand's
+    # per-sub-step noise draws stay distinct.
+    #
+    # It used to count physics steps (86400 = 24 h) while ``state.time`` also
+    # advanced per sub-step. gymnax was then consistent, but every loop that
+    # iterated ``range(max_steps_in_episode)`` in env steps -- the shipped
+    # ``runners.rollout`` included -- ran ten times past the time limit, and
+    # ``step_env`` kept returning a frozen state scored at a tenth of the
+    # reward for the remaining nine tenths. The recorded reactor baselines
+    # were understated about fivefold by this.
+    # 24 h of simulated time = 8640 env steps × 10 s.
     delta_t: float = 1.0
-    max_steps_in_episode: int = (
-        86400  # in physics steps (86400 × 1 s = 24 h, = 8640 control steps)
-    )
+    max_steps_in_episode: int = 8640  # env steps of 10 s: 24 h
 
 
 @struct.dataclass
@@ -247,6 +255,10 @@ class ReactorState(EnvState):
 
     target_n: float
     demand_key: jnp.ndarray  # PRNGKey for reproducible OU noise
+    #: Physics sub-steps since reset (``delta_t`` seconds each). ``time`` counts
+    #: environment steps; this is the clock the integrator and the OU demand
+    #: noise are keyed on, so it runs ``control_period`` times faster.
+    physics_time: int
 
     rho_ext: float  # current (actual, rate-limited) rod reactivity
     #: What the controller *asked* the rods for this step, before the rate
@@ -522,11 +534,13 @@ def compute_next_state(
     new_I_hat = new_positions[3 + N_GROUPS]
     new_Xe_hat = new_positions[4 + N_GROUPS]
 
-    new_time = state.time + 1
+    # One physics sub-step. The env-step clock ``state.time`` is advanced by
+    # ``Reactor.step_env`` once per control period, not here.
+    new_physics_time = state.physics_time + 1
 
     # ── Ornstein-Uhlenbeck demand process ──
     demand_mu = 0.5 * (params.target_n_range[0] + params.target_n_range[1])
-    key_t = jax.random.fold_in(state.demand_key, new_time)
+    key_t = jax.random.fold_in(state.demand_key, new_physics_time)
     noise = jax.random.normal(key_t, dtype=jnp.float32)
     drift = params.demand_theta * (demand_mu - state.target_n) * params.delta_t
     diffusion = params.demand_sigma * jnp.sqrt(params.delta_t) * noise
@@ -547,7 +561,7 @@ def compute_next_state(
             target_n=new_target,
             rho_ext=rho_ext,
             rho_ext_cmd=desired_rho,
-            time=new_time,
+            physics_time=new_physics_time,
         ),
         metrics,
     )
@@ -582,7 +596,7 @@ def check_is_terminal(state: ReactorState, params: ReactorParams, xp=jnp):
         state.T_coolant >= params.T_coolant_max,
     )
     terminated = xp.logical_or(xp.logical_or(n_out, T_fuel_out), T_coolant_out)
-    # state.time and max_steps_in_episode are both in physics-step units.
+    # Both in environment steps (see ReactorParams.max_steps_in_episode).
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 

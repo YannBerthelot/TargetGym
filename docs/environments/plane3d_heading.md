@@ -9,7 +9,7 @@
 | Action space | `Box((3,))`, all actions in [-1, 1] |
 | Observation space | `Box((15,))` |
 | Tracked variable(s) | altitude (m) |
-| Episode length | 200 steps (200 s at dt = 1 s) |
+| Episode length | 200 steps (200 s at 1 s per step) |
 | Import | `from target_gym import Plane3DHeading, PlaneParams3D` |
 | Cite as | `plane3d_heading-v1` |
 

@@ -678,22 +678,15 @@ def _render(cls, screen, state, params, frames, clock, stride: int | None = None
     stride was 72x too coarse for the episode actually being rendered and a
     whole reactor clip came out as two frames.
     """
-    from target_gym.reactor.env_jax import CONTROL_PERIOD
     from target_gym.render_kit import frame_stride
 
     if stride is None:
-        # ``state.time`` advances by a whole control period here, so the stride
-        # has to be expressed in those units or it lands between calls.
-        stride = frame_stride(params, time_step=CONTROL_PERIOD)
+        stride = frame_stride(params)
     if state is None:
         if cls.state is None:
             raise ValueError("No state provided")
         state = cls.state
 
-    # ``state.time`` advances by ``control_period`` here, not by one, so the
-    # usual ``time == 1`` episode-start signal never fires for this
-    # environment. An empty frame list means the same thing and does not
-    # depend on how time is counted.
     if not hasattr(cls, "history") or state.time <= 1 or not frames:
         cls.history = {
             "t": [],
@@ -711,7 +704,11 @@ def _render(cls, screen, state, params, frames, clock, stride: int | None = None
 
     step = state.time
     if step % stride == 0 or step <= 1 or not frames:
-        frame, cls.history = render_reactor(state, params, step, cls.history)
+        # The renderer wants the physics clock: it labels elapsed time as
+        # ``step * delta_t`` seconds, and ``delta_t`` is the sub-step.
+        frame, cls.history = render_reactor(
+            state, params, int(state.physics_time), cls.history
+        )
         frames.append(frame)
         cls.frames = frames
 

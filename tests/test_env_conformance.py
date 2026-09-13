@@ -498,9 +498,8 @@ def _episode_return(spec, policy, seed, params=None):
     key = jax.random.PRNGKey(seed)
     obs, state = env.reset_env(key, p)
     total = 0.0
-    # Loop on the *clock*, not on a step count. ``max_steps_in_episode`` is in
-    # physics steps, and the reactor advances ``control_period`` (10) of them
-    # per ``step_env`` -- counting iterations ran its episodes 10x too long.
+    # Loop on the *clock*, as ``runners.rollout`` does, so the episode ends
+    # exactly when the environment says it does.
     while int(state.time) < int(p.max_steps_in_episode):
         key, sub = jax.random.split(key)
         obs, state, reward, terminated, _ = step(sub, state, jnp.asarray(policy(obs)))
@@ -519,9 +518,9 @@ CONSTANT_ACTIONS = (-0.5, 0.0, 0.5)
 EFFECTIVENESS_SEEDS = 2
 # No extra episode cap: ``EnvSpec.test_params`` already sizes each episode to
 # that environment's own dynamics. A flat cap is meaningless across envs whose
-# characteristic times differ by orders of magnitude -- 150 physics steps is
-# 150 s for the reactor, whose xenon transient runs for hours, so the PID had
-# no time to demonstrate anything and lost to a constant.
+# characteristic times differ by orders of magnitude -- 150 steps is 25 min
+# for the reactor, whose xenon transient runs for hours, so the PID had no time
+# to demonstrate anything and lost to a constant.
 
 
 @pytest.mark.slow

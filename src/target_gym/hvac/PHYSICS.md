@@ -196,7 +196,7 @@ rather than claimed in fifteen.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `hvac` | 720 | 900 | 180.0 h | 1 in [-1, 1] | 7 | 9 |
 

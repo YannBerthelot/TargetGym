@@ -117,6 +117,8 @@ class DistillationParams(EnvParams):
     # integrator needs 16 substeps at this step size for stability; see
     # ``compute_next_state``.
     delta_t: float = 1.0
+    #: ``delta_t`` is in minutes (Skogestad's model unit); seconds per unit.
+    time_unit_seconds: float = 60.0
     max_steps_in_episode: int = 200
 
 

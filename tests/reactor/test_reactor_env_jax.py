@@ -18,6 +18,7 @@ def _make_state(params=None, **overrides) -> ReactorState:
     I_hat_eq, Xe_hat_eq = steady_state_xenon(1.0, params)
     defaults = dict(
         time=0,
+        physics_time=0,
         n=1.0,
         C=steady_state_precursors(1.0, params),
         T_fuel=params.initial_T_fuel,
@@ -59,7 +60,10 @@ def test_step_env_advances_state():
     obs2, state2, reward, done, info = env.step_env(key, state, jnp.array([0.0]))
     assert obs2.shape == env.obs_shape
     assert isinstance(state2, ReactorState)
-    assert state2.time == state.time + CONTROL_PERIOD
+    # ``time`` counts env steps; the physics clock runs ``CONTROL_PERIOD``
+    # times faster. Truncation is judged on the former, as on every plant.
+    assert state2.time == state.time + 1
+    assert state2.physics_time == state.physics_time + CONTROL_PERIOD
     assert jnp.isfinite(reward)
     assert done.dtype == jnp.bool_
     assert "last_state" in info
@@ -186,3 +190,48 @@ def test_observation_scales_rod_to_unit_range():
     state_min = _make_state(params=params, rho_ext=jnp.asarray(params.rho_ext_min))
     obs_min = env.get_obs(state_min)
     assert float(obs_min[2]) == pytest.approx(-1.0, abs=1e-4)
+
+
+def test_time_limit_counts_env_steps_and_rollout_stops_there():
+    """Regression for the truncation bug that understated the baselines 5x.
+
+    ``max_steps_in_episode`` used to be in physics steps while the shipped
+    rollout counted env steps, so it ran ten times past the limit and scored a
+    frozen plant at a tenth of the reward. Now the limit is env steps: the
+    episode ends exactly there, and the reward in the last step is the same
+    order as in the first.
+    """
+    from target_gym.registry import REGISTRY
+    from target_gym.runners.runners import rollout
+
+    spec = REGISTRY["reactor"]
+    params = spec.make_test_params(max_steps_in_episode=30)
+    env = spec.make_env()
+    obs, state = env.reset_env(jax.random.PRNGKey(0), params)
+    step = jax.jit(env.step_env)
+    for _ in range(30):
+        _, state, _, _, _ = step(jax.random.PRNGKey(0), state, jnp.zeros((1,)), params)
+    assert int(state.time) == 30
+    assert int(state.physics_time) == 30 * CONTROL_PERIOD
+    assert bool(env.is_truncated(state, params))
+
+    _, _, rewards = rollout(spec, params, lambda obs: jnp.zeros((1,)), seed=0)
+    assert len(rewards) == 30
+    # Past the old (physics-step) limit the plant is still live and scored in
+    # full: no order-of-magnitude drop between the first and the last step.
+    assert rewards[-1] > 0.1 * rewards[0]
+
+
+def test_demand_noise_is_fresh_every_sub_step():
+    """The OU demand keys its noise on the physics clock, so two consecutive
+    env steps must not replay the same draws (which is what folding on the
+    env-step clock would do)."""
+    env = Reactor()
+    params = env.default_params
+    obs, state = env.reset_env(jax.random.PRNGKey(3), params)
+    step = jax.jit(env.step_env)
+    _, s1, _, _, _ = step(jax.random.PRNGKey(0), state, jnp.zeros((1,)), params)
+    _, s2, _, _, _ = step(jax.random.PRNGKey(0), s1, jnp.zeros((1,)), params)
+    d1 = float(s1.target_n) - float(state.target_n)
+    d2 = float(s2.target_n) - float(s1.target_n)
+    assert d1 != d2

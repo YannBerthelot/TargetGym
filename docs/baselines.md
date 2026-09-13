@@ -795,7 +795,7 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 <!-- BEGIN GENERATED BASELINE TABLE -->
 
 <!-- Written by scripts/generate_baseline_table.py from
-     src/target_gym/data/baseline_returns.json. Do not edit by hand. -->
+     data/baseline_returns.json. Do not edit by hand. -->
 
 | environment | steps | PID | MPC | PID share | MPC share | MPC wins | term |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -804,6 +804,7 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `plane3d_circle` | 300 | 130.4 | 276.1 | 0.435 | 0.920 | 10/10 | 0 |
 | `plane3d_racetrack` | 650 | 303.7 | 614.1 | 0.467 | 0.945 | 10/10 | 0 |
 | `plane_sine` | 480 | 294.8 | 458.1 | 0.614 | 0.954 | 10/10 | 0 |
+| `reactor` | 864 | 287.5 | 548.6 | 0.333 | 0.635 | 10/10 | 0 |
 | `patrol` | 200 | 111.2 | 168.1 | 0.556 | 0.841 | 10/10 | 0 |
 | `distillation` | 200 | 122.2 | 154.6 | 0.611 | 0.773 | 10/10 | 0 |
 | `boiler_drum` | 400 | 247.7 | 303.0 | 0.619 | 0.758 | 10/10 | 0 |
@@ -812,7 +813,6 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `ph_neutralization` | 300 | 226.1 | 260.7 | 0.754 | 0.869 | 9/10 | 0 |
 | `cstr` | 100 | 89.4 | 94.6 | 0.894 | 0.946 | 10/10 | 0 |
 | `glass_furnace` | 1600 | 1443.5 | 1513.4 | 0.902 | 0.946 | 10/10 | 0 |
-| `reactor` | 8640 | 703.9 | 1080.7 | 0.081 | 0.125 | 10/10 | 0 |
 | `wind_turbine` | 400 | 331.8 | 348.3 | 0.829 | 0.871 | 8/10 | 0 |
 | `cement_kiln` | 700 | 621.5 | 647.7 | 0.888 | 0.925 | 10/10 | 0 |
 | `plane` | 280 | 249.2 | 259.1 | 0.890 | 0.925 | 9/10 | 0 |

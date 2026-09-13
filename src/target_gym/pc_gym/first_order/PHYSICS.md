@@ -104,7 +104,7 @@ transport delay — that the rest of the suite exists to pose.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `first_order` | 100 | 0.05 | 5 s | 1 in [-1, 1] | 2 | 3 |
 

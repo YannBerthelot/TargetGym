@@ -9,7 +9,7 @@ Close-patrol (formation-keeping) environment: state, parameters and transition.
 | Action space | `Box((3,))`, all actions in [-1, 1] |
 | Observation space | `Box((21,))` |
 | Tracked variable(s) | measured range (m) |
-| Episode length | 200 steps (200 s at dt = 1 s) |
+| Episode length | 200 steps (200 s at 1 s per step) |
 | Import | `from target_gym import PlanePatrolBearingOnly, PatrolParams` |
 | Cite as | `patrol_bearing_only-v1` |
 
