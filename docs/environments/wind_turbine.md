@@ -51,9 +51,6 @@ Every environment in this suite scores on one contract: the reward is
 
 A tuned PID ships with this environment.
 
-!!! warning "The MPC is not an upper bound here"
-    Under the version-2 reward the PID beats the MPC on 6 of 10 seeds (cost per step 2.
-
 ## Arguments
 
 | parameter | default |

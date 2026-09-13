@@ -223,7 +223,7 @@ PLANTS = {
     ),
     "wind_turbine": (
         _wind_errors,
-        lambda o, s, p: abs(float(s.pitch_cmd - s.pitch)),
+        lambda o, s, p: abs(float(s.pitch_cmd - s.pitch)) / float(p.pitch_max),
         100,
         "rotor inertia, tens of seconds at 0.25 s steps",
         400,

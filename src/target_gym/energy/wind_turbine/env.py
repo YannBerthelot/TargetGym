@@ -137,29 +137,33 @@ class WindTurbineParams(EnvParams):
     # Tracking: an electrical imbalance settled at ``imbalance_price`` per
     # MWh, linear in |error| (p = 1). Floor: the lowest hold error a shipped
     # controller has demonstrated under the shipped OU turbulence -- the MPC's
-    # 2.5 kW mean |error| over the 300 hold steps of the test episode
-    # (`scripts/evaluate_baselines.py`). Over a 5 min hold the PID holds
-    # 4.6 kW throughout while the MPC drifts from 3.4 kW to 54 kW
-    # (`scripts/measure_hold.py`), so neither is a floor over every window;
-    # the number is an upper bound on the achievable floor. Fatigue: pitch
+    # lowest per-seed mean |error| over the 300 hold steps of the test
+    # episode, 1.68 kW on seed 1 of five (mean 2.1 kW; the PID holds 3.5 kW
+    # there and 5.2 kW over a 5 min hold, `scripts/measure_hold.py`). A
+    # per-seed minimum rather than a mean, so that no run of the reference
+    # controller sits below it. An upper bound on the achievable floor. Fatigue: pitch
     # activity |cmd - achieved| / pitch_max above the PID's hold-phase level
-    # (0.0526) is charged, per unit of avoidable fraction, at
+    # (0.0013 of pitch_max) is charged, per unit of avoidable fraction, at
     # ``fatigue_weight`` times what tracking at the floor costs per step --
     # a documented stand-in for a maintenance model's price (provisional;
     # sweep 0.5 / 1 / 2). The $80/MWh imbalance price is the reactor's spot
     # price (provisional). An overspeed or underspeed trip costs, per step,
     # twice the 5 MW envelope's imbalance.
     reward_version: int = 2
-    e_floor: float = 2500.0  # W, MPC hold error on the test episode (upper bound)
+    e_floor: float = (
+        1680.0  # W, lowest per-seed MPC hold error on the test episode (upper bound)
+    )
     e_tol: float = 0.0
     tracking_exponent: float = 1.0
     imbalance_price: float = 80.0  # $/MWh, provisional
-    c_hold: float = 0.0526  # pitch activity fraction while holding (PID)
+    c_hold: float = (
+        0.0013  # pitch activity fraction |cmd - pitch| / pitch_max while holding (PID)
+    )
     fatigue_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
     failure_cost: float = 2.0 * 80.0 * 5.0 * 0.25 / 3600.0
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    rho_floor_tracking: float = 80.0 / 1.0e6 * 0.25 / 3600.0 * 2500.0
-    rho_floor: float = 80.0 / 1.0e6 * 0.25 / 3600.0 * 2500.0
+    rho_floor_tracking: float = 80.0 / 1.0e6 * 0.25 / 3600.0 * 1680.0
+    rho_floor: float = 80.0 / 1.0e6 * 0.25 / 3600.0 * 1680.0
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 

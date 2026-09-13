@@ -85,9 +85,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "hvac-v2": {
-    "fingerprint": "ab56346dc0c0251a",
-    "note": "v2 hvac: rho_floor (the MPC's measured cost) added as the NEA reference; reward unchanged",
-    "stamped": "2026-09-13T13:34:03+00:00"
+    "fingerprint": "e45ebfeff3c00a95",
+    "note": "v2: MPC-reference floors set to the lowest per-seed hold (wind 1680 W, HVAC 0.0273 EUR/step); reward unchanged",
+    "stamped": "2026-09-13T19:41:20+00:00"
   },
   "patrol-v1": {
     "fingerprint": "96b9deebac83bd98",
@@ -210,8 +210,8 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "wind_turbine-v2": {
-    "fingerprint": "c9ccf4305cb07a36",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "2b44b8fed09fab69",
+    "note": "v2: MPC-reference floors set to the lowest per-seed hold (wind 1680 W, HVAC 0.0273 EUR/step); reward unchanged",
+    "stamped": "2026-09-13T19:41:20+00:00"
   }
 }

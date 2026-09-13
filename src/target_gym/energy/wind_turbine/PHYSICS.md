@@ -161,11 +161,11 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 2500 W | the lowest hold error a shipped controller demonstrated under the shipped OU turbulence: the MPC's mean \|power error\| over the 300 hold steps of the test episode (`scripts/evaluate_baselines.py`). Over a 5 min hold (`scripts/measure_hold.py`, 1200 hold steps after a 300-step burn-in, 3 seeds) the PID holds 4.6 kW throughout and the MPC drifts from 3.4 kW to 54 kW, so neither is a floor over every window. Upper bound. |
+| `e_floor` | 1680 W | the lowest hold error a shipped controller demonstrated under the shipped OU turbulence: the MPC's lowest per-seed mean \|power error\| over the 300 hold steps of the test episode (seed 1 of five; mean 2.1 kW; `scripts/evaluate_baselines.py`, `target_gym.eval`). A per-seed minimum, so no run of the reference sits below it. The PID holds 3.5 kW there and 5.2 kW over a 5 min hold (`scripts/measure_hold.py`). Upper bound. |
 | `e_tol` | 0 | none |
 | `tracking_exponent` | 1 | an imbalance is settled linearly in energy |
 | `imbalance_price` | 80 $/MWh | **provisional**, the reactor's spot price; a wind farm's would come from its balancing tariff |
-| `c_hold` | 0.0526 | pitch activity fraction \|cmd - achieved\| / pitch_max while holding, PID (`scripts/measure_hold.py`) |
+| `c_hold` | 0.0013 | pitch activity fraction \|cmd - achieved\| / pitch_max while holding, PID (`scripts/measure_hold.py`; 0.0526 deg of a 40 deg range) |
 | `fatigue_weight` | 1 | **provisional.** Avoidable activity is charged per unit at what tracking at the floor costs per step; a maintenance model would give the price. Sweep 0.5 / 1 / 2. |
 | `failure_cost` | 2 x the 5 MW envelope's imbalance per step | overspeed / underspeed trip |
 

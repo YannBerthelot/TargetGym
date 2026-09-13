@@ -110,6 +110,26 @@ than by commit.
   | `wind_turbine` | 0.171 / 0.129 (8/10) | 2.622e-05 / 9.44e-05 (4/10) | $/step | **flipped** |
   | `battery` | 0.272 / 0.262 (8/10) | 0.003457 / 0.001569 (10/10) | $/step | unchanged |
 
+- **The MPCs are ceilings under the new reward.** Four things in the
+  planners had been written against the version-1 reward and stopped being
+  upper bounds under version 2 (the wind turbine's MPC lost to its PID on 6 of
+  10 seeds; the 2D aircraft's parked at the edge of the altitude tolerance
+  55 m/s below cruise). The gradient and sampling planners now descend the
+  plant's own version-2 cost in floor units, with their barriers kept and the
+  linear (p = 1) tracking terms squared for a gradient that vanishes at the
+  optimum; the HVAC CasADi planner minimises the priced dead-zone comfort and
+  the gas; the 2D aircraft plans without its 60-step open-loop tail, which
+  under an unbounded cost dominated the objective; the wind and 2D aircraft
+  planners start from, and at every step are compared against, the shipped
+  PID's rollout plan, so their plan is never worse than the PID's under the
+  planner's model; and the turbine planner carries move suppression on the
+  pitch command priced like the reward's fatigue term, plus a mild soft box
+  on rotor speed (what its supervisory logic does), because re-planning
+  creates activity no open-loop plan can see. Every MPC now beats its PID on
+  episode return and on hold cost (docs/reward-shaping.md,
+  docs/baselines.md). `runners.baseline_policy` also built the MPC on the raw
+  params rather than `plan_params`, so hand-run MPCs on the wind turbine and
+  the battery planned against one fixed noise realisation; fixed.
 - **`target_gym.eval`, the reach-and-hold protocol.** Gain after a per-plant
   burn-in, split into tracking and running cost; reach cost per target
   change; reach fraction; failure rate; the normalised expert advantage

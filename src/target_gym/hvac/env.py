@@ -155,11 +155,13 @@ class HVACParams(EnvParams):
     setback_lower_bound_only: bool = True  # provisional design choice
     tracking_exponent: float = 2.0
     failure_cost: float = 2.0 * 0.2 * 14.0**2 * 0.25
-    #: The shipped MPC's long-run cost on the test episode (EUR per step,
-    #: comfort 0.048 + gas 0.0076; `scripts/evaluate_baselines.py`): the NEA
-    #: reference, an upper bound on the floor -- overheating sets it.
-    rho_floor_tracking: float = 0.048
-    rho_floor: float = 0.0556
+    #: The shipped MPC's lowest per-seed hold cost on the test episode (EUR
+    #: per step, five seeds; comfort 0.0206, total 0.0273; the 3-seed means
+    #: are 0.0364 and 0.0427, `scripts/evaluate_baselines.py`): the NEA
+    #: reference, an upper bound on the floor -- overheating sets it, and the
+    #: weather moves it 2x between seeds, hence the minimum.
+    rho_floor_tracking: float = 0.0206
+    rho_floor: float = 0.0273
     floor_is_documented_minimum: bool = False
 
 

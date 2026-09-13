@@ -803,16 +803,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="wind_turbine",
         noise_fields=("turbulence_std",),
         disturbance_fields=("v_wind",),
-        mpc_degraded=(
-            "Under the version-2 reward the PID beats the MPC on 6 of 10 seeds "
-            "(cost per step 2.6e-5 vs 9.4e-5 $). The MPC's surrogate objective "
-            "mirrors the version-1 log-scaled reward's minimiser and its pitch "
-            "activity is 2.5x the PID's, which the priced fatigue term now "
-            "charges; its power hold also drifts over long horizons "
-            "(scripts/measure_hold.py: 3 kW then 54 kW over two halves of a "
-            "5 min hold, PID 4.6 kW throughout). Recorded, not retuned: the "
-            "objective is the controller's, the reward is the plant's."
-        ),
     ),
     EnvSpec(
         name="battery",

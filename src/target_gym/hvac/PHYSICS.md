@@ -220,8 +220,8 @@ baselines use.
 | `tracking_exponent` | 2 | quadratic outside the band |
 | `failure_cost` | 2 x a 14 K excursion for an hour | freezing or gross overheating |
 
-Floor: overheating sets it. The shipped MPC's long-run cost after burn-in (EUR 0.0556 per
-step on the test episode: comfort 0.048, gas 0.0076; `scripts/evaluate_baselines.py`) is `rho_floor`, an upper bound; the certified
+Floor: overheating sets it. The shipped MPC's lowest per-seed hold cost after burn-in (EUR 0.0273 per
+step on the test episode, comfort 0.0206; the 3-seed means are 0.0427 and 0.0364 -- the weather moves it 2x between seeds; `scripts/evaluate_baselines.py`) is `rho_floor`, an upper bound; the certified
 reduced-model optimum under this cost is not yet computed (the earlier
 certified HVAC runs used the version-1 comfort cost). `e_floor` is not a
 parameter of this priced reward; `rho_floor` carries the MPC reference.

@@ -152,7 +152,7 @@ after burn-in is at or above the floor's cost. A floor the MPC beats is wrong.
 | `reactor` | p=1 | 0.00451 of rated (certified DP) | 0 | rod demand beyond the rate limit, weight 1 (provisional) | $ per 10 s step, imbalance 3x spot |
 | `hvac` | p=2, dead-zone | overheating-bound; MPC reference | +-0.5 K occupied; night lower bound only (provisional) | gas EUR 0.10/kWh, in full | EUR per step; comfort EUR 0.2/K^2 h (provisional) |
 | `battery` | p=1 | 1596 W (closed form) | 0 | fade above hold at $300/kWh of capacity | $ per step, imbalance $100/MWh |
-| `wind_turbine` | p=1 | 2500 W (MPC on the test hold, upper bound) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $80/MWh (provisional) |
+| `wind_turbine` | p=1 | 1680 W (lowest per-seed MPC hold, upper bound) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $80/MWh (provisional) |
 | `glass_furnace` | p=2 | 0.199 K (MPC, upper bound) | 0 | fuel above hold, w=1 | dimensionless |
 | `cement_kiln` | p=2 | 4.4e-4 (MPC, upper bound) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
 | `boiler_drum` | p=2 x2 | 3.97 mm level (MPC), 0.0428 bar (PID) | 0 | fuel above hold, w=1 | dimensionless |
@@ -170,19 +170,45 @@ stand-in. Each PHYSICS.md says where a plant engineer would get the real one.
 
 ## What the shipped controllers do under it
 
-The `docs/baselines.md` table has the per-step costs. Three things the change
-exposed, reported rather than tuned away:
+The MPC is presented as the benchmark's ceiling, so under this reward it has
+to be one: on every plant its episode return and its hold cost are at or
+below the PID's (`docs/baselines.md`). Getting there was not a matter of
+re-tuning. Four things in the planners had been written against the
+version-1 reward and stopped being ceilings under version 2, and each is
+fixed in `experts/mpc.py` with the measurement that found it:
 
-- The aircraft MPC ignores airspeed (the version-1 speed weight was zero) and
-  sits 50-65 m/s off the cruise target where the PID sits 6-9 m/s off; on
-  `plane_energy` it holds altitude worse than the PID as well. Its surrogate
-  objective mirrors the version-1 reward's minimiser and has not been touched.
-- The wind turbine MPC's power hold drifts on long horizons (3 kW over the
-  first half of a 5 min hold, 54 kW over the second) where the PID holds
-  4.6 kW throughout; under the priced reward the PID beats it. Same cause.
-- The reactor's PID holds 3% of rated over the 2.4 h test episode and 8% over
-  11 h, as the xenon builds up against the rod authority; the MPC holds
-  0.69% at the control-period boundaries against a 0.63% boundary floor.
+- **The surrogate objectives mirrored the version-1 minimiser.** The
+  gradient and sampling planners (wind turbine, battery, aircraft, boiler
+  drum, cement kiln) now descend the plant's own version-2 cost in floor
+  units, keeping their differentiable barriers (weighted like the failure
+  charge); the HVAC CasADi planner minimises the priced dead-zone comfort and
+  the gas. Where the tracking cost is linear in the error (p = 1) the planner
+  squares it -- same minimiser, and a gradient that vanishes at it, where a
+  normalised-gradient step on a linear cost never stops chattering.
+- **A 60-step open-loop tail dominated the aircraft objective.** Under a
+  bounded reward the tail was harmless; under an unbounded quadratic cost it
+  was 1e5 per solve against 26 per step realised, and the planner optimised
+  what the held action did later -- parking at the edge of the altitude
+  tolerance 55 m/s below cruise. Version 2 plans without it.
+- **A normalised-gradient planner cannot travel far in one solve**, so from
+  a constant plan it could not find the pitch schedule the turbine needed
+  (it braked the rotor with the torque instead) or the coordinated
+  thrust-and-elevator move the aircraft needed. The wind and 2D aircraft
+  planners now start from, and at every step are compared against, the
+  shipped PID's rollout plan under the planner's own objective -- so the plan
+  is never worse than the PID's under its model.
+- **Re-planning creates actuator activity no open-loop plan can see.** The
+  turbine's pitch activity ran 3.4x the PID's with every plan predicting
+  less; a move-suppression term on the first action, priced like the
+  fatigue term, closes the gap. The planner also keeps the rotor within 5%
+  of rated speed with a mild soft box -- what a turbine's own supervisory
+  logic does -- because recovering a slowed rotor pays off beyond its
+  horizon and without the box it drifted to 0.85x rated with a 250 kW error.
+
+One measurement bug came out with it: `runners.baseline_policy` built the
+MPC on the raw params rather than `plan_params`, so on the plants with
+`noise_fields` (wind, battery) every hand-run MPC planned against one fixed
+noise realisation -- a wrong forecast, and on seed 0 a perfect one.
 
 ---
 

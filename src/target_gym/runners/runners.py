@@ -178,7 +178,14 @@ def baseline_policy(spec, kind: str, params=None) -> Callable | None:
         if not spec.has_mpc:
             return None
         params = spec.make_test_params() if params is None else params
-        mpc = spec.make_mpc(spec.make_env(), params)
+        # The planner's model predicts the mean disturbance (``plan_params``
+        # zeroes ``spec.noise_fields``), as the batched recorder's does. Built
+        # on the raw params it planned against one fixed noise realisation --
+        # a wrong forecast rather than none -- and on the wind turbine that
+        # was the difference between a 4.7 kW and a 7.8 kW hold.
+        from target_gym.experts.mpc import plan_params
+
+        mpc = spec.make_mpc(spec.make_env(), plan_params(spec, params))
         mpc.reset()
         return lambda obs, state: np.atleast_1d(mpc.step(obs, state))
 
