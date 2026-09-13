@@ -15,14 +15,14 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "cstr-v1": {
-    "fingerprint": "27a32e08f330f394",
-    "note": "initial stamp: every environment ships as v1 at the 0.9 release",
-    "stamped": "2026-09-04T11:12:51+00:00"
+    "fingerprint": "1aedfbe4bf2cd1e8",
+    "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",
+    "stamped": "2026-09-13T09:03:12+00:00"
   },
   "distillation-v1": {
-    "fingerprint": "8be9a7a76423a33f",
-    "note": "re-stamped without a note",
-    "stamped": "2026-09-11T10:53:48+00:00"
+    "fingerprint": "a54022227b359ba6",
+    "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",
+    "stamped": "2026-09-13T09:03:12+00:00"
   },
   "first_order-v1": {
     "fingerprint": "fa0ddbc733bf3f60",
@@ -98,6 +98,11 @@
     "fingerprint": "da9cd77061a7830c",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
+  },
+  "reactor-v2": {
+    "fingerprint": "63a0a2bd4b459422",
+    "note": "v2: max_steps_in_episode and state.time count env steps (10 s), not physics sub-steps; the shipped rollout had run 10x past the limit on a frozen plant, understating the recorded baselines ~5x",
+    "stamped": "2026-09-13T09:03:12+00:00"
   },
   "wind_turbine-v1": {
     "fingerprint": "889181b62fafcbed",

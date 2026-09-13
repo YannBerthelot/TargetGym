@@ -79,6 +79,30 @@ than by commit.
 
 ### Fixed
 
+- **The reactor's recorded baselines were understated about fivefold, and it
+  is now `reactor-v2`.** The plant integrates ten 1 s physics sub-steps per
+  environment step, and both `state.time` and `max_steps_in_episode` counted
+  the sub-steps while every rollout in the suite counted environment steps.
+  `runners.rollout` therefore ran 8640 env steps against a limit that fired at
+  864, and `step_env` spent the remaining 7776 returning a frozen plant scored
+  at a tenth of the reward: the published means (PID 0.081, MPC 0.125 per
+  step) were exactly (864 × 0.33 + 7776 × 0.033)/8640. Both counters now count
+  environment steps, as on every other plant and as gymnax's `is_truncated`
+  assumes; the physics clock lives in `state.physics_time`. Within an episode
+  nothing changed -- the trajectories are bit-identical -- but a number
+  published against `reactor-v1` was taken over a different task, so the
+  version is bumped and the baseline re-recorded on the same 2.4 h episode:
+  PID 0.333, MPC 0.635 per step. `runners.rollout` also loops on the
+  environment's clock rather than a step count, so this class of bug cannot
+  score a plant past its own time limit again.
+- **The generated facts tables labelled minutes as seconds for the PC-gym
+  plants, and would have labelled the reactor's control step as 1 s.** The CSTR
+  and distillation column integrate in their models' native minutes; their
+  params now declare `time_unit_seconds = 60`, and `registry.control_step_seconds`
+  folds that and the reactor's `control_period` into the seconds one env step
+  advances. The distillation episode reads 200 min rather than "3 min", the
+  CSTR's 25 min rather than "25 s". The two fingerprints moved with the new
+  field; the baselines were re-recorded and reproduced to the last digit.
 - **An installed package could not find its own tuned gains.** Both
   `experts/pid.py` and `provenance.py` resolved the data directory relative to
   the repository root, which is correct from a source checkout and nonsense from

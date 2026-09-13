@@ -23,7 +23,7 @@ from target_gym.utils import save_video
 
 # Number of physics sub-steps per control step. Constant so JIT can treat it
 # as static in `lax.scan(length=...)`. Change here only — `env.py` reads it
-# via a delayed import in `check_is_terminal` / `get_target_from_schedule`.
+# via ``Reactor.control_period``.
 CONTROL_PERIOD: int = 10
 
 
@@ -38,9 +38,10 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
     render_reactor = classmethod(_render)
     screen_width = 700
     screen_height = 900
-    # Number of physics sub-steps per env-step. Exposed so external
-    # rollout code (eval scripts) can convert max_steps_in_episode
-    # (physics units) to env-step counts.
+    # Number of physics sub-steps per env-step. ``max_steps_in_episode`` and
+    # ``state.time`` count env steps; ``state.physics_time`` counts sub-steps.
+    # Exposed so tooling can convert between the two (a control step lasts
+    # ``delta_t * control_period`` seconds).
     control_period: int = CONTROL_PERIOD
 
     # obs = [n, T_coolant, rho_ext_norm, target_n]
@@ -74,36 +75,39 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
             rho_raw = action.reshape(())
 
         # Action is held constant for `control_period` physics sub-steps. Reward
-        # is summed across the sub-steps; we freeze the state on termination so
-        # the scan can still run for a fixed length under jit.
+        # is accumulated across the sub-steps; we freeze the state on natural
+        # termination so the scan can still run for a fixed length under jit.
+        #
+        # Only *natural* termination is checked inside the scan. The time
+        # limit is an env-step count (``state.time``, advanced once below), so
+        # it cannot fire mid-period; gymnax's ``is_truncated`` reads it off the
+        # returned state. Checking truncation on the sub-step clock is what
+        # used to freeze this plant at a tenth of its episode.
         def sub_step(carry, _):
-            state, cum_reward, done, terminated = carry
+            state, cum_reward, terminated = carry
             candidate, _metrics = compute_next_state(
                 rho_raw, state, params, integration_method=self.integration_method
             )
             r = compute_reward(candidate, params, xp=jnp)
-            term, trunc = check_is_terminal(candidate, params, xp=jnp)
-            new_done = term | trunc
-            # Freeze state once done; still accumulate the final-step reward.
+            term = self.is_terminated(candidate, params)
+            # Freeze state once terminated; still accumulate the final-step
+            # reward. The `~terminated` guard records only the first crossing:
+            # once frozen, `term` keeps firing on the held state.
             next_state = jax.tree.map(
-                lambda a, b: jnp.where(done, a, b), state, candidate
+                lambda a, b: jnp.where(terminated, a, b), state, candidate
             )
-            next_reward = cum_reward + jnp.where(done, 0.0, r)
-            next_done = done | new_done
-            # Natural termination is tracked apart from `done` so `step_env`
-            # can report it alone -- gymnax >= 1.0 derives `truncated` itself
-            # from the returned state's `time`. The `~done` guard records only
-            # the first crossing: once frozen, `term` keeps firing on the
-            # held state.
-            next_terminated = terminated | (term & jnp.logical_not(done))
-            return (next_state, next_reward, next_done, next_terminated), None
+            next_reward = cum_reward + jnp.where(terminated, 0.0, r)
+            next_terminated = terminated | term
+            return (next_state, next_reward, next_terminated), None
 
-        (new_state, reward, _done, terminated), _ = jax.lax.scan(
+        (new_state, reward, terminated), _ = jax.lax.scan(
             sub_step,
-            (state, jnp.float32(0.0), jnp.bool_(False), jnp.bool_(False)),
+            (state, jnp.float32(0.0), jnp.bool_(False)),
             xs=None,
             length=CONTROL_PERIOD,
         )
+        # One environment step has elapsed, whatever the physics clock did.
+        new_state = new_state.replace(time=state.time + 1)
 
         # Mean over the sub-steps rather than the sum. The action is held for
         # ``CONTROL_PERIOD`` physics sub-steps, and summing made one environment
@@ -177,6 +181,7 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
 
         state = ReactorState(
             time=0,
+            physics_time=0,
             n=initial_n,
             C=initial_C,
             T_fuel=jnp.asarray(params.initial_T_fuel, dtype=jnp.float32),

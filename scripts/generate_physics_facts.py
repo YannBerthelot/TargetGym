@@ -44,14 +44,17 @@ def _tup(x):
 
 
 def _facts(names: list[str]) -> str:
-    from target_gym.registry import REGISTRY
+    from target_gym.registry import REGISTRY, control_step_seconds
 
     rows = []
     for name in names:
         spec = REGISTRY[name]
         env = spec.make_env()
         p = spec.make_test_params()
-        dt = float(getattr(p, "delta_t", 1.0))
+        # Seconds per env step, not ``delta_t``: two plants keep minutes and
+        # the reactor runs ten physics sub-steps per step (see
+        # ``registry.control_step_seconds``).
+        dt = control_step_seconds(env, p)
         steps = int(p.max_steps_in_episode)
         space = env.action_space(p)
         shape = space.shape or (1,)
@@ -78,7 +81,7 @@ def _facts(names: list[str]) -> str:
             "",
             "### Facts, generated from the code",
             "",
-            "| environment | steps | `delta_t` (s) | episode | action | obs | float state |",
+            "| environment | steps | step (s) | episode | action | obs | float state |",
             "| --- | --- | --- | --- | --- | --- | --- |",
             *rows,
             "",

@@ -171,9 +171,9 @@ means the environment does not exercise the reactor's full behaviour.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `cstr` | 100 | 0.25 | 25 s | 1 in [-1, 1] | 3 | 4 |
+| `cstr` | 100 | 15 | 25 min | 1 in [-1, 1] | 3 | 4 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

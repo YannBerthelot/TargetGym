@@ -7,7 +7,7 @@
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((6,))` |
 | Tracked variable(s) | h1 (m), h2 (m) |
-| Episode length | 500 steps (500 s at dt = 1 s) |
+| Episode length | 500 steps (500 s at 1 s per step) |
 | Import | `from target_gym import FourTank, FourTankParams` |
 | Cite as | `four_tank-v1` |
 

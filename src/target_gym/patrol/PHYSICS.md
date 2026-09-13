@@ -171,7 +171,7 @@ and is not modelled.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `patrol` | 200 | 1 | 3 min | 3 in [-1, 1] | 26 | 15 |
 | `patrol_bearing_only` | 200 | 1 | 3 min | 3 in [-1, 1] | 21 | 15 |

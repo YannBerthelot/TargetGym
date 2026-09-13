@@ -144,7 +144,7 @@ loading and individual pitch control has nothing to act on.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `wind_turbine` | 400 | 0.25 | 100 s | 2 in [-1, 1] | 5 | 8 |
 

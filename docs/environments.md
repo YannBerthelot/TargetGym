@@ -66,7 +66,7 @@ env, params = spec.make_env(), spec.params_cls()
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
 | `glass_furnace` | `glass_furnace-v1` | (5,) | (1,) | crown temperature (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
-| `reactor` | `reactor-v1` | (4,) | (1,) | neutron power (normalised) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
+| `reactor` | `reactor-v2` | (4,) | (1,) | neutron power (normalised) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 | `hvac` | `hvac-v1` | (7,) | (1,) | zone air temperature (deg C) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
 | `cement_kiln` | `cement_kiln-v1` | (8,) | (2,) | discharge free lime (%) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |
 | `boiler_drum` | `boiler_drum-v1` | (7,) | (2,) | drum level (m), drum pressure (bar) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |

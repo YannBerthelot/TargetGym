@@ -9,7 +9,7 @@ Glass furnace (float-glass process) — regenerative end-port fired furnace.
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((5,))` |
 | Tracked variable(s) | crown temperature (K) |
-| Episode length | 1600 steps (48000 s at dt = 30 s) |
+| Episode length | 1600 steps (48000 s at 30 s per step) |
 | Import | `from target_gym import GlassFurnace, GlassFurnaceParams` |
 | Cite as | `glass_furnace-v1` |
 

@@ -37,13 +37,12 @@ def _ceiling(spec, row) -> int:
     Every shipped reward is a product of terms in [0, 1], so one env step pays
     at most 1 and the ceiling is just the step count.
 
-    This used to divide the reactor's by its ``control_period`` of 10, on the
-    belief that ``max_steps_in_episode`` counted physics steps there. It does
-    not. ``control_period`` is how many physics sub-steps run *inside* one
-    ``step_env`` call, which changes nothing about how many rewards an episode
-    pays: a reactor rollout returns 8640 rewards for 8640 env steps, every one
-    of them non-zero and in [0, 1]. The wrong divisor put the reactor's share
-    at 1.251, which is what the guard below is for.
+    ``max_steps_in_episode`` counts env steps on every plant, the reactor
+    included since its clock was unified: ``control_period`` is how many
+    physics sub-steps run *inside* one ``step_env`` call and changes nothing
+    about how many rewards an episode pays. (When the reactor's limit was still
+    written in physics steps, this once divided by ``control_period`` and put
+    the reactor's share at 1.251, which is what the guard below is for.)
     """
     return int(row["steps"])
 

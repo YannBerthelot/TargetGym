@@ -165,7 +165,7 @@ skips its PRNG-hygiene checks.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `four_tank` | 500 | 1 | 8 min | 2 in [-1, 1] | 6 | 8 |
 

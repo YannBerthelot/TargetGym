@@ -223,7 +223,7 @@ peak temperature is resolution-limited; a finer grid shifts it modestly.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `cement_kiln` | 700 | 30 | 5.8 h | 2 in [-1, 1] | 8 | 85 |
 

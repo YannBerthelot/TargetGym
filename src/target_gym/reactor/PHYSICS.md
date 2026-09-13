@@ -128,7 +128,7 @@ levels stay available.
 | `sigma_phi0` | 7.95e-5 | 1/s | σ_a 2.65e-18 cm² × Φ ≈ 3e13 n/cm²/s | ✅ |
 | `gamma_ratio` | 0.049 | – | Direct Xe yield / I yield (0.003 / 0.061) | ✅ |
 | `rho_Xe_full` | 0.025 | – | Equilibrium xenon worth, 2500 pcm | ✅ |
-| `delta_t` | 1.0 | s | 86 400 physics steps = 24 h | ✅ |
+| `delta_t` | 1.0 | s | Physics sub-step; 10 per env step, so 8640 env steps = 24 h | ✅ |
 
 ---
 
@@ -194,9 +194,9 @@ this model markedly more benign than the real thing.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 8640 | 1 | 2.4 h | 1 in [-1, 1] | 4 | 14 |
+| `reactor` | 864 | 10 | 2.4 h | 1 in [-1, 1] | 4 | 14 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

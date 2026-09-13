@@ -166,7 +166,7 @@ error on the manipulated stream.
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `ph_neutralization` | 300 | 5 | 25 min | 1 in [-1, 1] | 3 | 6 |
 

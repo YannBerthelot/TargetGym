@@ -9,9 +9,9 @@ Nuclear reactor — point-kinetics with delayed neutrons, xenon poisoning, therm
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((4,))` |
 | Tracked variable(s) | neutron power (normalised) |
-| Episode length | 8640 steps (8640 s at dt = 1 s) |
+| Episode length | 864 steps (8640 s at 10 s per step) |
 | Import | `from target_gym import Reactor, ReactorParams` |
-| Cite as | `reactor-v1` |
+| Cite as | `reactor-v2` |
 
 ## Action space
 
@@ -38,13 +38,13 @@ Every environment in this suite scores on one contract: the reward is
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 11 fields.
+`reset` samples the initial condition and the target; state has 12 fields.
 
 ## Episode end
 
 **Termination.** See `check_is_terminal`.
 
-**Truncation.** After 8640 steps.
+**Truncation.** After 864 steps.
 
 ## Baselines
 
@@ -55,7 +55,7 @@ A tuned PID ships with this environment.
 | parameter | default |
 |---|---|
 | `delta_t` | 1 |
-| `max_steps_in_episode` | 8640 |
+| `max_steps_in_episode` | 864 |
 | `Lambda_gen` | 0.0001 |
 | `alpha_fuel` | -3e-05 |
 | `alpha_coolant` | -5e-05 |

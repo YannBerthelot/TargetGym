@@ -24,6 +24,7 @@ def _default_state(
     I_hat, Xe_hat = steady_state_xenon(n, params)
     return ReactorState(
         time=0,
+        physics_time=0,
         n=n,
         C=steady_state_precursors(n, params),
         T_fuel=params.initial_T_fuel,
@@ -154,7 +155,10 @@ def test_compute_next_state_progression(method):
         integration_method=method,
     )
     assert isinstance(new_state, ReactorState)
-    assert new_state.time == state.time + 1
+    # One physics sub-step: the physics clock moves, the env-step clock does
+    # not (``Reactor.step_env`` advances it once per control period).
+    assert new_state.physics_time == state.physics_time + 1
+    assert new_state.time == state.time
     # rho_ext is the converted action, clamped to [rho_ext_min, rho_ext_max]
     assert params.rho_ext_min <= float(new_state.rho_ext) <= params.rho_ext_max
     # Precursors have the right shape

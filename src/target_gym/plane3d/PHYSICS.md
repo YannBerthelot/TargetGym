@@ -240,7 +240,7 @@ xfail. That is a controller gap, not a physics gap; it is tracked in
 
 ### Facts, generated from the code
 
-| environment | steps | `delta_t` (s) | episode | action | obs | float state |
+| environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `plane3d_circle` | 300 | 1 | 5 min | 3 in [-1, 1] | 17 | 26 |
 | `plane3d_figure8` | 400 | 1 | 7 min | 3 in [-1, 1] | 19 | 26 |

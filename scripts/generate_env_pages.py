@@ -227,7 +227,9 @@ def page(name: str, spec) -> str:
 
     title = display_name(name)
     video = _video(name)
-    dt = float(getattr(params, "delta_t", 1.0))
+    from target_gym.registry import control_step_seconds
+
+    dt = control_step_seconds(env, params)
     episode = int(params.max_steps_in_episode)
 
     out = [f"# {title}", ""]
@@ -255,7 +257,7 @@ def page(name: str, spec) -> str:
         f"| Action space | `Box({act_space.shape or (1,)})`, all actions in [-1, 1] |",
         f"| Observation space | `Box({obs_space.shape or (1,)})` |",
         f"| Tracked variable(s) | {', '.join(labels) if labels else 'see below'} |",
-        f"| Episode length | {episode} steps ({episode * dt:g} s at dt = {dt:g} s) |",
+        f"| Episode length | {episode} steps ({episode * dt:g} s at {dt:g} s per step) |",
         f"| Import | `from target_gym import {type(env).__name__}, "
         f"{type(params).__name__}` |",
         f"| Cite as | `{spec.versioned_name}` |",
