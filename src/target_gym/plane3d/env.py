@@ -14,7 +14,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import NO_RESTART, EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.plane.dynamics import (
     advance_gust,
@@ -84,6 +84,9 @@ class PlaneState3D(EnvState):
             compute_velocity_3d(self.x_dot, self.y_dot, self.z_dot),
             self.speed_of_sound,
         )
+
+    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
+    downtime: int = 0
 
 
 @struct.dataclass
@@ -195,9 +198,14 @@ class PlaneParams3D(EnvParams):
     e_floor_path: float = 3.0  # m
     tracking_exponent: float = 2.0
     failure_cost: float = 3.0e8
+    #: Steps the plant is down after a trip before it restarts (a crash: no restart).
+    restart_steps: int = NO_RESTART
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    rho_floor_tracking: float = 2.0
-    rho_floor: float = 2.0
+    #: One: the altitude term is zero inside its tolerance, so at the floor
+    #: only the heading or path term costs 1 (the figure-8 has the path term
+    #: alone).
+    rho_floor_tracking: float = 1.0
+    rho_floor: float = 1.0
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = True
     # Figure-8: half-amplitude of the altitude twist (meters).  The curve
@@ -885,9 +893,11 @@ def altitude_cost(state, params, xp=jnp):
     )
 
 
-def _failure(state, params, xp=jnp):
+def _downtime(terms, state, params, xp=jnp):
     terminated, _ = check_is_terminal_3d(state, params, xp)
-    return R.failure_cost(terminated, params.failure_cost, xp)
+    return R.with_downtime(
+        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
+    )
 
 
 def compute_reward_terms_heading(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
@@ -899,10 +909,9 @@ def compute_reward_terms_heading(state: PlaneState3D, params: PlaneParams3D, xp=
         params.tracking_exponent,
         xp,
     )
-    return {
-        "tracking": altitude_cost(state, params, xp) + heading,
-        "failure": _failure(state, params, xp),
-    }
+    return _downtime(
+        {"tracking": altitude_cost(state, params, xp) + heading}, state, params, xp
+    )
 
 
 def compute_reward_terms_racetrack(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
@@ -913,10 +922,9 @@ def compute_reward_terms_racetrack(state: PlaneState3D, params: PlaneParams3D, x
         params.tracking_exponent,
         xp,
     )
-    return {
-        "tracking": altitude_cost(state, params, xp) + path,
-        "failure": _failure(state, params, xp),
-    }
+    return _downtime(
+        {"tracking": altitude_cost(state, params, xp) + path}, state, params, xp
+    )
 
 
 def compute_reward_terms_circle(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
@@ -927,13 +935,12 @@ def compute_reward_terms_circle(state: PlaneState3D, params: PlaneParams3D, xp=j
         params.tracking_exponent,
         xp,
     )
-    return {
-        "tracking": altitude_cost(state, params, xp) + path,
-        "failure": _failure(state, params, xp),
-    }
+    return _downtime(
+        {"tracking": altitude_cost(state, params, xp) + path}, state, params, xp
+    )
 
 
 def compute_reward_terms_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     _, _, _, dist, _ = nearest_point_on_twisted_lemniscate(state, params)
     path = R.tracking_cost(dist, params.e_floor_path, 0.0, params.tracking_exponent, xp)
-    return {"tracking": path, "failure": _failure(state, params, xp)}
+    return _downtime({"tracking": path}, state, params, xp)

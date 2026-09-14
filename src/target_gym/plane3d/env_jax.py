@@ -16,7 +16,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset
+from target_gym.base import canonical_reset, failure_kernel
 from target_gym.plane.dynamics import total_wind_3d
 from target_gym.plane3d.env import (
     _RACETRACK_LEG,
@@ -107,20 +107,23 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
             integration_method=self.integration_method,
             key=key,
         )
+        # A crash is part of the kernel: the aircraft is frozen at the failure
+        # cost to the window's end (``restart_steps = NO_RESTART``);
+        # ``terminated`` is never raised (``base.failure_kernel``).
+        new_state, tripped, down = failure_kernel(self, key, state, new_state, params)
         reward = self.compute_reward(new_state, params)
-        # gymnax >= 1.0 owns truncation: ``step_env`` reports natural
-        # termination only, and the base ``Environment.step`` derives
-        # ``truncated`` from ``state.time >= params.max_steps_in_episode``
-        # -- the very condition ``check_is_terminal`` returns second.
-        terminated, _ = check_is_terminal_3d(new_state, params, xp=jnp)
-
         obs = self.get_obs(new_state, params)
         return (
             obs,
             new_state,
             reward,
-            terminated,
-            {"metrics": metrics, "last_state": new_state},
+            jnp.zeros((), dtype=bool),
+            {
+                "metrics": metrics,
+                "last_state": new_state,
+                "tripped": tripped,
+                "down": down,
+            },
         )
 
     def is_terminated(self, state: PlaneState3D, params: PlaneParams3D) -> jax.Array:

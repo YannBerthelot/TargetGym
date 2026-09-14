@@ -7,15 +7,30 @@ paid once per target change). An episode return mixes the two in a proportion
 set by the episode length, which is why the recorded baselines are not the
 protocol. This module computes:
 
-``gain``            mean per-step cost after ``burn_in`` steps, pooled across
-                    episodes, with its 95% interval over episodes; split into
-                    ``tracking`` and ``running`` (and ``failure``) when the
-                    environment reports its reward terms.
+``gain``            mean per-step cost over every step after ``burn_in``,
+                    pooled across episodes, with its 95% interval over
+                    episodes: the long-run average cost of the natural
+                    process, transients included, which is what Theorem 4
+                    decomposes as ``rho = rho_hold + p * reach_cost``. Split
+                    into ``tracking`` and ``running`` (and ``failure``) when
+                    the environment reports its reward terms. No settle enters
+                    it, so two controllers are compared on the same steps.
+``hold``            the same over the settled steps only (after each cycle's
+                    transient, see ``reach_cost``): ``rho_hold``. Split as
+                    ``hold_tracking`` / ``hold_running``.
 ``reach_cost``      per target-change cycle, the summed cost above that cycle's
-                    hold level (the mean cost after its first ``settle`` steps);
-                    ``rho = rho_hold + p * reach_cost`` at change rate ``p``.
+                    hold level; ``rho = rho_hold + p * reach_cost`` at change
+                    rate ``p``. The hold level is the mean cost over the second
+                    half of the cycle and ``settle`` is measured on the cycle
+                    itself -- the first step from which the cost stays within
+                    twice that level, at least one -- so each controller is
+                    scored against its own transient. (A first version applied
+                    the MPC's settle to the PID, which on the battery scored
+                    the PID's transient after every dispatch block as hold and
+                    manufactured an MPC advantage; and with ``settle = 0`` the
+                    reach cost was zero by construction.)
 ``reach_fraction``  share of steps spent before first entering the band.
-``failure_rate``    share of cycles that reach an absorbing failure.
+``failure_rate``    share of cycles in which the plant trips (``info["tripped"]``).
 ``nea``             normalised expert advantage ``(PID - x) / (PID - floor)``:
                     1 at the achievable floor, 0 at PID parity, negative below
                     PID. In cost units, so it needs ``rho_floor`` -- the
@@ -24,9 +39,9 @@ protocol. This module computes:
 ``time_in_band``    a KPI only, never a training signal: share of steps with
                     every tracked error inside ``band``.
 
-``burn_in`` and ``settle`` are per plant, from ``data/hold_measurements.json``
-(``scripts/measure_hold.py``): three cost-bearing time constants, and the
-shipped MPC's settling time after a target change.
+``burn_in`` is per plant, from ``data/hold_measurements.json``
+(``scripts/measure_hold.py``): three cost-bearing time constants. Passing
+``settle`` overrides the per-cycle measurement with a fixed count.
 
 Usage::
 
@@ -54,7 +69,7 @@ class Episode:
     cost: np.ndarray  # per-step cost, >= 0 (= -reward)
     in_band: np.ndarray  # bool per step
     target_change: np.ndarray  # bool per step: a new target became active
-    failed: np.ndarray | None = None  # bool per step: absorbing failure reached
+    failed: np.ndarray | None = None  # bool per step: the plant tripped on this step
     terms: dict = field(default_factory=dict)  # name -> per-step array
 
 
@@ -70,22 +85,76 @@ def _ci(x):
 
 
 def gain(episodes, burn_in: int, key: str | None = None):
+    """Mean per-step cost over every step after the burn-in, pooled per
+    episode: the long-run average cost, transients included."""
     per_ep = []
     for ep in episodes:
         series = ep.cost if key is None else ep.terms[key]
         if len(series) > burn_in:
             per_ep.append(series[burn_in:].mean())
-    return float(np.mean(per_ep)), _ci(per_ep)
+    return (
+        (float(np.mean(per_ep)), _ci(per_ep))
+        if per_ep
+        else (float("nan"), float("nan"))
+    )
 
 
-def reach_cost(episodes, settle: int):
+def hold(episodes, burn_in: int, key: str | None = None, settle: int | None = None):
+    """Mean per-step cost over the settled steps only (after the burn-in and
+    after each cycle's transient): ``rho_hold``."""
+    per_ep = []
+    for ep in episodes:
+        series = ep.cost if key is None else ep.terms[key]
+        m = hold_mask(ep, burn_in, settle)
+        if m.sum() >= 1:
+            per_ep.append(series[m].mean())
+    return (
+        (float(np.mean(per_ep)), _ci(per_ep))
+        if per_ep
+        else (float("nan"), float("nan"))
+    )
+
+
+def _settle_of(cost: np.ndarray, settle: int | None) -> int:
+    """Steps of a cycle that belong to its transient.
+
+    Measured on the cycle: the hold level is the mean cost over the second
+    half, and the transient ends at the first step from which the cost stays
+    within twice that level. At least one step, at most half the cycle, so
+    the level is never taken over the window it defines.
+    """
+    n = len(cost)
+    if settle is not None:
+        return int(min(max(settle, 1), max(n // 2, 1)))
+    if n < 4:
+        return 1
+    level = cost[n // 2 :].mean()
+    ok = cost <= 2.0 * level + 1e-12
+    # last step that is still outside, plus one
+    outside = np.flatnonzero(~ok[: n // 2])
+    return int(min(max(outside[-1] + 1 if len(outside) else 1, 1), n // 2))
+
+
+def reach_cost(episodes, settle: int | None = None):
+    """Excess cost of each cycle's transient over its hold level."""
     vals = []
     for ep in episodes:
         for a, b in _cycles(ep):
-            if b - a > settle:
-                level = ep.cost[a + settle : b].mean()
-                vals.append((ep.cost[a:b] - level).sum())
+            k = _settle_of(ep.cost[a:b], settle)
+            level = ep.cost[a + k : b].mean() if b - a > k else ep.cost[a:b].mean()
+            vals.append((ep.cost[a : a + k] - level).sum())
     return (float(np.mean(vals)), _ci(vals)) if vals else (float("nan"), float("nan"))
+
+
+def hold_mask(ep: Episode, burn_in: int, settle: int | None = None) -> np.ndarray:
+    """Steps that count as hold: after the burn-in and after each cycle's
+    transient."""
+    m = np.zeros(len(ep.cost), bool)
+    for a, b in _cycles(ep):
+        k = _settle_of(ep.cost[a:b], settle)
+        m[a + k : b] = True
+    m[:burn_in] = False
+    return m
 
 
 def reach_fraction(episodes):
@@ -122,15 +191,18 @@ def nea(rho_pi, rho_ref, rho_floor):
 def evaluate(
     episodes,
     burn_in: int,
-    settle: int,
+    settle: int | None = None,
     rho_floor: float | None = None,
     rho_ref: float | None = None,
 ):
     g, gci = gain(episodes, burn_in)
+    h, hci = hold(episodes, burn_in, settle=settle)
     rc, rcci = reach_cost(episodes, settle)
     out = dict(
         gain=g,
         gain_ci=gci,
+        hold=h,
+        hold_ci=hci,
         reach_cost=rc,
         reach_cost_ci=rcci,
         reach_fraction=reach_fraction(episodes),
@@ -139,6 +211,7 @@ def evaluate(
     )
     for key in episodes[0].terms:
         out[key] = gain(episodes, burn_in, key)[0]
+        out["hold_" + key] = hold(episodes, burn_in, key, settle=settle)[0]
     if rho_floor is not None:
         out["abs_gap"] = g - rho_floor
     if rho_floor is not None and rho_ref is not None:
@@ -152,13 +225,10 @@ def evaluate(
 
 
 def hold_settings(name: str) -> dict:
-    """``burn_in`` and ``settle`` for a plant, from the measurement file."""
+    """``burn_in`` for a plant, from the measurement file."""
     rows = json.loads(_DATA.read_text()) if _DATA.exists() else {}
     row = rows.get(name)
-    if row is None:
-        return {"burn_in": 0, "settle": 0}
-    ctrl = row.get("mpc") or row.get("pid") or {}
-    return {"burn_in": int(row["burn_in"]), "settle": int(round(ctrl.get("settle", 0)))}
+    return {"burn_in": int(row["burn_in"]) if row else 0}
 
 
 def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
@@ -202,7 +272,9 @@ def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
             span = np.maximum(np.abs(tgt), 1e-9)
         changes.append(bool((np.abs(tgt - prev_target) > 0.05 * span).any()))
         prev_target = tgt
-        failed.append(bool(term))
+        failed.append(
+            bool(info.get("tripped", False)) if isinstance(info, dict) else False
+        )
         # Exact per-step terms when the environment returns them (the
         # reactor sums ten sub-steps); otherwise the terms at the new state.
         step_terms = info.get("reward_terms") if isinstance(info, dict) else None
@@ -211,8 +283,6 @@ def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
         if step_terms is not None:
             for k, v in step_terms.items():
                 terms.setdefault(k, []).append(float(v))
-        if bool(term):
-            break
     return Episode(
         cost=np.array(costs),
         in_band=np.array(bands),
@@ -239,7 +309,6 @@ def evaluate_controller(
     return evaluate(
         episodes,
         burn_in=min(settings["burn_in"], int(p.max_steps_in_episode) // 2),
-        settle=settings["settle"],
         rho_floor=float(getattr(p, "rho_floor", float("nan"))),
         rho_ref=rho_ref,
     )
@@ -248,7 +317,7 @@ def evaluate_controller(
 if __name__ == "__main__":
     # Smoke test against Theorem 4 of the note: constant hold cost 0.1 with reach
     # excursions of 5 at change rate p = 0.01 gives gain ~ 0.1 + p * 5 = 0.15,
-    # reach_cost ~ 5, reach_fraction ~ p * 5.
+    # hold ~ 0.1, reach_cost ~ 5, reach_fraction ~ p * 5.
     rng = np.random.default_rng(0)
     T, p = 20000, 0.01
     tc = rng.random(T) < p
@@ -258,5 +327,5 @@ if __name__ == "__main__":
         cost[i : i + 5] += 1.0
         band[i : i + 5] = False
     ep = Episode(cost=cost, in_band=band, target_change=tc, failed=np.zeros(T, bool))
-    m = evaluate([ep], burn_in=100, settle=10, rho_floor=0.1, rho_ref=0.2)
+    m = evaluate([ep], burn_in=100, rho_floor=0.1, rho_ref=0.2)
     print({k: round(float(v), 4) for k, v in m.items()})

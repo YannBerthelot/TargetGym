@@ -43,6 +43,7 @@ REWARD_PARAM_NAMES = {
     "comfort_price",
     "comfort_tolerance",
     "failure_cost",
+    "restart_steps",
 }
 
 
@@ -198,6 +199,32 @@ def test_reward_parameters_are_documented(spec):
     p = spec.make_test_params()
     missing = [k for k in _reward_params(p) if f"`{k}`" not in text]
     assert not missing, f"{spec.name}: undocumented reward parameters {missing}"
+    # Where the table states a number for a scalar parameter, it must be the
+    # parameter's value (a name in backticks alone documents nothing). Rows
+    # are ``| `name` | value | source |``; the first number of the value cell
+    # is compared to within 2%, or exactly for booleans. Rows whose value is
+    # prose (a formula, "documented minimum") are not checked.
+    wrong = []
+    for k in _reward_params(p):
+        v = getattr(p, k)
+        if not isinstance(v, (int, float, bool)) or isinstance(v, bool):
+            continue
+        m = re.search(rf"^\| `{re.escape(k)}`(?:, `[^`]+`)* \| ([^|]*) \|", text, re.M)
+        if not m:
+            continue
+        cell = m.group(1)
+        if not re.match(r"\s*[-+]?\d", cell) or re.match(r"\s*\d+(\.\d+)? x ", cell):
+            continue  # prose or a formula ("2 x the envelope's cost")
+        nums = [
+            float(x.replace(" ", "").replace("_", ""))
+            for x in re.findall(
+                r"[-+]?\d(?:[\d_]|\s(?=\d))*(?:\.\d+)?(?:[eE][-+]?\d+)?", cell
+            )
+        ]
+        # A cell may list one value per task (the aircraft's c_hold): any match.
+        if not any(abs(n - float(v)) <= 0.02 * max(abs(float(v)), 1e-12) for n in nums):
+            wrong.append(f"{k}: PHYSICS.md says {nums}, params say {v}")
+    assert not wrong, f"{spec.name}: {wrong}"
     assert re.search(
         r"measure_hold\.py|floor_\w+\.py|closed form|documented minimum", text
     ), f"{spec.name}: PHYSICS.md does not say how the floor was obtained"
@@ -219,3 +246,40 @@ def test_mpc_does_not_beat_a_measured_floor(spec):
         f"{spec.name}: MPC tracking cost {m['tracking']:.4g} below the floor "
         f"{float(p.rho_floor_tracking):.4g}"
     )
+
+
+def test_a_down_plant_pays_the_failure_cost_and_restarts(spec):
+    """``base.failure_kernel``: a plant with downtime left is frozen at the
+    failure cost, one step per step, and restarts when the countdown ends; a
+    plant with ``restart_steps = NO_RESTART`` stays down."""
+    from target_gym.base import NO_RESTART
+
+    env = spec.make_env()
+    p = spec.make_test_params()
+    obs, state = env.reset_env(jax.random.PRNGKey(0), p)
+    step = jax.jit(env.step_env)
+    a = jnp.zeros(
+        np.atleast_1d(env.action_space(p).sample(jax.random.PRNGKey(0))).shape
+    )
+    down = state.replace(
+        downtime=jnp.asarray(3, jnp.int32)
+    )  # 3 down steps taken so far
+    for k in (2, 1):
+        _, down, r, term, info = step(jax.random.PRNGKey(k), down, a, p)
+        assert not bool(term)
+        assert bool(info["down"]) and not bool(info["tripped"])
+        assert float(r) == pytest.approx(-float(p.failure_cost), rel=1e-5)
+        assert int(down.downtime) == k
+    # the countdown has run out: this step restarts the plant
+    _, fresh, r, term, info = step(jax.random.PRNGKey(3), down, a, p)
+    assert not bool(term) and not bool(info["down"])
+    assert int(fresh.downtime) == 0
+    assert int(fresh.time) == int(down.time) + 1
+    assert float(r) != pytest.approx(-float(p.failure_cost), rel=1e-5)
+    if int(p.restart_steps) >= NO_RESTART:
+        stuck = state.replace(downtime=jnp.asarray(NO_RESTART - 1, jnp.int32))
+        for k in range(3):
+            _, stuck, r, _, info = step(jax.random.PRNGKey(k), stuck, a, p)
+            assert bool(info["down"]) and float(r) == pytest.approx(
+                -float(p.failure_cost), rel=1e-5
+            )

@@ -75,20 +75,24 @@ class CementKilnParams(EnvParams):
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # Floor: the shipped MPC's long-run mean free-lime error under the shipped
-    # raw-meal disturbance, 4.4e-4 (fraction) over 1560 hold steps after a
+    # raw-meal disturbance, 3.42e-4 (fraction; the lowest of three seeds, 3.4 / 4.4 / 5.6e-4, PID 7.0-10.1e-4) over 1560 hold steps after a
     # 180-step burn-in, `scripts/measure_hold.py`; an upper bound on the
     # achievable floor. e_tol = 0 provisionally: the free-lime specification
     # band comes from the plant's quality system and is to be supplied. Fuel
     # above the hold-phase rate (1.824 kg/s, PID; MPC 1.840) is charged at
-    # weight 1. The unit free-lime span costs (1 / 4.4e-4)^2 = 5.2e6 per
+    # weight 1. The unit free-lime span costs (1 / 3.42e-4)^2 = 8.6e6 per
     # step; termination twice that.
     reward_version: int = 2
-    e_floor: float = 4.4e-4  # free-lime fraction, MPC hold error (upper bound)
+    e_floor: float = (
+        3.42e-4  # free-lime fraction, lowest per-seed MPC hold (upper bound)
+    )
     e_tol: float = 0.0  # provisional; quality-system band to be supplied
     tracking_exponent: float = 2.0
     c_hold: float = 1.824  # kg/s fuel while holding (PID)
     running_weight: float = 1.0
-    failure_cost: float = 1.04e7
+    failure_cost: float = 1.7e7
+    #: Steps the plant is down after a trip before it restarts (24 h at 30 s steps: cool-down, inspection and re-heat, provisional).
+    restart_steps: int = 2880
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 1.0
     rho_floor: float = 1.0
@@ -200,10 +204,11 @@ class CementKilnState(EnvState):
     raw_meal: jnp.ndarray  # kg/s (the disturbance)
     target_lime: jnp.ndarray
 
-
-# ---------------------------------------------------------------------------
-# Geometry and material flow
-# ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
+    # Geometry and material flow
+    # ---------------------------------------------------------------------------
+    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
+    downtime: int = 0
 
 
 def zone_length(params: CementKilnParams) -> float:
@@ -485,7 +490,7 @@ def check_is_terminal(state: CementKilnState, params: CementKilnParams, xp=jnp):
 def compute_reward_terms(state: CementKilnState, params: CementKilnParams, xp=jnp):
     """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
     terminated, _ = check_is_terminal(state, params, xp)
-    return {
+    terms = {
         "tracking": R.tracking_cost(
             discharge_lime(state) - state.target_lime,
             params.e_floor,
@@ -494,8 +499,10 @@ def compute_reward_terms(state: CementKilnState, params: CementKilnParams, xp=jn
             xp,
         ),
         "running": R.running_cost(state.fuel, params.c_hold, params.running_weight, xp),
-        "failure": R.failure_cost(terminated, params.failure_cost, xp),
     }
+    return R.with_downtime(
+        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
+    )
 
 
 def compute_reward_v1(state: CementKilnState, params: CementKilnParams, xp=jnp):

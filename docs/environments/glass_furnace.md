@@ -38,7 +38,7 @@ Every environment in this suite scores on one contract: the reward is
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 16 fields.
+`reset` samples the initial condition and the target; state has 17 fields.
 
 ## Episode end
 
@@ -68,5 +68,5 @@ A tuned PID ships with this environment.
 | `eps_regen_node` | 0.8 |
 | `reversal_period` | 1500 |
 | `reversal_dead_time` | 40 |
-| … | 55 more, see the params dataclass |
+| … | 56 more, see the params dataclass |
 

@@ -192,12 +192,17 @@ baselines use.
 | `e_tol` | 0 | no product specification band was supplied for the reactor concentration |
 | `tracking_exponent` | 2 | quadratic |
 | `failure_cost` | 1.8e7 | twice the span's cost, (0.3 / 1e-4)^2 |
+| `restart_steps` | 240 (1 h) | steps the plant is down after a trip before it restarts (cool, purge and re-feed after a runaway; provisional); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the tracking cost per step at the floor in the reward's
 units (the NEA floor for tracking) and `rho_floor` the full floor including
 consumption charged in full; `floor_is_documented_minimum` records whether
 `e_floor` is a measured/certified floor or a resolution used as a scale;
-`failure_cost` is charged per step in a terminal state and exceeds the largest
-tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
+cost the envelope can produce. A trip never ends the window (`base.failure_kernel`):
+the plant is frozen at that cost, with tracking and running cost zeroed, for
+`restart_steps` steps and then restarts as `reset_env` would; a plant with no
+restart stays down to the window's end. `terminated` is never raised;
+`info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).

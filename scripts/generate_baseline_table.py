@@ -78,7 +78,7 @@ def _table() -> str:
                 (pid_cost - mpc_cost) / max(abs(pid_cost), 1e-12),
                 f"| `{name}` | {steps} | {pid_cost:.4g} | {mpc_cost:.4g} | "
                 f"{(pid_cost - mpc_cost) / max(abs(pid_cost), 1e-12):.3f} | "
-                f"{won}/{len(pid)}{flag} | {row['mpc_terminated_early']} |",
+                f"{won}/{len(pid)}{flag} | {row['mpc_trips']} |",
             )
         )
 
@@ -97,7 +97,7 @@ def _table() -> str:
             "<!-- Written by scripts/generate_baseline_table.py from",
             "     data/baseline_returns.json. Do not edit by hand. -->",
             "",
-            "| environment | steps | PID cost/step | MPC cost/step | MPC saves | MPC wins | term |",
+            "| environment | steps | PID cost/step | MPC cost/step | MPC saves | MPC wins | trips |",
             "| --- | --- | --- | --- | --- | --- | --- |",
             *[r for _, r in rows],
             "",
@@ -112,9 +112,11 @@ def _table() -> str:
             "means it is not the upper bound this table presents it as; those carry an",
             "`EnvSpec.mpc_degraded` note saying why.",
             "",
-            "`term` counts seeds where the MPC ended the episode early. A permanent",
-            "zero can mean the controller is safe or that the environment cannot",
-            "terminate at all; `first_order` is the latter.",
+            "`trips` counts the MPC's trips over the ten windows: a trip never ends a",
+            "window, the plant is down at the failure cost and restarts, or stays",
+            "down (`base.failure_kernel`). A permanent zero can mean the controller",
+            "is safe or that the plant cannot leave its envelope; `first_order` is",
+            "the latter.",
             "",
             END,
         ]

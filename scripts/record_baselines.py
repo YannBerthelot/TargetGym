@@ -188,8 +188,8 @@ def _mpc_one_seed(args):
         params = spec.make_test_params()
         env = spec.make_env()
         policy = mpc_policy(spec, env, params)
-        _, _, r = rollout(spec, params, policy, seed)
-        out = float(np.sum(r)), int(len(r)), policy.controller.solver_report()
+        _, _, r, trips = rollout(spec, params, policy, seed, return_trips=True)
+        out = float(np.sum(r)), int(trips), policy.controller.solver_report()
     return (*out, time.time() - t0)
 
 
@@ -206,8 +206,8 @@ def _mpc_batch_one_env(args):
     t0 = time.time()
     with _running(live, f"{name} MPC batch"):
         spec = REGISTRY[name]
-        _, _, r, ended = rollout_mpc_batch(spec, spec.make_test_params(), SEEDS)
-        out = [float(v) for v in r.sum(axis=1)], int(ended.sum())
+        _, _, r, trips = rollout_mpc_batch(spec, spec.make_test_params(), SEEDS)
+        out = [float(v) for v in r.sum(axis=1)], int(trips.sum())
     return (*out, time.time() - t0)
 
 
@@ -317,7 +317,7 @@ def _split_by_planner(names: list[str]) -> tuple[list[str], list[str]]:
     return batched, per_seed
 
 
-def _row(name, pid, mpc, terminated_early, reports, seconds) -> dict:
+def _row(name, pid, mpc, trips, reports, seconds) -> dict:
     spec = REGISTRY[name]
     row = {
         "fingerprint": baseline_fingerprint(spec),
@@ -325,7 +325,7 @@ def _row(name, pid, mpc, terminated_early, reports, seconds) -> dict:
         "seeds": SEEDS,
         "pid_returns": [round(v, 6) for v in pid],
         "mpc_returns": [round(v, 6) for v in mpc],
-        "mpc_terminated_early": int(terminated_early),
+        "mpc_trips": int(trips),
         "seconds": round(seconds, 1),
     }
     row.update(_merge_reports(reports))
@@ -343,7 +343,7 @@ def _report(name: str, row: dict) -> None:
             health += f" ({row['solver_capped']} capped)"
     print(
         f"  {name:20s} PID {p:9.2f}  MPC {m:9.2f}  {verdict:22s} "
-        f"term {row['mpc_terminated_early']}  {row['seconds']:6.0f}s{health}",
+        f"trips {row['mpc_trips']}  {row['seconds']:6.0f}s{health}",
         flush=True,
     )
 
@@ -457,7 +457,7 @@ def main() -> int:
             if any(v is None for v in mpc_out[name]):
                 return
             mpc = [v for v, _, _ in mpc_out[name]]
-            ended = sum(1 for _, n, _ in mpc_out[name] if n < rows_steps[name])
+            ended = sum(n for _, n, _ in mpc_out[name])
             reports = [r for _, _, r in mpc_out[name]]
         else:
             if name not in batch_out:
@@ -469,10 +469,6 @@ def main() -> int:
         )
         _write(rows)
         _report(name, rows[name])
-
-    rows_steps = {
-        n: int(REGISTRY[n].make_test_params().max_steps_in_episode) for n in live
-    }
 
     # Sized by memory, not by cores.
     #

@@ -257,8 +257,8 @@ class ReactorParams(EnvParams):
     # the rod range, charged per unit at ``rod_wear_weight`` times what
     # tracking at the floor costs -- a documented stand-in for a maintenance
     # price (provisional; the audit found the optimum insensitive to it below
-    # ten times the floor). A trip costs, per step, twice the 1.49 envelope's
-    # imbalance.
+    # ten times the floor). A trip is charged, once, at twice the 1.49
+    # envelope's imbalance for every 10 s step the episode had left.
     reward_version: int = 2
     e_floor: float = 0.00451  # fraction of rated, certified hold floor
     e_tol: float = 0.0
@@ -266,6 +266,8 @@ class ReactorParams(EnvParams):
     imbalance_multiple: float = 3.0  # of spot, for imbalance energy
     rod_wear_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
     failure_cost: float = 2000.0  # $ per 10 s step
+    #: Steps the plant is down after a trip before it restarts (48 h at 10 s steps: a SCRAM's xenon-limited restart, provisional).
+    restart_steps: int = 17280
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 3.0 * 80.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
     rho_floor: float = 3.0 * 80.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
@@ -297,6 +299,8 @@ class ReactorState(EnvState):
     #: limit. Carried so the reward can charge for demanding motion the rods
     #: cannot deliver; see ``compute_reward``.
     rho_ext_cmd: float
+    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
+    downtime: int = 0
 
 
 def steady_state_precursors(n_0: float, params: ReactorParams) -> jnp.ndarray:
@@ -649,13 +653,11 @@ def compute_reward_terms(state: ReactorState, params: ReactorParams, xp=jnp):
     excess = xp.abs(state.rho_ext_cmd - state.rho_ext) / rho_scale
     rod_wear = p.rod_wear_weight * per_unit_s * p.e_floor * excess
     terminated, _ = check_is_terminal(state, p, xp)
-    from target_gym.reactor.env_jax import CONTROL_PERIOD
-
-    return {
+    terms = {
         "tracking": tracking,
         "running": rod_wear,
-        "failure": R.failure_cost(terminated, p.failure_cost / CONTROL_PERIOD, xp),
     }
+    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
 
 
 def compute_reward_v1(state: ReactorState, params: ReactorParams, xp=jnp):

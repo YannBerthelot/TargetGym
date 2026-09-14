@@ -82,7 +82,8 @@ def fly(env, params, power_raw, stick_raw, steps, state=None):
     z, v, theta, alpha, z_dot = [], [], [], [], []
     _jstep = jax.jit(env.step_env)
     for _ in range(steps):
-        _, state, _, terminated, _ = _jstep(KEY, state, action, params)
+        _, state, _, _, info = _jstep(KEY, state, action, params)
+        terminated = info["tripped"]  # a crash freezes the aircraft; the window goes on
         z.append(float(state.z))
         v.append(float(state.x_dot))
         theta.append(float(np.rad2deg(state.theta)))
@@ -273,8 +274,9 @@ def test_glide_is_shallower_than_ballistic_fall(env, params):
 # ---------------------------------------------------------------------------
 
 
-def test_flying_into_the_ground_terminates_the_episode(env, params):
-    """Descending to ground level must end the episode.
+def test_flying_into_the_ground_trips_the_aircraft(env, params):
+    """Descending to ground level must trip the aircraft (frozen at the
+    failure cost to the window's end, ``base.failure_kernel``).
 
     Note ``clamp_altitude`` in ``plane.dynamics`` is dead code -- defined,
     imported by ``plane3d.dynamics``, never called. Altitude is bounded purely
@@ -283,8 +285,8 @@ def test_flying_into_the_ground_terminates_the_episode(env, params):
     """
     state = make_state(params, alt=250.0, speed=200.0, theta_deg=-10.0)
     traj = fly(env, params, power_raw=-1.0, stick_raw=-0.5, steps=200, state=state)
-    assert traj["terminated"], "flew into the ground without terminating"
-    assert np.all(traj["z"][:-1] >= 0.0), "went underground before terminating"
+    assert traj["terminated"], "flew into the ground without tripping"
+    assert np.all(traj["z"][:-1] >= 0.0), "went underground before tripping"
     # The terminal undershoot is bounded by one step of vertical travel.
     one_step = abs(float(traj["z_dot"][-1])) * params.delta_t
     assert traj["z"][-1] > -(one_step + 1.0)

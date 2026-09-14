@@ -147,8 +147,9 @@ class WindTurbineParams(EnvParams):
     # ``fatigue_weight`` times what tracking at the floor costs per step --
     # a documented stand-in for a maintenance model's price (provisional;
     # sweep 0.5 / 1 / 2). The $80/MWh imbalance price is the reactor's spot
-    # price (provisional). An overspeed or underspeed trip costs, per step,
-    # twice the 5 MW envelope's imbalance.
+    # price (provisional). An overspeed or underspeed trip is charged, for
+    # every step the episode had left, twice the imbalance of the 7 MW the
+    # overspeed limit and torque_max allow (the rated 5 MW is not the envelope).
     reward_version: int = 2
     e_floor: float = (
         1680.0  # W, lowest per-seed MPC hold error on the test episode (upper bound)
@@ -160,7 +161,9 @@ class WindTurbineParams(EnvParams):
         0.0013  # pitch activity fraction |cmd - pitch| / pitch_max while holding (PID)
     )
     fatigue_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
-    failure_cost: float = 2.0 * 80.0 * 5.0 * 0.25 / 3600.0
+    failure_cost: float = 2.0 * 80.0 * 7.0 * 0.25 / 3600.0
+    #: Steps the plant is down after a trip before it restarts (10 min at 0.25 s steps: an overspeed trip's reset and re-synchronisation, provisional).
+    restart_steps: int = 2400
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 80.0 / 1.0e6 * 0.25 / 3600.0 * 1680.0
     rho_floor: float = 80.0 / 1.0e6 * 0.25 / 3600.0 * 1680.0
@@ -180,6 +183,8 @@ class WindTurbineState(EnvState):
     pitch_cmd: float
     torque_cmd: float
     target_power: float
+    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
+    downtime: int = 0
 
 
 def rotor_area(params: WindTurbineParams):
@@ -365,11 +370,11 @@ def compute_reward_terms(state: WindTurbineState, params: WindTurbineParams, xp=
         * R.running_cost(activity, p.c_hold, p.fatigue_weight, xp)
     )
     terminated, _ = check_is_terminal(state, p, xp)
-    return {
+    terms = {
         "tracking": tracking,
         "running": fatigue,
-        "failure": R.failure_cost(terminated, p.failure_cost, xp),
     }
+    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
 
 
 def compute_reward_v1(state: WindTurbineState, params: WindTurbineParams, xp=jnp):

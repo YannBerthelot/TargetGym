@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset
+from target_gym.base import canonical_reset, failure_kernel
 from target_gym.boiler_drum.env import (
     BoilerDrumParams,
     BoilerDrumState,
@@ -65,15 +65,17 @@ class BoilerDrum(environment.Environment[BoilerDrumState, BoilerDrumParams]):
         new_state, _ = compute_next_state(
             action, state, params, key, integration_method=self.integration_method
         )
+        # A trip is part of the kernel: the plant is frozen at the failure
+        # cost for ``restart_steps`` steps and restarts, or stays down to the
+        # window's end. ``terminated`` is never raised (``base.failure_kernel``).
+        new_state, tripped, down = failure_kernel(self, key, state, new_state, params)
         reward = compute_reward(new_state, params, xp=jnp)
-        # gymnax >= 1.0 owns truncation; step_env reports natural termination only.
-        terminated, _ = check_is_terminal(new_state, params, xp=jnp)
         return (
             self.get_obs(new_state),
             new_state,
             reward,
-            terminated,
-            {"last_state": new_state},
+            jnp.zeros((), dtype=bool),
+            {"last_state": new_state, "tripped": tripped, "down": down},
         )
 
     def get_obs(self, state: BoilerDrumState, params: BoilerDrumParams = None):

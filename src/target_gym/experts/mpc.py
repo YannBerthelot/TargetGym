@@ -2028,7 +2028,11 @@ def _done_value(params, squared: bool = False) -> float:
     """What a planner on the environment's own reward charges per step once
     the plant has terminated: 0 for the non-negative version-1 reward (the
     forgone reward is the penalty), the failure charge for version 2, whose
-    healthy steps are negative -- in the planner's units."""
+    healthy steps are negative -- in the planner's units. Under version 2 no
+    plant raises ``terminated`` any more (a trip freezes it at the failure
+    cost inside the rollout, ``base.failure_kernel``), so the planner sees the
+    trip's cost in the rollout itself and this value is never applied; it is
+    kept for the version-1 planners."""
     if _is_v1(params):
         return 0.0
     return -_failure_units(params, squared)
@@ -2780,8 +2784,8 @@ def make_wind_turbine_mpc(
     env,
     params,
     horizon: int = 60,
-    n_iter: int = 500,
-    lr: float = 0.005,
+    n_iter: int | None = None,
+    lr: float | None = None,
     n_tail: int = 0,
     objective_fn=_wind_turbine_objective,
 ):
@@ -2811,8 +2815,16 @@ def make_wind_turbine_mpc(
     the seed where they disagree scored *higher*), and the inner optimiser
     (Adam, and a decaying step size, are both worse here than the plain one).
     """
+    # Version 1 keeps the planner it was recorded with (100 iterations at
+    # lr 0.02, a zero warm start), so its recorded baseline reproduces; the
+    # version-2 planner needs the larger budget for the move-suppressed,
+    # squared-tracking objective (measured: 500 / 0.005 is the first setting
+    # that beats the PID on every seed).
+    v1 = _is_v1(params)
+    n_iter = (100 if v1 else 500) if n_iter is None else n_iter
+    lr = (0.02 if v1 else 0.005) if lr is None else lr
     done_value = 0.0
-    if not _is_v1(params) and objective_fn is _wind_turbine_objective:
+    if not v1 and objective_fn is _wind_turbine_objective:
         from target_gym.energy.wind_turbine.env import (
             compute_reward,
             compute_reward_terms,
@@ -2828,8 +2840,12 @@ def make_wind_turbine_mpc(
 
     from target_gym.experts.pid import make_wind_turbine_stateful_pid
 
-    initial_plan = _pid_rollout_plan(env, make_wind_turbine_stateful_pid, horizon, 2)
-    guide_plan = initial_plan if not _is_v1(params) else None
+    initial_plan = (
+        None
+        if v1
+        else _pid_rollout_plan(env, make_wind_turbine_stateful_pid, horizon, 2)
+    )
+    guide_plan = initial_plan
 
     def move_penalty(u0, u_prev, p):
         # Pitch command change between solves as a fraction of pitch_max
@@ -2851,7 +2867,7 @@ def make_wind_turbine_mpc(
         objective_fn=objective_fn,
         initial_plan_fn=initial_plan,
         guide_plan_fn=guide_plan,
-        move_penalty_fn=move_penalty if not _is_v1(params) else None,
+        move_penalty_fn=None if v1 else move_penalty,
     )
 
 

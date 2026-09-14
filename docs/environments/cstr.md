@@ -36,7 +36,7 @@ Every environment in this suite scores on one contract: the reward is
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 5 fields.
+`reset` samples the initial condition and the target; state has 6 fields.
 
 ## Episode end
 
@@ -66,5 +66,5 @@ A tuned PID ships with this environment.
 | `Caf` | 1 |
 | `T_c_max` | 302 |
 | `T_c_min` | 295 |
-| … | 14 more, see the params dataclass |
+| … | 15 more, see the params dataclass |
 

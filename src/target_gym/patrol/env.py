@@ -30,7 +30,7 @@ import jax.numpy as jnp
 from flax import struct
 
 from target_gym import reward as R
-from target_gym.base import EnvState
+from target_gym.base import NO_RESTART, EnvState
 from target_gym.experts.pid import Plane3DPIDState, plane3d_heading_pid_step
 from target_gym.plane.dynamics import advance_gust
 from target_gym.plane3d.dynamics import compute_velocity_3d
@@ -102,6 +102,8 @@ class PatrolState(EnvState):
     gust_x: float = 0.0
     gust_y: float = 0.0
     gust_z: float = 0.0
+    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
+    downtime: int = 0
 
 
 @struct.dataclass
@@ -145,6 +147,11 @@ class PatrolParams(PlaneParams3D):
     e_tol_slot: float = 0.0  # provisional; station-keeping radius to be supplied
     # Overrides the inherited aircraft value: twice the slot-loss bound's cost.
     failure_cost: float = 2.0 * (1500.0 / 3.0) ** 2
+    #: Steps the plant is down after a trip before it restarts (a crash, collision or lost formation: no restart).
+    restart_steps: int = NO_RESTART
+    #: Two terms without tolerance (slot, heading): the floor costs 2.
+    rho_floor_tracking: float = 2.0
+    rho_floor: float = 2.0
 
     # Lead behaviour.  Turn rate is sampled in [-r, r] rad/step; 0 => straight
     # and level.  At delta_t = 1 s, 0.003 rad/step ~ 0.17 deg/s ~ a very gentle
@@ -308,10 +315,10 @@ def compute_reward_terms_patrol(state: PatrolState, params: PatrolParams, xp=jnp
         xp,
     )
     terminated, _ = check_is_terminal_patrol(state, p, xp)
-    return {
+    terms = {
         "tracking": slot + heading,
-        "failure": R.failure_cost(terminated, p.failure_cost, xp),
     }
+    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
 
 
 def compute_reward_patrol_v1(state: PatrolState, params: PatrolParams, xp=jnp):

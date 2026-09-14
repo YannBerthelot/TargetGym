@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset
+from target_gym.base import canonical_reset, failure_kernel
 from target_gym.pc_gym.first_order.env import (
     FirstOrderParams,
     FirstOrderState,
@@ -68,15 +68,18 @@ class FirstOrderSystem(environment.Environment[FirstOrderState, FirstOrderParams
             u, state, params, integration_method=self.integration_method
         )
 
-        reward = compute_reward(new_state, params)
-        # gymnax >= 1.0 owns truncation: ``step_env`` reports natural
-        # termination only, and the base ``Environment.step`` derives
-        # ``truncated`` from ``state.time >= params.max_steps_in_episode``
-        # -- the very condition ``check_is_terminal`` returns second.
-        terminated, _ = check_is_terminal(new_state, params)
-
-        obs = self.get_obs(new_state)
-        return obs, new_state, reward, terminated, {"last_state": new_state}
+        # A trip is part of the kernel: the plant is frozen at the failure
+        # cost for ``restart_steps`` steps and restarts, or stays down to the
+        # window's end. ``terminated`` is never raised (``base.failure_kernel``).
+        new_state, tripped, down = failure_kernel(self, key, state, new_state, params)
+        reward = compute_reward(new_state, params, xp=jnp)
+        return (
+            self.get_obs(new_state),
+            new_state,
+            reward,
+            jnp.zeros((), dtype=bool),
+            {"last_state": new_state, "tripped": tripped, "down": down},
+        )
 
     def get_obs(self, state: FirstOrderState, params: FirstOrderParams = None):
         if params is None:

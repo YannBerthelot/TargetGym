@@ -5,9 +5,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "battery-v2": {
-    "fingerprint": "c280cf202eb50883",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "5add4f40497f0995",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "boiler_drum-v1": {
     "fingerprint": "24bd471e04585728",
@@ -15,9 +15,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "boiler_drum-v2": {
-    "fingerprint": "79bcc69da64b48b8",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "e5d370f917ab41ad",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "cement_kiln-v1": {
     "fingerprint": "0419d354f296e9f2",
@@ -25,9 +25,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "cement_kiln-v2": {
-    "fingerprint": "ee02d654652b3340",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "91379982ec3fd775",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "cstr-v1": {
     "fingerprint": "1aedfbe4bf2cd1e8",
@@ -35,9 +35,9 @@
     "stamped": "2026-09-13T09:03:12+00:00"
   },
   "cstr-v2": {
-    "fingerprint": "4ed7a92479798462",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "3400597e74b5de73",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "distillation-v1": {
     "fingerprint": "a54022227b359ba6",
@@ -45,9 +45,9 @@
     "stamped": "2026-09-13T09:03:12+00:00"
   },
   "distillation-v2": {
-    "fingerprint": "540993efc472795b",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "cec0eae6979abcd6",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "first_order-v1": {
     "fingerprint": "fa0ddbc733bf3f60",
@@ -55,9 +55,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "first_order-v2": {
-    "fingerprint": "e29775704f546d98",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "d7f18e46b482d0b7",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "four_tank-v1": {
     "fingerprint": "da38eef254db0f34",
@@ -65,9 +65,9 @@
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "four_tank-v2": {
-    "fingerprint": "6b8d0fdba23cac57",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "914adebf67d31f92",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "glass_furnace-v1": {
     "fingerprint": "272349cfabc95017",
@@ -75,9 +75,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "glass_furnace-v2": {
-    "fingerprint": "86a7251e8d8f95f8",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "95202fb9da4308ee",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "hvac-v1": {
     "fingerprint": "5c8e38a6b643c717",
@@ -85,9 +85,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "hvac-v2": {
-    "fingerprint": "e45ebfeff3c00a95",
-    "note": "v2: MPC-reference floors set to the lowest per-seed hold (wind 1680 W, HVAC 0.0273 EUR/step); reward unchanged",
-    "stamped": "2026-09-13T19:41:20+00:00"
+    "fingerprint": "78a5ede0ad14db23",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "patrol-v1": {
     "fingerprint": "96b9deebac83bd98",
@@ -95,9 +95,9 @@
     "stamped": "2026-09-10T23:12:20+00:00"
   },
   "patrol-v2": {
-    "fingerprint": "072cf3fa1e86f250",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "03dc183262c96743",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "patrol_bearing_only-v1": {
     "fingerprint": "96b9deebac83bd98",
@@ -105,9 +105,9 @@
     "stamped": "2026-09-10T23:12:20+00:00"
   },
   "patrol_bearing_only-v2": {
-    "fingerprint": "072cf3fa1e86f250",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "03dc183262c96743",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "ph_neutralization-v1": {
     "fingerprint": "55f320195cb81ce2",
@@ -115,9 +115,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "ph_neutralization-v2": {
-    "fingerprint": "533f2c884f9d8b7e",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "a58e92666b8041b2",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "plane-v1": {
     "fingerprint": "e5d0397cd54ac886",
@@ -125,9 +125,9 @@
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "plane-v2": {
-    "fingerprint": "b26a6862dca56c67",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "d4573980d1202df2",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "plane3d_circle-v1": {
     "fingerprint": "ffcbd44cb289829d",
@@ -135,9 +135,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_circle-v2": {
-    "fingerprint": "da6dad6125a7af8b",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "f9cf7caa0ca1920f",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "plane3d_figure8-v1": {
     "fingerprint": "925522f0cf3233f4",
@@ -145,9 +145,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_figure8-v2": {
-    "fingerprint": "ac8d546e76ce26bf",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "62e0026909ab540c",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "plane3d_heading-v1": {
     "fingerprint": "2961df4b494a5ab7",
@@ -155,9 +155,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_heading-v2": {
-    "fingerprint": "440532a37a376103",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "a0a9479d482f8440",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "plane3d_racetrack-v1": {
     "fingerprint": "f1f9b8f7b7dcec42",
@@ -165,9 +165,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_racetrack-v2": {
-    "fingerprint": "3a14ca0bf3139a99",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "a646b23fba0a9057",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "plane_energy-v1": {
     "fingerprint": "3994cf3273f563eb",
@@ -175,9 +175,9 @@
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "plane_energy-v2": {
-    "fingerprint": "cd72b551b831db03",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "a3e0671359a2a643",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "plane_sine-v1": {
     "fingerprint": "01afd0d200bbcfb0",
@@ -185,9 +185,9 @@
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "plane_sine-v2": {
-    "fingerprint": "363ea40a1d5c02e1",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "8603b7867e6221fd",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "reactor-v1": {
     "fingerprint": "da9cd77061a7830c",
@@ -200,9 +200,9 @@
     "stamped": "2026-09-13T09:03:12+00:00"
   },
   "reactor-v3": {
-    "fingerprint": "efc2dd81a8c574dd",
-    "note": "v2 (reactor v3): floor-normalised reward, docs/reward-shaping.md; re-stamped after an import-order lint pass, behaviour unchanged",
-    "stamped": "2026-09-13T11:58:55+00:00"
+    "fingerprint": "51d57df27b782777",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   },
   "wind_turbine-v1": {
     "fingerprint": "889181b62fafcbed",
@@ -210,8 +210,8 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "wind_turbine-v2": {
-    "fingerprint": "2b44b8fed09fab69",
-    "note": "v2: MPC-reference floors set to the lowest per-seed hold (wind 1680 W, HVAC 0.0273 EUR/step); reward unchanged",
-    "stamped": "2026-09-13T19:41:20+00:00"
+    "fingerprint": "1a262eec7217b641",
+    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
+    "stamped": "2026-09-14T09:04:20+00:00"
   }
 }

@@ -19,8 +19,8 @@ choice, is concave and pays a controller that trades rare large excursions
 for frequent small ones (Proposition 8 of the note), which is the wrong
 preference for a hold.
 
-**Running.** Consumption is charged only above ``c_hold``, what the shipped MPC
-consumes per step while holding: the part of the fuel, energy, boilup, reagent
+**Running.** Consumption is charged only above ``c_hold``, what the best shipped
+controller (MPC or PID) consumes per step while holding: the part of the fuel, energy, boilup, reagent
 or actuator travel that a controller could avoid. Dimensionless form
 ``w * max(c - c_hold, 0) / c_hold``, with ``w`` documented per plant as "one
 floor-width of tracking error is worth w times the hold-phase consumption";
@@ -30,10 +30,16 @@ product ``tracking * (1 - w * running)`` charges nothing for consumption
 exactly where tracking is worst, and a cost that vanishes when it should
 bind is not a cost.
 
-**Failure.** A terminal state costs, per step, more than the largest tracking
-cost the operating envelope can produce, so that a policy which fails with any
-probability has the worst possible long-run cost (safety enters through the
-gain, Proposition 5 of the note).
+**Failure.** Leaving the operating envelope trips the plant. A tripped plant
+is down at ``failure_cost`` per step -- above the largest tracking cost the
+envelope can produce, with tracking and running cost zeroed -- for
+``restart_steps`` steps, then restarts (``base.failure_kernel``); a plant
+that cannot restart stays down to the end of the window. That is the
+absorbing state of the Target-MDP note lived through inside the window, so a
+policy which fails with any probability has the worst long-run cost (safety
+enters through the gain, Proposition 5), and under a finite restart the gain
+decomposes as ``rho_hold + p * B + lambda * (restart_steps * failure_cost +
+B_restart)`` with ``lambda`` the trip rate. No episode ends at a trip.
 
 The best achievable per-step reward is then about -1 (tracking at the floor,
 nothing avoidable consumed), not 0 or 1: cross-plant comparability comes from
@@ -67,9 +73,18 @@ def priced_cost(quantity, price, xp=jnp):
     return price * quantity
 
 
-def failure_cost(terminated, per_step, xp=jnp):
-    """Per-step cost of being in an absorbing failure state."""
-    return xp.where(terminated, per_step, 0.0)
+def with_downtime(terms: dict, down, failure_cost, xp=jnp) -> dict:
+    """The terms of a plant that is down: every cost zeroed and the failure
+    cost charged, per step, for as long as ``down`` holds."""
+    out = {k: xp.where(down, 0.0, v) for k, v in terms.items()}
+    out["failure"] = xp.where(down, failure_cost, 0.0)
+    return out
+
+
+def is_down(tripped_now, state, xp=jnp):
+    """A plant is down when it is outside its envelope (tripped or frozen)
+    or still counting its downtime."""
+    return xp.logical_or(tripped_now, state.downtime > 0)
 
 
 def total(terms: dict, xp=jnp):

@@ -185,18 +185,23 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_top`, `e_floor_bottom` | 4.3e-5, 7.4e-5 mole fraction | the shipped MPC's long-run mean |error| on each product under the shipped feed-composition disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in, 3 seeds; PID 1.2e-4 and 2.2e-4). Upper bounds on the achievable floors. |
+| `e_floor_top`, `e_floor_bottom` | 4.9e-5, 6.4e-5 mole fraction | the lowest per-seed long-run mean \|error\| the shipped MPC held on each product under the shipped feed-composition disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in, 3 seeds; PID down to 5.7e-5 and 1.3e-4). Per-seed minima; upper bounds |
 | `e_tol` | 0 | **provisional.** The purity specifications a column is run against come from the sales contract. |
 | `tracking_exponent` | 2 | quadratic |
 | `c_hold` | 3.282 kmol/min | boilup while holding, PID (MPC 3.292) (`scripts/measure_hold.py`) |
 | `running_weight` | 1 | sweep 0.5 / 1 / 2 |
-| `failure_cost` | 1.45e9 | twice the two-product span cost |
+| `failure_cost` | 1.3e9 | twice the two-product span cost, per down step |
+| `restart_steps` | 240 (4 h) | steps the plant is down after a trip before it restarts (column shutdown and re-establishment of the profile; provisional); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the tracking cost per step at the floor in the reward's
 units (the NEA floor for tracking) and `rho_floor` the full floor including
 consumption charged in full; `floor_is_documented_minimum` records whether
 `e_floor` is a measured/certified floor or a resolution used as a scale;
-`failure_cost` is charged per step in a terminal state and exceeds the largest
-tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
+cost the envelope can produce. A trip never ends the window (`base.failure_kernel`):
+the plant is frozen at that cost, with tracking and running cost zeroed, for
+`restart_steps` steps and then restarts as `reset_env` would; a plant with no
+restart stays down to the window's end. `terminated` is never raised;
+`info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).

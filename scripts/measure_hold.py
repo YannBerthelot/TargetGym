@@ -13,8 +13,8 @@ floor-normalised reward (docs/reward-shaping.md):
             controller, so no floor may lie above it -- and the sanity check every
             floor has to pass.
 ``c_hold``  the running-cost quantity (fuel, energy, boilup, reagent, actuator
-            travel) per step, same window. Only consumption above the MPC's
-            ``c_hold`` is charged by the reward.
+            travel) per step, same window. Only consumption above the best
+            shipped controller's ``c_hold`` is charged by the reward.
 ``settle``  median steps after a target change until |error| first falls within
             twice ``e_hold``; the evaluation protocol drops that many steps from
             the start of each cycle before scoring the hold.
@@ -251,21 +251,19 @@ def _episode(spec, env, params, kind, seed, errors, consumption):
     policy = baseline_policy(spec, kind, params)
     ti = list(_as_tuple(env.obs_target_index))
     E, C, T = [], [], []
-    terminated = False
+    trips = 0  # a trip never ends the window (``base.failure_kernel``)
     while int(state.time) < int(params.max_steps_in_episode):
         o = np.asarray(obs)
         a = policy(o, state) if _wants_state(policy) else policy(o)
-        obs, state, _r, term, _ = step(
+        obs, state, _r, _term, info = step(
             key, state, jnp.atleast_1d(jnp.asarray(a)), params
         )
         o2 = np.asarray(obs)
         E.append(errors(o2, state, params))
         C.append(consumption(o2, state, params) if consumption else np.nan)
         T.append(o2[ti])
-        if bool(term):
-            terminated = True
-            break
-    return np.array(E), np.array(C, dtype=float), np.array(T), terminated
+        trips += int(bool(info.get("tripped", False)))
+    return np.array(E), np.array(C, dtype=float), np.array(T), trips
 
 
 def _cycles(targets, rel=0.05):
@@ -348,17 +346,22 @@ def measure(name, seeds):
             h = len(idx) // 2
             half1.append(e[idx[:h]].mean(axis=0))
             half2.append(e[idx[h:]].mean(axis=0))
+        per_seed = [e.mean(axis=0).tolist() for e in E]
         E = np.concatenate(E)
         C = np.concatenate(C)
         row[kind] = {
             "e_hold": E.mean(axis=0).tolist(),
+            # Per seed, so a floor can be the lowest hold the controller
+            # demonstrated rather than a mean it sits below on some seeds.
+            "e_hold_per_seed": per_seed,
+            "e_hold_min": np.min(per_seed, axis=0).tolist(),
             "e_hold_rms": np.sqrt((E**2).mean(axis=0)).tolist(),
             "e_hold_first_half": np.mean(half1, axis=0).tolist(),
             "e_hold_second_half": np.mean(half2, axis=0).tolist(),
             "c_hold": None if np.isnan(C).all() else float(np.nanmean(C)),
             "settle": float(np.median(B)),
             "cycles_per_episode": len(bounds) - 1,
-            "terminated": term,
+            "trips": term,
             "hold_steps_scored": int(len(E)),
             "seconds": round(time.time() - t0, 1),
         }

@@ -61,9 +61,13 @@ def _run_to_steady(fuel_raw, params=None, hours=140.0):
     action = jnp.array([fuel_raw])
     terminated = False
     _jstep = jax.jit(env.step_env)
+    # A trip no longer ends the window (``base.failure_kernel``): the plant
+    # is frozen and ``info["down"]`` says so. That is what "terminated" means
+    # to these checks: the furnace left its envelope.
     for _ in range(p.max_steps_in_episode):
-        _, state, _, terminated, _ = _jstep(key, state, action, p)
-        if bool(terminated):
+        _, state, _, _, info = _jstep(key, state, action, p)
+        terminated = bool(info["down"])
+        if terminated:
             break
     # Stop at a fully firing step. The burners are interrupted for 40 s at every
     # reversal, so a furnace sampled at an arbitrary step can be caught with its
@@ -71,7 +75,8 @@ def _run_to_steady(fuel_raw, params=None, hours=140.0):
     # specific energy is a quarter of the real figure. Neither says anything
     # about steady operation, which is what these checks are about.
     while float(state.fuel_flow) < p.fuel_min and not terminated:
-        _, state, _, terminated, _ = _jstep(key, state, action, p)
+        _, state, _, _, info = _jstep(key, state, action, p)
+        terminated = bool(info["down"])
     return state, bool(terminated), p
 
 

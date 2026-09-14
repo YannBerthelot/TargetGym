@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset
+from target_gym.base import canonical_reset, failure_kernel
 from target_gym.reactor.env import (
     ReactorParams,
     ReactorState,
@@ -123,6 +123,14 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
         )
         # One environment step has elapsed, whatever the physics clock did.
         new_state = new_state.replace(time=state.time + 1)
+        # A SCRAM is part of the kernel: the plant is down at the failure cost
+        # for ``restart_steps`` steps, then restarts (``base.failure_kernel``).
+        # While down, the step's cost is the failure cost and nothing else,
+        # whatever the frozen sub-steps summed to.
+        new_state, tripped, down = failure_kernel(self, key, state, new_state, params)
+        reward = jnp.where(down, -params.failure_cost, reward)
+        terms = {k: jnp.where(down, 0.0, v) for k, v in terms.items()}
+        terms["failure"] = jnp.where(down, params.failure_cost, terms["failure"])
 
         # Mean over the sub-steps rather than the sum. The action is held for
         # ``CONTROL_PERIOD`` physics sub-steps, and summing made one environment
@@ -146,8 +154,13 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
             obs,
             new_state,
             reward,
-            terminated,
-            {"last_state": new_state, "reward_terms": terms},
+            jnp.zeros((), dtype=bool),
+            {
+                "last_state": new_state,
+                "reward_terms": terms,
+                "tripped": tripped,
+                "down": down,
+            },
         )
 
     def get_obs(self, state: ReactorState, params: ReactorParams = None):

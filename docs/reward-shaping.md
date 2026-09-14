@@ -4,8 +4,12 @@ TargetGym exists to ask one question: **can a learned policy hold a setpoint
 better than a PID or an MPC?** That question lives entirely in the reward, so
 the reward is the measuring instrument, and this page records how it is built.
 Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`) scores
-through it; version 1, the capped log-scaled reward, is kept constructible
-(`reward_version=1` on any params) and described at the end of this page.
+through it -- seventeen with the tracking term normalised by a floor, and four
+(reactor, battery, wind turbine, building) with tracking and consumption in
+the owner's currency, where the floor enters as the reference cost `rho_floor`
+rather than as a divisor; version 1, the capped log-scaled reward, is kept
+constructible (`reward_version=1` on any params) and described at the end of
+this page.
 
 ## The reward, in one line
 
@@ -78,10 +82,27 @@ vanishes when it should bind is not a cost.
 
 ### Failure
 
-A terminal state costs, per step, more than the largest tracking cost the
-operating envelope can produce, so a policy that fails with any probability
-has the worst possible long-run cost. Safety enters through the average cost,
-not through a separate constraint.
+Leaving the operating envelope trips the plant. A reach-and-hold task is
+continuing, so a trip is not the end of an episode: the plant is frozen at
+`failure_cost` per step -- above the largest tracking cost the envelope can
+produce, with tracking and running cost zeroed -- for `restart_steps` steps,
+then restarts as `reset_env` would, on the same window clock
+(`base.failure_kernel`). A plant that cannot restart (the aircraft, the glass
+furnace) stays down to the window's end. That is the absorbing state of the
+Target-MDP note lived through inside the window, so a policy that fails with
+any probability has the worst long-run cost and safety enters through the
+average cost; with a finite restart the long-run cost decomposes as
+`rho_hold + p * B + lambda * (restart_steps * failure_cost + B_restart)`, with
+`lambda` the trip rate, which the protocol reports separately.
+
+No plant raises `terminated`. Raising it tells a discounted learner the
+crashed state is worth zero -- the cheapest state in the plant, and the
+bootstrap behind every agent that learns to crash -- and cuts the chain an
+average-reward learner estimates its gain on. The trip is `info["tripped"]`,
+read by the evaluator and by nothing an agent runs. (Two earlier versions of
+this page charged the trip once, per terminal step, and then for the steps the
+episode had left; both made the price of a trip depend on the episode rather
+than the plant.)
 
 ## Why the floor: loop performance assessment, in cost units
 
@@ -153,11 +174,11 @@ after burn-in is at or above the floor's cost. A floor the MPC beats is wrong.
 | `hvac` | p=2, dead-zone | overheating-bound; MPC reference | +-0.5 K occupied; night lower bound only (provisional) | gas EUR 0.10/kWh, in full | EUR per step; comfort EUR 0.2/K^2 h (provisional) |
 | `battery` | p=1 | 1596 W (closed form) | 0 | fade above hold at $300/kWh of capacity | $ per step, imbalance $100/MWh |
 | `wind_turbine` | p=1 | 1680 W (lowest per-seed MPC hold, upper bound) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $80/MWh (provisional) |
-| `glass_furnace` | p=2 | 0.199 K (MPC, upper bound) | 0 | fuel above hold, w=1 | dimensionless |
-| `cement_kiln` | p=2 | 4.4e-4 (MPC, upper bound) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
-| `boiler_drum` | p=2 x2 | 3.97 mm level (MPC), 0.0428 bar (PID) | 0 | fuel above hold, w=1 | dimensionless |
-| `distillation` | p=2 x2 | 4.3e-5 / 7.4e-5 (MPC, upper bounds) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
-| `ph_neutralization` | p=2 | 0.0146 pH (MPC, upper bound) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
+| `glass_furnace` | p=2 | 0.175 K (lowest per-seed MPC hold, upper bound) | 0 | fuel above hold, w=1 | dimensionless |
+| `cement_kiln` | p=2 | 3.4e-4 (lowest per-seed MPC hold, upper bound) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
+| `boiler_drum` | p=2 x2 | 2.7 mm level, 0.030 bar (lowest per-seed MPC holds) | 0 | fuel above hold, w=1 | dimensionless |
+| `distillation` | p=2 x2 | 4.9e-5 / 6.4e-5 (lowest per-seed MPC holds, upper bounds) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
+| `ph_neutralization` | p=2 | 0.0080 pH (lowest per-seed MPC hold, upper bound) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
 | `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance) | 0 | none | dimensionless |
 | `plane`, `plane_sine`, `plane_energy` | p=2, dead-zone | 1 m (documented minimum) | +-30 m (provisional) | airspeed deviation above hold, w=1 | dimensionless |
 | `plane3d_*` | p=2 | 1 m / 0.0087 rad / 3 m (documented minima) | +-30 m altitude | none | dimensionless |

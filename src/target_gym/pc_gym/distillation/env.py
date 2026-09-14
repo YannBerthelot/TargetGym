@@ -126,21 +126,23 @@ class DistillationParams(EnvParams):
     # Two tracked compositions, one term each, summed. Floors are the shipped
     # MPC's long-run hold errors under the shipped feed-composition
     # disturbance (`scripts/measure_hold.py`, 1200 hold steps after a
-    # 582-step burn-in): top 4.3e-5, bottom 7.4e-5 mole fraction (PID: 1.2e-4
+    # 582-step burn-in): top 4.9e-5, bottom 6.4e-5 mole fraction, each the MPC's lowest of three seeds (PID down to 5.7e-5
     # and 2.2e-4). Upper bounds on the achievable floors. e_tol = 0
     # provisionally: the product purity specifications a column is run
     # against come from the sales contract and are to be supplied. Boilup
     # above the hold-phase rate (3.282 kmol/min, PID; MPC 3.292) is charged
-    # at weight 1. The unit composition span costs (1 / 4.3e-5)^2 = 5.4e8 per
+    # at weight 1. The unit composition span costs (1 / 4.9e-5)^2 = 4.2e8 per
     # step on the top alone; termination twice the two-end sum.
     reward_version: int = 2
-    e_floor_top: float = 4.3e-5  # mole fraction, MPC hold error (upper bound)
-    e_floor_bottom: float = 7.4e-5
+    e_floor_top: float = 4.9e-5  # mole fraction, lowest per-seed MPC hold (upper bound)
+    e_floor_bottom: float = 6.4e-5
     e_tol: float = 0.0  # provisional; purity specs to be supplied
     tracking_exponent: float = 2.0
     c_hold: float = 3.282  # boilup while holding (PID)
     running_weight: float = 1.0
-    failure_cost: float = 1.45e9
+    failure_cost: float = 1.3e9
+    #: Steps the plant is down after a trip before it restarts (4 h at 1 min steps: column shutdown and re-establishment of the profile, provisional).
+    restart_steps: int = 240
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 2.0
     rho_floor: float = 2.0
@@ -157,6 +159,8 @@ class DistillationState(EnvState):
     V: float  # boilup (manipulated)
     target_yD: float
     target_xB: float
+    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
+    downtime: int = 0
 
 
 def vle(x, params: DistillationParams):
@@ -301,11 +305,11 @@ def compute_reward_terms(state: DistillationState, params: DistillationParams, x
     ) + R.tracking_cost(
         state.target_xB - state.x[0], p.e_floor_bottom, p.e_tol, p.tracking_exponent, xp
     )
-    return {
+    terms = {
         "tracking": track,
         "running": R.running_cost(state.V, p.c_hold, p.running_weight, xp),
-        "failure": R.failure_cost(terminated, p.failure_cost, xp),
     }
+    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
 
 
 def compute_reward_v1(state: DistillationState, params: DistillationParams, xp=jnp):

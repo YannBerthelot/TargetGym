@@ -42,21 +42,23 @@ def _fmt(x):
 
 def table(rows: dict) -> str:
     lines = [
-        "| plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID reach | MPC reach | fail |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID hold | MPC hold | PID reach | MPC reach | fail |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for name, r in rows.items():
         pid, mpc = r.get("pid"), r.get("mpc")
         floor = r["rho_floor"]
-        cell = lambda m: (  # noqa: E731
-            f"{_fmt(m['gain'])} ({_fmt(m.get('tracking'))} / {_fmt(m.get('running'))})"
-            if m
-            else "—"
-        )
+
+        def cell(m):
+            if not m:
+                return "—"
+            return f"{_fmt(m['gain'])} ({_fmt(m.get('tracking'))} / {_fmt(m.get('running'))})"
+
         n = nea(mpc["gain"], pid["gain"], floor) if (pid and mpc) else float("nan")
         fail = max((m["failure_rate"] for m in (pid, mpc) if m), default=float("nan"))
         lines.append(
             f"| `{name}` | {_fmt(floor)} | {cell(pid)} | {cell(mpc)} | {_fmt(n)} | "
+            f"{_fmt(pid['hold']) if pid else '—'} | {_fmt(mpc['hold']) if mpc else '—'} | "
             f"{_fmt(pid['reach_cost']) if pid else '—'} | {_fmt(mpc['reach_cost']) if mpc else '—'} | {_fmt(fail)} |"
         )
     return "\n".join(lines)
@@ -93,10 +95,15 @@ def main() -> int:
             m["seconds"] = round(time.time() - t0, 1)
             row[kind] = m
             print(
-                f"  {name:20s} {kind:3s} gain={m['gain']:.4g} track={m.get('tracking', float('nan')):.4g} "
+                f"  {name:20s} {kind:3s} gain={m['gain']:.4g} hold={m['hold']:.4g} "
+                f"track={m.get('tracking', float('nan')):.4g} "
                 f"run={m.get('running', float('nan')) or 0:.4g} reach={m['reach_cost']:.4g} "
                 f"fail={m['failure_rate']:.2f} [{m['seconds']}s]",
                 flush=True,
+            )
+        if "pid" in row and "mpc" in row:
+            row["mpc"]["nea"] = nea(
+                row["mpc"]["gain"], row["pid"]["gain"], row["rho_floor"]
             )
         rows[name] = row
         out_path.write_text(json.dumps(rows, indent=2, sort_keys=True) + "\n")

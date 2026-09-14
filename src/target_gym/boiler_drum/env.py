@@ -76,19 +76,21 @@ class BoilerDrumParams(EnvParams):
     # Two tracked outputs, one term each, summed. Floors are the best shipped
     # controller's long-run hold error under the shipped steam-demand
     # disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 60-step
-    # burn-in): level 3.97 mm (MPC; PID 53 mm) and pressure 0.0428 bar (PID;
+    # burn-in): level 2.67 mm and pressure 0.0303 bar, both the MPC's lowest of three seeds (PID 37-70 mm, 0.035-0.050 bar;
     # the MPC drifts to 0.17 bar). Upper bounds on the achievable floors.
     # Fuel above the hold-phase firing rate (1.566e8 W, MPC) is charged at
-    # weight 1. The level trip (0.25 m) costs (0.25 / 0.00397)^2 = 4.0e3 and
-    # the pressure envelope (40 bar / 0.0428)^2 = 8.7e5; a trip twice the sum.
+    # weight 1. The level trip (0.25 m) costs (0.25 / 0.00267)^2 = 8.8e3 and
+    # the pressure envelope (40 bar / 0.0303)^2 = 1.7e6; a trip twice the sum.
     reward_version: int = 2
-    e_floor_level: float = 3.97e-3  # m
-    e_floor_pressure: float = 0.0428  # bar
+    e_floor_level: float = 2.67e-3  # m, lowest per-seed MPC hold
+    e_floor_pressure: float = 0.0303  # bar, lowest per-seed MPC hold
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
     c_hold: float = 1.566e8  # W fuel while holding (MPC)
     running_weight: float = 1.0
-    failure_cost: float = 1.76e6
+    failure_cost: float = 3.5e6
+    #: Steps the plant is down after a trip before it restarts (4 h at 2 s steps: a drum trip's restart, provisional).
+    restart_steps: int = 7200
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 2.0
     rho_floor: float = 2.0
@@ -177,10 +179,11 @@ class BoilerDrumState(EnvState):
     target_pressure: jnp.ndarray  # bar
     level_ref: jnp.ndarray  # m3   water volume that reads as zero level
 
-
-# ---------------------------------------------------------------------------
-# Saturated steam properties
-# ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
+    # Saturated steam properties
+    # ---------------------------------------------------------------------------
+    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
+    downtime: int = 0
 
 
 def _poly(coef, p):
@@ -447,13 +450,15 @@ def compute_reward_terms(state: BoilerDrumState, params: BoilerDrumParams, xp=jn
         params.tracking_exponent,
         xp,
     )
-    return {
+    terms = {
         "tracking": track,
         "running": R.running_cost(
             state.Q_fuel, params.c_hold, params.running_weight, xp
         ),
-        "failure": R.failure_cost(terminated, params.failure_cost, xp),
     }
+    return R.with_downtime(
+        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
+    )
 
 
 def compute_reward_v1(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):

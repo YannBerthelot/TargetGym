@@ -32,6 +32,8 @@ class FirstOrderParams(EnvParams):
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
     failure_cost: float = 2.0e6
+    #: Steps the plant is down after a trip before it restarts (5 s at 0.05 s steps; a generic loop's reset, provisional).
+    restart_steps: int = 100
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 1.0
     rho_floor: float = 1.0
@@ -53,6 +55,8 @@ class FirstOrderState(EnvState):
 
     # For rendering
     u: float
+    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
+    downtime: int = 0
 
 
 def compute_velocity(position, action, params: FirstOrderParams):
@@ -99,7 +103,7 @@ def check_is_terminal(state: FirstOrderState, params: FirstOrderParams, xp=jnp):
 def compute_reward_terms(state: FirstOrderState, params: FirstOrderParams, xp=jnp):
     """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
     terminated, _ = check_is_terminal(state, params, xp)
-    return {
+    terms = {
         "tracking": R.tracking_cost(
             state.target_x - state.x,
             params.e_floor,
@@ -107,8 +111,10 @@ def compute_reward_terms(state: FirstOrderState, params: FirstOrderParams, xp=jn
             params.tracking_exponent,
             xp,
         ),
-        "failure": R.failure_cost(terminated, params.failure_cost, xp),
     }
+    return R.with_downtime(
+        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
+    )
 
 
 def compute_reward_v1(state: FirstOrderState, params: FirstOrderParams, xp=jnp):

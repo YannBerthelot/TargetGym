@@ -40,7 +40,7 @@ Every environment in this suite scores on one contract: the reward is
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 12 fields.
+`reset` samples the initial condition and the target; state has 13 fields.
 
 ## Episode end
 
@@ -70,5 +70,5 @@ A tuned PID ships with this environment.
 | `specific_fuel_consumption` | 0.0175 |
 | `power_response_rate` | 0.05 |
 | `stick_response_rate` | 0.9 |
-| … | 68 more, see the params dataclass |
+| … | 69 more, see the params dataclass |
 

@@ -217,12 +217,17 @@ baselines use.
 | `imbalance_multiple` | 3 x `spot_price_per_MWh` on `P_electric_GW` | 240 000 $/h per unit of \|error\|; tracking at the floor costs $3.0 per step |
 | `rod_wear_weight` | 1 | **provisional.** Reactivity asked beyond what the rods can deliver, as a fraction of the rod range, charged per unit at what tracking at the floor costs; the audit found the optimum insensitive to it below ten times the floor. Sweep 0.5 / 1 / 2. |
 | `failure_cost` | 2000 $ per step | twice the 1.49 envelope's imbalance |
+| `restart_steps` | 17280 (48 h) | steps the plant is down after a trip before it restarts (a SCRAM's xenon-limited restart; provisional); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the tracking cost per step at the floor in the reward's
 units (the NEA floor for tracking) and `rho_floor` the full floor including
 consumption charged in full; `floor_is_documented_minimum` records whether
 `e_floor` is a measured/certified floor or a resolution used as a scale;
-`failure_cost` is charged per step in a terminal state and exceeds the largest
-tracking cost the envelope can produce. `reward_version = 1` reconstructs the
+`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
+cost the envelope can produce. A trip never ends the window (`base.failure_kernel`):
+the plant is frozen at that cost, with tracking and running cost zeroed, for
+`restart_steps` steps and then restarts as `reset_env` would; a plant with no
+restart stays down to the window's end. `terminated` is never raised;
+`info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).

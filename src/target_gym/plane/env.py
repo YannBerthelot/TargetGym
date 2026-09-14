@@ -6,7 +6,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import NO_RESTART, EnvParams, EnvState
 from target_gym.integration import (
     integrate_dynamics,
 )
@@ -78,6 +78,9 @@ class PlaneState(EnvState):
             compute_velocity_from_horizontal_and_vertical_speed(self.x_dot, self.z_dot),
             self.speed_of_sound,
         )
+
+    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
+    downtime: int = 0
 
 
 @struct.dataclass
@@ -179,9 +182,13 @@ class PlaneParams(EnvParams):
     c_hold: float = 6.1  # m/s airspeed deviation while holding (PID)
     running_weight: float = 1.0
     failure_cost: float = 3.0e8
+    #: Steps the plant is down after a trip before it restarts (a crash: no restart).
+    restart_steps: int = NO_RESTART
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    rho_floor_tracking: float = 1.0
-    rho_floor: float = 1.0
+    #: Zero: inside the +-30 m tolerance the tracking cost is zero and the
+    #: airspeed term is charged only above the hold-phase deviation.
+    rho_floor_tracking: float = 0.0
+    rho_floor: float = 0.0
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = True
     min_alt: float = 0.0
@@ -307,15 +314,15 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp):
     p = params
     speed = xp.sqrt(state.x_dot**2 + state.z_dot**2)
     terminated, _ = check_is_terminal(state, p, xp)
-    return {
+    terms = {
         "tracking": R.tracking_cost(
             state.target_altitude - state.z, p.e_floor, p.e_tol, p.tracking_exponent, xp
         ),
         "running": R.running_cost(
             xp.abs(speed - p.target_speed), p.c_hold, p.running_weight, xp
         ),
-        "failure": R.failure_cost(terminated, p.failure_cost, xp),
     }
+    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
 
 
 def compute_reward_v1(state: PlaneState, params: PlaneParams, xp=jnp):

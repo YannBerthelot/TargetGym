@@ -804,26 +804,26 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 <!-- Written by scripts/generate_baseline_table.py from
      data/baseline_returns.json. Do not edit by hand. -->
 
-| environment | steps | PID cost/step | MPC cost/step | MPC saves | MPC wins | term |
+| environment | steps | PID cost/step | MPC cost/step | MPC saves | MPC wins | trips |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane3d_figure8` | 400 | 1.153e+06 | 82.36 | 1.000 | 10/10 | 0 |
+| `plane3d_figure8` | 400 | 1.153e+06 | 82.09 | 1.000 | 10/10 | 0 |
 | `plane3d_racetrack` | 650 | 9.094e+05 | 1265 | 0.999 | 10/10 | 0 |
 | `reactor` | 864 | 58.48 | 3.294 | 0.944 | 10/10 | 0 |
 | `plane_energy` | 1200 | 1.575e+04 | 1108 | 0.930 | 10/10 | 0 |
-| `boiler_drum` | 400 | 308.6 | 34.51 | 0.888 | 10/10 | 0 |
-| `distillation` | 200 | 1019 | 127 | 0.875 | 10/10 | 0 |
-| `patrol` | 200 | 293.8 | 51.11 | 0.826 | 10/10 | 0 |
+| `boiler_drum` | 400 | 676.3 | 72.75 | 0.892 | 10/10 | 0 |
+| `distillation` | 200 | 900 | 130.5 | 0.855 | 10/10 | 0 |
+| `patrol` | 200 | 293.8 | 48.66 | 0.834 | 10/10 | 0 |
 | `plane3d_circle` | 300 | 1.538e+04 | 2947 | 0.808 | 10/10 | 0 |
 | `plane3d_heading` | 200 | 4.028e+04 | 8644 | 0.785 | 10/10 | 0 |
-| `cement_kiln` | 700 | 8.202 | 2.188 | 0.733 | 10/10 | 0 |
+| `cement_kiln` | 700 | 13.53 | 3.533 | 0.739 | 10/10 | 0 |
 | `four_tank` | 500 | 1167 | 344.5 | 0.705 | 10/10 | 0 |
-| `ph_neutralization` | 300 | 157.8 | 47.15 | 0.701 | 10/10 | 0 |
+| `ph_neutralization` | 300 | 525.5 | 157 | 0.701 | 10/10 | 0 |
 | `plane_sine` | 480 | 4881 | 1694 | 0.653 | 10/10 | 0 |
-| `glass_furnace` | 1600 | 32.35 | 11.46 | 0.646 | 10/10 | 0 |
+| `glass_furnace` | 1600 | 41.81 | 14.81 | 0.646 | 10/10 | 0 |
 | `plane` | 280 | 6333 | 2794 | 0.559 | 10/10 | 0 |
-| `battery` | 360 | 0.003457 | 0.00156 | 0.549 | 10/10 | 0 |
+| `battery` | 360 | 0.003457 | 0.001597 | 0.538 | 10/10 | 0 |
 | `hvac` | 720 | 0.06478 | 0.03607 | 0.443 | 10/10 | 0 |
-| `wind_turbine` | 400 | 3.633e-05 | 2.407e-05 | 0.337 | 10/10 | 0 |
+| `wind_turbine` | 400 | 3.633e-05 | 2.62e-05 | 0.279 | 10/10 | 0 |
 | `cstr` | 100 | 6319 | 5803 | 0.082 | 10/10 | 0 |
 | `first_order` | 100 | 1018 | 1002 | 0.015 | 10/10 | 0 |
 
@@ -838,9 +838,11 @@ A ⚠️ marks an environment where it loses more often than it wins, which
 means it is not the upper bound this table presents it as; those carry an
 `EnvSpec.mpc_degraded` note saying why.
 
-`term` counts seeds where the MPC ended the episode early. A permanent
-zero can mean the controller is safe or that the environment cannot
-terminate at all; `first_order` is the latter.
+`trips` counts the MPC's trips over the ten windows: a trip never ends a
+window, the plant is down at the failure cost and restarts, or stays
+down (`base.failure_kernel`). A permanent zero can mean the controller
+is safe or that the plant cannot leave its envelope; `first_order` is
+the latter.
 
 <!-- END GENERATED BASELINE TABLE -->
 
@@ -848,47 +850,52 @@ terminate at all; `first_order` is the latter.
 
 Written from `data/protocol_results.json` (`scripts/evaluate_baselines.py`;
 re-run it after any change and paste the table). Gain is the mean cost per
-step after the plant's burn-in (three cost-bearing time constants, capped at
-half the test episode) and, within each target cycle, after the MPC's settling
-time -- split into tracking and running cost. Reach is the summed cost above
-the hold level per target change (zero by construction where the target drifts
-continuously: reactor, battery, HVAC, patrol). NEA is
-`(PID - MPC) / (PID - floor)`: 1 at the floor, 0 at PID parity. Units are
-floor-widths (squared where p = 2) on the dimensionless plants, dollars or
-euros per step on the priced ones; nothing here is comparable across rows
-except NEA. Three seeds on the process plants, one on the deterministic
-aircraft.
+step over every step after the plant's burn-in (three cost-bearing time
+constants, capped at half the test episode), transients included, split into
+tracking and running cost -- no settling time enters it, so the two
+controllers are compared on the same steps. Hold is the same over the settled
+steps only, each controller's transient measured on its own cycles (the first
+step from which the cost stays within twice the cycle's late level). Reach is
+the summed cost of that transient above the level, per target change (one
+cycle, hence ~0, where the target drifts continuously: reactor, HVAC). NEA is
+`(PID - MPC) / (PID - floor)` on the gain: 1 at the floor, 0 at PID parity.
+Units are floor-widths (squared where p = 2) on the dimensionless plants,
+dollars or euros per step on the priced ones; nothing here is comparable
+across rows except NEA. Three seeds on the process plants, one on the
+deterministic aircraft. `fail` is the trip rate per cycle.
 
 Reading across the rows: the aircraft PIDs are structurally inadequate on the
 moving-reference tasks (thousands of floor-widths while "holding" the
 racetrack, the figure-8 and the heading), where the MPC sits within a few;
-the glass furnace's MPC is 19 floor-widths-squared from its own long-run hold
+the glass furnace's MPC is 25 floor-widths-squared from its own long-run hold
 on the 13 h test episode because the episode is still in the transient of a
-30 h plant; and on every plant the MPC's hold cost and reach cost are at or
-below the PID's, which is what a ceiling has to be.
+30 h plant; on the battery the two controllers hold within 10% of each other
+and the MPC's advantage is in the transients after each dispatch block; and
+no controller tripped a plant in any window.
 
-| plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID reach | MPC reach | fail |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `battery` | 0.000222 | 0.00346 (0.00288 / 0.000589) | 0.00146 (0.000898 / 0.000559) | 0.619 | 1.36e-18 | -3.73e-20 | 0 |
-| `boiler_drum` | 2 | 238 (238 / 0.0276) | 19.5 (19.4 / 0.0295) | 0.926 | 3.38e+03 | 3e+03 | 0 |
-| `cement_kiln` | 1 | 6.11 (6.04 / 0.0732) | 1.72 (1.66 / 0.0532) | 0.86 | 625 | 374 | 0 |
-| `cstr` | 1 | 41.2 (41.2 / —) | 0.317 (0.317 / —) | 1.02 | 6.63e+05 | 6.12e+05 | 0 |
-| `distillation` | 2 | 260 (260 / 0.00219) | 3.57 (3.55 / 0.0122) | 0.994 | 6.1e+03 | 5.56e+03 | 0 |
-| `first_order` | 1 | 3.57e-06 (3.57e-06 / —) | 0 (0 / —) | — | 1.18e+05 | 1.17e+05 | 0 |
-| `four_tank` | 2 | 30.3 (30.3 / —) | 0.00741 (0.00741 / —) | 1.07 | 6.57e+05 | 1.92e+05 | 0 |
-| `glass_furnace` | 1 | 51 (50.9 / 0.0724) | 19.2 (19.2 / 0.0437) | 0.636 | 489 | 1.1e+03 | 0 |
-| `hvac` | 0.0273 | 0.0747 (0.066 / 0.00863) | 0.0427 (0.0364 / 0.00634) | 0.675 | 4.1e-17 | 1.95e-17 | 0 |
-| `patrol` | 2 | 539 (539 / —) | 0.33 (0.33 / —) | 1 | 527 | 1.01e+04 | 0 |
-| `patrol_bearing_only` | 2 | 502 (502 / —) | — | — | -9.09e-13 | — | 0 |
-| `ph_neutralization` | 1 | 5.91 (5.9 / 0.00681) | 1.44 (1.43 / 0.00669) | 0.91 | 1.43e+04 | 9.06e+03 | 0 |
-| `plane` | 1 | 0.0169 (0 / 0.0169) | 2.2e-06 (0 / 2.2e-06) | — | 3.35e+06 | 1.53e+06 | 0 |
-| `plane3d_circle` | 2 | 1.09e+03 (1.09e+03 / —) | 3.8 (3.8 / —) | 0.998 | 4.95e+06 | 1.59e+06 | 0 |
-| `plane3d_figure8` | 2 | 9.75e+05 (9.75e+05 / —) | 32.9 (32.9 / —) | 1 | -2.74e+07 | 1.92e+04 | 0 |
-| `plane3d_heading` | 2 | 1.79e+04 (1.79e+04 / —) | 0.0591 (0.0591 / —) | 1 | 7.28e+06 | 2.53e+06 | 0 |
-| `plane3d_racetrack` | 2 | 4.2e+06 (4.2e+06 / —) | 0.648 (0.648 / —) | 1 | -7.5e+07 | 1.54e+06 | 0 |
-| `plane_energy` | 1 | 1.37e+04 (1.37e+04 / 0.328) | 507 (506 / 0.622) | 0.963 | 2.13e+06 | 3.45e+05 | 0 |
-| `plane_sine` | 1 | 570 (570 / 0.295) | 0.16 (0.00114 / 0.159) | 1 | 5.15e+06 | 1.77e+06 | 0 |
-| `reactor` | 3.01 | 56.9 (56 / 0.924) | 3.31 (3.31 / 5.79e-05) | 0.994 | 2.14e-12 | -3.2e-14 | 0 |
-| `wind_turbine` | 9.33e-06 | 2.11e-05 (1.94e-05 / 1.7e-06) | 1.53e-05 (1.21e-05 / 3.26e-06) | 0.489 | 0.00216 | 0.00172 | 0 |
+| plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID hold | MPC hold | PID reach | MPC reach | fail |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `battery` | 0.000222 | 0.00346 (0.00288 / 0.000589) | 0.00138 (0.000817 / 0.000562) | 0.643 | 0.00132 | 0.00122 | 0.0497 | 0.00499 | 0 |
+| `boiler_drum` | 2 | 526 (526 / 0.0276) | 41.1 (41 / 0.0297) | 0.925 | 461 | 42.6 | 4.16e+04 | 6.04e+03 | 0 |
+| `cement_kiln` | 1 | 10.1 (10 / 0.0732) | 2.63 (2.58 / 0.054) | 0.82 | 12.2 | 2.72 | 1.95e+03 | 693 | 0 |
+| `cstr` | 1 | 41.2 (41.2 / —) | 0.317 (0.317 / —) | 1.02 | 5.96e-07 | 4.21e-05 | 6.64e+05 | 6.12e+05 | 0 |
+| `distillation` | 2 | 223 (223 / 0.00219) | 3.27 (3.26 / 0.0122) | 0.994 | 223 | 3.27 | 1.3e+04 | 5.56e+03 | 0 |
+| `first_order` | 1 | 3.57e-06 (3.57e-06 / —) | 0 (0 / —) | — | 7.89e-11 | 0 | 1.19e+05 | 1.17e+05 | 0 |
+| `four_tank` | 2 | 30.3 (30.3 / —) | 0.00741 (0.00741 / —) | 1.07 | 30.3 | 0.00741 | 6.5e+05 | 1.92e+05 | 0 |
+| `glass_furnace` | 1 | 65.9 (65.8 / 0.0724) | 24.8 (24.8 / 0.0437) | 0.633 | 65.9 | 24.8 | -7.25e+03 | -3.18e+03 | 0 |
+| `hvac` | 0.0273 | 0.0747 (0.066 / 0.00863) | 0.0427 (0.0364 / 0.00634) | 0.675 | 0.0757 | 0.0423 | 0.287 | 0.288 | 0 |
+| `patrol` | 2 | 539 (539 / —) | 0.144 (0.144 / —) | 1 | 539 | 0.144 | 1.41 | 1.09e+04 | 0 |
+| `patrol_bearing_only` | 2 | 502 (502 / —) | — | — | 502 | — | 13.5 | — | 0 |
+| `ph_neutralization` | 1 | 19.7 (19.7 / 0.00681) | 4.78 (4.77 / 0.00669) | 0.797 | 15.2 | 2.79 | 1.42e+05 | 3.65e+04 | 0 |
+| `plane` | 0 | 0.0169 (0 / 0.0169) | 3.12e-06 (0 / 3.14e-06) | 1 | 0.0169 | 3.12e-06 | 3.35e+06 | 1.54e+06 | 0 |
+| `plane3d_circle` | 1 | 1.09e+03 (1.09e+03 / —) | 3.8 (3.8 / —) | 0.997 | 1.09e+03 | 3.8 | 6.64e+06 | 1.59e+06 | 0 |
+| `plane3d_figure8` | 1 | 9.75e+05 (9.75e+05 / —) | 48.6 (48.6 / —) | 1 | 9.75e+05 | 48.6 | 1.89e+08 | 1.46e+04 | 0 |
+| `plane3d_heading` | 1 | 1.79e+04 (1.79e+04 / —) | 0.0591 (0.0591 / —) | 1 | 1.79e+04 | 0.0591 | 7.77e+06 | 2.53e+06 | 0 |
+| `plane3d_racetrack` | 1 | 4.2e+06 (4.2e+06 / —) | 0.641 (0.641 / —) | 1 | 4.2e+06 | 0.619 | -2.54e+06 | 1.55e+06 | 0 |
+| `plane_energy` | 0 | 1.37e+04 (1.37e+04 / 0.328) | 507 (506 / 0.698) | 0.963 | 2.41e+03 | 385 | 3.21e+06 | 3.38e+05 | 0 |
+| `plane_sine` | 0 | 570 (570 / 0.295) | 0.182 (0.00074 / 0.181) | 1 | 534 | 0.179 | 5.33e+06 | 1.77e+06 | 0 |
+| `reactor` | 3.01 | 56.9 (56 / 0.924) | 3.31 (3.31 / 5.79e-05) | 0.994 | 56.9 | 3.31 | 3.93e+03 | 11.4 | 0 |
+| `wind_turbine` | 9.33e-06 | 2.11e-05 (1.94e-05 / 1.7e-06) | 1.56e-05 (1.23e-05 / 3.26e-06) | 0.47 | 2.11e-05 | 1.56e-05 | 0.00683 | 0.00562 | 0 |
+
 
 

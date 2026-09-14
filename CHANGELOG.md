@@ -71,8 +71,10 @@ than by commit.
   cost charged only above the hold-phase consumption `c_hold` -- at weight 1
   on the dimensionless plants, at the owner's prices on the reactor (imbalance
   at 3x spot), the building (gas at EUR 0.10/kWh), the battery (imbalance
-  $100/MWh, fade $300/kWh) and the wind turbine -- and a failure charge per
-  terminal step above anything the envelope can cost. Convex, additive, in
+  $100/MWh, fade $300/kWh) and the wind turbine -- and a trip that never ends
+  the window: the plant is frozen at `failure_cost` per step for a documented
+  `restart_steps` and restarts, or stays down (`base.failure_kernel`), so no
+  plant raises `terminated` any more. Convex, additive, in
   defensible units; the per-step scale is no longer capped at 1 and differs
   by orders of magnitude between plants, so cross-plant comparison is the
   protocol's job (`target_gym.eval`), not the return's. The positioning and
@@ -131,8 +133,10 @@ than by commit.
   params rather than `plan_params`, so hand-run MPCs on the wind turbine and
   the battery planned against one fixed noise realisation; fixed.
 - **`target_gym.eval`, the reach-and-hold protocol.** Gain after a per-plant
-  burn-in, split into tracking and running cost; reach cost per target
-  change; reach fraction; failure rate; the normalised expert advantage
+  burn-in over every step (the long-run cost), and over the settled steps only
+  (the hold), each split into tracking and running cost, with each controller's
+  transient measured on its own cycles; reach cost per target change; reach
+  fraction; trip rate; the normalised expert advantage
   `(PID - x) / (PID - rho_floor)`; time-in-band as a KPI only.
   `scripts/evaluate_baselines.py` scores the shipped controllers with it and
   writes `data/protocol_results.json`; `docs/baselines.md` carries the table.

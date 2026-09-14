@@ -36,7 +36,7 @@ Every environment in this suite scores on one contract: the reward is
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 4 fields.
+`reset` samples the initial condition and the target; state has 5 fields.
 
 ## Episode end
 
@@ -65,6 +65,6 @@ A tuned PID ships with this environment.
 | `e_tol` | 0 |
 | `tracking_exponent` | 2 |
 | `failure_cost` | 2e+06 |
-| `rho_floor_tracking` | 1 |
-| … | 2 more, see the params dataclass |
+| `restart_steps` | 100 |
+| … | 3 more, see the params dataclass |
 

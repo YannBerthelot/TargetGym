@@ -63,7 +63,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import NO_RESTART, EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -274,20 +274,22 @@ class GlassFurnaceParams(EnvParams):
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # Floor: the shipped MPC's long-run mean |crown error| under the shipped
-    # pull disturbance, 0.199 K over 3600 hold steps (30 h) after a 10 800-step
+    # pull disturbance, 0.175 K (the lowest of three seeds: 0.192 / 0.175 / 0.228; PID 0.49-0.52) over 3600 hold steps (30 h) after a 10 800-step
     # (90 h) burn-in, 3 seeds, stationary across the window (0.209 / 0.188 K
     # halves), `scripts/measure_hold.py`; PID 0.504 K. An upper bound on the
     # achievable floor. Fuel above the hold-phase flow (0.590 kg/s, the same
     # for PID and MPC) is charged at weight 1 (provisional: no fuel price
-    # supplied). The crown envelope costs (250 / 0.199)^2 = 1.6e6 per step;
+    # supplied). The crown envelope costs (250 / 0.175)^2 = 2.0e6 per step;
     # a refractory or glass excursion twice that.
     reward_version: int = 2
-    e_floor: float = 0.199  # K, MPC hold error (upper bound on the floor)
+    e_floor: float = 0.175  # K, lowest per-seed MPC hold error (upper bound)
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
     c_hold: float = 0.590  # kg/s fuel while holding (PID = MPC)
     running_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
-    failure_cost: float = 3.2e6
+    failure_cost: float = 4.1e6
+    #: Steps the plant is down after a trip before it restarts (refractory damage or glass out of range ends the campaign; no restart within any window).
+    restart_steps: int = NO_RESTART
     rho_floor_tracking: float = 1.0
     rho_floor: float = 1.0
     floor_is_documented_minimum: bool = False
@@ -318,6 +320,8 @@ class GlassFurnaceState(EnvState):
     fuel_flow: float
     T_air_preheat: float
     T_stack: float
+    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
+    downtime: int = 0
 
 
 def glass_c_p(T, params: GlassFurnaceParams):
@@ -785,7 +789,7 @@ def check_is_terminal(state: GlassFurnaceState, params: GlassFurnaceParams, xp=j
 def compute_reward_terms(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp):
     """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
     terminated, _ = check_is_terminal(state, params, xp)
-    return {
+    terms = {
         "tracking": R.tracking_cost(
             state.target_T_crown - state.T_crown,
             params.e_floor,
@@ -796,8 +800,10 @@ def compute_reward_terms(state: GlassFurnaceState, params: GlassFurnaceParams, x
         "running": R.running_cost(
             state.fuel_flow, params.c_hold, params.running_weight, xp
         ),
-        "failure": R.failure_cost(terminated, params.failure_cost, xp),
     }
+    return R.with_downtime(
+        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
+    )
 
 
 def compute_reward_v1(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp):

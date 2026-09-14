@@ -39,7 +39,7 @@ Every environment in this suite scores on one contract: the reward is
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 11 fields.
+`reset` samples the initial condition and the target; state has 12 fields.
 
 ## Episode end
 
@@ -58,16 +58,16 @@ A tuned PID ships with this environment.
 | `delta_t` | 2 |
 | `max_steps_in_episode` | 400 |
 | `reward_version` | 2 |
-| `e_floor_level` | 0.00397 |
-| `e_floor_pressure` | 0.0428 |
+| `e_floor_level` | 0.00267 |
+| `e_floor_pressure` | 0.0303 |
 | `e_tol` | 0 |
 | `tracking_exponent` | 2 |
 | `c_hold` | 1.566e+08 |
 | `running_weight` | 1 |
-| `failure_cost` | 1.76e+06 |
+| `failure_cost` | 3.5e+06 |
+| `restart_steps` | 7200 |
 | `rho_floor_tracking` | 2 |
 | `rho_floor` | 2 |
 | `V_t` | 88 |
-| `V_d` | 40 |
-| … | 30 more, see the params dataclass |
+| … | 31 more, see the params dataclass |
 

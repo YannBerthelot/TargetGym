@@ -136,7 +136,7 @@ class PHParams(EnvParams):
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # Floor: the shipped MPC's long-run mean |pH error| under the shipped
-    # buffer-flow disturbance (q2 noise), 0.0146 pH over 900 hold steps after a
+    # buffer-flow disturbance (q2 noise), 0.0080 pH (the lowest of three seeds: 0.0139 / 0.0220 / 0.0080; PID 0.016-0.054) over 900 hold steps after a
     # 108-step burn-in, `scripts/measure_hold.py` -- an upper bound on the
     # achievable floor (no reduced-model optimum exists for this plant).
     # e_tol = 0 provisionally: the discharge permit band a plant would use
@@ -144,14 +144,16 @@ class PHParams(EnvParams):
     # outfall). Reagent above the hold-phase flow (16.24 mL/s, the same for
     # PID and MPC) is charged at weight 1: one floor-width of pH error is
     # worth the whole hold-phase reagent flow again. The span costs
-    # (10 / 0.0146)^2 = 4.7e5 per step; off-spec termination twice that.
+    # (10 / 0.0080)^2 = 1.6e6 per step; off-spec termination twice that.
     reward_version: int = 2
-    e_floor: float = 0.0146  # pH, MPC hold error (upper bound on the floor)
+    e_floor: float = 0.0080  # pH, lowest per-seed MPC hold error (upper bound)
     e_tol: float = 0.0  # provisional; permit band to be supplied
     tracking_exponent: float = 2.0
     c_hold: float = 16.24  # mL/s reagent while holding (PID = MPC)
     running_weight: float = 1.0
-    failure_cost: float = 9.4e5
+    failure_cost: float = 3.1e6
+    #: Steps the plant is down after a trip before it restarts (1 h at 5 s steps: flush the tank after a gross excursion, provisional).
+    restart_steps: int = 720
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 1.0
     rho_floor: float = 1.0
@@ -168,6 +170,8 @@ class PHState(EnvState):
     pH: float  # the single measurement
     q3: float  # commanded base flow
     target_pH: float
+    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
+    downtime: int = 0
 
 
 def titration_residual(pH, Wa, Wb, params: PHParams):
@@ -291,7 +295,7 @@ def check_is_terminal(state: PHState, params: PHParams, xp=jnp):
 def compute_reward_terms(state: PHState, params: PHParams, xp=jnp):
     """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
     terminated, _ = check_is_terminal(state, params, xp)
-    return {
+    terms = {
         "tracking": R.tracking_cost(
             state.target_pH - state.pH,
             params.e_floor,
@@ -300,8 +304,10 @@ def compute_reward_terms(state: PHState, params: PHParams, xp=jnp):
             xp,
         ),
         "running": R.running_cost(state.q3, params.c_hold, params.running_weight, xp),
-        "failure": R.failure_cost(terminated, params.failure_cost, xp),
     }
+    return R.with_downtime(
+        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
+    )
 
 
 def compute_reward_v1(state: PHState, params: PHParams, xp=jnp):

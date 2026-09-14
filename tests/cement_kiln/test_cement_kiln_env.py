@@ -237,10 +237,12 @@ def _open_loop(params, fuel_raw, rpm_raw, steps, seed=0):
     lime, T_bz = [], []
     step = jax.jit(env.step_env)
     for _ in range(steps):
-        _, state, _, terminated, _ = step(key, state, action, p)
+        _, state, _, _, info = step(key, state, action, p)
         lime.append(float(discharge_lime(state)))
         T_bz.append(float(burning_zone_temperature(state)))
-        if bool(terminated):
+        # A trip freezes the kiln rather than ending the window
+        # (``base.failure_kernel``); the open-loop record stops there.
+        if bool(info["tripped"]):
             break
     return np.array(lime), np.array(T_bz)
 
