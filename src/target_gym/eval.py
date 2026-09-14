@@ -29,6 +29,20 @@ protocol. This module computes:
                     the PID's transient after every dispatch block as hold and
                     manufactured an MPC advantage; and with ``settle = 0`` the
                     reach cost was zero by construction.)
+``transient_cost``  per cycle, the summed cost over the first ``burn_in``
+                    steps after the change (the cycle, if shorter), not
+                    relative to a level: what a target change costs in
+                    absolute terms over a window the plant sets. Two
+                    controllers' reach costs are each relative to their own
+                    hold level and transient, so a controller holding far
+                    off the target shows a small reach cost simply because
+                    its level swallows its transient; the transient cost is
+                    the number to compare across controllers.
+``unsettled_fraction`` share of cycles whose cost is still rising at the end
+                    (second-half mean above first-half mean): no hold was
+                    reached in the window, and the reach cost -- the transient
+                    below the "hold" level -- comes out negative. A negative
+                    reach cost is that signal, not a cheap transient.
 ``reach_fraction``  share of steps spent before first entering the band.
 ``failure_rate``    share of cycles in which the plant trips (``info["tripped"]``).
 ``nea``             normalised expert advantage ``(PID - x) / (PID - floor)``:
@@ -136,7 +150,11 @@ def _settle_of(cost: np.ndarray, settle: int | None) -> int:
 
 
 def reach_cost(episodes, settle: int | None = None):
-    """Excess cost of each cycle's transient over its hold level."""
+    """Excess cost of each cycle's transient over its hold level (the bias
+    ``B`` of Theorem 4). Negative when the cost is still rising at the end of
+    the cycle -- the transient is then cheaper than the "hold" level, i.e. the
+    controller reached no hold in the window; ``transient_cost`` and
+    ``unsettled_fraction`` report that separately."""
     vals = []
     for ep in episodes:
         for a, b in _cycles(ep):
@@ -144,6 +162,39 @@ def reach_cost(episodes, settle: int | None = None):
             level = ep.cost[a + k : b].mean() if b - a > k else ep.cost[a:b].mean()
             vals.append((ep.cost[a : a + k] - level).sum())
     return (float(np.mean(vals)), _ci(vals)) if vals else (float("nan"), float("nan"))
+
+
+def transient_cost(episodes, window: int):
+    """Summed cost over the first ``window`` steps of each cycle (the cycle if
+    shorter), not relative to anything: what the target change costs in
+    absolute terms over a window the plant sets. Comparable between two
+    controllers whose hold levels differ, which ``reach_cost`` -- each
+    controller's transient above its *own* hold level, over a transient
+    detected against that level -- is not: a controller holding far off
+    shows a small reach cost because its level swallows its transient.
+    ``evaluate`` uses the plant's burn-in (three cost-bearing time constants)
+    as the window."""
+    vals = []
+    for ep in episodes:
+        for a, b in _cycles(ep):
+            vals.append(ep.cost[a : min(a + max(int(window), 1), b)].sum())
+    return (float(np.mean(vals)), _ci(vals)) if vals else (float("nan"), float("nan"))
+
+
+def unsettled_fraction(episodes):
+    """Share of cycles in which the cost over the second half exceeds the
+    cost over the first half: the controller is still moving away from a hold
+    when the cycle ends, so its reach cost has no hold level to be measured
+    against."""
+    n_up = n_tot = 0
+    for ep in episodes:
+        for a, b in _cycles(ep):
+            c = ep.cost[a:b]
+            if len(c) < 4:
+                continue
+            n_tot += 1
+            n_up += bool(c[len(c) // 2 :].mean() > c[: len(c) // 2].mean())
+    return n_up / max(n_tot, 1)
 
 
 def hold_mask(ep: Episode, burn_in: int, settle: int | None = None) -> np.ndarray:
@@ -198,6 +249,7 @@ def evaluate(
     g, gci = gain(episodes, burn_in)
     h, hci = hold(episodes, burn_in, settle=settle)
     rc, rcci = reach_cost(episodes, settle)
+    tc, tcci = transient_cost(episodes, burn_in)
     out = dict(
         gain=g,
         gain_ci=gci,
@@ -205,6 +257,9 @@ def evaluate(
         hold_ci=hci,
         reach_cost=rc,
         reach_cost_ci=rcci,
+        transient_cost=tc,
+        transient_cost_ci=tcci,
+        unsettled_fraction=unsettled_fraction(episodes),
         reach_fraction=reach_fraction(episodes),
         failure_rate=failure_rate(episodes),
         time_in_band=time_in_band(episodes, burn_in),

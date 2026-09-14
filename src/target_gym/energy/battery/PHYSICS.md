@@ -204,7 +204,9 @@ it can then not follow.
 `rho_floor_tracking` is the tracking cost per step at the floor in the reward's
 units (the NEA floor for tracking) and `rho_floor` the full floor including
 consumption charged in full; `floor_is_documented_minimum` records whether
-`e_floor` is a measured/certified floor or a resolution used as a scale;
+`e_floor` is a measured/certified floor or a resolution used as a scale, and
+where it is a resolution (a deterministic plant) both references are 0, since
+exact hold is achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
 cost the envelope can produce. A trip never ends the window (`base.failure_kernel`):
 the plant is frozen at that cost, with tracking and running cost zeroed, for

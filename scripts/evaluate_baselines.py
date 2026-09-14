@@ -42,9 +42,10 @@ def _fmt(x):
 
 def table(rows: dict) -> str:
     lines = [
-        "| plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID hold | MPC hold | PID reach | MPC reach | fail |",
+        "| plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID hold | MPC hold | PID reach B (transient) | MPC reach B (transient) | fail |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
+    unsettled = []
     for name, r in rows.items():
         pid, mpc = r.get("pid"), r.get("mpc")
         floor = r["rho_floor"]
@@ -54,12 +55,40 @@ def table(rows: dict) -> str:
                 return "—"
             return f"{_fmt(m['gain'])} ({_fmt(m.get('tracking'))} / {_fmt(m.get('running'))})"
 
+        def reach(m, who):
+            if not m:
+                return "—"
+            b = m["reach_cost"]
+            mark = ""
+            if b is not None and b < 0:
+                mark = "†"
+                unsettled.append(f"{who} on `{name}`")
+            t = m.get("transient_cost")
+            return (
+                f"{_fmt(b)}{mark} ({_fmt(t)})" if t is not None else f"{_fmt(b)}{mark}"
+            )
+
         n = nea(mpc["gain"], pid["gain"], floor) if (pid and mpc) else float("nan")
         fail = max((m["failure_rate"] for m in (pid, mpc) if m), default=float("nan"))
         lines.append(
             f"| `{name}` | {_fmt(floor)} | {cell(pid)} | {cell(mpc)} | {_fmt(n)} | "
             f"{_fmt(pid['hold']) if pid else '—'} | {_fmt(mpc['hold']) if mpc else '—'} | "
-            f"{_fmt(pid['reach_cost']) if pid else '—'} | {_fmt(mpc['reach_cost']) if mpc else '—'} | {_fmt(fail)} |"
+            f"{reach(pid, 'PID')} | {reach(mpc, 'MPC')} | {_fmt(fail)} |"
+        )
+    lines.append("")
+    lines.append(
+        "Reach B is each controller's transient cost above its *own* hold level "
+        "(Theorem 4's bias), so it is not comparable between two controllers "
+        "whose holds differ: a controller holding far off shows a small B "
+        "because its level swallows its transient. The number in parentheses "
+        "is the transient's summed cost, not relative to anything, and is the "
+        "one to compare across controllers."
+    )
+    if unsettled:
+        lines.append(
+            "† cost still rising at the end of the window (no hold reached, "
+            'so the transient is cheaper than the "hold" level and B is '
+            "negative): " + ", ".join(unsettled) + "."
         )
     return "\n".join(lines)
 

@@ -112,7 +112,7 @@ than by commit.
   | `wind_turbine` | 0.171 / 0.129 (8/10) | 2.622e-05 / 9.44e-05 (4/10) | $/step | **flipped** |
   | `battery` | 0.272 / 0.262 (8/10) | 0.003457 / 0.001569 (10/10) | $/step | unchanged |
 
-- **The MPCs are ceilings under the new reward.** Four things in the
+- **The MPCs are ceilings under the new reward.** Five things in the
   planners had been written against the version-1 reward and stopped being
   upper bounds under version 2 (the wind turbine's MPC lost to its PID on 6 of
   10 seeds; the 2D aircraft's parked at the edge of the altitude tolerance
@@ -120,14 +120,19 @@ than by commit.
   plant's own version-2 cost in floor units, with their barriers kept and the
   linear (p = 1) tracking terms squared for a gradient that vanishes at the
   optimum; the HVAC CasADi planner minimises the priced dead-zone comfort and
-  the gas; the 2D aircraft plans without its 60-step open-loop tail, which
-  under an unbounded cost dominated the objective; the wind and 2D aircraft
-  planners start from, and at every step are compared against, the shipped
-  PID's rollout plan, so their plan is never worse than the PID's under the
-  planner's model; and the turbine planner carries move suppression on the
+  the gas; the 2D aircraft and the patrol follower plan without their
+  60-step open-loop tail, which under an unbounded cost dominated the
+  objective; the wind, 2D aircraft and patrol planners start from, and at
+  every step are compared against, the shipped PID's rollout plan, so their
+  plan is never worse than the PID's under the planner's model; and the turbine planner carries move suppression on the
   pitch command priced like the reward's fatigue term, plus a mild soft box
   on rotor speed (what its supervisory logic does), because re-planning
-  creates activity no open-loop plan can see. Every MPC now beats its PID on
+  creates activity no open-loop plan can see; and the gradient planner
+  returns the best iterate of each solve, warm start included, where it took
+  the last one -- a fixed step along a normalised gradient overshoots at a
+  tolerance edge, and on the 2D aircraft the descended plan could score
+  1000x worse than the plan it started from, after which the planner dived
+  out of the band it had just reached. Every MPC now beats its PID on
   episode return and on hold cost (docs/reward-shaping.md,
   docs/baselines.md). `runners.baseline_policy` also built the MPC on the raw
   params rather than `plan_params`, so hand-run MPCs on the wind turbine and
@@ -137,9 +142,15 @@ than by commit.
   (the hold), each split into tracking and running cost, with each controller's
   transient measured on its own cycles; reach cost per target change; reach
   fraction; trip rate; the normalised expert advantage
-  `(PID - x) / (PID - rho_floor)`; time-in-band as a KPI only.
-  `scripts/evaluate_baselines.py` scores the shipped controllers with it and
-  writes `data/protocol_results.json`; `docs/baselines.md` carries the table.
+  `(PID - x) / (PID - rho_floor)`, with `rho_floor = 0` on the deterministic
+  plants (a documented resolution is a scale, not a bound, and the MPCs sit
+  below it); the transient cost over the plant's burn-in window, which
+  compares two controllers where the reach cost -- each relative to its own
+  hold level -- does not; the share of cycles still unsettled at the end,
+  which is what a negative reach cost means; time-in-band as a KPI only.
+  `scripts/evaluate_baselines.py` scores the shipped controllers with it,
+  three seeds on every plant, and writes `data/protocol_results.json`;
+  `docs/baselines.md` carries the table.
 
 - **Migrated to the gymnax 1.0 six-value step API.** `step_env` now reports
   natural termination alone; the time limit is gymnax's, via `step`.

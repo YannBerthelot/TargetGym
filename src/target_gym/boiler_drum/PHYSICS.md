@@ -227,18 +227,20 @@ baselines use.
 | parameter | value | source |
 | --- | --- | --- |
 | `e_floor_level` | 2.67e-3 m | the lowest per-seed long-run mean \|level\| the shipped MPC held under the shipped steam-demand disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 60-step burn-in; seeds 2.7 / 17 / 18 mm, PID 37-70 mm). Per-seed minimum; upper bound |
-| `e_floor_pressure` | 0.0303 bar | the lowest per-seed MPC pressure hold (seeds 0.030 / 0.071 / 0.062 bar; PID 0.035-0.050). Per-seed minimum; upper bound |
+| `e_floor_pressure` | 0.0283 bar | the lowest per-seed MPC pressure hold (seeds 0.028 / 0.077 / 0.067 bar; PID 0.035-0.050). Per-seed minimum; upper bound |
 | `e_tol` | 0 | no specification band |
 | `tracking_exponent` | 2 | quadratic on both |
 | `c_hold` | 1.566e8 W | firing rate while holding, MPC (PID 1.568e8) (`scripts/measure_hold.py`) |
 | `running_weight` | 1 | sweep 0.5 / 1 / 2 |
-| `failure_cost` | 3.5e6 | twice the level-trip plus pressure-envelope cost, per down step |
+| `failure_cost` | 4.0e6 | twice the level-trip plus pressure-envelope cost, (0.25 / 2.67e-3)^2 + (40 / 0.0283)^2, per down step |
 | `restart_steps` | 7200 (4 h) | steps the plant is down after a trip before it restarts (a drum trip's restart; provisional); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the tracking cost per step at the floor in the reward's
 units (the NEA floor for tracking) and `rho_floor` the full floor including
 consumption charged in full; `floor_is_documented_minimum` records whether
-`e_floor` is a measured/certified floor or a resolution used as a scale;
+`e_floor` is a measured/certified floor or a resolution used as a scale, and
+where it is a resolution (a deterministic plant) both references are 0, since
+exact hold is achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
 cost the envelope can produce. A trip never ends the window (`base.failure_kernel`):
 the plant is frozen at that cost, with tracking and running cost zeroed, for

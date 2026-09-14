@@ -200,12 +200,11 @@ class PlaneParams3D(EnvParams):
     failure_cost: float = 3.0e8
     #: Steps the plant is down after a trip before it restarts (a crash: no restart).
     restart_steps: int = NO_RESTART
-    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    #: One: the altitude term is zero inside its tolerance, so at the floor
-    #: only the heading or path term costs 1 (the figure-8 has the path term
-    #: alone).
-    rho_floor_tracking: float = 1.0
-    rho_floor: float = 1.0
+    #: The NEA reference. Zero: the aircraft is deterministic, so exact hold
+    #: is achievable and the 1 m / 1 deg floors are scales, not floors (a
+    #: reference of 1, the cost at the resolution, put the MPC above it).
+    rho_floor_tracking: float = 0.0
+    rho_floor: float = 0.0
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = True
     # Figure-8: half-amplitude of the altitude twist (meters).  The curve

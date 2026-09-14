@@ -15,9 +15,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "boiler_drum-v2": {
-    "fingerprint": "e5d370f917ab41ad",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "0a23250fdf940232",
+    "note": "gradient planner returns its best iterate; patrol planner on the v2 objective with a PID guide; boiler/distillation floors re-measured; rho_floor 0 on the deterministic plants",
+    "stamped": "2026-09-14T15:31:34+00:00"
   },
   "cement_kiln-v1": {
     "fingerprint": "0419d354f296e9f2",
@@ -35,9 +35,9 @@
     "stamped": "2026-09-13T09:03:12+00:00"
   },
   "cstr-v2": {
-    "fingerprint": "3400597e74b5de73",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "88eb91b3ef0ffc42",
+    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
+    "stamped": "2026-09-14T13:41:37+00:00"
   },
   "distillation-v1": {
     "fingerprint": "a54022227b359ba6",
@@ -45,9 +45,9 @@
     "stamped": "2026-09-13T09:03:12+00:00"
   },
   "distillation-v2": {
-    "fingerprint": "cec0eae6979abcd6",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "86c6a88ec0fda910",
+    "note": "gradient planner returns its best iterate; patrol planner on the v2 objective with a PID guide; boiler/distillation floors re-measured; rho_floor 0 on the deterministic plants",
+    "stamped": "2026-09-14T15:31:34+00:00"
   },
   "first_order-v1": {
     "fingerprint": "fa0ddbc733bf3f60",
@@ -55,9 +55,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "first_order-v2": {
-    "fingerprint": "d7f18e46b482d0b7",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "889b367c8ac648d6",
+    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
+    "stamped": "2026-09-14T13:41:37+00:00"
   },
   "four_tank-v1": {
     "fingerprint": "da38eef254db0f34",
@@ -65,9 +65,9 @@
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "four_tank-v2": {
-    "fingerprint": "914adebf67d31f92",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "f1a7f089cf60738e",
+    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
+    "stamped": "2026-09-14T13:41:37+00:00"
   },
   "glass_furnace-v1": {
     "fingerprint": "272349cfabc95017",
@@ -95,9 +95,9 @@
     "stamped": "2026-09-10T23:12:20+00:00"
   },
   "patrol-v2": {
-    "fingerprint": "03dc183262c96743",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "14bb1561ff96f342",
+    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
+    "stamped": "2026-09-14T13:41:37+00:00"
   },
   "patrol_bearing_only-v1": {
     "fingerprint": "96b9deebac83bd98",
@@ -105,9 +105,9 @@
     "stamped": "2026-09-10T23:12:20+00:00"
   },
   "patrol_bearing_only-v2": {
-    "fingerprint": "03dc183262c96743",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "14bb1561ff96f342",
+    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
+    "stamped": "2026-09-14T13:41:37+00:00"
   },
   "ph_neutralization-v1": {
     "fingerprint": "55f320195cb81ce2",
@@ -135,9 +135,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_circle-v2": {
-    "fingerprint": "f9cf7caa0ca1920f",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "1d0d201e738281d2",
+    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
+    "stamped": "2026-09-14T13:41:37+00:00"
   },
   "plane3d_figure8-v1": {
     "fingerprint": "925522f0cf3233f4",
@@ -145,9 +145,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_figure8-v2": {
-    "fingerprint": "62e0026909ab540c",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "b45b0ed08faab15a",
+    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
+    "stamped": "2026-09-14T13:41:37+00:00"
   },
   "plane3d_heading-v1": {
     "fingerprint": "2961df4b494a5ab7",
@@ -155,9 +155,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_heading-v2": {
-    "fingerprint": "a0a9479d482f8440",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "7cd4cd9cc5b2922b",
+    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
+    "stamped": "2026-09-14T13:41:37+00:00"
   },
   "plane3d_racetrack-v1": {
     "fingerprint": "f1f9b8f7b7dcec42",
@@ -165,9 +165,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_racetrack-v2": {
-    "fingerprint": "a646b23fba0a9057",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "f4fde2fa321de1cd",
+    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
+    "stamped": "2026-09-14T13:41:37+00:00"
   },
   "plane_energy-v1": {
     "fingerprint": "3994cf3273f563eb",

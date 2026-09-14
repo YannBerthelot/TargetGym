@@ -121,7 +121,10 @@ estimated from plant data -- the one thing a simulator gives that a plant
 cannot, and the reason the sanity test below is possible. The normalised
 expert advantage `NEA = (PID - x) / (PID - rho*)`, with `rho*` the cost at the
 floor, is a Harris-type index in cost units: 1 at the bound, 0 at PID parity,
-negative below PID. And the two-cost report -- tracking against consumption --
+negative below PID. On the deterministic plants, where `e_floor` is a
+resolution used as a scale and exact hold is achievable, `rho*` is 0 -- a
+reference of 1 there (the cost at the resolution) is not a bound, and the
+shipped MPCs sit below it. And the two-cost report -- tracking against consumption --
 is Huang and Shah's LQG performance curve: the trade-off frontier a controller
 is judged against, rather than one scalar that hides where on it a controller
 sits.
@@ -176,8 +179,8 @@ after burn-in is at or above the floor's cost. A floor the MPC beats is wrong.
 | `wind_turbine` | p=1 | 1680 W (lowest per-seed MPC hold, upper bound) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $80/MWh (provisional) |
 | `glass_furnace` | p=2 | 0.175 K (lowest per-seed MPC hold, upper bound) | 0 | fuel above hold, w=1 | dimensionless |
 | `cement_kiln` | p=2 | 3.4e-4 (lowest per-seed MPC hold, upper bound) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
-| `boiler_drum` | p=2 x2 | 2.7 mm level, 0.030 bar (lowest per-seed MPC holds) | 0 | fuel above hold, w=1 | dimensionless |
-| `distillation` | p=2 x2 | 4.9e-5 / 6.4e-5 (lowest per-seed MPC holds, upper bounds) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
+| `boiler_drum` | p=2 x2 | 2.7 mm level, 0.028 bar (lowest per-seed MPC holds) | 0 | fuel above hold, w=1 | dimensionless |
+| `distillation` | p=2 x2 | 1.35e-5 / 3.3e-5 (lowest per-seed MPC holds, upper bounds) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
 | `ph_neutralization` | p=2 | 0.0080 pH (lowest per-seed MPC hold, upper bound) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
 | `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance) | 0 | none | dimensionless |
 | `plane`, `plane_sine`, `plane_energy` | p=2, dead-zone | 1 m (documented minimum) | +-30 m (provisional) | airspeed deviation above hold, w=1 | dimensionless |
@@ -194,7 +197,7 @@ stand-in. Each PHYSICS.md says where a plant engineer would get the real one.
 The MPC is presented as the benchmark's ceiling, so under this reward it has
 to be one: on every plant its episode return and its hold cost are at or
 below the PID's (`docs/baselines.md`). Getting there was not a matter of
-re-tuning. Four things in the planners had been written against the
+re-tuning. Five things in the planners had been written against the
 version-1 reward and stopped being ceilings under version 2, and each is
 fixed in `experts/mpc.py` with the measurement that found it:
 
@@ -214,10 +217,14 @@ fixed in `experts/mpc.py` with the measurement that found it:
 - **A normalised-gradient planner cannot travel far in one solve**, so from
   a constant plan it could not find the pitch schedule the turbine needed
   (it braked the rotor with the torque instead) or the coordinated
-  thrust-and-elevator move the aircraft needed. The wind and 2D aircraft
-  planners now start from, and at every step are compared against, the
-  shipped PID's rollout plan under the planner's own objective -- so the plan
-  is never worse than the PID's under its model.
+  thrust-and-elevator move the aircraft needed. The wind, 2D aircraft and
+  patrol planners now start from, and at every step are compared against,
+  the shipped PID's rollout plan under the planner's own objective -- so the
+  plan is never worse than the PID's under its model. (The patrol planner
+  had kept its version-1 surrogate, a bounded multiplicative shape; once the
+  descent below was made monotone, a better solve of that surrogate was a
+  worse version-2 return, 18x on two seeds. It descends the follower's own
+  cost now.)
 - **Re-planning creates actuator activity no open-loop plan can see.** The
   turbine's pitch activity ran 3.4x the PID's with every plan predicting
   less; a move-suppression term on the first action, priced like the
@@ -225,6 +232,16 @@ fixed in `experts/mpc.py` with the measurement that found it:
   of rated speed with a mild soft box -- what a turbine's own supervisory
   logic does -- because recovering a slowed rotor pays off beyond its
   horizon and without the box it drifted to 0.85x rated with a 250 kW error.
+- **The descent was not monotone, and the planner took its last iterate
+  regardless.** A fixed step along a normalised gradient overshoots wherever
+  the cost has an edge -- a tolerance band, a barrier -- and fifty of them
+  can end far from where they started: on the 2D aircraft's seed 1 the
+  shifted plan scored -0.003 and the descended plan -3.31, three steps later
+  -0.99 against -19.7; the planner then reached for the PID's guide, dived
+  33 m out of the tolerance band and, over the hold, paid twice the PID.
+  The one-seed protocol run had not seen it. The gradient planner now
+  returns the best iterate of the solve, warm start included, so under its
+  own model it never leaves a solve with a worse plan than it entered with.
 
 One measurement bug came out with it: `runners.baseline_policy` built the
 MPC on the raw params rather than `plan_params`, so on the plants with

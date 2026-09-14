@@ -292,21 +292,46 @@ class GradientMPC:
                 total = total - self.move_penalty_fn(a[0], u_prev, self.params)
             return total
 
-        cost_grad = jax.grad(lambda a: -objective(a))
+        cost_and_grad = jax.value_and_grad(lambda a: -objective(a))
         margin = self._BOUND_MARGIN * 0.5 * (self.action_ub - self.action_lb)
+
+        # The descent is not monotone: a fixed step along a normalised
+        # gradient overshoots wherever the objective has an edge -- a
+        # tolerance band, a barrier -- and the last iterate can then be far
+        # worse than the warm start it began from. Measured on the 2D
+        # aircraft (seed 1, step 144 of the test episode): the shifted plan
+        # scored -0.003, the plan after 50 iterations -3.31, and three steps
+        # later -0.99 against -19.7; taking the descended plan regardless,
+        # the planner then reached for the guide, dived 33 m out of the
+        # tolerance band and lost to the PID on the hold it had just
+        # reached. So the plan returned is the best iterate seen, the warm
+        # start included: under its own model the planner never leaves a
+        # solve with a worse plan than it entered it with. The steps
+        # themselves stay fixed: an accept-only backtracking step was tried
+        # and flew the aircraft 55 m/s slow again (running cost 0.15 against
+        # the PID's 0.002 on seed 1) -- it makes too little progress per solve.
         lb, ub, lr = self.action_lb + margin, self.action_ub - margin, self.lr
 
-        def body(_, actions):
-            g = cost_grad(actions)
+        def body(_, carry):
+            actions, best, best_cost = carry
+            cost, g = cost_and_grad(actions)
+            better = cost < best_cost
+            best = jnp.where(better, actions, best)
+            best_cost = jnp.where(better, cost, best_cost)
             # Replace NaN gradients with zero (can arise from numerically
             # unstable rollouts, e.g. near-stall flight dynamics)
             g = jnp.where(jnp.isnan(g), 0.0, g)
             # Clip gradient norm
             g_norm = jnp.sqrt(jnp.sum(g**2) + 1e-8)
             g = jnp.where(g_norm > 1.0, g / g_norm, g)
-            return jnp.clip(actions - lr * g, lb, ub)
+            return jnp.clip(actions - lr * g, lb, ub), best, best_cost
 
-        return jax.lax.fori_loop(0, n_iter, body, jnp.clip(actions_init, lb, ub))
+        start = jnp.clip(actions_init, lb, ub)
+        last, best, best_cost = jax.lax.fori_loop(
+            0, n_iter, body, (start, start, jnp.asarray(jnp.inf, start.dtype))
+        )
+        last_cost, _ = cost_and_grad(last)
+        return jnp.where(last_cost < best_cost, last, best)
 
     def _optimize(self, actions_init: jnp.ndarray, state) -> jnp.ndarray:
         """Refine a warm-started plan. Two arguments, so it vmaps as it stands."""
@@ -2250,6 +2275,18 @@ def _patrol_objective(state, params):
     return track * align - penalty
 
 
+def _patrol_stall_barrier(state, params):
+    """Squared shortfall of the follower's airspeed below 1.3x its stall
+    speed, in [0, 1]: the 2D aircraft's barrier on the follower's state."""
+    f = state.follower
+    speed = jnp.sqrt(f.x_dot**2 + f.y_dot**2 + f.z_dot**2)
+    v_stall = jnp.sqrt(
+        2.0 * f.m * params.gravity / (f.rho * params.wings_surface * params.CL_max)
+    )
+    margin = speed / (_PLANE_STALL_MARGIN * v_stall)
+    return jnp.maximum(1.0 - margin, 0.0) ** 2
+
+
 def make_patrol_mpc(
     env,
     params,
@@ -2299,6 +2336,30 @@ def make_patrol_mpc(
     ``n_tail=60`` scores 175.7 against 153.8 without it, which is better than
     doubling the iterations to 600 (171.5) and half the cost.
     """
+    initial_plan = guide_plan = None
+    if _is_v1(params):
+        objective_fn = _patrol_objective
+        done_value = -(_PLANE_BARRIER_WEIGHT + 1.0)
+    else:
+        # Under version 2 the planner descends the follower's own cost with
+        # the stall barrier kept, and without the open-loop tail (as the 2D
+        # aircraft: under an unbounded cost the tail dominates the solve).
+        # The surrogate above has the version-1 minimiser, and once the
+        # descent was made monotone -- a better solve of the surrogate --
+        # the follower lost to its PID on two seeds by 18x: optimising the
+        # wrong objective harder.
+        from target_gym.experts.pid import make_patrol_stateful_pid
+        from target_gym.patrol.env import compute_reward_patrol
+
+        objective_fn = _v2_objective(compute_reward_patrol, _patrol_stall_barrier)
+        done_value = _done_value(params)
+        n_tail = 0
+        # Started from, and at every step compared against, the shipped
+        # PID's rollout under the planner's own objective, as the 2D
+        # aircraft is: on its own the descent lost the slot on two seeds
+        # (returns -5e5 against the PID's -6e4).
+        initial_plan = _pid_rollout_plan(env, make_patrol_stateful_pid, horizon, 3)
+        guide_plan = initial_plan
     return GradientMPC(
         env,
         params,
@@ -2309,8 +2370,10 @@ def make_patrol_mpc(
         n_iter=n_iter,
         lr=lr,
         n_tail=n_tail,
-        objective_fn=_patrol_objective,
-        done_value=-(_PLANE_BARRIER_WEIGHT + 1.0),
+        objective_fn=objective_fn,
+        initial_plan_fn=initial_plan,
+        guide_plan_fn=guide_plan,
+        done_value=done_value,
     )
 
 

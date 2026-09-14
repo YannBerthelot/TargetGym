@@ -56,9 +56,11 @@ class CSTRParams(EnvParams):
     failure_cost: float = 1.8e7
     #: Steps the plant is down after a trip before it restarts (1 h at 15 s steps: cool, purge and re-feed after a runaway, provisional).
     restart_steps: int = 240
-    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    rho_floor_tracking: float = 1.0
-    rho_floor: float = 1.0
+    #: The NEA reference. Zero: the plant is deterministic, so exact hold is
+    #: achievable and ``e_floor`` is a scale, not a floor (a reference of 1,
+    #: the cost at the resolution, put the MPC above the reference and NEA > 1).
+    rho_floor_tracking: float = 0.0
+    rho_floor: float = 0.0
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = True
 

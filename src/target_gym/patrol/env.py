@@ -149,9 +149,10 @@ class PatrolParams(PlaneParams3D):
     failure_cost: float = 2.0 * (1500.0 / 3.0) ** 2
     #: Steps the plant is down after a trip before it restarts (a crash, collision or lost formation: no restart).
     restart_steps: int = NO_RESTART
-    #: Two terms without tolerance (slot, heading): the floor costs 2.
-    rho_floor_tracking: float = 2.0
-    rho_floor: float = 2.0
+    #: The NEA reference. Zero: deterministic lead and aircraft, so exact
+    #: station-keeping is achievable and the 3 m / 1 deg floors are scales.
+    rho_floor_tracking: float = 0.0
+    rho_floor: float = 0.0
 
     # Lead behaviour.  Turn rate is sampled in [-r, r] rad/step; 0 => straight
     # and level.  At delta_t = 1 s, 0.003 rad/step ~ 0.17 deg/s ~ a very gentle
