@@ -195,7 +195,7 @@ baselines use.
 | `fade_price` | 300 $/kWh | replacement cost of lost capacity |
 | `pack_kWh` | 1692 | capacity_As x OCV at 50% SOC / 3.6e6 |
 | `failure_cost` | 2 x the 1 MW envelope's imbalance per step | SOC / thermal trip |
-| `restart_steps` | 720 (1 h) | steps the plant is down after a trip before it restarts (a protection trip's reset; provisional); where a plant engineer would get it: the plant's restart procedure |
+| `restart_steps` | 720 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a protection trip's reset; provisional); where a plant engineer would get it: the plant's restart procedure |
 
 The version-1 SOC-comfort term is dropped (**provisional**): it has no owner
 price, and a pack driven to the edge of its window pays through the dispatch
@@ -208,10 +208,11 @@ consumption charged in full; `floor_is_documented_minimum` records whether
 where it is a resolution (a deterministic plant) both references are 0, since
 exact hold is achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
-cost the envelope can produce. A trip never ends the window (`base.failure_kernel`):
-the plant is frozen at that cost, with tracking and running cost zeroed, for
-`restart_steps` steps and then restarts as `reset_env` would; a plant with no
-restart stays down to the window's end. `terminated` is never raised;
-`info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+cost the envelope can produce, and `restart_steps` the time a restart would take,
+so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
+ends the window (`base.failure_kernel`): the step that leaves the envelope is
+charged the trip cost, with tracking and running cost zeroed, and the plant
+restarts at once as `reset_env` would, on the same clock. `terminated` is never
+raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).

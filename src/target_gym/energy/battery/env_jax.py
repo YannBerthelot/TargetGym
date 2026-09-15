@@ -67,17 +67,17 @@ class GridBattery(environment.Environment[BatteryState, BatteryParams]):
         new_state, _ = compute_next_state(
             action_raw, state, params, key, integration_method=self.integration_method
         )
-        # A trip is part of the kernel: the plant is frozen at the failure
-        # cost for ``restart_steps`` steps and restarts, or stays down to the
-        # window's end. ``terminated`` is never raised (``base.failure_kernel``).
-        new_state, tripped, down = failure_kernel(self, key, state, new_state, params)
-        reward = compute_reward(new_state, params, xp=jnp)
+        # A trip is part of the kernel: the step is charged the trip cost and
+        # the plant restarts at once; ``terminated`` is never raised
+        # (``base.failure_kernel``).
+        new_state, tripped, scored = failure_kernel(self, key, state, new_state, params)
+        reward = compute_reward(scored, params, xp=jnp)
         return (
             self.get_obs(new_state),
             new_state,
             reward,
             jnp.zeros((), dtype=bool),
-            {"last_state": new_state, "tripped": tripped, "down": down},
+            {"last_state": new_state, "tripped": tripped},
         )
 
     def get_obs(self, state, params: BatteryParams = None):

@@ -6,7 +6,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import NO_RESTART, EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState
 from target_gym.integration import (
     integrate_dynamics,
 )
@@ -78,9 +78,6 @@ class PlaneState(EnvState):
             compute_velocity_from_horizontal_and_vertical_speed(self.x_dot, self.z_dot),
             self.speed_of_sound,
         )
-
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 @struct.dataclass
@@ -176,21 +173,29 @@ class PlaneParams(EnvParams):
     # and sits 50-65 m/s off) charged at weight 1, a stand-in for fuel. Flying
     # out of the altitude envelope costs, per step, twice the envelope.
     reward_version: int = 2
-    e_floor: float = 1.0  # m, altimeter resolution (documented minimum)
-    e_tol: float = 30.0  # m, provisional
+    # The MPC holds 0.84 m in the test turbulence (1.26 on the sinusoid, 4.55
+    # on the ladder), below the 1 m barometric resolution: the instrument sets
+    # the scale where the simulator's hold is finer than it.
+    e_floor: float = 1.0  # m
+    e_tol: float = (
+        0.0  # m; a +-30 m band made the hold vacuous (both controllers held 0.1 m)
+    )
     tracking_exponent: float = 2.0
-    c_hold: float = 6.1  # m/s airspeed deviation while holding (PID)
+    c_hold: float = (
+        5.06  # m/s airspeed deviation while holding (PID; 8.15 sine, 5.23 ladder)
+    )
     running_weight: float = 1.0
-    failure_cost: float = 3.0e8
-    #: Steps the plant is down after a trip before it restarts (a crash: no restart).
-    restart_steps: int = NO_RESTART
+    failure_cost: float = 2.0 * (12192.0 / 1.0) ** 2
+    #: Restart time priced into a trip (``reward.trip_cost``): a crash loses the
+    #: sortie, 1 h of flight at 1 s steps (provisional).
+    restart_steps: int = 3600
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    #: Zero: inside the +-30 m tolerance the tracking cost is zero and the
-    #: airspeed term is charged only above the hold-phase deviation.
-    rho_floor_tracking: float = 0.0
-    rho_floor: float = 0.0
+    #: One: altitude at the floor costs 1 and the airspeed term is charged
+    #: only above the hold-phase deviation.
+    rho_floor_tracking: float = 1.0
+    rho_floor: float = 1.0
     #: True where e_floor is a resolution, not a measured or certified floor.
-    floor_is_documented_minimum: bool = True
+    floor_is_documented_minimum: bool = False
     min_alt: float = 0.0
     max_alt: float = 40_000.0 / 3.281
     # Look-ahead wind: apply the gust ALREADY stored in the state this step, so
@@ -256,7 +261,9 @@ class PlaneParams(EnvParams):
     # Ornstein-Uhlenbeck turbulence on top of the mean wind: sigma is the gust
     # std (m/s), theta the mean-reversion rate (1/s; correlation time ~ 1/theta).
     # sigma = 0 (default) => no turbulence, wind is exactly the steady mean.
-    turbulence_sigma: float = 0.0
+    # 1.2 m/s per 1 s step is a 2 m/s stationary gust std at theta = 0.2:
+    # light-to-moderate turbulence (provisional; see PHYSICS.md).
+    turbulence_sigma: float = 1.2
     turbulence_theta: float = 0.2
     # Impulse gust mode. impulse_prob = 0 (default) => the OU turbulence above. When
     # impulse_prob > 0 the gust is instead a rare, memoryless "kick": each step a kick
@@ -322,7 +329,7 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp):
             xp.abs(speed - p.target_speed), p.c_hold, p.running_weight, xp
         ),
     }
-    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
+    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: PlaneState, params: PlaneParams, xp=jnp):

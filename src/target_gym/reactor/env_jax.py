@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
+from target_gym import reward as R
 from target_gym.base import canonical_reset, failure_kernel
 from target_gym.reactor.env import (
     ReactorParams,
@@ -123,14 +124,15 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
         )
         # One environment step has elapsed, whatever the physics clock did.
         new_state = new_state.replace(time=state.time + 1)
-        # A SCRAM is part of the kernel: the plant is down at the failure cost
-        # for ``restart_steps`` steps, then restarts (``base.failure_kernel``).
-        # While down, the step's cost is the failure cost and nothing else,
-        # whatever the frozen sub-steps summed to.
-        new_state, tripped, down = failure_kernel(self, key, state, new_state, params)
-        reward = jnp.where(down, -params.failure_cost, reward)
-        terms = {k: jnp.where(down, 0.0, v) for k, v in terms.items()}
-        terms["failure"] = jnp.where(down, params.failure_cost, terms["failure"])
+        # A SCRAM is part of the kernel: the step that leaves the envelope is
+        # charged the trip cost and the plant restarts at once
+        # (``base.failure_kernel``). On that step the cost is the trip cost
+        # and nothing else, whatever the sub-steps summed to.
+        new_state, tripped, _ = failure_kernel(self, key, state, new_state, params)
+        trip = R.trip_cost(params)
+        reward = jnp.where(tripped, -trip, reward)
+        terms = {k: jnp.where(tripped, 0.0, v) for k, v in terms.items()}
+        terms["failure"] = jnp.where(tripped, trip, terms["failure"])
 
         # Mean over the sub-steps rather than the sum. The action is held for
         # ``CONTROL_PERIOD`` physics sub-steps, and summing made one environment
@@ -159,7 +161,6 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
                 "last_state": new_state,
                 "reward_terms": terms,
                 "tripped": tripped,
-                "down": down,
             },
         )
 

@@ -98,7 +98,7 @@ class FourTankParams(EnvParams):
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
     failure_cost: float = 8.4e6
-    #: Steps the plant is down after a trip before it restarts (10 min at 1 s steps: refill after an overflow or dry-out, provisional).
+    #: Restart time priced into a trip (``reward.trip_cost``; 10 min at 1 s steps: refill after an overflow or dry-out, provisional).
     restart_steps: int = 600
     #: The NEA reference. Zero: the plant is deterministic, so exact hold is
     #: achievable and ``e_floor`` is a scale, not a floor (a reference of 2,
@@ -121,8 +121,6 @@ class FourTankState(EnvState):
     # For rendering
     v1: float
     v2: float
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def compute_velocity(position, action, params: FourTankParams):
@@ -236,9 +234,7 @@ def compute_reward_terms(state: FourTankState, params: FourTankParams, xp=jnp):
     terms = {
         "tracking": track,
     }
-    return R.with_downtime(
-        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
-    )
+    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: FourTankState, params: FourTankParams, xp=jnp):

@@ -44,22 +44,23 @@ class EnvState:
     time: int
 
 
-NO_RESTART = 2**30  # ``restart_steps`` for a plant that never comes back
-
-
 def _select(cond, a, b):
     return jax.tree_util.tree_map(lambda x, y: jnp.where(cond, x, y), a, b)
 
 
 def failure_kernel(env, key, state, new_state, params):
-    """Trips and downtime, as part of the transition kernel.
+    """Trips, as part of the transition kernel: a lump cost and a restart.
 
     A reach-and-hold task is continuing, so leaving the operating envelope is
-    not the end of an episode: the plant trips, is down at the failure cost
-    for ``params.restart_steps`` steps, and restarts as ``reset_env`` would,
-    on the same window clock. A plant with ``restart_steps = NO_RESTART``
-    stays down to the end of the window -- the absorbing state of the
-    Target-MDP note, lived through rather than asserted.
+    not the end of an episode. When the physics' proposal for the next state
+    is outside the envelope the plant trips: the step is charged the trip
+    cost -- ``restart_steps * failure_cost``, the downtime a real restart
+    would take priced at the per-step failure cost (``reward.trip_cost``) --
+    and the plant restarts at once as ``reset_env`` would, on the same
+    window clock. Nothing is frozen: a frozen plant paid the same total over
+    a dead stretch of identical steps, which taught a learner nothing and,
+    inside a test window shorter than the restart, priced a trip by when it
+    happened rather than by what it was.
 
     ``terminated`` is therefore never raised by a plant. Raising it would
     tell a discounted learner the crashed state is worth zero -- the cheapest
@@ -69,32 +70,13 @@ def failure_kernel(env, key, state, new_state, params):
     which counts it; nothing an agent runs has to read it.
 
     Given the state before the step, the physics' proposal for after it and
-    the step's key, returns ``(state, tripped, down)``:
-
-    - healthy before, proposal inside the envelope: the proposal;
-    - healthy before, proposal outside: a trip -- the proposal, frozen, with
-      ``downtime = restart_steps`` (this step included);
-    - down before with more than one step of downtime: the frozen state,
-      one step less;
-    - down before on its last step of downtime: a fresh draw of ``reset_env``.
-
-    ``downtime`` on a returned state is the number of down steps up to and
-    including the one just taken, so it is at least 1 on every down step and
-    the reward -- a function of the returned state -- charges the failure
-    cost on each of them and on none other.
+    the step's key, returns ``(state, tripped, scored)``: the state the
+    window continues from (the proposal, or a fresh draw when it tripped),
+    whether it tripped, and the state the step's reward is computed on --
+    the proposal when it tripped, so that the reward, a function of a state,
+    charges the trip cost exactly on the step that left the envelope.
     """
-    countdown = state.downtime
-    was_down = jnp.logical_or(env.is_terminated(state, params), countdown > 0)
-    restart = jnp.logical_and(was_down, countdown <= 1)
-    stay_down = jnp.logical_and(was_down, countdown > 1)
-    tripped = jnp.logical_and(
-        jnp.logical_not(was_down), env.is_terminated(new_state, params)
-    )
-    fresh = env.reset_env(key, params)[1].replace(time=new_state.time, downtime=0)
-    frozen = state.replace(time=new_state.time, downtime=jnp.maximum(countdown - 1, 1))
-    entered = new_state.replace(downtime=jnp.asarray(params.restart_steps, jnp.int32))
-    healthy = new_state.replace(downtime=jnp.zeros((), jnp.int32))
-    out = _select(
-        restart, fresh, _select(stay_down, frozen, _select(tripped, entered, healthy))
-    )
-    return out, tripped, jnp.logical_or(stay_down, tripped)
+    tripped = env.is_terminated(new_state, params)
+    fresh = env.reset_env(key, params)[1].replace(time=new_state.time)
+    out = _select(tripped, fresh, new_state)
+    return out, tripped, new_state

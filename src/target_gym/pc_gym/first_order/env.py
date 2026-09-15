@@ -32,7 +32,7 @@ class FirstOrderParams(EnvParams):
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
     failure_cost: float = 2.0e6
-    #: Steps the plant is down after a trip before it restarts (5 s at 0.05 s steps; a generic loop's reset, provisional).
+    #: Restart time priced into a trip (``reward.trip_cost``; 5 s at 0.05 s steps; a generic loop's reset, provisional).
     restart_steps: int = 100
     #: The NEA reference. Zero: the plant is deterministic, so exact hold is
     #: achievable and ``e_floor`` is a scale, not a floor (a reference of 1,
@@ -57,8 +57,6 @@ class FirstOrderState(EnvState):
 
     # For rendering
     u: float
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def compute_velocity(position, action, params: FirstOrderParams):
@@ -114,9 +112,7 @@ def compute_reward_terms(state: FirstOrderState, params: FirstOrderParams, xp=jn
             xp,
         ),
     }
-    return R.with_downtime(
-        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
-    )
+    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: FirstOrderState, params: FirstOrderParams, xp=jnp):

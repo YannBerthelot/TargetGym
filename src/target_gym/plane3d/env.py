@@ -14,7 +14,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import NO_RESTART, EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.plane.dynamics import (
     advance_gust,
@@ -84,9 +84,6 @@ class PlaneState3D(EnvState):
             compute_velocity_3d(self.x_dot, self.y_dot, self.z_dot),
             self.speed_of_sound,
         )
-
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 @struct.dataclass
@@ -192,21 +189,26 @@ class PlaneParams3D(EnvParams):
     # distance have none. No running cost on these tasks. Leaving the
     # envelope costs, per step, twice the altitude envelope's cost.
     reward_version: int = 2
-    e_floor_altitude: float = 1.0  # m
-    e_tol_altitude: float = 30.0  # m, provisional
-    e_floor_heading: float = 0.0087  # rad
-    e_floor_path: float = 3.0  # m
+    e_floor_altitude: float = (
+        1.44  # m, lowest per-seed MPC hold in turbulence (heading task; circle 4.06, racetrack 1.39)
+    )
+    e_tol_altitude: float = 0.0  # m; a +-30 m band made the altitude hold vacuous
+    e_floor_heading: float = (
+        0.0087  # rad, 0.5 deg AHRS resolution: the MPC holds below it (1e-4 rad on two seeds, 6e-3 on three), so the resolution is the scale
+    )
+    e_floor_path: float = (
+        3.0  # m; per task: circle 8.12, racetrack 6.17, figure-8 14.6 (lowest per-seed MPC holds)
+    )
     tracking_exponent: float = 2.0
-    failure_cost: float = 3.0e8
-    #: Steps the plant is down after a trip before it restarts (a crash: no restart).
-    restart_steps: int = NO_RESTART
-    #: The NEA reference. Zero: the aircraft is deterministic, so exact hold
-    #: is achievable and the 1 m / 1 deg floors are scales, not floors (a
-    #: reference of 1, the cost at the resolution, put the MPC above it).
-    rho_floor_tracking: float = 0.0
-    rho_floor: float = 0.0
+    failure_cost: float = 2.0 * (12192.0 / 1.44) ** 2  # per task in the registry
+    #: Restart time priced into a trip (``reward.trip_cost``): a crash loses the
+    #: sortie, 1 h of flight at 1 s steps (provisional).
+    restart_steps: int = 3600
+    #: Two: altitude and heading (or path) each cost 1 at their floors.
+    rho_floor_tracking: float = 2.0
+    rho_floor: float = 2.0
     #: True where e_floor is a resolution, not a measured or certified floor.
-    floor_is_documented_minimum: bool = True
+    floor_is_documented_minimum: bool = False
     # Figure-8: half-amplitude of the altitude twist (meters).  The curve
     # altitude is z_mean ± this value, so the two crossover passes differ
     # by 2× this.  200 m ≈ 660 ft — gentle enough for an A320 but enough
@@ -242,7 +244,9 @@ class PlaneParams3D(EnvParams):
     wind_z: float = 0.0
     # Ornstein-Uhlenbeck turbulence: sigma = gust std (m/s), theta = mean-
     # reversion rate (1/s).  sigma = 0 (default) => steady wind, no turbulence.
-    turbulence_sigma: float = 0.0
+    # 1.2 m/s per 1 s step is a 2 m/s stationary gust std at theta = 0.2:
+    # light-to-moderate turbulence (provisional; see PHYSICS.md).
+    turbulence_sigma: float = 1.2
     turbulence_theta: float = 0.2
     # Linear wind shear: horizontal wind gains ``wind_shear_x``/``wind_shear_y``
     # m/s per metre of altitude above ``shear_ref_alt`` (0 => no shear).
@@ -894,9 +898,7 @@ def altitude_cost(state, params, xp=jnp):
 
 def _downtime(terms, state, params, xp=jnp):
     terminated, _ = check_is_terminal_3d(state, params, xp)
-    return R.with_downtime(
-        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
-    )
+    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
 
 
 def compute_reward_terms_heading(state: PlaneState3D, params: PlaneParams3D, xp=jnp):

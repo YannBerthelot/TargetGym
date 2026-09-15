@@ -240,6 +240,18 @@ the target over the same 5 km band. Independent draws gave a median start
 1.7 km from the assigned level, so the episode opened with minutes of open-loop
 climb before any tracking began.
 
+### Turbulence
+
+The test configurations fly in light-to-moderate turbulence: an
+Ornstein-Uhlenbeck gust on both axes with `turbulence_sigma = 1.2` m/s per 1 s
+step and `turbulence_theta = 0.2`, a stationary gust standard deviation of
+2 m/s (MIL-F-8785C puts light turbulence near 1.5 m/s and moderate near 3 m/s
+at low altitude; less at cruise). It is what makes the altitude hold a
+problem: in still air both shipped controllers held within 0.1 m of the
+commanded level and the tracking term scored nothing, so the benchmark was
+deciding on airspeed alone. The planners plan on the mean wind
+(`turbulence_sigma` is a `noise_field`), as a real MPC would.
+
 ## 5. Known deviations
 
 **✅ D1 and D2 — resolved.** They were one defect, not two.
@@ -378,13 +390,13 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1 m | documented minimum: barometric altimeter resolution. The test configurations fly with zero turbulence, so the achievable hold error is ~0 (the shipped PID holds 0.08 m on the altitude hold, `scripts/measure_hold.py`). |
-| `e_tol` | 30 m | **provisional**: a defensible vertical-separation margin; an operator's tolerance would come from the flight rules |
+| `e_floor` | 1 m (`plane`), 1.26 (`plane_sine`), 4.55 (`plane_energy`) | lowest per-seed long-run mean \|error\| the shipped MPC held in the test turbulence (`scripts/measure_hold.py`, 2 seeds; 0.84 / 1.26 / 4.55 m, PID 0.87 / 44.7 / 8.5), floored at the 1 m barometric resolution: a hold the instrument cannot see is not a floor. Upper bounds otherwise |
+| `e_tol` | 0 | no dead zone. A +-30 m band (the pilot's instrument tolerance; the autopilot's is +-20 m, RVSM +-65 ft) was tried and made the hold vacuous: both controllers held within 0.1 m in still air, and the tracking cost was identically zero |
 | `tracking_exponent` | 2 | quadratic outside the tolerance |
-| `c_hold` | 6.1 m/s (`plane`), 8.6 (`plane_sine`), 5.6 (`plane_energy`) | airspeed deviation from `target_speed` while holding, PID (`scripts/measure_hold.py`; the version-1 MPC ignored speed and sat 50-65 m/s off, so the better controller set the reference; the version-2 MPC holds cruise speed). Set per task in the registry. |
+| `c_hold` | 5.06 m/s (`plane`), 8.15 (`plane_sine`), 5.23 (`plane_energy`) | airspeed deviation from `target_speed` while holding, PID (`scripts/measure_hold.py`), the better controller on speed: the MPC's hold window follows a climb and its speed is still recovering (21 / 13 / 20 m/s off) |
 | `running_weight` | 1 | the speed term stands in for fuel; sweep 0.5 / 1 / 2 |
-| `failure_cost` | 3e8 | twice the altitude envelope's cost, (12 192 / 1)^2 |
-| `restart_steps` | none | steps the plant is down after a trip before it restarts (a crash: the aircraft stays down to the window's end); where a plant engineer would get it: the plant's restart procedure |
+| `failure_cost` | 3e8 (`plane`), 1.9e8 (`plane_sine`), 1.44e7 (`plane_energy`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor)^2 |
+| `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the tracking cost per step at the floor in the reward's
 units (the NEA floor for tracking) and `rho_floor` the full floor including
@@ -393,10 +405,11 @@ consumption charged in full; `floor_is_documented_minimum` records whether
 where it is a resolution (a deterministic plant) both references are 0, since
 exact hold is achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
-cost the envelope can produce. A trip never ends the window (`base.failure_kernel`):
-the plant is frozen at that cost, with tracking and running cost zeroed, for
-`restart_steps` steps and then restarts as `reset_env` would; a plant with no
-restart stays down to the window's end. `terminated` is never raised;
-`info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+cost the envelope can produce, and `restart_steps` the time a restart would take,
+so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
+ends the window (`base.failure_kernel`): the step that leaves the envelope is
+charged the trip cost, with tracking and running cost zeroed, and the plant
+restarts at once as `reset_env` would, on the same clock. `terminated` is never
+raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).

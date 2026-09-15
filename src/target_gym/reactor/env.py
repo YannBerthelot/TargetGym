@@ -266,7 +266,7 @@ class ReactorParams(EnvParams):
     imbalance_multiple: float = 3.0  # of spot, for imbalance energy
     rod_wear_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
     failure_cost: float = 2000.0  # $ per 10 s step
-    #: Steps the plant is down after a trip before it restarts (48 h at 10 s steps: a SCRAM's xenon-limited restart, provisional).
+    #: Restart time priced into a trip (``reward.trip_cost``; 48 h at 10 s steps: a SCRAM's xenon-limited restart, provisional).
     restart_steps: int = 17280
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 3.0 * 80.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
@@ -299,8 +299,6 @@ class ReactorState(EnvState):
     #: limit. Carried so the reward can charge for demanding motion the rods
     #: cannot deliver; see ``compute_reward``.
     rho_ext_cmd: float
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def steady_state_precursors(n_0: float, params: ReactorParams) -> jnp.ndarray:
@@ -657,7 +655,7 @@ def compute_reward_terms(state: ReactorState, params: ReactorParams, xp=jnp):
         "tracking": tracking,
         "running": rod_wear,
     }
-    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
+    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: ReactorState, params: ReactorParams, xp=jnp):

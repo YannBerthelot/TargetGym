@@ -248,7 +248,7 @@ def test_mpc_controls_at_least_as_well_as_the_pid(name):
     assert recorded["mpc_trips"] == 0, (
         f"{name}: the MPC tripped the plant {recorded['mpc_trips']} time(s) over "
         f"{recorded['seeds']} windows -- it left the operating envelope. A trip is "
-        f"charged at the failure cost for the downtime (``base.failure_kernel``); "
+        f"charged its restart time at the failure cost (``base.failure_kernel``); "
         f"a planner that trips is not an upper bound. Terminal conditions are "
         f"booleans, so a penalty behind ``where(tripped, ...)`` gives the planner "
         f"the cost of a trip but no gradient away from the boundary; a "

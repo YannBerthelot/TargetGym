@@ -1997,6 +1997,17 @@ def make_plane_mpc(
 
         objective_fn = _v2_objective(compute_reward, _plane_stall_barrier)
         done_value = _done_value(params)
+        # Twenty seconds of horizon, not thirty. In turbulence the 30-step
+        # plan never converged within the budget and the planner chattered
+        # between its plan and the guide (stick moving 0.17 per step): it
+        # held 4.6 m off with a 4.4 m bias where the PID held 2.5 m. Shorter
+        # is myopic the other way -- airspeed answers the throttle slowly, so
+        # at 15 steps the plan buys altitude with speed it will not see
+        # itself pay for (23 m/s off cruise). Measured on seed 0 over the
+        # hold, cost per step: 30 steps 4.6 (before the fix below, 10 at 25),
+        # 15 steps 4.6, 20 steps 2.7 against the PID's 9; stick 0.009/step.
+        if horizon == 30:
+            horizon = 20
         # From a constant plan the planner parks at the edge of the altitude
         # tolerance 55 m/s below cruise: raising thrust alone pitches the
         # aircraft out of the band before the linear speed saving pays, and
@@ -2354,6 +2365,13 @@ def make_patrol_mpc(
         objective_fn = _v2_objective(compute_reward_patrol, _patrol_stall_barrier)
         done_value = _done_value(params)
         n_tail = 0
+        # Twenty seconds of horizon, as on the 2D aircraft: in turbulence the
+        # 30-step plan does not converge within the budget, and 15 is too
+        # short to hold the slot on every seed (seeds 0 / 1 returns: 15 steps
+        # -9449 / -536, 20 steps -732 / -702, 25 steps -1382 / -859, the PID
+        # -3868 / -2033).
+        if horizon == 30:
+            horizon = 20
         # Started from, and at every step compared against, the shipped
         # PID's rollout under the planner's own objective, as the 2D
         # aircraft is: on its own the descent lost the slot on two seeds

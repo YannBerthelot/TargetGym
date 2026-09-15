@@ -5,9 +5,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "battery-v2": {
-    "fingerprint": "5add4f40497f0995",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "533900b1d2f06b07",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   },
   "boiler_drum-v1": {
     "fingerprint": "24bd471e04585728",
@@ -15,9 +15,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "boiler_drum-v2": {
-    "fingerprint": "0a23250fdf940232",
-    "note": "gradient planner returns its best iterate; patrol planner on the v2 objective with a PID guide; boiler/distillation floors re-measured; rho_floor 0 on the deterministic plants",
-    "stamped": "2026-09-14T15:31:34+00:00"
+    "fingerprint": "29bea0d6cc7d91f4",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   },
   "cement_kiln-v1": {
     "fingerprint": "0419d354f296e9f2",
@@ -25,9 +25,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "cement_kiln-v2": {
-    "fingerprint": "91379982ec3fd775",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "c41ef8b61d547487",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   },
   "cstr-v1": {
     "fingerprint": "1aedfbe4bf2cd1e8",
@@ -35,9 +35,9 @@
     "stamped": "2026-09-13T09:03:12+00:00"
   },
   "cstr-v2": {
-    "fingerprint": "88eb91b3ef0ffc42",
-    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
-    "stamped": "2026-09-14T13:41:37+00:00"
+    "fingerprint": "cc115d8fbc697d4b",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   },
   "distillation-v1": {
     "fingerprint": "a54022227b359ba6",
@@ -45,9 +45,9 @@
     "stamped": "2026-09-13T09:03:12+00:00"
   },
   "distillation-v2": {
-    "fingerprint": "86c6a88ec0fda910",
-    "note": "gradient planner returns its best iterate; patrol planner on the v2 objective with a PID guide; boiler/distillation floors re-measured; rho_floor 0 on the deterministic plants",
-    "stamped": "2026-09-14T15:31:34+00:00"
+    "fingerprint": "575c982761a098a7",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   },
   "first_order-v1": {
     "fingerprint": "fa0ddbc733bf3f60",
@@ -55,9 +55,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "first_order-v2": {
-    "fingerprint": "889b367c8ac648d6",
-    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
-    "stamped": "2026-09-14T13:41:37+00:00"
+    "fingerprint": "a02c69613eab61ab",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   },
   "four_tank-v1": {
     "fingerprint": "da38eef254db0f34",
@@ -65,9 +65,9 @@
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "four_tank-v2": {
-    "fingerprint": "f1a7f089cf60738e",
-    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
-    "stamped": "2026-09-14T13:41:37+00:00"
+    "fingerprint": "c2af56e45b7e254b",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   },
   "glass_furnace-v1": {
     "fingerprint": "272349cfabc95017",
@@ -75,9 +75,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "glass_furnace-v2": {
-    "fingerprint": "95202fb9da4308ee",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "4b287f16fd0d1a66",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   },
   "hvac-v1": {
     "fingerprint": "5c8e38a6b643c717",
@@ -85,9 +85,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "hvac-v2": {
-    "fingerprint": "78a5ede0ad14db23",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "ee2c8c4d22264ea8",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   },
   "patrol-v1": {
     "fingerprint": "96b9deebac83bd98",
@@ -95,9 +95,9 @@
     "stamped": "2026-09-10T23:12:20+00:00"
   },
   "patrol-v2": {
-    "fingerprint": "14bb1561ff96f342",
-    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
-    "stamped": "2026-09-14T13:41:37+00:00"
+    "fingerprint": "f4ed788de7ce2b96",
+    "note": "aircraft floors floored at instrument resolution (altitude 1 m, heading 0.5 deg)",
+    "stamped": "2026-09-15T12:01:04+00:00"
   },
   "patrol_bearing_only-v1": {
     "fingerprint": "96b9deebac83bd98",
@@ -105,9 +105,9 @@
     "stamped": "2026-09-10T23:12:20+00:00"
   },
   "patrol_bearing_only-v2": {
-    "fingerprint": "14bb1561ff96f342",
-    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
-    "stamped": "2026-09-14T13:41:37+00:00"
+    "fingerprint": "f4ed788de7ce2b96",
+    "note": "aircraft floors floored at instrument resolution (altitude 1 m, heading 0.5 deg)",
+    "stamped": "2026-09-15T12:01:04+00:00"
   },
   "ph_neutralization-v1": {
     "fingerprint": "55f320195cb81ce2",
@@ -115,9 +115,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "ph_neutralization-v2": {
-    "fingerprint": "a58e92666b8041b2",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "410fc8ea8d46bd04",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   },
   "plane-v1": {
     "fingerprint": "e5d0397cd54ac886",
@@ -125,9 +125,9 @@
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "plane-v2": {
-    "fingerprint": "d4573980d1202df2",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "e1e874bb1f979715",
+    "note": "aircraft floors floored at instrument resolution (altitude 1 m, heading 0.5 deg)",
+    "stamped": "2026-09-15T12:01:04+00:00"
   },
   "plane3d_circle-v1": {
     "fingerprint": "ffcbd44cb289829d",
@@ -135,9 +135,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_circle-v2": {
-    "fingerprint": "1d0d201e738281d2",
-    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
-    "stamped": "2026-09-14T13:41:37+00:00"
+    "fingerprint": "6c1f6ebbeb5b9632",
+    "note": "aircraft floors floored at instrument resolution (altitude 1 m, heading 0.5 deg)",
+    "stamped": "2026-09-15T12:01:04+00:00"
   },
   "plane3d_figure8-v1": {
     "fingerprint": "925522f0cf3233f4",
@@ -145,9 +145,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_figure8-v2": {
-    "fingerprint": "b45b0ed08faab15a",
-    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
-    "stamped": "2026-09-14T13:41:37+00:00"
+    "fingerprint": "4eef51ea9438bf77",
+    "note": "aircraft floors floored at instrument resolution (altitude 1 m, heading 0.5 deg)",
+    "stamped": "2026-09-15T12:01:04+00:00"
   },
   "plane3d_heading-v1": {
     "fingerprint": "2961df4b494a5ab7",
@@ -155,9 +155,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_heading-v2": {
-    "fingerprint": "7cd4cd9cc5b2922b",
-    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
-    "stamped": "2026-09-14T13:41:37+00:00"
+    "fingerprint": "4cac6cbe2322d1bf",
+    "note": "aircraft floors floored at instrument resolution (altitude 1 m, heading 0.5 deg)",
+    "stamped": "2026-09-15T12:01:04+00:00"
   },
   "plane3d_racetrack-v1": {
     "fingerprint": "f1f9b8f7b7dcec42",
@@ -165,9 +165,9 @@
     "stamped": "2026-09-10T07:38:30+00:00"
   },
   "plane3d_racetrack-v2": {
-    "fingerprint": "f4fde2fa321de1cd",
-    "note": "rho_floor set to 0 on the deterministic plants (NEA reference only; reward unchanged)",
-    "stamped": "2026-09-14T13:41:37+00:00"
+    "fingerprint": "579ea6725c43f244",
+    "note": "aircraft floors floored at instrument resolution (altitude 1 m, heading 0.5 deg)",
+    "stamped": "2026-09-15T12:01:04+00:00"
   },
   "plane_energy-v1": {
     "fingerprint": "3994cf3273f563eb",
@@ -175,9 +175,9 @@
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "plane_energy-v2": {
-    "fingerprint": "a3e0671359a2a643",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "e6d9aa7625aa46c5",
+    "note": "aircraft floors floored at instrument resolution (altitude 1 m, heading 0.5 deg)",
+    "stamped": "2026-09-15T12:01:04+00:00"
   },
   "plane_sine-v1": {
     "fingerprint": "01afd0d200bbcfb0",
@@ -185,9 +185,9 @@
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "plane_sine-v2": {
-    "fingerprint": "8603b7867e6221fd",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "c648f5251ef38e06",
+    "note": "aircraft floors floored at instrument resolution (altitude 1 m, heading 0.5 deg)",
+    "stamped": "2026-09-15T12:01:04+00:00"
   },
   "reactor-v1": {
     "fingerprint": "da9cd77061a7830c",
@@ -200,9 +200,9 @@
     "stamped": "2026-09-13T09:03:12+00:00"
   },
   "reactor-v3": {
-    "fingerprint": "51d57df27b782777",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "c055c217fee6388b",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   },
   "wind_turbine-v1": {
     "fingerprint": "889181b62fafcbed",
@@ -210,8 +210,8 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "wind_turbine-v2": {
-    "fingerprint": "1a262eec7217b641",
-    "note": "v2: trips in the kernel (base.failure_kernel, restart_steps), per-seed-minimum reference floors, corrected rho_floor",
-    "stamped": "2026-09-14T09:04:20+00:00"
+    "fingerprint": "e8f412e46d8630a4",
+    "note": "trip = lump cost + immediate restart; aircraft in turbulence with measured floors and no altitude dead zone; pH/CSTR trips removed; plane/patrol planner horizons",
+    "stamped": "2026-09-15T10:05:52+00:00"
   }
 }

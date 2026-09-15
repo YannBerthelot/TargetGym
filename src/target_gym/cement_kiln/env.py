@@ -91,7 +91,7 @@ class CementKilnParams(EnvParams):
     c_hold: float = 1.824  # kg/s fuel while holding (PID)
     running_weight: float = 1.0
     failure_cost: float = 1.7e7
-    #: Steps the plant is down after a trip before it restarts (24 h at 30 s steps: cool-down, inspection and re-heat, provisional).
+    #: Restart time priced into a trip (``reward.trip_cost``; 24 h at 30 s steps: cool-down, inspection and re-heat, provisional).
     restart_steps: int = 2880
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 1.0
@@ -207,8 +207,6 @@ class CementKilnState(EnvState):
     # ---------------------------------------------------------------------------
     # Geometry and material flow
     # ---------------------------------------------------------------------------
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def zone_length(params: CementKilnParams) -> float:
@@ -500,9 +498,7 @@ def compute_reward_terms(state: CementKilnState, params: CementKilnParams, xp=jn
         ),
         "running": R.running_cost(state.fuel, params.c_hold, params.running_weight, xp),
     }
-    return R.with_downtime(
-        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
-    )
+    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: CementKilnState, params: CementKilnParams, xp=jnp):

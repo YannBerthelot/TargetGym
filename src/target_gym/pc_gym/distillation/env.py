@@ -143,7 +143,7 @@ class DistillationParams(EnvParams):
     c_hold: float = 3.282  # boilup while holding (PID)
     running_weight: float = 1.0
     failure_cost: float = 1.28e10
-    #: Steps the plant is down after a trip before it restarts (4 h at 1 min steps: column shutdown and re-establishment of the profile, provisional).
+    #: Restart time priced into a trip (``reward.trip_cost``; 4 h at 1 min steps: column shutdown and re-establishment of the profile, provisional).
     restart_steps: int = 240
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 2.0
@@ -161,8 +161,6 @@ class DistillationState(EnvState):
     V: float  # boilup (manipulated)
     target_yD: float
     target_xB: float
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def vle(x, params: DistillationParams):
@@ -311,7 +309,7 @@ def compute_reward_terms(state: DistillationState, params: DistillationParams, x
         "tracking": track,
         "running": R.running_cost(state.V, p.c_hold, p.running_weight, xp),
     }
-    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
+    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: DistillationState, params: DistillationParams, xp=jnp):

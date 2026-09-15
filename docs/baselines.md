@@ -806,23 +806,23 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 
 | environment | steps | PID cost/step | MPC cost/step | MPC saves | MPC wins | trips |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane3d_figure8` | 400 | 1.153e+06 | 141.9 | 1.000 | 10/10 | 0 |
-| `plane3d_racetrack` | 650 | 9.094e+05 | 1283 | 0.999 | 10/10 | 0 |
+| `plane3d_figure8` | 400 | 4.695e+04 | 6.772 | 1.000 | 10/10 | 0 |
+| `plane3d_racetrack` | 650 | 1.78e+05 | 758.8 | 0.996 | 10/10 | 0 |
+| `plane_energy` | 1200 | 1366 | 73.21 | 0.946 | 10/10 | 0 |
 | `reactor` | 864 | 58.48 | 3.294 | 0.944 | 10/10 | 0 |
-| `plane_energy` | 1200 | 1.575e+04 | 1108 | 0.930 | 10/10 | 0 |
 | `distillation` | 200 | 9293 | 1042 | 0.888 | 10/10 | 0 |
 | `boiler_drum` | 400 | 684.2 | 77.98 | 0.886 | 10/10 | 0 |
-| `plane3d_circle` | 300 | 1.538e+04 | 2982 | 0.806 | 10/10 | 0 |
-| `plane3d_heading` | 200 | 4.028e+04 | 8703 | 0.784 | 10/10 | 0 |
+| `plane3d_circle` | 300 | 1207 | 235.1 | 0.805 | 10/10 | 0 |
+| `plane3d_heading` | 200 | 3.15e+04 | 6734 | 0.786 | 10/10 | 0 |
+| `plane_sine` | 480 | 5184 | 1251 | 0.759 | 10/10 | 0 |
 | `cement_kiln` | 700 | 13.53 | 3.533 | 0.739 | 10/10 | 0 |
 | `four_tank` | 500 | 1167 | 344.5 | 0.705 | 10/10 | 0 |
 | `ph_neutralization` | 300 | 525.5 | 157 | 0.701 | 10/10 | 0 |
-| `plane_sine` | 480 | 4881 | 1695 | 0.653 | 10/10 | 0 |
-| `battery` | 360 | 0.003457 | 0.001222 | 0.646 | 10/10 | 0 |
+| `plane` | 280 | 1.04e+04 | 3277 | 0.685 | 10/10 | 0 |
+| `patrol` | 200 | 11.22 | 3.595 | 0.680 | 10/10 | 0 |
+| `battery` | 360 | 0.003457 | 0.001196 | 0.654 | 10/10 | 0 |
 | `glass_furnace` | 1600 | 41.81 | 14.81 | 0.646 | 10/10 | 0 |
-| `plane` | 280 | 6333 | 2794 | 0.559 | 10/10 | 0 |
 | `hvac` | 720 | 0.06478 | 0.03607 | 0.443 | 10/10 | 0 |
-| `patrol` | 200 | 293.8 | 175.6 | 0.402 | 10/10 | 0 |
 | `wind_turbine` | 400 | 3.633e-05 | 2.821e-05 | 0.223 | 10/10 | 0 |
 | `cstr` | 100 | 6319 | 5803 | 0.082 | 10/10 | 0 |
 | `first_order` | 100 | 1018 | 1002 | 0.015 | 10/10 | 0 |
@@ -874,7 +874,11 @@ except NEA. Three seeds on every plant -- the aircraft draw their targets
 per seed too, and a one-seed run had hidden the 2D aircraft MPC losing its
 hold on seed 1. `fail` is the trip rate per cycle.
 
-Reading across the rows: the aircraft PIDs are structurally inadequate on the
+Reading across the rows: the aircraft now fly in light turbulence with no
+altitude dead zone, so their holds are real -- the 2D aircraft MPC holds 1.4
+floor-widths-squared of altitude against the PID's 6, and pays for it in
+airspeed (2.1 against 0.17), which is the trade the two-cost split exists to
+show; the aircraft PIDs remain structurally inadequate on the
 moving-reference tasks (thousands of floor-widths while "holding" the
 racetrack, the figure-8 and the heading), where the MPC sits within a few;
 the glass furnace's MPC is 25 floor-widths-squared from its own long-run hold
@@ -885,7 +889,7 @@ no controller tripped a plant in any window.
 
 | plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID hold | MPC hold | PID reach B (transient) | MPC reach B (transient) | fail |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `battery` | 0.000222 | 0.00346 (0.00288 / 0.000589) | 0.00113 (0.000561 / 0.000568) | 0.72 | 0.00132 | 0.0012 | 0.0497 (0.0292) | 0.00353 (0.00123) | 0 |
+| `battery` | 0.000222 | 0.00346 (0.00288 / 0.000589) | 0.00112 (0.000548 / 0.000567) | 0.724 | 0.00132 | 0.00117 | 0.0497 (0.0292) | 0.00358 (0.00128) | 0 |
 | `boiler_drum` | 2 | 526 (526 / 0.0276) | 44.1 (44.1 / 0.0293) | 0.92 | 461 | 41.2 | 4.36e+04 (4.93e+04) | 8.44e+03 (9.92e+03) | 0 |
 | `cement_kiln` | 1 | 10.1 (10 / 0.0732) | 2.63 (2.58 / 0.054) | 0.82 | 12.2 | 2.72 | 1.95e+03 (5.25e+03) | 693 (1.23e+03) | 0 |
 | `cstr` | 0 | 41.2 (41.2 / —) | 0.317 (0.317 / —) | 0.992 | 5.96e-07 | 4.21e-05 | 6.64e+05 (6.6e+05) | 6.12e+05 (6.12e+05) | 0 |
@@ -894,19 +898,19 @@ no controller tripped a plant in any window.
 | `four_tank` | 0 | 30.3 (30.3 / —) | 0.00741 (0.00741 / —) | 1 | 30.3 | 0.00741 | 6.5e+05 (6.58e+05) | 1.92e+05 (1.92e+05) | 0 |
 | `glass_furnace` | 1 | 65.9 (65.8 / 0.0724) | 24.8 (24.8 / 0.0437) | 0.633 | 65.9 | 24.8 | -7.25e+03† (3.54e+04) | -3.18e+03† (1.22e+04) | 0 |
 | `hvac` | 0.0273 | 0.0747 (0.066 / 0.00863) | 0.0427 (0.0364 / 0.00634) | 0.675 | 0.0757 | 0.0423 | 0.287 (2.9) | 0.288 (1.62) | 0 |
-| `patrol` | 0 | 266 (266 / —) | 170 (170 / —) | 0.36 | 266 | 170 | 2.05e+04 (4.65e+04) | 5.25e+03 (1.98e+04) | 0 |
-| `patrol_bearing_only` | 0 | 334 (334 / —) | — | — | 253 | — | 1.62e+04 (786) | — | 0 |
+| `patrol` | 2 | 10.1 (10.1 / —) | 3.57 (3.57 / —) | 0.807 | 10.1 | 3.57 | 818 (1.78e+03) | 170 (377) | 0 |
+| `patrol_bearing_only` | 2 | 11.1 (11.1 / —) | — | — | 7.65 | — | 692 (20.6) | — | 0 |
 | `ph_neutralization` | 1 | 19.7 (19.7 / 0.00681) | 4.78 (4.77 / 0.00669) | 0.797 | 15.2 | 2.79 | 1.42e+05 (1.43e+05) | 3.65e+04 (3.64e+04) | 0 |
-| `plane` | 0 | 0.019 (0 / 0.019) | 0.00107 (0.000871 / 0.000197) | 0.944 | 0.019 | 0.00107 | 2.35e+06 (2.35e+06) | 1.04e+06 (1.04e+06) | 0 |
-| `plane3d_circle` | 0 | 550 (550 / —) | 55.5 (55.5 / —) | 0.899 | 550 | 55.5 | 5.72e+06 (5.8e+06) | 1.12e+06 (1.13e+06) | 0 |
-| `plane3d_figure8` | 0 | 6.22e+05 (6.22e+05 / —) | 44.5 (44.5 / —) | 1 | 6.22e+05 | 44.5 | 2.04e+08 (3.11e+08) | 1.84e+04 (2.73e+04) | 0 |
-| `plane3d_heading` | 0 | 2.01e+04 (2.01e+04 / —) | 0.000641 (0.000641 / —) | 1 | 2.01e+04 | 0.000641 | 6.25e+06 (7.77e+06) | 2.03e+06 (2.03e+06) | 0 |
-| `plane3d_racetrack` | 0 | 1.51e+06 (1.51e+06 / —) | 36.5 (36.5 / —) | 1 | 1.51e+06 | 33.2 | -8.2e+05† (5.65e+06) | 1.07e+06 (1.07e+06) | 0 |
-| `plane_energy` | 0 | 1.36e+04 (1.36e+04 / 0.281) | 499 (498 / 0.561) | 0.963 | 803 | 313 | 2.16e+06 (2.24e+06) | 1.63e+05 (2.03e+05) | 0 |
-| `plane_sine` | 0 | 549 (549 / 0.226) | 0.291 (3.64e-07 / 0.291) | 0.999 | 515 | 0.21 | 2.62e+06 (2.72e+06) | 1.06e+06 (1.06e+06) | 0 |
+| `plane` | 1 | 6.21 (6.04 / 0.169) | 3.54 (1.43 / 2.11) | 0.512 | 6.21 | 3.54 | 2.73e+06 (2.73e+06) | 1.19e+06 (1.19e+06) | 0 |
+| `plane3d_circle` | 2 | 98.6 (98.6 / —) | 9.84 (9.84 / —) | 0.919 | 98.6 | 9.84 | 4.18e+05 (4.33e+05) | 8.38e+04 (8.53e+04) | 0 |
+| `plane3d_figure8` | 1 | 2.5e+04 (2.5e+04 / —) | 2.1 (2.1 / —) | 1 | 2.5e+04 | 2.1 | 8.57e+06 (1.28e+07) | 739 (1.15e+03) | 0 |
+| `plane3d_heading` | 2 | 1.79e+04 (1.79e+04 / —) | 5.05 (5.05 / —) | 1 | 1.79e+04 | 5.05 | 4.01e+06 (5.45e+06) | 1.53e+06 (1.53e+06) | 0 |
+| `plane3d_racetrack` | 2 | 3.18e+05 (3.18e+05 / —) | 7.04 (7.04 / —) | 1 | 3.18e+05 | 6.86 | 6.82e+04 (3.56e+06) | 6.28e+05 (6.3e+05) | 0 |
+| `plane_energy` | 1 | 780 (780 / 0.321) | 38.8 (35.4 / 3.39) | 0.951 | 51.7 | 25.4 | 1.23e+05 (1.28e+05) | 9.5e+03 (1.28e+04) | 0 |
+| `plane_sine` | 1 | 1.52e+03 (1.52e+03 / 0.261) | 2.99 (2.24 / 0.749) | 0.999 | 1.49e+03 | 2.86 | 1.88e+06 (2.14e+06) | 7.61e+05 (7.62e+05) | 0 |
 | `reactor` | 3.01 | 56.9 (56 / 0.924) | 3.31 (3.31 / 5.79e-05) | 0.994 | 56.9 | 3.31 | 3.93e+03 (2.97e+04) | 11.4 (1.43e+03) | 0 |
 | `wind_turbine` | 9.33e-06 | 2.11e-05 (1.94e-05 / 1.7e-06) | 1.69e-05 (1.25e-05 / 4.47e-06) | 0.355 | 2.11e-05 | 1.69e-05 | 0.00683 (0.0105) | 0.00544 (0.00878) | 0 |
 
 Reach B is each controller's transient cost above its *own* hold level (Theorem 4's bias), so it is not comparable between two controllers whose holds differ: a controller holding far off shows a small B because its level swallows its transient. The number in parentheses is the transient's summed cost, not relative to anything, and is the one to compare across controllers.
-† cost still rising at the end of the window (no hold reached, so the transient is cheaper than the "hold" level and B is negative): PID on `glass_furnace`, MPC on `glass_furnace`, PID on `plane3d_racetrack`.
+† cost still rising at the end of the window (no hold reached, so the transient is cheaper than the "hold" level and B is negative): PID on `glass_furnace`, MPC on `glass_furnace`.
 

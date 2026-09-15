@@ -155,7 +155,7 @@ class HVACParams(EnvParams):
     setback_lower_bound_only: bool = True  # provisional design choice
     tracking_exponent: float = 2.0
     failure_cost: float = 2.0 * 0.2 * 14.0**2 * 0.25
-    #: Steps the plant is down after a trip before it restarts (1 h at 15 min steps: reset after a freeze or overheat alarm, provisional).
+    #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 15 min steps: reset after a freeze or overheat alarm, provisional).
     restart_steps: int = 4
     #: The shipped MPC's lowest per-seed hold cost on the test episode (EUR
     #: per step, five seeds; comfort 0.0206, total 0.0273; the 3-seed means
@@ -184,8 +184,6 @@ class HVACState(EnvState):
     # ---------------------------------------------------------------------------
     # Derived conductances (ISO 13790 §7). Pure functions of params.
     # ---------------------------------------------------------------------------
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def zone_conductances(params: HVACParams):
@@ -496,7 +494,7 @@ def compute_reward_terms(state: HVACState, params: HVACParams, xp=jnp):
         "tracking": comfort,
         "running": energy,
     }
-    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
+    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: HVACState, params: HVACParams, xp=jnp):

@@ -162,7 +162,7 @@ class WindTurbineParams(EnvParams):
     )
     fatigue_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
     failure_cost: float = 2.0 * 80.0 * 7.0 * 0.25 / 3600.0
-    #: Steps the plant is down after a trip before it restarts (10 min at 0.25 s steps: an overspeed trip's reset and re-synchronisation, provisional).
+    #: Restart time priced into a trip (``reward.trip_cost``; 10 min at 0.25 s steps: an overspeed trip's reset and re-synchronisation, provisional).
     restart_steps: int = 2400
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 80.0 / 1.0e6 * 0.25 / 3600.0 * 1680.0
@@ -183,8 +183,6 @@ class WindTurbineState(EnvState):
     pitch_cmd: float
     torque_cmd: float
     target_power: float
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def rotor_area(params: WindTurbineParams):
@@ -374,7 +372,7 @@ def compute_reward_terms(state: WindTurbineState, params: WindTurbineParams, xp=
         "tracking": tracking,
         "running": fatigue,
     }
-    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
+    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: WindTurbineState, params: WindTurbineParams, xp=jnp):

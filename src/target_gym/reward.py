@@ -73,18 +73,19 @@ def priced_cost(quantity, price, xp=jnp):
     return price * quantity
 
 
-def with_downtime(terms: dict, down, failure_cost, xp=jnp) -> dict:
-    """The terms of a plant that is down: every cost zeroed and the failure
-    cost charged, per step, for as long as ``down`` holds."""
-    out = {k: xp.where(down, 0.0, v) for k, v in terms.items()}
-    out["failure"] = xp.where(down, failure_cost, 0.0)
+def trip_cost(params):
+    """The cost of a trip, charged once on the step that leaves the envelope:
+    the plant's restart time priced at the per-step failure cost."""
+    return params.restart_steps * params.failure_cost
+
+
+def with_trip(terms: dict, tripped, cost, xp=jnp) -> dict:
+    """The terms of a state outside the envelope: every cost zeroed and the
+    trip cost charged. The kernel restarts the plant on the same step
+    (``base.failure_kernel``), so this is paid once per trip."""
+    out = {k: xp.where(tripped, 0.0, v) for k, v in terms.items()}
+    out["failure"] = xp.where(tripped, cost, 0.0)
     return out
-
-
-def is_down(tripped_now, state, xp=jnp):
-    """A plant is down when it is outside its envelope (tripped or frozen)
-    or still counting its downtime."""
-    return xp.logical_or(tripped_now, state.downtime > 0)
 
 
 def total(terms: dict, xp=jnp):

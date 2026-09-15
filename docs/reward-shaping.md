@@ -41,8 +41,11 @@ the plant's own irreducible error, not a sensor resolution and not the
 operating envelope, so a controller's tracking cost reads directly as "how
 many floor-widths off". `e_tol` is a specification tolerance where the plant
 has one (a comfort band, a purity spec, a permit limit): the cost is zero
-inside it -- a dead-zone relaxation, which forfeits at most the tolerance in
-long-run cost -- and inside the band only consumption is optimised. `p` is 1
+inside it -- a dead-zone relaxation, which for a linear cost forfeits at most
+the tolerance in long-run cost (for p = 2 the forfeit at an error `E` is
+`(2 E e_tol - e_tol^2) / e_floor^2`, so the band must be small against the
+errors a controller actually makes; the aircraft's +-30 m band was not, and
+was dropped) -- and inside the band only consumption is optimised. `p` is 1
 where the owner's cost is linear in the error (an energy imbalance settled
 per MWh) and 2 otherwise. Multi-output plants sum one such term per output,
 each with its own floor.
@@ -83,26 +86,37 @@ vanishes when it should bind is not a cost.
 ### Failure
 
 Leaving the operating envelope trips the plant. A reach-and-hold task is
-continuing, so a trip is not the end of an episode: the plant is frozen at
-`failure_cost` per step -- above the largest tracking cost the envelope can
-produce, with tracking and running cost zeroed -- for `restart_steps` steps,
-then restarts as `reset_env` would, on the same window clock
-(`base.failure_kernel`). A plant that cannot restart (the aircraft, the glass
-furnace) stays down to the window's end. That is the absorbing state of the
-Target-MDP note lived through inside the window, so a policy that fails with
-any probability has the worst long-run cost and safety enters through the
-average cost; with a finite restart the long-run cost decomposes as
-`rho_hold + p * B + lambda * (restart_steps * failure_cost + B_restart)`, with
-`lambda` the trip rate, which the protocol reports separately.
+continuing, so a trip is not the end of an episode: the step that leaves the
+envelope is charged the **trip cost**, `restart_steps * failure_cost` -- the
+time a real restart takes, priced at a per-step failure cost above the
+largest tracking cost the envelope can produce -- with that step's tracking
+and running cost zeroed, and the plant restarts at once as `reset_env`
+would, on the same window clock (`base.failure_kernel`, `reward.trip_cost`).
+The long-run cost then decomposes as
+`rho_hold + p * B + lambda * (restart_steps * failure_cost + B_restart)`,
+with `lambda` the trip rate, which the protocol reports separately; the
+absorbing failure of the Target-MDP note is the `restart_steps -> inf`
+limit. Restart times are provisional numbers a plant engineer would supply
+(a SCRAM's xenon-limited restart, a furnace heat-up schedule, a lost sortie);
+each plant's `PHYSICS.md` gives its value and source.
+
+Two earlier forms were tried and dropped. Charging the trip once per terminal
+step, and then for the steps the episode had left, both priced a trip by
+where in the episode it happened. Freezing the plant at `failure_cost` for
+`restart_steps` steps -- downtime lived through -- paid the same total but as
+a dead stretch of identical steps: no information for a learner, and inside a
+test window shorter than the restart (every plant but the building) the
+restart never came, so the price was again set by the window. The lump is
+that total, paid where it is incurred.
 
 No plant raises `terminated`. Raising it tells a discounted learner the
 crashed state is worth zero -- the cheapest state in the plant, and the
 bootstrap behind every agent that learns to crash -- and cuts the chain an
 average-reward learner estimates its gain on. The trip is `info["tripped"]`,
-read by the evaluator and by nothing an agent runs. (Two earlier versions of
-this page charged the trip once, per terminal step, and then for the steps the
-episode had left; both made the price of a trip depend on the episode rather
-than the plant.)
+read by the evaluator and by nothing an agent runs. Two plants never trip:
+the pH loop's effluent is a convex mix of its inlet streams and cannot reach
+the 2 / 12 limits, and the CSTR settles between 318 and 329 K under any
+coolant setting; their envelope limits are documentation.
 
 ## Why the floor: loop performance assessment, in cost units
 
@@ -182,10 +196,10 @@ after burn-in is at or above the floor's cost. A floor the MPC beats is wrong.
 | `boiler_drum` | p=2 x2 | 2.7 mm level, 0.028 bar (lowest per-seed MPC holds) | 0 | fuel above hold, w=1 | dimensionless |
 | `distillation` | p=2 x2 | 1.35e-5 / 3.3e-5 (lowest per-seed MPC holds, upper bounds) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
 | `ph_neutralization` | p=2 | 0.0080 pH (lowest per-seed MPC hold, upper bound) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
-| `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance) | 0 | none | dimensionless |
-| `plane`, `plane_sine`, `plane_energy` | p=2, dead-zone | 1 m (documented minimum) | +-30 m (provisional) | airspeed deviation above hold, w=1 | dimensionless |
-| `plane3d_*` | p=2 | 1 m / 0.0087 rad / 3 m (documented minima) | +-30 m altitude | none | dimensionless |
-| `patrol` | p=2 | 3 m / 0.0087 rad (documented minima) | 0 (provisional) | none | dimensionless |
+| `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
+| `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
+| `plane3d_*` | p=2 | altitude 1.44 / 4.06 / 1.39 m, heading 1.0e-4 rad, path 8.1 / 6.2 / 14.6 m (lowest per-seed MPC holds in turbulence) | 0 | none | dimensionless |
+| `patrol` | p=2 | 18.6 m / 1.6e-3 rad (lowest per-seed MPC holds in turbulence) | 0 (provisional) | none | dimensionless |
 
 "Provisional" marks a number the plant's owner would supply -- a tolerance
 from the quality system, permit or grid code; a price from a tariff; a wear

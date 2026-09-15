@@ -80,7 +80,7 @@ feed concentrations and flows jointly against the published benchmark.
 | `q1`, `Wa1`, `Wb1` | 16.6, 3.0e−3, 0 | mL/s, M | Acid feed (HNO₃) | ✅ |
 | `q2_nominal`, `Wa2`, `Wb2` | 0.55, −3.0e−2, 3.0e−2 | mL/s, M | Buffer (NaHCO₃) | ✅ |
 | `Wa3`, `Wb3` | −3.05e−3, 5.0e−5 | M | Base (NaOH + NaHCO₃) | ✅ |
-| `q3_min`, `q3_max` | 10, 22 | mL/s | Spans pH ≈ 4.0–10.2, bracketing equivalence with failure margin both ways | ✅ |
+| `q3_min`, `q3_max` | 10, 22 | mL/s | Spans pH ≈ 4.0–10.2, bracketing equivalence; the 2 / 12 off-spec limits are unreachable (steady pH 3.1–10.6 at the flow extremes) | ✅ |
 | `pK1`, `pK2` | 6.35, 10.25 | – | Carbonic acid dissociation constants | ✅ |
 | `q2_noise_std` | 0.35 | mL/s | TUNED — buffering disturbance amplitude | ⚠️ |
 | `delta_t` | 5.0 | s | ≈ 18 steps per residence time | ✅ |
@@ -188,8 +188,8 @@ baselines use.
 | `tracking_exponent` | 2 | quadratic |
 | `c_hold` | 16.24 mL/s | reagent flow while holding, PID and MPC alike (`scripts/measure_hold.py`) |
 | `running_weight` | 1 | one floor-width of pH error is worth the hold-phase reagent flow again; sweep 0.5 / 1 / 2 |
-| `failure_cost` | 3.1e6 | twice the span's cost, (10 / 0.0080)^2, per down step |
-| `restart_steps` | 720 (1 h) | steps the plant is down after a trip before it restarts (flush the tank after a gross excursion; provisional); where a plant engineer would get it: the plant's restart procedure |
+| `failure_cost` | 3.1e6 | twice the span's cost, (10 / 0.0080)^2. **Never charged**: the effluent is a convex mix of the inlet streams, so its pH stays within about 3.1-10.6 whatever the valves do; the 2 / 12 limits are documentation of the off-spec range |
+| `restart_steps` | 720 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (flush the tank after a gross excursion; provisional; never exercised, see `failure_cost`); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the tracking cost per step at the floor in the reward's
 units (the NEA floor for tracking) and `rho_floor` the full floor including
@@ -198,10 +198,11 @@ consumption charged in full; `floor_is_documented_minimum` records whether
 where it is a resolution (a deterministic plant) both references are 0, since
 exact hold is achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
-cost the envelope can produce. A trip never ends the window (`base.failure_kernel`):
-the plant is frozen at that cost, with tracking and running cost zeroed, for
-`restart_steps` steps and then restarts as `reset_env` would; a plant with no
-restart stays down to the window's end. `terminated` is never raised;
-`info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+cost the envelope can produce, and `restart_steps` the time a restart would take,
+so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
+ends the window (`base.failure_kernel`): the step that leaves the envelope is
+charged the trip cost, with tracking and running cost zeroed, and the plant
+restarts at once as `reset_env` would, on the same clock. `terminated` is never
+raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).

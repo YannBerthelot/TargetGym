@@ -54,7 +54,7 @@ class CSTRParams(EnvParams):
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
     failure_cost: float = 1.8e7
-    #: Steps the plant is down after a trip before it restarts (1 h at 15 s steps: cool, purge and re-feed after a runaway, provisional).
+    #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 15 s steps: cool, purge and re-feed after a runaway, provisional).
     restart_steps: int = 240
     #: The NEA reference. Zero: the plant is deterministic, so exact hold is
     #: achievable and ``e_floor`` is a scale, not a floor (a reference of 1,
@@ -73,8 +73,6 @@ class CSTRState(EnvState):
 
     # For rendering
     T_c: float
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def compute_velocity(position, action, params: CSTRParams):
@@ -135,11 +133,10 @@ def get_obs(
 
 
 def check_is_terminal(state: CSTRState, params: CSTRParams, xp=jnp):
-    terminated_1 = jnp.logical_or(state.T <= params.T_min, state.T >= params.T_max)
-    terminated_2 = jnp.logical_or(
-        state.C_a <= params.C_a_min, state.C_a >= params.C_a_max
-    )
-    terminated = jnp.logical_or(terminated_1, terminated_2)
+    # No trip: with the coolant pinned at either bound the reactor settles
+    # between 318 and 329 K and C_a >= 0.83, so the 300 / 350 K and 0.7 / C_a_max
+    # limits are unreachable. Kept as documentation of the envelope.
+    terminated = jnp.zeros((), dtype=bool)
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
@@ -156,9 +153,7 @@ def compute_reward_terms(state: CSTRState, params: CSTRParams, xp=jnp):
             xp,
         ),
     }
-    return R.with_downtime(
-        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
-    )
+    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: CSTRState, params: CSTRParams, xp=jnp):

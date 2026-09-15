@@ -384,7 +384,11 @@ def test_step_env_is_jittable(spec):
     jitted = jax.jit(lambda k, s, a: env.step_env(k, s, a, params))
     obs_j, _, reward_j, _, _ = jitted(key, state, action)
     obs_e, _, reward_e, _, _ = env.step_env(key, state, action, params)
-    assert jnp.allclose(obs_j, obs_e, atol=1e-4)
+    # Float32 under jit reorders sums; an observation formed as a difference
+    # of kilometre-scale positions (the racetrack's cross-track) can move by
+    # an ulp of those positions, so the tolerance follows the vector's scale.
+    scale = float(jnp.max(jnp.abs(obs_e)))
+    assert jnp.allclose(obs_j, obs_e, atol=1e-4 + 1e-6 * scale)
     assert float(reward_j) == pytest.approx(float(reward_e), rel=1e-4, abs=1e-4)
 
 

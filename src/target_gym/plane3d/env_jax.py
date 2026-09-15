@@ -107,11 +107,11 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
             integration_method=self.integration_method,
             key=key,
         )
-        # A crash is part of the kernel: the aircraft is frozen at the failure
-        # cost to the window's end (``restart_steps = NO_RESTART``);
-        # ``terminated`` is never raised (``base.failure_kernel``).
-        new_state, tripped, down = failure_kernel(self, key, state, new_state, params)
-        reward = self.compute_reward(new_state, params)
+        # A crash is part of the kernel: the step is charged the trip cost and
+        # the flight restarts at once; ``terminated`` is never raised
+        # (``base.failure_kernel``).
+        new_state, tripped, scored = failure_kernel(self, key, state, new_state, params)
+        reward = self.compute_reward(scored, params)
         obs = self.get_obs(new_state, params)
         return (
             obs,
@@ -122,7 +122,6 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
                 "metrics": metrics,
                 "last_state": new_state,
                 "tripped": tripped,
-                "down": down,
             },
         )
 

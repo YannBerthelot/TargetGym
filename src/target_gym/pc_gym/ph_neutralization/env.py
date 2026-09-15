@@ -152,7 +152,7 @@ class PHParams(EnvParams):
     c_hold: float = 16.24  # mL/s reagent while holding (PID = MPC)
     running_weight: float = 1.0
     failure_cost: float = 3.1e6
-    #: Steps the plant is down after a trip before it restarts (1 h at 5 s steps: flush the tank after a gross excursion, provisional).
+    #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 5 s steps: flush the tank after a gross excursion, provisional).
     restart_steps: int = 720
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 1.0
@@ -170,8 +170,6 @@ class PHState(EnvState):
     pH: float  # the single measurement
     q3: float  # commanded base flow
     target_pH: float
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def titration_residual(pH, Wa, Wb, params: PHParams):
@@ -287,7 +285,10 @@ def get_obs(state: PHState, params: PHParams):
 
 
 def check_is_terminal(state: PHState, params: PHParams, xp=jnp):
-    terminated = xp.logical_or(state.pH <= params.pH_min, state.pH >= params.pH_max)
+    # No trip: the effluent is a convex mix of the inlet streams, so its pH
+    # stays within about 3.1-10.6 whatever the valves do, and the 2 / 12
+    # limits are unreachable. Kept as documentation of the off-spec range.
+    terminated = xp.zeros((), dtype=bool)
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
@@ -305,9 +306,7 @@ def compute_reward_terms(state: PHState, params: PHParams, xp=jnp):
         ),
         "running": R.running_cost(state.q3, params.c_hold, params.running_weight, xp),
     }
-    return R.with_downtime(
-        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
-    )
+    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: PHState, params: PHParams, xp=jnp):

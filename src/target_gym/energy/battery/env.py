@@ -182,7 +182,7 @@ class BatteryParams(EnvParams):
     fade_price: float = 300.0  # $/kWh of lost capacity
     pack_kWh: float = 1692.0  # capacity_As * OCV(50%) / 3.6e6
     failure_cost: float = 2.0 * 100.0 * 1.0 * 5.0 / 3600.0
-    #: Steps the plant is down after a trip before it restarts (1 h at 5 s steps: a protection trip's reset, provisional).
+    #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 5 s steps: a protection trip's reset, provisional).
     restart_steps: int = 720
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 100.0 / 1.0e6 * 5.0 / 3600.0 * 1596.0
@@ -205,8 +205,6 @@ class BatteryState(EnvState):
     # coming. The observation exposes only the current request, which is what
     # keeps the lookahead a genuine advantage rather than a free lunch.
     dispatch_schedule: jnp.ndarray
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def dispatch_block(time, params: BatteryParams, xp=jnp):
@@ -406,7 +404,7 @@ def compute_reward_terms(state: BatteryState, params: BatteryParams, xp=jnp):
         "tracking": tracking,
         "running": degradation,
     }
-    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
+    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: BatteryState, params: BatteryParams, xp=jnp):

@@ -38,7 +38,7 @@ Every environment in this suite scores on one contract: the reward is
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 8 fields.
+`reset` samples the initial condition and the target; state has 7 fields.
 
 ## Episode end
 

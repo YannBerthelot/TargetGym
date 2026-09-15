@@ -248,38 +248,45 @@ def test_mpc_does_not_beat_a_measured_floor(spec):
     )
 
 
-def test_a_down_plant_pays_the_failure_cost_and_restarts(spec):
-    """``base.failure_kernel``: a plant with downtime left is frozen at the
-    failure cost, one step per step, and restarts when the countdown ends; a
-    plant with ``restart_steps = NO_RESTART`` stays down."""
-    from target_gym.base import NO_RESTART
+def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
+    """``base.failure_kernel``: when the physics' proposal leaves the envelope
+    the step is scored on that proposal -- every term zero, the failure term
+    the trip cost ``restart_steps * failure_cost`` -- and the state the window
+    continues from is a fresh draw on the same clock. A proposal inside the
+    envelope passes through unchanged."""
+    from target_gym.base import failure_kernel
 
-    env = spec.make_env()
-    p = spec.make_test_params()
-    obs, state = env.reset_env(jax.random.PRNGKey(0), p)
-    step = jax.jit(env.step_env)
-    a = jnp.zeros(
-        np.atleast_1d(env.action_space(p).sample(jax.random.PRNGKey(0))).shape
-    )
-    down = state.replace(
-        downtime=jnp.asarray(3, jnp.int32)
-    )  # 3 down steps taken so far
-    for k in (2, 1):
-        _, down, r, term, info = step(jax.random.PRNGKey(k), down, a, p)
-        assert not bool(term)
-        assert bool(info["down"]) and not bool(info["tripped"])
-        assert float(r) == pytest.approx(-float(p.failure_cost), rel=1e-5)
-        assert int(down.downtime) == k
-    # the countdown has run out: this step restarts the plant
-    _, fresh, r, term, info = step(jax.random.PRNGKey(3), down, a, p)
-    assert not bool(term) and not bool(info["down"])
-    assert int(fresh.downtime) == 0
-    assert int(fresh.time) == int(down.time) + 1
-    assert float(r) != pytest.approx(-float(p.failure_cost), rel=1e-5)
-    if int(p.restart_steps) >= NO_RESTART:
-        stuck = state.replace(downtime=jnp.asarray(NO_RESTART - 1, jnp.int32))
-        for k in range(3):
-            _, stuck, r, _, info = step(jax.random.PRNGKey(k), stuck, a, p)
-            assert bool(info["down"]) and float(r) == pytest.approx(
-                -float(p.failure_cost), rel=1e-5
-            )
+    env, p, state = _a_state(spec)
+    key = jax.random.PRNGKey(7)
+    proposal = state.replace(time=state.time + 1)
+
+    class Trips:
+        is_terminated = staticmethod(lambda s, params: jnp.ones((), bool))
+        reset_env = staticmethod(env.reset_env)
+
+    out, tripped, scored = failure_kernel(Trips(), key, state, proposal, p)
+    assert bool(tripped)
+    assert int(out.time) == int(proposal.time)
+    assert scored is proposal
+    fresh = env.reset_env(key, p)[1]
+    for name in vars(fresh):
+        if name == "time":
+            continue
+        np.testing.assert_array_equal(
+            np.asarray(getattr(out, name)), np.asarray(getattr(fresh, name))
+        )
+    out, tripped, scored = failure_kernel(env, key, state, proposal, p)
+    assert not bool(tripped)
+    assert scored is proposal
+    for name in vars(proposal):
+        np.testing.assert_array_equal(
+            np.asarray(getattr(out, name)), np.asarray(getattr(proposal, name))
+        )
+    # The reward's failure term is the trip cost, and nothing else, on a
+    # state outside the envelope; zero on one inside.
+    terms = env.reward_terms(state, p)
+    assert float(terms["failure"]) == 0.0
+    assert float(R.trip_cost(p)) == float(p.restart_steps) * float(p.failure_cost)
+    out_of_envelope = R.with_trip(terms, jnp.ones((), bool), R.trip_cost(p))
+    assert float(out_of_envelope["failure"]) == pytest.approx(float(R.trip_cost(p)))
+    assert all(float(v) == 0.0 for k, v in out_of_envelope.items() if k != "failure")

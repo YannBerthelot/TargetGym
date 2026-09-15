@@ -72,9 +72,17 @@ than by commit.
   on the dimensionless plants, at the owner's prices on the reactor (imbalance
   at 3x spot), the building (gas at EUR 0.10/kWh), the battery (imbalance
   $100/MWh, fade $300/kWh) and the wind turbine -- and a trip that never ends
-  the window: the plant is frozen at `failure_cost` per step for a documented
-  `restart_steps` and restarts, or stays down (`base.failure_kernel`), so no
-  plant raises `terminated` any more. Convex, additive, in
+  the window: the step that leaves the envelope is charged the trip cost, a
+  documented restart time at `failure_cost` per step, and the plant restarts
+  at once (`base.failure_kernel`, `reward.trip_cost`), so no plant raises
+  `terminated` any more. (A first form froze the plant for the restart time
+  instead; same total, but a dead stretch of steps that taught a learner
+  nothing and, inside a test window shorter than the restart, priced a trip
+  by when it happened.) The pH loop and the CSTR cannot reach their envelope
+  limits and no longer pretend to trip; the aircraft fly in light-to-moderate
+  turbulence (2 m/s gust std) with no altitude dead zone, since in still air
+  with a +-30 m band both controllers held within 0.1 m and the altitude
+  term scored nothing. Convex, additive, in
   defensible units; the per-step scale is no longer capped at 1 and differs
   by orders of magnitude between plants, so cross-plant comparison is the
   protocol's job (`target_gym.eval`), not the return's. The positioning and

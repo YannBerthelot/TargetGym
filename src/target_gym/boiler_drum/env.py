@@ -89,7 +89,7 @@ class BoilerDrumParams(EnvParams):
     c_hold: float = 1.566e8  # W fuel while holding (MPC)
     running_weight: float = 1.0
     failure_cost: float = 4.0e6
-    #: Steps the plant is down after a trip before it restarts (4 h at 2 s steps: a drum trip's restart, provisional).
+    #: Restart time priced into a trip (``reward.trip_cost``; 4 h at 2 s steps: a drum trip's restart, provisional).
     restart_steps: int = 7200
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     rho_floor_tracking: float = 2.0
@@ -182,8 +182,6 @@ class BoilerDrumState(EnvState):
     # ---------------------------------------------------------------------------
     # Saturated steam properties
     # ---------------------------------------------------------------------------
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def _poly(coef, p):
@@ -456,9 +454,7 @@ def compute_reward_terms(state: BoilerDrumState, params: BoilerDrumParams, xp=jn
             state.Q_fuel, params.c_hold, params.running_weight, xp
         ),
     }
-    return R.with_downtime(
-        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
-    )
+    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):

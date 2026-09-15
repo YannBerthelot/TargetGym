@@ -63,7 +63,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import NO_RESTART, EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -288,8 +288,10 @@ class GlassFurnaceParams(EnvParams):
     c_hold: float = 0.590  # kg/s fuel while holding (PID = MPC)
     running_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
     failure_cost: float = 4.1e6
-    #: Steps the plant is down after a trip before it restarts (refractory damage or glass out of range ends the campaign; no restart within any window).
-    restart_steps: int = NO_RESTART
+    #: Restart time priced into a trip (``reward.trip_cost``): refractory damage or
+    #: glass out of range ends the campaign; a furnace heat-up schedule is about two
+    #: weeks, 40 320 steps at 30 s (provisional).
+    restart_steps: int = 40320
     rho_floor_tracking: float = 1.0
     rho_floor: float = 1.0
     floor_is_documented_minimum: bool = False
@@ -320,8 +322,6 @@ class GlassFurnaceState(EnvState):
     fuel_flow: float
     T_air_preheat: float
     T_stack: float
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 def glass_c_p(T, params: GlassFurnaceParams):
@@ -801,9 +801,7 @@ def compute_reward_terms(state: GlassFurnaceState, params: GlassFurnaceParams, x
             state.fuel_flow, params.c_hold, params.running_weight, xp
         ),
     }
-    return R.with_downtime(
-        terms, R.is_down(terminated, state, xp), params.failure_cost, xp
-    )
+    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp):

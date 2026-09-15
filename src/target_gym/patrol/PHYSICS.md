@@ -189,11 +189,11 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_slot` | 3 m | documented minimum: relative position from differenced GPS fixes. Deterministic lead, zero turbulence: the achievable hold error is ~0. |
+| `e_floor_slot` | 18.6 m | lowest per-seed MPC slot hold in the test turbulence (`scripts/measure_hold.py`; PID 44 m); upper bound |
 | `e_tol_slot` | 0 | **provisional.** The formation's station-keeping radius is a procedural number to be supplied. |
-| `e_floor_heading` | 0.0087 rad | inherited AHRS resolution |
-| `failure_cost` | 2 x (1500 m / 3 m)^2 = 5e5 per step | losing the formation, a collision or a crash; overrides the inherited aircraft value |
-| `restart_steps` | none | steps the plant is down after a trip before it restarts (a crash, collision or lost formation: the pair stays down to the window's end); where a plant engineer would get it: the plant's restart procedure |
+| `e_floor_heading` | 0.0087 rad | inherited 0.5 deg AHRS resolution; the MPC holds alignment below it (1.6e-3 rad in the test turbulence, PID 0.011), so the instrument sets the scale |
+| `failure_cost` | 2 x ((1500 / 18.6)^2 + (pi / 0.0087)^2) = 2.7e5 per step | losing the formation, a collision or a crash: twice the slot-loss bound plus the heading term; overrides the inherited aircraft value |
+| `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash, collision or lost formation loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the tracking cost per step at the floor in the reward's
 units (the NEA floor for tracking) and `rho_floor` the full floor including
@@ -202,10 +202,11 @@ consumption charged in full; `floor_is_documented_minimum` records whether
 where it is a resolution (a deterministic plant) both references are 0, since
 exact hold is achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
-cost the envelope can produce. A trip never ends the window (`base.failure_kernel`):
-the plant is frozen at that cost, with tracking and running cost zeroed, for
-`restart_steps` steps and then restarts as `reset_env` would; a plant with no
-restart stays down to the window's end. `terminated` is never raised;
-`info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+cost the envelope can produce, and `restart_steps` the time a restart would take,
+so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
+ends the window (`base.failure_kernel`): the step that leaves the envelope is
+charged the trip cost, with tracking and running cost zeroed, and the plant
+restarts at once as `reset_env` would, on the same clock. `terminated` is never
+raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).

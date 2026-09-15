@@ -30,9 +30,9 @@ import jax.numpy as jnp
 from flax import struct
 
 from target_gym import reward as R
-from target_gym.base import NO_RESTART, EnvState
+from target_gym.base import EnvState
 from target_gym.experts.pid import Plane3DPIDState, plane3d_heading_pid_step
-from target_gym.plane.dynamics import advance_gust
+from target_gym.plane.dynamics import advance_gust, step_key
 from target_gym.plane3d.dynamics import compute_velocity_3d
 from target_gym.plane3d.env import (
     PlaneParams3D,
@@ -102,8 +102,6 @@ class PatrolState(EnvState):
     gust_x: float = 0.0
     gust_y: float = 0.0
     gust_z: float = 0.0
-    #: Steps of downtime left after a trip (``base.failure_kernel``); 0 when healthy.
-    downtime: int = 0
 
 
 @struct.dataclass
@@ -143,16 +141,18 @@ class PatrolParams(PlaneParams3D):
     # turbulence: the achievable hold error is ~0, so these are documented
     # minima. Losing the formation, a collision or a crash costs, per step,
     # twice the 1500 m slot-loss bound.
-    e_floor_slot: float = 3.0  # m
+    e_floor_slot: float = (
+        18.6  # m, lowest per-seed MPC hold in turbulence (upper bound)
+    )
     e_tol_slot: float = 0.0  # provisional; station-keeping radius to be supplied
     # Overrides the inherited aircraft value: twice the slot-loss bound's cost.
-    failure_cost: float = 2.0 * (1500.0 / 3.0) ** 2
-    #: Steps the plant is down after a trip before it restarts (a crash, collision or lost formation: no restart).
-    restart_steps: int = NO_RESTART
-    #: The NEA reference. Zero: deterministic lead and aircraft, so exact
-    #: station-keeping is achievable and the 3 m / 1 deg floors are scales.
-    rho_floor_tracking: float = 0.0
-    rho_floor: float = 0.0
+    failure_cost: float = 2.0 * ((1500.0 / 18.6) ** 2 + (3.14159 / 0.0087) ** 2)
+    #: Restart time priced into a trip (``reward.trip_cost``): a crash, collision
+    #: or lost formation loses the sortie, 1 h of flight at 1 s steps (provisional).
+    restart_steps: int = 3600
+    #: Two terms (slot, heading), each costing 1 at its floor.
+    rho_floor_tracking: float = 2.0
+    rho_floor: float = 2.0
 
     # Lead behaviour.  Turn rate is sampled in [-r, r] rad/step; 0 => straight
     # and level.  At delta_t = 1 s, 0.003 rad/step ~ 0.17 deg/s ~ a very gentle
@@ -319,7 +319,7 @@ def compute_reward_terms_patrol(state: PatrolState, params: PatrolParams, xp=jnp
     terms = {
         "tracking": slot + heading,
     }
-    return R.with_downtime(terms, R.is_down(terminated, state, xp), p.failure_cost, xp)
+    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
 
 
 def compute_reward_patrol_v1(state: PatrolState, params: PatrolParams, xp=jnp):
@@ -555,7 +555,7 @@ def compute_next_state_patrol(
         params.turbulence_theta,
         params.turbulence_sigma,
         params.delta_t,
-        key,
+        step_key(key, state.time),
     )
     eff_params = params.replace(
         wind_x=params.wind_x + gust[0],

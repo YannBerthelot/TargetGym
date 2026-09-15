@@ -40,7 +40,8 @@ def test_sample_action():
 
 
 def test_step():
-    env = Airplane2D()
+    # Still air: the assertion is about the elevator, not a gust.
+    env = Airplane2D(env_params=PlaneParams(turbulence_sigma=0.0))
     obs, info = env.reset(seed=42)
     action = (0.5, 0)
     state = env.state

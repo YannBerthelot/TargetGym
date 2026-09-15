@@ -44,8 +44,9 @@ def env():
 
 @pytest.fixture(scope="module")
 def params():
-    # Long horizon so scenarios end on physics, not on the step limit.
-    return PlaneParams(max_steps_in_episode=100_000)
+    # Long horizon so scenarios end on physics, not on the step limit; still
+    # air, since these scenarios are about the aerodynamics.
+    return PlaneParams(max_steps_in_episode=100_000, turbulence_sigma=0.0)
 
 
 def make_state(

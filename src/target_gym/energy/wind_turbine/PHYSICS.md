@@ -168,7 +168,7 @@ baselines use.
 | `c_hold` | 0.0013 | pitch activity fraction \|cmd - achieved\| / pitch_max while holding, PID (`scripts/measure_hold.py`; 0.0526 deg of a 40 deg range) |
 | `fatigue_weight` | 1 | **provisional.** Avoidable activity is charged per unit at what tracking at the floor costs per step; a maintenance model would give the price. Sweep 0.5 / 1 / 2. |
 | `failure_cost` | 2 x the imbalance of the 7 MW the overspeed limit and `torque_max` allow, per step left | overspeed / underspeed trip |
-| `restart_steps` | 2400 (10 min) | steps the plant is down after a trip before it restarts (an overspeed trip's reset and re-synchronisation; provisional); where a plant engineer would get it: the plant's restart procedure |
+| `restart_steps` | 2400 (10 min) | restart time priced into a trip, `restart_steps x failure_cost` (an overspeed trip's reset and re-synchronisation; provisional); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the tracking cost per step at the floor in the reward's
 units (the NEA floor for tracking) and `rho_floor` the full floor including
@@ -177,10 +177,11 @@ consumption charged in full; `floor_is_documented_minimum` records whether
 where it is a resolution (a deterministic plant) both references are 0, since
 exact hold is achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
-cost the envelope can produce. A trip never ends the window (`base.failure_kernel`):
-the plant is frozen at that cost, with tracking and running cost zeroed, for
-`restart_steps` steps and then restarts as `reset_env` would; a plant with no
-restart stays down to the window's end. `terminated` is never raised;
-`info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+cost the envelope can produce, and `restart_steps` the time a restart would take,
+so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
+ends the window (`base.failure_kernel`): the step that leaves the envelope is
+charged the trip cost, with tracking and running cost zeroed, and the plant
+restarts at once as `reset_env` would, on the same clock. `terminated` is never
+raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
