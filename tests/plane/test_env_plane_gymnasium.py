@@ -24,7 +24,7 @@ def test_reset():
 def test_compute_reward():
     env = Airplane2D()
     obs, info = env.reset()
-    env_params = PlaneParams()
+    env_params = PlaneParams(reward_version=1)
     reward = compute_reward(state=env.state, params=env_params)
     assert reward.shape == ()
     assert 1 > reward > 0
@@ -40,7 +40,8 @@ def test_sample_action():
 
 
 def test_step():
-    env = Airplane2D()
+    # Still air: the assertion is about the elevator, not a gust.
+    env = Airplane2D(env_params=PlaneParams(turbulence_sigma=0.0))
     obs, info = env.reset(seed=42)
     action = (0.5, 0)
     state = env.state
@@ -63,7 +64,7 @@ def test_step():
 
 
 def test_is_terminal():
-    env_params = PlaneParams()
+    env_params = PlaneParams(reward_version=1)
     env = Airplane2D()
     obs, info = env.reset()
     terminal_state = PlaneState(

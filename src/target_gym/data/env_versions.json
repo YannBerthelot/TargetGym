@@ -4,95 +4,190 @@
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
   },
+  "battery-v2": {
+    "fingerprint": "27a2742ede6390d8",
+    "note": "floors clamped at instrument resolution; failure costs pegged to the reachable envelope; one imbalance price; HVAC comfort price and restart in place",
+    "stamped": "2026-09-15T16:00:53+00:00"
+  },
   "boiler_drum-v1": {
     "fingerprint": "24bd471e04585728",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "boiler_drum-v2": {
+    "fingerprint": "e734de748b14181c",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
   },
   "cement_kiln-v1": {
     "fingerprint": "0419d354f296e9f2",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
   },
+  "cement_kiln-v2": {
+    "fingerprint": "e85e90ccddf2b039",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
+  },
   "cstr-v1": {
     "fingerprint": "1aedfbe4bf2cd1e8",
     "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",
     "stamped": "2026-09-13T09:03:12+00:00"
+  },
+  "cstr-v2": {
+    "fingerprint": "fa3eeed66dfa083e",
+    "note": "floors clamped at instrument resolution; failure costs pegged to the reachable envelope; one imbalance price; HVAC comfort price and restart in place",
+    "stamped": "2026-09-15T16:00:53+00:00"
   },
   "distillation-v1": {
     "fingerprint": "a54022227b359ba6",
     "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",
     "stamped": "2026-09-13T09:03:12+00:00"
   },
+  "distillation-v2": {
+    "fingerprint": "e1cf0b2eb15d4820",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
+  },
   "first_order-v1": {
     "fingerprint": "fa0ddbc733bf3f60",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "first_order-v2": {
+    "fingerprint": "01b6e87308f62025",
+    "note": "floors clamped at instrument resolution; failure costs pegged to the reachable envelope; one imbalance price; HVAC comfort price and restart in place",
+    "stamped": "2026-09-15T16:00:53+00:00"
   },
   "four_tank-v1": {
     "fingerprint": "da38eef254db0f34",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
   },
+  "four_tank-v2": {
+    "fingerprint": "4d1530cc2a79f6e8",
+    "note": "floors clamped at instrument resolution; failure costs pegged to the reachable envelope; one imbalance price; HVAC comfort price and restart in place",
+    "stamped": "2026-09-15T16:00:53+00:00"
+  },
   "glass_furnace-v1": {
     "fingerprint": "272349cfabc95017",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "glass_furnace-v2": {
+    "fingerprint": "784fd82dd15379aa",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
   },
   "hvac-v1": {
     "fingerprint": "5c8e38a6b643c717",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
   },
+  "hvac-v2": {
+    "fingerprint": "0ce441eae263d4f2",
+    "note": "HVAC NEA reference re-measured at the new comfort price",
+    "stamped": "2026-09-15T17:01:27+00:00"
+  },
   "patrol-v1": {
     "fingerprint": "96b9deebac83bd98",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T23:12:20+00:00"
+  },
+  "patrol-v2": {
+    "fingerprint": "9659547b4e7c3b75",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
   },
   "patrol_bearing_only-v1": {
     "fingerprint": "96b9deebac83bd98",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T23:12:20+00:00"
   },
+  "patrol_bearing_only-v2": {
+    "fingerprint": "9659547b4e7c3b75",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
+  },
   "ph_neutralization-v1": {
     "fingerprint": "55f320195cb81ce2",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "ph_neutralization-v2": {
+    "fingerprint": "c66917904caf627f",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
   },
   "plane-v1": {
     "fingerprint": "e5d0397cd54ac886",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
   },
+  "plane-v2": {
+    "fingerprint": "4e9dd222b919df28",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
+  },
   "plane3d_circle-v1": {
     "fingerprint": "ffcbd44cb289829d",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
+  },
+  "plane3d_circle-v2": {
+    "fingerprint": "502cd9c026e49e1e",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
   },
   "plane3d_figure8-v1": {
     "fingerprint": "925522f0cf3233f4",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
   },
+  "plane3d_figure8-v2": {
+    "fingerprint": "04aae6985353b0fc",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
+  },
   "plane3d_heading-v1": {
     "fingerprint": "2961df4b494a5ab7",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
+  },
+  "plane3d_heading-v2": {
+    "fingerprint": "1ac149631f5c3870",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
   },
   "plane3d_racetrack-v1": {
     "fingerprint": "f1f9b8f7b7dcec42",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
   },
+  "plane3d_racetrack-v2": {
+    "fingerprint": "b41036f99768ff6e",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
+  },
   "plane_energy-v1": {
     "fingerprint": "3994cf3273f563eb",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
   },
+  "plane_energy-v2": {
+    "fingerprint": "d63dd1be43bd54c8",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
+  },
   "plane_sine-v1": {
     "fingerprint": "01afd0d200bbcfb0",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
+  },
+  "plane_sine-v2": {
+    "fingerprint": "c06af5d34ce9941d",
+    "note": "NEA references set to the measured hold cost in the clamped floor's units",
+    "stamped": "2026-09-15T18:13:07+00:00"
   },
   "reactor-v1": {
     "fingerprint": "da9cd77061a7830c",
@@ -104,9 +199,19 @@
     "note": "v2: max_steps_in_episode and state.time count env steps (10 s), not physics sub-steps; the shipped rollout had run 10x past the limit on a frozen plant, understating the recorded baselines ~5x",
     "stamped": "2026-09-13T09:03:12+00:00"
   },
+  "reactor-v3": {
+    "fingerprint": "cb913d0b4b87a812",
+    "note": "floors clamped at instrument resolution; failure costs pegged to the reachable envelope; one imbalance price; HVAC comfort price and restart in place",
+    "stamped": "2026-09-15T16:00:53+00:00"
+  },
   "wind_turbine-v1": {
     "fingerprint": "889181b62fafcbed",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "wind_turbine-v2": {
+    "fingerprint": "6e1483e4e6614b5c",
+    "note": "floors clamped at instrument resolution; failure costs pegged to the reachable envelope; one imbalance price; HVAC comfort price and restart in place",
+    "stamped": "2026-09-15T16:00:53+00:00"
   }
 }

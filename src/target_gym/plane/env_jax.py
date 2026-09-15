@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset
+from target_gym.base import canonical_reset, failure_kernel
 from target_gym.plane.dynamics import total_wind_2d
 from target_gym.plane.env import (
     PlaneParams,
@@ -13,6 +13,7 @@ from target_gym.plane.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
 )
 
@@ -60,6 +61,9 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
+    def reward_terms(self, state, params):
+        return compute_reward_terms(state, params)
+
     def step_env(
         self,
         key: chex.PRNGKey,
@@ -85,20 +89,22 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
             integration_method=self.integration_method,
             key=key,
         )
-        reward = self.compute_reward(new_state, params)
-        # gymnax >= 1.0 owns truncation: ``step_env`` reports natural
-        # termination only, and the base ``Environment.step`` derives
-        # ``truncated`` from ``state.time >= params.max_steps_in_episode``
-        # -- the very condition ``check_is_terminal`` returns second.
-        terminated, _ = check_is_terminal(new_state, params, xp=jnp)
-
+        # A crash is part of the kernel: the step is charged the trip cost and
+        # the flight restarts at once; ``terminated`` is never raised
+        # (``base.failure_kernel``).
+        new_state, tripped, scored = failure_kernel(self, key, state, new_state, params)
+        reward = self.compute_reward(scored, params)
         obs = self.get_obs(new_state, params)
         return (
             obs,
             new_state,
             reward,
-            terminated,
-            {"metrics": metrics, "last_state": new_state},
+            jnp.zeros((), dtype=bool),
+            {
+                "metrics": metrics,
+                "last_state": new_state,
+                "tripped": tripped,
+            },
         )
 
     def is_terminated(self, state: PlaneState, params: PlaneParams) -> jax.Array:

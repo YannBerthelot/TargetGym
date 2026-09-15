@@ -32,7 +32,9 @@ NOMINAL_L, NOMINAL_V = 2.706, 3.206
 
 @pytest.fixture(scope="module")
 def params():
-    return DistillationParams()
+    # Version-1 reward: the reward tests in this file describe the capped
+    # log shape; version 2 is covered by tests/test_reward_contract.py.
+    return DistillationParams(reward_version=1)
 
 
 def _raw(L, V, params):

@@ -1,5 +1,292 @@
 # Reward shaping
 
+TargetGym exists to ask one question: **can a learned policy hold a setpoint
+better than a PID or an MPC?** That question lives entirely in the reward, so
+the reward is the measuring instrument, and this page records how it is built.
+Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`) scores
+through it -- seventeen with the tracking term normalised by a floor, and four
+(reactor, battery, wind turbine, building) with tracking and consumption in
+the owner's currency, where the floor enters as the reference cost `rho_floor`
+rather than as a divisor; version 1, the capped log-scaled reward, is kept
+constructible (`reward_version=1` on any params) and described at the end of
+this page.
+
+## The reward, in one line
+
+```
+reward = -( tracking_cost + running_cost + failure_cost )
+```
+
+Three costs, each non-negative, added -- never multiplied -- and each in a unit
+the plant's owner could defend. `target_gym.reward` holds the arithmetic;
+every environment's `compute_reward_terms` returns the three terms and
+`compute_reward` is minus their sum. The best achievable per-step reward is
+about `-1` per tracked output on the dimensionless plants (tracking at the
+floor, nothing avoidable consumed), and minus the unavoidable bill on the
+priced ones. It is not capped at 1, and the per-step scale differs by orders of
+magnitude between plants: comparability across plants comes from the
+normalised expert advantage and from reporting the two costs separately
+(`target_gym.eval`), not from a cap.
+
+### Tracking: the error in units of what is achievable
+
+```
+tracking_cost = ( max(|e| - e_tol, 0) / e_floor ) ** p
+```
+
+`e_floor` is the **achievable floor**: the smallest long-run mean |error| any
+controller can hold on this plant under its shipped reference and
+disturbance processes -- floored at the resolution of the instrument the
+plant's table cites. Measurement noise is not modelled, so a simulator can
+hold finer than a real transmitter reads; a hold the instrument cannot see
+is not a floor, and on six plants (glass, kiln, boiler pressure,
+distillation, pH, the aircraft's altitude and heading) the resolution is
+the scale and the finer measured hold is recorded beside it. An error at the floor costs 1 per step. The scale is
+the plant's own irreducible error, not a sensor resolution and not the
+operating envelope, so a controller's tracking cost reads directly as "how
+many floor-widths off". `e_tol` is a specification tolerance where the plant
+has one (a comfort band, a purity spec, a permit limit): the cost is zero
+inside it -- a dead-zone relaxation, which for a linear cost forfeits at most
+the tolerance in long-run cost (for p = 2 the forfeit at an error `E` is
+`(2 E e_tol - e_tol^2) / e_floor^2`, so the band must be small against the
+errors a controller actually makes; the aircraft's +-30 m band was not, and
+was dropped) -- and inside the band only consumption is optimised. `p` is 1
+where the owner's cost is linear in the error (an energy imbalance settled
+per MWh) and 2 otherwise. Multi-output plants sum one such term per output,
+each with its own floor.
+
+The shape is convex in |e| by construction. Version 1's log-scaled tracking was
+concave: it paid the same for every halving of the error, and a concave cost
+prefers rare large excursions to frequent small ones of the same mean -- the
+wrong preference for a hold, where a controller that mostly sits well and
+occasionally loses the plant should not outscore one that sits slightly worse
+and never does. The Target-MDP note (Proposition 8) gives the three-state
+example where that preference costs an arbitrary amount.
+
+### Running cost: only what could have been avoided
+
+Consumption -- fuel, energy, boilup, reagent, actuator travel -- is charged
+above `c_hold`, what the best shipped controller consumes per step while
+holding: the avoidable part. Dimensionless form
+
+```
+running_cost = w * max(c - c_hold, 0) / c_hold
+```
+
+with `w` read as "one floor-width of tracking error is worth `w` times the
+hold-phase consumption again", default 1, swept {0.5, 1, 2} where the number
+matters. Where the owner's tariff is known the term is priced instead
+(`price * quantity`), and the tracking term is then in the same currency so
+there is no weight to choose: the reactor's imbalance at three times spot, the
+building's gas per kWh, the battery's imbalance per MWh and fade per kWh of
+lost capacity. Wear and fatigue have no defensible tariff; they are charged
+per unit of avoidable activity at what tracking at the floor costs, times a
+documented weight -- a stand-in for a maintenance model, which is why the
+sweep is the honest form.
+
+Version 1 multiplied: `tracking * (1 - w * running)`. A product charges
+nothing for consumption exactly where tracking is worst, and a cost that
+vanishes when it should bind is not a cost.
+
+### Failure
+
+Leaving the operating envelope trips the plant. A reach-and-hold task is
+continuing, so a trip is not the end of an episode: the step that leaves the
+envelope is charged the **trip cost**, `restart_steps * failure_cost` -- the
+time a real restart takes, priced at a per-step failure cost of twice the
+largest tracking cost the plant can *reach* (its target range against its
+trip bounds, or its steady-state range; not a nominal span it never visits)
+-- with that step's tracking and running cost zeroed, and the plant restarts
+at once as `reset_env` would, on the same window clock
+(`base.failure_kernel`, `reward.trip_cost`). A plant that does not restart
+cold -- the building, whose thermal mass persists through a lockout --
+carries `restart_in_place = True`: it keeps its state, and every step outside
+the envelope is charged until the controller brings it back.
+The long-run cost then decomposes as
+`rho_hold + p * B + lambda * (restart_steps * failure_cost + B_restart)`,
+with `lambda` the trip rate, which the protocol reports separately; the
+absorbing failure of the Target-MDP note is the `restart_steps -> inf`
+limit. Restart times are provisional numbers a plant engineer would supply
+(a SCRAM's xenon-limited restart, a furnace heat-up schedule, a lost sortie);
+each plant's `PHYSICS.md` gives its value and source.
+
+Two earlier forms were tried and dropped. Charging the trip once per terminal
+step, and then for the steps the episode had left, both priced a trip by
+where in the episode it happened. Freezing the plant at `failure_cost` for
+`restart_steps` steps -- downtime lived through -- paid the same total but as
+a dead stretch of identical steps: no information for a learner, and inside a
+test window shorter than the restart (every plant but the building) the
+restart never came, so the price was again set by the window. The lump is
+that total, paid where it is incurred.
+
+No plant raises `terminated`. Raising it tells a discounted learner the
+crashed state is worth zero -- the cheapest state in the plant, and the
+bootstrap behind every agent that learns to crash -- and cuts the chain an
+average-reward learner estimates its gain on. The trip is `info["tripped"]`,
+read by the evaluator and by nothing an agent runs. Two plants never trip:
+the pH loop's effluent is a convex mix of its inlet streams and cannot reach
+the 2 / 12 limits, and the CSTR settles between 318 and 329 K under any
+coolant setting; their envelope limits are documentation.
+
+## Why the floor: loop performance assessment, in cost units
+
+The floor-normalised cost is the reinforcement-learning form of **control-loop
+performance assessment**. Harris (1989) showed that the minimum-variance bound
+of a loop can be estimated from routine closed-loop data given the process
+delay, and that the ratio of the actual output variance to that bound -- the
+Harris index -- tells an engineer how much of the variance the controller is
+responsible for; Desborough and Harris (1992) turned it into the assessment
+measures industrial loop auditing uses, Huang and Shah (1999) extended it to
+feedforward, multivariable and LQG benchmarks, and Jelali (2006) surveys the
+technology and its industrial uptake.
+
+Our `e_floor` is that bound computed exactly on the simulator rather than
+estimated from plant data -- the one thing a simulator gives that a plant
+cannot, and the reason the sanity test below is possible. The normalised
+expert advantage `NEA = (PID - x) / (PID - rho*)`, with `rho*` the cost at the
+floor, is a Harris-type index in cost units: 1 at the bound, 0 at PID parity,
+negative below PID. `rho*` is the lowest per-seed hold cost the reference
+controller demonstrated, in the reward's units: 1 per tracked term where the
+floor is that hold, and less where the floor is clamped at the instrument
+resolution (the glass furnace's MPC holds 0.175 K against a 1 K scale, so
+`rho* = 0.03`). On the deterministic plants, where `e_floor` is a
+resolution used as a scale and exact hold is achievable, `rho*` is 0 -- a
+reference of 1 there (the cost at the resolution) is not a bound, and the
+shipped MPCs sit below it. And the two-cost report -- tracking against consumption --
+is Huang and Shah's LQG performance curve: the trade-off frontier a controller
+is judged against, rather than one scalar that hides where on it a controller
+sits.
+
+- T. J. Harris (1989). Assessment of control loop performance. *The Canadian
+  Journal of Chemical Engineering* 67(5), 856-861.
+- L. Desborough and T. Harris (1992). Performance assessment measures for
+  univariate feedback control. *The Canadian Journal of Chemical Engineering*
+  70(6), 1186-1197.
+- B. Huang and S. L. Shah (1999). *Performance Assessment of Control Loops:
+  Theory and Applications*. Springer, Advances in Industrial Control.
+- M. Jelali (2006). An overview of control performance assessment technology
+  and industrial applications. *Control Engineering Practice* 14(5), 441-466.
+
+## How each floor was obtained
+
+`scripts/measure_hold.py` runs the shipped PID and MPC on every plant for
+three cost-bearing time constants of burn-in and then a hold window, under the
+shipped reference and disturbance processes, and records the long-run mean
+|error| per output, the consumption per step, and the settling time after a
+target change (`src/target_gym/data/hold_measurements.json`). Three kinds of
+floor come out of it:
+
+- **Certified or closed-form** where the hold problem reduces to one the
+  optimum can be computed for: the reactor (`scripts/floor_reactor_hold.py`, a
+  one-state dynamic programme on the error against the demand's within-period
+  random walk) and the battery (white dispatch noise drawn after the action,
+  so `E|error| >= sd * sqrt(2/pi)`). The shipped MPC must hold at or above
+  these floors, and does.
+- **Upper bounds** where no reduced-model optimum exists yet: the best shipped
+  controller's own long-run hold error, labelled as such in the plant's
+  PHYSICS.md. A learner that beats it scores a tracking cost below 1, which is
+  allowed and informative.
+- **Documented minima** on the plants whose test configuration has no
+  disturbance at all -- the aircraft and patrol tasks fly with zero
+  turbulence, the CSTR, first-order plant and four-tank have none -- where the
+  achievable hold error is zero and a floor of zero would make the cost
+  unbounded. There the version-1 resolution floor is kept as the scale, and
+  the PHYSICS.md says so.
+
+The sanity test every measured floor has to pass, and a slow test enforces
+(`tests/test_reward_contract.py`): the shipped MPC's long-run tracking cost
+after burn-in is at or above the floor's cost. A floor the MPC beats is wrong.
+
+## Per-plant summary
+
+| plant | tracking | `e_floor` (how) | `e_tol` | running cost | units |
+| --- | --- | --- | --- | --- | --- |
+| `reactor` | p=1 | 0.00451 of rated (certified DP) | 0 | rod demand beyond the rate limit, weight 1 (provisional) | $ per 10 s step, imbalance $100/MWh |
+| `hvac` | p=2, dead-zone | overheating-bound; MPC reference | +-0.5 K occupied; night lower bound only (provisional) | gas EUR 0.10/kWh, in full | EUR per step; comfort EUR 0.03/K^2 h (provisional; restarts in place) |
+| `battery` | p=1 | 1596 W (closed form) | 0 | fade above hold at $300/kWh of capacity | $ per step, imbalance $100/MWh |
+| `wind_turbine` | p=1 | 1680 W (lowest per-seed MPC hold, upper bound) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $100/MWh (provisional) |
+| `glass_furnace` | p=2 | 1 K (thermocouple resolution; the MPC holds 0.175) | 0 | fuel above hold, w=1 | dimensionless |
+| `cement_kiln` | p=2 | 5e-4 (assay resolution; the MPC holds 3.4e-4) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
+| `boiler_drum` | p=2 x2 | 2.7 mm level (lowest per-seed MPC hold), 0.05 bar (transmitter resolution; the MPC holds 0.028) | 0 | fuel above hold, w=1 | dimensionless |
+| `distillation` | p=2 x2 | 1e-4 / 1e-4 (analyser resolution; the MPC holds 1.35e-5 / 3.3e-5) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
+| `ph_neutralization` | p=2 | 0.01 pH (electrode resolution; the MPC holds 0.0080) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
+| `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
+| `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
+| `plane3d_*` | p=2 | altitude 1.44 / 4.06 / 1.39 m, heading 1.0e-4 rad, path 8.1 / 6.2 / 14.6 m (lowest per-seed MPC holds in turbulence) | 0 | none | dimensionless |
+| `patrol` | p=2 | 18.6 m / 1.6e-3 rad (lowest per-seed MPC holds in turbulence) | 0 (provisional) | none | dimensionless |
+
+"Provisional" marks a number the plant's owner would supply -- a tolerance
+from the quality system, permit or grid code; a price from a tariff; a wear
+weight from a maintenance model -- and that ships here as a documented
+stand-in. Each PHYSICS.md says where a plant engineer would get the real one.
+
+## What the shipped controllers do under it
+
+The MPC is presented as the benchmark's ceiling, so under this reward it has
+to be one: on every plant its episode return and its hold cost are at or
+below the PID's (`docs/baselines.md`). Getting there was not a matter of
+re-tuning. Five things in the planners had been written against the
+version-1 reward and stopped being ceilings under version 2, and each is
+fixed in `experts/mpc.py` with the measurement that found it:
+
+- **The surrogate objectives mirrored the version-1 minimiser.** The
+  gradient and sampling planners (wind turbine, battery, aircraft, boiler
+  drum, cement kiln) now descend the plant's own version-2 cost in floor
+  units, keeping their differentiable barriers (weighted like the failure
+  charge); the HVAC CasADi planner minimises the priced dead-zone comfort and
+  the gas. Where the tracking cost is linear in the error (p = 1) the planner
+  squares it -- same minimiser, and a gradient that vanishes at it, where a
+  normalised-gradient step on a linear cost never stops chattering.
+- **A 60-step open-loop tail dominated the aircraft objective.** Under a
+  bounded reward the tail was harmless; under an unbounded quadratic cost it
+  was 1e5 per solve against 26 per step realised, and the planner optimised
+  what the held action did later -- parking at the edge of the altitude
+  tolerance 55 m/s below cruise. Version 2 plans without it.
+- **A normalised-gradient planner cannot travel far in one solve**, so from
+  a constant plan it could not find the pitch schedule the turbine needed
+  (it braked the rotor with the torque instead) or the coordinated
+  thrust-and-elevator move the aircraft needed. The wind, 2D aircraft and
+  patrol planners now start from, and at every step are compared against,
+  the shipped PID's rollout plan under the planner's own objective -- so the
+  plan is never worse than the PID's under its model. (The patrol planner
+  had kept its version-1 surrogate, a bounded multiplicative shape; once the
+  descent below was made monotone, a better solve of that surrogate was a
+  worse version-2 return, 18x on two seeds. It descends the follower's own
+  cost now.)
+- **Re-planning creates actuator activity no open-loop plan can see.** The
+  turbine's pitch activity ran 3.4x the PID's with every plan predicting
+  less; a move-suppression term on the first action, priced like the
+  fatigue term, closes the gap. The planner also keeps the rotor within 5%
+  of rated speed with a mild soft box -- what a turbine's own supervisory
+  logic does -- because recovering a slowed rotor pays off beyond its
+  horizon and without the box it drifted to 0.85x rated with a 250 kW error.
+- **The descent was not monotone, and the planner took its last iterate
+  regardless.** A fixed step along a normalised gradient overshoots wherever
+  the cost has an edge -- a tolerance band, a barrier -- and fifty of them
+  can end far from where they started: on the 2D aircraft's seed 1 the
+  shifted plan scored -0.003 and the descended plan -3.31, three steps later
+  -0.99 against -19.7; the planner then reached for the PID's guide, dived
+  33 m out of the tolerance band and, over the hold, paid twice the PID.
+  The one-seed protocol run had not seen it. The gradient planner now
+  returns the best iterate of the solve, warm start included, so under its
+  own model it never leaves a solve with a worse plan than it entered with.
+
+One measurement bug came out with it: `runners.baseline_policy` built the
+MPC on the raw params rather than `plan_params`, so on the plants with
+`noise_fields` (wind, battery) every hand-run MPC planned against one fixed
+noise realisation -- a wrong forecast, and on seed 0 a perfect one.
+
+---
+
+## Version 1: the log-scaled reward (history)
+
+What follows is the page as it stood for version 1, kept because the shape it
+argues for is still the right *sensitivity* argument -- a reward has to keep
+paying for precision all the way down -- and because the resolution floors it
+tabulates are the documented minima the version-2 floors fall back on where a
+plant has no disturbance.
+
+
 TargetGym exists to ask a specific question: **can a learned policy hold a
 setpoint better than a PID or an MPC?** That question lives entirely in the
 reward. A reward that saturates once the error is "small enough" scores a
@@ -103,7 +390,7 @@ closer stops being measurable".
 
 ## Status
 
-**Every environment now uses this shape.** The aircraft family came first (the
+**Every environment used this shape in version 1.** The aircraft family came first (the
 2D plane, all three 3D tasks, and the lead term of the patrol formation); the
 twelve process and energy plants followed. All of them route through a single
 `log_scaled_reward` in `utils.py` rather than eighteen transcriptions of the

@@ -8,13 +8,20 @@ including a "seeds won" column that nothing computed. That is the headline
 results table of the whole library, and hand-transcription is exactly the drift
 this repository has spent a lot of effort eliminating everywhere else.
 
-Returns are also reported as a **fraction of the ceiling**. Every reward in the
-suite is a product of ``log_scaled_reward`` terms, each in [0, 1], times factors
-of the form ``(1 - w*x)`` with ``x`` in [0, 1], so a step can score at most 1
-and an episode's ceiling is exactly its number of env steps. Raw returns span
-30 to 900 across the suite and say nothing on their own; the fraction says what
-share of the available reward a controller actually captured, and is comparable
-across every row.
+Returns are reported as a **cost per step**: minus the mean return divided
+by the episode length. Every version-2 reward is minus a sum of non-negative
+costs (docs/reward-shaping.md) -- tracking in floor-widths, avoidable
+consumption, a failure charge -- so the per-step cost is comparable across
+seeds of one plant and reads directly ("how many floor-widths off, on
+average, over the episode"). It is *not* comparable across plants: the priced
+plants are in dollars or euros per step, and an episode return mixes the
+reach transient with the hold in a proportion set by the episode length. The
+protocol numbers in ``data/protocol_results.json`` (``scripts/evaluate_baselines.py``)
+are the ones to compare across plants.
+
+Under version 1 the rewards were products of terms in [0, 1] and the table
+reported the return as a share of the episode's ceiling; a positive mean return
+now means a row was recorded against version 1 and is stale.
 """
 
 from __future__ import annotations
@@ -32,17 +39,12 @@ END = "<!-- END GENERATED BASELINE TABLE -->"
 
 
 def _ceiling(spec, row) -> int:
-    """Env steps in an episode, which is the most reward it can pay.
-
-    Every shipped reward is a product of terms in [0, 1], so one env step pays
-    at most 1 and the ceiling is just the step count.
+    """Env steps in an episode, the divisor of the per-step cost.
 
     ``max_steps_in_episode`` counts env steps on every plant, the reactor
     included since its clock was unified: ``control_period`` is how many
     physics sub-steps run *inside* one ``step_env`` call and changes nothing
-    about how many rewards an episode pays. (When the reactor's limit was still
-    written in physics steps, this once divided by ``control_period`` and put
-    the reactor's share at 1.251, which is what the guard below is for.)
+    about how many rewards an episode pays.
     """
     return int(row["steps"])
 
@@ -60,23 +62,23 @@ def _table() -> str:
             continue
         pid = np.asarray(row["pid_returns"], dtype=float)
         mpc = np.asarray(row["mpc_returns"], dtype=float)
-        ceiling = _ceiling(spec, row)
+        steps = _ceiling(spec, row)
         won = int((mpc > pid).sum())
         flag = " ⚠️" if won < len(pid) / 2 else ""
-        # A share above 1 is arithmetically impossible under the current
-        # rewards, every one of which is a product of terms in [0, 1]. It means
-        # the row was recorded against a different reward or a different notion
-        # of a step, and is stale. Worth shouting about rather than publishing:
-        # this is precisely the inconsistency raw returns hide.
-        over = max(pid.mean(), mpc.mean()) / ceiling
-        if over > 1.0 + 1e-9:
-            stale.append(f"{name}: share {over:.3f} exceeds 1, so the row is stale")
+        # Version-2 rewards are costs: a positive mean return can only come
+        # from a row recorded against the version-1 reward, and is stale.
+        # Worth shouting about rather than publishing.
+        if max(pid.mean(), mpc.mean()) > 1e-9:
+            stale.append(
+                f"{name}: positive mean return, recorded against the version-1 reward"
+            )
+        pid_cost, mpc_cost = -pid.mean() / steps, -mpc.mean() / steps
         rows.append(
             (
-                mpc.mean() / ceiling - pid.mean() / ceiling,
-                f"| `{name}` | {ceiling} | {pid.mean():.1f} | {mpc.mean():.1f} | "
-                f"{pid.mean() / ceiling:.3f} | {mpc.mean() / ceiling:.3f} | "
-                f"{won}/{len(pid)}{flag} | {row['mpc_terminated_early']} |",
+                (pid_cost - mpc_cost) / max(abs(pid_cost), 1e-12),
+                f"| `{name}` | {steps} | {pid_cost:.4g} | {mpc_cost:.4g} | "
+                f"{(pid_cost - mpc_cost) / max(abs(pid_cost), 1e-12):.3f} | "
+                f"{won}/{len(pid)}{flag} | {row['mpc_trips']} |",
             )
         )
 
@@ -95,22 +97,26 @@ def _table() -> str:
             "<!-- Written by scripts/generate_baseline_table.py from",
             "     data/baseline_returns.json. Do not edit by hand. -->",
             "",
-            "| environment | steps | PID | MPC | PID share | MPC share | MPC wins | term |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| environment | steps | PID cost/step | MPC cost/step | MPC saves | MPC wins | trips |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
             *[r for _, r in rows],
             "",
-            "`share` is the mean return over the episode's ceiling, so 1.000 would be",
-            "perfect tracking on every step. It is comparable across rows; the raw",
-            "returns are not, because they are sums over episodes of different lengths.",
+            "`cost/step` is minus the mean return over the episode length: tracking in",
+            "floor-widths plus avoidable consumption (dimensionless plants) or dollars /",
+            "euros per step (reactor, battery, wind turbine, HVAC). `MPC saves` is the",
+            "fraction of the PID's cost the MPC removes. Episode returns mix the reach",
+            "transient with the hold; the protocol table below separates them.",
             "",
             "`MPC wins` counts seeds where the MPC out-scored the PID, paired.",
             "A ⚠️ marks an environment where it loses more often than it wins, which",
             "means it is not the upper bound this table presents it as; those carry an",
             "`EnvSpec.mpc_degraded` note saying why.",
             "",
-            "`term` counts seeds where the MPC ended the episode early. A permanent",
-            "zero can mean the controller is safe or that the environment cannot",
-            "terminate at all; `first_order` is the latter.",
+            "`trips` counts the MPC's trips over the ten windows: a trip never ends a",
+            "window, the plant is down at the failure cost and restarts, or stays",
+            "down (`base.failure_kernel`). A permanent zero can mean the controller",
+            "is safe or that the plant cannot leave its envelope; `first_order` is",
+            "the latter.",
             "",
             END,
         ]

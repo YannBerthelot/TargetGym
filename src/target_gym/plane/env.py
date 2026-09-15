@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import (
     integrate_dynamics,
@@ -159,6 +160,44 @@ class PlaneParams(EnvParams):
     elevator_surface: float = 10
 
     max_steps_in_episode: int = 10_000
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # Altitude: quadratic outside a +-``e_tol`` tolerance about the commanded
+    # altitude (+-30 m, a defensible vertical-separation margin, provisional),
+    # normalised by a documented minimum of 1 m (altimeter resolution): the
+    # test configurations fly with zero turbulence, so the achievable hold
+    # error is ~0 (the shipped PID holds 0.08 m, `scripts/measure_hold.py`).
+    # Airspeed: the deviation from ``target_speed`` above the hold-phase
+    # deviation of the better shipped controller (``c_hold``, m/s; 6.1 for the
+    # altitude hold, 8.6 on the sinusoid, both PID -- the MPC ignores speed
+    # and sits 50-65 m/s off) charged at weight 1, a stand-in for fuel. Flying
+    # out of the altitude envelope costs, per step, twice the envelope.
+    reward_version: int = 2
+    # The MPC holds 0.84 m in the test turbulence (1.26 on the sinusoid, 4.55
+    # on the ladder), below the 1 m barometric resolution: the instrument sets
+    # the scale where the simulator's hold is finer than it.
+    e_floor: float = 1.0  # m
+    e_tol: float = (
+        0.0  # m; a +-30 m band made the hold vacuous (both controllers held 0.1 m)
+    )
+    tracking_exponent: float = 2.0
+    c_hold: float = (
+        5.06  # m/s airspeed deviation while holding (PID; 8.15 sine, 5.23 ladder)
+    )
+    running_weight: float = 1.0
+    failure_cost: float = 2.0 * (12192.0 / 1.0) ** 2
+    #: Restart time priced into a trip (``reward.trip_cost``): a crash loses the
+    #: sortie, 1 h of flight at 1 s steps (provisional).
+    restart_steps: int = 3600
+    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    #: One: altitude at the floor costs 1 and the airspeed term is charged
+    #: only above the hold-phase deviation.
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (the MPC's 0.84 m hold in 1 m units; per task in the registry).
+    rho_floor_tracking: float = (0.84 / 1.0) ** 2
+    rho_floor: float = (0.84 / 1.0) ** 2
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = False
     min_alt: float = 0.0
     max_alt: float = 40_000.0 / 3.281
     # Look-ahead wind: apply the gust ALREADY stored in the state this step, so
@@ -224,7 +263,9 @@ class PlaneParams(EnvParams):
     # Ornstein-Uhlenbeck turbulence on top of the mean wind: sigma is the gust
     # std (m/s), theta the mean-reversion rate (1/s; correlation time ~ 1/theta).
     # sigma = 0 (default) => no turbulence, wind is exactly the steady mean.
-    turbulence_sigma: float = 0.0
+    # 1.2 m/s per 1 s step is a 2 m/s stationary gust std at theta = 0.2:
+    # light-to-moderate turbulence (provisional; see PHYSICS.md).
+    turbulence_sigma: float = 1.2
     turbulence_theta: float = 0.2
     # Impulse gust mode. impulse_prob = 0 (default) => the OU turbulence above. When
     # impulse_prob > 0 the gust is instead a rare, memoryless "kick": each step a kick
@@ -277,7 +318,23 @@ def check_no_nan(x, id=None):
             raise AssertionError(f"NaN detected in {id}: {x}")
 
 
-def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
+def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    p = params
+    speed = xp.sqrt(state.x_dot**2 + state.z_dot**2)
+    terminated, _ = check_is_terminal(state, p, xp)
+    terms = {
+        "tracking": R.tracking_cost(
+            state.target_altitude - state.z, p.e_floor, p.e_tol, p.tracking_exponent, xp
+        ),
+        "running": R.running_cost(
+            xp.abs(speed - p.target_speed), p.c_hold, p.running_weight, xp
+        ),
+    }
+    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+
+
+def compute_reward_v1(state: PlaneState, params: PlaneParams, xp=jnp):
     """Log-scaled altitude tracking, optionally coupled to an airspeed hold.
 
     One over the commanded altitude when it is held exactly, decaying so that
@@ -319,6 +376,15 @@ def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
         xp,
     )
     return tracking * (1.0 - params.speed_weight * (1.0 - speed_term))
+
+
+def compute_reward(state: PlaneState, params: PlaneParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
+    )
 
 
 def get_obs(state: PlaneState, params: PlaneParams = None, xp=jnp):

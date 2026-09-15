@@ -114,3 +114,33 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + failure)`, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor` | 6e-3 | documented minimum: a thousandth of the span. The test configuration has no disturbance and a fixed target, so the achievable hold error is zero -- the shipped MPC holds 0.0 after settling (`scripts/measure_hold.py`, 300 hold steps after a 30-step burn-in; PID 2e-6). |
+| `e_tol` | 0 | no specification band on a generic plant |
+| `tracking_exponent` | 2 | quadratic |
+| `failure_cost` | 2e6 | twice the span's cost, (6 / 6e-3)^2 |
+| `restart_steps` | 100 (5 s) | restart time priced into a trip, `restart_steps x failure_cost` (a generic loop's reset; provisional); where a plant engineer would get it: the plant's restart procedure |
+
+`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+hold cost the reference controller demonstrated, in the reward's units, which
+is 1 per term where the floor is that hold and less where the floor is clamped
+at the instrument resolution -- and `rho_floor` the same with consumption
+charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
+measured/certified floor or a resolution used as a scale, and where it is a
+resolution on a deterministic plant both references are 0, since exact hold is
+achievable there and the resolution only sets the unit;
+`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
+cost the envelope can produce, and `restart_steps` the time a restart would take,
+so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
+ends the window (`base.failure_kernel`): the step that leaves the envelope is
+charged the trip cost, with tracking and running cost zeroed, and the plant
+restarts at once as `reset_env` would, on the same clock. `terminated` is never
+raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

@@ -20,7 +20,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset
+from target_gym.base import canonical_reset, failure_kernel
 from target_gym.experts.pid import make_plane3d_heading_pid
 from target_gym.patrol.env import (
     N_LEAD_LEGS,
@@ -29,6 +29,7 @@ from target_gym.patrol.env import (
     check_is_terminal_patrol,
     compute_next_state_patrol,
     compute_reward_patrol,
+    compute_reward_terms_patrol,
     desired_slot_position,
     get_obs_bearing_only,
     get_obs_full,
@@ -69,6 +70,9 @@ class _PlanePatrolBase(environment.Environment[PatrolState, PatrolParams]):
     def compute_reward(self, state, params):
         return compute_reward_patrol(state, params)
 
+    def reward_terms(self, state, params):
+        return compute_reward_terms_patrol(state, params)
+
     def step_env(
         self,
         key: chex.PRNGKey,
@@ -87,19 +91,22 @@ class _PlanePatrolBase(environment.Environment[PatrolState, PatrolParams]):
             integration_method=self.integration_method,
             key=key,
         )
-        reward = self.compute_reward(new_state, params)
-        # gymnax >= 1.0 owns truncation: ``step_env`` reports natural
-        # termination only, and the base ``Environment.step`` derives
-        # ``truncated`` from ``state.time >= params.max_steps_in_episode``
-        # -- the very condition ``check_is_terminal`` returns second.
-        terminated, _ = check_is_terminal_patrol(new_state, params, xp=jnp)
+        # A crash is part of the kernel: the step is charged the trip cost and
+        # the flight restarts at once; ``terminated`` is never raised
+        # (``base.failure_kernel``).
+        new_state, tripped, scored = failure_kernel(self, key, state, new_state, params)
+        reward = self.compute_reward(scored, params)
         obs = self.get_obs(new_state)
         return (
             obs,
             new_state,
             reward,
-            terminated,
-            {"metrics": metrics, "last_state": new_state},
+            jnp.zeros((), dtype=bool),
+            {
+                "metrics": metrics,
+                "last_state": new_state,
+                "tripped": tripped,
+            },
         )
 
     def is_terminated(self, state: PatrolState, params: PatrolParams) -> jax.Array:

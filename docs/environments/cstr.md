@@ -9,7 +9,7 @@
 | Tracked variable(s) | C_a (mol/L) |
 | Episode length | 100 steps (1500 s at 15 s per step) |
 | Import | `from target_gym import CSTR, CSTRParams` |
-| Cite as | `cstr-v1` |
+| Cite as | `cstr-v2` |
 
 ## Action space
 
@@ -66,5 +66,5 @@ A tuned PID ships with this environment.
 | `Caf` | 1 |
 | `T_c_max` | 302 |
 | `T_c_min` | 295 |
-| … | 7 more, see the params dataclass |
+| … | 15 more, see the params dataclass |
 

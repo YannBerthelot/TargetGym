@@ -62,6 +62,105 @@ than by commit.
 
 ### Changed
 
+- **Every reward is now a floor-normalised cost, and every environment is a
+  new version (`-v2`; the reactor `-v3`).** `reward = -(tracking + running +
+  failure)`: tracking as `(max(|e| - e_tol, 0) / e_floor) ** p` with
+  `e_floor` the achievable hold floor measured or certified under the plant's
+  own reference and disturbance (`scripts/measure_hold.py`,
+  `scripts/floor_reactor_hold.py`; `data/hold_measurements.json`), running
+  cost charged only above the hold-phase consumption `c_hold` -- at weight 1
+  on the dimensionless plants, at the owner's prices on the reactor, the
+  battery and the wind turbine (one imbalance price, $100/MWh; fade
+  $300/kWh) and the building (gas at EUR 0.10/kWh, comfort at EUR 0.03/K^2 h,
+  twice the gas it takes to remove the discomfort) -- and a trip that never ends
+  the window: the step that leaves the envelope is charged the trip cost, a
+  documented restart time at `failure_cost` per step, and the plant restarts
+  at once (`base.failure_kernel`, `reward.trip_cost`), so no plant raises
+  `terminated` any more. (A first form froze the plant for the restart time
+  instead; same total, but a dead stretch of steps that taught a learner
+  nothing and, inside a test window shorter than the restart, priced a trip
+  by when it happened.) The pH loop and the CSTR cannot reach their envelope
+  limits and no longer pretend to trip; the aircraft fly in light-to-moderate
+  turbulence (2 m/s gust std) with no altitude dead zone, since in still air
+  with a +-30 m band both controllers held within 0.1 m and the altitude
+  term scored nothing. Convex, additive, in
+  defensible units; the per-step scale is no longer capped at 1 and differs
+  by orders of magnitude between plants, so cross-plant comparison is the
+  protocol's job (`target_gym.eval`), not the return's. The positioning and
+  the per-plant table are in docs/reward-shaping.md; each PHYSICS.md carries
+  its floor, tolerance, hold-phase consumption, exponent and prices with the
+  script or source behind them, and marks the ones that are provisional
+  stand-ins for numbers a plant owner would supply (tolerances, wear and
+  comfort prices, the reactor's rod-wear weight). The version-1 reward stays
+  constructible with `reward_version=1` on any params, its baselines are kept
+  in `data/baseline_returns_v1.json`, and a contract test
+  (`tests/test_reward_contract.py`) holds every plant to additivity,
+  convexity, documentation and -- on the slow job -- to the shipped MPC never
+  beating a measured floor. Per plant, old and new PID / MPC costs:
+
+  | plant | v1 PID / MPC cost (1 − share) | v2 PID / MPC cost per step | units | MPC ranking |
+  | --- | --- | --- | --- | --- |
+  | `plane` | 0.110 / 0.075 (9/10) | 6333 / 6068 (5/10) | floor-widths | unchanged |
+  | `plane_energy` | 0.382 / 0.244 (10/10) | 1.575e+04 / 2677 (10/10) | floor-widths | unchanged |
+  | `plane_sine` | 0.386 / 0.046 (10/10) | 4881 / 3147 (7/10) | floor-widths | unchanged |
+  | `plane3d_heading` | 0.840 / 0.149 (10/10) | 4.028e+04 / 8644 (10/10) | floor-widths | unchanged |
+  | `plane3d_circle` | 0.565 / 0.080 (10/10) | 1.538e+04 / 2947 (10/10) | floor-widths | unchanged |
+  | `plane3d_racetrack` | 0.533 / 0.055 (10/10) | 9.094e+05 / 1265 (10/10) | floor-widths | unchanged |
+  | `plane3d_figure8` | 0.795 / 0.040 (10/10) | 1.153e+06 / 82.36 (10/10) | floor-widths | unchanged |
+  | `patrol` | 0.444 / 0.159 (10/10) | 293.8 / 51.11 (10/10) | floor-widths | unchanged |
+  | `cstr` | 0.106 / 0.054 (10/10) | 6319 / 5803 (10/10) | floor-widths | unchanged |
+  | `first_order` | 0.070 / 0.046 (10/10) | 1018 / 1002 (10/10) | floor-widths | unchanged |
+  | `four_tank` | 0.223 / 0.106 (10/10) | 1167 / 344.5 (10/10) | floor-widths | unchanged |
+  | `ph_neutralization` | 0.246 / 0.131 (9/10) | 157.8 / 47.15 (10/10) | floor-widths | unchanged |
+  | `distillation` | 0.389 / 0.227 (10/10) | 1019 / 127 (10/10) | floor-widths | unchanged |
+  | `glass_furnace` | 0.098 / 0.054 (10/10) | 32.35 / 11.46 (10/10) | floor-widths | unchanged |
+  | `reactor` | 0.667 / 0.365 (10/10) | 58.48 / 3.294 (10/10) | $/step | unchanged |
+  | `hvac` | 0.475 / 0.443 (10/10) | 0.06478 / 0.04603 (10/10) | EUR/step | unchanged |
+  | `cement_kiln` | 0.112 / 0.075 (10/10) | 8.202 / 2.213 (10/10) | floor-widths | unchanged |
+  | `boiler_drum` | 0.381 / 0.242 (10/10) | 308.6 / 54.78 (10/10) | floor-widths | unchanged |
+  | `wind_turbine` | 0.171 / 0.129 (8/10) | 2.622e-05 / 9.44e-05 (4/10) | $/step | **flipped** |
+  | `battery` | 0.272 / 0.262 (8/10) | 0.003457 / 0.001569 (10/10) | $/step | unchanged |
+
+- **The MPCs are ceilings under the new reward.** Five things in the
+  planners had been written against the version-1 reward and stopped being
+  upper bounds under version 2 (the wind turbine's MPC lost to its PID on 6 of
+  10 seeds; the 2D aircraft's parked at the edge of the altitude tolerance
+  55 m/s below cruise). The gradient and sampling planners now descend the
+  plant's own version-2 cost in floor units, with their barriers kept and the
+  linear (p = 1) tracking terms squared for a gradient that vanishes at the
+  optimum; the HVAC CasADi planner minimises the priced dead-zone comfort and
+  the gas; the 2D aircraft and the patrol follower plan without their
+  60-step open-loop tail, which under an unbounded cost dominated the
+  objective; the wind, 2D aircraft and patrol planners start from, and at
+  every step are compared against, the shipped PID's rollout plan, so their
+  plan is never worse than the PID's under the planner's model; and the turbine planner carries move suppression on the
+  pitch command priced like the reward's fatigue term, plus a mild soft box
+  on rotor speed (what its supervisory logic does), because re-planning
+  creates activity no open-loop plan can see; and the gradient planner
+  returns the best iterate of each solve, warm start included, where it took
+  the last one -- a fixed step along a normalised gradient overshoots at a
+  tolerance edge, and on the 2D aircraft the descended plan could score
+  1000x worse than the plan it started from, after which the planner dived
+  out of the band it had just reached. Every MPC now beats its PID on
+  episode return and on hold cost (docs/reward-shaping.md,
+  docs/baselines.md). `runners.baseline_policy` also built the MPC on the raw
+  params rather than `plan_params`, so hand-run MPCs on the wind turbine and
+  the battery planned against one fixed noise realisation; fixed.
+- **`target_gym.eval`, the reach-and-hold protocol.** Gain after a per-plant
+  burn-in over every step (the long-run cost), and over the settled steps only
+  (the hold), each split into tracking and running cost, with each controller's
+  transient measured on its own cycles; reach cost per target change; reach
+  fraction; trip rate; the normalised expert advantage
+  `(PID - x) / (PID - rho_floor)`, with `rho_floor = 0` on the deterministic
+  plants (a documented resolution is a scale, not a bound, and the MPCs sit
+  below it); the transient cost over the plant's burn-in window, which
+  compares two controllers where the reach cost -- each relative to its own
+  hold level -- does not; the share of cycles still unsettled at the end,
+  which is what a negative reach cost means; time-in-band as a KPI only.
+  `scripts/evaluate_baselines.py` scores the shipped controllers with it,
+  three seeds on every plant, and writes `data/protocol_results.json`;
+  `docs/baselines.md` carries the table.
+
 - **Migrated to the gymnax 1.0 six-value step API.** `step_env` now reports
   natural termination alone; the time limit is gymnax's, via `step`.
 - **Every renderer rebuilt** on a shared control-room toolkit

@@ -29,9 +29,10 @@ from typing import Tuple
 import jax.numpy as jnp
 from flax import struct
 
+from target_gym import reward as R
 from target_gym.base import EnvState
 from target_gym.experts.pid import Plane3DPIDState, plane3d_heading_pid_step
-from target_gym.plane.dynamics import advance_gust
+from target_gym.plane.dynamics import advance_gust, step_key
 from target_gym.plane3d.dynamics import compute_velocity_3d
 from target_gym.plane3d.env import (
     PlaneParams3D,
@@ -130,6 +131,30 @@ class PatrolParams(PlaneParams3D):
     #: few metres is the honest resolution; asking for better is measuring
     #: noise.
     slot_precision_floor: float = 3.0
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # Slot position, quadratic outside a tolerance of ``e_tol_slot`` (0
+    # provisionally: the formation's station-keeping radius is a procedural
+    # number to be supplied), normalised by the 3 m relative-GPS resolution
+    # above; heading alignment with the lead, quadratic, normalised by the
+    # inherited 0.0087 rad AHRS resolution. Deterministic lead, no
+    # turbulence: the achievable hold error is ~0, so these are documented
+    # minima. Losing the formation, a collision or a crash costs, per step,
+    # twice the 1500 m slot-loss bound.
+    e_floor_slot: float = (
+        18.6  # m, lowest per-seed MPC hold in turbulence (upper bound)
+    )
+    e_tol_slot: float = 0.0  # provisional; station-keeping radius to be supplied
+    # Overrides the inherited aircraft value: twice the slot-loss bound's cost.
+    failure_cost: float = 2.0 * ((1500.0 / 18.6) ** 2 + (3.14159 / 0.0087) ** 2)
+    #: Restart time priced into a trip (``reward.trip_cost``): a crash, collision
+    #: or lost formation loses the sortie, 1 h of flight at 1 s steps (provisional).
+    restart_steps: int = 3600
+    #: Two terms (slot, heading), each costing 1 at its floor.
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (slot at its floor, the MPC's 1.6e-3 rad alignment hold in 0.5 deg units).
+    rho_floor_tracking: float = 1.0 + (1.6e-3 / 0.0087) ** 2
+    rho_floor: float = 1.0 + (1.6e-3 / 0.0087) ** 2
 
     # Lead behaviour.  Turn rate is sampled in [-r, r] rad/step; 0 => straight
     # and level.  At delta_t = 1 s, 0.003 rad/step ~ 0.17 deg/s ~ a very gentle
@@ -279,7 +304,27 @@ def heading_alignment(state: PatrolState, params: PatrolParams, xp=jnp):
     return xp.exp(-0.5 * (dpsi / params.heading_tolerance) ** 2)
 
 
-def compute_reward_patrol(state: PatrolState, params: PatrolParams, xp=jnp):
+def compute_reward_terms_patrol(state: PatrolState, params: PatrolParams, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    p = params
+    slot = R.tracking_cost(
+        slot_error(state), p.e_floor_slot, p.e_tol_slot, p.tracking_exponent, xp
+    )
+    heading = R.tracking_cost(
+        wrap_angle(state.follower.psi - state.lead.psi),
+        p.e_floor_heading,
+        0.0,
+        p.tracking_exponent,
+        xp,
+    )
+    terminated, _ = check_is_terminal_patrol(state, p, xp)
+    terms = {
+        "tracking": slot + heading,
+    }
+    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+
+
+def compute_reward_patrol_v1(state: PatrolState, params: PatrolParams, xp=jnp):
     """Slot-position tracking times heading alignment.
 
     The multiplicative heading factor makes the target "fly the slot *parallel*
@@ -315,6 +360,15 @@ def compute_reward_patrol(state: PatrolState, params: PatrolParams, xp=jnp):
 
 
 # ─── Observations ───────────────────────────────────────
+
+
+def compute_reward_patrol(state: PatrolState, params: PatrolParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_patrol_v1(state, params, xp),
+        R.total(compute_reward_terms_patrol(state, params, xp), xp),
+        xp,
+    )
 
 
 def _relative_velocity_lead_frame(state: PatrolState):
@@ -503,7 +557,7 @@ def compute_next_state_patrol(
         params.turbulence_theta,
         params.turbulence_sigma,
         params.delta_t,
-        key,
+        step_key(key, state.time),
     )
     eff_params = params.replace(
         wind_x=params.wind_x + gust[0],

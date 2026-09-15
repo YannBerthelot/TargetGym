@@ -102,8 +102,12 @@ def _action_bounds(env, params) -> tuple[np.ndarray, np.ndarray]:
     )
 
 
-def rollout(spec, params, policy: Callable, seed: int = 0):
+def rollout(spec, params, policy: Callable, seed: int = 0, return_trips: bool = False):
     """Run one episode, returning tracked values, targets and rewards.
+
+    A trip never ends the window (``base.failure_kernel``): the plant is down
+    at the failure cost and restarts, or stays down. With ``return_trips`` the
+    number of trips in the window is returned as a fourth value.
 
     ``policy`` is called as ``policy(obs)`` or, when it accepts two arguments,
     ``policy(obs, state)`` -- the MPC baselines need the full state.
@@ -123,6 +127,7 @@ def rollout(spec, params, policy: Callable, seed: int = 0):
     step = _jitted_step(env)
 
     values, targets, rewards = [], [], []
+    trips = 0
     # Loop on the environment's own clock rather than on a fixed count, so a
     # plant whose ``state.time`` ever counted something other than env steps
     # (the reactor did, until its clock was unified) cannot be scored past its
@@ -137,12 +142,15 @@ def rollout(spec, params, policy: Callable, seed: int = 0):
         # ``where`` -- is a separate un-jitted dispatch, and the controller ends
         # up costing several times the environment step it is controlling.
         action = policy(obs_np, state) if _wants_state(policy) else policy(obs_np)
-        obs, state, reward, terminated, _ = step(
+        obs, state, reward, terminated, info = step(
             key, state, jnp.atleast_1d(jnp.asarray(action)), params
         )
         rewards.append(float(reward))
+        trips += int(bool(info.get("tripped", False)))
         if bool(terminated):
             break
+    if return_trips:
+        return np.array(values), np.array(targets), np.array(rewards), trips
     return np.array(values), np.array(targets), np.array(rewards)
 
 
@@ -178,7 +186,14 @@ def baseline_policy(spec, kind: str, params=None) -> Callable | None:
         if not spec.has_mpc:
             return None
         params = spec.make_test_params() if params is None else params
-        mpc = spec.make_mpc(spec.make_env(), params)
+        # The planner's model predicts the mean disturbance (``plan_params``
+        # zeroes ``spec.noise_fields``), as the batched recorder's does. Built
+        # on the raw params it planned against one fixed noise realisation --
+        # a wrong forecast rather than none -- and on the wind turbine that
+        # was the difference between a 4.7 kW and a 7.8 kW hold.
+        from target_gym.experts.mpc import plan_params
+
+        mpc = spec.make_mpc(spec.make_env(), plan_params(spec, params))
         mpc.reset()
         return lambda obs, state: np.atleast_1d(mpc.step(obs, state))
 
@@ -199,11 +214,10 @@ def rollout_mpc_batch(spec, params, n_seeds: int):
     Running them one after another left thirteen of fourteen cores idle while
     ``plane_energy`` took two hours.
 
-    Returns ``(values, targets, rewards, terminated)``: the first three with a
-    leading seed axis, matching what :func:`rollout` returns for one, and a
-    boolean per seed saying whether it ended early. Termination is tracked
-    rather than inferred from zero-padded rewards, because a legitimate reward
-    can be zero and ``mpc_terminated_early`` is a published field.
+    Returns ``(values, targets, rewards, trips)``: the first three with a
+    leading seed axis, matching what :func:`rollout` returns for one, and the
+    number of trips per seed (``info["tripped"]``; a trip never ends the
+    window). ``mpc_trips`` is a published field.
     """
     env = spec.make_env()
     from target_gym.experts.mpc import plan_params
@@ -221,8 +235,7 @@ def rollout_mpc_batch(spec, params, n_seeds: int):
     step = jax.jit(jax.vmap(env.step_env, in_axes=(0, 0, 0, None)))
 
     values, targets, rewards = [], [], []
-    alive = jnp.ones((n_seeds,), dtype=bool)
-    ended = jnp.zeros((n_seeds,), dtype=bool)
+    trips = jnp.zeros((n_seeds,), dtype=jnp.int32)
     for _ in range(n_steps):
         values.append(obs[:, list(value_idx)])
         targets.append(obs[:, list(target_idx)])
@@ -234,21 +247,15 @@ def rollout_mpc_batch(spec, params, n_seeds: int):
         u = actions[:, 0]
         if mpc.action_dim == 1:
             u = u[:, 0]
-        obs, state, reward, terminated, _ = step(keys, state, u, params)
-        # A seed that has terminated stops earning. Its state keeps being
-        # stepped because the batch runs in lockstep, which is why the reward
-        # has to be masked rather than the loop broken.
-        rewards.append(jnp.where(alive, reward, 0.0))
-        ended = ended | (alive & terminated)
-        alive = alive & jnp.logical_not(terminated)
-        if not bool(jnp.any(alive)):
-            break
+        obs, state, reward, _terminated, info = step(keys, state, u, params)
+        rewards.append(reward)
+        trips = trips + jnp.asarray(info["tripped"], dtype=jnp.int32)
 
     return (
         np.asarray(jnp.stack(values, axis=1)),
         np.asarray(jnp.stack(targets, axis=1)),
         np.asarray(jnp.stack(rewards, axis=1)),
-        np.asarray(ended),
+        np.asarray(trips),
     )
 
 

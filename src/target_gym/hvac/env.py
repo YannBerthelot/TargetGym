@@ -45,6 +45,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -131,6 +132,45 @@ class HVACParams(EnvParams):
     delta_t: float = 900.0  # s (15 min) -- standard building-simulation step
     max_steps_in_episode: int = 720  # 7.5 days at dt = 900 s
 
+    # ---- Reward (docs/reward-shaping.md; version 2), in euros per step ----
+    # Comfort: while occupied, a quadratic penalty on the air temperature
+    # outside a +-``comfort_tolerance`` band about the setpoint; during the
+    # setback, on the shortfall below ``setpoint_setback`` only. This plant
+    # cannot cool, and under its clear-sky solar gains the zone sits above the
+    # setback target every night and above the occupied band two thirds of
+    # the day whatever the controller does (`scripts/measure_hold.py`: mean
+    # signed error +4.3 K at setback, +1.2 K occupied, for the shipped MPC);
+    # a symmetric night target would score the weather. Priced at
+    # ``comfort_price`` per K^2 per hour (provisional; sweep 0.1 / 0.2 / 0.4).
+    # Energy: the emitter's heat at ``gas_price`` per kWh, charged in full --
+    # it is the bill this plant exists to trade against comfort. Floor:
+    # overheating sets it; the shipped MPC's long-run cost is the reference
+    # (an upper bound; the certified reduced-model optimum for this cost is
+    # not yet computed). Freezing or gross overheating (the termination
+    # bounds) costs, per step, twice a 14 K excursion for an hour.
+    reward_version: int = 2
+    comfort_tolerance: float = 0.5  # K, occupied
+    comfort_price: float = (
+        0.03  # EUR per K^2 per hour, provisional: twice the gas it takes to remove 1 K for 1 h (H = 159 W/K at EUR 0.10/kWh = EUR 0.016)
+    )
+    gas_price: float = 0.10  # EUR per kWh
+    setback_lower_bound_only: bool = True  # provisional design choice
+    tracking_exponent: float = 2.0
+    failure_cost: float = (
+        2.0 * 0.03 * 17.0**2 * 0.25
+    )  # twice the reachable 17.5 K excursion (22.5 C setpoint -> 5 C trip) less the band, for one 15 min step
+    #: A building does not restart cold: outside the envelope every step is charged the trip cost and the plant keeps evolving under control.
+    restart_in_place: bool = True
+    #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 15 min steps: reset after a freeze or overheat alarm, provisional).
+    restart_steps: int = 4
+    #: The shipped MPC's lowest per-seed hold cost on the test episode (EUR
+    #: per step, five seeds, `scripts/hvac_floor.py`): the NEA reference, an
+    #: upper bound on the floor -- overheating sets it, and the weather moves
+    #: it 2x between seeds, hence the minimum.
+    rho_floor_tracking: float = 0.0010
+    rho_floor: float = 0.0010
+    floor_is_documented_minimum: bool = False
+
 
 @struct.dataclass
 class HVACState(EnvState):
@@ -146,10 +186,9 @@ class HVACState(EnvState):
     setpoint_occupied: float  # this episode's occupied setpoint
     Q_command: float  # commanded heating power (W)
 
-
-# ---------------------------------------------------------------------------
-# Derived conductances (ISO 13790 §7). Pure functions of params.
-# ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
+    # Derived conductances (ISO 13790 §7). Pure functions of params.
+    # ---------------------------------------------------------------------------
 
 
 def zone_conductances(params: HVACParams):
@@ -443,7 +482,27 @@ def check_is_terminal(state: HVACState, params: HVACParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward(state: HVACState, params: HVACParams, xp=jnp):
+def compute_reward_terms(state: HVACState, params: HVACParams, xp=jnp):
+    """The reward's additive cost terms in EUR per step (``target_gym.reward``)."""
+    p = params
+    hours = p.delta_t / 3600.0
+    occupied = is_occupied(state.time, p)
+    err = state.T_air - state.target_T
+    excess_occ = xp.maximum(xp.abs(err) - p.comfort_tolerance, 0.0)
+    shortfall = xp.maximum(-err, 0.0)  # below the setback target
+    excess_setback = xp.where(p.setback_lower_bound_only, shortfall, xp.abs(err))
+    excess = xp.where(occupied, excess_occ, excess_setback)
+    comfort = p.comfort_price * hours * excess**p.tracking_exponent
+    energy = p.gas_price * state.Q_emitter / 1000.0 * hours
+    terminated, _ = check_is_terminal(state, p, xp)
+    terms = {
+        "tracking": comfort,
+        "running": energy,
+    }
+    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+
+
+def compute_reward_v1(state: HVACState, params: HVACParams, xp=jnp):
     """Comfort tracking minus energy use.
 
     Tracking is log-scaled (``utils.log_scaled_reward``): every halving of the
@@ -463,6 +522,15 @@ def compute_reward(state: HVACState, params: HVACParams, xp=jnp):
     )
     energy = state.Q_emitter / params.Q_heat_max
     return comfort * (1.0 - params.energy_weight * energy)
+
+
+def compute_reward(state: HVACState, params: HVACParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
+    )
 
 
 def energy_use_kwh(state: HVACState, params: HVACParams):
