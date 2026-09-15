@@ -151,8 +151,10 @@ class PatrolParams(PlaneParams3D):
     #: or lost formation loses the sortie, 1 h of flight at 1 s steps (provisional).
     restart_steps: int = 3600
     #: Two terms (slot, heading), each costing 1 at its floor.
-    rho_floor_tracking: float = 2.0
-    rho_floor: float = 2.0
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (slot at its floor, the MPC's 1.6e-3 rad alignment hold in 0.5 deg units).
+    rho_floor_tracking: float = 1.0 + (1.6e-3 / 0.0087) ** 2
+    rho_floor: float = 1.0 + (1.6e-3 / 0.0087) ** 2
 
     # Lead behaviour.  Turn rate is sampled in [-r, r] rad/step; 0 => straight
     # and level.  At delta_t = 1 s, 0.003 rad/step ~ 0.17 deg/s ~ a very gentle

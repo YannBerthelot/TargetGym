@@ -36,7 +36,12 @@ tracking_cost = ( max(|e| - e_tol, 0) / e_floor ) ** p
 
 `e_floor` is the **achievable floor**: the smallest long-run mean |error| any
 controller can hold on this plant under its shipped reference and
-disturbance processes. An error at the floor costs 1 per step. The scale is
+disturbance processes -- floored at the resolution of the instrument the
+plant's table cites. Measurement noise is not modelled, so a simulator can
+hold finer than a real transmitter reads; a hold the instrument cannot see
+is not a floor, and on six plants (glass, kiln, boiler pressure,
+distillation, pH, the aircraft's altitude and heading) the resolution is
+the scale and the finer measured hold is recorded beside it. An error at the floor costs 1 per step. The scale is
 the plant's own irreducible error, not a sensor resolution and not the
 operating envelope, so a controller's tracking cost reads directly as "how
 many floor-widths off". `e_tol` is a specification tolerance where the plant
@@ -88,10 +93,15 @@ vanishes when it should bind is not a cost.
 Leaving the operating envelope trips the plant. A reach-and-hold task is
 continuing, so a trip is not the end of an episode: the step that leaves the
 envelope is charged the **trip cost**, `restart_steps * failure_cost` -- the
-time a real restart takes, priced at a per-step failure cost above the
-largest tracking cost the envelope can produce -- with that step's tracking
-and running cost zeroed, and the plant restarts at once as `reset_env`
-would, on the same window clock (`base.failure_kernel`, `reward.trip_cost`).
+time a real restart takes, priced at a per-step failure cost of twice the
+largest tracking cost the plant can *reach* (its target range against its
+trip bounds, or its steady-state range; not a nominal span it never visits)
+-- with that step's tracking and running cost zeroed, and the plant restarts
+at once as `reset_env` would, on the same window clock
+(`base.failure_kernel`, `reward.trip_cost`). A plant that does not restart
+cold -- the building, whose thermal mass persists through a lockout --
+carries `restart_in_place = True`: it keeps its state, and every step outside
+the envelope is charged until the controller brings it back.
 The long-run cost then decomposes as
 `rho_hold + p * B + lambda * (restart_steps * failure_cost + B_restart)`,
 with `lambda` the trip rate, which the protocol reports separately; the
@@ -135,7 +145,11 @@ estimated from plant data -- the one thing a simulator gives that a plant
 cannot, and the reason the sanity test below is possible. The normalised
 expert advantage `NEA = (PID - x) / (PID - rho*)`, with `rho*` the cost at the
 floor, is a Harris-type index in cost units: 1 at the bound, 0 at PID parity,
-negative below PID. On the deterministic plants, where `e_floor` is a
+negative below PID. `rho*` is the lowest per-seed hold cost the reference
+controller demonstrated, in the reward's units: 1 per tracked term where the
+floor is that hold, and less where the floor is clamped at the instrument
+resolution (the glass furnace's MPC holds 0.175 K against a 1 K scale, so
+`rho* = 0.03`). On the deterministic plants, where `e_floor` is a
 resolution used as a scale and exact hold is achievable, `rho*` is 0 -- a
 reference of 1 there (the cost at the resolution) is not a bound, and the
 shipped MPCs sit below it. And the two-cost report -- tracking against consumption --
@@ -187,15 +201,15 @@ after burn-in is at or above the floor's cost. A floor the MPC beats is wrong.
 
 | plant | tracking | `e_floor` (how) | `e_tol` | running cost | units |
 | --- | --- | --- | --- | --- | --- |
-| `reactor` | p=1 | 0.00451 of rated (certified DP) | 0 | rod demand beyond the rate limit, weight 1 (provisional) | $ per 10 s step, imbalance 3x spot |
-| `hvac` | p=2, dead-zone | overheating-bound; MPC reference | +-0.5 K occupied; night lower bound only (provisional) | gas EUR 0.10/kWh, in full | EUR per step; comfort EUR 0.2/K^2 h (provisional) |
+| `reactor` | p=1 | 0.00451 of rated (certified DP) | 0 | rod demand beyond the rate limit, weight 1 (provisional) | $ per 10 s step, imbalance $100/MWh |
+| `hvac` | p=2, dead-zone | overheating-bound; MPC reference | +-0.5 K occupied; night lower bound only (provisional) | gas EUR 0.10/kWh, in full | EUR per step; comfort EUR 0.03/K^2 h (provisional; restarts in place) |
 | `battery` | p=1 | 1596 W (closed form) | 0 | fade above hold at $300/kWh of capacity | $ per step, imbalance $100/MWh |
-| `wind_turbine` | p=1 | 1680 W (lowest per-seed MPC hold, upper bound) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $80/MWh (provisional) |
-| `glass_furnace` | p=2 | 0.175 K (lowest per-seed MPC hold, upper bound) | 0 | fuel above hold, w=1 | dimensionless |
-| `cement_kiln` | p=2 | 3.4e-4 (lowest per-seed MPC hold, upper bound) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
-| `boiler_drum` | p=2 x2 | 2.7 mm level, 0.028 bar (lowest per-seed MPC holds) | 0 | fuel above hold, w=1 | dimensionless |
-| `distillation` | p=2 x2 | 1.35e-5 / 3.3e-5 (lowest per-seed MPC holds, upper bounds) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
-| `ph_neutralization` | p=2 | 0.0080 pH (lowest per-seed MPC hold, upper bound) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
+| `wind_turbine` | p=1 | 1680 W (lowest per-seed MPC hold, upper bound) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $100/MWh (provisional) |
+| `glass_furnace` | p=2 | 1 K (thermocouple resolution; the MPC holds 0.175) | 0 | fuel above hold, w=1 | dimensionless |
+| `cement_kiln` | p=2 | 5e-4 (assay resolution; the MPC holds 3.4e-4) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
+| `boiler_drum` | p=2 x2 | 2.7 mm level (lowest per-seed MPC hold), 0.05 bar (transmitter resolution; the MPC holds 0.028) | 0 | fuel above hold, w=1 | dimensionless |
+| `distillation` | p=2 x2 | 1e-4 / 1e-4 (analyser resolution; the MPC holds 1.35e-5 / 3.3e-5) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
+| `ph_neutralization` | p=2 | 0.01 pH (electrode resolution; the MPC holds 0.0080) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
 | `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
 | `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
 | `plane3d_*` | p=2 | altitude 1.44 / 4.06 / 1.39 m, heading 1.0e-4 rad, path 8.1 / 6.2 / 14.6 m (lowest per-seed MPC holds in turbulence) | 0 | none | dimensionless |

@@ -242,35 +242,39 @@ class ReactorParams(EnvParams):
     max_steps_in_episode: int = 8640  # env steps of 10 s: 24 h
 
     # ---- Reward (docs/reward-shaping.md; version 2), in dollars per second ----
-    # Tracking: the power imbalance against demand settled at three times
-    # spot on the 1 GWe output, ``imbalance_multiple * spot_price_per_MWh *
-    # P_electric_GW * 1000`` $/h per unit of |error| = 240 000 $/h, linear
-    # (p = 1). Each physics sub-step charges one second; ``step_env`` sums the
+    # Tracking: the power imbalance against demand settled at $100/MWh (1.25
+    # x spot, the one imbalance price of the priced plants) on the 1 GWe
+    # output, ``imbalance_multiple * spot_price_per_MWh * P_electric_GW *
+    # 1000`` $/h per unit of |error| = 100 000 $/h, linear (p = 1). Each physics sub-step charges one second; ``step_env`` sums the
     # ten sub-steps of a control period, so the env-step reward is $ per
     # 10 s step. Floor: 0.00451 of rated, the mean sub-step |error| no
     # controller can beat because the demand random-walks by 7.9e-3 (sd)
     # within one control period (`scripts/floor_reactor_hold.py`, certified
-    # on the one-state hold model); at the floor tracking costs $3.0 per step.
+    # on the one-state hold model); at the floor tracking costs $1.25 per step.
     # The shipped MPC holds 0.0069 at period boundaries against a 0.0063
     # boundary floor (`scripts/measure_hold.py`). Rod wear: the reactivity the
     # controller asks for beyond what the rods can deliver, as a fraction of
     # the rod range, charged per unit at ``rod_wear_weight`` times what
     # tracking at the floor costs -- a documented stand-in for a maintenance
     # price (provisional; the audit found the optimum insensitive to it below
-    # ten times the floor). A trip is charged, once, at twice the 1.49
-    # envelope's imbalance for every 10 s step the episode had left.
+    # ten times the floor). A trip is charged the restart time at twice the
+    # imbalance of the reachable 1.2 of rated (``reward.trip_cost``).
     reward_version: int = 2
     e_floor: float = 0.00451  # fraction of rated, certified hold floor
     e_tol: float = 0.0
     tracking_exponent: float = 1.0
-    imbalance_multiple: float = 3.0  # of spot, for imbalance energy
+    imbalance_multiple: float = (
+        1.25  # of spot: $100/MWh, the one imbalance price of the priced plants
+    )
     rod_wear_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
-    failure_cost: float = 2000.0  # $ per 10 s step
+    failure_cost: float = (
+        2.0 * 100.0 * 1000.0 * 1.2 * 10.0 / 3600.0
+    )  # twice the imbalance of the reachable 1.2 of rated (0.3 target vs 1.5 n_max), per 10 s step
     #: Restart time priced into a trip (``reward.trip_cost``; 48 h at 10 s steps: a SCRAM's xenon-limited restart, provisional).
     restart_steps: int = 17280
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    rho_floor_tracking: float = 3.0 * 80.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
-    rho_floor: float = 3.0 * 80.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
+    rho_floor_tracking: float = 100.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
+    rho_floor: float = 100.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 

@@ -127,12 +127,14 @@ baselines use.
 | `failure_cost` | 2e6 | twice the span's cost, (6 / 6e-3)^2 |
 | `restart_steps` | 100 (5 s) | restart time priced into a trip, `restart_steps x failure_cost` (a generic loop's reset; provisional); where a plant engineer would get it: the plant's restart procedure |
 
-`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
-units (the NEA floor for tracking) and `rho_floor` the full floor including
-consumption charged in full; `floor_is_documented_minimum` records whether
-`e_floor` is a measured/certified floor or a resolution used as a scale, and
-where it is a resolution (a deterministic plant) both references are 0, since
-exact hold is achievable there and the resolution only sets the unit;
+`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+hold cost the reference controller demonstrated, in the reward's units, which
+is 1 per term where the floor is that hold and less where the floor is clamped
+at the instrument resolution -- and `rho_floor` the same with consumption
+charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
+measured/certified floor or a resolution used as a scale, and where it is a
+resolution on a deterministic plant both references are 0, since exact hold is
+achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
 cost the envelope can produce, and `restart_steps` the time a restart would take,
 so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never

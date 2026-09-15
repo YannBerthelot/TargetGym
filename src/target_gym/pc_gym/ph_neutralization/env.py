@@ -146,7 +146,9 @@ class PHParams(EnvParams):
     # worth the whole hold-phase reagent flow again. The span costs
     # (10 / 0.0080)^2 = 1.6e6 per step; off-spec termination twice that.
     reward_version: int = 2
-    e_floor: float = 0.0080  # pH, lowest per-seed MPC hold error (upper bound)
+    # The MPC holds 0.0080 pH in the shipped disturbance, below the 0.01 pH
+    # electrode resolution: the instrument sets the scale.
+    e_floor: float = 0.01  # pH
     e_tol: float = 0.0  # provisional; permit band to be supplied
     tracking_exponent: float = 2.0
     c_hold: float = 16.24  # mL/s reagent while holding (PID = MPC)
@@ -155,8 +157,10 @@ class PHParams(EnvParams):
     #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 5 s steps: flush the tank after a gross excursion, provisional).
     restart_steps: int = 720
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    rho_floor_tracking: float = 1.0
-    rho_floor: float = 1.0
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (the MPC's 0.0080 pH hold in 0.01 units).
+    rho_floor_tracking: float = (0.0080 / 0.01) ** 2
+    rho_floor: float = (0.0080 / 0.01) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 

@@ -491,6 +491,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             # (`scripts/measure_hold.py`); the version-2 references.
             "c_hold": 5.23,
             "e_floor": 4.55,
+            "rho_floor_tracking": 1.0,
+            "rho_floor": 1.0,
             "failure_cost": 2.0 * (12192.0 / 4.55) ** 2,
         },
         tuned_gains_key="plane",
@@ -524,6 +526,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "target_period": 240.0,
             "c_hold": 8.15,  # PID hold-phase airspeed deviation on the sinusoid
             "e_floor": 1.26,  # lowest per-seed MPC hold on the sinusoid
+            "rho_floor_tracking": 1.0,
+            "rho_floor": 1.0,
             "failure_cost": 2.0 * (12192.0 / 1.26) ** 2,
         },
         tuned_gains_key="plane",
@@ -556,6 +560,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             # Lowest per-seed MPC holds on this task (`scripts/measure_hold.py`).
             "e_floor_altitude": 4.06,
             "e_floor_path": 8.12,
+            "rho_floor_tracking": 2.0,
+            "rho_floor": 2.0,
             "failure_cost": 2.0 * (12192.0 / 4.06) ** 2,
         },
         tuned_gains_key="plane3d_circle",
@@ -578,6 +584,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "max_steps_in_episode": 650,
             "e_floor_altitude": 1.39,
             "e_floor_path": 6.17,
+            "rho_floor_tracking": 2.0,
+            "rho_floor": 2.0,
             "failure_cost": 2.0 * (12192.0 / 1.39) ** 2,
         },
         tuned_gains_key="plane3d_racetrack",

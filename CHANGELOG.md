@@ -69,9 +69,10 @@ than by commit.
   own reference and disturbance (`scripts/measure_hold.py`,
   `scripts/floor_reactor_hold.py`; `data/hold_measurements.json`), running
   cost charged only above the hold-phase consumption `c_hold` -- at weight 1
-  on the dimensionless plants, at the owner's prices on the reactor (imbalance
-  at 3x spot), the building (gas at EUR 0.10/kWh), the battery (imbalance
-  $100/MWh, fade $300/kWh) and the wind turbine -- and a trip that never ends
+  on the dimensionless plants, at the owner's prices on the reactor, the
+  battery and the wind turbine (one imbalance price, $100/MWh; fade
+  $300/kWh) and the building (gas at EUR 0.10/kWh, comfort at EUR 0.03/K^2 h,
+  twice the gas it takes to remove the discomfort) -- and a trip that never ends
   the window: the step that leaves the envelope is charged the trip cost, a
   documented restart time at `failure_cost` per step, and the plant restarts
   at once (`base.failure_kernel`, `reward.trip_cost`), so no plant raises

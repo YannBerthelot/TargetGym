@@ -58,15 +58,15 @@ A tuned PID ships with this environment.
 | `delta_t` | 30 |
 | `max_steps_in_episode` | 700 |
 | `reward_version` | 2 |
-| `e_floor` | 0.000342 |
+| `e_floor` | 0.0005 |
 | `e_tol` | 0 |
 | `tracking_exponent` | 2 |
 | `c_hold` | 1.824 |
 | `running_weight` | 1 |
-| `failure_cost` | 1.7e+07 |
+| `failure_cost` | 14112 |
 | `restart_steps` | 2880 |
-| `rho_floor_tracking` | 1 |
-| `rho_floor` | 1 |
+| `rho_floor_tracking` | 0.467856 |
+| `rho_floor` | 0.467856 |
 | `diameter` | 4 |
 | `length` | 60 |
 | … | 44 more, see the params dataclass |

@@ -282,18 +282,24 @@ class GlassFurnaceParams(EnvParams):
     # supplied). The crown envelope costs (250 / 0.175)^2 = 2.0e6 per step;
     # a refractory or glass excursion twice that.
     reward_version: int = 2
-    e_floor: float = 0.175  # K, lowest per-seed MPC hold error (upper bound)
+    # The MPC holds 0.175 K in the shipped disturbance, below the 1 K thermocouple
+    # resolution: the instrument sets the scale (a hold it cannot see is not a floor).
+    e_floor: float = 1.0  # K
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
     c_hold: float = 0.590  # kg/s fuel while holding (PID = MPC)
     running_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
-    failure_cost: float = 4.1e6
+    failure_cost: float = (
+        2.0 * (183.0 / 1.0) ** 2
+    )  # reachable crown excursion, 1610 -> 1427 C
     #: Restart time priced into a trip (``reward.trip_cost``): refractory damage or
     #: glass out of range ends the campaign; a furnace heat-up schedule is about two
     #: weeks, 40 320 steps at 30 s (provisional).
     restart_steps: int = 40320
-    rho_floor_tracking: float = 1.0
-    rho_floor: float = 1.0
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (the MPC's 0.175 K hold in 1 K units).
+    rho_floor_tracking: float = (0.175 / 1.0) ** 2
+    rho_floor: float = (0.175 / 1.0) ** 2
     floor_is_documented_minimum: bool = False
 
 

@@ -83,19 +83,23 @@ class CementKilnParams(EnvParams):
     # weight 1. The unit free-lime span costs (1 / 3.42e-4)^2 = 8.6e6 per
     # step; termination twice that.
     reward_version: int = 2
-    e_floor: float = (
-        3.42e-4  # free-lime fraction, lowest per-seed MPC hold (upper bound)
-    )
+    # The MPC holds 3.4e-4 in the shipped disturbance, below the 5e-4 free-lime
+    # assay resolution: the instrument sets the scale.
+    e_floor: float = 5e-4
     e_tol: float = 0.0  # provisional; quality-system band to be supplied
     tracking_exponent: float = 2.0
     c_hold: float = 1.824  # kg/s fuel while holding (PID)
     running_weight: float = 1.0
-    failure_cost: float = 1.7e7
+    failure_cost: float = (
+        2.0 * ((0.05 - 0.008) / 5e-4) ** 2
+    )  # a cold kiln's 5 % free lime (provisional) against the lowest target
     #: Restart time priced into a trip (``reward.trip_cost``; 24 h at 30 s steps: cool-down, inspection and re-heat, provisional).
     restart_steps: int = 2880
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    rho_floor_tracking: float = 1.0
-    rho_floor: float = 1.0
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (the MPC's 3.42e-4 hold in 5e-4 units).
+    rho_floor_tracking: float = (3.42e-4 / 5e-4) ** 2
+    rho_floor: float = (3.42e-4 / 5e-4) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 

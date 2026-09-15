@@ -181,7 +181,9 @@ class BatteryParams(EnvParams):
     c_hold: float = 1.92e-8  # fractional fade per step while holding
     fade_price: float = 300.0  # $/kWh of lost capacity
     pack_kWh: float = 1692.0  # capacity_As * OCV(50%) / 3.6e6
-    failure_cost: float = 2.0 * 100.0 * 1.0 * 5.0 / 3600.0
+    failure_cost: float = (
+        2.0 * 100.0 * 1.8 * 5.0 / 3600.0
+    )  # twice the imbalance of the reachable 1.8 MW (0.8 MW target vs 1 MW power), per 5 s step
     #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 5 s steps: a protection trip's reset, provisional).
     restart_steps: int = 720
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.

@@ -59,15 +59,15 @@ A tuned PID ships with this environment.
 | `max_steps_in_episode` | 400 |
 | `reward_version` | 2 |
 | `e_floor_level` | 0.00267 |
-| `e_floor_pressure` | 0.0283 |
+| `e_floor_pressure` | 0.05 |
 | `e_tol` | 0 |
 | `tracking_exponent` | 2 |
 | `c_hold` | 1.566e+08 |
 | `running_weight` | 1 |
-| `failure_cost` | 4e+06 |
+| `failure_cost` | 440734 |
 | `restart_steps` | 7200 |
-| `rho_floor_tracking` | 2 |
-| `rho_floor` | 2 |
+| `rho_floor_tracking` | 1.32036 |
+| `rho_floor` | 1.32036 |
 | `V_t` | 88 |
 | … | 31 more, see the params dataclass |
 

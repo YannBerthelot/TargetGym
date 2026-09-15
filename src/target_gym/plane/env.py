@@ -192,8 +192,10 @@ class PlaneParams(EnvParams):
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     #: One: altitude at the floor costs 1 and the airspeed term is charged
     #: only above the hold-phase deviation.
-    rho_floor_tracking: float = 1.0
-    rho_floor: float = 1.0
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (the MPC's 0.84 m hold in 1 m units; per task in the registry).
+    rho_floor_tracking: float = (0.84 / 1.0) ** 2
+    rho_floor: float = (0.84 / 1.0) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
     min_alt: float = 0.0

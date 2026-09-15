@@ -69,6 +69,10 @@ def failure_kernel(env, key, state, new_state, params):
     gain on. The event is reported as ``info["tripped"]`` for the evaluator,
     which counts it; nothing an agent runs has to read it.
 
+    A plant whose params carry ``restart_in_place = True`` restarts from
+    where it tripped instead of from a fresh draw: every step outside the
+    envelope is charged, and the plant stays under control.
+
     Given the state before the step, the physics' proposal for after it and
     the step's key, returns ``(state, tripped, scored)``: the state the
     window continues from (the proposal, or a fresh draw when it tripped),
@@ -77,6 +81,12 @@ def failure_kernel(env, key, state, new_state, params):
     charges the trip cost exactly on the step that left the envelope.
     """
     tripped = env.is_terminated(new_state, params)
+    # A plant that does not restart cold (a building: its thermal mass
+    # persists through a lockout) keeps its state. Every step outside the
+    # envelope is then a trip -- charged the trip cost -- until the
+    # controller brings it back, which is the physical picture and closes
+    # the shortcut a fresh draw would offer (a free cool-down).
+    in_place = jnp.asarray(getattr(params, "restart_in_place", False), bool)
     fresh = env.reset_env(key, params)[1].replace(time=new_state.time)
-    out = _select(tripped, fresh, new_state)
+    out = _select(jnp.logical_and(tripped, jnp.logical_not(in_place)), fresh, new_state)
     return out, tripped, new_state

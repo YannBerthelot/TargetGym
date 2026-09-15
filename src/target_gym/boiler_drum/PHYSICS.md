@@ -227,20 +227,22 @@ baselines use.
 | parameter | value | source |
 | --- | --- | --- |
 | `e_floor_level` | 2.67e-3 m | the lowest per-seed long-run mean \|level\| the shipped MPC held under the shipped steam-demand disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 60-step burn-in; seeds 2.7 / 17 / 18 mm, PID 37-70 mm). Per-seed minimum; upper bound |
-| `e_floor_pressure` | 0.0283 bar | the lowest per-seed MPC pressure hold (seeds 0.028 / 0.077 / 0.067 bar; PID 0.035-0.050). Per-seed minimum; upper bound |
+| `e_floor_pressure` | 0.05 bar (the MPC holds 0.028) | the pressure transmitter's resolution; the lowest per-seed MPC hold (seeds 0.028 / 0.077 / 0.067 bar; PID 0.035-0.050) sits below it. Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
 | `e_tol` | 0 | no specification band |
 | `tracking_exponent` | 2 | quadratic on both |
 | `c_hold` | 1.566e8 W | firing rate while holding, MPC (PID 1.568e8) (`scripts/measure_hold.py`) |
 | `running_weight` | 1 | sweep 0.5 / 1 / 2 |
-| `failure_cost` | 4.0e6 | twice the level-trip plus pressure-envelope cost, (0.25 / 2.67e-3)^2 + (40 / 0.0283)^2, per down step |
+| `failure_cost` | 4.4e5 | twice the level-trip plus the reachable pressure excursion's cost, 2 x ((0.25 / 2.67e-3)^2 + (23 / 0.05)^2): the 88 bar target to the 65 bar trip, per trip step |
 | `restart_steps` | 7200 (4 h) | restart time priced into a trip, `restart_steps x failure_cost` (a drum trip's restart; provisional); where a plant engineer would get it: the plant's restart procedure |
 
-`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
-units (the NEA floor for tracking) and `rho_floor` the full floor including
-consumption charged in full; `floor_is_documented_minimum` records whether
-`e_floor` is a measured/certified floor or a resolution used as a scale, and
-where it is a resolution (a deterministic plant) both references are 0, since
-exact hold is achievable there and the resolution only sets the unit;
+`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+hold cost the reference controller demonstrated, in the reward's units, which
+is 1 per term where the floor is that hold and less where the floor is clamped
+at the instrument resolution -- and `rho_floor` the same with consumption
+charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
+measured/certified floor or a resolution used as a scale, and where it is a
+resolution on a deterministic plant both references are 0, since exact hold is
+achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
 cost the envelope can produce, and `restart_steps` the time a restart would take,
 so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never

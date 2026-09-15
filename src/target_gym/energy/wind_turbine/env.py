@@ -156,17 +156,19 @@ class WindTurbineParams(EnvParams):
     )
     e_tol: float = 0.0
     tracking_exponent: float = 1.0
-    imbalance_price: float = 80.0  # $/MWh, provisional
+    imbalance_price: float = (
+        100.0  # $/MWh, provisional; the one imbalance price of the priced plants
+    )
     c_hold: float = (
         0.0013  # pitch activity fraction |cmd - pitch| / pitch_max while holding (PID)
     )
     fatigue_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
-    failure_cost: float = 2.0 * 80.0 * 7.0 * 0.25 / 3600.0
+    failure_cost: float = 2.0 * 100.0 * 7.0 * 0.25 / 3600.0
     #: Restart time priced into a trip (``reward.trip_cost``; 10 min at 0.25 s steps: an overspeed trip's reset and re-synchronisation, provisional).
     restart_steps: int = 2400
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    rho_floor_tracking: float = 80.0 / 1.0e6 * 0.25 / 3600.0 * 1680.0
-    rho_floor: float = 80.0 / 1.0e6 * 0.25 / 3600.0 * 1680.0
+    rho_floor_tracking: float = 100.0 / 1.0e6 * 0.25 / 3600.0 * 1680.0
+    rho_floor: float = 100.0 / 1.0e6 * 0.25 / 3600.0 * 1680.0
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 

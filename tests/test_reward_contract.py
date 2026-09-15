@@ -44,6 +44,7 @@ REWARD_PARAM_NAMES = {
     "comfort_tolerance",
     "failure_cost",
     "restart_steps",
+    "restart_in_place",
 }
 
 
@@ -257,6 +258,8 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     from target_gym.base import failure_kernel
 
     env, p, state = _a_state(spec)
+    if getattr(p, "restart_in_place", False):
+        pytest.skip(f"{spec.name}: restarts in place (its own test below)")
     key = jax.random.PRNGKey(7)
     proposal = state.replace(time=state.time + 1)
 
@@ -290,3 +293,24 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     out_of_envelope = R.with_trip(terms, jnp.ones((), bool), R.trip_cost(p))
     assert float(out_of_envelope["failure"]) == pytest.approx(float(R.trip_cost(p)))
     assert all(float(v) == 0.0 for k, v in out_of_envelope.items() if k != "failure")
+
+
+def test_a_plant_that_restarts_in_place_keeps_its_state_and_pays_every_step():
+    """``restart_in_place``: the building keeps its state through a trip --
+    the proposal is both the state the window continues from and the state
+    scored -- so every step outside the envelope is charged."""
+    from target_gym.base import failure_kernel
+
+    spec = REGISTRY["hvac"]
+    env, p, state = _a_state(spec)
+    assert bool(p.restart_in_place)
+    proposal = state.replace(time=state.time + 1, T_air=jnp.asarray(p.T_air_max + 1.0))
+    out, tripped, scored = failure_kernel(
+        env, jax.random.PRNGKey(0), state, proposal, p
+    )
+    assert bool(tripped)
+    assert scored is proposal
+    assert float(out.T_air) == pytest.approx(float(p.T_air_max) + 1.0)
+    terms = env.reward_terms(out, p)
+    assert float(terms["failure"]) == pytest.approx(float(R.trip_cost(p)))
+    assert float(terms["tracking"]) == 0.0 and float(terms["running"]) == 0.0

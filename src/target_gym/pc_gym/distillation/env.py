@@ -134,20 +134,24 @@ class DistillationParams(EnvParams):
     # at weight 1. The unit composition span costs (1 / 1.35e-5)^2 = 5.5e9 per
     # step on the top alone; a trip twice the two-end sum.
     reward_version: int = 2
-    e_floor_top: float = (
-        1.35e-5  # mole fraction, lowest per-seed MPC hold (upper bound)
-    )
-    e_floor_bottom: float = 3.3e-5
+    # The MPC holds 1.35e-5 / 3.3e-5 in the shipped disturbance, below the 1e-4
+    # composition-analyser resolution: the instrument sets both scales.
+    e_floor_top: float = 1e-4  # mole fraction
+    e_floor_bottom: float = 1e-4
     e_tol: float = 0.0  # provisional; purity specs to be supplied
     tracking_exponent: float = 2.0
     c_hold: float = 3.282  # boilup while holding (PID)
     running_weight: float = 1.0
-    failure_cost: float = 1.28e10
+    failure_cost: float = (
+        2.0 * 2.0 * (0.095 / 1e-4) ** 2
+    )  # reachable 0.095 on each product (0.98 -> 0.90 trip; 0.02 -> 0.10)
     #: Restart time priced into a trip (``reward.trip_cost``; 4 h at 1 min steps: column shutdown and re-establishment of the profile, provisional).
     restart_steps: int = 240
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    rho_floor_tracking: float = 2.0
-    rho_floor: float = 2.0
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (the MPC's 1.35e-5 / 3.3e-5 holds in 1e-4 units).
+    rho_floor_tracking: float = (1.35e-5 / 1e-4) ** 2 + (3.3e-5 / 1e-4) ** 2
+    rho_floor: float = (1.35e-5 / 1e-4) ** 2 + (3.3e-5 / 1e-4) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 

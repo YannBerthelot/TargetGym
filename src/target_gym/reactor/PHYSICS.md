@@ -214,17 +214,19 @@ baselines use.
 | `e_floor` | 0.00451 of rated | certified hold floor: `scripts/floor_reactor_hold.py`, a one-state dynamic programme on the error against the demand's within-period random walk (sd 7.9e-3 over 10 s) with the rod-limited power slews; the slew never binds and the floor is the walk. The shipped MPC holds 0.0069 at period boundaries against the 0.0063 boundary floor (`scripts/measure_hold.py`, 2000 hold steps after a 2000-step burn-in); the PID 0.08 over the same 11 h (3% over the 2.4 h test episode). |
 | `e_tol` | 0 | none |
 | `tracking_exponent` | 1 | imbalance energy is settled linearly |
-| `imbalance_multiple` | 3 x `spot_price_per_MWh` on `P_electric_GW` | 240 000 $/h per unit of \|error\|; tracking at the floor costs $3.0 per step |
+| `imbalance_multiple` | 1.25 x `spot_price_per_MWh` on `P_electric_GW` | $100/MWh, the one imbalance price of the priced plants (battery, wind turbine): 100 000 $/h per unit of \|error\|; tracking at the floor costs $1.25 per step. The earlier 3 x spot was a penalty convention, not a tariff |
 | `rod_wear_weight` | 1 | **provisional.** Reactivity asked beyond what the rods can deliver, as a fraction of the rod range, charged per unit at what tracking at the floor costs; the audit found the optimum insensitive to it below ten times the floor. Sweep 0.5 / 1 / 2. |
-| `failure_cost` | 2000 $ per step | twice the 1.49 envelope's imbalance |
+| `failure_cost` | 667 $ per step | twice the imbalance of the reachable 1.2 of rated (a 0.3 target against the 1.5 `n_max` trip) for one 10 s step |
 | `restart_steps` | 17280 (48 h) | restart time priced into a trip, `restart_steps x failure_cost` (a SCRAM's xenon-limited restart; provisional); where a plant engineer would get it: the plant's restart procedure |
 
-`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
-units (the NEA floor for tracking) and `rho_floor` the full floor including
-consumption charged in full; `floor_is_documented_minimum` records whether
-`e_floor` is a measured/certified floor or a resolution used as a scale, and
-where it is a resolution (a deterministic plant) both references are 0, since
-exact hold is achievable there and the resolution only sets the unit;
+`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+hold cost the reference controller demonstrated, in the reward's units, which
+is 1 per term where the floor is that hold and less where the floor is clamped
+at the instrument resolution -- and `rho_floor` the same with consumption
+charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
+measured/certified floor or a resolution used as a scale, and where it is a
+resolution on a deterministic plant both references are 0, since exact hold is
+achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
 cost the envelope can produce, and `restart_steps` the time a restart would take,
 so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never

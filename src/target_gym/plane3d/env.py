@@ -205,8 +205,10 @@ class PlaneParams3D(EnvParams):
     #: sortie, 1 h of flight at 1 s steps (provisional).
     restart_steps: int = 3600
     #: Two: altitude and heading (or path) each cost 1 at their floors.
-    rho_floor_tracking: float = 2.0
-    rho_floor: float = 2.0
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (altitude at its floor, the MPC's 1e-4 rad heading hold in 0.5 deg units).
+    rho_floor_tracking: float = 1.0 + (1.0e-4 / 0.0087) ** 2
+    rho_floor: float = 1.0 + (1.0e-4 / 0.0087) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
     # Figure-8: half-amplitude of the altitude twist (meters).  The curve

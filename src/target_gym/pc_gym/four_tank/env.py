@@ -97,7 +97,9 @@ class FourTankParams(EnvParams):
     e_floor: float = 1e-3  # m, level transmitter resolution, both tanks
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
-    failure_cost: float = 8.4e6
+    failure_cost: float = 2.0 * (
+        (0.25 / 1e-3) ** 2 + (0.289 / 1e-3) ** 2
+    )  # reachable errors: steady tops 0.360 / 0.429 m against the lowest targets
     #: Restart time priced into a trip (``reward.trip_cost``; 10 min at 1 s steps: refill after an overflow or dry-out, provisional).
     restart_steps: int = 600
     #: The NEA reference. Zero: the plant is deterministic, so exact hold is

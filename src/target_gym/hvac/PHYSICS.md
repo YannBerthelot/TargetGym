@@ -215,11 +215,12 @@ baselines use.
 | --- | --- | --- |
 | `comfort_tolerance` | 0.5 K | occupied comfort band about the setpoint (dead-zone) |
 | `setback_lower_bound_only` | True | **provisional design choice.** During the setback only the shortfall below 17 C is charged. This plant cannot cool: under its clear-sky gains the zone sits +4.3 K above the setback target every night and above the occupied band two thirds of the day whatever the controller does (`scripts/measure_hold.py`, signed errors for the shipped MPC over 720 hold steps after a 516-step burn-in), so a symmetric night target would score the weather. |
-| `comfort_price` | 0.2 EUR per K^2 per hour | **provisional**; sweep 0.1 / 0.2 / 0.4 |
+| `comfort_price` | 0.03 EUR per K^2 per hour | **provisional**: twice the gas it takes to remove 1 K for 1 h (H = 159 W/K at EUR 0.10/kWh = EUR 0.016), so comfort is worth fixing but not at any price; the earlier 0.2 was 12x the gas and the gas term never bound. Sweep 0.015 / 0.03 / 0.06 |
 | `gas_price` | 0.10 EUR/kWh | charged on the emitter's heat in full: the bill the plant trades against comfort |
 | `tracking_exponent` | 2 | quadratic outside the band |
-| `failure_cost` | 2 x a 14 K excursion for an hour | freezing or gross overheating |
+| `failure_cost` | 4.3 EUR per step | twice the reachable excursion's comfort cost for one 15 min step, 2 x 0.03 x 17^2 x 0.25: a 22.5 C setpoint to the 5 C trip, less the band |
 | `restart_steps` | 4 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (reset after a freeze or overheat alarm; provisional); where a plant engineer would get it: the plant's restart procedure |
+| `restart_in_place` | True | a building does not restart cold: its thermal mass persists through a lockout, so after a trip the plant keeps its state and every step outside the envelope is charged the trip cost (`restart_steps x failure_cost` = EUR 17) until the controller brings it back (`base.failure_kernel`); a fresh draw at 18-22 C offered a free cool-down for EUR 78 against EUR 145/day of overheating
 
 Floor: overheating sets it. The shipped MPC's lowest per-seed hold cost after burn-in (EUR 0.0273 per
 step on the test episode, comfort 0.0206; the 3-seed means are 0.0427 and 0.0364 -- the weather moves it 2x between seeds; `scripts/evaluate_baselines.py`) is `rho_floor`, an upper bound; the certified
@@ -227,12 +228,14 @@ reduced-model optimum under this cost is not yet computed (the earlier
 certified HVAC runs used the version-1 comfort cost). `e_floor` is not a
 parameter of this priced reward; `rho_floor` carries the MPC reference.
 
-`rho_floor_tracking` is the tracking cost per step at the floor in the reward's
-units (the NEA floor for tracking) and `rho_floor` the full floor including
-consumption charged in full; `floor_is_documented_minimum` records whether
-`e_floor` is a measured/certified floor or a resolution used as a scale, and
-where it is a resolution (a deterministic plant) both references are 0, since
-exact hold is achievable there and the resolution only sets the unit;
+`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+hold cost the reference controller demonstrated, in the reward's units, which
+is 1 per term where the floor is that hold and less where the floor is clamped
+at the instrument resolution -- and `rho_floor` the same with consumption
+charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
+measured/certified floor or a resolution used as a scale, and where it is a
+resolution on a deterministic plant both references are 0, since exact hold is
+achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
 cost the envelope can produce, and `restart_steps` the time a restart would take,
 so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never

@@ -83,17 +83,23 @@ class BoilerDrumParams(EnvParams):
     # the pressure envelope (40 bar / 0.0283)^2 = 2.0e6; a trip twice the sum.
     reward_version: int = 2
     e_floor_level: float = 2.67e-3  # m, lowest per-seed MPC hold
-    e_floor_pressure: float = 0.0283  # bar, lowest per-seed MPC hold
+    e_floor_pressure: float = (
+        0.05  # bar, the pressure transmitter's resolution; the MPC holds 0.028 bar below it
+    )
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
     c_hold: float = 1.566e8  # W fuel while holding (MPC)
     running_weight: float = 1.0
-    failure_cost: float = 4.0e6
+    failure_cost: float = 2.0 * (
+        (0.25 / 2.67e-3) ** 2 + (23.0 / 0.05) ** 2
+    )  # level trip, and the reachable 23 bar (88 -> 65)
     #: Restart time priced into a trip (``reward.trip_cost``; 4 h at 2 s steps: a drum trip's restart, provisional).
     restart_steps: int = 7200
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    rho_floor_tracking: float = 2.0
-    rho_floor: float = 2.0
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (level at its floor, the MPC's 0.0283 bar pressure hold in 0.05 bar units).
+    rho_floor_tracking: float = 1.0 + (0.0283 / 0.05) ** 2
+    rho_floor: float = 1.0 + (0.0283 / 0.05) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 

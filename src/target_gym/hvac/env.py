@@ -150,20 +150,25 @@ class HVACParams(EnvParams):
     # bounds) costs, per step, twice a 14 K excursion for an hour.
     reward_version: int = 2
     comfort_tolerance: float = 0.5  # K, occupied
-    comfort_price: float = 0.2  # EUR per K^2 per hour, provisional
+    comfort_price: float = (
+        0.03  # EUR per K^2 per hour, provisional: twice the gas it takes to remove 1 K for 1 h (H = 159 W/K at EUR 0.10/kWh = EUR 0.016)
+    )
     gas_price: float = 0.10  # EUR per kWh
     setback_lower_bound_only: bool = True  # provisional design choice
     tracking_exponent: float = 2.0
-    failure_cost: float = 2.0 * 0.2 * 14.0**2 * 0.25
+    failure_cost: float = (
+        2.0 * 0.03 * 17.0**2 * 0.25
+    )  # twice the reachable 17.5 K excursion (22.5 C setpoint -> 5 C trip) less the band, for one 15 min step
+    #: A building does not restart cold: outside the envelope every step is charged the trip cost and the plant keeps evolving under control.
+    restart_in_place: bool = True
     #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 15 min steps: reset after a freeze or overheat alarm, provisional).
     restart_steps: int = 4
     #: The shipped MPC's lowest per-seed hold cost on the test episode (EUR
-    #: per step, five seeds; comfort 0.0206, total 0.0273; the 3-seed means
-    #: are 0.0364 and 0.0427, `scripts/evaluate_baselines.py`): the NEA
-    #: reference, an upper bound on the floor -- overheating sets it, and the
-    #: weather moves it 2x between seeds, hence the minimum.
-    rho_floor_tracking: float = 0.0206
-    rho_floor: float = 0.0273
+    #: per step, five seeds, `scripts/hvac_floor.py`): the NEA reference, an
+    #: upper bound on the floor -- overheating sets it, and the weather moves
+    #: it 2x between seeds, hence the minimum.
+    rho_floor_tracking: float = 0.0010
+    rho_floor: float = 0.0010
     floor_is_documented_minimum: bool = False
 
 
