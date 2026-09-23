@@ -49,7 +49,10 @@ reporting the two costs separately (``target_gym.eval``), not from a cap.
 
 from __future__ import annotations
 
+import math
+
 import jax.numpy as jnp
+import numpy as np
 
 
 def tracking_cost(error, e_floor, e_tol=0.0, p=2.0, xp=jnp):
@@ -77,6 +80,67 @@ def trip_cost(params):
     """The cost of a trip, charged once on the step that leaves the envelope:
     the plant's restart time priced at the per-step failure cost."""
     return params.restart_steps * params.failure_cost
+
+
+def _erfc_np(z):
+    """erfc(z / sqrt 2) on numpy arrays, for the xp=np scoring path."""
+    from scipy.special import erfc
+
+    return erfc(np.asarray(z) / math.sqrt(2.0))
+
+
+def proximity_cost(margin, sigma, cost, reaction_steps=1.0, risk=1.0, xp=jnp):
+    """The trip's cost charged by EXPECTATION instead of by realisation:
+    ``cost * Phi(-margin / (sigma sqrt(reaction_steps)))``, the probability
+    that the disturbance carries the state past the envelope before the
+    controller can arrest it.
+
+    ``margin``: the distance from the current state to the envelope, in the
+    envelope's own units - positive inside it, NEGATIVE outside, where the
+    charge saturates at the whole lump. On a deterministic rollout (a planner's
+    model, which has no noise of its own) the charge is then a smoothed step:
+    ~0 far inside, half at the boundary, ~1 lump well outside, and it carries a
+    gradient across the crossing where the step function has none. ``sigma``: the plant's one-step
+    disturbance scale in the same units - ``e_floor sqrt(pi/2)`` where the
+    floor is the irreducible error of a driven plant, since
+    ``e_floor = sd sqrt(2/pi)`` is how that floor is computed. ``cost``:
+    :func:`trip_cost`.
+
+    WHY EXPECTATION. Charging the realised trip makes the cost discontinuous
+    at the envelope - zero derivative on both sides and a jump between - so no
+    gradient method can see the cliff coming, and two controllers that spend
+    the same time at the edge score differently according to whether one was
+    pushed over. The conditional expectation of the same lump is smooth, has a
+    gradient wherever the margin does, and is the Rao-Blackwellisation of the
+    indicator: at ``reaction_steps = risk = 1`` it has the SAME mean as the
+    realised charge and strictly lower variance. Report the realised cost as
+    the KPI and optimise this one, and the two agree in expectation.
+
+    RISK AVERSION is the other two arguments, and both change the objective
+    rather than the estimator - state them wherever a number produced with
+    them is reported. ``reaction_steps``: judge the margin against the
+    disturbance accumulated over the time the loop needs to arrest an
+    excursion (dead time plus a dominant time constant), not over one step -
+    the random-walk bound ``sigma sqrt(h)``, conservative where the
+    disturbance is mean-reverting. This is the physical form of "hold a
+    margin": a plant that cannot be arrested quickly is charged more for the
+    same distance, which is why it bites hardest on long dead times and
+    non-minimum-phase plants. ``risk``: a bare multiplier on the charge; a
+    poor instrument on its own, since a Gaussian tail is steep enough that
+    100x moves the point where the charge overtakes tracking by about one
+    sigma."""
+    from jax.scipy.stats import norm
+
+    scale = xp.maximum(sigma, 1e-12) * xp.sqrt(xp.maximum(reaction_steps, 1.0))
+    # the margin is NOT clamped at 0: a NEGATIVE margin is a state already past
+    # the envelope, and the charge must go to the whole lump there, not stay at
+    # the half it takes at the boundary. Clamping made this a smoothed step
+    # that saturated at 1/2, so a planner rolling a trajectory deep outside the
+    # envelope was charged half of what crossing costs and took the trip
+    # (measured on 8 lag plants: trips 568 -> 1143 with the clamp in)
+    z = margin / scale
+    tail = norm.cdf(-z) if xp is jnp else 0.5 * _erfc_np(z)
+    return risk * cost * tail
 
 
 def with_trip(terms: dict, tripped, cost, xp=jnp) -> dict:
