@@ -171,6 +171,7 @@ def run_policy(
     key,
     n_steps: int | None = None,
     per_episode_params: bool = False,
+    record: Mapping[str, Callable[[Any, Any, Any], Any]] | None = None,
 ) -> dict[str, Any]:
     """``task.n_episodes`` closed-loop episodes of ``policy`` on ``env``.
 
@@ -184,7 +185,14 @@ def run_policy(
     ``max_steps``, cut at a termination); ``terms`` (name -> ``(n, T)``) where
     the plant reports its reward terms; the policy's final ``carry``;
     ``wall_s``. A terminated episode is
-    frozen: its plant stops, its reward is 0 afterwards and its record ends."""
+    frozen: its plant stops, its reward is 0 afterwards and its record ends.
+
+    ``record``: named per-step quantities a study wants beside the reward,
+    each ``fn(state, params, tripped) -> scalar`` for one episode (vmapped
+    here) on the state after the step, its parameters, and whether the step
+    tripped (False where the plant reports no trips; after a trip the state is
+    the restarted plant, so ``tripped`` is how a function scores that step).
+    Returned as ``records`` (name -> ``(n, T)``)."""
     import jax
     import jax.numpy as jnp
 
@@ -201,6 +209,10 @@ def run_policy(
     oracle = bool(getattr(policy, "oracle", False))
     terms_fn = getattr(env, "reward_terms", None)
     terms_b = None if terms_fn is None else jax.jit(jax.vmap(terms_fn, in_axes=(0, pa)))
+    record_b = {
+        k: jax.jit(jax.vmap(fn, in_axes=(0, pa, 0))) for k, fn in (record or {}).items()
+    }
+    records_rec: dict[str, list] = {k: [] for k in record_b}
     vi, ti = list(task.value_index), list(task.target_index)
     done = np.zeros(n, bool)
     length = np.minimum(task.max_steps, T).astype(int)
@@ -228,9 +240,12 @@ def run_policy(
         o = np.asarray(obs)
         rec["reward"].append(np.where(done, 0.0, np.asarray(r, float)))
         tripped = info.get("tripped") if isinstance(info, dict) else None
-        rec["tripped"].append(
-            np.zeros(n, bool) if tripped is None else np.asarray(tripped, bool) & ~done
-        )
+        tripped = np.zeros(n, bool) if tripped is None else np.asarray(tripped, bool)
+        rec["tripped"].append(tripped & ~done)
+        for k, fn in record_b.items():
+            records_rec[k].append(
+                np.asarray(fn(state, params, jnp.asarray(tripped)), float)
+            )
         rec["action"].append(np.asarray(action))
         rec["value"].append(o[:, vi])
         rec["target"].append(o[:, ti])
@@ -255,6 +270,7 @@ def run_policy(
     if err_rec:
         out["info_error"] = np.stack(err_rec, axis=1)
     out["terms"] = {k: np.stack(v, axis=1) for k, v in terms_rec.items()}
+    out["records"] = {k: np.stack(v, axis=1) for k, v in records_rec.items()}
     out["length"] = length
     out["carry"] = carry  # the policy's final carry, for its own diagnostics
     out["wall_s"] = time.perf_counter() - t0
@@ -289,7 +305,9 @@ def score(
     over the episodes pooled, the library's convention for one plant run
     several times; with a ``burn_in`` per episode, the mean over episodes of
     each one's own metrics) and the per-episode ``gain`` / ``failure_rate``
-    arrays, for paired comparisons between policies run on the same seed."""
+    arrays, for paired comparisons between policies run on the same seed;
+    ``records``: each recorded quantity's mean over each episode's own steps
+    (the burn-in included), per episode."""
     eps = episodes_of(rollout)
     b = np.asarray(burn_in, int)
     per = [
@@ -303,10 +321,16 @@ def score(
     else:
         keys = [k for k in per[0] if np.isscalar(per[0][k])]
         metrics = {k: float(np.nanmean([m[k] for m in per])) for k in keys}
+    lengths = np.asarray(rollout["length"], int)
+    records = {
+        k: np.asarray([v[i, :L].mean() for i, L in enumerate(lengths)], float)
+        for k, v in (rollout.get("records") or {}).items()
+    }
     return {
         "metrics": {k: float(v) for k, v in metrics.items()},
         "gain": np.asarray([m["gain"] for m in per], float),
         "failure_rate": np.asarray([m["failure_rate"] for m in per], float),
+        "records": records,
     }
 
 
@@ -318,6 +342,7 @@ def run_policy_on_benchmark(
     n_steps: int | None = None,
     test_params: bool = True,
     declare: Callable[[str, Any, Any], Mapping[str, Any]] | None = None,
+    record: Callable[[str, Any, Any], Mapping[str, Callable] | None] | None = None,
     verbose: bool = True,
 ) -> dict[str, dict[str, Any]]:
     """``policy`` on every registered task (or ``tasks``), ``n_episodes`` each,
@@ -342,7 +367,9 @@ def run_policy_on_benchmark(
     one environment and differ only there). False runs ``env.default_params``,
     the environment's own defaults. ``declare(name, env, params)``: the information a
     study declares to the controller beyond this library's
-    (:attr:`TaskInfo.extras`), per task."""
+    (:attr:`TaskInfo.extras`), per task. ``record(name, env, params)``: the
+    per-step quantities to record on that task (:func:`run_policy`'s
+    ``record``), returned per episode in the row's ``records``."""
     import jax
 
     from target_gym.registry import REGISTRY
@@ -358,7 +385,10 @@ def run_policy_on_benchmark(
         info = task_info(name, env, params, n_episodes, extras=extras)
         key = jax.random.fold_in(jax.random.PRNGKey(seed), order[name])
         try:
-            rollout = run_policy(policy, env, params, info, key, n_steps=n_steps)
+            rollout = run_policy(
+                policy, env, params, info, key, n_steps=n_steps,
+                record=None if record is None else record(name, env, params),
+            )  # fmt: skip
         except Unsupported as e:
             results[name] = {"unsupported": str(e)}
             if verbose:

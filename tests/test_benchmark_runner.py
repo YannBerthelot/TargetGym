@@ -253,3 +253,29 @@ def test_a_burn_in_per_episode_is_each_episodes_own():
     expected = [E.evaluate([e], burn_in=b)["gain"] for e, b in zip(eps, (10, 30))]
     np.testing.assert_allclose(s["gain"], expected)
     assert s["metrics"]["gain"] == pytest.approx(np.mean(expected))
+
+
+def test_recorded_quantities_are_per_step_and_see_the_trip():
+    """A study's per-step quantities: evaluated on the state after each step,
+    told whether the step tripped, and averaged over each episode's steps."""
+    env, params, info = _setup("cstr", 2)
+    record = {
+        "time": lambda s, p, tripped: jnp.asarray(s.time, jnp.float32),
+        "trip": lambda s, p, tripped: tripped.astype(jnp.float32),
+    }
+    r = B.run_policy(
+        Hold(0.0), env, params, info, jax.random.PRNGKey(0), n_steps=5, record=record
+    )
+    assert r["records"]["time"].shape == (2, 5)
+    np.testing.assert_array_equal(r["records"]["time"][0], [1, 2, 3, 4, 5])
+    np.testing.assert_array_equal(r["records"]["trip"], r["tripped"].astype(float))
+    s = B.score({**r, "length": np.array([5, 5])}, burn_in=1)
+    np.testing.assert_allclose(s["records"]["time"], [3.0, 3.0])
+
+
+def test_the_benchmark_passes_a_studys_records_per_task():
+    res = B.run_policy_on_benchmark(
+        Hold(), tasks=["cstr"], n_episodes=2, n_steps=4, verbose=False,
+        record=lambda name, env, params: {"one": lambda s, p, tripped: jnp.float32(1.0)},
+    )  # fmt: skip
+    np.testing.assert_allclose(res["cstr"]["records"]["one"], [1.0, 1.0])
