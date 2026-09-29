@@ -68,6 +68,7 @@ print(len(REGISTRY), "environments in", len(GROUPS), "groups")
 | `target_gym.runners` | Figure and video generation. A tool, not a library surface. |
 | `target_gym.render_kit` | The dashboard toolkit. Stable enough to build on, but its primitives are still moving. |
 | `target_gym.utils` | A grab-bag; parts of it will move or go. |
+| `target_gym.benchmark` | One policy interface and a paired runner over every task (`Policy`, `TaskInfo`, `run_policy`, `run_policy_on_benchmark`, `shipped_policy`). New; its `TaskInfo.extras` conventions are still settling with its first downstream user. |
 
 ## Not public
 

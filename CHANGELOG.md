@@ -42,6 +42,14 @@ than by commit.
 - **A Colab quickstart** (`notebooks/quickstart.ipynb`), linked from the README
   and the documentation index, and executed by the test suite so it cannot rot.
 - `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1).
+- **A benchmark runner** (`target_gym.benchmark`, provisional): one policy
+  interface (`reset(key, obs, task)`, `act(carry, obs, t)`) and a runner that
+  plays any controller on one task or on every registered task, on episodes
+  paired across controllers by their keys, scored by `target_gym.eval`'s
+  protocol. It runs the registered task definition by default, and wraps the
+  shipped PID / MPC as policies. A study can record named per-step
+  quantities beside the reward (`record=`, e.g. the version-1 tracking score)
+  and get their per-episode means.
 - **A central registry** (`target_gym.registry`) describing every environment,
   its parameters and its baselines, and a **shared conformance suite** that runs
   the same contracts against all of them -- PRNG hygiene, determinism, the
