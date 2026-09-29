@@ -71,15 +71,20 @@ def _fly_bank(target_deg, steps=2500, tail=500):
                 1.0,
             )
         )
-        _, state, _, terminated, _ = step(
+        _, next_state, _, _, info = step(
             key, state, jnp.array([-0.55, 0.0, aileron]), params
         )
+        # A trip no longer ends the episode: base.failure_kernel restarts the
+        # aircraft from a fresh draw, with a new heading. Stop at the trip, as
+        # the terminated flag used to, so the measured turn is one flight.
+        if bool(info["tripped"]):
+            break
+        state = next_state
         phis.append(float(state.phi))
         psis.append(float(state.psi))
         speeds.append(float(np.hypot(float(state.x_dot), float(state.y_dot))))
-        if bool(terminated):
-            break
 
+    assert len(psis) >= tail, f"tripped after {len(psis)} steps, before a full tail"
     phi = float(np.mean(phis[-tail:]))
     V = float(np.mean(speeds[-tail:]))
     unwrapped = np.unwrap(psis[-tail:])
@@ -146,12 +151,13 @@ def test_a_constant_aileron_commands_a_rate_not_an_angle():
 
     phis = []
     for _ in range(900):
-        _, state, _, terminated, _ = step(
+        _, next_state, _, _, info = step(
             key, state, jnp.array([-0.55, 0.0, 0.15]), params
         )
-        phis.append(float(state.phi))
-        if bool(terminated):
+        if bool(info["tripped"]):  # a restart would splice in a fresh roll angle
             break
+        state = next_state
+        phis.append(float(state.phi))
     phis = np.unwrap(np.array(phis))
     first = phis[len(phis) // 3] - phis[0]
     second = phis[-1] - phis[2 * len(phis) // 3]
