@@ -183,10 +183,19 @@ jobs:
     # One interpreter is enough: what these assert is controller behaviour,
     # which does not vary across Python versions the way an import or a wheel
     # does. The grid above is what covers those.
+    #
+    # The floor check (test_mpc_does_not_beat_a_measured_floor) brought MPC
+    # rollouts back: it runs each measured plant's MPC for two seeds. Profiled
+    # on a 14-core laptop the slow suite took 10:50 wall-clock and about 65
+    # core-minutes, 52 of them in that one test ([patrol] 564 s, [plane_energy]
+    # 402 s, [plane3d_racetrack] 384 s, [glass_furnace] 380 s). The first run
+    # on a four-core runner was still going when the old 30-minute limit
+    # killed it, so the limit is 90 minutes. Tighten it from a completed run's
+    # duration.
     name: slow tests
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     env:
       UV_PYTHON: "3.13"
 
