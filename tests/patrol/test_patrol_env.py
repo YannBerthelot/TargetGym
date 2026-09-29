@@ -116,7 +116,7 @@ class TestStep:
 
     def test_reward_near_one_in_slot(self):
         env = PlanePatrol()
-        params = env.default_params.replace(follower_spawn_noise=0.0)
+        params = env.default_params.replace(follower_spawn_noise=0.0, reward_version=1)
         _, state = env.reset(jax.random.PRNGKey(2), params)
         r = float(compute_reward_patrol(state, params))
         assert r == pytest.approx(1.0, abs=1e-2)
@@ -134,10 +134,17 @@ class TestStep:
         assert float(separation(state)) < params.min_separation
         terminated, _ = check_is_terminal_patrol(state, params)
         assert bool(terminated)
-        # The collision is punished by ending the episode, not by a negative
-        # reward: every remaining step is forgone, and the per-step reward is
-        # non-negative, so a short episode can never beat a long one.
-        assert 0.0 <= float(compute_reward_patrol(state, params)) <= 1.0
+        # Version 1 punished a collision by ending the episode: every remaining
+        # step was forgone, and the per-step reward was non-negative, so a
+        # short episode could never beat a long one.
+        assert (
+            0.0
+            <= float(compute_reward_patrol(state, params.replace(reward_version=1)))
+            <= 1.0
+        )
+        # Version 2 is a cost, so a terminal state must itself cost more than
+        # any step in the envelope, or crashing would read as an improvement.
+        assert float(compute_reward_patrol(state, params)) <= -params.failure_cost
 
     def test_lost_formation_terminates(self):
         env = PlanePatrol()

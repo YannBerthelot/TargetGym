@@ -14,7 +14,9 @@ from target_gym.pc_gym.four_tank.env import (
 
 @pytest.fixture
 def params():
-    return FourTankParams()
+    # Version-1 reward: the reward tests in this file describe the capped
+    # log shape; version 2 is covered by tests/test_reward_contract.py.
+    return FourTankParams(reward_version=1)
 
 
 @pytest.fixture
@@ -253,7 +255,7 @@ def _steady_levels(v1, v2, p):
 
 def test_every_target_is_individually_reachable():
     """No sampled setpoint may lie above what saturated pumps can hold."""
-    p = FourTankParams()
+    p = FourTankParams(reward_version=1)
     h1_max, h2_max = _steady_levels(p.v_max, p.v_max, p)
     assert p.target_h1_range[1] < h1_max, (
         f"target h1 up to {p.target_h1_range[1]} exceeds the maximum "
@@ -272,7 +274,7 @@ def test_every_target_pair_is_jointly_reachable():
     enough -- the whole box has to lie inside the image of the steady-state
     map over the admissible voltages.
     """
-    p = FourTankParams()
+    p = FourTankParams(reward_version=1)
     V = _np.linspace(max(p.v_min, 1e-3), p.v_max, 220)
     reach = _np.array([_steady_levels(a, b, p) for a in V for b in V])
     for t1 in _np.linspace(*p.target_h1_range, 6):
@@ -285,7 +287,7 @@ def test_every_target_pair_is_jointly_reachable():
 
 def test_targets_leave_voltage_headroom():
     """Holding the top of the range must not need a saturated pump."""
-    p = FourTankParams()
+    p = FourTankParams(reward_version=1)
     need = None
     for v in _np.linspace(max(p.v_min, 1e-3), p.v_max, 400):
         if _steady_levels(v, v, p)[0] >= p.target_h1_range[1]:
@@ -297,7 +299,7 @@ def test_targets_leave_voltage_headroom():
 
 def test_initial_levels_start_inside_the_operating_envelope():
     """An episode must not begin above a level the plant can never hold."""
-    p = FourTankParams()
+    p = FourTankParams(reward_version=1)
     h1_max, h2_max = _steady_levels(p.v_max, p.v_max, p)
     assert p.initial_h1_range[1] <= h1_max
     assert p.initial_h2_range[1] <= h2_max
@@ -318,7 +320,7 @@ def test_relative_gain_array_demands_the_cross_pairing():
     action on the diagonal pairing is unstable -- which is why the shipped PID
     drives v1 from h2 and v2 from h1.
     """
-    p = FourTankParams()
+    p = FourTankParams(reward_version=1)
     assert p.gamma1 + p.gamma2 < 1.0, "expected the non-minimum-phase configuration"
     lam = p.gamma1 * p.gamma2 / (p.gamma1 + p.gamma2 - 1.0)
     assert lam < 0.0
@@ -356,7 +358,7 @@ def test_upper_tanks_keep_margin_above_the_low_level_trip():
     seed in twenty failed regardless of gains. Every corner must leave real
     margin.
     """
-    p = FourTankParams()
+    p = FourTankParams(reward_version=1)
     worst = _np.inf
     for t1 in _np.linspace(*p.target_h1_range, 6):
         for t2 in _np.linspace(*p.target_h2_range, 6):
@@ -379,7 +381,7 @@ def test_tracking_band_is_scaled_to_the_operating_range():
     about three times the reachable range, so a half-metre miss still scored
     0.43 and a saturated controller looked much like a working one.
     """
-    p = FourTankParams()
+    p = FourTankParams(reward_version=1)
     span = p.target_h1_range[1] - p.target_h1_range[0]
     assert p.tracking_band < p.h_max - p.h_min
     assert p.tracking_band <= span, "band is wider than the whole setpoint range"
@@ -387,7 +389,7 @@ def test_tracking_band_is_scaled_to_the_operating_range():
 
 def test_reward_falls_to_zero_outside_the_band():
     """Clipped, so a larger error can never score better than a smaller one."""
-    p = FourTankParams()
+    p = FourTankParams(reward_version=1)
     base = dict(time=0, h3=0.3, h4=0.12, target_h1=0.15, target_h2=0.20, v1=5.0, v2=7.0)
     prev = None
     for err in (0.0, 0.01, 0.03, 0.05, 0.20, 1.0):

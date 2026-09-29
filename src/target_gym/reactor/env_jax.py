@@ -7,13 +7,15 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset
+from target_gym import reward as R
+from target_gym.base import canonical_reset, failure_kernel
 from target_gym.reactor.env import (
     ReactorParams,
     ReactorState,
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
     steady_state_precursors,
     steady_state_xenon,
@@ -60,6 +62,12 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
+    def reward_terms(self, state, params):
+        """Cost terms at one physics sub-step ($ per second). ``step_env``
+        returns their exact sum over the control period in
+        ``info["reward_terms"]``; this is the instantaneous rate."""
+        return compute_reward_terms(state, params)
+
     def step_env(
         self,
         key: chex.PRNGKey,
@@ -84,11 +92,12 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
         # returned state. Checking truncation on the sub-step clock is what
         # used to freeze this plant at a tenth of its episode.
         def sub_step(carry, _):
-            state, cum_reward, terminated = carry
+            state, cum_reward, cum_terms, terminated = carry
             candidate, _metrics = compute_next_state(
                 rho_raw, state, params, integration_method=self.integration_method
             )
             r = compute_reward(candidate, params, xp=jnp)
+            terms = compute_reward_terms(candidate, params, xp=jnp)
             term = self.is_terminated(candidate, params)
             # Freeze state once terminated; still accumulate the final-step
             # reward. The `~terminated` guard records only the first crossing:
@@ -96,18 +105,34 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
             next_state = jax.tree.map(
                 lambda a, b: jnp.where(terminated, a, b), state, candidate
             )
-            next_reward = cum_reward + jnp.where(terminated, 0.0, r)
+            live = jnp.logical_not(terminated)
+            next_reward = cum_reward + jnp.where(live, r, 0.0)
+            next_terms = {
+                k: cum_terms[k] + jnp.where(live, v, 0.0) for k, v in terms.items()
+            }
             next_terminated = terminated | term
-            return (next_state, next_reward, next_terminated), None
+            return (next_state, next_reward, next_terms, next_terminated), None
 
-        (new_state, reward, terminated), _ = jax.lax.scan(
+        zero_terms = {
+            k: jnp.float32(0.0) for k in compute_reward_terms(state, params, xp=jnp)
+        }
+        (new_state, reward, terms, terminated), _ = jax.lax.scan(
             sub_step,
-            (state, jnp.float32(0.0), jnp.bool_(False)),
+            (state, jnp.float32(0.0), zero_terms, jnp.bool_(False)),
             xs=None,
             length=CONTROL_PERIOD,
         )
         # One environment step has elapsed, whatever the physics clock did.
         new_state = new_state.replace(time=state.time + 1)
+        # A SCRAM is part of the kernel: the step that leaves the envelope is
+        # charged the trip cost and the plant restarts at once
+        # (``base.failure_kernel``). On that step the cost is the trip cost
+        # and nothing else, whatever the sub-steps summed to.
+        new_state, tripped, _ = failure_kernel(self, key, state, new_state, params)
+        trip = R.trip_cost(params)
+        reward = jnp.where(tripped, -trip, reward)
+        terms = {k: jnp.where(tripped, 0.0, v) for k, v in terms.items()}
+        terms["failure"] = jnp.where(tripped, trip, terms["failure"])
 
         # Mean over the sub-steps rather than the sum. The action is held for
         # ``CONTROL_PERIOD`` physics sub-steps, and summing made one environment
@@ -119,13 +144,24 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
         #
         # Terminating mid-period still costs: only the sub-steps before the stop
         # contribute to the sum, so the mean falls with them.
+        #
+        # Version 2 sums instead: its terms are dollars per physics second, so
+        # the sum is the cost of the whole 10 s control step, the unit every
+        # other plant's step reward is in.
         obs = self.get_obs(new_state)
+        reward = jnp.where(params.reward_version == 1, reward / CONTROL_PERIOD, reward)
+        # The version-2 terms summed over the sub-steps, exactly as the reward
+        # is, for ``target_gym.eval``'s tracking / running split.
         return (
             obs,
             new_state,
-            reward / CONTROL_PERIOD,
-            terminated,
-            {"last_state": new_state},
+            reward,
+            jnp.zeros((), dtype=bool),
+            {
+                "last_state": new_state,
+                "reward_terms": terms,
+                "tripped": tripped,
+            },
         )
 
     def get_obs(self, state: ReactorState, params: ReactorParams = None):

@@ -180,3 +180,41 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2), in dollars per step
+
+`compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor` | 1596 W | closed form: the dispatch target is a block level plus white noise of sd 2 kW drawn after the action, so no controller holds E\|error\| below sd * sqrt(2/pi). The shipped PID and MPC hold 5.6 and 6.4 kW within blocks (`scripts/measure_hold.py`, per dispatch block after settling, 3 seeds). |
+| `e_tol` | 0 | none |
+| `tracking_exponent` | 1 | linear imbalance |
+| `imbalance_price` | 100 $/MWh | dispatch imbalance tariff (as in the audit) |
+| `c_hold` | 1.92e-8 | fractional capacity fade per step while holding, PID and MPC alike (`scripts/measure_hold.py`); mostly calendar ageing, which no controller avoids, hence charged only above it |
+| `fade_price` | 300 $/kWh | replacement cost of lost capacity |
+| `pack_kWh` | 1692 | capacity_As x OCV at 50% SOC / 3.6e6 |
+| `failure_cost` | 2 x the imbalance of the reachable 1.8 MW (a 0.8 MW target against the 1 MW power limit) per step | SOC / thermal trip |
+| `restart_steps` | 720 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a protection trip's reset; provisional); where a plant engineer would get it: the plant's restart procedure |
+
+The version-1 SOC-comfort term is dropped (**provisional**): it has no owner
+price, and a pack driven to the edge of its window pays through the dispatch
+it can then not follow.
+
+`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+hold cost the reference controller demonstrated, in the reward's units, which
+is 1 per term where the floor is that hold and less where the floor is clamped
+at the instrument resolution -- and `rho_floor` the same with consumption
+charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
+measured/certified floor or a resolution used as a scale, and where it is a
+resolution on a deterministic plant both references are 0, since exact hold is
+achievable there and the resolution only sets the unit;
+`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
+cost the envelope can produce, and `restart_steps` the time a restart would take,
+so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
+ends the window (`base.failure_kernel`): the step that leaves the envelope is
+charged the trip cost, with tracking and running cost zeroed, and the plant
+restarts at once as `reset_env` would, on the same clock. `terminated` is never
+raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

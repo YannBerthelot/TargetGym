@@ -38,7 +38,9 @@ CRUISE_MACH = 0.78
 
 @pytest.fixture(scope="module")
 def params():
-    return PlaneParams()
+    # Still air: these are checks on the aerodynamics and the energy budget,
+    # and a gust is an energy source the engine did not supply.
+    return PlaneParams(turbulence_sigma=0.0)
 
 
 def _CL(aoa_deg, mach, params):
@@ -713,7 +715,12 @@ def test_energy_never_exceeds_what_the_engine_can_supply(action):
     for i in range(int(params.max_steps_in_episode)):
         before = _mechanical_energy(state, params)
         speed_before = np.hypot(float(state.x_dot), float(state.z_dot))
-        _, state, _, terminated, _ = step(key, state, jnp.asarray(action), params)
+        _, state, _, terminated, info = step(key, state, jnp.asarray(action), params)
+        if bool(info["tripped"]):
+            # A crash restarts the flight from a fresh draw
+            # (``base.failure_kernel``): the energy jump is the restart, not
+            # the physics, and the check is about the physics.
+            break
         after = _mechanical_energy(state, params)
 
         # Ceiling: full thrust acting along the flight path, at the higher of

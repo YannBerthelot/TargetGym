@@ -94,6 +94,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -239,6 +240,43 @@ class ReactorParams(EnvParams):
     # 24 h of simulated time = 8640 env steps × 10 s.
     delta_t: float = 1.0
     max_steps_in_episode: int = 8640  # env steps of 10 s: 24 h
+
+    # ---- Reward (docs/reward-shaping.md; version 2), in dollars per second ----
+    # Tracking: the power imbalance against demand settled at $100/MWh (1.25
+    # x spot, the one imbalance price of the priced plants) on the 1 GWe
+    # output, ``imbalance_multiple * spot_price_per_MWh * P_electric_GW *
+    # 1000`` $/h per unit of |error| = 100 000 $/h, linear (p = 1). Each physics sub-step charges one second; ``step_env`` sums the
+    # ten sub-steps of a control period, so the env-step reward is $ per
+    # 10 s step. Floor: 0.00451 of rated, the mean sub-step |error| no
+    # controller can beat because the demand random-walks by 7.9e-3 (sd)
+    # within one control period (`scripts/floor_reactor_hold.py`, certified
+    # on the one-state hold model); at the floor tracking costs $1.25 per step.
+    # The shipped MPC holds 0.0069 at period boundaries against a 0.0063
+    # boundary floor (`scripts/measure_hold.py`). Rod wear: the reactivity the
+    # controller asks for beyond what the rods can deliver, as a fraction of
+    # the rod range, charged per unit at ``rod_wear_weight`` times what
+    # tracking at the floor costs -- a documented stand-in for a maintenance
+    # price (provisional; the audit found the optimum insensitive to it below
+    # ten times the floor). A trip is charged the restart time at twice the
+    # imbalance of the reachable 1.2 of rated (``reward.trip_cost``).
+    reward_version: int = 2
+    e_floor: float = 0.00451  # fraction of rated, certified hold floor
+    e_tol: float = 0.0
+    tracking_exponent: float = 1.0
+    imbalance_multiple: float = (
+        1.25  # of spot: $100/MWh, the one imbalance price of the priced plants
+    )
+    rod_wear_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
+    failure_cost: float = (
+        2.0 * 100.0 * 1000.0 * 1.2 * 10.0 / 3600.0
+    )  # twice the imbalance of the reachable 1.2 of rated (0.3 target vs 1.5 n_max), per 10 s step
+    #: Restart time priced into a trip (``reward.trip_cost``; 48 h at 10 s steps: a SCRAM's xenon-limited restart, provisional).
+    restart_steps: int = 17280
+    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    rho_floor_tracking: float = 100.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
+    rho_floor: float = 100.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = False
 
 
 @struct.dataclass
@@ -601,7 +639,30 @@ def check_is_terminal(state: ReactorState, params: ReactorParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward(state: ReactorState, params: ReactorParams, xp=jnp):
+def compute_reward_terms(state: ReactorState, params: ReactorParams, xp=jnp):
+    """The reward's additive cost terms in $ per physics second (``target_gym.reward``)."""
+    p = params
+    per_unit_s = (
+        p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW * 1000.0 / 3600.0
+    )  # $ per second per unit of |error|
+    error = state.target_n - state.n
+    tracking = (
+        per_unit_s
+        * p.e_floor
+        * R.tracking_cost(error, p.e_floor, p.e_tol, p.tracking_exponent, xp)
+    )
+    rho_scale = xp.maximum(xp.abs(p.rho_ext_min), xp.abs(p.rho_ext_max))
+    excess = xp.abs(state.rho_ext_cmd - state.rho_ext) / rho_scale
+    rod_wear = p.rod_wear_weight * per_unit_s * p.e_floor * excess
+    terminated, _ = check_is_terminal(state, p, xp)
+    terms = {
+        "tracking": tracking,
+        "running": rod_wear,
+    }
+    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+
+
+def compute_reward_v1(state: ReactorState, params: ReactorParams, xp=jnp):
     """Flux tracking minus a small rod-motion penalty.
 
     Tracking is log-scaled (``utils.log_scaled_reward``): every halving of the
@@ -641,6 +702,15 @@ def compute_reward(state: ReactorState, params: ReactorParams, xp=jnp):
     )
 
     return tracking * (1.0 - rod_penalty)
+
+
+def compute_reward(state: ReactorState, params: ReactorParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
+    )
 
 
 def compute_revenue_rate(state: ReactorState, params: ReactorParams):

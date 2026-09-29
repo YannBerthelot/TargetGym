@@ -188,8 +188,8 @@ def _mpc_one_seed(args):
         params = spec.make_test_params()
         env = spec.make_env()
         policy = mpc_policy(spec, env, params)
-        _, _, r = rollout(spec, params, policy, seed)
-        out = float(np.sum(r)), int(len(r)), policy.controller.solver_report()
+        _, _, r, trips = rollout(spec, params, policy, seed, return_trips=True)
+        out = float(np.sum(r)), int(trips), policy.controller.solver_report()
     return (*out, time.time() - t0)
 
 
@@ -206,8 +206,8 @@ def _mpc_batch_one_env(args):
     t0 = time.time()
     with _running(live, f"{name} MPC batch"):
         spec = REGISTRY[name]
-        _, _, r, ended = rollout_mpc_batch(spec, spec.make_test_params(), SEEDS)
-        out = [float(v) for v in r.sum(axis=1)], int(ended.sum())
+        _, _, r, trips = rollout_mpc_batch(spec, spec.make_test_params(), SEEDS)
+        out = [float(v) for v in r.sum(axis=1)], int(trips.sum())
     return (*out, time.time() - t0)
 
 
@@ -299,11 +299,25 @@ def _split_by_planner(names: list[str]) -> tuple[list[str], list[str]]:
             print(f"  {name:20s} no MPC baseline, skipped", flush=True)
             continue
         probe = spec.make_mpc(spec.make_env(), spec.make_test_params())
-        (batched if isinstance(probe, GradientMPC) and accel else per_seed).append(name)
+        # The batched path vmaps the planner's optimiser over seeds and so
+        # bypasses ``GradientMPC.step``: a planner that warm-starts from or is
+        # guided by a PID rollout, or suppresses moves against the last applied
+        # action, is only itself on the per-seed path (the wind turbine and
+        # the 2D aircraft). Recording it batched measured a different
+        # controller from the one every other script runs.
+        stepwise = any(
+            getattr(probe, attr, None) is not None
+            for attr in ("initial_plan_fn", "guide_plan_fn", "move_penalty_fn")
+        )
+        (
+            batched
+            if isinstance(probe, GradientMPC) and accel and not stepwise
+            else per_seed
+        ).append(name)
     return batched, per_seed
 
 
-def _row(name, pid, mpc, terminated_early, reports, seconds) -> dict:
+def _row(name, pid, mpc, trips, reports, seconds) -> dict:
     spec = REGISTRY[name]
     row = {
         "fingerprint": baseline_fingerprint(spec),
@@ -311,7 +325,7 @@ def _row(name, pid, mpc, terminated_early, reports, seconds) -> dict:
         "seeds": SEEDS,
         "pid_returns": [round(v, 6) for v in pid],
         "mpc_returns": [round(v, 6) for v in mpc],
-        "mpc_terminated_early": int(terminated_early),
+        "mpc_trips": int(trips),
         "seconds": round(seconds, 1),
     }
     row.update(_merge_reports(reports))
@@ -329,7 +343,7 @@ def _report(name: str, row: dict) -> None:
             health += f" ({row['solver_capped']} capped)"
     print(
         f"  {name:20s} PID {p:9.2f}  MPC {m:9.2f}  {verdict:22s} "
-        f"term {row['mpc_terminated_early']}  {row['seconds']:6.0f}s{health}",
+        f"trips {row['mpc_trips']}  {row['seconds']:6.0f}s{health}",
         flush=True,
     )
 
@@ -443,7 +457,7 @@ def main() -> int:
             if any(v is None for v in mpc_out[name]):
                 return
             mpc = [v for v, _, _ in mpc_out[name]]
-            ended = sum(1 for _, n, _ in mpc_out[name] if n < rows_steps[name])
+            ended = sum(n for _, n, _ in mpc_out[name])
             reports = [r for _, _, r in mpc_out[name]]
         else:
             if name not in batch_out:
@@ -455,10 +469,6 @@ def main() -> int:
         )
         _write(rows)
         _report(name, rows[name])
-
-    rows_steps = {
-        n: int(REGISTRY[n].make_test_params().max_steps_in_episode) for n in live
-    }
 
     # Sized by memory, not by cores.
     #

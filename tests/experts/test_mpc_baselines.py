@@ -245,13 +245,15 @@ def test_mpc_controls_at_least_as_well_as_the_pid(name):
     if recorded is None:
         pytest.fail(f"{name}: no recorded baseline -- run scripts/record_baselines.py.")
 
-    assert recorded["mpc_terminated_early"] == 0, (
-        f"{name}: the MPC ended {recorded['mpc_terminated_early']} of "
-        f"{recorded['seeds']} episodes early -- the plant reached a terminal "
-        f"state. Terminal conditions are reported through a boolean, so a reward "
-        f"penalty behind ``where(terminated, ...)`` gives the planner the cost of "
-        f"a crash but no gradient away from the boundary; a differentiable "
-        f"barrier on the approach is what works (see make_wind_turbine_mpc)."
+    assert recorded["mpc_trips"] == 0, (
+        f"{name}: the MPC tripped the plant {recorded['mpc_trips']} time(s) over "
+        f"{recorded['seeds']} windows -- it left the operating envelope. A trip is "
+        f"charged its restart time at the failure cost (``base.failure_kernel``); "
+        f"a planner that trips is not an upper bound. Terminal conditions are "
+        f"booleans, so a penalty behind ``where(tripped, ...)`` gives the planner "
+        f"the cost of a trip but no gradient away from the boundary; a "
+        f"differentiable barrier on the approach is what works (see "
+        f"make_wind_turbine_mpc)."
     )
 
     pid = np.array(recorded["pid_returns"])

@@ -162,6 +162,13 @@ a millimetre. The circle needs none of this — its distance is analytic.
 
 ---
 
+### Turbulence
+
+As on the 2D aircraft: the test configurations fly in light-to-moderate
+turbulence, an Ornstein-Uhlenbeck gust with `turbulence_sigma = 1.2` m/s per
+step and `turbulence_theta = 0.2` (2 m/s stationary gust std), without which
+the altitude hold scored nothing. The planners plan on the mean wind.
+
 ### Integration order
 
 ``rk4_2`` -- two RK4 substeps per environment step -- rather than one. The
@@ -253,3 +260,35 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + failure)`, one quadratic term per tracked output, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor_altitude` | 1.44 m (`plane3d_heading`), 4.06 (`plane3d_circle`), 1.39 (`plane3d_racetrack`) | lowest per-seed long-run mean |error| the shipped MPC held in the test turbulence (`scripts/measure_hold.py`, 2 seeds, hold steps after a 210-step burn-in); an upper bound on the achievable floor, and below the instrument resolution a real aircraft would have (1 m barometric, 0.5 deg heading, 3 m GPS): measurement noise is not modelled. PID: 44 / 7.2 / 5.2 m |
+| `e_tol_altitude` | 0 | no dead zone; a +-30 m band made the altitude hold vacuous (see the 2D aircraft) |
+| `e_floor_heading` | 0.0087 rad | the 0.5 deg AHRS resolution. The MPC holds below it in the test turbulence (1e-4 rad on two seeds, 6e-3 on three; `scripts/measure_hold.py`, `target_gym.eval`), so the instrument, not the simulator, sets the scale; the PID never captures the heading (0.96 rad) |
+| `e_floor_path` | 8.12 m (`plane3d_circle`), 6.17 (`plane3d_racetrack`), 14.6 (`plane3d_figure8`); 3 m (GPS accuracy) where no path term is scored | lowest per-seed MPC path-distance holds in the test turbulence; upper bounds. PID: 53 / 408 / 1767 m |
+| `tracking_exponent` | 2 | quadratic |
+| `failure_cost` | 1.43e8 (`plane3d_heading`), 1.8e7 (`plane3d_circle`), 1.54e8 (`plane3d_racetrack`), 3.75e6 (`plane3d_figure8`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor_altitude)^2; the figure-8 scores the path alone, 2 x (20 000 / 14.6)^2 |
+| `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
+
+`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+hold cost the reference controller demonstrated, in the reward's units, which
+is 1 per term where the floor is that hold and less where the floor is clamped
+at the instrument resolution -- and `rho_floor` the same with consumption
+charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
+measured/certified floor or a resolution used as a scale, and where it is a
+resolution on a deterministic plant both references are 0, since exact hold is
+achievable there and the resolution only sets the unit;
+`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
+cost the envelope can produce, and `restart_steps` the time a restart would take,
+so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
+ends the window (`base.failure_kernel`): the step that leaves the envelope is
+charged the trip cost, with tracking and running cost zeroed, and the plant
+restarts at once as `reset_env` would, on the same clock. `terminated` is never
+raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

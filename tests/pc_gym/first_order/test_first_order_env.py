@@ -13,7 +13,9 @@ from target_gym.pc_gym.first_order.env import (
 
 @pytest.fixture
 def params():
-    return FirstOrderParams()
+    # Version-1 reward: the reward tests in this file describe the capped
+    # log shape; version 2 is covered by tests/test_reward_contract.py.
+    return FirstOrderParams(reward_version=1)
 
 
 @pytest.fixture

@@ -615,6 +615,13 @@ path is what those tasks are for and a sub-lap episode never asked for it.
 
 ## MPC against PID, ten seeds
 
+> **Version 1.** The hand-written table in this section was measured under
+> the version-1 log-scaled reward and is kept as the record of that release;
+> the sections after it that describe "the shipped reward" as log-scaled and
+> capped describe version 1 too. The current numbers, under the
+> floor-normalised cost of version 2 (docs/reward-shaping.md), are the
+> generated table at the end of this page and the protocol table after it.
+
 Return, paired per seed, on each environment's own episode. Every number here
 was re-measured after the reward unification -- returns are not comparable
 across that change, so the previous table was discarded rather than patched.
@@ -797,40 +804,116 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 <!-- Written by scripts/generate_baseline_table.py from
      data/baseline_returns.json. Do not edit by hand. -->
 
-| environment | steps | PID | MPC | PID share | MPC share | MPC wins | term |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `plane3d_figure8` | 400 | 81.9 | 384.2 | 0.205 | 0.960 | 10/10 | 0 |
-| `plane3d_heading` | 200 | 32.0 | 170.2 | 0.160 | 0.851 | 10/10 | 0 |
-| `plane3d_circle` | 300 | 130.4 | 276.1 | 0.435 | 0.920 | 10/10 | 0 |
-| `plane3d_racetrack` | 650 | 303.7 | 614.1 | 0.467 | 0.945 | 10/10 | 0 |
-| `plane_sine` | 480 | 294.8 | 458.1 | 0.614 | 0.954 | 10/10 | 0 |
-| `reactor` | 864 | 287.5 | 548.6 | 0.333 | 0.635 | 10/10 | 0 |
-| `patrol` | 200 | 111.2 | 168.1 | 0.556 | 0.841 | 10/10 | 0 |
-| `distillation` | 200 | 122.2 | 154.6 | 0.611 | 0.773 | 10/10 | 0 |
-| `boiler_drum` | 400 | 247.7 | 303.0 | 0.619 | 0.758 | 10/10 | 0 |
-| `plane_energy` | 1200 | 741.7 | 907.6 | 0.618 | 0.756 | 10/10 | 0 |
-| `four_tank` | 500 | 388.5 | 446.9 | 0.777 | 0.894 | 10/10 | 0 |
-| `ph_neutralization` | 300 | 226.1 | 260.7 | 0.754 | 0.869 | 9/10 | 0 |
-| `cstr` | 100 | 89.4 | 94.6 | 0.894 | 0.946 | 10/10 | 0 |
-| `glass_furnace` | 1600 | 1443.5 | 1513.4 | 0.902 | 0.946 | 10/10 | 0 |
-| `wind_turbine` | 400 | 331.8 | 348.3 | 0.829 | 0.871 | 8/10 | 0 |
-| `cement_kiln` | 700 | 621.5 | 647.7 | 0.888 | 0.925 | 10/10 | 0 |
-| `plane` | 280 | 249.2 | 259.1 | 0.890 | 0.925 | 9/10 | 0 |
-| `hvac` | 720 | 377.7 | 401.0 | 0.525 | 0.557 | 10/10 | 0 |
-| `first_order` | 100 | 93.0 | 95.4 | 0.930 | 0.954 | 10/10 | 0 |
-| `battery` | 360 | 262.0 | 265.8 | 0.728 | 0.738 | 8/10 | 0 |
+| environment | steps | PID cost/step | MPC cost/step | MPC saves | MPC wins | trips |
+| --- | --- | --- | --- | --- | --- | --- |
+| `plane3d_figure8` | 400 | 4.695e+04 | 6.772 | 1.000 | 10/10 | 0 |
+| `plane3d_racetrack` | 650 | 1.78e+05 | 758.8 | 0.996 | 10/10 | 0 |
+| `plane_energy` | 1200 | 1366 | 73.21 | 0.946 | 10/10 | 0 |
+| `reactor` | 864 | 24.37 | 1.373 | 0.944 | 10/10 | 0 |
+| `boiler_drum` | 400 | 641.9 | 42.4 | 0.934 | 10/10 | 0 |
+| `distillation` | 200 | 262.3 | 31.91 | 0.878 | 10/10 | 0 |
+| `plane3d_circle` | 300 | 1207 | 235.1 | 0.805 | 10/10 | 0 |
+| `plane3d_heading` | 200 | 3.15e+04 | 6734 | 0.786 | 10/10 | 0 |
+| `plane_sine` | 480 | 5184 | 1251 | 0.759 | 10/10 | 0 |
+| `cement_kiln` | 700 | 6.368 | 1.705 | 0.732 | 10/10 | 0 |
+| `four_tank` | 500 | 1167 | 344.5 | 0.705 | 10/10 | 0 |
+| `ph_neutralization` | 300 | 336.3 | 100.5 | 0.701 | 10/10 | 0 |
+| `plane` | 280 | 1.04e+04 | 3276 | 0.685 | 10/10 | 0 |
+| `patrol` | 200 | 11.22 | 3.56 | 0.683 | 10/10 | 0 |
+| `battery` | 360 | 0.003457 | 0.001196 | 0.654 | 10/10 | 0 |
+| `glass_furnace` | 1600 | 1.352 | 0.4943 | 0.634 | 10/10 | 0 |
+| `hvac` | 720 | 0.01966 | 0.01064 | 0.459 | 10/10 | 0 |
+| `wind_turbine` | 400 | 4.541e-05 | 3.557e-05 | 0.217 | 9/10 | 0 |
+| `cstr` | 100 | 6319 | 5803 | 0.082 | 10/10 | 0 |
+| `first_order` | 100 | 1018 | 1002 | 0.015 | 10/10 | 0 |
 
-`share` is the mean return over the episode's ceiling, so 1.000 would be
-perfect tracking on every step. It is comparable across rows; the raw
-returns are not, because they are sums over episodes of different lengths.
+`cost/step` is minus the mean return over the episode length: tracking in
+floor-widths plus avoidable consumption (dimensionless plants) or dollars /
+euros per step (reactor, battery, wind turbine, HVAC). `MPC saves` is the
+fraction of the PID's cost the MPC removes. Episode returns mix the reach
+transient with the hold; the protocol table below separates them.
 
 `MPC wins` counts seeds where the MPC out-scored the PID, paired.
 A ⚠️ marks an environment where it loses more often than it wins, which
 means it is not the upper bound this table presents it as; those carry an
 `EnvSpec.mpc_degraded` note saying why.
 
-`term` counts seeds where the MPC ended the episode early. A permanent
-zero can mean the controller is safe or that the environment cannot
-terminate at all; `first_order` is the latter.
+`trips` counts the MPC's trips over the ten windows: a trip never ends a
+window, the plant is down at the failure cost and restarts, or stays
+down (`base.failure_kernel`). A permanent zero can mean the controller
+is safe or that the plant cannot leave its envelope; `first_order` is
+the latter.
 
 <!-- END GENERATED BASELINE TABLE -->
+
+## The protocol numbers: hold and reach, separately
+
+Written from `data/protocol_results.json` (`scripts/evaluate_baselines.py`;
+re-run it after any change and paste the table). Gain is the mean cost per
+step over every step after the plant's burn-in (three cost-bearing time
+constants, capped at half the test episode), transients included, split into
+tracking and running cost -- no settling time enters it, so the two
+controllers are compared on the same steps. Hold is the same over the settled
+steps only, each controller's transient measured on its own cycles (the first
+step from which the cost stays within twice the cycle's late level). Reach is
+the summed cost of that transient above the level, per target change (one
+cycle, hence ~0, where the target drifts continuously: reactor, HVAC) -- the
+bias B of Theorem 4 -- with the transient's absolute summed cost in
+parentheses. B is relative to each controller's *own* hold level, so it does
+not compare two controllers whose holds differ (a PID holding hundreds of
+floor-widths off shows a small B because its level swallows its transient:
+patrol); the absolute transient cost does. A negative B (†) means the cost is
+still rising at the window's end -- no hold was reached, the "hold" level is
+above the transient -- and is a finding about the window, not a cheap
+transient. NEA is `(PID - MPC) / (PID - floor)` on the gain: 1 at the floor,
+0 at PID parity; the floor is 0 on the deterministic plants, where the
+documented resolution is a scale and exact hold is achievable. Units are
+floor-widths (squared where p = 2) on the dimensionless plants, dollars or
+euros per step on the priced ones; nothing here is comparable across rows
+except NEA. Three seeds on every plant -- the aircraft draw their targets
+per seed too, and a one-seed run had hidden the 2D aircraft MPC losing its
+hold on seed 1. `fail` is the trip rate per cycle.
+
+Reading across the rows: the aircraft now fly in light turbulence with no
+altitude dead zone, so their holds are real -- the 2D aircraft MPC holds 1.4
+floor-widths-squared of altitude against the PID's 6, and pays for it in
+airspeed (2.1 against 0.17), which is the trade the two-cost split exists to
+show; the aircraft PIDs remain structurally inadequate on the
+moving-reference tasks (thousands of floor-widths while "holding" the
+racetrack, the figure-8 and the heading), where the MPC sits within a few;
+the glass furnace's MPC is 26x its own long-run hold cost on the 13 h test
+episode (0.80 against a 0.03 reference) because the episode is still in the
+transient of a 30 h plant; on the battery the two controllers hold within 10%
+of each other and the MPC's advantage is in the transients after each
+dispatch block; on the building, priced at EUR 0.03/K^2 h of discomfort, the
+MPC now spends less gas *and* less comfort than the PID (0.0036 against
+0.0086, 0.0053 against 0.0099 EUR per step), where at EUR 0.2 the gas term
+never bound; and no controller tripped a plant in any window.
+
+| plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID hold | MPC hold | PID reach B (transient) | MPC reach B (transient) | fail |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `battery` | 0.000222 | 0.00346 (0.00288 / 0.000589) | 0.00112 (0.000548 / 0.000567) | 0.724 | 0.00132 | 0.00117 | 0.0497 (0.0292) | 0.00358 (0.00128) | 0 |
+| `boiler_drum` | 1.32 | 524 (524 / 0.0276) | 23.8 (23.8 / 0.0323) | 0.957 | 460 | 24.7 | 3.28e+04 (3.84e+04) | 3e+03 (4.81e+03) | 0 |
+| `cement_kiln` | 0.468 | 4.75 (4.68 / 0.0732) | 1.33 (1.27 / 0.0535) | 0.8 | 5.75 | 1.37 | 910 (2.46e+03) | 318 (585) | 0 |
+| `cstr` | 0 | 41.2 (41.2 / —) | 0.317 (0.317 / —) | 0.992 | 5.96e-07 | 4.21e-05 | 6.64e+05 (6.6e+05) | 6.12e+05 (6.12e+05) | 0 |
+| `distillation` | 0.127 | 62.6 (62.6 / 0.00219) | 0.297 (0.284 / 0.0123) | 0.997 | 62.6 | 0.297 | 4.05e+03 (1.33e+04) | 1.65e+03 (1.68e+03) | 0 |
+| `first_order` | 0 | 3.57e-06 (3.57e-06 / —) | 0 (0 / —) | 1 | 7.89e-11 | 0 | 1.19e+05 (1.19e+05) | 1.17e+05 (1.17e+05) | 0 |
+| `four_tank` | 0 | 30.3 (30.3 / —) | 0.00741 (0.00741 / —) | 1 | 30.3 | 0.00741 | 6.5e+05 (6.58e+05) | 1.92e+05 (1.92e+05) | 0 |
+| `glass_furnace` | 0.0306 | 2.09 (2.02 / 0.0724) | 0.803 (0.759 / 0.0437) | 0.625 | 2.09 | 0.803 | -225† (1.14e+03) | -99.5† (405) | 0 |
+| `hvac` | 0.001 | 0.0185 (0.00991 / 0.00863) | 0.00884 (0.00525 / 0.00359) | 0.553 | 0.0154 | 0.00368 | 0.367 (0.913) | 0.377 (0.514) | 0 |
+| `patrol` | 1.03 | 10.1 (10.1 / —) | 3.57 (3.57 / —) | 0.721 | 10.1 | 3.57 | 818 (1.78e+03) | 170 (377) | 0 |
+| `patrol_bearing_only` | 1.03 | 11.1 (11.1 / —) | — | — | 7.65 | — | 692 (20.6) | — | 0 |
+| `ph_neutralization` | 0.64 | 12.6 (12.6 / 0.00681) | 3.06 (3.06 / 0.00669) | 0.797 | 9.73 | 1.79 | 9.07e+04 (9.12e+04) | 2.34e+04 (2.33e+04) | 0 |
+| `plane` | 0.706 | 6.21 (6.04 / 0.169) | 3.54 (1.43 / 2.11) | 0.484 | 6.21 | 3.54 | 2.73e+06 (2.73e+06) | 1.19e+06 (1.19e+06) | 0 |
+| `plane3d_circle` | 2 | 98.6 (98.6 / —) | 9.84 (9.84 / —) | 0.919 | 98.6 | 9.84 | 4.18e+05 (4.33e+05) | 8.38e+04 (8.53e+04) | 0 |
+| `plane3d_figure8` | 1 | 2.5e+04 (2.5e+04 / —) | 2.1 (2.1 / —) | 1 | 2.5e+04 | 2.1 | 8.57e+06 (1.28e+07) | 739 (1.15e+03) | 0 |
+| `plane3d_heading` | 1 | 1.79e+04 (1.79e+04 / —) | 5.05 (5.05 / —) | 1 | 1.79e+04 | 5.05 | 4.01e+06 (5.45e+06) | 1.53e+06 (1.53e+06) | 0 |
+| `plane3d_racetrack` | 2 | 3.18e+05 (3.18e+05 / —) | 7.04 (7.04 / —) | 1 | 3.18e+05 | 6.86 | 6.82e+04 (3.56e+06) | 6.28e+05 (6.3e+05) | 0 |
+| `plane_energy` | 1 | 780 (780 / 0.321) | 38.8 (35.4 / 3.39) | 0.951 | 51.7 | 25.4 | 1.23e+05 (1.28e+05) | 9.5e+03 (1.28e+04) | 0 |
+| `plane_sine` | 1 | 1.52e+03 (1.52e+03 / 0.261) | 2.99 (2.24 / 0.749) | 0.999 | 1.49e+03 | 2.86 | 1.88e+06 (2.14e+06) | 7.61e+05 (7.62e+05) | 0 |
+| `reactor` | 1.25 | 23.7 (23.3 / 0.385) | 1.38 (1.38 / 2.41e-05) | 0.994 | 23.7 | 1.38 | 1.64e+03 (1.24e+04) | 4.77 (597) | 0 |
+| `wind_turbine` | 1.17e-05 | 2.64e-05 (2.43e-05 / 2.12e-06) | 2.1e-05 (1.55e-05 / 5.46e-06) | 0.365 | 2.64e-05 | 2.1e-05 | 0.00854 (0.0132) | 0.00687 (0.011) | 0 |
+
+Reach B is each controller's transient cost above its *own* hold level (Theorem 4's bias), so it is not comparable between two controllers whose holds differ: a controller holding far off shows a small B because its level swallows its transient. The number in parentheses is the transient's summed cost, not relative to anything, and is the one to compare across controllers.
+† cost still rising at the end of the window (no hold reached, so the transient is cheaper than the "hold" level and B is negative): PID on `glass_furnace`, MPC on `glass_furnace`.
+

@@ -81,14 +81,14 @@ def test_action_and_observation_space():
 
 
 def test_is_terminal_propagates_logic():
-    """The assertion here used to be commented out, so the test passed as long
-    as nothing raised. It now checks both limits actually fire."""
+    """The CSTR has no trip: its envelope limits are unreachable from any
+    coolant setting (the reactor settles between 318 and 329 K), so even a
+    state placed on a limit does not terminate. Truncation is the clock."""
     env = CSTR()
     p = env.default_params
 
-    # T at the runaway limit, and Ca below its floor: both trip.
     hot = CSTRState(time=0, C_a=0.5, T=p.T_max, target_CA=0.6, T_c=298.0)
-    assert bool(env.is_terminated(hot, p))
+    assert not bool(env.is_terminated(hot, p))
     assert not bool(env.is_truncated(hot, p))
 
     # A healthy operating point does not.

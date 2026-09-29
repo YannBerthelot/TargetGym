@@ -26,7 +26,7 @@ def test_compute_reward():
     env = JaxEnv()
     key = jax.random.PRNGKey(seed=42)
     obs, env_state = env.reset(key)
-    env_params = PlaneParams()
+    env_params = PlaneParams(reward_version=1)
     reward = compute_reward(state=env_state, params=env_params)
     assert isinstance(reward, (jnp.ndarray, np.ndarray))
     assert 1 >= reward >= 0
@@ -36,7 +36,7 @@ def test_sample_action():
     env = JaxEnv()
     key = jax.random.PRNGKey(seed=42)
     obs, env_state = env.reset(key)
-    env_params = PlaneParams()
+    env_params = PlaneParams(reward_version=1)
     action = env.action_space(env_params).sample(key)
     assert -1 <= action[0] <= 1
     assert -1 <= action[1] <= 1
@@ -67,7 +67,7 @@ def test_is_terminal():
     env = JaxEnv()
     key = jax.random.PRNGKey(seed=42)
     obs, state = env.reset(key)
-    env_params = PlaneParams()
+    env_params = PlaneParams(reward_version=1)
     terminal_state = PlaneState(
         x=0,
         x_dot=0,
@@ -166,7 +166,7 @@ def _reward_at(error_m: float, params=None):
     """Reward for being ``error_m`` above the target, away from any boundary."""
     from target_gym.plane.env import PlaneParams, PlaneState, compute_reward
 
-    p = params or PlaneParams()
+    p = params or PlaneParams(reward_version=1)
     target = 5000.0
     state = PlaneState(
         time=1,
@@ -225,7 +225,7 @@ def test_precision_stops_paying_below_the_resolution_floor():
     """
     from target_gym.plane.env import PlaneParams
 
-    floor = PlaneParams().precision_floor
+    floor = PlaneParams(reward_version=1).precision_floor
     above = _reward_at(floor * 4) - _reward_at(floor * 8)
     below = _reward_at(floor / 8) - _reward_at(floor / 4)
     assert (

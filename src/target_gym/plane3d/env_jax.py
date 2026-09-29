@@ -16,7 +16,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset
+from target_gym.base import canonical_reset, failure_kernel
 from target_gym.plane.dynamics import total_wind_3d
 from target_gym.plane3d.env import (
     _RACETRACK_LEG,
@@ -28,6 +28,10 @@ from target_gym.plane3d.env import (
     compute_reward_figure8,
     compute_reward_heading,
     compute_reward_racetrack,
+    compute_reward_terms_circle,
+    compute_reward_terms_figure8,
+    compute_reward_terms_heading,
+    compute_reward_terms_racetrack,
     get_obs_circle,
     get_obs_figure8,
     get_obs_heading,
@@ -103,20 +107,22 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
             integration_method=self.integration_method,
             key=key,
         )
-        reward = self.compute_reward(new_state, params)
-        # gymnax >= 1.0 owns truncation: ``step_env`` reports natural
-        # termination only, and the base ``Environment.step`` derives
-        # ``truncated`` from ``state.time >= params.max_steps_in_episode``
-        # -- the very condition ``check_is_terminal`` returns second.
-        terminated, _ = check_is_terminal_3d(new_state, params, xp=jnp)
-
+        # A crash is part of the kernel: the step is charged the trip cost and
+        # the flight restarts at once; ``terminated`` is never raised
+        # (``base.failure_kernel``).
+        new_state, tripped, scored = failure_kernel(self, key, state, new_state, params)
+        reward = self.compute_reward(scored, params)
         obs = self.get_obs(new_state, params)
         return (
             obs,
             new_state,
             reward,
-            terminated,
-            {"metrics": metrics, "last_state": new_state},
+            jnp.zeros((), dtype=bool),
+            {
+                "metrics": metrics,
+                "last_state": new_state,
+                "tripped": tripped,
+            },
         )
 
     def is_terminated(self, state: PlaneState3D, params: PlaneParams3D) -> jax.Array:
@@ -261,6 +267,9 @@ class Plane3DHeading(_Airplane3DBase):
     def compute_reward(self, state, params):
         return compute_reward_heading(state, params)
 
+    def reward_terms(self, state, params):
+        return compute_reward_terms_heading(state, params)
+
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         return self._append_wind(get_obs_heading(state, xp=jnp), state, params)
 
@@ -345,6 +354,9 @@ class Plane3DRacetrack(_Airplane3DBase):
     def compute_reward(self, state, params):
         return compute_reward_racetrack(state, params)
 
+    def reward_terms(self, state, params):
+        return compute_reward_terms_racetrack(state, params)
+
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         return self._append_wind(get_obs_racetrack(state, xp=jnp), state, params)
 
@@ -418,6 +430,9 @@ class Plane3DCircle(_Airplane3DBase):
 
     def compute_reward(self, state, params):
         return compute_reward_circle(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms_circle(state, params)
 
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         return self._append_wind(get_obs_circle(state, xp=jnp), state, params)
@@ -511,6 +526,9 @@ class Plane3DFigureEight(_Airplane3DBase):
 
     def compute_reward(self, state, params):
         return compute_reward_figure8(state, params)
+
+    def reward_terms(self, state, params):
+        return compute_reward_terms_figure8(state, params)
 
     def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
         if params is None:

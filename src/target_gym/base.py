@@ -42,3 +42,51 @@ class EnvParams:
 @struct.dataclass
 class EnvState:
     time: int
+
+
+def _select(cond, a, b):
+    return jax.tree_util.tree_map(lambda x, y: jnp.where(cond, x, y), a, b)
+
+
+def failure_kernel(env, key, state, new_state, params):
+    """Trips, as part of the transition kernel: a lump cost and a restart.
+
+    A reach-and-hold task is continuing, so leaving the operating envelope is
+    not the end of an episode. When the physics' proposal for the next state
+    is outside the envelope the plant trips: the step is charged the trip
+    cost -- ``restart_steps * failure_cost``, the downtime a real restart
+    would take priced at the per-step failure cost (``reward.trip_cost``) --
+    and the plant restarts at once as ``reset_env`` would, on the same
+    window clock. Nothing is frozen: a frozen plant paid the same total over
+    a dead stretch of identical steps, which taught a learner nothing and,
+    inside a test window shorter than the restart, priced a trip by when it
+    happened rather than by what it was.
+
+    ``terminated`` is therefore never raised by a plant. Raising it would
+    tell a discounted learner the crashed state is worth zero -- the cheapest
+    state in the plant, and the bootstrap behind every agent that learns to
+    crash -- and would cut the chain an average-reward learner estimates its
+    gain on. The event is reported as ``info["tripped"]`` for the evaluator,
+    which counts it; nothing an agent runs has to read it.
+
+    A plant whose params carry ``restart_in_place = True`` restarts from
+    where it tripped instead of from a fresh draw: every step outside the
+    envelope is charged, and the plant stays under control.
+
+    Given the state before the step, the physics' proposal for after it and
+    the step's key, returns ``(state, tripped, scored)``: the state the
+    window continues from (the proposal, or a fresh draw when it tripped),
+    whether it tripped, and the state the step's reward is computed on --
+    the proposal when it tripped, so that the reward, a function of a state,
+    charges the trip cost exactly on the step that left the envelope.
+    """
+    tripped = env.is_terminated(new_state, params)
+    # A plant that does not restart cold (a building: its thermal mass
+    # persists through a lockout) keeps its state. Every step outside the
+    # envelope is then a trip -- charged the trip cost -- until the
+    # controller brings it back, which is the physical picture and closes
+    # the shortcut a fresh draw would offer (a free cool-down).
+    in_place = jnp.asarray(getattr(params, "restart_in_place", False), bool)
+    fresh = env.reset_env(key, params)[1].replace(time=new_state.time)
+    out = _select(jnp.logical_and(tripped, jnp.logical_not(in_place)), fresh, new_state)
+    return out, tripped, new_state

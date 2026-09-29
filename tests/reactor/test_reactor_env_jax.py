@@ -205,7 +205,8 @@ def test_time_limit_counts_env_steps_and_rollout_stops_there():
     from target_gym.runners.runners import rollout
 
     spec = REGISTRY["reactor"]
-    params = spec.make_test_params(max_steps_in_episode=30)
+    # Version-1 reward: non-negative, so "a tenth of the reward" reads as it did.
+    params = spec.make_test_params(max_steps_in_episode=30, reward_version=1)
     env = spec.make_env()
     obs, state = env.reset_env(jax.random.PRNGKey(0), params)
     step = jax.jit(env.step_env)

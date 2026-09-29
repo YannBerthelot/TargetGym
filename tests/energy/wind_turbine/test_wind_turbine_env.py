@@ -30,7 +30,9 @@ from target_gym.energy.wind_turbine.env_jax import WindTurbine
 
 @pytest.fixture(scope="module")
 def params():
-    return WindTurbineParams()
+    # Version-1 reward: the reward tests in this file describe the capped
+    # log shape; version 2 is covered by tests/test_reward_contract.py.
+    return WindTurbineParams(reward_version=1)
 
 
 # ---------------------------------------------------------------------------

@@ -233,3 +233,35 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor` | 5e-4 (free-lime fraction; the MPC holds 3.42e-4) | the lowest per-seed long-run mean \|error\| the shipped MPC held under the shipped raw-meal disturbance (`scripts/measure_hold.py`, 1560 hold steps after a 180-step burn-in; seeds 3.4 / 4.4 / 5.6e-4, PID 7.0-10.1e-4). Per-seed minimum; upper bound Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
+| `e_tol` | 0 | **provisional.** The free-lime specification band comes from the plant's quality system. |
+| `tracking_exponent` | 2 | quadratic |
+| `c_hold` | 1.824 kg/s | fuel while holding, PID (MPC 1.840) (`scripts/measure_hold.py`) |
+| `running_weight` | 1 | sweep 0.5 / 1 / 2 |
+| `failure_cost` | 1.41e4 | twice the reachable free-lime excursion's cost, 2 x ((0.05 - 0.008) / 5e-4)^2: a cold kiln's 5 % free lime (provisional) against the lowest target; the trips are on burning-zone temperature |
+| `restart_steps` | 2880 (24 h) | restart time priced into a trip, `restart_steps x failure_cost` (cool-down, inspection and re-heat; provisional); where a plant engineer would get it: the plant's restart procedure |
+
+`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+hold cost the reference controller demonstrated, in the reward's units, which
+is 1 per term where the floor is that hold and less where the floor is clamped
+at the instrument resolution -- and `rho_floor` the same with consumption
+charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
+measured/certified floor or a resolution used as a scale, and where it is a
+resolution on a deterministic plant both references are 0, since exact hold is
+achievable there and the resolution only sets the unit;
+`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
+cost the envelope can produce, and `restart_steps` the time a restart would take,
+so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
+ends the window (`base.failure_kernel`): the step that leaves the envelope is
+charged the trip cost, with tracking and running cost zeroed, and the plant
+restarts at once as `reset_env` would, on the same clock. `terminated` is never
+raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

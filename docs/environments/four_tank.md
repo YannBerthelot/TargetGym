@@ -9,7 +9,7 @@
 | Tracked variable(s) | h1 (m), h2 (m) |
 | Episode length | 500 steps (500 s at 1 s per step) |
 | Import | `from target_gym import FourTank, FourTankParams` |
-| Cite as | `four_tank-v1` |
+| Cite as | `four_tank-v2` |
 
 ## Action space
 
@@ -28,7 +28,7 @@ reward scores.
 
 ## Rewards
 
-Mean of the two level-tracking scores.
+See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract: the reward is
 `(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
@@ -67,5 +67,5 @@ A tuned PID ships with this environment.
 | `A1` | 1 |
 | `A2` | 1 |
 | `A3` | 1 |
-| … | 7 more, see the params dataclass |
+| … | 15 more, see the params dataclass |
 

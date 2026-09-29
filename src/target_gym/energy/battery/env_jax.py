@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset
+from target_gym.base import canonical_reset, failure_kernel
 from target_gym.energy.battery.env import (
     N_DISPATCH_BLOCKS,
     BatteryParams,
@@ -15,6 +15,7 @@ from target_gym.energy.battery.env import (
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
 )
 from target_gym.energy.battery.rendering import _render
@@ -47,6 +48,9 @@ class GridBattery(environment.Environment[BatteryState, BatteryParams]):
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
+    def reward_terms(self, state, params):
+        return compute_reward_terms(state, params)
+
     def step_env(
         self,
         key: chex.PRNGKey,
@@ -63,15 +67,17 @@ class GridBattery(environment.Environment[BatteryState, BatteryParams]):
         new_state, _ = compute_next_state(
             action_raw, state, params, key, integration_method=self.integration_method
         )
-        reward = compute_reward(new_state, params, xp=jnp)
-        # gymnax >= 1.0 owns truncation; step_env reports natural termination only.
-        terminated, _ = check_is_terminal(new_state, params, xp=jnp)
+        # A trip is part of the kernel: the step is charged the trip cost and
+        # the plant restarts at once; ``terminated`` is never raised
+        # (``base.failure_kernel``).
+        new_state, tripped, scored = failure_kernel(self, key, state, new_state, params)
+        reward = compute_reward(scored, params, xp=jnp)
         return (
             self.get_obs(new_state),
             new_state,
             reward,
-            terminated,
-            {"last_state": new_state},
+            jnp.zeros((), dtype=bool),
+            {"last_state": new_state, "tripped": tripped},
         )
 
     def get_obs(self, state, params: BatteryParams = None):

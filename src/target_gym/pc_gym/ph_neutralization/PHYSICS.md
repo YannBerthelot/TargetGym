@@ -80,7 +80,7 @@ feed concentrations and flows jointly against the published benchmark.
 | `q1`, `Wa1`, `Wb1` | 16.6, 3.0e−3, 0 | mL/s, M | Acid feed (HNO₃) | ✅ |
 | `q2_nominal`, `Wa2`, `Wb2` | 0.55, −3.0e−2, 3.0e−2 | mL/s, M | Buffer (NaHCO₃) | ✅ |
 | `Wa3`, `Wb3` | −3.05e−3, 5.0e−5 | M | Base (NaOH + NaHCO₃) | ✅ |
-| `q3_min`, `q3_max` | 10, 22 | mL/s | Spans pH ≈ 4.0–10.2, bracketing equivalence with failure margin both ways | ✅ |
+| `q3_min`, `q3_max` | 10, 22 | mL/s | Spans pH ≈ 4.0–10.2, bracketing equivalence; the 2 / 12 off-spec limits are unreachable (steady pH 3.1–10.6 at the flow extremes) | ✅ |
 | `pK1`, `pK2` | 6.35, 10.25 | – | Carbonic acid dissociation constants | ✅ |
 | `q2_noise_std` | 0.35 | mL/s | TUNED — buffering disturbance amplitude | ⚠️ |
 | `delta_t` | 5.0 | s | ≈ 18 steps per residence time | ✅ |
@@ -176,3 +176,35 @@ see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
 baselines use.
 
 <!-- END GENERATED FACTS -->
+
+## Reward (version 2)
+
+`compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.
+
+| parameter | value | source |
+| --- | --- | --- |
+| `e_floor` | 0.01 pH (the MPC holds 0.0080) | the lowest per-seed long-run mean \|error\| the shipped MPC held under the shipped buffer-flow disturbance (`scripts/measure_hold.py`, 900 hold steps after a 108-step burn-in; seeds 0.0139 / 0.0220 / 0.0080, PID 0.016-0.054). A per-seed minimum so no run of the reference sits below it; an upper bound on the achievable floor Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
+| `e_tol` | 0 | **provisional.** The discharge permit band (typically pH 6-9 on an outfall) is a regulatory number the plant would supply. |
+| `tracking_exponent` | 2 | quadratic |
+| `c_hold` | 16.24 mL/s | reagent flow while holding, PID and MPC alike (`scripts/measure_hold.py`) |
+| `running_weight` | 1 | one floor-width of pH error is worth the hold-phase reagent flow again; sweep 0.5 / 1 / 2 |
+| `failure_cost` | 3.1e6 | twice the span's cost, (10 / 0.0080)^2. **Never charged**: the effluent is a convex mix of the inlet streams, so its pH stays within about 3.1-10.6 whatever the valves do; the 2 / 12 limits are documentation of the off-spec range |
+| `restart_steps` | 720 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (flush the tank after a gross excursion; provisional; never exercised, see `failure_cost`); where a plant engineer would get it: the plant's restart procedure |
+
+`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+hold cost the reference controller demonstrated, in the reward's units, which
+is 1 per term where the floor is that hold and less where the floor is clamped
+at the instrument resolution -- and `rho_floor` the same with consumption
+charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
+measured/certified floor or a resolution used as a scale, and where it is a
+resolution on a deterministic plant both references are 0, since exact hold is
+achievable there and the resolution only sets the unit;
+`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
+cost the envelope can produce, and `restart_steps` the time a restart would take,
+so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
+ends the window (`base.failure_kernel`): the step that leaves the envelope is
+charged the trip cost, with tracking and running cost zeroed, and the plant
+restarts at once as `reset_env` would, on the same clock. `terminated` is never
+raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+capped log-scaled reward of the previous version (`precision_floor` and the
+old weights are read only by it).

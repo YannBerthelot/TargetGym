@@ -38,7 +38,9 @@ HEATER_MARGIN_RANGE = (1.3, 2.0)
 
 @pytest.fixture(scope="module")
 def params():
-    return HVACParams()
+    # Version-1 reward: the reward tests in this file describe the capped
+    # log shape; version 2 is covered by tests/test_reward_contract.py.
+    return HVACParams(reward_version=1)
 
 
 def _steady_free_float(params, hours, T_out_fixed, T_start=20.0):

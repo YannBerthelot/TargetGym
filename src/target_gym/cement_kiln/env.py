@@ -54,6 +54,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -71,6 +72,36 @@ FEED_OU_THETA = 8.3e-4
 class CementKilnParams(EnvParams):
     delta_t: float = 30.0
     max_steps_in_episode: int = 700  # 5.8 h at dt = 30 s
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # Floor: the shipped MPC's long-run mean free-lime error under the shipped
+    # raw-meal disturbance, 3.42e-4 (fraction; the lowest of three seeds, 3.4 / 4.4 / 5.6e-4, PID 7.0-10.1e-4) over 1560 hold steps after a
+    # 180-step burn-in, `scripts/measure_hold.py`; an upper bound on the
+    # achievable floor. e_tol = 0 provisionally: the free-lime specification
+    # band comes from the plant's quality system and is to be supplied. Fuel
+    # above the hold-phase rate (1.824 kg/s, PID; MPC 1.840) is charged at
+    # weight 1. The unit free-lime span costs (1 / 3.42e-4)^2 = 8.6e6 per
+    # step; termination twice that.
+    reward_version: int = 2
+    # The MPC holds 3.4e-4 in the shipped disturbance, below the 5e-4 free-lime
+    # assay resolution: the instrument sets the scale.
+    e_floor: float = 5e-4
+    e_tol: float = 0.0  # provisional; quality-system band to be supplied
+    tracking_exponent: float = 2.0
+    c_hold: float = 1.824  # kg/s fuel while holding (PID)
+    running_weight: float = 1.0
+    failure_cost: float = (
+        2.0 * ((0.05 - 0.008) / 5e-4) ** 2
+    )  # a cold kiln's 5 % free lime (provisional) against the lowest target
+    #: Restart time priced into a trip (``reward.trip_cost``; 24 h at 30 s steps: cool-down, inspection and re-heat, provisional).
+    restart_steps: int = 2880
+    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (the MPC's 3.42e-4 hold in 5e-4 units).
+    rho_floor_tracking: float = (3.42e-4 / 5e-4) ** 2
+    rho_floor: float = (3.42e-4 / 5e-4) ** 2
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = False
 
     # -- geometry -------------------------------------------------------------
     diameter: float = 4.0  # m
@@ -177,10 +208,9 @@ class CementKilnState(EnvState):
     raw_meal: jnp.ndarray  # kg/s (the disturbance)
     target_lime: jnp.ndarray
 
-
-# ---------------------------------------------------------------------------
-# Geometry and material flow
-# ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
+    # Geometry and material flow
+    # ---------------------------------------------------------------------------
 
 
 def zone_length(params: CementKilnParams) -> float:
@@ -459,7 +489,23 @@ def check_is_terminal(state: CementKilnState, params: CementKilnParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward(state: CementKilnState, params: CementKilnParams, xp=jnp):
+def compute_reward_terms(state: CementKilnState, params: CementKilnParams, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    terminated, _ = check_is_terminal(state, params, xp)
+    terms = {
+        "tracking": R.tracking_cost(
+            discharge_lime(state) - state.target_lime,
+            params.e_floor,
+            params.e_tol,
+            params.tracking_exponent,
+            xp,
+        ),
+        "running": R.running_cost(state.fuel, params.c_hold, params.running_weight, xp),
+    }
+    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+
+
+def compute_reward_v1(state: CementKilnState, params: CementKilnParams, xp=jnp):
     """Free-lime tracking minus fuel.
 
     Tracking is log-scaled (``utils.log_scaled_reward``): every halving of the
@@ -478,6 +524,15 @@ def compute_reward(state: CementKilnState, params: CementKilnParams, xp=jnp):
     quality = log_scaled_reward(err, params.precision_floor, 1.0, xp)
     fuel = (state.fuel - params.fuel_min) / (params.fuel_max - params.fuel_min)
     return quality * (1.0 - params.fuel_weight * fuel)
+
+
+def compute_reward(state: CementKilnState, params: CementKilnParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
+    )
 
 
 def specific_heat_consumption(state: CementKilnState, params: CementKilnParams):

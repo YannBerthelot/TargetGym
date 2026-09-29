@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
@@ -84,6 +85,30 @@ class FourTankParams(EnvParams):
 
     delta_t: float = 1.0
     max_steps_in_episode: int = 500
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # No disturbance and fixed targets: the shipped MPC holds both levels to
+    # 1e-5 m after settling (`scripts/measure_hold.py`), so the floor is
+    # effectively zero and the normalisation uses the level transmitter's
+    # 1 mm resolution. One term per tank, summed. The span costs
+    # (1.45 / 1e-3)^2 = 2.1e6 per tank per step; overflow or dry-out twice the
+    # two-tank maximum.
+    reward_version: int = 2
+    e_floor: float = 1e-3  # m, level transmitter resolution, both tanks
+    e_tol: float = 0.0
+    tracking_exponent: float = 2.0
+    failure_cost: float = 2.0 * (
+        (0.25 / 1e-3) ** 2 + (0.289 / 1e-3) ** 2
+    )  # reachable errors: steady tops 0.360 / 0.429 m against the lowest targets
+    #: Restart time priced into a trip (``reward.trip_cost``; 10 min at 1 s steps: refill after an overflow or dry-out, provisional).
+    restart_steps: int = 600
+    #: The NEA reference. Zero: the plant is deterministic, so exact hold is
+    #: achievable and ``e_floor`` is a scale, not a floor (a reference of 2,
+    #: the cost at the resolution, put the MPC above the reference and NEA > 1).
+    rho_floor_tracking: float = 0.0
+    rho_floor: float = 0.0
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = True
 
 
 @struct.dataclass
@@ -192,7 +217,29 @@ def check_is_terminal(state: FourTankState, params: FourTankParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward(state: FourTankState, params: FourTankParams, xp=jnp):
+def compute_reward_terms(state: FourTankState, params: FourTankParams, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    terminated, _ = check_is_terminal(state, params, xp)
+    track = R.tracking_cost(
+        state.target_h1 - state.h1,
+        params.e_floor,
+        params.e_tol,
+        params.tracking_exponent,
+        xp,
+    ) + R.tracking_cost(
+        state.target_h2 - state.h2,
+        params.e_floor,
+        params.e_tol,
+        params.tracking_exponent,
+        xp,
+    )
+    terms = {
+        "tracking": track,
+    }
+    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+
+
+def compute_reward_v1(state: FourTankState, params: FourTankParams, xp=jnp):
     """Mean of the two level-tracking scores.
 
     Tracking is log-scaled (``utils.log_scaled_reward``): every halving of the
@@ -214,3 +261,12 @@ def compute_reward(state: FourTankState, params: FourTankParams, xp=jnp):
         xp.abs(state.target_h2 - state.h2), params.precision_floor, span, xp
     )
     return (r1 + r2) / 2.0
+
+
+def compute_reward(state: FourTankState, params: FourTankParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms(state, params, xp), xp),
+        xp,
+    )

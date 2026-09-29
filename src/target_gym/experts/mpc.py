@@ -35,6 +35,8 @@ Common API (both classes)::
     mpc.reset()
 """
 
+import inspect
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -142,6 +144,9 @@ class GradientMPC:
         n_tail: int = 0,
         done_value: float = 0.0,
         objective_fn=None,
+        initial_plan_fn=None,
+        guide_plan_fn=None,
+        move_penalty_fn=None,
     ):
         self.env = env
         self.params = params
@@ -154,6 +159,37 @@ class GradientMPC:
         self.n_tail = int(n_tail)
         self.done_value = float(done_value)
         self.objective_fn = objective_fn
+        # ``f(state, params) -> raw action`` (or a whole ``(horizon,
+        # action_dim)`` plan) the first plan of an episode is filled with. Without it the plan starts at zero -- mid-range on every
+        # actuator -- and the normalised-gradient steps take several env steps
+        # to walk it to the operating point: on the wind turbine the first
+        # action left a 1.5 MW error where the PID, which starts from the
+        # actuator's current position, left 3 kW. A warm start from the
+        # actuator state is what a real MPC does at commissioning.
+        self.initial_plan_fn = initial_plan_fn
+        self._fresh = True
+        # ``f(state, params) -> plan`` evaluated at every step: the descent
+        # runs from the shifted previous plan as always, and the better of
+        # the two plans under the planner's objective is kept. With a
+        # stabilising controller's rollout as the guide, the planner's plan is
+        # never worse than that controller's under its own model -- which is
+        # what makes it an upper bound over it rather than a competitor that
+        # can lose to it where the descent stalls (measured on the 2D
+        # aircraft: from its own shifted plan it held ten floor-widths worse
+        # than the cascaded PID; guided, it cannot).
+        self.guide_plan_fn = guide_plan_fn
+        # ``f(u_first, u_previous, params) -> cost`` in the objective's units:
+        # move suppression on the first action against the one applied last
+        # step. An open-loop plan cannot see the activity that re-planning
+        # creates -- successive solves disagree, and the applied command
+        # jumps where every plan was smooth -- so a reward that prices
+        # actuator activity is under-charged in the plan and over-paid in the
+        # plant (the turbine's pitch activity ran 3.4x the PID's with the
+        # plan predicting less). Priced like that reward term, this closes the
+        # gap; it is standard MPC practice (do-mpc's ``rterm``).
+        self.move_penalty_fn = move_penalty_fn
+        self._u_prev = None
+        self._jit_rollout = jax.jit(self._rollout)
 
         self._actions = jnp.zeros((horizon, action_dim))
         # One jitted entry point, deliberately. A second one for a larger
@@ -248,21 +284,54 @@ class GradientMPC:
         NaN in the aircraft dynamics (see ``NAN_TUNERS`` in
         ``tests/experts/test_pid_tuning.py``).
         """
-        cost_grad = jax.grad(lambda a: -self._rollout(a, state))
+        u_prev = self._u_prev
+
+        def objective(a):
+            total = self._rollout(a, state)
+            if self.move_penalty_fn is not None and u_prev is not None:
+                total = total - self.move_penalty_fn(a[0], u_prev, self.params)
+            return total
+
+        cost_and_grad = jax.value_and_grad(lambda a: -objective(a))
         margin = self._BOUND_MARGIN * 0.5 * (self.action_ub - self.action_lb)
+
+        # The descent is not monotone: a fixed step along a normalised
+        # gradient overshoots wherever the objective has an edge -- a
+        # tolerance band, a barrier -- and the last iterate can then be far
+        # worse than the warm start it began from. Measured on the 2D
+        # aircraft (seed 1, step 144 of the test episode): the shifted plan
+        # scored -0.003, the plan after 50 iterations -3.31, and three steps
+        # later -0.99 against -19.7; taking the descended plan regardless,
+        # the planner then reached for the guide, dived 33 m out of the
+        # tolerance band and lost to the PID on the hold it had just
+        # reached. So the plan returned is the best iterate seen, the warm
+        # start included: under its own model the planner never leaves a
+        # solve with a worse plan than it entered it with. The steps
+        # themselves stay fixed: an accept-only backtracking step was tried
+        # and flew the aircraft 55 m/s slow again (running cost 0.15 against
+        # the PID's 0.002 on seed 1) -- it makes too little progress per solve.
         lb, ub, lr = self.action_lb + margin, self.action_ub - margin, self.lr
 
-        def body(_, actions):
-            g = cost_grad(actions)
+        def body(_, carry):
+            actions, best, best_cost = carry
+            cost, g = cost_and_grad(actions)
+            better = cost < best_cost
+            best = jnp.where(better, actions, best)
+            best_cost = jnp.where(better, cost, best_cost)
             # Replace NaN gradients with zero (can arise from numerically
             # unstable rollouts, e.g. near-stall flight dynamics)
             g = jnp.where(jnp.isnan(g), 0.0, g)
             # Clip gradient norm
             g_norm = jnp.sqrt(jnp.sum(g**2) + 1e-8)
             g = jnp.where(g_norm > 1.0, g / g_norm, g)
-            return jnp.clip(actions - lr * g, lb, ub)
+            return jnp.clip(actions - lr * g, lb, ub), best, best_cost
 
-        return jax.lax.fori_loop(0, n_iter, body, jnp.clip(actions_init, lb, ub))
+        start = jnp.clip(actions_init, lb, ub)
+        last, best, best_cost = jax.lax.fori_loop(
+            0, n_iter, body, (start, start, jnp.asarray(jnp.inf, start.dtype))
+        )
+        last_cost, _ = cost_and_grad(last)
+        return jnp.where(last_cost < best_cost, last, best)
 
     def _optimize(self, actions_init: jnp.ndarray, state) -> jnp.ndarray:
         """Refine a warm-started plan. Two arguments, so it vmaps as it stands."""
@@ -281,16 +350,45 @@ class GradientMPC:
 
     def step(self, _obs, state):
         """Return next action. ``_obs`` is ignored (kept for API symmetry)."""
+        if self._fresh and self.initial_plan_fn is not None:
+            init = jnp.asarray(
+                self.initial_plan_fn(state, self.params), dtype=jnp.float32
+            )
+            if init.ndim == 2:
+                self._actions = init  # a whole plan, e.g. a PID's rollout
+            else:
+                first = jnp.reshape(init, (self.action_dim,))
+                self._actions = jnp.broadcast_to(first, (self.horizon, self.action_dim))
+        self._fresh = False
         actions_init = jnp.concatenate([self._actions[1:], self._actions[-1:]], axis=0)
         self._actions = self._jit_optimize(actions_init, state)
+        if self.guide_plan_fn is not None:
+            guide = jnp.asarray(
+                self.guide_plan_fn(state, self.params), dtype=jnp.float32
+            )
+            if self._score(guide, state) > self._score(self._actions, state):
+                self._actions = guide
         first = self._actions[0]
+        self._u_prev = first
         if self.action_dim == 1:
             return float(first[0])
         return np.array(first)
 
+    def _score(self, plan, state) -> float:
+        total = float(self._jit_rollout(plan, state))
+        if self.move_penalty_fn is not None and self._u_prev is not None:
+            total -= float(self.move_penalty_fn(plan[0], self._u_prev, self.params))
+        return total
+
     def reset(self):
-        """Reset the internal action sequence to zeros."""
+        """Reset the internal action sequence to zeros (or, on the next step,
+        to ``initial_plan_fn`` of the state)."""
         self._actions = jnp.zeros((self.horizon, self.action_dim))
+        self._fresh = True
+        self._u_prev = None
+        for fn in (self.initial_plan_fn, self.guide_plan_fn):
+            if hasattr(fn, "reset"):
+                fn.reset()
 
 
 # ============================================================================
@@ -1526,6 +1624,7 @@ class HVACCasadiMPC(CasadiMPC):
         phi_int = model.set_variable("_tvp", "phi_int")
         phi_sol = model.set_variable("_tvp", "phi_sol")
         model.set_variable("_tvp", "target_T")
+        model.set_variable("_tvp", "occupied")
 
         Q_command = 0.5 * (u_raw + 1.0) * p.Q_heat_max
 
@@ -1574,9 +1673,31 @@ class HVACCasadiMPC(CasadiMPC):
         # minimiser with a usable gradient everywhere, which a quadratic gives.
         comfort = -((err / (2.0 * p.comfort_band)) ** 2)
         energy = model.x["Q_emitter"] / p.Q_heat_max
-        mpc.set_objective(
-            lterm=-comfort + float(p.energy_weight) * energy, mterm=-comfort
-        )
+        if _is_v1(p):
+            mpc.set_objective(
+                lterm=-comfort + float(p.energy_weight) * energy, mterm=-comfort
+            )
+        else:
+            # Version 2: the plant's own cost in euros per step -- a
+            # quadratic on the air temperature outside the occupied comfort
+            # band, or below the setback target at night, plus the gas. The
+            # dead zone is smoothed by ``_SMOOTH_K`` for IPOPT; the symmetric
+            # quadratic above heated to the night target and ignored both the
+            # tolerance and the gas, which under this cost is not a ceiling.
+            hours = float(p.delta_t) / 3600.0
+            occupied = model.tvp["occupied"]
+            tol = float(p.comfort_tolerance)
+            excess_occ = _smooth_max(casadi.sqrt(err * err + 1e-6) - tol)
+            shortfall = _smooth_max(err)  # target above the air: too cold
+            excess_night = (
+                shortfall
+                if bool(p.setback_lower_bound_only)
+                else (casadi.sqrt(err * err + 1e-6))
+            )
+            excess = occupied * excess_occ + (1.0 - occupied) * excess_night
+            comfort_cost = float(p.comfort_price) * hours * excess**2
+            gas_cost = float(p.gas_price) * model.x["Q_emitter"] / 1000.0 * hours
+            mpc.set_objective(lterm=comfort_cost + gas_cost, mterm=comfort_cost)
         mpc.set_rterm(u_raw=1e-3)
         mpc.bounds["lower", "_u", "u_raw"] = -1.0
         mpc.bounds["upper", "_u", "u_raw"] = 1.0
@@ -1588,6 +1709,7 @@ class HVACCasadiMPC(CasadiMPC):
         def tvp_fun(_t):
             from target_gym.hvac.env import (
                 internal_gain,
+                is_occupied,
                 outdoor_temperature,
                 scheduled_setpoint,
                 solar_gain,
@@ -1604,6 +1726,7 @@ class HVACCasadiMPC(CasadiMPC):
                 tvp_tpl["_tvp", k, "target_T"] = float(
                     scheduled_setpoint(t, self._setpoint_occupied, p)
                 )
+                tvp_tpl["_tvp", k, "occupied"] = float(is_occupied(t, p))
             return tvp_tpl
 
         mpc.set_tvp_fun(tvp_fun)
@@ -1816,6 +1939,11 @@ def _plane_objective(state, params):
     from target_gym.plane.env import compute_reward
 
     reward = compute_reward(state, params)
+    return reward - _PLANE_BARRIER_WEIGHT * _plane_stall_barrier(state, params)
+
+
+def _plane_stall_barrier(state, params):
+    """Squared shortfall of airspeed below 1.3x the stall speed, in [0, 1]."""
     speed = jnp.sqrt(state.x_dot**2 + state.z_dot**2)
     v_stall = jnp.sqrt(
         2.0
@@ -1824,7 +1952,7 @@ def _plane_objective(state, params):
         / (state.rho * params.wings_surface * params.CL_max)
     )
     margin = speed / (_PLANE_STALL_MARGIN * v_stall)
-    return reward - _PLANE_BARRIER_WEIGHT * jnp.maximum(1.0 - margin, 0.0) ** 2
+    return jnp.maximum(1.0 - margin, 0.0) ** 2
 
 
 def make_plane_mpc(
@@ -1862,6 +1990,42 @@ def make_plane_mpc(
     that reaches the ground is charged for the rest of the horizon rather than
     scoring the 0.0 that a barrier-free positive reward could rely on.
     """
+    initial_plan = None
+    if not _is_v1(params) and objective_fn is _plane_objective:
+        from target_gym.experts.pid import make_plane_cascaded_pid
+        from target_gym.plane.env import compute_reward
+
+        objective_fn = _v2_objective(compute_reward, _plane_stall_barrier)
+        done_value = _done_value(params)
+        # Twenty seconds of horizon, not thirty. In turbulence the 30-step
+        # plan never converged within the budget and the planner chattered
+        # between its plan and the guide (stick moving 0.17 per step): it
+        # held 4.6 m off with a 4.4 m bias where the PID held 2.5 m. Shorter
+        # is myopic the other way -- airspeed answers the throttle slowly, so
+        # at 15 steps the plan buys altitude with speed it will not see
+        # itself pay for (23 m/s off cruise). Measured on seed 0 over the
+        # hold, cost per step: 30 steps 4.6 (before the fix below, 10 at 25),
+        # 15 steps 4.6, 20 steps 2.7 against the PID's 9; stick 0.009/step.
+        if horizon == 30:
+            horizon = 20
+        # From a constant plan the planner parks at the edge of the altitude
+        # tolerance 55 m/s below cruise: raising thrust alone pitches the
+        # aircraft out of the band before the linear speed saving pays, and
+        # the coordinated thrust-and-elevator move is out of reach of the
+        # normalised steps. The cascaded PID's plan is a stabilising start.
+        initial_plan = _pid_rollout_plan(env, make_plane_cascaded_pid, horizon, 2)
+        guide_plan = initial_plan
+        # No open-loop tail under version 2. Holding the last action for 60 s
+        # lets the phugoid carry the aircraft far from the band, and under an
+        # unbounded quadratic cost that tail dominated the objective (1e5
+        # per solve against 26 per step realised): the planner optimised
+        # what the held action did later, parked at the edge of the
+        # tolerance and flew 55 m/s slow. Without it, and guided by the
+        # PID's plan, it holds altitude to the metre at cruise speed.
+        n_tail = 0
+    else:
+        done_value = -(_PLANE_BARRIER_WEIGHT + 1.0)
+        guide_plan = None
     return GradientMPC(
         env,
         params,
@@ -1873,8 +2037,168 @@ def make_plane_mpc(
         lr=lr,
         n_tail=n_tail,
         objective_fn=objective_fn,
-        done_value=-(_PLANE_BARRIER_WEIGHT + 1.0),
+        initial_plan_fn=initial_plan,
+        guide_plan_fn=guide_plan,
+        done_value=done_value,
     )
+
+
+def _is_v1(params) -> bool:
+    return int(getattr(params, "reward_version", 2)) == 1
+
+
+def _floor_units(params) -> float:
+    """The version-2 reward's scale: the tracking cost per step at the floor."""
+    return float(getattr(params, "rho_floor_tracking", 1.0)) or 1.0
+
+
+def _failure_units(params, squared: bool = False) -> float:
+    """The failure charge in the planner's units: floor units, and squared
+    where the planner squares a linear tracking term (so that it still
+    exceeds the worst tracking cost the envelope can produce)."""
+    f = float(getattr(params, "failure_cost", 0.0)) / _floor_units(params)
+    return f * f if squared else f
+
+
+def _done_value(params, squared: bool = False) -> float:
+    """What a planner on the environment's own reward charges per step once
+    the plant has terminated: 0 for the non-negative version-1 reward (the
+    forgone reward is the penalty), the failure charge for version 2, whose
+    healthy steps are negative -- in the planner's units. Under version 2 no
+    plant raises ``terminated`` any more (a trip freezes it at the failure
+    cost inside the rollout, ``base.failure_kernel``), so the planner sees the
+    trip's cost in the rollout itself and this value is never applied; it is
+    kept for the version-1 planners."""
+    if _is_v1(params):
+        return 0.0
+    return -_failure_units(params, squared)
+
+
+_SMOOTH_K = 0.05  # width of the smoothed max(x, 0) used in CasADi objectives
+
+
+def _smooth_max(x):
+    """``max(x, 0)`` smoothed for IPOPT: ``(x + sqrt(x^2 + k^2)) / 2``."""
+    return 0.5 * (x + casadi.sqrt(x * x + _SMOOTH_K * _SMOOTH_K))
+
+
+class _PIDRolloutPlan:
+    """``initial_plan_fn`` / ``guide_plan_fn`` that rolls the shipped PID out
+    from the current state over the horizon and hands its action sequence to
+    the planner.
+
+    A normalised-gradient planner moves its whole plan by at most ``lr`` per
+    iteration, spread over ``horizon * action_dim`` entries, so a solve
+    cannot travel far from wherever it starts: on the wind turbine, from a
+    constant plan it braked the rotor with the torque (a 700 kW error for the
+    whole horizon) because the pitch schedule it needed was out of reach, and
+    on the 2D aircraft it parked at the edge of the altitude tolerance 55 m/s
+    below cruise. Starting from, and at every step compared against, a
+    stabilising controller's plan makes the planner an upper bound over that
+    controller under its own model.
+
+    The PID is cold-started for every rollout -- its integrators at zero,
+    what a controller switched on in this state would do. A PID stepped
+    along the planner's own trajectory instead winds its integrators up on
+    a control history that is not its own, and on the aircraft its plan then
+    crashed (objective -1e8) while the shipped PID held perfectly.
+    """
+
+    def __init__(self, env, make_pid, horizon: int, action_dim: int):
+        self.env, self.make_pid = env, make_pid
+        self.horizon, self.action_dim = horizon, action_dim
+        self.reset()
+
+    def reset(self):
+        self._pid = self.make_pid()
+        if hasattr(self._pid, "reset"):
+            self._pid.reset()
+        call = self._pid if callable(self._pid) else self._pid.step
+        self._wants_state = len(inspect.signature(call).parameters) >= 2
+
+    def _act(self, pid, obs, state):
+        call = pid if callable(pid) else pid.step
+        raw = (
+            call(np.asarray(obs), state) if self._wants_state else call(np.asarray(obs))
+        )
+        a = np.reshape(np.asarray(raw, dtype=np.float32), (-1,))
+        return (
+            a[: self.action_dim]
+            if a.shape[0] >= self.action_dim
+            else np.resize(a, self.action_dim)
+        )
+
+    def __call__(self, state, params):
+        env = self.env
+        obs = env.get_obs(state, params)
+        self.reset()
+        pid = self._pid
+        plan = []
+        s = state
+        for _ in range(self.horizon):
+            a = self._act(pid, obs, s)
+            plan.append(a)
+            obs, s, _, term, _ = env.step_env(
+                jax.random.PRNGKey(0), s, jnp.asarray(a), params
+            )
+            if bool(term):
+                break
+        while len(plan) < self.horizon:
+            plan.append(plan[-1])
+        return jnp.asarray(np.stack(plan), dtype=jnp.float32)
+
+
+def _pid_rollout_plan(env, make_pid, horizon: int, action_dim: int):
+    return _PIDRolloutPlan(env, make_pid, horizon, action_dim)
+
+
+def _v2_objective(reward_fn, barrier_fn=None, terms_fn=None, shaping_fn=None):
+    """A planner objective on the version-2 reward: the reward in floor units
+    (tracking at the floor costs 1 per step) minus a differentiable barrier
+    weighted like the failure charge.
+
+    ``terms_fn`` (the environment's ``compute_reward_terms``) is passed for
+    the plants whose tracking cost is linear in |error| (p = 1: the wind
+    turbine, the battery). Projected descent with a normalised gradient on a
+    linear cost is sign descent -- the step never shrinks near the optimum,
+    so the plan chatters (measured on the turbine: the rotor speed wandered to
+    1.12x rated with the barrier active two thirds of the time, and the hold
+    error was 6x the PID's). The tracking term is squared in floor units
+    instead, which has the same minimiser and a gradient that vanishes at it;
+    the running and failure terms are kept as they are.
+
+    The version-1 surrogates in this module exist because the log-scaled
+    reward was flat where a planner needed a gradient. The version-2 reward
+    is convex and additive (docs/reward-shaping.md), so the planner can
+    descend the plant's own cost -- which is the only way the MPC is an upper
+    bound *on that cost*: a surrogate with the version-1 minimiser sells the
+    consumption term the new reward charges, and the wind turbine and the
+    aircraft measurably lost to their PIDs that way. The barriers stay: a
+    terminal state is a boolean and gives the optimiser no derivative pointing
+    away from it, so the soft version is weighted at the failure charge
+    itself, in the same units.
+    """
+
+    def f(state, params):
+        floor = _floor_units(params)
+        if terms_fn is None:
+            obj = reward_fn(state, params) / floor
+        else:
+            t = terms_fn(state, params)
+            track = t["tracking"] / floor
+            rest = sum(v for k, v in t.items() if k != "tracking") / floor
+            obj = -(track**2 + rest)
+        if barrier_fn is not None:
+            obj = obj - _failure_units(params, terms_fn is not None) * barrier_fn(
+                state, params
+            )
+        if shaping_fn is not None:
+            # Planner-side shaping already expressed in floor units (a
+            # regulation preference, not a trip): see the wind turbine.
+            obj = obj - shaping_fn(state, params)
+        return obj
+
+    return f
 
 
 def make_plane3d_mpc(
@@ -1890,6 +2214,12 @@ def make_plane3d_mpc(
     aerodynamic model with roll, so it remains differentiable JAX but not
     expressible in CasADi. Works for all three task variants (Heading,
     Circle, FigureEight) since they share step_env.
+
+    The objective is the environment's own reward. Under the version-2
+    reward, a cost, a healthy step is negative, so a plan that leaves the
+    envelope must be charged the failure cost for the rest of the horizon or
+    crashing would read as an improvement over flying on; ``done_value`` is
+    set to it (version 1 is non-negative and keeps 0).
     """
     return GradientMPC(
         env,
@@ -1897,6 +2227,7 @@ def make_plane3d_mpc(
         action_dim=3,
         action_lb=-1.0,
         action_ub=1.0,
+        done_value=_done_value(params),
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,
@@ -1955,6 +2286,18 @@ def _patrol_objective(state, params):
     return track * align - penalty
 
 
+def _patrol_stall_barrier(state, params):
+    """Squared shortfall of the follower's airspeed below 1.3x its stall
+    speed, in [0, 1]: the 2D aircraft's barrier on the follower's state."""
+    f = state.follower
+    speed = jnp.sqrt(f.x_dot**2 + f.y_dot**2 + f.z_dot**2)
+    v_stall = jnp.sqrt(
+        2.0 * f.m * params.gravity / (f.rho * params.wings_surface * params.CL_max)
+    )
+    margin = speed / (_PLANE_STALL_MARGIN * v_stall)
+    return jnp.maximum(1.0 - margin, 0.0) ** 2
+
+
 def make_patrol_mpc(
     env,
     params,
@@ -2004,6 +2347,37 @@ def make_patrol_mpc(
     ``n_tail=60`` scores 175.7 against 153.8 without it, which is better than
     doubling the iterations to 600 (171.5) and half the cost.
     """
+    initial_plan = guide_plan = None
+    if _is_v1(params):
+        objective_fn = _patrol_objective
+        done_value = -(_PLANE_BARRIER_WEIGHT + 1.0)
+    else:
+        # Under version 2 the planner descends the follower's own cost with
+        # the stall barrier kept, and without the open-loop tail (as the 2D
+        # aircraft: under an unbounded cost the tail dominates the solve).
+        # The surrogate above has the version-1 minimiser, and once the
+        # descent was made monotone -- a better solve of the surrogate --
+        # the follower lost to its PID on two seeds by 18x: optimising the
+        # wrong objective harder.
+        from target_gym.experts.pid import make_patrol_stateful_pid
+        from target_gym.patrol.env import compute_reward_patrol
+
+        objective_fn = _v2_objective(compute_reward_patrol, _patrol_stall_barrier)
+        done_value = _done_value(params)
+        n_tail = 0
+        # Twenty seconds of horizon, as on the 2D aircraft: in turbulence the
+        # 30-step plan does not converge within the budget, and 15 is too
+        # short to hold the slot on every seed (seeds 0 / 1 returns: 15 steps
+        # -9449 / -536, 20 steps -732 / -702, 25 steps -1382 / -859, the PID
+        # -3868 / -2033).
+        if horizon == 30:
+            horizon = 20
+        # Started from, and at every step compared against, the shipped
+        # PID's rollout under the planner's own objective, as the 2D
+        # aircraft is: on its own the descent lost the slot on two seeds
+        # (returns -5e5 against the PID's -6e4).
+        initial_plan = _pid_rollout_plan(env, make_patrol_stateful_pid, horizon, 3)
+        guide_plan = initial_plan
     return GradientMPC(
         env,
         params,
@@ -2014,8 +2388,10 @@ def make_patrol_mpc(
         n_iter=n_iter,
         lr=lr,
         n_tail=n_tail,
-        objective_fn=_patrol_objective,
-        done_value=-(_PLANE_BARRIER_WEIGHT + 1.0),
+        objective_fn=objective_fn,
+        initial_plan_fn=initial_plan,
+        guide_plan_fn=guide_plan,
+        done_value=done_value,
     )
 
 
@@ -2099,20 +2475,31 @@ class BoilerDrumGradientMPC(GradientMPC):
         key = jax.random.PRNGKey(0)
         pr = self.params
 
-        def step_fn(carry, u):
-            s = carry
-            _, new_s, _, _, _ = self.env.step_env(key, s, self._env_action(u), pr)
-            level_err = new_s.level / pr.level_band
-            press_err = (new_s.pressure - new_s.target_pressure) / pr.pressure_band
-            fuel = new_s.Q_fuel / pr.Q_max
-            cost = (
-                self.level_weight * level_err**2
-                + self.pressure_weight * press_err**2
-                + pr.fuel_weight * fuel
-            )
-            return new_s, -cost
+        v1 = _is_v1(pr)
+        floor = _floor_units(pr)
+        fail = float(getattr(pr, "failure_cost", 0.0)) / floor
 
-        _, rewards = jax.lax.scan(step_fn, state, actions)
+        def step_fn(carry, u):
+            s, done = carry
+            _, new_s, r, terminated, _ = self.env.step_env(
+                key, s, self._env_action(u), pr
+            )
+            if v1:
+                level_err = new_s.level / pr.level_band
+                press_err = (new_s.pressure - new_s.target_pressure) / pr.pressure_band
+                fuel = new_s.Q_fuel / pr.Q_max
+                cost = (
+                    self.level_weight * level_err**2
+                    + self.pressure_weight * press_err**2
+                    + pr.fuel_weight * fuel
+                )
+                return (new_s, done), -cost
+            # Version 2: the plant's own cost, in floor units, with a trip
+            # charged for the rest of the horizon.
+            obj = jnp.where(done, -fail, r / floor)
+            return (new_s, jnp.logical_or(done, terminated)), obj
+
+        (_, _), rewards = jax.lax.scan(step_fn, (state, jnp.zeros((), bool)), actions)
         return jnp.sum(rewards)
 
 
@@ -2280,10 +2667,15 @@ def make_cement_kiln_mpc(
     transport delay. That is the point: a controller whose horizon is shorter
     than the delay is choosing fuel whose consequences it cannot see.
     """
+    objective = _cement_kiln_objective
+    if not _is_v1(params):
+        from target_gym.cement_kiln.env import compute_reward
+
+        objective = _v2_objective(compute_reward)
     return SamplingMPC(
         env,
         params,
-        objective=_cement_kiln_objective,
+        objective=objective,
         action_dim=2,
         action_lb=-1.0,
         action_ub=1.0,
@@ -2344,6 +2736,12 @@ def make_battery_mpc(
     long enough to see the state-of-charge limits coming, which is exactly what
     a reactive controller cannot do.
     """
+    done_value = 0.0
+    if not _is_v1(params) and objective_fn is _battery_objective:
+        from target_gym.energy.battery.env import compute_reward, compute_reward_terms
+
+        objective_fn = _v2_objective(compute_reward, terms_fn=compute_reward_terms)
+        done_value = _done_value(params, squared=True)
     return GradientMPC(
         env,
         params,
@@ -2353,6 +2751,7 @@ def make_battery_mpc(
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,
+        done_value=done_value,
         objective_fn=objective_fn,
     )
 
@@ -2386,7 +2785,7 @@ def _wind_turbine_objective(state, params):
     workaround for a broken reward any more -- it is a planner-side
     reformulation, which is a normal thing for an MPC to carry.
     """
-    from target_gym.energy.wind_turbine.env import electrical_power, omega_rated
+    from target_gym.energy.wind_turbine.env import electrical_power
 
     power = electrical_power(state.omega, state.torque, params)
     err = (state.target_power - power) / params.power_band
@@ -2409,13 +2808,7 @@ def _wind_turbine_objective(state, params):
     # The onset matters (0.85 beats 0.80); the weight barely does (10, 30 and
     # 100 land within 0.4 of each other), which is the signature of a term that
     # is shaping the approach rather than trading against the objective.
-    w_rated = omega_rated(params)
-    over = state.omega / (params.overspeed_factor * w_rated)
-    under = (params.underspeed_factor * w_rated) / jnp.maximum(state.omega, 1e-6)
-    barrier = (
-        jnp.maximum(over - _WT_BARRIER_ONSET, 0.0) ** 2
-        + jnp.maximum(under - _WT_BARRIER_ONSET, 0.0) ** 2
-    )
+    barrier = _wind_turbine_barrier(state, params)
 
     # Offset so a healthy step scores ~1 and a terminated one scores
     # ``done_value`` = 0, making an early trip cost the rest of the horizon.
@@ -2427,12 +2820,53 @@ def _wind_turbine_objective(state, params):
     )
 
 
+_WT_SPEED_BOX = 0.05  # rotor speed kept within this fraction of rated
+_WT_SPEED_BOX_COST = 100.0  # floor units at a 10% excursion: ten floor-widths
+
+
+def _wind_turbine_barrier(state, params):
+    """Squared excursion of the rotor speed past 85% of the way to either trip."""
+    from target_gym.energy.wind_turbine.env import omega_rated
+
+    ratio = state.omega / omega_rated(params)
+    over = ratio / params.overspeed_factor
+    under = params.underspeed_factor / jnp.maximum(ratio, 1e-6)
+    return (
+        jnp.maximum(over - _WT_BARRIER_ONSET, 0.0) ** 2
+        + jnp.maximum(under - _WT_BARRIER_ONSET, 0.0) ** 2
+    )
+
+
+def _wind_turbine_speed_box(state, params):
+    """Soft box keeping the rotor within 5% of rated, in floor units.
+
+    What a turbine's own supervisory logic does above rated wind (regulate
+    rotor speed with the pitch, power with the torque), and it is there for
+    the planner's horizon, not for the reward. Recovering a rotor that has
+    slowed costs torque now and pays off over the rotor's ~100 s of inertia,
+    beyond a 15 s plan; without the box the planner sat at 0.85x rated with a
+    250 kW error rather than spend the torque (seed 1 of the test episode),
+    and drifted the same way over a long hold. Mild by design: a 10%
+    excursion costs ten floor-widths of tracking error (25 kW), so the plan
+    is still the plant's own cost -- weighted like the trip, or like a 500 kW
+    error, the box dominated the tracking term and the planner braked the
+    rotor with the torque instead (a 350-700 kW error for a whole horizon,
+    measured on seeds 1 and 2), where the PID rides a 16% overspeed with a
+    50 kW error and the plant trips only at 25%.
+    """
+    from target_gym.energy.wind_turbine.env import omega_rated
+
+    ratio = state.omega / omega_rated(params)
+    excess = jnp.maximum(jnp.abs(ratio - 1.0) - _WT_SPEED_BOX, 0.0) / _WT_SPEED_BOX
+    return _WT_SPEED_BOX_COST * excess**2
+
+
 def make_wind_turbine_mpc(
     env,
     params,
     horizon: int = 60,
-    n_iter: int = 100,
-    lr: float = 0.02,
+    n_iter: int | None = None,
+    lr: float | None = None,
     n_tail: int = 0,
     objective_fn=_wind_turbine_objective,
 ):
@@ -2462,6 +2896,44 @@ def make_wind_turbine_mpc(
     the seed where they disagree scored *higher*), and the inner optimiser
     (Adam, and a decaying step size, are both worse here than the plain one).
     """
+    # Version 1 keeps the planner it was recorded with (100 iterations at
+    # lr 0.02, a zero warm start), so its recorded baseline reproduces; the
+    # version-2 planner needs the larger budget for the move-suppressed,
+    # squared-tracking objective (measured: 500 / 0.005 is the first setting
+    # that beats the PID on every seed).
+    v1 = _is_v1(params)
+    n_iter = (100 if v1 else 500) if n_iter is None else n_iter
+    lr = (0.02 if v1 else 0.005) if lr is None else lr
+    done_value = 0.0
+    if not v1 and objective_fn is _wind_turbine_objective:
+        from target_gym.energy.wind_turbine.env import (
+            compute_reward,
+            compute_reward_terms,
+        )
+
+        objective_fn = _v2_objective(
+            compute_reward,
+            _wind_turbine_barrier,
+            terms_fn=compute_reward_terms,
+            shaping_fn=_wind_turbine_speed_box,
+        )
+        done_value = _done_value(params, squared=True)
+
+    from target_gym.experts.pid import make_wind_turbine_stateful_pid
+
+    initial_plan = (
+        None
+        if v1
+        else _pid_rollout_plan(env, make_wind_turbine_stateful_pid, horizon, 2)
+    )
+    guide_plan = initial_plan
+
+    def move_penalty(u0, u_prev, p):
+        # Pitch command change between solves as a fraction of pitch_max
+        # (raw range 2 <-> pitch_max), in floor units of the fatigue term.
+        frac = jnp.abs(u0[0] - u_prev[0]) * 0.5
+        return float(p.fatigue_weight) * (frac / p.c_hold) ** 2
+
     return GradientMPC(
         env,
         params,
@@ -2472,7 +2944,11 @@ def make_wind_turbine_mpc(
         n_iter=n_iter,
         lr=lr,
         n_tail=n_tail,
+        done_value=done_value,
         objective_fn=objective_fn,
+        initial_plan_fn=initial_plan,
+        guide_plan_fn=guide_plan,
+        move_penalty_fn=None if v1 else move_penalty,
     )
 
 
@@ -2487,6 +2963,9 @@ def make_distillation_mpc(
     aircraft. Optimises [L_raw, V_raw] jointly, which is the point on an
     ill-conditioned plant: the useful move is a *coordinated* change in reflux
     and boilup, exactly what independent diagonal loops cannot make.
+
+    The objective is the environment's own reward; see ``make_plane3d_mpc``
+    for why ``done_value`` follows the reward version.
     """
     return GradientMPC(
         env,
@@ -2494,6 +2973,7 @@ def make_distillation_mpc(
         action_dim=2,
         action_lb=-1.0,
         action_ub=1.0,
+        done_value=_done_value(params),
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,

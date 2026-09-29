@@ -191,7 +191,7 @@ def test_action_rate_limiting():
 
 def test_reward_peaks_on_target():
     """Reward is maximal when n matches target_n (and zero rod reactivity)."""
-    params = ReactorParams()
+    params = ReactorParams(reward_version=1)
     state_on = _default_state(params, target=1.0, n=1.0)
     state_off = state_on.replace(n=0.3)
 
@@ -205,7 +205,7 @@ def test_reward_peaks_on_target():
 
 def test_rod_motion_penalty_applied():
     """Non-zero rod reactivity reduces the reward even at perfect tracking."""
-    params = ReactorParams()
+    params = ReactorParams(reward_version=1)
     state = _default_state(params, target=1.0, n=1.0)
     state_with_rods = state.replace(rho_ext=jnp.asarray(params.rho_ext_max))
     r_neutral = float(compute_reward(state, params))

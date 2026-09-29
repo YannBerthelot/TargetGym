@@ -4,95 +4,190 @@
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
   },
+  "battery-v2": {
+    "fingerprint": "822403b65f4457ed",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
+  },
   "boiler_drum-v1": {
     "fingerprint": "24bd471e04585728",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "boiler_drum-v2": {
+    "fingerprint": "e236d4eba0db546d",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
   },
   "cement_kiln-v1": {
     "fingerprint": "0419d354f296e9f2",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
   },
+  "cement_kiln-v2": {
+    "fingerprint": "1a08e172929fb8e4",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
+  },
   "cstr-v1": {
     "fingerprint": "1aedfbe4bf2cd1e8",
     "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",
     "stamped": "2026-09-13T09:03:12+00:00"
+  },
+  "cstr-v2": {
+    "fingerprint": "cd87162c0b0a06a1",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
   },
   "distillation-v1": {
     "fingerprint": "a54022227b359ba6",
     "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",
     "stamped": "2026-09-13T09:03:12+00:00"
   },
+  "distillation-v2": {
+    "fingerprint": "d8c248aa3460bc35",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
+  },
   "first_order-v1": {
     "fingerprint": "fa0ddbc733bf3f60",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "first_order-v2": {
+    "fingerprint": "616cf605d936fe76",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
   },
   "four_tank-v1": {
     "fingerprint": "da38eef254db0f34",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
   },
+  "four_tank-v2": {
+    "fingerprint": "00935a34eab3f2c9",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
+  },
   "glass_furnace-v1": {
     "fingerprint": "272349cfabc95017",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "glass_furnace-v2": {
+    "fingerprint": "3b23f29f05fbf5ec",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
   },
   "hvac-v1": {
     "fingerprint": "5c8e38a6b643c717",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
   },
+  "hvac-v2": {
+    "fingerprint": "4b73344ca7d85dd8",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
+  },
   "patrol-v1": {
     "fingerprint": "96b9deebac83bd98",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T23:12:20+00:00"
+  },
+  "patrol-v2": {
+    "fingerprint": "d339d7ba30e331f8",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
   },
   "patrol_bearing_only-v1": {
     "fingerprint": "96b9deebac83bd98",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T23:12:20+00:00"
   },
+  "patrol_bearing_only-v2": {
+    "fingerprint": "d339d7ba30e331f8",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
+  },
   "ph_neutralization-v1": {
     "fingerprint": "55f320195cb81ce2",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "ph_neutralization-v2": {
+    "fingerprint": "f124ba9c8c0d42b9",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
   },
   "plane-v1": {
     "fingerprint": "e5d0397cd54ac886",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
   },
+  "plane-v2": {
+    "fingerprint": "d7cfcfc44836f4e9",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
+  },
   "plane3d_circle-v1": {
     "fingerprint": "ffcbd44cb289829d",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
+  },
+  "plane3d_circle-v2": {
+    "fingerprint": "07cbacf23c22cca8",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
   },
   "plane3d_figure8-v1": {
     "fingerprint": "925522f0cf3233f4",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
   },
+  "plane3d_figure8-v2": {
+    "fingerprint": "6ca3e0508790c607",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
+  },
   "plane3d_heading-v1": {
     "fingerprint": "2961df4b494a5ab7",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
+  },
+  "plane3d_heading-v2": {
+    "fingerprint": "c85c825eedb7c682",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
   },
   "plane3d_racetrack-v1": {
     "fingerprint": "f1f9b8f7b7dcec42",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T07:38:30+00:00"
   },
+  "plane3d_racetrack-v2": {
+    "fingerprint": "4bf4f9614b4e7e45",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
+  },
   "plane_energy-v1": {
     "fingerprint": "3994cf3273f563eb",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
   },
+  "plane_energy-v2": {
+    "fingerprint": "e330e6a0223d178b",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
+  },
   "plane_sine-v1": {
     "fingerprint": "01afd0d200bbcfb0",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
+  },
+  "plane_sine-v2": {
+    "fingerprint": "d3a0fc291af062f8",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
   },
   "reactor-v1": {
     "fingerprint": "da9cd77061a7830c",
@@ -104,9 +199,19 @@
     "note": "v2: max_steps_in_episode and state.time count env steps (10 s), not physics sub-steps; the shipped rollout had run 10x past the limit on a frozen plant, understating the recorded baselines ~5x",
     "stamped": "2026-09-13T09:03:12+00:00"
   },
+  "reactor-v3": {
+    "fingerprint": "10a2728d109f6ff6",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
+  },
   "wind_turbine-v1": {
     "fingerprint": "889181b62fafcbed",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
+  },
+  "wind_turbine-v2": {
+    "fingerprint": "1f98dd58b461e3e8",
+    "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
+    "stamped": "2026-09-29T20:06:05+00:00"
   }
 }

@@ -13,6 +13,7 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState
 from target_gym.integration import integrate_dynamics
 from target_gym.plane.dynamics import (
@@ -177,6 +178,39 @@ class PlaneParams3D(EnvParams):
     precision_floor: float = 1.0  # m, barometric altimeter resolution
     heading_precision_floor: float = 0.0087  # rad (~0.5 deg), AHRS/compass
     position_precision_floor: float = 3.0  # m, civil GPS horizontal accuracy
+
+    # ---- Reward (docs/reward-shaping.md; version 2) ----
+    # One quadratic term per tracked output, summed, each normalised by a
+    # documented minimum: the test configurations fly with zero turbulence,
+    # so the achievable hold error is ~0 on every task (the shipped MPC holds
+    # altitude to 0.1 m and the heading to 1e-3 rad, `scripts/measure_hold.py`)
+    # and the sensor resolutions above are the scales. Altitude has a +-30 m
+    # tolerance (a vertical-separation margin, provisional); heading and path
+    # distance have none. No running cost on these tasks. Leaving the
+    # envelope costs, per step, twice the altitude envelope's cost.
+    reward_version: int = 2
+    e_floor_altitude: float = (
+        1.44  # m, lowest per-seed MPC hold in turbulence (heading task; circle 4.06, racetrack 1.39)
+    )
+    e_tol_altitude: float = 0.0  # m; a +-30 m band made the altitude hold vacuous
+    e_floor_heading: float = (
+        0.0087  # rad, 0.5 deg AHRS resolution: the MPC holds below it (1e-4 rad on two seeds, 6e-3 on three), so the resolution is the scale
+    )
+    e_floor_path: float = (
+        3.0  # m; per task: circle 8.12, racetrack 6.17, figure-8 14.6 (lowest per-seed MPC holds)
+    )
+    tracking_exponent: float = 2.0
+    failure_cost: float = 2.0 * (12192.0 / 1.44) ** 2  # per task in the registry
+    #: Restart time priced into a trip (``reward.trip_cost``): a crash loses the
+    #: sortie, 1 h of flight at 1 s steps (provisional).
+    restart_steps: int = 3600
+    #: Two: altitude and heading (or path) each cost 1 at their floors.
+    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: demonstrated, in the reward's units (altitude at its floor, the MPC's 1e-4 rad heading hold in 0.5 deg units).
+    rho_floor_tracking: float = 1.0 + (1.0e-4 / 0.0087) ** 2
+    rho_floor: float = 1.0 + (1.0e-4 / 0.0087) ** 2
+    #: True where e_floor is a resolution, not a measured or certified floor.
+    floor_is_documented_minimum: bool = False
     # Figure-8: half-amplitude of the altitude twist (meters).  The curve
     # altitude is z_mean ± this value, so the two crossover passes differ
     # by 2× this.  200 m ≈ 660 ft — gentle enough for an A320 but enough
@@ -212,7 +246,9 @@ class PlaneParams3D(EnvParams):
     wind_z: float = 0.0
     # Ornstein-Uhlenbeck turbulence: sigma = gust std (m/s), theta = mean-
     # reversion rate (1/s).  sigma = 0 (default) => steady wind, no turbulence.
-    turbulence_sigma: float = 0.0
+    # 1.2 m/s per 1 s step is a 2 m/s stationary gust std at theta = 0.2:
+    # light-to-moderate turbulence (provisional; see PHYSICS.md).
+    turbulence_sigma: float = 1.2
     turbulence_theta: float = 0.2
     # Linear wind shear: horizontal wind gains ``wind_shear_x``/``wind_shear_y``
     # m/s per metre of altitude above ``shear_ref_alt`` (0 => no shear).
@@ -274,7 +310,7 @@ def path_reward(dist, state, params, xp=jnp):
 # ─── Heading task reward ────────────────────────────────
 
 
-def compute_reward_heading(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+def compute_reward_heading_v1(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     """Reward: multiplicative altitude * heading, both log-scaled in the error.
 
     Mirrors the Plane (2D) altitude reward and extends it with a heading
@@ -296,6 +332,15 @@ def compute_reward_heading(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
 
 
 # ─── Circle task reward ─────────────────────────────────
+
+
+def compute_reward_heading(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_heading_v1(state, params, xp),
+        R.total(compute_reward_terms_heading(state, params, xp), xp),
+        xp,
+    )
 
 
 def distance_to_circle(state: PlaneState3D):
@@ -398,7 +443,7 @@ def racetrack_guidance(state: PlaneState3D):
     return cross, jnp.arctan2(jnp.sin(tangent), jnp.cos(tangent)), curvature
 
 
-def compute_reward_racetrack(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+def compute_reward_racetrack_v1(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     """Altitude tracking * proximity to the holding pattern, both log-scaled."""
     alt_r = altitude_reward(state, params, xp)
     d = xp.abs(distance_to_racetrack(state))
@@ -406,7 +451,16 @@ def compute_reward_racetrack(state: PlaneState3D, params: PlaneParams3D, xp=jnp)
     return alt_r * track_r
 
 
-def compute_reward_circle(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+def compute_reward_racetrack(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_racetrack_v1(state, params, xp),
+        R.total(compute_reward_terms_racetrack(state, params, xp), xp),
+        xp,
+    )
+
+
+def compute_reward_circle_v1(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     """Reward: altitude tracking * proximity to the circle path, both log-scaled."""
     alt_r = altitude_reward(state, params, xp)
     d = xp.abs(distance_to_circle(state))
@@ -433,6 +487,16 @@ def compute_reward_circle(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
 #
 # The whole curve is rotated in the horizontal plane by target_heading
 # (the orientation angle, randomised at reset).
+
+
+def compute_reward_circle(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_circle_v1(state, params, xp),
+        R.total(compute_reward_terms_circle(state, params, xp), xp),
+        xp,
+    )
+
 
 _N_CURVE_SAMPLES = 400
 
@@ -522,7 +586,7 @@ def nearest_point_on_twisted_lemniscate(state: PlaneState3D, params: PlaneParams
     return nearest_dx, nearest_dy, nearest_dz, dist, tangent_heading
 
 
-def compute_reward_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+def compute_reward_figure8_v1(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     """Reward: log-scaled 3D distance to the twisted lemniscate.
 
     Pure shape tracking — no moving reference, no shape backstop.  The 3D
@@ -541,6 +605,15 @@ def compute_reward_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
 
 
 # ─── Observation helpers ────────────────────────────────
+
+
+def compute_reward_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_figure8_v1(state, params, xp),
+        R.total(compute_reward_terms_figure8(state, params, xp), xp),
+        xp,
+    )
 
 
 def get_obs_heading(state: PlaneState3D, xp=jnp):
@@ -813,3 +886,64 @@ def compute_next_state_3d(
         gust_z=gust[2],
     )
     return new_state, metrics
+
+
+def altitude_cost(state, params, xp=jnp):
+    return R.tracking_cost(
+        state.target_altitude - state.z,
+        params.e_floor_altitude,
+        params.e_tol_altitude,
+        params.tracking_exponent,
+        xp,
+    )
+
+
+def _downtime(terms, state, params, xp=jnp):
+    terminated, _ = check_is_terminal_3d(state, params, xp)
+    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+
+
+def compute_reward_terms_heading(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    heading = R.tracking_cost(
+        wrap_angle(state.psi - state.target_heading),
+        params.e_floor_heading,
+        0.0,
+        params.tracking_exponent,
+        xp,
+    )
+    return _downtime(
+        {"tracking": altitude_cost(state, params, xp) + heading}, state, params, xp
+    )
+
+
+def compute_reward_terms_racetrack(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+    path = R.tracking_cost(
+        distance_to_racetrack(state),
+        params.e_floor_path,
+        0.0,
+        params.tracking_exponent,
+        xp,
+    )
+    return _downtime(
+        {"tracking": altitude_cost(state, params, xp) + path}, state, params, xp
+    )
+
+
+def compute_reward_terms_circle(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+    path = R.tracking_cost(
+        distance_to_circle(state),
+        params.e_floor_path,
+        0.0,
+        params.tracking_exponent,
+        xp,
+    )
+    return _downtime(
+        {"tracking": altitude_cost(state, params, xp) + path}, state, params, xp
+    )
+
+
+def compute_reward_terms_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+    _, _, _, dist, _ = nearest_point_on_twisted_lemniscate(state, params)
+    path = R.tracking_cost(dist, params.e_floor_path, 0.0, params.tracking_exponent, xp)
+    return _downtime({"tracking": path}, state, params, xp)

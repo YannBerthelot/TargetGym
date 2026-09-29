@@ -7,13 +7,14 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset
+from target_gym.base import canonical_reset, failure_kernel
 from target_gym.pc_gym.four_tank.env import (
     FourTankParams,
     FourTankState,
     check_is_terminal,
     compute_next_state,
     compute_reward,
+    compute_reward_terms,
     get_obs,
 )
 from target_gym.pc_gym.four_tank.rendering import _render
@@ -46,6 +47,9 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
+    def reward_terms(self, state, params):
+        return compute_reward_terms(state, params)
+
     def step_env(
         self,
         key: chex.PRNGKey,
@@ -62,15 +66,18 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
             action, state, params, integration_method=self.integration_method
         )
 
-        reward = compute_reward(new_state, params)
-        # gymnax >= 1.0 owns truncation: ``step_env`` reports natural
-        # termination only, and the base ``Environment.step`` derives
-        # ``truncated`` from ``state.time >= params.max_steps_in_episode``
-        # -- the very condition ``check_is_terminal`` returns second.
-        terminated, _ = check_is_terminal(new_state, params)
-
-        obs = self.get_obs(new_state)
-        return obs, new_state, reward, terminated, {"last_state": new_state}
+        # A trip is part of the kernel: the step is charged the trip cost and
+        # the plant restarts at once; ``terminated`` is never raised
+        # (``base.failure_kernel``).
+        new_state, tripped, scored = failure_kernel(self, key, state, new_state, params)
+        reward = compute_reward(scored, params, xp=jnp)
+        return (
+            self.get_obs(new_state),
+            new_state,
+            reward,
+            jnp.zeros((), dtype=bool),
+            {"last_state": new_state, "tripped": tripped},
+        )
 
     def get_obs(self, state: FourTankState, params: FourTankParams = None):
         if params is None:

@@ -171,7 +171,12 @@ class EnvSpec:
     # because the package had no users to preserve results for. Bump it
     # whenever the dynamics, the reward, the parameters or the observation
     # layout change, so that a published number keeps meaning what it meant.
-    version: int = 1
+    #
+    # v2 for every environment: the floor-normalised reward replaced the
+    # capped log-scaled one (docs/reward-shaping.md). The v1 reward is still
+    # constructible with ``reward_version=1`` on any params, and the v1
+    # baselines are kept in ``data/baseline_returns_v1.json``.
+    version: int = 2
     test_params: dict[str, Any] = field(default_factory=dict)
     tuned_gains_key: str | None = None
     baselines_note: str | None = None
@@ -435,6 +440,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="plane",
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
+        noise_fields=("turbulence_sigma",),
     ),
     # Two moving-setpoint variants of the same aircraft. They are the same plant
     # and the same controllers; only the commanded altitude differs, which is
@@ -480,10 +486,19 @@ _SPECS: tuple[EnvSpec, ...] = (
             "target_amplitude": 900.0,
             "target_steps": 8,
             "speed_weight": 0.5,
+            # Hold-phase airspeed deviation of the PID on this task and the
+            # lowest per-seed MPC hold between ladder steps
+            # (`scripts/measure_hold.py`); the version-2 references.
+            "c_hold": 5.23,
+            "e_floor": 4.55,
+            "rho_floor_tracking": 1.0,
+            "rho_floor": 1.0,
+            "failure_cost": 2.0 * (12192.0 / 4.55) ** 2,
         },
         tuned_gains_key="plane",
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
+        noise_fields=("turbulence_sigma",),
     ),
     EnvSpec(
         name="plane_sine",
@@ -509,10 +524,16 @@ _SPECS: tuple[EnvSpec, ...] = (
             "target_pattern": 3,
             "target_amplitude": 300.0,
             "target_period": 240.0,
+            "c_hold": 8.15,  # PID hold-phase airspeed deviation on the sinusoid
+            "e_floor": 1.26,  # lowest per-seed MPC hold on the sinusoid
+            "rho_floor_tracking": 1.0,
+            "rho_floor": 1.0,
+            "failure_cost": 2.0 * (12192.0 / 1.26) ** 2,
         },
         tuned_gains_key="plane",
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
+        noise_fields=("turbulence_sigma",),
     ),
     EnvSpec(
         name="plane3d_heading",
@@ -525,6 +546,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="plane3d_heading",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
+        noise_fields=("turbulence_sigma",),
     ),
     EnvSpec(
         name="plane3d_circle",
@@ -533,10 +555,19 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
         make_pid=_pid("make_plane3d_circle_cascaded_pid"),
         make_mpc=_mpc("make_plane3d_mpc"),
-        test_params={"max_steps_in_episode": 300},
+        test_params={
+            "max_steps_in_episode": 300,
+            # Lowest per-seed MPC holds on this task (`scripts/measure_hold.py`).
+            "e_floor_altitude": 4.06,
+            "e_floor_path": 8.12,
+            "rho_floor_tracking": 2.0,
+            "rho_floor": 2.0,
+            "failure_cost": 2.0 * (12192.0 / 4.06) ** 2,
+        },
         tuned_gains_key="plane3d_circle",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
+        noise_fields=("turbulence_sigma",),
     ),
     EnvSpec(
         name="plane3d_racetrack",
@@ -549,10 +580,18 @@ _SPECS: tuple[EnvSpec, ...] = (
         # about 8.3 r of path. At an 8.4 km radius and 230 m/s that is ~300 s,
         # so 650 steps is the three laps the episode-length criterion asks of a
         # periodic task.
-        test_params={"max_steps_in_episode": 650},
+        test_params={
+            "max_steps_in_episode": 650,
+            "e_floor_altitude": 1.39,
+            "e_floor_path": 6.17,
+            "rho_floor_tracking": 2.0,
+            "rho_floor": 2.0,
+            "failure_cost": 2.0 * (12192.0 / 1.39) ** 2,
+        },
         tuned_gains_key="plane3d_racetrack",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
+        noise_fields=("turbulence_sigma",),
         # No ``expert_degraded``: this expert used to carry one, and what it
         # said was that its gains had never been searched. They have been now.
         # Coordinate descent on the cross-track gain alone, over five seeds and
@@ -589,10 +628,18 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
         make_pid=_pid("make_plane3d_figure8_stateful_pid"),
         make_mpc=_mpc("make_plane3d_mpc"),
-        test_params={"max_steps_in_episode": 400},
+        test_params={
+            "max_steps_in_episode": 400,
+            # Path term alone: its floor, and the reference is one term.
+            "e_floor_path": 14.6,
+            "rho_floor_tracking": 1.0,
+            "rho_floor": 1.0,
+            "failure_cost": 2.0 * (20000.0 / 14.6) ** 2,
+        },
         tuned_gains_key="plane3d_figure8",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
+        noise_fields=("turbulence_sigma",),
     ),
     EnvSpec(
         name="patrol",
@@ -603,6 +650,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_patrol_mpc"),
         test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
+        noise_fields=("turbulence_sigma",),
     ),
     EnvSpec(
         name="patrol_bearing_only",
@@ -636,6 +684,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "true state anyway would make it an oracle on a task defined by "
             "what is hidden, so it needs a planner built on the estimator."
         ),
+        noise_fields=("turbulence_sigma",),
     ),
     # -- Process control ----------------------------------------------------
     EnvSpec(
@@ -737,7 +786,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # physics sub-steps. The physics within an episode is unchanged, but a
         # return published against v1 was taken over 8640 env steps of which
         # 7776 scored a frozen plant, so its numbers do not carry over.
-        version=2,
+        # v3: the floor-normalised reward, like every other plant's v2.
+        version=3,
     ),
     EnvSpec(
         name="hvac",

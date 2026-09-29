@@ -159,7 +159,7 @@ class TestHeadingReward:
         env = Plane3DHeading()
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         state = state.replace(z=state.target_altitude, psi=state.target_heading)
         reward = compute_reward_heading(state, params)
         assert float(reward) > 0.9
@@ -168,7 +168,7 @@ class TestHeadingReward:
         env = Plane3DHeading()
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         state = state.replace(
             z=state.target_altitude + 5000.0, psi=state.target_heading
         )
@@ -179,7 +179,7 @@ class TestHeadingReward:
         env = Plane3DHeading()
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         state = state.replace(
             z=state.target_altitude, psi=state.target_heading + jnp.pi
         )
@@ -190,7 +190,7 @@ class TestHeadingReward:
         env = Plane3DHeading()
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         state = state.replace(z=-1.0)
         reward = float(compute_reward_heading(state, params))
         # There is no crash penalty any more. Termination costs the agent every
@@ -267,7 +267,7 @@ class TestCircleReward:
         env = Plane3DCircle()
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         # State is already on the circle from reset
         state = state.replace(z=state.target_altitude)
         reward = compute_reward_circle(state, params)
@@ -278,7 +278,7 @@ class TestCircleReward:
         env = Plane3DCircle()
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         # Move far from circle
         state = state.replace(
             x=state.target_x + state.target_radius * 3,
@@ -354,7 +354,7 @@ class TestFigureEightReward:
         env = Plane3DFigureEight()
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         state = state.replace(z=state.target_altitude)
         reward = compute_reward_figure8(state, params)
         assert float(reward) > 0.5
@@ -364,7 +364,7 @@ class TestFigureEightReward:
         env = Plane3DFigureEight()
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         state = state.replace(
             x=state.target_x + state.target_radius * 5,
             y=state.target_y + state.target_radius * 5,
@@ -385,7 +385,7 @@ class TestTerminal3D:
         env = env_cls()
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         terminated, truncated = check_is_terminal_3d(state, params)
         assert not bool(terminated)
         assert not bool(truncated)
@@ -395,11 +395,11 @@ class TestTerminal3D:
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
         state = state.replace(z=-1.0)
-        terminated, _ = check_is_terminal_3d(state, PlaneParams3D())
+        terminated, _ = check_is_terminal_3d(state, PlaneParams3D(reward_version=1))
         assert bool(terminated)
 
     def test_terminal_above_max(self):
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         env = Plane3DHeading()
         key = jax.random.PRNGKey(42)
         _, state = env.reset(key)
@@ -491,7 +491,7 @@ def test_aileron_cannot_out_lift_the_wing():
     """
     from target_gym.plane3d.env import PlaneParams3D
 
-    p = PlaneParams3D()
+    p = PlaneParams3D(reward_version=1)
     full_deflection_deg = 25.0
     delta_cl = p.cl_alpha * p.aileron_effectiveness * full_deflection_deg
     assert delta_cl < p.CL_max, (
@@ -509,7 +509,7 @@ def _heading_reward_at(alt_err=0.0, hdg_err=0.0):
     state = state.replace(
         z=state.target_altitude + alt_err, psi=state.target_heading + hdg_err
     )
-    return float(compute_reward_heading(state, PlaneParams3D()))
+    return float(compute_reward_heading(state, PlaneParams3D(reward_version=1)))
 
 
 def _circle_reward_at(cross_track):
@@ -520,7 +520,7 @@ def _circle_reward_at(cross_track):
         y=state.target_y,
         z=state.target_altitude,
     )
-    return float(compute_reward_circle(state, PlaneParams3D()))
+    return float(compute_reward_circle(state, PlaneParams3D(reward_version=1)))
 
 
 def _assert_scale_free(reward_at, pairs, axis):
@@ -600,7 +600,7 @@ class TestLemniscateDistanceResolution:
         """
         from target_gym.plane3d.env import _sample_twisted_lemniscate
 
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         _, state = Plane3DFigureEight().reset(jax.random.PRNGKey(0))
         cx, cy, cz = _sample_twisted_lemniscate(state, params)
         for i in (0, 50, 100, 150, 199):
@@ -615,7 +615,7 @@ class TestLemniscateDistanceResolution:
     def test_known_offset_is_measured_accurately(self):
         from target_gym.plane3d.env import nearest_point_on_twisted_lemniscate
 
-        params = PlaneParams3D()
+        params = PlaneParams3D(reward_version=1)
         _, state = Plane3DFigureEight().reset(jax.random.PRNGKey(0))
         for offset in (100.0, 10.0, 1.0):
             dist = float(

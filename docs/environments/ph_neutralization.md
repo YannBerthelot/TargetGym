@@ -11,7 +11,7 @@ pH neutralisation — CSTR with acid, buffer and base streams.
 | Tracked variable(s) | pH |
 | Episode length | 300 steps (1500 s at 5 s per step) |
 | Import | `from target_gym import PHNeutralization, PHParams` |
-| Cite as | `ph_neutralization-v1` |
+| Cite as | `ph_neutralization-v2` |
 
 ## Action space
 
@@ -29,7 +29,7 @@ reward scores.
 
 ## Rewards
 
-pH tracking minus a small reagent cost.
+See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract: the reward is
 `(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
@@ -68,5 +68,5 @@ A tuned PID ships with this environment.
 | `Wb2` | 0.03 |
 | `q3_min` | 10 |
 | `q3_max` | 22 |
-| … | 9 more, see the params dataclass |
+| … | 19 more, see the params dataclass |
 

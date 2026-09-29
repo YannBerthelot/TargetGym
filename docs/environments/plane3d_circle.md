@@ -11,7 +11,7 @@
 | Tracked variable(s) | altitude (m) |
 | Episode length | 300 steps (300 s at 1 s per step) |
 | Import | `from target_gym import Plane3DCircle, PlaneParams3D` |
-| Cite as | `plane3d_circle-v1` |
+| Cite as | `plane3d_circle-v2` |
 
 ## Action space
 
@@ -70,5 +70,5 @@ A tuned PID ships with this environment.
 | `specific_fuel_consumption` | 0.0175 |
 | `power_response_rate` | 0.05 |
 | `stick_response_rate` | 0.9 |
-| … | 50 more, see the params dataclass |
+| … | 60 more, see the params dataclass |
 
