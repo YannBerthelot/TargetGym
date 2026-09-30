@@ -322,12 +322,6 @@ that these controllers are not optimising the quantity they are scored on, and
 because the reward is not quadratic, the plan that minimises the proxy is not
 in general the plan that maximises expected reward.
 
-MPC rollouts are expensive, so episodes are cached under `data/mpc_cache/`:
-
-```bash
-make clear-mpc     # drop the MPC trajectory cache
-```
-
 ### The solver is capped, and every record says how often the cap bit
 
 IPOPT ships with a limit of 3000 iterations and no time limit at all. In a

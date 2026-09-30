@@ -8,7 +8,7 @@ CPU_ENV := CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu JAX_PLATFORM_NAME=cpu
 
 .PHONY: ci ci-lint ci-format-check ci-test help install \
         all all-% figures figures-% videos videos-% tuning tuning-% \
-        clear-mpc short-gifs baselines baselines-% \
+        short-gifs baselines baselines-% \
         time-constants \
         test test-all mypy coverage \
         missing-annotations type lint format check-codestyle commit-checks \
@@ -82,10 +82,6 @@ baselines-%:  ## Re-measure one environment's recorded baseline
 
 time-constants:  ## Measure each plant's actuator-to-output time constant
 	uv run python scripts/measure_time_constants.py
-
-clear-mpc:
-	rm -rf data/mpc_cache data/interpolators
-	@echo "Cleared MPC trajectory cache (data/mpc_cache/, data/interpolators/)."
 
 test:  ## Fast tests only
 	$(CPU_ENV) uv run pytest --tb=short --disable-warnings -n auto -m "not slow"
