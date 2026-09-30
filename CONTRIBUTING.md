@@ -125,9 +125,15 @@ uv run python scripts/record_baselines.py                  # everything
 uv run python scripts/record_baselines.py --envs plane cstr # just these
 ```
 
-The headline table in `docs/baselines.md` is generated from those records, so
-regenerate it afterwards with `uv run python scripts/generate_baseline_table.py`.
-`make ci-docs` and the CI docs job fail while it is stale.
+The headline table in `docs/baselines.md` and the per-environment pages both
+show those records, so regenerate them afterwards:
+
+```bash
+uv run python scripts/generate_baseline_table.py
+uv run python scripts/generate_env_pages.py
+```
+
+`make ci-docs` and the CI docs job fail while either is stale.
 
 Each record carries a fingerprint of what determined it: the environment's
 modules, the shared controller and integration code, the gains, the parameter
@@ -170,11 +176,12 @@ trusted, by `tests/test_docs.py`:
   `docs/baselines.md` is generated as well, by
   `scripts/generate_baseline_table.py` from
   `src/target_gym/data/baseline_returns.json`. Adding an environment or a
-  baseline means regenerating all three, and re-recording a baseline means
-  regenerating the table. `make ci-docs` runs each with `--check` and then
-  `mkdocs build --strict`, which fails on a dangling link, including one that
-  resolves on GitHub but not on the built site, since anything outside `docs/`
-  (a `PHYSICS.md` under `src/`, `CONTRIBUTING.md`) has to be linked absolutely.
+  baseline means regenerating all three, and so does re-recording baselines,
+  since the pages and the table show the recorded numbers. `make ci-docs` runs
+  each with `--check` and then `mkdocs build --strict`, which fails on a
+  dangling link, including one that resolves on GitHub but not on the built
+  site, since anything outside `docs/` (a `PHYSICS.md` under `src/`,
+  `CONTRIBUTING.md`) has to be linked absolutely.
 
   Action meanings on those pages are read out of each environment class's
   docstring, from a line like `Action (2,): [power, stick], raw in [-1, 1]`.
