@@ -15,7 +15,7 @@ Everything on a page is read from the environment itself: spaces from
 ``observation_space``/``action_space``, tracked variables from
 ``obs_value_index``, rewards and termination from the docstrings of
 ``compute_reward`` and ``check_is_terminal``, arguments from the params
-dataclass, baseline scores from ``data/baseline_returns.json``.
+dataclass, baseline scores from ``src/target_gym/data/baseline_returns.json``.
 """
 
 from __future__ import annotations
@@ -35,10 +35,16 @@ import numpy as np  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from target_gym.provenance import BASELINES_PATH  # noqa: E402
 from target_gym.registry import REGISTRY, display_name  # noqa: E402
 
 OUT_DIR = ROOT / "docs" / "environments"
-BASELINES = ROOT / "data" / "baseline_returns.json"
+# The recorded baselines, from where the package reads them. This used to be
+# a path of its own, ``data/baseline_returns.json`` at the repository root,
+# which stopped existing when the data moved into the package. The generator
+# checked ``exists()`` and fell back to a sentence, so every page quietly lost
+# its numbers and ``--check`` still passed. It reads the file unconditionally
+# now: if the file moves again, this script fails instead of degrading.
 
 # Where each environment's gif lives, relative to the repository root. Only
 # environments with a rendered clip get a picture; the rest simply omit it.
@@ -164,28 +170,53 @@ def _params_table(params, limit: int = 14) -> str:
     return "\n".join(rows)
 
 
-def _baseline_section(name: str, spec) -> str:
-    recorded = {}
-    if BASELINES.exists():
-        recorded = json.loads(BASELINES.read_text()).get(name, {})
-    lines = []
+def _baseline_section(spec, row: dict | None) -> str:
     if not spec.has_pid:
         return f"No baseline ships for this environment. {spec.baselines_note or ''}".strip()
-    if recorded.get("pid_returns"):
-        pid = np.mean(recorded["pid_returns"])
-        steps = recorded["steps"]
+    lines = []
+    if row and row.get("pid_returns"):
+        # Reported the way docs/baselines.md reports them: every reward is
+        # minus a sum of costs, so the mean return is negative and the cost
+        # per step is its positive counterpart. Four significant figures
+        # because the plants span ten orders of magnitude; a fixed ``.1f``
+        # printed the wind turbine's -0.0145 as -0.0.
+        pid = np.asarray(row["pid_returns"], dtype=float)
+        steps = int(row["steps"])
         lines.append(
-            f"Measured over {recorded['seeds']} seeds on a {steps}-step episode "
-            f"(see [Baselines](../baselines.md)):\n"
+            f"Recorded over {row['seeds']} seeds of the {steps}-step episode "
+            "(see [Baselines](../baselines.md)). The reward is a cost, so a "
+            "return closer to zero is better.\n"
         )
-        lines.append("| controller | return | per step |")
+        lines.append("| controller | mean return | cost per step |")
         lines.append("|---|---|---|")
-        lines.append(f"| PID | {pid:.1f} | {pid / steps:.3f} |")
-        if recorded.get("mpc_returns"):
-            mpc = np.mean(recorded["mpc_returns"])
-            lines.append(f"| MPC | {mpc:.1f} | {mpc / steps:.3f} |")
+        lines.append(f"| PID | {pid.mean():.4g} | {-pid.mean() / steps:.4g} |")
+        if row.get("mpc_returns"):
+            mpc = np.asarray(row["mpc_returns"], dtype=float)
+            lines.append(f"| MPC | {mpc.mean():.4g} | {-mpc.mean() / steps:.4g} |")
+            won = int((mpc > pid).sum())
+            summary = f"\nThe MPC beats the PID on {won} of {len(pid)} seeds"
+            trips = row.get("mpc_trips")
+            if trips == 0:
+                summary += " and does not trip the plant on any of them"
+            elif trips is not None:
+                summary += (
+                    f" and trips the plant {trips} time{'' if trips == 1 else 's'}"
+                    " across them"
+                )
+            lines.append(summary + ".")
+    elif spec.has_mpc:
+        lines.append(
+            "A PID and an MPC ship with this environment, but no comparison has "
+            "been recorded for them yet."
+        )
     else:
-        lines.append("A tuned PID ships with this environment.")
+        # ``scripts/record_baselines.py`` only records environments with both
+        # controllers, so a PID on its own never has numbers to show here. The
+        # note says what the PID is and why no MPC ships.
+        lines.append(
+            "No MPC ships with this environment, so there is no recorded "
+            f"comparison. {spec.baselines_note or 'A PID ships.'}"
+        )
     # Both degradation notes are surfaced, not just the MPC's. The homepage
     # promises that "where a baseline is weak, the docs say how weak", and a
     # weak *expert* is the case that misleads hardest: a reader who beats it
@@ -205,9 +236,17 @@ def _baseline_section(name: str, spec) -> str:
     return "\n".join(lines)
 
 
-def page(name: str, spec) -> str:
+def page(name: str, spec, recorded: dict) -> str:
     env = spec.make_env()
     params = spec.make_test_params()
+    # The Rewards and Episode end sections below describe the version-2
+    # reward. Refuse to put that text on a page whose environment scores
+    # differently, which is how "bounded in [0, 1]" outlived version 1.
+    if getattr(params, "reward_version", 2) != 2:
+        raise SystemExit(
+            f"{name}: reward_version {params.reward_version}, and the page "
+            "template describes version 2"
+        )
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
     module = _env_module(spec)
@@ -287,10 +326,15 @@ def page(name: str, spec) -> str:
     out += [
         reward_doc or "See the environment's `compute_reward`.",
         "",
-        "Every environment in this suite scores on one contract: the reward is",
-        "`(tracking terms, multiplied) x (1 - weighted costs)`, bounded in",
-        "`[0, 1]`, and reaches 1 only while the target is held exactly. See",
-        "[Reward shaping](../reward-shaping.md).",
+        "Every environment in this suite scores on one contract. The reward is",
+        "minus the sum of three non-negative costs,",
+        "`-(tracking_cost + running_cost + failure_cost)`. The running cost",
+        "charges consumption and the failure cost charges trips out of the",
+        "operating envelope. The reward is never positive, and its scale differs",
+        "by orders of magnitude between plants. Some plants are",
+        "priced in dollars or euros and the rest are dimensionless; the",
+        "[per-plant summary](../reward-shaping.md#per-plant-summary) says which.",
+        "See [Reward shaping](../reward-shaping.md) for how each cost is built.",
         "",
         "## Starting state",
         "",
@@ -305,14 +349,32 @@ def page(name: str, spec) -> str:
         if module and hasattr(module, "check_is_terminal")
         else None
     )
+    # No plant raises ``terminated`` (``base.failure_kernel``): a trip is
+    # charged and the plant restarts, so ``check_is_terminal`` is the trip
+    # condition and its docstring, where there is one, says what trips.
+    if getattr(params, "restart_in_place", False):
+        trip = (
+            "The plant keeps its state through a trip instead of restarting, "
+            "and every step spent outside the envelope is charged the trip "
+            'cost and sets `info["tripped"]` until the controller brings it back.'
+        )
+    else:
+        trip = (
+            "The step that leaves the envelope is charged the trip cost and "
+            'sets `info["tripped"]`, and the plant restarts as `reset_env` '
+            "would while the episode clock keeps running."
+        )
     out += [
-        f"**Termination.** {term_doc or 'See `check_is_terminal`.'}",
+        "**Termination.** None. `terminated` is always false, and leaving the "
+        f"operating envelope trips the plant instead. {trip}"
+        + (f" {term_doc}" if term_doc else "")
+        + " See [Reward shaping](../reward-shaping.md#failure).",
         "",
         f"**Truncation.** After {episode} steps.",
         "",
         "## Baselines",
         "",
-        _baseline_section(name, spec),
+        _baseline_section(spec, recorded.get(name)),
         "",
         "## Arguments",
         "",
@@ -323,7 +385,8 @@ def page(name: str, spec) -> str:
 
 
 def build() -> dict[str, str]:
-    return {name: page(name, spec) for name, spec in REGISTRY.items()}
+    recorded = json.loads(BASELINES_PATH.read_text())
+    return {name: page(name, spec, recorded) for name, spec in REGISTRY.items()}
 
 
 def main() -> int:

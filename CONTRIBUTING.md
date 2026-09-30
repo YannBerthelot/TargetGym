@@ -163,7 +163,8 @@ trusted, by `tests/test_docs.py`:
   `docs/environments.md` by `scripts/generate_env_reference.py`, and the
   per-environment pages under `docs/environments/` by
   `scripts/generate_env_pages.py`. Adding an environment or a baseline means
-  regenerating both. `make ci-docs` runs each with `--check` and then
+  regenerating both, and so does re-recording baselines, since each page shows
+  its environment's recorded numbers. `make ci-docs` runs each with `--check` and then
   `mkdocs build --strict`, which fails on a dangling link, including one that
   resolves on GitHub but not on the built site, since anything outside `docs/`
   (a `PHYSICS.md` under `src/`, `CONTRIBUTING.md`) has to be linked absolutely.
