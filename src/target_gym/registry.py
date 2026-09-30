@@ -181,7 +181,7 @@ class EnvSpec:
     # v2 for every environment: the floor-normalised reward replaced the
     # capped log-scaled one (docs/reward-shaping.md). The v1 reward is still
     # constructible with ``reward_version=1`` on any params, and the v1
-    # baselines are kept in ``data/baseline_returns_v1.json``.
+    # baselines are kept in ``src/target_gym/data/baseline_returns_v1.json``.
     version: int = 2
     test_params: dict[str, Any] = field(default_factory=dict)
     tuned_gains_key: str | None = None

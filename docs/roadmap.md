@@ -48,7 +48,7 @@ what is broken and recorded rather than hidden.
         package. This also clears the stale PyPI summary, which still mentions a
         "Car" environment that does not exist.
       - [x] **Environment versioning.** Done: `EnvSpec.version`,
-        `spec.versioned_name`, `data/env_versions.json`, and
+        `spec.versioned_name`, `src/target_gym/data/env_versions.json`, and
         `tests/test_env_versions.py`, which fails when an environment's
         fingerprint moves without its version being bumped. Every environment
         ships as `v1`.
@@ -199,6 +199,28 @@ what is broken and recorded rather than hidden.
       conservative, because the module's whole point is that it may cry stale when
       nothing changed but must never report fresh when something did. So an
       unresolvable entry point has to fall back to hashing the entire file.
+
+* [ ] **Remove the `utils.py` helpers nothing calls, with the next re-record.**
+      `load_or_run_mpc_episode`, `save_comparison_gif`, `save_comparison_figure`
+      and `load_or_build_interpolator` lost their last callers when 5458229
+      replaced the seven per-environment runners with `runners/runners.py`.
+      Only `tests/test_runners.py` and `tests/test_utils.py` still call them,
+      and `save_comparison_figure` has no caller at all. `run_episode_headless`
+      and `run_episode_headless_with_state` are only reachable through them.
+
+      Deleting them changes no behaviour, but `utils.py` is hashed into both
+      provenance fingerprints. On the 21-environment registry the deletion
+      would stale all 21 version stamps, all 20 recorded baselines and all 21
+      protocol rows, which is about two hours of re-measurement to reproduce
+      the same numbers. So they go in the next change that has to re-record
+      anyway, or once fingerprints hash only the code each environment reaches
+      (the item above). That change should also drop the `pickle` and
+      `FigureCanvasAgg` imports, which nothing else in `utils.py` uses, the
+      helpers' tests, the `("utils.py", "_, rewards = result")` allowlist entry
+      in `tests/test_env_conformance.py`, and the mentions of
+      `run_episode_headless` in `plane/dynamics.py` and in that test file. It
+      needs a CHANGELOG entry, because `target_gym.utils` is importable.
+      `moviepy` stays, since `save_video` uses it.
 
 * [ ] **Find a defensible framing for running cost, then put it back.**
       Six environments carried a consumption term in their reward -- fuel on
@@ -444,7 +466,7 @@ what is broken and recorded rather than hidden.
         350.4 against an honest 151.8. That is now closed by `plan_params`, so
         an oracle arm is something to re-enable deliberately -- pass the
         evaluation key through `plan_params` rather than around it -- and its
-        results must never reach `data/baseline_returns.json`.
+        results must never reach `src/target_gym/data/baseline_returns.json`.
       - [ ] **Scenario arm on `SamplingMPC`.** A vmap over K disturbance keys
         and a mean, on top of the vmap over action samples it already does.
         Then a decision about whether to average the objective or use a risk
@@ -491,7 +513,7 @@ what is broken and recorded rather than hidden.
       against itself.
 * [ ] **Publish RL baseline results.** The environments claim a learned policy
       has something real to beat; no learned policy's numbers are published yet.
-      The harness is in place: `data/rl_results.json`, written through
+      The harness is in place: `src/target_gym/data/rl_results.json`, written through
       `target_gym.rl_results.record_result` and guarded by a fingerprint of the
       environment, so a result recorded before a reward or dynamics change is
       refused rather than quoted. Training runs outside this package (the

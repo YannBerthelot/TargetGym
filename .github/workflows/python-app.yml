@@ -178,7 +178,7 @@ jobs:
     # parallelises across tests rather than within one, that single test set
     # roughly 70% of the wall-clock floor and came close to this job's
     # 30-minute timeout on four slower cores. It is now asserted from
-    # data/baseline_returns.json, recorded by hand with
+    # src/target_gym/data/baseline_returns.json, recorded by hand with
     # scripts/record_baselines.py and guarded by a fingerprint of the physics,
     # controllers, gains and parameters it was taken against. That moved it into
     # the fast job above, where it runs on every push and across the whole
@@ -191,9 +191,9 @@ jobs:
     # The floor check (test_mpc_does_not_beat_a_measured_floor) briefly brought
     # MPC rollouts back here, and the same thing happened: 52 of the suite's 65
     # core-minutes, and a run killed by this timeout on a four-core runner. It
-    # now reads the MPC's cost from data/protocol_results.json under the same
-    # fingerprint, and runs in the fast job; one slow test re-runs the protocol
-    # on the pH plant to keep the recording honest.
+    # now reads the MPC's cost from src/target_gym/data/protocol_results.json
+    # under the same fingerprint, and runs in the fast job; one slow test
+    # re-runs the protocol on the pH plant to keep the recording honest.
     name: slow tests
     if: github.event_name == 'push'
     runs-on: ubuntu-latest

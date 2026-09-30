@@ -1189,11 +1189,11 @@ def _controller_defaults(gains_key):
     """Starting point for a controller that has never had a tuned entry.
 
     ``plane_cascaded`` is the case this exists for. The 2D aircraft's shipped
-    autopilot reads that key, it has never been in data/pid_gains.json, and both
-    tuners wrote ``plane`` instead -- a different, no-longer-shipped MIMO
-    controller -- so ``make tuning-plane`` reported success and changed nothing.
-    Seeding from the constructor's own defaults is what the controller has in
-    fact been running on.
+    autopilot reads that key, it has never been in
+    src/target_gym/data/pid_gains.json, and both tuners wrote ``plane`` instead --
+    a different, no-longer-shipped MIMO controller -- so ``make tuning-plane``
+    reported success and changed nothing. Seeding from the constructor's own
+    defaults is what the controller has in fact been running on.
     """
     import inspect
 
