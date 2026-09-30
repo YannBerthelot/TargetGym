@@ -12,7 +12,41 @@ It was written on 2026-09-29 on the branch `docs/new-families-proposal`, which
 starts from `reward/floor-normalised`. Every new task has to use the version-2
 reward and `base.failure_kernel`, and `main` has neither yet. They exist on
 `reward/floor-normalised` and on `feature/run-policy-on-benchmark`, which is
-built on it.
+built on it. Both have since been merged into `main`.
+
+## Status
+
+As of 2026-09-30, after the owner's decisions and the gate checks:
+
+- New tasks join the core pool. They are appended to the registry after the 21,
+  so every default accessor, the counts and the default benchmark include them,
+  and the seeds of the 21 do not move. The registry tier field proposed under
+  [Registering new tasks](#registering-new-tasks) was dropped: with every new
+  task in the core pool it had nothing to do.
+- Two pieces of that design remain, because the new tasks need them. A task
+  whose physics imports another package's file declares it in
+  `EnvSpec.fingerprint_sources`, so both of its fingerprints hash it. A task
+  added after the 21 keeps its controllers in its own package's `experts.py`,
+  which its baseline fingerprint hashes and its version stamp leaves out, since
+  `experts/pid.py` and `experts/mpc.py` are in every task's baseline
+  fingerprint. `tests/test_registry_rules.py` pins the 21 specs and holds new
+  tasks to these rules.
+- The build set is `unstable_cstr`, then `compressor_surge`.
+- The gate checks were run before any code, each re-derived by a second agent.
+  - `compressor_surge` passed: a controller that chases the pressure setpoint
+    without watching the surge margin crosses the surge line. Its drafted
+    expert trips in about 10 % of episodes, so the expert needs a wider margin
+    before anything is recorded.
+  - `grade_transition` is dropped for now. On the published constants every
+    grade is open-loop stable, the feed is too dilute for a runaway (the
+    reactor cannot exceed 370.4 K), and the relative gain is 1.3 to 1.6, not
+    the 3.2 to 7.8 quoted below from recalled constants.
+  - `batch_reactor` is deferred. On the published jacket values a plain PI
+    never trips; it becomes hard only with a 2-minute actuator lag that no
+    source gives.
+- `maglev` is not in this round.
+
+The sections below are the proposal as it was written, before these decisions.
 
 ## What this page asks you to decide
 

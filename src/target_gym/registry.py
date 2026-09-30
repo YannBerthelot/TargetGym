@@ -157,6 +157,12 @@ class EnvSpec:
         real environment forward gets a copy of the params with these set to
         zero, so it plans on the mean disturbance instead of one invented
         realisation of it.
+    fingerprint_sources:
+        Source files outside the task's own package that its physics imports,
+        relative to ``src/target_gym`` (e.g. ``"pc_gym/cstr/env.py"``). Both
+        fingerprints hash only the task's own package, so an imported file has
+        to be declared here for an edit to it to make this task's records
+        stale.
     """
 
     name: str
@@ -188,6 +194,7 @@ class EnvSpec:
     #: a planner uses for its internal model. See ``experts.mpc.plan_params``.
     noise_fields: tuple[str, ...] = ()
     disturbance_overrides: dict[str, Any] = field(default_factory=dict)
+    fingerprint_sources: tuple[str, ...] = ()
 
     @property
     def versioned_name(self) -> str:
@@ -403,22 +410,27 @@ class _LazyParams:
 # -- PID factories ----------------------------------------------------------
 
 
-def _pid(factory_name: str) -> Callable[[], Any]:
+def _pid(
+    factory_name: str, module: str = "target_gym.experts.pid"
+) -> Callable[[], Any]:
+    # A task added after the 21 passes its own package's ``experts`` module:
+    # experts/pid.py and experts/mpc.py are in every task's baseline
+    # fingerprint, so a controller added there would stale all of them.
     def make():
         from importlib import import_module
 
-        return getattr(import_module("target_gym.experts.pid"), factory_name)()
+        return getattr(import_module(module), factory_name)()
 
     return make
 
 
-def _mpc(factory_name: str) -> Callable[[Any, Any], Any]:
+def _mpc(
+    factory_name: str, module: str = "target_gym.experts.mpc"
+) -> Callable[[Any, Any], Any]:
     def make(env, params, **kwargs):
         from importlib import import_module
 
-        return getattr(import_module("target_gym.experts.mpc"), factory_name)(
-            env, params, **kwargs
-        )
+        return getattr(import_module(module), factory_name)(env, params, **kwargs)
 
     return make
 
@@ -857,6 +869,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("dispatch_noise_std",),
         disturbance_fields=("target_power",),
     ),
+    # Append new tasks here, never insert: a task's position in REGISTRY is its
+    # benchmark seed index, and TargetFoundation derives seeds the same way.
 )
 
 REGISTRY: dict[str, EnvSpec] = {spec.name: spec for spec in _SPECS}

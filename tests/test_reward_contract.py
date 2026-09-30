@@ -255,6 +255,16 @@ def _recorded_protocol_row(spec) -> dict:
     return row
 
 
+def test_recorded_protocol_row_still_describes_this_tree(spec):
+    """Every shipped PID has a protocol row taken against this tree, whether
+    or not its floor is measured. The floor check below skips four rows (three
+    documented minima and patrol_bearing_only), so without this their
+    fingerprints would go unchecked."""
+    if not spec.has_pid:
+        pytest.skip(f"{spec.name}: {spec.baselines_note}")
+    _recorded_protocol_row(spec)
+
+
 def test_mpc_does_not_beat_a_measured_floor(spec):
     """Floor sanity: where ``e_floor`` is a measured or certified floor (not a
     documented minimum on a deterministic plant), the shipped MPC's long-run
