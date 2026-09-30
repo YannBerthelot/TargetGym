@@ -231,22 +231,65 @@ def test_reward_parameters_are_documented(spec):
     ), f"{spec.name}: PHYSICS.md does not say how the floor was obtained"
 
 
-@pytest.mark.slow
+PROTOCOL_PATH = SRC / "data" / "protocol_results.json"
+
+
+def _recorded_protocol_row(spec) -> dict:
+    """The row ``scripts/evaluate_baselines.py`` recorded for ``spec``, refused
+    if its fingerprint no longer matches the tree (the same guard, and the same
+    fingerprint, as the recorded baselines)."""
+    from target_gym.provenance import baseline_fingerprint
+
+    rerun = (
+        f"Re-run `uv run python scripts/evaluate_baselines.py --envs {spec.name}` "
+        f"and commit src/target_gym/data/protocol_results.json."
+    )
+    rows = json.loads(PROTOCOL_PATH.read_text()) if PROTOCOL_PATH.exists() else {}
+    row = rows.get(spec.name)
+    assert row is not None, f"{spec.name}: no recorded protocol row. {rerun}"
+    current = baseline_fingerprint(spec)
+    assert row.get("fingerprint") == current, (
+        f"{spec.name}: the protocol row was taken against different code "
+        f"(recorded {row.get('fingerprint')}, current {current}). {rerun}"
+    )
+    return row
+
+
 def test_mpc_does_not_beat_a_measured_floor(spec):
     """Floor sanity: where ``e_floor`` is a measured or certified floor (not a
     documented minimum on a deterministic plant), the shipped MPC's long-run
     tracking cost after burn-in is at or above the floor's cost. A floor the
-    MPC beats is wrong."""
-    from target_gym.eval import evaluate_controller
+    MPC beats is wrong.
 
+    Read from the recorded protocol results rather than re-measured: running
+    every measured plant's MPC here cost about 52 core-minutes per merge, and
+    the answer only changes when the physics, controllers, gains or parameters
+    do, which is exactly what the row's fingerprint guards. The live check below
+    keeps the measurement itself honest on one plant."""
     p = spec.make_test_params()
     if spec.make_mpc is None or getattr(p, "floor_is_documented_minimum", True):
         pytest.skip(f"{spec.name}: no measured floor to check against")
-    m = evaluate_controller(spec.name, "mpc", seeds=2)
-    assert m["tracking"] >= 0.98 * float(p.rho_floor_tracking), (
-        f"{spec.name}: MPC tracking cost {m['tracking']:.4g} below the floor "
+    tracking = _recorded_protocol_row(spec)["mpc"]["tracking"]
+    assert tracking >= 0.98 * float(p.rho_floor_tracking), (
+        f"{spec.name}: MPC tracking cost {tracking:.4g} below the floor "
         f"{float(p.rho_floor_tracking):.4g}"
     )
+
+
+@pytest.mark.slow
+def test_the_recorded_mpc_cost_is_what_the_mpc_measures_now():
+    """The recorded floor check above is only as good as the recording. Re-run
+    the protocol on the cheapest measured plant (pH neutralisation, about 5 s)
+    with the recorded seed count and require the same tracking cost, so a
+    change to the evaluator that the fingerprint cannot see still fails
+    somewhere. The tolerance allows for floating-point differences between the
+    machine that recorded and the one checking, nothing more."""
+    from target_gym.eval import evaluate_controller
+
+    spec = REGISTRY["ph_neutralization"]
+    row = _recorded_protocol_row(spec)
+    m = evaluate_controller(spec.name, "mpc", seeds=int(row["seeds"]))
+    assert m["tracking"] == pytest.approx(row["mpc"]["tracking"], rel=1e-3)
 
 
 def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):

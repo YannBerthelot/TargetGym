@@ -12,6 +12,13 @@ failure rate, and the normalised expert advantage of the MPC against the PID,
 Unlike the recorded baselines (``record_baselines.py``, one return per
 episode), this is the number the benchmark is about: what a controller pays
 per step once it is holding, and what a target change costs it.
+
+Each row carries the same fingerprint as a recorded baseline
+(``provenance.baseline_fingerprint``: the environment's modules, the shared
+controller code, the gains and the parameter values), so a test can read the
+MPC's recorded cost instead of re-running the MPC, and refuse the row once the
+code it describes has moved. ``tests/test_reward_contract.py`` does that for the
+floor check.
 """
 
 from __future__ import annotations
@@ -29,6 +36,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from target_gym.eval import evaluate_controller, nea  # noqa: E402
+from target_gym.provenance import baseline_fingerprint  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 
 OUT = ROOT / "src" / "target_gym" / "data" / "protocol_results.json"
@@ -112,6 +120,7 @@ def main() -> int:
         spec = REGISTRY[name]
         p = spec.make_test_params()
         row = {
+            "fingerprint": baseline_fingerprint(spec),
             "rho_floor": float(getattr(p, "rho_floor", float("nan"))),
             "seeds": args.seeds,
         }
