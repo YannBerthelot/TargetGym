@@ -8,7 +8,7 @@ CPU_ENV := CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu JAX_PLATFORM_NAME=cpu
 
 .PHONY: ci ci-lint ci-format-check ci-test help install \
         all all-% figures figures-% videos videos-% tuning tuning-% \
-        clear-tuning short-gifs baselines baselines-% \
+        short-gifs baselines baselines-% \
         time-constants \
         test test-all mypy coverage \
         missing-annotations type lint format check-codestyle commit-checks \
@@ -70,10 +70,6 @@ tuning:
 
 tuning-%:
 	uv run python scripts/tune_pid.py --envs $*
-
-clear-tuning:
-	rm -f data/pid_gains.json
-	@echo "Cleared PID gains cache (data/pid_gains.json)."
 
 short-gifs:
 	uv run python scripts/shorten_gifs.py
