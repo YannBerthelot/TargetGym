@@ -56,6 +56,26 @@ def _setup(name, n):
     return env, params, B.task_info(name, env, params, n)
 
 
+def test_a_core_task_keeps_its_benchmark_key():
+    """The key is fold_in(PRNGKey(seed), position in REGISTRY), whatever order
+    the tasks are named in. TargetFoundation derives the same keys, so the
+    positions are pinned as literals."""
+    seen = {}
+
+    class KeyHold(Hold):
+        def reset(self, key, obs, task):
+            seen[task.name] = key
+            return super().reset(key, obs, task)
+
+    B.run_policy_on_benchmark(
+        KeyHold(), tasks=["battery", "cstr"], n_episodes=2, n_steps=1, verbose=False
+    )
+    for name, index in (("cstr", 9), ("battery", 20)):
+        task_key = jax.random.fold_in(jax.random.PRNGKey(0), index)
+        # run_policy hands the policy fold_in(task_key, 1)
+        assert (seen[name] == jax.random.fold_in(task_key, 1)).all(), name
+
+
 def test_a_policy_satisfies_the_protocol():
     assert isinstance(Hold(), B.Policy)
     assert isinstance(B.shipped_policy("pid"), B.Policy)

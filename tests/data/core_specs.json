@@ -1,0 +1,840 @@
+[
+  {
+    "name": "plane",
+    "group": "aircraft",
+    "version": 2,
+    "display_name": "Altitude hold",
+    "params_cls": [
+      "target_gym.plane.env",
+      "PlaneParams"
+    ],
+    "env_factory": "_plane",
+    "env_class": [
+      "target_gym.plane.env_jax",
+      "Airplane2D"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_plane_cascaded_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_plane_mpc"
+    ],
+    "test_params": {
+      "max_steps_in_episode": 280
+    },
+    "tuned_gains_key": "plane",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "gust_x",
+      "gust_z"
+    ],
+    "disturbance_overrides": {
+      "turbulence_sigma": 3.0
+    },
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": [
+      "turbulence_sigma"
+    ]
+  },
+  {
+    "name": "plane_energy",
+    "group": "aircraft",
+    "version": 2,
+    "display_name": "Altitude and airspeed",
+    "params_cls": [
+      "target_gym.plane.env",
+      "PlaneParams"
+    ],
+    "env_factory": "_plane",
+    "env_class": [
+      "target_gym.plane.env_jax",
+      "Airplane2D"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_plane_cascaded_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_plane_mpc"
+    ],
+    "test_params": {
+      "max_steps_in_episode": 1200,
+      "target_pattern": 1,
+      "target_amplitude": 900.0,
+      "target_steps": 8,
+      "speed_weight": 0.5,
+      "c_hold": 5.23,
+      "e_floor": 4.55,
+      "rho_floor_tracking": 1.0,
+      "rho_floor": 1.0,
+      "failure_cost": 14360088.298514672
+    },
+    "tuned_gains_key": "plane",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "gust_x",
+      "gust_z"
+    ],
+    "disturbance_overrides": {
+      "turbulence_sigma": 3.0
+    },
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": [
+      "turbulence_sigma"
+    ]
+  },
+  {
+    "name": "plane_sine",
+    "group": "aircraft",
+    "version": 2,
+    "display_name": "Altitude - sinusoid",
+    "params_cls": [
+      "target_gym.plane.env",
+      "PlaneParams"
+    ],
+    "env_factory": "_plane",
+    "env_class": [
+      "target_gym.plane.env_jax",
+      "Airplane2D"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_plane_cascaded_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_plane_mpc"
+    ],
+    "test_params": {
+      "max_steps_in_episode": 480,
+      "target_pattern": 3,
+      "target_amplitude": 300.0,
+      "target_period": 240.0,
+      "c_hold": 8.15,
+      "e_floor": 1.26,
+      "rho_floor_tracking": 1.0,
+      "rho_floor": 1.0,
+      "failure_cost": 187257324.26303852
+    },
+    "tuned_gains_key": "plane",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "gust_x",
+      "gust_z"
+    ],
+    "disturbance_overrides": {
+      "turbulence_sigma": 3.0
+    },
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": [
+      "turbulence_sigma"
+    ]
+  },
+  {
+    "name": "plane3d_heading",
+    "group": "aircraft",
+    "version": 2,
+    "display_name": "3D heading",
+    "params_cls": [
+      "target_gym.plane3d.env",
+      "PlaneParams3D"
+    ],
+    "env_factory": "_plane3d_heading",
+    "env_class": [
+      "target_gym.plane3d.env_jax",
+      "Plane3DHeading"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_plane3d_heading_cascaded_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_plane3d_mpc"
+    ],
+    "test_params": {
+      "max_steps_in_episode": 200
+    },
+    "tuned_gains_key": "plane3d_heading",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "gust_x",
+      "gust_y",
+      "gust_z"
+    ],
+    "disturbance_overrides": {
+      "turbulence_sigma": 3.0
+    },
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": [
+      "turbulence_sigma"
+    ]
+  },
+  {
+    "name": "plane3d_circle",
+    "group": "aircraft",
+    "version": 2,
+    "display_name": "3D circle",
+    "params_cls": [
+      "target_gym.plane3d.env",
+      "PlaneParams3D"
+    ],
+    "env_factory": "_plane3d_circle",
+    "env_class": [
+      "target_gym.plane3d.env_jax",
+      "Plane3DCircle"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_plane3d_circle_cascaded_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_plane3d_mpc"
+    ],
+    "test_params": {
+      "max_steps_in_episode": 300,
+      "e_floor_altitude": 4.06,
+      "e_floor_path": 8.12,
+      "rho_floor_tracking": 2.0,
+      "rho_floor": 2.0,
+      "failure_cost": 18035485.452207047
+    },
+    "tuned_gains_key": "plane3d_circle",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "gust_x",
+      "gust_y",
+      "gust_z"
+    ],
+    "disturbance_overrides": {
+      "turbulence_sigma": 3.0
+    },
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": [
+      "turbulence_sigma"
+    ]
+  },
+  {
+    "name": "plane3d_racetrack",
+    "group": "aircraft",
+    "version": 2,
+    "display_name": "3D holding pattern",
+    "params_cls": [
+      "target_gym.plane3d.env",
+      "PlaneParams3D"
+    ],
+    "env_factory": "_plane3d_racetrack",
+    "env_class": [
+      "target_gym.plane3d.env_jax",
+      "Plane3DRacetrack"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_plane3d_racetrack_cascaded_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_plane3d_mpc"
+    ],
+    "test_params": {
+      "max_steps_in_episode": 650,
+      "e_floor_altitude": 1.39,
+      "e_floor_path": 6.17,
+      "rho_floor_tracking": 2.0,
+      "rho_floor": 2.0,
+      "failure_cost": 153868706.58868593
+    },
+    "tuned_gains_key": "plane3d_racetrack",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "gust_x",
+      "gust_y",
+      "gust_z"
+    ],
+    "disturbance_overrides": {
+      "turbulence_sigma": 3.0
+    },
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": [
+      "turbulence_sigma"
+    ]
+  },
+  {
+    "name": "plane3d_figure8",
+    "group": "aircraft",
+    "version": 2,
+    "display_name": "3D figure-8",
+    "params_cls": [
+      "target_gym.plane3d.env",
+      "PlaneParams3D"
+    ],
+    "env_factory": "_plane3d_figure8",
+    "env_class": [
+      "target_gym.plane3d.env_jax",
+      "Plane3DFigureEight"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_plane3d_figure8_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_plane3d_mpc"
+    ],
+    "test_params": {
+      "max_steps_in_episode": 400,
+      "e_floor_path": 14.6,
+      "rho_floor_tracking": 1.0,
+      "rho_floor": 1.0,
+      "failure_cost": 3753049.3525989866
+    },
+    "tuned_gains_key": "plane3d_figure8",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "gust_x",
+      "gust_y",
+      "gust_z"
+    ],
+    "disturbance_overrides": {
+      "turbulence_sigma": 3.0
+    },
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": [
+      "turbulence_sigma"
+    ]
+  },
+  {
+    "name": "patrol",
+    "group": "aircraft",
+    "version": 2,
+    "display_name": "Patrol - MARL formation",
+    "params_cls": [
+      "target_gym.patrol.env",
+      "PatrolParams"
+    ],
+    "env_factory": "_patrol",
+    "env_class": [
+      "target_gym.patrol.env_jax",
+      "PlanePatrol"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_patrol_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_patrol_mpc"
+    ],
+    "test_params": {
+      "max_steps_in_episode": 200
+    },
+    "tuned_gains_key": "patrol",
+    "baselines_note": null,
+    "disturbance_fields": [],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": [
+      "turbulence_sigma"
+    ]
+  },
+  {
+    "name": "patrol_bearing_only",
+    "group": "aircraft",
+    "version": 2,
+    "display_name": "Patrol - MARL, bearing-only",
+    "params_cls": [
+      "target_gym.patrol.env",
+      "PatrolParams"
+    ],
+    "env_factory": "_patrol_bearing_only",
+    "env_class": [
+      "target_gym.patrol.env_jax",
+      "PlanePatrolBearingOnly"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_patrol_bearing_only_stateful_pid"
+    ],
+    "make_mpc": null,
+    "test_params": {
+      "max_steps_in_episode": 200
+    },
+    "tuned_gains_key": "patrol",
+    "baselines_note": "PID present -- a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only genuinely unobservable quantity is the lead's HEADING, which the commanded slot needs because the slot is expressed in the lead's frame; it is recovered by differencing the estimated relative position and filtering. Measured performance matches the full-observation expert (4 of 8 seeds complete, ~229 m settled slot error vs ~260 m), so the partial observation costs essentially nothing here. No MPC, and the reason is the withheld observation rather than the manoeuvring lead. This note used to blame the lead, on the grounds that an MPC would need its future trajectory as a time-varying parameter. That holds for a CasADi model and not for a gradient planner: `patrol` now ships a GradientMPC that differentiates step_env, and because the lead is scripted and deterministic the plan propagates it for free. What blocks one here is that the planner reads the slot error out of the state, which is precisely what this variant withholds. Handing it the true state anyway would make it an oracle on a task defined by what is hidden, so it needs a planner built on the estimator.",
+    "disturbance_fields": [],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": [
+      "turbulence_sigma"
+    ]
+  },
+  {
+    "name": "cstr",
+    "group": "process",
+    "version": 2,
+    "display_name": "CSTR",
+    "params_cls": [
+      "target_gym.pc_gym.cstr.env",
+      "CSTRParams"
+    ],
+    "env_factory": "_cstr",
+    "env_class": [
+      "target_gym.pc_gym.cstr.env_jax",
+      "CSTR"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_cstr_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_cstr_mpc"
+    ],
+    "test_params": {},
+    "tuned_gains_key": "cstr",
+    "baselines_note": null,
+    "disturbance_fields": [],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": []
+  },
+  {
+    "name": "first_order",
+    "group": "process",
+    "version": 2,
+    "display_name": "First order",
+    "params_cls": [
+      "target_gym.pc_gym.first_order.env",
+      "FirstOrderParams"
+    ],
+    "env_factory": "_first_order",
+    "env_class": [
+      "target_gym.pc_gym.first_order.env_jax",
+      "FirstOrderSystem"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_first_order_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_first_order_mpc"
+    ],
+    "test_params": {},
+    "tuned_gains_key": "first_order",
+    "baselines_note": null,
+    "disturbance_fields": [],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": []
+  },
+  {
+    "name": "four_tank",
+    "group": "process",
+    "version": 2,
+    "display_name": "Four-tank",
+    "params_cls": [
+      "target_gym.pc_gym.four_tank.env",
+      "FourTankParams"
+    ],
+    "env_factory": "_four_tank",
+    "env_class": [
+      "target_gym.pc_gym.four_tank.env_jax",
+      "FourTank"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_four_tank_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_four_tank_mpc"
+    ],
+    "test_params": {},
+    "tuned_gains_key": "four_tank",
+    "baselines_note": null,
+    "disturbance_fields": [],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": []
+  },
+  {
+    "name": "ph_neutralization",
+    "group": "process",
+    "version": 2,
+    "display_name": "pH neutralisation",
+    "params_cls": [
+      "target_gym.pc_gym.ph_neutralization.env",
+      "PHParams"
+    ],
+    "env_factory": "_ph_neutralization",
+    "env_class": [
+      "target_gym.pc_gym.ph_neutralization.env_jax",
+      "PHNeutralization"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_ph_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_ph_mpc"
+    ],
+    "test_params": {},
+    "tuned_gains_key": "ph_neutralization",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "q2"
+    ],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": []
+  },
+  {
+    "name": "distillation",
+    "group": "process",
+    "version": 2,
+    "display_name": "Distillation",
+    "params_cls": [
+      "target_gym.pc_gym.distillation.env",
+      "DistillationParams"
+    ],
+    "env_factory": "_distillation",
+    "env_class": [
+      "target_gym.pc_gym.distillation.env_jax",
+      "DistillationColumn"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_distillation_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_distillation_mpc"
+    ],
+    "test_params": {},
+    "tuned_gains_key": "distillation",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "zF"
+    ],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": []
+  },
+  {
+    "name": "glass_furnace",
+    "group": "industrial",
+    "version": 2,
+    "display_name": "Glass Furnace",
+    "params_cls": [
+      "target_gym.glass_furnace.env",
+      "GlassFurnaceParams"
+    ],
+    "env_factory": "_glass_furnace",
+    "env_class": [
+      "target_gym.glass_furnace.env_jax",
+      "GlassFurnace"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_glass_furnace_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_glass_furnace_mpc"
+    ],
+    "test_params": {},
+    "tuned_gains_key": "glass_furnace",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "m_pull_disturbance"
+    ],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": []
+  },
+  {
+    "name": "reactor",
+    "group": "industrial",
+    "version": 3,
+    "display_name": "Reactor",
+    "params_cls": [
+      "target_gym.reactor.env",
+      "ReactorParams"
+    ],
+    "env_factory": "_reactor",
+    "env_class": [
+      "target_gym.reactor.env_jax",
+      "Reactor"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_reactor_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_reactor_mpc"
+    ],
+    "test_params": {
+      "max_steps_in_episode": 864
+    },
+    "tuned_gains_key": "reactor",
+    "baselines_note": null,
+    "disturbance_fields": [],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": []
+  },
+  {
+    "name": "hvac",
+    "group": "industrial",
+    "version": 2,
+    "display_name": "Building HVAC",
+    "params_cls": [
+      "target_gym.hvac.env",
+      "HVACParams"
+    ],
+    "env_factory": "_hvac",
+    "env_class": [
+      "target_gym.hvac.env_jax",
+      "BuildingHVAC"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_hvac_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_hvac_mpc"
+    ],
+    "test_params": {},
+    "tuned_gains_key": "hvac",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "weather_dev"
+    ],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": []
+  },
+  {
+    "name": "cement_kiln",
+    "group": "industrial",
+    "version": 2,
+    "display_name": "Cement Kiln",
+    "params_cls": [
+      "target_gym.cement_kiln.env",
+      "CementKilnParams"
+    ],
+    "env_factory": "_cement_kiln",
+    "env_class": [
+      "target_gym.cement_kiln.env_jax",
+      "CementKiln"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_cement_kiln_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_cement_kiln_mpc"
+    ],
+    "test_params": {},
+    "tuned_gains_key": "cement_kiln",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "raw_meal"
+    ],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": []
+  },
+  {
+    "name": "boiler_drum",
+    "group": "industrial",
+    "version": 2,
+    "display_name": "Boiler Drum",
+    "params_cls": [
+      "target_gym.boiler_drum.env",
+      "BoilerDrumParams"
+    ],
+    "env_factory": "_boiler_drum",
+    "env_class": [
+      "target_gym.boiler_drum.env_jax",
+      "BoilerDrum"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_boiler_drum_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_boiler_drum_mpc"
+    ],
+    "test_params": {},
+    "tuned_gains_key": "boiler_drum",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "q_steam"
+    ],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": []
+  },
+  {
+    "name": "wind_turbine",
+    "group": "energy",
+    "version": 2,
+    "display_name": "Wind Turbine",
+    "params_cls": [
+      "target_gym.energy.wind_turbine.env",
+      "WindTurbineParams"
+    ],
+    "env_factory": "_wind_turbine",
+    "env_class": [
+      "target_gym.energy.wind_turbine.env_jax",
+      "WindTurbine"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_wind_turbine_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_wind_turbine_mpc"
+    ],
+    "test_params": {},
+    "tuned_gains_key": "wind_turbine",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "v_wind"
+    ],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": [
+      "turbulence_std"
+    ]
+  },
+  {
+    "name": "battery",
+    "group": "energy",
+    "version": 2,
+    "display_name": "Battery",
+    "params_cls": [
+      "target_gym.energy.battery.env",
+      "BatteryParams"
+    ],
+    "env_factory": "_battery",
+    "env_class": [
+      "target_gym.energy.battery.env_jax",
+      "GridBattery"
+    ],
+    "make_pid": [
+      "_pid.<locals>.make",
+      "target_gym.experts.pid",
+      "make_battery_stateful_pid"
+    ],
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.experts.mpc",
+      "make_battery_mpc"
+    ],
+    "test_params": {},
+    "tuned_gains_key": "battery",
+    "baselines_note": null,
+    "disturbance_fields": [
+      "target_power"
+    ],
+    "disturbance_overrides": {},
+    "effectiveness_overrides": {},
+    "expert_degraded": null,
+    "mpc_degraded": null,
+    "noise_fields": [
+      "dispatch_noise_std"
+    ]
+  }
+]
