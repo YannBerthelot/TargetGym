@@ -201,6 +201,18 @@ def save_video(
 
 # ---------------------------------------------------------------------------
 # Headless episode runner + comparison GIF
+#
+# Nothing in the package calls the helpers from here to the end of
+# save_comparison_figure, or load_or_build_interpolator further down. Their
+# callers were the seven per-environment runners that 5458229 replaced with
+# runners/runners.py, and only tests/test_runners.py and tests/test_utils.py
+# use them now. The two headless runners below are only reachable through them.
+#
+# They stay because this module is hashed into both provenance fingerprints.
+# Deleting them would mark every version stamp, recorded baseline and protocol
+# row stale without moving a single number, and re-recording takes about two
+# hours. Remove them in a change that has to re-record anyway; the roadmap item
+# on these helpers lists what goes with them.
 # ---------------------------------------------------------------------------
 
 
