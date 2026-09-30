@@ -1351,6 +1351,82 @@
     "tau_cost_source": "OU demand 1/theta = 6667 s at 10 s steps (xenon constrains reach only)",
     "tau_cost_steps": 667
   },
+  "unstable_cstr": {
+    "burn_in": 0,
+    "mpc": {
+      "c_hold": null,
+      "cycles_per_episode": 6,
+      "e_hold": [
+        6.460234544647392e-06
+      ],
+      "e_hold_first_half": [
+        6.391745500877732e-06
+      ],
+      "e_hold_min": [
+        6.28892576060025e-06
+      ],
+      "e_hold_per_seed": [
+        [
+          6.33489980828017e-06
+        ],
+        [
+          6.28892576060025e-06
+        ],
+        [
+          6.75329965815763e-06
+        ]
+      ],
+      "e_hold_rms": [
+        8.084090040938463e-06
+      ],
+      "e_hold_second_half": [
+        6.525996923301136e-06
+      ],
+      "hold_steps_scored": 1141,
+      "seconds": 107.8,
+      "settle": 120.0,
+      "trips": 0
+    },
+    "pid": {
+      "c_hold": null,
+      "cycles_per_episode": 6,
+      "e_hold": [
+        0.00013399997260421515
+      ],
+      "e_hold_first_half": [
+        0.000132579225464724
+      ],
+      "e_hold_min": [
+        0.00012274620530661196
+      ],
+      "e_hold_per_seed": [
+        [
+          0.00013912506983615458
+        ],
+        [
+          0.00012274620530661196
+        ],
+        [
+          0.00014012865722179413
+        ]
+      ],
+      "e_hold_rms": [
+        0.00016833438712637872
+      ],
+      "e_hold_second_half": [
+        0.00013542071974370629
+      ],
+      "hold_steps_scored": 1440,
+      "seconds": 2.9,
+      "settle": 120.0,
+      "trips": 0
+    },
+    "seeds": 3,
+    "step_seconds": 3.0,
+    "steps": 1200,
+    "tau_cost_source": "per 10 min block, from minute 6; open-loop unstable",
+    "tau_cost_steps": 0
+  },
   "wind_turbine": {
     "burn_in": 300,
     "mpc": {

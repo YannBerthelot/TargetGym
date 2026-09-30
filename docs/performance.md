@@ -12,7 +12,7 @@ Measured on arm64 CPU, Darwin, single process, no GPU.
 
 **These are not properties of the plants.** They move with the machine and with
 the batch size, which is why they are measured here rather than claimed in the
-fifteen `PHYSICS.md` contracts, where every other number is a fact about the
+sixteen `PHYSICS.md` contracts, where every other number is a fact about the
 process being modelled. Nothing in CI checks them, because a check that fails on
 somebody else's laptop is worse than no check.
 
@@ -21,6 +21,7 @@ somebody else's laptop is worse than no check.
 | `first_order` | 694.72 M | 773.12 M |
 | `cstr` | 201.55 M | 176.35 M |
 | `four_tank` | 111.44 M | 108.26 M |
+| `unstable_cstr` | 14.44 M | 12.42 M |
 | `hvac` | 12.75 M | 12.39 M |
 | `boiler_drum` | 11.89 M | 10.85 M |
 | `battery` | 11.31 M | 9.23 M |
@@ -40,13 +41,19 @@ somebody else's laptop is worse than no check.
 | `patrol_bearing_only` | 0.64 M | 0.54 M |
 | `patrol` | 0.62 M | 0.53 M |
 
+The `unstable_cstr` row was measured later than the others (2026-09-30), with
+the command above and with `--batch 256` at the default 1000 steps, on an
+arm64 Darwin machine under a shared load. `cstr`, measured in the same runs,
+came out at 199.91 M and 169.22 M, within about 4 % of its row, so the new row
+compares with the rest to about that accuracy.
+
 ## What this means for RL
 
 The protocol's largest sample budget is 1e7 environment steps. At the slowest
 environment here that is about 16 seconds of environment time; at the fastest
 it is under a millisecond. Network forward and backward passes dominate any
 learning loop by two to three orders of magnitude, so **the environment is never
-the bottleneck at these budgets**, and none of the twenty-one is unfit on speed.
+the bottleneck at these budgets**, and none of the twenty-two is unfit on speed.
 
 The spread is arithmetic per step, not anything fixable. The distillation column
 integrates 41 states through 16 RK4 substeps, and its contract establishes that

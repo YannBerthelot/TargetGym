@@ -92,6 +92,51 @@ conformance suite checks do not ratchet) and `baselines_note` (why a PID or
 MPC is absent, so a missing baseline is a documented gap rather than a silent
 one).
 
+### A task added after the 21
+
+The 21 tasks registered before the new task families are pinned
+(`tests/data/pinned_specs.json`). A task added after them follows the rules
+below, which keep its recorded baselines valid. `tests/test_registry_rules.py`
+checks each one, and checks the tuner row only for a task that ships a PID.
+
+- **Append, never insert.** A task's position in `REGISTRY` is its benchmark
+  seed index, and TargetFoundation derives seeds the same way, so the new
+  `EnvSpec` goes at the end of `_SPECS`.
+- **Controllers in the task's own `experts.py`.** `experts/pid.py` and
+  `experts/mpc.py` are in every task's baseline fingerprint, so a controller
+  added there would make every other task's records stale. Point the spec at
+  the package's module with the `module` argument,
+  `make_pid=_pid("make_<name>_pid", module="target_gym.<package>.experts")`,
+  and the same for `_mpc`. The version stamp leaves `experts*` files out, so
+  the package's other files import them only inside a function.
+- **Declare imported physics.** Both fingerprints hash the task's own package.
+  If its physics imports a module from another package, list that file in
+  `fingerprint_sources`, relative to `src/target_gym` (`"pc_gym/cstr/env.py"`
+  for `unstable_cstr`), so an edit there makes this task's records stale too.
+  Apart from those files, the package imports only itself and the shared
+  plumbing (`base`, `utils`, `integration`, `reward`). Its `experts*.py` files
+  may also import the shared controller modules `target_gym.experts`,
+  `target_gym.experts.pid` and `target_gym.experts.mpc`. Its `rendering*.py`
+  files are exempt and may import `target_gym.render_kit`, since no
+  fingerprint covers rendering and a renderer cannot change a return.
+- **A name that is no prefix of another.** Gains keys are collected by name
+  prefix, and names starting with `plane` or `patrol` are treated as aircraft.
+  A new name must not start another registered name or start with one, and
+  must not start with `plane` or `patrol`.
+- **Ships as `-v2` with its own `compute_reward_v1`.** The spec keeps the
+  default `version=2`, and the package's `env.py` defines
+  `compute_reward_v1`, which TargetFoundation looks up by that name.
+- **A hold row.** Add the task to `PLANTS` in `scripts/measure_hold.py` and run
+  `scripts/measure_hold.py --envs <name>`. Without a row in
+  `src/target_gym/data/hold_measurements.json` the protocol gets a burn-in of
+  0 and scores the approach as if it were the hold.
+- **A tuner row.** If the task ships a PID, add it to `TUNERS` in
+  `scripts/tune_pid.py`, which refuses a name that has no row there. The
+  generic coordinate descent (`_tune_aircraft_search`) starts from the
+  `DEFAULT_GAINS` of the package's `experts.py` when the gains file has no
+  entry yet. A plain `make tuning` covers only the 21, so tune the new task by
+  name, `make tuning-<name>`, before recording its baselines.
+
 ### The physics contract
 
 Every environment carries a `PHYSICS.md` with a sourced parameter table,

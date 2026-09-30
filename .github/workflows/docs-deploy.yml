@@ -31,8 +31,9 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-latest
-    # Rendering 21 clips is the bulk of this job: about eight minutes on a
-    # developer machine, and a GitHub runner has fewer and slower cores.
+    # Rendering one clip per registered environment, 22 today, is the bulk of
+    # this job. The first 21 took about eight minutes on a developer machine,
+    # and a GitHub runner has fewer and slower cores.
     timeout-minutes: 45
     env:
       UV_PYTHON: "3.13"
@@ -54,8 +55,8 @@ jobs:
     # ``docs/videos`` is a symlink to ``videos/``, and ``.gitignore`` excludes
     # ``videos/**/*.gif`` because the rendered clips run to tens of megabytes.
     # A local ``mkdocs build`` therefore passes on a working tree that happens
-    # to have them, and a CI build from a clean checkout would publish 21
-    # environment pages with broken images. Rendering them here keeps the
+    # to have them, and a CI build from a clean checkout would publish every
+    # environment page with a broken image. Rendering them here keeps the
     # repository light and the site correct; only the five gallery mosaics,
     # which the README and the environment index embed, are committed.
     #
@@ -65,7 +66,7 @@ jobs:
       env:
         SDL_VIDEODRIVER: dummy
         MPLBACKEND: Agg
-      # One process per environment, not one for all twenty-one.
+      # One process per environment, not one for all of them.
       #
       # Rendering them in a single process is what the module does by default,
       # and on a runner it dies: each environment compiles its own step_env and
@@ -73,7 +74,7 @@ jobs:
       # climbs from 9 s per environment for the aircraft to 92 s for the cement
       # kiln, and the job was killed with SIGTERM partway through the nineteenth.
       # A fresh process per environment releases all of it and the total comes
-      # in lower despite paying JAX start-up twenty-one times.
+      # in lower despite paying JAX start-up once per environment.
       run: |
         envs=$(uv run python -c "from target_gym.registry import REGISTRY; print(' '.join(REGISTRY))")
         for env in $envs; do

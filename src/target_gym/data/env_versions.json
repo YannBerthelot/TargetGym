@@ -204,6 +204,11 @@
     "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
     "stamped": "2026-09-29T20:06:05+00:00"
   },
+  "unstable_cstr-v2": {
+    "fingerprint": "2b357b9b2c66ec84",
+    "note": "unstable_cstr-v2 is unpublished: stamped on this branch, then its NEA reference (rho_floor, not the reward) was re-measured once the hold stopped counting the MPC's anticipation of target changes.",
+    "stamped": "2026-09-30T20:46:03+00:00"
+  },
   "wind_turbine-v1": {
     "fingerprint": "889181b62fafcbed",
     "note": "re-stamped without a note",

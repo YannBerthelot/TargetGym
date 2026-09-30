@@ -7,7 +7,7 @@ hide:
 
 <p align="center">
   <b>Reach a setpoint. Hold it forever. Against disturbances.</b><br/>
-  21 JAX environments for <i>target MDPs</i>, the control problems industry actually has.
+  22 JAX environments for <i>target MDPs</i>, the control problems industry actually has.
 </p>
 
 <p align="center">
@@ -15,8 +15,9 @@ hide:
   <sub>One example task from each family, under PID control.</sub>
 </p>
 
-**21 environments**: 9 aircraft, 5 process control, 5 industrial / energy, 2 renewable energy. Every one of them is in the
-[gallery](environments.md), with its own page, clip and baseline numbers.
+**22 environments**: 9 aircraft, 6 process control, 5 industrial / energy, 2 renewable energy. Every one of them is in the
+[gallery](environments.md) with its own page and clip, and its recorded baseline
+numbers are in [Baselines](baselines.md).
 
 ---
 
@@ -44,7 +45,7 @@ for t in range(200):
         break
 ```
 
-[Browse the twenty-one environments →](environments.md){ .md-button .md-button--primary }
+[Browse the twenty-two environments →](environments.md){ .md-button .md-button--primary }
 [Getting started →](getting-started.md){ .md-button }
 
 ---
@@ -62,8 +63,9 @@ these are the failure modes that come with it:
 | **Transport delay** | Half the kiln's response to a fuel change takes a full 25-minute residence time |
 | **Multi-timescale** | Millisecond neutronics against hour-long xenon; sub-second flame gas against 30 h glass residence |
 | **Finite budgets** | A battery whose tracking *now* costs the ability to track later |
+| **Open-loop instability** | A stirred-tank reactor held on its unstable middle steady state, where an uncontrolled error grows e-fold every 19 to 43 s (derived, `scripts/unstable_cstr_numbers.py --section targets`) |
 
-Every environment ships a tuned PID, and nineteen of twenty-one also ship an MPC,
+Every environment ships a tuned PID, and twenty-one of twenty-two also ship an MPC,
 so a learned policy has something real to beat. And **where a baseline is weak,
 the docs say how weak**.
 

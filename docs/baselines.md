@@ -88,7 +88,7 @@ The underlying objects are reachable directly if you need them, through
 
 ## Coverage
 
-All twenty-one environments ship a PID. Twenty also ship an MPC; only
+All twenty-two environments ship a PID. Twenty-one also ship an MPC; only
 `patrol_bearing_only` does not, and `EnvSpec.baselines_note` records why -- it
 withholds the decomposed slot error a planner would read, which is the point of
 the variant, so it needs a planner built on its estimator rather than the
@@ -198,8 +198,8 @@ Three implementations, chosen per environment by what its dynamics allow:
 
 | Implementation | Used by | When it applies |
 |---|---|---|
-| `CasadiMPC` subclasses | 7 environments | A direct nonlinear program over an explicit model; the sharpest when the model can be written in CasADi |
-| `GradientMPC` | 11 environments | Differentiates the JAX dynamics directly and descends the objective |
+| `CasadiMPC` subclasses | 8 environments | A direct nonlinear program over an explicit model; the sharpest when the model can be written in CasADi |
+| `GradientMPC` | 12 environments | Differentiates the JAX dynamics directly and descends the objective |
 | `SamplingMPC` | cement kiln | Cross-entropy sampling, for when gradients are unusable |
 
 
@@ -210,7 +210,9 @@ step. There are no learned parameters, so there is nothing that could be
 specific to an episode or a seed. What it has instead is a model, a horizon and
 solver settings, and an objective, all chosen once per environment the way a
 controller structure is. Between episodes it carries only a warm start, and on
-the glass furnace an offset-free bias integrator; `reset()` clears both.
+the glass furnace an offset-free bias integrator; `reset()` clears both. The
+unstable CSTR's MPC also keeps the memory of the cascade PID it falls back on,
+and `reset()` clears that too.
 
 The irony is that the **PID** is the trained one here. Its gains come from a
 search on seeds 0 to 2 and are reported on held-out seeds. The MPC has never
@@ -227,7 +229,7 @@ microseconds. A reference to measure against, not something to put inside a
 training loop.
 
 **It does not vmap or jit** on the CasADi plants, which call IPOPT, a solver
-outside JAX. The eleven `GradientMPC` environments do batch, which is how the
+outside JAX. The twelve `GradientMPC` environments do batch, which is how the
 recording parallelises across seeds.
 
 **`reset()` between episodes**, or the furnace's bias integrator carries a
@@ -357,10 +359,13 @@ A capped solve is still applied: IPOPT was converging and we stopped it, which
 is the whole point. Any *other* failure -- infeasible, restoration failed,
 invalid number -- returns an iterate that means nothing, so the controller holds
 its previous action and restores the previous warm start rather than planning
-from the wreckage.
+from the wreckage. The unstable CSTR's MPC hands such a step to its cascade PID
+instead, because holding the last action can trip that plant.
 
-Read `solver_failures` before quoting a number. All seven CasADi environments
-currently record 100%.
+Read `solver_failures` before quoting a number. All eight CasADi environments
+currently record 100% solver success. That includes `unstable_cstr`, whose MPC
+lives in its own package, with 12 000 solves over ten seeds and none failed or
+capped (measured, `scripts/record_baselines.py --envs unstable_cstr`).
 
 ### Conditioning, constraints, and what is deliberately absent
 
@@ -387,9 +392,14 @@ does not clip, it *ends the episode* when a level touches `h_min` or `h_max`.
 Those two bounds are now soft, and `h_max` is now present at all; before this the
 controller was blind to half of a termination condition it is scored on.
 
-**No terminal ingredients.** `mterm` is the stage cost everywhere, so there is
-no terminal cost or terminal set and therefore no nominal stability guarantee
-in the Mayne sense. These horizons are long relative to the closed-loop
+**No terminal ingredients, with one exception.** `mterm` is the stage cost on
+every MPC except the unstable CSTR's, so there is no terminal cost or terminal
+set and therefore no nominal stability guarantee in the Mayne sense. The
+unstable CSTR's MPC carries a terminal cost, the Riccati solution for the
+env's one-step linearisation at C_a 0.45 (`terminal_weight` in the plant's
+`experts.py`), so the end of its horizon does not look free on a plant whose
+uncontrolled error grows. It has no terminal set either, so the guarantee is
+absent there too. These horizons are long relative to the closed-loop
 transient they have to cover, which is checked separately by
 `scripts/audit_mpc_horizons.py`, and the baselines are measured rather than
 certified. It is recorded here so nobody assumes the guarantee exists.
@@ -426,6 +436,18 @@ at the same optimisation cost.
 Both are open items rather than tuning knobs, and neither is affected by the
 reward shape -- `GradientMPC` sums the environment's reward directly, so it
 picks up reward changes without any objective to re-derive.
+
+`unstable_cstr` passes at ratio 2.91, a 32-step (1.6 min) horizon against a
+`tau_close` of 11 steps (measured, `scripts/audit_mpc_horizons.py --envs
+unstable_cstr`). Its horizon was set by a different bound. Started 0.01 K on
+the safe side of the point of no return, the plant under full cooling takes up
+to 21 steps to reach its temperature peak, at a +6 K feed drift (derived,
+`scripts/unstable_cstr_numbers.py --section pnr`). The horizon was raised from
+30 to 32 so that it is at least 1.5 times that, and a plan that recovers from
+near the edge then runs past the peak. The MPC's soft bound on the
+temperature sits 1 K under the point-of-no-return line
+`354.9 - 40.7 (C_a - 0.45)` K (`MPC_PNR_MARGIN_K`, ours; the line is derived
+by the same section, refit at a +6 K drift).
 
 ## Regenerating the figures and videos
 
@@ -514,9 +536,9 @@ neither cap is needed once the rollouts happen by hand. Both were lifted, which
 is what exposed the glass furnace's MPC (see below).
 
 **What it costs.** The fingerprint covers the shared controller modules, so
-editing `experts/mpc.py` invalidates all sixteen records even when the change
-provably touches one environment. That is deliberate. A finer, symbol-level
-fingerprint would have to resolve `_pid("make_glass_furnace_stateful_pid")` --
+editing `experts/mpc.py` invalidates every environment's record even when the
+change provably touches one environment. That is deliberate. A finer,
+symbol-level fingerprint would have to resolve `_pid("make_glass_furnace_stateful_pid")` --
 a string lookup -- and a miss there produces a record that is stale and *looks*
 fresh, which is the one direction this design refuses. The price is a
 re-measurement after controller work; the alternative price is a false green.
@@ -808,6 +830,7 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `plane_energy` | 1200 | 1366 | 73.21 | 0.946 | 10/10 | 0 |
 | `reactor` | 864 | 24.37 | 1.373 | 0.944 | 10/10 | 0 |
 | `boiler_drum` | 400 | 641.9 | 42.4 | 0.934 | 10/10 | 0 |
+| `unstable_cstr` | 1200 | 5.714e+04 | 4178 | 0.927 | 10/10 | 0 |
 | `distillation` | 200 | 262.3 | 31.91 | 0.878 | 10/10 | 0 |
 | `plane3d_circle` | 300 | 1207 | 235.1 | 0.805 | 10/10 | 0 |
 | `plane3d_heading` | 200 | 3.15e+04 | 6734 | 0.786 | 10/10 | 0 |
@@ -860,7 +883,7 @@ parentheses. A controller that previews the schedule, as the MPCs do, may
 move toward the next target before the change. Those last steps of a cycle
 are found from the cost alone (`target_gym.eval`), left out of the hold, and
 counted in the reach and transient cost of the change they prepare. Of the
-recorded rows this moves two: the altitude-and-airspeed aircraft's MPC hold
+rows recorded when the rule was added, it moved two: the altitude-and-airspeed aircraft's MPC hold
 falls from 25.4 to 7.02, with its reach cost rising to match, and the
 building MPC's reach cost moves from 0.377 to 0.382. The gains, and so NEA,
 do not move. B is relative to each controller's *own* hold level, so it does
@@ -894,6 +917,17 @@ MPC now spends less gas *and* less comfort than the PID (0.0036 against
 0.0086, 0.0053 against 0.0099 EUR per step), where at EUR 0.2 the gas term
 never bound; and no controller tripped a plant in any window.
 
+On `unstable_cstr` the MPC's gain is 4.03e3 against the PID's 5.74e4, NEA
+0.93, and its hold cost is 0.00649 against the PID's 2.68 (measured,
+`scripts/evaluate_baselines.py`). The MPC previews the schedule, and the steps
+in which it already moves toward the next level are found by
+`target_gym.eval`, left out of its hold and counted in the reach and transient
+cost of that switch. As a C_a error, `scripts/measure_hold.py` measures a
+mean hold of 6.46e-6 mol/L for the MPC and 1.34e-4 for the PID, pooled over
+three seeds, against a floor width of 1e-4 mol/L (the analyser's
+resolution). The MPC's lowest per-seed hold, 6.29e-6 mol/L, sets the floor
+column: ρ* = (6.29e-6 / 1e-4)² = 0.00396.
+
 | plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID hold | MPC hold | PID reach B (transient) | MPC reach B (transient) | fail |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `battery` | 0.000222 | 0.00346 (0.00288 / 0.000589) | 0.00112 (0.000548 / 0.000567) | 0.724 | 0.00132 | 0.00117 | 0.0497 (0.0292) | 0.00358 (0.00128) | 0 |
@@ -916,6 +950,7 @@ never bound; and no controller tripped a plant in any window.
 | `plane_energy` | 1 | 780 (780 / 0.321) | 38.8 (35.4 / 3.39) | 0.951 | 51.7 | 7.02 | 1.23e+05 (1.28e+05) | 1.22e+04 (1.3e+04) | 0 |
 | `plane_sine` | 1 | 1.52e+03 (1.52e+03 / 0.261) | 2.99 (2.24 / 0.749) | 0.999 | 1.49e+03 | 2.86 | 1.88e+06 (2.14e+06) | 7.61e+05 (7.62e+05) | 0 |
 | `reactor` | 1.25 | 23.7 (23.3 / 0.385) | 1.38 (1.38 / 2.41e-05) | 0.994 | 23.7 | 1.38 | 1.64e+03 (1.24e+04) | 4.77 (597) | 0 |
+| `unstable_cstr` | 0.00396 | 5.74e+04 (5.74e+04 / —) | 4.03e+03 (4.03e+03 / —) | 0.93 | 2.68 | 0.00649 | 1.15e+07 (5.84e+05) | 8.07e+05 (2.52e+05) | 0 |
 | `wind_turbine` | 1.17e-05 | 2.64e-05 (2.43e-05 / 2.12e-06) | 2.1e-05 (1.55e-05 / 5.46e-06) | 0.365 | 2.64e-05 | 2.1e-05 | 0.00854 (0.0132) | 0.00687 (0.011) | 0 |
 
 Reach B is each controller's transient cost above its *own* hold level (Theorem 4's bias), so it is not comparable between two controllers whose holds differ: a controller holding far off shows a small B because its level swallows its transient. The number in parentheses is the transient's summed cost, not relative to anything, and is the one to compare across controllers.

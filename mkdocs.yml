@@ -102,6 +102,7 @@ nav:
           - Four Tank: environments/four_tank.md
           - Ph Neutralization: environments/ph_neutralization.md
           - Distillation: environments/distillation.md
+          - Unstable Cstr: environments/unstable_cstr.md
       - Industrial:
           - Glass Furnace: environments/glass_furnace.md
           - Reactor: environments/reactor.md

@@ -6,7 +6,7 @@ title: "TargetGym: Reinforcement Learning Environments for Target MDPs"
 abstract: >-
   JAX reinforcement learning environments built around target MDPs -- tasks
   where the objective is to reach and maintain a subset of states rather than
-  to reach a goal and stop. Eighteen environments spanning aircraft, process,
+  to reach a goal and stop. Twenty-two environments spanning aircraft, process,
   industrial and energy plants, each with a documented and tested physics
   contract and PID/MPC baselines.
 type: software

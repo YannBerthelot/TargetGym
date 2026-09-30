@@ -69,11 +69,15 @@ against the PID on identical evaluation episodes. Pairing removes the variance
 from initial conditions and targets, which on these tasks is large: the circle
 task's radius alone moved the PID's return by a factor of two.
 
-**Across environments**, raw returns are not comparable — episodes run from 100
-steps (cstr) to 1200 (reactor), and the reward is bounded in `[0, 1]` per step,
-so return scales with horizon. Use **mean reward per step**, which is in `[0, 1]`
-with 1 meaning perfect tracking at zero cost, and is the same quantity in every
-environment.
+**Across environments**, raw returns are not comparable. Test episodes
+(`EnvSpec.test_params`) run from 100 steps (cstr, first_order) to 1600
+(glass_furnace), and the per-step cost differs by orders of magnitude between
+plants, since each plant's tracking is in its own floor-widths or its owner's
+currency ([docs/reward-shaping.md](reward-shaping.md)). Compare with the
+**normalised expert advantage** `NEA = (PID - x) / (PID - rho*)`, computed on
+each controller's gain, its mean cost per step after the plant's burn-in as
+`target_gym.eval` measures it. NEA is 1 at the floor and 0 at PID parity.
+Report the tracking and running costs beside it.
 
 **Report the interquartile mean with a 95% stratified bootstrap confidence
 interval**, plus the win rate against the PID. Not the mean alone. This is
@@ -162,6 +166,14 @@ before reading any result from it.
 | four_tank | 500 | 38 | 190 | 0.99800 |
 | ph_neutralization | 300 | 14 | 70 | 0.99667 |
 | reactor | 1200 | 1 | 5 | 0.99917 |
+| unstable_cstr | 1200 | 6.3 to 14.4 | 32 to 72 | 0.99917 |
+
+The `unstable_cstr` row is filled by hand, because
+`scripts/measure_time_constants.py` has no step response to fit on that plant
+(see the next section). Its tau is the unstable time constant 1/lambda+, the
+time an uncontrolled error takes to grow e-fold. Over the five targets it runs
+from 19.0 s at C_a 0.45 to 43.1 s at 0.65, which is 6.3 to 14.4 steps of 3 s
+(derived, `scripts/unstable_cstr_numbers.py --section targets`).
 
 ### How long an episode has to be
 
@@ -210,16 +222,38 @@ monotone and settles. Measured across the registry:
   3415 at 11520. Since the furnace physics gained a regenerator, a reversal
   cycle, a thermocouple lag and a fuel dead time, it has no time constant on the
   episode timescale.
+* **The unstable CSTR runs away.** It is held on an open-loop unstable steady
+  state, so under a constant coolant command it leaves that state and either
+  trips or falls to the extinguished branch (derived,
+  `scripts/unstable_cstr_numbers.py --section reach`). There is no step
+  response, and its row above uses the unstable time constant instead.
 
 So the clause binds on roughly a third of the environments, and for the rest the
 episode is set by laps (the path-following aircraft), by the disturbance
 timescale (the reactor, the turbine, the battery, the boiler drum) or by the
-setpoint schedule (the furnace, the building, the kiln). **A criterion stated in
-terms of a quantity that does not exist for two thirds of the suite should not be
-read as a universal check**, and an earlier attempt to enforce it as a test was
+setpoint schedule (the furnace, the building, the kiln, the unstable CSTR).
+**A criterion stated in terms of a quantity that does not exist for two thirds
+of the suite should not be read as a universal check**, and an earlier attempt to enforce it as a test was
 withdrawn for that reason: measuring `tau` inside the episode under judgement
 makes the rule circular, since a longer episode sees more of the response,
 reports a larger `tau`, and demands a longer episode.
+
+**The unstable CSTR's episode length is set by its setpoint schedule.** Read
+with its unstable time constant as tau, the actuator clause asks for 10 tau,
+63 to 144 steps, and N = 1200 holds 83 to 189 of them. An episode is six
+blocks of 200 steps (10 min), and each block has to hold a switch's settle
+with room left to hold after it. The block length is three times the settle
+of the cascade's default gains after the worst switch, 62 steps, rounded up
+to whole minutes (derived,
+`scripts/unstable_cstr_numbers.py --section settle`). The shipped cascade's
+slowest settle to 2 % of a switch is 60 steps (3.0 min; derived, same
+section), 0.3 of a block. `scripts/measure_hold.py` scores the hold from
+step 120 of each block until the controller starts moving toward the next
+level, which `target_gym.eval.anticipations` detects, so at most 80 steps of a
+block are scored. Over three seeds, 18 blocks, it scored 1440 steps for the
+PID and 1141 for the MPC (measured, `hold_steps_scored` in
+`src/target_gym/data/hold_measurements.json`). There is no period clause,
+since the task is not periodic.
 
 **Six benchmark episodes were below the original criterion and were lengthened.** The
 environments themselves were fine -- their own defaults are long -- but

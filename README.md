@@ -1,7 +1,7 @@
 <h1 align="center">TargetGym</h1>
 
 <h3 align="center">
-  21 JAX environments for setpoint tracking,<br/>
+  22 JAX environments for setpoint tracking,<br/>
   with tuned PID and MPC baselines.
 </h3>
 
@@ -28,7 +28,7 @@ disturbances, rather than to reach a goal state once. The environments model
 real plants, including an A320-like aircraft, a glass furnace, a nuclear
 reactor, a cement kiln, a grid battery and a wind turbine.
 
-- **Baselines included.** Every environment ships a tuned PID; 20 of 21 also
+- **Baselines included.** Every environment ships a tuned PID; 21 of 22 also
   ship an MPC with full state access, which serves as an upper bound. Both are
   recorded over ten seeds in `src/target_gym/data/baseline_returns.json`.
 - **Validated physics.** Each environment carries a `PHYSICS.md` with a sourced
@@ -145,7 +145,7 @@ are covered in [docs/getting-started.md](docs/getting-started.md).
 | Family | Count | Environments |
 |---|---|---|
 | **Aircraft** | 9 | A320-like 2D aircraft on three reference patterns; four 3D path-following tasks; two formation-patrol variants |
-| **Process control** | 5 | CSTR, first-order lag, four-tank, pH neutralisation, binary distillation |
+| **Process control** | 6 | CSTR, first-order lag, four-tank, pH neutralisation, binary distillation, CSTR on its unstable steady state |
 | **Industrial / energy** | 5 | Glass furnace, nuclear reactor, building HVAC, boiler drum, cement kiln |
 | **Renewable energy** | 2 | Wind turbine, grid battery |
 
@@ -195,7 +195,7 @@ Ornstein-Uhlenbeck turbulence, unobservable by default.
 
 ## Baselines
 
-Every environment ships a tuned PID; 20 of 21 also ship an MPC. The exception is
+Every environment ships a tuned PID; 21 of 22 also ship an MPC. The exception is
 `patrol_bearing_only`, which withholds the slot error a planner would read.
 
 Controller structure is chosen per plant:
@@ -206,6 +206,9 @@ Controller structure is chosen per plant:
   measurement oscillates at the delay period.
 - **Four-tank**: crossed loops, since the negative RGA element makes the
   diagonal pairing unstable.
+- **Unstable CSTR**: cascade, an outer PI on concentration setting the
+  temperature an inner PD holds, since no P or PI loop on concentration alone
+  can stabilise the reactor's middle steady state.
 
 Three MPC implementations are used: CasADi/IPOPT where a symbolic model exists,
 gradient-based planning through the JAX dynamics elsewhere, and cross-entropy
@@ -241,7 +244,7 @@ Tests assert consequences rather than formulas: ISA table values, L/D ratios,
 thermal time constants, energy balances, equilibria. A test that recomputes the
 implementation's own expression would pass on a wrong one.
 
-All 21 environments are covered by fifteen contracts, since aircraft variants
+All 22 environments are covered by sixteen contracts, since aircraft variants
 share a plant. A shared conformance suite additionally checks determinism, PRNG
 handling, `jit`/`vmap`/`scan` compatibility and numerical health over full
 episodes.
@@ -257,7 +260,7 @@ method and lists what each model is validated against.
 |---|---|
 | **[Getting started](docs/getting-started.md)** | Episodes, vectorised rollouts, the registry, Gymnasium |
 | **[Target MDPs](docs/target-mdp.md)** | The formal setting |
-| **[Environment reference](docs/environments.md)** | All 21: shapes, tracked variables, baselines, contracts |
+| **[Environment reference](docs/environments.md)** | All 22: shapes, tracked variables, baselines, contracts |
 | **[Public API](docs/api.md)** | Stable and provisional surface |
 | **[Baselines](docs/baselines.md)** | PID and MPC controllers, tuning, solver reporting |
 | **[RL protocol](docs/rl-protocol.md)** | Measuring a learned policy |

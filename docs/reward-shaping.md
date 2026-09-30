@@ -4,10 +4,10 @@ TargetGym exists to ask one question: **can a learned policy hold a setpoint
 better than a PID or an MPC?** That question lives entirely in the reward, so
 the reward is the measuring instrument, and this page records how it is built.
 Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`) scores
-through it -- seventeen with the tracking term normalised by a floor, and four
-(reactor, battery, wind turbine, building) with tracking and consumption in
+through it. Eighteen normalise the tracking term by a floor, and four
+(reactor, battery, wind turbine, building) put tracking and consumption in
 the owner's currency, where the floor enters as the reference cost `rho_floor`
-rather than as a divisor; version 1, the capped log-scaled reward, is kept
+rather than as a divisor. Version 1, the capped log-scaled reward, is kept
 constructible (`reward_version=1` on any params) and described at the end of
 this page.
 
@@ -39,9 +39,9 @@ controller can hold on this plant under its shipped reference and
 disturbance processes -- floored at the resolution of the instrument the
 plant's table cites. Measurement noise is not modelled, so a simulator can
 hold finer than a real transmitter reads; a hold the instrument cannot see
-is not a floor, and on six plants (glass, kiln, boiler pressure,
-distillation, pH, the aircraft's altitude and heading) the resolution is
-the scale and the finer measured hold is recorded beside it. An error at the floor costs 1 per step. The scale is
+is not a floor, and on seven plants (glass, kiln, boiler pressure,
+distillation, pH, the unstable CSTR, the aircraft's altitude and heading) the
+resolution is the scale and the finer measured hold is recorded beside it. An error at the floor costs 1 per step. The scale is
 the plant's own irreducible error, not a sensor resolution and not the
 operating envelope, so a controller's tracking cost reads directly as "how
 many floor-widths off". `e_tol` is a specification tolerance where the plant
@@ -173,8 +173,11 @@ sits.
 three cost-bearing time constants of burn-in and then a hold window, under the
 shipped reference and disturbance processes, and records the long-run mean
 |error| per output, the consumption per step, and the settling time after a
-target change (`src/target_gym/data/hold_measurements.json`). Three kinds of
-floor come out of it:
+target change (`src/target_gym/data/hold_measurements.json`). On
+`unstable_cstr`, which has no burn-in, it scores each 10-minute block from
+step 120 (minute 6) until the controller starts moving toward the next level,
+as detected by `target_gym.eval.anticipations`. Three kinds of floor come out
+of it:
 
 - **Certified or closed-form** where the hold problem reduces to one the
   optimum can be computed for: the reactor (`scripts/floor_reactor_hold.py`, a
@@ -215,6 +218,7 @@ the evaluator measures.
 | `boiler_drum` | p=2 x2 | 2.7 mm level (lowest per-seed MPC hold), 0.05 bar (transmitter resolution; the MPC holds 0.028) | 0 | fuel above hold, w=1 | dimensionless |
 | `distillation` | p=2 x2 | 1e-4 / 1e-4 (analyser resolution; the MPC holds 1.35e-5 / 3.3e-5) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
 | `ph_neutralization` | p=2 | 0.01 pH (electrode resolution; the MPC holds 0.0080) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
+| `unstable_cstr` | p=2 | 1e-4 mol/L (analyser resolution; the MPC holds 6.29e-6, lowest per seed, so `rho* = (6.29e-6 / 1e-4)^2 = 0.00396`) | 0 (provisional) | none | dimensionless |
 | `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
 | `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds; `plane_energy`'s held 1.20 m once its anticipation of target changes left the hold, so its floor is loose until the MPC is reviewed) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
 | `plane3d_*` | p=2 | altitude 1.44 / 4.06 / 1.39 m, heading 1.0e-4 rad, path 8.1 / 6.2 / 14.6 m (lowest per-seed MPC holds in turbulence) | 0 | none | dimensionless |
@@ -228,8 +232,12 @@ stand-in. Each PHYSICS.md says where a plant engineer would get the real one.
 ## What the shipped controllers do under it
 
 The MPC is presented as the benchmark's ceiling, so under this reward it has
-to be one: on every plant its episode return and its hold cost are at or
-below the PID's (`docs/baselines.md`). Getting there was not a matter of
+to be one. On every plant with an MPC, its mean episode return is above the
+PID's (`scripts/record_baselines.py`) and its protocol gain is below the PID's
+(`scripts/evaluate_baselines.py`); both tables are in `docs/baselines.md`. Its
+hold cost is below the PID's on every plant except `cstr`, where the PID holds
+at 5.96e-7 floor-widths squared and the MPC at 4.21e-5 (measured,
+`scripts/evaluate_baselines.py`). Getting there was not a matter of
 re-tuning. Five things in the planners had been written against the
 version-1 reward and stopped being ceilings under version 2, and each is
 fixed in `experts/mpc.py` with the measurement that found it:
@@ -456,6 +464,17 @@ separated by what they burn. Non-negativity then comes free, so a short episode
 can never beat a long one — which also made the aircraft's flat `-200` crash
 penalty redundant, and it has been removed. Termination already costs every step
 it forgoes.
+
+`unstable_cstr`, added after version 2, has the one version-1 reward outside
+that bound. A trip there restarts the plant at once and charges the downtime
+on the tripped step (`base.failure_kernel`), so a score of 0 on that step made
+a trip nearly free. Over 12 policies and a constant-coolant scan, 128 seeds
+each, 16 pairs had a tripping policy scoring above a trip-free one (measured,
+`scripts/unstable_cstr_numbers.py --v1`). Its version 1 therefore scores a
+tripped step as `-restart_steps`, which is -1200, the downtime priced at
+version 1's best per-step score. In the same run that leaves no tripping
+policy above a trip-free one and ranks the 12 policies as version 2 does
+(Spearman 1.000), and the bound in `[0, 1]` does not hold on this task.
 
 ### The gradient is not scale-free, only the value is
 

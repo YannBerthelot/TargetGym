@@ -248,5 +248,6 @@ environment was written.
 | Cement Kiln | Published 3.0-3.5 MJ/kg heat consumption, Sullivan residence correlation, 0.5-2 % free lime | An energy audit caught the kiln being fed *raw* meal instead of calcined hot meal, overstating its thermal load by ~50 % |
 | Four Tank | Johansson (2000); RGA, reachability of the target box | The sampled targets sat entirely **above** what the plant can reach, so every episode was unwinnable, and the loops were paired the unstable way round |
 | CSTR | Steady-state multiplicity, branch stability | The 350 K runaway trip sits exactly where the unstable middle steady state does, so termination fires as the reactor ignites |
+| Unstable CSTR | APMonitor's low steady state at a 300 K coolant; Decardi-Nelson and Liu's two middle-branch states; multiplicity, folds and branch stability | The ignited states that the CSTR's table lists at 300 and 305 K are unstable foci. The branch turns stable only past a Hopf point at a 306.22 K coolant |
 | 3D Aircraft | Coordinated-turn relation, load factor | Banked flight reproduces psi_dot = g tan(phi)/V to within 0.5 %, though nothing in the model computes a turn rate |
 
