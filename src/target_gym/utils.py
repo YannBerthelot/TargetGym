@@ -202,6 +202,15 @@ def save_video(
 # ---------------------------------------------------------------------------
 # Headless episode runner + comparison GIF
 # ---------------------------------------------------------------------------
+#
+# Nothing outside the tests calls anything in this section, or
+# load_or_build_interpolator further down. The callers were the seven
+# per-environment runners, which also passed the MPC cache paths under
+# data/mpc_cache/ and data/interpolators/. runners/runners.py replaced them and
+# renders without a cache. The code stays only because this module is hashed
+# into every provenance fingerprint: deleting it would mark every recorded
+# baseline and every environment version stamp stale. Remove it in a change
+# that has to re-record the baselines anyway.
 
 
 def run_episode_headless(env, select_action, params, seed: int = 42):
@@ -249,8 +258,10 @@ def load_or_run_mpc_episode(
     Load a cached MPC episode trajectory from disk, or run the MPC episode and
     save it.  The cache stores ``(states, rewards)`` as a pickle.
 
-    This avoids re-running the expensive MPC optimisation on every GIF render.
-    Delete the cache file to force a fresh run.
+    Delete the cache file to force a fresh run. The file is keyed on its path
+    alone, so it cannot tell a trajectory recorded before a physics or
+    controller change from a current one. That is a reason not to wire it back
+    into the runners; see the note above this section.
     """
     if os.path.exists(cache_path):
         with open(cache_path, "rb") as f:
