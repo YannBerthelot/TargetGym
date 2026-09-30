@@ -65,7 +65,9 @@ _gains_cache: dict | None = None
 
 
 def _load_gains() -> dict:
-    """Load gains from data/pid_gains.json, running tuning first if the file is absent."""
+    """Load gains from src/target_gym/data/pid_gains.json, running tuning first if the
+    file is absent.
+    """
     global _gains_cache
     if _gains_cache is None:
         if not _GAINS_FILE.exists():
@@ -744,7 +746,7 @@ def make_patrol_pid() -> tuple[PatrolPIDParams, Plane3DPIDState]:
     """JAX-functional close-patrol follower PID (pursuit guidance).
 
     Gains default to hand-set values that hold a trailing slot; they can be
-    overridden from ``data/pid_gains.json`` under the ``patrol`` key.
+    overridden from ``src/target_gym/data/pid_gains.json`` under the ``patrol`` key.
     """
     _p = _load_gains().get("patrol", {})
     params = PatrolPIDParams(
@@ -1046,7 +1048,7 @@ def make_cstr_pid(
     reaction → higher Ca), so all gains are negative.
     dt = env delta_t = 0.25 (matches PC-gym: tsim=25s, N=100).
 
-    Gains are read from data/pid_gains.json if present; keyword arguments
+    Gains are read from src/target_gym/data/pid_gains.json if present; keyword arguments
     override the file (useful for ablation / manual testing).
     """
     Kp = Kp if Kp is not None else _g("cstr", "Kp", -103.6)
@@ -1157,7 +1159,7 @@ def make_four_tank_gs_pid() -> tuple[MIMOGainSchedulePIDParams, MIMOPIDState]:
 
     Mirrors :func:`make_four_tank_pid` but reads the per-loop
     ``gain_schedule_pid1`` / ``gain_schedule_pid2`` tables from
-    ``data/pid_gains.json``. Pair this with
+    ``src/target_gym/data/pid_gains.json``. Pair this with
     :func:`mimo_gain_scheduled_pid_step` and wrap in a
     ``FunctionalExpertPolicy`` to run as a JIT-compatible expert.
     """
@@ -1284,7 +1286,7 @@ def make_plane_pid(
 
     Sign: both positive — higher altitude error → more power / nose-up stick.
     dt = env delta_t = 1.0.
-    Gains read from data/pid_gains.json; keyword arguments override.
+    Gains read from src/target_gym/data/pid_gains.json; keyword arguments override.
     """
     _pl = _load_gains().get("plane", {})
     _p1 = _pl.get("pid1", {})
@@ -1333,7 +1335,7 @@ register_learnable_gains(plane3d_heading_pid_step, _PLANE3D_HEADING_LEARNABLE)
 
 
 def make_plane3d_heading_pid() -> tuple[Plane3DHeadingPIDParams, Plane3DPIDState]:
-    """JAX-functional heading-task PID. Gains from data/pid_gains.json.
+    """JAX-functional heading-task PID. Gains from src/target_gym/data/pid_gains.json.
 
     Altitude is MIMO-controlled: alt_err drives both stick (pitch) and power
     (throttle, added on top of a cruise bias), matching the 2D Airplane2D PID.
@@ -1357,7 +1359,7 @@ def make_plane3d_heading_pid() -> tuple[Plane3DHeadingPIDParams, Plane3DPIDState
 
 
 def make_plane3d_circle_pid() -> tuple[Plane3DCirclePIDParams, Plane3DPIDState]:
-    """JAX-functional circle-task PID. Gains from data/pid_gains.json."""
+    """JAX-functional circle-task PID. Gains from src/target_gym/data/pid_gains.json."""
     params = Plane3DCirclePIDParams(
         Kp_alt=_g3d("circle", "alt", "Kp", 0.0005),
         Ki_alt=_g3d("circle", "alt", "Ki", 1e-5),
@@ -1378,7 +1380,9 @@ def make_plane3d_circle_pid() -> tuple[Plane3DCirclePIDParams, Plane3DPIDState]:
 
 
 def make_plane3d_figure8_pid() -> tuple[Plane3DHeadingPIDParams, Plane3DPIDState]:
-    """JAX-functional figure-8 task PID. Gains from data/pid_gains.json."""
+    """JAX-functional figure-8 task PID. Gains from
+    src/target_gym/data/pid_gains.json.
+    """
     params = Plane3DHeadingPIDParams(
         Kp_alt=_g3d("figure8", "alt", "Kp", 0.0005),
         Ki_alt=_g3d("figure8", "alt", "Ki", 1e-5),
@@ -1404,7 +1408,9 @@ def make_plane3d_figure8_pid() -> tuple[Plane3DHeadingPIDParams, Plane3DPIDState
 
 
 def make_cstr_stateful_pid() -> StatefulPID:
-    """obs: [Ca, T, target_Ca]  (full get_obs layout). Gains from data/pid_gains.json."""
+    """obs: [Ca, T, target_Ca] (full get_obs layout). Gains from
+    src/target_gym/data/pid_gains.json.
+    """
     return StatefulPID(
         Kp=_g("cstr", "Kp", -103.6),
         Ki=_g("cstr", "Ki", -1.86),
@@ -1416,7 +1422,9 @@ def make_cstr_stateful_pid() -> StatefulPID:
 
 
 def make_first_order_stateful_pid() -> StatefulPID:
-    """obs: [x, target_x]  (full get_obs layout). Gains from data/pid_gains.json."""
+    """obs: [x, target_x] (full get_obs layout). Gains from
+    src/target_gym/data/pid_gains.json.
+    """
     return StatefulPID(
         Kp=_g("first_order", "Kp", 2.11),
         Ki=_g("first_order", "Ki", 9.72),
@@ -1449,7 +1457,7 @@ def make_four_tank_stateful_pid() -> StatefulMIMOPID:
     diverts to the *diagonal* upper tank dominates, and that tank drains into
     the lower tank on the other side.
 
-    Gains from data/pid_gains.json.
+    Gains from src/target_gym/data/pid_gains.json.
     """
     _ft = _load_gains().get("four_tank", {})
     _p1 = _ft.get("pid1", {})
@@ -1474,7 +1482,9 @@ def make_four_tank_stateful_pid() -> StatefulMIMOPID:
 
 
 def make_glass_furnace_stateful_pid() -> StatefulPID:
-    """obs: [T_crown, T_air_preheat, fuel_pct, reversal_phase, target_T_crown]  (full get_obs layout). Gains from data/pid_gains.json."""
+    """obs: [T_crown, T_air_preheat, fuel_pct, reversal_phase, target_T_crown] (full
+    get_obs layout). Gains from src/target_gym/data/pid_gains.json.
+    """
     return StatefulPID(
         Kp=_g("glass_furnace", "Kp", 0.01),
         Ki=_g("glass_furnace", "Ki", 0.001),
@@ -1486,7 +1496,9 @@ def make_glass_furnace_stateful_pid() -> StatefulPID:
 
 
 def make_reactor_stateful_pid() -> StatefulPID:
-    """obs: [n, T_coolant, rho_ext_norm, target_n]  (full get_obs layout). Gains from data/pid_gains.json."""
+    """obs: [n, T_coolant, rho_ext_norm, target_n] (full get_obs layout). Gains from
+    src/target_gym/data/pid_gains.json.
+    """
     return StatefulPID(
         Kp=_g("reactor", "Kp", 5.0),
         Ki=_g("reactor", "Ki", 0.5),
@@ -1501,7 +1513,7 @@ def make_plane_stateful_pid() -> StatefulMIMOPID:
     """
     obs: [x_dot, z, z_dot, theta, theta_dot, gamma, target_altitude, power, stick]
     MIMO PID: both power (pid1) and stick (pid2) track altitude error.
-    Gains read from data/pid_gains.json.
+    Gains read from src/target_gym/data/pid_gains.json.
     """
     _pl = _load_gains().get("plane", {})
     _p1 = _pl.get("pid1", {})
@@ -1529,7 +1541,7 @@ def make_plane_stateful_pid() -> StatefulMIMOPID:
 # Per-environment gain-scheduled factories (relay autotuning)
 # ---------------------------------------------------------------------------
 #
-# These read from the ``gain_schedule`` sub-dict in data/pid_gains.json.
+# These read from the ``gain_schedule`` sub-dict in src/target_gym/data/pid_gains.json.
 # If no gain schedule is available, they fall back to the flat-gain factories
 # above (wrapping them in a 1-point "schedule" for API compatibility).
 
@@ -1815,7 +1827,7 @@ def make_plane_stateful_gs_pid() -> StatefulMIMOPID:
 # All three tasks share an altitude loop (PID on z → stick) and use a
 # task-specific lateral loop (heading / circle radius / figure-8 phase →
 # desired bank → aileron). Gains are stored under "plane3d_<task>" in
-# data/pid_gains.json so each task can be tuned independently.
+# src/target_gym/data/pid_gains.json so each task can be tuned independently.
 #
 # Structure of the gains dict for each task::
 #
@@ -2129,7 +2141,9 @@ def _g3d(task: str, group: str, key: str, default: float) -> float:
 
 
 def make_plane3d_heading_stateful_pid() -> StatefulPlane3DHeadingPID:
-    """Heading task PID. Gains read from data/pid_gains.json under "plane3d_heading"."""
+    """Heading task PID. Gains read from src/target_gym/data/pid_gains.json under
+    "plane3d_heading".
+    """
     cruise = float(_load_gains().get("plane3d_heading", {}).get("power", 0.6))
     return StatefulPlane3DHeadingPID(
         Kp_alt=_g3d("heading", "alt", "Kp", 0.0005),
@@ -2144,7 +2158,9 @@ def make_plane3d_heading_stateful_pid() -> StatefulPlane3DHeadingPID:
 
 
 def make_plane3d_circle_stateful_pid() -> StatefulPlane3DCirclePID:
-    """Circle task PID. Gains read from data/pid_gains.json under "plane3d_circle"."""
+    """Circle task PID. Gains read from src/target_gym/data/pid_gains.json under
+    "plane3d_circle".
+    """
     cruise = float(_load_gains().get("plane3d_circle", {}).get("power", 0.6))
     return StatefulPlane3DCirclePID(
         Kp_alt=_g3d("circle", "alt", "Kp", 0.0005),
@@ -2159,7 +2175,8 @@ def make_plane3d_circle_stateful_pid() -> StatefulPlane3DCirclePID:
 
 
 def make_plane3d_figure8_stateful_pid() -> StatefulPlane3DFigureEightPID:
-    """Figure-8 task PID. Gains read from data/pid_gains.json under "plane3d_figure8".
+    """Figure-8 task PID. Gains read from src/target_gym/data/pid_gains.json under
+    "plane3d_figure8".
 
     Now uses heading-chasing (same structure as heading PID) to follow the
     moving reference point.  Falls back to heading gains if figure8-specific

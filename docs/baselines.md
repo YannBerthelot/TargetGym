@@ -845,7 +845,7 @@ the latter.
 
 ## The protocol numbers: hold and reach, separately
 
-Written from `data/protocol_results.json` (`scripts/evaluate_baselines.py`;
+Written from `src/target_gym/data/protocol_results.json` (`scripts/evaluate_baselines.py`;
 re-run it after any change and paste the table). Gain is the mean cost per
 step over every step after the plant's burn-in (three cost-bearing time
 constants, capped at half the test episode), transients included, split into
