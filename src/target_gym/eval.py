@@ -53,7 +53,7 @@ protocol. This module computes:
 ``time_in_band``    a KPI only, never a training signal: share of steps with
                     every tracked error inside ``band``.
 
-``burn_in`` is per plant, from ``data/hold_measurements.json``
+``burn_in`` is per plant, from ``src/target_gym/data/hold_measurements.json``
 (``scripts/measure_hold.py``): three cost-bearing time constants. Passing
 ``settle`` overrides the per-cycle measurement with a fixed count.
 

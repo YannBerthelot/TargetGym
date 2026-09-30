@@ -181,8 +181,9 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
     @property
     def expert_policy(self):
         # Prefer gain-scheduled gains (per-operating-point Kp/Ki tables)
-        # when available in data/pid_gains.json — significantly better
-        # than a single midpoint pair across the full target range.
+        # when available in src/target_gym/data/pid_gains.json, since they do
+        # significantly better than a single midpoint pair across the full
+        # target range.
         # Falls back to the SISO version if no schedule is present.
         from target_gym.experts.pid import (
             FunctionalExpertPolicy,

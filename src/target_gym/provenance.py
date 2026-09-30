@@ -6,7 +6,7 @@ fifty times over. Paying that on every merge is wasteful: the answer only moves
 when the physics, the controllers or their gains move, and most merges touch
 none of the three.
 
-So the measurement is recorded to ``data/baseline_returns.json`` by
+So the measurement is recorded to ``src/target_gym/data/baseline_returns.json`` by
 ``scripts/record_baselines.py`` and CI compares the recorded numbers instead of
 reproducing them. That trade is only safe if a stale record cannot pass
 silently, which is what this module is for: each record carries a fingerprint of
@@ -227,7 +227,7 @@ def environment_fingerprint(spec) -> str:
 
     Composed separately rather than by reusing the baseline digest, so that
     adding this could not change any fingerprint already recorded in
-    ``data/baseline_returns.json``.
+    ``src/target_gym/data/baseline_returns.json``.
     """
     params = spec.make_test_params()
     values = {

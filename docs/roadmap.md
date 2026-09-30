@@ -48,7 +48,7 @@ what is broken and recorded rather than hidden.
         package. This also clears the stale PyPI summary, which still mentions a
         "Car" environment that does not exist.
       - [x] **Environment versioning.** Done: `EnvSpec.version`,
-        `spec.versioned_name`, `data/env_versions.json`, and
+        `spec.versioned_name`, `src/target_gym/data/env_versions.json`, and
         `tests/test_env_versions.py`, which fails when an environment's
         fingerprint moves without its version being bumped. Every environment
         ships as `v1`.
@@ -444,7 +444,7 @@ what is broken and recorded rather than hidden.
         350.4 against an honest 151.8. That is now closed by `plan_params`, so
         an oracle arm is something to re-enable deliberately -- pass the
         evaluation key through `plan_params` rather than around it -- and its
-        results must never reach `data/baseline_returns.json`.
+        results must never reach `src/target_gym/data/baseline_returns.json`.
       - [ ] **Scenario arm on `SamplingMPC`.** A vmap over K disturbance keys
         and a mean, on top of the vmap over action samples it already does.
         Then a decision about whether to average the objective or use a risk
@@ -491,7 +491,7 @@ what is broken and recorded rather than hidden.
       against itself.
 * [ ] **Publish RL baseline results.** The environments claim a learned policy
       has something real to beat; no learned policy's numbers are published yet.
-      The harness is in place: `data/rl_results.json`, written through
+      The harness is in place: `src/target_gym/data/rl_results.json`, written through
       `target_gym.rl_results.record_result` and guarded by a fingerprint of the
       environment, so a result recorded before a reward or dynamics change is
       refused rather than quoted. Training runs outside this package (the
