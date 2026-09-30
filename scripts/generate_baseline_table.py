@@ -3,10 +3,11 @@
     uv run python scripts/generate_baseline_table.py            # write
     uv run python scripts/generate_baseline_table.py --check    # CI: exit 1 if stale
 
-The table used to be transcribed by hand from ``data/baseline_returns.json``,
-including a "seeds won" column that nothing computed. That is the headline
-results table of the whole library, and hand-transcription is exactly the drift
-this repository has spent a lot of effort eliminating everywhere else.
+The table used to be transcribed by hand from
+``src/target_gym/data/baseline_returns.json``, including a "seeds won" column
+that nothing computed. That is the headline results table of the whole library,
+and hand-transcription is exactly the drift this repository has spent a lot of
+effort eliminating everywhere else.
 
 Returns are reported as a **cost per step**: minus the mean return divided
 by the episode length. Every version-2 reward is minus a sum of non-negative
@@ -16,8 +17,8 @@ seeds of one plant and reads directly ("how many floor-widths off, on
 average, over the episode"). It is *not* comparable across plants: the priced
 plants are in dollars or euros per step, and an episode return mixes the
 reach transient with the hold in a proportion set by the episode length. The
-protocol numbers in ``data/protocol_results.json`` (``scripts/evaluate_baselines.py``)
-are the ones to compare across plants.
+protocol numbers in ``src/target_gym/data/protocol_results.json``
+(``scripts/evaluate_baselines.py``) are the ones to compare across plants.
 
 Under version 1 the rewards were products of terms in [0, 1] and the table
 reported the return as a share of the episode's ceiling; a positive mean return
@@ -95,7 +96,7 @@ def _table() -> str:
             BEGIN,
             "",
             "<!-- Written by scripts/generate_baseline_table.py from",
-            "     data/baseline_returns.json. Do not edit by hand. -->",
+            "     src/target_gym/data/baseline_returns.json. Do not edit by hand. -->",
             "",
             "| environment | steps | PID cost/step | MPC cost/step | MPC saves | MPC wins | trips |",
             "| --- | --- | --- | --- | --- | --- | --- |",

@@ -125,6 +125,10 @@ uv run python scripts/record_baselines.py                  # everything
 uv run python scripts/record_baselines.py --envs plane cstr # just these
 ```
 
+The headline table in `docs/baselines.md` is generated from those records, so
+regenerate it afterwards with `uv run python scripts/generate_baseline_table.py`.
+`make ci-docs` and the CI docs job fail while it is stale.
+
 Each record carries a fingerprint of what determined it: the environment's
 modules, the shared controller and integration code, the gains, the parameter
 values. The suite refuses to read one whose fingerprint no longer matches
@@ -162,8 +166,12 @@ trusted, by `tests/test_docs.py`:
 - **The environment pages are generated** from the registry:
   `docs/environments.md` by `scripts/generate_env_reference.py`, and the
   per-environment pages under `docs/environments/` by
-  `scripts/generate_env_pages.py`. Adding an environment or a baseline means
-  regenerating both. `make ci-docs` runs each with `--check` and then
+  `scripts/generate_env_pages.py`. The recorded baseline table in
+  `docs/baselines.md` is generated as well, by
+  `scripts/generate_baseline_table.py` from
+  `src/target_gym/data/baseline_returns.json`. Adding an environment or a
+  baseline means regenerating all three, and re-recording a baseline means
+  regenerating the table. `make ci-docs` runs each with `--check` and then
   `mkdocs build --strict`, which fails on a dangling link, including one that
   resolves on GitHub but not on the built site, since anything outside `docs/`
   (a `PHYSICS.md` under `src/`, `CONTRIBUTING.md`) has to be linked absolutely.

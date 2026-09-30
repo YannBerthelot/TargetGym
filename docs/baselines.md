@@ -802,7 +802,7 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 <!-- BEGIN GENERATED BASELINE TABLE -->
 
 <!-- Written by scripts/generate_baseline_table.py from
-     data/baseline_returns.json. Do not edit by hand. -->
+     src/target_gym/data/baseline_returns.json. Do not edit by hand. -->
 
 | environment | steps | PID cost/step | MPC cost/step | MPC saves | MPC wins | trips |
 | --- | --- | --- | --- | --- | --- | --- |
