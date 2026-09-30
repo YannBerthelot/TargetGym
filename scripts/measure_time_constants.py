@@ -32,16 +32,12 @@ import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
 import numpy as np  # noqa: E402
 
-from target_gym.registry import all_specs  # noqa: E402
+from target_gym.registry import REGISTRY  # noqa: E402
 from target_gym.runners.runners import _as_tuple  # noqa: E402
 
 out = {}
 print(f"  {'environment':20s} {'dt':>8s} {'tau_63':>10s} {'steps':>7s}  shape")
-# Every tier, core first. An open-loop unstable plant has no meaningful step
-# response, so its row in docs/rl-protocol.md is filled by hand whatever this
-# prints.
-for spec in all_specs("all"):
-    name = spec.name
+for name, spec in REGISTRY.items():
     params = spec.make_test_params()
     env = spec.make_env()
     dt = float(getattr(params, "delta_t", 1.0))

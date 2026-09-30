@@ -22,7 +22,7 @@ describes the tree is refused rather than believed. See
 
 Usage
 -----
-    uv run python scripts/record_baselines.py              # every core task
+    uv run python scripts/record_baselines.py              # everything
     uv run python scripts/record_baselines.py --envs plane cstr
 
 Run it whenever the test suite tells you a record is stale, and commit the
@@ -47,8 +47,8 @@ import time
 import jax
 import numpy as np
 
-from target_gym import registry
 from target_gym.provenance import BASELINES_PATH, baseline_fingerprint
+from target_gym.registry import REGISTRY
 from target_gym.runners.runners import (
     mpc_policy,
     pid_policy,
@@ -173,7 +173,7 @@ def _pid_one_seed(args):
     name, seed, live = args
     t0 = time.time()
     with _running(live, f"{name} PID seed {seed}"):
-        spec = registry.get(name)
+        spec = REGISTRY[name]
         params = spec.make_test_params()
         value = float(np.sum(rollout(spec, params, pid_policy(spec), seed)[2]))
     return value, time.time() - t0
@@ -184,7 +184,7 @@ def _mpc_one_seed(args):
     name, seed, live = args
     t0 = time.time()
     with _running(live, f"{name} MPC seed {seed}"):
-        spec = registry.get(name)
+        spec = REGISTRY[name]
         params = spec.make_test_params()
         env = spec.make_env()
         policy = mpc_policy(spec, env, params)
@@ -205,7 +205,7 @@ def _mpc_batch_one_env(args):
     name, live = args
     t0 = time.time()
     with _running(live, f"{name} MPC batch"):
-        spec = registry.get(name)
+        spec = REGISTRY[name]
         _, _, r, trips = rollout_mpc_batch(spec, spec.make_test_params(), SEEDS)
         out = [float(v) for v in r.sum(axis=1)], int(trips.sum())
     return (*out, time.time() - t0)
@@ -294,7 +294,7 @@ def _split_by_planner(names: list[str]) -> tuple[list[str], list[str]]:
     )
     batched, per_seed = [], []
     for name in names:
-        spec = registry.get(name)
+        spec = REGISTRY[name]
         if not spec.has_pid or spec.make_mpc is None:
             print(f"  {name:20s} no MPC baseline, skipped", flush=True)
             continue
@@ -318,7 +318,7 @@ def _split_by_planner(names: list[str]) -> tuple[list[str], list[str]]:
 
 
 def _row(name, pid, mpc, trips, reports, seconds) -> dict:
-    spec = registry.get(name)
+    spec = REGISTRY[name]
     row = {
         "fingerprint": baseline_fingerprint(spec),
         "steps": int(spec.make_test_params().max_steps_in_episode),
@@ -416,16 +416,11 @@ def _run_jobs(jobs, workers, inflight, durations, pid_out, mpc_out, batch_out, e
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument(
-        "--envs",
-        nargs="*",
-        default=None,
-        help="default: every core task with an MPC; name an extended task to record it",
-    )
+    ap.add_argument("--envs", nargs="*", default=None, help="default: all with an MPC")
     args = ap.parse_args()
 
     names = args.envs or [
-        n for n, s in registry.REGISTRY.items() if s.has_pid and s.make_mpc is not None
+        n for n, s in REGISTRY.items() if s.has_pid and s.make_mpc is not None
     ]
     batched, per_seed = _split_by_planner(names)
     live = batched + per_seed
@@ -585,11 +580,8 @@ def _write(rows: dict[str, dict]) -> None:
     # whatever the file already held, which is what makes a partial re-record
     # safe, and is exactly why nothing ever cleans up. ``plane_steps`` sat in
     # here after being absorbed into ``plane_energy``, describing a task that
-    # cannot be constructed. The known names cover every tier. Checked against
-    # ``REGISTRY`` (the core tier) alone, a default run would drop every
-    # extended row.
-    known = set(registry.env_names("all"))
-    dead = [k for k in out if k != "_meta" and k not in known]
+    # cannot be constructed.
+    dead = [k for k in out if k != "_meta" and k not in REGISTRY]
     for k in dead:
         del out[k]
         print(f"  dropped {k}: no longer in the registry", flush=True)

@@ -6,8 +6,7 @@ operation close to an operating envelope. This page answers that request (called
 the handover below). It proposes ten candidate tasks across seven families and
 asks for two decisions before any environment code is written: which two tasks
 to build first, and how to register new tasks without changing what existing
-users get from the registry. Apart from the registry tier mechanism, nothing on
-this page is implemented.
+users get from the registry. Nothing on this page is implemented.
 
 It was written on 2026-09-29 on the branch `docs/new-families-proposal`, which
 starts from `reward/floor-normalised`. Every new task has to use the version-2
@@ -17,10 +16,21 @@ built on it. Both have since been merged into `main`.
 
 ## Status
 
-As of 2026-09-30:
+As of 2026-09-30, after the owner's decisions and the gate checks:
 
-- The registry tier mechanism is settled and is being implemented. See
-  [Registering new tasks](#registering-new-tasks).
+- New tasks join the core pool. They are appended to the registry after the 21,
+  so every default accessor, the counts and the default benchmark include them,
+  and the seeds of the 21 do not move. The registry tier field proposed under
+  [Registering new tasks](#registering-new-tasks) was dropped: with every new
+  task in the core pool it had nothing to do.
+- Two pieces of that design remain, because the new tasks need them. A task
+  whose physics imports another package's file declares it in
+  `EnvSpec.fingerprint_sources`, so both of its fingerprints hash it. A task
+  added after the 21 keeps its controllers in its own package's `experts.py`,
+  which its baseline fingerprint hashes and its version stamp leaves out, since
+  `experts/pid.py` and `experts/mpc.py` are in every task's baseline
+  fingerprint. `tests/test_registry_rules.py` pins the 21 specs and holds new
+  tasks to these rules.
 - The build set is `unstable_cstr`, then `compressor_surge`.
 - The gate checks were run before any code, each re-derived by a second agent.
   - `compressor_surge` passed: a controller that chases the pressure setpoint
@@ -36,7 +46,7 @@ As of 2026-09-30:
     source gives.
 - `maglev` is not in this round.
 
-The sections below are the proposal as it was written, before these checks.
+The sections below are the proposal as it was written, before these decisions.
 
 ## What this page asks you to decide
 
@@ -267,58 +277,47 @@ seeds the same way.
 
 ### Proposed: a registry tier field
 
-This design is settled. The [API reference](../api.md#registry-tiers) documents
-the fields and accessors it adds.
-
 - `EnvSpec` gains `tier`, `"core"` by default. The 21 stay core. This registry
   tier says only whether default accessors return a task. It is unrelated to the
   six difficulty tiers of `docs/complexity.md`, and on this page "tier" always
   means the registry tier.
-- New tasks are `"extended"`. Their specs are appended to the same `_SPECS`
-  tuple in `registry.py`, after the 21 and never between them, and their
-  packages live under `src/target_gym/extended/<name>/`. An extended package is
-  imported only when its task is built.
-- Extended environment and params classes are not exported from the package
-  root. `docs/api.md` declares every name in `target_gym.__all__` stable, and
-  the extended tier is provisional. They are imported from
-  `target_gym.extended.<name>`, or built through `registry.get(name)`.
-  `import target_gym` runs no extended code, so a broken extended task cannot
-  break the import for the 21.
-- New groups go in `EXTENDED_GROUPS`, which `registry.py` declares beside
-  `GROUPS`. They are named by control challenge (question 4) and never reuse one
-  of the four core group names. A group is created with its first task. A new
-  task whose name the default title-casing writes wrongly gets an entry in the
-  existing `DISPLAY_NAMES`.
+- New tasks are `"extended"`. Their packages live under
+  `src/target_gym/extended/`, and their specs in `target_gym/extended/specs.py`,
+  which is imported only when asked for.
+- `target_gym/__init__.py` exports each extended environment and params class
+  lazily, through a module-level `__getattr__`, so they are importable from the
+  package root as `tests/test_public_api.py` requires, while `import target_gym`
+  still runs no extended code. A broken extended task then cannot break the
+  import for the 21.
+- New groups live beside those specs, in `EXTENDED_GROUPS`, with any display
+  names in `EXTENDED_DISPLAY_NAMES`. They never reuse one of the four core group
+  names. A group is created with its first task (question 4).
 - `REGISTRY`, `GROUPS`, `all_specs()`, `env_names()` and `specs_in_group()`
   return exactly what they return today, in the same order, for every existing
   caller. Code that wants the new tasks asks for them, with `all_specs("all")`,
   `registry.get(name)` or `specs_in_group()` given a new group's name. The
   mechanism widens `get` to search every tier and lets `specs_in_group` accept
   an extended group, which today raises `KeyError`.
-- Each new task declares a fixed number, its `seed_index`, from 1000 up, that
-  TargetGym's `benchmark.py` uses (through `registry.task_seed_index`) in place
-  of the task's list position when it derives episode seeds. Adding a task, or
-  promoting one later if that is allowed (question 15), then never shifts
-  another task's episodes. TargetFoundation's `scripts/benchmark_all.py`
-  derives seeds itself and has to change before it can run a new task (see What
-  TargetFoundation will need).
-- There is no shared package for extended physics, because no two of the tasks
-  chosen so far share any. A task whose physics imports a file outside its own
-  package, as `unstable_cstr` imports the shipped cstr's `pc_gym/cstr/env.py`,
-  lists that file in its `fingerprint_sources`, and its version stamp and
-  baseline fingerprint both hash it. A test checks that an extended package
-  imports only its own modules, `base`, `reward`, `utils`, `integration` and its
-  declared sources, plus the shared experts from its own `experts*` files. Each
-  task's controllers live in its own `experts.py`, which its baseline
-  fingerprint hashes and its version stamp leaves out.
+- Each new task declares a fixed number, from 1000 up, that TargetGym's
+  `benchmark.py` uses in place of the task's list position when it derives
+  episode seeds. Adding a task, or promoting one later if that is allowed
+  (question 15), then never shifts another task's episodes. TargetFoundation's
+  `scripts/benchmark_all.py` derives seeds itself and has to change before it
+  can run a new task (see What TargetFoundation will need).
+- Physics shared by several new tasks lives in
+  `src/target_gym/extended/common/`, which every extended task's version stamp
+  and baseline fingerprint both hash. A test checks that an extended package
+  imports only its own modules, `base`, `reward`, `utils`, `integration`,
+  `extended.common`, and the shared experts from its own `experts.py`. Any other
+  import is declared on the spec as an extra fingerprint source.
 - TargetGym's own tests, version stamping and page generators iterate every tier
   and every group, so new tasks get the whole conformance suite and their own
   pages. A guard test checks that no registered spec is left out of the
-  conformance suite. `record_baselines.py` records the core tier by default, and
-  an extended task when it is named with `--envs` (question 12). Its clean-up
-  step, which today deletes every row whose name is not in `REGISTRY`, checks
-  names against every tier instead. `scripts/tune_pid.py` also looks tasks up
-  in `REGISTRY` and moves to `registry.get`.
+  conformance suite. `record_baselines.py` can record every tier, with the core
+  tier as the proposed default (question 12). Its clean-up step, which today
+  deletes every row whose name is not in `REGISTRY`, checks names against every
+  tier instead. `scripts/tune_pid.py` also looks tasks up in `REGISTRY` and
+  moves to `registry.get`.
 - The environment counts in the README, `environments.md` and `docs/index.md`,
   and the homepage's flagship clips, stay on the 21. Each new page needs an
   entry in the hand-written nav in `mkdocs.yml`. Three hand-maintained tables
@@ -326,8 +325,8 @@ the fields and accessors it adds.
   `docs/reward-shaping.md`, the ladder in `docs/complexity.md` and the
   validation table in `docs/PHYSICS_METHODOLOGY.md`. Each new task adds a row to
   each, in the same change as its `PHYSICS.md`.
-- `CONTRIBUTING.md` keeps "Adding an environment" for core tasks, and gains a
-  checklist for adding an extended task in the change that adds the first one.
+- The same change rewrites "Adding an environment" in `CONTRIBUTING.md` to
+  match.
 
 **Cost to the 21.** From reading the code, the 21 existing tasks are unaffected.
 `registry.py` is in no fingerprint, and the fingerprint code's path for extended
@@ -339,29 +338,28 @@ today. The change that adds the mechanism has to prove this by passing the
 baseline and version-stamp tests without re-recording or re-stamping anything.
 
 **Cost to TargetFoundation.** Its default run is unchanged. It sees new tasks
-only after it moves its pin and opts in. The move that brings the mechanism
-needs one rehash of its golden test, because `registry.py`, `benchmark.py` and
-`eval.py` change. Each new task then appends its spec to `registry.py`, so a
-later move that brings new tasks needs another rehash. TargetFoundation's own
+only after it moves its pin and opts in. That move needs one rehash of its
+golden test, because `registry.py`, `benchmark.py` and `eval.py` change once.
+After that, a new task changes no TargetGym file the golden test hashes, unless
+it changes shared evaluation code: `grade_transition`'s delayed measurement
+needs `eval.py` to split episodes on a switch flag the environment reports, so
+that support should ship with the mechanism. TargetFoundation's own
 `policies.py`, where each new task needs rows, is golden-hashed too, so each
 batch of tasks it declares costs it a rehash whatever design is chosen here.
-`grade_transition`'s delayed measurement needs `eval.py` to split episodes on a
-switch flag the environment reports. That support ships with
-`grade_transition`, whose change edits `registry.py` anyway. The flag's shape,
-a scalar `info["target_switch"]`, is fixed now.
 
 **Cost in time.** Running every tier adds CI and recording time that has not
 been measured. `docs/testing.md` holds both CI jobs to ten minutes, and each
 extended task adds conformance compiles, slow closed-loop tests and an MPC to
-record. Extended tests will therefore run in their own CI job, `extended`,
-added with the first extended task. It will block merges like the others, so
-the core budget stays visible, and
-`record_baselines.py` records the core tier unless given extended names
-(question 12).
+record. One option is to run extended conformance as its own CI job that still
+blocks merges, so the core budget stays visible, and to have
+`record_baselines.py` record the core tier unless asked for more (question 12).
 
-**Where it starts.** `feature/run-policy-on-benchmark`, which added
-`benchmark.py`, is merged, so the mechanism branch, `registry/tiers`, starts
-from `main`.
+**Where it starts.** `benchmark.py` exists only on
+`feature/run-policy-on-benchmark`, whose commit TargetFoundation pins, so the
+mechanism branch should start from that commit or wait until it is merged. That
+branch is also checked out in a separate worktree that TargetFoundation's
+benchmark jobs import, so the new branch is created from the pinned commit and
+that worktree is left untouched.
 
 The mechanism costs about 3.5 days, paid once for all new tasks.
 
@@ -516,9 +514,8 @@ The mechanism costs about 3.5 days, paid once for all new tasks.
 - **Open points.** The gate on the published regime described under
   Recommendation. The delayed measurement needs `eval.py` and
   `scripts/measure_hold.py` to split episodes on a switch flag the environment
-  reports. That support would ship with this task, as one scalar
-  `info["target_switch"]` per grade change (see Registering new tasks). The
-  shipped PID leans on grade
+  reports, with the NAMW flag set 10 steps after the temperature's; the
+  `eval.py` part ships with the mechanism. The shipped PID leans on grade
   feedforward, which is model knowledge TargetFoundation's methods lack. A PID
   without it would make that comparison fair, but a spec holds one `make_pid`
   and the recorder records one PID per task, so it needs a second registered

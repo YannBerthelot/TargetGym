@@ -31,8 +31,7 @@ import pytest
 
 from target_gym import registry
 
-# Every tier, core first, so the ids of the 21 core tasks do not move.
-ALL_SPECS = list(registry.all_specs("all"))
+ALL_SPECS = list(registry.all_specs())
 SPEC_IDS = [s.name for s in ALL_SPECS]
 
 
@@ -477,8 +476,7 @@ def test_pid_baseline_produces_valid_actions(spec):
 
 
 def test_registry_matches_group_vocabulary(spec):
-    groups = registry.GROUPS if spec.tier == "core" else registry.EXTENDED_GROUPS
-    assert spec.group in groups
+    assert spec.group in registry.GROUPS
 
 
 # ---------------------------------------------------------------------------

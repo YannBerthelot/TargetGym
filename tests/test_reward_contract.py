@@ -22,13 +22,12 @@ import pytest
 
 from target_gym import reward as R
 from target_gym.provenance import BASELINES_PATH
-from target_gym.registry import REGISTRY, all_specs
+from target_gym.registry import REGISTRY
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "src" / "target_gym"
 
-# Every tier, core first. The hand-picked plants below stay core lookups.
-SPECS = list(all_specs("all"))
+SPECS = list(REGISTRY.values())
 IDS = [s.name for s in SPECS]
 
 # Parameters the reward reads, whose value must be traceable in PHYSICS.md.

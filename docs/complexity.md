@@ -3,9 +3,7 @@
 There is a wide difficulty range in this suite, so it can be used as a
 curriculum and not only as a benchmark. Tiers weigh both the **dynamics**
 (linearity, coupling, stiffness) and the **RL side** (dimensionality,
-horizon, partial observability). The Tier column below is this difficulty tier,
-unrelated to the registry tier (`EnvSpec.tier`, core or extended) described in
-the [API reference](api.md#registry-tiers).
+horizon, partial observability).
 
 | Tier | Environment | Obs | Act | Dynamics | Key RL challenges |
 |---|---|---|---|---|---|

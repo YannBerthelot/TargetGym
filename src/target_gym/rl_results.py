@@ -98,9 +98,10 @@ def record_result(
     PID's and the MPC's. Anything else -- a training curve, a normalised score --
     is not comparable to them and does not belong here.
     """
-    from target_gym import registry
+    from target_gym.registry import REGISTRY
 
-    spec = registry.get(env)
+    if env not in REGISTRY:
+        raise KeyError(f"unknown environment {env!r}")
     values = [float(v) for v in returns]
     if not values:
         raise ValueError(f"{env}/{algorithm}: no returns given")
@@ -111,11 +112,11 @@ def record_result(
         # belongs to a *version* of an environment: the key says which entry it
         # came from, this says what that entry meant when the number was
         # measured, and the fingerprint below is what proves the two agree.
-        "env_version": spec.versioned_name,
+        "env_version": REGISTRY[env].versioned_name,
         "algorithm": algorithm,
         "library": library,
         "library_version": library_version,
-        "env_fingerprint": environment_fingerprint(spec),
+        "env_fingerprint": environment_fingerprint(REGISTRY[env]),
         "n_seeds": len(values),
         "returns": [round(v, 6) for v in values],
         "episode_steps": int(episode_steps),
@@ -142,10 +143,9 @@ def record_result(
 
 def is_current(record: dict) -> bool:
     """Whether a record still describes the environment as it stands now."""
-    from target_gym import registry
+    from target_gym.registry import REGISTRY
 
-    try:
-        spec = registry.get(record["env"])
-    except KeyError:
+    spec = REGISTRY.get(record["env"])
+    if spec is None:
         return False
     return record["env_fingerprint"] == environment_fingerprint(spec)

@@ -74,12 +74,8 @@ jobs:
       # kiln, and the job was killed with SIGTERM partway through the nineteenth.
       # A fresh process per environment releases all of it and the total comes
       # in lower despite paying JAX start-up twenty-one times.
-      #
-      # Every tier. An extended task's generated page embeds its clip too, and
-      # mkdocs --strict does not check raw <img> tags, so a missing clip would
-      # publish as a broken picture.
       run: |
-        envs=$(uv run python -c "from target_gym import registry; print(' '.join(registry.env_names('all')))")
+        envs=$(uv run python -c "from target_gym.registry import REGISTRY; print(' '.join(REGISTRY))")
         for env in $envs; do
           echo "::group::render $env"
           uv run python -m target_gym.runners.runners --only videos --env "$env"

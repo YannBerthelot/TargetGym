@@ -91,7 +91,7 @@ def test_every_environment_has_a_physics_contract():
 
     missing = [
         spec.name
-        for spec in registry.all_specs("all")
+        for spec in registry.all_specs()
         if not _physics_contract(spec).exists()
     ]
     assert not missing, f"environments without a PHYSICS.md: {missing}"
@@ -131,19 +131,13 @@ def test_readme_states_the_right_number_of_physics_contracts():
     prose has no other way of being checked, and this one is load-bearing --
     it is how a reader sizes the physics claim.
 
-    The counts come from the specs. The core sentence counts the contracts the
-    21 core tasks reach. A second sentence counts the extended tasks and the
-    contracts only they reach, and it must be absent while no extended task
-    is registered.
+    The count comes from the specs, and every PHYSICS.md under src/ must be
+    one a registered task reaches.
     """
     from target_gym import registry
 
-    core = {_physics_contract(spec) for spec in registry.all_specs()}
-    extended = {
-        _physics_contract(spec) for spec in registry.all_specs("extended")
-    } - core
+    want = {_physics_contract(spec) for spec in registry.all_specs()}
     on_disk = set((ROOT / "src").rglob("PHYSICS.md"))
-    want = core | extended
 
     def rel(paths):
         return sorted(str(p.relative_to(ROOT)) for p in paths)
@@ -154,30 +148,11 @@ def test_readme_states_the_right_number_of_physics_contracts():
     )
 
     readme = (ROOT / "README.md").read_text()
-    match = re.search(r"environments are covered\*{0,2} by ([\w-]+) contracts", readme)
+    match = re.search(r"covered\*{0,2} by ([\w-]+) contracts", readme)
     assert match, "could not find the 'covered by N contracts' claim in README.md"
-    assert _number(match.group(1)) == len(core), (
+    assert _number(match.group(1)) == len(want), (
         f"README says {match.group(1)} contracts, "
-        f"but the core tasks reach {len(core)} PHYSICS.md files"
-    )
-
-    match = re.search(
-        r"The ([\w-]+) extended tasks? (?:is|are) covered by ([\w-]+) contracts? "
-        r"of (?:its|their) own",
-        readme,
-    )
-    n_extended = len(registry.env_names("extended"))
-    if not n_extended:
-        assert not match, "README counts extended tasks, but none is registered"
-        return
-    assert match, (
-        "could not find the 'The N extended tasks are covered by M contracts of "
-        "their own' claim in README.md"
-    )
-    said = _number(match.group(1)), _number(match.group(2))
-    assert said == (n_extended, len(extended)), (
-        f"README says {said[0]} extended tasks and {said[1]} contracts, "
-        f"but there are {n_extended} and {len(extended)}"
+        f"but the tasks reach {len(want)} PHYSICS.md files"
     )
 
 
@@ -191,7 +166,7 @@ def test_every_task_has_a_page_in_the_nav():
 
     nav = (ROOT / "mkdocs.yml").read_text()
     problems = []
-    for name in registry.env_names("all"):
+    for name in registry.env_names():
         if not (DOCS / "environments" / f"{name}.md").exists():
             problems.append(f"{name}: no docs/environments/{name}.md")
         if not re.search(rf"\benvironments/{re.escape(name)}\.md\b", nav):

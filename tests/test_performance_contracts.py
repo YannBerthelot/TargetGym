@@ -13,7 +13,7 @@ import re
 import jax
 import pytest
 
-from target_gym import registry
+from target_gym.registry import REGISTRY
 
 SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "target_gym"
 
@@ -57,9 +57,7 @@ def test_get_obs_is_not_a_compiled_wrapper(name):
     ``_cache_size``; a plain function does not. Asserting on that is
     deterministic, unlike a wall-clock threshold on a shared runner.
     """
-    module = importlib.import_module(
-        type(registry.REGISTRY[name].make_env()).__module__
-    )
+    module = importlib.import_module(type(REGISTRY[name].make_env()).__module__)
     env_module = importlib.import_module(module.__name__.replace(".env_jax", ".env"))
     get_obs = getattr(env_module, "get_obs", None)
 
@@ -72,7 +70,7 @@ def test_get_obs_is_not_a_compiled_wrapper(name):
     )
 
 
-@pytest.mark.parametrize("name", registry.env_names("all"))
+@pytest.mark.parametrize("name", list(REGISTRY))
 def test_reset_returns_strongly_typed_state(name):
     """A reset state must have the dtypes a stepped state has.
 
@@ -86,7 +84,7 @@ def test_reset_returns_strongly_typed_state(name):
     ``base.canonical_reset`` is what fixes it. This asserts the decorator has not
     been dropped from a new environment, which is easy to do and silent.
     """
-    spec = registry.get(name)
+    spec = REGISTRY[name]
     env = spec.make_env()
     _, state = env.reset_env(jax.random.PRNGKey(0), spec.params_cls())
     weak = [
@@ -103,7 +101,7 @@ def test_reset_returns_strongly_typed_state(name):
     )
 
 
-@pytest.mark.parametrize("name", registry.env_names("all"))
+@pytest.mark.parametrize("name", list(REGISTRY))
 def test_make_env_shares_one_instance(name):
     """Building an environment twice must not produce two objects.
 
@@ -119,7 +117,7 @@ def test_make_env_shares_one_instance(name):
     An environment that starts keeping state across steps breaks this and must
     fix the sharing rather than the test.
     """
-    spec = registry.get(name)
+    spec = REGISTRY[name]
     assert spec.make_env() is spec.make_env(), (
         f"{name}: make_env returned two different objects. Each one costs JAX a "
         f"retained compiled executable, so building environments in a loop leaks."

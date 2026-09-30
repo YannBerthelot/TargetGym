@@ -51,7 +51,7 @@ import numpy as np  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from target_gym import registry  # noqa: E402
+from target_gym.registry import REGISTRY, control_step_seconds  # noqa: E402
 from target_gym.runners.runners import (  # noqa: E402
     _as_tuple,
     _wants_state,
@@ -297,7 +297,7 @@ def _settle(errors, bounds, level):
 
 
 def measure(name, seeds):
-    spec = registry.get(name)
+    spec = REGISTRY[name]
     env = spec.make_env()
     p = spec.make_test_params()
     err_fn, cons_fn, tau, source, hold = PLANTS[name]
@@ -312,7 +312,7 @@ def measure(name, seeds):
     params = p.replace(max_steps_in_episode=steps)
     row = {
         "steps": steps,
-        "step_seconds": registry.control_step_seconds(env, p),
+        "step_seconds": control_step_seconds(env, p),
         "burn_in": burn_in,
         "tau_cost_steps": tau,
         "tau_cost_source": source,
@@ -380,9 +380,7 @@ def main() -> int:
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--out", default=str(OUT), help="merge rows into this JSON")
     args = ap.parse_args()
-    # The core tasks by default. An extended task is measured when --envs
-    # names it.
-    names = args.envs or [n for n in PLANTS if registry.get(n).tier == "core"]
+    names = args.envs or list(PLANTS)
     out_path = pathlib.Path(args.out)
     out = json.loads(out_path.read_text()) if out_path.exists() else {}
     for name in names:

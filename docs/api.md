@@ -47,12 +47,10 @@ running out of clock is a failure state.
 
 ### The registry
 
-`target_gym.registry.REGISTRY` maps a name to an `EnvSpec` for each of the 21
-core tasks, and `GROUPS` names their four groups. Both hold the core tier only;
-the other tier is described under [Registry tiers](#registry-tiers). The spec's
-fields (`make_env`, `params_cls`, `make_pid`, `make_mpc`, `test_params`,
+`target_gym.registry.REGISTRY` maps a name to an `EnvSpec`. The spec's fields
+(`make_env`, `params_cls`, `make_pid`, `make_mpc`, `test_params`,
 `disturbance_fields`, `baselines_note`, ...) are documented on the class and
-are stable, except the three tier fields listed there.
+are stable.
 
 ```python
 from target_gym.registry import REGISTRY, GROUPS
@@ -70,45 +68,7 @@ print(len(REGISTRY), "environments in", len(GROUPS), "groups")
 | `target_gym.runners` | Figure and video generation. A tool, not a library surface. |
 | `target_gym.render_kit` | The dashboard toolkit. Stable enough to build on, but its primitives are still moving. |
 | `target_gym.utils` | A grab-bag; parts of it will move or go. |
-| `target_gym.benchmark` | One policy interface and a paired runner over the 21 core tasks, or any named ones (`Policy`, `TaskInfo`, `run_policy`, `run_policy_on_benchmark`, `shipped_policy`). New; its `TaskInfo.extras` conventions are still settling with its first downstream user. |
-
-### Registry tiers
-
-Every `EnvSpec` has a `tier`. The 21 tasks in `REGISTRY` are `"core"`, and
-every default accessor returns exactly those, in registration order. Code that
-iterates the defaults, such as `benchmark.run_policy_on_benchmark` with no
-`tasks`, sees the 21 only. Tasks added after the 21 are `"extended"`. They are
-registered, tested, version-stamped and documented like the core ones, and are
-returned only to code that asks for them by tier, by group or by name. The
-registry tier is unrelated to the difficulty tiers of the
-[complexity ladder](complexity.md).
-
-| Name | Meaning |
-|---|---|
-| `EnvSpec.tier` | `"core"` (the default) or `"extended"`. `TIERS` lists both |
-| `EnvSpec.seed_index` | Extended tasks only: a fixed number, 1000 and up, unique and increasing in registration order. `None` for core tasks |
-| `EnvSpec.fingerprint_sources` | Files outside the task's own package that its physics imports, relative to `src/target_gym`. Both of the task's fingerprints hash them. Empty for every core task |
-| `all_specs(tier="core")`, `env_names(tier="core")` | The specs, or their names, of one tier in registration order. `tier` is `"core"`, `"extended"`, or `"all"` for every tier with core first; any other value raises `ValueError` |
-| `get(name)` | One spec by name, from any tier. Naming a task is how code asks for an extended one |
-| `EXTENDED_GROUPS` | The display name of each extended group. Groups are named by control challenge, and no key is also a key of `GROUPS`. A group is added with its first task, so this is empty until the first extended task |
-| `specs_in_group(group)` | Accepts a core or an extended group. A core group returns core specs only |
-| `task_seed_index(name)` | What `benchmark.run_policy_on_benchmark` folds into its seed for a task: its position in `REGISTRY` (0 to 20) for a core task, its `seed_index` for an extended one. Adding a task never shifts another task's episodes |
-
-Extended environment and params classes are not in `target_gym.__all__`, so the
-Stable list above does not grow with them. Import them from their own package,
-the environment class from `target_gym.extended.<name>.env_jax` and the params
-class from `target_gym.extended.<name>.env`, or build them through the registry
-with `registry.get(name).make_env()` and `.params_cls()`, as for any task.
-`import target_gym` imports no extended module.
-
-```python
-from target_gym import registry
-
-assert registry.env_names() == list(registry.REGISTRY)  # the 21 core tasks
-for name in registry.env_names("all"):  # every tier, core first
-    spec = registry.get(name)
-    print(spec.versioned_name, spec.tier, registry.task_seed_index(name))
-```
+| `target_gym.benchmark` | One policy interface and a paired runner over every task (`Policy`, `TaskInfo`, `run_policy`, `run_policy_on_benchmark`, `shipped_policy`). New; its `TaskInfo.extras` conventions are still settling with its first downstream user. |
 
 ## Not public
 

@@ -351,10 +351,10 @@ def evaluate_controller(
     name: str, kind: str = "pid", seeds: int = 3, params=None, rho_ref=None
 ):
     """Score a shipped controller (``"pid"`` or ``"mpc"``) on a plant."""
-    from target_gym import registry
+    from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
 
-    spec = registry.get(name)
+    spec = REGISTRY[name]
     p = params or spec.make_test_params()
     episodes = [
         run_episode(spec, p, baseline_policy(spec, kind, p), seed=s)

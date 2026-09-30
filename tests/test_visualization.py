@@ -7,11 +7,11 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym import registry
 from target_gym.pc_gym.cstr.env_jax import CSTR as JaxCSTR
 from target_gym.pc_gym.cstr.env_jax import CSTRParams, CSTRState
 from target_gym.plane.env_jax import Airplane2D as JaxPlane2D
 from target_gym.plane.env_jax import PlaneParams, PlaneState
+from target_gym.registry import REGISTRY
 
 
 # -------------------------
@@ -108,11 +108,9 @@ def test_save_renders_param(jax_env_cls, EnvParamsCls, EnvStateCls, action_fn):
 RENDER_STEPS = 12
 
 
-@pytest.mark.parametrize(
-    "name", registry.env_names("all"), ids=registry.env_names("all")
-)
+@pytest.mark.parametrize("name", list(REGISTRY), ids=list(REGISTRY))
 def test_every_environment_renders(name):
-    spec = registry.get(name)
+    spec = REGISTRY[name]
     env = spec.make_env()
     params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": 30})
 

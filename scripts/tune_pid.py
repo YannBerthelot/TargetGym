@@ -1272,10 +1272,10 @@ def _tune_aircraft_search(
     import numpy as np
 
     import target_gym.experts.pid as pid_mod
-    from target_gym import registry
+    from target_gym.registry import REGISTRY
     from target_gym.runners.runners import pid_policy, rollout
 
-    spec = registry.get(env_name)
+    spec = REGISTRY[env_name]
     params = spec.make_test_params(max_steps_in_episode=steps)
     all_gains = dict(pid_mod._load_gains())
     start = all_gains.get(gains_key) or _controller_defaults(gains_key)
@@ -1386,21 +1386,16 @@ TUNERS = {
 
 
 def main():
-    from target_gym import registry
-
     parser = argparse.ArgumentParser(
         description="Tune PID gains via relay autotuning and save to data/pid_gains.json"
     )
-    # The default tunes the core tasks only, so ``make tuning`` never moves an
-    # extended task's gains. An extended task is tuned when --envs names it.
     parser.add_argument(
         "--envs",
         nargs="+",
         choices=list(TUNERS),
-        default=[k for k in TUNERS if registry.get(k).tier == "core"],
+        default=list(TUNERS),
         metavar="ENV",
-        help="Environments to tune (default: every core one). Choices: "
-        + ", ".join(TUNERS),
+        help="Environments to tune (default: all). Choices: " + ", ".join(TUNERS),
     )
     parser.add_argument(
         "--n-points",

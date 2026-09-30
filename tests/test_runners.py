@@ -30,7 +30,7 @@ from target_gym.experts.mpc import (
 )
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
-from target_gym.registry import REGISTRY, all_specs
+from target_gym.registry import REGISTRY
 from target_gym.runners import runners as R
 from target_gym.runners.utils import run_constant_policy_final_value
 from target_gym.utils import (
@@ -84,19 +84,19 @@ def test_every_registered_environment_exposes_a_tracked_label():
     this ships plots labelled with an index instead of a quantity.
     """
     missing = [
-        spec.name
-        for spec in all_specs("all")
+        name
+        for name, spec in REGISTRY.items()
         if not getattr(spec.make_env(), "tracked_names", None)
     ]
     assert not missing, f"environments without tracked_names: {missing}"
 
 
 def test_tracked_names_matches_the_number_of_tracked_channels():
-    for spec in all_specs("all"):
+    for name, spec in REGISTRY.items():
         env = spec.make_env()
         n = len(R._as_tuple(env.obs_value_index))
         assert len(env.tracked_names) == n, (
-            f"{spec.name}: {len(env.tracked_names)} tracked_names for {n} tracked "
+            f"{name}: {len(env.tracked_names)} tracked_names for {n} tracked "
             "observation slots"
         )
 
