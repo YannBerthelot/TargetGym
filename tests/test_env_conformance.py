@@ -7,7 +7,7 @@ each was written in isolation, so a defect in a shared convention could hide in
 one environment while the others were fine. The glass furnace's pull-rate
 disturbance is the worked example: it read its randomness from the PRNG key
 handed to ``step_env``, but every rollout helper in this repository
-(``run_episode_headless``, ``save_video``, the ``lax.scan`` bodies in the
+(``runners.rollout``, ``save_video``, the ``lax.scan`` bodies in the
 runners) passes *the same key at every step*. The "AR(1) noise" was therefore a
 deterministic monotone ramp, and 334 passing tests said nothing about it.
 
@@ -248,9 +248,9 @@ def _terminal_disturbances(spec, seeds, split_key, steps):
 def test_disturbance_magnitude_is_independent_of_key_splitting(spec):
     """A disturbance must not depend on whether the *caller* splits the key.
 
-    Every rollout helper in this repository -- ``run_episode_headless``,
+    Every rollout helper in this repository (``runners.rollout``,
     ``save_video``, the ``lax.scan`` bodies in the runners, and gymnax's own
-    ``Environment.step`` when handed a constant key -- drives ``step_env`` with
+    ``Environment.step`` when handed a constant key) drives ``step_env`` with
     the same key at every step. An environment that draws its per-step noise
     directly from that key then redraws the *identical* innovation forever,
     collapsing a zero-mean process into a deterministic ramp toward
@@ -741,13 +741,11 @@ def test_no_new_write_only_state_fields():
     )
 
 
-# Check 4. Tuple unpacks that discard a component. All three discard position
-# coordinates the equations of motion genuinely do not depend on, or a scan
-# carry.
+# Check 4. Tuple unpacks that discard a component. Both discard position
+# coordinates the equations of motion genuinely do not depend on.
 KNOWN_DISCARDED_UNPACKS = {
     ("plane/dynamics.py", "_, z, theta = positions"),
     ("plane3d/dynamics.py", "_, _, z, theta, phi = positions"),
-    ("utils.py", "_, rewards = result"),
 }
 
 

@@ -1,16 +1,13 @@
 """
-Tests for the runner module: generic rollouts and figure modes, the
-save_comparison_gif utility, obs_value_index / obs_target_index /
-tracked_names attributes, and MPC / make_pid / make_mpc env methods.
+Tests for the runner module: generic rollouts and figure modes,
+obs_value_index / obs_target_index / tracked_names attributes, and
+MPC / make_pid / make_mpc env methods.
 """
-
-import os
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from scipy.interpolate import interp1d
 
 from target_gym import (
     CSTR,
@@ -32,12 +29,6 @@ from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
 from target_gym.registry import REGISTRY
 from target_gym.runners import runners as R
-from target_gym.runners.utils import run_constant_policy_final_value
-from target_gym.utils import (
-    load_or_build_interpolator,
-    load_or_run_mpc_episode,
-    save_comparison_gif,
-)
 
 N = 10  # minimal steps for speed
 
@@ -99,42 +90,6 @@ def test_tracked_names_matches_the_number_of_tracked_channels():
             f"{name}: {len(env.tracked_names)} tracked_names for {n} tracked "
             "observation slots"
         )
-
-
-# ---------------------------------------------------------------------------
-# Comparison-GIF interpolator building
-# ---------------------------------------------------------------------------
-
-
-def test_plane_comparison_interpolator_valid_range(tmp_path):
-    """The interpolator built from a stick sweep maps altitudes -> stick in [-1,1]."""
-    env = Airplane2D(integration_method="rk4_1")
-    params = PlaneParams(max_steps_in_episode=N)
-    stick_levels = jnp.linspace(-1.0, 1.0, 8)
-
-    final_alts = np.array(
-        jax.vmap(
-            lambda s: run_constant_policy_final_value(
-                env, params, action=(0.5, s), state_attr="z", steps=N
-            )
-        )(stick_levels)
-    )
-    s_np = np.array(stick_levels)
-    sort_idx = np.argsort(final_alts)
-    cache = str(tmp_path / "plane_interp.pkl")
-    interpolator = load_or_build_interpolator(
-        cache,
-        lambda: interp1d(
-            final_alts[sort_idx],
-            s_np[sort_idx],
-            bounds_error=False,
-            fill_value="extrapolate",
-        ),
-    )
-
-    mid_alt = float(np.median(final_alts[np.isfinite(final_alts)]))
-    best_stick = float(np.clip(interpolator(mid_alt), -1.0, 1.0))
-    assert -1.0 <= best_stick <= 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -222,61 +177,6 @@ def test_four_tank_obs_indices_match_obs_array():
     for vi, ti in zip(env.obs_value_index, env.obs_target_index):
         assert np.isfinite(float(obs[vi])), f"obs[{vi}] (value) is not finite"
         assert np.isfinite(float(obs[ti])), f"obs[{ti}] (target) is not finite"
-
-
-# ---------------------------------------------------------------------------
-# save_comparison_gif utility
-# ---------------------------------------------------------------------------
-
-
-def test_save_comparison_gif_creates_file(tmp_path):
-    """save_comparison_gif produces a GIF at the requested output path."""
-    env = CSTR(integration_method="rk4_1")
-    params = CSTRParams(max_steps_in_episode=N)
-    from target_gym.experts.pid import make_cstr_stateful_pid
-
-    pid = make_cstr_stateful_pid()
-
-    output_path = str(tmp_path / "comparison.gif")
-    save_comparison_gif(
-        env=env,
-        const_select_action=lambda _: np.array([0.5]),
-        pid_select_action=lambda obs: np.array([pid.step(obs)]),
-        output_path=output_path,
-        get_state_val=lambda s: float(s.C_a),
-        get_target_val=lambda s: float(s.target_CA),
-        ylabel="Concentration (mol/L)",
-        const_label="Constant T_c=0.5",
-        pid_label="PID",
-        params=params,
-    )
-
-    assert os.path.exists(output_path)
-    assert os.path.getsize(output_path) > 0
-
-
-def test_load_or_run_mpc_episode_caches(tmp_path):
-    """load_or_run_mpc_episode saves on first call and loads on second (no re-run)."""
-    env = CSTR(integration_method="rk4_1")
-    params = CSTRParams(max_steps_in_episode=N)
-    mpc = make_cstr_mpc(env, params, horizon=3)
-    call_count = [0]
-
-    def counting_action(obs, state):
-        call_count[0] += 1
-        return np.array([mpc.step(obs, state)])
-
-    cache = str(tmp_path / "mpc.pkl")
-    states1, rews1 = load_or_run_mpc_episode(cache, env, counting_action, params)
-    assert os.path.exists(cache)
-    first_calls = call_count[0]
-    assert first_calls > 0
-
-    # Second call must load from cache — counting_action is NOT called again
-    states2, rews2 = load_or_run_mpc_episode(cache, env, counting_action, params)
-    assert call_count[0] == first_calls, "MPC was re-run despite cache existing"
-    assert len(states1) == len(states2)
-    assert rews1 == rews2
 
 
 # ---------------------------------------------------------------------------
