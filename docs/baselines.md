@@ -875,7 +875,7 @@ per seed too, and a one-seed run had hidden the 2D aircraft MPC losing its
 hold on seed 1. `fail` is the trip rate per cycle.
 
 Reading across the rows: the aircraft now fly in light turbulence with no
-altitude dead zone, so their holds are real -- the 2D aircraft MPC holds 1.4
+altitude dead zone, so their holds are real -- the 2D aircraft MPC holds 1.3
 floor-widths-squared of altitude against the PID's 6, and pays for it in
 airspeed (2.1 against 0.17), which is the trade the two-cost split exists to
 show; the aircraft PIDs remain structurally inadequate on the
@@ -901,10 +901,10 @@ never bound; and no controller tripped a plant in any window.
 | `four_tank` | 0 | 30.3 (30.3 / —) | 0.00741 (0.00741 / —) | 1 | 30.3 | 0.00741 | 6.5e+05 (6.58e+05) | 1.92e+05 (1.92e+05) | 0 |
 | `glass_furnace` | 0.0306 | 2.09 (2.02 / 0.0724) | 0.803 (0.759 / 0.0437) | 0.625 | 2.09 | 0.803 | -225† (1.14e+03) | -99.5† (405) | 0 |
 | `hvac` | 0.001 | 0.0185 (0.00991 / 0.00863) | 0.00884 (0.00525 / 0.00359) | 0.553 | 0.0154 | 0.00368 | 0.367 (0.913) | 0.377 (0.514) | 0 |
-| `patrol` | 1.03 | 10.1 (10.1 / —) | 3.57 (3.57 / —) | 0.721 | 10.1 | 3.57 | 818 (1.78e+03) | 170 (377) | 0 |
+| `patrol` | 1.03 | 10.1 (10.1 / —) | 3.02 (3.02 / —) | 0.782 | 10.1 | 3.02 | 818 (1.78e+03) | 184 (377) | 0 |
 | `patrol_bearing_only` | 1.03 | 11.1 (11.1 / —) | — | — | 7.65 | — | 692 (20.6) | — | 0 |
 | `ph_neutralization` | 0.64 | 12.6 (12.6 / 0.00681) | 3.06 (3.06 / 0.00669) | 0.797 | 9.73 | 1.79 | 9.07e+04 (9.12e+04) | 2.34e+04 (2.33e+04) | 0 |
-| `plane` | 0.706 | 6.21 (6.04 / 0.169) | 3.54 (1.43 / 2.11) | 0.484 | 6.21 | 3.54 | 2.73e+06 (2.73e+06) | 1.19e+06 (1.19e+06) | 0 |
+| `plane` | 0.706 | 6.21 (6.04 / 0.169) | 3.45 (1.34 / 2.12) | 0.5 | 6.21 | 3.45 | 2.73e+06 (2.73e+06) | 1.19e+06 (1.19e+06) | 0 |
 | `plane3d_circle` | 2 | 98.6 (98.6 / —) | 9.84 (9.84 / —) | 0.919 | 98.6 | 9.84 | 4.18e+05 (4.33e+05) | 8.38e+04 (8.53e+04) | 0 |
 | `plane3d_figure8` | 1 | 2.5e+04 (2.5e+04 / —) | 2.1 (2.1 / —) | 1 | 2.5e+04 | 2.1 | 8.57e+06 (1.28e+07) | 739 (1.15e+03) | 0 |
 | `plane3d_heading` | 1 | 1.79e+04 (1.79e+04 / —) | 5.05 (5.05 / —) | 1 | 1.79e+04 | 5.05 | 4.01e+06 (5.45e+06) | 1.53e+06 (1.53e+06) | 0 |

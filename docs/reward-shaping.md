@@ -193,9 +193,14 @@ floor come out of it:
   unbounded. There the version-1 resolution floor is kept as the scale, and
   the PHYSICS.md says so.
 
-The sanity test every measured floor has to pass, and a slow test enforces
+The sanity test every measured floor has to pass, and a test enforces
 (`tests/test_reward_contract.py`): the shipped MPC's long-run tracking cost
 after burn-in is at or above the floor's cost. A floor the MPC beats is wrong.
+The test reads the MPC's cost from `src/target_gym/data/protocol_results.json`,
+recorded by `scripts/evaluate_baselines.py`, rather than running the MPC again,
+and refuses a row whose fingerprint no longer matches the code. One slow test
+re-runs the protocol on the pH plant to check the recording still matches what
+the evaluator measures.
 
 ## Per-plant summary
 

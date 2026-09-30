@@ -133,6 +133,17 @@ stale; re-record them and commit the result with the change that invalidated it.
 `src/target_gym/provenance.py` explains why the fingerprint is taken over source
 rather than over behaviour, and what that trade buys.
 
+The long-run protocol costs in `src/target_gym/data/protocol_results.json` work
+the same way. They are what the floor check in `tests/test_reward_contract.py`
+compares each measured floor against, and they carry the same fingerprint, so
+the same change that makes a baseline stale makes its row stale too. Re-run the
+protocol for the environments the test names, and if the numbers moved, paste
+the table it prints into the protocol section of `docs/baselines.md`:
+
+```bash
+uv run python scripts/evaluate_baselines.py --envs plane cstr
+```
+
 Two things to know before starting a run. It reads `src/target_gym/data/baseline_returns.json`
 and merges its results into whatever the file holds *at the time it writes*, so
 a second run started later will not clobber it, but two runs recording the same
