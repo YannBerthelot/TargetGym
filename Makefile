@@ -8,7 +8,7 @@ CPU_ENV := CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu JAX_PLATFORM_NAME=cpu
 
 .PHONY: ci ci-lint ci-format-check ci-test help install \
         all all-% figures figures-% videos videos-% tuning tuning-% \
-        clear-mpc short-gifs baselines baselines-% \
+        short-gifs baselines baselines-% \
         time-constants \
         test test-all mypy coverage \
         missing-annotations type lint format check-codestyle commit-checks \
@@ -36,6 +36,7 @@ ci-format-check:  ## Black --check on the whole tree
 ci-docs:  ## Generated pages are current and the site builds with no dangling links
 	uv run python scripts/generate_env_reference.py --check
 	uv run python scripts/generate_env_pages.py --check
+	uv run python scripts/generate_baseline_table.py --check
 	uv run python scripts/stamp_env_versions.py --check
 	uv run python scripts/generate_physics_facts.py --check
 	uv run python scripts/check_doc_drift.py --check
@@ -82,10 +83,6 @@ baselines-%:  ## Re-measure one environment's recorded baseline
 
 time-constants:  ## Measure each plant's actuator-to-output time constant
 	uv run python scripts/measure_time_constants.py
-
-clear-mpc:
-	rm -rf data/mpc_cache data/interpolators
-	@echo "Cleared MPC trajectory cache (data/mpc_cache/, data/interpolators/)."
 
 test:  ## Fast tests only
 	$(CPU_ENV) uv run pytest --tb=short --disable-warnings -n auto -m "not slow"

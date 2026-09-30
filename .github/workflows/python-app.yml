@@ -72,9 +72,13 @@ jobs:
       run: uv sync --frozen --group dev --group docs
 
     - name: Check the generated pages are current
+      # The baseline table in docs/baselines.md is written from the recorded
+      # returns rather than the registry, so re-recording without regenerating
+      # it would leave the headline results stale.
       run: |
         uv run python scripts/generate_env_reference.py --check
         uv run python scripts/generate_env_pages.py --check
+        uv run python scripts/generate_baseline_table.py --check
 
     - name: Check the documentation still describes the code
       run: |
