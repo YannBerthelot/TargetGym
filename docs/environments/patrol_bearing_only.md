@@ -33,10 +33,15 @@ reward scores.
 
 See the environment's `compute_reward`.
 
-Every environment in this suite scores on one contract: the reward is
-`(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
-`[0, 1]`, and reaches 1 only while the target is held exactly. See
-[Reward shaping](../reward-shaping.md).
+Every environment in this suite scores on one contract. The reward is
+minus the sum of three non-negative costs,
+`-(tracking_cost + running_cost + failure_cost)`. The running cost
+charges consumption and the failure cost charges trips out of the
+operating envelope. The reward is never positive, and its scale differs
+by orders of magnitude between plants. Some plants are
+priced in dollars or euros and the rest are dimensionless; the
+[per-plant summary](../reward-shaping.md#per-plant-summary) says which.
+See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
@@ -44,13 +49,13 @@ Every environment in this suite scores on one contract: the reward is
 
 ## Episode end
 
-**Termination.** See `check_is_terminal`.
+**Termination.** None. `terminated` is always false, and leaving the operating envelope trips the plant instead. The step that leaves the envelope is charged the trip cost and sets `info["tripped"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 200 steps.
 
 ## Baselines
 
-A tuned PID ships with this environment.
+No MPC ships with this environment, so there is no recorded comparison. PID present -- a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only genuinely unobservable quantity is the lead's HEADING, which the commanded slot needs because the slot is expressed in the lead's frame; it is recovered by differencing the estimated relative position and filtering. Measured performance matches the full-observation expert (4 of 8 seeds complete, ~229 m settled slot error vs ~260 m), so the partial observation costs essentially nothing here. No MPC, and the reason is the withheld observation rather than the manoeuvring lead. This note used to blame the lead, on the grounds that an MPC would need its future trajectory as a time-varying parameter. That holds for a CasADi model and not for a gradient planner: `patrol` now ships a GradientMPC that differentiates step_env, and because the lead is scripted and deterministic the plan propagates it for free. What blocks one here is that the planner reads the slot error out of the state, which is precisely what this variant withholds. Handing it the true state anyway would make it an oracle on a task defined by what is hidden, so it needs a planner built on the estimator.
 
 ## Arguments
 

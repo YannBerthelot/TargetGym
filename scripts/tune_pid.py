@@ -1387,7 +1387,7 @@ TUNERS = {
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Tune PID gains via relay autotuning and save to data/pid_gains.json"
+        description="Tune PID gains via relay autotuning and save to src/target_gym/data/pid_gains.json"
     )
     parser.add_argument(
         "--envs",
@@ -1440,7 +1440,7 @@ def main():
         if not explicit_envs and env_name in gains and env_name != "_meta":
             print(
                 f"\n── {env_name}: already tuned (skipped). "
-                f"Use --envs {env_name} or clear cache to re-tune."
+                f"Use --envs {env_name} to re-tune."
             )
             continue
         tuner_fn, display = TUNERS[env_name]

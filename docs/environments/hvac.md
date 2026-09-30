@@ -31,10 +31,15 @@ reward scores.
 
 See the environment's `compute_reward`.
 
-Every environment in this suite scores on one contract: the reward is
-`(tracking terms, multiplied) x (1 - weighted costs)`, bounded in
-`[0, 1]`, and reaches 1 only while the target is held exactly. See
-[Reward shaping](../reward-shaping.md).
+Every environment in this suite scores on one contract. The reward is
+minus the sum of three non-negative costs,
+`-(tracking_cost + running_cost + failure_cost)`. The running cost
+charges consumption and the failure cost charges trips out of the
+operating envelope. The reward is never positive, and its scale differs
+by orders of magnitude between plants. Some plants are
+priced in dollars or euros and the rest are dimensionless; the
+[per-plant summary](../reward-shaping.md#per-plant-summary) says which.
+See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
@@ -42,13 +47,20 @@ Every environment in this suite scores on one contract: the reward is
 
 ## Episode end
 
-**Termination.** See `check_is_terminal`.
+**Termination.** None. `terminated` is always false, and leaving the operating envelope trips the plant instead. The plant keeps its state through a trip instead of restarting, and every step spent outside the envelope is charged the trip cost and sets `info["tripped"]` until the controller brings it back. See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 720 steps.
 
 ## Baselines
 
-A tuned PID ships with this environment.
+Recorded over 10 seeds of the 720-step episode (see [Baselines](../baselines.md)). The reward is a cost, so a return closer to zero is better.
+
+| controller | mean return | cost per step |
+|---|---|---|
+| PID | -14.15 | 0.01966 |
+| MPC | -7.659 | 0.01064 |
+
+The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 

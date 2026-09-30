@@ -296,7 +296,11 @@ def check_mass_does_not_increase(old_mass, new_mass, xp=jnp):
 
 
 def check_is_terminal(state: PlaneState, params: PlaneParams, xp=jnp):
-    """Return True if the episode should terminate."""
+    """The aircraft trips when its altitude leaves ``[min_alt, max_alt]``.
+
+    Returns ``(tripped, truncated)``. A trip does not end the episode:
+    ``base.failure_kernel`` charges it and restarts the aircraft.
+    """
     terminated = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
     truncated = state.time >= params.max_steps_in_episode
 

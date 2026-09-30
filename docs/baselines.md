@@ -113,15 +113,18 @@ for the multi-loop plants a MIMO form with a deliberate pairing -- the
 four-tank's loops are **crossed**, because its relative gain array puts
 λ11 at −0.067 and the obvious pairing is unstable.
 
-Gains are tuned by `scripts/tune_pid.py` and cached in `src/target_gym/data/pid_gains.json`:
+Gains are tuned by `scripts/tune_pid.py` and stored in `src/target_gym/data/pid_gains.json`:
 
 ```bash
 uv run python scripts/tune_pid.py --envs cstr    # or `make tuning-cstr`
-make clear-tuning                                # drop the cache and retune
 ```
 
-The script skips any environment already present in the cache, so re-running it
-without `--envs` or `make clear-tuning` is a no-op for everything already tuned.
+The script skips any environment already present in the file, so re-running it
+without `--envs` is a no-op for everything already tuned. Naming an environment
+with `--envs` re-tunes it. Nothing deletes the file for you: it also holds gains
+for environments the script has no tuner for, and each environment's gains are
+part of its recorded baseline's fingerprint, so deleting it would lose those
+gains and stale every baseline that uses one.
 
 Two caveats worth knowing before you re-tune anything:
 
