@@ -144,20 +144,39 @@ def _digest_paths(paths) -> str:
     return h.hexdigest()
 
 
-def _env_sources(spec) -> list[pathlib.Path]:
-    """Every Python module in the package the environment is defined in."""
+def _env_sources(spec, controllers: bool = True) -> list[pathlib.Path]:
+    """Every Python module in the package the environment is defined in, plus
+    the files the spec declares in ``fingerprint_sources``.
+
+    ``controllers=False`` leaves out ``experts*`` files. An extended task keeps
+    its own controllers in its package (experts/pid.py and experts/mpc.py are
+    in every task's baseline fingerprint), and they belong in its baseline
+    fingerprint but not in its version stamp: retuning a controller does not
+    change the environment. No core package holds such a file, so for the 21
+    both calls return the same list.
+    """
     module = type(spec.make_env()).__module__
     package = module.rsplit(".", 1)[0]
     directory = _ROOT.parent / pathlib.Path(*package.split("."))
-    if not directory.is_dir():
-        return []
+    paths = sorted(directory.glob("*.py")) if directory.is_dir() else []
+    for rel in spec.fingerprint_sources:
+        path = _ROOT / rel
+        # _digest_paths skips a missing path silently; a typo here must not.
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"{spec.name}: declared fingerprint source {rel!r} does not exist"
+            )
+        paths.append(path)
     # Any rendering module, not just the one named exactly "rendering.py".
     # Drawing code cannot change a return, so hashing it only produces false
     # stales; the 2D aircraft's second renderer, rendering_console.py, was
     # being hashed purely because the filter matched on an exact filename
     # rather than on the role.
     return [
-        p for p in sorted(directory.glob("*.py")) if not p.name.startswith("rendering")
+        p
+        for p in paths
+        if not p.name.startswith("rendering")
+        and (controllers or not p.name.startswith("experts"))
     ]
 
 
@@ -218,7 +237,7 @@ def environment_fingerprint(spec) -> str:
     }
     h = hashlib.sha256()
     h.update(b"env-v1")
-    h.update(_digest_paths(_env_sources(spec)).encode())
+    h.update(_digest_paths(_env_sources(spec, controllers=False)).encode())
     h.update(_digest_paths(_PHYSICS_SOURCES).encode())
     h.update(json.dumps(values, sort_keys=True).encode())
     return h.hexdigest()[:16]

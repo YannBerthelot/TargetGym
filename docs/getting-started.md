@@ -104,6 +104,8 @@ pid.reset()
 ```
 
 See the [environment reference](environments.md) for every registry name.
+`REGISTRY` holds the 21 core tasks, and a task from the extended tier loads by
+name with `registry.get(name)` (see [Registry tiers](api.md#registry-tiers)).
 
 ## Rendering
 

@@ -48,7 +48,7 @@ import matplotlib.colors as mcolors  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 from tqdm import tqdm  # noqa: E402
 
-from target_gym.registry import REGISTRY  # noqa: E402
+from target_gym import registry  # noqa: E402
 from target_gym.utils import truncate_colormap  # noqa: E402
 
 FIGURE_DIR = "figures"
@@ -319,7 +319,7 @@ def _tracked_labels(env, n: int) -> list[str]:
 
 def figure_sweep(name: str, params=None, resolution: int = 9, plot: bool = True):
     """Constant-action sweep: what the plant does open-loop, across its range."""
-    spec = REGISTRY[name]
+    spec = registry.get(name)
     env = spec.make_env()
     params = params or _media_params(spec)
     levels = np.linspace(-1.0, 1.0, resolution)
@@ -350,7 +350,7 @@ def figure_sweep(name: str, params=None, resolution: int = 9, plot: bool = True)
 
 def figure_pid(name: str, params=None, n_seeds: int = 6, plot: bool = True):
     """Closed-loop PID response, one trace per sampled setpoint."""
-    spec = REGISTRY[name]
+    spec = registry.get(name)
     if not spec.has_pid:
         return None
     env = spec.make_env()
@@ -495,7 +495,7 @@ def _clip_params(spec):
 
 def figure_comparison(name: str, params=None, n_seeds: int = 5, plot: bool = True):
     """Cumulative return of the best constant action, the PID and the MPC."""
-    spec = REGISTRY[name]
+    spec = registry.get(name)
     env = spec.make_env()
     params = params or _media_params(spec)
 
@@ -593,7 +593,7 @@ def retime_gif(path: str, fps: int = GIF_FPS) -> str:
 
 def video(name: str, params=None, seed: int = 0) -> str | None:
     """Render one PID episode to ``videos/<name>/pid_output.gif``."""
-    spec = REGISTRY[name]
+    spec = registry.get(name)
     policy = pid_policy(spec)
     if policy is None:
         return None
@@ -621,7 +621,7 @@ def video(name: str, params=None, seed: int = 0) -> str | None:
 
 
 def run_figures(envs: Sequence[str] | None = None) -> None:
-    for name in tqdm(list(envs or REGISTRY), desc="figures"):
+    for name in tqdm(list(envs or registry.REGISTRY), desc="figures"):
         tqdm.write(f"\n── {name} ──")
         figure_sweep(name)
         figure_pid(name)
@@ -629,7 +629,7 @@ def run_figures(envs: Sequence[str] | None = None) -> None:
 
 
 def run_videos(envs: Sequence[str] | None = None) -> None:
-    for name in tqdm(list(envs or REGISTRY), desc="videos"):
+    for name in tqdm(list(envs or registry.REGISTRY), desc="videos"):
         tqdm.write(f"\n── {name} ──")
         video(name)
 
@@ -646,10 +646,10 @@ def main() -> None:
     parser.add_argument(
         "--env",
         nargs="*",
-        choices=list(REGISTRY),
+        choices=registry.env_names("all"),
         default=None,
         metavar="ENV",
-        help="environments to run (default: all)",
+        help="environments to run, in any tier (default: the core tasks)",
     )
     parser.add_argument(
         "--only",

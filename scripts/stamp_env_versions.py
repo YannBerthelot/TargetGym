@@ -41,15 +41,18 @@ warnings.filterwarnings("ignore")
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from target_gym import registry  # noqa: E402
 from target_gym.provenance import environment_fingerprint  # noqa: E402
-from target_gym.registry import REGISTRY  # noqa: E402
 
 PATH = ROOT / "src" / "target_gym" / "data" / "env_versions.json"
 
 
 def current() -> dict[str, str]:
+    # Every tier. An extended task's version is a promise too, so its stamp is
+    # written and checked like a core one.
     return {
-        spec.versioned_name: environment_fingerprint(spec) for spec in REGISTRY.values()
+        spec.versioned_name: environment_fingerprint(spec)
+        for spec in registry.all_specs("all")
     }
 
 

@@ -22,12 +22,13 @@ import pytest
 
 from target_gym import reward as R
 from target_gym.provenance import BASELINES_PATH
-from target_gym.registry import REGISTRY
+from target_gym.registry import REGISTRY, all_specs
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "src" / "target_gym"
 
-SPECS = list(REGISTRY.values())
+# Every tier, core first. The hand-picked plants below stay core lookups.
+SPECS = list(all_specs("all"))
 IDS = [s.name for s in SPECS]
 
 # Parameters the reward reads, whose value must be traceable in PHYSICS.md.
@@ -253,6 +254,16 @@ def _recorded_protocol_row(spec) -> dict:
         f"(recorded {row.get('fingerprint')}, current {current}). {rerun}"
     )
     return row
+
+
+def test_recorded_protocol_row_still_describes_this_tree(spec):
+    """Every shipped PID has a protocol row taken against this tree, whether
+    or not its floor is measured. The floor check below skips four rows (three
+    documented minima and patrol_bearing_only), so without this their
+    fingerprints would go unchecked."""
+    if not spec.has_pid:
+        pytest.skip(f"{spec.name}: {spec.baselines_note}")
+    _recorded_protocol_row(spec)
 
 
 def test_mpc_does_not_beat_a_measured_floor(spec):

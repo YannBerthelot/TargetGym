@@ -6,7 +6,7 @@ time.
 
 Usage
 -----
-    python -m target_gym.benchmark_speed                 # every environment
+    python -m target_gym.benchmark_speed                 # the 21 core tasks
     python -m target_gym.benchmark_speed --envs hvac cstr
     python -m target_gym.benchmark_speed --batch 512 --steps 2000 --markdown
 """
@@ -56,10 +56,12 @@ def benchmark_env(env, params, steps: int = 1000, batch_size: int = 256) -> floa
 
 
 def main() -> None:
-    from target_gym.registry import REGISTRY, all_specs
+    from target_gym import registry
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--envs", nargs="*", default=[s.name for s in all_specs()])
+    # The core tier by default: the throughput page is a headline number.
+    # An extended task is measured when --envs names it.
+    ap.add_argument("--envs", nargs="*", default=[s.name for s in registry.all_specs()])
     ap.add_argument("--steps", type=int, default=1000)
     ap.add_argument("--batch", type=int, default=256)
     ap.add_argument("--markdown", action="store_true", help="emit a README cell")
@@ -67,7 +69,7 @@ def main() -> None:
 
     results = {}
     for name in args.envs:
-        spec = REGISTRY[name]
+        spec = registry.get(name)
         env = spec.make_env()
         params = spec.params_cls().replace(max_steps_in_episode=args.steps + 10)
         try:

@@ -21,8 +21,8 @@ import pathlib
 
 import pytest
 
+from target_gym import registry
 from target_gym.provenance import environment_fingerprint
-from target_gym.registry import REGISTRY
 
 PATH = (
     pathlib.Path(__file__).resolve().parent.parent
@@ -32,6 +32,9 @@ PATH = (
     / "env_versions.json"
 )
 STORED = json.loads(PATH.read_text()) if PATH.exists() else {}
+
+# Every tier: an extended task is stamped and checked like a core one.
+NAMES = sorted(registry.env_names("all"))
 
 _INSTRUCTION = (
     "Decide which of these it is, then run scripts/stamp_env_versions.py:\n"
@@ -43,18 +46,18 @@ _INSTRUCTION = (
 )
 
 
-@pytest.mark.parametrize("name", sorted(REGISTRY))
+@pytest.mark.parametrize("name", NAMES)
 def test_every_environment_is_versioned(name):
     """Every registered environment carries a version, so it can be cited."""
-    spec = REGISTRY[name]
+    spec = registry.get(name)
     assert isinstance(spec.version, int) and spec.version >= 1
     assert spec.versioned_name == f"{name}-v{spec.version}"
 
 
-@pytest.mark.parametrize("name", sorted(REGISTRY))
+@pytest.mark.parametrize("name", NAMES)
 def test_environment_matches_the_version_it_claims(name):
     """The tree still describes the version it says it is."""
-    spec = REGISTRY[name]
+    spec = registry.get(name)
     stamped = STORED.get(spec.versioned_name)
     assert stamped is not None, (
         f"{spec.versioned_name} has never been stamped. "

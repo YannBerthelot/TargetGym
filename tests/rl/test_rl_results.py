@@ -11,17 +11,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from target_gym import rl_results
+from target_gym import registry, rl_results
 from target_gym.provenance import environment_fingerprint
-from target_gym.registry import REGISTRY
 
 RECORDS = {k: v for k, v in rl_results.load_results().items() if k != "_meta"}
 
 
 def test_result_keys_name_a_registered_environment():
-    unknown = {
-        k: r.get("env") for k, r in RECORDS.items() if r.get("env") not in REGISTRY
-    }
+    names = registry.env_names("all")
+    unknown = {k: r.get("env") for k, r in RECORDS.items() if r.get("env") not in names}
     assert (
         not unknown
     ), f"results recorded for environments that do not exist: {unknown}"
@@ -55,7 +53,7 @@ def test_record_still_describes_this_environment(key):
     still worth keeping, but not worth quoting, until it is re-run.
     """
     record = RECORDS[key]
-    spec = REGISTRY[record["env"]]
+    spec = registry.get(record["env"])
     current = environment_fingerprint(spec)
     assert record["env_fingerprint"] == current, (
         f"{key}: recorded against {record['env_fingerprint']}, environment is now "
@@ -75,7 +73,7 @@ def test_result_is_comparable_to_the_shipped_baselines(key):
     the comparison equivalent of comparing a mean against a median.
     """
     record = RECORDS[key]
-    spec = REGISTRY[record["env"]]
+    spec = registry.get(record["env"])
     episode = int(spec.make_test_params().max_steps_in_episode)
     assert record["episode_steps"] <= episode, (
         f"{key}: scored over {record['episode_steps']} steps, but the "

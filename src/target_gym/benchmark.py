@@ -16,7 +16,7 @@ state=state)``, so a benchmark row that sees more than a plant instruments
 says so in its own code.
 
 :func:`run_policy` runs a policy on one task, :func:`run_policy_on_benchmark`
-on every registered task (or a chosen few), and both score the episodes with
+on the 21 core tasks (or a chosen few), and both score the episodes with
 this library's protocol (:mod:`target_gym.eval`). Episodes are PAIRED: the
 reset states and every step's key depend only on ``(key, n, T)``, so two
 policies run on the same key meet the same plants, the same set-point
@@ -345,18 +345,22 @@ def run_policy_on_benchmark(
     record: Callable[[str, Any, Any], Mapping[str, Callable] | None] | None = None,
     verbose: bool = True,
 ) -> dict[str, dict[str, Any]]:
-    """``policy`` on every registered task (or ``tasks``), ``n_episodes`` each,
+    """``policy`` on the 21 core tasks (or ``tasks``), ``n_episodes`` each,
     scored by the protocol at the task's burn-in (``eval.hold_settings``,
-    capped at half the episode as ``eval.evaluate_controller`` does).
+    capped at half the episode as ``eval.evaluate_controller`` does). An
+    extended task runs only when ``tasks`` names it, for example
+    ``tasks=registry.env_names("extended")``.
 
     Returns per task ``{"metrics", "gain", "failure_rate", "n_episodes",
     "n_steps", "wall_s"}`` (``metrics["failure_rate"]`` pooled over the
     episodes' cycles, ``failure_rate`` per episode) and ``"diagnostics"``
     where the policy has a ``diagnostics(carry) -> dict`` method (called on
     the final carry), or ``{"unsupported": reason}`` when the policy raised
-    :class:`Unsupported`. The task's key is ``fold_in(PRNGKey(seed), task
-    index in the registry)``, so a task's episodes do not depend on which
-    other tasks were run.
+    :class:`Unsupported`. The task's key is ``fold_in(PRNGKey(seed),
+    registry.task_seed_index(name))``: a core task's position in
+    ``REGISTRY``, an extended task's declared ``seed_index``. A task's
+    episodes therefore do not depend on which other tasks were run, or on
+    which tasks were registered after it.
 
     ``test_params`` (default): the task as the registry defines it,
     ``spec.make_test_params()`` - the parameters this library records its
@@ -372,18 +376,19 @@ def run_policy_on_benchmark(
     ``record``), returned per episode in the row's ``records``."""
     import jax
 
-    from target_gym.registry import REGISTRY
+    from target_gym import registry
 
-    names = list(REGISTRY) if tasks is None else list(tasks)
-    order = {name: i for i, name in enumerate(REGISTRY)}
+    names = list(registry.REGISTRY) if tasks is None else list(tasks)
     results: dict[str, dict[str, Any]] = {}
     for name in names:
-        spec = REGISTRY[name]
+        spec = registry.get(name)
         env = spec.make_env()
         params = spec.make_test_params() if test_params else env.default_params
         extras = None if declare is None else declare(name, env, params)
         info = task_info(name, env, params, n_episodes, extras=extras)
-        key = jax.random.fold_in(jax.random.PRNGKey(seed), order[name])
+        key = jax.random.fold_in(
+            jax.random.PRNGKey(seed), registry.task_seed_index(name)
+        )
         try:
             rollout = run_policy(
                 policy, env, params, info, key, n_steps=n_steps,
@@ -449,12 +454,13 @@ def shipped_policy(kind: str = "pid", test_params: bool = True) -> CallablePolic
     without one, or not registered here, is :class:`Unsupported`. The MPC
     plans on the task's parameters, so ``test_params`` must match the run's
     (:func:`run_policy_on_benchmark`: the registered task by default)."""
-    from target_gym.registry import REGISTRY
+    from target_gym import registry
     from target_gym.runners.runners import baseline_policy
 
     def make(task: TaskInfo):
-        spec = REGISTRY.get(task.name)
-        if spec is None:  # not one of this library's tasks: nothing is shipped for it
+        try:
+            spec = registry.get(task.name)
+        except KeyError:  # not one of this library's tasks: nothing is shipped for it
             return None
         params = (
             spec.make_test_params() if test_params else spec.make_env().default_params

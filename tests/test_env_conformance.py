@@ -31,7 +31,8 @@ import pytest
 
 from target_gym import registry
 
-ALL_SPECS = list(registry.all_specs())
+# Every tier, core first, so the ids of the 21 core tasks do not move.
+ALL_SPECS = list(registry.all_specs("all"))
 SPEC_IDS = [s.name for s in ALL_SPECS]
 
 
@@ -476,7 +477,8 @@ def test_pid_baseline_produces_valid_actions(spec):
 
 
 def test_registry_matches_group_vocabulary(spec):
-    assert spec.group in registry.GROUPS
+    groups = registry.GROUPS if spec.tier == "core" else registry.EXTENDED_GROUPS
+    assert spec.group in groups
 
 
 # ---------------------------------------------------------------------------
@@ -904,6 +906,11 @@ def test_plant_does_not_accelerate_without_input(spec):
 
     tr = np.stack(traj)
     assert np.isfinite(tr).all(), f"{spec.name}: non-finite state under zero input"
+    if spec.name in KNOWN_OPEN_LOOP_UNSTABLE:
+        pytest.skip(
+            f"{spec.name}: open-loop unstable by design; "
+            f"{KNOWN_OPEN_LOOP_UNSTABLE[spec.name]}"
+        )
     if len(tr) < 10:
         pytest.skip(f"{spec.name} terminates too early to measure a trend")
 
@@ -931,10 +938,17 @@ def test_plant_does_not_accelerate_without_input(spec):
     )
 
 
-# Measured worst over all eighteen: the glass furnace's T_work at 3.25x over
-# 3000 unforced steps. 8x leaves room for the shorter run used here without
-# admitting a genuinely unstable mode.
+# Measured worst over the eighteen tasks registered when this limit was set:
+# the glass furnace's T_work at 3.25x over 3000 unforced steps. 8x leaves room
+# for the shorter run used here without admitting a genuinely unstable mode.
 ACCELERATION_LIMIT = 8.0
+
+# Check 7. Plants whose unforced mode grows by design, with the measured growth
+# rate and the test in the plant's own suite that asserts it. This check cannot
+# score them: a trip restarts the plant (base.failure_kernel), so the unforced
+# run becomes a runaway-and-restart sawtooth whose ratio depends on where the
+# restarts fall.
+KNOWN_OPEN_LOOP_UNSTABLE: dict[str, str] = {}
 
 
 # Check 5. Environments with a known seam that survives refinement, and what it

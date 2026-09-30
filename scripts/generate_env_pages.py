@@ -35,7 +35,7 @@ import numpy as np  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from target_gym.registry import REGISTRY, display_name  # noqa: E402
+from target_gym.registry import all_specs, display_name  # noqa: E402
 
 OUT_DIR = ROOT / "docs" / "environments"
 BASELINES = ROOT / "data" / "baseline_returns.json"
@@ -323,7 +323,8 @@ def page(name: str, spec) -> str:
 
 
 def build() -> dict[str, str]:
-    return {name: page(name, spec) for name, spec in REGISTRY.items()}
+    # Every tier. An extended task gets a page like a core one.
+    return {spec.name: page(spec.name, spec) for spec in all_specs("all")}
 
 
 def main() -> int:

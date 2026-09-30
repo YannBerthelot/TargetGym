@@ -44,17 +44,17 @@ def _tup(x):
 
 
 def _facts(names: list[str]) -> str:
-    from target_gym.registry import REGISTRY, control_step_seconds
+    from target_gym import registry
 
     rows = []
     for name in names:
-        spec = REGISTRY[name]
+        spec = registry.get(name)
         env = spec.make_env()
         p = spec.make_test_params()
         # Seconds per env step, not ``delta_t``: two plants keep minutes and
         # the reactor runs ten physics sub-steps per step (see
         # ``registry.control_step_seconds``).
-        dt = control_step_seconds(env, p)
+        dt = registry.control_step_seconds(env, p)
         steps = int(p.max_steps_in_episode)
         space = env.action_space(p)
         shape = space.shape or (1,)
@@ -100,19 +100,20 @@ def main() -> int:
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
 
-    from target_gym.registry import REGISTRY
+    from target_gym.registry import all_specs
 
     by_pkg: dict[pathlib.Path, list[str]] = {}
-    for name, spec in REGISTRY.items():
+    for spec in all_specs("all"):
         # The params class knows which module it lives in, and its package is
         # where the contract sits. Several packages serve more than one
         # environment -- the 2D aircraft three, the 3D four, patrol two -- so a
-        # block can carry several rows.
+        # block can carry several rows. Every tier is covered, and an extended
+        # task's package has its own PHYSICS.md and so its own block.
         module = getattr(spec.params_cls, "_module", "")
         rel = module.replace("target_gym.", "").replace(".", "/")
         doc = (SRC / rel).parent / "PHYSICS.md"
         if doc.exists():
-            by_pkg.setdefault(doc, []).append(name)
+            by_pkg.setdefault(doc, []).append(spec.name)
 
     stale = []
     for doc, names in sorted(by_pkg.items()):

@@ -1,7 +1,8 @@
 """Score the shipped controllers with the reach-and-hold protocol.
 
 Run with ``uv run python scripts/evaluate_baselines.py [--envs ...] [--seeds N]``.
-For every plant with a PID (and an MPC where one exists) it runs
+For every core plant with a PID (or the ones named with ``--envs``), and its
+MPC where one exists, it runs
 ``target_gym.eval.evaluate_controller`` on the test episode and writes
 ``src/target_gym/data/protocol_results.json``: the long-run cost after burn-in
 split into tracking and running cost, the reach cost per target change, the
@@ -35,9 +36,9 @@ warnings.filterwarnings("ignore")
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from target_gym import registry  # noqa: E402
 from target_gym.eval import evaluate_controller, nea  # noqa: E402
 from target_gym.provenance import baseline_fingerprint  # noqa: E402
-from target_gym.registry import REGISTRY  # noqa: E402
 
 OUT = ROOT / "src" / "target_gym" / "data" / "protocol_results.json"
 
@@ -115,9 +116,9 @@ def main() -> int:
     if args.table:
         print(table(rows))
         return 0
-    names = args.envs or [n for n, s in REGISTRY.items() if s.has_pid]
+    names = args.envs or [n for n, s in registry.REGISTRY.items() if s.has_pid]
     for name in names:
-        spec = REGISTRY[name]
+        spec = registry.get(name)
         p = spec.make_test_params()
         row = {
             "fingerprint": baseline_fingerprint(spec),

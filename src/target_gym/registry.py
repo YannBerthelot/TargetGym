@@ -20,6 +20,18 @@ Multi-agent environments (``PlanePatrolMARL``) are deliberately *not*
 registered: they expose a dict-based JaxMARL-style API rather than the
 single-agent gymnax one, so the shared conformance contract does not apply.
 They are covered by their own tests in ``tests/patrol/``.
+
+Tiers
+-----
+Every spec has a ``tier``. The 21 ``"core"`` tasks are what every default
+accessor returns (``REGISTRY``, ``GROUPS``, ``all_specs()``, ``env_names()``,
+``specs_in_group`` on a core group), in the order they have always had, so a
+benchmark over the defaults runs the same tasks with the same seeds. New tasks
+are ``"extended"``: registered, tested, stamped and documented, but returned
+only to code that asks for them, by name through :func:`get`, with
+``all_specs("all")`` or ``env_names("extended")``, or through an extended
+group. Their packages live under ``target_gym/extended/``. The registry tier
+is unrelated to the difficulty tiers of ``docs/complexity.md``.
 """
 
 from __future__ import annotations
@@ -31,13 +43,22 @@ from typing import Any, Callable, Iterator, cast
 # Groups
 # ---------------------------------------------------------------------------
 
-#: Human-readable name for each group, in the order they should be presented.
+#: The registry tiers. See the module docstring.
+TIERS: tuple[str, ...] = ("core", "extended")
+
+#: Human-readable name for each core group, in the order they should be
+#: presented.
 GROUPS: dict[str, str] = {
     "aircraft": "Aircraft",
     "process": "Process Control",
     "industrial": "Industrial / Energy",
     "energy": "Renewable Energy",
 }
+
+#: Extended-tier groups, named by control challenge. Never a key of GROUPS, so
+#: naming one is itself the opt-in. A group is added with its first task, so
+#: none is ever empty.
+EXTENDED_GROUPS: dict[str, str] = {}
 
 
 # How a registry name is written for a human. Only the names that
@@ -102,7 +123,7 @@ class EnvSpec:
         Registry key.  Matches the runner module prefix and the key used in
         ``src/target_gym/data/pid_gains.json`` where gains are tuned.
     group:
-        One of :data:`GROUPS`.
+        One of :data:`GROUPS` (core) or :data:`EXTENDED_GROUPS` (extended).
     env_factory:
         Zero-argument callable returning a fresh environment instance.
     params_cls:
@@ -157,6 +178,21 @@ class EnvSpec:
         real environment forward gets a copy of the params with these set to
         zero, so it plans on the mean disturbance instead of one invented
         realisation of it.
+    tier:
+        ``"core"``, one of the 21 tasks every default accessor returns, or
+        ``"extended"``, returned only to code that asks for it. See the
+        module docstring.
+    seed_index:
+        Extended tasks only: the number ``benchmark.run_policy_on_benchmark``
+        folds into its seed for this task, 1000 and up, unique and increasing
+        in registration order. Core tasks leave it ``None`` and use their
+        position in ``REGISTRY``, which is also how TargetFoundation derives
+        its seeds.
+    fingerprint_sources:
+        Source files outside the task's own package that its physics imports,
+        relative to ``src/target_gym`` (e.g. ``"pc_gym/cstr/env.py"``). They
+        are hashed into both of the task's fingerprints, so editing one
+        makes this task's records stale too.
     """
 
     name: str
@@ -188,6 +224,9 @@ class EnvSpec:
     #: a planner uses for its internal model. See ``experts.mpc.plan_params``.
     noise_fields: tuple[str, ...] = ()
     disturbance_overrides: dict[str, Any] = field(default_factory=dict)
+    tier: str = "core"
+    seed_index: int | None = None
+    fingerprint_sources: tuple[str, ...] = ()
 
     @property
     def versioned_name(self) -> str:
@@ -403,22 +442,27 @@ class _LazyParams:
 # -- PID factories ----------------------------------------------------------
 
 
-def _pid(factory_name: str) -> Callable[[], Any]:
+def _pid(
+    factory_name: str, module: str = "target_gym.experts.pid"
+) -> Callable[[], Any]:
+    # An extended task passes its own ``target_gym.extended.<name>.experts``:
+    # experts/pid.py and experts/mpc.py are in every task's baseline
+    # fingerprint, so a controller added there would stale all of them.
     def make():
         from importlib import import_module
 
-        return getattr(import_module("target_gym.experts.pid"), factory_name)()
+        return getattr(import_module(module), factory_name)()
 
     return make
 
 
-def _mpc(factory_name: str) -> Callable[[Any, Any], Any]:
+def _mpc(
+    factory_name: str, module: str = "target_gym.experts.mpc"
+) -> Callable[[Any, Any], Any]:
     def make(env, params, **kwargs):
         from importlib import import_module
 
-        return getattr(import_module("target_gym.experts.mpc"), factory_name)(
-            env, params, **kwargs
-        )
+        return getattr(import_module(module), factory_name)(env, params, **kwargs)
 
     return make
 
@@ -857,33 +901,78 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("dispatch_noise_std",),
         disturbance_fields=("target_power",),
     ),
+    # -- Extended tier ------------------------------------------------------
+    # Append only, never insert. A core task's position is its benchmark seed
+    # index, and TargetFoundation derives seeds the same way. Extended tasks
+    # carry their own seed_index. The default accessors do not return these.
 )
 
-REGISTRY: dict[str, EnvSpec] = {spec.name: spec for spec in _SPECS}
+#: The 21 core tasks, in registration order. Extended tasks are not in it.
+REGISTRY: dict[str, EnvSpec] = {
+    spec.name: spec for spec in _SPECS if spec.tier == "core"
+}
 
 
-def all_specs() -> Iterator[EnvSpec]:
-    """Iterate over every registered environment spec."""
-    return iter(_SPECS)
+def _specs(tier: str) -> list[EnvSpec]:
+    if tier == "all":
+        return list(_SPECS)
+    if tier not in TIERS:
+        raise ValueError(f"unknown tier {tier!r}; expected 'core', 'extended' or 'all'")
+    return [spec for spec in _SPECS if spec.tier == tier]
+
+
+def all_specs(tier: str = "core") -> Iterator[EnvSpec]:
+    """Specs of one tier, or of every tier with ``"all"``, in registration
+    order (core first). The default is the 21 core tasks."""
+    return iter(_specs(tier))
 
 
 def specs_in_group(group: str) -> Iterator[EnvSpec]:
-    """Iterate over the specs belonging to ``group``."""
-    if group not in GROUPS:
-        raise KeyError(f"Unknown group {group!r}; expected one of {sorted(GROUPS)}")
-    return (spec for spec in _SPECS if spec.group == group)
+    """The specs of a core or an extended group. The two never share a name,
+    so naming an extended group is itself the opt-in. A core group returns
+    core specs only, so a spec given the wrong group cannot leak into a
+    default listing."""
+    if group in GROUPS:
+        tier = "core"
+    elif group in EXTENDED_GROUPS:
+        tier = "extended"
+    else:
+        known = sorted({**GROUPS, **EXTENDED_GROUPS})
+        raise KeyError(f"Unknown group {group!r}; expected one of {known}")
+    return (spec for spec in _SPECS if spec.group == group and spec.tier == tier)
 
 
 def get(name: str) -> EnvSpec:
-    """Look up one spec by registry name."""
-    try:
-        return REGISTRY[name]
-    except KeyError:
-        raise KeyError(
-            f"Unknown environment {name!r}; registered: {sorted(REGISTRY)}"
-        ) from None
+    """One spec by registry name, in any tier. Naming a task is how code asks
+    for an extended one."""
+    for spec in _SPECS:
+        if spec.name == name:
+            return spec
+    raise KeyError(
+        f"Unknown environment {name!r}; registered: {sorted(env_names('all'))}"
+    )
 
 
-def env_names() -> list[str]:
-    """Names of every registered environment, in registration order."""
-    return [spec.name for spec in _SPECS]
+def env_names(tier: str = "core") -> list[str]:
+    """Names of one tier's tasks (``"all"`` for every tier), in registration
+    order. The default is the 21 core tasks."""
+    return [spec.name for spec in _specs(tier)]
+
+
+def task_seed_index(name: str) -> int:
+    """What ``benchmark.run_policy_on_benchmark`` folds into its seed for
+    ``name``.
+
+    A core task: its position in ``REGISTRY`` (0 to 20), which is also how
+    TargetFoundation's ``benchmark_all.py`` derives seeds. An extended task:
+    its declared ``seed_index`` (1000 and up). Adding or promoting a task
+    therefore never shifts another task's episodes.
+    """
+    spec = get(name)
+    if spec.seed_index is not None:
+        return spec.seed_index
+    if spec.tier != "core":
+        raise ValueError(
+            f"{name}: an extended task declares its seed_index (1000 and up)"
+        )
+    return list(REGISTRY).index(name)

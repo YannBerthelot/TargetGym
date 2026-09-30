@@ -19,10 +19,10 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from target_gym import registry
 from target_gym.provenance import baseline_fingerprint, load_recorded_baselines
-from target_gym.registry import REGISTRY
 
-MPC_ENVS = [name for name, spec in REGISTRY.items() if spec.has_mpc]
+MPC_ENVS = [s.name for s in registry.all_specs("all") if s.has_mpc]
 CLOSED_LOOP_STEPS = 3
 
 
@@ -66,7 +66,7 @@ def _cheap_mpc(spec, env, params):
 
 @pytest.mark.parametrize("name", MPC_ENVS)
 def test_registered_mpc_builds_and_controls(name):
-    spec = REGISTRY[name]
+    spec = registry.get(name)
     env = spec.make_env()
     params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": 20})
 
@@ -107,8 +107,8 @@ def test_registered_mpc_builds_and_controls(name):
 def test_every_environment_without_an_mpc_says_why():
     """A missing baseline must be documented, not silent."""
     undocumented = [
-        name
-        for name, spec in REGISTRY.items()
+        spec.name
+        for spec in registry.all_specs("all")
         if not spec.has_mpc and not spec.baselines_note
     ]
     assert (
@@ -194,7 +194,7 @@ def test_recorded_baseline_still_describes_this_tree(name):
     Comments and docstrings are excluded from the fingerprint, so editing prose
     does not send anyone off to spend forty minutes of CPU.
     """
-    spec = REGISTRY[name]
+    spec = registry.get(name)
     if not spec.has_pid:
         pytest.skip(f"{name}: {spec.baselines_note}")
 
@@ -235,7 +235,7 @@ def test_mpc_controls_at_least_as_well_as_the_pid(name):
     that trips the turbine or flies the aircraft into the ground can still
     average acceptably across seeds, and averaging is exactly what hid it.
     """
-    spec = REGISTRY[name]
+    spec = registry.get(name)
     if not spec.has_pid:
         pytest.skip(f"{name}: {spec.baselines_note}")
     if spec.mpc_degraded:

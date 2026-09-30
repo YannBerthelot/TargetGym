@@ -72,6 +72,14 @@ def test_documented_example_runs(code, tmp_path, monkeypatch):
     exec(compile(code, "<doc>", "exec"), {"__name__": "__doc_example__"})
 
 
+def _physics_contract(spec) -> pathlib.Path:
+    """Where ``spec``'s PHYSICS.md belongs: beside its environment class."""
+    module = type(spec.make_env()).__module__
+    for suffix in (".env_jax", ".marl"):
+        module = module.removesuffix(suffix)
+    return ROOT / "src" / module.replace(".", "/") / "PHYSICS.md"
+
+
 def test_every_environment_has_a_physics_contract():
     """The README claims every environment carries a PHYSICS.md. Keep it true.
 
@@ -79,30 +87,41 @@ def test_every_environment_has_a_physics_contract():
     argument, so it is asserted rather than trusted -- a new environment
     without a contract fails here instead of quietly weakening the claim.
     """
-    from target_gym.registry import REGISTRY
+    from target_gym import registry
 
-    missing = []
-    for name, spec in REGISTRY.items():
-        module = type(spec.make_env()).__module__
-        for suffix in (".env_jax", ".marl"):
-            module = module.removesuffix(suffix)
-        if not (ROOT / "src" / module.replace(".", "/") / "PHYSICS.md").exists():
-            missing.append(name)
+    missing = [
+        spec.name
+        for spec in registry.all_specs("all")
+        if not _physics_contract(spec).exists()
+    ]
     assert not missing, f"environments without a PHYSICS.md: {missing}"
 
 
 # Written-out numbers, because that is how the README says them.
+_UNITS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+_TEENS = [
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+]
 _NUMBER_WORDS = {
-    "twelve": 12,
-    "thirteen": 13,
-    "fourteen": 14,
-    "fifteen": 15,
-    "sixteen": 16,
-    "seventeen": 17,
-    "eighteen": 18,
-    "nineteen": 19,
-    "twenty": 20,
+    word: i
+    for i, word in enumerate(
+        [*_UNITS, *_TEENS, "twenty", *(f"twenty-{u}" for u in _UNITS)], start=1
+    )
 }
+
+
+def _number(word: str) -> int:
+    assert word.lower() in _NUMBER_WORDS, f"unrecognised number word {word!r}"
+    return _NUMBER_WORDS[word.lower()]
 
 
 def test_readme_states_the_right_number_of_physics_contracts():
@@ -111,21 +130,73 @@ def test_readme_states_the_right_number_of_physics_contracts():
     It said "fourteen" for a while after a fifteenth was added. A number in
     prose has no other way of being checked, and this one is load-bearing --
     it is how a reader sizes the physics claim.
+
+    The counts come from the specs. The core sentence counts the contracts the
+    21 core tasks reach. A second sentence counts the extended tasks and the
+    contracts only they reach, and it must be absent while no extended task
+    is registered.
     """
-    import re
+    from target_gym import registry
+
+    core = {_physics_contract(spec) for spec in registry.all_specs()}
+    extended = {
+        _physics_contract(spec) for spec in registry.all_specs("extended")
+    } - core
+    on_disk = set((ROOT / "src").rglob("PHYSICS.md"))
+    want = core | extended
+
+    def rel(paths):
+        return sorted(str(p.relative_to(ROOT)) for p in paths)
+
+    assert on_disk == want, (
+        f"PHYSICS.md files no task reaches: {rel(on_disk - want)}; "
+        f"tasks whose PHYSICS.md is missing: {rel(want - on_disk)}"
+    )
 
     readme = (ROOT / "README.md").read_text()
-    match = re.search(r"covered\*{0,2} by (\w+) contracts", readme)
+    match = re.search(r"environments are covered\*{0,2} by ([\w-]+) contracts", readme)
     assert match, "could not find the 'covered by N contracts' claim in README.md"
-
-    word = match.group(1).lower()
-    assert word in _NUMBER_WORDS, f"unrecognised number word {word!r} in the claim"
-
-    actual = len(list((ROOT / "src").rglob("PHYSICS.md")))
-    assert _NUMBER_WORDS[word] == actual, (
-        f"README says {word} ({_NUMBER_WORDS[word]}) contracts, "
-        f"but there are {actual} PHYSICS.md files"
+    assert _number(match.group(1)) == len(core), (
+        f"README says {match.group(1)} contracts, "
+        f"but the core tasks reach {len(core)} PHYSICS.md files"
     )
+
+    match = re.search(
+        r"The ([\w-]+) extended tasks? (?:is|are) covered by ([\w-]+) contracts? "
+        r"of (?:its|their) own",
+        readme,
+    )
+    n_extended = len(registry.env_names("extended"))
+    if not n_extended:
+        assert not match, "README counts extended tasks, but none is registered"
+        return
+    assert match, (
+        "could not find the 'The N extended tasks are covered by M contracts of "
+        "their own' claim in README.md"
+    )
+    said = _number(match.group(1)), _number(match.group(2))
+    assert said == (n_extended, len(extended)), (
+        f"README says {said[0]} extended tasks and {said[1]} contracts, "
+        f"but there are {n_extended} and {len(extended)}"
+    )
+
+
+def test_every_task_has_a_page_in_the_nav():
+    """Every task's generated page exists and is listed in the mkdocs nav.
+
+    MkDocs reports a page missing from the nav only at INFO level, so
+    ``mkdocs build --strict`` would not catch the omission.
+    """
+    from target_gym import registry
+
+    nav = (ROOT / "mkdocs.yml").read_text()
+    problems = []
+    for name in registry.env_names("all"):
+        if not (DOCS / "environments" / f"{name}.md").exists():
+            problems.append(f"{name}: no docs/environments/{name}.md")
+        if not re.search(rf"\benvironments/{re.escape(name)}\.md\b", nav):
+            problems.append(f"{name}: not in the mkdocs.yml nav")
+    assert not problems, "\n".join(problems)
 
 
 def test_the_colab_notebook_still_runs():
