@@ -8,16 +8,20 @@ controller takes to settle after a target change. These are the inputs to the
 floor-normalised reward (docs/reward-shaping.md):
 
 ``e_hold``  mean |error| per tracked output after ``burn_in`` steps and, within
-            each target cycle, after ``settle`` steps. The MPC's value is an
-            *upper bound* on the achievable floor ``e_floor`` -- it is a real
-            controller, so no floor may lie above it -- and the sanity check every
-            floor has to pass.
+            each target cycle, after ``settle`` steps and before the steps in
+            which the controller already moves toward the next target (its
+            anticipation of the change, detected on the squared errors by
+            ``target_gym.eval.anticipations``, the same rule the evaluation
+            protocol uses on the cost). The MPC's value is an *upper bound* on the
+            achievable floor ``e_floor``, since it is a real controller and no
+            floor may lie above it, and the sanity check every floor has to
+            pass.
 ``c_hold``  the running-cost quantity (fuel, energy, boilup, reagent, actuator
             travel) per step, same window. Only consumption above the best
             shipped controller's ``c_hold`` is charged by the reward.
 ``settle``  median steps after a target change until |error| first falls within
-            twice ``e_hold``; the evaluation protocol drops that many steps from
-            the start of each cycle before scoring the hold.
+            twice ``e_hold``; the hold drops that many steps from the start of
+            each cycle.
 
 ``burn_in`` is three times the slowest *cost-bearing* time constant of the plant,
 in env steps, from each plant's PHYSICS.md (the table ``PLANTS`` below carries
@@ -51,6 +55,7 @@ import numpy as np  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from target_gym.eval import anticipations  # noqa: E402
 from target_gym.registry import REGISTRY, control_step_seconds  # noqa: E402
 from target_gym.runners.runners import (  # noqa: E402
     _as_tuple,
@@ -277,23 +282,59 @@ def _cycles(targets, rel=0.05):
     return np.concatenate([[0], starts, [len(targets)]])
 
 
-def _hold_mask(n, burn_in, bounds, settle):
+def _hold_mask(n, burn_in, bounds, settle, antic=None):
+    """Hold steps: after the burn-in and, within each cycle, after ``settle``
+    steps and before the cycle's ``antic`` anticipation steps."""
+    antic = antic if antic is not None else [0] * (len(bounds) - 1)
     m = np.zeros(n, bool)
-    for a, b in zip(bounds[:-1], bounds[1:]):
-        m[a + settle : b] = True
+    for a, b, j in zip(bounds[:-1], bounds[1:], antic):
+        m[a + settle : b - j] = True
     m[:burn_in] = False
     return m
 
 
-def _settle(errors, bounds, level):
-    """Median steps per cycle until every output is within 2x its hold level."""
+def _settle(errors, bounds, level, antic=None):
+    """Median steps per cycle until every output is within 2x its hold level,
+    looking only at the cycle before its anticipation of the next change."""
+    antic = antic if antic is not None else [0] * (len(bounds) - 1)
     out = []
-    for a, b in zip(bounds[:-1], bounds[1:]):
-        seg = errors[a:b]
+    for a, b, j in zip(bounds[:-1], bounds[1:], antic):
+        seg = errors[a : b - j]
         ok = (seg <= 2.0 * level[None, :]).all(axis=1)
         idx = np.flatnonzero(ok)
-        out.append(int(idx[0]) if len(idx) else b - a)
+        out.append(int(idx[0]) if len(idx) else b - j - a)
     return float(np.median(out)) if out else float("nan")
+
+
+def split_seed(e, targets, burn_in, settle=None):
+    """The hold of one seed's error series ``e`` (steps x outputs).
+
+    The target cycles come from the target jumps, and the anticipation of each
+    change from ``target_gym.eval.anticipations`` on the squared errors, so a
+    rise counts as it does in the quadratic tracking cost the protocol
+    searches, with the same sensitivity. Then a provisional hold level over
+    everything after the burn-in outside the anticipation, the settle measured
+    against it (or ``settle``, a fixed count, when given), and the hold mask
+    that drops the settle from every cycle. Returns
+    ``(mask, settle, bounds, antic)``.
+    """
+    bounds = _cycles(targets)
+    cycles = list(zip(bounds[:-1].tolist(), bounds[1:].tolist()))
+    antic = anticipations(np.asarray(e, float) ** 2, cycles)
+    m0 = _hold_mask(len(e), burn_in, bounds, 0, antic)
+    if m0.sum() < 10:
+        # second half of the episode, anticipation still left out
+        m0 = _hold_mask(len(e), len(e) // 2, bounds, 0, antic)
+    lvl = e[m0].mean(axis=0)
+    if settle is None:
+        settle = _settle(e, bounds, lvl, antic)
+    settle = float(settle)
+    m = _hold_mask(
+        len(e), burn_in, bounds, int(min(settle, (len(e) - burn_in) // 4)), antic
+    )
+    if m.sum() < 10:
+        m = m0
+    return m, settle, bounds, antic
 
 
 def measure(name, seeds):
@@ -325,20 +366,7 @@ def measure(name, seeds):
         for seed in range(seeds):
             e, c, tg, ended = _episode(spec, env, params, kind, seed, err_fn, cons_fn)
             term += int(ended)
-            bounds = _cycles(tg)
-            # Provisional hold level from the burn-in window alone, then settle,
-            # then the hold mask that drops the settle from every cycle.
-            m0 = _hold_mask(len(e), burn_in, bounds, 0)
-            if m0.sum() < 10:
-                m0 = np.ones(len(e), bool)
-                m0[: len(e) // 2] = False
-            lvl = e[m0].mean(axis=0)
-            settle = _settle(e, bounds, lvl)
-            m = _hold_mask(
-                len(e), burn_in, bounds, int(min(settle, (len(e) - burn_in) // 4))
-            )
-            if m.sum() < 10:
-                m = m0
+            m, settle, bounds, _antic = split_seed(e, tg, burn_in)
             E.append(e[m])
             C.append(c[m])
             B.append(settle)

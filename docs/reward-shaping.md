@@ -216,7 +216,7 @@ the evaluator measures.
 | `distillation` | p=2 x2 | 1e-4 / 1e-4 (analyser resolution; the MPC holds 1.35e-5 / 3.3e-5) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
 | `ph_neutralization` | p=2 | 0.01 pH (electrode resolution; the MPC holds 0.0080) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
 | `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
-| `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
+| `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds; `plane_energy`'s held 1.20 m once its anticipation of target changes left the hold, so its floor is loose until the MPC is reviewed) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
 | `plane3d_*` | p=2 | altitude 1.44 / 4.06 / 1.39 m, heading 1.0e-4 rad, path 8.1 / 6.2 / 14.6 m (lowest per-seed MPC holds in turbulence) | 0 | none | dimensionless |
 | `patrol` | p=2 | 18.6 m / 1.6e-3 rad (lowest per-seed MPC holds in turbulence) | 0 (provisional) | none | dimensionless |
 

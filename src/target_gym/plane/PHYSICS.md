@@ -390,7 +390,7 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1 m (`plane`), 1.26 (`plane_sine`), 4.55 (`plane_energy`) | lowest per-seed long-run mean \|error\| the shipped MPC held in the test turbulence (`scripts/measure_hold.py`, 2 seeds; 0.84 / 1.26 / 4.55 m, PID 0.87 / 44.7 / 8.5), floored at the 1 m barometric resolution: a hold the instrument cannot see is not a floor. Upper bounds otherwise |
+| `e_floor` | 1 m (`plane`), 1.26 (`plane_sine`), 4.55 (`plane_energy`) | lowest per-seed long-run mean \|error\| the shipped MPC held in the test turbulence (`scripts/measure_hold.py`, 2 seeds; 0.84 / 1.26 / 4.55 m, PID 0.87 / 44.7 / 8.5), floored at the 1 m barometric resolution: a hold the instrument cannot see is not a floor. Upper bounds otherwise. `plane_energy`'s 4.55 m was measured before the MPC's moves toward the next target were separated from its hold; its hold without them is 1.20 m at best (1.35 / 1.20 m per seed), so this floor is loose until the MPC is reviewed |
 | `e_tol` | 0 | no dead zone. A +-30 m band (the pilot's instrument tolerance; the autopilot's is +-20 m, RVSM +-65 ft) was tried and made the hold vacuous: both controllers held within 0.1 m in still air, and the tracking cost was identically zero |
 | `tracking_exponent` | 2 | quadratic outside the tolerance |
 | `c_hold` | 5.06 m/s (`plane`), 8.15 (`plane_sine`), 5.23 (`plane_energy`) | airspeed deviation from `target_speed` while holding, PID (`scripts/measure_hold.py`), the better controller on speed: the MPC's hold window follows a climb and its speed is still recovering (21 / 13 / 20 m/s off) |
