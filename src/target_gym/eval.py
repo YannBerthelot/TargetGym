@@ -1,61 +1,137 @@
 """Evaluation protocol for reach-and-hold tasks.
 
-A reach-and-hold controller is judged on two numbers, not one return: the
-long-run average cost while holding (the *gain*, what the plant pays forever)
-and the excess cost of getting to the target after it moves (the *reach cost*,
-paid once per target change). An episode return mixes the two in a proportion
-set by the episode length, which is why the recorded baselines are not the
-protocol. This module computes:
+A reach-and-hold controller is judged on two numbers. The first is the
+long-run average cost while holding (the *gain*, what the plant pays forever).
+The second is the excess cost of getting to the target after it moves (the
+*reach cost*, paid once per target change). An episode return mixes the two in
+a proportion set by the episode length, which is why the recorded baselines
+are not the protocol.
+
+A target cycle runs from one target change up to the next (the first cycle
+starts at the reset). ``cycle_segments`` splits every cycle into three parts.
+
+1. The *settle* after its own change. The level of the cycle is the mean cost
+   over its second half, and the settle ends at the first step from which the
+   cost stays within twice that level. It is at least one step and at most
+   half the cycle, and it is measured on each cycle, so each controller is
+   scored against its own transient. A first version applied the MPC's settle
+   to the PID, which on the battery scored the PID's transient after every
+   dispatch block as hold and manufactured an MPC advantage. With
+   ``settle = 0`` the reach cost was zero by construction.
+2. The *hold*, the steps in between.
+3. The *anticipation* of the next change. A controller that previews the
+   reference schedule (the shipped MPCs plan on the environment's own step,
+   which carries the schedule) starts moving toward the next target before
+   the change. That is good control, and it lowers the total cost. The rising
+   cost it causes at the end of the cycle belongs to reaching the next target,
+   and scored as hold it inflated the hold and deflated the reach cost.
+   ``anticipation`` detects it from the cost alone, with no per-plant setting,
+   as the longest run of steps at the end of the cycle that meets the
+   conditions below. Each is stated against the level of the cycle without
+   the run, the mean over its second half as the settle rule has it.
+
+   * Its first two steps cost more than twice the level, and so do at least
+     four in five of its steps, with never more than two in a row at or below
+     it. An error that crosses zero, or passes through the dead band of the
+     tracking cost, on its way to the next target makes such a dip, and one
+     dip must not cut the run short. Opening on two steps keeps a lone noise
+     spike just before the rise from pulling hold steps into the run.
+   * Its median is at least ten times the level.
+   * It is rising, its second half costing more on average than its first.
+   * It is at least three steps long. A run of one or two steps counts only
+     when every step of it costs a hundred times the level, and a two-step run
+     must rise.
+
+   Only a cycle of at least 16 steps that another cycle follows is searched,
+   and the run takes at most half of it, so the last cycle of an episode
+   never loses steps. The level is floored at the typical level of the
+   episode, so that a cycle held inside the dead band at a cost of zero or
+   nearly zero does not turn every small rise into a tenfold excursion.
+   ``anticipations`` searches every cycle once with no floor (the last one
+   too, for its level only), takes each cycle's level with the run it found
+   left out, and searches again with the mean of those levels as the floor.
+   Only the second search counts. The settle and the level are then measured
+   on the cycle without the run. A cycle in which no run qualifies keeps
+   exactly the settle, level and hold steps it had before the rule existed.
+
+The conditions keep stationary per-step noise from reading as anticipation. A
+cost of ``e**2`` with Gaussian ``e`` exceeds twice its mean on about 16% of
+steps. In episodes of ten noise-only cycles the rule fires on at most 0.11% of
+the cycles it searches, for Gaussian and heavy-tailed noise alike, and a
+single cycle searched with no floor fires on at most 0.9% of 16-step cycles
+and 0.3% of longer ones (``tests/test_eval_protocol.py`` measures the rates).
+Noise correlated over tens of steps passes for anticipation more often, in up
+to 0.22% of the cycles of such an episode and up to 7% of single cycles
+searched with no floor. The rule then moves that excursion from the hold to
+the next change's transient, which lowers the hold a little, and the gain is
+unaffected either way.
+
+The floor keeps a controller's own excursions at the edge of a dead band out
+of the anticipation, and it also limits what the rule can see. On the
+building (``hvac``) the PID's heating cost rises at the end of some night
+cycles by more than the MPC's cost rises when it pre-heats or lets the zone
+cool ahead of a change. From the cost alone the rule cannot take one and
+leave the other, so it takes neither, and an anticipation costing less than
+ten times the episode's typical level stays in the hold. A cycle that never
+settles raises the floor of its episode, which makes the rule more
+conservative. In a cycle too short for the controller to settle, where the
+tail of the settle still dominates the second half, a modest anticipation
+goes undetected in the same way and the cycle keeps its old numbers.
+
+This module computes the following.
 
 ``gain``            mean per-step cost over every step after ``burn_in``,
                     pooled across episodes, with its 95% interval over
-                    episodes: the long-run average cost of the natural
+                    episodes. It is the long-run average cost of the natural
                     process, transients included, which is what Theorem 4
-                    decomposes as ``rho = rho_hold + p * reach_cost``. Split
-                    into ``tracking`` and ``running`` (and ``failure``) when
-                    the environment reports its reward terms. No settle enters
-                    it, so two controllers are compared on the same steps.
-``hold``            the same over the settled steps only (after each cycle's
-                    transient, see ``reach_cost``): ``rho_hold``. Split as
+                    decomposes as ``rho = rho_hold + p * reach_cost``. It is
+                    split into ``tracking`` and ``running`` (and ``failure``)
+                    when the environment reports its reward terms. No
+                    segmentation enters it, so two controllers are compared
+                    on the same steps.
+``hold``            the same over the hold steps only, ``rho_hold``. Split as
                     ``hold_tracking`` / ``hold_running``.
-``reach_cost``      per target-change cycle, the summed cost above that cycle's
-                    hold level; ``rho = rho_hold + p * reach_cost`` at change
-                    rate ``p``. The hold level is the mean cost over the second
-                    half of the cycle and ``settle`` is measured on the cycle
-                    itself -- the first step from which the cost stays within
-                    twice that level, at least one -- so each controller is
-                    scored against its own transient. (A first version applied
-                    the MPC's settle to the PID, which on the battery scored
-                    the PID's transient after every dispatch block as hold and
-                    manufactured an MPC advantage; and with ``settle = 0`` the
-                    reach cost was zero by construction.)
-``transient_cost``  per cycle, the summed cost over the first ``burn_in``
-                    steps after the change (the cycle, if shorter), not
-                    relative to a level: what a target change costs in
-                    absolute terms over a window the plant sets. Two
+``reach_cost``      per target change, the summed cost above the cycle's hold
+                    level over its settle, plus the summed cost above the
+                    previous cycle's hold level over the anticipation that
+                    prepared the change. The hold level is the mean cost over
+                    the hold steps. ``rho = rho_hold + p * reach_cost`` at
+                    change rate ``p``.
+``transient_cost``  per target change, the summed cost over the first
+                    ``burn_in`` steps after the change (up to the cycle's own
+                    anticipation, if that comes first) plus the cost of the
+                    anticipation steps among the last ``burn_in`` before the
+                    change, so the window reaches as far on each side.
+                    Nothing is subtracted, so it is what a target change
+                    costs in absolute terms over a window the plant sets. Two
                     controllers' reach costs are each relative to their own
-                    hold level and transient, so a controller holding far
-                    off the target shows a small reach cost simply because
-                    its level swallows its transient; the transient cost is
-                    the number to compare across controllers.
-``unsettled_fraction`` share of cycles whose cost is still rising at the end
-                    (second-half mean above first-half mean): no hold was
-                    reached in the window, and the reach cost -- the transient
-                    below the "hold" level -- comes out negative. A negative
-                    reach cost is that signal, not a cheap transient.
+                    hold level and transient, so a controller holding far off
+                    the target shows a small reach cost because its level
+                    swallows its transient. The transient cost is the number
+                    to compare across controllers.
+``unsettled_fraction`` share of cycles whose cost, with the anticipation
+                    removed, is higher over the second half than over the
+                    first. Such a cycle reached no hold in the window, and its
+                    reach cost (the transient measured against a "hold" level
+                    above it) comes out negative. A negative reach cost marks
+                    this case.
 ``reach_fraction``  share of steps spent before first entering the band.
 ``failure_rate``    share of cycles in which the plant trips (``info["tripped"]``).
-``nea``             normalised expert advantage ``(PID - x) / (PID - floor)``:
-                    1 at the achievable floor, 0 at PID parity, negative below
-                    PID. In cost units, so it needs ``rho_floor`` -- the
-                    floor-normalised reward makes that 1 per tracked output
-                    when nothing avoidable is consumed.
-``time_in_band``    a KPI only, never a training signal: share of steps with
-                    every tracked error inside ``band``.
+``nea``             normalised expert advantage ``(PID - x) / (PID - floor)``,
+                    which is 1 at the achievable floor, 0 at PID parity and
+                    negative below PID. It is in cost units, so it needs
+                    ``rho_floor``, which the floor-normalised reward makes 1
+                    per tracked output when nothing avoidable is consumed.
+``time_in_band``    a KPI only, never a training signal. The share of steps
+                    with every tracked error inside ``band``.
 
 ``burn_in`` is per plant, from ``src/target_gym/data/hold_measurements.json``
-(``scripts/measure_hold.py``): three cost-bearing time constants. Passing
-``settle`` overrides the per-cycle measurement with a fixed count.
+(``scripts/measure_hold.py``), and is three cost-bearing time constants.
+Passing ``settle`` overrides the per-cycle settle with a fixed count. The
+anticipation is detected either way. ``scripts/measure_hold.py`` imports
+``anticipations`` and runs it on the squared errors, so that the hold errors
+behind the floors leave out the same steps, found with the same sensitivity
+as on the quadratic tracking cost.
 
 Usage::
 
@@ -72,10 +148,21 @@ from __future__ import annotations
 import json
 import pathlib
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 import numpy as np
 
 _DATA = pathlib.Path(__file__).resolve().parent / "data" / "hold_measurements.json"
+
+# Absolute slack on "within twice the level", as the settle rule has always had.
+_TOL = 1e-12
+# The anticipation rule (module docstring, ``anticipation``).
+_ANTICIPATION_MIN_CYCLE = 16  # shorter cycles are never searched
+_ANTICIPATION_MIN_STEPS = 3  # a run is at least this long, unless it is huge
+_ANTICIPATION_RATIO = 10.0  # its median is at least this many times the level
+_ANTICIPATION_SHARE = 0.8  # share of its steps above twice the level
+_ANTICIPATION_MAX_DIP = 2  # most steps in a row at or below twice the level
+_ANTICIPATION_SHORT_RATIO = 100.0  # every step of a 1- or 2-step run is above
 
 
 @dataclass
@@ -98,6 +185,150 @@ def _ci(x):
     return 1.96 * x.std(ddof=1) / np.sqrt(len(x)) if len(x) > 1 else float("nan")
 
 
+class Segment(NamedTuple):
+    """One target cycle split by ``cycle_segments``, as absolute step indices.
+
+    ``start:hold_start`` is the settle after the cycle's own change,
+    ``hold_start:hold_end`` the hold, and ``hold_end:end`` the anticipation of
+    the next change (empty when none was detected)."""
+
+    start: int
+    hold_start: int
+    hold_end: int
+    end: int
+
+
+def _longest_dip(above: np.ndarray) -> int:
+    """Most consecutive ``False`` entries of a boolean array."""
+    idx = np.flatnonzero(above)
+    if len(idx) == 0:
+        return len(above)
+    return int((np.diff(np.concatenate([[-1], idx, [len(above)]])) - 1).max())
+
+
+def anticipation(series, floor=0.0) -> int:
+    """Steps at the end of one cycle that anticipate the change ending it.
+
+    ``series`` is the cycle's per-step cost, or a ``(steps, outputs)`` array
+    of per-output costs, in which case the longest run over the outputs is
+    returned. The level is the mean over the second half of the cycle without
+    the run, as the settle rule has it, or ``floor`` if that is higher
+    (``floor`` may be one value per output). The run is the longest stretch at
+    the end of the cycle that
+
+    * starts with two steps costing more than twice the level, has at least
+      four in five of its steps above twice the level, and never more than two
+      in a row at or below it,
+    * has a median of at least ten times the level,
+    * is rising, its second half costing more on average than its first, and
+    * is at least three steps long. A run of one or two steps counts only when
+      every step costs a hundred times the level, and a two-step run rises.
+
+    The run takes at most half the cycle, and a cycle shorter than 16 steps is
+    not searched. 0 means no anticipation. The caller decides whether a change
+    follows the cycle at all, and what the floor is (``anticipations``).
+    """
+    x = np.asarray(series, float)
+    if x.ndim == 2:
+        floors = np.broadcast_to(np.asarray(floor, float), x.shape[1:])
+        return max(
+            (anticipation(x[:, i], floors[i]) for i in range(x.shape[1])), default=0
+        )
+    n = len(x)
+    if n < _ANTICIPATION_MIN_CYCLE:
+        return 0
+    for j in range(n // 2, 0, -1):
+        m = n - j
+        level = max(float(x[m // 2 : m].mean()), float(floor))
+        run = x[m:]
+        above = run > 2.0 * level + _TOL
+        if not above[:2].all():
+            continue
+        if j < _ANTICIPATION_MIN_STEPS:
+            if (run > _ANTICIPATION_SHORT_RATIO * level + _TOL).all() and (
+                j == 1 or run[1] > run[0]
+            ):
+                return j
+            continue
+        if above.mean() < _ANTICIPATION_SHARE:
+            continue
+        if _longest_dip(above) > _ANTICIPATION_MAX_DIP:
+            continue
+        if np.median(run) < _ANTICIPATION_RATIO * level + _TOL:
+            continue
+        if not run[j // 2 :].mean() > run[: j // 2].mean():
+            continue
+        return j
+    return 0
+
+
+def anticipations(series, cycles) -> list[int]:
+    """``anticipation`` of every cycle ``(a, b)`` of ``series`` that another
+    cycle follows, and 0 for the cycle that runs to the end of the series,
+    since no change follows it. ``cycles`` are consecutive, as ``_cycles``
+    returns them.
+
+    Two searches. The first has no floor, and once it finds a run anywhere it
+    also searches the last cycle, whose level enters the floor too. The floor
+    of the second is the mean, over every cycle of at least four steps, of the
+    cycle's level (the mean over the second half) once the run the first
+    search found is left out, so a long anticipation does not raise the floor
+    it is measured against. A higher level only makes each condition harder,
+    so the second search finds nothing where the first found nothing, and
+    never a longer run.
+
+    A ``(steps, outputs)`` series is searched output by output, each with its
+    own floor, and a cycle's anticipation is the longest over the outputs.
+    ``scripts/measure_hold.py`` calls this on its squared errors, so the hold
+    errors behind the floors and the protocol's hold leave out the same kind
+    of steps."""
+    x = np.asarray(series, float)
+    if x.ndim == 2:
+        per_output = [anticipations(x[:, i], cycles) for i in range(x.shape[1])]
+        return [max(js) for js in zip(*per_output)] if per_output else [0] * len(cycles)
+    n = len(x)
+    first = [anticipation(x[a:b]) if b < n else 0 for a, b in cycles]
+    if not any(first):
+        return first
+    searched = [j > 0 for j in first]
+    first = [j if b < n else anticipation(x[a:b]) for (a, b), j in zip(cycles, first)]
+    levels = []
+    for (a, b), j in zip(cycles, first):
+        c = x[a : b - j]
+        if len(c) >= 4:
+            levels.append(c[len(c) // 2 :].mean())
+    floor = float(np.mean(levels)) if levels else 0.0
+    return [
+        anticipation(x[a:b], floor) if s else 0 for (a, b), s in zip(cycles, searched)
+    ]
+
+
+def cycle_segments(cost, cycles, settle: int | None = None) -> list[Segment]:
+    """Split each cycle ``(a, b)`` of a per-step ``cost`` into settle, hold
+    and anticipation (module docstring). The anticipation comes from
+    ``anticipations``; the settle is ``_settle_of`` measured on the cycle
+    without its anticipation, so a cycle with none gets exactly the settle
+    it would get without the rule."""
+    cost = np.asarray(cost)
+    out = []
+    for (a, b), j in zip(cycles, anticipations(cost, cycles)):
+        h = b - j
+        out.append(Segment(a, a + _settle_of(cost[a:h], settle), h, b))
+    return out
+
+
+def _segments(ep: Episode, settle: int | None = None) -> list[Segment]:
+    return cycle_segments(ep.cost, _cycles(ep), settle)
+
+
+def _hold_level(cost: np.ndarray, s: Segment) -> float:
+    """Mean cost over the hold steps (over the cycle without its anticipation
+    when the hold is empty)."""
+    if s.hold_end > s.hold_start:
+        return cost[s.hold_start : s.hold_end].mean()
+    return cost[s.start : s.hold_end].mean()
+
+
 def gain(episodes, burn_in: int, key: str | None = None):
     """Mean per-step cost over every step after the burn-in, pooled per
     episode: the long-run average cost, transients included."""
@@ -114,8 +345,9 @@ def gain(episodes, burn_in: int, key: str | None = None):
 
 
 def hold(episodes, burn_in: int, key: str | None = None, settle: int | None = None):
-    """Mean per-step cost over the settled steps only (after the burn-in and
-    after each cycle's transient): ``rho_hold``."""
+    """Mean per-step cost over the hold steps only (after the burn-in, after
+    each cycle's settle and before its anticipation of the next change):
+    ``rho_hold``."""
     per_ep = []
     for ep in episodes:
         series = ep.cost if key is None else ep.terms[key]
@@ -143,53 +375,73 @@ def _settle_of(cost: np.ndarray, settle: int | None) -> int:
     if n < 4:
         return 1
     level = cost[n // 2 :].mean()
-    ok = cost <= 2.0 * level + 1e-12
+    ok = cost <= 2.0 * level + _TOL
     # last step that is still outside, plus one
     outside = np.flatnonzero(~ok[: n // 2])
     return int(min(max(outside[-1] + 1 if len(outside) else 1, 1), n // 2))
 
 
 def reach_cost(episodes, settle: int | None = None):
-    """Excess cost of each cycle's transient over its hold level (the bias
-    ``B`` of Theorem 4). Negative when the cost is still rising at the end of
-    the cycle -- the transient is then cheaper than the "hold" level, i.e. the
-    controller reached no hold in the window; ``transient_cost`` and
-    ``unsettled_fraction`` report that separately."""
+    """Excess cost of each target change's transient over the hold level (the
+    bias ``B`` of Theorem 4). The transient is the settle of the cycle the
+    change starts, measured against that cycle's hold level, plus the
+    anticipation at the end of the previous cycle, measured against the
+    previous cycle's hold level. Negative when the cost is still rising at
+    the end of the cycle, because the transient is then cheaper than the
+    "hold" level and the controller reached no hold in the window.
+    ``transient_cost`` and ``unsettled_fraction`` report that separately."""
     vals = []
     for ep in episodes:
-        for a, b in _cycles(ep):
-            k = _settle_of(ep.cost[a:b], settle)
-            level = ep.cost[a + k : b].mean() if b - a > k else ep.cost[a:b].mean()
-            vals.append((ep.cost[a : a + k] - level).sum())
+        carry = None  # excess of the previous cycle's anticipation
+        for s in _segments(ep, settle):
+            level = _hold_level(ep.cost, s)
+            v = (ep.cost[s.start : s.hold_start] - level).sum()
+            if carry is not None:
+                v = v + carry
+            vals.append(v)
+            carry = None
+            if s.hold_end < s.end:
+                carry = (ep.cost[s.hold_end : s.end] - level).sum()
     return (float(np.mean(vals)), _ci(vals)) if vals else (float("nan"), float("nan"))
 
 
 def transient_cost(episodes, window: int):
-    """Summed cost over the first ``window`` steps of each cycle (the cycle if
-    shorter), not relative to anything: what the target change costs in
-    absolute terms over a window the plant sets. Comparable between two
-    controllers whose hold levels differ, which ``reach_cost`` -- each
-    controller's transient above its *own* hold level, over a transient
-    detected against that level -- is not: a controller holding far off
-    shows a small reach cost because its level swallows its transient.
-    ``evaluate`` uses the plant's burn-in (three cost-bearing time constants)
-    as the window."""
+    """Summed cost over the first ``window`` steps after each target change
+    (up to the cycle's own anticipation, if that comes first), plus the cost
+    of the anticipation steps among the last ``window`` before the change, so
+    the window reaches as far before the change as after it. Nothing is
+    subtracted, so it is what the target change costs in absolute terms over
+    a window the plant sets. Comparable between two controllers whose hold
+    levels differ, which
+    ``reach_cost`` is not, since it measures each controller's transient
+    above that controller's own hold level, over a transient detected against
+    that level. A controller holding far off shows a small reach cost because
+    its level swallows its transient. ``evaluate`` uses the plant's burn-in
+    (three cost-bearing time constants) as the window."""
     vals = []
+    w = max(int(window), 1)
     for ep in episodes:
-        for a, b in _cycles(ep):
-            vals.append(ep.cost[a : min(a + max(int(window), 1), b)].sum())
+        carry = None  # cost of the previous cycle's anticipation
+        for s in _segments(ep):
+            v = ep.cost[s.start : min(s.start + w, s.hold_end)].sum()
+            if carry is not None:
+                v = v + carry
+            vals.append(v)
+            carry = None
+            if s.hold_end < s.end:
+                carry = ep.cost[max(s.hold_end, s.end - w) : s.end].sum()
     return (float(np.mean(vals)), _ci(vals)) if vals else (float("nan"), float("nan"))
 
 
 def unsettled_fraction(episodes):
     """Share of cycles in which the cost over the second half exceeds the
-    cost over the first half: the controller is still moving away from a hold
-    when the cycle ends, so its reach cost has no hold level to be measured
-    against."""
+    cost over the first half, with the anticipation of the next change left
+    out. The controller is still moving away from a hold when the cycle ends,
+    so its reach cost has no hold level to be measured against."""
     n_up = n_tot = 0
     for ep in episodes:
-        for a, b in _cycles(ep):
-            c = ep.cost[a:b]
+        for s in _segments(ep):
+            c = ep.cost[s.start : s.hold_end]
             if len(c) < 4:
                 continue
             n_tot += 1
@@ -198,12 +450,11 @@ def unsettled_fraction(episodes):
 
 
 def hold_mask(ep: Episode, burn_in: int, settle: int | None = None) -> np.ndarray:
-    """Steps that count as hold: after the burn-in and after each cycle's
-    transient."""
+    """Steps that count as hold: after the burn-in, after each cycle's settle
+    and before its anticipation of the next change."""
     m = np.zeros(len(ep.cost), bool)
-    for a, b in _cycles(ep):
-        k = _settle_of(ep.cost[a:b], settle)
-        m[a + k : b] = True
+    for s in _segments(ep, settle):
+        m[s.hold_start : s.hold_end] = True
     m[:burn_in] = False
     return m
 

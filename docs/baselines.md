@@ -856,7 +856,14 @@ step from which the cost stays within twice the cycle's late level). Reach is
 the summed cost of that transient above the level, per target change (one
 cycle, hence ~0, where the target drifts continuously: reactor, HVAC) -- the
 bias B of Theorem 4 -- with the transient's absolute summed cost in
-parentheses. B is relative to each controller's *own* hold level, so it does
+parentheses. A controller that previews the schedule, as the MPCs do, may
+move toward the next target before the change. Those last steps of a cycle
+are found from the cost alone (`target_gym.eval`), left out of the hold, and
+counted in the reach and transient cost of the change they prepare. Of the
+recorded rows this moves two: the altitude-and-airspeed aircraft's MPC hold
+falls from 25.4 to 7.02, with its reach cost rising to match, and the
+building MPC's reach cost moves from 0.377 to 0.382. The gains, and so NEA,
+do not move. B is relative to each controller's *own* hold level, so it does
 not compare two controllers whose holds differ (a PID holding hundreds of
 floor-widths off shows a small B because its level swallows its transient:
 patrol); the absolute transient cost does. A negative B (†) means the cost is
@@ -897,7 +904,7 @@ never bound; and no controller tripped a plant in any window.
 | `first_order` | 0 | 3.57e-06 (3.57e-06 / —) | 0 (0 / —) | 1 | 7.89e-11 | 0 | 1.19e+05 (1.19e+05) | 1.17e+05 (1.17e+05) | 0 |
 | `four_tank` | 0 | 30.3 (30.3 / —) | 0.00741 (0.00741 / —) | 1 | 30.3 | 0.00741 | 6.5e+05 (6.58e+05) | 1.92e+05 (1.92e+05) | 0 |
 | `glass_furnace` | 0.0306 | 2.09 (2.02 / 0.0724) | 0.803 (0.759 / 0.0437) | 0.625 | 2.09 | 0.803 | -225† (1.14e+03) | -99.5† (405) | 0 |
-| `hvac` | 0.001 | 0.0185 (0.00991 / 0.00863) | 0.00884 (0.00525 / 0.00359) | 0.553 | 0.0154 | 0.00368 | 0.367 (0.913) | 0.377 (0.514) | 0 |
+| `hvac` | 0.001 | 0.0185 (0.00991 / 0.00863) | 0.00884 (0.00525 / 0.00359) | 0.553 | 0.0154 | 0.00368 | 0.367 (0.913) | 0.382 (0.514) | 0 |
 | `patrol` | 1.03 | 10.1 (10.1 / —) | 3.02 (3.02 / —) | 0.782 | 10.1 | 3.02 | 818 (1.78e+03) | 184 (377) | 0 |
 | `patrol_bearing_only` | 1.03 | 11.1 (11.1 / —) | — | — | 7.65 | — | 692 (20.6) | — | 0 |
 | `ph_neutralization` | 0.64 | 12.6 (12.6 / 0.00681) | 3.06 (3.06 / 0.00669) | 0.797 | 9.73 | 1.79 | 9.07e+04 (9.12e+04) | 2.34e+04 (2.33e+04) | 0 |
@@ -906,7 +913,7 @@ never bound; and no controller tripped a plant in any window.
 | `plane3d_figure8` | 1 | 2.5e+04 (2.5e+04 / —) | 2.1 (2.1 / —) | 1 | 2.5e+04 | 2.1 | 8.57e+06 (1.28e+07) | 739 (1.15e+03) | 0 |
 | `plane3d_heading` | 1 | 1.79e+04 (1.79e+04 / —) | 5.05 (5.05 / —) | 1 | 1.79e+04 | 5.05 | 4.01e+06 (5.45e+06) | 1.53e+06 (1.53e+06) | 0 |
 | `plane3d_racetrack` | 2 | 3.18e+05 (3.18e+05 / —) | 7.04 (7.04 / —) | 1 | 3.18e+05 | 6.86 | 6.82e+04 (3.56e+06) | 6.28e+05 (6.3e+05) | 0 |
-| `plane_energy` | 1 | 780 (780 / 0.321) | 38.8 (35.4 / 3.39) | 0.951 | 51.7 | 25.4 | 1.23e+05 (1.28e+05) | 9.5e+03 (1.28e+04) | 0 |
+| `plane_energy` | 1 | 780 (780 / 0.321) | 38.8 (35.4 / 3.39) | 0.951 | 51.7 | 7.02 | 1.23e+05 (1.28e+05) | 1.22e+04 (1.3e+04) | 0 |
 | `plane_sine` | 1 | 1.52e+03 (1.52e+03 / 0.261) | 2.99 (2.24 / 0.749) | 0.999 | 1.49e+03 | 2.86 | 1.88e+06 (2.14e+06) | 7.61e+05 (7.62e+05) | 0 |
 | `reactor` | 1.25 | 23.7 (23.3 / 0.385) | 1.38 (1.38 / 2.41e-05) | 0.994 | 23.7 | 1.38 | 1.64e+03 (1.24e+04) | 4.77 (597) | 0 |
 | `wind_turbine` | 1.17e-05 | 2.64e-05 (2.43e-05 / 2.12e-06) | 2.1e-05 (1.55e-05 / 5.46e-06) | 0.365 | 2.64e-05 | 2.1e-05 | 0.00854 (0.0132) | 0.00687 (0.011) | 0 |
