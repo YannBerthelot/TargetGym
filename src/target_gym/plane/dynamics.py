@@ -44,8 +44,8 @@ def step_key(key, time):
     """Per-step PRNG key derived from the episode key *and* the step index.
 
     ``step_env`` receives whatever key the caller supplies, and every rollout
-    helper in this repository -- ``run_episode_headless``, ``save_video``, the
-    ``lax.scan`` bodies in the runners -- supplies the *same* key at every
+    helper in this repository (``runners.rollout``, ``save_video``, the
+    ``lax.scan`` bodies in the runners) supplies the *same* key at every
     step. Drawing noise straight from it therefore redraws one identical
     innovation forever, collapsing a zero-mean disturbance into a deterministic
     ramp toward ``innovation / (1 - rho)``.

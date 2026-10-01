@@ -477,6 +477,19 @@ than by commit.
   `scripts/benchmark_integration.py`, which imported an undeclared dependency
   and could not run.
 
+- **The comparison helpers in `target_gym.utils`**: `save_comparison_gif`,
+  `save_comparison_figure`, `load_or_run_mpc_episode`,
+  `load_or_build_interpolator`, `run_episode_headless` and
+  `run_episode_headless_with_state`, along with the `make clear-mpc` target
+  that emptied their `data/mpc_cache/` and `data/interpolators/` caches. They
+  drew the constant, PID and MPC comparison figure and GIF for the seven
+  per-environment runners, and nothing has called them since
+  `target_gym.runners.runners` replaced those. Its `figure_comparison` draws
+  the reward comparison now and needs no cache, because it runs each MPC
+  episode once. `utils.py` is hashed into every fingerprint, so the baselines
+  and protocol rows were re-recorded, and came out bit for bit the same, and
+  the version stamps were re-stamped in place.
+
 ### Known gaps
 
 - ~~Both patrol variants hold formation only loosely, roughly 139 m of settled

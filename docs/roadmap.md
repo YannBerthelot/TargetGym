@@ -200,7 +200,14 @@ what is broken and recorded rather than hidden.
       nothing changed but must never report fresh when something did. So an
       unresolvable entry point has to fall back to hashing the entire file.
 
-* [ ] **Remove the `utils.py` helpers nothing calls, with the next re-record.**
+* [x] **Remove the `utils.py` helpers nothing calls, with the next re-record.**
+      Done, without waiting for another change to pay for the re-record. The
+      helpers, their tests, the two imports, the allowlist entry and the stale
+      mentions are gone. The 20 baselines and 21 protocol rows were re-recorded
+      and matched the previous records bit for bit apart from their
+      fingerprints, and the 21 version stamps were re-stamped in place with a
+      note saying so. What follows is the item as it was written.
+
       `load_or_run_mpc_episode`, `save_comparison_gif`, `save_comparison_figure`
       and `load_or_build_interpolator` lost their last callers when 5458229
       replaced the seven per-environment runners with `runners/runners.py`.
