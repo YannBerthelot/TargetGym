@@ -1,14 +1,4 @@
-from target_gym.experts.mpc import (
-    GradientMPC,
-    make_cstr_mpc,
-    make_first_order_mpc,
-    make_four_tank_mpc,
-    make_glass_furnace_mpc,
-    make_hvac_mpc,
-    make_plane3d_mpc,
-    make_plane_mpc,
-    make_reactor_mpc,
-)
+from target_gym.experts.mpc import CasadiMPC, GradientMPC, SamplingMPC
 from target_gym.experts.pid import (
     GainSchedulePIDParams,
     MIMOGainSchedulePIDParams,
@@ -99,14 +89,9 @@ __all__ = [
     "make_plane3d_circle_cascaded_pid",
     "make_plane3d_circle_stateful_pid",
     "make_plane3d_figure8_stateful_pid",
-    # MPC
+    # MPC machinery. Each task's oracle factory lives in its own package's
+    # experts.py; reach it through EnvSpec.make_mpc.
+    "CasadiMPC",
     "GradientMPC",
-    "make_cstr_mpc",
-    "make_first_order_mpc",
-    "make_four_tank_mpc",
-    "make_glass_furnace_mpc",
-    "make_hvac_mpc",
-    "make_plane_mpc",
-    "make_plane3d_mpc",
-    "make_reactor_mpc",
+    "SamplingMPC",
 ]

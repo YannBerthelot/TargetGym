@@ -154,7 +154,7 @@ class GridBattery(environment.Environment[BatteryState, BatteryParams]):
 
     def make_mpc(self, params=None, **kwargs):
         """Return a gradient MPC oracle for dispatch tracking."""
-        from target_gym.experts.mpc import make_battery_mpc
+        from target_gym.energy.battery.experts import make_battery_mpc
 
         if params is None:
             params = self.default_params

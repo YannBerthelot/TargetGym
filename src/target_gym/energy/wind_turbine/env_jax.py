@@ -165,7 +165,7 @@ class WindTurbine(environment.Environment[WindTurbineState, WindTurbineParams]):
 
     def make_mpc(self, params=None, **kwargs):
         """Return a gradient MPC oracle for power regulation."""
-        from target_gym.experts.mpc import make_wind_turbine_mpc
+        from target_gym.energy.wind_turbine.experts import make_wind_turbine_mpc
 
         if params is None:
             params = self.default_params

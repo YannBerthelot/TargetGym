@@ -191,6 +191,9 @@ what is broken and recorded rather than hidden.
       every existing environment's record stale. Registering the racetrack hold
       added 93 lines to `pid.py` and deleted none, and that alone invalidated
       all twenty recorded baselines, though no existing controller's behaviour moved.
+      Partly done: each task's oracle now lives in its own package's
+      `experts.py`, so oracle work re-records only that package. The PIDs of
+      the 21 and the shared MPC machinery still invalidate everything.
       Re-recording is cheap enough today (the aircraft variants dominate the
       cost and needed re-recording regardless), so this was paid rather than
       fixed, but it scales badly: it is a full re-measure per environment added.
@@ -510,10 +513,9 @@ what is broken and recorded rather than hidden.
         stacking and no wrapper; the aircraft's `observe_wind` is
         constructor-level and specific to that plant.
 
-      **Do the fingerprint-scoping item above first.** Adding a planner to
-      `experts/mpc.py` invalidates all twenty recorded baselines and costs a
-      nine-to-eleven hour re-record, purely because the fingerprint hashes the
-      file whole rather than the definitions an environment reaches.
+      A new planner for one task goes in that task's own `experts.py`, which
+      re-records only its package. A change to the shared machinery in
+      `experts/mpc.py` still re-records every task.
 
 * [x] **Host the documentation.** Done, and this was a duplicate of the 0.6
       blocking entry above; it survived because nothing checks the roadmap

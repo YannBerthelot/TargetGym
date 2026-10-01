@@ -1,11 +1,11 @@
 {
   "_meta": {
-    "generated": "2026-10-01T06:40:33+00:00",
+    "generated": "2026-10-01T13:45:06+00:00",
     "note": "Regenerate with scripts/record_baselines.py when a test reports a stale fingerprint. Commit the result with the change that invalidated it.",
     "seeds": 10
   },
   "battery": {
-    "fingerprint": "e1fac0e165b4741f",
+    "fingerprint": "d47cc85ec9c564c3",
     "mpc_returns": [
       -0.527136,
       -0.326407,
@@ -31,12 +31,12 @@
       -1.398957,
       -0.725328
     ],
-    "seconds": 1193.2,
+    "seconds": 246.8,
     "seeds": 10,
     "steps": 360
   },
   "boiler_drum": {
-    "fingerprint": "f87d15b6832048ae",
+    "fingerprint": "261051426f653244",
     "mpc_returns": [
       -6620.837402,
       -17612.152344,
@@ -62,12 +62,12 @@
       -147902.964945,
       -287671.671981
     ],
-    "seconds": 1189.0,
+    "seconds": 242.2,
     "seeds": 10,
     "steps": 400
   },
   "cement_kiln": {
-    "fingerprint": "6f1b9087ca0a551c",
+    "fingerprint": "6035d20a37dc8249",
     "mpc_returns": [
       -1500.419564,
       -953.460863,
@@ -93,12 +93,12 @@
       -5232.518274,
       -3495.785253
     ],
-    "seconds": 6518.5,
+    "seconds": 3028.7,
     "seeds": 10,
     "steps": 700
   },
   "compressor_surge": {
-    "fingerprint": "ae0c2031948a0daa",
+    "fingerprint": "17d2ee265378c807",
     "mpc_returns": [
       -164197.326672,
       -166483.915183,
@@ -124,7 +124,7 @@
       -1580656.377738,
       -2612767.951456
     ],
-    "seconds": 705.3,
+    "seconds": 6543.0,
     "seeds": 10,
     "solver_calls": 12000,
     "solver_capped": 1,
@@ -133,7 +133,7 @@
     "steps": 1200
   },
   "cstr": {
-    "fingerprint": "9022f823dc0d4930",
+    "fingerprint": "4e808bff0667011d",
     "mpc_returns": [
       -164.807108,
       -227878.904876,
@@ -159,7 +159,7 @@
       -2359596.640396,
       -86995.630231
     ],
-    "seconds": 7695.1,
+    "seconds": 2096.1,
     "seeds": 10,
     "solver_calls": 1000,
     "solver_capped": 0,
@@ -168,7 +168,7 @@
     "steps": 100
   },
   "distillation": {
-    "fingerprint": "19b740e882cea30c",
+    "fingerprint": "eadadf8d77577e8c",
     "mpc_returns": [
       -4813.390137,
       -196.588852,
@@ -194,12 +194,12 @@
       -108157.592125,
       -1795.915156
     ],
-    "seconds": 1182.0,
+    "seconds": 233.4,
     "seeds": 10,
     "steps": 200
   },
   "first_order": {
-    "fingerprint": "5500f2925896d5e6",
+    "fingerprint": "037bbaf51f1d3b1f",
     "mpc_returns": [
       -278230.886689,
       -62768.399542,
@@ -225,7 +225,7 @@
       -803.760362,
       -152578.39808
     ],
-    "seconds": 7539.8,
+    "seconds": 2491.6,
     "seeds": 10,
     "solver_calls": 1000,
     "solver_capped": 0,
@@ -234,7 +234,7 @@
     "steps": 100
   },
   "four_tank": {
-    "fingerprint": "1053fe46d5460a8b",
+    "fingerprint": "a27952f1d4c984da",
     "mpc_returns": [
       -132697.012954,
       -388345.823108,
@@ -260,7 +260,7 @@
       -868952.23365,
       -469131.401406
     ],
-    "seconds": 7574.7,
+    "seconds": 2490.6,
     "seeds": 10,
     "solver_calls": 5000,
     "solver_capped": 0,
@@ -269,7 +269,7 @@
     "steps": 500
   },
   "glass_furnace": {
-    "fingerprint": "21d31fd44e71bbad",
+    "fingerprint": "5af936bb354ca593",
     "mpc_returns": [
       -706.407511,
       -1588.599734,
@@ -295,7 +295,7 @@
       -1679.69486,
       -1681.707136
     ],
-    "seconds": 5851.2,
+    "seconds": 4297.2,
     "seeds": 10,
     "solver_calls": 16000,
     "solver_capped": 0,
@@ -304,7 +304,7 @@
     "steps": 1600
   },
   "hvac": {
-    "fingerprint": "1217ad468ddd3b7e",
+    "fingerprint": "a9bcaad0c2d0ab3a",
     "mpc_returns": [
       -10.229124,
       -8.176775,
@@ -330,7 +330,7 @@
       -12.471335,
       -14.546638
     ],
-    "seconds": 1495.8,
+    "seconds": 6000.9,
     "seeds": 10,
     "solver_calls": 7200,
     "solver_capped": 0,
@@ -339,7 +339,7 @@
     "steps": 720
   },
   "patrol": {
-    "fingerprint": "9847be4f2851a725",
+    "fingerprint": "5ca9ed1f46c2a87d",
     "mpc_returns": [
       -683.994809,
       -567.136745,
@@ -365,12 +365,12 @@
       -2023.898161,
       -2173.206232
     ],
-    "seconds": 7785.1,
+    "seconds": 2910.8,
     "seeds": 10,
     "steps": 200
   },
   "ph_neutralization": {
-    "fingerprint": "cbcb9354d5d5acb2",
+    "fingerprint": "9abc0a432ff910cf",
     "mpc_returns": [
       -57266.136747,
       -14270.33571,
@@ -396,7 +396,7 @@
       -81203.876998,
       -88427.013644
     ],
-    "seconds": 2850.6,
+    "seconds": 5927.1,
     "seeds": 10,
     "solver_calls": 3000,
     "solver_capped": 0,
@@ -405,7 +405,7 @@
     "steps": 300
   },
   "plane": {
-    "fingerprint": "745620e6d514dc22",
+    "fingerprint": "acf6b2002e93bbc7",
     "mpc_returns": [
       -1750885.853768,
       -41486.956004,
@@ -431,12 +431,12 @@
       -12393543.914075,
       -1580699.659999
     ],
-    "seconds": 6811.9,
+    "seconds": 2970.4,
     "seeds": 10,
     "steps": 280
   },
   "plane3d_circle": {
-    "fingerprint": "012fe63ffd0aa295",
+    "fingerprint": "94a628a192632b75",
     "mpc_returns": [
       -117353.296875,
       -7926.648438,
@@ -462,12 +462,12 @@
       -909158.298271,
       -239972.304377
     ],
-    "seconds": 1135.9,
+    "seconds": 637.8,
     "seeds": 10,
     "steps": 300
   },
   "plane3d_figure8": {
-    "fingerprint": "85dba3364a61ee44",
+    "fingerprint": "44e0b18aa7eff918",
     "mpc_returns": [
       -1265.191162,
       -2023.979248,
@@ -493,12 +493,12 @@
       -15194095.12477,
       -20006753.715439
     ],
-    "seconds": 1522.4,
+    "seconds": 866.3,
     "seeds": 10,
     "steps": 400
   },
   "plane3d_heading": {
-    "fingerprint": "82636a3434712413",
+    "fingerprint": "57650f7fc96fb26a",
     "mpc_returns": [
       -1795469.75,
       -673728.9375,
@@ -524,12 +524,12 @@
       -9593079.971191,
       -6612024.681763
     ],
-    "seconds": 1124.9,
+    "seconds": 491.4,
     "seeds": 10,
     "steps": 200
   },
   "plane3d_racetrack": {
-    "fingerprint": "70283693cfed03b1",
+    "fingerprint": "2bf14e875365916c",
     "mpc_returns": [
       -926575.8125,
       -27785.769531,
@@ -555,12 +555,12 @@
       -69362509.059548,
       -59385241.05572
     ],
-    "seconds": 2203.9,
+    "seconds": 1239.6,
     "seeds": 10,
     "steps": 650
   },
   "plane_energy": {
-    "fingerprint": "b6a4ff5362983226",
+    "fingerprint": "c2ea5a26336f68f2",
     "mpc_returns": [
       -127890.38788,
       -45202.861479,
@@ -586,12 +586,12 @@
       -5298857.412485,
       -921167.315371
     ],
-    "seconds": 5026.4,
+    "seconds": 5372.9,
     "seeds": 10,
     "steps": 1200
   },
   "plane_sine": {
-    "fingerprint": "da98573a25a8ea01",
+    "fingerprint": "725f8cb4678b1dac",
     "mpc_returns": [
       -1263593.619054,
       -31820.033036,
@@ -617,12 +617,12 @@
       -5219161.766008,
       -2203956.042466
     ],
-    "seconds": 6498.8,
+    "seconds": 3501.8,
     "seeds": 10,
     "steps": 480
   },
   "reactor": {
-    "fingerprint": "5c68b10ae7f0705c",
+    "fingerprint": "740f008bb8572d0c",
     "mpc_returns": [
       -1201.814253,
       -1155.561136,
@@ -648,7 +648,7 @@
       -19800.621731,
       -25556.552603
     ],
-    "seconds": 7693.5,
+    "seconds": 2447.5,
     "seeds": 10,
     "solver_calls": 8640,
     "solver_capped": 0,
@@ -657,7 +657,7 @@
     "steps": 864
   },
   "unstable_cstr": {
-    "fingerprint": "af7577239f1556e6",
+    "fingerprint": "61ae82f7f21e7ed6",
     "mpc_returns": [
       -4909060.895574,
       -4307364.524249,
@@ -683,7 +683,7 @@
       -67224558.429671,
       -70754968.997747
     ],
-    "seconds": 185.5,
+    "seconds": 6661.0,
     "seeds": 10,
     "solver_calls": 12000,
     "solver_capped": 0,
@@ -692,7 +692,7 @@
     "steps": 1200
   },
   "wind_turbine": {
-    "fingerprint": "a598cfd9f0670f50",
+    "fingerprint": "cff5d92597472e9c",
     "mpc_returns": [
       -0.00715,
       -0.013503,
@@ -718,7 +718,7 @@
       -0.027201,
       -0.011931
     ],
-    "seconds": 3099.5,
+    "seconds": 5945.2,
     "seeds": 10,
     "steps": 400
   }

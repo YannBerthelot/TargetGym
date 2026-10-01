@@ -17,16 +17,13 @@ from target_gym import (
     FourTank,
     FourTankParams,
 )
-from target_gym.experts.mpc import (
-    CasadiMPC,
-    GradientMPC,
-    make_cstr_mpc,
-    make_first_order_mpc,
-    make_four_tank_mpc,
-    make_plane_mpc,
-)
+from target_gym.experts.mpc import CasadiMPC, GradientMPC
+from target_gym.pc_gym.cstr.experts import make_cstr_mpc
+from target_gym.pc_gym.first_order.experts import make_first_order_mpc
+from target_gym.pc_gym.four_tank.experts import make_four_tank_mpc
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
+from target_gym.plane.experts import make_plane_mpc
 from target_gym.registry import REGISTRY
 from target_gym.runners import runners as R
 

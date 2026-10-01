@@ -20,7 +20,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.plane.experts",
       "make_plane_mpc"
     ],
     "test_params": {
@@ -63,7 +63,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.plane.experts",
       "make_plane_mpc"
     ],
     "test_params": {
@@ -115,7 +115,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.plane.experts",
       "make_plane_mpc"
     ],
     "test_params": {
@@ -166,7 +166,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.plane3d.experts",
       "make_plane3d_mpc"
     ],
     "test_params": {
@@ -210,7 +210,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.plane3d.experts",
       "make_plane3d_mpc"
     ],
     "test_params": {
@@ -259,7 +259,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.plane3d.experts",
       "make_plane3d_mpc"
     ],
     "test_params": {
@@ -308,7 +308,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.plane3d.experts",
       "make_plane3d_mpc"
     ],
     "test_params": {
@@ -356,7 +356,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.patrol.experts",
       "make_patrol_mpc"
     ],
     "test_params": {
@@ -428,7 +428,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.pc_gym.cstr.experts",
       "make_cstr_mpc"
     ],
     "test_params": {},
@@ -462,7 +462,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.pc_gym.first_order.experts",
       "make_first_order_mpc"
     ],
     "test_params": {},
@@ -496,7 +496,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.pc_gym.four_tank.experts",
       "make_four_tank_mpc"
     ],
     "test_params": {},
@@ -530,7 +530,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.pc_gym.ph_neutralization.experts",
       "make_ph_mpc"
     ],
     "test_params": {},
@@ -566,7 +566,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.pc_gym.distillation.experts",
       "make_distillation_mpc"
     ],
     "test_params": {},
@@ -602,7 +602,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.glass_furnace.experts",
       "make_glass_furnace_mpc"
     ],
     "test_params": {},
@@ -638,7 +638,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.reactor.experts",
       "make_reactor_mpc"
     ],
     "test_params": {
@@ -674,7 +674,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.hvac.experts",
       "make_hvac_mpc"
     ],
     "test_params": {},
@@ -710,7 +710,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.cement_kiln.experts",
       "make_cement_kiln_mpc"
     ],
     "test_params": {},
@@ -746,7 +746,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.boiler_drum.experts",
       "make_boiler_drum_mpc"
     ],
     "test_params": {},
@@ -782,7 +782,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.energy.wind_turbine.experts",
       "make_wind_turbine_mpc"
     ],
     "test_params": {},
@@ -820,7 +820,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.experts.mpc",
+      "target_gym.energy.battery.experts",
       "make_battery_mpc"
     ],
     "test_params": {},

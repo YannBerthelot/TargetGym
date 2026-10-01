@@ -244,7 +244,8 @@ at 5.96e-7 floor-widths squared and the MPC at 4.21e-5 (measured,
 `scripts/evaluate_baselines.py`). Getting there was not a matter of
 re-tuning. Five things in the planners had been written against the
 version-1 reward and stopped being ceilings under version 2, and each is
-fixed in `experts/mpc.py` with the measurement that found it:
+fixed in the planner (now in its task's `experts.py`) with the measurement
+that found it:
 
 - **The surrogate objectives mirrored the version-1 minimiser.** The
   gradient and sampling planners (wind turbine, battery, aircraft, boiler

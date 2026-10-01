@@ -6,9 +6,10 @@ Pinned: every field of the 21 specs (``tests/data/pinned_specs.json``, taken
 before any task was added) and their order, since a task's position in
 REGISTRY is its benchmark seed index. New tasks are appended after them.
 
-A task added after the 21 keeps its controllers in its own package's
-``experts.py`` (``experts/pid.py`` and ``experts/mpc.py`` are in every task's
-baseline fingerprint), declares any physics it imports from another package in
+Every task builds its oracle (the MPC slot) from its own package's
+``experts.py``; ``experts/mpc.py`` holds only the shared machinery, and it is
+in every task's baseline fingerprint. A task added after the 21 keeps its PID
+there too (``experts/pid.py`` is also in every baseline fingerprint), declares any physics it imports from another package in
 ``fingerprint_sources``, has a name that cannot collide with another task's
 gains keys, ships as ``-v2`` with a ``compute_reward_v1`` of its own, has a
 hold row, and, if it ships a PID, has a row in ``TUNERS`` in
@@ -57,7 +58,6 @@ PINNED_21 = [
 
 _FACTORY_MODULES = {
     "_pid.<locals>.make": "target_gym.experts.pid",
-    "_mpc.<locals>.make": "target_gym.experts.mpc",
 }
 
 
@@ -248,26 +248,33 @@ def _may_import(module: str, package: str, allowed: set[str]) -> bool:
     return module == package or module.startswith(f"{package}.") or module in allowed
 
 
-def test_a_new_package_imports_only_what_it_declares():
-    """Imported physics must be fingerprinted, so a package added after the 21
+def test_imports_stay_inside_the_fingerprint():
+    """Imported code must be fingerprinted, so a package added after the 21
     imports only itself, the shared plumbing and the modules its spec declares
-    in ``fingerprint_sources`` (its experts*.py may also import the shared
-    controller code). Relative imports are refused because the check reads
-    absolute names only. A file not named experts* imports its package's
-    controllers only inside a function, as the env_jax files of the 21 do: the
-    version stamp leaves experts* out, so physics that depended on them could
-    change with no version bump."""
+    in ``fingerprint_sources``, and every task's experts*.py imports only its
+    own package, the shared plumbing, its declared sources and the shared
+    controller code. (The physics of the 21 predates the rule and is not
+    checked.) Relative imports are refused because the check reads absolute
+    names only. A file not named experts* imports its package's controllers
+    only inside a function, as the env_jax files of the 21 do: the version
+    stamp leaves experts* out, so physics that depended on them could change
+    with no version bump."""
     problems = []
-    for s in _added():
+    seen = set()
+    for s in registry.all_specs():
         package = _package(s)
+        added = s.name not in PINNED_21
         declared = {
             "target_gym." + rel.removesuffix(".py").replace("/", ".")
             for rel in s.fingerprint_sources
         }
         for path in sorted(_package_dir(s).glob("*.py")):
-            if path.name.startswith("rendering"):
+            if path.name.startswith("rendering") or path in seen:
                 continue
+            seen.add(path)
             is_experts = path.name.startswith("experts")
+            if not (added or is_experts):
+                continue
             allowed = _SHARED_MODULES | declared
             if is_experts:
                 allowed |= _CONTROLLER_MODULES
@@ -314,31 +321,44 @@ def test_a_new_package_imports_only_what_it_declares():
     assert not problems, "\n".join(problems)
 
 
-def test_the_21_hash_what_they_hashed():
-    """The 21 declare no extra sources and hold no experts* file, so both
-    fingerprints of the 21 read the same files as before. A new task's own
-    experts.py is in its baseline fingerprint and out of its version stamp."""
+def test_controllers_are_in_the_baseline_fingerprint_only():
+    """A package's experts.py is in the baseline fingerprint of its tasks and
+    out of their version stamp, since retuning a controller does not change
+    the environment. The stamp is otherwise the baseline's file list, and the
+    21 declare no extra sources, so their stamps read the same files as before
+    their oracles moved out of experts/mpc.py (test_env_versions holds the
+    stamps themselves)."""
     problems = []
     for s in registry.all_specs():
         sources = provenance._env_sources(s)
         stamped = provenance._env_sources(s, controllers=False)
-        if s.name in PINNED_21:
-            if s.fingerprint_sources:
-                problems.append(f"{s.name}: declares {s.fingerprint_sources}")
-            if stamped != sources:
-                dropped = [
-                    str(p.relative_to(ROOT)) for p in sources if p not in stamped
-                ]
-                problems.append(f"{s.name}: the version stamp would drop {dropped}")
-            continue
+        if s.name in PINNED_21 and s.fingerprint_sources:
+            problems.append(f"{s.name}: declares {s.fingerprint_sources}")
+        if stamped != [p for p in sources if not p.name.startswith("experts")]:
+            problems.append(f"{s.name}: the version stamp drops more than experts*")
         experts = _package_dir(s) / "experts.py"
-        if experts.exists():
-            if experts not in sources:
-                problems.append(
-                    f"{s.name}: experts.py is not in its baseline fingerprint"
-                )
-            if experts in stamped:
-                problems.append(f"{s.name}: experts.py is in its version stamp")
+        if experts.exists() and experts not in sources:
+            problems.append(f"{s.name}: experts.py is not in its baseline fingerprint")
+    assert not problems, "\n".join(problems)
+
+
+def test_every_oracle_lives_in_its_own_package():
+    """Each task's MPC slot is built from its own package's experts.py, so an
+    oracle change re-records only the tasks of that package. experts/mpc.py
+    keeps the shared machinery and no task's factory."""
+    problems = []
+    for s in registry.all_specs():
+        if s.make_mpc is None:
+            continue
+        _, module, factory = _factory(s.make_mpc)
+        if module != f"{_package(s)}.experts":
+            problems.append(f"{s.name}: make_mpc builds {factory} from {module}")
+    tree = ast.parse((SRC / "experts" / "mpc.py").read_text())
+    problems += [
+        f"experts/mpc.py defines {node.name}; move it to its task's package"
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name.endswith("_mpc")
+    ]
     assert not problems, "\n".join(problems)
 
 

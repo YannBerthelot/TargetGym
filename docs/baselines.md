@@ -558,8 +558,11 @@ neither cap is needed once the rollouts happen by hand. Both were lifted, which
 is what exposed the glass furnace's MPC (see below).
 
 **What it costs.** The fingerprint covers the shared controller modules, so
-editing `experts/mpc.py` invalidates every environment's record even when the
-change provably touches one environment. That is deliberate. A finer,
+editing `experts/pid.py` or the shared machinery in `experts/mpc.py`
+invalidates every environment's record even when the change provably touches
+one environment. Each task's oracle lives in its own package's `experts.py`,
+which only that package's fingerprint covers, so oracle work re-records only
+that package. That is deliberate. A finer,
 symbol-level fingerprint would have to resolve `_pid("make_glass_furnace_stateful_pid")` --
 a string lookup -- and a miss there produces a record that is stale and *looks*
 fresh, which is the one direction this design refuses. The price is a

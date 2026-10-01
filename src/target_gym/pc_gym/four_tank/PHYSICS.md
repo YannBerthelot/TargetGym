@@ -126,7 +126,7 @@ which under a log is only the denominator and no longer flattens anything.
 
 `tracking_band = 0.05` is left over from the narrowing that was tried first. It
 is **a controller constant, not a reward parameter**: nothing in this file's
-reward reads it, and the only consumer is the MPC objective in `experts/mpc.py`,
+reward reads it, and the only consumer is the MPC objective in `experts.py`,
 which normalises its tracking error by it. That is the same shape as the glass
 furnace's since-removed `tracking_scale`, which the reward had stopped using while the
 controller went on steering by it, and which cost that environment 16% against

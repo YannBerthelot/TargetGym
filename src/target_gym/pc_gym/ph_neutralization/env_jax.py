@@ -154,7 +154,7 @@ class PHNeutralization(environment.Environment[PHState, PHParams]):
 
     def make_mpc(self, params=None, **kwargs):
         """Return a CasADi MPC oracle for pH tracking."""
-        from target_gym.experts.mpc import make_ph_mpc
+        from target_gym.pc_gym.ph_neutralization.experts import make_ph_mpc
 
         if params is None:
             params = self.default_params
