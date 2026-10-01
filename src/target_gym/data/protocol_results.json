@@ -150,7 +150,7 @@
     "seeds": 3
   },
   "compressor_surge": {
-    "fingerprint": "ae73faf6ee920497",
+    "fingerprint": "ae0c2031948a0daa",
     "mpc": {
       "abs_gap": 60.78867037921334,
       "failure": 0.0,
@@ -167,7 +167,7 @@
       "reach_cost_ci": 121686.67649874912,
       "reach_fraction": 0.02638888888888889,
       "running": 0.39330397264499745,
-      "seconds": 384.5,
+      "seconds": 679.3,
       "time_in_band": 0.9574603174603175,
       "tracking": 60.3953750298042,
       "transient_cost": 100838.53133030674,
@@ -189,7 +189,7 @@
       "reach_cost_ci": 416010.10001511616,
       "reach_fraction": 0.21638888888888888,
       "running": 0.38761349717923804,
-      "seconds": 4.0,
+      "seconds": 11.3,
       "time_in_band": 0.28857142857142853,
       "tracking": 1780.6261964149633,
       "transient_cost": 894121.8776647933,

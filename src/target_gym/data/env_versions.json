@@ -30,8 +30,9 @@
     "stamped": "2026-09-30T20:57:19+00:00"
   },
   "compressor_surge-v2": {
-    "fingerprint": "67d968835ea9e808",
-    "stamped": "2026-10-01T03:07:00+00:00"
+    "fingerprint": "b57d32e94be4dbbd",
+    "note": "compressor_surge-v2 is unpublished: re-stamped after main's removal of dead helpers from utils.py (PR #50), which is in every fingerprint and changes no behaviour.",
+    "stamped": "2026-10-01T06:28:15+00:00"
   },
   "cstr-v1": {
     "fingerprint": "1aedfbe4bf2cd1e8",
