@@ -81,22 +81,30 @@ actively cooled.
 | OCV coefficients | see params | – | NMC-like fit; validated on window and monotonicity | ⚠️ |
 | `C_thermal`, `UA_thermal` | 9e6 J/K, 3000 W/K | – | ~10 t pack; active cooling | ⚠️ |
 | `k_calendar`, `k_cycle`, `E_activation` | 3e−9, 1.5e−9, 20 kJ/mol | – | TUNED — Arrhenius calendar plus throughput cycling | ⚠️ |
-| `delta_t` | 5.0 | s | 720 steps = 60 min | ✅ |
+| `delta_t` | 5.0 | s | 360 steps = 30 min | ✅ |
 
 ---
 
 ## 4. Task design
 
-**Dispatch tracking against a finite energy budget.** The tension is
-structural rather than tuned: following the grid's request drains charge, and
-running the pack empty or full **ends the episode irrecoverably**. Unlike a
-thermal plant, the battery cannot hold a setpoint indefinitely — tracking now
-costs the ability to track later.
+**Dispatch tracking, paid for in wear.** Following the grid's request moves
+charge in and out of the pack, and every MWh moved costs capacity fade, which
+the running cost prices at every step. The charge window is real: leaving
+0.05-0.95 state of charge trips the pack, and a dispatch held in one direction
+long enough would get there. Over a scored episode, though, the window does
+not bind on a controller that tracks exactly. The episode is 360 steps of 5 s
+(30 minutes, six 300 s dispatch blocks) from an initial state of charge drawn
+uniformly in 0.35-0.75. A feedforward that follows the schedule exactly keeps
+the state of charge within 0.17-0.85 over 2000 seeds and never trips; over a
+60-minute schedule, twice the scored length, it stays within 0.10-0.92, still
+with no trip (oracle audit, 2026-10-01). So within a scored episode, tracking
+now does not cost the ability to track later. What it costs is wear.
 
 **The dispatch signal is a schedule, not a random walk.** Twelve blocks, each
 held for a 300 s market interval, drawn uniformly in ±0.8 MW, with 2 kW of
-regulation jitter on top. That is what a grid battery is actually handed: a
-setpoint for a dispatch interval, then another.
+regulation jitter on top; the scored 30-minute episode spans the first six.
+That is what a grid battery is actually handed: a setpoint for a dispatch
+interval, then another.
 
 It used to be an Ornstein-Uhlenbeck process, and that made the task
 unmeasurable rather than merely unrealistic. Its one-step innovation had a
@@ -121,23 +129,39 @@ against.
 current needed for a given power depends on state of charge through the OCV
 curve, so the same dispatch costs more when the pack is low.
 
-**Reward** = dispatch tracking − degradation − a weak pull toward mid charge.
-The last term is deliberately weak: it should bias toward keeping headroom in
-both directions without overriding the dispatch the battery is paid to follow.
+**Reward** = −(dispatch imbalance + degradation + trip cost), in dollars per
+step (version 2, below). Version 1 also had a weak pull toward mid charge, to
+keep headroom in both directions; version 2 drops it, and over a scored
+episode a controller that tracks exactly does not need that headroom.
 
 ---
 
 ## 5. Baselines
 
-| controller | return | power error | episodes completed |
-|---|---|---|---|
-| PID + charge guard | **155.7** | 0.062 MW | 360/360 |
-| constant ±0.5 / 0 | 11.6 – 20.5 | 0.35 – 0.63 MW | 360/360 |
+Version-2 reward, over the ten recorded seeds of the scored 360-step episode.
+The reward is a cost, so a return closer to zero is better.
 
-The guard matters more than the gains. Fading the demand out *only in the
-direction that would breach a limit* — throttling discharge near empty and
-charge near full, untouched in the middle — is what keeps the controller out
-of the terminal states while leaving normal dispatch alone.
+| controller | return | mean power error | trips |
+|---|---|---|---|
+| PID + charge guard | **−1.244** | 0.020 MW | 0 |
+| constant −0.5 / 0 / +0.5 | −29.9 / −18.3 / −25.3 | 0.59 / 0.37 / 0.50 MW | 0 |
+
+The PID's return is the recorded baseline, as on the environment page
+(`docs/environments/battery.md`, which also carries the oracle's). The other
+numbers were measured on the same seeds (2026-10-01), with a replay of the
+PID that reproduces its recorded returns to within 5e-6.
+
+The charge guard fades the demand out *only in the direction that would
+breach a limit*: discharge is throttled below 0.17 state of charge and charge
+above 0.83, within 0.12 of each limit, and the middle is untouched. Within a
+scored episode it is insurance that is almost never called on. Over 2000
+seeds it acts on 4 of them, 111 of 720,000 steps, and a copy of the PID with
+the guard removed never trips either, staying within 0.17-0.85 state of
+charge. On those four seeds the guard changes the return by between −0.041
+and +0.0005: it can only move the command away from the target, which costs
+imbalance and saves a little wear. It stays because the limits are real and a
+trip is priced as an hour of downtime, and nothing else in the PID would keep
+it off them.
 
 **The oracle is a feedforward, not a planner.** Delivered power equals the
 command within the step, and the target is the scheduled level plus white
