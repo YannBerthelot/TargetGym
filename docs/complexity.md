@@ -9,9 +9,9 @@ horizon, partial observability).
 |---|---|---|---|---|---|
 | 1 (Trivial) | First Order System | 2 | 1 | Linear SISO | Baseline sanity-check |
 | 2 (Medium) | CSTR | 3 | 1 | Nonlinear SISO | Exponential Arrhenius kinetics, stiff dynamics, exothermic runaway risk |
+| 2 (Medium) | Grid Battery | 5 | 1 | Nonlinear ECM | **Finite charge window**: its limits trip the pack, but exact tracking stays inside them over the 30 min episode, so what tracking costs is wear, priced per step; state-dependent efficiency |
 | 3 (Hard) | Building HVAC | 7 | 1 | Linear RC network | **Partial observability** (thermal mass hidden), 43 h time constant, setback anticipation, comfort/energy trade-off |
 | 3 (Hard) | Four Tank | 6 | 2 | Nonlinear MIMO | **Non-minimum phase** (gamma1+gamma2 = 0.4): the RGA element is *negative*, so the obvious diagonal pairing is unstable and the loops must be crossed |
-| 3 (Hard) | Grid Battery | 5 | 1 | Nonlinear ECM | **Finite charge window**: its limits trip the pack, but exact tracking stays inside them over the 30 min episode, so what tracking costs is wear, priced per step; state-dependent efficiency |
 | 4 (Very Hard) | Wind Turbine | 6 | 2 | Nonlinear aero-elastic | Turbulent unmeasured inflow, region switching, drive-train torsion, thrust/power trade-off |
 | 4 (Very Hard) | pH Neutralisation | 3 | 1 | Implicit algebraic | 45x steady-state gain variation across the range, unmeasured buffering, same pH from different states |
 | 4 (Very Hard) | Binary Distillation | 6 | 2 | Stiff nonlinear MIMO | **Ill-conditioned** (condition number ~140): the two purities move together far more easily than apart |
