@@ -181,7 +181,7 @@ class FirstOrderSystem(environment.Environment[FirstOrderState, FirstOrderParams
 
     def make_mpc(self, params=None, **kwargs):
         """Return a GradientMPC oracle for state tracking."""
-        from target_gym.experts.mpc import make_first_order_mpc
+        from target_gym.pc_gym.first_order.experts import make_first_order_mpc
 
         if params is None:
             params = self.default_params

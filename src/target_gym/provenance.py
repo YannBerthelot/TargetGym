@@ -148,12 +148,12 @@ def _env_sources(spec, controllers: bool = True) -> list[pathlib.Path]:
     """Every Python module in the package the environment is defined in, plus
     the files the spec declares in ``fingerprint_sources``.
 
-    ``controllers=False`` leaves out ``experts*`` files. A task added after
-    the 21 keeps its controllers in its own package (experts/pid.py and
-    experts/mpc.py are in every task's baseline fingerprint), and they belong
-    in its baseline fingerprint but not in its version stamp, since retuning a
-    controller does not change the environment. None of the 21 packages holds
-    such a file, so for them both calls return the same list.
+    ``controllers=False`` leaves out ``experts*`` files. Every task keeps its
+    oracle in its own package (and a task added after the 21 its PID too),
+    since experts/pid.py and experts/mpc.py are in every task's baseline
+    fingerprint. Those files belong in the baseline fingerprint but not in the
+    version stamp, since retuning a controller does not change the
+    environment.
     """
     module = type(spec.make_env()).__module__
     package = module.rsplit(".", 1)[0]

@@ -169,7 +169,7 @@ class BoilerDrum(environment.Environment[BoilerDrumState, BoilerDrumParams]):
         return make_boiler_drum_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
-        from target_gym.experts.mpc import make_boiler_drum_mpc
+        from target_gym.boiler_drum.experts import make_boiler_drum_mpc
 
         if params is None:
             params = self.default_params

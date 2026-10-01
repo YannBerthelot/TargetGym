@@ -107,7 +107,8 @@ checks each one, and checks the tuner row only for a task that ships a PID.
   added there would make every other task's records stale. Point the spec at
   the package's module with the `module` argument,
   `make_pid=_pid("make_<name>_pid", module="target_gym.<package>.experts")`,
-  and the same for `_mpc`. The version stamp leaves `experts*` files out, so
+  and the same for `_mpc`. (Every task's oracle already lives in its own
+  package, the 21 included; only their PIDs remain in `experts/pid.py`.) The version stamp leaves `experts*` files out, so
   the package's other files import them only inside a function.
 - **Declare imported physics.** Both fingerprints hash the task's own package.
   If its physics imports a module from another package, list that file in

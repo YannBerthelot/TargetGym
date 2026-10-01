@@ -70,6 +70,18 @@ than by commit.
 
 ### Changed
 
+- **Each task's oracle lives in its own package.** The MPC-slot controllers
+  of the 21 original tasks moved out of `experts/mpc.py` into their packages'
+  `experts.py` (for example `target_gym.plane.experts.make_plane_mpc`), as the
+  two newest tasks already had it. `experts/mpc.py` keeps the shared
+  machinery: `GradientMPC`, `CasadiMPC`, `SamplingMPC`, `plan_params` and the
+  objective helpers. An oracle change now re-records only the tasks of its
+  package instead of all of them. The move changes no number, and the version
+  stamps did not move, since they leave `experts*` files out. Every baseline
+  and protocol row was re-recorded because the baseline fingerprints moved.
+  `target_gym.experts` no longer re-exports the per-task MPC factories; reach
+  them through `EnvSpec.make_mpc`.
+
 - **Every reward is now a floor-normalised cost, and every environment is a
   new version (`-v2`; the reactor `-v3`).** `reward = -(tracking + running +
   failure)`: tracking as `(max(|e| - e_tol, 0) / e_floor) ** p` with

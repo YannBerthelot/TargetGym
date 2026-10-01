@@ -210,7 +210,7 @@ class GlassFurnace(environment.Environment[GlassFurnaceState, GlassFurnaceParams
 
     def make_mpc(self, params=None, **kwargs):
         """Return a CasADi MPC oracle for crown-temperature tracking."""
-        from target_gym.experts.mpc import make_glass_furnace_mpc
+        from target_gym.glass_furnace.experts import make_glass_furnace_mpc
 
         if params is None:
             params = self.default_params

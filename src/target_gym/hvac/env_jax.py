@@ -169,7 +169,7 @@ class BuildingHVAC(environment.Environment[HVACState, HVACParams]):
 
     def make_mpc(self, params=None, **kwargs):
         """Return a CasADi MPC oracle for zone temperature control."""
-        from target_gym.experts.mpc import make_hvac_mpc
+        from target_gym.hvac.experts import make_hvac_mpc
 
         if params is None:
             params = self.default_params

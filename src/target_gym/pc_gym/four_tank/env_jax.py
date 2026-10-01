@@ -210,7 +210,7 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
 
     def make_mpc(self, params=None, **kwargs):
         """Return a GradientMPC oracle for level tracking."""
-        from target_gym.experts.mpc import make_four_tank_mpc
+        from target_gym.pc_gym.four_tank.experts import make_four_tank_mpc
 
         if params is None:
             params = self.default_params

@@ -155,7 +155,7 @@ class CementKiln(environment.Environment[CementKilnState, CementKilnParams]):
         return make_cement_kiln_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
-        from target_gym.experts.mpc import make_cement_kiln_mpc
+        from target_gym.cement_kiln.experts import make_cement_kiln_mpc
 
         if params is None:
             params = self.default_params

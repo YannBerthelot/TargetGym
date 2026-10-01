@@ -270,7 +270,7 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
 
     def make_mpc(self, params=None, **kwargs):
         """Return a CasADi MPC oracle for neutron-power tracking."""
-        from target_gym.experts.mpc import make_reactor_mpc
+        from target_gym.reactor.experts import make_reactor_mpc
 
         if params is None:
             params = self.default_params

@@ -166,7 +166,7 @@ class DistillationColumn(
 
     def make_mpc(self, params=None, **kwargs):
         """Return a gradient MPC oracle for dual composition control."""
-        from target_gym.experts.mpc import make_distillation_mpc
+        from target_gym.pc_gym.distillation.experts import make_distillation_mpc
 
         if params is None:
             params = self.default_params

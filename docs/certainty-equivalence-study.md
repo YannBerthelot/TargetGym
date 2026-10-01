@@ -350,7 +350,9 @@ Ordered by how much they would undermine a published result.
 7. **Fingerprint blast radius.** `provenance.baseline_fingerprint` hashes
    `experts/pid.py` and `experts/mpc.py` whole, so adding a scenario planner
    invalidates all twenty recorded baselines and forces a full re-record, which
-   is a nine to eleven hour job. The roadmap already carries an item to scope
+   is a nine to eleven hour job. (Since then each task's oracle moved to its
+   own package, so a planner added for one task re-records only that
+   package.) The roadmap already carries an item to scope
    this per environment. Doing that item *before* this study is a direct saving.
 
 ## 6. Which environment to prototype on

@@ -241,7 +241,7 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
 
     def make_mpc(self, params=None, **kwargs):
         """Return a GradientMPC oracle optimising both power and stick."""
-        from target_gym.experts.mpc import make_plane_mpc
+        from target_gym.plane.experts import make_plane_mpc
 
         if params is None:
             params = self.default_params

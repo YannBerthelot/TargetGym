@@ -432,8 +432,9 @@ is.
 
 ## 13. Does a reduced prediction model still answer the actuator like the plant?
 
-**What went wrong.** Each CasADi MPC in `target_gym.experts.mpc` optimises
-against a hand-reduced model of its environment, and the glass furnace's
+**What went wrong.** Each CasADi MPC (a `CasadiMPC` subclass in its task's
+`experts.py`) optimises against a hand-reduced model of its environment, and
+the glass furnace's
 reduction changed the model's response to fuel. That does not make the
 controller noisy, which is what one looks for; it makes it settle in the
 *wrong place*, because an MPC drives its
@@ -480,9 +481,8 @@ state. It sat at "1.3% behind, passing" until the episode-length audit
 lengthened that episode to 1600 steps.
 
 **What it applies to.** Every environment whose MPC plans against a model of
-its own, which here is all nine CasADi ones. The seven in
-`target_gym.experts.mpc` plan against reduced models, and none of them had this
-comparison before. The unstable CSTR's CasADi model restates the env's
+its own, which here is all nine CasADi ones. The seven original ones plan
+against reduced models, and none of them had this comparison before. The unstable CSTR's CasADi model restates the env's
 equations without reducing them, because CasADi cannot trace the env's `jnp`
 code. Two tests in `tests/pc_gym/unstable_cstr/test_unstable_cstr_experts.py`
 hold that copy to the plant. `test_mpc_model_is_the_env_velocity` compares its
