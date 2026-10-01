@@ -1,6 +1,6 @@
 # Environment reference
 
-Twenty-one environments, every one a *target MDP*: the objective is
+Twenty-three environments, every one a *target MDP*: the objective is
 to reach and hold a subset of the state space against disturbances, not to reach
 a goal and stop.
 
@@ -58,6 +58,7 @@ env, params = spec.make_env(), spec.params_cls()
 | `four_tank` | `four_tank-v2` | (6,) | (2,) | h1 (m), h2 (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
 | `ph_neutralization` | `ph_neutralization-v2` | (3,) | (1,) | pH | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
 | `distillation` | `distillation-v2` | (6,) | (2,) | yD (mole fraction) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
+| `unstable_cstr` | `unstable_cstr-v2` | (4,) | (1,) | C_a (mol/L) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Industrial / Energy
 
@@ -70,6 +71,7 @@ env, params = spec.make_env(), spec.params_cls()
 | `hvac` | `hvac-v2` | (7,) | (1,) | zone air temperature (deg C) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
 | `cement_kiln` | `cement_kiln-v2` | (8,) | (2,) | discharge free lime (%) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |
 | `boiler_drum` | `boiler_drum-v2` | (7,) | (2,) | drum level (m), drum pressure (bar) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |
+| `compressor_surge` | `compressor_surge-v2` | (7,) | (2,) | header pressure (kPa) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/compressor_surge/PHYSICS.md) |
 
 ## Renewable Energy
 

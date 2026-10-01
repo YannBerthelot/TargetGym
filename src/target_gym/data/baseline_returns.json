@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "generated": "2026-09-30T20:56:57+00:00",
+    "generated": "2026-10-01T06:40:33+00:00",
     "note": "Regenerate with scripts/record_baselines.py when a test reports a stale fingerprint. Commit the result with the change that invalidated it.",
     "seeds": 10
   },
@@ -96,6 +96,41 @@
     "seconds": 6518.5,
     "seeds": 10,
     "steps": 700
+  },
+  "compressor_surge": {
+    "fingerprint": "ae0c2031948a0daa",
+    "mpc_returns": [
+      -164197.326672,
+      -166483.915183,
+      -879795.73571,
+      -17508.364984,
+      -11909.356365,
+      -38974.603289,
+      -12171.584574,
+      -88341.74107,
+      -469371.439393,
+      -88454.472004
+    ],
+    "mpc_trips": 0,
+    "pid_returns": [
+      -3312486.200276,
+      -2447907.141004,
+      -4986381.982942,
+      -878043.280519,
+      -858544.131012,
+      -1390094.98594,
+      -1020012.815934,
+      -2393161.428914,
+      -1580656.377738,
+      -2612767.951456
+    ],
+    "seconds": 705.3,
+    "seeds": 10,
+    "solver_calls": 12000,
+    "solver_capped": 1,
+    "solver_failures": 1,
+    "solver_mean_iters": 7.1,
+    "steps": 1200
   },
   "cstr": {
     "fingerprint": "9022f823dc0d4930",
@@ -620,6 +655,41 @@
     "solver_failures": 0,
     "solver_mean_iters": 5.4,
     "steps": 864
+  },
+  "unstable_cstr": {
+    "fingerprint": "af7577239f1556e6",
+    "mpc_returns": [
+      -4909060.895574,
+      -4307364.524249,
+      -5309138.554508,
+      -4861637.589908,
+      -5800224.840695,
+      -5078095.579512,
+      -5391559.895244,
+      -4319727.700157,
+      -5948705.256356,
+      -4211048.239644
+    ],
+    "mpc_trips": 0,
+    "pid_returns": [
+      -68712075.421191,
+      -70021489.650927,
+      -68001034.838446,
+      -69428506.856021,
+      -66118048.925637,
+      -68922162.817631,
+      -67844244.395708,
+      -68646420.3245,
+      -67224558.429671,
+      -70754968.997747
+    ],
+    "seconds": 185.5,
+    "seeds": 10,
+    "solver_calls": 12000,
+    "solver_capped": 0,
+    "solver_failures": 0,
+    "solver_mean_iters": 13.3,
+    "steps": 1200
   },
   "wind_turbine": {
     "fingerprint": "a598cfd9f0670f50",

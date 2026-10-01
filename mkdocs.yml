@@ -102,12 +102,14 @@ nav:
           - Four Tank: environments/four_tank.md
           - Ph Neutralization: environments/ph_neutralization.md
           - Distillation: environments/distillation.md
+          - Unstable Cstr: environments/unstable_cstr.md
       - Industrial:
           - Glass Furnace: environments/glass_furnace.md
           - Reactor: environments/reactor.md
           - Hvac: environments/hvac.md
           - Cement Kiln: environments/cement_kiln.md
           - Boiler Drum: environments/boiler_drum.md
+          - Compressor Surge: environments/compressor_surge.md
       - Energy:
           - Wind Turbine: environments/wind_turbine.md
           - Battery: environments/battery.md

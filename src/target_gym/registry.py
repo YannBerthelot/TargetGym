@@ -60,6 +60,7 @@ DISPLAY_NAMES: dict[str, str] = {
     "plane": "Altitude hold",
     "patrol": "Patrol - MARL formation",
     "patrol_bearing_only": "Patrol - MARL, bearing-only",
+    "unstable_cstr": "Unstable CSTR",
 }
 
 
@@ -84,7 +85,7 @@ def control_step_seconds(env, params) -> float:
 
     Lives here rather than in ``utils.py`` because that module is part of every
     environment's provenance fingerprint, and a bookkeeping helper must not
-    move twenty-one fingerprints.
+    move every environment's fingerprint.
     """
     dt = float(getattr(params, "delta_t", 1.0))
     unit = float(getattr(params, "time_unit_seconds", 1.0))
@@ -368,6 +369,18 @@ def _hvac():
     from target_gym.hvac.env_jax import BuildingHVAC
 
     return BuildingHVAC()
+
+
+def _unstable_cstr():
+    from target_gym.pc_gym.unstable_cstr.env_jax import UnstableCSTR
+
+    return UnstableCSTR()
+
+
+def _compressor_surge():
+    from target_gym.compressor_surge.env_jax import CompressorSurge
+
+    return CompressorSurge()
 
 
 # -- params classes (imported lazily through the same mechanism) -------------
@@ -871,6 +884,54 @@ _SPECS: tuple[EnvSpec, ...] = (
     ),
     # Append new tasks here, never insert: a task's position in REGISTRY is its
     # benchmark seed index, and TargetFoundation derives seeds the same way.
+    # A task added after the 21 keeps its controllers in its own package's
+    # experts.py and declares any physics it imports (tests/test_registry_rules.py).
+    EnvSpec(
+        name="unstable_cstr",
+        group="process",
+        env_factory=_unstable_cstr,
+        params_cls=_LazyParams(
+            "target_gym.pc_gym.unstable_cstr.env", "UnstableCSTRParams"
+        ),
+        make_pid=_pid(
+            "make_unstable_cstr_pid", module="target_gym.pc_gym.unstable_cstr.experts"
+        ),
+        make_mpc=_mpc(
+            "make_unstable_cstr_mpc", module="target_gym.pc_gym.unstable_cstr.experts"
+        ),
+        # 1200 steps = 60 min at 3 s: six 10-minute blocks. The defaults are the
+        # task, so there is no test_params override and no effectiveness_overrides.
+        tuned_gains_key="unstable_cstr",
+        disturbance_fields=("Ti_dev",),
+        noise_fields=("Ti_sigma",),
+        # The balances and the ten parameter values are imported from cstr, so an
+        # edit there moves this task's stamp and baseline too.
+        fingerprint_sources=("pc_gym/cstr/env.py",),
+    ),
+    EnvSpec(
+        name="compressor_surge",
+        group="industrial",
+        env_factory=_compressor_surge,
+        params_cls=_LazyParams(
+            "target_gym.compressor_surge.env", "CompressorSurgeParams"
+        ),
+        make_pid=_pid(
+            "make_compressor_surge_pid", module="target_gym.compressor_surge.experts"
+        ),
+        make_mpc=_mpc(
+            "make_compressor_surge_mpc", module="target_gym.compressor_surge.experts"
+        ),
+        # 1200 steps = 120 s at 0.1 s: four 30-second setpoint blocks and six
+        # 20-second demand blocks. The defaults are the task, so there is no
+        # test_params override and no effectiveness_overrides.
+        tuned_gains_key="compressor_surge",
+        # The OU deviation of the consumers' opening, zero-mean under a
+        # constant key; demand_sigma is its stationary sd.
+        disturbance_fields=("demand_dev",),
+        noise_fields=("demand_sigma",),
+        # No fingerprint_sources: the package imports only itself and the
+        # shared plumbing.
+    ),
 )
 
 REGISTRY: dict[str, EnvSpec] = {spec.name: spec for spec in _SPECS}

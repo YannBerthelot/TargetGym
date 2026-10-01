@@ -10,9 +10,10 @@ A task added after the 21 keeps its controllers in its own package's
 ``experts.py`` (``experts/pid.py`` and ``experts/mpc.py`` are in every task's
 baseline fingerprint), declares any physics it imports from another package in
 ``fingerprint_sources``, has a name that cannot collide with another task's
-gains keys, ships as ``-v2`` with a ``compute_reward_v1`` of its own, and has a
-hold row. The checks loop over the added tasks and assert once, so they pass
-trivially while none exists.
+gains keys, ships as ``-v2`` with a ``compute_reward_v1`` of its own, has a
+hold row, and, if it ships a PID, has a row in ``TUNERS`` in
+scripts/tune_pid.py. The checks loop over the added tasks and assert once, so
+they pass trivially while none exists.
 """
 
 from __future__ import annotations
@@ -356,6 +357,33 @@ def test_every_mpc_task_and_every_new_task_has_a_hold_row():
         f"no row in src/target_gym/data/hold_measurements.json for {missing}. "
         "Run scripts/measure_hold.py --envs with those names."
     )
+
+
+def _tuner_rows() -> set[str]:
+    """The keys of ``TUNERS`` in scripts/tune_pid.py, read from its source.
+    Importing the script would put ``src`` on ``sys.path`` as a side effect."""
+    path = ROOT / "scripts" / "tune_pid.py"
+    for node in ast.parse(path.read_text()).body:
+        if (
+            isinstance(node, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == "TUNERS" for t in node.targets)
+            and isinstance(node.value, ast.Dict)
+        ):
+            return {
+                key.value
+                for key in node.value.keys
+                if isinstance(key, ast.Constant) and isinstance(key.value, str)
+            }
+    raise AssertionError("scripts/tune_pid.py defines no TUNERS dict literal")
+
+
+def test_every_new_task_with_a_pid_has_a_tuner_row():
+    """A new task's gains are set by naming it to scripts/tune_pid.py, which
+    refuses a name with no row in ``TUNERS``. So every task added after the 21
+    that ships a PID has a row there."""
+    rows = _tuner_rows()
+    missing = [s.name for s in _added() if s.has_pid and s.name not in rows]
+    assert not missing, f"no TUNERS row in scripts/tune_pid.py for {missing}"
 
 
 def test_allowlists_name_real_tasks():

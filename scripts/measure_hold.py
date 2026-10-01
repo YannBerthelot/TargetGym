@@ -156,8 +156,17 @@ def _wind_errors(obs, state, params):
     )
 
 
+def _compressor_recycle_power(obs, state, params):
+    """Ideal compression power spent on recycled gas (W), the running quantity
+    the compressor's reward charges above ``c_hold``."""
+    from target_gym.compressor_surge.env import recycle_power
+
+    return float(recycle_power(state, params))
+
+
 PLANTS = {
-    # name: (errors or None for obs-based, consumption, tau_cost steps, source, hold steps)
+    # name: (errors or None for obs-based, consumption, tau_cost steps, source,
+    #        hold steps[, fixed settle steps])
     "plane": (None, _plane_speed, 70, "phugoid ~1 min at 1 s steps", None),
     "plane_energy": (None, _plane_speed, 70, "phugoid ~1 min", None),
     "plane_sine": (None, _plane_speed, 70, "phugoid ~1 min", None),
@@ -244,6 +253,48 @@ PLANTS = {
         0,
         "per dispatch block; thermal 50 min affects fade only",
         None,
+    ),
+    # Six 10-minute blocks, and the last level holds past step 1200, so the task
+    # keeps its own length and has no burn-in, as the battery does. A state is
+    # scored against level[block_clock // 200]. The hold starts at minute 6 of
+    # each block, a fixed settle of 120 steps, and ends where the MPC starts
+    # moving toward the next level, which split_seed finds as anticipation.
+    # The settle heuristic would take its provisional level from the whole
+    # episode, switch transients included, and score transient tails as hold.
+    # A saddle has no open-loop time constant, and the feed drift moves the
+    # steady coolant and leaves the error alone.
+    "unstable_cstr": (
+        None,
+        None,
+        0,
+        "per 10 min block, from minute 6; open-loop unstable",
+        None,
+        120,
+    ),
+    # Four 30-second setpoint blocks and six 20-second demand blocks, and both
+    # last levels hold past step 1200, so the task keeps its own length, as
+    # the battery does. The consumption is the recycle power in W, the
+    # quantity the running cost charges above c_hold. The slowest cost-bearing
+    # time constant is about 5 s: the demand deviation's correlation time
+    # 1 / demand_theta, and the 4.93 s t63 of the header pressure after a
+    # speed step from 87.5 to 105 % (derived, PHYSICS.md section 4). Three of
+    # them, 15 s, are the burn-in, which leaves out the approach from the
+    # off-target reset. The hold in each setpoint block starts 100 steps
+    # (10 s, ours) after the change, since a full 20 to 28 kPa move needs
+    # 4.9 s of drive travel plus the 1 s speed lag (derived, PHYSICS.md
+    # section 4). It ends where a controller starts moving toward the next
+    # level, which split_seed finds as anticipation. The settle heuristic
+    # would take its provisional level from the whole episode, setpoint moves
+    # included, and score transient tails as hold. The demand ramps at 20,
+    # 40, 80 and 100 s fall inside the hold, since they are the disturbance
+    # the task holds against; the one at 60 s meets a setpoint change.
+    "compressor_surge": (
+        None,
+        _compressor_recycle_power,
+        50,
+        "demand deviation 1/theta 5 s; dp t63 4.93 s after a speed step 87.5 to 105 %",
+        None,
+        100,
     ),
 }
 
@@ -341,7 +392,8 @@ def measure(name, seeds):
     spec = REGISTRY[name]
     env = spec.make_env()
     p = spec.make_test_params()
-    err_fn, cons_fn, tau, source, hold = PLANTS[name]
+    err_fn, cons_fn, tau, source, hold, *extra = PLANTS[name]
+    fixed_settle = extra[0] if extra else None
     if err_fn is None:
         err_fn = _obs_errors(env)
     burn_in = 3 * tau
@@ -366,7 +418,7 @@ def measure(name, seeds):
         for seed in range(seeds):
             e, c, tg, ended = _episode(spec, env, params, kind, seed, err_fn, cons_fn)
             term += int(ended)
-            m, settle, bounds, _antic = split_seed(e, tg, burn_in)
+            m, settle, bounds, _antic = split_seed(e, tg, burn_in, settle=fixed_settle)
             E.append(e[m])
             C.append(c[m])
             B.append(settle)

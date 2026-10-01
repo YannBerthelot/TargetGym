@@ -5,6 +5,8 @@ from target_gym.boiler_drum.env import BoilerDrumParams
 from target_gym.boiler_drum.env_jax import BoilerDrum
 from target_gym.cement_kiln.env import CementKilnParams
 from target_gym.cement_kiln.env_jax import CementKiln
+from target_gym.compressor_surge.env import CompressorSurgeParams
+from target_gym.compressor_surge.env_jax import CompressorSurge
 from target_gym.energy.battery.env import BatteryParams
 from target_gym.energy.battery.env_jax import GridBattery
 from target_gym.energy.wind_turbine.env import WindTurbineParams
@@ -23,6 +25,8 @@ from target_gym.pc_gym.first_order.env_jax import FirstOrderParams, FirstOrderSy
 from target_gym.pc_gym.four_tank.env_jax import FourTank, FourTankParams
 from target_gym.pc_gym.ph_neutralization.env import PHParams
 from target_gym.pc_gym.ph_neutralization.env_jax import PHNeutralization
+from target_gym.pc_gym.unstable_cstr.env import UnstableCSTRParams
+from target_gym.pc_gym.unstable_cstr.env_jax import UnstableCSTR
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
 from target_gym.plane3d.env import PlaneParams3D
@@ -76,6 +80,9 @@ __all__ = (
     "FirstOrderParams",
     "FourTank",
     "FourTankParams",
+    # Unstable CSTR
+    "UnstableCSTR",
+    "UnstableCSTRParams",
     # Distillation
     "DistillationColumn",
     "DistillationParams",
@@ -94,6 +101,9 @@ __all__ = (
     # Cement kiln
     "CementKiln",
     "CementKilnParams",
+    # Compressor surge
+    "CompressorSurge",
+    "CompressorSurgeParams",
     # Wind turbine
     "WindTurbine",
     "WindTurbineParams",

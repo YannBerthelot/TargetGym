@@ -190,6 +190,20 @@ suggesting an unbounded mode, and the rest sit near 1. Five plants are driven by
 an exogenous input -- wind, dispatch, weather, a manoeuvring lead -- and are not
 unforced even at zero action, so they are marked rather than scored.
 
+**Plants unstable by design.** `KNOWN_OPEN_LOOP_UNSTABLE` in
+`tests/test_env_conformance.py` lists the plants whose unforced mode grows on
+purpose, and the check skips them. It admits no other plant, since a plant
+that runs away without being designed to is the defect this check exists to
+find. The check could not score such a plant anyway, because a trip restarts
+it (`base.failure_kernel`) and the unforced run becomes a runaway-and-restart
+sawtooth whose ratio depends on where the restarts fall. So each entry records
+the measured growth rate and names the test in the plant's own suite that
+asserts it. The one entry today is `unstable_cstr`, held on a saddle at every
+target with lambda+ 1.39 to 3.16 /min (derived by
+`scripts/unstable_cstr_numbers.py --section targets`). The rate is asserted
+from the Jacobian by `test_every_target_is_a_saddle` and by stepping the env by
+`test_unforced_error_grows_at_the_saddle_rate`.
+
 ## 8. Is actuator authority validated, or merely plausible?
 
 **What went wrong.** The aileron moment applied the *wing's* lift-curve slope to
@@ -210,14 +224,16 @@ the plant. Both tails are suspicious: an actuator that can trip the plant in a
 few steps leaves the episode decided before the controller has acted, and one
 that cannot move it is decorative.
 
-**What it finds here.** No environment is inert -- every actuator moves its
-tracked variable -- but the margin varies by three orders of magnitude, and two
-plants are startlingly twitchy:
+**What it finds here.** No environment is inert, since every actuator moves its
+tracked variable, but the margin varies by three orders of magnitude, and four
+plants can trip within twenty steps:
 
 | environment | steps to trip at full travel | in seconds |
 | --- | --- | --- |
 | `boiler_drum` | **3** | 6 s |
+| `unstable_cstr` | 5 to 20 (median 9) | 15 to 60 s |
 | `wind_turbine` | 11 | 2.75 s |
+| `compressor_surge` | 14 to 153 (median 25.5) | 1.4 to 15.3 s |
 | aircraft (3D) | 27 | 27 s |
 | `hvac` | 56 | 14 h |
 | `distillation` | 231 | 231 s |
@@ -231,6 +247,21 @@ is meant to be one of the hardest environments here -- but it does mean a
 controller that saturates has already lost, which is worth knowing before
 reading a poor score as a tuning problem. The three plants that cannot be
 tripped at all are the three simplest, as expected.
+
+The unstable CSTR's row is full heating from each of its 135 reset corners
+(five targets, nine corners, three feed drifts; derived by
+`scripts/unstable_cstr_numbers.py --section reach`). A fast trip under full
+heating is intended, since the plant is held a few kelvin below a point of no
+return. Full cooling from the same corners never trips it.
+
+The compressor's row is full travel low, 70 % speed with the recycle shut, over
+20 drawn schedules (measured, `scripts/compressor_surge_numbers.py --section
+reach`). It trips on surge in every one. From the PRNGKey(0) reset with the
+consumers' opening held at one level, the first trip comes after 3 steps at
+0.20 and 117 at 0.95, and never at full opening (same section). Full travel
+high never trips it. `test_full_travel_low_trips` and
+`test_full_travel_high_never_trips` in
+`tests/compressor_surge/test_compressor_surge_env.py` assert both.
 
 ## 9. Does a control loop's gain depend on an operating variable?
 
@@ -401,10 +432,11 @@ is.
 
 ## 13. Does a reduced prediction model still answer the actuator like the plant?
 
-**What went wrong.** Every CasADi MPC here optimises against a hand-reduced
-model of its environment, and the glass furnace's reduction changed the model's
-response to fuel. That does not make the controller noisy, which is what one
-looks for; it makes it settle in the *wrong place*, because an MPC drives its
+**What went wrong.** Each CasADi MPC in `target_gym.experts.mpc` optimises
+against a hand-reduced model of its environment, and the glass furnace's
+reduction changed the model's response to fuel. That does not make the
+controller noisy, which is what one looks for; it makes it settle in the
+*wrong place*, because an MPC drives its
 own **predicted** error to zero and predicted is not actual. It re-measures the
 true state every step, so nothing accumulates and nothing looks wrong -- it
 simply picks the same slightly-wrong fuel flow again, forever, with no
@@ -447,8 +479,27 @@ steady-state offset cannot be found by a measurement that never reaches steady
 state. It sat at "1.3% behind, passing" until the episode-length audit
 lengthened that episode to 1600 steps.
 
-**What it applies to.** Every environment whose MPC plans against a reduced
-model, which here is all seven CasADi ones. None had this comparison before.
+**What it applies to.** Every environment whose MPC plans against a model of
+its own, which here is all nine CasADi ones. The seven in
+`target_gym.experts.mpc` plan against reduced models, and none of them had this
+comparison before. The unstable CSTR's CasADi model restates the env's
+equations without reducing them, because CasADi cannot trace the env's `jnp`
+code. Two tests in `tests/pc_gym/unstable_cstr/test_unstable_cstr_experts.py`
+hold that copy to the plant. `test_mpc_model_is_the_env_velocity` compares its
+right-hand side with the env's `compute_velocity` at 1000 random points, and
+`test_mpc_predicts_one_step_like_the_plant` runs this check on 120 states of a
+PID episode with the feed drift on. One control interval of the model lands
+within `e_floor` of `step_env` in C_a, and the mean signed error stays under a
+tenth of `e_floor`. The compressor's NMPC restates the env's discrete step in
+CasADi for the same reason, ten substeps of rate limits and RK4, with the
+rate-limit clips rounded so that IPOPT sees a smooth problem. Two tests in
+`tests/compressor_surge/test_compressor_surge_experts.py` hold it to the plant.
+`test_mpc_model_is_the_env_step` compares the step with the clips exact against
+`compute_next_state` at 1000 random states, and
+`test_mpc_predicts_one_step_like_the_plant` runs this check with the shipped
+rounding on 120 states, most of them from a PID episode. One step of the model
+lands within 0.05 `e_floor` of the env's float32 step in header pressure and
+within 1e-4 in the trip variable `phi_min`.
 
 ---
 
@@ -488,10 +539,11 @@ model, which here is all seven CasADi ones. None had this comparison before.
   checks 5, 7 and 8 step or differentiate every plant and are marked `slow`,
   adding about 100 s to that job.
 
-  Each carries an allowlist -- `KNOWN_WRITE_ONLY_STATE_FIELDS`,
-  `KNOWN_DISCARDED_UNPACKS`, `KNOWN_SEAMS` -- so the tests report *new* defects
-  instead of restating the known-benign ones every run, and so that admitting a
-  finding is a deliberate act with a reason recorded next to it.
+  Each carries an allowlist (`KNOWN_WRITE_ONLY_STATE_FIELDS`,
+  `KNOWN_DISCARDED_UNPACKS`, `KNOWN_SEAMS`, `KNOWN_OPEN_LOOP_UNSTABLE`), so
+  the tests report *new* defects instead of restating the known-benign ones
+  every run, and so that admitting a finding is a deliberate act with a reason
+  recorded next to it.
 - ~~Checks 5, 7 and 8 have still not been run against the other seventeen
   environments.~~ Run. All twelve checks have now been applied to all eighteen.
   Each turned out to have a plant-agnostic form needing no per-plant seam,

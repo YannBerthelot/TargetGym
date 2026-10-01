@@ -14,10 +14,11 @@ a real control loop.
 
 Usage
 -----
-    # Tune everything with defaults
+    # Tune the rows of the 21 tasks registered first that have no stored
+    # gains yet (a task added after them is tuned only when named)
     python scripts/tune_pid.py
 
-    # Tune specific envs
+    # Tune specific envs, re-tuning them if they already have gains
     python scripts/tune_pid.py --envs cstr first_order
 
     # More operating points for finer gain scheduling
@@ -1233,6 +1234,37 @@ def _controller_defaults(gains_key):
     return None
 
 
+def _task_experts(env_name):
+    """The ``experts`` module of ``env_name``'s own package, or None.
+
+    A task added after the 21 keeps its controllers there, beside its env
+    (tests/test_registry_rules.py). The packages of the 21 hold no such module,
+    since their controllers live in ``target_gym.experts``.
+    """
+    from importlib import import_module
+
+    from target_gym.registry import REGISTRY
+
+    package = type(REGISTRY[env_name].make_env()).__module__.rsplit(".", 1)[0]
+    module = f"{package}.experts"
+    try:
+        return import_module(module)
+    except ModuleNotFoundError as exc:
+        if exc.name != module:
+            raise  # the module exists and one of its own imports failed
+        return None
+
+
+def _task_defaults(env_name):
+    """Starting point for a task added after the 21 that has no tuned entry
+    yet: the ``DEFAULT_GAINS`` of its own package's experts.py.
+
+    None for the 21, so their start is what it always was.
+    """
+    defaults = getattr(_task_experts(env_name), "DEFAULT_GAINS", None)
+    return dict(defaults) if defaults else None
+
+
 def _flat_paths(d, prefix=()):
     """Every numeric leaf in a nested gains dict, as a path."""
     for k, v in d.items():
@@ -1278,7 +1310,11 @@ def _tune_aircraft_search(
     spec = REGISTRY[env_name]
     params = spec.make_test_params(max_steps_in_episode=steps)
     all_gains = dict(pid_mod._load_gains())
-    start = all_gains.get(gains_key) or _controller_defaults(gains_key)
+    start = (
+        all_gains.get(gains_key)
+        or _controller_defaults(gains_key)
+        or _task_defaults(env_name)
+    )
     if not start:
         raise RuntimeError(
             f"{env_name}: no '{gains_key}' entry and no known defaults to start "
@@ -1377,7 +1413,63 @@ TUNERS = {
         ),
         "Plane3DRacetrack",
     ),
+    # Tasks added after the 21. A plain run leaves them out (``_plain_run_envs``).
+    #
+    # Coordinate descent on the cascade's four gains over whole episodes (six
+    # target blocks, 24 seeds), starting from the package's DEFAULT_GAINS. The
+    # setpoint limits (experts.HELD_GAINS) are held: their right value is set by
+    # the distance to the point of no return, which the return sees only once a
+    # trip happens. Candidates whose linearised closed loop does not decay fast
+    # enough are refused by the task's own PID factory
+    # (experts.check_cascade_gains), and ``score`` maps that refusal to -inf.
+    "unstable_cstr": (
+        lambda n_points=0, tuning_rule="", **kw: _tune_aircraft_search(
+            "unstable_cstr",
+            "unstable_cstr",
+            steps=1200,
+            seeds=24,
+            hold=_task_experts("unstable_cstr").HELD_GAINS,
+            **kw,
+        ),
+        "UnstableCSTR",
+    ),
+    # Coordinate descent on the pair's four gains (experts.TUNED_GAINS: the
+    # speed PI and the anti-surge PI) over whole episodes (four setpoint
+    # blocks, six demand blocks, 24 seeds), starting from the package's
+    # DEFAULT_GAINS. The control line, the override line, the override hold
+    # and the reset band (experts.HELD_GAINS) are held: their right value is
+    # set by the distance to the surge line, which the return sees only once
+    # a trip happens. Candidates that fail any of the guard's checks are
+    # refused by the task's own PID factory (experts.check_pair_gains), and
+    # ``score`` maps that refusal to -inf. The checks, in the plant's
+    # PHYSICS.md section 7, are the linearised closed loop's decay at the
+    # control-line points (GUARD_MIN_DECAY), no trip and a margin of at least
+    # GUARD_MIN_MARGIN in the stress battery, and at most GUARD_MAX_TRAVEL of
+    # valve travel over each battery run's last 100 steps.
+    "compressor_surge": (
+        lambda n_points=0, tuning_rule="", **kw: _tune_aircraft_search(
+            "compressor_surge",
+            "compressor_surge",
+            steps=1200,
+            seeds=24,
+            hold=_task_experts("compressor_surge").HELD_GAINS,
+            **kw,
+        ),
+        "CompressorSurge",
+    ),
 }
+
+
+def _plain_run_envs():
+    """The rows a run without ``--envs`` (``make tuning``) covers: those of the
+    21 tasks registered before the new task families, as before any was added.
+    A task added after them is tuned only when named
+    (``make tuning-<name>``), so its gains are set once, on purpose, before its
+    baselines are recorded."""
+    from target_gym.registry import env_names
+
+    first_21 = set(env_names()[:21])
+    return [name for name in TUNERS if name in first_21]
 
 
 # ---------------------------------------------------------------------------
@@ -1393,9 +1485,13 @@ def main():
         "--envs",
         nargs="+",
         choices=list(TUNERS),
-        default=list(TUNERS),
+        default=_plain_run_envs(),
         metavar="ENV",
-        help="Environments to tune (default: all). Choices: " + ", ".join(TUNERS),
+        help=(
+            "Environments to tune (default: the rows of the 21 tasks registered "
+            "first, skipping any already in the gains file). Choices: "
+            + ", ".join(TUNERS)
+        ),
     )
     parser.add_argument(
         "--n-points",

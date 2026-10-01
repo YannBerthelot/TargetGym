@@ -944,7 +944,16 @@ ACCELERATION_LIMIT = 8.0
 # score them: a trip restarts the plant (base.failure_kernel), so the unforced
 # run becomes a runaway-and-restart sawtooth whose ratio depends on where the
 # restarts fall.
-KNOWN_OPEN_LOOP_UNSTABLE: dict[str, str] = {}
+KNOWN_OPEN_LOOP_UNSTABLE: dict[str, str] = {
+    "unstable_cstr": (
+        "a saddle at every target: lambda+ 1.39 to 3.16 /min (43 to 19 s), "
+        "derived from the Jacobian by scripts/unstable_cstr_numbers.py "
+        "--section targets; asserted by tests/pc_gym/unstable_cstr/"
+        "test_unstable_cstr_physics.py::test_every_target_is_a_saddle and, by "
+        "stepping the env, test_unstable_cstr_env.py::"
+        "test_unforced_error_grows_at_the_saddle_rate"
+    ),
+}
 
 
 # Check 5. Environments with a known seam that survives refinement, and what it

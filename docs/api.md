@@ -9,8 +9,9 @@ change shape before they settle.
 
 ### Environment and parameter classes
 
-The thirty-seven names in `target_gym.__all__` -- every environment class and
-its matching `Params` class, plus the Gymnasium wrapper:
+The forty-four names in `target_gym.__all__` are stable. They are every
+environment class and its matching `Params` class, plus the Gymnasium wrapper.
+To check the count:
 
 ```python
 import target_gym
@@ -37,7 +38,7 @@ themselves stable:
 
 | Attribute | Meaning |
 |---|---|
-| `obs_value_index` | Observation slot(s) holding the tracked variable -- an `int`, or a tuple for multi-loop plants |
+| `obs_value_index` | Observation slot(s) holding the tracked variable, an `int` or a tuple for multi-loop plants |
 | `obs_target_index` | Slot(s) holding its setpoint, in the same order |
 | `tracked_names` | Human-readable name and unit per tracked slot |
 

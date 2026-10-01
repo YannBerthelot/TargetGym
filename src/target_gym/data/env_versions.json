@@ -29,6 +29,11 @@
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
   },
+  "compressor_surge-v2": {
+    "fingerprint": "b57d32e94be4dbbd",
+    "note": "compressor_surge-v2 is unpublished: re-stamped after main's removal of dead helpers from utils.py (PR #50), which is in every fingerprint and changes no behaviour.",
+    "stamped": "2026-10-01T06:28:15+00:00"
+  },
   "cstr-v1": {
     "fingerprint": "1aedfbe4bf2cd1e8",
     "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",
@@ -203,6 +208,11 @@
     "fingerprint": "a2cd90471f13ecf3",
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
+  },
+  "unstable_cstr-v2": {
+    "fingerprint": "ea293f84c38cc924",
+    "note": "unstable_cstr-v2 is unpublished: re-stamped after main's removal of dead helpers from utils.py (PR #50), which is in every fingerprint and changes no behaviour.",
+    "stamped": "2026-10-01T06:21:04+00:00"
   },
   "wind_turbine-v1": {
     "fingerprint": "889181b62fafcbed",
