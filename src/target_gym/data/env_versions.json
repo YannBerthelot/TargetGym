@@ -205,9 +205,9 @@
     "stamped": "2026-09-30T20:57:19+00:00"
   },
   "unstable_cstr-v2": {
-    "fingerprint": "2b357b9b2c66ec84",
-    "note": "unstable_cstr-v2 is unpublished: stamped on this branch, then its NEA reference (rho_floor, not the reward) was re-measured once the hold stopped counting the MPC's anticipation of target changes.",
-    "stamped": "2026-09-30T20:46:03+00:00"
+    "fingerprint": "ea293f84c38cc924",
+    "note": "unstable_cstr-v2 is unpublished: re-stamped after main's removal of dead helpers from utils.py (PR #50), which is in every fingerprint and changes no behaviour.",
+    "stamped": "2026-10-01T06:21:04+00:00"
   },
   "wind_turbine-v1": {
     "fingerprint": "889181b62fafcbed",

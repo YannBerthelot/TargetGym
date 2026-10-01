@@ -942,6 +942,52 @@
     "rho_floor": 1.252777777777778,
     "seeds": 3
   },
+  "unstable_cstr": {
+    "fingerprint": "af7577239f1556e6",
+    "mpc": {
+      "abs_gap": 4034.874925348566,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 4034.878881758566,
+      "gain_ci": 475.51727038343995,
+      "hold": 0.006494621936984606,
+      "hold_ci": 0.0008064966177407776,
+      "hold_failure": 0.0,
+      "hold_tracking": 0.006494621936984606,
+      "nea": 0.9297381728153714,
+      "reach_cost": 806974.4840365805,
+      "reach_cost_ci": 349148.6146553464,
+      "reach_fraction": 0.06694444444444445,
+      "seconds": 167.2,
+      "time_in_band": 0.8641666666666666,
+      "tracking": 4034.878881758566,
+      "transient_cost": 252417.77595011392,
+      "transient_cost_ci": 89441.10457373677,
+      "unsettled_fraction": 0.0
+    },
+    "pid": {
+      "abs_gap": 57426.27379652447,
+      "failure": 0.0,
+      "failure_rate": 0.0,
+      "gain": 57426.27775293447,
+      "gain_ci": 966.4756881932553,
+      "hold": 2.6754056214793382,
+      "hold_ci": 0.4344120487570316,
+      "hold_failure": 0.0,
+      "hold_tracking": 2.6754056214793382,
+      "reach_cost": 11484715.483574212,
+      "reach_cost_ci": 4419926.098323819,
+      "reach_fraction": 0.2222222222222222,
+      "seconds": 8.4,
+      "time_in_band": 0.32916666666666666,
+      "tracking": 57426.27775293447,
+      "transient_cost": 584485.0705532498,
+      "transient_cost_ci": 201143.58407349885,
+      "unsettled_fraction": 0.0
+    },
+    "rho_floor": 0.00395641,
+    "seeds": 3
+  },
   "wind_turbine": {
     "fingerprint": "a598cfd9f0670f50",
     "mpc": {
