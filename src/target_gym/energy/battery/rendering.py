@@ -2,9 +2,8 @@
 
 The schematic is the pack: a stack of cells filled to state of charge, with the
 grid tie above it. Current direction and colour say whether the battery is
-being paid to deliver or to absorb, and the fill is the budget that makes this
-task different from every thermal plant here -- tracking now spends the ability
-to track later.
+being paid to deliver or to absorb, and the fill shows how far the pack is from
+the charge limits that would trip it.
 """
 
 from target_gym import render_kit as rk

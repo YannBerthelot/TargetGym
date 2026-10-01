@@ -185,7 +185,7 @@ does not:
 | **Wrong-way-first response** | Opening the steam valve makes drum level *rise* before it falls, as steam bubbles expand | A controller following the immediate trend pushes the loop the wrong way |
 | **Transport delay** | Half the kiln's response to a fuel change arrives a 25-minute residence time later | Credit assignment spans hundreds of steps |
 | **Multi-timescale dynamics** | Millisecond neutronics against hour-long xenon; sub-second flame gas against 30-hour glass residence | One control interval cannot serve both ends |
-| **Finite budgets** | A battery spends charge to follow dispatch and then cannot follow it | Tracking now is priced against tracking later |
+| **Finite budgets** | A battery's charge window trips the pack at either edge, though exact dispatch tracking stays inside it for the whole 30-minute episode | Within an episode, tracking is priced against wear at every step, not against tracking later |
 
 Also modelled: actuator lag, competing objectives, and scheduled setpoints that
 reward anticipation (the building's night setback, the furnace's crown schedule,

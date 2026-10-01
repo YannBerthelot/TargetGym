@@ -62,7 +62,7 @@ these are the failure modes that come with it:
 | **Non-minimum phase** | Drum level rises as mass *leaves*; the four-tank's obvious loop pairing is unstable |
 | **Transport delay** | Half the kiln's response to a fuel change takes a full 25-minute residence time |
 | **Multi-timescale** | Millisecond neutronics against hour-long xenon; sub-second flame gas against 30 h glass residence |
-| **Finite budgets** | A battery whose tracking *now* costs the ability to track later |
+| **Finite budgets** | A battery whose charge limits trip the pack, though exact dispatch tracking stays inside them for a 30-minute episode, so tracking costs wear rather than later tracking |
 | **Open-loop instability** | A stirred-tank reactor held on its unstable middle steady state, where an uncontrolled error grows e-fold every 19 to 43 s (derived, `scripts/unstable_cstr_numbers.py --section targets`) |
 | **A trip the reward does not track** | A compressor trips when its flow margin to surge runs out. No reward term reads that margin, and the recycle valve that protects it has no tracked output of its own |
 

@@ -24,19 +24,22 @@ with state of charge.
 
 Task
 ----
-Track a grid dispatch signal while managing a finite energy budget. The
-tension is structural: following dispatch drains charge, and running the pack
-empty or full is irrecoverable within the episode.
+Track a scheduled grid dispatch signal. Every MWh moved to follow it costs
+capacity fade, which the running cost prices at every step: within an
+episode, that wear is what tracking costs.
 
 Why it is a hard target MDP
 ---------------------------
-* **A finite, depletable budget.** Unlike a thermal plant the battery cannot
-  hold a setpoint indefinitely. Tracking now costs the ability to track later.
-* **Irrecoverable end states.** Hitting the state-of-charge limits ends the
-  episode; no later action recovers it.
-* **Degradation is a hidden cost.** Capacity fade accumulates invisibly and is
-  driven by throughput and temperature, so aggressive tracking is paid for
-  later rather than immediately.
+* **Tracking is paid for in wear.** Capacity fade is driven by throughput and
+  temperature. The accumulated fade is not observed; the running cost charges
+  its rate, above the hold-phase rate, at every step.
+* **Hard charge limits.** Leaving 0.05-0.95 state of charge is a terminal
+  state: the pack trips, and the reward charges an hour of downtime. A
+  dispatch held in one direction long enough would get there, but over the
+  scored 360-step (30 min) episode a controller that follows the schedule
+  exactly stays within 0.17-0.85 and never trips (oracle audit, 2026-10-01).
+  The limits are a hazard for a policy that strays, not a budget that exact
+  tracking runs down.
 * **Efficiency depends on where you are.** Losses scale with current squared,
   and current for a given power depends on state of charge through the OCV
   curve — so the same dispatch costs more when the pack is low.
@@ -59,7 +62,8 @@ KELVIN = 273.15
 
 #: Dispatch blocks in a schedule. A grid battery is not handed a random walk:
 #: it is handed a setpoint, holds it for a market interval, and is handed
-#: another. Twelve blocks covers a 60 min episode at the 5 min interval below.
+#: another. Twelve blocks cover 60 min at the 5 min interval below, twice the
+#: default 30 min episode, which spans the first six.
 #:
 #: The signal used to be an Ornstein-Uhlenbeck process, and it made the task
 #: unmeasurable. Its one-step innovation had a standard deviation of 63.6 kW
@@ -131,12 +135,13 @@ class BatteryParams(EnvParams):
     # NOT a consumption cost, despite the name, and deliberately left live when
     # the running costs were zeroed for the 0.6 line. It gates the two terms
     # below, degradation and state-of-charge comfort, and those are not a price
-    # on the plant's inputs: they are what keeps the control problem well posed.
-    # Without the SoC term the optimal policy follows dispatch until the pack
-    # hits a limit and the episode ends, which is not a tracking task; without
-    # the degradation term the pack has no reason to care about throughput,
-    # which is most of what a battery controller is for. This environment has
-    # no consumption cost to remove, so nothing here was zeroed.
+    # on the plant's inputs. The SoC term was meant to stop the optimal policy
+    # following dispatch into a limit, though a policy that follows the
+    # schedule exactly stays inside the window over the 30 min episode (oracle
+    # audit, 2026-10-01); version 2 drops it. Without the degradation term the
+    # pack has no reason to care about throughput, which is most of what a
+    # battery controller is for. This environment has no consumption cost to
+    # remove, so nothing here was zeroed.
     cost_weight: float = 0.1
     degradation_weight: float = 2.0e5  # scales fractional fade into reward units
     soc_comfort_weight: float = 0.10  # gentle pull toward mid charge
@@ -154,8 +159,10 @@ class BatteryParams(EnvParams):
     initial_soc_range: Tuple[float, float] = (0.35, 0.75)
 
     # ---- Time discretization ----
-    # 10-90 % state of charge at full power takes ~96 min, so a 60 min episode
-    # at 5 s per step exercises a real fraction of the energy budget.
+    # 10-90 % state of charge at full power takes ~96 min. The default 360
+    # steps of 5 s is a 30 min episode, about a third of that traverse; a
+    # controller that follows the schedule exactly stays within 0.17-0.85
+    # state of charge over it (oracle audit, 2026-10-01).
     delta_t: float = 5.0
     max_steps_in_episode: int = 360
 

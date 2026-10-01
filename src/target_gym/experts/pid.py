@@ -3439,12 +3439,13 @@ class StatefulBatteryPID:
     conversion losses -- so the tracking loop is mostly feedforward with a
     small proportional trim for the losses.
 
-    The interesting part is the guard. A battery cannot hold a setpoint
-    indefinitely, and hitting either state-of-charge limit ends the episode
-    irrecoverably, so the demand is faded out as the pack approaches a limit
-    *in the direction that would breach it*. Discharging is throttled near
-    empty and charging near full; neither is touched in the middle. Without
-    this the controller follows dispatch straight into a terminal state.
+    Then there is the guard. Hitting either state-of-charge limit trips the
+    pack, so the demand is faded out as the pack approaches a limit *in the
+    direction that would breach it*. Discharging is throttled near empty and
+    charging near full; neither is touched in the middle. Over the scored
+    30 min episode it is insurance rather than load-bearing: across 2000
+    seeds it acts on 4, and a copy without it never trips either (2026-10-01;
+    see the battery's PHYSICS.md, section 5).
 
     obs: [soc, V_cell, T_cell, P_MW, target_P_MW]
     """
