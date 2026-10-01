@@ -154,7 +154,7 @@ class GridBattery(environment.Environment[BatteryState, BatteryParams]):
         return make_battery_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
-        """Return a gradient MPC oracle for dispatch tracking."""
+        """Return the oracle: feedforward of the scheduled dispatch level."""
         from target_gym.energy.battery.experts import make_battery_mpc
 
         if params is None:

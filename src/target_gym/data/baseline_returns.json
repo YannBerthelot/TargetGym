@@ -1,22 +1,22 @@
 {
   "_meta": {
-    "generated": "2026-10-01T13:45:06+00:00",
+    "generated": "2026-10-01T15:20:15+00:00",
     "note": "Regenerate with scripts/record_baselines.py when a test reports a stale fingerprint. Commit the result with the change that invalidated it.",
     "seeds": 10
   },
   "battery": {
-    "fingerprint": "d47cc85ec9c564c3",
+    "fingerprint": "f2c3484d6cffb578",
     "mpc_returns": [
-      -0.527136,
-      -0.326407,
-      -0.356688,
-      -0.80336,
-      -0.464412,
-      -0.441178,
-      -0.171186,
-      -0.522723,
-      -0.402539,
-      -0.288832
+      -0.404652,
+      -0.190808,
+      -0.248702,
+      -0.678032,
+      -0.350382,
+      -0.344084,
+      -0.077804,
+      -0.443341,
+      -0.287458,
+      -0.170124
     ],
     "mpc_trips": 0,
     "pid_returns": [
@@ -31,7 +31,7 @@
       -1.398957,
       -0.725328
     ],
-    "seconds": 246.8,
+    "seconds": 7.5,
     "seeds": 10,
     "steps": 360
   },

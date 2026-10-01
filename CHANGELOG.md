@@ -70,6 +70,16 @@ than by commit.
 
 ### Changed
 
+- **The battery's oracle is a feedforward of the scheduled dispatch level.**
+  It commands the level of the block the next step is scored against, which
+  leaves only the dispatch noise: its mean error is 1577 W against the
+  closed-form floor of 1596 W, where the gradient MPC it replaces held about
+  3.9 kW. Protocol cost falls from 1.115e-3 to 7.82e-4 $/step and NEA rises
+  from 0.724 to 0.827 (it cannot reach 1, because the floor leaves out
+  degradation). The floor is closed form, so it does not move. Measured in the
+  oracle audit; shading the command toward zero to save degradation would
+  gain about 0.03%.
+
 - **Each task's oracle lives in its own package.** The MPC-slot controllers
   of the 21 original tasks moved out of `experts/mpc.py` into their packages'
   `experts.py` (for example `target_gym.plane.experts.make_plane_mpc`), as the
