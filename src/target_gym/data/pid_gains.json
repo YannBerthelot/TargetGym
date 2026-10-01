@@ -23,7 +23,7 @@
   },
   "_meta": {
     "description": "PID gains tuned via relay autotuning (Astrom-Hagglund). Re-generate with: python scripts/tune_pid.py",
-    "tuned_at": "2026-09-30T16:36:45",
+    "tuned_at": "2026-10-01T05:04:57",
     "methodology": "Relay feedback experiment: inject relay signal, measure sustained oscillation to extract ultimate gain (Ku) and period (Tu), then compute PID gains via tuning rules. Gain-scheduled across N operating points spanning the target range.",
     "tuning_rule": "amigo"
   },
@@ -467,6 +467,17 @@
     "sp_above": 2.0,
     "sp_line_margin": 0.3,
     "Tc_bias": 300.0,
+    "note": "coordinate descent on episode return, 24 seeds"
+  },
+  "compressor_surge": {
+    "kp_speed": 0.11199999999999999,
+    "ki_speed": 0.04,
+    "kp_surge": 1.4,
+    "ki_surge": 6.0,
+    "surge_line": 0.15,
+    "override_line": 0.075,
+    "override_hold": 2.0,
+    "reset_band": 0.05,
     "note": "coordinate descent on episode return, 24 seeds"
   }
 }

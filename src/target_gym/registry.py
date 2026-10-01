@@ -377,6 +377,12 @@ def _unstable_cstr():
     return UnstableCSTR()
 
 
+def _compressor_surge():
+    from target_gym.compressor_surge.env_jax import CompressorSurge
+
+    return CompressorSurge()
+
+
 # -- params classes (imported lazily through the same mechanism) -------------
 
 
@@ -901,6 +907,30 @@ _SPECS: tuple[EnvSpec, ...] = (
         # The balances and the ten parameter values are imported from cstr, so an
         # edit there moves this task's stamp and baseline too.
         fingerprint_sources=("pc_gym/cstr/env.py",),
+    ),
+    EnvSpec(
+        name="compressor_surge",
+        group="industrial",
+        env_factory=_compressor_surge,
+        params_cls=_LazyParams(
+            "target_gym.compressor_surge.env", "CompressorSurgeParams"
+        ),
+        make_pid=_pid(
+            "make_compressor_surge_pid", module="target_gym.compressor_surge.experts"
+        ),
+        make_mpc=_mpc(
+            "make_compressor_surge_mpc", module="target_gym.compressor_surge.experts"
+        ),
+        # 1200 steps = 120 s at 0.1 s: four 30-second setpoint blocks and six
+        # 20-second demand blocks. The defaults are the task, so there is no
+        # test_params override and no effectiveness_overrides.
+        tuned_gains_key="compressor_surge",
+        # The OU deviation of the consumers' opening, zero-mean under a
+        # constant key; demand_sigma is its stationary sd.
+        disturbance_fields=("demand_dev",),
+        noise_fields=("demand_sigma",),
+        # No fingerprint_sources: the package imports only itself and the
+        # shared plumbing.
     ),
 )
 

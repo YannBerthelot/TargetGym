@@ -29,6 +29,10 @@
     "note": "Behaviour-preserving: 71e1072 only added reward.proximity_cost, which no environment, controller or script calls. reward.py is in every environment's fingerprint, so every stamp moved with no change in behaviour.",
     "stamped": "2026-09-29T20:06:05+00:00"
   },
+  "compressor_surge-v2": {
+    "fingerprint": "67d968835ea9e808",
+    "stamped": "2026-10-01T03:07:00+00:00"
+  },
   "cstr-v1": {
     "fingerprint": "1aedfbe4bf2cd1e8",
     "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",

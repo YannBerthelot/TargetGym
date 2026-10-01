@@ -109,6 +109,7 @@ nav:
           - Hvac: environments/hvac.md
           - Cement Kiln: environments/cement_kiln.md
           - Boiler Drum: environments/boiler_drum.md
+          - Compressor Surge: environments/compressor_surge.md
       - Energy:
           - Wind Turbine: environments/wind_turbine.md
           - Battery: environments/battery.md

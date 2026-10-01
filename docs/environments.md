@@ -1,6 +1,6 @@
 # Environment reference
 
-Twenty-two environments, every one a *target MDP*: the objective is
+Twenty-three environments, every one a *target MDP*: the objective is
 to reach and hold a subset of the state space against disturbances, not to reach
 a goal and stop.
 
@@ -71,6 +71,7 @@ env, params = spec.make_env(), spec.params_cls()
 | `hvac` | `hvac-v2` | (7,) | (1,) | zone air temperature (deg C) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
 | `cement_kiln` | `cement_kiln-v2` | (8,) | (2,) | discharge free lime (%) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |
 | `boiler_drum` | `boiler_drum-v2` | (7,) | (2,) | drum level (m), drum pressure (bar) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |
+| `compressor_surge` | `compressor_surge-v2` | (7,) | (2,) | header pressure (kPa) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/compressor_surge/PHYSICS.md) |
 
 ## Renewable Energy
 

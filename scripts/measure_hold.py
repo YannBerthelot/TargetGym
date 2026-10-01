@@ -156,6 +156,14 @@ def _wind_errors(obs, state, params):
     )
 
 
+def _compressor_recycle_power(obs, state, params):
+    """Ideal compression power spent on recycled gas (W), the running quantity
+    the compressor's reward charges above ``c_hold``."""
+    from target_gym.compressor_surge.env import recycle_power
+
+    return float(recycle_power(state, params))
+
+
 PLANTS = {
     # name: (errors or None for obs-based, consumption, tau_cost steps, source,
     #        hold steps[, fixed settle steps])
@@ -262,6 +270,31 @@ PLANTS = {
         "per 10 min block, from minute 6; open-loop unstable",
         None,
         120,
+    ),
+    # Four 30-second setpoint blocks and six 20-second demand blocks, and both
+    # last levels hold past step 1200, so the task keeps its own length, as
+    # the battery does. The consumption is the recycle power in W, the
+    # quantity the running cost charges above c_hold. The slowest cost-bearing
+    # time constant is about 5 s: the demand deviation's correlation time
+    # 1 / demand_theta, and the 4.93 s t63 of the header pressure after a
+    # speed step from 87.5 to 105 % (derived, PHYSICS.md section 4). Three of
+    # them, 15 s, are the burn-in, which leaves out the approach from the
+    # off-target reset. The hold in each setpoint block starts 100 steps
+    # (10 s, ours) after the change, since a full 20 to 28 kPa move needs
+    # 4.9 s of drive travel plus the 1 s speed lag (derived, PHYSICS.md
+    # section 4). It ends where a controller starts moving toward the next
+    # level, which split_seed finds as anticipation. The settle heuristic
+    # would take its provisional level from the whole episode, setpoint moves
+    # included, and score transient tails as hold. The demand ramps at 20,
+    # 40, 80 and 100 s fall inside the hold, since they are the disturbance
+    # the task holds against; the one at 60 s meets a setpoint change.
+    "compressor_surge": (
+        None,
+        _compressor_recycle_power,
+        50,
+        "demand deviation 1/theta 5 s; dp t63 4.93 s after a speed step 87.5 to 105 %",
+        None,
+        100,
     ),
 }
 

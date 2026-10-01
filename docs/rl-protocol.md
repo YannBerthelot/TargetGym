@@ -167,6 +167,7 @@ before reading any result from it.
 | ph_neutralization | 300 | 14 | 70 | 0.99667 |
 | reactor | 1200 | 1 | 5 | 0.99917 |
 | unstable_cstr | 1200 | 6.3 to 14.4 | 32 to 72 | 0.99917 |
+| compressor_surge | 1200 | 49.3 | 247 | 0.99917 |
 
 The `unstable_cstr` row is filled by hand, because
 `scripts/measure_time_constants.py` has no step response to fit on that plant
@@ -174,6 +175,16 @@ The `unstable_cstr` row is filled by hand, because
 time an uncontrolled error takes to grow e-fold. Over the five targets it runs
 from 19.0 s at C_a 0.45 to 43.1 s at 0.65, which is 6.3 to 14.4 steps of 3 s
 (derived, `scripts/unstable_cstr_numbers.py --section targets`).
+
+The `compressor_surge` row is filled by hand as well, from the plant's numbers
+script, which times the header pressure's response to five actuator steps from
+a steady operating point: speed 87.5 % of rated and recycle opening 0.5, the
+commands a zero action maps to, with the consumer valve at 0.9. Its tau is the
+slowest of them, a speed step from 87.5 to 105 % of rated whose pressure
+reaches 63.2 % of its change in 4.93 s, 49.3 steps of 0.1 s (derived,
+`scripts/compressor_surge_numbers.py --section steady`). The recycle valve
+moves the pressure faster, in 0.41 to 3.57 s over the same section's three
+valve steps.
 
 ### How long an episode has to be
 
@@ -252,6 +263,16 @@ step 120 of each block until the controller starts moving toward the next
 level, which `target_gym.eval.anticipations` detects, so at most 80 steps of a
 block are scored. Over three seeds, 18 blocks, it scored 1440 steps for the
 PID and 1141 for the MPC (measured, `hold_steps_scored` in
+`src/target_gym/data/hold_measurements.json`). There is no period clause,
+since the task is not periodic.
+
+**The compressor's episode clears the actuator clause.** With tau at 49.3
+steps, 10 tau is 493 steps, and N = 1200 holds 24.3 tau (derived from the row
+above). The episode is four setpoint blocks of 300 steps (30 s, ours), each
+6.1 tau long. After a 150-step burn-in, `scripts/measure_hold.py` scores each
+block from 100 steps after its change until the controller starts moving
+toward the next level. Over three seeds it scored 2250 steps for the PID and
+2165 for the MPC (measured, `hold_steps_scored` in
 `src/target_gym/data/hold_measurements.json`). There is no period clause,
 since the task is not periodic.
 

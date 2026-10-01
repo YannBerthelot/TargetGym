@@ -9,7 +9,7 @@ change shape before they settle.
 
 ### Environment and parameter classes
 
-The forty-two names in `target_gym.__all__` are stable. They are every
+The forty-four names in `target_gym.__all__` are stable. They are every
 environment class and its matching `Params` class, plus the Gymnasium wrapper.
 To check the count:
 

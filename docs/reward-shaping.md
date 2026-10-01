@@ -4,7 +4,7 @@ TargetGym exists to ask one question: **can a learned policy hold a setpoint
 better than a PID or an MPC?** That question lives entirely in the reward, so
 the reward is the measuring instrument, and this page records how it is built.
 Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`) scores
-through it. Eighteen normalise the tracking term by a floor, and four
+through it. Nineteen normalise the tracking term by a floor, and four
 (reactor, battery, wind turbine, building) put tracking and consumption in
 the owner's currency, where the floor enters as the reference cost `rho_floor`
 rather than as a divisor. Version 1, the capped log-scaled reward, is kept
@@ -39,9 +39,9 @@ controller can hold on this plant under its shipped reference and
 disturbance processes -- floored at the resolution of the instrument the
 plant's table cites. Measurement noise is not modelled, so a simulator can
 hold finer than a real transmitter reads; a hold the instrument cannot see
-is not a floor, and on seven plants (glass, kiln, boiler pressure,
-distillation, pH, the unstable CSTR, the aircraft's altitude and heading) the
-resolution is the scale and the finer measured hold is recorded beside it. An error at the floor costs 1 per step. The scale is
+is not a floor, and on eight plants (glass, kiln, boiler pressure,
+distillation, pH, the unstable CSTR, the compressor's header pressure, the
+aircraft's altitude and heading) the resolution is the scale and the finer measured hold is recorded beside it. An error at the floor costs 1 per step. The scale is
 the plant's own irreducible error, not a sensor resolution and not the
 operating envelope, so a controller's tracking cost reads directly as "how
 many floor-widths off". `e_tol` is a specification tolerance where the plant
@@ -176,8 +176,11 @@ shipped reference and disturbance processes, and records the long-run mean
 target change (`src/target_gym/data/hold_measurements.json`). On
 `unstable_cstr`, which has no burn-in, it scores each 10-minute block from
 step 120 (minute 6) until the controller starts moving toward the next level,
-as detected by `target_gym.eval.anticipations`. Three kinds of floor come out
-of it:
+as detected by `target_gym.eval.anticipations`. On `compressor_surge` the
+burn-in is 150 steps (15 s), which leaves out the approach from the off-target
+reset, and each 30-second setpoint block is scored from 100 steps (10 s, ours)
+after its change until the controller starts moving toward the next level,
+detected the same way. Three kinds of floor come out of it:
 
 - **Certified or closed-form** where the hold problem reduces to one the
   optimum can be computed for: the reactor (`scripts/floor_reactor_hold.py`, a
@@ -219,6 +222,7 @@ the evaluator measures.
 | `distillation` | p=2 x2 | 1e-4 / 1e-4 (analyser resolution; the MPC holds 1.35e-5 / 3.3e-5) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
 | `ph_neutralization` | p=2 | 0.01 pH (electrode resolution; the MPC holds 0.0080) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
 | `unstable_cstr` | p=2 | 1e-4 mol/L (analyser resolution; the MPC holds 6.29e-6, lowest per seed, so `rho* = (6.29e-6 / 1e-4)^2 = 0.00396`) | 0 (provisional) | none | dimensionless |
+| `compressor_surge` | p=2 | 0.0275 kPa (pressure transmitter accuracy, 0.055 % (read) of a 0 to 50 kPa span (ours); the MPC holds 1.03e-4, lowest per seed, so `rho* = (1.03e-4 / 0.0275)^2 = 1.40e-5`) | 0 (provisional) | recycle power above hold, w=1 (`c_hold` 62 270 W, the MPC's measured hold consumption) | dimensionless |
 | `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
 | `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds; `plane_energy`'s held 1.20 m once its anticipation of target changes left the hold, so its floor is loose until the MPC is reviewed) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
 | `plane3d_*` | p=2 | altitude 1.44 / 4.06 / 1.39 m, heading 1.0e-4 rad, path 8.1 / 6.2 / 14.6 m (lowest per-seed MPC holds in turbulence) | 0 | none | dimensionless |
@@ -465,16 +469,36 @@ can never beat a long one — which also made the aircraft's flat `-200` crash
 penalty redundant, and it has been removed. Termination already costs every step
 it forgoes.
 
-`unstable_cstr`, added after version 2, has the one version-1 reward outside
-that bound. A trip there restarts the plant at once and charges the downtime
-on the tripped step (`base.failure_kernel`), so a score of 0 on that step made
-a trip nearly free. Over 12 policies and a constant-coolant scan, 128 seeds
-each, 16 pairs had a tripping policy scoring above a trip-free one (measured,
+`unstable_cstr` and `compressor_surge`, added after version 2, have the two
+version-1 rewards outside that bound. A trip on `unstable_cstr` restarts the
+plant at once and charges the downtime on the tripped step
+(`base.failure_kernel`), so a score of 0 on that step made a trip nearly
+free. Over 12 policies and a constant-coolant scan, 128 seeds each, 16 pairs
+had a tripping policy scoring above a trip-free one (measured,
 `scripts/unstable_cstr_numbers.py --v1`). Its version 1 therefore scores a
 tripped step as `-restart_steps`, which is -1200, the downtime priced at
 version 1's best per-step score. In the same run that leaves no tripping
 policy above a trip-free one and ranks the 12 policies as version 2 does
 (Spearman 1.000), and the bound in `[0, 1]` does not hold on this task.
+
+`compressor_surge` restarts the same way after a surge trip, and its version 1
+also scores a tripped step as `-restart_steps`, which is -9000 there (15
+minutes of 0.1 s steps, ours and provisional). On seeds 0 to 31,
+`test_v1_ranks_tripping_below_safe` in
+`tests/compressor_surge/test_compressor_surge_env.py` runs three policies that
+trip in most episodes and three that never trip. With 0 on the tripped step, a
+setpoint chaser that ignores the surge margin scores above a fixed recycle
+opening of 0.30. As shipped, each of those tripping policies scores below
+every safe one. `scripts/compressor_surge_numbers.py --v1` repeats the
+comparison over 12 policies on 128 seeds each (measured). With 0 on a tripped
+step, 17 of the 35 (tripping, trip-free) pairs rank the tripping policy
+higher, and the Spearman correlation with version 2 is +0.483. A tripped step
+must score below -2915 to reverse all 17. As shipped, every tripping policy of
+the 12 scores below every trip-free one, and the correlation is +0.993. The
+same flag runs two policies that trip rarely on 5120 episodes each: the
+guarded heuristic at a 5 % control line trips 4 times and the chaser at bias
+0.4 trips 13 times. Version 1 as shipped still ranks both above the fixed
+0.30, and version 2 ranks both below it.
 
 ### The gradient is not scale-free, only the value is
 

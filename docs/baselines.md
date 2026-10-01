@@ -88,7 +88,7 @@ The underlying objects are reachable directly if you need them, through
 
 ## Coverage
 
-All twenty-two environments ship a PID. Twenty-one also ship an MPC; only
+All twenty-three environments ship a PID. Twenty-two also ship an MPC; only
 `patrol_bearing_only` does not, and `EnvSpec.baselines_note` records why -- it
 withholds the decomposed slot error a planner would read, which is the point of
 the variant, so it needs a planner built on its estimator rather than the
@@ -198,7 +198,7 @@ Three implementations, chosen per environment by what its dynamics allow:
 
 | Implementation | Used by | When it applies |
 |---|---|---|
-| `CasadiMPC` subclasses | 8 environments | A direct nonlinear program over an explicit model; the sharpest when the model can be written in CasADi |
+| `CasadiMPC` subclasses | 9 environments | A direct nonlinear program over an explicit model; the sharpest when the model can be written in CasADi |
 | `GradientMPC` | 12 environments | Differentiates the JAX dynamics directly and descends the objective |
 | `SamplingMPC` | cement kiln | Cross-entropy sampling, for when gradients are unusable |
 
@@ -211,8 +211,8 @@ specific to an episode or a seed. What it has instead is a model, a horizon and
 solver settings, and an objective, all chosen once per environment the way a
 controller structure is. Between episodes it carries only a warm start, and on
 the glass furnace an offset-free bias integrator; `reset()` clears both. The
-unstable CSTR's MPC also keeps the memory of the cascade PID it falls back on,
-and `reset()` clears that too.
+unstable CSTR's and the compressor's MPCs also keep the memory of the PID they
+fall back on, and `reset()` clears that too.
 
 The irony is that the **PID** is the trained one here. Its gains come from a
 search on seeds 0 to 2 and are reported on held-out seeds. The MPC has never
@@ -359,13 +359,21 @@ A capped solve is still applied: IPOPT was converging and we stopped it, which
 is the whole point. Any *other* failure -- infeasible, restoration failed,
 invalid number -- returns an iterate that means nothing, so the controller holds
 its previous action and restores the previous warm start rather than planning
-from the wreckage. The unstable CSTR's MPC hands such a step to its cascade PID
-instead, because holding the last action can trip that plant.
+from the wreckage. The unstable CSTR's and the compressor's MPCs hand such a
+step to their PIDs instead, because holding the last action can trip either
+plant.
 
-Read `solver_failures` before quoting a number. All eight CasADi environments
-currently record 100% solver success. That includes `unstable_cstr`, whose MPC
-lives in its own package, with 12 000 solves over ten seeds and none failed or
-capped (measured, `scripts/record_baselines.py --envs unstable_cstr`).
+Read `solver_failures` before quoting a number. `scripts/record_baselines.py`
+prints solver success to 0.1 %, and all nine CasADi environments record 100%
+at that precision. That includes the two whose MPCs live in their own
+packages.
+`unstable_cstr` ran 12 000 solves over ten seeds with none failed or capped
+(measured, `scripts/record_baselines.py --envs unstable_cstr`).
+`compressor_surge` also ran 12 000 solves over ten seeds. One of them was
+stopped by the cap, which makes its `solver_failures` 1 and its
+`solver_capped` 1, and its iterate was applied as any capped solve is. No
+solve failed for another reason (measured, `scripts/record_baselines.py --envs
+compressor_surge`).
 
 ### Conditioning, constraints, and what is deliberately absent
 
@@ -392,17 +400,20 @@ does not clip, it *ends the episode* when a level touches `h_min` or `h_max`.
 Those two bounds are now soft, and `h_max` is now present at all; before this the
 controller was blind to half of a termination condition it is scored on.
 
-**No terminal ingredients, with one exception.** `mterm` is the stage cost on
-every MPC except the unstable CSTR's, so there is no terminal cost or terminal
-set and therefore no nominal stability guarantee in the Mayne sense. The
-unstable CSTR's MPC carries a terminal cost, the Riccati solution for the
-env's one-step linearisation at C_a 0.45 (`terminal_weight` in the plant's
-`experts.py`), so the end of its horizon does not look free on a plant whose
-uncontrolled error grows. It has no terminal set either, so the guarantee is
-absent there too. These horizons are long relative to the closed-loop
-transient they have to cover, which is checked separately by
-`scripts/audit_mpc_horizons.py`, and the baselines are measured rather than
-certified. It is recorded here so nobody assumes the guarantee exists.
+**No terminal ingredients, with two exceptions.** `mterm` is the stage cost on
+every MPC except the unstable CSTR's and the compressor's, so there is no
+terminal cost or terminal set and therefore no nominal stability guarantee in
+the Mayne sense. The unstable CSTR's MPC carries a terminal cost, the Riccati
+solution for the env's one-step linearisation at C_a 0.45 (`terminal_weight` in
+the plant's `experts.py`), so the end of its horizon does not look free on a
+plant whose uncontrolled error grows. The compressor's NMPC weights the tracking
+term of its last planned state 20 times (`MPC_TERMINAL_WEIGHT` in the plant's
+`experts.py`, ours), through its stage weights with `mterm` set to zero.
+Neither has a terminal set, so the guarantee is absent there too. These
+horizons are long relative to the closed-loop transient they have to cover,
+which is checked separately by `scripts/audit_mpc_horizons.py`, and the
+baselines are measured rather than certified. It is recorded here so nobody
+assumes the guarantee exists.
 
 ### Horizons, and which ones are too short
 
@@ -448,6 +459,17 @@ near the edge then runs past the peak. The MPC's soft bound on the
 temperature sits 1 K under the point-of-no-return line
 `354.9 - 40.7 (C_a - 0.45)` K (`MPC_PNR_MARGIN_K`, ours; the line is derived
 by the same section, refit at a +6 K drift).
+
+`compressor_surge` passes at ratio 1.33, a 60-step (6 s) horizon against a
+`tau_close` of 45 steps (measured, `scripts/audit_mpc_horizons.py --envs
+compressor_surge`). The horizon covers the slowest actuator move a setpoint
+block asks for. A full 20 to 28 kPa move needs 4.9 s of drive travel plus
+the drive's 1 s lag (derived, `scripts/compressor_surge_numbers.py --section
+steady`). Every planned step
+keeps a flow-coefficient margin of 0.05 over the surge line
+(`MPC_SURGE_MARGIN`, TUNED by `scripts/compressor_surge_numbers.py
+--mpc-gate`, which accepted 0.03 and 0.05 at the same cost; the wider one
+ships).
 
 ## Regenerating the figures and videos
 
@@ -831,6 +853,7 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `reactor` | 864 | 24.37 | 1.373 | 0.944 | 10/10 | 0 |
 | `boiler_drum` | 400 | 641.9 | 42.4 | 0.934 | 10/10 | 0 |
 | `unstable_cstr` | 1200 | 5.714e+04 | 4178 | 0.927 | 10/10 | 0 |
+| `compressor_surge` | 1200 | 1790 | 161.4 | 0.910 | 10/10 | 0 |
 | `distillation` | 200 | 262.3 | 31.91 | 0.878 | 10/10 | 0 |
 | `plane3d_circle` | 300 | 1207 | 235.1 | 0.805 | 10/10 | 0 |
 | `plane3d_heading` | 200 | 3.15e+04 | 6734 | 0.786 | 10/10 | 0 |
@@ -928,11 +951,24 @@ three seeds, against a floor width of 1e-4 mol/L (the analyser's
 resolution). The MPC's lowest per-seed hold, 6.29e-6 mol/L, sets the floor
 column: ρ* = (6.29e-6 / 1e-4)² = 0.00396.
 
+On `compressor_surge` the MPC's gain is 60.8 against the PID's 1781, NEA
+0.966, and its hold cost is 0.214 against the PID's 9.41 (measured,
+`scripts/evaluate_baselines.py`). The running cost, recycle power above
+`c_hold`, is 0.388 per step for the PID and 0.393 for the MPC (measured, same
+run). As a header-pressure error, `scripts/measure_hold.py` measures a mean
+hold of 2.0e-4 kPa for the MPC and 0.058 kPa for the PID, pooled over three
+seeds, against a floor width of 0.0275 kPa, the pressure transmitter's
+accuracy (derived from the 0.055 % of span in the transmitter data sheets
+the plant's `PHYSICS.md` cites, over a 0 to 50 kPa span that is ours). The
+MPC's lowest per-seed hold, 1.03e-4 kPa, sets the floor column:
+ρ* = (1.03e-4 / 0.0275)² = 1.40e-5.
+
 | plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID hold | MPC hold | PID reach B (transient) | MPC reach B (transient) | fail |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `battery` | 0.000222 | 0.00346 (0.00288 / 0.000589) | 0.00112 (0.000548 / 0.000567) | 0.724 | 0.00132 | 0.00117 | 0.0497 (0.0292) | 0.00358 (0.00128) | 0 |
 | `boiler_drum` | 1.32 | 524 (524 / 0.0276) | 23.8 (23.8 / 0.0323) | 0.957 | 460 | 24.7 | 3.28e+04 (3.84e+04) | 3e+03 (4.81e+03) | 0 |
 | `cement_kiln` | 0.468 | 4.75 (4.68 / 0.0732) | 1.33 (1.27 / 0.0535) | 0.8 | 5.75 | 1.37 | 910 (2.46e+03) | 318 (585) | 0 |
+| `compressor_surge` | 1.4e-05 | 1.78e+03 (1.78e+03 / 0.388) | 60.8 (60.4 / 0.393) | 0.966 | 9.41 | 0.214 | 8.93e+05 (8.94e+05) | 1.01e+05 (1.01e+05) | 0 |
 | `cstr` | 0 | 41.2 (41.2 / —) | 0.317 (0.317 / —) | 0.992 | 5.96e-07 | 4.21e-05 | 6.64e+05 (6.6e+05) | 6.12e+05 (6.12e+05) | 0 |
 | `distillation` | 0.127 | 62.6 (62.6 / 0.00219) | 0.297 (0.284 / 0.0123) | 0.997 | 62.6 | 0.297 | 4.05e+03 (1.33e+04) | 1.65e+03 (1.68e+03) | 0 |
 | `first_order` | 0 | 3.57e-06 (3.57e-06 / —) | 0 (0 / —) | 1 | 7.89e-11 | 0 | 1.19e+05 (1.19e+05) | 1.17e+05 (1.17e+05) | 0 |

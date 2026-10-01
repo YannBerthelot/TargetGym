@@ -12,7 +12,7 @@ Measured on arm64 CPU, Darwin, single process, no GPU.
 
 **These are not properties of the plants.** They move with the machine and with
 the batch size, which is why they are measured here rather than claimed in the
-sixteen `PHYSICS.md` contracts, where every other number is a fact about the
+seventeen `PHYSICS.md` contracts, where every other number is a fact about the
 process being modelled. Nothing in CI checks them, because a check that fails on
 somebody else's laptop is worse than no check.
 
@@ -28,6 +28,7 @@ somebody else's laptop is worse than no check.
 | `wind_turbine` | 11.23 M | 12.44 M |
 | `glass_furnace` | 4.10 M | 3.34 M |
 | `ph_neutralization` | 3.97 M | 3.77 M |
+| `compressor_surge` | 2.53 M | 1.57 M |
 | `plane` | 2.13 M | 1.39 M |
 | `plane_energy` | 2.13 M | 1.39 M |
 | `plane_sine` | 2.13 M | 1.41 M |
@@ -47,13 +48,20 @@ arm64 Darwin machine under a shared load. `cstr`, measured in the same runs,
 came out at 199.91 M and 169.22 M, within about 4 % of its row, so the new row
 compares with the rest to about that accuracy.
 
+The `compressor_surge` row was measured on 2026-10-01 with the same two
+commands, on an arm64 Darwin machine at a load average of about 2.5, with
+`cstr` in the same runs. `cstr` came out at 210.89 M and 174.35 M, within
+about 5 % of its row. A second pair of runs gave 2.55 M and 1.48 M for
+`compressor_surge`, so the two pairs differ by up to 6 %.
+
 ## What this means for RL
 
 The protocol's largest sample budget is 1e7 environment steps. At the slowest
 environment here that is about 16 seconds of environment time; at the fastest
 it is under a millisecond. Network forward and backward passes dominate any
 learning loop by two to three orders of magnitude, so **the environment is never
-the bottleneck at these budgets**, and none of the twenty-two is unfit on speed.
+the bottleneck at these budgets**, and none of the twenty-three is unfit on
+speed.
 
 The spread is arithmetic per step, not anything fixable. The distillation column
 integrates 41 states through 16 RK4 substeps, and its contract establishes that

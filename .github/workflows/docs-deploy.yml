@@ -31,7 +31,7 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-latest
-    # Rendering one clip per registered environment, 22 today, is the bulk of
+    # Rendering one clip per registered environment, 23 today, is the bulk of
     # this job. The first 21 took about eight minutes on a developer machine,
     # and a GitHub runner has fewer and slower cores.
     timeout-minutes: 45

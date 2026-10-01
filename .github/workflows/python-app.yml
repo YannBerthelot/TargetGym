@@ -44,7 +44,7 @@ jobs:
 
   docs:
     # The documentation is generated from the registry, so it can go stale
-    # silently: docs/environments.md and the twenty-two per-environment pages
+    # silently: docs/environments.md and the twenty-three per-environment pages
     # are written by scripts, and every count and table in them comes from the
     # code. Nothing checked that until this job existed, and it drifted --
     # pages missing from the nav, links to files outside the docs tree that

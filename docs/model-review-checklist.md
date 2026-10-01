@@ -225,14 +225,15 @@ few steps leaves the episode decided before the controller has acted, and one
 that cannot move it is decorative.
 
 **What it finds here.** No environment is inert, since every actuator moves its
-tracked variable, but the margin varies by three orders of magnitude, and three
-plants trip within twenty steps:
+tracked variable, but the margin varies by three orders of magnitude, and four
+plants can trip within twenty steps:
 
 | environment | steps to trip at full travel | in seconds |
 | --- | --- | --- |
 | `boiler_drum` | **3** | 6 s |
 | `unstable_cstr` | 5 to 20 (median 9) | 15 to 60 s |
 | `wind_turbine` | 11 | 2.75 s |
+| `compressor_surge` | 14 to 153 (median 25.5) | 1.4 to 15.3 s |
 | aircraft (3D) | 27 | 27 s |
 | `hvac` | 56 | 14 h |
 | `distillation` | 231 | 231 s |
@@ -252,6 +253,15 @@ The unstable CSTR's row is full heating from each of its 135 reset corners
 `scripts/unstable_cstr_numbers.py --section reach`). A fast trip under full
 heating is intended, since the plant is held a few kelvin below a point of no
 return. Full cooling from the same corners never trips it.
+
+The compressor's row is full travel low, 70 % speed with the recycle shut, over
+20 drawn schedules (measured, `scripts/compressor_surge_numbers.py --section
+reach`). It trips on surge in every one. From the PRNGKey(0) reset with the
+consumers' opening held at one level, the first trip comes after 3 steps at
+0.20 and 117 at 0.95, and never at full opening (same section). Full travel
+high never trips it. `test_full_travel_low_trips` and
+`test_full_travel_high_never_trips` in
+`tests/compressor_surge/test_compressor_surge_env.py` assert both.
 
 ## 9. Does a control loop's gain depend on an operating variable?
 
@@ -470,7 +480,7 @@ state. It sat at "1.3% behind, passing" until the episode-length audit
 lengthened that episode to 1600 steps.
 
 **What it applies to.** Every environment whose MPC plans against a model of
-its own, which here is all eight CasADi ones. The seven in
+its own, which here is all nine CasADi ones. The seven in
 `target_gym.experts.mpc` plan against reduced models, and none of them had this
 comparison before. The unstable CSTR's CasADi model restates the env's
 equations without reducing them, because CasADi cannot trace the env's `jnp`
@@ -480,7 +490,16 @@ right-hand side with the env's `compute_velocity` at 1000 random points, and
 `test_mpc_predicts_one_step_like_the_plant` runs this check on 120 states of a
 PID episode with the feed drift on. One control interval of the model lands
 within `e_floor` of `step_env` in C_a, and the mean signed error stays under a
-tenth of `e_floor`.
+tenth of `e_floor`. The compressor's NMPC restates the env's discrete step in
+CasADi for the same reason, ten substeps of rate limits and RK4, with the
+rate-limit clips rounded so that IPOPT sees a smooth problem. Two tests in
+`tests/compressor_surge/test_compressor_surge_experts.py` hold it to the plant.
+`test_mpc_model_is_the_env_step` compares the step with the clips exact against
+`compute_next_state` at 1000 random states, and
+`test_mpc_predicts_one_step_like_the_plant` runs this check with the shipped
+rounding on 120 states, most of them from a PID episode. One step of the model
+lands within 0.05 `e_floor` of the env's float32 step in header pressure and
+within 1e-4 in the trip variable `phi_min`.
 
 ---
 

@@ -5,6 +5,8 @@ from target_gym.boiler_drum.env import BoilerDrumParams
 from target_gym.boiler_drum.env_jax import BoilerDrum
 from target_gym.cement_kiln.env import CementKilnParams
 from target_gym.cement_kiln.env_jax import CementKiln
+from target_gym.compressor_surge.env import CompressorSurgeParams
+from target_gym.compressor_surge.env_jax import CompressorSurge
 from target_gym.energy.battery.env import BatteryParams
 from target_gym.energy.battery.env_jax import GridBattery
 from target_gym.energy.wind_turbine.env import WindTurbineParams
@@ -99,6 +101,9 @@ __all__ = (
     # Cement kiln
     "CementKiln",
     "CementKilnParams",
+    # Compressor surge
+    "CompressorSurge",
+    "CompressorSurgeParams",
     # Wind turbine
     "WindTurbine",
     "WindTurbineParams",

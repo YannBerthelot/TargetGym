@@ -1433,6 +1433,30 @@ TUNERS = {
         ),
         "UnstableCSTR",
     ),
+    # Coordinate descent on the pair's four gains (experts.TUNED_GAINS: the
+    # speed PI and the anti-surge PI) over whole episodes (four setpoint
+    # blocks, six demand blocks, 24 seeds), starting from the package's
+    # DEFAULT_GAINS. The control line, the override line, the override hold
+    # and the reset band (experts.HELD_GAINS) are held: their right value is
+    # set by the distance to the surge line, which the return sees only once
+    # a trip happens. Candidates that fail any of the guard's checks are
+    # refused by the task's own PID factory (experts.check_pair_gains), and
+    # ``score`` maps that refusal to -inf. The checks, in the plant's
+    # PHYSICS.md section 7, are the linearised closed loop's decay at the
+    # control-line points (GUARD_MIN_DECAY), no trip and a margin of at least
+    # GUARD_MIN_MARGIN in the stress battery, and at most GUARD_MAX_TRAVEL of
+    # valve travel over each battery run's last 100 steps.
+    "compressor_surge": (
+        lambda n_points=0, tuning_rule="", **kw: _tune_aircraft_search(
+            "compressor_surge",
+            "compressor_surge",
+            steps=1200,
+            seeds=24,
+            hold=_task_experts("compressor_surge").HELD_GAINS,
+            **kw,
+        ),
+        "CompressorSurge",
+    ),
 }
 
 
