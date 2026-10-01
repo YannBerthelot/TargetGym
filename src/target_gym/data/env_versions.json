@@ -120,9 +120,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "ph_neutralization-v2": {
-    "fingerprint": "90495975fe09e3f6",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "077eebf99595acbb",
+    "note": "rho_floor and rho_floor_tracking follow the better oracle (oracle audit, pH reads the buffer flow): the NEA reference only, read by the evaluator and no reward or pH controller, so behaviour is unchanged",
+    "stamped": "2026-10-01T15:34:31+00:00"
   },
   "plane-v1": {
     "fingerprint": "e5d0397cd54ac886",

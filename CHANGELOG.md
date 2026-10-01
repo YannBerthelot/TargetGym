@@ -70,6 +70,17 @@ than by commit.
 
 ### Changed
 
+- **The pH oracle reads the buffer flow.** Its CasADi model took the buffer
+  flow q2 at its nominal value and left feedback to absorb the drift; it now
+  takes q2 as a time-varying parameter, forecast from the state by the env's
+  OU mean decay, as it already read the hidden invariants Wa and Wb. Protocol
+  cost falls from 3.06 to 0.096 per step (-97%) and the mean hold error from
+  0.0146 to 0.0022 pH. The NEA floor follows the better oracle:
+  `rho_floor = rho_floor_tracking = (0.0013 / 0.01)^2`, from 0.64. `e_floor`
+  is the 0.01 pH electrode resolution and does not move, so the reward is
+  unchanged and `ph_neutralization-v2` is re-stamped in place. The spec now
+  declares `noise_fields=("q2_noise_std",)`.
+
 - **The battery's oracle is a feedforward of the scheduled dispatch level.**
   It commands the level of the block the next step is scored against, which
   leaves only the dispatch noise: its mean error is 1577 W against the

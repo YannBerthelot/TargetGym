@@ -761,6 +761,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # disturbance to move the operating point.
         tuned_gains_key="ph_neutralization",
         disturbance_fields=("q2",),
+        # The buffer flow's OU innovation. The CasADi oracle never rolls the
+        # simulator, so it could not see it anyway; declared so no planner can.
+        noise_fields=("q2_noise_std",),
     ),
     EnvSpec(
         name="distillation",
