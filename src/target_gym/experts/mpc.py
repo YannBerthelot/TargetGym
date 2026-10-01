@@ -285,9 +285,9 @@ class GradientMPC:
         work, since it never consults the derivative, but it scores below this
         on both seeds tried and costs ``action_dim * 7`` extra rollouts a step.
 
-        Twelve of the twenty environments with an MPC use this optimiser. The
-        four plants among them (battery, boiler drum, distillation, wind
-        turbine) were re-recorded after the change and moved by under half a
+        Twelve of the twenty environments with an MPC used this optimiser at
+        the time. The four plants among them (battery, boiler drum,
+        distillation, wind turbine) were re-recorded after the change and moved by under half a
         point of return, distillation not at all, so the defect was latent for
         them and real only for the aircraft.
 
@@ -743,7 +743,7 @@ def _v2_objective(reward_fn, barrier_fn=None, terms_fn=None, shaping_fn=None):
 
     ``terms_fn`` (the environment's ``compute_reward_terms``) is passed for
     the plants whose tracking cost is linear in |error| (p = 1: the wind
-    turbine, the battery). Projected descent with a normalised gradient on a
+    turbine). Projected descent with a normalised gradient on a
     linear cost is sign descent -- the step never shrinks near the optimum,
     so the plan chatters (measured on the turbine: the rotor speed wandered to
     1.12x rated with the barrier active two thirds of the time, and the hold
