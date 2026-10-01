@@ -1,6 +1,6 @@
 {
   "battery": {
-    "fingerprint": "5ab883590717c496",
+    "fingerprint": "e1fac0e165b4741f",
     "mpc": {
       "abs_gap": 0.0008936995826932335,
       "failure": 0.0,
@@ -17,7 +17,7 @@
       "reach_cost_ci": 0.0020101804356274025,
       "reach_fraction": 0.0,
       "running": 0.0005671105558307048,
-      "seconds": 14.7,
+      "seconds": 18.9,
       "time_in_band": 1.0,
       "tracking": 0.0005482556695396936,
       "transient_cost": 0.001280018721041011,
@@ -39,7 +39,7 @@
       "reach_cost_ci": 0.024358571463084535,
       "reach_fraction": 0.0,
       "running": 0.0005892355497247048,
-      "seconds": 1.0,
+      "seconds": 1.3,
       "time_in_band": 1.0,
       "tracking": 0.0028754986599065237,
       "transient_cost": 0.02922830321298938,
@@ -50,7 +50,7 @@
     "seeds": 3
   },
   "boiler_drum": {
-    "fingerprint": "d1d3c7755c8f7673",
+    "fingerprint": "f87d15b6832048ae",
     "mpc": {
       "abs_gap": 22.47128590871445,
       "failure": 0.0,
@@ -67,7 +67,7 @@
       "reach_cost_ci": 3301.3987664300635,
       "reach_fraction": 0.0,
       "running": 0.03232918574238497,
-      "seconds": 24.0,
+      "seconds": 35.2,
       "time_in_band": 1.0,
       "tracking": 23.759312753030784,
       "transient_cost": 4807.55957660079,
@@ -89,7 +89,7 @@
       "reach_cost_ci": 58780.06242257566,
       "reach_fraction": 0.0,
       "running": 0.02757870536197694,
-      "seconds": 2.0,
+      "seconds": 4.2,
       "time_in_band": 1.0,
       "tracking": 524.1454528630912,
       "transient_cost": 38413.12072479725,
@@ -100,7 +100,7 @@
     "seeds": 3
   },
   "cement_kiln": {
-    "fingerprint": "1d806f301ab98cc4",
+    "fingerprint": "6f1b9087ca0a551c",
     "mpc": {
       "abs_gap": 0.8577547449630452,
       "failure": 0.0,
@@ -117,7 +117,7 @@
       "reach_cost_ci": 592.042292156961,
       "reach_fraction": 0.10714285714285714,
       "running": 0.053537939555565406,
-      "seconds": 73.9,
+      "seconds": 95.6,
       "time_in_band": 0.011538461538461539,
       "tracking": 1.2720728058447324,
       "transient_cost": 585.475927224806,
@@ -139,7 +139,7 @@
       "reach_cost_ci": 3291.481952332005,
       "reach_fraction": 0.5961904761904762,
       "running": 0.07316886010849909,
-      "seconds": 8.0,
+      "seconds": 10.2,
       "time_in_band": 0.0032051282051282055,
       "tracking": 4.67806490569376,
       "transient_cost": 2463.242489540964,
@@ -150,7 +150,7 @@
     "seeds": 3
   },
   "cstr": {
-    "fingerprint": "a4cfe783e1c2e159",
+    "fingerprint": "9022f823dc0d4930",
     "mpc": {
       "abs_gap": 0.3168699649215692,
       "failure": 0.0,
@@ -165,7 +165,7 @@
       "reach_cost": 611868.1501454591,
       "reach_cost_ci": 984248.0732393527,
       "reach_fraction": 0.11333333333333333,
-      "seconds": 1.5,
+      "seconds": 2.3,
       "time_in_band": 0.9772727272727274,
       "tracking": 0.3168699649215692,
       "transient_cost": 611840.2697944567,
@@ -185,7 +185,7 @@
       "reach_cost": 663731.8785403199,
       "reach_cost_ci": 930921.8108785156,
       "reach_fraction": 0.25,
-      "seconds": 0.2,
+      "seconds": 0.3,
       "time_in_band": 0.8522727272727274,
       "tracking": 41.23786548601277,
       "transient_cost": 660102.9464372,
@@ -196,7 +196,7 @@
     "seeds": 3
   },
   "distillation": {
-    "fingerprint": "cabfa68327b99328",
+    "fingerprint": "19b740e882cea30c",
     "mpc": {
       "abs_gap": 0.16940545371485252,
       "failure": 0.0,
@@ -213,7 +213,7 @@
       "reach_cost_ci": 3046.894641814224,
       "reach_fraction": 0.0,
       "running": 0.012345725707709788,
-      "seconds": 47.9,
+      "seconds": 57.2,
       "time_in_band": 1.0,
       "tracking": 0.28418472861560684,
       "transient_cost": 1676.651127020518,
@@ -235,7 +235,7 @@
       "reach_cost_ci": 4372.132158250534,
       "reach_fraction": 0.0,
       "running": 0.002192919133619095,
-      "seconds": 0.8,
+      "seconds": 1.1,
       "time_in_band": 1.0,
       "tracking": 62.5916948646307,
       "transient_cost": 13342.469948450724,
@@ -246,7 +246,7 @@
     "seeds": 3
   },
   "first_order": {
-    "fingerprint": "8c0e9666249a5c4c",
+    "fingerprint": "5500f2925896d5e6",
     "mpc": {
       "abs_gap": 0.0,
       "failure": 0.0,
@@ -261,7 +261,7 @@
       "reach_cost": 117442.30771431065,
       "reach_cost_ci": 160238.29476739286,
       "reach_fraction": 0.08666666666666667,
-      "seconds": 1.1,
+      "seconds": 1.9,
       "time_in_band": 1.0,
       "tracking": 0.0,
       "transient_cost": 117442.30771431065,
@@ -281,7 +281,7 @@
       "reach_cost": 119411.92337141332,
       "reach_cost_ci": 160959.8489882017,
       "reach_fraction": 0.16333333333333333,
-      "seconds": 0.2,
+      "seconds": 0.3,
       "time_in_band": 1.0,
       "tracking": 3.5713776159847415e-06,
       "transient_cost": 119411.9231214248,
@@ -292,7 +292,7 @@
     "seeds": 3
   },
   "four_tank": {
-    "fingerprint": "07a5708e7a81a9be",
+    "fingerprint": "1053fe46d5460a8b",
     "mpc": {
       "abs_gap": 0.007413171941092113,
       "failure": 0.0,
@@ -307,7 +307,7 @@
       "reach_cost": 192414.351913324,
       "reach_cost_ci": 196825.19567749198,
       "reach_fraction": 0.38133333333333336,
-      "seconds": 23.4,
+      "seconds": 27.0,
       "time_in_band": 1.0,
       "tracking": 0.007413171941092113,
       "transient_cost": 192416.20520630933,
@@ -327,7 +327,7 @@
       "reach_cost": 649930.1285934859,
       "reach_cost_ci": 509409.7052122283,
       "reach_fraction": 0.764,
-      "seconds": 1.0,
+      "seconds": 1.5,
       "time_in_band": 0.168,
       "tracking": 30.28834361658494,
       "transient_cost": 657528.0918048223,
@@ -338,7 +338,7 @@
     "seeds": 3
   },
   "glass_furnace": {
-    "fingerprint": "0672a784237d358d",
+    "fingerprint": "21d31fd44e71bbad",
     "mpc": {
       "abs_gap": 0.7724674100634001,
       "failure": 0.0,
@@ -355,7 +355,7 @@
       "reach_cost_ci": 739.7131592599002,
       "reach_fraction": 0.00625,
       "running": 0.04374474915607076,
-      "seconds": 558.7,
+      "seconds": 2191.0,
       "time_in_band": 0.895,
       "tracking": 0.7593476606843373,
       "transient_cost": 405.41935942725587,
@@ -377,7 +377,7 @@
       "reach_cost_ci": 1602.84835647486,
       "reach_fraction": 0.005833333333333334,
       "running": 0.07236991975771767,
-      "seconds": 3.4,
+      "seconds": 26.2,
       "time_in_band": 0.7629166666666666,
       "tracking": 2.016519948622833,
       "transient_cost": 1138.53225994731,
@@ -388,7 +388,7 @@
     "seeds": 3
   },
   "hvac": {
-    "fingerprint": "1e93bb56d6430389",
+    "fingerprint": "1217ad468ddd3b7e",
     "mpc": {
       "abs_gap": 0.007839867491681439,
       "failure": 0.0,
@@ -401,15 +401,15 @@
       "hold_running": 0.0002019852245354369,
       "hold_tracking": 0.003482163471528654,
       "nea": 0.5530183108456628,
-      "reach_cost": 0.3821957259083965,
-      "reach_cost_ci": 0.16436471400863553,
+      "reach_cost": 0.3772966698110116,
+      "reach_cost_ci": 0.16204847598686134,
       "reach_fraction": 0.0,
       "running": 0.003589138551850415,
-      "seconds": 110.1,
+      "seconds": 49.2,
       "time_in_band": 1.0,
       "tracking": 0.005250728790520474,
       "transient_cost": 0.5139118112993724,
-      "transient_cost_ci": 0.1756419983467394,
+      "transient_cost_ci": 0.17370632327472857,
       "unsettled_fraction": 0.6041666666666666
     },
     "pid": {
@@ -427,7 +427,7 @@
       "reach_cost_ci": 0.18791279606924602,
       "reach_fraction": 0.0,
       "running": 0.008633536105082303,
-      "seconds": 8.2,
+      "seconds": 2.0,
       "time_in_band": 1.0,
       "tracking": 0.00990603559935072,
       "transient_cost": 0.9133180137577303,
@@ -438,7 +438,7 @@
     "seeds": 3
   },
   "patrol": {
-    "fingerprint": "a5a9fbbbc122c0e4",
+    "fingerprint": "9847be4f2851a725",
     "mpc": {
       "abs_gap": 1.9838192655551823,
       "failure": 0.0,
@@ -453,7 +453,7 @@
       "reach_cost": 183.95732760399133,
       "reach_cost_ci": 169.63645435233047,
       "reach_fraction": 0.0,
-      "seconds": 783.2,
+      "seconds": 4660.2,
       "time_in_band": 1.0,
       "tracking": 3.0176414823966717,
       "transient_cost": 376.6622680425644,
@@ -473,7 +473,7 @@
       "reach_cost": 818.1733274946545,
       "reach_cost_ci": 1431.268083745654,
       "reach_fraction": 0.0,
-      "seconds": 3.5,
+      "seconds": 21.7,
       "time_in_band": 1.0,
       "tracking": 10.115891099572183,
       "transient_cost": 1784.3490402698517,
@@ -484,7 +484,7 @@
     "seeds": 3
   },
   "patrol_bearing_only": {
-    "fingerprint": "33f5d41b1d7a58f6",
+    "fingerprint": "cfbb8b5e19bc0bcc",
     "pid": {
       "abs_gap": 10.069966496952713,
       "failure": 0.0,
@@ -498,7 +498,7 @@
       "reach_cost": 691.7005497464505,
       "reach_cost_ci": 980.4297314883012,
       "reach_fraction": 0.0,
-      "seconds": 3.4,
+      "seconds": 5.2,
       "time_in_band": 1.0,
       "tracking": 11.103788574536642,
       "transient_cost": 20.554016431172688,
@@ -509,7 +509,7 @@
     "seeds": 3
   },
   "ph_neutralization": {
-    "fingerprint": "27375d41cff3aa16",
+    "fingerprint": "cbcb9354d5d5acb2",
     "mpc": {
       "abs_gap": 2.4217494231726517,
       "failure": 0.0,
@@ -526,7 +526,7 @@
       "reach_cost_ci": 33505.82112327352,
       "reach_fraction": 0.02,
       "running": 0.006691988231823289,
-      "seconds": 5.9,
+      "seconds": 7.6,
       "time_in_band": 0.5347222222222222,
       "tracking": 3.0550574457004074,
       "transient_cost": 23319.37500972656,
@@ -548,7 +548,7 @@
       "reach_cost_ci": 105702.84953015645,
       "reach_fraction": 0.13333333333333333,
       "running": 0.006811846317734509,
-      "seconds": 0.6,
+      "seconds": 0.7,
       "time_in_band": 0.2829861111111111,
       "tracking": 12.576964106020077,
       "transient_cost": 91237.25508159399,
@@ -559,7 +559,7 @@
     "seeds": 3
   },
   "plane": {
-    "fingerprint": "2346f6711f454940",
+    "fingerprint": "745620e6d514dc22",
     "mpc": {
       "abs_gap": 2.748999102639726,
       "failure": 0.0,
@@ -576,7 +576,7 @@
       "reach_cost_ci": 1131171.7538433166,
       "reach_fraction": 0.05238095238095238,
       "running": 2.118043641071944,
-      "seconds": 163.5,
+      "seconds": 205.9,
       "time_in_band": 0.6190476190476191,
       "tracking": 1.3365555507796152,
       "transient_cost": 1194387.6817989126,
@@ -598,7 +598,7 @@
       "reach_cost_ci": 2629119.077773461,
       "reach_fraction": 0.12023809523809524,
       "running": 0.16899351088712658,
-      "seconds": 1.6,
+      "seconds": 2.7,
       "time_in_band": 0.3214285714285714,
       "tracking": 6.039529516015734,
       "transient_cost": 2729326.18579225,
@@ -609,7 +609,7 @@
     "seeds": 3
   },
   "plane3d_circle": {
-    "fingerprint": "0110e294bd3ed5cf",
+    "fingerprint": "012fe63ffd0aa295",
     "mpc": {
       "abs_gap": 7.84251423464881,
       "failure": 0.0,
@@ -624,7 +624,7 @@
       "reach_cost": 83830.24016522155,
       "reach_cost_ci": 78757.57378455122,
       "reach_fraction": 0.0,
-      "seconds": 275.0,
+      "seconds": 787.1,
       "time_in_band": 1.0,
       "tracking": 9.842512272198995,
       "transient_cost": 85331.58324348927,
@@ -644,7 +644,7 @@
       "reach_cost": 417688.8974387941,
       "reach_cost_ci": 394049.56944605056,
       "reach_fraction": 0.0,
-      "seconds": 1.8,
+      "seconds": 4.8,
       "time_in_band": 1.0,
       "tracking": 98.6159697373708,
       "transient_cost": 432668.3278032194,
@@ -655,7 +655,7 @@
     "seeds": 3
   },
   "plane3d_figure8": {
-    "fingerprint": "1ff5f8f0f98f662f",
+    "fingerprint": "85dba3364a61ee44",
     "mpc": {
       "abs_gap": 1.1047061410123327,
       "failure": 0.0,
@@ -670,7 +670,7 @@
       "reach_cost": 739.2580442104164,
       "reach_cost_ci": 106.16885376701744,
       "reach_fraction": 0.0,
-      "seconds": 361.5,
+      "seconds": 1170.8,
       "time_in_band": 1.0,
       "tracking": 2.104706780037765,
       "transient_cost": 1145.440383053695,
@@ -690,7 +690,7 @@
       "reach_cost": 8566795.328095866,
       "reach_cost_ci": 635373.0592397704,
       "reach_fraction": 0.0,
-      "seconds": 4.0,
+      "seconds": 14.7,
       "time_in_band": 1.0,
       "tracking": 24974.371125132242,
       "transient_cost": 12829567.639437184,
@@ -701,7 +701,7 @@
     "seeds": 3
   },
   "plane3d_heading": {
-    "fingerprint": "79bcf4f7a3c65ecf",
+    "fingerprint": "82636a3434712413",
     "mpc": {
       "abs_gap": 4.0519075880738225,
       "failure": 0.0,
@@ -716,7 +716,7 @@
       "reach_cost": 1527171.45446934,
       "reach_cost_ci": 856297.2357683,
       "reach_fraction": 0.0,
-      "seconds": 202.9,
+      "seconds": 385.1,
       "time_in_band": 1.0,
       "tracking": 5.052039705922944,
       "transient_cost": 1527672.7754537603,
@@ -736,7 +736,7 @@
       "reach_cost": 4011106.94532758,
       "reach_cost_ci": 3473387.0609451076,
       "reach_fraction": 0.0,
-      "seconds": 1.6,
+      "seconds": 6.9,
       "time_in_band": 1.0,
       "tracking": 17866.750628255206,
       "transient_cost": 5446630.089233398,
@@ -747,7 +747,7 @@
     "seeds": 3
   },
   "plane3d_racetrack": {
-    "fingerprint": "416864e42d0aa143",
+    "fingerprint": "70283693cfed03b1",
     "mpc": {
       "abs_gap": 5.035814911522929,
       "failure": 0.0,
@@ -762,7 +762,7 @@
       "reach_cost": 628468.396495263,
       "reach_cost_ci": 592733.9472141122,
       "reach_fraction": 0.0,
-      "seconds": 490.6,
+      "seconds": 1474.7,
       "time_in_band": 1.0,
       "tracking": 7.035825099017866,
       "transient_cost": 629834.7672318106,
@@ -782,7 +782,7 @@
       "reach_cost": 68192.49222839915,
       "reach_cost_ci": 594870.0917574627,
       "reach_fraction": 0.0,
-      "seconds": 2.8,
+      "seconds": 10.3,
       "time_in_band": 1.0,
       "tracking": 318430.00134958973,
       "transient_cost": 3562459.609373311,
@@ -793,29 +793,29 @@
     "seeds": 3
   },
   "plane_energy": {
-    "fingerprint": "0bca843920822afd",
+    "fingerprint": "b6a4ff5362983226",
     "mpc": {
       "abs_gap": 37.78304497765294,
       "failure": 0.0,
       "failure_rate": 0.0,
       "gain": 38.78304497765294,
       "gain_ci": 0.462849665960001,
-      "hold": 7.022819629485768,
-      "hold_ci": 3.684610398533435,
+      "hold": 25.352778914522066,
+      "hold_ci": 3.5424623742801837,
       "hold_failure": 0.0,
-      "hold_running": 3.457992829383535,
-      "hold_tracking": 3.5648267513335985,
+      "hold_running": 3.3064299594143676,
+      "hold_tracking": 22.046348736380295,
       "nea": 0.9514989008101379,
-      "reach_cost": 12160.7926663549,
-      "reach_cost_ci": 9614.613105250595,
+      "reach_cost": 9495.950014669275,
+      "reach_cost_ci": 9803.258488226733,
       "reach_fraction": 0.04527777777777778,
       "running": 3.393162519848625,
-      "seconds": 1487.3,
+      "seconds": 2241.9,
       "time_in_band": 0.8814814814814814,
       "tracking": 35.389882306792906,
-      "transient_cost": 13047.36298409894,
-      "transient_cost_ci": 9543.475943133904,
-      "unsettled_fraction": 0.0
+      "transient_cost": 12818.104876872112,
+      "transient_cost_ci": 9777.965225895452,
+      "unsettled_fraction": 0.47619047619047616
     },
     "pid": {
       "abs_gap": 779.0141998585977,
@@ -832,7 +832,7 @@
       "reach_cost_ci": 44323.66311649239,
       "reach_fraction": 0.20833333333333334,
       "running": 0.320970036120484,
-      "seconds": 11.5,
+      "seconds": 21.7,
       "time_in_band": 0.6841750841750841,
       "tracking": 779.6932285010997,
       "transient_cost": 128125.01644189848,
@@ -843,7 +843,7 @@
     "seeds": 3
   },
   "plane_sine": {
-    "fingerprint": "859e2bc897026e92",
+    "fingerprint": "da98573a25a8ea01",
     "mpc": {
       "abs_gap": 1.987992316838056,
       "failure": 0.0,
@@ -860,7 +860,7 @@
       "reach_cost_ci": 732229.50618304,
       "reach_fraction": 0.022916666666666665,
       "running": 0.7485499770245457,
-      "seconds": 244.0,
+      "seconds": 324.6,
       "time_in_band": 0.5975308641975309,
       "tracking": 2.2394423273117234,
       "transient_cost": 761640.2087242514,
@@ -882,7 +882,7 @@
       "reach_cost_ci": 2116417.1098840605,
       "reach_fraction": 0.13125,
       "running": 0.2610314360319603,
-      "seconds": 1.9,
+      "seconds": 2.6,
       "time_in_band": 0.011111111111111112,
       "tracking": 1521.6051281850803,
       "transient_cost": 2143269.866609156,
@@ -893,7 +893,7 @@
     "seeds": 3
   },
   "reactor": {
-    "fingerprint": "5ce8a67b428aae20",
+    "fingerprint": "5c68b10ae7f0705c",
     "mpc": {
       "abs_gap": 0.12562112114219737,
       "failure": 0.0,
@@ -910,7 +910,7 @@
       "reach_cost_ci": 58.26532978888694,
       "reach_fraction": 0.0019290123456790122,
       "running": 2.4124962049452443e-05,
-      "seconds": 63.3,
+      "seconds": 89.9,
       "time_in_band": 0.4035493827160494,
       "tracking": 1.378374774031985,
       "transient_cost": 596.5448464850584,
@@ -932,7 +932,7 @@
       "reach_cost_ci": 3162.863354331861,
       "reach_fraction": 0.037037037037037035,
       "running": 0.3848325202928944,
-      "seconds": 1.3,
+      "seconds": 1.9,
       "time_in_band": 0.032407407407407406,
       "tracking": 23.32241257822808,
       "transient_cost": 12373.617989857992,
@@ -942,54 +942,8 @@
     "rho_floor": 1.252777777777778,
     "seeds": 3
   },
-  "unstable_cstr": {
-    "fingerprint": "526e3ee67b632a30",
-    "mpc": {
-      "abs_gap": 4034.874925348566,
-      "failure": 0.0,
-      "failure_rate": 0.0,
-      "gain": 4034.878881758566,
-      "gain_ci": 475.51727038343995,
-      "hold": 0.006494621936984606,
-      "hold_ci": 0.0008064966177407776,
-      "hold_failure": 0.0,
-      "hold_tracking": 0.006494621936984606,
-      "nea": 0.9297381728153714,
-      "reach_cost": 806974.4840365805,
-      "reach_cost_ci": 349148.6146553464,
-      "reach_fraction": 0.06694444444444445,
-      "seconds": 120.9,
-      "time_in_band": 0.8641666666666666,
-      "tracking": 4034.878881758566,
-      "transient_cost": 252417.77595011392,
-      "transient_cost_ci": 89441.10457373677,
-      "unsettled_fraction": 0.0
-    },
-    "pid": {
-      "abs_gap": 57426.27379652447,
-      "failure": 0.0,
-      "failure_rate": 0.0,
-      "gain": 57426.27775293447,
-      "gain_ci": 966.4756881932553,
-      "hold": 2.6754056214793382,
-      "hold_ci": 0.4344120487570316,
-      "hold_failure": 0.0,
-      "hold_tracking": 2.6754056214793382,
-      "reach_cost": 11484715.483574212,
-      "reach_cost_ci": 4419926.098323819,
-      "reach_fraction": 0.2222222222222222,
-      "seconds": 4.1,
-      "time_in_band": 0.32916666666666666,
-      "tracking": 57426.27775293447,
-      "transient_cost": 584485.0705532498,
-      "transient_cost_ci": 201143.58407349885,
-      "unsettled_fraction": 0.0
-    },
-    "rho_floor": 0.00395641,
-    "seeds": 3
-  },
   "wind_turbine": {
-    "fingerprint": "2335dd4dd803f77a",
+    "fingerprint": "a598cfd9f0670f50",
     "mpc": {
       "abs_gap": 9.34162247193394e-06,
       "failure": 0.0,
@@ -1006,7 +960,7 @@
       "reach_cost_ci": 0.01006738479955447,
       "reach_fraction": 0.0,
       "running": 5.462148675549801e-06,
-      "seconds": 314.1,
+      "seconds": 688.1,
       "time_in_band": 1.0,
       "tracking": 1.5546140436170458e-05,
       "transient_cost": 0.011011830683077761,
@@ -1028,7 +982,7 @@
       "reach_cost_ci": 0.008818118039560573,
       "reach_fraction": 0.0,
       "running": 2.121256354807125e-06,
-      "seconds": 0.9,
+      "seconds": 4.5,
       "time_in_band": 1.0,
       "tracking": 2.4260000647882882e-05,
       "transient_cost": 0.013168228372717769,
