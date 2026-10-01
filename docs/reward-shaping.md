@@ -186,8 +186,10 @@ detected the same way. Three kinds of floor come out of it:
   optimum can be computed for: the reactor (`scripts/floor_reactor_hold.py`, a
   one-state dynamic programme on the error against the demand's within-period
   random walk) and the battery (white dispatch noise drawn after the action,
-  so `E|error| >= sd * sqrt(2/pi)`). The shipped MPC must hold at or above
-  these floors, and does.
+  so `E|error| >= sd * sqrt(2/pi)`). The shipped MPC must hold at these
+  floors within sampling error, and does. The battery's oracle sits on its
+  floor by design: its mean error is 1577 W against 1596 W over 1080 scored
+  steps, about half a standard error below.
 - **Upper bounds** where no reduced-model optimum exists yet: the best shipped
   controller's own long-run hold error, labelled as such in the plant's
   PHYSICS.md. A learner that beats it scores a tracking cost below 1, which is
@@ -201,7 +203,9 @@ detected the same way. Three kinds of floor come out of it:
 
 The sanity test every measured floor has to pass, and a test enforces
 (`tests/test_reward_contract.py`): the shipped MPC's long-run tracking cost
-after burn-in is at or above the floor's cost. A floor the MPC beats is wrong.
+after burn-in is at or above the floor's cost, within sampling error (2%, or
+on the battery, whose oracle sits on its closed-form floor, three standard
+errors of the noise's mean). A floor the MPC beats by more is wrong.
 The test reads the MPC's cost from `src/target_gym/data/protocol_results.json`,
 recorded by `scripts/evaluate_baselines.py`, rather than running the MPC again,
 and refuses a row whose fingerprint no longer matches the code. One slow test
@@ -249,7 +253,8 @@ that found it:
 
 - **The surrogate objectives mirrored the version-1 minimiser.** The
   gradient and sampling planners (wind turbine, battery, aircraft, boiler
-  drum, cement kiln) now descend the plant's own version-2 cost in floor
+  drum, cement kiln; the battery's has since been replaced by a feedforward
+  of the scheduled level) now descend the plant's own version-2 cost in floor
   units, keeping their differentiable barriers (weighted like the failure
   charge); the HVAC CasADi planner minimises the priced dead-zone comfort and
   the gas. Where the tracking cost is linear in the error (p = 1) the planner

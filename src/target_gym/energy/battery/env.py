@@ -117,8 +117,10 @@ class BatteryParams(EnvParams):
     V_cell_max: float = 4.25
 
     # ---- Reward shaping ----
-    # Error scale for the MPC's tracking term, not read by ``compute_reward``.
-    # See "Why the MPC does not minimise the reward" in docs/baselines.md.
+    # Error scale of the retired gradient MPC's tracking term. Nothing reads it
+    # since the oracle became a feedforward of the scheduled level (oracle
+    # audit, 2026-10); kept so the parameters, and the version stamp, do not
+    # change.
     power_band: float = 0.15e6  # W
     precision_floor: float = 1e3  # W, revenue-grade power metering resolution
     # Upper bound on the per-step cost terms, used to keep the reward
@@ -164,9 +166,10 @@ class BatteryParams(EnvParams):
     # |error|. Floor: the dispatch target is a block level plus white noise of
     # sd ``dispatch_noise_std`` drawn after the action is chosen, so no
     # controller can hold the mean |error| below E|N(0, sd)| = sd * sqrt(2/pi)
-    # = 1596 W (closed form; the shipped PID and MPC hold 5.6 and 6.4 kW,
+    # = 1596 W (closed form; the shipped PID holds 5.6 kW, and the oracle, a
+    # feedforward of the scheduled level, 1.58 kW: the floor itself,
     # `scripts/measure_hold.py`). Degradation: capacity fade above the
-    # hold-phase rate (1.92e-8 of capacity per step, PID and MPC alike) at
+    # hold-phase rate (1.92e-8 of capacity per step, PID and oracle alike) at
     # ``fade_price`` per kWh of the 1692 kWh pack -- the avoidable part of
     # ageing, so the best achievable reward stays near zero. The SOC-comfort
     # term of version 1 has no owner price and is dropped (provisional): a

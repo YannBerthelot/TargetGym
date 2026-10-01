@@ -265,11 +265,29 @@ def test_recorded_protocol_row_still_describes_this_tree(spec):
     _recorded_protocol_row(spec)
 
 
+def _sampling_slack(spec, row) -> float:
+    """How far below the floor the recorded MPC cost may sit by chance.
+
+    2% everywhere, except where the oracle sits on a closed-form noise floor by
+    design. The battery's oracle commands the scheduled level and leaves only
+    the dispatch noise, drawn after the action, so its recorded cost is the
+    realised mean |noise| over the recorded steps: below E|noise| about half
+    the time. There the slack is three standard errors of that mean (about 7%
+    over 3 seeds of 360 steps)."""
+    if spec.name != "battery":
+        return 0.02
+    p = spec.make_test_params()
+    n = int(row["seeds"]) * int(p.max_steps_in_episode)
+    se = float(p.dispatch_noise_std) * np.sqrt(1.0 - 2.0 / np.pi) / np.sqrt(n)
+    return max(0.02, 3.0 * se / float(p.e_floor))
+
+
 def test_mpc_does_not_beat_a_measured_floor(spec):
     """Floor sanity: where ``e_floor`` is a measured or certified floor (not a
     documented minimum on a deterministic plant), the shipped MPC's long-run
-    tracking cost after burn-in is at or above the floor's cost. A floor the
-    MPC beats is wrong.
+    tracking cost after burn-in is at or above the floor's cost, within
+    sampling error (``_sampling_slack``). A floor the MPC beats by more is
+    wrong.
 
     Read from the recorded protocol results rather than re-measured: running
     every measured plant's MPC here cost about 52 core-minutes per merge, and
@@ -279,8 +297,10 @@ def test_mpc_does_not_beat_a_measured_floor(spec):
     p = spec.make_test_params()
     if spec.make_mpc is None or getattr(p, "floor_is_documented_minimum", True):
         pytest.skip(f"{spec.name}: no measured floor to check against")
-    tracking = _recorded_protocol_row(spec)["mpc"]["tracking"]
-    assert tracking >= 0.98 * float(p.rho_floor_tracking), (
+    row = _recorded_protocol_row(spec)
+    tracking = row["mpc"]["tracking"]
+    slack = _sampling_slack(spec, row)
+    assert tracking >= (1.0 - slack) * float(p.rho_floor_tracking), (
         f"{spec.name}: MPC tracking cost {tracking:.4g} below the floor "
         f"{float(p.rho_floor_tracking):.4g}"
     )

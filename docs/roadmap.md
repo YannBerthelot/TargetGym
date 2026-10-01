@@ -408,7 +408,7 @@ what is broken and recorded rather than hidden.
 * [ ] **Derive the MPC error bands rather than choosing them one at a time.**
       Every MPC objective normalises its tracking error by a per-plant band:
       `tracking_band` on the four-tank, the distillation column, the pH loop and
-      now the glass furnace, `power_band` on the turbine and the battery,
+      now the glass furnace, `power_band` on the turbine,
       `comfort_band`, `lime_band`, `reward_band`. The surrogate is deliberate
       and measured -- the log-scaled reward's gradient decays like `1/e`, so the
       pull toward the setpoint is weakest where the controller is furthest from

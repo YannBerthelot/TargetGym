@@ -139,6 +139,23 @@ direction that would breach a limit* — throttling discharge near empty and
 charge near full, untouched in the middle — is what keeps the controller out
 of the terminal states while leaving normal dispatch alone.
 
+**The oracle is a feedforward, not a planner.** Delivered power equals the
+command within the step, and the target is the scheduled level plus white
+noise drawn after the action. So the best causal command is the level of the
+block the step is scored against, `dispatch_block(t + 1)`, and what is left is
+the noise, whose expected absolute value is `e_floor`. The oracle commands
+exactly that (`experts.py`, `ScheduleFeedforward`). Measured on the protocol
+seeds, its mean error is 1577 W against the closed-form 1596 W, and its
+protocol cost is 7.82e-4 $/step against 1.115e-3 for the gradient MPC it
+replaced (oracle audit, 2026-10). A controller that knew the noise would
+remove only the noise, and shading the command toward zero to save
+degradation gains about 0.03% on the protocol seeds. It does not guard the
+state of charge. Over 2000 seeds of the scored 30-minute episode the state of
+charge stays within 0.17-0.85 and never trips; over the full 60-minute
+schedule, within 0.10-0.92, still with no trip. So within a scored episode
+the energy budget does not bind on a controller that tracks exactly; what
+tracking costs it is degradation, which the running cost prices.
+
 ---
 
 ## 6. Known deviations
@@ -187,11 +204,11 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1596 W | closed form: the dispatch target is a block level plus white noise of sd 2 kW drawn after the action, so no controller holds E\|error\| below sd * sqrt(2/pi). The shipped PID and MPC hold 5.6 and 6.4 kW within blocks (`scripts/measure_hold.py`, per dispatch block after settling, 3 seeds). |
+| `e_floor` | 1596 W | closed form: the dispatch target is a block level plus white noise of sd 2 kW drawn after the action, so no controller holds E\|error\| below sd * sqrt(2/pi). The shipped PID holds 5.6 kW within blocks, and the oracle, a feedforward of the scheduled level, 1.58 kW: the floor itself (`scripts/measure_hold.py`, per dispatch block after settling, 3 seeds). |
 | `e_tol` | 0 | none |
 | `tracking_exponent` | 1 | linear imbalance |
 | `imbalance_price` | 100 $/MWh | dispatch imbalance tariff (as in the audit) |
-| `c_hold` | 1.92e-8 | fractional capacity fade per step while holding, PID and MPC alike (`scripts/measure_hold.py`); mostly calendar ageing, which no controller avoids, hence charged only above it |
+| `c_hold` | 1.92e-8 | fractional capacity fade per step while holding, PID and oracle alike (`scripts/measure_hold.py`); mostly calendar ageing, which no controller avoids, hence charged only above it |
 | `fade_price` | 300 $/kWh | replacement cost of lost capacity |
 | `pack_kWh` | 1692 | capacity_As x OCV at 50% SOC / 3.6e6 |
 | `failure_cost` | 2 x the imbalance of the reachable 1.8 MW (a 0.8 MW target against the 1 MW power limit) per step | SOC / thermal trip |
