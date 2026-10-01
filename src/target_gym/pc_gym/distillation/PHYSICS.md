@@ -142,6 +142,18 @@ PID gains come from a grid search. Return rises monotonically to Kp ≈ 400 with
 no instability, but 150 captures 98 % of it at a quarter of the control
 activity — the safer margin given RGA ≈ 50.
 
+**The MPC plans on the mean feed, with a decaying step.** Until the oracle
+audit (2026-10-01) the feed-composition noise was not declared in the spec's
+`noise_fields`, so the plan followed one fixed noise path, the plant's own on
+protocol seed 0. Declared, the plan follows the mean, and that alone made the
+oracle 15% worse: the fixed normalised step cannot place reflux and boilup
+closer than about `lr` to the optimum, and that was the whole hold error. A
+step decaying from 0.08 to 0.004 over 80 iterations scores 0.0125 on the
+protocol seeds, against 0.297 before (zero trips). What is left is seed 0's
+running cost (about 0.037 per step on that seed, 0.0122 in the three-seed
+mean); the tracking left is far below the analyser's
+resolution. (The table above predates the version-2 reward and this change.)
+
 ---
 
 ## 7. Known deviations
@@ -185,7 +197,7 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_top`, `e_floor_bottom` | 1e-4, 1e-4 mole fraction (the MPC holds 1.35e-5 / 3.3e-5) | the lowest per-seed long-run mean \|error\| the shipped MPC held on each product under the shipped feed-composition disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in, 3 seeds; PID down to 5.7e-5 and 1.3e-4). Per-seed minima; upper bounds Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
+| `e_floor_top`, `e_floor_bottom` | 1e-4, 1e-4 mole fraction (the MPC holds 7.6e-7 / 5.2e-7) | the lowest per-seed long-run mean \|error\| the shipped MPC held on each product under the shipped feed-composition disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in, 3 seeds; PID down to 5.7e-5 and 1.3e-4; before the oracle audit it held 1.35e-5 / 3.3e-5). Per-seed minima; upper bounds Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
 | `e_tol` | 0 | **provisional.** The purity specifications a column is run against come from the sales contract. |
 | `tracking_exponent` | 2 | quadratic |
 | `c_hold` | 3.282 kmol/min | boilup while holding, PID (MPC 3.292) (`scripts/measure_hold.py`) |

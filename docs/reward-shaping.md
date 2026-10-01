@@ -39,9 +39,11 @@ controller can hold on this plant under its shipped reference and
 disturbance processes -- floored at the resolution of the instrument the
 plant's table cites. Measurement noise is not modelled, so a simulator can
 hold finer than a real transmitter reads; a hold the instrument cannot see
-is not a floor, and on eight plants (glass, kiln, boiler pressure,
-distillation, pH, the unstable CSTR, the compressor's header pressure, the
-aircraft's altitude and heading) the resolution is the scale and the finer measured hold is recorded beside it. An error at the floor costs 1 per step. The scale is
+is not a floor, and on seven plants (glass, kiln, distillation, pH, the
+unstable CSTR, the compressor's header pressure, the aircraft's altitude and
+heading) the resolution is the scale and the finer measured hold is recorded
+beside it. (The boiler's pressure floor is its transmitter resolution too,
+which the oracle holds just above, at 0.052 bar.) An error at the floor costs 1 per step. The scale is
 the plant's own irreducible error, not a sensor resolution and not the
 operating envelope, so a controller's tracking cost reads directly as "how
 many floor-widths off". `e_tol` is a specification tolerance where the plant
@@ -146,10 +148,13 @@ cannot, and the reason the sanity test below is possible. The normalised
 expert advantage `NEA = (PID - x) / (PID - rho*)`, with `rho*` the cost at the
 floor, is a Harris-type index in cost units: 1 at the bound, 0 at PID parity,
 negative below PID. `rho*` is the lowest per-seed hold cost the reference
-controller demonstrated, in the reward's units: 1 per tracked term where the
-floor is that hold, and less where the floor is clamped at the instrument
-resolution (the glass furnace's MPC holds 0.175 K against a 1 K scale, so
-`rho* = 0.03`). On the deterministic plants, where `e_floor` is a
+controller demonstrated, in the reward's units: the sum over tracked terms of
+`(hold / e_floor)^p`, which is 1 per term where the floor is that hold and
+less where the floor is clamped at the instrument resolution (the glass
+furnace's MPC holds 0.175 K against a 1 K scale, so `rho* = 0.03`). Where a
+floor was kept within 1.5x of a re-measured hold rather than reset (the
+oracle audit's rule), its term is near 1 but not 1: the boiler's level term is
+0.84 and its pressure term 1.08, so its `rho* = 1.92`. On the deterministic plants, where `e_floor` is a
 resolution used as a scale and exact hold is achievable, `rho*` is 0 -- a
 reference of 1 there (the cost at the resolution) is not a bound, and the
 shipped MPCs sit below it. And the two-cost report -- tracking against consumption --
@@ -221,9 +226,9 @@ the evaluator measures.
 | `battery` | p=1 | 1596 W (closed form) | 0 | fade above hold at $300/kWh of capacity | $ per step, imbalance $100/MWh |
 | `wind_turbine` | p=1 | 1680 W (lowest per-seed MPC hold, upper bound) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $100/MWh (provisional) |
 | `glass_furnace` | p=2 | 1 K (thermocouple resolution; the MPC holds 0.175) | 0 | fuel above hold, w=1 | dimensionless |
-| `cement_kiln` | p=2 | 5e-4 (assay resolution; the MPC holds 3.4e-4) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
-| `boiler_drum` | p=2 x2 | 2.7 mm level (lowest per-seed MPC hold), 0.05 bar (transmitter resolution; the MPC holds 0.028) | 0 | fuel above hold, w=1 | dimensionless |
-| `distillation` | p=2 x2 | 1e-4 / 1e-4 (analyser resolution; the MPC holds 1.35e-5 / 3.3e-5) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
+| `cement_kiln` | p=2 | 5e-4 (assay resolution; the MPC holds 4.9e-5) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
+| `boiler_drum` | p=2 x2 | 2.7 mm level (an earlier oracle's lowest per-seed hold; the current one holds 2.45 mm), 0.05 bar (transmitter resolution; the MPC holds 0.052) | 0 | fuel above hold, w=1 | dimensionless |
+| `distillation` | p=2 x2 | 1e-4 / 1e-4 (analyser resolution; the MPC holds 7.6e-7 / 5.2e-7) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
 | `ph_neutralization` | p=2 | 0.01 pH (electrode resolution; the MPC holds 0.0013) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
 | `unstable_cstr` | p=2 | 1e-4 mol/L (analyser resolution; the MPC holds 6.29e-6, lowest per seed, so `rho* = (6.29e-6 / 1e-4)^2 = 0.00396`) | 0 (provisional) | none | dimensionless |
 | `compressor_surge` | p=2 | 0.0275 kPa (pressure transmitter accuracy, 0.055 % (read) of a 0 to 50 kPa span (ours); the MPC holds 1.03e-4, lowest per seed, so `rho* = (1.03e-4 / 0.0275)^2 = 1.40e-5`) | 0 (provisional) | recycle power above hold, w=1 (`c_hold` 62 270 W, the MPC's measured hold consumption) | dimensionless |

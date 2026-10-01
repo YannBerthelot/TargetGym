@@ -13,7 +13,12 @@ from target_gym.experts.mpc import (
 
 
 def make_distillation_mpc(
-    env, params, horizon: int = 15, n_iter: int = 40, lr: float = 0.08
+    env,
+    params,
+    horizon: int = 15,
+    n_iter: int = 80,
+    lr: float = 0.08,
+    lr_end: float = 0.004,
 ):
     """Gradient MPC for the distillation column.
 
@@ -26,6 +31,15 @@ def make_distillation_mpc(
 
     The objective is the environment's own reward; see ``make_plane3d_mpc``
     for why ``done_value`` follows the reward version.
+
+    The step decays from ``lr`` to ``lr_end`` over each solve. A fixed
+    normalised step cannot place the reflux and boilup closer than about
+    ``lr`` to the optimum, and on this plant that was the whole hold error.
+    Measured in the oracle audit (2026-10-01) on the protocol seeds, planning
+    on the mean feed composition: the fixed step scored 0.34, the decaying
+    step 0.0126 at 40 iterations and 0.0125 at 80, against a floor of about
+    0.0122 set by seed 0's running cost. More iterations still shrink the
+    tracking term, which is by then far below the analyser's resolution.
     """
     return GradientMPC(
         env,
@@ -37,4 +51,5 @@ def make_distillation_mpc(
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,
+        lr_end=lr_end,
     )

@@ -73,19 +73,21 @@ class BoilerDrumParams(EnvParams):
     max_steps_in_episode: int = 400  # 800 s at dt = 2 s
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
-    # Two tracked outputs, one term each, summed. Floors are the best shipped
-    # controller's long-run hold error under the shipped steam-demand
-    # disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 60-step
-    # burn-in): level 2.67 mm and pressure 0.0283 bar, both the MPC's lowest of three seeds (PID 37-70 mm, 0.035-0.050 bar;
-    # the MPC drifts to 0.077 bar). Upper bounds on the achievable floors.
-    # Fuel above the hold-phase firing rate (1.566e8 W, MPC) is charged at
-    # weight 1. The level trip (0.25 m) costs (0.25 / 0.00267)^2 = 8.8e3 and
-    # the pressure envelope (40 bar / 0.0283)^2 = 2.0e6; a trip twice the sum.
+    # Two tracked outputs, one term each, summed. The level floor, 2.67 mm, is
+    # an earlier oracle's lowest per-seed hold, measured when that oracle saw
+    # the steam noise of its best seed; the pressure floor is the 0.05 bar
+    # transmitter resolution. The current oracle plans on the mean steam
+    # demand (oracle audit, 2026-10-01) and holds 2.45 mm and 0.0519 bar on its
+    # best seed (`scripts/measure_hold.py`, 1200 hold steps after a 60-step
+    # burn-in; PID 37-70 mm, 0.035-0.050 bar). Both are within 1.5x of the
+    # floors, so the floors stay the scale. Upper bounds on the achievable
+    # floors. Fuel above the hold-phase firing rate (1.566e8 W, MPC) is
+    # charged at weight 1. The level trip (0.25 m) costs (0.25 / 0.00267)^2 =
+    # 8.8e3 and the reachable 23 bar pressure error (23 / 0.05)^2 = 2.1e5; a
+    # trip twice the sum.
     reward_version: int = 2
-    e_floor_level: float = 2.67e-3  # m, lowest per-seed MPC hold
-    e_floor_pressure: float = (
-        0.05  # bar, the pressure transmitter's resolution; the MPC holds 0.028 bar below it
-    )
+    e_floor_level: float = 2.67e-3  # m, an earlier oracle's best hold; now 2.45 mm
+    e_floor_pressure: float = 0.05  # bar, the transmitter's resolution; MPC 0.052
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
     c_hold: float = 1.566e8  # W fuel while holding (MPC)
@@ -97,9 +99,10 @@ class BoilerDrumParams(EnvParams):
     restart_steps: int = 7200
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     #: The NEA reference: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (level at its floor, the MPC's 0.0283 bar pressure hold in 0.05 bar units).
-    rho_floor_tracking: float = 1.0 + (0.0283 / 0.05) ** 2
-    rho_floor: float = 1.0 + (0.0283 / 0.05) ** 2
+    #: demonstrated, in the reward's units (the MPC's 2.45 mm level and 0.0519 bar
+    #: pressure holds, in 2.67 mm and 0.05 bar units).
+    rho_floor_tracking: float = (2.45e-3 / 2.67e-3) ** 2 + (0.0519 / 0.05) ** 2
+    rho_floor: float = (2.45e-3 / 2.67e-3) ** 2 + (0.0519 / 0.05) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 

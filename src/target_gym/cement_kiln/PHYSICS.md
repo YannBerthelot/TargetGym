@@ -177,6 +177,20 @@ zero, so it sat at its initial action sequence and scored exactly what a
 zero-action constant scores. The cross-entropy method samples instead, and
 recovers the expected MPC-over-PID margin.
 
+**It plans on the mean feed, and searches near its last plan.** Until the
+oracle audit (2026-10-01) the raw-meal noise was not declared in the spec's
+`noise_fields`, so the sampled plans were scored on one fixed noise path:
+the plant's own on protocol seed 0, a wrong one elsewhere. Declared, they are
+scored on the mean. The search then needed reshaping more than enlarging:
+each solve starts from the shifted previous plan, so it now samples near it
+(spread 0.1 rather than 0.5), runs 32 iterations of 96 samples so the
+smoothed spread can contract, and returns the best sequence it evaluated. On
+the protocol seeds that scores 0.0705, against 1.33 before, 1.26 for the old
+budget on the mean feed and 0.264 for 384 samples and 8 iterations at the
+same cost per step; 64 iterations add under 1%. What is left is mostly fuel
+above the hold rate, which the raw-meal swings drive. (The table above
+predates the version-2 reward and this change.)
+
 ---
 
 ## 6. Known deviations
@@ -240,10 +254,10 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 5e-4 (free-lime fraction; the MPC holds 3.42e-4) | the lowest per-seed long-run mean \|error\| the shipped MPC held under the shipped raw-meal disturbance (`scripts/measure_hold.py`, 1560 hold steps after a 180-step burn-in; seeds 3.4 / 4.4 / 5.6e-4, PID 7.0-10.1e-4). Per-seed minimum; upper bound Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
+| `e_floor` | 5e-4 (free-lime fraction; the MPC holds 4.89e-5) | the lowest per-seed long-run mean \|error\| the shipped MPC held under the shipped raw-meal disturbance (`scripts/measure_hold.py`, 1560 hold steps after a 180-step burn-in; seeds 4.9 / 6.5 / 8.4e-5, PID 7.0-10.1e-4; before the oracle audit it held 3.3 / 4.4 / 5.4e-4). Per-seed minimum; upper bound Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
 | `e_tol` | 0 | **provisional.** The free-lime specification band comes from the plant's quality system. |
 | `tracking_exponent` | 2 | quadratic |
-| `c_hold` | 1.824 kg/s | fuel while holding, PID (MPC 1.840) (`scripts/measure_hold.py`) |
+| `c_hold` | 1.824 kg/s | fuel while holding, PID (MPC 1.790) (`scripts/measure_hold.py`) |
 | `running_weight` | 1 | sweep 0.5 / 1 / 2 |
 | `failure_cost` | 1.41e4 | twice the reachable free-lime excursion's cost, 2 x ((0.05 - 0.008) / 5e-4)^2: a cold kiln's 5 % free lime (provisional) against the lowest target; the trips are on burning-zone temperature |
 | `restart_steps` | 2880 (24 h) | restart time priced into a trip, `restart_steps x failure_cost` (cool-down, inspection and re-heat; provisional); where a plant engineer would get it: the plant's restart procedure |

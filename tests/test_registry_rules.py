@@ -362,6 +362,46 @@ def test_every_oracle_lives_in_its_own_package():
     assert not problems, "\n".join(problems)
 
 
+# Plant noise not declared yet. Each of these oracles is a CasADi planner on
+# its own model, which never rolls the simulator and so cannot see the noise.
+# Declaring it moves the task's baseline fingerprint, so each is declared when
+# that task is next re-recorded. This list only shrinks.
+_NOISE_NOT_YET_DECLARED = {
+    "glass_furnace": {"m_pull_noise_std"},
+    "reactor": {"demand_sigma"},
+    "hvac": {"T_out_noise_std"},
+}
+
+
+def test_plant_noise_is_declared():
+    """Every non-zero noise amplitude in a task's parameters (a field ending in
+    ``_std`` or ``_sigma``; the reactor's ``sigma_phi0`` is a xenon absorption
+    rate, not noise, and the pattern leaves it alone) is in its
+    ``noise_fields``, so ``plan_params`` zeroes it for the oracle. A planner
+    that rolls the simulator with a fixed key otherwise sees the exact noise of
+    one seed and a wrong path on every other: the boiler, kiln and
+    distillation oracles did, until the oracle audit (2026-10-01)."""
+    problems = []
+    for s in registry.all_specs():
+        p = s.make_test_params()
+        noisy = {
+            f.name
+            for f in dataclasses.fields(p)
+            if f.name.endswith(("_std", "_sigma"))
+            and isinstance(getattr(p, f.name), (int, float))
+            and float(getattr(p, f.name)) != 0.0
+        }
+        missing = (
+            noisy - set(s.noise_fields) - _NOISE_NOT_YET_DECLARED.get(s.name, set())
+        )
+        if missing:
+            problems.append(f"{s.name}: undeclared noise {sorted(missing)}")
+        stale = _NOISE_NOT_YET_DECLARED.get(s.name, set()) & set(s.noise_fields)
+        if stale:
+            problems.append(f"{s.name}: {sorted(stale)} is declared; drop it here")
+    assert not problems, "\n".join(problems)
+
+
 def test_every_mpc_task_and_every_new_task_has_a_hold_row():
     """``eval.hold_settings`` returns a burn-in of 0 for a task with no row in
     hold_measurements.json, without a word, and the protocol would then score

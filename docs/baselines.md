@@ -311,15 +311,18 @@ policy, gets the observation vector alone. **The table below is therefore not a
 controller-class comparison at equal information**, and part of every MPC lead
 is the hidden state rather than the planning.
 
-**The gradient and sampling planners do not plan on the mean disturbance.**
-Both roll the true environment forward internally, and the environments derive
-their process noise as `fold_in(key, state.time)`. The planners pass a fixed
-`PRNGKey(0)`, so they simulate one specific pseudo-random disturbance
-trajectory, consistent across an episode and unrelated to the realisation the
-environment will actually produce. That is neither certainty equivalence, which
-would use the mean, nor a robust or scenario formulation. It has not been
-measured against the alternatives; it is recorded here so nobody assumes
-otherwise from the word "MPC".
+**The gradient and sampling planners plan on the mean disturbance.** Both roll
+the true environment forward internally, and the environments derive their
+process noise as `fold_in(key, state.time)`. The planners pass a fixed
+`PRNGKey(0)`, and `plan_params` zeroes every noise amplitude the spec declares
+in `noise_fields` for the planner's copy of the params, so the plan follows the
+mean: certainty equivalence, not a robust or scenario formulation. A plant
+whose noise was not declared had its planner simulate one fixed noise path
+instead, exactly the plant's own on protocol seed 0 and a wrong one on every
+other seed. The last three (boiler, kiln, distillation) were fixed in the
+oracle audit (2026-10), and a registry test now requires every non-zero noise
+amplitude to be declared, except on the glass furnace, reactor and HVAC, whose
+CasADi oracles never roll the simulator and which the test lists as pending.
 
 **The CasADi objectives are quadratic proxies, not the environment's reward.**
 The shipped rewards are log-scaled and clip to zero outside the tracking band,
@@ -864,17 +867,17 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | --- | --- | --- | --- | --- | --- | --- |
 | `plane3d_figure8` | 400 | 4.695e+04 | 6.772 | 1.000 | 10/10 | 0 |
 | `plane3d_racetrack` | 650 | 1.78e+05 | 758.8 | 0.996 | 10/10 | 0 |
+| `boiler_drum` | 400 | 641.9 | 15.31 | 0.976 | 10/10 | 0 |
 | `plane_energy` | 1200 | 1366 | 73.21 | 0.946 | 10/10 | 0 |
 | `reactor` | 864 | 24.37 | 1.373 | 0.944 | 10/10 | 0 |
-| `boiler_drum` | 400 | 641.9 | 42.4 | 0.934 | 10/10 | 0 |
+| `cement_kiln` | 700 | 6.368 | 0.4048 | 0.936 | 10/10 | 0 |
 | `unstable_cstr` | 1200 | 5.714e+04 | 4178 | 0.927 | 10/10 | 0 |
 | `compressor_surge` | 1200 | 1790 | 161.4 | 0.910 | 10/10 | 0 |
-| `distillation` | 200 | 262.3 | 31.91 | 0.878 | 10/10 | 0 |
+| `distillation` | 200 | 262.3 | 29.9 | 0.886 | 10/10 | 0 |
 | `plane3d_circle` | 300 | 1207 | 235.1 | 0.805 | 10/10 | 0 |
 | `plane3d_heading` | 200 | 3.15e+04 | 6734 | 0.786 | 10/10 | 0 |
 | `plane_sine` | 480 | 5184 | 1251 | 0.759 | 10/10 | 0 |
 | `battery` | 360 | 0.003457 | 0.0008876 | 0.743 | 10/10 | 0 |
-| `cement_kiln` | 700 | 6.368 | 1.705 | 0.732 | 10/10 | 0 |
 | `ph_neutralization` | 300 | 336.3 | 91.22 | 0.729 | 10/10 | 0 |
 | `four_tank` | 500 | 1167 | 344.5 | 0.705 | 10/10 | 0 |
 | `plane` | 280 | 1.04e+04 | 3276 | 0.685 | 10/10 | 0 |
@@ -982,11 +985,11 @@ MPC's lowest per-seed hold, 1.03e-4 kPa, sets the floor column:
 | plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID hold | MPC hold | PID reach B (transient) | MPC reach B (transient) | fail |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `battery` | 0.000222 | 0.00346 (0.00288 / 0.000589) | 0.000782 (0.000219 / 0.000563) | 0.827 | 0.00132 | 0.000868 | 0.0497 (0.0292) | 0.000234 (0.000687) | 0 |
-| `boiler_drum` | 1.32 | 524 (524 / 0.0276) | 23.8 (23.8 / 0.0323) | 0.957 | 460 | 24.7 | 3.28e+04 (3.84e+04) | 3e+03 (4.81e+03) | 0 |
-| `cement_kiln` | 0.468 | 4.75 (4.68 / 0.0732) | 1.33 (1.27 / 0.0535) | 0.8 | 5.75 | 1.37 | 910 (2.46e+03) | 318 (585) | 0 |
+| `boiler_drum` | 1.92 | 524 (524 / 0.0276) | 4.67 (4.62 / 0.0463) | 0.995 | 460 | 3.44 | 3.28e+04 (3.84e+04) | 2.59e+03 (2.38e+03) | 0 |
+| `cement_kiln` | 0.00956 | 4.75 (4.68 / 0.0732) | 0.0705 (0.0295 / 0.0411) | 0.987 | 5.75 | 0.0728 | 910 (2.46e+03) | 241 (255) | 0 |
 | `compressor_surge` | 1.4e-05 | 1.78e+03 (1.78e+03 / 0.388) | 60.8 (60.4 / 0.393) | 0.966 | 9.41 | 0.214 | 8.93e+05 (8.94e+05) | 1.01e+05 (1.01e+05) | 0 |
 | `cstr` | 0 | 41.2 (41.2 / —) | 0.317 (0.317 / —) | 0.992 | 5.96e-07 | 4.21e-05 | 6.64e+05 (6.6e+05) | 6.12e+05 (6.12e+05) | 0 |
-| `distillation` | 0.127 | 62.6 (62.6 / 0.00219) | 0.297 (0.284 / 0.0123) | 0.997 | 62.6 | 0.297 | 4.05e+03 (1.33e+04) | 1.65e+03 (1.68e+03) | 0 |
+| `distillation` | 8.53e-05 | 62.6 (62.6 / 0.00219) | 0.0125 (0.000261 / 0.0122) | 1 | 62.6 | 0.0125 | 4.05e+03 (1.33e+04) | 1.4e+03 (1.4e+03) | 0 |
 | `first_order` | 0 | 3.57e-06 (3.57e-06 / —) | 0 (0 / —) | 1 | 7.89e-11 | 0 | 1.19e+05 (1.19e+05) | 1.17e+05 (1.17e+05) | 0 |
 | `four_tank` | 0 | 30.3 (30.3 / —) | 0.00741 (0.00741 / —) | 1 | 30.3 | 0.00741 | 6.5e+05 (6.58e+05) | 1.92e+05 (1.92e+05) | 0 |
 | `glass_furnace` | 0.0306 | 2.09 (2.02 / 0.0724) | 0.803 (0.759 / 0.0437) | 0.625 | 2.09 | 0.803 | -225† (1.14e+03) | -99.5† (405) | 0 |

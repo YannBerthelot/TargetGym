@@ -70,6 +70,25 @@ than by commit.
 
 ### Changed
 
+- **The boiler, kiln and distillation oracles plan on the mean noise, with
+  stronger optimisers.** Their plant noise (steam demand, raw-meal feed, feed
+  composition) was not in `noise_fields`, so their planners, which roll the
+  simulator with a fixed key, saw the exact noise of protocol seed 0 and a
+  wrong path on every other seed. It is declared now, and a registry test
+  requires every non-zero noise amplitude to be declared; the glass furnace,
+  reactor and HVAC are listed as pending, since their CasADi oracles never
+  roll the simulator. With the noise out of the plan, each optimiser got the
+  budget the oracle audit measured it needs: the boiler 1280 iterations with
+  a step decaying 0.15 to 0.005, distillation 80 iterations decaying 0.08 to
+  0.004, the kiln 32 CEM iterations of 96 samples from a 0.1 spread,
+  returning the best sample. Protocol cost falls from 23.8 to 4.67 (boiler),
+  1.33 to 0.0705 (kiln) and 0.297 to 0.0125 (distillation), with zero trips.
+  The NEA floors follow the re-measured holds: kiln 0.468 to 0.00956,
+  distillation 0.127 to 8.5e-5, and the boiler up from 1.32 to 1.92, since
+  its old value came from the seed-0 foresight. Every `e_floor` stays (the
+  boiler's 2.67 mm level floor is within 1.1x of the new 2.45 mm hold), so
+  the rewards are unchanged and the three versions are re-stamped in place.
+
 - **The pH oracle reads the buffer flow.** Its CasADi model took the buffer
   flow q2 at its nominal value and left feedback to absorb the drift; it now
   takes q2 as a time-varying parameter, forecast from the state by the env's
