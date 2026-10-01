@@ -15,9 +15,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "boiler_drum-v2": {
-    "fingerprint": "7c1a8517e33a38e8",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "ea7d45b3b6b955ff",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: the planner plans on the mean noise, with a larger optimiser budget). They are the NEA reference: no reward reads them, so the environment's behaviour is unchanged. The boiler planner divides its objective by rho_floor_tracking, so its hold was re-measured under the new value (1.9204 against the 1.9194 set) and its rows re-recorded with it.",
+    "stamped": "2026-10-01T18:09:02+00:00"
   },
   "cement_kiln-v1": {
     "fingerprint": "0419d354f296e9f2",
@@ -25,9 +25,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "cement_kiln-v2": {
-    "fingerprint": "92905dbc453fd7ff",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "931837e967ab598e",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: the planner plans on the mean noise, with a larger optimiser budget). They are the NEA reference: no reward reads them, so the environment's behaviour is unchanged. The kiln planner divides its objective by the floor, but its CEM ranking does not depend on that scale; its rows were re-recorded with it.",
+    "stamped": "2026-10-01T18:09:02+00:00"
   },
   "compressor_surge-v2": {
     "fingerprint": "b57d32e94be4dbbd",
@@ -50,9 +50,9 @@
     "stamped": "2026-09-13T09:03:12+00:00"
   },
   "distillation-v2": {
-    "fingerprint": "62c278c94b4bb6b1",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "66324f13544e8b45",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: the planner plans on the mean noise, with a larger optimiser budget). They are the NEA reference: no reward reads them, so the environment's behaviour is unchanged. The distillation planner sums the raw reward and does not read it; its rows were re-recorded with the new planner budget and declared noise.",
+    "stamped": "2026-10-01T18:09:02+00:00"
   },
   "first_order-v1": {
     "fingerprint": "fa0ddbc733bf3f60",

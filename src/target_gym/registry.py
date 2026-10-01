@@ -781,6 +781,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # test episode is kept short.
         tuned_gains_key="distillation",
         disturbance_fields=("zF",),
+        # The feed composition's OU innovation. The JAX planner rolls its model with a fixed key, so
+        # undeclared it saw the exact noise of protocol seed 0 and a wrong path on
+        # every other seed (oracle audit, 2026-10-01).
+        noise_fields=("zF_noise_std",),
     ),
     # -- Industrial / energy ------------------------------------------------
     EnvSpec(
@@ -857,6 +861,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # to 700.)
         tuned_gains_key="cement_kiln",
         disturbance_fields=("raw_meal",),
+        # The raw-meal feed's OU innovation. The JAX planner rolls its model with a fixed key, so
+        # undeclared it saw the exact noise of protocol seed 0 and a wrong path on
+        # every other seed (oracle audit, 2026-10-01).
+        noise_fields=("feed_noise_std",),
     ),
     EnvSpec(
         name="boiler_drum",
@@ -869,6 +877,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # so a controller has to survive many inverse-response transients.
         tuned_gains_key="boiler_drum",
         disturbance_fields=("q_steam",),
+        # The steam demand's OU innovation. The JAX planner rolls its model with a fixed key, so
+        # undeclared it saw the exact noise of protocol seed 0 and a wrong path on
+        # every other seed (oracle audit, 2026-10-01).
+        noise_fields=("q_steam_noise_std",),
     ),
     EnvSpec(
         name="wind_turbine",

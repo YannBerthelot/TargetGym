@@ -78,7 +78,12 @@ class BoilerDrumGradientMPC(GradientMPC):
 
 
 def make_boiler_drum_mpc(
-    env, params, horizon: int = 30, n_iter: int = 40, lr: float = 0.05
+    env,
+    params,
+    horizon: int = 30,
+    n_iter: int = 1280,
+    lr: float = 0.15,
+    lr_end: float = 0.005,
 ):
     """Gradient MPC for the drum boiler.
 
@@ -87,6 +92,15 @@ def make_boiler_drum_mpc(
     symbolically for no gain. Optimises firing and feedwater jointly, which
     matters because they are coupled through pressure -- firing harder raises
     pressure, which collapses bubbles and *lowers* the level.
+
+    The descent budget is large because the objective is ill-conditioned and
+    the normalised steps make slow progress on it. Measured in the oracle
+    audit (2026-10-01) on the protocol seeds, planning on the mean steam
+    demand: 40 iterations scored 19.2, 160 with a decaying step 8.2, 640 5.3
+    and 1280 4.7, each doubling gaining about half what the one before did,
+    at 160 s per protocol seed. A longer horizon (45) and a PID-rollout guide
+    did worse or nothing. A better-conditioned optimiser would likely beat
+    more iterations.
     """
     return BoilerDrumGradientMPC(
         env,
@@ -97,4 +111,5 @@ def make_boiler_drum_mpc(
         horizon=horizon,
         n_iter=n_iter,
         lr=lr,
+        lr_end=lr_end,
     )

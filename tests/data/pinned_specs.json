@@ -581,7 +581,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "zF_noise_std"
+    ]
   },
   {
     "name": "glass_furnace",
@@ -725,7 +727,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "feed_noise_std"
+    ]
   },
   {
     "name": "boiler_drum",
@@ -761,7 +765,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "q_steam_noise_std"
+    ]
   },
   {
     "name": "wind_turbine",

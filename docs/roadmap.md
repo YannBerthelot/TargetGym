@@ -493,7 +493,9 @@ what is broken and recorded rather than hidden.
         parameters named in `EnvSpec.noise_fields` for the planner's copy of
         the params, which is certainty equivalence. It controls better, not
         merely more honestly: the wind turbine went from 343.9 to 348.3, and
-        the battery MPC from losing 9 seeds in 10 to leading.
+        the battery MPC from losing 9 seeds in 10 to leading. The boiler,
+        kiln and distillation planners only joined in the oracle audit
+        (2026-10), when their noise was declared.
       - [ ] **An asymmetric reward variant**, if mechanism 2 is to be isolated
         cleanly rather than merely present. Every reward here is symmetric in
         the error, including the cement kiln's free lime; they are all

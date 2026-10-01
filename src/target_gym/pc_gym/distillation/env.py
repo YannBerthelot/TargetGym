@@ -123,18 +123,20 @@ class DistillationParams(EnvParams):
     max_steps_in_episode: int = 200
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
-    # Two tracked compositions, one term each, summed. Floors are the shipped
-    # MPC's long-run hold errors under the shipped feed-composition
-    # disturbance (`scripts/measure_hold.py`, 1200 hold steps after a
-    # 582-step burn-in): top 1.35e-5, bottom 3.3e-5 mole fraction, each the MPC's lowest of three seeds (PID down to 5.7e-5
-    # and 1.3e-4). Upper bounds on the achievable floors. e_tol = 0
-    # provisionally: the product purity specifications a column is run
-    # against come from the sales contract and are to be supplied. Boilup
-    # above the hold-phase rate (3.282 kmol/min, PID; MPC 3.292) is charged
-    # at weight 1. The unit composition span costs (1 / 1.35e-5)^2 = 5.5e9 per
-    # step on the top alone; a trip twice the two-end sum.
+    # Two tracked compositions, one term each, summed. The shipped MPC's
+    # long-run hold errors under the shipped feed-composition disturbance
+    # (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in)
+    # are top 7.6e-7 and bottom 5.2e-7 mole fraction, each its lowest of three
+    # seeds (PID down to 5.7e-5 and 1.3e-4): the oracle since the oracle audit
+    # (2026-10-01), planning on the mean feed with a decaying step. It held
+    # 1.35e-5 and 3.3e-5 before. Upper bounds on the achievable floors.
+    # e_tol = 0 provisionally: the product purity specifications a column is
+    # run against come from the sales contract and are to be supplied. Boilup
+    # above the hold-phase rate (3.282 kmol/min, PID; MPC 3.292) is charged at
+    # weight 1. A trip is charged at twice the reachable 0.095 error on each
+    # product, in floor units (`failure_cost`).
     reward_version: int = 2
-    # The MPC holds 1.35e-5 / 3.3e-5 in the shipped disturbance, below the 1e-4
+    # The MPC holds 7.6e-7 / 5.2e-7 in the shipped disturbance, below the 1e-4
     # composition-analyser resolution: the instrument sets both scales.
     e_floor_top: float = 1e-4  # mole fraction
     e_floor_bottom: float = 1e-4
@@ -149,9 +151,9 @@ class DistillationParams(EnvParams):
     restart_steps: int = 240
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     #: The NEA reference: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (the MPC's 1.35e-5 / 3.3e-5 holds in 1e-4 units).
-    rho_floor_tracking: float = (1.35e-5 / 1e-4) ** 2 + (3.3e-5 / 1e-4) ** 2
-    rho_floor: float = (1.35e-5 / 1e-4) ** 2 + (3.3e-5 / 1e-4) ** 2
+    #: demonstrated, in the reward's units (the MPC's 7.64e-7 / 5.19e-7 holds in 1e-4 units).
+    rho_floor_tracking: float = (7.64e-7 / 1e-4) ** 2 + (5.19e-7 / 1e-4) ** 2
+    rho_floor: float = (7.64e-7 / 1e-4) ** 2 + (5.19e-7 / 1e-4) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 
