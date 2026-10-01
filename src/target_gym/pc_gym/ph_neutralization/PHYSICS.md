@@ -141,6 +141,19 @@ flat out there, so IPOPT sees no gradient at all, optimises the only live term
 ~3.9 pH mean error. What the objective must share with the reward is its
 **minimiser**, not its shape.
 
+**The MPC reads the buffer flow.** The buffer flow is not in the
+observation, but the MPC is the oracle and reads the state, as it already did
+for the equally hidden invariants Wa and Wb. Its model takes q2 as a
+time-varying parameter, forecast from the current value by the env's own OU
+mean decay. Until the oracle audit (2026-10-01) it planned on the nominal
+flow and left receding-horizon feedback to absorb the drift, and that model
+error made almost all of its hold error. On the protocol seeds, reading q2
+cut the protocol cost from 3.06 to 0.096 and the mean hold error from 0.0146
+to 0.0022 pH. What is left is the OU innovation itself: a planner told the
+realised next q2 tracks to about 1e-5 pH, so the whole remaining tracking cost
+is that one-step innovation, which no causal controller can predict. (The
+table above predates the version-2 reward and this change.)
+
 ---
 
 ## 6. Known deviations
@@ -183,12 +196,12 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 0.01 pH (the MPC holds 0.0080) | the lowest per-seed long-run mean \|error\| the shipped MPC held under the shipped buffer-flow disturbance (`scripts/measure_hold.py`, 900 hold steps after a 108-step burn-in; seeds 0.0139 / 0.0220 / 0.0080, PID 0.016-0.054). A per-seed minimum so no run of the reference sits below it; an upper bound on the achievable floor Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
+| `e_floor` | 0.01 pH (the MPC holds 0.0013) | the lowest per-seed long-run mean \|error\| the shipped MPC held under the shipped buffer-flow disturbance (`scripts/measure_hold.py`, 900 hold steps after a 108-step burn-in; seeds 0.0021 / 0.0031 / 0.0013, PID 0.016-0.054). The MPC reads the buffer flow from the state since the oracle audit (2026-10-01); planning on the nominal flow, it held 0.0080. A per-seed minimum so no run of the reference sits below it; an upper bound on the achievable floor Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
 | `e_tol` | 0 | **provisional.** The discharge permit band (typically pH 6-9 on an outfall) is a regulatory number the plant would supply. |
 | `tracking_exponent` | 2 | quadratic |
 | `c_hold` | 16.24 mL/s | reagent flow while holding, PID and MPC alike (`scripts/measure_hold.py`) |
 | `running_weight` | 1 | one floor-width of pH error is worth the hold-phase reagent flow again; sweep 0.5 / 1 / 2 |
-| `failure_cost` | 3.1e6 | twice the span's cost, (10 / 0.0080)^2. **Never charged**: the effluent is a convex mix of the inlet streams, so its pH stays within about 3.1-10.6 whatever the valves do; the 2 / 12 limits are documentation of the off-spec range |
+| `failure_cost` | 3.1e6 | twice the span's cost in units of the earlier 0.0080 pH hold, (10 / 0.0080)^2, left as it is when the hold improved. **Never charged**: the effluent is a convex mix of the inlet streams, so its pH stays within about 3.1-10.6 whatever the valves do; the 2 / 12 limits are documentation of the off-spec range |
 | `restart_steps` | 720 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (flush the tank after a gross excursion; provisional; never exercised, see `failure_cost`); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed

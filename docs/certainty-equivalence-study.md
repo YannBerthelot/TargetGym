@@ -5,7 +5,10 @@ uncertainty* from *what is left for learning*, by inserting stronger
 model-based baselines between deterministic MPC and RL.
 
 Investigation only. Nothing in this report has been implemented, and no
-environment, baseline or test was modified to produce it.
+environment, baseline or test was modified to produce it. It describes the
+planners as they were then: the oracle audit (2026-10) has since changed some
+of them, for example the pH planner now forecasts the buffer flow from the
+state instead of assuming its nominal value.
 
 ## 1. Verdict
 

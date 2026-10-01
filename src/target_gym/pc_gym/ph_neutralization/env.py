@@ -136,17 +136,22 @@ class PHParams(EnvParams):
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # Floor: the shipped MPC's long-run mean |pH error| under the shipped
-    # buffer-flow disturbance (q2 noise), 0.0080 pH (the lowest of three seeds: 0.0139 / 0.0220 / 0.0080; PID 0.016-0.054) over 900 hold steps after a
-    # 108-step burn-in, `scripts/measure_hold.py` -- an upper bound on the
-    # achievable floor (no reduced-model optimum exists for this plant).
+    # buffer-flow disturbance (q2 noise), 0.0013 pH (the lowest of three
+    # seeds: 0.0021 / 0.0031 / 0.0013; PID 0.016-0.054) over 900 hold steps
+    # after a 108-step burn-in, `scripts/measure_hold.py`. That is the oracle
+    # reading the buffer flow (oracle audit, 2026-10-01); the planner that
+    # assumed nominal flow held 0.0080. An upper bound on the achievable
+    # floor (no reduced-model optimum exists for this plant).
     # e_tol = 0 provisionally: the discharge permit band a plant would use
     # here is a regulatory number to be supplied (typically pH 6-9 on the
     # outfall). Reagent above the hold-phase flow (16.24 mL/s, the same for
     # PID and MPC) is charged at weight 1: one floor-width of pH error is
-    # worth the whole hold-phase reagent flow again. The span costs
-    # (10 / 0.0080)^2 = 1.6e6 per step; off-spec termination twice that.
+    # worth the whole hold-phase reagent flow again. The failure cost was set
+    # at twice the span's cost in units of the earlier 0.0080 pH hold,
+    # (10 / 0.0080)^2 = 1.6e6 per step. It is never charged (see PHYSICS.md),
+    # so it was left as it is when the hold improved.
     reward_version: int = 2
-    # The MPC holds 0.0080 pH in the shipped disturbance, below the 0.01 pH
+    # The MPC holds 0.0013 pH in the shipped disturbance, below the 0.01 pH
     # electrode resolution: the instrument sets the scale.
     e_floor: float = 0.01  # pH
     e_tol: float = 0.0  # provisional; permit band to be supplied
@@ -158,9 +163,9 @@ class PHParams(EnvParams):
     restart_steps: int = 720
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     #: The NEA reference: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (the MPC's 0.0080 pH hold in 0.01 units).
-    rho_floor_tracking: float = (0.0080 / 0.01) ** 2
-    rho_floor: float = (0.0080 / 0.01) ** 2
+    #: demonstrated, in the reward's units (the MPC's 0.0013 pH hold in 0.01 units).
+    rho_floor_tracking: float = (0.0013 / 0.01) ** 2
+    rho_floor: float = (0.0013 / 0.01) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 

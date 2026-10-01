@@ -301,7 +301,8 @@ a reader deciding whether their own controller is competitive needs them.
 **The MPC sees the full simulator state. The PID sees only the observation.**
 Every planner's entry point is `step(obs, state)` with `obs` ignored, and
 `runners.mpc_policy` hands it the state object. So on the pH CSTR the MPC reads
-the reaction invariants `Wa` and `Wb`; on the glass furnace it reads the glass
+the reaction invariants `Wa` and `Wb` and the buffer-flow disturbance `q2`; on
+the glass furnace it reads the glass
 and checker temperatures and the pull-rate disturbance; on the reactor it reads
 the xenon and iodine inventories and the fuel temperature. Those are exactly
 the quantities each environment hides on purpose, and several environments are
@@ -874,8 +875,8 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `plane_sine` | 480 | 5184 | 1251 | 0.759 | 10/10 | 0 |
 | `battery` | 360 | 0.003457 | 0.0008876 | 0.743 | 10/10 | 0 |
 | `cement_kiln` | 700 | 6.368 | 1.705 | 0.732 | 10/10 | 0 |
+| `ph_neutralization` | 300 | 336.3 | 91.22 | 0.729 | 10/10 | 0 |
 | `four_tank` | 500 | 1167 | 344.5 | 0.705 | 10/10 | 0 |
-| `ph_neutralization` | 300 | 336.3 | 100.5 | 0.701 | 10/10 | 0 |
 | `plane` | 280 | 1.04e+04 | 3276 | 0.685 | 10/10 | 0 |
 | `patrol` | 200 | 11.22 | 3.56 | 0.683 | 10/10 | 0 |
 | `glass_furnace` | 1600 | 1.352 | 0.4943 | 0.634 | 10/10 | 0 |
@@ -992,7 +993,7 @@ MPC's lowest per-seed hold, 1.03e-4 kPa, sets the floor column:
 | `hvac` | 0.001 | 0.0185 (0.00991 / 0.00863) | 0.00884 (0.00525 / 0.00359) | 0.553 | 0.0154 | 0.00368 | 0.367 (0.913) | 0.382 (0.514) | 0 |
 | `patrol` | 1.03 | 10.1 (10.1 / —) | 3.02 (3.02 / —) | 0.782 | 10.1 | 3.02 | 818 (1.78e+03) | 184 (377) | 0 |
 | `patrol_bearing_only` | 1.03 | 11.1 (11.1 / —) | — | — | 7.65 | — | 692 (20.6) | — | 0 |
-| `ph_neutralization` | 0.64 | 12.6 (12.6 / 0.00681) | 3.06 (3.06 / 0.00669) | 0.797 | 9.73 | 1.79 | 9.07e+04 (9.12e+04) | 2.34e+04 (2.33e+04) | 0 |
+| `ph_neutralization` | 0.0169 | 12.6 (12.6 / 0.00681) | 0.096 (0.089 / 0.00705) | 0.994 | 9.73 | 0.0756 | 9.07e+04 (9.12e+04) | 2.21e+04 (2.21e+04) | 0 |
 | `plane` | 0.706 | 6.21 (6.04 / 0.169) | 3.45 (1.34 / 2.12) | 0.5 | 6.21 | 3.45 | 2.73e+06 (2.73e+06) | 1.19e+06 (1.19e+06) | 0 |
 | `plane3d_circle` | 2 | 98.6 (98.6 / —) | 9.84 (9.84 / —) | 0.919 | 98.6 | 9.84 | 4.18e+05 (4.33e+05) | 8.38e+04 (8.53e+04) | 0 |
 | `plane3d_figure8` | 1 | 2.5e+04 (2.5e+04 / —) | 2.1 (2.1 / —) | 1 | 2.5e+04 | 2.1 | 8.57e+06 (1.28e+07) | 739 (1.15e+03) | 0 |
