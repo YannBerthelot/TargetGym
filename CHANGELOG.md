@@ -70,6 +70,26 @@ than by commit.
 
 ### Changed
 
+- **The wind turbine's oracle is a feedback law.** Generator torque comes
+  from four Newton steps through the plant's own model, with the turbulence at
+  its mean, so the next step's power meets the target and only the one-step
+  wind innovation is left. Pitch comes from the shipped PI on rotor speed,
+  with the setpoint at 1.05 x rated and the command slew capped at 0.13 deg
+  per step near it, opening to the actuator's rate toward the edges of a
+  0.97-1.13 band. It replaces a gradient MPC whose descent left a mean of
+  0.9-1.8 kW of power error its own model predicted. Protocol cost falls from
+  2.10e-5 to 1.30e-5 $/step (-38%, better on every seed), the 10-seed
+  episode cost from 3.56e-5 to 1.38e-5 (MPC ahead on 10 of 10, from 9), at
+  about 0.1 ms per step instead of about 0.4 s (plus a one-off JIT compile of
+  about 0.4 s per instance). Over seeds 3-199 it never trips and keeps the
+  rotor within 0.836-1.178 of rated speed. The NEA floor
+  follows its 1454 W best hold: `rho_floor = rho_floor_tracking` goes from
+  1.17e-5 to 1.01e-5, and NEA is 0.821 against it (0.365 before). `e_floor`
+  (1680 W, an earlier oracle's hold) is within 1.16x of the new hold and
+  stays, so the reward is unchanged and `wind_turbine-v2` is re-stamped in
+  place. The gradient planner is kept as `make_wind_turbine_gradient_mpc`,
+  still the oracle for version-1 params.
+
 - **The boiler, kiln and distillation oracles plan on the mean noise, with
   stronger optimisers.** Their plant noise (steam demand, raw-meal feed, feed
   composition) was not in `noise_fields`, so their planners, which roll the

@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "generated": "2026-10-01T18:06:13+00:00",
+    "generated": "2026-10-01T22:45:35+00:00",
     "note": "Regenerate with scripts/record_baselines.py when a test reports a stale fingerprint. Commit the result with the change that invalidated it.",
     "seeds": 10
   },
@@ -692,18 +692,18 @@
     "steps": 1200
   },
   "wind_turbine": {
-    "fingerprint": "cff5d92597472e9c",
+    "fingerprint": "a5c03dc409a686fc",
     "mpc_returns": [
-      -0.00715,
-      -0.013503,
-      -0.024987,
-      -0.009464,
-      -0.014791,
-      -0.009644,
-      -0.011311,
-      -0.013361,
-      -0.027819,
-      -0.010248
+      -0.004276,
+      -0.005631,
+      -0.006844,
+      -0.004778,
+      -0.006124,
+      -0.005221,
+      -0.006012,
+      -0.005548,
+      -0.005819,
+      -0.004849
     ],
     "mpc_trips": 0,
     "pid_returns": [
@@ -718,7 +718,7 @@
       -0.027201,
       -0.011931
     ],
-    "seconds": 5945.2,
+    "seconds": 9.8,
     "seeds": 10,
     "steps": 400
   }
