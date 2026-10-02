@@ -217,8 +217,10 @@ Controller structure is chosen per plant:
 
 Five kinds of controller fill the MPC slot: CasADi/IPOPT where a symbolic model
 exists, gradient-based planning through the JAX dynamics elsewhere,
-cross-entropy sampling for the cement kiln, on the battery a feedforward of
-the scheduled dispatch level, which is the best causal action there, and on
+cross-entropy sampling for the cement kiln, on the battery a feedforward of the
+scheduled dispatch level, which is the best causal action there, on the wind
+turbine a feedback law (generator torque solved so that the next step's power
+meets the target, and pitch from the PID with its command slew capped), and on
 the patrol tasks the lead's own autopilot flown on the follower's state with a
 short residual planner on top. Solver convergence is recorded alongside every
 result.
