@@ -85,8 +85,9 @@ what is broken and recorded rather than hidden.
         faster than the engines can supply it. It touched the commanded
         altitude at t=90 with 30 m/s of airspeed left and departed.
         `_plane_objective` now carries a barrier on airspeed against the stall
-        speed at that mass and altitude, the pattern `make_wind_turbine_mpc`
-        already uses. Fencing angle of attack instead does not work: it sits at
+        speed at that mass and altitude, the pattern the turbine's gradient
+        planner (`make_wind_turbine_gradient_mpc`) already used. Fencing
+        angle of attack instead does not work: it sits at
         4-8 deg through the whole manoeuvre and crosses 15 deg one step before
         the departure.
 
@@ -408,7 +409,7 @@ what is broken and recorded rather than hidden.
 * [ ] **Derive the MPC error bands rather than choosing them one at a time.**
       Every MPC objective normalises its tracking error by a per-plant band:
       `tracking_band` on the four-tank, the distillation column, the pH loop and
-      now the glass furnace, `power_band` on the turbine,
+      now the glass furnace, `power_band` on the turbine (its version-1 planner),
       `comfort_band`, `lime_band`, `reward_band`. The surrogate is deliberate
       and measured -- the log-scaled reward's gradient decays like `1/e`, so the
       pull toward the setpoint is weakest where the controller is furthest from

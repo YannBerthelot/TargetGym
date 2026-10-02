@@ -253,7 +253,7 @@ def test_mpc_controls_at_least_as_well_as_the_pid(name):
         f"booleans, so a penalty behind ``where(tripped, ...)`` gives the planner "
         f"the cost of a trip but no gradient away from the boundary; a "
         f"differentiable barrier on the approach is what works (see "
-        f"make_wind_turbine_mpc)."
+        f"make_wind_turbine_gradient_mpc)."
     )
 
     pid = np.array(recorded["pid_returns"])
