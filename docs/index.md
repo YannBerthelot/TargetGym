@@ -66,9 +66,9 @@ these are the failure modes that come with it:
 | **Open-loop instability** | A stirred-tank reactor held on its unstable middle steady state, where an uncontrolled error grows e-fold every 19 to 43 s (derived, `scripts/unstable_cstr_numbers.py --section targets`) |
 | **A trip the reward does not track** | A compressor trips when its flow margin to surge runs out. No reward term reads that margin, and the recycle valve that protects it has no tracked output of its own |
 
-Every environment ships a tuned PID, and twenty-two of twenty-three also ship an MPC,
-so a learned policy has something real to beat. And **where a baseline is weak,
-the docs say how weak**.
+Every environment ships a tuned PID and an MPC (on `patrol_bearing_only` the MPC
+reads the true state, a full-state bound), so a learned policy has something real
+to beat. And **where a baseline is weak, the docs say how weak**.
 
 ## Documentation
 

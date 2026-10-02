@@ -107,6 +107,46 @@ than by commit.
   `plane_sine_cascaded` and `plane_energy_cascaded` that a test holds equal to
   it). Over ten seeds the MPC leads the PID on every seed of all three, with
   zero trips.
+- **The patrol oracle flies the lead's own autopilot, and the slot floor is
+  the GPS resolution (`patrol-v3`, `patrol_bearing_only-v3`).** The MPC slot
+  was a 20-step `GradientMPC` started from the PID's rollout, which kept the
+  follower within 29-32 m RMS of its slot on the protocol seeds. It now holds
+  `PatrolTwinOracle`: the follower flies the lead's heading autopilot on its
+  own state, aimed at the slot, so in the slot the shared gust drops out, and
+  a 30-step planner adds a residual to that law inside its rollout of
+  `step_env`. Under the earlier floors the protocol cost falls from 3.02 to
+  0.0316 per step (-99%). That slot floor, 18.6 m, was the old planner's own
+  hold, 45x the new oracle's, so it moves to the 3 m relative-GPS
+  resolution. The reward changes, so both tasks (they share `PatrolParams`)
+  become version 3, and `failure_cost` follows (2.7e5 to 7.6e5 per step).
+  Under the new floor the oracle costs 0.0371 per step against the PID's
+  265 (NEA 1.000), holds the slot to 0.10-0.12 m and the heading to about
+  1.7e-3 rad, and never trips; `rho_floor = rho_floor_tracking` goes from
+  1.03 to 0.0363. `patrol_bearing_only` gains an MPC, the same oracle reading
+  the true state and labelled a full-state bound, and a hold row, so its
+  protocol window now starts after the capture, as `patrol`'s does (its PID
+  costs 199 there). The oracle's law hands back its memory with the types it
+  was given, so its jitted step compiles once per episode rather than twice
+  (about 40 s saved per episode without a persistent compile cache).
+- **The wind turbine's oracle is a feedback law.** Generator torque comes
+  from four Newton steps through the plant's own model, with the turbulence at
+  its mean, so the next step's power meets the target and only the one-step
+  wind innovation is left. Pitch comes from the shipped PI on rotor speed,
+  with the setpoint at 1.05 x rated and the command slew capped at 0.13 deg
+  per step near it, opening to the actuator's rate toward the edges of a
+  0.97-1.13 band. It replaces a gradient MPC whose descent left a mean of
+  0.9-1.8 kW of power error its own model predicted. Protocol cost falls from
+  2.10e-5 to 1.30e-5 $/step (-38%, better on every seed), the 10-seed
+  episode cost from 3.56e-5 to 1.38e-5 (MPC ahead on 10 of 10, from 9), at
+  about 0.1 ms per step instead of about 0.4 s (plus a one-off JIT compile of
+  about 0.4 s per instance). Over seeds 3-199 it never trips and keeps the
+  rotor within 0.836-1.178 of rated speed. The NEA floor
+  follows its 1454 W best hold: `rho_floor = rho_floor_tracking` goes from
+  1.17e-5 to 1.01e-5, and NEA is 0.821 against it (0.365 before). `e_floor`
+  (1680 W, an earlier oracle's hold) is within 1.16x of the new hold and
+  stays, so the reward is unchanged and `wind_turbine-v2` is re-stamped in
+  place. The gradient planner is kept as `make_wind_turbine_gradient_mpc`,
+  still the oracle for version-1 params.
 
 - **The boiler, kiln and distillation oracles plan on the mean noise, with
   stronger optimisers.** Their plant noise (steam demand, raw-meal feed, feed

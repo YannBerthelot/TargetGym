@@ -89,8 +89,8 @@ single environment-specific test.
 `EnvSpec`'s docstring documents each field. Two are easy to overlook:
 `disturbance_fields` (state entries holding zero-mean noise, which the
 conformance suite checks do not ratchet) and `baselines_note` (why a PID or
-MPC is absent, so a missing baseline is a documented gap rather than a silent
-one).
+MPC is absent, or what a shipped one really is, so a gap or a caveat is
+documented rather than silent).
 
 ### A task added after the 21
 

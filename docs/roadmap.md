@@ -13,7 +13,8 @@ what is broken and recorded rather than hidden.
 * [x] Restore the Plane Patrol baselines with pursuit guidance. Done: both
       variants ship a stateful wrapper around the functional pursuit expert,
       and `patrol_bearing_only` adds a lead-state estimator in front of the
-      same law. Neither has an MPC yet; see *Baseline coverage*.
+      same law. Both now ship `PatrolTwinOracle` in the MPC slot as well;
+      on `patrol_bearing_only` it reads the true state, a full-state bound.
 * [ ] Add microburst / spatially-varying wind fields (position-dependent, not just altitude-linear).
 * [ ] Provide benchmark results for popular RL baselines.
 * [ ] Add random orientation variations to circle and heading tasks.
@@ -85,8 +86,9 @@ what is broken and recorded rather than hidden.
         faster than the engines can supply it. It touched the commanded
         altitude at t=90 with 30 m/s of airspeed left and departed.
         `_plane_objective` now carries a barrier on airspeed against the stall
-        speed at that mass and altitude, the pattern `make_wind_turbine_mpc`
-        already uses. Fencing angle of attack instead does not work: it sits at
+        speed at that mass and altitude, the pattern the turbine's gradient
+        planner (`make_wind_turbine_gradient_mpc`) already used. Fencing
+        angle of attack instead does not work: it sits at
         4-8 deg through the whole manoeuvre and crosses 15 deg one step before
         the departure.
 
@@ -408,7 +410,7 @@ what is broken and recorded rather than hidden.
 * [ ] **Derive the MPC error bands rather than choosing them one at a time.**
       Every MPC objective normalises its tracking error by a per-plant band:
       `tracking_band` on the four-tank, the distillation column, the pH loop and
-      now the glass furnace, `power_band` on the turbine,
+      now the glass furnace, `power_band` on the turbine (its version-1 planner),
       `comfort_band`, `lime_band`, `reward_band`. The surrogate is deliberate
       and measured -- the log-scaled reward's gradient decays like `1/e`, so the
       pull toward the setpoint is weakest where the controller is furthest from
