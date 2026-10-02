@@ -11,7 +11,7 @@ Close-patrol (formation-keeping) environment: state, parameters and transition.
 | Tracked variable(s) | measured range (m) |
 | Episode length | 200 steps (200 s at 1 s per step) |
 | Import | `from target_gym import PlanePatrolBearingOnly, PatrolParams` |
-| Cite as | `patrol_bearing_only-v2` |
+| Cite as | `patrol_bearing_only-v3` |
 
 ## Action space
 
@@ -55,7 +55,16 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-No MPC ships with this environment, so there is no recorded comparison. PID present -- a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only genuinely unobservable quantity is the lead's HEADING, which the commanded slot needs because the slot is expressed in the lead's frame; it is recovered by differencing the estimated relative position and filtering. Measured performance matches the full-observation expert (4 of 8 seeds complete, ~229 m settled slot error vs ~260 m), so the partial observation costs essentially nothing here. No MPC, and the reason is the withheld observation rather than the manoeuvring lead. This note used to blame the lead, on the grounds that an MPC would need its future trajectory as a time-varying parameter. That holds for a CasADi model and not for a gradient planner: `patrol` now ships a GradientMPC that differentiates step_env, and because the lead is scripted and deterministic the plan propagates it for free. What blocks one here is that the planner reads the slot error out of the state, which is precisely what this variant withholds. Handing it the true state anyway would make it an oracle on a task defined by what is hidden, so it needs a planner built on the estimator.
+Recorded over 10 seeds of the 200-step episode (see [Baselines](../baselines.md)). The reward is a cost, so a return closer to zero is better.
+
+| controller | mean return | cost per step |
+|---|---|---|
+| PID | -5.808e+04 | 290.4 |
+| MPC | -2845 | 14.22 |
+
+The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+
+The PID is a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator recovers it by differencing the estimated relative position and filtering. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its NEA measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed (oracle audit, 2026-10).
 
 ## Arguments
 

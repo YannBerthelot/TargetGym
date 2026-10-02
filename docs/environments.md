@@ -15,7 +15,9 @@ whole of what differs between them:
   `env.obs_value_index` with its setpoint at `env.obs_target_index`, and named
   by `env.tracked_names`.
 - **PID / MPC** say whether a baseline ships. Where one does not, the registry
-  records why in `baselines_note` rather than leaving it silent.
+  records why in `baselines_note` rather than leaving it silent, and the same
+  note qualifies a shipped one that needs it (`patrol_bearing_only`'s MPC is a
+  full-state bound).
 - **Physics** links the environment's contract: sourced parameters, published
   validation targets asserted by tests, and quantified known deviations.
 
@@ -42,10 +44,10 @@ env, params = spec.make_env(), spec.params_cls()
 | `plane3d_circle` | `plane3d_circle-v3` | (17,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `plane3d_racetrack` | `plane3d_racetrack-v3` | (21,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `plane3d_figure8` | `plane3d_figure8-v3` | (19,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
-| `patrol` | `patrol-v2` | (26,) | (3,) | slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
-| `patrol_bearing_only` | `patrol_bearing_only-v2` | (21,) | (3,) | measured range (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
+| `patrol` | `patrol-v3` | (26,) | (3,) | slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
+| `patrol_bearing_only` | `patrol_bearing_only-v3` | (21,) | (3,) | measured range (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
-> `patrol_bearing_only` -- PID present -- a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only genuinely unobservable quantity is the lead's HEADING, which the commanded slot needs because the slot is expressed in the lead's frame; it is recovered by differencing the estimated relative position and filtering. Measured performance matches the full-observation expert (4 of 8 seeds complete, ~229 m settled slot error vs ~260 m), so the partial observation costs essentially nothing here. No MPC, and the reason is the withheld observation rather than the manoeuvring lead. This note used to blame the lead, on the grounds that an MPC would need its future trajectory as a time-varying parameter. That holds for a CasADi model and not for a gradient planner: `patrol` now ships a GradientMPC that differentiates step_env, and because the lead is scripted and deterministic the plan propagates it for free. What blocks one here is that the planner reads the slot error out of the state, which is precisely what this variant withholds. Handing it the true state anyway would make it an oracle on a task defined by what is hidden, so it needs a planner built on the estimator.
+> `patrol_bearing_only` -- The PID is a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator recovers it by differencing the estimated relative position and filtering. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its NEA measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed (oracle audit, 2026-10).
 
 ## Process Control
 

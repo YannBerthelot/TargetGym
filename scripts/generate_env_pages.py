@@ -204,6 +204,11 @@ def _baseline_section(spec, row: dict | None) -> str:
                     " across them"
                 )
             lines.append(summary + ".")
+        # A note on a task that ships both baselines says what one of them
+        # is (patrol_bearing_only's MPC is a full-state bound), so it stays
+        # beside the numbers it qualifies.
+        if spec.baselines_note:
+            lines.append(f"\n{spec.baselines_note}")
     elif spec.has_mpc:
         lines.append(
             "A PID and an MPC ship with this environment, but no comparison has "

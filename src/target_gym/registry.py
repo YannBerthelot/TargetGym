@@ -127,7 +127,9 @@ class EnvSpec:
     baselines_note:
         Set when ``make_pid``/``make_mpc`` are ``None``: a short explanation
         of why, surfaced by the baseline-coverage test so a missing expert is
-        a documented gap rather than a silent one.
+        a documented gap rather than a silent one. Also set where both ship
+        but one needs saying what it is (``patrol_bearing_only``'s MPC is a
+        full-state bound); the environment pages print it beside the numbers.
     disturbance_fields:
         State fields holding a *zero-mean stochastic disturbance* (gusts, load
         noise). The conformance suite asserts these behave like disturbances --
@@ -146,8 +148,9 @@ class EnvSpec:
     expert_degraded:
         Set when a baseline *exists and is well-formed* but does not yet meet
         the effectiveness contract -- it loses to a constant action. Distinct
-        from ``baselines_note``, which marks a baseline that is absent
-        entirely. Surfaced by the conformance suite so a weak expert is a
+        from ``baselines_note``, which explains a baseline that is absent, or
+        labels one that needs qualifying (``patrol_bearing_only``'s
+        full-state MPC). Surfaced by the conformance suite so a weak expert is a
         recorded, explained gap rather than a silently bad benchmark number.
     mpc_degraded:
         The same, for the MPC: set when the MPC exists and runs but returns
@@ -712,6 +715,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
         noise_fields=("turbulence_sigma",),
+        # v3: the slot floor is the 3 m relative-GPS resolution, from 18.6 m
+        # (an earlier planner's hold), so the reward changed (oracle audit,
+        # 2026-10). PatrolParams is shared, so patrol_bearing_only moves too.
+        version=3,
     ),
     EnvSpec(
         name="patrol_bearing_only",
@@ -719,33 +726,29 @@ _SPECS: tuple[EnvSpec, ...] = (
         env_factory=_patrol_bearing_only,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
         make_pid=_pid("make_patrol_bearing_only_stateful_pid"),
-        make_mpc=None,
+        make_mpc=_mpc(
+            "make_patrol_bearing_only_mpc", module="target_gym.patrol.experts"
+        ),
         test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
         baselines_note=(
-            "PID present -- a lead-state estimator feeding the same pursuit "
-            "law the full-observation variant uses. Range with azimuth and "
+            "The PID is a lead-state estimator feeding the same pursuit law "
+            "the full-observation variant uses. Range with azimuth and "
             "elevation is a complete relative-position measurement, so the "
-            "only genuinely unobservable quantity is the lead's HEADING, "
-            "which the commanded slot needs because the slot is expressed in "
-            "the lead's frame; it is recovered by differencing the estimated "
-            "relative position and filtering. Measured performance matches "
-            "the full-observation expert (4 of 8 seeds complete, ~229 m "
-            "settled slot error vs ~260 m), so the partial observation costs "
-            "essentially nothing here. "
-            "No MPC, and the reason is the withheld observation rather than "
-            "the manoeuvring lead. This note used to blame the lead, on the "
-            "grounds that an MPC would need its future trajectory as a "
-            "time-varying parameter. That holds for a CasADi model and not "
-            "for a gradient planner: `patrol` now ships a GradientMPC that "
-            "differentiates step_env, and because the lead is scripted and "
-            "deterministic the plan propagates it for free. What blocks one "
-            "here is that the planner reads the slot error out of the state, "
-            "which is precisely what this variant withholds. Handing it the "
-            "true state anyway would make it an oracle on a task defined by "
-            "what is hidden, so it needs a planner built on the estimator."
+            "only unobservable quantity is the lead's heading, which the slot "
+            "needs because it is expressed in the lead's frame; the estimator "
+            "recovers it by differencing the estimated relative position and "
+            "filtering. The MPC slot holds patrol's oracle reading the true "
+            "state, so it is a full-state bound, not a bearing-only "
+            "controller. On a task defined by what the observation withholds, "
+            "its NEA measures information and control together: what the "
+            "hidden lead state is worth plus what a policy leaves on the "
+            "table. It never reads the observation, so its per-step costs "
+            "equal patrol's seed for seed (oracle audit, 2026-10)."
         ),
         noise_fields=("turbulence_sigma",),
+        # v3 with patrol: they share PatrolParams, and the slot floor moved.
+        version=3,
     ),
     # -- Process control ----------------------------------------------------
     EnvSpec(
