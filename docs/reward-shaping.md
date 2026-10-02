@@ -3,8 +3,9 @@
 TargetGym exists to ask one question: **can a learned policy hold a setpoint
 better than a PID or an MPC?** That question lives entirely in the reward, so
 the reward is the measuring instrument, and this page records how it is built.
-Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`) scores
-through it. Nineteen normalise the tracking term by a floor, and four
+Version 2 of every environment (the `-v2` stamps; the reactor, `patrol` and
+`patrol_bearing_only` are `-v3`) scores through it. Nineteen normalise the
+tracking term by a floor, and four
 (reactor, battery, wind turbine, building) put tracking and consumption in
 the owner's currency, where the floor enters as the reference cost `rho_floor`
 rather than as a divisor. Version 1, the capped log-scaled reward, is kept
@@ -235,7 +236,7 @@ the evaluator measures.
 | `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
 | `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds; `plane_energy`'s held 1.20 m once its anticipation of target changes left the hold, so its floor is loose until the MPC is reviewed) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
 | `plane3d_*` | p=2 | altitude 1.44 / 4.06 / 1.39 m, heading 1.0e-4 rad, path 8.1 / 6.2 / 14.6 m (lowest per-seed MPC holds in turbulence) | 0 | none | dimensionless |
-| `patrol` | p=2 | 18.6 m / 1.6e-3 rad (lowest per-seed MPC holds in turbulence) | 0 (provisional) | none | dimensionless |
+| `patrol`, `patrol_bearing_only` | p=2 x2 | slot 3 m (relative-GPS resolution; the oracle holds 0.10 m, lowest per seed; 18.6 m, an earlier planner's hold, until version 3), heading 0.0087 rad (AHRS resolution; the oracle holds 1.6e-3 rad), so `rho* = (0.1021 / 3)^2 + (1.631e-3 / 0.0087)^2 = 0.0363` | 0 (provisional) | none | dimensionless |
 
 "Provisional" marks a number the plant's owner would supply -- a tolerance
 from the quality system, permit or grid code; a price from a tariff; a wear
@@ -273,14 +274,16 @@ that found it:
 - **A normalised-gradient planner cannot travel far in one solve**, so from
   a constant plan it could not find the pitch schedule the turbine needed
   (it braked the rotor with the torque instead) or the coordinated
-  thrust-and-elevator move the aircraft needed. The wind, 2D aircraft and
-  patrol planners now start from, and at every step are compared against,
-  the shipped PID's rollout plan under the planner's own objective -- so the
+  thrust-and-elevator move the aircraft needed. The wind and 2D aircraft
+  planners now start from, and at every step are compared against, the
+  shipped PID's rollout plan under the planner's own objective, so the
   plan is never worse than the PID's under its model. (The patrol planner
-  had kept its version-1 surrogate, a bounded multiplicative shape; once the
-  descent below was made monotone, a better solve of that surrogate was a
-  worse version-2 return, 18x on two seeds. It descends the follower's own
-  cost now.)
+  did too. It had kept its version-1 surrogate, a bounded multiplicative
+  shape; once the descent below was made monotone, a better solve of that
+  surrogate was a worse version-2 return, 18x on two seeds, so it was moved
+  onto the follower's own cost. The oracle audit (2026-10) then replaced it
+  with the lead's own autopilot flown on the follower's state and a residual
+  planner that descends the reward itself.)
 - **Re-planning creates actuator activity no open-loop plan can see.** The
   turbine's pitch activity ran 3.4x the PID's with every plan predicting
   less; a move-suppression term on the first action, priced like the

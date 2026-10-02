@@ -13,7 +13,8 @@ what is broken and recorded rather than hidden.
 * [x] Restore the Plane Patrol baselines with pursuit guidance. Done: both
       variants ship a stateful wrapper around the functional pursuit expert,
       and `patrol_bearing_only` adds a lead-state estimator in front of the
-      same law. Neither has an MPC yet; see *Baseline coverage*.
+      same law. Both now ship `PatrolTwinOracle` in the MPC slot as well;
+      on `patrol_bearing_only` it reads the true state, a full-state bound.
 * [ ] Add microburst / spatially-varying wind fields (position-dependent, not just altitude-linear).
 * [ ] Provide benchmark results for popular RL baselines.
 * [ ] Add random orientation variations to circle and heading tasks.

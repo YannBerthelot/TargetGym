@@ -11,7 +11,7 @@ Close-patrol (formation-keeping) environment: state, parameters and transition.
 | Tracked variable(s) | slot error (m) |
 | Episode length | 200 steps (200 s at 1 s per step) |
 | Import | `from target_gym import PlanePatrol, PatrolParams` |
-| Cite as | `patrol-v2` |
+| Cite as | `patrol-v3` |
 
 ## Action space
 
@@ -59,8 +59,8 @@ Recorded over 10 seeds of the 200-step episode (see [Baselines](../baselines.md)
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -2244 | 11.22 |
-| MPC | -712 | 3.56 |
+| PID | -5.971e+04 | 298.6 |
+| MPC | -2845 | 14.22 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 

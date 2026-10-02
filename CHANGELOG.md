@@ -70,6 +70,28 @@ than by commit.
 
 ### Changed
 
+- **The patrol oracle flies the lead's own autopilot, and the slot floor is
+  the GPS resolution (`patrol-v3`, `patrol_bearing_only-v3`).** The MPC slot
+  was a 20-step `GradientMPC` started from the PID's rollout, which kept the
+  follower within 29-32 m RMS of its slot on the protocol seeds. It now holds
+  `PatrolTwinOracle`: the follower flies the lead's heading autopilot on its
+  own state, aimed at the slot, so in the slot the shared gust drops out, and
+  a 30-step planner adds a residual to that law inside its rollout of
+  `step_env`. Under the earlier floors the protocol cost falls from 3.02 to
+  0.0316 per step (-99%). That slot floor, 18.6 m, was the old planner's own
+  hold, 45x the new oracle's, so it moves to the 3 m relative-GPS
+  resolution. The reward changes, so both tasks (they share `PatrolParams`)
+  become version 3, and `failure_cost` follows (2.7e5 to 7.6e5 per step).
+  Under the new floor the oracle costs 0.0371 per step against the PID's
+  265 (NEA 1.000), holds the slot to 0.10-0.12 m and the heading to about
+  1.7e-3 rad, and never trips; `rho_floor = rho_floor_tracking` goes from
+  1.03 to 0.0363. `patrol_bearing_only` gains an MPC, the same oracle reading
+  the true state and labelled a full-state bound, and a hold row, so its
+  protocol window now starts after the capture, as `patrol`'s does (its PID
+  costs 199 there). The oracle's law hands back its memory with the types it
+  was given, so its jitted step compiles once per episode rather than twice
+  (about 40 s saved per episode without a persistent compile cache).
+
 - **The boiler, kiln and distillation oracles plan on the mean noise, with
   stronger optimisers.** Their plant noise (steam demand, raw-meal feed, feed
   composition) was not in `noise_fields`, so their planners, which roll the
