@@ -166,6 +166,38 @@ def test_each_oracle_reads_gains_its_fingerprint_collects(name):
         }
 
 
+def test_the_tuner_writes_the_copies_with_plane_cascaded(monkeypatch):
+    """scripts/tune_pid.py writes ``plane_cascaded``'s values under every key
+    an oracle reads a copy from, keeping each copy's own note, so a retune
+    keeps the test above passing without a hand edit."""
+    import importlib.util
+    import sys
+
+    monkeypatch.setattr(sys, "path", list(sys.path))  # the script prepends src
+    path = pathlib.Path(__file__).resolve().parents[2] / "scripts" / "tune_pid.py"
+    loader = importlib.util.spec_from_file_location("_tune_pid_under_test", path)
+    tune = importlib.util.module_from_spec(loader)
+    loader.loader.exec_module(tune)
+
+    read = {
+        task_settings(registry.get(n).make_test_params())["gains_key"] for n in TASKS
+    }
+    copies = set(read) - {"plane_cascaded"}
+    assert set(tune.GAINS_COPIES["plane_cascaded"]) == copies
+    on_disk = json.loads(pid_mod._GAINS_FILE.read_text())
+    gains = {k: dict(v) for k, v in on_disk.items()}
+    gains["plane_cascaded"] = {
+        **gains["plane_cascaded"],
+        "Kp_alt": 0.5,
+        "note": "a retune",
+    }
+    tune._write_copies(gains, "plane_cascaded")
+    for key in copies:
+        assert _numeric(gains[key]) == _numeric(gains["plane_cascaded"])
+        assert gains[key]["Kp_alt"] == 0.5
+        assert gains[key]["note"] == on_disk[key]["note"]
+
+
 def test_a_missing_gains_key_raises():
     with pytest.raises(KeyError, match="plane_nowhere"):
         cascaded_pid_factory("plane_nowhere")()
@@ -236,7 +268,7 @@ class _Stub:
 
     def reset(self):
         self._actions = jnp.zeros((3, 2))
-        self._u_prev, self._fresh, self.steps = None, True, 0
+        self._fresh, self.steps = True, 0
         if self._pid is not None:
             self._pid.reset()
 
@@ -244,9 +276,7 @@ class _Stub:
         self.steps += 1
         self._fresh = False
         self._actions = jnp.full((3, 2), self.throttle)
-        action = np.array([self.throttle, 0.1], dtype=np.float32)
-        self._u_prev = jnp.asarray(action)
-        return action
+        return np.array([self.throttle, 0.1], dtype=np.float32)
 
 
 def _state(t, error, x_dot=200.0):

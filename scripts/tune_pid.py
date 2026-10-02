@@ -1359,6 +1359,26 @@ def _tune_aircraft_search(
 
 GAINS_KEY = {"plane": "plane_cascaded"}
 
+# Copies of a tuned entry, written with it. The plane_sine and plane_energy
+# oracles read their own copy of plane_cascaded (plane/experts.py), a key
+# their baseline fingerprint collects, and tests/plane/test_plane_experts.py
+# holds each copy equal to it, so a retune that wrote plane_cascaded alone
+# left that test failing until the copies were edited by hand.
+GAINS_COPIES = {"plane_cascaded": ("plane_sine_cascaded", "plane_energy_cascaded")}
+
+
+def _write_copies(gains: dict, save_key: str) -> None:
+    """Write ``gains[save_key]``'s values under each of its ``GAINS_COPIES``.
+
+    A copy keeps its own ``note``, which says what it is a copy of and why.
+    """
+    values = {k: v for k, v in gains[save_key].items() if k != "note"}
+    for copy in GAINS_COPIES.get(save_key, ()):
+        note = gains.get(copy, {}).get("note") or (
+            f"a copy of {save_key}, written with it by scripts/tune_pid.py"
+        )
+        gains[copy] = {**values, "note": note}
+
 
 TUNERS = {
     "cstr": (_tune_cstr, "CSTR"),
@@ -1551,6 +1571,7 @@ def main():
             n_points=args.n_points,
             tuning_rule=args.tuning_rule,
         )
+        _write_copies(gains, save_key)
         # Print summary
         gs = gains[save_key].get("gain_schedule")
         if gs:

@@ -70,6 +70,51 @@ than by commit.
 
 ### Changed
 
+- **The CSTR and four-tank oracles plan the rest of the episode.** A new
+  shared class, `ShrinkingHorizonNLP` in `experts/mpc.py`, solves one NLP
+  with IPOPT over every remaining step, on the environment's own discrete
+  step written in CasADi (the same integration method and substeps, in
+  float64; a test holds each task's map equal to `step_env`). The cost is the
+  version-2 tracking term in floor units, with the steps before the
+  protocol's burn-in weighted 1e-3, so the oracle optimises the window the
+  protocol scores; the burn-in is read from the hold row by the factory. It
+  starts cold from zero, warm-starts from its shifted plan, re-solves every
+  step on the CSTR and every 25 on the four-tank, and is capped at 500
+  iterations with no wall-clock limit. It replaces `CSTRCasadiMPC` and
+  `FourTankCasadiMPC`, which are removed. On the protocol seeds the CSTR's
+  gain falls from 0.317 to 9.4e-9 per step (hold 4.2e-5 to 0, reach cost
+  611 868 to 609 936) and the four-tank's from 0.0074 to 3.1e-8 (reach cost
+  192 414 to 184 765), with zero trips and none of the 360 solves failed,
+  matching the oracle audit's probes (2026-10) to every printed digit. The
+  old CSTR oracle's move penalty, in raw mol/L, was 1e4 in floor units and
+  alone made its 0.317; the old four-tank oracle charged every step alike, and
+  on that non-minimum-phase plant even the exact optimum of such a cost leaves
+  0.0098 in the scored window. Over the ten baseline seeds the episode cost
+  is 5752 per step against the recorded 5803 (CSTR) and 336 against 345
+  (four-tank), lower on every seed, with zero trips. Three protocol seeds take
+  16 s and 28 s. Both floors are documented minima with `rho_floor` 0, so
+  neither moves. `first_order` keeps its `CasadiMPC`.
+- **`GradientMPC` has no move penalty any more.** `move_penalty_fn` and the
+  last applied action it read are removed. Only the turbine's version-2
+  gradient planner set it, and that planner stopped being the oracle when the
+  Newton feedback law replaced it; the audit had also found the penalty half
+  dead, read when the solve was traced, before any action existed. The
+  version-1 turbine planner never had one and is unchanged.
+- **The baseline fingerprint covers every gains entry a task reads, and its
+  burn-in.** It hashed only the `pid_gains.json` keys starting with the task's
+  name, so a retune of `plane` left `plane_sine`'s and `plane_energy`'s
+  records looking fresh, and one of `plane3d_heading` left patrol's. It now
+  also hashes the `tuned_gains_key` entry and any keys in the new
+  `EnvSpec.gains_keys`, which patrol and `patrol_bearing_only` set to
+  `plane3d_heading` (their oracle and the lead fly that autopilot). It also
+  hashes the task's burn-in from `hold_measurements.json`, which the protocol
+  scores from and the new CSTR and four-tank oracles plan on. Registry tests
+  check every declared key exists and that the fingerprint covers these.
+  Every fingerprint moves with this change, and every task is re-recorded.
+- **`scripts/tune_pid.py` writes `plane_sine_cascaded` and
+  `plane_energy_cascaded` with `plane_cascaded`**, the copies the
+  `plane_sine` and `plane_energy` oracles read and a test holds equal to it.
+  A retune used to leave that test failing until they were edited by hand.
 - **The 2D aircraft oracle hands its throttle to the PID's airspeed loop
   once it has captured its altitude, and `plane_energy` is `-v3` with its
   altitude floor at its oracle's hold.** The gradient planner never moved its

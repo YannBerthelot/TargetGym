@@ -537,6 +537,14 @@ def hold_settings(name: str) -> dict:
     return {"burn_in": int(row["burn_in"]) if row else 0}
 
 
+def scored_burn_in(name: str, params) -> int:
+    """The burn-in ``evaluate_controller`` scores ``name`` with at ``params``:
+    the hold row's, capped at half the episode. The oracles that weight the
+    scored window read it too (``experts.mpc.protocol_burn_in``)."""
+    burn_in = hold_settings(name)["burn_in"]
+    return min(burn_in, int(params.max_steps_in_episode) // 2)
+
+
 def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
     """One episode of a registered environment as an ``Episode`` record.
 
@@ -611,10 +619,9 @@ def evaluate_controller(
         run_episode(spec, p, baseline_policy(spec, kind, p), seed=s)
         for s in range(seeds)
     ]
-    settings = hold_settings(name)
     return evaluate(
         episodes,
-        burn_in=min(settings["burn_in"], int(p.max_steps_in_episode) // 2),
+        burn_in=scored_burn_in(name, p),
         rho_floor=float(getattr(p, "rho_floor", float("nan"))),
         rho_ref=rho_ref,
     )

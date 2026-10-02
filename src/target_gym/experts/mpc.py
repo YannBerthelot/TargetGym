@@ -19,6 +19,12 @@ CasadiMPC  (CasADi / IPOPT)
 
         pip install casadi do-mpc
 
+ShrinkingHorizonNLP  (CasADi / IPOPT)
+    One NLP over the rest of the episode on the environment's own discrete
+    step, re-solved from the true state every few steps. For deterministic
+    plants with episodes short enough to plan whole (the CSTR and the
+    four-tank), where it reaches the plant's optimum.
+
 SamplingMPC  (JAX, gradient-free)
     Cross-entropy-method shooting: samples action sequences, rolls them out,
     refits to the elite fraction.  For plants whose forward rollout is well
@@ -157,7 +163,6 @@ class GradientMPC:
         objective_fn=None,
         initial_plan_fn=None,
         guide_plan_fn=None,
-        move_penalty_fn=None,
     ):
         self.env = env
         self.params = params
@@ -190,17 +195,6 @@ class GradientMPC:
         # aircraft: from its own shifted plan it held ten floor-widths worse
         # than the cascaded PID; guided, it cannot).
         self.guide_plan_fn = guide_plan_fn
-        # ``f(u_first, u_previous, params) -> cost`` in the objective's units:
-        # move suppression on the first action against the one applied last
-        # step. An open-loop plan cannot see the activity that re-planning
-        # creates -- successive solves disagree, and the applied command
-        # jumps where every plan was smooth -- so a reward that prices
-        # actuator activity is under-charged in the plan and over-paid in the
-        # plant (the turbine's pitch activity ran 3.4x the PID's with the
-        # plan predicting less). Priced like that reward term, this closes the
-        # gap; it is standard MPC practice (do-mpc's ``rterm``).
-        self.move_penalty_fn = move_penalty_fn
-        self._u_prev = None
         self._jit_rollout = jax.jit(self._rollout)
 
         self._actions = jnp.zeros((horizon, action_dim))
@@ -296,15 +290,7 @@ class GradientMPC:
         NaN in the aircraft dynamics (see ``NAN_TUNERS`` in
         ``tests/experts/test_pid_tuning.py``).
         """
-        u_prev = self._u_prev
-
-        def objective(a):
-            total = self._rollout(a, state)
-            if self.move_penalty_fn is not None and u_prev is not None:
-                total = total - self.move_penalty_fn(a[0], u_prev, self.params)
-            return total
-
-        cost_and_grad = jax.value_and_grad(lambda a: -objective(a))
+        cost_and_grad = jax.value_and_grad(lambda a: -self._rollout(a, state))
         margin = self._BOUND_MARGIN * 0.5 * (self.action_ub - self.action_lb)
 
         # The descent is not monotone: a fixed step along a normalised
@@ -391,23 +377,18 @@ class GradientMPC:
             if self._score(guide, state) > self._score(self._actions, state):
                 self._actions = guide
         first = self._actions[0]
-        self._u_prev = first
         if self.action_dim == 1:
             return float(first[0])
         return np.array(first)
 
     def _score(self, plan, state) -> float:
-        total = float(self._jit_rollout(plan, state))
-        if self.move_penalty_fn is not None and self._u_prev is not None:
-            total -= float(self.move_penalty_fn(plan[0], self._u_prev, self.params))
-        return total
+        return float(self._jit_rollout(plan, state))
 
     def reset(self):
         """Reset the internal action sequence to zeros (or, on the next step,
         to ``initial_plan_fn`` of the state)."""
         self._actions = jnp.zeros((self.horizon, self.action_dim))
         self._fresh = True
-        self._u_prev = None
         for fn in (self.initial_plan_fn, self.guide_plan_fn):
             if hasattr(fn, "reset"):
                 fn.reset()
@@ -625,6 +606,308 @@ class CasadiMPC:
             "solver_mean_iters": round(self.solve_iters / calls, 1),
             "solver_last_status": self.last_return_status,
         }
+
+
+# ============================================================================
+# Shrinking-horizon NLP (IPOPT)
+# ============================================================================
+
+
+def casadi_step_map(velocity, nx: int, nu: int, delta_t: float, method: str):
+    """The first-order step of ``integration.integrate_dynamics`` in CasADi.
+
+    Returns ``F(x, u) -> x_next``, a ``casadi.Function``. ``velocity(x, u)``
+    is the plant's right-hand side written in CasADi, and ``method`` is the
+    environment's own ``integration_method`` string (``"rk4_1"``,
+    ``"euler_2"``, ...), parsed the way ``integrate_dynamics`` parses it, with
+    the same stages and the same substep length ``delta_t / n``. So the map
+    is the environment's step in float64, wherever the plant is a
+    first-order ODE integrated by that function.
+    """
+    if "euler" in method:
+        order, n_sub = "euler", int(method.split("_")[1])
+    elif "rk" in method:
+        order, n_sub = int(method.split("_")[0][2:]), int(method.split("_")[1])
+    else:
+        raise ValueError(f"Unknown integration method: {method}")
+    if order not in ("euler", 2, 3, 4):
+        raise ValueError(f"Unsupported RK order: {order}")
+    h = float(delta_t) / n_sub
+    x = casadi.MX.sym("x", nx)
+    u = casadi.MX.sym("u", nu)
+
+    def f(p):
+        return velocity(p, u)
+
+    p = x
+    for _ in range(n_sub):
+        if order == "euler":
+            p = p + h * f(p)
+        elif order == 2:
+            k1 = f(p)
+            p = p + h * f(p + 0.5 * h * k1)
+        elif order == 3:
+            k1 = f(p)
+            k2 = f(p + 0.5 * h * k1)
+            k3 = f(p - h * k1 + 2 * h * k2)
+            p = p + (h / 6.0) * (k1 + 4 * k2 + k3)
+        else:
+            k1 = f(p)
+            k2 = f(p + 0.5 * h * k1)
+            k3 = f(p + 0.5 * h * k2)
+            k4 = f(p + h * k3)
+            p = p + (h / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+    return casadi.Function("step", [x, u], [p])
+
+
+def protocol_burn_in(name: str, params) -> int:
+    """The first step the protocol scores on task ``name`` at these params.
+
+    ``eval.scored_burn_in``: the hold row's burn-in, capped at half the
+    episode, which is what ``eval.evaluate_controller`` scores from. An
+    oracle that weights the scored window reads it here so that it
+    optimises the window the protocol scores. The burn-in is in every task's
+    baseline fingerprint (``provenance.baseline_fingerprint``), so a record
+    taken under one burn-in is stale under another.
+    """
+    from target_gym.eval import scored_burn_in
+
+    return scored_burn_in(name, params)
+
+
+# IPOPT settings of the shrinking-horizon NLP. The iteration cap is the one
+# that binds, and it is deterministic; there is no wall-clock limit, so a
+# record reproduces on a slower machine. 500 is the cap the oracle audit
+# (2026-10) measured with: a solve takes 6 to 10 iterations on the CSTR and
+# the four-tank, the first one from a cold start included.
+NLP_MAX_ITER = 500
+NLP_TOL = 1e-9
+NLP_ACCEPTABLE_TOL = 1e-6
+
+
+class ShrinkingHorizonNLP:
+    """
+    One NLP over the rest of the episode, re-solved from the true state.
+
+    The oracle for a deterministic plant whose episode is short enough to
+    plan whole. Every ``resolve_every`` steps it solves, with IPOPT through
+    CasADi's ``Opti``, for the actions from the current step to the end of
+    the episode, on ``step_map``, the environment's own discrete step written
+    in CasADi: the same integration method and substeps as ``env.py``, in
+    float64 (each task's ``experts.py`` builds it and a test holds it equal to
+    ``step_env``). In between it applies that plan. There is no model error
+    and no horizon to fall short of, so up to float32 rounding in the plant
+    the closed loop is the plant's optimum for the objective.
+
+    The objective is the version-2 tracking cost in floor units,
+    ``((target - x) / e_floor) ** 2`` summed over the tracked outputs, which is
+    the reward's own tracking term where ``e_tol`` is 0 and the exponent 2
+    (the constructor refuses anything else). Steps from ``window_start`` on
+    weigh 1 and earlier ones ``pre_weight``. ``window_start`` is the step the
+    protocol starts scoring from, which the task's factory reads from the
+    protocol's own burn-in (``protocol_burn_in``, the hold row in
+    ``data/hold_measurements.json``), so the oracle optimises the window the
+    protocol scores. A small ``pre_weight`` keeps the approach from being
+    free, which a window-only objective leaves degenerate, without letting
+    it trade against the window: on the four-tank, whose response is
+    non-minimum-phase, the exact optimum of an unweighted all-step objective
+    leaves 0.0098 per step in the scored window, and weighting the window
+    1000 times removes that tail for 0.004% more reach cost (oracle audit,
+    2026-10). The cost is divided by the number of steps planned, as in the
+    measurements.
+
+    Inputs are bounded to the action box ``[-1, 1]``, hard. ``x_lb`` and
+    ``x_ub``, when given, bound every planned state after the current one,
+    hard as well: the plant is deterministic and the map exact, so a bound the
+    plan keeps is one the plant keeps. Decision variables are scaled by
+    ``x_scale``, the typical magnitude of each state.
+
+    The first solve of an episode starts cold, from ``u = 0``; later ones
+    warm-start from the previous plan, shifted to the current step. Both roll
+    the guess through ``step_map`` for the states' initial values. A solve
+    that IPOPT stops at the iteration cap is applied, as ``CasadiMPC`` applies
+    one. A solve that fails for any other reason leaves the previous plan in
+    place, or, on an episode's first solve, applies the iterate clipped to
+    the box. ``solver_report`` counts both, in ``CasadiMPC``'s fields.
+
+    ``state_fields`` names the environment-state fields the map's ``x`` holds,
+    in order; ``target_fields`` the fields holding the setpoints, one per
+    entry of ``tracked``, the indices into ``x`` of the outputs they set.
+    """
+
+    def __init__(
+        self,
+        env,
+        params,
+        step_map,
+        state_fields,
+        target_fields,
+        tracked,
+        window_start: int,
+        x_scale,
+        x_lb=None,
+        x_ub=None,
+        pre_weight: float = 1e-3,
+        resolve_every: int = 1,
+        tol: float = NLP_TOL,
+        acceptable_tol: float = NLP_ACCEPTABLE_TOL,
+        max_iter: int = NLP_MAX_ITER,
+    ):
+        if not _CASADI_AVAILABLE:
+            raise ImportError(
+                "casadi is required for ShrinkingHorizonNLP: pip install casadi"
+            )
+        if float(getattr(params, "e_tol", 0.0)) != 0.0 or (
+            float(getattr(params, "tracking_exponent", 2.0)) != 2.0
+        ):
+            raise ValueError(
+                "ShrinkingHorizonNLP's objective is the reward's tracking term "
+                "only for a quadratic cost with no tolerance band"
+            )
+        self.env, self.params = env, params
+        self.step_map = step_map
+        self.state_fields = tuple(state_fields)
+        self.target_fields = tuple(target_fields)
+        self.tracked = tuple(int(i) for i in tracked)
+        self.nx = int(step_map.size1_in(0))
+        self.action_dim = int(step_map.size1_in(1))
+        if len(self.state_fields) != self.nx:
+            raise ValueError("state_fields must name every entry of the map's x")
+        if len(self.target_fields) != len(self.tracked):
+            raise ValueError("one target field per tracked output")
+        self.steps = int(params.max_steps_in_episode)
+        # The first solve of an episode plans all of it.
+        self.horizon = self.steps
+        self.window_start = int(window_start)
+        self.x_scale = np.asarray(x_scale, dtype=float).reshape(self.nx)
+        self.x_lb = None if x_lb is None else np.asarray(x_lb, float).reshape(self.nx)
+        self.x_ub = None if x_ub is None else np.asarray(x_ub, float).reshape(self.nx)
+        self.e_floor = np.broadcast_to(
+            np.asarray(params.e_floor, dtype=float), (len(self.tracked),)
+        )
+        self.pre_weight = float(pre_weight)
+        self.resolve_every = max(int(resolve_every), 1)
+        self._ipopt = {
+            "print_level": 0,
+            "sb": "yes",
+            "tol": float(tol),
+            "acceptable_tol": float(acceptable_tol),
+            "max_iter": int(max_iter),
+            "mu_strategy": "adaptive",
+        }
+        # Solver health over every solve, as ``CasadiMPC`` keeps it: ``reset``
+        # leaves these alone so one count covers a whole rollout.
+        self.solve_calls = 0
+        self.solve_iters = 0
+        self.solve_failures = 0
+        self.solve_capped = 0
+        self.last_return_status = ""
+        self.reset()
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def step(self, _obs, state):
+        """The action for the current state. ``_obs`` is ignored."""
+        t = int(state.time)
+        if self._plan is not None and t < self._t0:
+            self._plan = None  # a new episode without a reset
+        if t >= self.steps:  # past the planned episode: hold the last action
+            u = np.zeros(self.action_dim) if self._plan is None else self._plan[:, -1]
+        else:
+            stale = self._plan is None or t - self._t0 >= self._plan.shape[1]
+            if stale or (t - self._t0) % self.resolve_every == 0:
+                self._solve(state, t)
+            u = self._plan[:, t - self._t0]
+        return float(u[0]) if self.action_dim == 1 else u
+
+    def reset(self):
+        """Forget the plan, so the next step solves from a cold start."""
+        self._plan = None
+        self._t0 = 0
+
+    def solver_report(self) -> dict:
+        """Convergence summary for the solves performed so far."""
+        calls = max(self.solve_calls, 1)
+        return {
+            "solver_calls": self.solve_calls,
+            "solver_failures": self.solve_failures,
+            "solver_capped": self.solve_capped,
+            "solver_mean_iters": round(self.solve_iters / calls, 1),
+            "solver_last_status": self.last_return_status,
+        }
+
+    # ------------------------------------------------------------------
+    # The solve
+    # ------------------------------------------------------------------
+
+    def _guess(self, t: int, n: int) -> np.ndarray:
+        """The previous plan from step ``t`` on, or zeros on a cold start."""
+        if self._plan is None:
+            return np.zeros((self.action_dim, n))
+        guess = self._plan[:, t - self._t0 :]
+        if guess.shape[1] < n:
+            pad = np.repeat(guess[:, -1:], n - guess.shape[1], axis=1)
+            guess = np.concatenate([guess, pad], axis=1)
+        return guess[:, :n]
+
+    def _solve(self, state, t: int) -> None:
+        F, nx, nu = self.step_map, self.nx, self.action_dim
+        x0 = np.array([float(getattr(state, f)) for f in self.state_fields])
+        targets = [float(getattr(state, f)) for f in self.target_fields]
+        n = self.steps - t
+        scale = self.x_scale
+        S = casadi.DM(scale)
+
+        opti = casadi.Opti()
+        X = opti.variable(nx, n + 1)  # states over scale
+        U = opti.variable(nu, n)
+        opti.subject_to(X[:, 0] == x0 / scale)
+        for k in range(n):
+            opti.subject_to(X[:, k + 1] == F(X[:, k] * S, U[:, k]) / S)
+        opti.subject_to(opti.bounded(-1.0, U, 1.0))
+        if self.x_lb is not None or self.x_ub is not None:
+            lb = np.full(nx, -np.inf) if self.x_lb is None else self.x_lb
+            ub = np.full(nx, np.inf) if self.x_ub is None else self.x_ub
+            for k in range(1, n + 1):
+                opti.subject_to(opti.bounded(lb / scale, X[:, k], ub / scale))
+        J = 0
+        for k in range(n):
+            # Action k sets the state the step's cost is charged on, k + 1.
+            w = 1.0 if t + k >= self.window_start else self.pre_weight
+            for j, i in enumerate(self.tracked):
+                J += w * ((targets[j] - X[i, k + 1] * scale[i]) / self.e_floor[j]) ** 2
+        opti.minimize(J / n)
+
+        guess = self._guess(t, n)
+        xg = np.zeros((nx, n + 1))
+        xg[:, 0] = x0
+        for k in range(n):
+            xg[:, k + 1] = np.array(F(xg[:, k], guess[:, k])).ravel()
+        opti.set_initial(X, xg / scale[:, None])
+        opti.set_initial(U, guess)
+        opti.solver("ipopt", {"print_time": 0}, dict(self._ipopt))
+        try:
+            u = np.array(opti.solve().value(U))
+            ok = True
+        except RuntimeError:
+            u = np.array(opti.debug.value(U))
+            ok = False
+        stats = opti.stats()
+        status = str(stats.get("return_status", ""))
+        self.solve_calls += 1
+        self.solve_iters += int(stats.get("iter_count", 0) or 0)
+        capped = status in _IPOPT_CAP_STATUSES
+        if capped:
+            self.solve_capped += 1
+        if not ok:
+            self.solve_failures += 1
+            self.last_return_status = status
+            if not capped and self._plan is not None:
+                return  # keep the previous plan rather than a failed iterate
+        self._plan = np.clip(u.reshape(nu, n), -1.0, 1.0)
+        self._t0 = t
 
 
 def _is_v1(params) -> bool:

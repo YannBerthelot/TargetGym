@@ -52,6 +52,7 @@ _ROOT = pathlib.Path(__file__).resolve().parent
 # user's first call. The wheel did not ship the files either.
 GAINS_PATH = _ROOT / "data" / "pid_gains.json"
 BASELINES_PATH = _ROOT / "data" / "baseline_returns.json"
+HOLDS_PATH = _ROOT / "data" / "hold_measurements.json"
 
 # Shared controller code. A change here can move any environment's numbers, so
 # it belongs in every environment's fingerprint.
@@ -180,12 +181,53 @@ def _env_sources(spec, controllers: bool = True) -> list[pathlib.Path]:
     ]
 
 
+def gains_entries(spec, allgains: dict) -> dict:
+    """The entries of ``pid_gains.json`` a task's records depend on.
+
+    Every key that starts with the task's name (a controller may read a
+    differently named key of its own, as ``plane_cascaded`` is the 2D
+    aircraft's), the key named by ``spec.tuned_gains_key``, and every key the
+    spec declares in ``gains_keys``. Only the first used to be taken, so a
+    task whose controllers read another task's key had a record no retune of
+    that key could stale: ``plane_sine`` and ``plane_energy`` read ``plane``,
+    and patrol's oracle and lead read ``plane3d_heading``. A declared key that
+    is not in the file raises, as a missing ``fingerprint_sources`` file does,
+    so a typo cannot drop it silently.
+    """
+    keys = {k for k in allgains if k.startswith(spec.name)}
+    if spec.tuned_gains_key is not None and spec.tuned_gains_key in allgains:
+        keys.add(spec.tuned_gains_key)
+    for key in getattr(spec, "gains_keys", ()):
+        if key not in allgains:
+            raise KeyError(
+                f"{spec.name}: declared gains key {key!r} is not in {GAINS_PATH.name}"
+            )
+        keys.add(key)
+    return {k: allgains[k] for k in sorted(keys)}
+
+
+def scored_burn_in_row(spec) -> int | None:
+    """The task's burn-in in ``hold_measurements.json``, or ``None``.
+
+    The protocol scores from it, and an oracle that weights the scored window
+    plans on it (``experts.mpc.protocol_burn_in``), so it belongs in the
+    baseline fingerprint. The rest of the hold row is a measurement taken with
+    the controllers and is left out.
+    """
+    if not HOLDS_PATH.exists():
+        return None
+    row = json.loads(HOLDS_PATH.read_text()).get(spec.name)
+    return None if row is None else int(row["burn_in"])
+
+
 def baseline_fingerprint(spec) -> str:
     """Everything that determines this environment's recorded baseline scores.
 
-    Four inputs: the environment's own modules, the shared controller and
-    integration code, the tuned gains, and the parameter values the measurement
-    is taken at. Rendering is excluded -- it cannot change a return.
+    Five inputs: the environment's own modules, the shared controller and
+    integration code, the tuned gains its controllers read
+    (``gains_entries``), the parameter values the measurement is taken at, and
+    the burn-in the protocol scores it from. Rendering is excluded, since it
+    cannot change a return.
     """
     params = spec.make_test_params()
     values = {
@@ -196,11 +238,7 @@ def baseline_fingerprint(spec) -> str:
 
     gains = {}
     if GAINS_PATH.exists():
-        allgains = json.loads(GAINS_PATH.read_text())
-        # A controller may read a differently-named key (the 2D aircraft's
-        # autopilot reads "plane_cascaded"), so take every key that starts with
-        # the environment's name rather than only the exact match.
-        gains = {k: v for k, v in allgains.items() if k.startswith(spec.name)}
+        gains = gains_entries(spec, json.loads(GAINS_PATH.read_text()))
 
     h = hashlib.sha256()
     h.update(_digest_paths(_env_sources(spec)).encode())
@@ -213,6 +251,7 @@ def baseline_fingerprint(spec) -> str:
     # worth 350.4 against 151.8 on the battery. A record taken under one and
     # read under the other is exactly the silent staleness this guards.
     h.update(json.dumps(sorted(getattr(spec, "noise_fields", ()))).encode())
+    h.update(json.dumps(scored_burn_in_row(spec)).encode())
     return h.hexdigest()[:16]
 
 

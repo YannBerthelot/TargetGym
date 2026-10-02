@@ -124,6 +124,15 @@ class EnvSpec:
         Key under which this environment's PID gains live in
         ``src/target_gym/data/pid_gains.json``.  ``None`` means the controller is not a
         single flat SISO loop and the gains are stored per sub-loop.
+        ``provenance.baseline_fingerprint`` hashes this key's entry.
+    gains_keys:
+        Other keys of ``pid_gains.json`` this task's controllers or physics
+        read. ``provenance.baseline_fingerprint`` hashes the entries whose key
+        starts with the task's name and the ``tuned_gains_key`` entry; a key
+        outside both is declared here, or a retune of it would leave this
+        task's records looking fresh. Patrol declares ``plane3d_heading``,
+        the 3D heading autopilot its oracle and its lead fly on.
+        ``tests/test_registry_rules.py`` checks every declared key exists.
     baselines_note:
         Set when ``make_pid``/``make_mpc`` are ``None``: a short explanation
         of why, surfaced by the baseline-coverage test so a missing expert is
@@ -189,6 +198,9 @@ class EnvSpec:
     version: int = 2
     test_params: dict[str, Any] = field(default_factory=dict)
     tuned_gains_key: str | None = None
+    #: Further ``pid_gains.json`` keys the task reads, hashed into its
+    #: baseline fingerprint (``provenance.gains_entries``).
+    gains_keys: tuple[str, ...] = ()
     baselines_note: str | None = None
     expert_degraded: str | None = None
     mpc_degraded: str | None = None
@@ -693,6 +705,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_patrol_mpc", module="target_gym.patrol.experts"),
         test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
+        # The oracle and the lead fly the 3D heading autopilot.
+        gains_keys=("plane3d_heading",),
         noise_fields=("turbulence_sigma",),
         # v3: the slot floor is the 3 m relative-GPS resolution, from 18.6 m
         # (an earlier planner's hold), so the reward changed (oracle audit,
@@ -710,6 +724,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
+        gains_keys=("plane3d_heading",),
         baselines_note=(
             "The PID is a lead-state estimator feeding the same pursuit law "
             "the full-observation variant uses. Range with azimuth and "

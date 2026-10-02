@@ -2,18 +2,20 @@
 
 Each task keeps its oracle in its own package, so changing one re-records
 only the tasks of that package. The shared machinery (GradientMPC,
-CasadiMPC, SamplingMPC and the v2 objective helpers) stays in
-``target_gym.experts.mpc``, which is in every task's baseline fingerprint.
+CasadiMPC, ShrinkingHorizonNLP, SamplingMPC and the v2 objective helpers)
+stays in ``target_gym.experts.mpc``, which is in every task's baseline
+fingerprint.
 """
 
-import numpy as np
-
-from target_gym.experts.mpc import CasadiMPC
+from target_gym.experts.mpc import (
+    ShrinkingHorizonNLP,
+    casadi_step_map,
+    protocol_burn_in,
+)
 
 try:
     import casadi
-    import do_mpc
-except ImportError:  # CasadiMPC refuses to build without them
+except ImportError:  # ShrinkingHorizonNLP refuses to build without it
     pass
 
 
@@ -21,81 +23,69 @@ except ImportError:  # CasadiMPC refuses to build without them
 # CSTR
 # ---------------------------------------------------------------------------
 
+#: Typical magnitude of [C_a, T], which scales the NLP's state variables.
+_X_SCALE = (1.0, 300.0)
 
-class CSTRCasadiMPC(CasadiMPC):
+
+def cstr_step_map(env, params):
+    """The CSTR's discrete step, ``F(x, u) -> x_next``, as a CasADi Function.
+
+    ``x = [C_a, T]`` and ``u`` the raw coolant command in ``[-1, 1]``. The
+    right-hand side is ``env.compute_velocity`` term for term, and the
+    integration is the environment's own (``env.integration_method``,
+    ``rk4_1`` as registered), so on the action box this is ``step_env`` in
+    float64. The env clips the command to the box first; the NLP bounds it
+    there, so the clip is left out to keep the map smooth at the bounds.
     """
-    CasADi MPC for CSTR.
+    p = params
 
-    States : [C_a, T]
-    Input  : u_raw ∈ [-1, 1]  →  T_c ∈ [T_c_min, T_c_max]
-    ODE    :
-        dC_a/dt = q/V*(Caf - C_a) - k0*exp(-EA/R/T)*C_a
-        dT/dt   = q/V*(Ti - T) + (-ΔHr)*rA/(ρ·C) + UA*(T_c - T)/(ρ·C·V)
-    """
-
-    SCALING = {"_x": {"C_a": 1.0, "T": 300.0}}
-
-    def _build_mpc(self):
-        p = self.params
-        model = do_mpc.model.Model("continuous")
-
-        C_a = model.set_variable("_x", "C_a")
-        T = model.set_variable("_x", "T")
-        u_raw = model.set_variable("_u", "u_raw")
-        target_CA = model.set_variable("_p", "target_CA")
-
-        # Action scaling
-        T_c = p.T_c_min + 0.5 * (u_raw + 1.0) * (p.T_c_max - p.T_c_min)
+    def velocity(x, u):
+        C_a, T = x[0], x[1]
+        T_c = p.T_c_min + 0.5 * (u[0] + 1.0) * (p.T_c_max - p.T_c_min)
         rA = p.k0 * casadi.exp(-p.EA_over_R / T) * C_a
-
-        model.set_rhs("C_a", p.q / p.V * (p.Caf - C_a) - rA)
-        model.set_rhs(
-            "T",
+        return casadi.vertcat(
+            p.q / p.V * (p.Caf - C_a) - rA,
             p.q / p.V * (p.Ti - T)
-            + (-p.deltaHr) * rA / (p.rho * p.C)
-            + p.UA * (T_c - T) / (p.rho * p.C * p.V),
-        )
-        model.setup()
-
-        mpc = do_mpc.controller.MPC(model)
-        mpc.set_param(
-            n_horizon=self.horizon,
-            t_step=self.mpc_dt,
-            n_robust=0,
-            store_full_solution=False,
+            + ((-p.deltaHr) * rA) * (1 / (p.rho * p.C))
+            + p.UA * (T_c - T) * (1 / (p.rho * p.C * p.V)),
         )
 
-        lterm = (target_CA - C_a) ** 2
-        mpc.set_objective(lterm=lterm, mterm=lterm)
-        mpc.set_rterm(u_raw=1e-4)
-
-        mpc.bounds["lower", "_u", "u_raw"] = -1.0
-        mpc.bounds["upper", "_u", "u_raw"] = 1.0
-
-        self._target_CA = float(p.target_CA_range[0])
-        p_tpl = mpc.get_p_template(1)
-
-        def p_fun(_t):
-            p_tpl["_p", 0, "target_CA"] = self._target_CA
-            return p_tpl
-
-        mpc.set_p_fun(p_fun)
-        self._apply_scaling(mpc)
-        mpc.set_param(nlpsol_opts=self._quiet_ipopt())
-        mpc.setup()
-        return mpc
-
-    def _extract_x0(self, state):
-        return np.array([float(state.C_a), float(state.T)])
-
-    def _update_setpoint(self, state):
-        self._target_CA = float(state.target_CA)
+    method = getattr(env, "integration_method", "rk4_1")
+    return casadi_step_map(velocity, 2, 1, float(p.delta_t), method)
 
 
-def make_cstr_mpc(env, params, horizon: int = 5):
-    """CasADi/IPOPT MPC for CSTR — matches the PC-gym oracle (N=5).
+def make_cstr_mpc(
+    env,
+    params,
+    window_start: int | None = None,
+    resolve_every: int = 1,
+    pre_weight: float = 1e-3,
+):
+    """The CSTR's oracle: a shrinking-horizon NLP over the rest of the episode.
 
-    With delta_t=0.25 s (PC-gym standard: tsim=25s, N=100), horizon=5 gives
-    1.25 s lookahead — about one residence time (V/q=1 s).
+    It re-solves every step on the env's own step (``cstr_step_map``), with
+    the concentration's tracking cost in floor units. ``window_start`` is
+    where the protocol starts scoring, read by default from its burn-in
+    (``protocol_burn_in``: 12 steps of the registered 100), and the steps
+    before it weigh ``pre_weight``. The plant is deterministic, so the
+    closed loop reaches the plant's optimum to float32 rounding.
+
+    It replaced a do-mpc controller on PC-gym's 5-step horizon (oracle audit,
+    2026-10), whose move penalty, in raw mol/L, was 1e4 in floor units and
+    alone made its 0.317 per step on the protocol seeds. This one gives
+    9.4e-9 there with zero trips (``tests/pc_gym/cstr``).
     """
-    return CSTRCasadiMPC(env, params, horizon=horizon)
+    if window_start is None:
+        window_start = protocol_burn_in("cstr", params)
+    return ShrinkingHorizonNLP(
+        env,
+        params,
+        step_map=cstr_step_map(env, params),
+        state_fields=("C_a", "T"),
+        target_fields=("target_CA",),
+        tracked=(0,),
+        window_start=window_start,
+        x_scale=_X_SCALE,
+        pre_weight=pre_weight,
+        resolve_every=resolve_every,
+    )

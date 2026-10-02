@@ -396,7 +396,6 @@ class PlaneMPC(GradientMPC):
             if self._score(guide, aug) > self._score(self._actions, aug):
                 self._actions = guide
         first = self._actions[0]
-        self._u_prev = first
         return np.array([throttle, float(first[1])], dtype=np.float32)
 
     def reset(self):
@@ -484,7 +483,6 @@ class PlaneHandoverMPC:
                 self.bumpless_tol,
             )
         hold._actions = capture._actions
-        hold._u_prev = capture._u_prev
         hold._fresh = False
         self.mode = "hold"
         self.handovers.append((int(state.time), "hold"))
@@ -493,7 +491,6 @@ class PlaneHandoverMPC:
         plan = np.array(self.hold._actions, dtype=np.float32)
         plan[:, 0] = self._last[0]
         self.capture._actions = jnp.asarray(plan)
-        self.capture._u_prev = jnp.asarray(self._last)
         self.capture._fresh = False
         self.mode = "capture"
         self._settled = 0

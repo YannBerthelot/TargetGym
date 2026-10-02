@@ -86,11 +86,11 @@ disturbances under a constant PRNG key, and a PID that beats the best constant
 action. Most defects in a new environment surface there before you write a
 single environment-specific test.
 
-`EnvSpec`'s docstring documents each field. Two are easy to overlook:
+`EnvSpec`'s docstring documents each field. Three are easy to overlook:
 `disturbance_fields` (state entries holding zero-mean noise, which the
-conformance suite checks do not ratchet) and `baselines_note` (why a PID or
+conformance suite checks do not ratchet), `baselines_note` (why a PID or
 MPC is absent, or what a shipped one really is, so a gap or a caveat is
-documented rather than silent).
+documented rather than silent) and `gains_keys` (below).
 
 ### A task added after the 21
 
@@ -120,6 +120,13 @@ checks each one, and checks the tuner row only for a task that ships a PID.
   `target_gym.experts.pid` and `target_gym.experts.mpc`. Its `rendering*.py`
   files are exempt and may import `target_gym.render_kit`, since no
   fingerprint covers rendering and a renderer cannot change a return.
+- **Declare the gains your controllers read.** The baseline fingerprint
+  hashes the `pid_gains.json` entries whose key starts with the task's name
+  and the entry named by `tuned_gains_key`. A controller, or the physics,
+  that reads any other key lists it in `gains_keys`, so a retune of that key
+  makes this task's records stale (patrol declares `plane3d_heading`, the
+  autopilot its oracle and its lead fly). This one applies to the 21 too, and
+  `tests/test_registry_rules.py` checks that every declared key exists.
 - **A name that is no prefix of another.** Gains keys are collected by name
   prefix, and names starting with `plane` or `patrol` are treated as aircraft.
   A new name must not start another registered name or start with one, and

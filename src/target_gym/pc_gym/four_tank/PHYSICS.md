@@ -110,6 +110,21 @@ difficulty is structural, not informational.
 against the `h_max − h_min` span with a floor at `precision_floor = 1e-3` m, a
 millimetre, which is what a level transmitter resolves.
 
+**The oracle plans the rest of the episode.** The plant is deterministic, so
+the MPC slot holds its optimum: an NLP over every remaining step, solved by
+IPOPT on `four_tank_step_map`, the environment's own RK4 step written in
+CasADi (a test holds it equal to `step_env`), re-solved from the true state
+every 25 steps, with every planned level held 5 mm inside the trip limits.
+Its cost is both lower tanks' tracking terms in floor units, and the steps
+of the protocol's 250-step burn-in weigh 1e-3. That weighting is the point.
+With the pumps sending 80 % of their flow across (`gamma1 + gamma2` = 0.4)
+the response is non-minimum-phase, and even the exact optimum of a cost that
+charges every step alike leaves 0.0098 per step in the scored window; the
+do-mpc controller it replaced in the oracle audit (2026-10), 10 steps of
+20 s with such a cost, left 0.0074. This one scores 3.1e-8 with zero trips.
+`e_floor` is the transmitter's resolution and `rho_floor` is 0, both
+documented minima, so neither moved.
+
 ---
 
 ## 5. Known deviations
@@ -126,13 +141,15 @@ which under a log is only the denominator and no longer flattens anything.
 
 `tracking_band = 0.05` is left over from the narrowing that was tried first. It
 is **a controller constant, not a reward parameter**: nothing in this file's
-reward reads it, and the only consumer is the MPC objective in `experts.py`,
-which normalises its tracking error by it. That is the same shape as the glass
-furnace's since-removed `tracking_scale`, which the reward had stopped using while the
+reward reads it, and since the oracle audit (2026-10) neither does the MPC,
+which tracks in floor units (`e_floor`); an earlier MPC objective normalised
+its tracking error by it. That is the same shape as the glass furnace's
+since-removed `tracking_scale`, which the reward had stopped using while the
 controller went on steering by it, and which cost that environment 16% against
-its own PID. It is harmless here, because this objective has no competing cost
-term for a mis-scaled tracking term to be flat against, so the band affects only
-conditioning. It is named here so it does not look like the furnace's did.
+its own PID. It was harmless here, because that objective had no competing
+cost term for a mis-scaled tracking term to be flat against, so the band
+affected only conditioning. It is named here so it does not look like the
+furnace's did.
 
 Recorded because it is *why* a much worse defect went unnoticed: the target range once sat entirely above the
 reachable envelope — no sampled setpoint was attainable and every episode was
@@ -182,7 +199,7 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1e-3 m | documented minimum: the level transmitter's 1 mm resolution, both tanks. No disturbance; the shipped MPC holds 1e-5 m on both tanks after settling (`scripts/measure_hold.py`, 900 hold steps after a 270-step burn-in; PID 0.6 and 2.9 mm). |
+| `e_floor` | 1e-3 m | documented minimum: the level transmitter's 1 mm resolution, both tanks. No disturbance; the MPC before the oracle audit (2026-10) held 1e-5 m on both tanks after settling (`scripts/measure_hold.py`, 900 hold steps after a 270-step burn-in; PID 0.6 and 2.9 mm), and the NLP that replaced it about 2e-7 m (protocol hold cost 3.1e-8). |
 | `e_tol` | 0 | no level specification band |
 | `tracking_exponent` | 2 | quadratic |
 | `failure_cost` | 2.92e5 | twice the reachable two-tank excursion's cost, 2 x ((0.25 / 1e-3)^2 + (0.289 / 1e-3)^2): the steady-state tops 0.360 / 0.429 m against the lowest targets |

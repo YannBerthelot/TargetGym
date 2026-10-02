@@ -204,7 +204,7 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
         return make_cstr_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
-        """Return a GradientMPC oracle for concentration tracking."""
+        """Return the oracle, a shrinking-horizon NLP, for concentration tracking."""
         from target_gym.pc_gym.cstr.experts import make_cstr_mpc
 
         if params is None:

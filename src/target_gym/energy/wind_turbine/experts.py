@@ -11,8 +11,8 @@ solve on the noise-free plant model, so that the next step's power equals the
 target, and collective pitch from the shipped PI with its command slew capped
 at the activity the reward leaves free. It beats the gradient planner it
 replaced on every protocol seed. That planner,
-:func:`make_wind_turbine_gradient_mpc`, is kept unchanged: it is still the
-oracle for version-1 params, whose recorded baseline it reproduces.
+:func:`make_wind_turbine_gradient_mpc`, is still the oracle for version-1
+params, whose recorded baseline it reproduces.
 """
 
 import math
@@ -170,20 +170,22 @@ def make_wind_turbine_gradient_mpc(
     the seed where they disagree scored *higher*), and the inner optimiser
     (Adam, and a decaying step size, are both worse here than the plain one).
 
-    The oracle audit (2026-10) found two weaknesses in the version-2 planner,
-    kept here as recorded. Its descent (500 fixed steps at lr 0.005) does not
-    converge on the torque: the applied action left a mean of 1.8 kW of power
-    error that its own model predicted on protocol seed 0 (0.9 kW on seeds 1
-    and 2). And the move penalty is read when the solve is traced, when there
-    is no previous action, so it never enters the descent; it acts only when
-    the guide plan is compared. :class:`WindTurbineNewtonPI` replaced it as
-    the version-2 oracle.
+    The oracle audit (2026-10) found two weaknesses in the version-2 planner.
+    Its descent (500 fixed steps at lr 0.005) does not converge on the
+    torque: the applied action left a mean of 1.8 kW of power error that its
+    own model predicted on protocol seed 0 (0.9 kW on seeds 1 and 2). And its
+    move penalty on the pitch was read when the solve was traced, when there
+    was no previous action, so it never entered the descent and acted only
+    when the guide plan was compared. :class:`WindTurbineNewtonPI` replaced
+    it as the version-2 oracle, and the move penalty was then removed, with
+    ``GradientMPC``'s ``move_penalty_fn``, once nothing used it. Version 1
+    never had one.
     """
     # Version 1 keeps the planner it was recorded with (100 iterations at
     # lr 0.02, a zero warm start), so its recorded baseline reproduces; the
-    # version-2 planner needs the larger budget for the move-suppressed,
-    # squared-tracking objective (measured: 500 / 0.005 is the first setting
-    # that beats the PID on every seed).
+    # version-2 planner needs the larger budget for the squared-tracking
+    # objective (measured: 500 / 0.005 is the first setting that beats the
+    # PID on every seed).
     v1 = _is_v1(params)
     n_iter = (100 if v1 else 500) if n_iter is None else n_iter
     lr = (0.02 if v1 else 0.005) if lr is None else lr
@@ -211,12 +213,6 @@ def make_wind_turbine_gradient_mpc(
     )
     guide_plan = initial_plan
 
-    def move_penalty(u0, u_prev, p):
-        # Pitch command change between solves as a fraction of pitch_max
-        # (raw range 2 <-> pitch_max), in floor units of the fatigue term.
-        frac = jnp.abs(u0[0] - u_prev[0]) * 0.5
-        return float(p.fatigue_weight) * (frac / p.c_hold) ** 2
-
     return GradientMPC(
         env,
         params,
@@ -231,7 +227,6 @@ def make_wind_turbine_gradient_mpc(
         objective_fn=objective_fn,
         initial_plan_fn=initial_plan,
         guide_plan_fn=guide_plan,
-        move_penalty_fn=None if v1 else move_penalty,
     )
 
 
