@@ -257,9 +257,9 @@ def _recorded_protocol_row(spec) -> dict:
 
 def test_recorded_protocol_row_still_describes_this_tree(spec):
     """Every shipped PID has a protocol row taken against this tree, whether
-    or not its floor is measured. The floor check below skips four rows (three
-    documented minima and patrol_bearing_only), so without this their
-    fingerprints would go unchecked."""
+    or not its floor is measured. The floor check below skips the three
+    documented minima, so without this their fingerprints would go
+    unchecked."""
     if not spec.has_pid:
         pytest.skip(f"{spec.name}: {spec.baselines_note}")
     _recorded_protocol_row(spec)

@@ -181,6 +181,9 @@ PLANTS = {
     ),
     "plane3d_figure8": (_plane3d_errors("figure8"), None, 70, "phugoid ~1 min", None),
     "patrol": (_patrol_errors, None, 70, "phugoid ~1 min", None),
+    # The same plant, reward and oracle (which reads the true state), so the
+    # same window: the protocol then scores both variants after the capture.
+    "patrol_bearing_only": (_patrol_errors, None, 70, "phugoid ~1 min", None),
     "cstr": (None, None, 4, "residence ~1 min at 15 s steps", 100),
     "first_order": (None, None, 10, "tau = 0.5 s at 0.05 s steps", 100),
     "four_tank": (None, None, 90, "tank tau ~1.5 min at 1 s steps", 300),

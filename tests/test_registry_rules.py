@@ -405,8 +405,8 @@ def test_plant_noise_is_declared():
 def test_every_mpc_task_and_every_new_task_has_a_hold_row():
     """``eval.hold_settings`` returns a burn-in of 0 for a task with no row in
     hold_measurements.json, without a word, and the protocol would then score
-    the approach as if it were the hold. Every task with an MPC has a row
-    (patrol_bearing_only has neither), and so does every new task."""
+    the approach as if it were the hold. Every task with an MPC has a row,
+    and so does every new task."""
     rows = json.loads((SRC / "data" / "hold_measurements.json").read_text())
     missing = [
         s.name
