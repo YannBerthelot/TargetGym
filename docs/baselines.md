@@ -245,10 +245,12 @@ Four things to know before you use it.
 an opponent: it knows the reactor's xenon inventory, the column's interior
 profile and the turbine's rotor-effective wind.
 
-**It is slow**, from 3 ms to 600 ms per step against environments that step in
-microseconds (the battery's feedforward and the turbine's feedback law, about
-0.1 ms per step after a one-off JIT compile of about 0.4 s, aside). A reference
-to measure against, not something to put inside a training loop.
+**It is slow**, from 3 ms to about 1.3 s per step against environments that
+step in microseconds (the battery's feedforward and the turbine's feedback law,
+about 0.1 ms per step after a one-off JIT compile of about 0.4 s, aside; the
+four 3D aircraft tasks, at 200 descent iterations a solve since the oracle
+audit, 2026-10, are the slow end). A reference to measure against, not
+something to put inside a training loop.
 
 **It does not vmap or jit** on the CasADi plants, which call IPOPT, a solver
 outside JAX. Six of the seven `GradientMPC` environments (the 3D aircraft, the
@@ -901,8 +903,8 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 
 | environment | steps | PID cost/step | MPC cost/step | MPC saves | MPC wins | trips |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane3d_figure8` | 400 | 4.695e+04 | 6.772 | 1.000 | 10/10 | 0 |
-| `plane3d_racetrack` | 650 | 1.78e+05 | 758.8 | 0.996 | 10/10 | 0 |
+| `plane3d_figure8` | 400 | 1.112e+06 | 14.73 | 1.000 | 10/10 | 0 |
+| `plane3d_racetrack` | 650 | 7.429e+05 | 1414 | 0.998 | 10/10 | 0 |
 | `boiler_drum` | 400 | 641.9 | 15.31 | 0.976 | 10/10 | 0 |
 | `patrol` | 200 | 298.6 | 14.22 | 0.952 | 10/10 | 0 |
 | `patrol_bearing_only` | 200 | 290.4 | 14.22 | 0.951 | 10/10 | 0 |
@@ -912,8 +914,8 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `unstable_cstr` | 1200 | 5.714e+04 | 4178 | 0.927 | 10/10 | 0 |
 | `compressor_surge` | 1200 | 1790 | 161.4 | 0.910 | 10/10 | 0 |
 | `distillation` | 200 | 262.3 | 29.9 | 0.886 | 10/10 | 0 |
-| `plane3d_circle` | 300 | 1207 | 235.1 | 0.805 | 10/10 | 0 |
-| `plane3d_heading` | 200 | 3.15e+04 | 6734 | 0.786 | 10/10 | 0 |
+| `plane3d_circle` | 300 | 1.919e+04 | 3142 | 0.836 | 10/10 | 0 |
+| `plane3d_heading` | 200 | 4.634e+04 | 8266 | 0.822 | 10/10 | 0 |
 | `plane_sine` | 480 | 5184 | 1249 | 0.759 | 10/10 | 0 |
 | `battery` | 360 | 0.003457 | 0.0008876 | 0.743 | 10/10 | 0 |
 | `ph_neutralization` | 300 | 336.3 | 91.22 | 0.729 | 10/10 | 0 |
@@ -986,8 +988,8 @@ airspeed against the PID's 0.17, its throttle on the PID's airspeed loop once
 it has captured its altitude (until the oracle audit, 2026-10, it held 1.3
 and paid 2.1 in airspeed: not the trade the two-cost split exists to show,
 but a throttle the planner never moved after its first plan); the aircraft
-PIDs remain structurally inadequate on the moving-reference tasks (thousands
-of floor-widths while "holding" the racetrack, the figure-8 and the heading),
+PIDs remain structurally inadequate on the moving-reference tasks (2e4 to 1e6
+floor-widths while "holding" the heading, the figure-8 and the racetrack),
 where the MPC sits within a few;
 the glass furnace's MPC is 26x its own long-run hold cost on the 13 h test
 episode (0.80 against a 0.03 reference) because the episode is still in the
@@ -1048,10 +1050,10 @@ it, and the heading the rest.
 | `patrol_bearing_only` | 0.0363 | 199 (199 / —) | 0.0371 (0.0371 / —) | 1 | 199 | 0.0371 | 1.71e+04 (3.85e+04) | 6.04e+03 (6.04e+03) | 0 |
 | `ph_neutralization` | 0.0169 | 12.6 (12.6 / 0.00681) | 0.096 (0.089 / 0.00705) | 0.994 | 9.73 | 0.0756 | 9.07e+04 (9.12e+04) | 2.21e+04 (2.21e+04) | 0 |
 | `plane` | 0.21 | 6.21 (6.04 / 0.169) | 0.516 (0.422 / 0.0945) | 0.949 | 6.21 | 0.516 | 2.73e+06 (2.73e+06) | 1.19e+06 (1.19e+06) | 0 |
-| `plane3d_circle` | 2 | 98.6 (98.6 / —) | 9.84 (9.84 / —) | 0.919 | 98.6 | 9.84 | 4.18e+05 (4.33e+05) | 8.38e+04 (8.53e+04) | 0 |
-| `plane3d_figure8` | 1 | 2.5e+04 (2.5e+04 / —) | 2.1 (2.1 / —) | 1 | 2.5e+04 | 2.1 | 8.57e+06 (1.28e+07) | 739 (1.15e+03) | 0 |
-| `plane3d_heading` | 1 | 1.79e+04 (1.79e+04 / —) | 5.05 (5.05 / —) | 1 | 1.79e+04 | 5.05 | 4.01e+06 (5.45e+06) | 1.53e+06 (1.53e+06) | 0 |
-| `plane3d_racetrack` | 2 | 3.18e+05 (3.18e+05 / —) | 7.04 (7.04 / —) | 1 | 3.18e+05 | 6.86 | 6.82e+04 (3.56e+06) | 6.28e+05 (6.3e+05) | 0 |
+| `plane3d_circle` | 0.466 | 832 (832 / —) | 1.93 (1.93 / —) | 0.998 | 832 | 1.93 | 6.91e+06 (7.04e+06) | 1.23e+06 (1.23e+06) | 0 |
+| `plane3d_figure8` | 0.184 | 5.92e+05 (5.92e+05 / —) | 0.77 (0.77 / —) | 1 | 5.92e+05 | 0.77 | 2.03e+08 (3.04e+08) | 5.17e+03 (5.32e+03) | 0 |
+| `plane3d_heading` | 0.454 | 1.9e+04 (1.9e+04 / —) | 0.726 (0.726 / —) | 1 | 1.9e+04 | 0.726 | 7.27e+06 (8.86e+06) | 2.01e+06 (2.01e+06) | 0 |
+| `plane3d_racetrack` | 0.487 | 1.35e+06 (1.35e+06 / —) | 1.07 (1.07 / —) | 1 | 1.35e+06 | 1.01 | -6.84e+05† (6.89e+06) | 1.21e+06 (1.21e+06) | 0 |
 | `plane_energy` | 0.963 | 1.12e+04 (1.12e+04 / 0.321) | 511 (508 / 3.51) | 0.954 | 740 | 48.1 | 1.77e+06 (1.84e+06) | 1.76e+05 (1.81e+05) | 0 |
 | `plane_sine` | 0.176 | 1.52e+03 (1.52e+03 / 0.261) | 0.546 (0.29 / 0.255) | 1 | 1.49e+03 | 0.527 | 1.88e+06 (2.14e+06) | 7.61e+05 (7.61e+05) | 0 |
 | `reactor` | 1.25 | 23.7 (23.3 / 0.385) | 1.38 (1.38 / 2.41e-05) | 0.994 | 23.7 | 1.38 | 1.64e+03 (1.24e+04) | 4.77 (597) | 0 |
@@ -1059,5 +1061,5 @@ it, and the heading the rest.
 | `wind_turbine` | 1.01e-05 | 2.64e-05 (2.43e-05 / 2.12e-06) | 1.3e-05 (1.27e-05 / 3.08e-07) | 0.821 | 2.64e-05 | 1.3e-05 | 0.00854 (0.0132) | 0.000539 (0.00298) | 0 |
 
 Reach B is each controller's transient cost above its *own* hold level (Theorem 4's bias), so it is not comparable between two controllers whose holds differ: a controller holding far off shows a small B because its level swallows its transient. The number in parentheses is the transient's summed cost, not relative to anything, and is the one to compare across controllers.
-† cost still rising at the end of the window (no hold reached, so the transient is cheaper than the "hold" level and B is negative): PID on `glass_furnace`, MPC on `glass_furnace`.
+† cost still rising at the end of the window (no hold reached, so the transient is cheaper than the "hold" level and B is negative): PID on `glass_furnace`, MPC on `glass_furnace`, PID on `plane3d_racetrack`.
 

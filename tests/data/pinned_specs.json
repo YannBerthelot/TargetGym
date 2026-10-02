@@ -151,7 +151,7 @@
   {
     "name": "plane3d_heading",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "3D heading",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -173,7 +173,11 @@
       "make_plane3d_mpc"
     ],
     "test_params": {
-      "max_steps_in_episode": 200
+      "max_steps_in_episode": 200,
+      "e_floor_altitude": 1.0,
+      "rho_floor_tracking": 0.45360830046901834,
+      "rho_floor": 0.45360830046901834,
+      "failure_cost": 297289728.0
     },
     "tuned_gains_key": "plane3d_heading",
     "gains_keys": [],
@@ -196,7 +200,7 @@
   {
     "name": "plane3d_circle",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "3D circle",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -219,11 +223,11 @@
     ],
     "test_params": {
       "max_steps_in_episode": 300,
-      "e_floor_altitude": 4.06,
-      "e_floor_path": 8.12,
-      "rho_floor_tracking": 2.0,
-      "rho_floor": 2.0,
-      "failure_cost": 18035485.452207047
+      "e_floor_altitude": 1.0,
+      "e_floor_path": 3.0,
+      "rho_floor_tracking": 0.4656965077777777,
+      "rho_floor": 0.4656965077777777,
+      "failure_cost": 297289728.0
     },
     "tuned_gains_key": "plane3d_circle",
     "gains_keys": [],
@@ -246,7 +250,7 @@
   {
     "name": "plane3d_racetrack",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "3D holding pattern",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -269,11 +273,11 @@
     ],
     "test_params": {
       "max_steps_in_episode": 650,
-      "e_floor_altitude": 1.39,
-      "e_floor_path": 6.17,
-      "rho_floor_tracking": 2.0,
-      "rho_floor": 2.0,
-      "failure_cost": 153868706.58868593
+      "e_floor_altitude": 1.0,
+      "e_floor_path": 3.0,
+      "rho_floor_tracking": 0.48693653444444446,
+      "rho_floor": 0.48693653444444446,
+      "failure_cost": 297289728.0
     },
     "tuned_gains_key": "plane3d_racetrack",
     "gains_keys": [],
@@ -296,7 +300,7 @@
   {
     "name": "plane3d_figure8",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "3D figure-8",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -319,10 +323,10 @@
     ],
     "test_params": {
       "max_steps_in_episode": 400,
-      "e_floor_path": 14.6,
-      "rho_floor_tracking": 1.0,
-      "rho_floor": 1.0,
-      "failure_cost": 3753049.3525989866
+      "e_floor_path": 3.0,
+      "rho_floor_tracking": 0.1840696011111111,
+      "rho_floor": 0.1840696011111111,
+      "failure_cost": 88888888.8888889
     },
     "tuned_gains_key": "plane3d_figure8",
     "gains_keys": [],

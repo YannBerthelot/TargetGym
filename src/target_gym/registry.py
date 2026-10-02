@@ -597,11 +597,27 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
         make_pid=_pid("make_plane3d_heading_cascaded_pid"),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
-        test_params={"max_steps_in_episode": 200},
+        # The floors are set here, not taken from the PlaneParams3D class
+        # defaults, because PatrolParams inherits those defaults and patrol's
+        # records must not move with this task's floor.
+        test_params={
+            "max_steps_in_episode": 200,
+            # The 1 m altimeter resolution; the heading floor is the class
+            # default, the 0.0087 rad AHRS resolution. The oracle holds below
+            # both, and rho is its lowest per-seed holds (0.6735 m, 2.14e-5
+            # rad; `scripts/measure_hold.py`) in floor units.
+            "e_floor_altitude": 1.0,
+            "rho_floor_tracking": (0.6735 / 1.0) ** 2 + (2.14e-5 / 0.0087) ** 2,
+            "rho_floor": (0.6735 / 1.0) ** 2 + (2.14e-5 / 0.0087) ** 2,
+            "failure_cost": 2.0 * (12192.0 / 1.0) ** 2,
+        },
         tuned_gains_key="plane3d_heading",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # v3: the altitude floor is the 1 m altimeter resolution, from the
+        # 1.44 m an earlier oracle held (oracle audit, 2026-10).
+        version=3,
     ),
     EnvSpec(
         name="plane3d_circle",
@@ -612,17 +628,24 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
         test_params={
             "max_steps_in_episode": 300,
-            # Lowest per-seed MPC holds on this task (`scripts/measure_hold.py`).
-            "e_floor_altitude": 4.06,
-            "e_floor_path": 8.12,
-            "rho_floor_tracking": 2.0,
-            "rho_floor": 2.0,
-            "failure_cost": 2.0 * (12192.0 / 4.06) ** 2,
+            # The 1 m altimeter and 3 m GPS resolutions. The oracle holds
+            # below both, and rho is its lowest per-seed holds (0.6657 m,
+            # 0.4504 m; `scripts/measure_hold.py`) in floor units.
+            "e_floor_altitude": 1.0,
+            "e_floor_path": 3.0,
+            "rho_floor_tracking": (0.6657 / 1.0) ** 2 + (0.4504 / 3.0) ** 2,
+            "rho_floor": (0.6657 / 1.0) ** 2 + (0.4504 / 3.0) ** 2,
+            "failure_cost": 2.0 * (12192.0 / 1.0) ** 2,
         },
         tuned_gains_key="plane3d_circle",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # v3: the floors are the instrument resolutions (oracle audit,
+        # 2026-10), from the 4.06 m altitude an earlier oracle held and an
+        # 8.12 m path floor labelled as its hold, though it equals 2 x 4.06 m
+        # and the recorded hold was 14.27 m.
+        version=3,
     ),
     EnvSpec(
         name="plane3d_racetrack",
@@ -637,16 +660,23 @@ _SPECS: tuple[EnvSpec, ...] = (
         # periodic task.
         test_params={
             "max_steps_in_episode": 650,
-            "e_floor_altitude": 1.39,
-            "e_floor_path": 6.17,
-            "rho_floor_tracking": 2.0,
-            "rho_floor": 2.0,
-            "failure_cost": 2.0 * (12192.0 / 1.39) ** 2,
+            # The 1 m altimeter and 3 m GPS resolutions. The oracle holds
+            # below both, and rho is its lowest per-seed holds (0.6803 m,
+            # 0.4660 m; `scripts/measure_hold.py`) in floor units.
+            "e_floor_altitude": 1.0,
+            "e_floor_path": 3.0,
+            "rho_floor_tracking": (0.6803 / 1.0) ** 2 + (0.4660 / 3.0) ** 2,
+            "rho_floor": (0.6803 / 1.0) ** 2 + (0.4660 / 3.0) ** 2,
+            "failure_cost": 2.0 * (12192.0 / 1.0) ** 2,
         },
         tuned_gains_key="plane3d_racetrack",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # v3: the floors are the instrument resolutions, from the 1.39 m
+        # altitude and 6.17 m path an earlier oracle held (oracle audit,
+        # 2026-10).
+        version=3,
         # No ``expert_degraded``: this expert used to carry one, and what it
         # said was that its gains had never been searched. They have been now.
         # Coordinate descent on the cross-track gain alone, over five seeds and
@@ -685,16 +715,21 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
         test_params={
             "max_steps_in_episode": 400,
-            # Path term alone: its floor, and the reference is one term.
-            "e_floor_path": 14.6,
-            "rho_floor_tracking": 1.0,
-            "rho_floor": 1.0,
-            "failure_cost": 2.0 * (20000.0 / 14.6) ** 2,
+            # Path term alone, its floor the 3 m GPS resolution. The oracle
+            # holds below it, and rho is its lowest per-seed hold (1.2871 m;
+            # `scripts/measure_hold.py`) in floor units.
+            "e_floor_path": 3.0,
+            "rho_floor_tracking": (1.2871 / 3.0) ** 2,
+            "rho_floor": (1.2871 / 3.0) ** 2,
+            "failure_cost": 2.0 * (20000.0 / 3.0) ** 2,
         },
         tuned_gains_key="plane3d_figure8",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # v3: the path floor is the 3 m GPS resolution, from the 14.6 m an
+        # earlier oracle held (oracle audit, 2026-10).
+        version=3,
     ),
     EnvSpec(
         name="patrol",
