@@ -3,13 +3,14 @@
 TargetGym exists to ask one question: **can a learned policy hold a setpoint
 better than a PID or an MPC?** That question lives entirely in the reward, so
 the reward is the measuring instrument, and this page records how it is built.
-Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`) scores
-through it. Nineteen normalise the tracking term by a floor, and four
-(reactor, battery, wind turbine, building) put tracking and consumption in
-the owner's currency, where the floor enters as the reference cost `rho_floor`
-rather than as a divisor. Version 1, the capped log-scaled reward, is kept
-constructible (`reward_version=1` on any params) and described at the end of
-this page.
+Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`, and so
+is `plane_energy`, whose altitude floor was reset to its oracle's hold in the
+oracle audit, 2026-10) scores through it. Nineteen normalise the tracking
+term by a floor, and four (reactor, battery, wind turbine, building) put
+tracking and consumption in the owner's currency, where the floor enters as
+the reference cost `rho_floor` rather than as a divisor. Version 1, the
+capped log-scaled reward, is kept constructible (`reward_version=1` on any
+params) and described at the end of this page.
 
 ## The reward, in one line
 
@@ -154,7 +155,11 @@ less where the floor is clamped at the instrument resolution (the glass
 furnace's MPC holds 0.175 K against a 1 K scale, so `rho* = 0.03`). Where a
 floor was kept within 1.5x of a re-measured hold rather than reset (the
 oracle audit's rule), its term is near 1 but not 1: the boiler's level term is
-0.84 and its pressure term 1.08, so its `rho* = 1.92`. On the deterministic plants, where `e_floor` is a
+0.84 and its pressure term 1.08, so its `rho* = 1.92`. A floor is also kept
+when the value that would replace it is within 1.5x: `plane_sine`'s 1.26 m is
+an earlier oracle's hold, and its oracle now holds 0.53 m, below the 1 m
+altimeter resolution that would be the floor, so its
+`rho* = (0.5285 / 1.26)^2 = 0.176`. On the deterministic plants, where `e_floor` is a
 resolution used as a scale and exact hold is achievable, `rho*` is 0 -- a
 reference of 1 there (the cost at the resolution) is not a bound, and the
 shipped MPCs sit below it. And the two-cost report -- tracking against consumption --
@@ -233,7 +238,7 @@ the evaluator measures.
 | `unstable_cstr` | p=2 | 1e-4 mol/L (analyser resolution; the MPC holds 6.29e-6, lowest per seed, so `rho* = (6.29e-6 / 1e-4)^2 = 0.00396`) | 0 (provisional) | none | dimensionless |
 | `compressor_surge` | p=2 | 0.0275 kPa (pressure transmitter accuracy, 0.055 % (read) of a 0 to 50 kPa span (ours); the MPC holds 1.03e-4, lowest per seed, so `rho* = (1.03e-4 / 0.0275)^2 = 1.40e-5`) | 0 (provisional) | recycle power above hold, w=1 (`c_hold` 62 270 W, the MPC's measured hold consumption) | dimensionless |
 | `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
-| `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds; `plane_energy`'s held 1.20 m once its anticipation of target changes left the hold, so its floor is loose until the MPC is reviewed) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
+| `plane`, `plane_sine`, `plane_energy` | p=2 | 1 / 1.26 / 1.20 m: `plane`'s is the altimeter resolution (the MPC holds 0.46 m); `plane_sine`'s an earlier MPC's hold, kept within 1.5x of that resolution (the MPC holds 0.53 m); `plane_energy`'s its MPC's lowest per-seed hold between ladder steps, from 4.55 m in `-v3` (the MPC holds 1.18 m under it); lowest per-seed holds in the test turbulence | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
 | `plane3d_*` | p=2 | altitude 1.44 / 4.06 / 1.39 m, heading 1.0e-4 rad, path 8.1 / 6.2 / 14.6 m (lowest per-seed MPC holds in turbulence) | 0 | none | dimensionless |
 | `patrol` | p=2 | 18.6 m / 1.6e-3 rad (lowest per-seed MPC holds in turbulence) | 0 (provisional) | none | dimensionless |
 

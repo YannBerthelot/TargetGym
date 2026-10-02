@@ -163,19 +163,17 @@ class PlaneParams(EnvParams):
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # Altitude: quadratic outside a +-``e_tol`` tolerance about the commanded
-    # altitude (+-30 m, a defensible vertical-separation margin, provisional),
-    # normalised by a documented minimum of 1 m (altimeter resolution): the
-    # test configurations fly with zero turbulence, so the achievable hold
-    # error is ~0 (the shipped PID holds 0.08 m, `scripts/measure_hold.py`).
-    # Airspeed: the deviation from ``target_speed`` above the hold-phase
-    # deviation of the better shipped controller (``c_hold``, m/s; 6.1 for the
-    # altitude hold, 8.6 on the sinusoid, both PID -- the MPC ignores speed
-    # and sits 50-65 m/s off) charged at weight 1, a stand-in for fuel. Flying
-    # out of the altitude envelope costs, per step, twice the envelope.
+    # altitude, normalised by the altitude floor ``e_floor``. Airspeed: the
+    # deviation from ``target_speed`` above the hold-phase deviation of the
+    # better shipped controller (``c_hold``, m/s; 5.06 for the altitude hold,
+    # 8.15 on the sinusoid, 5.23 on the ladder, all PID) charged at weight 1,
+    # a stand-in for fuel. Flying out of the altitude envelope costs, per
+    # step, twice the envelope.
     reward_version: int = 2
-    # The MPC holds 0.84 m in the test turbulence (1.26 on the sinusoid, 4.55
-    # on the ladder), below the 1 m barometric resolution: the instrument sets
-    # the scale where the simulator's hold is finer than it.
+    # The 1 m barometric resolution. The oracle holds finer than that in the
+    # test turbulence, 0.46 m on its best seed (`scripts/measure_hold.py`,
+    # oracle audit 2026-10), so the instrument sets the scale. ``plane_sine``
+    # and ``plane_energy`` set their own floors in the registry.
     e_floor: float = 1.0  # m
     e_tol: float = (
         0.0  # m; a +-30 m band made the hold vacuous (both controllers held 0.1 m)
@@ -189,13 +187,16 @@ class PlaneParams(EnvParams):
     #: Restart time priced into a trip (``reward.trip_cost``): a crash loses the
     #: sortie, 1 h of flight at 1 s steps (provisional).
     restart_steps: int = 3600
-    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    #: One: altitude at the floor costs 1 and the airspeed term is charged
-    #: only above the hold-phase deviation.
     #: The NEA reference: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (the MPC's 0.84 m hold in 1 m units; per task in the registry).
-    rho_floor_tracking: float = (0.84 / 1.0) ** 2
-    rho_floor: float = (0.84 / 1.0) ** 2
+    #: demonstrated, in the reward's units (its 0.4581 m hold in 1 m units,
+    #: `scripts/measure_hold.py`; per task in the registry). ``rho_floor``
+    #: leaves out the airspeed term, as on the other plants whose running
+    #: term is charged above the hold-phase consumption; the oracle still
+    #: pays some of it while holding (``hold_running`` in
+    #: protocol_results.json). The oracle's planner does not read it
+    #: (``objective_scale`` in plane/experts.py).
+    rho_floor_tracking: float = (0.4581 / 1.0) ** 2
+    rho_floor: float = (0.4581 / 1.0) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
     min_alt: float = 0.0

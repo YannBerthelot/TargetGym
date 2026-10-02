@@ -70,6 +70,44 @@ than by commit.
 
 ### Changed
 
+- **The 2D aircraft oracle hands its throttle to the PID's airspeed loop
+  once it has captured its altitude, and `plane_energy` is `-v3` with its
+  altitude floor at its oracle's hold.** The gradient planner never moved its
+  throttle after its first plan: on `plane` the command was constant to three
+  decimals over every protocol seed's scored window while the airspeed sat 10
+  to 27 m/s off cruise. On `plane` and `plane_sine` that planner now flies only
+  the capture of the initial altitude offset. Once the aircraft has held within
+  3 m for five steps, a second planner takes over: the throttle is the
+  cascaded PID's airspeed loop, live in the plant and as a JAX port inside the
+  planner's rollout, and the planner optimises the elevator alone, 100
+  iterations with a step decaying from 0.05 to 0.002. Past 20 m off, the first
+  planner takes back over. The speed-loop planner flown from the first step
+  held 4.6x tighter on `plane`'s protocol but captured more slowly: over ten seeds it was worse on 9
+  of 10 `plane` seeds and all 10 `plane_sine` seeds, by 4 to 29% per seed
+  whatever the start offset (`plane` seed 0, 591 m off: 2.04e6 over its first
+  140 steps against 1.75e6). With the handover, protocol cost falls from 3.45
+  to 0.516 (`plane`) and from 2.99 to 0.546 (`plane_sine`), with zero trips
+  and the reach cost of the shipped planner to within 0.01%, and over ten
+  seeds the episode costs 3273 per step against the shipped planner's 3276
+  (`plane`) and 1249 against 1251 (`plane_sine`), lower on every seed of
+  both. `plane_energy` keeps the planner it had, since neither change moved
+  its ladder transients. Its 4.55 m altitude floor was an earlier oracle's
+  hold, 3.8x the current one, so it is reset to 1.20 m, the oracle's best
+  per-seed hold under the old floor (1.198 m); `failure_cost` follows, and the
+  reward changes, so the task is `plane_energy-v3` (511 per step on the
+  protocol against the PID's 11 210). `plane`'s floor is the 1 m altimeter
+  resolution and `plane_sine`'s 1.26 m is within 1.5x of it, so both stay and
+  only `rho_floor = rho_floor_tracking` follows the oracle's holds (0.46 m and
+  0.53 m): 0.706 to 0.210 and 1 to 0.176, with 0.963 on `plane_energy`; those
+  two are re-stamped in place. The planner now divides its objective by a
+  fixed scale per task rather than by `rho_floor_tracking`: while it read the
+  reference its holds set, re-measuring moved the holds by up to 19% and the
+  value never settled. Each task's oracle reads the PID gains from a key its
+  own baseline fingerprint collects (`plane_cascaded`, and copies
+  `plane_sine_cascaded` and `plane_energy_cascaded` that a test holds equal to
+  it). Over ten seeds the MPC leads the PID on every seed of all three, with
+  zero trips.
+
 - **The boiler, kiln and distillation oracles plan on the mean noise, with
   stronger optimisers.** Their plant noise (steam demand, raw-meal feed, feed
   composition) was not in `noise_fields`, so their planners, which roll the

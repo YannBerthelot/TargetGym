@@ -9,7 +9,7 @@
 | Tracked variable(s) | altitude (m) |
 | Episode length | 1200 steps (1200 s at 1 s per step) |
 | Import | `from target_gym import Airplane2D, PlaneParams` |
-| Cite as | `plane_energy-v2` |
+| Cite as | `plane_energy-v3` |
 
 ## Action space
 
@@ -56,8 +56,8 @@ Recorded over 10 seeds of the 1200-step episode (see [Baselines](../baselines.md
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -1.639e+06 | 1366 |
-| MPC | -8.785e+04 | 73.21 |
+| PID | -2.355e+07 | 1.963e+04 |
+| MPC | -1.215e+06 | 1013 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 

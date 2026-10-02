@@ -512,19 +512,27 @@ _SPECS: tuple[EnvSpec, ...] = (
             "target_amplitude": 900.0,
             "target_steps": 8,
             "speed_weight": 0.5,
-            # Hold-phase airspeed deviation of the PID on this task and the
-            # lowest per-seed MPC hold between ladder steps
-            # (`scripts/measure_hold.py`); the version-2 references.
+            # Hold-phase airspeed deviation of the PID on this task
+            # (`scripts/measure_hold.py`).
             "c_hold": 5.23,
-            "e_floor": 4.55,
-            "rho_floor_tracking": 1.0,
-            "rho_floor": 1.0,
-            "failure_cost": 2.0 * (12192.0 / 4.55) ** 2,
+            # The oracle's lowest per-seed altitude hold between ladder steps,
+            # 1.198 m, rounded (oracle audit, 2026-10). It was 4.55 m, an
+            # earlier oracle's hold taken before its moves toward the next
+            # target were separated from its hold. Under this floor the same
+            # planner holds 1.35 / 1.18 m per seed, and rho is the lower in
+            # floor units (`scripts/measure_hold.py`).
+            "e_floor": 1.20,
+            "rho_floor_tracking": (1.1773 / 1.20) ** 2,
+            "rho_floor": (1.1773 / 1.20) ** 2,
+            "failure_cost": 2.0 * (12192.0 / 1.20) ** 2,
         },
         tuned_gains_key="plane",
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # v3: the altitude floor is the oracle's own 1.20 m hold, from the
+        # 4.55 m an earlier oracle held (oracle audit, 2026-10).
+        version=3,
     ),
     EnvSpec(
         name="plane_sine",
@@ -551,9 +559,15 @@ _SPECS: tuple[EnvSpec, ...] = (
             "target_amplitude": 300.0,
             "target_period": 240.0,
             "c_hold": 8.15,  # PID hold-phase airspeed deviation on the sinusoid
-            "e_floor": 1.26,  # lowest per-seed MPC hold on the sinusoid
-            "rho_floor_tracking": 1.0,
-            "rho_floor": 1.0,
+            # The altitude floor is an earlier oracle's lowest per-seed hold on
+            # the sinusoid. The current oracle holds 0.53 m, below the 1 m
+            # barometric resolution, and the resolution is within 1.5x of
+            # 1.26 m, so the floor stays (oracle audit, 2026-10). rho is the
+            # oracle's lowest per-seed hold, 0.5285 m, in floor units
+            # (`scripts/measure_hold.py`).
+            "e_floor": 1.26,
+            "rho_floor_tracking": (0.5285 / 1.26) ** 2,
+            "rho_floor": (0.5285 / 1.26) ** 2,
             "failure_cost": 2.0 * (12192.0 / 1.26) ** 2,
         },
         tuned_gains_key="plane",

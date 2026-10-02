@@ -218,7 +218,9 @@ solver settings, and an objective, all chosen once per environment the way a
 controller structure is. Between episodes it carries only a warm start, and on
 the glass furnace an offset-free bias integrator; `reset()` clears both. The
 unstable CSTR's and the compressor's MPCs also keep the memory of the PID they
-fall back on, and `reset()` clears that too.
+fall back on, and the 2D aircraft's on `plane` and `plane_sine` which of its
+two planners is flying and the integrator of the PID airspeed loop that drives
+its throttle once it holds; `reset()` clears those too.
 
 The irony is that the **PID** is the trained one here. Its gains come from a
 search on seeds 0 to 2 and are reported on held-out seeds. The MPC has never
@@ -868,7 +870,7 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `plane3d_figure8` | 400 | 4.695e+04 | 6.772 | 1.000 | 10/10 | 0 |
 | `plane3d_racetrack` | 650 | 1.78e+05 | 758.8 | 0.996 | 10/10 | 0 |
 | `boiler_drum` | 400 | 641.9 | 15.31 | 0.976 | 10/10 | 0 |
-| `plane_energy` | 1200 | 1366 | 73.21 | 0.946 | 10/10 | 0 |
+| `plane_energy` | 1200 | 1.963e+04 | 1013 | 0.948 | 10/10 | 0 |
 | `reactor` | 864 | 24.37 | 1.373 | 0.944 | 10/10 | 0 |
 | `cement_kiln` | 700 | 6.368 | 0.4048 | 0.936 | 10/10 | 0 |
 | `unstable_cstr` | 1200 | 5.714e+04 | 4178 | 0.927 | 10/10 | 0 |
@@ -876,11 +878,11 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `distillation` | 200 | 262.3 | 29.9 | 0.886 | 10/10 | 0 |
 | `plane3d_circle` | 300 | 1207 | 235.1 | 0.805 | 10/10 | 0 |
 | `plane3d_heading` | 200 | 3.15e+04 | 6734 | 0.786 | 10/10 | 0 |
-| `plane_sine` | 480 | 5184 | 1251 | 0.759 | 10/10 | 0 |
+| `plane_sine` | 480 | 5184 | 1249 | 0.759 | 10/10 | 0 |
 | `battery` | 360 | 0.003457 | 0.0008876 | 0.743 | 10/10 | 0 |
 | `ph_neutralization` | 300 | 336.3 | 91.22 | 0.729 | 10/10 | 0 |
 | `four_tank` | 500 | 1167 | 344.5 | 0.705 | 10/10 | 0 |
-| `plane` | 280 | 1.04e+04 | 3276 | 0.685 | 10/10 | 0 |
+| `plane` | 280 | 1.04e+04 | 3273 | 0.685 | 10/10 | 0 |
 | `patrol` | 200 | 11.22 | 3.56 | 0.683 | 10/10 | 0 |
 | `glass_furnace` | 1600 | 1.352 | 0.4943 | 0.634 | 10/10 | 0 |
 | `hvac` | 720 | 0.01966 | 0.01064 | 0.459 | 10/10 | 0 |
@@ -943,12 +945,15 @@ per seed too, and a one-seed run had hidden the 2D aircraft MPC losing its
 hold on seed 1. `fail` is the trip rate per cycle.
 
 Reading across the rows: the aircraft now fly in light turbulence with no
-altitude dead zone, so their holds are real -- the 2D aircraft MPC holds 1.3
-floor-widths-squared of altitude against the PID's 6, and pays for it in
-airspeed (2.1 against 0.17), which is the trade the two-cost split exists to
-show; the aircraft PIDs remain structurally inadequate on the
-moving-reference tasks (thousands of floor-widths while "holding" the
-racetrack, the figure-8 and the heading), where the MPC sits within a few;
+altitude dead zone, so their holds are real, and the 2D aircraft MPC holds
+0.42 floor-widths-squared of altitude against the PID's 6.0 and pays 0.09 in
+airspeed against the PID's 0.17, its throttle on the PID's airspeed loop once
+it has captured its altitude (until the oracle audit, 2026-10, it held 1.3
+and paid 2.1 in airspeed: not the trade the two-cost split exists to show,
+but a throttle the planner never moved after its first plan); the aircraft
+PIDs remain structurally inadequate on the moving-reference tasks (thousands
+of floor-widths while "holding" the racetrack, the figure-8 and the heading),
+where the MPC sits within a few;
 the glass furnace's MPC is 26x its own long-run hold cost on the 13 h test
 episode (0.80 against a 0.03 reference) because the episode is still in the
 transient of a 30 h plant; on the battery the oracle, a feedforward of the
@@ -997,13 +1002,13 @@ MPC's lowest per-seed hold, 1.03e-4 kPa, sets the floor column:
 | `patrol` | 1.03 | 10.1 (10.1 / —) | 3.02 (3.02 / —) | 0.782 | 10.1 | 3.02 | 818 (1.78e+03) | 184 (377) | 0 |
 | `patrol_bearing_only` | 1.03 | 11.1 (11.1 / —) | — | — | 7.65 | — | 692 (20.6) | — | 0 |
 | `ph_neutralization` | 0.0169 | 12.6 (12.6 / 0.00681) | 0.096 (0.089 / 0.00705) | 0.994 | 9.73 | 0.0756 | 9.07e+04 (9.12e+04) | 2.21e+04 (2.21e+04) | 0 |
-| `plane` | 0.706 | 6.21 (6.04 / 0.169) | 3.45 (1.34 / 2.12) | 0.5 | 6.21 | 3.45 | 2.73e+06 (2.73e+06) | 1.19e+06 (1.19e+06) | 0 |
+| `plane` | 0.21 | 6.21 (6.04 / 0.169) | 0.516 (0.422 / 0.0945) | 0.949 | 6.21 | 0.516 | 2.73e+06 (2.73e+06) | 1.19e+06 (1.19e+06) | 0 |
 | `plane3d_circle` | 2 | 98.6 (98.6 / —) | 9.84 (9.84 / —) | 0.919 | 98.6 | 9.84 | 4.18e+05 (4.33e+05) | 8.38e+04 (8.53e+04) | 0 |
 | `plane3d_figure8` | 1 | 2.5e+04 (2.5e+04 / —) | 2.1 (2.1 / —) | 1 | 2.5e+04 | 2.1 | 8.57e+06 (1.28e+07) | 739 (1.15e+03) | 0 |
 | `plane3d_heading` | 1 | 1.79e+04 (1.79e+04 / —) | 5.05 (5.05 / —) | 1 | 1.79e+04 | 5.05 | 4.01e+06 (5.45e+06) | 1.53e+06 (1.53e+06) | 0 |
 | `plane3d_racetrack` | 2 | 3.18e+05 (3.18e+05 / —) | 7.04 (7.04 / —) | 1 | 3.18e+05 | 6.86 | 6.82e+04 (3.56e+06) | 6.28e+05 (6.3e+05) | 0 |
-| `plane_energy` | 1 | 780 (780 / 0.321) | 38.8 (35.4 / 3.39) | 0.951 | 51.7 | 7.02 | 1.23e+05 (1.28e+05) | 1.22e+04 (1.3e+04) | 0 |
-| `plane_sine` | 1 | 1.52e+03 (1.52e+03 / 0.261) | 2.99 (2.24 / 0.749) | 0.999 | 1.49e+03 | 2.86 | 1.88e+06 (2.14e+06) | 7.61e+05 (7.62e+05) | 0 |
+| `plane_energy` | 0.963 | 1.12e+04 (1.12e+04 / 0.321) | 511 (508 / 3.51) | 0.954 | 740 | 48.1 | 1.77e+06 (1.84e+06) | 1.76e+05 (1.81e+05) | 0 |
+| `plane_sine` | 0.176 | 1.52e+03 (1.52e+03 / 0.261) | 0.546 (0.29 / 0.255) | 1 | 1.49e+03 | 0.527 | 1.88e+06 (2.14e+06) | 7.61e+05 (7.61e+05) | 0 |
 | `reactor` | 1.25 | 23.7 (23.3 / 0.385) | 1.38 (1.38 / 2.41e-05) | 0.994 | 23.7 | 1.38 | 1.64e+03 (1.24e+04) | 4.77 (597) | 0 |
 | `unstable_cstr` | 0.00396 | 5.74e+04 (5.74e+04 / —) | 4.03e+03 (4.03e+03 / —) | 0.93 | 2.68 | 0.00649 | 1.15e+07 (5.84e+05) | 8.07e+05 (2.52e+05) | 0 |
 | `wind_turbine` | 1.17e-05 | 2.64e-05 (2.43e-05 / 2.12e-06) | 2.1e-05 (1.55e-05 / 5.46e-06) | 0.365 | 2.64e-05 | 2.1e-05 | 0.00854 (0.0132) | 0.00687 (0.011) | 0 |

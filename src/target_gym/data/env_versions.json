@@ -130,9 +130,9 @@
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "plane-v2": {
-    "fingerprint": "11e62c7c89f47624",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "9ddc3fa728d4ecfc",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: on plane and plane_sine the shipped planner flies the capture of the initial altitude offset and, once the aircraft has settled, a planner over the cascaded PID's airspeed loop with a decaying step holds). They are the NEA reference: no reward reads them, so the environment's behaviour is unchanged. e_floor stays: plane's is the 1 m altimeter resolution, and plane_sine's 1.26 m is within 1.5x of the 1 m resolution that would replace it. The plane MPC does not read rho_floor_tracking (it plans on a fixed objective scale per task), so the holds that set the new values were measured with the oracle the rows were recorded with. The PlaneParams default in plane/env.py moved too, which moves plane_sine's and plane_energy's stamps as well; both override it.",
+    "stamped": "2026-10-02T14:46:10+00:00"
   },
   "plane3d_circle-v1": {
     "fingerprint": "ffcbd44cb289829d",
@@ -184,15 +184,20 @@
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
   },
+  "plane_energy-v3": {
+    "fingerprint": "afd87aa324abf131",
+    "note": "v3: e_floor 4.55 -> 1.20 m (oracle audit, 2026-10). 4.55 m was an earlier oracle's hold, taken before its moves toward the next target were separated from its hold; 1.20 m is the current oracle's best per-seed hold, 1.198 m, rounded. failure_cost follows (2 x (12192 / 1.20)^2), and rho_floor = rho_floor_tracking = (1.1773 / 1.20)^2 from the hold re-measured under the new floor. Re-stamped in place when plane's rho_floor moved: the PlaneParams default in plane/env.py changed, and plane_energy overrides it, so its reward and floors are unchanged.",
+    "stamped": "2026-10-02T14:46:10+00:00"
+  },
   "plane_sine-v1": {
     "fingerprint": "01afd0d200bbcfb0",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "plane_sine-v2": {
-    "fingerprint": "0f42a93a23698676",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "50e5c2238c3ac72f",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: on plane and plane_sine the shipped planner flies the capture of the initial altitude offset and, once the aircraft has settled, a planner over the cascaded PID's airspeed loop with a decaying step holds). They are the NEA reference: no reward reads them, so the environment's behaviour is unchanged. e_floor stays: plane's is the 1 m altimeter resolution, and plane_sine's 1.26 m is within 1.5x of the 1 m resolution that would replace it. The plane MPC does not read rho_floor_tracking (it plans on a fixed objective scale per task), so the holds that set the new values were measured with the oracle the rows were recorded with. The PlaneParams default in plane/env.py moved too, which moves plane_sine's and plane_energy's stamps as well; both override it.",
+    "stamped": "2026-10-02T14:46:10+00:00"
   },
   "reactor-v1": {
     "fingerprint": "da9cd77061a7830c",
