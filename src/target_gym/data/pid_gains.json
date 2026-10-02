@@ -445,6 +445,38 @@
     "Ki_speed": 7.5e-05,
     "note": "coordinate descent on episode return, 3 seeds"
   },
+  "plane_sine_cascaded": {
+    "Kp_alt": 0.12,
+    "vs_max": 21.0,
+    "Kp_vs": 0.01,
+    "Ki_vs": 0.0016,
+    "theta_trim": 0.032,
+    "theta_max": 0.26,
+    "Kp_theta": 5.6,
+    "Kd_theta": 3.0,
+    "alpha_max": 0.13299999999999998,
+    "target_speed": 230.0,
+    "cruise_power": -0.22749999999999998,
+    "Kp_speed": 0.05,
+    "Ki_speed": 7.5e-05,
+    "note": "a copy of plane_cascaded, read by the plane_sine oracle (plane/experts.py): baseline_fingerprint collects the gain keys that start with the task's name, so plane_sine's covers this one and not plane_cascaded. tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
+  },
+  "plane_energy_cascaded": {
+    "Kp_alt": 0.12,
+    "vs_max": 21.0,
+    "Kp_vs": 0.01,
+    "Ki_vs": 0.0016,
+    "theta_trim": 0.032,
+    "theta_max": 0.26,
+    "Kp_theta": 5.6,
+    "Kd_theta": 3.0,
+    "alpha_max": 0.13299999999999998,
+    "target_speed": 230.0,
+    "cruise_power": -0.22749999999999998,
+    "Kp_speed": 0.05,
+    "Ki_speed": 7.5e-05,
+    "note": "a copy of plane_cascaded, read by the plane_energy oracle (plane/experts.py): baseline_fingerprint collects the gain keys that start with the task's name, so plane_energy's covers this one and not plane_cascaded. tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
+  },
   "plane3d_racetrack": {
     "track": {
       "Kp": 0.0016799999999999999,

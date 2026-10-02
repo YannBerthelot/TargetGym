@@ -45,7 +45,7 @@
   {
     "name": "plane_energy",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "Altitude and airspeed",
     "params_cls": [
       "target_gym.plane.env",
@@ -73,10 +73,10 @@
       "target_steps": 8,
       "speed_weight": 0.5,
       "c_hold": 5.23,
-      "e_floor": 4.55,
-      "rho_floor_tracking": 1.0,
-      "rho_floor": 1.0,
-      "failure_cost": 14360088.298514672
+      "e_floor": 1.2,
+      "rho_floor_tracking": 0.9625245069444446,
+      "rho_floor": 0.9625245069444446,
+      "failure_cost": 206451200.0
     },
     "tuned_gains_key": "plane",
     "baselines_note": null,
@@ -125,8 +125,8 @@
       "target_period": 240.0,
       "c_hold": 8.15,
       "e_floor": 1.26,
-      "rho_floor_tracking": 1.0,
-      "rho_floor": 1.0,
+      "rho_floor_tracking": 0.1759336419753086,
+      "rho_floor": 0.1759336419753086,
       "failure_cost": 187257324.26303852
     },
     "tuned_gains_key": "plane",

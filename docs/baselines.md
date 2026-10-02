@@ -199,13 +199,14 @@ Two caveats worth knowing before you re-tune anything:
 The MPC slot holds the best controller we can build for each task, as an
 upper bound for the others. It need not be a planner: where the best causal
 action has a closed form, the slot holds that. Each task's controller lives in
-its own package's `experts.py`. Five kinds, chosen per environment by what its
+its own package's `experts.py`. Seven kinds, chosen per environment by what its
 dynamics allow:
 
 | Implementation | Used by | When it applies |
 |---|---|---|
 | `CasadiMPC` subclasses | 9 environments | A direct nonlinear program over an explicit model; the sharpest when the model can be written in CasADi |
-| `GradientMPC` | 9 environments | Differentiates the JAX dynamics directly and descends the objective |
+| `GradientMPC` | 7 environments | Differentiates the JAX dynamics directly and descends the objective |
+| Handover between two gradient planners | plane, plane_sine | The capture of the initial altitude offset needs both actuators planned, and the hold is tighter with the throttle on the PID's airspeed loop and only the elevator planned; the oracle switches once the aircraft holds within 3 m, and back past 20 m |
 | `SamplingMPC` | cement kiln | Cross-entropy sampling, for when gradients are unusable |
 | Feedforward | battery | The best causal action is known in closed form: the battery commands the scheduled level of the block the next step is scored against, which leaves only the dispatch noise |
 | Feedback law with a residual planner | patrol, patrol_bearing_only | A good law is known but not the optimum: the follower flies the lead's own autopilot on its own state with slot corrections, so the shared gust drops out, and a 30-step planner adds a residual to the law inside its rollout of `step_env` |
@@ -223,9 +224,12 @@ solver settings, and an objective, all chosen once per environment the way a
 controller structure is. Between episodes it carries only a warm start, and on
 the glass furnace an offset-free bias integrator; `reset()` clears both. The
 unstable CSTR's and the compressor's MPCs also keep the memory of the PID they
-fall back on, the turbine's feedback law its last speed error, and the
-patrol oracle's law its copy of the lead's autopilot integrators, an
-along-track integral and the lead's last heading; `reset()` clears those too.
+fall back on, the turbine's feedback law its last speed error, the patrol
+oracle's law its copy of the lead's autopilot integrators, an along-track
+integral and the lead's last heading, and the 2D aircraft's on `plane` and
+`plane_sine` which of its two planners is flying and the integrator of the PID
+airspeed loop that drives its throttle once it holds; `reset()` clears those
+too.
 
 The irony is that the **PID** is the trained one here. Its gains come from a
 search on seeds 0 to 2 and are reported on held-out seeds. The MPC has never
@@ -247,11 +251,11 @@ audit, 2026-10, are the slow end). A reference to measure against, not
 something to put inside a training loop.
 
 **It does not vmap or jit** on the CasADi plants, which call IPOPT, a solver
-outside JAX. Six of the nine `GradientMPC` environments (the 3D aircraft, the
+outside JAX. Six of the seven `GradientMPC` environments (the 3D aircraft, the
 distillation column and the boiler drum) batch, which is how the recording
-parallelises across seeds; the three 2D aircraft tasks, whose planners start
-from and are guided by a PID rollout, record one process per seed, as does the
-patrol oracle.
+parallelises across seeds; `plane_energy`, whose planner starts from and is
+guided by a PID rollout, records one process per seed, as do the patrol oracle
+and the 2D aircraft's handover oracle on `plane` and `plane_sine`.
 
 **`reset()` between episodes**, or the furnace's bias integrator carries a
 correction into an episode where it is a standing error.
@@ -888,7 +892,7 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `boiler_drum` | 400 | 641.9 | 15.31 | 0.976 | 10/10 | 0 |
 | `patrol` | 200 | 298.6 | 14.22 | 0.952 | 10/10 | 0 |
 | `patrol_bearing_only` | 200 | 290.4 | 14.22 | 0.951 | 10/10 | 0 |
-| `plane_energy` | 1200 | 1366 | 73.21 | 0.946 | 10/10 | 0 |
+| `plane_energy` | 1200 | 1.963e+04 | 1013 | 0.948 | 10/10 | 0 |
 | `reactor` | 864 | 24.37 | 1.373 | 0.944 | 10/10 | 0 |
 | `cement_kiln` | 700 | 6.368 | 0.4048 | 0.936 | 10/10 | 0 |
 | `unstable_cstr` | 1200 | 5.714e+04 | 4178 | 0.927 | 10/10 | 0 |
@@ -896,12 +900,12 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `distillation` | 200 | 262.3 | 29.9 | 0.886 | 10/10 | 0 |
 | `plane3d_circle` | 300 | 1.919e+04 | 3142 | 0.836 | 10/10 | 0 |
 | `plane3d_heading` | 200 | 4.634e+04 | 8266 | 0.822 | 10/10 | 0 |
-| `plane_sine` | 480 | 5184 | 1251 | 0.759 | 10/10 | 0 |
+| `plane_sine` | 480 | 5184 | 1249 | 0.759 | 10/10 | 0 |
 | `battery` | 360 | 0.003457 | 0.0008876 | 0.743 | 10/10 | 0 |
 | `ph_neutralization` | 300 | 336.3 | 91.22 | 0.729 | 10/10 | 0 |
 | `four_tank` | 500 | 1167 | 344.5 | 0.705 | 10/10 | 0 |
 | `wind_turbine` | 400 | 4.541e-05 | 1.378e-05 | 0.697 | 10/10 | 0 |
-| `plane` | 280 | 1.04e+04 | 3276 | 0.685 | 10/10 | 0 |
+| `plane` | 280 | 1.04e+04 | 3273 | 0.685 | 10/10 | 0 |
 | `glass_furnace` | 1600 | 1.352 | 0.4943 | 0.634 | 10/10 | 0 |
 | `hvac` | 720 | 0.01966 | 0.01064 | 0.459 | 10/10 | 0 |
 | `cstr` | 100 | 6319 | 5803 | 0.082 | 10/10 | 0 |
@@ -962,12 +966,15 @@ per seed too, and a one-seed run had hidden the 2D aircraft MPC losing its
 hold on seed 1. `fail` is the trip rate per cycle.
 
 Reading across the rows: the aircraft now fly in light turbulence with no
-altitude dead zone, so their holds are real -- the 2D aircraft MPC holds 1.3
-floor-widths-squared of altitude against the PID's 6, and pays for it in
-airspeed (2.1 against 0.17), which is the trade the two-cost split exists to
-show; the aircraft PIDs remain structurally inadequate on the
-moving-reference tasks (2e4 to 1e6 floor-widths while "holding" the
-heading, the figure-8 and the racetrack), where the MPC sits within a few;
+altitude dead zone, so their holds are real, and the 2D aircraft MPC holds
+0.42 floor-widths-squared of altitude against the PID's 6.0 and pays 0.09 in
+airspeed against the PID's 0.17, its throttle on the PID's airspeed loop once
+it has captured its altitude (until the oracle audit, 2026-10, it held 1.3
+and paid 2.1 in airspeed: not the trade the two-cost split exists to show,
+but a throttle the planner never moved after its first plan); the aircraft
+PIDs remain structurally inadequate on the moving-reference tasks (2e4 to 1e6
+floor-widths while "holding" the heading, the figure-8 and the racetrack),
+where the MPC sits within a few;
 the glass furnace's MPC is 26x its own long-run hold cost on the 13 h test
 episode (0.80 against a 0.03 reference) because the episode is still in the
 transient of a 30 h plant; on the battery the oracle, a feedforward of the
@@ -1026,13 +1033,13 @@ it, and the heading the rest.
 | `patrol` | 0.0363 | 265 (265 / —) | 0.0371 (0.0371 / —) | 1 | 265 | 0.0371 | 1.96e+04 (4.53e+04) | 6.04e+03 (6.04e+03) | 0 |
 | `patrol_bearing_only` | 0.0363 | 199 (199 / —) | 0.0371 (0.0371 / —) | 1 | 199 | 0.0371 | 1.71e+04 (3.85e+04) | 6.04e+03 (6.04e+03) | 0 |
 | `ph_neutralization` | 0.0169 | 12.6 (12.6 / 0.00681) | 0.096 (0.089 / 0.00705) | 0.994 | 9.73 | 0.0756 | 9.07e+04 (9.12e+04) | 2.21e+04 (2.21e+04) | 0 |
-| `plane` | 0.706 | 6.21 (6.04 / 0.169) | 3.45 (1.34 / 2.12) | 0.5 | 6.21 | 3.45 | 2.73e+06 (2.73e+06) | 1.19e+06 (1.19e+06) | 0 |
+| `plane` | 0.21 | 6.21 (6.04 / 0.169) | 0.516 (0.422 / 0.0945) | 0.949 | 6.21 | 0.516 | 2.73e+06 (2.73e+06) | 1.19e+06 (1.19e+06) | 0 |
 | `plane3d_circle` | 0.466 | 832 (832 / —) | 1.93 (1.93 / —) | 0.998 | 832 | 1.93 | 6.91e+06 (7.04e+06) | 1.23e+06 (1.23e+06) | 0 |
 | `plane3d_figure8` | 0.184 | 5.92e+05 (5.92e+05 / —) | 0.77 (0.77 / —) | 1 | 5.92e+05 | 0.77 | 2.03e+08 (3.04e+08) | 5.17e+03 (5.32e+03) | 0 |
 | `plane3d_heading` | 0.454 | 1.9e+04 (1.9e+04 / —) | 0.726 (0.726 / —) | 1 | 1.9e+04 | 0.726 | 7.27e+06 (8.86e+06) | 2.01e+06 (2.01e+06) | 0 |
 | `plane3d_racetrack` | 0.487 | 1.35e+06 (1.35e+06 / —) | 1.07 (1.07 / —) | 1 | 1.35e+06 | 1.01 | -6.84e+05† (6.89e+06) | 1.21e+06 (1.21e+06) | 0 |
-| `plane_energy` | 1 | 780 (780 / 0.321) | 38.8 (35.4 / 3.39) | 0.951 | 51.7 | 7.02 | 1.23e+05 (1.28e+05) | 1.22e+04 (1.3e+04) | 0 |
-| `plane_sine` | 1 | 1.52e+03 (1.52e+03 / 0.261) | 2.99 (2.24 / 0.749) | 0.999 | 1.49e+03 | 2.86 | 1.88e+06 (2.14e+06) | 7.61e+05 (7.62e+05) | 0 |
+| `plane_energy` | 0.963 | 1.12e+04 (1.12e+04 / 0.321) | 511 (508 / 3.51) | 0.954 | 740 | 48.1 | 1.77e+06 (1.84e+06) | 1.76e+05 (1.81e+05) | 0 |
+| `plane_sine` | 0.176 | 1.52e+03 (1.52e+03 / 0.261) | 0.546 (0.29 / 0.255) | 1 | 1.49e+03 | 0.527 | 1.88e+06 (2.14e+06) | 7.61e+05 (7.61e+05) | 0 |
 | `reactor` | 1.25 | 23.7 (23.3 / 0.385) | 1.38 (1.38 / 2.41e-05) | 0.994 | 23.7 | 1.38 | 1.64e+03 (1.24e+04) | 4.77 (597) | 0 |
 | `unstable_cstr` | 0.00396 | 5.74e+04 (5.74e+04 / —) | 4.03e+03 (4.03e+03 / —) | 0.93 | 2.68 | 0.00649 | 1.15e+07 (5.84e+05) | 8.07e+05 (2.52e+05) | 0 |
 | `wind_turbine` | 1.01e-05 | 2.64e-05 (2.43e-05 / 2.12e-06) | 1.3e-05 (1.27e-05 / 3.08e-07) | 0.821 | 2.64e-05 | 1.3e-05 | 0.00854 (0.0132) | 0.000539 (0.00298) | 0 |

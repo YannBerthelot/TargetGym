@@ -240,7 +240,15 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
         return make_plane_cascaded_pid()
 
     def make_mpc(self, params=None, **kwargs):
-        """Return a GradientMPC oracle optimising both power and stick."""
+        """Return the 2D aircraft's gradient MPC (``plane.experts.make_plane_mpc``).
+
+        On ``plane`` and ``plane_sine`` it plans power and stick until the
+        aircraft has captured its altitude, then plans the stick alone with
+        the throttle on the cascaded PID's airspeed loop (``PlaneHandoverMPC``
+        and ``_TASK_SETTINGS`` in plane/experts.py). On ``plane_energy``,
+        under reward version 1, or with a caller's own ``objective_fn``, it
+        plans both power and stick throughout.
+        """
         from target_gym.plane.experts import make_plane_mpc
 
         if params is None:

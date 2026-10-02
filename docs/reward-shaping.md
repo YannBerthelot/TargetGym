@@ -4,14 +4,14 @@ TargetGym exists to ask one question: **can a learned policy hold a setpoint
 better than a PID or an MPC?** That question lives entirely in the reward, so
 the reward is the measuring instrument, and this page records how it is built.
 Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`, and so
-are `patrol`, `patrol_bearing_only` and the four 3D aircraft tasks, whose floors
-were reset in the oracle audit, 2026-10) scores through it. Nineteen
-normalise the tracking term by a floor, and four
-(reactor, battery, wind turbine, building) put tracking and consumption in
-the owner's currency, where the floor enters as the reference cost `rho_floor`
-rather than as a divisor. Version 1, the capped log-scaled reward, is kept
-constructible (`reward_version=1` on any params) and described at the end of
-this page.
+Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`, and so
+are `patrol`, `patrol_bearing_only`, `plane_energy` and the four 3D aircraft
+tasks, whose floors were reset in the oracle audit, 2026-10) scores through it.
+Nineteen normalise the tracking term by a floor, and four (reactor, battery,
+wind turbine, building) put tracking and consumption in the owner's currency,
+where the floor enters as the reference cost `rho_floor` rather than as a
+divisor. Version 1, the capped log-scaled reward, is kept constructible
+(`reward_version=1` on any params) and described at the end of this page.
 
 ## The reward, in one line
 
@@ -157,7 +157,11 @@ furnace's MPC holds 0.175 K against a 1 K scale, so `rho* = 0.03`). Where a
 floor was kept within 1.5x of a re-measured hold rather than reset (the
 oracle audit's rule), its term is near 1 but not 1: the boiler's level term is
 0.84 and its pressure term 1.08, so its `rho* = 1.92`; the wind turbine's
-oracle holds 1454 W against its 1680 W floor, so its term is 0.865. On the deterministic plants, where `e_floor` is a
+oracle holds 1454 W against its 1680 W floor, so its term is 0.865. A floor is
+also kept when the value that would replace it is within 1.5x: `plane_sine`'s
+1.26 m is an earlier oracle's hold, and its oracle now holds 0.53 m, below the
+1 m altimeter resolution that would be the floor, so its
+`rho* = (0.5285 / 1.26)^2 = 0.176`. On the deterministic plants, where `e_floor` is a
 resolution used as a scale and exact hold is achievable, `rho*` is 0 -- a
 reference of 1 there (the cost at the resolution) is not a bound, and the
 shipped MPCs sit below it. And the two-cost report -- tracking against consumption --
@@ -236,7 +240,7 @@ the evaluator measures.
 | `unstable_cstr` | p=2 | 1e-4 mol/L (analyser resolution; the MPC holds 6.29e-6, lowest per seed, so `rho* = (6.29e-6 / 1e-4)^2 = 0.00396`) | 0 (provisional) | none | dimensionless |
 | `compressor_surge` | p=2 | 0.0275 kPa (pressure transmitter accuracy, 0.055 % (read) of a 0 to 50 kPa span (ours); the MPC holds 1.03e-4, lowest per seed, so `rho* = (1.03e-4 / 0.0275)^2 = 1.40e-5`) | 0 (provisional) | recycle power above hold, w=1 (`c_hold` 62 270 W, the MPC's measured hold consumption) | dimensionless |
 | `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
-| `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds; `plane_energy`'s held 1.20 m once its anticipation of target changes left the hold, so its floor is loose until the MPC is reviewed) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
+| `plane`, `plane_sine`, `plane_energy` | p=2 | 1 / 1.26 / 1.20 m: `plane`'s is the altimeter resolution (the MPC holds 0.46 m); `plane_sine`'s an earlier MPC's hold, kept within 1.5x of that resolution (the MPC holds 0.53 m); `plane_energy`'s its MPC's lowest per-seed hold between ladder steps, from 4.55 m in `-v3` (the MPC holds 1.18 m under it); lowest per-seed holds in the test turbulence | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
 | `plane3d_*` | p=2 | altitude 1 m (altimeter resolution; the MPC holds 0.67 / 0.67 / 0.68 m on heading / circle / racetrack), heading 0.0087 rad (AHRS resolution; the MPC holds 2.1e-5), path 3 m (GPS resolution; the MPC holds 0.45 / 0.47 / 1.29 m on circle / racetrack / figure-8); lowest per-seed holds in turbulence | 0 | none | dimensionless |
 | `patrol`, `patrol_bearing_only` | p=2 x2 | slot 3 m (relative-GPS resolution; the oracle holds 0.10 m, lowest per seed; 18.6 m, an earlier planner's hold, until version 3), heading 0.0087 rad (AHRS resolution; the oracle holds 1.6e-3 rad), so `rho* = (0.1021 / 3)^2 + (1.631e-3 / 0.0087)^2 = 0.0363` | 0 (provisional) | none | dimensionless |
 
