@@ -3,8 +3,10 @@
 TargetGym exists to ask one question: **can a learned policy hold a setpoint
 better than a PID or an MPC?** That question lives entirely in the reward, so
 the reward is the measuring instrument, and this page records how it is built.
-Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`) scores
-through it. Nineteen normalise the tracking term by a floor, and four
+Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`, and so
+are the four 3D aircraft tasks, whose floors were reset to their instrument
+resolutions in the oracle audit, 2026-10) scores through it. Nineteen
+normalise the tracking term by a floor, and four
 (reactor, battery, wind turbine, building) put tracking and consumption in
 the owner's currency, where the floor enters as the reference cost `rho_floor`
 rather than as a divisor. Version 1, the capped log-scaled reward, is kept
@@ -40,8 +42,8 @@ disturbance processes -- floored at the resolution of the instrument the
 plant's table cites. Measurement noise is not modelled, so a simulator can
 hold finer than a real transmitter reads; a hold the instrument cannot see
 is not a floor, and on seven plants (glass, kiln, distillation, pH, the
-unstable CSTR, the compressor's header pressure, the aircraft's altitude and
-heading) the resolution is the scale and the finer measured hold is recorded
+unstable CSTR, the compressor's header pressure, the aircraft's altitude,
+heading and path) the resolution is the scale and the finer measured hold is recorded
 beside it. (The boiler's pressure floor is its transmitter resolution too,
 which the oracle holds just above, at 0.052 bar.) An error at the floor costs 1 per step. The scale is
 the plant's own irreducible error, not a sensor resolution and not the
@@ -200,11 +202,11 @@ detected the same way. Three kinds of floor come out of it:
   PHYSICS.md. A learner that beats it scores a tracking cost below 1, which is
   allowed and informative.
 - **Documented minima** on the plants whose test configuration has no
-  disturbance at all -- the aircraft and patrol tasks fly with zero
-  turbulence, the CSTR, first-order plant and four-tank have none -- where the
+  disturbance at all (the CSTR, first-order plant and four-tank), where the
   achievable hold error is zero and a floor of zero would make the cost
   unbounded. There the version-1 resolution floor is kept as the scale, and
-  the PHYSICS.md says so.
+  the PHYSICS.md says so. The aircraft and patrol tasks fly in turbulence and
+  are not among them.
 
 The sanity test every measured floor has to pass, and a test enforces
 (`tests/test_reward_contract.py`): the shipped MPC's long-run tracking cost
@@ -234,7 +236,7 @@ the evaluator measures.
 | `compressor_surge` | p=2 | 0.0275 kPa (pressure transmitter accuracy, 0.055 % (read) of a 0 to 50 kPa span (ours); the MPC holds 1.03e-4, lowest per seed, so `rho* = (1.03e-4 / 0.0275)^2 = 1.40e-5`) | 0 (provisional) | recycle power above hold, w=1 (`c_hold` 62 270 W, the MPC's measured hold consumption) | dimensionless |
 | `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
 | `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds; `plane_energy`'s held 1.20 m once its anticipation of target changes left the hold, so its floor is loose until the MPC is reviewed) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
-| `plane3d_*` | p=2 | altitude 1.44 / 4.06 / 1.39 m, heading 1.0e-4 rad, path 8.1 / 6.2 / 14.6 m (lowest per-seed MPC holds in turbulence) | 0 | none | dimensionless |
+| `plane3d_*` | p=2 | altitude 1 m (altimeter resolution; the MPC holds 0.67 / 0.67 / 0.68 m on heading / circle / racetrack), heading 0.0087 rad (AHRS resolution; the MPC holds 2.1e-5), path 3 m (GPS resolution; the MPC holds 0.45 / 0.47 / 1.29 m on circle / racetrack / figure-8); lowest per-seed holds in turbulence | 0 | none | dimensionless |
 | `patrol` | p=2 | 18.6 m / 1.6e-3 rad (lowest per-seed MPC holds in turbulence) | 0 (provisional) | none | dimensionless |
 
 "Provisional" marks a number the plant's owner would supply -- a tolerance

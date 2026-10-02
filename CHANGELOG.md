@@ -70,6 +70,35 @@ than by commit.
 
 ### Changed
 
+- **The 3D aircraft oracle decays its step, and the four 3D tasks are
+  `-v3` with their floors at the instrument resolutions.** The gradient
+  planner's fixed normalised step of 0.05 was also its resolution, and left
+  steady offsets (4.1 to 4.5 m of altitude and 14.3 to 15.5 m of path on the
+  circle). The step now decays from 0.05 to 0.002 over each solve, over 200
+  iterations on all four tasks; the settings sit in a table in
+  `plane3d/experts.py`, which is in the four tasks' baseline fingerprint.
+  The oracle then held below the 1 m altimeter and 3 m GPS resolutions, so
+  the floors were reset to them: altitude 1.44 / 4.06 / 1.39 m to 1 m
+  (heading, circle, racetrack), path 8.12 / 6.17 / 14.6 m to 3 m (circle,
+  racetrack, figure-8). Those were an earlier oracle's holds, except the
+  circle's 8.12 m path floor, which was labelled one but equals 2 x 4.06 m
+  (that oracle's recorded hold there was 14.3 m). That changes the reward,
+  so `plane3d_heading`, `plane3d_circle`, `plane3d_racetrack` and
+  `plane3d_figure8` are `-v3`, and `failure_cost` follows the floors. The
+  heading's floors are set in the registry rather than in the
+  `PlaneParams3D` defaults, which patrol inherits. Under the earlier floors
+  the oracle audit measured the protocol cost falling from 5.05 to 0.380
+  (heading), 9.84 to 0.123 (circle) and 2.10 to 0.031 (figure-8) at 200
+  iterations, and from 7.04 to 1.49 (racetrack) at 50. Re-measured under the
+  `-v3` floors, which weight its objective, it costs 0.726, 1.93, 1.07 and
+  0.770 per step with zero trips (the racetrack cost 4.58 at 50 iterations
+  on the same seeds, so it moved to 200 too), and `rho_floor =
+  rho_floor_tracking` follows its re-measured holds: 0.454, 0.466, 0.487 and
+  0.184, from 1.0, 2, 2 and 1. The budget costs compute: 0.9 to 1.3 s per
+  step on the four tasks in the recorded protocol rows, about 8 min a seed
+  on the figure-8 and 10 on the racetrack, against 0.4 to 0.5 s per step for
+  the fixed step in the oracle audit's timings.
+
 - **The boiler, kiln and distillation oracles plan on the mean noise, with
   stronger optimisers.** Their plant noise (steam demand, raw-meal feed, feed
   composition) was not in `noise_fields`, so their planners, which roll the

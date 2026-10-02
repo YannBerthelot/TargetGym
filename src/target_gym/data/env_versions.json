@@ -144,6 +144,10 @@
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
   },
+  "plane3d_circle-v3": {
+    "fingerprint": "8e1e9c3f79fd7838",
+    "stamped": "2026-10-01T23:30:21+00:00"
+  },
   "plane3d_figure8-v1": {
     "fingerprint": "925522f0cf3233f4",
     "note": "re-stamped without a note",
@@ -153,6 +157,10 @@
     "fingerprint": "8a4ff4b1e479c4e4",
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
+  },
+  "plane3d_figure8-v3": {
+    "fingerprint": "25fa73380e2b67a6",
+    "stamped": "2026-10-01T23:30:21+00:00"
   },
   "plane3d_heading-v1": {
     "fingerprint": "2961df4b494a5ab7",
@@ -164,6 +172,10 @@
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
   },
+  "plane3d_heading-v3": {
+    "fingerprint": "cb6d7deabcb0d2af",
+    "stamped": "2026-10-01T23:30:21+00:00"
+  },
   "plane3d_racetrack-v1": {
     "fingerprint": "f1f9b8f7b7dcec42",
     "note": "re-stamped without a note",
@@ -173,6 +185,11 @@
     "fingerprint": "489d0fef135c9627",
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
+  },
+  "plane3d_racetrack-v3": {
+    "fingerprint": "bfbadce73d489587",
+    "note": "Behaviour-preserving: only rho_floor and rho_floor_tracking moved, from 1.07 to 0.487, when the racetrack oracle went from 50 to 200 descent iterations and its holds were re-measured (0.6803 m altitude, 0.4660 m path, lowest per seed). The floors (1 m, 3 m), failure_cost and every other parameter are unchanged, and neither rho enters the reward: it is the NEA reference, and the planner never applies done_value.",
+    "stamped": "2026-10-02T11:40:22+00:00"
   },
   "plane_energy-v1": {
     "fingerprint": "3994cf3273f563eb",
