@@ -1016,7 +1016,11 @@ These issues are outside this proposal, and each should get its own fix.
     `patrol`'s records and leave `patrol_bearing_only`'s passing as fresh.
   - `plane_energy` and `plane_sine` fly on the `plane_cascaded` gains, which
     their baseline fingerprints do not collect, so retuning those gains would
-    leave their recorded baselines passing as fresh.
+    leave their recorded baselines passing as fresh. (Closed in the oracle
+    audit, 2026-10: their oracles read copies under their own names,
+    `plane_sine_cascaded` and `plane_energy_cascaded`, and a test holds the
+    copies equal to `plane_cascaded`, so a retune has to update them, which
+    stales both tasks' records.)
 
   The open roadmap item on scoping the baseline fingerprint is the natural place
   to fix these.

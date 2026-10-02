@@ -23,7 +23,7 @@ from target_gym.pc_gym.first_order.experts import make_first_order_mpc
 from target_gym.pc_gym.four_tank.experts import make_four_tank_mpc
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
-from target_gym.plane.experts import make_plane_mpc
+from target_gym.plane.experts import PlaneHandoverMPC, make_plane_mpc
 from target_gym.registry import REGISTRY
 from target_gym.runners import runners as R
 
@@ -286,5 +286,9 @@ def test_plane_env_make_mpc_returns_controller():
     env = Airplane2D()
     params = PlaneParams(max_steps_in_episode=N)
     mpc = env.make_mpc(params=params, horizon=3, n_iter=2)
-    assert isinstance(mpc, GradientMPC)
+    # The default pattern (plane's hold) flies two gradient planners in turn:
+    # one for the capture of the altitude, one for the hold.
+    assert isinstance(mpc, PlaneHandoverMPC)
+    assert isinstance(mpc.capture, GradientMPC)
+    assert isinstance(mpc.hold, GradientMPC)
     assert mpc.action_dim == 2

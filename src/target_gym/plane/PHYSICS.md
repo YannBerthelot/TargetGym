@@ -250,7 +250,59 @@ at low altitude; less at cruise). It is what makes the altitude hold a
 problem: in still air both shipped controllers held within 0.1 m of the
 commanded level and the tracking term scored nothing, so the benchmark was
 deciding on airspeed alone. The planners plan on the mean wind
-(`turbulence_sigma` is a `noise_field`), as a real MPC would.
+(`turbulence_sigma` is in the spec's `noise_fields`), as a real MPC would.
+
+### The reference controller
+
+The MPC slot holds a gradient MPC that rolls out the simulator itself
+(`make_plane_mpc` in `experts.py`): 20 s of horizon on the mean wind, started
+from and compared at every step against the cascaded PID's rollout. Since the
+oracle audit (2026-10) it differs by task. On `plane` and `plane_sine` two
+planners share the episode (`PlaneHandoverMPC`). The shipped planner, which
+plans power and stick with a fixed step, flies the capture of the initial
+altitude offset. Once the aircraft has held within 3 m of the commanded
+altitude for five consecutive steps, a second planner takes over: the
+throttle is the cascaded PID's airspeed loop, and the planner optimises the
+elevator alone, 100 iterations with a step that decays from 0.05 to 0.002
+over each solve. If the error ever passes 20 m, the shipped planner takes
+back over.
+
+Each planner covers the other's weakness. Planning both actuators, the
+shipped planner never moved its throttle after its first plan: on `plane` the
+command was constant to three decimals over the scored window of every
+protocol seed, while the airspeed sat 10 to 27 m/s off cruise on average. Its
+fixed step was also its resolution: the decay alone took seed 1's altitude
+cost from 1.47 to 0.47 per step. The speed-loop planner, flown from the first
+step, captured the initial offset more slowly. Over the ten recorded seeds it
+was worse on 9 of 10 `plane` seeds and all 10 `plane_sine` seeds, by 4 to 29%
+per seed whatever the start offset (on `plane` seed 0, 591 m off, its first
+140 steps cost 2.04e6 against 1.75e6).
+
+The airspeed loop runs live in the plant and as a JAX port inside the hold
+planner's rollout, so the elevator plan is optimised against the throttle the
+plant will get. At the handover its integrator starts from the value closest
+to zero that puts its first command within 0.01 of the shipped planner's last
+throttle: zero when both sit at full throttle, as at the end of a climb. On
+the protocol seeds the cost per step falls from 3.45 to 0.516 on `plane` and
+from 2.99 to 0.546 on `plane_sine`, with zero trips, and the reach cost is
+the shipped planner's to within 0.01%. Over ten seeds the episode costs 3273
+per step against the shipped planner's 3276 on `plane`, and 1249 against 1251
+on `plane_sine`, lower on every seed of both. `plane_energy` keeps the
+shipped planner throughout. Its cost is the ladder's transients, which
+neither change moved: the speed loop traded 7 to 8% more altitude cost for
+less airspeed cost, a trade its tighter floor makes worse (rescored at the
+1.20 m floor, the same trajectories cost 6.6 to 7.7% more than the shipped
+planner's). Under that floor (`plane_energy-v3`) it costs 511 per step on the
+protocol against the PID's 11 210, with zero trips.
+
+Each oracle reads the PID's gains from a key of `pid_gains.json` that its
+own baseline fingerprint collects: `plane_cascaded` on `plane`, and a copy
+of it under the task's own name on the other two (`plane_sine_cascaded`,
+`plane_energy_cascaded`), which a test holds equal to it. The planner's
+objective is the reward over a fixed scale per task, not over
+`rho_floor_tracking`: that is the NEA reference, set from this oracle's own
+holds, and while the planner read it every re-measured floor changed the
+oracle that measured it.
 
 ## 5. Known deviations
 
@@ -390,18 +442,20 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1 m (`plane`), 1.26 (`plane_sine`), 4.55 (`plane_energy`) | lowest per-seed long-run mean \|error\| the shipped MPC held in the test turbulence (`scripts/measure_hold.py`, 2 seeds; 0.84 / 1.26 / 4.55 m, PID 0.87 / 44.7 / 8.5), floored at the 1 m barometric resolution: a hold the instrument cannot see is not a floor. Upper bounds otherwise. `plane_energy`'s 4.55 m was measured before the MPC's moves toward the next target were separated from its hold; its hold without them is 1.20 m at best (1.35 / 1.20 m per seed), so this floor is loose until the MPC is reviewed |
+| `e_floor` | 1 m (`plane`), 1.26 (`plane_sine`), 1.20 (`plane_energy`) | the long-run mean \|error\| the shipped MPC holds in the test turbulence, lowest per seed (`scripts/measure_hold.py`, 2 seeds), floored at the 1 m barometric resolution: a hold the instrument cannot see is not a floor. `plane`: the resolution; the MPC holds 0.55 / 0.46 m (PID 1.83 / 0.87). `plane_sine`: an earlier MPC's hold. The current one holds 0.53 / 0.53 m (PID 45.4 / 44.7), below the resolution, and the resolution is within 1.5x of 1.26 m, so the floor stays (oracle audit, 2026-10). `plane_energy` (`-v3`): the MPC's 1.198 m between ladder steps, rounded; under that floor it holds 1.35 / 1.18 m (PID 8.5 / 12.1). It was 4.55 m, an earlier MPC's hold taken before its moves toward the next target were separated from its hold. Upper bounds otherwise |
 | `e_tol` | 0 | no dead zone. A +-30 m band (the pilot's instrument tolerance; the autopilot's is +-20 m, RVSM +-65 ft) was tried and made the hold vacuous: both controllers held within 0.1 m in still air, and the tracking cost was identically zero |
 | `tracking_exponent` | 2 | quadratic outside the tolerance |
-| `c_hold` | 5.06 m/s (`plane`), 8.15 (`plane_sine`), 5.23 (`plane_energy`) | airspeed deviation from `target_speed` while holding, PID (`scripts/measure_hold.py`), the better controller on speed: the MPC's hold window follows a climb and its speed is still recovering (21 / 13 / 20 m/s off) |
+| `c_hold` | 5.06 m/s (`plane`), 8.15 (`plane_sine`), 5.23 (`plane_energy`) | airspeed deviation from `target_speed` while holding, PID (`scripts/measure_hold.py`), the better controller on speed. The MPC holds 5.13 and 8.25 m/s on `plane` and `plane_sine`, where its throttle is the PID's own airspeed loop once it holds, and 19.6 on `plane_energy`, where it plans the throttle itself |
 | `running_weight` | 1 | the speed term stands in for fuel; sweep 0.5 / 1 / 2 |
-| `failure_cost` | 3e8 (`plane`), 1.9e8 (`plane_sine`), 1.44e7 (`plane_energy`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor)^2 |
+| `failure_cost` | 3e8 (`plane`), 1.9e8 (`plane_sine`), 2.1e8 (`plane_energy`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor)^2 |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
 
-`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+`rho_floor_tracking` is the NEA reference for tracking: the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
-at the instrument resolution -- and `rho_floor` the same with consumption
+at the instrument resolution. Here it is (0.4581 / 1)^2 = 0.210 on `plane`,
+(0.5285 / 1.26)^2 = 0.176 on `plane_sine` and (1.1773 / 1.20)^2 = 0.963 on
+`plane_energy`. `rho_floor` is the same with consumption
 charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
 measured/certified floor or a resolution used as a scale, and where it is a
 resolution on a deterministic plant both references are 0, since exact hold is
