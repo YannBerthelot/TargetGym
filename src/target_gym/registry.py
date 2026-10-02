@@ -126,12 +126,18 @@ class EnvSpec:
         single flat SISO loop and the gains are stored per sub-loop.
         ``provenance.baseline_fingerprint`` hashes this key's entry.
     gains_keys:
-        Other keys of ``pid_gains.json`` this task's controllers or physics
-        read. ``provenance.baseline_fingerprint`` hashes the entries whose key
-        starts with the task's name and the ``tuned_gains_key`` entry; a key
-        outside both is declared here, or a retune of it would leave this
-        task's records looking fresh. Patrol declares ``plane3d_heading``,
-        the 3D heading autopilot its oracle and its lead fly on.
+        Other keys of ``pid_gains.json`` this task's baseline and protocol
+        records depend on. ``provenance.baseline_fingerprint`` hashes the
+        entries whose key starts with the task's name and the
+        ``tuned_gains_key`` entry; a key outside both is declared here, or a
+        retune of it would leave those records looking fresh. ``plane_sine``
+        and ``plane_energy`` declare ``plane_cascaded``, the key their
+        cascaded PID baseline reads, and patrol declares ``plane3d_heading``,
+        the autopilot its oracle and its scripted lead fly. The field feeds
+        the baseline fingerprint only. The version stamp
+        (``provenance.environment_fingerprint``) hashes neither
+        ``pid_gains.json`` nor ``experts/pid.py``, so it does not see a gains
+        entry the physics reads; patrol's lead is the one such case today.
         ``tests/test_registry_rules.py`` checks every declared key exists.
     baselines_note:
         Set when ``make_pid``/``make_mpc`` are ``None``: a short explanation
@@ -542,6 +548,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "failure_cost": 2.0 * (12192.0 / 1.20) ** 2,
         },
         tuned_gains_key="plane",
+        # The cascaded PID baseline reads ``plane_cascaded``.
+        gains_keys=("plane_cascaded",),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -586,6 +594,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "failure_cost": 2.0 * (12192.0 / 1.26) ** 2,
         },
         tuned_gains_key="plane",
+        # The cascaded PID baseline reads ``plane_cascaded``.
+        gains_keys=("plane_cascaded",),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),

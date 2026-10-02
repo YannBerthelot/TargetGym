@@ -139,17 +139,15 @@ now scores 0.15, and every halving of the error is worth the same increment down
 to the millimetre the transmitter resolves. The span is still the full 1.45 m,
 which under a log is only the denominator and no longer flattens anything.
 
-`tracking_band = 0.05` is left over from the narrowing that was tried first. It
-is **a controller constant, not a reward parameter**: nothing in this file's
-reward reads it, and since the oracle audit (2026-10) neither does the MPC,
-which tracks in floor units (`e_floor`); an earlier MPC objective normalised
-its tracking error by it. That is the same shape as the glass furnace's
-since-removed `tracking_scale`, which the reward had stopped using while the
-controller went on steering by it, and which cost that environment 16% against
-its own PID. It was harmless here, because that objective had no competing
-cost term for a mis-scaled tracking term to be flat against, so the band
-affected only conditioning. It is named here so it does not look like the
-furnace's did.
+`tracking_band = 0.05` is left over from the narrowing that was tried first.
+The clipped reward it was added for was its only reader, and nothing has read
+it since the reward became log-scaled. No MPC objective ever normalised by it:
+the do-mpc oracle tracked in raw metres, and the shrinking-horizon NLP that
+replaced it in the oracle audit (2026-10) tracks in floor units (`e_floor`).
+It is named here as a warning about a band the reward ignores. The glass
+furnace's since-removed `tracking_scale` was one: the reward had stopped using
+it while that controller went on steering by it, which cost that environment
+16% against its own PID.
 
 Recorded because it is *why* a much worse defect went unnoticed: the target range once sat entirely above the
 reachable envelope — no sampled setpoint was attainable and every episode was

@@ -102,15 +102,20 @@ than by commit.
   version-1 turbine planner never had one and is unchanged.
 - **The baseline fingerprint covers every gains entry a task reads, and its
   burn-in.** It hashed only the `pid_gains.json` keys starting with the task's
-  name, so a retune of `plane` left `plane_sine`'s and `plane_energy`'s
-  records looking fresh, and one of `plane3d_heading` left patrol's. It now
-  also hashes the `tuned_gains_key` entry and any keys in the new
-  `EnvSpec.gains_keys`, which patrol and `patrol_bearing_only` set to
-  `plane3d_heading` (their oracle and the lead fly that autopilot). It also
-  hashes the task's burn-in from `hold_measurements.json`, which the protocol
-  scores from and the new CSTR and four-tank oracles plan on. Registry tests
-  check every declared key exists and that the fingerprint covers these.
-  Every fingerprint moves with this change, and every task is re-recorded.
+  name. `plane_sine` and `plane_energy` fly a PID baseline on
+  `plane_cascaded`, which reached their fingerprints only through the copies
+  their oracle reads; a retune of `plane3d_heading` left patrol's records
+  looking fresh, and one of `patrol` left `patrol_bearing_only`'s. It now also
+  hashes the `tuned_gains_key` entry and any keys in the new
+  `EnvSpec.gains_keys`, which `plane_sine` and `plane_energy` set to
+  `plane_cascaded` and patrol and `patrol_bearing_only` set to
+  `plane3d_heading` (their oracle and the lead fly that autopilot). The field
+  feeds the baseline fingerprint only; the version stamp still sees no gains.
+  It also hashes the burn-in the protocol scores from (`eval.scored_burn_in`:
+  the task's row in `hold_measurements.json`, capped at half the episode),
+  which the new CSTR and four-tank oracles plan on. Registry tests check every
+  declared key exists and that the fingerprint covers these. Every
+  fingerprint moves with this change, and every task is re-recorded.
 - **`scripts/tune_pid.py` writes `plane_sine_cascaded` and
   `plane_energy_cascaded` with `plane_cascaded`**, the copies the
   `plane_sine` and `plane_energy` oracles read and a test holds equal to it.

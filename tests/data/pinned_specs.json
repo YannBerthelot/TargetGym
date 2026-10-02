@@ -80,7 +80,9 @@
       "failure_cost": 206451200.0
     },
     "tuned_gains_key": "plane",
-    "gains_keys": [],
+    "gains_keys": [
+      "plane_cascaded"
+    ],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -132,7 +134,9 @@
       "failure_cost": 187257324.26303852
     },
     "tuned_gains_key": "plane",
-    "gains_keys": [],
+    "gains_keys": [
+      "plane_cascaded"
+    ],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",

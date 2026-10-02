@@ -497,9 +497,11 @@ def test_declared_gains_keys_exist():
 def test_the_baseline_fingerprint_covers_the_gains_a_task_reads():
     """The fingerprint hashes the entries whose key starts with the task's
     name, its ``tuned_gains_key``'s and its declared ``gains_keys``. It once
-    took only the first, so ``plane_sine`` and ``plane_energy`` (which read
-    ``plane``) and patrol (whose oracle and lead read ``plane3d_heading``)
-    could be retuned under a record that still looked fresh."""
+    took only the first, so ``plane_sine`` and ``plane_energy`` (whose PID
+    baseline reads ``plane_cascaded``, reaching their fingerprints only
+    through the copies their oracle reads) and patrol (whose oracle and lead
+    read ``plane3d_heading``) could be retuned under a record that still
+    looked fresh."""
     gains = _gains()
     problems = []
     for s in registry.all_specs():
@@ -514,11 +516,17 @@ def test_the_baseline_fingerprint_covers_the_gains_a_task_reads():
     assert not problems, "\n".join(problems)
     assert "plane3d_heading" in registry.REGISTRY["patrol"].gains_keys
     assert "plane3d_heading" in registry.REGISTRY["patrol_bearing_only"].gains_keys
+    assert "plane_cascaded" in registry.REGISTRY["plane_sine"].gains_keys
+    assert "plane_cascaded" in registry.REGISTRY["plane_energy"].gains_keys
 
 
 @pytest.mark.parametrize(
     "name,key",
-    [("plane_sine", "plane"), ("patrol", "plane3d_heading"), ("cstr", "cstr")],
+    [
+        ("plane_sine", "plane_cascaded"),
+        ("patrol", "plane3d_heading"),
+        ("cstr", "cstr"),
+    ],
 )
 def test_retuning_a_key_a_task_reads_stales_its_record(
     tmp_path, monkeypatch, name, key
@@ -544,18 +552,27 @@ def test_an_undeclared_gains_key_raises(monkeypatch):
 
 
 def test_the_baseline_fingerprint_covers_the_burn_in(tmp_path, monkeypatch):
-    """The protocol scores from the hold row's burn-in, and the CSTR and
-    four-tank oracles plan on it, so a changed burn-in stales the record;
-    the rest of the hold row is a measurement and does not."""
+    """The protocol scores from the hold row's burn-in capped at half the
+    episode (``eval.scored_burn_in``), and the CSTR and four-tank oracles plan
+    on that value, so a change to it stales the record. A change the cap
+    absorbs does not, and neither does the rest of the hold row, which is a
+    measurement."""
+    from target_gym import eval as E
+
     spec = registry.REGISTRY["cstr"]
+    params = spec.make_test_params()
+    half = int(params.max_steps_in_episode) // 2
     before = provenance.baseline_fingerprint(spec)
-    rows = json.loads(provenance.HOLDS_PATH.read_text())
+    rows = json.loads(E._DATA.read_text())
+    assert rows["cstr"]["burn_in"] < half  # so a bump is not absorbed
     path = tmp_path / "hold_measurements.json"
-    monkeypatch.setattr(provenance, "HOLDS_PATH", path)
-    row = {**rows["cstr"], "seeds": rows["cstr"]["seeds"] + 1}
-    path.write_text(json.dumps({**rows, "cstr": row}))
-    assert provenance.baseline_fingerprint(spec) == before
-    path.write_text(
-        json.dumps({**rows, "cstr": {**row, "burn_in": row["burn_in"] + 1}})
-    )
-    assert provenance.baseline_fingerprint(spec) != before
+    monkeypatch.setattr(E, "_DATA", path)
+
+    def fingerprint_with(**changes):
+        path.write_text(json.dumps({**rows, "cstr": {**rows["cstr"], **changes}}))
+        return provenance.baseline_fingerprint(spec)
+
+    assert fingerprint_with(seeds=rows["cstr"]["seeds"] + 1) == before
+    assert fingerprint_with(burn_in=rows["cstr"]["burn_in"] + 1) != before
+    capped = fingerprint_with(burn_in=half)
+    assert fingerprint_with(burn_in=half + 1) == capped

@@ -678,8 +678,10 @@ def protocol_burn_in(name: str, params) -> int:
 # IPOPT settings of the shrinking-horizon NLP. The iteration cap is the one
 # that binds, and it is deterministic; there is no wall-clock limit, so a
 # record reproduces on a slower machine. 500 is the cap the oracle audit
-# (2026-10) measured with: a solve takes 6 to 10 iterations on the CSTR and
-# the four-tank, the first one from a cold start included.
+# (2026-10) measured with. On the CSTR and the four-tank a solve averages 6.1
+# to 11.8 iterations per seed over the ten baseline seeds, and none of their
+# 1000 and 200 solves reached the cap. Single solves vary around that mean:
+# the cold first solve of an episode is among the slowest.
 NLP_MAX_ITER = 500
 NLP_TOL = 1e-9
 NLP_ACCEPTABLE_TOL = 1e-6

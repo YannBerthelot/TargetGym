@@ -122,11 +122,16 @@ checks each one, and checks the tuner row only for a task that ships a PID.
   fingerprint covers rendering and a renderer cannot change a return.
 - **Declare the gains your controllers read.** The baseline fingerprint
   hashes the `pid_gains.json` entries whose key starts with the task's name
-  and the entry named by `tuned_gains_key`. A controller, or the physics,
-  that reads any other key lists it in `gains_keys`, so a retune of that key
-  makes this task's records stale (patrol declares `plane3d_heading`, the
-  autopilot its oracle and its lead fly). This one applies to the 21 too, and
-  `tests/test_registry_rules.py` checks that every declared key exists.
+  and the entry named by `tuned_gains_key`. A controller that reads any other
+  key lists it in `gains_keys`, so a retune of that key makes this task's
+  baseline and protocol records stale (`plane_sine` and `plane_energy`
+  declare `plane_cascaded`, which their PID baseline reads). This one applies
+  to the 21 too, and `tests/test_registry_rules.py` checks that every
+  declared key exists. `gains_keys` feeds the baseline fingerprint only: the
+  version stamp hashes neither `pid_gains.json` nor `experts/pid.py`, so a
+  new task's physics should not read them. Freeze such gains inside the
+  package instead. Patrol's scripted lead, which flies the `plane3d_heading`
+  autopilot, is the known exception among the 21.
 - **A name that is no prefix of another.** Gains keys are collected by name
   prefix, and names starting with `plane` or `patrol` are treated as aircraft.
   A new name must not start another registered name or start with one, and
@@ -137,7 +142,11 @@ checks each one, and checks the tuner row only for a task that ships a PID.
 - **A hold row.** Add the task to `PLANTS` in `scripts/measure_hold.py` and run
   `scripts/measure_hold.py --envs <name>`. Without a row in
   `src/target_gym/data/hold_measurements.json` the protocol gets a burn-in of
-  0 and scores the approach as if it were the hold.
+  0 and scores the approach as if it were the hold. The burn-in the protocol
+  scores from (the row's, capped at half the episode) is part of the baseline
+  fingerprint, so adding the row, or changing it in a way that moves that
+  burn-in, makes the task's baseline and protocol records stale. Add the row
+  before recording the baselines.
 - **A tuner row.** If the task ships a PID, add it to `TUNERS` in
   `scripts/tune_pid.py`, which refuses a name that has no row there. The
   generic coordinate descent (`_tune_aircraft_search`) starts from the
@@ -190,9 +199,11 @@ uv run python scripts/generate_env_pages.py
 
 Each record carries a fingerprint of what determined it: the environment's
 modules, the shared controller and integration code, the gains, the parameter
-values. The suite refuses to read one whose fingerprint no longer matches
-the tree. So if you change any of those, a test will tell you which records went
-stale; re-record them and commit the result with the change that invalidated it.
+values, and the burn-in the protocol scores from (the task's row in
+`hold_measurements.json`, capped at half the episode). The suite refuses to
+read one whose fingerprint no longer matches the tree. So if you change any of
+those, a test will tell you which records went stale; re-record them and
+commit the result with the change that invalidated it.
 `src/target_gym/provenance.py` explains why the fingerprint is taken over source
 rather than over behaviour, and what that trade buys.
 

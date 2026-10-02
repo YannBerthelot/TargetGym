@@ -95,10 +95,23 @@ def test_it_resolves_every_period_and_follows_the_plan_between():
 
 
 def test_a_new_episode_without_a_reset_starts_cold():
+    """When time goes back to 0 the old plan is dropped before the first
+    solve, so that solve starts from zeros. Reaching the target alone would
+    not show it: in this toy the old plan ends at 0, so a warm guess would be
+    zeros too."""
     nlp, F = _toy()
     _run(nlp, F)
+    cold = []
+    guess = nlp._guess
+
+    def spy(t, n):
+        cold.append(nlp._plan is None)
+        return guess(t, n)
+
+    nlp._guess = spy
     xs = _run(nlp, F)  # time goes back to 0
     np.testing.assert_allclose(xs[2:], 1.0, atol=1e-6)
+    assert cold[0], "the first solve of the new episode saw the old plan"
 
 
 def test_a_failed_solve_keeps_the_previous_plan():
@@ -118,11 +131,16 @@ def test_a_failed_solve_keeps_the_previous_plan():
 
 
 def test_a_capped_solve_is_applied():
+    """Every solve hits the cap, and each capped plan replaces the last, so
+    the plan in use starts at the last step solved (5). Were capped solves
+    discarded like other failures, only the first would be used and the
+    plan would still start at 0."""
     nlp, F = _toy(max_iter=1)
     _run(nlp, F)
     report = nlp.solver_report()
     assert report["solver_capped"] == report["solver_failures"] > 0
     assert report["solver_last_status"] == "Maximum_Iterations_Exceeded"
+    assert nlp._t0 == 5
 
 
 @pytest.mark.parametrize("field,value", [("e_tol", 0.1), ("tracking_exponent", 1.0)])

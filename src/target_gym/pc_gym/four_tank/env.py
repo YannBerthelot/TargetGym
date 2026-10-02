@@ -41,11 +41,11 @@ class FourTankParams(EnvParams):
     precision_floor: float = 1e-3  # m, level transmitter resolution (1 mm)
     h_max: float = 1.5
 
-    # Error scale an earlier MPC's tracking term used, in metres. Not read by
-    # ``compute_reward``, nor by the oracle, which tracks in floor units
-    # (``e_floor``) since the oracle audit (2026-10). 5 cm is a real miss on a
-    # plant whose setpoints live between 0.10 and 0.30 m. See D1 in PHYSICS.md
-    # for why a band the reward ignores is worth watching.
+    # Error scale, in metres, from the clipped reward this field was added
+    # for; unread since the reward became log-scaled. No oracle has read it:
+    # the current one tracks in floor units (``e_floor``). 5 cm is a real miss
+    # on a plant whose setpoints live between 0.10 and 0.30 m. See D1 in
+    # PHYSICS.md for why a band the reward ignores is worth watching.
     tracking_band: float = 0.05
 
     # Target level ranges for tanks 1 and 2.

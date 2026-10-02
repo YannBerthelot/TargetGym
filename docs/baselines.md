@@ -268,8 +268,11 @@ evaluated on.
 
 ### Why the MPC does not minimise the reward
 
-Every planning MPC here optimises a **quadratic surrogate** in a per-plant
-error band, not the environment's own reward. That is deliberate, standard, and measured.
+Every planning MPC here except the CSTR's and the four-tank's optimises a
+**quadratic surrogate** in a per-plant error band, not the environment's own
+reward. That is deliberate, standard, and measured. Those two are
+`ShrinkingHorizonNLP` oracles that minimise the version-2 reward's own
+tracking term in `e_floor` units, weighted toward the scored window.
 
 It is the difference between *economic* MPC, which optimises the true
 objective, and *tracking* MPC, which optimises a quadratic around the setpoint;
@@ -376,8 +379,8 @@ baseline recorded on one machine reproduces on another, which a wall-clock cap
 could not promise. `IPOPT_MAX_CPU_TIME` is a backstop against a solve that is
 pathological rather than merely hard, and sits far above anything a healthy step
 needs. `ShrinkingHorizonNLP` is capped at `NLP_MAX_ITER`, 500 iterations,
-against a mean of 6.3 to 11.8 iterations a solve on each seed measured on the
-CSTR and the four-tank, and has no time limit at all.
+against a mean of 6.1 to 11.8 iterations a solve on each of the ten baseline
+seeds measured on the CSTR and the four-tank, and has no time limit at all.
 
 Capping alone would not be enough, because do-mpc neither raises nor warns when
 IPOPT gives up. It stores the failed iterate, hands it back as the action, and
@@ -405,8 +408,7 @@ prints solver success to 0.1 %, and all nine environments solved by IPOPT (seven
 `CasadiMPC` and two `ShrinkingHorizonNLP`) record 100% at that precision. The
 CSTR's NLP ran 1000 solves over the ten baseline seeds and the four-tank's 200,
 with none failed or capped (measured before the re-record, oracle audit,
-2026-10). That includes the two whose MPCs live in their own
-packages.
+2026-10).
 `unstable_cstr` ran 12 000 solves over ten seeds with none failed or capped
 (measured, `scripts/record_baselines.py --envs unstable_cstr`).
 `compressor_surge` also ran 12 000 solves over ten seeds. One of them was
@@ -615,10 +617,11 @@ re-measurement after controller work; the alternative price is a false green.
 
 **What stops a stale record from passing.** Each entry carries a fingerprint of
 everything that determines it -- the environment's own modules, the shared
-controller and integration code, that environment's tuned gains, and the
-parameter values the measurement was taken at. A test compares it against the
-tree and refuses a record that no longer describes the code, naming the command
-that regenerates it.
+controller and integration code, that environment's tuned gains, the
+parameter values the measurement was taken at, and the burn-in the protocol
+scores from (the task's row in `hold_measurements.json`, capped at half the
+episode). A test compares it against the tree and refuses a record that no
+longer describes the code, naming the command that regenerates it.
 
 The fingerprint is taken over *source*, not over behaviour, and that is
 deliberate. Hashing a short trajectory would be more direct and does not survive
