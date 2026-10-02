@@ -302,9 +302,10 @@ def _split_by_planner(names: list[str]) -> tuple[list[str], list[str]]:
         # The batched path vmaps the planner's optimiser over seeds and so
         # bypasses ``GradientMPC.step``: a planner that warm-starts from or is
         # guided by a PID rollout, or suppresses moves against the last applied
-        # action, is only itself on the per-seed path (the wind turbine and
-        # the 2D aircraft). Recording it batched measured a different
-        # controller from the one every other script runs.
+        # action, is only itself on the per-seed path (the 2D aircraft and
+        # patrol, and the wind turbine's planner before the oracle audit).
+        # Recording it batched measured a different controller from the one
+        # every other script runs.
         stepwise = any(
             getattr(probe, attr, None) is not None
             for attr in ("initial_plan_fn", "guide_plan_fn", "move_penalty_fn")

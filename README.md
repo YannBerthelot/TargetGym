@@ -215,11 +215,13 @@ Controller structure is chosen per plant:
   is the pairing industrial anti-surge systems use, and the recycle valve gets
   a loop of its own because the margin it protects is not a tracked output.
 
-Four kinds of controller fill the MPC slot: CasADi/IPOPT where a symbolic model
+Five kinds of controller fill the MPC slot: CasADi/IPOPT where a symbolic model
 exists, gradient-based planning through the JAX dynamics elsewhere,
-cross-entropy sampling for the cement kiln, and on the battery a feedforward of
-the scheduled dispatch level, which is the best causal action there. Solver
-convergence is recorded alongside every result.
+cross-entropy sampling for the cement kiln, on the battery a feedforward of the
+scheduled dispatch level, which is the best causal action there, and on the
+wind turbine a feedback law: generator torque solved so that the next step's
+power meets the target, and pitch from the PID with its command slew capped.
+Solver convergence is recorded alongside every result.
 
 Each baseline must beat the best constant action on its environment, a
 deliberately low bar that a mis-wired controller fails. Weak baselines are

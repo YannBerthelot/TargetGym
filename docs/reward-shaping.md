@@ -156,7 +156,8 @@ less where the floor is clamped at the instrument resolution (the glass
 furnace's MPC holds 0.175 K against a 1 K scale, so `rho* = 0.03`). Where a
 floor was kept within 1.5x of a re-measured hold rather than reset (the
 oracle audit's rule), its term is near 1 but not 1: the boiler's level term is
-0.84 and its pressure term 1.08, so its `rho* = 1.92`. On the deterministic plants, where `e_floor` is a
+0.84 and its pressure term 1.08, so its `rho* = 1.92`; the wind turbine's
+oracle holds 1454 W against its 1680 W floor, so its term is 0.865. On the deterministic plants, where `e_floor` is a
 resolution used as a scale and exact hold is achievable, `rho*` is 0 -- a
 reference of 1 there (the cost at the resolution) is not a bound, and the
 shipped MPCs sit below it. And the two-cost report -- tracking against consumption --
@@ -226,7 +227,7 @@ the evaluator measures.
 | `reactor` | p=1 | 0.00451 of rated (certified DP) | 0 | rod demand beyond the rate limit, weight 1 (provisional) | $ per 10 s step, imbalance $100/MWh |
 | `hvac` | p=2, dead-zone | overheating-bound; MPC reference | +-0.5 K occupied; night lower bound only (provisional) | gas EUR 0.10/kWh, in full | EUR per step; comfort EUR 0.03/K^2 h (provisional; restarts in place) |
 | `battery` | p=1 | 1596 W (closed form) | 0 | fade above hold at $300/kWh of capacity | $ per step, imbalance $100/MWh |
-| `wind_turbine` | p=1 | 1680 W (lowest per-seed MPC hold, upper bound) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $100/MWh (provisional) |
+| `wind_turbine` | p=1 | 1680 W (an earlier oracle's lowest per-seed hold, upper bound; the current one holds 1454 W) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $100/MWh (provisional) |
 | `glass_furnace` | p=2 | 1 K (thermocouple resolution; the MPC holds 0.175) | 0 | fuel above hold, w=1 | dimensionless |
 | `cement_kiln` | p=2 | 5e-4 (assay resolution; the MPC holds 4.9e-5) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
 | `boiler_drum` | p=2 x2 | 2.7 mm level (an earlier oracle's lowest per-seed hold; the current one holds 2.45 mm), 0.05 bar (transmitter resolution; the MPC holds 0.052) | 0 | fuel above hold, w=1 | dimensionless |
@@ -261,10 +262,11 @@ that found it:
 - **The surrogate objectives mirrored the version-1 minimiser.** The
   gradient and sampling planners (wind turbine, battery, aircraft, boiler
   drum, cement kiln; the battery's has since been replaced by a feedforward
-  of the scheduled level) now descend the plant's own version-2 cost in floor
-  units, keeping their differentiable barriers (weighted like the failure
-  charge); the HVAC CasADi planner minimises the priced dead-zone comfort and
-  the gas. Where the tracking cost is linear in the error (p = 1) the planner
+  of the scheduled level, and the turbine's by a feedback law) now descend
+  the plant's own version-2 cost in floor units, keeping their
+  differentiable barriers (weighted like the failure charge); the HVAC
+  CasADi planner minimises the priced dead-zone comfort and the gas. Where
+  the tracking cost is linear in the error (p = 1) the planner
   squares it -- same minimiser, and a gradient that vanishes at it, where a
   normalised-gradient step on a linear cost never stops chattering.
 - **A 60-step open-loop tail dominated the aircraft objective.** Under a
@@ -275,7 +277,8 @@ that found it:
 - **A normalised-gradient planner cannot travel far in one solve**, so from
   a constant plan it could not find the pitch schedule the turbine needed
   (it braked the rotor with the torque instead) or the coordinated
-  thrust-and-elevator move the aircraft needed. The wind, 2D aircraft and
+  thrust-and-elevator move the aircraft needed. The wind (until the oracle
+  audit replaced the turbine's planner with a feedback law), 2D aircraft and
   patrol planners now start from, and at every step are compared against,
   the shipped PID's rollout plan under the planner's own objective -- so the
   plan is never worse than the PID's under its model. (The patrol planner
@@ -290,6 +293,10 @@ that found it:
   of rated speed with a mild soft box -- what a turbine's own supervisory
   logic does -- because recovering a slowed rotor pays off beyond its
   horizon and without the box it drifted to 0.85x rated with a 250 kW error.
+  (The oracle audit (2026-10) found that the move-suppression term never
+  entered the descent, only the comparison with the PID's plan, and
+  replaced the turbine's planner with a feedback law whose pitch command is
+  slew-capped at the activity the reward leaves free.)
 - **The descent was not monotone, and the planner took its last iterate
   regardless.** A fixed step along a normalised gradient overshoots wherever
   the cost has an edge -- a tolerance band, a barrier -- and fifty of them

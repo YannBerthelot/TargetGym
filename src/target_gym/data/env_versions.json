@@ -237,8 +237,8 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "wind_turbine-v2": {
-    "fingerprint": "ac20f458cce7259c",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "41ee40adcc7b107e",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: the turbine's oracle is now a feedback law, torque by four Newton steps on the noise-free model and pitch by the shipped PI with a slew cap; best per-seed hold 1454 W). They are the NEA reference: no reward reads them, and neither does the new oracle, so the environment's behaviour is unchanged. e_floor stays at 1680 W, within 1.16x of the new hold, so the reward does not move.",
+    "stamped": "2026-10-01T22:44:55+00:00"
   }
 }

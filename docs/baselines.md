@@ -197,28 +197,31 @@ Two caveats worth knowing before you re-tune anything:
 The MPC slot holds the best controller we can build for each task, as an
 upper bound for the others. It need not be a planner: where the best causal
 action has a closed form, the slot holds that. Each task's controller lives in
-its own package's `experts.py`. Four kinds, chosen per environment by what its
+its own package's `experts.py`. Five kinds, chosen per environment by what its
 dynamics allow:
 
 | Implementation | Used by | When it applies |
 |---|---|---|
 | `CasadiMPC` subclasses | 9 environments | A direct nonlinear program over an explicit model; the sharpest when the model can be written in CasADi |
-| `GradientMPC` | 11 environments | Differentiates the JAX dynamics directly and descends the objective |
+| `GradientMPC` | 10 environments | Differentiates the JAX dynamics directly and descends the objective |
 | `SamplingMPC` | cement kiln | Cross-entropy sampling, for when gradients are unusable |
 | Feedforward | battery | The best causal action is known in closed form: the battery commands the scheduled level of the block the next step is scored against, which leaves only the dispatch noise |
+| Feedback law | wind turbine | Generator torque by four Newton steps on the noise-free plant model, so the next step's power meets the target and only the wind innovation is left; pitch by the PID's PI on rotor speed with its command slew capped near the setpoint. It replaced a `GradientMPC` whose descent did not converge on the torque (oracle audit, 2026-10) |
 
 
 ### The MPC is not trained, and you can just run it
 
 It solves an optimisation problem online, from the current state, at every
-step (except on the battery, whose slot holds a feedforward with no solver).
+step (except on the battery and the wind turbine, whose slots hold a
+feedforward and a feedback law with no solver).
 There are no learned parameters, so there is nothing that could be
 specific to an episode or a seed. What it has instead is a model, a horizon and
 solver settings, and an objective, all chosen once per environment the way a
 controller structure is. Between episodes it carries only a warm start, and on
 the glass furnace an offset-free bias integrator; `reset()` clears both. The
 unstable CSTR's and the compressor's MPCs also keep the memory of the PID they
-fall back on, and `reset()` clears that too.
+fall back on, and the turbine's feedback law its last speed error; `reset()`
+clears those too.
 
 The irony is that the **PID** is the trained one here. Its gains come from a
 search on seeds 0 to 2 and are reported on held-out seeds. The MPC has never
@@ -231,14 +234,17 @@ an opponent: it knows the reactor's xenon inventory, the column's interior
 profile and the turbine's rotor-effective wind.
 
 **It is slow**, from 3 ms to about 1.3 s per step against environments that
-step in microseconds (the battery's feedforward aside; the four 3D aircraft
-tasks, at 200 descent iterations a solve since the oracle audit, 2026-10, are
-the slow end).
-A reference to measure against, not something to put inside a training loop.
+step in microseconds (the battery's feedforward and the turbine's feedback law,
+about 0.1 ms per step after a one-off JIT compile of about 0.4 s, aside; the
+four 3D aircraft tasks, at 200 descent iterations a solve since the oracle
+audit, 2026-10, are the slow end). A reference to measure against, not
+something to put inside a training loop.
 
 **It does not vmap or jit** on the CasADi plants, which call IPOPT, a solver
-outside JAX. The eleven `GradientMPC` environments do batch, which is how the
-recording parallelises across seeds.
+outside JAX. Six of the ten `GradientMPC` environments (the 3D aircraft, the
+distillation column and the boiler drum) batch, which is how the recording
+parallelises across seeds; the 2D aircraft tasks and patrol, whose planners
+start from and are guided by a PID rollout, record one process per seed.
 
 **`reset()` between episodes**, or the furnace's bias integrator carries a
 correction into an episode where it is a standing error.
@@ -266,7 +272,7 @@ curvature is unbounded at the floor.
 
 So each plant declares an error band the planner normalises by:
 `tracking_band` on the four-tank, the column, the pH loop and the glass
-furnace, `power_band` on the turbine, plus `comfort_band`,
+furnace, `power_band` on the turbine (its version-1 planner), plus `comfort_band`,
 `lime_band`, `level_band`, `pressure_band` and `reward_band`.
 
 **These are controller constants, not reward parameters**, and it is worth
@@ -772,7 +778,10 @@ a clipped tracking term that was exactly flat outside its band, and no reward in
 the library has such a term any more. Log-scaling fixes the *value*, though, not
 the gradient -- see "The MPC objective is not the reward" below. (The
 battery's planner, and with it its surrogate, was later retired for a
-feedforward of the scheduled level in the oracle audit, 2026-10.)
+feedforward of the scheduled level in the oracle audit, 2026-10. The
+turbine's planner, barrier included, was retired in the same audit for a
+feedback law that never plans past the next step; it is still the oracle for
+version-1 params.)
 
 Two seeds would misreport almost everything. Measuring on two produced three
 wrong conclusions during this work -- the wind turbine at "98% of the PID", the
@@ -882,11 +891,11 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `battery` | 360 | 0.003457 | 0.0008876 | 0.743 | 10/10 | 0 |
 | `ph_neutralization` | 300 | 336.3 | 91.22 | 0.729 | 10/10 | 0 |
 | `four_tank` | 500 | 1167 | 344.5 | 0.705 | 10/10 | 0 |
+| `wind_turbine` | 400 | 4.541e-05 | 1.378e-05 | 0.697 | 10/10 | 0 |
 | `plane` | 280 | 1.04e+04 | 3276 | 0.685 | 10/10 | 0 |
 | `patrol` | 200 | 11.22 | 3.56 | 0.683 | 10/10 | 0 |
 | `glass_furnace` | 1600 | 1.352 | 0.4943 | 0.634 | 10/10 | 0 |
 | `hvac` | 720 | 0.01966 | 0.01064 | 0.459 | 10/10 | 0 |
-| `wind_turbine` | 400 | 4.541e-05 | 3.557e-05 | 0.217 | 9/10 | 0 |
 | `cstr` | 100 | 6319 | 5803 | 0.082 | 10/10 | 0 |
 | `first_order` | 100 | 1018 | 1002 | 0.015 | 10/10 | 0 |
 
@@ -1008,7 +1017,7 @@ MPC's lowest per-seed hold, 1.03e-4 kPa, sets the floor column:
 | `plane_sine` | 1 | 1.52e+03 (1.52e+03 / 0.261) | 2.99 (2.24 / 0.749) | 0.999 | 1.49e+03 | 2.86 | 1.88e+06 (2.14e+06) | 7.61e+05 (7.62e+05) | 0 |
 | `reactor` | 1.25 | 23.7 (23.3 / 0.385) | 1.38 (1.38 / 2.41e-05) | 0.994 | 23.7 | 1.38 | 1.64e+03 (1.24e+04) | 4.77 (597) | 0 |
 | `unstable_cstr` | 0.00396 | 5.74e+04 (5.74e+04 / —) | 4.03e+03 (4.03e+03 / —) | 0.93 | 2.68 | 0.00649 | 1.15e+07 (5.84e+05) | 8.07e+05 (2.52e+05) | 0 |
-| `wind_turbine` | 1.17e-05 | 2.64e-05 (2.43e-05 / 2.12e-06) | 2.1e-05 (1.55e-05 / 5.46e-06) | 0.365 | 2.64e-05 | 2.1e-05 | 0.00854 (0.0132) | 0.00687 (0.011) | 0 |
+| `wind_turbine` | 1.01e-05 | 2.64e-05 (2.43e-05 / 2.12e-06) | 1.3e-05 (1.27e-05 / 3.08e-07) | 0.821 | 2.64e-05 | 1.3e-05 | 0.00854 (0.0132) | 0.000539 (0.00298) | 0 |
 
 Reach B is each controller's transient cost above its *own* hold level (Theorem 4's bias), so it is not comparable between two controllers whose holds differ: a controller holding far off shows a small B because its level swallows its transient. The number in parentheses is the transient's summed cost, not relative to anything, and is the one to compare across controllers.
 † cost still rising at the end of the window (no hold reached, so the transient is cheaper than the "hold" level and B is negative): PID on `glass_furnace`, MPC on `glass_furnace`, PID on `plane3d_racetrack`.
