@@ -199,12 +199,13 @@ Two caveats worth knowing before you re-tune anything:
 The MPC slot holds the best controller we can build for each task, as an
 upper bound for the others. It need not be a planner: where the best causal
 action has a closed form, the slot holds that. Each task's controller lives in
-its own package's `experts.py`. Seven kinds, chosen per environment by what its
+its own package's `experts.py`. Eight kinds, chosen per environment by what its
 dynamics allow:
 
 | Implementation | Used by | When it applies |
 |---|---|---|
-| `CasadiMPC` subclasses | 9 environments | A direct nonlinear program over an explicit model; the sharpest when the model can be written in CasADi |
+| `CasadiMPC` subclasses | 7 environments | A direct nonlinear program over an explicit model; the sharpest when the model can be written in CasADi |
+| `ShrinkingHorizonNLP` | cstr, four_tank | A deterministic plant with an episode short enough to plan whole: one NLP over every remaining step, on the environment's own discrete step written in CasADi, re-solved every step (cstr) or every 25 (four_tank). The cost is the reward's tracking term in floor units with the steps before the protocol's burn-in weighted 1e-3, and the closed loop reaches the plant's optimum to float32 rounding (oracle audit, 2026-10) |
 | `GradientMPC` | 7 environments | Differentiates the JAX dynamics directly and descends the objective |
 | Handover between two gradient planners | plane, plane_sine | The capture of the initial altitude offset needs both actuators planned, and the hold is tighter with the throttle on the PID's airspeed loop and only the elevator planned; the oracle switches once the aircraft holds within 3 m, and back past 20 m |
 | `SamplingMPC` | cement kiln | Cross-entropy sampling, for when gradients are unusable |
@@ -217,7 +218,8 @@ dynamics allow:
 
 It solves an optimisation problem online, from the current state, at every
 step (except on the battery and the wind turbine, whose slots hold a
-feedforward and a feedback law with no solver).
+feedforward and a feedback law with no solver, and on the four-tank, whose
+NLP re-solves every 25 steps and applies its plan in between).
 There are no learned parameters, so there is nothing that could be
 specific to an episode or a seed. What it has instead is a model, a horizon and
 solver settings, and an objective, all chosen once per environment the way a
@@ -266,8 +268,11 @@ evaluated on.
 
 ### Why the MPC does not minimise the reward
 
-Every planning MPC here optimises a **quadratic surrogate** in a per-plant
-error band, not the environment's own reward. That is deliberate, standard, and measured.
+Every planning MPC here except the CSTR's and the four-tank's optimises a
+**quadratic surrogate** in a per-plant error band, not the environment's own
+reward. That is deliberate, standard, and measured. Those two are
+`ShrinkingHorizonNLP` oracles that minimise the version-2 reward's own
+tracking term in `e_floor` units, weighted toward the scored window.
 
 It is the difference between *economic* MPC, which optimises the true
 objective, and *tracking* MPC, which optimises a quadratic around the setpoint;
@@ -282,9 +287,11 @@ for the CasADi plants a quadratic is far better conditioned than a log, whose
 curvature is unbounded at the floor.
 
 So each plant declares an error band the planner normalises by:
-`tracking_band` on the four-tank, the column, the pH loop and the glass
-furnace, `power_band` on the turbine (its version-1 planner), plus `comfort_band`,
-`lime_band`, `level_band`, `pressure_band` and `reward_band`.
+`tracking_band` on the column, the pH loop and the glass furnace, `power_band`
+on the turbine (its version-1 planner), plus `comfort_band`, `lime_band`,
+`level_band`, `pressure_band` and `reward_band`. The four-tank still declares a
+`tracking_band` that nothing reads: its oracle, like the CSTR's, tracks in
+floor units, `e_floor`, since the oracle audit (2026-10).
 
 **These are controller constants, not reward parameters**, and it is worth
 saying so loudly because they did not always look like it. Several once carried
@@ -344,6 +351,8 @@ amplitude to be declared, except on the glass furnace, reactor and HVAC, whose
 CasADi oracles never roll the simulator and which the test lists as pending.
 
 **The CasADi objectives are quadratic proxies, not the environment's reward.**
+(Except on the CSTR and the four-tank, whose NLPs minimise the version-2
+reward's own tracking term, weighted toward the scored window.)
 The shipped rewards are log-scaled and clip to zero outside the tracking band,
 which is fine to be scored on and useless to descend: on the pH CSTR, IPOPT
 optimised the only term with a live gradient, the reagent cost, railed the
@@ -369,7 +378,9 @@ healthy furnace step that converges in 21 iterations and a worst healthy step of
 baseline recorded on one machine reproduces on another, which a wall-clock cap
 could not promise. `IPOPT_MAX_CPU_TIME` is a backstop against a solve that is
 pathological rather than merely hard, and sits far above anything a healthy step
-needs.
+needs. `ShrinkingHorizonNLP` is capped at `NLP_MAX_ITER`, 500 iterations,
+against a mean of 6.1 to 11.8 iterations a solve on each of the ten baseline
+seeds measured on the CSTR and the four-tank, and has no time limit at all.
 
 Capping alone would not be enough, because do-mpc neither raises nor warns when
 IPOPT gives up. It stores the failed iterate, hands it back as the action, and
@@ -393,9 +404,11 @@ step to their PIDs instead, because holding the last action can trip either
 plant.
 
 Read `solver_failures` before quoting a number. `scripts/record_baselines.py`
-prints solver success to 0.1 %, and all nine CasADi environments record 100%
-at that precision. That includes the two whose MPCs live in their own
-packages.
+prints solver success to 0.1 %, and all nine environments solved by IPOPT (seven
+`CasadiMPC` and two `ShrinkingHorizonNLP`) record 100% at that precision. The
+CSTR's NLP ran 1000 solves over the ten baseline seeds and the four-tank's 200,
+with none failed or capped (measured before the re-record, oracle audit,
+2026-10).
 `unstable_cstr` ran 12 000 solves over ten seeds with none failed or capped
 (measured, `scripts/record_baselines.py --envs unstable_cstr`).
 `compressor_surge` also ran 12 000 solves over ten seeds. One of them was
@@ -416,7 +429,7 @@ a vector spanning `rho_ext` around 0.0016 up to a precursor concentration around
 377, a factor of 605 000 measured over a PID episode, with hard bounds on the
 smallest entry. Every `CasadiMPC` subclass now declares a `SCALING` table of
 typical magnitudes, taken from the mean of `|x|` over a PID episode and rounded
-to one figure.
+to one figure, and every `ShrinkingHorizonNLP` an `x_scale`.
 
 **Hard bounds on inputs, soft bounds on states.** The optimiser owns the inputs
 and can always satisfy their bounds, so those stay hard. A state bound is a
@@ -425,14 +438,19 @@ it onto the bound the NLP is infeasible at `x0` and IPOPT answers with a
 restoration phase and hundreds of iterations instead of an action. Most
 environments cannot reach that -- the reactor clips `rho_ext` to its bounds and
 the pH plant bisects its algebraic variable on `[0, 14]` -- but the four-tank
-does not clip, it *ends the episode* when a level touches `h_min` or `h_max`.
-Those two bounds are now soft, and `h_max` is now present at all; before this the
-controller was blind to half of a termination condition it is scored on.
+does not clip: a level that touches `h_min` or `h_max` trips the plant. Its
+do-mpc oracle made those two bounds soft and added `h_max`, which it had been
+missing. The shrinking-horizon NLP that replaced it (oracle audit, 2026-10)
+keeps every planned level 5 mm inside both, hard. That is safe there: only the
+planned states are bounded, never the current one, and its map is the plant's
+own step on a deterministic plant, so a bound the plan keeps is one the plant
+keeps.
 
 **No terminal ingredients, with two exceptions.** `mterm` is the stage cost on
-every MPC except the unstable CSTR's and the compressor's, so there is no
+every `CasadiMPC` except the unstable CSTR's and the compressor's, so there is no
 terminal cost or terminal set and therefore no nominal stability guarantee in
-the Mayne sense. The unstable CSTR's MPC carries a terminal cost, the Riccati
+the Mayne sense. (The CSTR's and four-tank's NLPs need neither: they plan to
+the end of the episode, so nothing lies past their horizon.) The unstable CSTR's MPC carries a terminal cost, the Riccati
 solution for the env's one-step linearisation at C_a 0.45 (`terminal_weight` in
 the plant's `experts.py`), so the end of its horizon does not look free on a
 plant whose uncontrolled error grows. The compressor's NMPC weights the tracking
@@ -450,14 +468,13 @@ assumes the guarantee exists.
 the time a *viable* controller needs to bring the tracking error to 1/e and keep
 it there. A receding-horizon controller can only optimise what it can see, so
 `horizon * mpc_dt` has to cover that transient. Most environments pass with room
-to spare; two groups do not:
+to spare; the aircraft do not:
 
 | Environment | horizon | `tau_close` | ratio | |
 |---|---|---|---|---|
 | `plane` | 30 | 37 | 0.81 | myopic |
 | `plane3d_heading` | 30 | 40 | 0.75 | myopic |
 | `plane3d_circle` | 30 | 40 | 0.75 | myopic |
-| `four_tank` | 5 | 198 | 0.03 | myopic |
 
 The aircraft cases are **not** fixed by nudging the horizon to meet the
 criterion. Measured on `plane3d_heading` over 150 steps, horizon 30 and horizon
@@ -469,13 +486,14 @@ times the audit's minimum and costs roughly 9x. These are `GradientMPC`
 instances, which roll out `step_env` itself, so covered time cannot be bought
 with a coarser `mpc_dt` the way the CasADi controllers allow.
 
-`four_tank` is the CasADi case where that trick does apply: at ratio 0.03 it is
-the worst in the suite, and a coarser prediction step would buy the covered time
-at the same optimisation cost.
+`four_tank` was the CasADi case where that trick does apply. At 5 steps it was
+the worst in the suite, ratio 0.03; 10 prediction steps of 20 s then covered
+200 s, and since the oracle audit (2026-10) its oracle plans every remaining
+step of the episode, 500 against a `tau_close` of 198, so it passes.
 
-Both are open items rather than tuning knobs, and neither is affected by the
-reward shape -- `GradientMPC` sums the environment's reward directly, so it
-picks up reward changes without any objective to re-derive.
+The aircraft are an open item rather than a tuning knob, and not one the
+reward shape affects: `GradientMPC` sums the environment's reward directly,
+so it picks up reward changes without any objective to re-derive.
 
 `unstable_cstr` passes at ratio 2.91, a 32-step (1.6 min) horizon against a
 `tau_close` of 11 steps (measured, `scripts/audit_mpc_horizons.py --envs
@@ -599,10 +617,11 @@ re-measurement after controller work; the alternative price is a false green.
 
 **What stops a stale record from passing.** Each entry carries a fingerprint of
 everything that determines it -- the environment's own modules, the shared
-controller and integration code, that environment's tuned gains, and the
-parameter values the measurement was taken at. A test compares it against the
-tree and refuses a record that no longer describes the code, naming the command
-that regenerates it.
+controller and integration code, that environment's tuned gains, the
+parameter values the measurement was taken at, and the burn-in the protocol
+scores from (the task's row in `hold_measurements.json`, capped at half the
+episode). A test compares it against the tree and refuses a record that no
+longer describes the code, naming the command that regenerates it.
 
 The fingerprint is taken over *source*, not over behaviour, and that is
 deliberate. Hashing a short trajectory would be more direct and does not survive
@@ -903,12 +922,12 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `plane_sine` | 480 | 5184 | 1249 | 0.759 | 10/10 | 0 |
 | `battery` | 360 | 0.003457 | 0.0008876 | 0.743 | 10/10 | 0 |
 | `ph_neutralization` | 300 | 336.3 | 91.22 | 0.729 | 10/10 | 0 |
-| `four_tank` | 500 | 1167 | 344.5 | 0.705 | 10/10 | 0 |
+| `four_tank` | 500 | 1167 | 336.2 | 0.712 | 10/10 | 0 |
 | `wind_turbine` | 400 | 4.541e-05 | 1.378e-05 | 0.697 | 10/10 | 0 |
 | `plane` | 280 | 1.04e+04 | 3273 | 0.685 | 10/10 | 0 |
 | `glass_furnace` | 1600 | 1.352 | 0.4943 | 0.634 | 10/10 | 0 |
 | `hvac` | 720 | 0.01966 | 0.01064 | 0.459 | 10/10 | 0 |
-| `cstr` | 100 | 6319 | 5803 | 0.082 | 10/10 | 0 |
+| `cstr` | 100 | 6319 | 5752 | 0.090 | 10/10 | 0 |
 | `first_order` | 100 | 1018 | 1002 | 0.015 | 10/10 | 0 |
 
 `cost/step` is minus the mean return over the episode length: tracking in
@@ -1024,10 +1043,10 @@ it, and the heading the rest.
 | `boiler_drum` | 1.92 | 524 (524 / 0.0276) | 4.67 (4.62 / 0.0463) | 0.995 | 460 | 3.44 | 3.28e+04 (3.84e+04) | 2.59e+03 (2.38e+03) | 0 |
 | `cement_kiln` | 0.00956 | 4.75 (4.68 / 0.0732) | 0.0705 (0.0295 / 0.0411) | 0.987 | 5.75 | 0.0728 | 910 (2.46e+03) | 241 (255) | 0 |
 | `compressor_surge` | 1.4e-05 | 1.78e+03 (1.78e+03 / 0.388) | 60.8 (60.4 / 0.393) | 0.966 | 9.41 | 0.214 | 8.93e+05 (8.94e+05) | 1.01e+05 (1.01e+05) | 0 |
-| `cstr` | 0 | 41.2 (41.2 / —) | 0.317 (0.317 / —) | 0.992 | 5.96e-07 | 4.21e-05 | 6.64e+05 (6.6e+05) | 6.12e+05 (6.12e+05) | 0 |
+| `cstr` | 0 | 41.2 (41.2 / —) | 9.42e-09 (9.42e-09 / —) | 1 | 5.96e-07 | 0 | 6.64e+05 (6.6e+05) | 6.1e+05 (6.1e+05) | 0 |
 | `distillation` | 8.53e-05 | 62.6 (62.6 / 0.00219) | 0.0125 (0.000261 / 0.0122) | 1 | 62.6 | 0.0125 | 4.05e+03 (1.33e+04) | 1.4e+03 (1.4e+03) | 0 |
 | `first_order` | 0 | 3.57e-06 (3.57e-06 / —) | 0 (0 / —) | 1 | 7.89e-11 | 0 | 1.19e+05 (1.19e+05) | 1.17e+05 (1.17e+05) | 0 |
-| `four_tank` | 0 | 30.3 (30.3 / —) | 0.00741 (0.00741 / —) | 1 | 30.3 | 0.00741 | 6.5e+05 (6.58e+05) | 1.92e+05 (1.92e+05) | 0 |
+| `four_tank` | 0 | 30.3 (30.3 / —) | 3.08e-08 (3.08e-08 / —) | 1 | 30.3 | 3.08e-08 | 6.5e+05 (6.58e+05) | 1.85e+05 (1.85e+05) | 0 |
 | `glass_furnace` | 0.0306 | 2.09 (2.02 / 0.0724) | 0.803 (0.759 / 0.0437) | 0.625 | 2.09 | 0.803 | -225† (1.14e+03) | -99.5† (405) | 0 |
 | `hvac` | 0.001 | 0.0185 (0.00991 / 0.00863) | 0.00884 (0.00525 / 0.00359) | 0.553 | 0.0154 | 0.00368 | 0.367 (0.913) | 0.382 (0.514) | 0 |
 | `patrol` | 0.0363 | 265 (265 / —) | 0.0371 (0.0371 / —) | 1 | 265 | 0.0371 | 1.96e+04 (4.53e+04) | 6.04e+03 (6.04e+03) | 0 |

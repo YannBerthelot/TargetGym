@@ -302,7 +302,8 @@ that found it:
   (The oracle audit (2026-10) found that the move-suppression term never
   entered the descent, only the comparison with the PID's plan, and
   replaced the turbine's planner with a feedback law whose pitch command is
-  slew-capped at the activity the reward leaves free.)
+  slew-capped at the activity the reward leaves free. The term was then
+  removed, with `GradientMPC`'s `move_penalty_fn`, once nothing used it.)
 - **The descent was not monotone, and the planner took its last iterate
   regardless.** A fixed step along a normalised gradient overshoots wherever
   the cost has an edge -- a tolerance band, a barrier -- and fifty of them

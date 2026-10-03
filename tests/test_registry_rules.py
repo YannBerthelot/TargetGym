@@ -15,6 +15,10 @@ gains keys, ships as ``-v2`` with a ``compute_reward_v1`` of its own, has a
 hold row, and, if it ships a PID, has a row in ``TUNERS`` in
 scripts/tune_pid.py. The checks loop over the added tasks and assert once, so
 they pass trivially while none exists.
+
+For every task, the 21 included: each gains key a spec declares in
+``gains_keys`` exists, and the baseline fingerprint covers the task's
+``tuned_gains_key``, its declared keys and its burn-in.
 """
 
 from __future__ import annotations
@@ -94,6 +98,7 @@ def _pinned_snapshot() -> list[dict]:
                 "make_mpc": _factory(s.make_mpc),
                 "test_params": s.test_params,
                 "tuned_gains_key": s.tuned_gains_key,
+                "gains_keys": s.gains_keys,
                 "baselines_note": s.baselines_note,
                 "disturbance_fields": s.disturbance_fields,
                 "disturbance_overrides": s.disturbance_overrides,
@@ -469,3 +474,105 @@ def test_declared_sources_enter_both_fingerprints():
         typo = dataclasses.replace(base, fingerprint_sources=("no/such/file.py",))
         with pytest.raises(FileNotFoundError, match="no/such/file.py"):
             fingerprint(typo)
+
+
+def _gains() -> dict:
+    return json.loads(provenance.GAINS_PATH.read_text())
+
+
+def test_declared_gains_keys_exist():
+    """A key in ``gains_keys`` names an entry of pid_gains.json. A typo
+    would otherwise drop the entry from the fingerprint without a word
+    (``provenance.gains_entries`` raises on one as well)."""
+    gains = _gains()
+    missing = [
+        f"{s.name}: {key}"
+        for s in registry.all_specs()
+        for key in s.gains_keys
+        if key not in gains
+    ]
+    assert not missing, f"declared gains keys not in pid_gains.json: {missing}"
+
+
+def test_the_baseline_fingerprint_covers_the_gains_a_task_reads():
+    """The fingerprint hashes the entries whose key starts with the task's
+    name, its ``tuned_gains_key``'s and its declared ``gains_keys``. It once
+    took only the first, so ``plane_sine`` and ``plane_energy`` (whose PID
+    baseline reads ``plane_cascaded``, reaching their fingerprints only
+    through the copies their oracle reads) and patrol (whose oracle and lead
+    read ``plane3d_heading``) could be retuned under a record that still
+    looked fresh."""
+    gains = _gains()
+    problems = []
+    for s in registry.all_specs():
+        entries = provenance.gains_entries(s, gains)
+        wanted = {k for k in gains if k.startswith(s.name)} | set(s.gains_keys)
+        if s.tuned_gains_key in gains:
+            wanted.add(s.tuned_gains_key)
+        if set(entries) != wanted:
+            problems.append(
+                f"{s.name}: hashes {sorted(entries)}, reads {sorted(wanted)}"
+            )
+    assert not problems, "\n".join(problems)
+    assert "plane3d_heading" in registry.REGISTRY["patrol"].gains_keys
+    assert "plane3d_heading" in registry.REGISTRY["patrol_bearing_only"].gains_keys
+    assert "plane_cascaded" in registry.REGISTRY["plane_sine"].gains_keys
+    assert "plane_cascaded" in registry.REGISTRY["plane_energy"].gains_keys
+
+
+@pytest.mark.parametrize(
+    "name,key",
+    [
+        ("plane_sine", "plane_cascaded"),
+        ("patrol", "plane3d_heading"),
+        ("cstr", "cstr"),
+    ],
+)
+def test_retuning_a_key_a_task_reads_stales_its_record(
+    tmp_path, monkeypatch, name, key
+):
+    """End to end: a changed entry under the task's tuned key or a declared
+    key moves its baseline fingerprint, and an unrelated entry does not."""
+    spec = registry.REGISTRY[name]
+    before = provenance.baseline_fingerprint(spec)
+    gains = _gains()
+    path = tmp_path / "pid_gains.json"
+    monkeypatch.setattr(provenance, "GAINS_PATH", path)
+    unrelated = next(k for k in gains if k not in provenance.gains_entries(spec, gains))
+    path.write_text(json.dumps({**gains, unrelated: {"retuned": 1.0}}))
+    assert provenance.baseline_fingerprint(spec) == before
+    path.write_text(json.dumps({**gains, key: {**gains[key], "retuned": 1.0}}))
+    assert provenance.baseline_fingerprint(spec) != before
+
+
+def test_an_undeclared_gains_key_raises(monkeypatch):
+    spec = dataclasses.replace(registry.REGISTRY["patrol"], gains_keys=("no_such_key",))
+    with pytest.raises(KeyError, match="no_such_key"):
+        provenance.baseline_fingerprint(spec)
+
+
+def test_the_baseline_fingerprint_covers_the_burn_in(tmp_path, monkeypatch):
+    """The protocol scores from the hold row's burn-in capped at half the
+    episode (``eval.scored_burn_in``), and the CSTR and four-tank oracles plan
+    on that value, so a change to it stales the record. A change the cap
+    absorbs does not, and neither does the rest of the hold row, which is a
+    measurement."""
+    from target_gym import eval as E
+
+    spec = registry.REGISTRY["cstr"]
+    params = spec.make_test_params()
+    half = int(params.max_steps_in_episode) // 2
+    before = provenance.baseline_fingerprint(spec)
+    rows = json.loads(E._DATA.read_text())
+    assert rows["cstr"]["burn_in"] < half  # so a bump is not absorbed
+    path = tmp_path / "hold_measurements.json"
+    monkeypatch.setattr(E, "_DATA", path)
+
+    def fingerprint_with(**changes):
+        path.write_text(json.dumps({**rows, "cstr": {**rows["cstr"], **changes}}))
+        return provenance.baseline_fingerprint(spec)
+
+    assert fingerprint_with(seeds=rows["cstr"]["seeds"] + 1) == before
+    assert fingerprint_with(burn_in=rows["cstr"]["burn_in"] + 1) != before
+    capped = fingerprint_with(burn_in=half)
+    assert fingerprint_with(burn_in=half + 1) == capped

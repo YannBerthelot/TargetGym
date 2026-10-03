@@ -27,6 +27,7 @@
       "max_steps_in_episode": 280
     },
     "tuned_gains_key": "plane",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -79,6 +80,9 @@
       "failure_cost": 206451200.0
     },
     "tuned_gains_key": "plane",
+    "gains_keys": [
+      "plane_cascaded"
+    ],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -130,6 +134,9 @@
       "failure_cost": 187257324.26303852
     },
     "tuned_gains_key": "plane",
+    "gains_keys": [
+      "plane_cascaded"
+    ],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -177,6 +184,7 @@
       "failure_cost": 297289728.0
     },
     "tuned_gains_key": "plane3d_heading",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -226,6 +234,7 @@
       "failure_cost": 297289728.0
     },
     "tuned_gains_key": "plane3d_circle",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -275,6 +284,7 @@
       "failure_cost": 297289728.0
     },
     "tuned_gains_key": "plane3d_racetrack",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -323,6 +333,7 @@
       "failure_cost": 88888888.8888889
     },
     "tuned_gains_key": "plane3d_figure8",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -367,6 +378,9 @@
       "max_steps_in_episode": 200
     },
     "tuned_gains_key": "patrol",
+    "gains_keys": [
+      "plane3d_heading"
+    ],
     "baselines_note": null,
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -405,6 +419,9 @@
       "max_steps_in_episode": 200
     },
     "tuned_gains_key": "patrol",
+    "gains_keys": [
+      "plane3d_heading"
+    ],
     "baselines_note": "The PID is a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator recovers it by differencing the estimated relative position and filtering. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its NEA measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed (oracle audit, 2026-10).",
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -441,6 +458,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "cstr",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -475,6 +493,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "first_order",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -509,6 +528,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "four_tank",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -543,6 +563,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "ph_neutralization",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "q2"
@@ -581,6 +602,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "distillation",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "zF"
@@ -619,6 +641,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "glass_furnace",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "m_pull_disturbance"
@@ -657,6 +680,7 @@
       "max_steps_in_episode": 864
     },
     "tuned_gains_key": "reactor",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -691,6 +715,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "hvac",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "weather_dev"
@@ -727,6 +752,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "cement_kiln",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "raw_meal"
@@ -765,6 +791,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "boiler_drum",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "q_steam"
@@ -803,6 +830,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "wind_turbine",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "v_wind"
@@ -841,6 +869,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "battery",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "target_power"

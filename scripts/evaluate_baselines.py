@@ -15,7 +15,8 @@ per step once it is holding, and what a target change costs it.
 
 Each row carries the same fingerprint as a recorded baseline
 (``provenance.baseline_fingerprint``: the environment's modules, the shared
-controller code, the gains and the parameter values), so a test can read the
+controller code, the gains, the parameter values and the burn-in the protocol
+scores from, the hold row's capped at half the episode), so a test can read the
 MPC's recorded cost instead of re-running the MPC, and refuse the row once the
 code it describes has moved. ``tests/test_reward_contract.py`` does that for the
 floor check.

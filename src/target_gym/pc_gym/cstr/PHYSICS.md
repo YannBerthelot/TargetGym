@@ -128,6 +128,19 @@ envelope and was nearly flat over any error a working controller produces.
 from the sampled setpoint. That is inherited from PC-gym and is why the shared
 conformance suite skips its PRNG-hygiene checks.
 
+**The oracle plans the rest of the episode.** Determinism and a 100-step
+episode make the plant's optimum computable, so the MPC slot holds it: an NLP
+over every remaining step, solved by IPOPT on `cstr_step_map`, the
+environment's own RK4 step written in CasADi (a test holds it equal to
+`step_env`), and re-solved from the true state every step. Its cost is the
+concentration's tracking term in floor units, with the steps of the
+protocol's 12-step burn-in weighted 1e-3. On the protocol seeds it scores 9.4e-9 per
+step with zero trips, and holds the target to float32 resolution once
+settled. It replaced, in the oracle audit (2026-10), PC-gym's 5-step do-mpc
+controller, whose move penalty, written against a cost in raw mol/L, was 1e4
+in floor units and alone made its 0.317 per step. `e_floor` is the analyser's
+resolution and `rho_floor` is 0, both documented minima, so neither moved.
+
 ---
 
 ## 5. Known deviations
@@ -188,7 +201,7 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1e-4 mol/L | documented minimum: the online composition analyser's resolution. No disturbance and a fixed target; the shipped MPC holds 1e-6 mol/L after settling (`scripts/measure_hold.py`, 283 hold steps after a 12-step burn-in; PID 7e-5). |
+| `e_floor` | 1e-4 mol/L | documented minimum: the online composition analyser's resolution. No disturbance and a fixed target; the MPC before the oracle audit (2026-10) held 1e-6 mol/L after settling (`scripts/measure_hold.py`, 283 hold steps after a 12-step burn-in; PID 7e-5), and the NLP that replaced it holds the target to float32 resolution (protocol hold cost 0). |
 | `e_tol` | 0 | no product specification band was supplied for the reactor concentration |
 | `tracking_exponent` | 2 | quadratic |
 | `failure_cost` | 1.8e7 | twice the span's cost, (0.3 / 1e-4)^2. **Never charged**: the plant cannot trip -- with the coolant pinned at either bound it settles between 318 and 329 K with C_a >= 0.83, inside the 300 / 350 K and 0.7 limits, which are documentation of the envelope |

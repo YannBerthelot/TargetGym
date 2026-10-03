@@ -409,9 +409,12 @@ what is broken and recorded rather than hidden.
 
 * [ ] **Derive the MPC error bands rather than choosing them one at a time.**
       Every MPC objective normalises its tracking error by a per-plant band:
-      `tracking_band` on the four-tank, the distillation column, the pH loop and
-      now the glass furnace, `power_band` on the turbine (its version-1 planner),
-      `comfort_band`, `lime_band`, `reward_band`. The surrogate is deliberate
+      `tracking_band` on the distillation column, the pH loop and now the
+      glass furnace, `power_band` on the turbine (its version-1 planner),
+      `comfort_band`, `lime_band`, `reward_band`. (The CSTR and four-tank
+      oracles track in floor units, `e_floor`, since the oracle audit
+      (2026-10). The four-tank's `tracking_band` has been unread since the
+      reward became log-scaled.) The surrogate is deliberate
       and measured -- the log-scaled reward's gradient decays like `1/e`, so the
       pull toward the setpoint is weakest where the controller is furthest from
       it, and a quadratic in the normalised error scored 341.9 against 172.1 for
