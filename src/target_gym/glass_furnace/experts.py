@@ -91,11 +91,14 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
     * **The loads are fed.** Plus the pull and charge above: 0.7271 mean, and
       better than the previous version on every seed.
     * **The offset-free correction is a heat-rate disturbance, not a
-      setpoint bias.** See ``step``. 0.1784 / 1.0547 / 0.1709, mean 0.4680:
-      42% below the previous version, and 40-48% below it on each seed, with
-      zero trips and zero solver failures. Keeping the setpoint bias and
-      adding anti-windup to it instead gave 0.2454 / 1.4248 / 0.3064 (mean
-      0.6589).
+      setpoint bias.** See ``step``. 0.1784 / 1.0547 / 0.1709, mean 0.4680
+      at the earlier 30-minute horizon: 42% below the previous version, and
+      40-48% below it on each seed, with zero trips and zero solver
+      failures. Keeping the setpoint bias and adding anti-windup to it
+      instead gave 0.2454 / 1.4248 / 0.3064 (mean 0.6589).
+    * **The horizon is one hour.** 0.1683 / 0.8449 / 0.1675, mean 0.3936:
+      51% below the previous version, better than the 30-minute horizon on
+      every seed (see ``make_glass_furnace_mpc``).
 
     What is left is mostly authority. On seed 1 a -5.5 K trim meets a low
     pull that puts the target below the crown's equilibrium at minimum fuel:
@@ -103,8 +106,9 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
     minimum and the crown still above target. On seeds 0 and 2 the running
     (fuel) term is 26% and 37% of the cost, and 35% and 64% of the tracking
     cost falls on steps with the fuel burning at its maximum and the crown
-    below target: the reversal dips. Some of seed 1's is lookahead,
-    though: see ``make_glass_furnace_mpc`` for a longer horizon.
+    below target: the reversal dips. Those shares were measured at the
+    30-minute horizon; the one-hour horizon took 20% off seed 1 by
+    pre-cooling earlier.
 
     The objective is a saturating surrogate of the reward's squared error
     (``_build_mpc``); it ignores the reward's running cost.
@@ -572,22 +576,21 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
 def make_glass_furnace_mpc(
     env,
     params,
-    horizon: int = 60,
+    horizon: int = 120,
     disturbance_gain: float = _FURNACE_DISTURBANCE_GAIN,
 ):
     """CasADi/IPOPT MPC for the GlassFurnace.
 
-    With delta_t = 30 s, horizon = 60 is 30 min of lookahead, about half the
-    crown's 3960 s (132-step) open-loop time constant. That is enough to see
-    each scheduled setpoint change and pre-cool or pre-heat for it, which a
-    PID cannot do.
+    With delta_t = 30 s, horizon = 120 is one hour of lookahead, about 0.9 of
+    the crown's 3960 s (132-step) open-loop time constant. That is enough to
+    see each scheduled setpoint change and pre-cool or pre-heat for it, which
+    a PID cannot do, and to start pre-cooling early enough for a large trim.
 
-    It is not enough to pre-cool fully for a large trim. ``horizon=120`` (one
-    hour) gave 0.1683 / 0.8449 / 0.1675 on protocol seeds 0-2, mean 0.3936,
-    against 0.4680 at 60: better on every seed, mostly seed 1 (-20%), where
-    it starts pre-cooling earlier. It costs 1.7 to 1.9 times the solve time,
-    on every recording of this task and on the long-run hold measurement
-    that sets its floor, so 60 stays the default.
+    Measured in the oracle audit (2026-10) on protocol seeds 0-2: 0.1683 /
+    0.8449 / 0.1675, mean 0.3936, against 0.1784 / 1.0547 / 0.1709 (mean
+    0.4680) at 30 minutes (horizon 60): better on every seed, mostly seed 1
+    (-20%), where it starts pre-cooling earlier. It costs 1.7 to 1.9 times
+    the solve time of the 30-minute horizon.
 
     ``disturbance_gain`` is the gain of the crown heat-rate estimate
     (``GlassFurnaceCasadiMPC.step``). The result is flat in it: 0.05 gave

@@ -80,9 +80,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "glass_furnace-v2": {
-    "fingerprint": "b0db207df01003ab",
-    "note": "rho_floor and rho_floor_tracking follow the better oracle (oracle audit, glass furnace oracle applies its first free move, plans on the known loads and estimates a crown heat-rate disturbance): the NEA reference only, read by the evaluator and no reward or glass furnace controller, so behaviour is unchanged",
-    "stamped": "2026-10-03T11:01:50+00:00"
+    "fingerprint": "80414a1262d52d76",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured hold of the one-hour-horizon oracle (oracle audit, 2026-10): the NEA reference only. No reward reads it and the CasADi oracle does not either, so behaviour is unchanged; e_floor stays the 1 K thermocouple resolution",
+    "stamped": "2026-10-03T20:51:34+00:00"
   },
   "hvac-v1": {
     "fingerprint": "5c8e38a6b643c717",

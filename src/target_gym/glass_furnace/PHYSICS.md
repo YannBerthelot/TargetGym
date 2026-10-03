@@ -242,8 +242,8 @@ has no ultimate gain or period to extract — the same failure mode as FourTank.
 **The MPC (oracle audit, 2026-10-03).** The oracle is a CasADi model of the
 plant: two checker nodes per chamber against the plant's four, the flame solved
 algebraically, and the target schedule, the reversal, its firing dip and the
-fuel already in the pipeline fed over a 60-step (30 min) horizon. The audit
-changed three things in it.
+fuel already in the pipeline fed over a 120-step (one hour) horizon, doubled
+from 30 minutes. The audit also changed three things in it.
 
 * It applies the first input the plan can move. The first two intervals burn
   the pipeline, so the plan's inputs there never reach its dynamics, and the
@@ -262,16 +262,19 @@ changed three things in it.
   and the estimate settles at +0.14 to +0.19 K a step.
 
 On the protocol seeds 0-2 the cost per step went from 0.300 / 1.783 / 0.326 to
-0.178 / 1.055 / 0.171 (mean 0.803 to 0.468, `scripts/evaluate_baselines.py`),
-with zero trips and zero solver failures. What is left is mostly authority: on
-seed 1 a -5.5 K trim meets a low pull, and 0.82 of its 1.05 per step is spent
-with the fuel at its minimum and the crown still above target. A one-hour
-horizon (`horizon=120`) gave 0.168 / 0.845 / 0.167 (mean 0.394) at 1.7 to 1.9
-times the solve time, on every recording and on the long-run hold measurement,
-so the default stays at 60. Its long-run hold is 0.089 / 0.103 / 0.114 K per
-seed, against 0.192 / 0.175 / 0.228 K before, so the NEA reference follows it:
-`rho_floor = rho_floor_tracking = (0.0894 / 1)^2`, from `(0.175 / 1)^2` (see the
-reward table below; `e_floor` stays the 1 K thermocouple resolution).
+0.168 / 0.845 / 0.167 (mean 0.803 to 0.394, `scripts/evaluate_baselines.py`),
+with zero trips and zero solver failures; the three changes at the old
+30-minute horizon gave 0.178 / 1.055 / 0.171 (mean 0.468), and the hour
+mostly helps seed 1, where it starts pre-cooling earlier. What is left is
+mostly authority: on seed 1 a -5.5 K trim meets a low pull, and the fuel
+spends much of the window at its minimum with the crown still above target.
+A solve takes 1.7 to 1.9 times as long as at 30 minutes. Over the ten
+baseline seeds the episode cost falls 37-53% on every seed (0.494 to 0.274 per
+step), with none of 16 000 solves failed or capped. The long-run hold is
+0.061 / 0.077 / 0.088 K per seed, against 0.192 / 0.175 / 0.228 K before, so
+the NEA reference follows it: `rho_floor = rho_floor_tracking = (0.0614 / 1)^2`,
+from `(0.175 / 1)^2` (see the reward table below; `e_floor` stays the 1 K
+thermocouple resolution).
 
 ---
 
@@ -318,7 +321,7 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1.0 K (the MPC holds 0.0894) | the lowest per-seed long-run mean \|crown error\| the shipped MPC held under the shipped pull disturbance (`scripts/measure_hold.py`, 3600 hold steps after a 10 800-step burn-in; seeds 0.089 / 0.103 / 0.114 K, PID 0.49-0.52 K). The oracle of the oracle audit (2026-10-03); the one before it held 0.192 / 0.175 / 0.228 K. Per-seed minimum; upper bound Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
+| `e_floor` | 1.0 K (the MPC holds 0.0614) | the lowest per-seed long-run mean \|crown error\| the shipped MPC held under the shipped pull disturbance (`scripts/measure_hold.py`, 3600 hold steps after a 10 800-step burn-in; seeds 0.061 / 0.077 / 0.088 K, PID 0.49-0.52 K). The oracle of the oracle audit (2026-10-03); the one before it held 0.192 / 0.175 / 0.228 K. Per-seed minimum; upper bound Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
 | `e_tol` | 0 | the crown temperature target has no band |
 | `tracking_exponent` | 2 | quadratic |
 | `c_hold` | 0.590 kg/s | fuel flow while holding (`scripts/measure_hold.py`) |

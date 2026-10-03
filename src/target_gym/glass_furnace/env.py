@@ -275,9 +275,9 @@ class GlassFurnaceParams(EnvParams):
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # Floor: the 1 K crown thermocouple resolution. The shipped MPC's long-run
     # mean |crown error| under the shipped pull disturbance sits below it:
-    # 0.0894 K (the lowest of three seeds: 0.089 / 0.103 / 0.114; PID
+    # 0.0614 K (the lowest of three seeds: 0.061 / 0.077 / 0.088; PID
     # 0.49-0.52) over 3600 hold steps (30 h) after a 10 800-step (90 h)
-    # burn-in, stationary across the window (0.109 / 0.095 K halves),
+    # burn-in, about stationary across the window (0.086 / 0.065 K halves),
     # `scripts/measure_hold.py`. That is the oracle of the oracle audit
     # (2026-10-03); the one before it held 0.175 K. An upper bound on the
     # achievable floor. Fuel above the hold-phase flow (0.590 kg/s, the same
@@ -285,7 +285,7 @@ class GlassFurnaceParams(EnvParams):
     # supplied). A trip costs twice the reachable crown excursion's cost per
     # step, 2 x (183 / 1)^2.
     reward_version: int = 2
-    # The MPC holds 0.0894 K in the shipped disturbance, below the 1 K thermocouple
+    # The MPC holds 0.0614 K in the shipped disturbance, below the 1 K thermocouple
     # resolution: the instrument sets the scale (a hold it cannot see is not a floor).
     e_floor: float = 1.0  # K
     e_tol: float = 0.0
@@ -300,10 +300,10 @@ class GlassFurnaceParams(EnvParams):
     #: weeks, 40 320 steps at 30 s (provisional).
     restart_steps: int = 40320
     #: The NEA reference: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (the MPC's 0.0894 K hold in 1 K
+    #: demonstrated, in the reward's units (the MPC's 0.0614 K hold in 1 K
     #: units; 0.175 K before the oracle audit, 2026-10-03).
-    rho_floor_tracking: float = (0.0894 / 1.0) ** 2
-    rho_floor: float = (0.0894 / 1.0) ** 2
+    rho_floor_tracking: float = (0.0614 / 1.0) ** 2
+    rho_floor: float = (0.0614 / 1.0) ** 2
     floor_is_documented_minimum: bool = False
 
 

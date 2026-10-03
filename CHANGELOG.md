@@ -86,20 +86,19 @@ than by commit.
   up to -22 K with the fuel at its minimum and was dropped at every trim. The
   plant runs about 0.15 K a step hotter than the reduced model, and the
   estimate settles there. The factory's `bias_gain` and
-  `bias_reset_on_setpoint` keywords are replaced by `disturbance_gain`. On
-  the protocol seeds the cost falls from 0.300 / 1.783 / 0.326 to 0.178 /
-  1.055 / 0.171 per step (mean 0.803 to 0.468, -42%), with zero trips and no
-  solver failure, matching the oracle audit's measurement (2026-10) to every
-  digit. Over the ten baseline seeds the episode cost falls 34-49% on every
-  seed (0.494 to 0.294 per step), with zero trips; one of the 16 000 solves
-  stopped at IPOPT's iteration cap and was applied, as capped solves are (two
-  records on differently loaded runs matched bit for bit, so it is not the
-  CPU-time cap). A one-hour horizon gave a mean of
-  0.394 at 1.7 to 1.9 times the solve time and is left as an option
-  (`horizon=120`). The NEA floor follows the better oracle: its long-run hold
-  is 0.089 / 0.103 / 0.114 K per seed (`scripts/measure_hold.py`, against
-  0.192 / 0.175 / 0.228), so `rho_floor = rho_floor_tracking = (0.0894 / 1.0)^2`,
-  from 0.0306, and the NEA is 0.779 (0.625 before). `e_floor` is the 1 K
+  `bias_reset_on_setpoint` keywords are replaced by `disturbance_gain`, and
+  the horizon doubles to one hour (120 steps), which lets it start
+  pre-cooling early enough for a large trim. On the protocol seeds the cost
+  falls from 0.300 / 1.783 / 0.326 to 0.168 / 0.845 / 0.167 per step (mean
+  0.803 to 0.394, -51%; the same changes at the old 30-minute horizon gave
+  0.468), with zero trips and no solver failure, matching the oracle audit's
+  measurement (2026-10) to every digit. Over the ten baseline seeds the
+  episode cost falls 37-53% on every seed (0.494 to 0.274 per step), with zero
+  trips and none of 16 000 solves failed or capped. A solve takes 1.7 to 1.9
+  times as long as at 30 minutes. The NEA floor follows the better oracle: its
+  long-run hold is 0.061 / 0.077 / 0.088 K per seed (`scripts/measure_hold.py`,
+  against 0.192 / 0.175 / 0.228), so `rho_floor = rho_floor_tracking =
+  (0.0614 / 1.0)^2`, from 0.0306, and the NEA is 0.813 (0.625 before). `e_floor` is the 1 K
   thermocouple resolution and does not move, nothing behavioural reads
   `rho_floor`, so `glass_furnace-v2` is re-stamped in place. The spec now
   declares `noise_fields=("m_pull_noise_std",)`, which the registry test
