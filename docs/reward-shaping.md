@@ -153,7 +153,7 @@ negative below PID. `rho*` is the lowest per-seed hold cost the reference
 controller demonstrated, in the reward's units: the sum over tracked terms of
 `(hold / e_floor)^p`, which is 1 per term where the floor is that hold and
 less where the floor is clamped at the instrument resolution (the glass
-furnace's MPC holds 0.175 K against a 1 K scale, so `rho* = 0.03`). Where a
+furnace's MPC holds 0.0894 K against a 1 K scale, so `rho* = 0.008`). Where a
 floor was kept within 1.5x of a re-measured hold rather than reset (the
 oracle audit's rule), its term is near 1 but not 1: the boiler's level term is
 0.84 and its pressure term 1.08, so its `rho* = 1.92`; the wind turbine's
@@ -232,7 +232,7 @@ the evaluator measures.
 | `hvac` | p=2, dead-zone | overheating-bound; MPC reference | +-0.5 K occupied; night lower bound only (provisional) | gas EUR 0.10/kWh, in full | EUR per step; comfort EUR 0.03/K^2 h (provisional; restarts in place) |
 | `battery` | p=1 | 1596 W (closed form) | 0 | fade above hold at $300/kWh of capacity | $ per step, imbalance $100/MWh |
 | `wind_turbine` | p=1 | 1680 W (an earlier oracle's lowest per-seed hold, upper bound; the current one holds 1454 W) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $100/MWh (provisional) |
-| `glass_furnace` | p=2 | 1 K (thermocouple resolution; the MPC holds 0.175) | 0 | fuel above hold, w=1 | dimensionless |
+| `glass_furnace` | p=2 | 1 K (thermocouple resolution; the MPC holds 0.0894) | 0 | fuel above hold, w=1 | dimensionless |
 | `cement_kiln` | p=2 | 5e-4 (assay resolution; the MPC holds 4.9e-5) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
 | `boiler_drum` | p=2 x2 | 2.7 mm level (an earlier oracle's lowest per-seed hold; the current one holds 2.45 mm), 0.05 bar (transmitter resolution; the MPC holds 0.052) | 0 | fuel above hold, w=1 | dimensionless |
 | `distillation` | p=2 x2 | 1e-4 / 1e-4 (analyser resolution; the MPC holds 7.6e-7 / 5.2e-7) | 0 (provisional) | boilup above hold, w=1 | dimensionless |

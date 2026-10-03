@@ -8,7 +8,8 @@ Investigation only. Nothing in this report has been implemented, and no
 environment, baseline or test was modified to produce it. It describes the
 planners as they were then: the oracle audit (2026-10) has since changed some
 of them, for example the pH planner now forecasts the buffer flow from the
-state instead of assuming its nominal value.
+state instead of assuming its nominal value, and the glass furnace's plans on
+the pull rate's conditional mean, read from the state.
 
 ## 1. Verdict
 

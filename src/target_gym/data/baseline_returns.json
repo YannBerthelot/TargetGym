@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "generated": "2026-10-02T22:03:31+00:00",
+    "generated": "2026-10-03T11:20:04+00:00",
     "note": "Regenerate with scripts/record_baselines.py when a test reports a stale fingerprint. Commit the result with the change that invalidated it.",
     "seeds": 10
   },
@@ -269,18 +269,18 @@
     "steps": 500
   },
   "glass_furnace": {
-    "fingerprint": "6203042d7a066474",
+    "fingerprint": "45801f04fa8103d5",
     "mpc_returns": [
-      -706.407511,
-      -1588.599734,
-      -848.672617,
-      -384.160311,
-      -1089.348495,
-      -1178.058314,
-      -514.936892,
-      -468.249398,
-      -632.01852,
-      -498.120381
+      -385.797098,
+      -946.49311,
+      -546.515109,
+      -197.459228,
+      -668.641034,
+      -776.314128,
+      -296.234257,
+      -252.869593,
+      -367.135241,
+      -264.556739
     ],
     "mpc_trips": 0,
     "pid_returns": [
@@ -295,12 +295,12 @@
       -1679.69486,
       -1681.707136
     ],
-    "seconds": 3371.1,
+    "seconds": 1075.1,
     "seeds": 10,
     "solver_calls": 16000,
-    "solver_capped": 0,
-    "solver_failures": 0,
-    "solver_mean_iters": 16.8,
+    "solver_capped": 1,
+    "solver_failures": 1,
+    "solver_mean_iters": 15.9,
     "steps": 1600
   },
   "hvac": {

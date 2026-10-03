@@ -324,11 +324,13 @@ what is broken and recorded rather than hidden.
       the plant, and the glass furnace's has now diverged from its environment
       three separate times: an error band inherited from a deleted reward, a
       regenerator coarsened without the observation changing, and batch charging
-      the controller does not know is pulsed. Nothing detects any of that. The
-      fix is a conformance check per environment: step both models from the same
-      state under the same input and assert the one-step predictions agree to a
-      stated tolerance, so a divergence is a test failure rather than a slow
-      loss of baseline quality.
+      the controller did not know was pulsed (until the oracle audit, 2026-10,
+      fed it the charge; the plant still runs about 0.15 K a step hotter than
+      the controller's model, which the oracle now estimates online). Nothing
+      detects any of that. The fix is a conformance check per environment: step
+      both models from the same state under the same input and assert the
+      one-step predictions agree to a stated tolerance, so a divergence is a
+      test failure rather than a slow loss of baseline quality.
 
 * [x] **A check for code that has drifted from its own documentation.**
       These contracts are what a reader consults *instead of* the code, so a

@@ -80,9 +80,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "glass_furnace-v2": {
-    "fingerprint": "b959053b92f7ef26",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "b0db207df01003ab",
+    "note": "rho_floor and rho_floor_tracking follow the better oracle (oracle audit, glass furnace oracle applies its first free move, plans on the known loads and estimates a crown heat-rate disturbance): the NEA reference only, read by the evaluator and no reward or glass furnace controller, so behaviour is unchanged",
+    "stamped": "2026-10-03T11:01:50+00:00"
   },
   "hvac-v1": {
     "fingerprint": "5c8e38a6b643c717",

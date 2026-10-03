@@ -22,12 +22,18 @@ except ImportError:  # CasadiMPC refuses to build without them
 # ---------------------------------------------------------------------------
 
 
-# Integral gain and clamp for the furnace's offset-free correction, in kelvin.
-# The gain is deliberately slow against a 3960 s open-loop time constant: this
-# has to remove a standing offset over hundreds of steps, not chase noise.
-_FURNACE_BIAS_GAIN = 0.05
-_FURNACE_BIAS_LIMIT = 40.0
-_FURNACE_BIAS_RESET = True
+#: Gain of the crown heat-rate disturbance estimate: the fraction of each
+#: step's one-step crown prediction error folded into the estimate. 0.02 is a
+#: 50-step time constant, against the crown's 132. The error it averages is
+#: small and clean (standard deviation 0.01 to 0.03 K a step on protocol seed
+#: 0, alternating with the reversal half cycle) next to the mismatch it
+#: estimates: over the scored window of protocol seeds 0-2 the estimate sat
+#: between +0.14 and +0.19 K a step (means 0.169 / 0.150 / 0.172). The plant
+#: runs hotter than this reduced model on every seed.
+_FURNACE_DISTURBANCE_GAIN = 0.02
+#: Clamp on that estimate, in K/s (0.6 K a step, more than three times the
+#: largest value measured), so a bad solve cannot run it away.
+_FURNACE_DISTURBANCE_LIMIT = 0.02
 
 
 #: Checker nodes per chamber in the *controller's* regenerator model. The plant
@@ -52,29 +58,56 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
     """
     CasADi MPC for the regenerative glass furnace.
 
-    Prediction model (7 states): ``[T_crown, T_melt, T_work, m_batch,
-    T_regen_hot, T_regen_mid, T_regen_cold]``, plus the flame temperature as
-    an *algebraic* variable.
+    Prediction model (8 states): ``[T_crown, T_melt, T_work, m_batch]`` and
+    both regenerator chambers at two checker nodes each, plus the flame
+    temperature as an *algebraic* variable. The plant has four nodes per
+    chamber; ``_extract_x0`` averages them in pairs.
 
-    Deliberately a reduced model of the 11-state plant, and the reductions are
-    chosen so the controller still sees everything that sets the crown's
-    response to fuel:
+    What the controller knows ahead of time, as time-varying parameters over
+    the horizon:
 
-    * **The regenerator is kept**, collapsed from two alternating 4-node
-      chambers to one 3-node stack at the cycle average. Air preheat supplies
-      ~40 % of the useful heat input, so a controller blind to it mis-predicts
-      the steady-state gain badly -- the same mistake the reactor MPC made by
-      dropping xenon.
-    * **The reversal cycle is averaged out.** Its 25 min period is well inside
-      the 30 min horizon and it is a known, autonomous oscillation the
-      controller cannot influence; predicting its phase buys nothing.
-    * **The flame is algebraic**, matching the plant's quasi-steady treatment,
-      so no stiff fast state enters the NLP.
-    * **The batch blanket is kept** because its shielding sets how much
-      radiation reaches the glass, which is strongly pull-rate dependent.
+    * the target schedule, so it pre-moves before a scheduled step;
+    * the reversal: which chamber preheats the air, and the firing dip while
+      the valves change over, both deterministic in time;
+    * the fuel already in the pipeline, which fixes the first
+      ``FUEL_DEAD_TIME_STEPS`` intervals of every plan;
+    * the loads: the pull at its AR(1) conditional mean, ``m_pull + rho^(k+1)
+      d_t`` with ``d_t`` read from the state, and the pulsed batch charge
+      ``charge_rate_now`` at that pull. Both are what the plant applies, on
+      the mean;
+    * a heat-rate disturbance on the crown, estimated online (see ``step``).
 
-    The setpoint schedule enters as a time-varying parameter so the MPC
-    anticipates step changes -- the advantage PID structurally cannot have.
+    Three things changed in the oracle audit (2026-10). The numbers are the
+    protocol's window cost per step on seeds 0-2 (``eval.evaluate_controller``
+    after its 800-step burn-in, as ``scripts/evaluate_baselines.py`` records
+    it; lower is better), against 0.2996 / 1.7834 / 0.3263 (mean 0.8031) for
+    the previous version:
+
+    * **The applied input is the first one the plan can move.** The first
+      ``FUEL_DEAD_TIME_STEPS`` intervals burn the pipeline, so do-mpc's u_0
+      and u_1 never enter the predicted dynamics, and only the move penalty
+      set them: the plant received ``u_prev + (u_2 - u_prev)/3``, a filter
+      the plan did not model. Applying ``u_2``: 0.7327 mean.
+    * **The loads are fed.** Plus the pull and charge above: 0.7271 mean, and
+      better than the previous version on every seed.
+    * **The offset-free correction is a heat-rate disturbance, not a
+      setpoint bias.** See ``step``. 0.1784 / 1.0547 / 0.1709, mean 0.4680:
+      42% below the previous version, and 40-48% below it on each seed, with
+      zero trips and zero solver failures. Keeping the setpoint bias and
+      adding anti-windup to it instead gave 0.2454 / 1.4248 / 0.3064 (mean
+      0.6589).
+
+    What is left is mostly authority. On seed 1 a -5.5 K trim meets a low
+    pull that puts the target below the crown's equilibrium at minimum fuel:
+    0.82 of its 1.05 per window step is spent with the fuel burning at its
+    minimum and the crown still above target. On seeds 0 and 2 the running
+    (fuel) term is 26% and 37% of the cost, and 35% and 64% of the tracking
+    cost falls on steps with the fuel burning at its maximum and the crown
+    below target: the reversal dips. Some of seed 1's is lookahead,
+    though: see ``make_glass_furnace_mpc`` for a longer horizon.
+
+    The objective is a saturating surrogate of the reward's squared error
+    (``_build_mpc``); it ignores the reward's running cost.
     """
 
     SCALING = {
@@ -93,7 +126,9 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         p = self.params
         from target_gym.glass_furnace.env import (
             FUEL_DEAD_TIME_STEPS,
+            M_PULL_AR_RHO,
             N_SETPOINTS,
+            charge_rate_now,
             firing_fraction,
         )
 
@@ -109,17 +144,15 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         T_melt = model.set_variable("_x", "T_melt")
         T_work = model.set_variable("_x", "T_work")
         m_batch = model.set_variable("_x", "m_batch")
-        # Both regenerator chambers, at the plant's own node count. The MPC is
-        # presented as an upper bound, so it is entitled to the plant's model as
-        # well as its state -- it already reads the true state in _extract_x0.
-        # The previous version collapsed these two alternating four-node
-        # chambers onto one three-node stack "at the cycle average", which is
-        # exact only if everything downstream is linear in these temperatures.
-        # It is not: measured by check 13 of the model review checklist, the
-        # plant ran +0.0275 K per control interval hotter than that model,
-        # one-signed on 71% of settled steps, and multiplied by the crown's
-        # 132-step time constant that is the 2-6 K standing offset which put
-        # this MPC 16% behind its own PID.
+        # Both regenerator chambers, at two nodes each against the plant's
+        # four (see ``_FURNACE_MPC_REGEN_NODES``). An earlier version collapsed
+        # the two alternating chambers onto one stack "at the cycle average",
+        # which is exact only if everything downstream is linear in these
+        # temperatures. It is not: measured by check 13 of the model review
+        # checklist, the plant ran +0.0275 K per control interval hotter than
+        # that model, one-signed on 71% of settled steps, and multiplied by the
+        # crown's 132-step time constant that is the 2-6 K standing offset
+        # which put this MPC 16% behind its own PID.
         from target_gym.glass_furnace.env import N_REGEN_NODES
 
         n_regen = _FURNACE_MPC_REGEN_NODES
@@ -130,9 +163,9 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         model.set_variable("_tvp", "target_T_crown")
         # Firing actually released, as a fraction of commanded: 1 away from a
         # reversal, near zero while the valves change over. Deterministic in
-        # time and therefore known to the controller, which is the point of
-        # modelling it -- the dip is a periodic upset a predictive controller
-        # can plan through and a PID can only react to.
+        # time and therefore known to the controller: the dip is a periodic
+        # upset a predictive controller can plan through and a PID can only
+        # react to.
         firing = model.set_variable("_tvp", "firing")
         # Fuel already in the pipeline. The plant applies what was commanded
         # FUEL_DEAD_TIME_STEPS ago, so the first intervals of any plan are
@@ -143,6 +176,17 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         # The reversal is a deterministic function of time, so the oracle knows
         # it exactly rather than averaging it away. 0 -> A preheats air.
         a_is_air = model.set_variable("_tvp", "a_is_air")
+        # The loads, on the mean. The pull is the nominal pull plus the AR(1)
+        # disturbance's conditional mean, rho^(k+1) d_t with d_t read from the
+        # state; the batch charge is the pusher's step-averaged pulse train at
+        # that pull (``charge_rate_now``), a pure function of time. Both used
+        # to be the nominal pull and a continuous charge, and a setpoint bias
+        # absorbed the difference.
+        m_pull_k = model.set_variable("_tvp", "m_pull_k")
+        charge_k = model.set_variable("_tvp", "charge_k")
+        # Heat-rate disturbance on the crown, K/s, constant over the horizon.
+        # Estimated in ``step``.
+        q_crown = model.set_variable("_tvp", "q_crown")
 
         m_fuel_free = p.fuel_min + 0.5 * (u_raw + 1.0) * (p.fuel_max - p.fuel_min)
         m_fuel = firing * (commit * u_committed + (1.0 - commit) * m_fuel_free)
@@ -240,7 +284,8 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
 
         model.set_rhs(
             "T_crown",
-            (Q_rad_gc + Q_conv_gc - Q_rad_cm - Q_rad_cw - Q_wall_c) / p.C_crown,
+            (Q_rad_gc + Q_conv_gc - Q_rad_cm - Q_rad_cw - Q_wall_c) / p.C_crown
+            + q_crown,
         )
         model.set_rhs(
             "T_melt",
@@ -250,7 +295,7 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
                 + Q_rad_cm
                 - Q_wall_m
                 - melt_rate * p.dH_fusion
-                + p.m_pull * cp_melt * (p.T_batch_in - T_melt)
+                + m_pull_k * cp_melt * (p.T_batch_in - T_melt)
             )
             / (p.C_melt * cp_melt / p.c_p_glass_a),
         )
@@ -262,11 +307,11 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
                 + Q_rad_cw
                 - Q_wall_w
                 - Q_cool_w
-                + p.m_pull * cp_work * (T_melt - T_work)
+                + m_pull_k * cp_work * (T_melt - T_work)
             )
             / (p.C_work * cp_work / p.c_p_glass_a),
         )
-        model.set_rhs("m_batch", p.m_pull / p.batch_yield - melt_rate)
+        model.set_rhs("m_batch", charge_k - melt_rate)
         for i in range(n_regen):
             model.set_rhs(
                 f"T_rA{i}",
@@ -335,12 +380,12 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         default_target = float(sum(p.target_T_crown_range) / 2.0)
         self._target_schedule = np.full(N_SETPOINTS, default_target)
         self._current_step = 0
-        self._bias = 0.0
-        self._bias_slot = -1
-        # Overridden by make_glass_furnace_mpc; defaults here so a directly
+        self._pull_disturbance = 0.0
+        self._q_crown = 0.0
+        self._pred_crown = None
+        # Overridden by make_glass_furnace_mpc; a default here so a directly
         # constructed instance still behaves.
-        self._bias_gain = _FURNACE_BIAS_GAIN
-        self._bias_reset = _FURNACE_BIAS_RESET
+        self._q_gain = _FURNACE_DISTURBANCE_GAIN
         self._max_steps = int(p.max_steps_in_episode)
         self._n_setpoints = int(N_SETPOINTS)
         p_rev = float(p.reversal_period)
@@ -354,7 +399,7 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
                     self._n_setpoints - 1,
                 )
                 tvp_tpl["_tvp", k, "target_T_crown"] = float(
-                    self._target_schedule[slot] + self._bias
+                    self._target_schedule[slot]
                 )
                 # The reversal is deterministic in time, so the oracle supplies
                 # its exact phase across the whole horizon rather than averaging
@@ -362,6 +407,18 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
                 cycles = (future * self.mpc_dt) / p_rev
                 tvp_tpl["_tvp", k, "a_is_air"] = float(1.0 - (np.floor(cycles) % 2.0))
                 tvp_tpl["_tvp", k, "firing"] = float(firing_fraction(future, p, xp=np))
+                # Interval k runs from t+k to t+k+1, and the plant draws that
+                # interval's pull after one more AR(1) step, so its mean is
+                # rho^(k+1) d_t. Same 0.1 kg/s floor as the plant.
+                m_pull = max(
+                    float(p.m_pull) + M_PULL_AR_RHO ** (k + 1) * self._pull_disturbance,
+                    0.1,
+                )
+                tvp_tpl["_tvp", k, "m_pull_k"] = m_pull
+                tvp_tpl["_tvp", k, "charge_k"] = float(
+                    charge_rate_now(m_pull, future, p, xp=np)
+                )
+                tvp_tpl["_tvp", k, "q_crown"] = float(self._q_crown)
                 # The first FUEL_DEAD_TIME_STEPS intervals burn what is already
                 # in the pipeline. Beyond that the optimiser decides.
                 committed = k < len(self._pipeline)
@@ -419,14 +476,14 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         )
 
     def reset(self):
-        """Clear the offset-free bias as well as the warm start.
+        """Clear the disturbance estimate as well as the warm start.
 
-        Without this the bias earned on one episode is carried into the next,
-        where it is a standing setpoint error rather than a correction.
+        Without this the estimate earned on one episode is carried into the
+        next, where it starts from another plant state.
         """
         super().reset()
-        self._bias = 0.0
-        self._bias_slot = -1
+        self._q_crown = 0.0
+        self._pred_crown = None
 
     def _update_setpoint(self, state):
         self._target_schedule = np.asarray(state.target_schedule, dtype=float)
@@ -435,66 +492,107 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
         # decided now. An upper-bound controller reads the true state, and this
         # is part of it.
         self._pipeline = np.asarray(state.fuel_pipeline, dtype=float)
+        # The pull disturbance is in the state too; its future innovations are
+        # not, so the plan uses its conditional mean (see ``tvp_fun``).
+        self._pull_disturbance = float(state.m_pull_disturbance)
 
-        # Offset-free correction. ``_extract_x0`` collapses the plant's two
-        # four-node regenerator chambers onto the model's three nodes by
-        # averaging, which is a deliberate model reduction and therefore a
-        # structural plant-model mismatch. A finite-horizon MPC with mismatch
-        # settles with a steady-state offset; a PID's integrator does not, and
-        # over a long episode that is the whole difference between them.
-        #
-        # Measured on a 1600-step episode before this existed: for the first
-        # half of the episode the two are indistinguishable, both still
-        # approaching, and from the sixth decile the PID converges to 0.0-0.5 K
-        # of error while the MPC plateaus at 2-6 K. Per step that was 0.619
-        # against the PID's 0.765 -- a 19% shortfall that the previous 240-step
-        # episode was far too short to see, since it ended while both were still
-        # on their way.
-        #
-        # The remedy is the textbook one: integrate the measured tracking error
-        # into a bias and shift the setpoint the solver is given, which is the
-        # disturbance model of offset-free MPC in its simplest form. The gain is
-        # small relative to the plant's 3960 s time constant, and the bias is
-        # clamped so a saturated actuator cannot wind it up.
-        slot = min(
-            (self._current_step * self._n_setpoints) // self._max_steps,
-            self._n_setpoints - 1,
-        )
-        # The bias absorbs model *gain* error as well as a standing disturbance,
-        # and gain error is specific to an operating point. Carrying it across a
-        # setpoint change applies the previous target's correction to the new
-        # one: measured, that put an 11.4 K excursion into the decile after a
-        # schedule step, worse there than having no bias at all. So it is
-        # dropped when the schedule moves, and re-earned.
-        if self._bias_reset and slot != self._bias_slot:
-            self._bias_slot = slot
-            self._bias = 0.0
-        self._bias_slot = slot
-        error = float(self._target_schedule[slot]) - float(state.T_crown)
-        self._bias = float(
-            np.clip(
-                self._bias + self._bias_gain * error,
-                -_FURNACE_BIAS_LIMIT,
-                _FURNACE_BIAS_LIMIT,
+    def step(self, _obs, state):
+        """One receding-horizon step: estimate, solve, apply the first free move.
+
+        **Offset-free correction.** The model is reduced (two checker nodes a
+        chamber against four, a flame solved continuously against the plant's
+        frozen per step, collocation against RK4), and a finite-horizon MPC
+        with a mismatched model settles with an offset. The plant runs hotter
+        than the model, about +0.15 K a step on the crown. That is estimated
+        here as a heat-rate disturbance on the crown balance: each step, the
+        crown the last solve predicted for now is compared with the crown
+        measured, and a fraction ``_q_gain`` of the difference is added to the
+        estimate, which the next plan carries over its whole horizon.
+
+        This replaces a setpoint bias that integrated the tracking error
+        (target minus crown) and shifted every future target by it. That bias
+        had three faults the measurement showed. It integrated against the
+        current slot while the plan pre-moved toward the next one, so it
+        pushed against anticipation (seed 1: from -0.55 to +0.65 K over the 30
+        steps before a -5.5 K trim). It wound up while the fuel sat at its
+        bound (seed 1: -22 K, holding fuel at minimum for about 90 steps after
+        the crown had fallen below target). And it was dropped at every slot
+        change and re-learned, though it sat at -0.6 to -1.6 K within every
+        slot on every seed, so each trim started with the model's offset
+        uncorrected. A prediction error does none of these: it does not see the
+        target, a saturated input is in the prediction, and the mismatch it
+        measures does not change at a trim, so it never resets.
+
+        **Applied input.** The plan's first ``FUEL_DEAD_TIME_STEPS`` inputs
+        never reach the predicted dynamics (those intervals burn the
+        pipeline), so the input applied is the plan's input at that index,
+        the first one that does. do-mpc's ``u_prev``, which its move penalty
+        compares the next plan with, is set to it. Returning do-mpc's u_0, as
+        the base class does, gave the plant ``u_prev + (u_2 - u_prev)/3``.
+        """
+        from target_gym.glass_furnace.env import FUEL_DEAD_TIME_STEPS
+
+        if self._pred_crown is not None:
+            e1 = float(state.T_crown) - self._pred_crown
+            self._q_crown = float(
+                np.clip(
+                    self._q_crown + self._q_gain * e1 / self.mpc_dt,
+                    -_FURNACE_DISTURBANCE_LIMIT,
+                    _FURNACE_DISTURBANCE_LIMIT,
+                )
             )
-        )
+        self._update_setpoint(state)
+        x0 = self._extract_x0(state)
+        m = self._mpc
+        if not self._initialized:
+            m.x0 = x0
+            m.set_initial_guess()
+            self._initialized = True
+        guess = self._save_guess()
+        m.make_step(x0)
+        ok = self._record_solve()
+        u = np.array(
+            m.opt_x_num["_u", FUEL_DEAD_TIME_STEPS, 0] * m._u_scaling
+        ).flatten()
+        if ok:
+            # The crown this plan predicts for the next step, for the next
+            # estimate. Node k of do-mpc's collocation grid is
+            # ``_x[k, scenario, -1]``.
+            self._pred_crown = float(
+                m.opt_x_num["_x", 1, 0, -1, "T_crown"] * m._x_scaling["T_crown"]
+            )
+        else:
+            u = self._fallback(guess, u)
+            self._pred_crown = None
+        m._u0.master = casadi.DM(u)
+        self._last_u = u
+        return float(np.clip(u, -1.0, 1.0)[0])
 
 
 def make_glass_furnace_mpc(
     env,
     params,
     horizon: int = 60,
-    bias_gain: float = _FURNACE_BIAS_GAIN,
-    bias_reset_on_setpoint: bool = _FURNACE_BIAS_RESET,
+    disturbance_gain: float = _FURNACE_DISTURBANCE_GAIN,
 ):
-    """CasADi/IPOPT MPC for the GlassFurnace (3-zone lumped thermal model).
+    """CasADi/IPOPT MPC for the GlassFurnace.
 
-    With delta_t=30 s, horizon=60 gives 30 min lookahead.  The crown thermal
-    time constant is ~15 min, so 2×τ of lookahead is enough to see the next
-    scheduled setpoint change and pre-cool / pre-heat accordingly (which PID
-    cannot do — that's the whole point of the schedule).
+    With delta_t = 30 s, horizon = 60 is 30 min of lookahead, about half the
+    crown's 3960 s (132-step) open-loop time constant. That is enough to see
+    each scheduled setpoint change and pre-cool or pre-heat for it, which a
+    PID cannot do.
+
+    It is not enough to pre-cool fully for a large trim. ``horizon=120`` (one
+    hour) gave 0.1683 / 0.8449 / 0.1675 on protocol seeds 0-2, mean 0.3936,
+    against 0.4680 at 60: better on every seed, mostly seed 1 (-20%), where
+    it starts pre-cooling earlier. It costs 1.7 to 1.9 times the solve time,
+    on every recording of this task and on the long-run hold measurement
+    that sets its floor, so 60 stays the default.
+
+    ``disturbance_gain`` is the gain of the crown heat-rate estimate
+    (``GlassFurnaceCasadiMPC.step``). The result is flat in it: 0.05 gave
+    1.0514 on seed 1 against 1.0547 at the default 0.02.
     """
     mpc = GlassFurnaceCasadiMPC(env, params, horizon=horizon)
-    mpc._bias_gain = float(bias_gain)
-    mpc._bias_reset = bool(bias_reset_on_setpoint)
+    mpc._q_gain = float(disturbance_gain)
     return mpc

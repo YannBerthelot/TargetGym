@@ -70,6 +70,42 @@ than by commit.
 
 ### Changed
 
+- **The glass furnace's oracle applies the move it plans, plans on the known
+  loads, and estimates its model error as a heat rate.** Three changes to its
+  CasADi MPC. It applies the plan's input at index `FUEL_DEAD_TIME_STEPS`, the
+  first one that reaches the predicted dynamics, and makes it do-mpc's
+  previous input; it applied the plan's first input, which the dead time
+  keeps out of the prediction and only the move penalty set, a third of the
+  way from the previous input to the one that mattered. It takes the pull at
+  its AR(1) conditional mean, read from the state, and the pulsed batch
+  charge at that pull as time-varying parameters, where it used the nominal
+  pull and a continuous charge. And a crown heat-rate disturbance, estimated
+  from the one-step prediction error (gain 0.02, clamped at 0.6 K a step,
+  never reset within an episode), replaces the setpoint bias, which integrated
+  the tracking error, pushed against the plan's anticipation of a trim, wound
+  up to -22 K with the fuel at its minimum and was dropped at every trim. The
+  plant runs about 0.15 K a step hotter than the reduced model, and the
+  estimate settles there. The factory's `bias_gain` and
+  `bias_reset_on_setpoint` keywords are replaced by `disturbance_gain`. On
+  the protocol seeds the cost falls from 0.300 / 1.783 / 0.326 to 0.178 /
+  1.055 / 0.171 per step (mean 0.803 to 0.468, -42%), with zero trips and no
+  solver failure, matching the oracle audit's measurement (2026-10) to every
+  digit. Over the ten baseline seeds the episode cost falls 34-49% on every
+  seed (0.494 to 0.294 per step), with zero trips; one of the 16 000 solves
+  stopped at IPOPT's iteration cap and was applied, as capped solves are (two
+  records on differently loaded runs matched bit for bit, so it is not the
+  CPU-time cap). A one-hour horizon gave a mean of
+  0.394 at 1.7 to 1.9 times the solve time and is left as an option
+  (`horizon=120`). The NEA floor follows the better oracle: its long-run hold
+  is 0.089 / 0.103 / 0.114 K per seed (`scripts/measure_hold.py`, against
+  0.192 / 0.175 / 0.228), so `rho_floor = rho_floor_tracking = (0.0894 / 1.0)^2`,
+  from 0.0306, and the NEA is 0.779 (0.625 before). `e_floor` is the 1 K
+  thermocouple resolution and does not move, nothing behavioural reads
+  `rho_floor`, so `glass_furnace-v2` is re-stamped in place. The spec now
+  declares `noise_fields=("m_pull_noise_std",)`, which the registry test
+  listed as pending; the oracle never rolls the simulator, so this changes
+  no number.
+
 - **The CSTR and four-tank oracles plan the rest of the episode.** A new
   shared class, `ShrinkingHorizonNLP` in `experts/mpc.py`, solves one NLP
   with IPOPT over every remaining step, on the environment's own discrete
