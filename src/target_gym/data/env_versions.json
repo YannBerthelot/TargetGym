@@ -80,9 +80,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "glass_furnace-v2": {
-    "fingerprint": "b959053b92f7ef26",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "80414a1262d52d76",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured hold of the one-hour-horizon oracle (oracle audit, 2026-10): the NEA reference only. No reward reads it and the CasADi oracle does not either, so behaviour is unchanged; e_floor stays the 1 K thermocouple resolution",
+    "stamped": "2026-10-03T20:51:34+00:00"
   },
   "hvac-v1": {
     "fingerprint": "5c8e38a6b643c717",

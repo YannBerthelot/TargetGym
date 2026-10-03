@@ -457,14 +457,16 @@ error, and that is what integrates into a standing offset.
     do_mpc.simulator.Simulator(mpc._mpc.model)   # integration_tool="idas" if
                                                  # the model has algebraic vars
 
-**What it finds here.** On the glass furnace the plant runs **+0.0275 K per
-control interval hotter than the model**, one-signed on 71% of settled steps.
+**What it finds here.** On the glass furnace, with the single-stack
+regenerator model of the time, the plant ran **+0.0275 K per control interval
+hotter than the model**, one-signed on 71% of settled steps.
 Per step that is nothing. Multiplied by the plant's own 132-step time constant
 it is **3.6 K** -- which is precisely the 2-6 K plateau the closed-loop deciles
 showed, so the mechanism is quantified rather than argued.
 
-**Why the reduction looked safe when it was written.** The reasoning is in the
-class docstring and is worth reading as a specimen. One bullet keeps the
+**Why the reduction looked safe when it was written.** The reasoning was in the
+class docstring (rewritten in the oracle audit, 2026-10), and the two bullets
+quoted here are worth reading as a specimen. One keeps the
 regenerator *because* "a controller blind to it mis-predicts the steady-state
 gain badly"; the next averages away the reversal cycle because "predicting its
 phase buys nothing". The second is true about *phase* and slides silently from

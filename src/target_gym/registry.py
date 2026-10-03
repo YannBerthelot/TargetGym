@@ -876,6 +876,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         tuned_gains_key="glass_furnace",
         disturbance_fields=("m_pull_disturbance",),
+        # The pull disturbance's AR(1) innovation. The CasADi oracle never rolls
+        # the simulator and plans on the pull's conditional mean, read from
+        # the state, so it could not see the innovation anyway; declared so no
+        # planner can.
+        noise_fields=("m_pull_noise_std",),
     ),
     EnvSpec(
         name="reactor",

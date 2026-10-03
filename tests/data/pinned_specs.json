@@ -650,7 +650,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "m_pull_noise_std"
+    ]
   },
   {
     "name": "reactor",

@@ -372,7 +372,6 @@ def test_every_oracle_lives_in_its_own_package():
 # Declaring it moves the task's baseline fingerprint, so each is declared when
 # that task is next re-recorded. This list only shrinks.
 _NOISE_NOT_YET_DECLARED = {
-    "glass_furnace": {"m_pull_noise_std"},
     "reactor": {"demand_sigma"},
     "hvac": {"T_out_noise_std"},
 }

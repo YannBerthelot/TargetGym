@@ -224,7 +224,8 @@ There are no learned parameters, so there is nothing that could be
 specific to an episode or a seed. What it has instead is a model, a horizon and
 solver settings, and an objective, all chosen once per environment the way a
 controller structure is. Between episodes it carries only a warm start, and on
-the glass furnace an offset-free bias integrator; `reset()` clears both. The
+the glass furnace its estimate of the crown's heat-rate disturbance; `reset()`
+clears both. The
 unstable CSTR's and the compressor's MPCs also keep the memory of the PID they
 fall back on, the turbine's feedback law its last speed error, the patrol
 oracle's law its copy of the lead's autopilot integrators, an along-track
@@ -259,8 +260,9 @@ parallelises across seeds; `plane_energy`, whose planner starts from and is
 guided by a PID rollout, records one process per seed, as do the patrol oracle
 and the 2D aircraft's handover oracle on `plane` and `plane_sine`.
 
-**`reset()` between episodes**, or the furnace's bias integrator carries a
-correction into an episode where it is a standing error.
+**`reset()` between episodes**, or the furnace's estimate of the crown's
+heat-rate disturbance, learned on one episode, is carried into the next, which
+starts from another plant state.
 
 And you may not need to run it at all: `src/target_gym/data/baseline_returns.json` holds ten
 seeds of both baselines per environment, on the same episodes an agent is
@@ -329,7 +331,8 @@ Every planner's entry point is `step(obs, state)` with `obs` ignored, and
 `runners.mpc_policy` hands it the state object. So on the pH CSTR the MPC reads
 the reaction invariants `Wa` and `Wb` and the buffer-flow disturbance `q2`; on
 the glass furnace it reads the glass
-and checker temperatures and the pull-rate disturbance; on the reactor it reads
+and checker temperatures and the pull-rate disturbance, whose conditional mean
+it plans on; on the reactor it reads
 the xenon and iodine inventories and the fuel temperature. Those are exactly
 the quantities each environment hides on purpose, and several environments are
 built as genuine POMDPs on the strength of that. The PID, and any learned
@@ -347,8 +350,10 @@ whose noise was not declared had its planner simulate one fixed noise path
 instead, exactly the plant's own on protocol seed 0 and a wrong one on every
 other seed. The last three (boiler, kiln, distillation) were fixed in the
 oracle audit (2026-10), and a registry test now requires every non-zero noise
-amplitude to be declared, except on the glass furnace, reactor and HVAC, whose
-CasADi oracles never roll the simulator and which the test lists as pending.
+amplitude to be declared, except on the reactor and HVAC, whose CasADi oracles
+never roll the simulator and which the test lists as pending. The glass
+furnace's pull noise was declared when its oracle was re-recorded in the same
+audit; its CasADi oracle never rolled the simulator either.
 
 **The CasADi objectives are quadratic proxies, not the environment's reward.**
 (Except on the CSTR and the four-tank, whose NLPs minimise the version-2
@@ -692,15 +697,17 @@ disagreed with the plant's, so it optimised against a reduced model, and a
 finite-horizon MPC with plant-model mismatch settles with a bias that a PID's
 integrator removes; an offset-free correction, a clamped integral of the
 measured error shifting the solver's setpoint and dropped at each schedule step,
-took it from 19.1% behind to 16.0% and is kept. Horizon was never the cause:
-going from 0.45 to 1.52 open-loop time constants was worth 1.1 points at three
+took it from 19.1% behind to 16.0%. (The oracle audit, 2026-10, replaced that
+correction with a heat-rate disturbance on the crown, estimated from the one-step
+prediction error; see the glass furnace's PHYSICS.md.) Horizon was never the
+cause: going from 0.45 to 1.52 open-loop time constants was worth 1.1 points at three
 times the solve cost.
 
 **It now leads, 1513.4 against 1443.5, winning 10 of 10 seeds**, and the
 `EnvSpec.mpc_degraded` flag has been removed. The last piece was variable
 scaling: the planner had been handing IPOPT crown temperatures around 1600 K
 next to a fuel fraction around 0.6, and its mean iteration count over 16 000
-solves is now 16.8.
+solves came down to 16.8 (15.9 for the oracle of the oracle audit, 2026-10).
 
 
 The same change moved the two path-following tasks from being scored over **less
@@ -919,13 +926,13 @@ clean. Hence cross-entropy sampling rather than a gradient method.
 | `distillation` | 200 | 262.3 | 29.9 | 0.886 | 10/10 | 0 |
 | `plane3d_circle` | 300 | 1.919e+04 | 3142 | 0.836 | 10/10 | 0 |
 | `plane3d_heading` | 200 | 4.634e+04 | 8266 | 0.822 | 10/10 | 0 |
+| `glass_furnace` | 1600 | 1.352 | 0.2743 | 0.797 | 10/10 | 0 |
 | `plane_sine` | 480 | 5184 | 1249 | 0.759 | 10/10 | 0 |
 | `battery` | 360 | 0.003457 | 0.0008876 | 0.743 | 10/10 | 0 |
 | `ph_neutralization` | 300 | 336.3 | 91.22 | 0.729 | 10/10 | 0 |
 | `four_tank` | 500 | 1167 | 336.2 | 0.712 | 10/10 | 0 |
 | `wind_turbine` | 400 | 4.541e-05 | 1.378e-05 | 0.697 | 10/10 | 0 |
 | `plane` | 280 | 1.04e+04 | 3273 | 0.685 | 10/10 | 0 |
-| `glass_furnace` | 1600 | 1.352 | 0.4943 | 0.634 | 10/10 | 0 |
 | `hvac` | 720 | 0.01966 | 0.01064 | 0.459 | 10/10 | 0 |
 | `cstr` | 100 | 6319 | 5752 | 0.090 | 10/10 | 0 |
 | `first_order` | 100 | 1018 | 1002 | 0.015 | 10/10 | 0 |
@@ -994,10 +1001,11 @@ but a throttle the planner never moved after its first plan); the aircraft
 PIDs remain structurally inadequate on the moving-reference tasks (2e4 to 1e6
 floor-widths while "holding" the heading, the figure-8 and the racetrack),
 where the MPC sits within a few;
-the glass furnace's MPC is 26x its own long-run hold cost on the 13 h test
-episode (0.80 against a 0.03 reference) because the episode is still in the
-transient of a 30 h plant; on the battery the oracle, a feedforward of the
-scheduled level, holds at the noise floor (mean error 1577 W against the
+the glass furnace's MPC is 104x its own long-run hold cost on the 13 h test
+episode (0.39 against a 0.0038 reference) because the episode is still in the
+transient of a 30 h plant (26x, 0.80 against 0.03, before the oracle audit
+of 2026-10 improved the oracle's window and its hold); on the battery the
+oracle, a feedforward of the scheduled level, holds at the noise floor (mean error 1577 W against the
 closed-form 1596 W) and pays almost nothing in the transients after each
 dispatch block; on the building, priced at EUR 0.03/K^2 h of discomfort, the
 MPC now spends less gas *and* less comfort than the PID (0.0036 against
@@ -1047,7 +1055,7 @@ it, and the heading the rest.
 | `distillation` | 8.53e-05 | 62.6 (62.6 / 0.00219) | 0.0125 (0.000261 / 0.0122) | 1 | 62.6 | 0.0125 | 4.05e+03 (1.33e+04) | 1.4e+03 (1.4e+03) | 0 |
 | `first_order` | 0 | 3.57e-06 (3.57e-06 / —) | 0 (0 / —) | 1 | 7.89e-11 | 0 | 1.19e+05 (1.19e+05) | 1.17e+05 (1.17e+05) | 0 |
 | `four_tank` | 0 | 30.3 (30.3 / —) | 3.08e-08 (3.08e-08 / —) | 1 | 30.3 | 3.08e-08 | 6.5e+05 (6.58e+05) | 1.85e+05 (1.85e+05) | 0 |
-| `glass_furnace` | 0.0306 | 2.09 (2.02 / 0.0724) | 0.803 (0.759 / 0.0437) | 0.625 | 2.09 | 0.803 | -225† (1.14e+03) | -99.5† (405) | 0 |
+| `glass_furnace` | 0.00377 | 2.09 (2.02 / 0.0724) | 0.394 (0.354 / 0.04) | 0.813 | 2.09 | 0.394 | -225† (1.14e+03) | -3.28† (247) | 0 |
 | `hvac` | 0.001 | 0.0185 (0.00991 / 0.00863) | 0.00884 (0.00525 / 0.00359) | 0.553 | 0.0154 | 0.00368 | 0.367 (0.913) | 0.382 (0.514) | 0 |
 | `patrol` | 0.0363 | 265 (265 / —) | 0.0371 (0.0371 / —) | 1 | 265 | 0.0371 | 1.96e+04 (4.53e+04) | 6.04e+03 (6.04e+03) | 0 |
 | `patrol_bearing_only` | 0.0363 | 199 (199 / —) | 0.0371 (0.0371 / —) | 1 | 199 | 0.0371 | 1.71e+04 (3.85e+04) | 6.04e+03 (6.04e+03) | 0 |
