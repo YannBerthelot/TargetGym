@@ -17,6 +17,7 @@ import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.plane.dynamics import total_wind_3d
 from target_gym.plane3d.env import (
     _RACETRACK_LEG,
@@ -41,7 +42,9 @@ from target_gym.plane3d.rendering import _render
 from target_gym.utils import compute_norm_from_coordinates, save_video
 
 
-class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
+class _Airplane3DBase(
+    RegistryExperts, environment.Environment[PlaneState3D, PlaneParams3D]
+):
     """
     Base class for all 3D airplane environments.
 
@@ -259,6 +262,7 @@ class Plane3DHeading(_Airplane3DBase):
     tracked_names: tuple = ("altitude (m)",)
     obs_target_index: int = 10  # target_altitude
     task_type: str = "heading"
+    registry_name: str = "plane3d_heading"
 
     def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
@@ -344,6 +348,7 @@ class Plane3DRacetrack(_Airplane3DBase):
     # holding pattern is drawn as a straight dashed line -- a picture of a
     # different task than the one being scored.
     task_type: str = "racetrack"
+    registry_name: str = "plane3d_racetrack"
 
     def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
@@ -422,6 +427,7 @@ class Plane3DCircle(_Airplane3DBase):
     obs_value_index: int = 2
     obs_target_index: int = 10
     task_type: str = "circle"
+    registry_name: str = "plane3d_circle"
     tracked_names: tuple = ("altitude (m)",)
 
     def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
@@ -518,6 +524,7 @@ class Plane3DFigureEight(_Airplane3DBase):
     obs_value_index: int = 2
     obs_target_index: int = 10
     task_type: str = "figure8"
+    registry_name: str = "plane3d_figure8"
     tracked_names: tuple = ("altitude (m)",)
 
     def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):

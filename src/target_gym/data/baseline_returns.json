@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "generated": "2026-10-03T22:10:04+00:00",
+    "generated": "2026-10-22T18:13:26+00:00",
     "note": "Regenerate with scripts/record_baselines.py when a test reports a stale fingerprint. Commit the result with the change that invalidated it.",
     "seeds": 10
   },
@@ -339,7 +339,7 @@
     "steps": 720
   },
   "patrol": {
-    "fingerprint": "550c012f2b7cd867",
+    "fingerprint": "db38c213d3d2d188",
     "mpc_returns": [
       -4535.684535,
       -1595.14216,
@@ -365,12 +365,12 @@
       -55509.796467,
       -57913.613483
     ],
-    "seconds": 7543.0,
+    "seconds": 1390.8,
     "seeds": 10,
     "steps": 200
   },
   "patrol_bearing_only": {
-    "fingerprint": "550c012f2b7cd867",
+    "fingerprint": "db38c213d3d2d188",
     "mpc_returns": [
       -4535.684535,
       -1595.14216,
@@ -396,7 +396,7 @@
       -66372.904793,
       -57730.49995
     ],
-    "seconds": 5256.9,
+    "seconds": 1663.2,
     "seeds": 10,
     "steps": 200
   },
@@ -467,7 +467,7 @@
     "steps": 280
   },
   "plane3d_circle": {
-    "fingerprint": "ece53a73cc9310ba",
+    "fingerprint": "c060ea03d5d50416",
     "mpc_returns": [
       -1813407.0,
       -48032.011719,
@@ -493,12 +493,12 @@
       -14821095.338348,
       -3620811.891903
     ],
-    "seconds": 1316.8,
+    "seconds": 905.8,
     "seeds": 10,
     "steps": 300
   },
   "plane3d_figure8": {
-    "fingerprint": "58ec1398327e2241",
+    "fingerprint": "8e1396f15d77df26",
     "mpc_returns": [
       -8365.845703,
       -4213.024902,
@@ -524,12 +524,12 @@
       -359863722.653965,
       -473848875.577229
     ],
-    "seconds": 1763.0,
+    "seconds": 911.7,
     "seeds": 10,
     "steps": 400
   },
   "plane3d_heading": {
-    "fingerprint": "5c3960da8a1121eb",
+    "fingerprint": "fd841d1ef5f2a39e",
     "mpc_returns": [
       -2772279.25,
       -534619.375,
@@ -555,12 +555,12 @@
       -17940006.628662,
       -8366353.817383
     ],
-    "seconds": 1313.2,
+    "seconds": 1052.4,
     "seeds": 10,
     "steps": 200
   },
   "plane3d_racetrack": {
-    "fingerprint": "967dbb06622ce6bf",
+    "fingerprint": "09dceb0435d20728",
     "mpc_returns": [
       -1772547.125,
       -38629.886719,
@@ -586,7 +586,7 @@
       -275973313.343803,
       -247237367.136979
     ],
-    "seconds": 2500.5,
+    "seconds": 1304.3,
     "seeds": 10,
     "steps": 650
   },
