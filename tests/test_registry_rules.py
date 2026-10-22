@@ -429,3 +429,13 @@ def test_declared_sources_enter_both_fingerprints():
         typo = dataclasses.replace(base, fingerprint_sources=("no/such/file.py",))
         with pytest.raises(FileNotFoundError, match="no/such/file.py"):
             fingerprint(typo)
+
+
+def test_param_units_do_not_move_a_fingerprint():
+    """``PARAM_UNITS`` only documents values, so adding or editing it must not
+    stale a version stamp or a recorded baseline. Anything else still does."""
+    base = "X = 1.0\n"
+    digest = provenance._stable_ast_digest
+    assert digest(base + 'PARAM_UNITS = {"X": "m"}\n') == digest(base)
+    assert digest(base + 'PARAM_UNITS: dict = {"X": "s"}\n') == digest(base)
+    assert digest(base + 'OTHER = {"X": "m"}\n') != digest(base)

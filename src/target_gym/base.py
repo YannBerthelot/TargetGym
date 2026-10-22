@@ -1,5 +1,4 @@
 import functools
-import sys
 
 import jax
 import jax.numpy as jnp
@@ -47,15 +46,6 @@ PARAM_UNITS = {
     "delta_t": "s",
     "max_steps_in_episode": "steps",
 }
-
-
-def param_units(params_cls: type) -> dict[str, str]:
-    """Units of a params class's fields, merged over its bases' modules."""
-    units: dict[str, str] = {}
-    for cls in reversed(params_cls.__mro__):
-        module = sys.modules.get(cls.__module__)
-        units.update(getattr(module, "PARAM_UNITS", {}))
-    return units
 
 
 @struct.dataclass

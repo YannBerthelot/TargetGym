@@ -35,9 +35,9 @@ import numpy as np  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from target_gym.base import param_units  # noqa: E402
 from target_gym.provenance import BASELINES_PATH  # noqa: E402
 from target_gym.registry import REGISTRY, display_name  # noqa: E402
+from target_gym.units import param_units  # noqa: E402
 
 OUT_DIR = ROOT / "docs" / "environments"
 # The recorded baselines, from where the package reads them. This used to be

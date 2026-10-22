@@ -77,6 +77,20 @@ _PHYSICS_SOURCES = (
 )
 
 
+#: Module-level names that only document the code, skipped by the fingerprint.
+_DOC_ONLY_NAMES = frozenset({"PARAM_UNITS"})
+
+
+def _is_doc_constant(node: ast.AST) -> bool:
+    if isinstance(node, ast.Assign):
+        targets = node.targets
+    elif isinstance(node, ast.AnnAssign):
+        targets = [node.target]
+    else:
+        return False
+    return all(isinstance(t, ast.Name) and t.id in _DOC_ONLY_NAMES for t in targets)
+
+
 def _stable_ast_digest(source: str) -> str:
     """Hash a module's structure, ignoring comments, docstrings and formatting.
 
@@ -107,6 +121,10 @@ def _stable_ast_digest(source: str) -> str:
             items = value if isinstance(value, list) else [value]
             for i, child in enumerate(items):
                 if not isinstance(child, ast.AST):
+                    continue
+                # Drop documentation-only module constants (``PARAM_UNITS``):
+                # they describe a value and cannot change behaviour.
+                if isinstance(node, ast.Module) and _is_doc_constant(child):
                     continue
                 # Drop docstrings: the leading bare string of a module, class or
                 # function body.
