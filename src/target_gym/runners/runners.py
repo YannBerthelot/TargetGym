@@ -171,7 +171,7 @@ def baseline_policy(spec, kind: str, params=None) -> Callable | None:
     contestants is worth being loud about.
 
     ``kind`` is ``"pid"`` or ``"mpc"``. Returns ``None`` when the environment
-    does not ship that baseline, which for the MPC is the two patrol variants.
+    does not ship that baseline; every registered environment ships both.
     """
     if kind == "pid":
         if not spec.has_pid:

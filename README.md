@@ -28,10 +28,9 @@ disturbances, rather than to reach a goal state once. The environments model
 real plants, including an A320-like aircraft, a glass furnace, a nuclear
 reactor, a cement kiln, a grid battery and a wind turbine.
 
-- **Baselines included.** Every environment ships a tuned PID; 22 of 23 also
-  ship an MPC with full state access, which serves as an upper bound. On those
-  22 both are recorded over ten seeds in
-  `src/target_gym/data/baseline_returns.json`.
+- **Baselines included.** Every environment ships a tuned PID and an MPC
+  with full state access, which serves as an upper bound. Both are recorded
+  over ten seeds in `src/target_gym/data/baseline_returns.json`.
 - **Validated physics.** Each environment carries a `PHYSICS.md` with a sourced
   parameter table, published validation targets asserted by tests, and its
   documented approximations.
@@ -185,7 +184,7 @@ does not:
 | **Wrong-way-first response** | Opening the steam valve makes drum level *rise* before it falls, as steam bubbles expand | A controller following the immediate trend pushes the loop the wrong way |
 | **Transport delay** | Half the kiln's response to a fuel change arrives a 25-minute residence time later | Credit assignment spans hundreds of steps |
 | **Multi-timescale dynamics** | Millisecond neutronics against hour-long xenon; sub-second flame gas against 30-hour glass residence | One control interval cannot serve both ends |
-| **Finite budgets** | A battery spends charge to follow dispatch and then cannot follow it | Tracking now is priced against tracking later |
+| **Finite budgets** | A battery's charge window trips the pack at either edge, though exact dispatch tracking stays inside it for the whole 30-minute episode | Within an episode, tracking is priced against wear at every step, not against tracking later |
 
 Also modelled: actuator lag, competing objectives, and scheduled setpoints that
 reward anticipation (the building's night setback, the furnace's crown schedule,
@@ -196,8 +195,9 @@ Ornstein-Uhlenbeck turbulence, unobservable by default.
 
 ## Baselines
 
-Every environment ships a tuned PID; 22 of 23 also ship an MPC. The exception is
-`patrol_bearing_only`, which withholds the slot error a planner would read.
+Every environment ships a tuned PID and an MPC. On `patrol_bearing_only`, which
+withholds the slot error a planner would read, the MPC slot holds `patrol`'s
+oracle reading the true state, labelled a full-state bound.
 
 Controller structure is chosen per plant:
 
@@ -215,9 +215,14 @@ Controller structure is chosen per plant:
   is the pairing industrial anti-surge systems use, and the recycle valve gets
   a loop of its own because the margin it protects is not a tracked output.
 
-Three MPC implementations are used: CasADi/IPOPT where a symbolic model exists,
-gradient-based planning through the JAX dynamics elsewhere, and cross-entropy
-sampling for the cement kiln. Solver convergence is recorded alongside every
+Five kinds of controller fill the MPC slot: CasADi/IPOPT where a symbolic model
+exists, gradient-based planning through the JAX dynamics elsewhere,
+cross-entropy sampling for the cement kiln, on the battery a feedforward of the
+scheduled dispatch level, which is the best causal action there, on the wind
+turbine a feedback law (generator torque solved so that the next step's power
+meets the target, and pitch from the PID with its command slew capped), and on
+the patrol tasks the lead's own autopilot flown on the follower's state with a
+short residual planner on top. Solver convergence is recorded alongside every
 result.
 
 Each baseline must beat the best constant action on its environment, a

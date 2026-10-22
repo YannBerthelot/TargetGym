@@ -105,8 +105,9 @@ class GridBattery(environment.Environment[BatteryState, BatteryParams]):
             maxval=params.initial_soc_range[1],
         )
         # A schedule of held setpoints, drawn once. The pack is told what it
-        # will be asked for; whether it can deliver it out of a finite energy
-        # budget is the task.
+        # will be asked for, and delivering it is the task; within a scored
+        # episode, exact delivery stays inside the charge window and what it
+        # costs is wear.
         schedule = jax.random.uniform(
             dispatch_key,
             shape=(N_DISPATCH_BLOCKS,),
@@ -153,7 +154,7 @@ class GridBattery(environment.Environment[BatteryState, BatteryParams]):
         return make_battery_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
-        """Return a gradient MPC oracle for dispatch tracking."""
+        """Return the oracle: feedforward of the scheduled dispatch level."""
         from target_gym.energy.battery.experts import make_battery_mpc
 
         if params is None:

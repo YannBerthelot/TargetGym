@@ -27,7 +27,15 @@ def _cement_kiln_objective(state, params):
 
 
 def make_cement_kiln_mpc(
-    env, params, horizon: int = 40, n_samples: int = 96, n_iter: int = 4, **kwargs
+    env,
+    params,
+    horizon: int = 40,
+    n_samples: int = 96,
+    n_elite: int = 12,
+    n_iter: int = 32,
+    init_std: float = 0.1,
+    return_best: bool = True,
+    **kwargs,
 ):
     """Sampling (CEM) MPC for the rotary kiln.
 
@@ -37,6 +45,15 @@ def make_cement_kiln_mpc(
     A 40-step horizon is 20 minutes at dt = 30 s, most of the ~25 minute
     transport delay. That is the point: a controller whose horizon is shorter
     than the delay is choosing fuel whose consequences it cannot see.
+
+    Each solve starts from the shifted previous plan, so it searches near it
+    (``init_std`` 0.1) and runs enough iterations for the smoothed CEM spread
+    to contract; it returns the best sequence it evaluated. Measured in the
+    oracle audit (2026-10-01) on the protocol seeds, planning on the mean
+    feed: the earlier budget (4 iterations from a 0.5 spread, smoothed mean)
+    scored 1.26; 384 samples and 8 iterations 0.264; this 96 x 32 setting
+    0.0705 at the same cost per step, and 64 iterations 0.0699. What is left
+    is mostly fuel above the hold rate, which the raw-meal swings drive.
     """
     objective = _cement_kiln_objective
     if not _is_v1(params):
@@ -52,6 +69,9 @@ def make_cement_kiln_mpc(
         action_ub=1.0,
         horizon=horizon,
         n_samples=n_samples,
+        n_elite=n_elite,
         n_iter=n_iter,
+        init_std=init_std,
+        return_best=return_best,
         **kwargs,
     )

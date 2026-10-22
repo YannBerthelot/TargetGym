@@ -11,7 +11,7 @@
 | Tracked variable(s) | altitude (m) |
 | Episode length | 300 steps (300 s at 1 s per step) |
 | Import | `from target_gym import Plane3DCircle, PlaneParams3D` |
-| Cite as | `plane3d_circle-v2` |
+| Cite as | `plane3d_circle-v3` |
 
 ## Action space
 
@@ -59,8 +59,8 @@ Recorded over 10 seeds of the 300-step episode (see [Baselines](../baselines.md)
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -3.62e+05 | 1207 |
-| MPC | -7.053e+04 | 235.1 |
+| PID | -5.756e+06 | 1.919e+04 |
+| MPC | -9.427e+05 | 3142 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
@@ -113,15 +113,15 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 | `heading_precision_floor` | 0.0087 | rad |
 | `position_precision_floor` | 3 | m |
 | `reward_version` | 2 | - |
-| `e_floor_altitude` | 4.06 | m |
+| `e_floor_altitude` | 1 | m |
 | `e_tol_altitude` | 0 | m |
 | `e_floor_heading` | 0.0087 | rad |
-| `e_floor_path` | 8.12 | m |
+| `e_floor_path` | 3 | m |
 | `tracking_exponent` | 2 | - |
-| `failure_cost` | 1.80355e+07 | reward |
+| `failure_cost` | 2.9729e+08 | reward |
 | `restart_steps` | 3600 | steps |
-| `rho_floor_tracking` | 2 | reward |
-| `rho_floor` | 2 | reward |
+| `rho_floor_tracking` | 0.465697 | reward |
+| `rho_floor` | 0.465697 | reward |
 | `figure8_altitude_amplitude` | 200 | m |
 | `initial_z_dot` | 0 | m/s |
 | `initial_x_dot` | 200 | m/s |

@@ -388,11 +388,12 @@ The mechanism costs about 3.5 days, paid once for all new tasks.
   `patrol` as an aircraft. That is why the task is `unstable_cstr`.
 - **Controllers stay out of shared files.** `experts/pid.py` and
   `experts/mpc.py` are in every task's baseline fingerprint, so a new controller
-  there would make all 20 recorded baselines stale (every task has one except
-  `patrol_bearing_only`, which has no MPC). A task's controllers go in its own
-  package as `experts.py`, reached through a module argument on `registry._pid`
-  and `_mpc`. The open roadmap item on scoping the baseline fingerprint to the
-  code each environment reaches would remove this constraint; keeping new
+  there would make every recorded baseline stale (every task has one,
+  `patrol_bearing_only` too since its MPC slot was filled). A task's
+  controllers go in its own package as `experts.py`, reached through a module
+  argument on `registry._pid` and `_mpc`. The open roadmap item on scoping the
+  baseline fingerprint to the code each environment reaches would remove this
+  constraint; keeping new
   controllers in their own package avoids it without waiting. `base.py`,
   `reward.py`, `utils.py` and `integration.py` are in every version stamp, so
   new tasks use them and do not edit them.
@@ -1006,12 +1007,28 @@ These issues are outside this proposal, and each should get its own fix.
   - `patrol` imports `plane.dynamics`, `plane3d.env` and `plane3d.dynamics`.
   - The patrol lead aircraft, in both `patrol` and `patrol_bearing_only`, flies
     a PID from `experts/pid.py` on the `plane3d_heading` gains. Neither task's
-    version stamp covers the PID or the gains, and `patrol`'s baseline
-    fingerprint misses the gains (`patrol_bearing_only` has no recorded
-    baseline).
+    version stamp covers the PID or the gains, and neither task's baseline
+    fingerprint collects them, though both oracles also fly that autopilot
+    (`env._lead_pid_params`). (Baseline side closed by the shared oracle
+    machinery change, 2026-10: both tasks declare
+    `gains_keys=("plane3d_heading",)`, so their baseline fingerprints now hash
+    that entry. Their version stamps still do not cover the PID or the gains.)
+  - `patrol_bearing_only` now has a recorded baseline and a protocol row, and
+    its fingerprints also miss the `patrol` gains, which its PID reads through
+    `make_patrol_pid` (`experts/pid.py`). Retuning those gains would stale
+    `patrol`'s records and leave `patrol_bearing_only`'s passing as fresh.
+    (Closed by the same change: the baseline fingerprint now also hashes the
+    `tuned_gains_key` entry, which is `patrol` for `patrol_bearing_only`, so a
+    retune of `patrol` stales both tasks' records.)
   - `plane_energy` and `plane_sine` fly on the `plane_cascaded` gains, which
     their baseline fingerprints do not collect, so retuning those gains would
-    leave their recorded baselines passing as fresh.
+    leave their recorded baselines passing as fresh. (Closed in the oracle
+    audit, 2026-10: their oracles read copies under their own names,
+    `plane_sine_cascaded` and `plane_energy_cascaded`, and a test holds the
+    copies equal to `plane_cascaded`, so a retune has to update them, which
+    stales both tasks' records. The shared oracle machinery change, 2026-10,
+    also declares `plane_cascaded` in both tasks' `gains_keys`, so their
+    baseline fingerprints hash it directly.)
 
   The open roadmap item on scoping the baseline fingerprint is the natural place
   to fix these.

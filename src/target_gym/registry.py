@@ -124,10 +124,27 @@ class EnvSpec:
         Key under which this environment's PID gains live in
         ``src/target_gym/data/pid_gains.json``.  ``None`` means the controller is not a
         single flat SISO loop and the gains are stored per sub-loop.
+        ``provenance.baseline_fingerprint`` hashes this key's entry.
+    gains_keys:
+        Other keys of ``pid_gains.json`` this task's baseline and protocol
+        records depend on. ``provenance.baseline_fingerprint`` hashes the
+        entries whose key starts with the task's name and the
+        ``tuned_gains_key`` entry; a key outside both is declared here, or a
+        retune of it would leave those records looking fresh. ``plane_sine``
+        and ``plane_energy`` declare ``plane_cascaded``, the key their
+        cascaded PID baseline reads, and patrol declares ``plane3d_heading``,
+        the autopilot its oracle and its scripted lead fly. The field feeds
+        the baseline fingerprint only. The version stamp
+        (``provenance.environment_fingerprint``) hashes neither
+        ``pid_gains.json`` nor ``experts/pid.py``, so it does not see a gains
+        entry the physics reads; patrol's lead is the one such case today.
+        ``tests/test_registry_rules.py`` checks every declared key exists.
     baselines_note:
         Set when ``make_pid``/``make_mpc`` are ``None``: a short explanation
         of why, surfaced by the baseline-coverage test so a missing expert is
-        a documented gap rather than a silent one.
+        a documented gap rather than a silent one. Also set where both ship
+        but one needs saying what it is (``patrol_bearing_only``'s MPC is a
+        full-state bound); the environment pages print it beside the numbers.
     disturbance_fields:
         State fields holding a *zero-mean stochastic disturbance* (gusts, load
         noise). The conformance suite asserts these behave like disturbances --
@@ -146,8 +163,9 @@ class EnvSpec:
     expert_degraded:
         Set when a baseline *exists and is well-formed* but does not yet meet
         the effectiveness contract -- it loses to a constant action. Distinct
-        from ``baselines_note``, which marks a baseline that is absent
-        entirely. Surfaced by the conformance suite so a weak expert is a
+        from ``baselines_note``, which explains a baseline that is absent, or
+        labels one that needs qualifying (``patrol_bearing_only``'s
+        full-state MPC). Surfaced by the conformance suite so a weak expert is a
         recorded, explained gap rather than a silently bad benchmark number.
     mpc_degraded:
         The same, for the MPC: set when the MPC exists and runs but returns
@@ -186,6 +204,9 @@ class EnvSpec:
     version: int = 2
     test_params: dict[str, Any] = field(default_factory=dict)
     tuned_gains_key: str | None = None
+    #: Further ``pid_gains.json`` keys the task reads, hashed into its
+    #: baseline fingerprint (``provenance.gains_entries``).
+    gains_keys: tuple[str, ...] = ()
     baselines_note: str | None = None
     expert_degraded: str | None = None
     mpc_degraded: str | None = None
@@ -512,19 +533,29 @@ _SPECS: tuple[EnvSpec, ...] = (
             "target_amplitude": 900.0,
             "target_steps": 8,
             "speed_weight": 0.5,
-            # Hold-phase airspeed deviation of the PID on this task and the
-            # lowest per-seed MPC hold between ladder steps
-            # (`scripts/measure_hold.py`); the version-2 references.
+            # Hold-phase airspeed deviation of the PID on this task
+            # (`scripts/measure_hold.py`).
             "c_hold": 5.23,
-            "e_floor": 4.55,
-            "rho_floor_tracking": 1.0,
-            "rho_floor": 1.0,
-            "failure_cost": 2.0 * (12192.0 / 4.55) ** 2,
+            # The oracle's lowest per-seed altitude hold between ladder steps,
+            # 1.198 m, rounded (oracle audit, 2026-10). It was 4.55 m, an
+            # earlier oracle's hold taken before its moves toward the next
+            # target were separated from its hold. Under this floor the same
+            # planner holds 1.35 / 1.18 m per seed, and rho is the lower in
+            # floor units (`scripts/measure_hold.py`).
+            "e_floor": 1.20,
+            "rho_floor_tracking": (1.1773 / 1.20) ** 2,
+            "rho_floor": (1.1773 / 1.20) ** 2,
+            "failure_cost": 2.0 * (12192.0 / 1.20) ** 2,
         },
         tuned_gains_key="plane",
+        # The cascaded PID baseline reads ``plane_cascaded``.
+        gains_keys=("plane_cascaded",),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # v3: the altitude floor is the oracle's own 1.20 m hold, from the
+        # 4.55 m an earlier oracle held (oracle audit, 2026-10).
+        version=3,
     ),
     EnvSpec(
         name="plane_sine",
@@ -551,12 +582,20 @@ _SPECS: tuple[EnvSpec, ...] = (
             "target_amplitude": 300.0,
             "target_period": 240.0,
             "c_hold": 8.15,  # PID hold-phase airspeed deviation on the sinusoid
-            "e_floor": 1.26,  # lowest per-seed MPC hold on the sinusoid
-            "rho_floor_tracking": 1.0,
-            "rho_floor": 1.0,
+            # The altitude floor is an earlier oracle's lowest per-seed hold on
+            # the sinusoid. The current oracle holds 0.53 m, below the 1 m
+            # barometric resolution, and the resolution is within 1.5x of
+            # 1.26 m, so the floor stays (oracle audit, 2026-10). rho is the
+            # oracle's lowest per-seed hold, 0.5285 m, in floor units
+            # (`scripts/measure_hold.py`).
+            "e_floor": 1.26,
+            "rho_floor_tracking": (0.5285 / 1.26) ** 2,
+            "rho_floor": (0.5285 / 1.26) ** 2,
             "failure_cost": 2.0 * (12192.0 / 1.26) ** 2,
         },
         tuned_gains_key="plane",
+        # The cascaded PID baseline reads ``plane_cascaded``.
+        gains_keys=("plane_cascaded",),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -568,11 +607,27 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
         make_pid=_pid("make_plane3d_heading_cascaded_pid"),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
-        test_params={"max_steps_in_episode": 200},
+        # The floors are set here, not taken from the PlaneParams3D class
+        # defaults, because PatrolParams inherits those defaults and patrol's
+        # records must not move with this task's floor.
+        test_params={
+            "max_steps_in_episode": 200,
+            # The 1 m altimeter resolution; the heading floor is the class
+            # default, the 0.0087 rad AHRS resolution. The oracle holds below
+            # both, and rho is its lowest per-seed holds (0.6735 m, 2.14e-5
+            # rad; `scripts/measure_hold.py`) in floor units.
+            "e_floor_altitude": 1.0,
+            "rho_floor_tracking": (0.6735 / 1.0) ** 2 + (2.14e-5 / 0.0087) ** 2,
+            "rho_floor": (0.6735 / 1.0) ** 2 + (2.14e-5 / 0.0087) ** 2,
+            "failure_cost": 2.0 * (12192.0 / 1.0) ** 2,
+        },
         tuned_gains_key="plane3d_heading",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # v3: the altitude floor is the 1 m altimeter resolution, from the
+        # 1.44 m an earlier oracle held (oracle audit, 2026-10).
+        version=3,
     ),
     EnvSpec(
         name="plane3d_circle",
@@ -583,17 +638,24 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
         test_params={
             "max_steps_in_episode": 300,
-            # Lowest per-seed MPC holds on this task (`scripts/measure_hold.py`).
-            "e_floor_altitude": 4.06,
-            "e_floor_path": 8.12,
-            "rho_floor_tracking": 2.0,
-            "rho_floor": 2.0,
-            "failure_cost": 2.0 * (12192.0 / 4.06) ** 2,
+            # The 1 m altimeter and 3 m GPS resolutions. The oracle holds
+            # below both, and rho is its lowest per-seed holds (0.6657 m,
+            # 0.4504 m; `scripts/measure_hold.py`) in floor units.
+            "e_floor_altitude": 1.0,
+            "e_floor_path": 3.0,
+            "rho_floor_tracking": (0.6657 / 1.0) ** 2 + (0.4504 / 3.0) ** 2,
+            "rho_floor": (0.6657 / 1.0) ** 2 + (0.4504 / 3.0) ** 2,
+            "failure_cost": 2.0 * (12192.0 / 1.0) ** 2,
         },
         tuned_gains_key="plane3d_circle",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # v3: the floors are the instrument resolutions (oracle audit,
+        # 2026-10), from the 4.06 m altitude an earlier oracle held and an
+        # 8.12 m path floor labelled as its hold, though it equals 2 x 4.06 m
+        # and the recorded hold was 14.27 m.
+        version=3,
     ),
     EnvSpec(
         name="plane3d_racetrack",
@@ -608,16 +670,23 @@ _SPECS: tuple[EnvSpec, ...] = (
         # periodic task.
         test_params={
             "max_steps_in_episode": 650,
-            "e_floor_altitude": 1.39,
-            "e_floor_path": 6.17,
-            "rho_floor_tracking": 2.0,
-            "rho_floor": 2.0,
-            "failure_cost": 2.0 * (12192.0 / 1.39) ** 2,
+            # The 1 m altimeter and 3 m GPS resolutions. The oracle holds
+            # below both, and rho is its lowest per-seed holds (0.6803 m,
+            # 0.4660 m; `scripts/measure_hold.py`) in floor units.
+            "e_floor_altitude": 1.0,
+            "e_floor_path": 3.0,
+            "rho_floor_tracking": (0.6803 / 1.0) ** 2 + (0.4660 / 3.0) ** 2,
+            "rho_floor": (0.6803 / 1.0) ** 2 + (0.4660 / 3.0) ** 2,
+            "failure_cost": 2.0 * (12192.0 / 1.0) ** 2,
         },
         tuned_gains_key="plane3d_racetrack",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # v3: the floors are the instrument resolutions, from the 1.39 m
+        # altitude and 6.17 m path an earlier oracle held (oracle audit,
+        # 2026-10).
+        version=3,
         # No ``expert_degraded``: this expert used to carry one, and what it
         # said was that its gains had never been searched. They have been now.
         # Coordinate descent on the cross-track gain alone, over five seeds and
@@ -656,16 +725,21 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
         test_params={
             "max_steps_in_episode": 400,
-            # Path term alone: its floor, and the reference is one term.
-            "e_floor_path": 14.6,
-            "rho_floor_tracking": 1.0,
-            "rho_floor": 1.0,
-            "failure_cost": 2.0 * (20000.0 / 14.6) ** 2,
+            # Path term alone, its floor the 3 m GPS resolution. The oracle
+            # holds below it, and rho is its lowest per-seed hold (1.2871 m;
+            # `scripts/measure_hold.py`) in floor units.
+            "e_floor_path": 3.0,
+            "rho_floor_tracking": (1.2871 / 3.0) ** 2,
+            "rho_floor": (1.2871 / 3.0) ** 2,
+            "failure_cost": 2.0 * (20000.0 / 3.0) ** 2,
         },
         tuned_gains_key="plane3d_figure8",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # v3: the path floor is the 3 m GPS resolution, from the 14.6 m an
+        # earlier oracle held (oracle audit, 2026-10).
+        version=3,
     ),
     EnvSpec(
         name="patrol",
@@ -676,7 +750,13 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_patrol_mpc", module="target_gym.patrol.experts"),
         test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
+        # The oracle and the lead fly the 3D heading autopilot.
+        gains_keys=("plane3d_heading",),
         noise_fields=("turbulence_sigma",),
+        # v3: the slot floor is the 3 m relative-GPS resolution, from 18.6 m
+        # (an earlier planner's hold), so the reward changed (oracle audit,
+        # 2026-10). PatrolParams is shared, so patrol_bearing_only moves too.
+        version=3,
     ),
     EnvSpec(
         name="patrol_bearing_only",
@@ -684,33 +764,30 @@ _SPECS: tuple[EnvSpec, ...] = (
         env_factory=_patrol_bearing_only,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
         make_pid=_pid("make_patrol_bearing_only_stateful_pid"),
-        make_mpc=None,
+        make_mpc=_mpc(
+            "make_patrol_bearing_only_mpc", module="target_gym.patrol.experts"
+        ),
         test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
+        gains_keys=("plane3d_heading",),
         baselines_note=(
-            "PID present -- a lead-state estimator feeding the same pursuit "
-            "law the full-observation variant uses. Range with azimuth and "
+            "The PID is a lead-state estimator feeding the same pursuit law "
+            "the full-observation variant uses. Range with azimuth and "
             "elevation is a complete relative-position measurement, so the "
-            "only genuinely unobservable quantity is the lead's HEADING, "
-            "which the commanded slot needs because the slot is expressed in "
-            "the lead's frame; it is recovered by differencing the estimated "
-            "relative position and filtering. Measured performance matches "
-            "the full-observation expert (4 of 8 seeds complete, ~229 m "
-            "settled slot error vs ~260 m), so the partial observation costs "
-            "essentially nothing here. "
-            "No MPC, and the reason is the withheld observation rather than "
-            "the manoeuvring lead. This note used to blame the lead, on the "
-            "grounds that an MPC would need its future trajectory as a "
-            "time-varying parameter. That holds for a CasADi model and not "
-            "for a gradient planner: `patrol` now ships a GradientMPC that "
-            "differentiates step_env, and because the lead is scripted and "
-            "deterministic the plan propagates it for free. What blocks one "
-            "here is that the planner reads the slot error out of the state, "
-            "which is precisely what this variant withholds. Handing it the "
-            "true state anyway would make it an oracle on a task defined by "
-            "what is hidden, so it needs a planner built on the estimator."
+            "only unobservable quantity is the lead's heading, which the slot "
+            "needs because it is expressed in the lead's frame; the estimator "
+            "recovers it by differencing the estimated relative position and "
+            "filtering. The MPC slot holds patrol's oracle reading the true "
+            "state, so it is a full-state bound, not a bearing-only "
+            "controller. On a task defined by what the observation withholds, "
+            "its NEA measures information and control together: what the "
+            "hidden lead state is worth plus what a policy leaves on the "
+            "table. It never reads the observation, so its per-step costs "
+            "equal patrol's seed for seed (oracle audit, 2026-10)."
         ),
         noise_fields=("turbulence_sigma",),
+        # v3 with patrol: they share PatrolParams, and the slot floor moved.
+        version=3,
     ),
     # -- Process control ----------------------------------------------------
     EnvSpec(
@@ -761,6 +838,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # disturbance to move the operating point.
         tuned_gains_key="ph_neutralization",
         disturbance_fields=("q2",),
+        # The buffer flow's OU innovation. The CasADi oracle never rolls the
+        # simulator, so it could not see it anyway; declared so no planner can.
+        noise_fields=("q2_noise_std",),
     ),
     EnvSpec(
         name="distillation",
@@ -778,6 +858,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # test episode is kept short.
         tuned_gains_key="distillation",
         disturbance_fields=("zF",),
+        # The feed composition's OU innovation. The JAX planner rolls its model with a fixed key, so
+        # undeclared it saw the exact noise of protocol seed 0 and a wrong path on
+        # every other seed (oracle audit, 2026-10-01).
+        noise_fields=("zF_noise_std",),
     ),
     # -- Industrial / energy ------------------------------------------------
     EnvSpec(
@@ -792,6 +876,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         tuned_gains_key="glass_furnace",
         disturbance_fields=("m_pull_disturbance",),
+        # The pull disturbance's AR(1) innovation. The CasADi oracle never rolls
+        # the simulator and plans on the pull's conditional mean, read from
+        # the state, so it could not see the innovation anyway; declared so no
+        # planner can.
+        noise_fields=("m_pull_noise_std",),
     ),
     EnvSpec(
         name="reactor",
@@ -854,6 +943,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # to 700.)
         tuned_gains_key="cement_kiln",
         disturbance_fields=("raw_meal",),
+        # The raw-meal feed's OU innovation. The JAX planner rolls its model with a fixed key, so
+        # undeclared it saw the exact noise of protocol seed 0 and a wrong path on
+        # every other seed (oracle audit, 2026-10-01).
+        noise_fields=("feed_noise_std",),
     ),
     EnvSpec(
         name="boiler_drum",
@@ -866,6 +959,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # so a controller has to survive many inverse-response transients.
         tuned_gains_key="boiler_drum",
         disturbance_fields=("q_steam",),
+        # The steam demand's OU innovation. The JAX planner rolls its model with a fixed key, so
+        # undeclared it saw the exact noise of protocol seed 0 and a wrong path on
+        # every other seed (oracle audit, 2026-10-01).
+        noise_fields=("q_steam_noise_std",),
     ),
     EnvSpec(
         name="wind_turbine",

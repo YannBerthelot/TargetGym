@@ -180,33 +180,34 @@ class PlaneParams3D(EnvParams):
     position_precision_floor: float = 3.0  # m, civil GPS horizontal accuracy
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
-    # One quadratic term per tracked output, summed, each normalised by a
-    # documented minimum: the test configurations fly with zero turbulence,
-    # so the achievable hold error is ~0 on every task (the shipped MPC holds
-    # altitude to 0.1 m and the heading to 1e-3 rad, `scripts/measure_hold.py`)
-    # and the sensor resolutions above are the scales. Altitude has a +-30 m
-    # tolerance (a vertical-separation margin, provisional); heading and path
-    # distance have none. No running cost on these tasks. Leaving the
-    # envelope costs, per step, twice the altitude envelope's cost.
+    # One quadratic term per tracked output, summed, each normalised by its
+    # floor. The test configurations fly in the turbulence below. Each 3D
+    # task's registry entry sets its own floors: since the oracle audit
+    # (2026-10) they are the instrument resolutions above (1 m altitude,
+    # 0.0087 rad heading, 3 m path), which the oracle holds below on every
+    # task (`scripts/measure_hold.py`; the holds are in PHYSICS.md). No
+    # tolerance and no running cost on these tasks. Leaving the envelope
+    # costs, per step, twice the altitude envelope's cost (on the figure-8,
+    # which scores no altitude, twice the path's).
+    #
+    # The class defaults below are plane3d_heading-v2's floors, set from an
+    # earlier oracle's holds. They stay because PatrolParams inherits them:
+    # patrol scores neither altitude nor path, but these values are in its
+    # fingerprint, so moving them would re-version patrol for nothing.
     reward_version: int = 2
-    e_floor_altitude: float = (
-        1.44  # m, lowest per-seed MPC hold in turbulence (heading task; circle 4.06, racetrack 1.39)
-    )
+    e_floor_altitude: float = 1.44  # m, heading-v2's; the 3D tasks set 1.0
     e_tol_altitude: float = 0.0  # m; a +-30 m band made the altitude hold vacuous
-    e_floor_heading: float = (
-        0.0087  # rad, 0.5 deg AHRS resolution: the MPC holds below it (1e-4 rad on two seeds, 6e-3 on three), so the resolution is the scale
-    )
-    e_floor_path: float = (
-        3.0  # m; per task: circle 8.12, racetrack 6.17, figure-8 14.6 (lowest per-seed MPC holds)
-    )
+    e_floor_heading: float = 0.0087  # rad, 0.5 deg AHRS resolution
+    e_floor_path: float = 3.0  # m, civil GPS accuracy; the path tasks set it too
     tracking_exponent: float = 2.0
     failure_cost: float = 2.0 * (12192.0 / 1.44) ** 2  # per task in the registry
     #: Restart time priced into a trip (``reward.trip_cost``): a crash loses the
     #: sortie, 1 h of flight at 1 s steps (provisional).
     restart_steps: int = 3600
-    #: Two: altitude and heading (or path) each cost 1 at their floors.
-    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (altitude at its floor, the MPC's 1e-4 rad heading hold in 0.5 deg units).
+    #: The NEA reference: the lowest per-seed hold cost the oracle
+    #: demonstrated, in the reward's units. These defaults are heading-v2's
+    #: (altitude at its floor, an earlier oracle's 1e-4 rad heading hold in
+    #: 0.5 deg units); each 3D task sets its own in the registry.
     rho_floor_tracking: float = 1.0 + (1.0e-4 / 0.0087) ** 2
     rho_floor: float = 1.0 + (1.0e-4 / 0.0087) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.

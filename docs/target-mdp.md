@@ -135,13 +135,13 @@ properties of the industrial problem, and the suite keeps them.
 There is a stricter reading of "disturbance invariant" under which no
 randomness may enter the reference at all: a target is admissible only if its
 future is a deterministic function of the present. That reading would exclude
-the battery, whose dispatch request follows an Ornstein-Uhlenbeck process, and
-the reactor, whose flux demand follows another. It is rejected here for three
-reasons.
+the battery, whose dispatch request carries white regulation jitter on top of
+its scheduled blocks, and the reactor, whose flux demand follows an
+Ornstein-Uhlenbeck process. It is rejected here for three reasons.
 
 First, it does not classify tasks, it classifies noise placement. Write the
-battery in error coordinates, $\epsilon = P_{\text{target}} - P$. A stochastic
-increment on the setpoint and a stochastic increment on the delivered power
+battery in error coordinates, $\epsilon = P_{\text{target}} - P$. A random
+perturbation of the setpoint and a random perturbation of the delivered power
 produce the same error dynamics up to a sign. The servo problem with a random
 reference and the regulator problem with a random output disturbance are the
 same control problem, and a definition that admits one and rejects the other is
@@ -179,8 +179,10 @@ environment in this suite makes that move, whether or not it looks like it.
 - The 2D altitude patterns carry the current commanded altitude as a state
   field, advanced each step by the pattern generator, and expose it in the
   observation. The staircase, the sinusoid and the chirp all fit this way.
-- The battery and the reactor carry the current dispatch or demand as a state
-  field, advanced by an Ornstein-Uhlenbeck step, and expose it.
+- The reactor carries the current demand as a state field, advanced by an
+  Ornstein-Uhlenbeck step, and exposes it. The battery carries its whole
+  dispatch schedule as a state field and exposes only the current request:
+  the live block's level plus regulation jitter.
 - The patrol tasks carry the lead aircraft's full state and define the slot in
   its body frame.
 
@@ -195,7 +197,7 @@ and the table below records it, because it determines the ceiling.
 | `plane_energy` | staircase, four treads at fixed intervals | scheduled, switching times not observed |
 | `plane_sine` | sinusoid, 800 m amplitude, 240 s period | deterministic exosystem of order two, phase not observed |
 | `reactor` | flux demand | Ornstein-Uhlenbeck, stochastic |
-| `battery` | dispatch request | Ornstein-Uhlenbeck, stochastic |
+| `battery` | dispatch request | scheduled 300 s blocks, next level and switching times not observed, plus white jitter: stochastic |
 | `patrol`, `patrol_bearing_only` | slot on a manoeuvring lead | exogenous aircraft, autopilot with a hidden constant turn rate |
 
 **A remark on phase space.** A sinusoid of amplitude $A$ and angular frequency
@@ -234,13 +236,14 @@ encodes the phase a single observation hides. Whether a memoryless policy
 falls short of the ceiling is therefore a property of the closed loop, to be
 computed rather than assumed.
 
-**Stochastic exosystem.** The reference has an irreducible random increment.
-`battery` and `reactor` are in this class, and both are faithful models of grid
-operation: the operator sends a fresh setpoint every few seconds and nobody
-forecasts it. The set $G$ is fixed and the current setpoint is observed, so the
-criterion holds, but the maximum reward is unattainable at every transition for
-any policy, because the plant has inertia and the reference moved without
-warning.
+**Stochastic exosystem.** The reference has an irreducible random part.
+`reactor` and `battery` are in this class, and both are faithful models of grid
+operation. The reactor's flux demand is load-following that nobody forecasts.
+The battery's dispatch is a schedule of held blocks, as a market dispatches,
+with regulation jitter on top that no policy can anticipate. The set $G$ is
+fixed and the current setpoint is observed, so the criterion holds, but the
+maximum reward is unattainable at every transition for any policy, because the
+reference moves without warning after the action is chosen.
 
 That ceiling is a property of the environment. On such a task an absolute score
 means nothing, and acquires meaning only against a controller facing the same

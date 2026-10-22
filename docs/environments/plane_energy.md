@@ -9,7 +9,7 @@
 | Tracked variable(s) | altitude (m) |
 | Episode length | 1200 steps (1200 s at 1 s per step) |
 | Import | `from target_gym import Airplane2D, PlaneParams` |
-| Cite as | `plane_energy-v2` |
+| Cite as | `plane_energy-v3` |
 
 ## Action space
 
@@ -56,8 +56,8 @@ Recorded over 10 seeds of the 1200-step episode (see [Baselines](../baselines.md
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -1.639e+06 | 1366 |
-| MPC | -8.785e+04 | 73.21 |
+| PID | -2.355e+07 | 1.963e+04 |
+| MPC | -1.215e+06 | 1013 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
@@ -99,15 +99,15 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 | `stabilizer_surface` | 27 | m^2 |
 | `elevator_surface` | 10 | m^2 |
 | `reward_version` | 2 | - |
-| `e_floor` | 4.55 | m |
+| `e_floor` | 1.2 | m |
 | `e_tol` | 0 | m |
 | `tracking_exponent` | 2 | - |
 | `c_hold` | 5.23 | m/s |
 | `running_weight` | 1 | - |
-| `failure_cost` | 1.43601e+07 | reward |
+| `failure_cost` | 2.06451e+08 | reward |
 | `restart_steps` | 3600 | steps |
-| `rho_floor_tracking` | 1 | reward |
-| `rho_floor` | 1 | reward |
+| `rho_floor_tracking` | 0.962525 | reward |
+| `rho_floor` | 0.962525 | reward |
 | `min_alt` | 0 | m |
 | `max_alt` | 12191.4 | m |
 | `speed_weight` | 0.5 | - |

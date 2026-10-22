@@ -75,15 +75,16 @@ class CementKilnParams(EnvParams):
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # Floor: the shipped MPC's long-run mean free-lime error under the shipped
-    # raw-meal disturbance, 3.42e-4 (fraction; the lowest of three seeds, 3.4 / 4.4 / 5.6e-4, PID 7.0-10.1e-4) over 1560 hold steps after a
+    # raw-meal disturbance, 4.9e-5 (fraction; the lowest of three seeds,
+    # 4.9 / 6.5 / 8.4e-5, PID 7.0-10.1e-4) over 1560 hold steps after a
     # 180-step burn-in, `scripts/measure_hold.py`; an upper bound on the
-    # achievable floor. e_tol = 0 provisionally: the free-lime specification
-    # band comes from the plant's quality system and is to be supplied. Fuel
-    # above the hold-phase rate (1.824 kg/s, PID; MPC 1.840) is charged at
-    # weight 1. The unit free-lime span costs (1 / 3.42e-4)^2 = 8.6e6 per
-    # step; termination twice that.
+    # achievable floor. That is the oracle since the oracle audit (2026-10-01),
+    # planning on the mean feed with a larger sampling budget; it held 3.3e-4
+    # before. e_tol = 0 provisionally: the free-lime specification band comes
+    # from the plant's quality system and is to be supplied. Fuel above the
+    # hold-phase rate (1.824 kg/s, PID; MPC 1.790) is charged at weight 1.
     reward_version: int = 2
-    # The MPC holds 3.4e-4 in the shipped disturbance, below the 5e-4 free-lime
+    # The MPC holds 4.9e-5 in the shipped disturbance, below the 5e-4 free-lime
     # assay resolution: the instrument sets the scale.
     e_floor: float = 5e-4
     e_tol: float = 0.0  # provisional; quality-system band to be supplied
@@ -97,9 +98,9 @@ class CementKilnParams(EnvParams):
     restart_steps: int = 2880
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
     #: The NEA reference: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (the MPC's 3.42e-4 hold in 5e-4 units).
-    rho_floor_tracking: float = (3.42e-4 / 5e-4) ** 2
-    rho_floor: float = (3.42e-4 / 5e-4) ** 2
+    #: demonstrated, in the reward's units (the MPC's 4.89e-5 hold in 5e-4 units).
+    rho_floor_tracking: float = (4.89e-5 / 5e-4) ** 2
+    rho_floor: float = (4.89e-5 / 5e-4) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 

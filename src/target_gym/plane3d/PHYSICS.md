@@ -192,6 +192,51 @@ machine you are reading this from are in
 error at one substep was 0.823 m, inside its 1 m floor rather than outside it,
 but it is set the same way so the family stays consistent.
 
+### The oracle
+
+The MPC slot holds a gradient MPC (`make_plane3d_mpc` in `experts.py`): it
+differentiates `step_env` over a 30-step horizon and descends the reward, on
+params with the turbulence zeroed, so it plans on the mean wind. Its
+normalised step is also its resolution: it cannot place an action closer than
+about the step to the optimum. At a fixed 0.05 for 50 iterations that left
+steady offsets, 4.1 to 4.5 m of altitude and 14.3 to 15.5 m of path on the
+circle in its last hold measurement. Since the oracle audit (2026-10) the step
+decays geometrically from 0.05 to 0.002 over each solve, with 200 iterations
+on every task (the settings table in `experts.py`). Under the earlier floors
+the audit measured, on the three protocol seeds, the cost falling from 5.05 to
+0.380 (heading), 9.84 to 0.123 (circle) and 2.10 to 0.031 (figure-8) at 200
+iterations, and from 7.04 to 1.49 (racetrack) at 50, with zero trips. The
+iterations matter. On the figure-8 at 50, the decaying step lost one seed to
+the fixed step (3.9 against 1.18, with 40 m excursions at the lobe tips), and
+at 200 that seed held 3.3 m. On the racetrack, measured under the `-v3`
+floors on the same seeds, 200 iterations cost 1.07 (0.960 / 1.29 / 0.962)
+against 4.58 (2.23 / 7.54 / 3.97) at 50, with zero trips either way, so the
+racetrack moved to 200 as well.
+
+The oracle then held below every instrument resolution, so the floors were
+reset to them (the `-v3` tasks) and the oracle re-measured under them, since
+the floors weight its objective. Its lowest per-seed holds are 0.67 / 0.67 /
+0.68 m of altitude (heading, circle, racetrack), 2.1e-5 rad of heading and
+0.45 / 0.47 / 1.29 m of path (circle, racetrack, figure-8;
+`scripts/measure_hold.py`), and its protocol cost under the `-v3` reward is
+0.726 (heading), 1.93 (circle), 1.07 (racetrack) and 0.770 (figure-8), with
+zero trips (`scripts/evaluate_baselines.py`). Those are larger numbers than
+the audit's mostly because the floors are smaller: the audit's own
+trajectories, rescored at the new floors, cost 0.788 (heading), 1.60 (circle)
+and 0.744 (figure-8), and 5.01 on the racetrack at 50 iterations, where the
+oracle re-planned at 50 cost 4.58. The heading and the racetrack land below
+their rescored costs. The figure-8 scores one output, so its new floor only
+rescales the objective, and it lands 3% above (0.770 against 0.744) with its
+holds about unchanged (3.11 / 1.29 m against 3.08 / 1.33 m); the likely cause
+is the planner's gradient-norm clip, which a larger objective meets more
+often, not a trade between terms. The circle is the one clear loss. Its
+altitude term gained 16.5x and its path term 7.3x, and the re-planned oracle
+trades path for altitude: its altitude holds improved (0.83 / 0.67 m against
+0.92 / 0.71 m) and its seed-1 path hold grew from 2.2 to 3.8 m. The budget
+costs compute: 0.9 to 1.3 s per step on the four tasks in the recorded
+protocol rows (one core, on a shared machine), against 0.4 to 0.5 s for the
+fixed step in the audit's timings.
+
 ## 5. Known deviations
 
 **⚠️ D1 — no yaw axis, and it costs less than it appears to.** Turns are
@@ -267,13 +312,20 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_altitude` | 1.44 m (`plane3d_heading`), 4.06 (`plane3d_circle`), 1.39 (`plane3d_racetrack`) | lowest per-seed long-run mean |error| the shipped MPC held in the test turbulence (`scripts/measure_hold.py`, 2 seeds, hold steps after a 210-step burn-in); an upper bound on the achievable floor, and below the instrument resolution a real aircraft would have (1 m barometric, 0.5 deg heading, 3 m GPS): measurement noise is not modelled. PID: 44 / 7.2 / 5.2 m |
+| `e_floor_altitude` | 1 m (`plane3d_heading`, `plane3d_circle`, `plane3d_racetrack`); `plane3d_figure8` scores no altitude and keeps the 1.44 m class default | the barometric altimeter's resolution. The oracle holds below it in the test turbulence: its lowest per-seed long-run mean \|error\| is 0.67 / 0.67 / 0.68 m (`scripts/measure_hold.py`, 2 seeds, hold steps after a 210-step burn-in, the second half of the episode on the 200-step heading task). Measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. Until the oracle audit (2026-10) the floors were an earlier oracle's holds, 1.44 / 4.06 / 1.39 m (the `-v2` tasks). PID: 44 / 7.2 / 5.2 m |
 | `e_tol_altitude` | 0 | no dead zone; a +-30 m band made the altitude hold vacuous (see the 2D aircraft) |
-| `e_floor_heading` | 0.0087 rad | the 0.5 deg AHRS resolution. The MPC holds below it in the test turbulence (1e-4 rad on two seeds, 6e-3 on three; `scripts/measure_hold.py`, `target_gym.eval`), so the instrument, not the simulator, sets the scale; the PID never captures the heading (0.96 rad) |
-| `e_floor_path` | 8.12 m (`plane3d_circle`), 6.17 (`plane3d_racetrack`), 14.6 (`plane3d_figure8`); 3 m (GPS accuracy) where no path term is scored | lowest per-seed MPC path-distance holds in the test turbulence; upper bounds. PID: 53 / 408 / 1767 m |
+| `e_floor_heading` | 0.0087 rad | the 0.5 deg AHRS resolution. The oracle holds far below it in the test turbulence (2.1e-5 rad, lowest per seed; `scripts/measure_hold.py`), so the instrument, not the simulator, sets the scale; the PID never captures the heading (0.96 rad) |
+| `e_floor_path` | 3 m (`plane3d_circle`, `plane3d_racetrack`, `plane3d_figure8`; also the default where no path term is scored) | civil GPS horizontal accuracy. The oracle holds below it: its lowest per-seed path-distance holds are 0.45 / 0.47 / 1.29 m (`scripts/measure_hold.py`). Until the oracle audit (2026-10) the floors were 8.12 / 6.17 / 14.6 m: the racetrack's and figure-8's were an earlier oracle's holds, while the circle's 8.12 m was labelled one but equals 2 x 4.06 m, and that oracle's recorded hold there was 14.3 m. PID: 53 / 408 / 1767 m |
 | `tracking_exponent` | 2 | quadratic |
-| `failure_cost` | 1.43e8 (`plane3d_heading`), 1.8e7 (`plane3d_circle`), 1.54e8 (`plane3d_racetrack`), 3.75e6 (`plane3d_figure8`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor_altitude)^2; the figure-8 scores the path alone, 2 x (20 000 / 14.6)^2 |
+| `failure_cost` | 2.97e8 (`plane3d_heading`, `plane3d_circle`, `plane3d_racetrack`), 8.89e7 (`plane3d_figure8`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor_altitude)^2; the figure-8 scores the path alone, 2 x (20 000 / e_floor_path)^2 |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
+| `rho_floor_tracking`, `rho_floor` | 0.454 (`plane3d_heading`), 0.466 (`plane3d_circle`), 0.487 (`plane3d_racetrack`), 0.184 (`plane3d_figure8`) | the oracle's lowest per-seed holds above in floor units, (hold / floor)^2 summed over the scored outputs (`scripts/measure_hold.py`): (0.6735 / 1)^2 + (2.1e-5 / 0.0087)^2, (0.6657 / 1)^2 + (0.4504 / 3)^2, (0.6803 / 1)^2 + (0.4660 / 3)^2 and (1.2871 / 3)^2 |
+
+Each 3D task's values above are its registry parameters,
+`spec.make_test_params()`. The `PlaneParams3D()` class defaults, which patrol
+inherits, are still `plane3d_heading-v2`'s (a 1.44 m altitude floor, its
+`failure_cost` and its `rho_floor`), so params built from the class alone
+score the `-v2` reward.
 
 `rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which

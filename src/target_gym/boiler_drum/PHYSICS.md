@@ -170,6 +170,18 @@ the controller is called on to fix; optimising it directly leaves no gradient
 where one is most needed. The objective shares the reward's *minimiser*, not
 its shape — the same lesson recorded for the pH environment.
 
+**The MPC plans on the mean steam demand, with a large descent budget.** Its
+model is the simulator itself, rolled with a fixed key. Until the oracle
+audit (2026-10-01) the steam-demand noise was not declared in the spec's
+`noise_fields`, so the plan followed one fixed noise path: exactly the
+plant's on protocol seed 0 and a wrong one on every other seed. Declared, the
+plan follows the mean. The descent then needed far more iterations: on the
+protocol seeds, 40 iterations scored 19.2, 160 with a decaying step 8.2, 640
+5.3 and the shipped 1280 4.67, against 23.8 before (zero trips). Each doubling
+still gains about half what the one before it did, so the optimiser, not the
+plant, is what limits it. (The table above predates the version-2 reward and
+this change.)
+
 ---
 
 ## 6. Known deviations
@@ -226,8 +238,8 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_level` | 2.67e-3 m | the lowest per-seed long-run mean \|level\| the shipped MPC held under the shipped steam-demand disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 60-step burn-in; seeds 2.7 / 17 / 18 mm, PID 37-70 mm). Per-seed minimum; upper bound |
-| `e_floor_pressure` | 0.05 bar (the MPC holds 0.028) | the pressure transmitter's resolution; the lowest per-seed MPC hold (seeds 0.028 / 0.077 / 0.067 bar; PID 0.035-0.050) sits below it. Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
+| `e_floor_level` | 2.67e-3 m | an earlier oracle's lowest per-seed long-run mean \|level\| under the shipped steam-demand disturbance (seeds 2.7 / 17 / 18 mm), measured while it saw the steam noise of that seed. The current oracle, planning on the mean demand, holds 3.4 / 2.5 / 2.7 mm (`scripts/measure_hold.py`, 1200 hold steps after a 60-step burn-in; PID 37-70 mm). Its best seed, 2.45 mm, is within 1.1x of the floor, which is kept as the scale. Upper bound |
+| `e_floor_pressure` | 0.05 bar (the MPC holds 0.052) | the pressure transmitter's resolution. The oracle holds 0.066 / 0.052 / 0.053 bar per seed (PID 0.035-0.050), just above it; an earlier oracle's 0.028 bar came from seeing the steam noise. The hold is within 1.5x of the resolution, so the resolution stays the scale (the PID's best seed, 0.035 bar, sits below it, and a hold the instrument cannot see is not a floor). |
 | `e_tol` | 0 | no specification band |
 | `tracking_exponent` | 2 | quadratic on both |
 | `c_hold` | 1.566e8 W | firing rate while holding, MPC (PID 1.568e8) (`scripts/measure_hold.py`) |
@@ -238,7 +250,10 @@ baselines use.
 `rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
-at the instrument resolution -- and `rho_floor` the same with consumption
+at the instrument resolution. On this plant neither holds exactly: the level
+floor (2.67 mm) is an earlier oracle's hold, so the current oracle's 2.45 mm
+costs 0.84, and its 0.0519 bar pressure hold sits just above the 0.05 bar
+resolution kept as the scale, so that term costs 1.08 and `rho* = 1.92` -- `rho_floor` the same with consumption
 charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
 measured/certified floor or a resolution used as a scale, and where it is a
 resolution on a deterministic plant both references are 0, since exact hold is

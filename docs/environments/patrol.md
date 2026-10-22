@@ -11,7 +11,7 @@ Close-patrol (formation-keeping) environment: state, parameters and transition.
 | Tracked variable(s) | slot error (m) |
 | Episode length | 200 steps (200 s at 1 s per step) |
 | Import | `from target_gym import PlanePatrol, PatrolParams` |
-| Cite as | `patrol-v2` |
+| Cite as | `patrol-v3` |
 
 ## Action space
 
@@ -59,8 +59,8 @@ Recorded over 10 seeds of the 200-step episode (see [Baselines](../baselines.md)
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -2244 | 11.22 |
-| MPC | -712 | 3.56 |
+| PID | -5.971e+04 | 298.6 |
+| MPC | -2845 | 14.22 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
@@ -118,10 +118,10 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 | `e_floor_heading` | 0.0087 | rad |
 | `e_floor_path` | 3 | m |
 | `tracking_exponent` | 2 | - |
-| `failure_cost` | 273797 | reward |
+| `failure_cost` | 760790 | reward |
 | `restart_steps` | 3600 | steps |
-| `rho_floor_tracking` | 1.03382 | reward |
-| `rho_floor` | 1.03382 | reward |
+| `rho_floor_tracking` | 0.0363037 | reward |
+| `rho_floor` | 0.0363037 | reward |
 | `figure8_altitude_amplitude` | 200 | m |
 | `initial_z_dot` | 0 | m/s |
 | `initial_x_dot` | 200 | m/s |
@@ -147,7 +147,7 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 | `min_separation` | 25 | m |
 | `max_slot_error` | 1500 | m |
 | `slot_precision_floor` | 3 | m |
-| `e_floor_slot` | 18.6 | m |
+| `e_floor_slot` | 3 | m |
 | `e_tol_slot` | 0 | m |
 | `lead_leg_seconds` | 60 | s |
 | `follower_spawn_noise` | 40 | m |

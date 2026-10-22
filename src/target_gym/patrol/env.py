@@ -137,24 +137,28 @@ class PatrolParams(PlaneParams3D):
     # provisionally: the formation's station-keeping radius is a procedural
     # number to be supplied), normalised by the 3 m relative-GPS resolution
     # above; heading alignment with the lead, quadratic, normalised by the
-    # inherited 0.0087 rad AHRS resolution. Deterministic lead, no
-    # turbulence: the achievable hold error is ~0, so these are documented
-    # minima. Losing the formation, a collision or a crash costs, per step,
-    # twice the 1500 m slot-loss bound.
-    e_floor_slot: float = (
-        18.6  # m, lowest per-seed MPC hold in turbulence (upper bound)
-    )
+    # inherited 0.0087 rad AHRS resolution. The oracle holds both below their
+    # instruments in the test turbulence (scripts/measure_hold.py), so the
+    # instruments set the scale. Losing the formation, a collision or a crash
+    # costs, per step, twice the 1500 m slot-loss bound plus the heading term.
+    #
+    # patrol-v3: the slot floor was 18.6 m, an earlier planner's lowest
+    # per-seed hold, until the oracle audit (2026-10). The twin-autopilot
+    # oracle that replaced it held 0.41 m under that floor and holds 0.10 m
+    # under this one (lowest per-seed holds), so the floor is now the
+    # instrument rather than the next oracle's hold.
+    e_floor_slot: float = 3.0  # m, relative-GPS resolution (slot_precision_floor)
     e_tol_slot: float = 0.0  # provisional; station-keeping radius to be supplied
     # Overrides the inherited aircraft value: twice the slot-loss bound's cost.
-    failure_cost: float = 2.0 * ((1500.0 / 18.6) ** 2 + (3.14159 / 0.0087) ** 2)
+    failure_cost: float = 2.0 * ((1500.0 / 3.0) ** 2 + (3.14159 / 0.0087) ** 2)
     #: Restart time priced into a trip (``reward.trip_cost``): a crash, collision
     #: or lost formation loses the sortie, 1 h of flight at 1 s steps (provisional).
     restart_steps: int = 3600
-    #: Two terms (slot, heading), each costing 1 at its floor.
-    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (slot at its floor, the MPC's 1.6e-3 rad alignment hold in 0.5 deg units).
-    rho_floor_tracking: float = 1.0 + (1.6e-3 / 0.0087) ** 2
-    rho_floor: float = 1.0 + (1.6e-3 / 0.0087) ** 2
+    #: Two terms (slot, heading). The NEA reference: the lowest per-seed hold
+    #: cost the oracle demonstrated, in the reward's units (its slot hold in
+    #: 3 m units plus its alignment hold in 0.5 deg units).
+    rho_floor_tracking: float = (0.1021 / 3.0) ** 2 + (1.631e-3 / 0.0087) ** 2
+    rho_floor: float = (0.1021 / 3.0) ** 2 + (1.631e-3 / 0.0087) ** 2
 
     # Lead behaviour.  Turn rate is sampled in [-r, r] rad/step; 0 => straight
     # and level.  At delta_t = 1 s, 0.003 rad/step ~ 0.17 deg/s ~ a very gentle

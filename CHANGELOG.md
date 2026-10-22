@@ -70,6 +70,237 @@ than by commit.
 
 ### Changed
 
+- **The glass furnace's oracle applies the move it plans, plans on the known
+  loads, and estimates its model error as a heat rate.** Three changes to its
+  CasADi MPC. It applies the plan's input at index `FUEL_DEAD_TIME_STEPS`, the
+  first one that reaches the predicted dynamics, and makes it do-mpc's
+  previous input; it applied the plan's first input, which the dead time
+  keeps out of the prediction and only the move penalty set, a third of the
+  way from the previous input to the one that mattered. It takes the pull at
+  its AR(1) conditional mean, read from the state, and the pulsed batch
+  charge at that pull as time-varying parameters, where it used the nominal
+  pull and a continuous charge. And a crown heat-rate disturbance, estimated
+  from the one-step prediction error (gain 0.02, clamped at 0.6 K a step,
+  never reset within an episode), replaces the setpoint bias, which integrated
+  the tracking error, pushed against the plan's anticipation of a trim, wound
+  up to -22 K with the fuel at its minimum and was dropped at every trim. The
+  plant runs about 0.15 K a step hotter than the reduced model, and the
+  estimate settles there. The factory's `bias_gain` and
+  `bias_reset_on_setpoint` keywords are replaced by `disturbance_gain`, and
+  the horizon doubles to one hour (120 steps), which lets it start
+  pre-cooling early enough for a large trim. On the protocol seeds the cost
+  falls from 0.300 / 1.783 / 0.326 to 0.168 / 0.845 / 0.167 per step (mean
+  0.803 to 0.394, -51%; the same changes at the old 30-minute horizon gave
+  0.468), with zero trips and no solver failure, matching the oracle audit's
+  measurement (2026-10) to every digit. Over the ten baseline seeds the
+  episode cost falls 37-53% on every seed (0.494 to 0.274 per step), with zero
+  trips and none of 16 000 solves failed or capped. A solve takes 1.7 to 1.9
+  times as long as at 30 minutes. The NEA floor follows the better oracle: its
+  long-run hold is 0.061 / 0.077 / 0.088 K per seed (`scripts/measure_hold.py`,
+  against 0.192 / 0.175 / 0.228), so `rho_floor = rho_floor_tracking =
+  (0.0614 / 1.0)^2`, from 0.0306, and the NEA is 0.813 (0.625 before). `e_floor` is the 1 K
+  thermocouple resolution and does not move, nothing behavioural reads
+  `rho_floor`, so `glass_furnace-v2` is re-stamped in place. The spec now
+  declares `noise_fields=("m_pull_noise_std",)`, which the registry test
+  listed as pending; the oracle never rolls the simulator, so this changes
+  no number.
+
+- **The CSTR and four-tank oracles plan the rest of the episode.** A new
+  shared class, `ShrinkingHorizonNLP` in `experts/mpc.py`, solves one NLP
+  with IPOPT over every remaining step, on the environment's own discrete
+  step written in CasADi (the same integration method and substeps, in
+  float64; a test holds each task's map equal to `step_env`). The cost is the
+  version-2 tracking term in floor units, with the steps before the
+  protocol's burn-in weighted 1e-3, so the oracle optimises the window the
+  protocol scores; the burn-in is read from the hold row by the factory. It
+  starts cold from zero, warm-starts from its shifted plan, re-solves every
+  step on the CSTR and every 25 on the four-tank, and is capped at 500
+  iterations with no wall-clock limit. It replaces `CSTRCasadiMPC` and
+  `FourTankCasadiMPC`, which are removed. On the protocol seeds the CSTR's
+  gain falls from 0.317 to 9.4e-9 per step (hold 4.2e-5 to 0, reach cost
+  611 868 to 609 936) and the four-tank's from 0.0074 to 3.1e-8 (reach cost
+  192 414 to 184 765), with zero trips and none of the 360 solves failed,
+  matching the oracle audit's probes (2026-10) to every printed digit. The
+  old CSTR oracle's move penalty, in raw mol/L, was 1e4 in floor units and
+  alone made its 0.317; the old four-tank oracle charged every step alike, and
+  on that non-minimum-phase plant even the exact optimum of such a cost leaves
+  0.0098 in the scored window. Over the ten baseline seeds the episode cost
+  is 5752 per step against the recorded 5803 (CSTR) and 336 against 345
+  (four-tank), lower on every seed, with zero trips. Three protocol seeds take
+  16 s and 28 s. Both floors are documented minima with `rho_floor` 0, so
+  neither moves. `first_order` keeps its `CasadiMPC`.
+- **`GradientMPC` has no move penalty any more.** `move_penalty_fn` and the
+  last applied action it read are removed. Only the turbine's version-2
+  gradient planner set it, and that planner stopped being the oracle when the
+  Newton feedback law replaced it; the audit had also found the penalty half
+  dead, read when the solve was traced, before any action existed. The
+  version-1 turbine planner never had one and is unchanged.
+- **The baseline fingerprint covers every gains entry a task reads, and its
+  burn-in.** It hashed only the `pid_gains.json` keys starting with the task's
+  name. `plane_sine` and `plane_energy` fly a PID baseline on
+  `plane_cascaded`, which reached their fingerprints only through the copies
+  their oracle reads; a retune of `plane3d_heading` left patrol's records
+  looking fresh, and one of `patrol` left `patrol_bearing_only`'s. It now also
+  hashes the `tuned_gains_key` entry and any keys in the new
+  `EnvSpec.gains_keys`, which `plane_sine` and `plane_energy` set to
+  `plane_cascaded` and patrol and `patrol_bearing_only` set to
+  `plane3d_heading` (their oracle and the lead fly that autopilot). The field
+  feeds the baseline fingerprint only; the version stamp still sees no gains.
+  It also hashes the burn-in the protocol scores from (`eval.scored_burn_in`:
+  the task's row in `hold_measurements.json`, capped at half the episode),
+  which the new CSTR and four-tank oracles plan on. Registry tests check every
+  declared key exists and that the fingerprint covers these. Every
+  fingerprint moves with this change, and every task is re-recorded.
+- **`scripts/tune_pid.py` writes `plane_sine_cascaded` and
+  `plane_energy_cascaded` with `plane_cascaded`**, the copies the
+  `plane_sine` and `plane_energy` oracles read and a test holds equal to it.
+  A retune used to leave that test failing until they were edited by hand.
+- **The 3D aircraft oracle decays its step, and the four 3D tasks are
+  `-v3` with their floors at the instrument resolutions.** The gradient
+  planner's fixed normalised step of 0.05 was also its resolution, and left
+  steady offsets (4.1 to 4.5 m of altitude and 14.3 to 15.5 m of path on the
+  circle). The step now decays from 0.05 to 0.002 over each solve, over 200
+  iterations on all four tasks; the settings sit in a table in
+  `plane3d/experts.py`, which is in the four tasks' baseline fingerprint.
+  The oracle then held below the 1 m altimeter and 3 m GPS resolutions, so
+  the floors were reset to them: altitude 1.44 / 4.06 / 1.39 m to 1 m
+  (heading, circle, racetrack), path 8.12 / 6.17 / 14.6 m to 3 m (circle,
+  racetrack, figure-8). Those were an earlier oracle's holds, except the
+  circle's 8.12 m path floor, which was labelled one but equals 2 x 4.06 m
+  (that oracle's recorded hold there was 14.3 m). That changes the reward,
+  so `plane3d_heading`, `plane3d_circle`, `plane3d_racetrack` and
+  `plane3d_figure8` are `-v3`, and `failure_cost` follows the floors. The
+  heading's floors are set in the registry rather than in the
+  `PlaneParams3D` defaults, which patrol inherits. Under the earlier floors
+  the oracle audit measured the protocol cost falling from 5.05 to 0.380
+  (heading), 9.84 to 0.123 (circle) and 2.10 to 0.031 (figure-8) at 200
+  iterations, and from 7.04 to 1.49 (racetrack) at 50. Re-measured under the
+  `-v3` floors, which weight its objective, it costs 0.726, 1.93, 1.07 and
+  0.770 per step with zero trips (the racetrack cost 4.58 at 50 iterations
+  on the same seeds, so it moved to 200 too), and `rho_floor =
+  rho_floor_tracking` follows its re-measured holds: 0.454, 0.466, 0.487 and
+  0.184, from 1.0, 2, 2 and 1. The budget costs compute: 0.9 to 1.3 s per
+  step on the four tasks in the recorded protocol rows, about 8 min a seed
+  on the figure-8 and 10 on the racetrack, against 0.4 to 0.5 s per step for
+  the fixed step in the oracle audit's timings.
+- **The 2D aircraft oracle hands its throttle to the PID's airspeed loop
+  once it has captured its altitude, and `plane_energy` is `-v3` with its
+  altitude floor at its oracle's hold.** The gradient planner never moved its
+  throttle after its first plan: on `plane` the command was constant to three
+  decimals over every protocol seed's scored window while the airspeed sat 10
+  to 27 m/s off cruise. On `plane` and `plane_sine` that planner now flies only
+  the capture of the initial altitude offset. Once the aircraft has held within
+  3 m for five steps, a second planner takes over: the throttle is the
+  cascaded PID's airspeed loop, live in the plant and as a JAX port inside the
+  planner's rollout, and the planner optimises the elevator alone, 100
+  iterations with a step decaying from 0.05 to 0.002. Past 20 m off, the first
+  planner takes back over. The speed-loop planner flown from the first step
+  held 4.6x tighter on `plane`'s protocol but captured more slowly: over ten seeds it was worse on 9
+  of 10 `plane` seeds and all 10 `plane_sine` seeds, by 4 to 29% per seed
+  whatever the start offset (`plane` seed 0, 591 m off: 2.04e6 over its first
+  140 steps against 1.75e6). With the handover, protocol cost falls from 3.45
+  to 0.516 (`plane`) and from 2.99 to 0.546 (`plane_sine`), with zero trips
+  and the reach cost of the shipped planner to within 0.01%, and over ten
+  seeds the episode costs 3273 per step against the shipped planner's 3276
+  (`plane`) and 1249 against 1251 (`plane_sine`), lower on every seed of
+  both. `plane_energy` keeps the planner it had, since neither change moved
+  its ladder transients. Its 4.55 m altitude floor was an earlier oracle's
+  hold, 3.8x the current one, so it is reset to 1.20 m, the oracle's best
+  per-seed hold under the old floor (1.198 m); `failure_cost` follows, and the
+  reward changes, so the task is `plane_energy-v3` (511 per step on the
+  protocol against the PID's 11 210). `plane`'s floor is the 1 m altimeter
+  resolution and `plane_sine`'s 1.26 m is within 1.5x of it, so both stay and
+  only `rho_floor = rho_floor_tracking` follows the oracle's holds (0.46 m and
+  0.53 m): 0.706 to 0.210 and 1 to 0.176, with 0.963 on `plane_energy`; those
+  two are re-stamped in place. The planner now divides its objective by a
+  fixed scale per task rather than by `rho_floor_tracking`: while it read the
+  reference its holds set, re-measuring moved the holds by up to 19% and the
+  value never settled. Each task's oracle reads the PID gains from a key its
+  own baseline fingerprint collects (`plane_cascaded`, and copies
+  `plane_sine_cascaded` and `plane_energy_cascaded` that a test holds equal to
+  it). Over ten seeds the MPC leads the PID on every seed of all three, with
+  zero trips.
+- **The patrol oracle flies the lead's own autopilot, and the slot floor is
+  the GPS resolution (`patrol-v3`, `patrol_bearing_only-v3`).** The MPC slot
+  was a 20-step `GradientMPC` started from the PID's rollout, which kept the
+  follower within 29-32 m RMS of its slot on the protocol seeds. It now holds
+  `PatrolTwinOracle`: the follower flies the lead's heading autopilot on its
+  own state, aimed at the slot, so in the slot the shared gust drops out, and
+  a 30-step planner adds a residual to that law inside its rollout of
+  `step_env`. Under the earlier floors the protocol cost falls from 3.02 to
+  0.0316 per step (-99%). That slot floor, 18.6 m, was the old planner's own
+  hold, 45x the new oracle's, so it moves to the 3 m relative-GPS
+  resolution. The reward changes, so both tasks (they share `PatrolParams`)
+  become version 3, and `failure_cost` follows (2.7e5 to 7.6e5 per step).
+  Under the new floor the oracle costs 0.0371 per step against the PID's
+  265 (NEA 1.000), holds the slot to 0.10-0.12 m and the heading to about
+  1.7e-3 rad, and never trips; `rho_floor = rho_floor_tracking` goes from
+  1.03 to 0.0363. `patrol_bearing_only` gains an MPC, the same oracle reading
+  the true state and labelled a full-state bound, and a hold row, so its
+  protocol window now starts after the capture, as `patrol`'s does (its PID
+  costs 199 there). The oracle's law hands back its memory with the types it
+  was given, so its jitted step compiles once per episode rather than twice
+  (about 40 s saved per episode without a persistent compile cache).
+- **The wind turbine's oracle is a feedback law.** Generator torque comes
+  from four Newton steps through the plant's own model, with the turbulence at
+  its mean, so the next step's power meets the target and only the one-step
+  wind innovation is left. Pitch comes from the shipped PI on rotor speed,
+  with the setpoint at 1.05 x rated and the command slew capped at 0.13 deg
+  per step near it, opening to the actuator's rate toward the edges of a
+  0.97-1.13 band. It replaces a gradient MPC whose descent left a mean of
+  0.9-1.8 kW of power error its own model predicted. Protocol cost falls from
+  2.10e-5 to 1.30e-5 $/step (-38%, better on every seed), the 10-seed
+  episode cost from 3.56e-5 to 1.38e-5 (MPC ahead on 10 of 10, from 9), at
+  about 0.1 ms per step instead of about 0.4 s (plus a one-off JIT compile of
+  about 0.4 s per instance). Over seeds 3-199 it never trips and keeps the
+  rotor within 0.836-1.178 of rated speed. The NEA floor
+  follows its 1454 W best hold: `rho_floor = rho_floor_tracking` goes from
+  1.17e-5 to 1.01e-5, and NEA is 0.821 against it (0.365 before). `e_floor`
+  (1680 W, an earlier oracle's hold) is within 1.16x of the new hold and
+  stays, so the reward is unchanged and `wind_turbine-v2` is re-stamped in
+  place. The gradient planner is kept as `make_wind_turbine_gradient_mpc`,
+  still the oracle for version-1 params.
+
+- **The boiler, kiln and distillation oracles plan on the mean noise, with
+  stronger optimisers.** Their plant noise (steam demand, raw-meal feed, feed
+  composition) was not in `noise_fields`, so their planners, which roll the
+  simulator with a fixed key, saw the exact noise of protocol seed 0 and a
+  wrong path on every other seed. It is declared now, and a registry test
+  requires every non-zero noise amplitude to be declared; the glass furnace,
+  reactor and HVAC are listed as pending, since their CasADi oracles never
+  roll the simulator. With the noise out of the plan, each optimiser got the
+  budget the oracle audit measured it needs: the boiler 1280 iterations with
+  a step decaying 0.15 to 0.005, distillation 80 iterations decaying 0.08 to
+  0.004, the kiln 32 CEM iterations of 96 samples from a 0.1 spread,
+  returning the best sample. Protocol cost falls from 23.8 to 4.67 (boiler),
+  1.33 to 0.0705 (kiln) and 0.297 to 0.0125 (distillation), with zero trips.
+  The NEA floors follow the re-measured holds: kiln 0.468 to 0.00956,
+  distillation 0.127 to 8.5e-5, and the boiler up from 1.32 to 1.92, since
+  its old value came from the seed-0 foresight. Every `e_floor` stays (the
+  boiler's 2.67 mm level floor is within 1.1x of the new 2.45 mm hold), so
+  the rewards are unchanged and the three versions are re-stamped in place.
+
+- **The pH oracle reads the buffer flow.** Its CasADi model took the buffer
+  flow q2 at its nominal value and left feedback to absorb the drift; it now
+  takes q2 as a time-varying parameter, forecast from the state by the env's
+  OU mean decay, as it already read the hidden invariants Wa and Wb. Protocol
+  cost falls from 3.06 to 0.096 per step (-97%) and the mean hold error from
+  0.0146 to 0.0022 pH. The NEA floor follows the better oracle:
+  `rho_floor = rho_floor_tracking = (0.0013 / 0.01)^2`, from 0.64. `e_floor`
+  is the 0.01 pH electrode resolution and does not move, so the reward is
+  unchanged and `ph_neutralization-v2` is re-stamped in place. The spec now
+  declares `noise_fields=("q2_noise_std",)`.
+
+- **The battery's oracle is a feedforward of the scheduled dispatch level.**
+  It commands the level of the block the next step is scored against, which
+  leaves only the dispatch noise: its mean error is 1577 W against the
+  closed-form floor of 1596 W, where the gradient MPC it replaces held about
+  3.9 kW. Protocol cost falls from 1.115e-3 to 7.82e-4 $/step and NEA rises
+  from 0.724 to 0.827 (it cannot reach 1, because the floor leaves out
+  degradation). The floor is closed form, so it does not move. Measured in the
+  oracle audit; shading the command toward zero to save degradation would
+  gain about 0.03%.
+
 - **Each task's oracle lives in its own package.** The MPC-slot controllers
   of the 21 original tasks moved out of `experts/mpc.py` into their packages'
   `experts.py` (for example `target_gym.plane.experts.make_plane_mpc`), as the

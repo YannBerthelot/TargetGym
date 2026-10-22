@@ -362,10 +362,13 @@ def run_policy_on_benchmark(
     ``spec.make_test_params()`` - the parameters this library records its
     baselines and measures its burn-ins on. They differ from the
     environments' defaults on every aircraft task (episodes of 200-1200 steps
-    against 10 000) and on the reactor (864 against 8640); on five aircraft
-    tasks they are the task itself (plane, plane_energy and plane_sine share
-    one environment and differ only there). False runs ``env.default_params``,
-    the environment's own defaults. ``declare(name, env, params)``: the information a
+    against 10 000) and on the reactor (864 against 8640); on six aircraft
+    tasks they are the task itself: plane_energy and plane_sine (plane,
+    plane_energy and plane_sine share one environment and differ only there)
+    and the four plane3d tasks, whose floors are set in the registry (so
+    ``PlaneParams3D()`` scores plane3d_heading-v2's reward, not -v3's).
+    False runs ``env.default_params``, the environment's own defaults.
+    ``declare(name, env, params)``: the information a
     study declares to the controller beyond this library's
     (:attr:`TaskInfo.extras`), per task. ``record(name, env, params)``: the
     per-step quantities to record on that task (:func:`run_policy`'s

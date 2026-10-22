@@ -209,7 +209,7 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
         return make_four_tank_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
-        """Return a GradientMPC oracle for level tracking."""
+        """Return the oracle, a shrinking-horizon NLP, for level tracking."""
         from target_gym.pc_gym.four_tank.experts import make_four_tank_mpc
 
         if params is None:

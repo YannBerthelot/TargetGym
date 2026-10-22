@@ -164,7 +164,7 @@ class WindTurbine(environment.Environment[WindTurbineState, WindTurbineParams]):
         return make_wind_turbine_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
-        """Return a gradient MPC oracle for power regulation."""
+        """Return the oracle: Newton torque and slew-capped PI pitch (version 2)."""
         from target_gym.energy.wind_turbine.experts import make_wind_turbine_mpc
 
         if params is None:

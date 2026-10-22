@@ -15,9 +15,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "boiler_drum-v2": {
-    "fingerprint": "7c1a8517e33a38e8",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "ea7d45b3b6b955ff",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: the planner plans on the mean noise, with a larger optimiser budget). They are the NEA reference: no reward reads them, so the environment's behaviour is unchanged. The boiler planner divides its objective by rho_floor_tracking, so its hold was re-measured under the new value (1.9204 against the 1.9194 set) and its rows re-recorded with it.",
+    "stamped": "2026-10-01T18:09:02+00:00"
   },
   "cement_kiln-v1": {
     "fingerprint": "0419d354f296e9f2",
@@ -25,9 +25,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "cement_kiln-v2": {
-    "fingerprint": "92905dbc453fd7ff",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "931837e967ab598e",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: the planner plans on the mean noise, with a larger optimiser budget). They are the NEA reference: no reward reads them, so the environment's behaviour is unchanged. The kiln planner divides its objective by the floor, but its CEM ranking does not depend on that scale; its rows were re-recorded with it.",
+    "stamped": "2026-10-01T18:09:02+00:00"
   },
   "compressor_surge-v2": {
     "fingerprint": "b57d32e94be4dbbd",
@@ -50,9 +50,9 @@
     "stamped": "2026-09-13T09:03:12+00:00"
   },
   "distillation-v2": {
-    "fingerprint": "62c278c94b4bb6b1",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "66324f13544e8b45",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: the planner plans on the mean noise, with a larger optimiser budget). They are the NEA reference: no reward reads them, so the environment's behaviour is unchanged. The distillation planner sums the raw reward and does not read it; its rows were re-recorded with the new planner budget and declared noise.",
+    "stamped": "2026-10-01T18:09:02+00:00"
   },
   "first_order-v1": {
     "fingerprint": "fa0ddbc733bf3f60",
@@ -80,9 +80,9 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "glass_furnace-v2": {
-    "fingerprint": "b959053b92f7ef26",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "80414a1262d52d76",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured hold of the one-hour-horizon oracle (oracle audit, 2026-10): the NEA reference only. No reward reads it and the CasADi oracle does not either, so behaviour is unchanged; e_floor stays the 1 K thermocouple resolution",
+    "stamped": "2026-10-03T20:51:34+00:00"
   },
   "hvac-v1": {
     "fingerprint": "5c8e38a6b643c717",
@@ -104,6 +104,10 @@
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
   },
+  "patrol-v3": {
+    "fingerprint": "9b5f5e49f3ea3618",
+    "stamped": "2026-10-01T23:25:25+00:00"
+  },
   "patrol_bearing_only-v1": {
     "fingerprint": "96b9deebac83bd98",
     "note": "re-stamped without a note",
@@ -114,15 +118,19 @@
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
   },
+  "patrol_bearing_only-v3": {
+    "fingerprint": "9b5f5e49f3ea3618",
+    "stamped": "2026-10-01T23:25:25+00:00"
+  },
   "ph_neutralization-v1": {
     "fingerprint": "55f320195cb81ce2",
     "note": "re-stamped without a note",
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "ph_neutralization-v2": {
-    "fingerprint": "90495975fe09e3f6",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "077eebf99595acbb",
+    "note": "rho_floor and rho_floor_tracking follow the better oracle (oracle audit, pH reads the buffer flow): the NEA reference only, read by the evaluator and no reward or pH controller, so behaviour is unchanged",
+    "stamped": "2026-10-01T15:34:31+00:00"
   },
   "plane-v1": {
     "fingerprint": "e5d0397cd54ac886",
@@ -130,9 +138,9 @@
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "plane-v2": {
-    "fingerprint": "11e62c7c89f47624",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "9ddc3fa728d4ecfc",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: on plane and plane_sine the shipped planner flies the capture of the initial altitude offset and, once the aircraft has settled, a planner over the cascaded PID's airspeed loop with a decaying step holds). They are the NEA reference: no reward reads them, so the environment's behaviour is unchanged. e_floor stays: plane's is the 1 m altimeter resolution, and plane_sine's 1.26 m is within 1.5x of the 1 m resolution that would replace it. The plane MPC does not read rho_floor_tracking (it plans on a fixed objective scale per task), so the holds that set the new values were measured with the oracle the rows were recorded with. The PlaneParams default in plane/env.py moved too, which moves plane_sine's and plane_energy's stamps as well; both override it.",
+    "stamped": "2026-10-02T14:46:10+00:00"
   },
   "plane3d_circle-v1": {
     "fingerprint": "ffcbd44cb289829d",
@@ -144,6 +152,10 @@
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
   },
+  "plane3d_circle-v3": {
+    "fingerprint": "8e1e9c3f79fd7838",
+    "stamped": "2026-10-01T23:30:21+00:00"
+  },
   "plane3d_figure8-v1": {
     "fingerprint": "925522f0cf3233f4",
     "note": "re-stamped without a note",
@@ -153,6 +165,10 @@
     "fingerprint": "8a4ff4b1e479c4e4",
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
+  },
+  "plane3d_figure8-v3": {
+    "fingerprint": "25fa73380e2b67a6",
+    "stamped": "2026-10-01T23:30:21+00:00"
   },
   "plane3d_heading-v1": {
     "fingerprint": "2961df4b494a5ab7",
@@ -164,6 +180,10 @@
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
   },
+  "plane3d_heading-v3": {
+    "fingerprint": "cb6d7deabcb0d2af",
+    "stamped": "2026-10-01T23:30:21+00:00"
+  },
   "plane3d_racetrack-v1": {
     "fingerprint": "f1f9b8f7b7dcec42",
     "note": "re-stamped without a note",
@@ -173,6 +193,11 @@
     "fingerprint": "489d0fef135c9627",
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
+  },
+  "plane3d_racetrack-v3": {
+    "fingerprint": "bfbadce73d489587",
+    "note": "Behaviour-preserving: only rho_floor and rho_floor_tracking moved, from 1.07 to 0.487, when the racetrack oracle went from 50 to 200 descent iterations and its holds were re-measured (0.6803 m altitude, 0.4660 m path, lowest per seed). The floors (1 m, 3 m), failure_cost and every other parameter are unchanged, and neither rho enters the reward: it is the NEA reference, and the planner never applies done_value.",
+    "stamped": "2026-10-02T11:40:22+00:00"
   },
   "plane_energy-v1": {
     "fingerprint": "3994cf3273f563eb",
@@ -184,15 +209,20 @@
     "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
     "stamped": "2026-09-30T20:57:19+00:00"
   },
+  "plane_energy-v3": {
+    "fingerprint": "afd87aa324abf131",
+    "note": "v3: e_floor 4.55 -> 1.20 m (oracle audit, 2026-10). 4.55 m was an earlier oracle's hold, taken before its moves toward the next target were separated from its hold; 1.20 m is the current oracle's best per-seed hold, 1.198 m, rounded. failure_cost follows (2 x (12192 / 1.20)^2), and rho_floor = rho_floor_tracking = (1.1773 / 1.20)^2 from the hold re-measured under the new floor. Re-stamped in place when plane's rho_floor moved: the PlaneParams default in plane/env.py changed, and plane_energy overrides it, so its reward and floors are unchanged.",
+    "stamped": "2026-10-02T14:46:10+00:00"
+  },
   "plane_sine-v1": {
     "fingerprint": "01afd0d200bbcfb0",
     "note": "re-stamped without a note",
     "stamped": "2026-09-10T09:54:54+00:00"
   },
   "plane_sine-v2": {
-    "fingerprint": "0f42a93a23698676",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "50e5c2238c3ac72f",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: on plane and plane_sine the shipped planner flies the capture of the initial altitude offset and, once the aircraft has settled, a planner over the cascaded PID's airspeed loop with a decaying step holds). They are the NEA reference: no reward reads them, so the environment's behaviour is unchanged. e_floor stays: plane's is the 1 m altimeter resolution, and plane_sine's 1.26 m is within 1.5x of the 1 m resolution that would replace it. The plane MPC does not read rho_floor_tracking (it plans on a fixed objective scale per task), so the holds that set the new values were measured with the oracle the rows were recorded with. The PlaneParams default in plane/env.py moved too, which moves plane_sine's and plane_energy's stamps as well; both override it.",
+    "stamped": "2026-10-02T14:46:10+00:00"
   },
   "reactor-v1": {
     "fingerprint": "da9cd77061a7830c",
@@ -220,8 +250,8 @@
     "stamped": "2026-09-11T10:53:48+00:00"
   },
   "wind_turbine-v2": {
-    "fingerprint": "ac20f458cce7259c",
-    "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
-    "stamped": "2026-09-30T20:57:19+00:00"
+    "fingerprint": "41ee40adcc7b107e",
+    "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: the turbine's oracle is now a feedback law, torque by four Newton steps on the noise-free model and pitch by the shipped PI with a slew cap; best per-seed hold 1454 W). They are the NEA reference: no reward reads them, and neither does the new oracle, so the environment's behaviour is unchanged. e_floor stays at 1680 W, within 1.16x of the new hold, so the reward does not move.",
+    "stamped": "2026-10-01T22:44:55+00:00"
   }
 }

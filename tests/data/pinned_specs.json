@@ -27,6 +27,7 @@
       "max_steps_in_episode": 280
     },
     "tuned_gains_key": "plane",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -45,7 +46,7 @@
   {
     "name": "plane_energy",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "Altitude and airspeed",
     "params_cls": [
       "target_gym.plane.env",
@@ -73,12 +74,15 @@
       "target_steps": 8,
       "speed_weight": 0.5,
       "c_hold": 5.23,
-      "e_floor": 4.55,
-      "rho_floor_tracking": 1.0,
-      "rho_floor": 1.0,
-      "failure_cost": 14360088.298514672
+      "e_floor": 1.2,
+      "rho_floor_tracking": 0.9625245069444446,
+      "rho_floor": 0.9625245069444446,
+      "failure_cost": 206451200.0
     },
     "tuned_gains_key": "plane",
+    "gains_keys": [
+      "plane_cascaded"
+    ],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -125,11 +129,14 @@
       "target_period": 240.0,
       "c_hold": 8.15,
       "e_floor": 1.26,
-      "rho_floor_tracking": 1.0,
-      "rho_floor": 1.0,
+      "rho_floor_tracking": 0.1759336419753086,
+      "rho_floor": 0.1759336419753086,
       "failure_cost": 187257324.26303852
     },
     "tuned_gains_key": "plane",
+    "gains_keys": [
+      "plane_cascaded"
+    ],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -148,7 +155,7 @@
   {
     "name": "plane3d_heading",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "3D heading",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -170,9 +177,14 @@
       "make_plane3d_mpc"
     ],
     "test_params": {
-      "max_steps_in_episode": 200
+      "max_steps_in_episode": 200,
+      "e_floor_altitude": 1.0,
+      "rho_floor_tracking": 0.45360830046901834,
+      "rho_floor": 0.45360830046901834,
+      "failure_cost": 297289728.0
     },
     "tuned_gains_key": "plane3d_heading",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -192,7 +204,7 @@
   {
     "name": "plane3d_circle",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "3D circle",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -215,13 +227,14 @@
     ],
     "test_params": {
       "max_steps_in_episode": 300,
-      "e_floor_altitude": 4.06,
-      "e_floor_path": 8.12,
-      "rho_floor_tracking": 2.0,
-      "rho_floor": 2.0,
-      "failure_cost": 18035485.452207047
+      "e_floor_altitude": 1.0,
+      "e_floor_path": 3.0,
+      "rho_floor_tracking": 0.4656965077777777,
+      "rho_floor": 0.4656965077777777,
+      "failure_cost": 297289728.0
     },
     "tuned_gains_key": "plane3d_circle",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -241,7 +254,7 @@
   {
     "name": "plane3d_racetrack",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "3D holding pattern",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -264,13 +277,14 @@
     ],
     "test_params": {
       "max_steps_in_episode": 650,
-      "e_floor_altitude": 1.39,
-      "e_floor_path": 6.17,
-      "rho_floor_tracking": 2.0,
-      "rho_floor": 2.0,
-      "failure_cost": 153868706.58868593
+      "e_floor_altitude": 1.0,
+      "e_floor_path": 3.0,
+      "rho_floor_tracking": 0.48693653444444446,
+      "rho_floor": 0.48693653444444446,
+      "failure_cost": 297289728.0
     },
     "tuned_gains_key": "plane3d_racetrack",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -290,7 +304,7 @@
   {
     "name": "plane3d_figure8",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "3D figure-8",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -313,12 +327,13 @@
     ],
     "test_params": {
       "max_steps_in_episode": 400,
-      "e_floor_path": 14.6,
-      "rho_floor_tracking": 1.0,
-      "rho_floor": 1.0,
-      "failure_cost": 3753049.3525989866
+      "e_floor_path": 3.0,
+      "rho_floor_tracking": 0.1840696011111111,
+      "rho_floor": 0.1840696011111111,
+      "failure_cost": 88888888.8888889
     },
     "tuned_gains_key": "plane3d_figure8",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "gust_x",
@@ -338,7 +353,7 @@
   {
     "name": "patrol",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "Patrol - MARL formation",
     "params_cls": [
       "target_gym.patrol.env",
@@ -363,6 +378,9 @@
       "max_steps_in_episode": 200
     },
     "tuned_gains_key": "patrol",
+    "gains_keys": [
+      "plane3d_heading"
+    ],
     "baselines_note": null,
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -376,7 +394,7 @@
   {
     "name": "patrol_bearing_only",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "Patrol - MARL, bearing-only",
     "params_cls": [
       "target_gym.patrol.env",
@@ -392,12 +410,19 @@
       "target_gym.experts.pid",
       "make_patrol_bearing_only_stateful_pid"
     ],
-    "make_mpc": null,
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.patrol.experts",
+      "make_patrol_bearing_only_mpc"
+    ],
     "test_params": {
       "max_steps_in_episode": 200
     },
     "tuned_gains_key": "patrol",
-    "baselines_note": "PID present -- a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only genuinely unobservable quantity is the lead's HEADING, which the commanded slot needs because the slot is expressed in the lead's frame; it is recovered by differencing the estimated relative position and filtering. Measured performance matches the full-observation expert (4 of 8 seeds complete, ~229 m settled slot error vs ~260 m), so the partial observation costs essentially nothing here. No MPC, and the reason is the withheld observation rather than the manoeuvring lead. This note used to blame the lead, on the grounds that an MPC would need its future trajectory as a time-varying parameter. That holds for a CasADi model and not for a gradient planner: `patrol` now ships a GradientMPC that differentiates step_env, and because the lead is scripted and deterministic the plan propagates it for free. What blocks one here is that the planner reads the slot error out of the state, which is precisely what this variant withholds. Handing it the true state anyway would make it an oracle on a task defined by what is hidden, so it needs a planner built on the estimator.",
+    "gains_keys": [
+      "plane3d_heading"
+    ],
+    "baselines_note": "The PID is a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator recovers it by differencing the estimated relative position and filtering. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its NEA measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed (oracle audit, 2026-10).",
     "disturbance_fields": [],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
@@ -433,6 +458,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "cstr",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -467,6 +493,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "first_order",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -501,6 +528,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "four_tank",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -535,6 +563,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "ph_neutralization",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "q2"
@@ -543,7 +572,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "q2_noise_std"
+    ]
   },
   {
     "name": "distillation",
@@ -571,6 +602,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "distillation",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "zF"
@@ -579,7 +611,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "zF_noise_std"
+    ]
   },
   {
     "name": "glass_furnace",
@@ -607,6 +641,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "glass_furnace",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "m_pull_disturbance"
@@ -615,7 +650,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "m_pull_noise_std"
+    ]
   },
   {
     "name": "reactor",
@@ -645,6 +682,7 @@
       "max_steps_in_episode": 864
     },
     "tuned_gains_key": "reactor",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -679,6 +717,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "hvac",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "weather_dev"
@@ -715,6 +754,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "cement_kiln",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "raw_meal"
@@ -723,7 +763,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "feed_noise_std"
+    ]
   },
   {
     "name": "boiler_drum",
@@ -751,6 +793,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "boiler_drum",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "q_steam"
@@ -759,7 +802,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "q_steam_noise_std"
+    ]
   },
   {
     "name": "wind_turbine",
@@ -787,6 +832,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "wind_turbine",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "v_wind"
@@ -825,6 +871,7 @@
     ],
     "test_params": {},
     "tuned_gains_key": "battery",
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
       "target_power"

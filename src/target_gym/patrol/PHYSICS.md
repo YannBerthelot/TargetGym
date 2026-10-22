@@ -101,23 +101,50 @@ about 0.17 °/s — a gentle orbit, not an aerobatic one.
 
 The tracked scalar is the **slot error** for the full-observation variant and
 the **measured range** for the bearing-only one, each against its commanded
-value. Reward is a Gaussian in the tracking error multiplied by the heading
-alignment, with the suite's usual `-max_steps_in_episode` on an irrecoverable
-state.
+value. The version-2 reward charges the squared slot error and the squared
+heading misalignment with the lead, each in units of its floor, plus a trip
+cost on an irrecoverable state (see *Reward (version 2)* below).
 
 ## 5. Baselines
 
 A **PID** ships for both variants: a stateful wrapper around the functional
 pursuit expert for the full-observation task, and for the bearing-only task the
-same pursuit law fed by a lead-state estimator. Measured performance of the two
-is close — about 229 m settled slot error for the bearing-only expert against
-about 260 m with full observation — so the partial observation costs
-essentially nothing once the heading is reconstructed.
+same pursuit law fed by a lead-state estimator. The two hold the slot about
+equally well: 44 to 68 m of mean slot error for the full-observation PID and 40
+to 57 m for the bearing-only one (lowest to highest per-seed hold,
+`scripts/measure_hold.py`, seeds 0-1), at 265 and 199 per step on the protocol
+seeds. So the partial observation costs essentially nothing once the heading
+is reconstructed.
 
-**No MPC.** The follower's plant is the full 3D aircraft and its reference is a
-manoeuvring lead, so an MPC needs the lead's future trajectory as a
-time-varying parameter. That is not yet wired, and `EnvSpec.baselines_note`
-records it so the gap is documented rather than silent.
+**The oracle** in the MPC slot is `PatrolTwinOracle` (`experts.py`), a
+feedback law with a short planner on top. The law flies the lead's own heading
+autopilot on the follower's state, aimed at the lead's commanded heading and
+altitude plus the slot offset, and adds small corrections on the slot error
+and a turn feedforward. In the slot with nothing to correct it commands
+exactly what the lead commands, so the shared gust moves both aircraft alike
+and drops out of the relative position the reward scores. A 30-step
+receding-horizon planner then adds a residual to the law inside its rollout of
+`step_env` (turbulence zeroed) and descends the reward itself. The lead is
+scripted, so the rollout propagates it for free.
+
+It replaced a 20-step `GradientMPC` started from the PID's rollout in the
+oracle audit (2026-10). Under the earlier 18.6 m slot floor that planner cost
+3.02 per step on the protocol seeds and held the slot to 29-32 m RMS, where
+the law alone cost 0.109 (4-6 m RMS) and the law with the planner 0.0316
+(0.4-1.1 m RMS). The gust is common-mode, so what the old planner lost was
+solver weakness, not disturbance. Its own hold had set the slot floor, so the
+floor became the 3 m relative-GPS resolution (version 3 of both tasks). Under
+that floor the oracle costs 0.0371 per step on the protocol seeds
+(0.0407 / 0.0459 / 0.0248) against the PID's 265, never trips, and holds a
+mean slot error of 0.10 to 0.12 m and a heading error of 1.6e-3 to 1.7e-3 rad
+(`scripts/measure_hold.py`, seeds 0-1). What is left is mostly heading: in a
+turn a slot behind the lead moves sideways at omega x slot_back, so holding it
+exactly needs a heading offset of about omega slot_back / V, 4.5e-3 rad at the
+largest turn rate and slot (0.003 rad/s, 300 m, 200 m/s).
+
+On `patrol_bearing_only` the same oracle reads the true state. It is a
+full-state bound, not a bearing-only controller: on a task defined by what the
+observation withholds, its NEA measures information and control together.
 
 ## 6. Known deviations
 
@@ -189,11 +216,17 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_slot` | 18.6 m | lowest per-seed MPC slot hold in the test turbulence (`scripts/measure_hold.py`; PID 44 m); upper bound |
+| `e_floor_slot` | 3 m | relative position from differenced GPS fixes (`slot_precision_floor`), an instrument resolution: the oracle holds 0.10 m (lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; PID 44 m), so the instrument sets the scale. Until version 3 it was 18.6 m, an earlier planner's hold; the oracle audit (2026-10) found the current oracle holding 0.41 m under it |
 | `e_tol_slot` | 0 | **provisional.** The formation's station-keeping radius is a procedural number to be supplied. |
-| `e_floor_heading` | 0.0087 rad | inherited 0.5 deg AHRS resolution; the MPC holds alignment below it (1.6e-3 rad in the test turbulence, PID 0.011), so the instrument sets the scale |
-| `failure_cost` | 2 x ((1500 / 18.6)^2 + (pi / 0.0087)^2) = 2.7e5 per step | losing the formation, a collision or a crash: twice the slot-loss bound plus the heading term; overrides the inherited aircraft value |
+| `e_floor_heading` | 0.0087 rad | inherited 0.5 deg AHRS resolution; the oracle holds alignment below it (1.6e-3 rad, lowest per-seed hold in the test turbulence, PID 0.011), so the instrument sets the scale |
+| `failure_cost` | 2 x ((1500 / 3)^2 + (pi / 0.0087)^2) = 7.6e5 per step | losing the formation, a collision or a crash: twice the slot-loss bound plus the heading term; overrides the inherited aircraft value |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash, collision or lost formation loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
+
+Version 3 of both tasks (oracle audit, 2026-10) changed `e_floor_slot` from
+18.6 m to 3 m, and `failure_cost` with it (from 2.7e5); the form of the reward
+is unchanged. `rho_floor = rho_floor_tracking = (0.1021 / 3)^2 +
+(1.631e-3 / 0.0087)^2 = 0.0363`, the oracle's lowest per-seed holds in floor
+units.
 
 `rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which

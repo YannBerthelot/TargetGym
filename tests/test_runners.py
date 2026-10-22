@@ -17,13 +17,13 @@ from target_gym import (
     FourTank,
     FourTankParams,
 )
-from target_gym.experts.mpc import CasadiMPC, GradientMPC
+from target_gym.experts.mpc import CasadiMPC, GradientMPC, ShrinkingHorizonNLP
 from target_gym.pc_gym.cstr.experts import make_cstr_mpc
 from target_gym.pc_gym.first_order.experts import make_first_order_mpc
 from target_gym.pc_gym.four_tank.experts import make_four_tank_mpc
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
-from target_gym.plane.experts import make_plane_mpc
+from target_gym.plane.experts import PlaneHandoverMPC, make_plane_mpc
 from target_gym.registry import REGISTRY
 from target_gym.runners import runners as R
 
@@ -184,9 +184,9 @@ def test_four_tank_obs_indices_match_obs_array():
 @pytest.mark.parametrize(
     "env_cls,params_cls,make_fn,make_kwargs,action_dim",
     [
-        (CSTR, CSTRParams, make_cstr_mpc, {"horizon": 3}, 1),
+        (CSTR, CSTRParams, make_cstr_mpc, {}, 1),
         (FirstOrderSystem, FirstOrderParams, make_first_order_mpc, {"horizon": 3}, 1),
-        (FourTank, FourTankParams, make_four_tank_mpc, {"horizon": 3}, 2),
+        (FourTank, FourTankParams, make_four_tank_mpc, {}, 2),
     ],
 )
 def test_mpc_step_returns_finite(env_cls, params_cls, make_fn, make_kwargs, action_dim):
@@ -267,9 +267,9 @@ def test_plane_env_make_pid_returns_controller():
 @pytest.mark.parametrize(
     "env_cls,params_cls,make_kwargs,expected_type",
     [
-        (CSTR, CSTRParams, {"horizon": 3}, CasadiMPC),
+        (CSTR, CSTRParams, {}, ShrinkingHorizonNLP),
         (FirstOrderSystem, FirstOrderParams, {"horizon": 3}, CasadiMPC),
-        (FourTank, FourTankParams, {"horizon": 3}, CasadiMPC),
+        (FourTank, FourTankParams, {}, ShrinkingHorizonNLP),
     ],
 )
 def test_env_make_mpc_returns_controller(
@@ -286,5 +286,9 @@ def test_plane_env_make_mpc_returns_controller():
     env = Airplane2D()
     params = PlaneParams(max_steps_in_episode=N)
     mpc = env.make_mpc(params=params, horizon=3, n_iter=2)
-    assert isinstance(mpc, GradientMPC)
+    # The default pattern (plane's hold) flies two gradient planners in turn:
+    # one for the capture of the altitude, one for the hold.
+    assert isinstance(mpc, PlaneHandoverMPC)
+    assert isinstance(mpc.capture, GradientMPC)
+    assert isinstance(mpc.hold, GradientMPC)
     assert mpc.action_dim == 2

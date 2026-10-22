@@ -3,13 +3,15 @@
 TargetGym exists to ask one question: **can a learned policy hold a setpoint
 better than a PID or an MPC?** That question lives entirely in the reward, so
 the reward is the measuring instrument, and this page records how it is built.
-Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`) scores
-through it. Nineteen normalise the tracking term by a floor, and four
-(reactor, battery, wind turbine, building) put tracking and consumption in
-the owner's currency, where the floor enters as the reference cost `rho_floor`
-rather than as a divisor. Version 1, the capped log-scaled reward, is kept
-constructible (`reward_version=1` on any params) and described at the end of
-this page.
+Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`, and so
+Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`, and so
+are `patrol`, `patrol_bearing_only`, `plane_energy` and the four 3D aircraft
+tasks, whose floors were reset in the oracle audit, 2026-10) scores through it.
+Nineteen normalise the tracking term by a floor, and four (reactor, battery,
+wind turbine, building) put tracking and consumption in the owner's currency,
+where the floor enters as the reference cost `rho_floor` rather than as a
+divisor. Version 1, the capped log-scaled reward, is kept constructible
+(`reward_version=1` on any params) and described at the end of this page.
 
 ## The reward, in one line
 
@@ -39,9 +41,11 @@ controller can hold on this plant under its shipped reference and
 disturbance processes -- floored at the resolution of the instrument the
 plant's table cites. Measurement noise is not modelled, so a simulator can
 hold finer than a real transmitter reads; a hold the instrument cannot see
-is not a floor, and on eight plants (glass, kiln, boiler pressure,
-distillation, pH, the unstable CSTR, the compressor's header pressure, the
-aircraft's altitude and heading) the resolution is the scale and the finer measured hold is recorded beside it. An error at the floor costs 1 per step. The scale is
+is not a floor, and on seven plants (glass, kiln, distillation, pH, the
+unstable CSTR, the compressor's header pressure, the aircraft's altitude,
+heading and path) the resolution is the scale and the finer measured hold is recorded
+beside it. (The boiler's pressure floor is its transmitter resolution too,
+which the oracle holds just above, at 0.052 bar.) An error at the floor costs 1 per step. The scale is
 the plant's own irreducible error, not a sensor resolution and not the
 operating envelope, so a controller's tracking cost reads directly as "how
 many floor-widths off". `e_tol` is a specification tolerance where the plant
@@ -146,10 +150,18 @@ cannot, and the reason the sanity test below is possible. The normalised
 expert advantage `NEA = (PID - x) / (PID - rho*)`, with `rho*` the cost at the
 floor, is a Harris-type index in cost units: 1 at the bound, 0 at PID parity,
 negative below PID. `rho*` is the lowest per-seed hold cost the reference
-controller demonstrated, in the reward's units: 1 per tracked term where the
-floor is that hold, and less where the floor is clamped at the instrument
-resolution (the glass furnace's MPC holds 0.175 K against a 1 K scale, so
-`rho* = 0.03`). On the deterministic plants, where `e_floor` is a
+controller demonstrated, in the reward's units: the sum over tracked terms of
+`(hold / e_floor)^p`, which is 1 per term where the floor is that hold and
+less where the floor is clamped at the instrument resolution (the glass
+furnace's MPC holds 0.0614 K against a 1 K scale, so `rho* = 0.0038`). Where a
+floor was kept within 1.5x of a re-measured hold rather than reset (the
+oracle audit's rule), its term is near 1 but not 1: the boiler's level term is
+0.84 and its pressure term 1.08, so its `rho* = 1.92`; the wind turbine's
+oracle holds 1454 W against its 1680 W floor, so its term is 0.865. A floor is
+also kept when the value that would replace it is within 1.5x: `plane_sine`'s
+1.26 m is an earlier oracle's hold, and its oracle now holds 0.53 m, below the
+1 m altimeter resolution that would be the floor, so its
+`rho* = (0.5285 / 1.26)^2 = 0.176`. On the deterministic plants, where `e_floor` is a
 resolution used as a scale and exact hold is achievable, `rho*` is 0 -- a
 reference of 1 there (the cost at the resolution) is not a bound, and the
 shipped MPCs sit below it. And the two-cost report -- tracking against consumption --
@@ -186,22 +198,26 @@ detected the same way. Three kinds of floor come out of it:
   optimum can be computed for: the reactor (`scripts/floor_reactor_hold.py`, a
   one-state dynamic programme on the error against the demand's within-period
   random walk) and the battery (white dispatch noise drawn after the action,
-  so `E|error| >= sd * sqrt(2/pi)`). The shipped MPC must hold at or above
-  these floors, and does.
+  so `E|error| >= sd * sqrt(2/pi)`). The shipped MPC must hold at these
+  floors within sampling error, and does. The battery's oracle sits on its
+  floor by design: its mean error is 1577 W against 1596 W over 1080 scored
+  steps, about half a standard error below.
 - **Upper bounds** where no reduced-model optimum exists yet: the best shipped
   controller's own long-run hold error, labelled as such in the plant's
   PHYSICS.md. A learner that beats it scores a tracking cost below 1, which is
   allowed and informative.
 - **Documented minima** on the plants whose test configuration has no
-  disturbance at all -- the aircraft and patrol tasks fly with zero
-  turbulence, the CSTR, first-order plant and four-tank have none -- where the
+  disturbance at all (the CSTR, first-order plant and four-tank), where the
   achievable hold error is zero and a floor of zero would make the cost
   unbounded. There the version-1 resolution floor is kept as the scale, and
-  the PHYSICS.md says so.
+  the PHYSICS.md says so. The aircraft and patrol tasks fly in turbulence and
+  are not among them.
 
 The sanity test every measured floor has to pass, and a test enforces
 (`tests/test_reward_contract.py`): the shipped MPC's long-run tracking cost
-after burn-in is at or above the floor's cost. A floor the MPC beats is wrong.
+after burn-in is at or above the floor's cost, within sampling error (2%, or
+on the battery, whose oracle sits on its closed-form floor, three standard
+errors of the noise's mean). A floor the MPC beats by more is wrong.
 The test reads the MPC's cost from `src/target_gym/data/protocol_results.json`,
 recorded by `scripts/evaluate_baselines.py`, rather than running the MPC again,
 and refuses a row whose fingerprint no longer matches the code. One slow test
@@ -215,18 +231,18 @@ the evaluator measures.
 | `reactor` | p=1 | 0.00451 of rated (certified DP) | 0 | rod demand beyond the rate limit, weight 1 (provisional) | $ per 10 s step, imbalance $100/MWh |
 | `hvac` | p=2, dead-zone | overheating-bound; MPC reference | +-0.5 K occupied; night lower bound only (provisional) | gas EUR 0.10/kWh, in full | EUR per step; comfort EUR 0.03/K^2 h (provisional; restarts in place) |
 | `battery` | p=1 | 1596 W (closed form) | 0 | fade above hold at $300/kWh of capacity | $ per step, imbalance $100/MWh |
-| `wind_turbine` | p=1 | 1680 W (lowest per-seed MPC hold, upper bound) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $100/MWh (provisional) |
-| `glass_furnace` | p=2 | 1 K (thermocouple resolution; the MPC holds 0.175) | 0 | fuel above hold, w=1 | dimensionless |
-| `cement_kiln` | p=2 | 5e-4 (assay resolution; the MPC holds 3.4e-4) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
-| `boiler_drum` | p=2 x2 | 2.7 mm level (lowest per-seed MPC hold), 0.05 bar (transmitter resolution; the MPC holds 0.028) | 0 | fuel above hold, w=1 | dimensionless |
-| `distillation` | p=2 x2 | 1e-4 / 1e-4 (analyser resolution; the MPC holds 1.35e-5 / 3.3e-5) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
-| `ph_neutralization` | p=2 | 0.01 pH (electrode resolution; the MPC holds 0.0080) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
+| `wind_turbine` | p=1 | 1680 W (an earlier oracle's lowest per-seed hold, upper bound; the current one holds 1454 W) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $100/MWh (provisional) |
+| `glass_furnace` | p=2 | 1 K (thermocouple resolution; the MPC holds 0.0614) | 0 | fuel above hold, w=1 | dimensionless |
+| `cement_kiln` | p=2 | 5e-4 (assay resolution; the MPC holds 4.9e-5) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
+| `boiler_drum` | p=2 x2 | 2.7 mm level (an earlier oracle's lowest per-seed hold; the current one holds 2.45 mm), 0.05 bar (transmitter resolution; the MPC holds 0.052) | 0 | fuel above hold, w=1 | dimensionless |
+| `distillation` | p=2 x2 | 1e-4 / 1e-4 (analyser resolution; the MPC holds 7.6e-7 / 5.2e-7) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
+| `ph_neutralization` | p=2 | 0.01 pH (electrode resolution; the MPC holds 0.0013) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
 | `unstable_cstr` | p=2 | 1e-4 mol/L (analyser resolution; the MPC holds 6.29e-6, lowest per seed, so `rho* = (6.29e-6 / 1e-4)^2 = 0.00396`) | 0 (provisional) | none | dimensionless |
 | `compressor_surge` | p=2 | 0.0275 kPa (pressure transmitter accuracy, 0.055 % (read) of a 0 to 50 kPa span (ours); the MPC holds 1.03e-4, lowest per seed, so `rho* = (1.03e-4 / 0.0275)^2 = 1.40e-5`) | 0 (provisional) | recycle power above hold, w=1 (`c_hold` 62 270 W, the MPC's measured hold consumption) | dimensionless |
 | `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
-| `plane`, `plane_sine`, `plane_energy` | p=2 | 0.84 / 1.26 / 4.55 m (lowest per-seed MPC holds in the test turbulence, upper bounds; `plane_energy`'s held 1.20 m once its anticipation of target changes left the hold, so its floor is loose until the MPC is reviewed) | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
-| `plane3d_*` | p=2 | altitude 1.44 / 4.06 / 1.39 m, heading 1.0e-4 rad, path 8.1 / 6.2 / 14.6 m (lowest per-seed MPC holds in turbulence) | 0 | none | dimensionless |
-| `patrol` | p=2 | 18.6 m / 1.6e-3 rad (lowest per-seed MPC holds in turbulence) | 0 (provisional) | none | dimensionless |
+| `plane`, `plane_sine`, `plane_energy` | p=2 | 1 / 1.26 / 1.20 m: `plane`'s is the altimeter resolution (the MPC holds 0.46 m); `plane_sine`'s an earlier MPC's hold, kept within 1.5x of that resolution (the MPC holds 0.53 m); `plane_energy`'s its MPC's lowest per-seed hold between ladder steps, from 4.55 m in `-v3` (the MPC holds 1.18 m under it); lowest per-seed holds in the test turbulence | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
+| `plane3d_*` | p=2 | altitude 1 m (altimeter resolution; the MPC holds 0.67 / 0.67 / 0.68 m on heading / circle / racetrack), heading 0.0087 rad (AHRS resolution; the MPC holds 2.1e-5), path 3 m (GPS resolution; the MPC holds 0.45 / 0.47 / 1.29 m on circle / racetrack / figure-8); lowest per-seed holds in turbulence | 0 | none | dimensionless |
+| `patrol`, `patrol_bearing_only` | p=2 x2 | slot 3 m (relative-GPS resolution; the oracle holds 0.10 m, lowest per seed; 18.6 m, an earlier planner's hold, until version 3), heading 0.0087 rad (AHRS resolution; the oracle holds 1.6e-3 rad), so `rho* = (0.1021 / 3)^2 + (1.631e-3 / 0.0087)^2 = 0.0363` | 0 (provisional) | none | dimensionless |
 
 "Provisional" marks a number the plant's owner would supply -- a tolerance
 from the quality system, permit or grid code; a price from a tariff; a wear
@@ -249,10 +265,12 @@ that found it:
 
 - **The surrogate objectives mirrored the version-1 minimiser.** The
   gradient and sampling planners (wind turbine, battery, aircraft, boiler
-  drum, cement kiln) now descend the plant's own version-2 cost in floor
-  units, keeping their differentiable barriers (weighted like the failure
-  charge); the HVAC CasADi planner minimises the priced dead-zone comfort and
-  the gas. Where the tracking cost is linear in the error (p = 1) the planner
+  drum, cement kiln; the battery's has since been replaced by a feedforward
+  of the scheduled level, and the turbine's by a feedback law) now descend
+  the plant's own version-2 cost in floor units, keeping their
+  differentiable barriers (weighted like the failure charge); the HVAC
+  CasADi planner minimises the priced dead-zone comfort and the gas. Where
+  the tracking cost is linear in the error (p = 1) the planner
   squares it -- same minimiser, and a gradient that vanishes at it, where a
   normalised-gradient step on a linear cost never stops chattering.
 - **A 60-step open-loop tail dominated the aircraft objective.** Under a
@@ -263,14 +281,17 @@ that found it:
 - **A normalised-gradient planner cannot travel far in one solve**, so from
   a constant plan it could not find the pitch schedule the turbine needed
   (it braked the rotor with the torque instead) or the coordinated
-  thrust-and-elevator move the aircraft needed. The wind, 2D aircraft and
-  patrol planners now start from, and at every step are compared against,
-  the shipped PID's rollout plan under the planner's own objective -- so the
-  plan is never worse than the PID's under its model. (The patrol planner
-  had kept its version-1 surrogate, a bounded multiplicative shape; once the
-  descent below was made monotone, a better solve of that surrogate was a
-  worse version-2 return, 18x on two seeds. It descends the follower's own
-  cost now.)
+  thrust-and-elevator move the aircraft needed. The 2D aircraft planners now
+  start from, and at every step are compared against, the shipped PID's
+  rollout plan under the planner's own objective, as the wind planner did
+  until the oracle audit replaced it with a feedback law, so the plan is never
+  worse than the PID's under its model. (The patrol planner
+  did too. It had kept its version-1 surrogate, a bounded multiplicative
+  shape; once the descent below was made monotone, a better solve of that
+  surrogate was a worse version-2 return, 18x on two seeds, so it was moved
+  onto the follower's own cost. The oracle audit (2026-10) then replaced it
+  with the lead's own autopilot flown on the follower's state and a residual
+  planner that descends the reward itself.)
 - **Re-planning creates actuator activity no open-loop plan can see.** The
   turbine's pitch activity ran 3.4x the PID's with every plan predicting
   less; a move-suppression term on the first action, priced like the
@@ -278,6 +299,11 @@ that found it:
   of rated speed with a mild soft box -- what a turbine's own supervisory
   logic does -- because recovering a slowed rotor pays off beyond its
   horizon and without the box it drifted to 0.85x rated with a 250 kW error.
+  (The oracle audit (2026-10) found that the move-suppression term never
+  entered the descent, only the comparison with the PID's plan, and
+  replaced the turbine's planner with a feedback law whose pitch command is
+  slew-capped at the activity the reward leaves free. The term was then
+  removed, with `GradientMPC`'s `move_penalty_fn`, once nothing used it.)
 - **The descent was not monotone, and the planner took its last iterate
   regardless.** A fixed step along a normalised gradient overshoots wherever
   the cost has an edge -- a tolerance band, a barrier -- and fifty of them

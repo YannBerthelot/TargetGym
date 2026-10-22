@@ -13,7 +13,8 @@ what is broken and recorded rather than hidden.
 * [x] Restore the Plane Patrol baselines with pursuit guidance. Done: both
       variants ship a stateful wrapper around the functional pursuit expert,
       and `patrol_bearing_only` adds a lead-state estimator in front of the
-      same law. Neither has an MPC yet; see *Baseline coverage*.
+      same law. Both now ship `PatrolTwinOracle` in the MPC slot as well;
+      on `patrol_bearing_only` it reads the true state, a full-state bound.
 * [ ] Add microburst / spatially-varying wind fields (position-dependent, not just altitude-linear).
 * [ ] Provide benchmark results for popular RL baselines.
 * [ ] Add random orientation variations to circle and heading tasks.
@@ -85,8 +86,9 @@ what is broken and recorded rather than hidden.
         faster than the engines can supply it. It touched the commanded
         altitude at t=90 with 30 m/s of airspeed left and departed.
         `_plane_objective` now carries a barrier on airspeed against the stall
-        speed at that mass and altitude, the pattern `make_wind_turbine_mpc`
-        already uses. Fencing angle of attack instead does not work: it sits at
+        speed at that mass and altitude, the pattern the turbine's gradient
+        planner (`make_wind_turbine_gradient_mpc`) already used. Fencing
+        angle of attack instead does not work: it sits at
         4-8 deg through the whole manoeuvre and crosses 15 deg one step before
         the departure.
 
@@ -322,11 +324,13 @@ what is broken and recorded rather than hidden.
       the plant, and the glass furnace's has now diverged from its environment
       three separate times: an error band inherited from a deleted reward, a
       regenerator coarsened without the observation changing, and batch charging
-      the controller does not know is pulsed. Nothing detects any of that. The
-      fix is a conformance check per environment: step both models from the same
-      state under the same input and assert the one-step predictions agree to a
-      stated tolerance, so a divergence is a test failure rather than a slow
-      loss of baseline quality.
+      the controller did not know was pulsed (until the oracle audit, 2026-10,
+      fed it the charge; the plant still runs about 0.15 K a step hotter than
+      the controller's model, which the oracle now estimates online). Nothing
+      detects any of that. The fix is a conformance check per environment: step
+      both models from the same state under the same input and assert the
+      one-step predictions agree to a stated tolerance, so a divergence is a
+      test failure rather than a slow loss of baseline quality.
 
 * [x] **A check for code that has drifted from its own documentation.**
       These contracts are what a reader consults *instead of* the code, so a
@@ -407,9 +411,12 @@ what is broken and recorded rather than hidden.
 
 * [ ] **Derive the MPC error bands rather than choosing them one at a time.**
       Every MPC objective normalises its tracking error by a per-plant band:
-      `tracking_band` on the four-tank, the distillation column, the pH loop and
-      now the glass furnace, `power_band` on the turbine and the battery,
-      `comfort_band`, `lime_band`, `reward_band`. The surrogate is deliberate
+      `tracking_band` on the distillation column, the pH loop and now the
+      glass furnace, `power_band` on the turbine (its version-1 planner),
+      `comfort_band`, `lime_band`, `reward_band`. (The CSTR and four-tank
+      oracles track in floor units, `e_floor`, since the oracle audit
+      (2026-10). The four-tank's `tracking_band` has been unread since the
+      reward became log-scaled.) The surrogate is deliberate
       and measured -- the log-scaled reward's gradient decays like `1/e`, so the
       pull toward the setpoint is weakest where the controller is furthest from
       it, and a quadratic in the normalised error scored 341.9 against 172.1 for
@@ -493,7 +500,9 @@ what is broken and recorded rather than hidden.
         parameters named in `EnvSpec.noise_fields` for the planner's copy of
         the params, which is certainty equivalence. It controls better, not
         merely more honestly: the wind turbine went from 343.9 to 348.3, and
-        the battery MPC from losing 9 seeds in 10 to leading.
+        the battery MPC from losing 9 seeds in 10 to leading. The boiler,
+        kiln and distillation planners only joined in the oracle audit
+        (2026-10), when their noise was declared.
       - [ ] **An asymmetric reward variant**, if mechanism 2 is to be isolated
         cleanly rather than merely present. Every reward here is symmetric in
         the error, including the cement kiln's free lime; they are all

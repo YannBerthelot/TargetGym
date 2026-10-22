@@ -115,6 +115,37 @@ below rated torque, so it under-brakes and the rotor runs away to an overspeed
 trip. The fix that works is backing the torque demand off linearly between 0.6
 and 0.9 of rated speed, which is inactive during normal Region 3 regulation.
 
+**The oracle is a feedback law, not a planner.** Since the oracle audit
+(2026-10) the MPC slot holds `WindTurbineNewtonPI` (`experts.py`). Generator
+torque reaches its command within a step, so the power the next step is
+scored on is set by this step's torque command: four Newton steps through the
+plant's own model, with the turbulence at its mean, make the predicted power
+equal the target (times the PID's low-speed protection above). What is left
+is the one-step wind innovation, which no causal controller can see; with the
+turbulence switched off the error is float32 rounding. Pitch is the PID's PI
+on rotor speed, in velocity form, with the setpoint at 1.05 x rated and the
+command's slew capped at 0.13 deg per step between 1.01 and 1.09 x rated: a
+command ramping that fast leaves the actuator 0.052 deg behind, which is
+`c_hold` (0.0013 of the 40 deg range). Toward 0.97 and 1.13 x rated the cap
+opens linearly to the actuator's 2 deg per step, and outside that band it is
+lifted.
+
+On the protocol seeds the cost falls from 2.10e-5 to 1.30e-5 $ per step
+(-38%, better on every seed) against the gradient planner it replaced, and the
+best per-seed hold from 1907 W to 1454 W (`scripts/evaluate_baselines.py`,
+`scripts/measure_hold.py`). It needs about 0.1 ms per step, after a one-off
+JIT compile of about 0.4 s per instance, where the planner needed about 0.4 s
+per step; the planner is still the version-1 oracle. Screened over
+seeds 3-199 of the 400-step episode it never trips, and the rotor stays
+within 0.836-1.178 of rated speed (the trips are at 0.40 and 1.25). The peak
+is a start-up transient (seed 149). The low is seed 142, whose lull leaves
+less power in the wind than its 4.79 MW target, so every controller sags
+there, the PID included. A hard cap band without the ramp scored 2.3% better
+on the protocol seeds, but after a gust it let the rotor sag to 0.82-0.89 x
+rated on 16 of the 197 screened seeds and on protocol seed 0 over a longer
+hold (27.2 kW of mean error), and it peaked at 1.218 x rated. (The table above
+predates the version-2 reward and this change.)
+
 ---
 
 ## 6. Known deviations
@@ -161,14 +192,18 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1680 W | the lowest hold error a shipped controller demonstrated under the shipped OU turbulence: the MPC's lowest per-seed mean \|power error\| over the 300 hold steps of the test episode (seed 1 of five; mean 2.1 kW; `scripts/evaluate_baselines.py`, `target_gym.eval`). A per-seed minimum, so no run of the reference sits below it. Over a 5 min hold (`scripts/measure_hold.py`, 1200 hold steps after a 300-step burn-in, 3 seeds) the MPC holds 2.2 kW (best seed 1.9 kW) and the PID 4.6 kW. Upper bound; the 1680 W was demonstrated by the planner before its descent was made monotone (commit cc39157) and is kept as the tighter of the two demonstrated bounds. |
+| `e_floor` | 1680 W (the oracle holds 1454 W) | an earlier oracle's lowest hold error under the shipped OU turbulence: the gradient planner's lowest per-seed mean \|power error\| over the 300 hold steps of the test episode (seed 1 of five; `scripts/evaluate_baselines.py`, `target_gym.eval`), demonstrated before its descent was made monotone (commit cc39157). A per-seed minimum, so no run of the reference sat below it; an upper bound. The oracle that replaced the planner in the oracle audit (2026-10) holds 1454 / 1687 / 2106 W per seed (`scripts/measure_hold.py`, 400 hold steps after a 300-step burn-in, 3 seeds; PID 3702-5211 W, the planner 1907-2366 W). The floor is 1.16x its best seed, within the audit's 1.5x rule, so the floor, and the reward, stay. |
 | `e_tol` | 0 | none |
 | `tracking_exponent` | 1 | an imbalance is settled linearly in energy |
 | `imbalance_price` | 100 $/MWh | **provisional**; the one imbalance price of the priced plants (reactor, battery); a wind farm's would come from its balancing tariff |
-| `c_hold` | 0.0013 | pitch activity fraction \|cmd - achieved\| / pitch_max while holding, PID (`scripts/measure_hold.py`; 0.0526 deg of a 40 deg range) |
+| `c_hold` | 0.0013 | pitch activity fraction \|cmd - achieved\| / pitch_max while holding, PID (`scripts/measure_hold.py`; 0.0526 deg of a 40 deg range; the oracle holds 0.00124) |
 | `fatigue_weight` | 1 | **provisional.** Avoidable activity is charged per unit at what tracking at the floor costs per step; a maintenance model would give the price. Sweep 0.5 / 1 / 2. |
 | `failure_cost` | 2 x the imbalance of the 7 MW the overspeed limit and `torque_max` allow, per step left | overspeed / underspeed trip |
 | `restart_steps` | 2400 (10 min) | restart time priced into a trip, `restart_steps x failure_cost` (an overspeed trip's reset and re-synchronisation; provisional); where a plant engineer would get it: the plant's restart procedure |
+
+On this plant `rho_floor` and `rho_floor_tracking` are the tracking cost of
+the oracle's best per-seed hold, 1454 W: 1.01e-5 $ per step, 0.865 of the cost
+at `e_floor`.
 
 `rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which

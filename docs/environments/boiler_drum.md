@@ -59,7 +59,7 @@ Recorded over 10 seeds of the 400-step episode (see [Baselines](../baselines.md)
 | controller | mean return | cost per step |
 |---|---|---|
 | PID | -2.568e+05 | 641.9 |
-| MPC | -1.696e+04 | 42.4 |
+| MPC | -6124 | 15.31 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
@@ -78,8 +78,8 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 | `running_weight` | 1 | - |
 | `failure_cost` | 440734 | reward |
 | `restart_steps` | 7200 | steps |
-| `rho_floor_tracking` | 1.32036 | reward |
-| `rho_floor` | 1.32036 | reward |
+| `rho_floor_tracking` | 1.91944 | reward |
+| `rho_floor` | 1.91944 | reward |
 | `V_t` | 88 | m^3 |
 | `V_d` | 40 | m^3 |
 | `V_r` | 37 | m^3 |

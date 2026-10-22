@@ -116,9 +116,11 @@ class WindTurbineParams(EnvParams):
     underspeed_factor: float = 0.40
 
     # ---- Reward shaping ----
-    # Error scale for the MPC's tracking term, not read by ``compute_reward``.
-    # See "Why the MPC does not minimise the reward" in docs/baselines.md. The reward's
-    # envelope is ``power_envelope`` on the next line.
+    # Error scale for the version-1 gradient planner's tracking term, not read
+    # by ``compute_reward``. See "Why the MPC does not minimise the reward" in
+    # docs/baselines.md. The version-2 oracle, a feedback law since the oracle
+    # audit (2026-10), does not read it either. The version-1 reward's envelope
+    # is ``power_envelope`` below.
     power_band: float = 0.5e6  # W
     precision_floor: float = 1e3  # W, revenue-grade power metering resolution
     power_envelope: float = 5e6  # W, rated electrical output
@@ -136,13 +138,17 @@ class WindTurbineParams(EnvParams):
     # ---- Reward (docs/reward-shaping.md; version 2), in dollars per step ----
     # Tracking: an electrical imbalance settled at ``imbalance_price`` per
     # MWh, linear in |error| (p = 1). Floor: the lowest hold error a shipped
-    # controller has demonstrated under the shipped OU turbulence -- the MPC's
-    # lowest per-seed mean |error| over the 300 hold steps of the test
-    # episode, 1.68 kW on seed 1 of five (mean 2.1 kW; over a 5 min hold the
-    # MPC holds 2.1 kW and the PID 4.6 kW, `scripts/measure_hold.py`). A
-    # per-seed minimum rather than a mean, so that no run of the reference
-    # controller sits below it. An upper bound on the achievable floor. Fatigue: pitch
-    # activity |cmd - achieved| / pitch_max above the PID's hold-phase level
+    # controller had demonstrated under the shipped OU turbulence when it was
+    # set, the gradient planner's lowest per-seed mean |error| over the 300
+    # hold steps of the test episode: 1.68 kW on seed 1 of five. A per-seed
+    # minimum rather than a mean, so that no run of the reference controller
+    # sits below it. An upper bound on the achievable floor. The oracle that
+    # replaced the planner (oracle audit, 2026-10) holds 1454 W on its best
+    # seed and 1749 W on average, the PID 4563 W (`scripts/measure_hold.py`,
+    # 400 hold steps after a 300-step burn-in, 3 seeds). 1680 W is within
+    # 1.5x of that best hold (1.16x), so the floor, and with it the reward,
+    # was kept; only the NEA reference below follows the new hold. Fatigue:
+    # pitch activity |cmd - achieved| / pitch_max above the PID's hold-phase level
     # (0.0013 of pitch_max) is charged, per unit of avoidable fraction, at
     # ``fatigue_weight`` times what tracking at the floor costs per step --
     # a documented stand-in for a maintenance model's price (provisional;
@@ -152,7 +158,7 @@ class WindTurbineParams(EnvParams):
     # overspeed limit and torque_max allow (the rated 5 MW is not the envelope).
     reward_version: int = 2
     e_floor: float = (
-        1680.0  # W, lowest per-seed MPC hold error on the test episode (upper bound)
+        1680.0  # W, an earlier oracle's lowest per-seed hold error (upper bound)
     )
     e_tol: float = 0.0
     tracking_exponent: float = 1.0
@@ -166,9 +172,11 @@ class WindTurbineParams(EnvParams):
     failure_cost: float = 2.0 * 100.0 * 7.0 * 0.25 / 3600.0
     #: Restart time priced into a trip (``reward.trip_cost``; 10 min at 0.25 s steps: an overspeed trip's reset and re-synchronisation, provisional).
     restart_steps: int = 2400
-    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    rho_floor_tracking: float = 100.0 / 1.0e6 * 0.25 / 3600.0 * 1680.0
-    rho_floor: float = 100.0 / 1.0e6 * 0.25 / 3600.0 * 1680.0
+    #: The NEA reference: the tracking cost per step, in the reward's units, of
+    #: the oracle's lowest per-seed hold, 1454 W (seed 0, `scripts/measure_hold.py`;
+    #: (1454 / 1680)^1 = 0.865 of the cost at ``e_floor``).
+    rho_floor_tracking: float = 100.0 / 1.0e6 * 0.25 / 3600.0 * 1454.0
+    rho_floor: float = 100.0 / 1.0e6 * 0.25 / 3600.0 * 1454.0
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 
