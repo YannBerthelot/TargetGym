@@ -64,21 +64,49 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 900 |
-| `max_steps_in_episode` | 720 |
-| `A_floor` | 150 |
-| `lambda_at` | 4.5 |
-| `f_class` | 2.5 |
-| `cm_per_area` | 165000 |
-| `h_is` | 3.45 |
-| `h_ms` | 9.1 |
-| `A_wall` | 120 |
-| `U_wall` | 0.28 |
-| `A_roof` | 150 |
-| `U_roof` | 0.18 |
-| `A_window` | 25 |
-| `U_window` | 1.3 |
-| … | 29 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 900 | s |
+| `max_steps_in_episode` | 720 | steps |
+| `A_floor` | 150 | m^2 |
+| `lambda_at` | 4.5 | - |
+| `f_class` | 2.5 | - |
+| `cm_per_area` | 165000 | J/(K m^2) |
+| `h_is` | 3.45 | W/(m^2 K) |
+| `h_ms` | 9.1 | W/(m^2 K) |
+| `A_wall` | 120 | m^2 |
+| `U_wall` | 0.28 | W/(m^2 K) |
+| `A_roof` | 150 | m^2 |
+| `U_roof` | 0.18 | W/(m^2 K) |
+| `A_window` | 25 | m^2 |
+| `U_window` | 1.3 | W/(m^2 K) |
+| `g_window` | 0.55 | - |
+| `air_changes_per_hour` | 0.5 | 1/h |
+| `room_height` | 2.6 | m |
+| `Q_heat_max` | 7200 | W |
+| `emitter_tau` | 900 | s |
+| `T_out_mean` | 5 | degC |
+| `T_out_amplitude` | 5 | K |
+| `T_out_noise_std` | 3 | K |
+| `solar_peak` | 350 | W/m^2 |
+| `gain_occupied` | 8 | W/m^2 |
+| `gain_unoccupied` | 2 | W/m^2 |
+| `occupied_start_h` | 7 | h |
+| `occupied_end_h` | 22 | h |
+| `setpoint_occupied` | 21 | degC |
+| `setpoint_setback` | 17 | degC |
+| `T_air_min` | 5 | degC |
+| `precision_floor` | 0.1 | K |
+| `T_air_max` | 35 | degC |
+| `comfort_band` | 1 | K |
+| `energy_weight` | 0 | - |
+| `reward_version` | 2 | - |
+| `comfort_tolerance` | 0.5 | K |
+| `comfort_price` | 0.03 | EUR/(K^2 h) |
+| `gas_price` | 0.1 | EUR/kWh |
+| `tracking_exponent` | 2 | - |
+| `failure_cost` | 4.335 | reward |
+| `restart_steps` | 4 | steps |
+| `rho_floor_tracking` | 0.001 | reward |
+| `rho_floor` | 0.001 | reward |
 

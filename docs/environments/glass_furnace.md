@@ -64,21 +64,76 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 30 |
-| `max_steps_in_episode` | 1600 |
-| `LHV` | 5e+07 |
-| `AFR` | 17 |
-| `excess_air` | 0.1 |
-| `c_p_air` | 1150 |
-| `c_p_gas` | 1200 |
-| `fuel_min` | 0.513 |
-| `fuel_max` | 0.698 |
-| `flame_rad_fraction` | 0.55 |
-| `C_regen_node` | 3e+07 |
-| `eps_regen_node` | 0.8 |
-| `reversal_period` | 1500 |
-| `reversal_dead_time` | 40 |
-| … | 56 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 30 | s |
+| `max_steps_in_episode` | 1600 | steps |
+| `LHV` | 5e+07 | J/kg |
+| `AFR` | 17 | - |
+| `excess_air` | 0.1 | - |
+| `c_p_air` | 1150 | J/(kg K) |
+| `c_p_gas` | 1200 | J/(kg K) |
+| `fuel_min` | 0.513 | kg/s |
+| `fuel_max` | 0.698 | kg/s |
+| `flame_rad_fraction` | 0.55 | - |
+| `C_regen_node` | 3e+07 | J/K |
+| `eps_regen_node` | 0.8 | - |
+| `reversal_period` | 1500 | s |
+| `reversal_dead_time` | 40 | s |
+| `reversal_firing_floor` | 0.05 | - |
+| `tau_thermocouple` | 120 | s |
+| `charge_period` | 300 | s |
+| `charge_duty` | 0.3 | - |
+| `charge_mass_jitter` | 0.15 | - |
+| `U_regen` | 0.3 | W/(m^2 K) |
+| `A_regen` | 300 | m^2 |
+| `m_pull` | 5.79 | kg/s |
+| `batch_yield` | 0.83 | - |
+| `T_batch_in` | 25 | degC |
+| `dH_fusion` | 800000 | J/kg |
+| `m_batch_full` | 39000 | kg |
+| `batch_shield` | 0.85 | - |
+| `m_pull_noise_std` | 0.4 | kg/s |
+| `C_gas` | 240000 | J/K |
+| `C_crown` | 2.5e+08 | J/K |
+| `C_melt` | 7.8e+08 | J/K |
+| `C_work` | 7.8e+08 | J/K |
+| `c_p_glass_a` | 900 | J/(kg K) |
+| `c_p_glass_b` | 0.35 | J/(kg K^2) |
+| `eps_rad` | 0.8 | - |
+| `A_crown` | 200 | m^2 |
+| `A_melt` | 200 | m^2 |
+| `A_work` | 10 | m^2 |
+| `h_conv` | 30 | W/(m^2 K) |
+| `U_wall` | 1 | W/(m^2 K) |
+| `A_wall_crown` | 200 | m^2 |
+| `A_wall_melt` | 200 | m^2 |
+| `A_wall_work` | 200 | m^2 |
+| `UA_work_cooling` | 3000 | W/K |
+| `T_ambient` | 25 | degC |
+| `T_crown_min` | 1427 | degC |
+| `tracking_band` | 10 | K |
+| `precision_floor` | 1 | K |
+| `T_crown_max` | 1677 | degC |
+| `T_glass_min` | 900 | degC |
+| `T_glass_max` | 1727 | degC |
+| `fuel_cost_weight` | 0 | - |
+| `target_T_crown_trim` | 6 | K |
+| `initial_T_crown_offset` | 4 | K |
+| `initial_T_gas_offset` | 31 | K |
+| `initial_T_melt_offset` | -35 | K |
+| `initial_T_work_offset` | -151 | K |
+| `initial_T_regen_hot` | 1383 | degC |
+| `initial_T_regen_cold` | 544 | degC |
+| `initial_m_batch` | 10753 | kg |
+| `reward_version` | 2 | - |
+| `e_floor` | 1 | K |
+| `e_tol` | 0 | K |
+| `tracking_exponent` | 2 | - |
+| `c_hold` | 0.59 | kg/s |
+| `running_weight` | 1 | - |
+| `failure_cost` | 66978 | reward |
+| `restart_steps` | 40320 | steps |
+| `rho_floor_tracking` | 0.030625 | reward |
+| `rho_floor` | 0.030625 | reward |
 

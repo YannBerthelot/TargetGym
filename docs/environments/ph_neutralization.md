@@ -64,21 +64,39 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 5 |
-| `max_steps_in_episode` | 300 |
-| `V` | 2900 |
-| `q1` | 16.6 |
-| `Wa1` | 0.003 |
-| `Wb1` | 0 |
-| `q2_nominal` | 0.55 |
-| `q2_noise_std` | 0.35 |
-| `q2_min` | 0 |
-| `q2_max` | 2.5 |
-| `Wa2` | -0.03 |
-| `Wb2` | 0.03 |
-| `q3_min` | 10 |
-| `q3_max` | 22 |
-| … | 19 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 5 | s |
+| `max_steps_in_episode` | 300 | steps |
+| `V` | 2900 | mL |
+| `q1` | 16.6 | mL/s |
+| `Wa1` | 0.003 | mol/L |
+| `Wb1` | 0 | mol/L |
+| `q2_nominal` | 0.55 | mL/s |
+| `q2_noise_std` | 0.35 | mL/s |
+| `q2_min` | 0 | mL/s |
+| `q2_max` | 2.5 | mL/s |
+| `Wa2` | -0.03 | mol/L |
+| `Wb2` | 0.03 | mol/L |
+| `q3_min` | 10 | mL/s |
+| `q3_max` | 22 | mL/s |
+| `Wa3` | -0.00305 | mol/L |
+| `Wb3` | 5e-05 | mol/L |
+| `pK1` | 6.35 | - |
+| `pK2` | 10.25 | - |
+| `pH_min` | 2 | pH |
+| `precision_floor` | 0.01 | pH |
+| `pH_max` | 12 | pH |
+| `tracking_band` | 1 | pH |
+| `reagent_cost_weight` | 0 | - |
+| `reward_version` | 2 | - |
+| `e_floor` | 0.01 | pH |
+| `e_tol` | 0 | pH |
+| `tracking_exponent` | 2 | - |
+| `c_hold` | 16.24 | mL/s |
+| `running_weight` | 1 | - |
+| `failure_cost` | 3.1e+06 | reward |
+| `restart_steps` | 720 | steps |
+| `rho_floor_tracking` | 0.64 | reward |
+| `rho_floor` | 0.64 | reward |
 

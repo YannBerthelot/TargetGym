@@ -156,6 +156,44 @@ class DistillationParams(EnvParams):
     floor_is_documented_minimum: bool = False
 
 
+#: Units of the DistillationParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "alpha": "-",
+    "M_tray": "kmol",
+    "M_drum": "kmol",
+    "F": "kmol/min",
+    "zF_nominal": "-",
+    "qF": "-",
+    "zF_noise_std": "-",
+    "zF_min": "-",
+    "zF_max": "-",
+    "L_min": "kmol/min",
+    "L_max": "kmol/min",
+    "V_min": "kmol/min",
+    "V_max": "kmol/min",
+    "D_min": "kmol/min",
+    "D_max": "kmol/min",
+    "yD_floor": "-",
+    "xB_ceiling": "-",
+    "tracking_band": "-",
+    "precision_floor": "-",
+    "boilup_cost_weight": "-",
+    "delta_t": "min",
+    "time_unit_seconds": "s",
+    "e_floor_top": "-",
+    "e_floor_bottom": "-",
+    "reward_version": "-",
+    "e_tol": "-",
+    "tracking_exponent": "-",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+    "c_hold": "kmol/min",
+    "running_weight": "-",
+}
+
+
 @struct.dataclass
 class DistillationState(EnvState):
     x: jnp.ndarray  # (N_STAGES,) liquid composition -- interior stages HIDDEN

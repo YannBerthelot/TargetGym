@@ -1,4 +1,5 @@
 import functools
+import sys
 
 import jax
 import jax.numpy as jnp
@@ -37,6 +38,24 @@ def canonical_reset(reset_env):
 class EnvParams:
     delta_t: float = 1.0
     max_steps_in_episode: int = 1_000
+
+
+#: Unit of each numeric params field, read by the generated environment pages.
+#: Every module that defines a params class keeps one of these for the fields
+#: it adds; "-" marks a dimensionless value.
+PARAM_UNITS = {
+    "delta_t": "s",
+    "max_steps_in_episode": "steps",
+}
+
+
+def param_units(params_cls: type) -> dict[str, str]:
+    """Units of a params class's fields, merged over its bases' modules."""
+    units: dict[str, str] = {}
+    for cls in reversed(params_cls.__mro__):
+        module = sys.modules.get(cls.__module__)
+        units.update(getattr(module, "PARAM_UNITS", {}))
+    return units
 
 
 @struct.dataclass

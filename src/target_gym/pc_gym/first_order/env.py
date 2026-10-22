@@ -50,6 +50,26 @@ class FirstOrderParams(EnvParams):
     max_steps_in_episode: int = 100
 
 
+#: Units of the FirstOrderParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "K": "-",
+    "tau": "s",
+    "u_min": "-",
+    "u_max": "-",
+    "x_min": "-",
+    "x_max": "-",
+    "e_floor": "-",
+    "reward_version": "-",
+    "e_tol": "-",
+    "tracking_exponent": "-",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+    "precision_floor": "-",
+}
+
+
 @struct.dataclass
 class FirstOrderState(EnvState):
     x: float

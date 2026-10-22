@@ -173,6 +173,53 @@ class WindTurbineParams(EnvParams):
     floor_is_documented_minimum: bool = False
 
 
+#: Units of the WindTurbineParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "R": "m",
+    "rho": "kg/m^3",
+    "J_rotor": "kg m^2",
+    "J_gen": "kg m^2",
+    "N_gear": "-",
+    "eta_gen": "-",
+    "P_rated": "W",
+    "v_rated": "m/s",
+    "omega_rated_rpm": "rpm",
+    "v_cut_out": "m/s",
+    "cp_c1": "-",
+    "cp_c2": "-",
+    "cp_c3": "1/deg",
+    "cp_c4": "-",
+    "cp_c5": "-",
+    "cp_c6": "-",
+    "pitch_min": "deg",
+    "pitch_max": "deg",
+    "pitch_rate_max": "deg/s",
+    "pitch_tau": "s",
+    "torque_max": "N m",
+    "torque_tau": "s",
+    "turbulence_std": "m/s",
+    "v_min": "m/s",
+    "v_max": "m/s",
+    "overspeed_factor": "-",
+    "underspeed_factor": "-",
+    "power_band": "W",
+    "precision_floor": "W",
+    "power_envelope": "W",
+    "pitch_activity_weight": "-",
+    "reward_version": "-",
+    "e_floor": "W",
+    "e_tol": "W",
+    "tracking_exponent": "-",
+    "imbalance_price": "$/MWh",
+    "c_hold": "-",
+    "fatigue_weight": "-",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+}
+
+
 @struct.dataclass
 class WindTurbineState(EnvState):
     omega: float  # rotor speed (rad/s)

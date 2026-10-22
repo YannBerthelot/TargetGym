@@ -65,21 +65,51 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 2 |
-| `max_steps_in_episode` | 400 |
-| `reward_version` | 2 |
-| `e_floor_level` | 0.00267 |
-| `e_floor_pressure` | 0.05 |
-| `e_tol` | 0 |
-| `tracking_exponent` | 2 |
-| `c_hold` | 1.566e+08 |
-| `running_weight` | 1 |
-| `failure_cost` | 440734 |
-| `restart_steps` | 7200 |
-| `rho_floor_tracking` | 1.32036 |
-| `rho_floor` | 1.32036 |
-| `V_t` | 88 |
-| … | 31 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 2 | s |
+| `max_steps_in_episode` | 400 | steps |
+| `reward_version` | 2 | - |
+| `e_floor_level` | 0.00267 | m |
+| `e_floor_pressure` | 0.05 | bar |
+| `e_tol` | 0 | m or bar |
+| `tracking_exponent` | 2 | - |
+| `c_hold` | 1.566e+08 | W |
+| `running_weight` | 1 | - |
+| `failure_cost` | 440734 | reward |
+| `restart_steps` | 7200 | steps |
+| `rho_floor_tracking` | 1.32036 | reward |
+| `rho_floor` | 1.32036 | reward |
+| `V_t` | 88 | m^3 |
+| `V_d` | 40 | m^3 |
+| `V_r` | 37 | m^3 |
+| `V_dc` | 11 | m^3 |
+| `A_d` | 20 | m^2 |
+| `A_dc` | 0.355 | m^2 |
+| `L_r` | 11 | m |
+| `m_metal` | 300000 | kg |
+| `C_metal` | 550 | J/(kg K) |
+| `k_friction` | 25 | - |
+| `tau_sr` | 8 | s |
+| `T_d` | 15 | s |
+| `f_carry` | 0.1 | - |
+| `f_cd` | 0.25 | - |
+| `c_pw` | 5700 | J/(kg K) |
+| `gravity` | 9.81 | m/s^2 |
+| `h_feedwater` | 1.037e+06 | J/kg |
+| `Q_max` | 2.4e+08 | W |
+| `q_feed_max` | 200 | kg/s |
+| `Q_nominal` | 1.6e+08 | W |
+| `q_steam_nominal` | 93.35 | kg/s |
+| `p_nominal` | 85 | bar |
+| `V_wt_nominal` | 58 | m^3 |
+| `q_steam_noise_std` | 8 | kg/s |
+| `level_band` | 0.1 | m |
+| `pressure_band` | 2 | bar |
+| `level_trip` | 0.25 | m |
+| `pressure_min` | 65 | bar |
+| `level_precision_floor` | 0.001 | m |
+| `pressure_precision_floor` | 0.05 | bar |
+| `pressure_max` | 105 | bar |
+| `fuel_weight` | 0 | - |
 

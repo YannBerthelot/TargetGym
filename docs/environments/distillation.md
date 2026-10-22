@@ -65,21 +65,40 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 1 |
-| `max_steps_in_episode` | 200 |
-| `alpha` | 1.5 |
-| `M_tray` | 0.5 |
-| `M_drum` | 0.5 |
-| `F` | 1 |
-| `zF_nominal` | 0.5 |
-| `qF` | 1 |
-| `zF_noise_std` | 0.03 |
-| `zF_min` | 0.4 |
-| `zF_max` | 0.6 |
-| `L_min` | 2.3 |
-| `L_max` | 3.1 |
-| `V_min` | 2.8 |
-| … | 20 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 1 | min |
+| `max_steps_in_episode` | 200 | steps |
+| `alpha` | 1.5 | - |
+| `M_tray` | 0.5 | kmol |
+| `M_drum` | 0.5 | kmol |
+| `F` | 1 | kmol/min |
+| `zF_nominal` | 0.5 | - |
+| `qF` | 1 | - |
+| `zF_noise_std` | 0.03 | - |
+| `zF_min` | 0.4 | - |
+| `zF_max` | 0.6 | - |
+| `L_min` | 2.3 | kmol/min |
+| `L_max` | 3.1 | kmol/min |
+| `V_min` | 2.8 | kmol/min |
+| `V_max` | 3.6 | kmol/min |
+| `D_min` | 0.1 | kmol/min |
+| `D_max` | 0.9 | kmol/min |
+| `yD_floor` | 0.9 | - |
+| `xB_ceiling` | 0.1 | - |
+| `tracking_band` | 0.02 | - |
+| `precision_floor` | 0.0001 | - |
+| `boilup_cost_weight` | 0 | - |
+| `time_unit_seconds` | 60 | s |
+| `reward_version` | 2 | - |
+| `e_floor_top` | 0.0001 | - |
+| `e_floor_bottom` | 0.0001 | - |
+| `e_tol` | 0 | - |
+| `tracking_exponent` | 2 | - |
+| `c_hold` | 3.282 | kmol/min |
+| `running_weight` | 1 | - |
+| `failure_cost` | 3.61e+06 | reward |
+| `restart_steps` | 240 | steps |
+| `rho_floor_tracking` | 0.127125 | reward |
+| `rho_floor` | 0.127125 | reward |
 

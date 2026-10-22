@@ -59,21 +59,89 @@ No MPC ships with this environment, so there is no recorded comparison. PID pres
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 1 |
-| `max_steps_in_episode` | 200 |
-| `gravity` | 9.81 |
-| `initial_mass` | 73500 |
-| `thrust_output_at_sea_level` | 240000 |
-| `air_density_at_sea_level` | 1.225 |
-| `frontal_surface` | 12.6 |
-| `wings_surface` | 122.6 |
-| `C_x0` | 0.095 |
-| `C_z0` | 0.9 |
-| `initial_fuel_quantity` | 19088 |
-| `specific_fuel_consumption` | 0.0175 |
-| `power_response_rate` | 0.05 |
-| `stick_response_rate` | 0.9 |
-| … | 69 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 1 | s |
+| `max_steps_in_episode` | 200 | steps |
+| `gravity` | 9.81 | m/s^2 |
+| `initial_mass` | 73500 | kg |
+| `thrust_output_at_sea_level` | 240000 | N |
+| `air_density_at_sea_level` | 1.225 | kg/m^3 |
+| `frontal_surface` | 12.6 | m^2 |
+| `wings_surface` | 122.6 | m^2 |
+| `C_x0` | 0.095 | - |
+| `C_z0` | 0.9 | - |
+| `initial_fuel_quantity` | 19088 | kg |
+| `specific_fuel_consumption` | 0.0175 | kg/(kN.s) |
+| `power_response_rate` | 0.05 | 1/s |
+| `stick_response_rate` | 0.9 | 1/s |
+| `aileron_response_rate` | 0.9 | 1/s |
+| `aspect_ratio` | 9.48 | - |
+| `aileron_effectiveness` | 0.4 | - |
+| `cl_alpha` | 0.08786 | 1/deg |
+| `cl0` | 0.2 | - |
+| `cd0` | 0.02 | - |
+| `k` | 0.045 | - |
+| `aoa_stall` | 15 | deg |
+| `CL_max` | 1.5 | - |
+| `CL_min` | -1 | - |
+| `aoa_stall_width` | 3 | deg |
+| `M_crit` | 0.8 | - |
+| `k_shock_stall` | 4 | - |
+| `shock_stall_floor` | 0.25 | - |
+| `k_drag` | 5 | - |
+| `I` | 9000000 | kg.m^2 |
+| `I_x` | 2500000 | kg.m^2 |
+| `moment_arm_stabilizer` | 15 | m |
+| `moment_arm_wings` | 1.5 | m |
+| `stabilizer_surface` | 27 | m^2 |
+| `elevator_surface` | 10 | m^2 |
+| `wingspan` | 35.8 | m |
+| `aileron_surface` | 6 | m^2 |
+| `moment_arm_aileron` | 14 | m |
+| `C_lp` | -0.4 | - |
+| `min_alt` | 0 | m |
+| `max_alt` | 12191.4 | m |
+| `precision_floor` | 1 | m |
+| `heading_precision_floor` | 0.0087 | rad |
+| `position_precision_floor` | 3 | m |
+| `reward_version` | 2 | - |
+| `e_floor_altitude` | 1.44 | m |
+| `e_tol_altitude` | 0 | m |
+| `e_floor_heading` | 0.0087 | rad |
+| `e_floor_path` | 3 | m |
+| `tracking_exponent` | 2 | - |
+| `failure_cost` | 273797 | reward |
+| `restart_steps` | 3600 | steps |
+| `rho_floor_tracking` | 1.03382 | reward |
+| `rho_floor` | 1.03382 | reward |
+| `figure8_altitude_amplitude` | 200 | m |
+| `initial_z_dot` | 0 | m/s |
+| `initial_x_dot` | 200 | m/s |
+| `initial_y_dot` | 0 | m/s |
+| `initial_theta_dot` | 0 | deg/s |
+| `initial_theta` | 0 | deg |
+| `initial_phi` | 0 | deg |
+| `initial_phi_dot` | 0 | deg/s |
+| `initial_heading` | 0 | rad |
+| `initial_power` | 1 | - |
+| `initial_stick` | 0 | deg |
+| `initial_aileron` | 0 | deg |
+| `wind_x` | 0 | m/s |
+| `wind_y` | 0 | m/s |
+| `wind_z` | 0 | m/s |
+| `turbulence_sigma` | 1.2 | m/s |
+| `turbulence_theta` | 0.2 | 1/s |
+| `wind_shear_x` | 0 | 1/s |
+| `wind_shear_y` | 0 | 1/s |
+| `shear_ref_alt` | 0 | m |
+| `slot_tolerance` | 60 | m |
+| `heading_tolerance` | 0.5236 | rad |
+| `min_separation` | 25 | m |
+| `max_slot_error` | 1500 | m |
+| `slot_precision_floor` | 3 | m |
+| `e_floor_slot` | 18.6 | m |
+| `e_tol_slot` | 0 | m |
+| `lead_leg_seconds` | 60 | s |
+| `follower_spawn_noise` | 40 | m |
 

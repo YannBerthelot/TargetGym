@@ -172,6 +172,25 @@ class PatrolParams(PlaneParams3D):
     delta_t: float = 1.0
 
 
+#: Units of the PatrolParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "slot_tolerance": "m",
+    "heading_tolerance": "rad",
+    "min_separation": "m",
+    "max_slot_error": "m",
+    "slot_precision_floor": "m",
+    "e_floor_slot": "m",
+    "e_tol_slot": "m",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+    "lead_leg_seconds": "s",
+    "follower_spawn_noise": "m",
+    "delta_t": "s",
+}
+
+
 def make_cruise_state(
     x: float,
     y: float,

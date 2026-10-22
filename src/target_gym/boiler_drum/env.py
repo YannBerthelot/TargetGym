@@ -172,6 +172,54 @@ class BoilerDrumParams(EnvParams):
     fuel_weight: float = 0.0  # was 0.05
 
 
+#: Units of the BoilerDrumParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "reward_version": "-",
+    "e_floor_level": "m",
+    "e_floor_pressure": "bar",
+    "e_tol": "m or bar",
+    "tracking_exponent": "-",
+    "c_hold": "W",
+    "running_weight": "-",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+    "V_t": "m^3",
+    "V_d": "m^3",
+    "V_r": "m^3",
+    "V_dc": "m^3",
+    "A_d": "m^2",
+    "A_dc": "m^2",
+    "L_r": "m",
+    "m_metal": "kg",
+    "C_metal": "J/(kg K)",
+    "k_friction": "-",
+    "tau_sr": "s",
+    "T_d": "s",
+    "f_carry": "-",
+    "f_cd": "-",
+    "c_pw": "J/(kg K)",
+    "gravity": "m/s^2",
+    "h_feedwater": "J/kg",
+    "Q_max": "W",
+    "q_feed_max": "kg/s",
+    "Q_nominal": "W",
+    "q_steam_nominal": "kg/s",
+    "p_nominal": "bar",
+    "V_wt_nominal": "m^3",
+    "q_steam_noise_std": "kg/s",
+    "level_band": "m",
+    "pressure_band": "bar",
+    "level_trip": "m",
+    "pressure_min": "bar",
+    "level_precision_floor": "m",
+    "pressure_precision_floor": "bar",
+    "pressure_max": "bar",
+    "fuel_weight": "-",
+}
+
+
 @struct.dataclass
 class BoilerDrumState(EnvState):
     pressure: jnp.ndarray  # bar
