@@ -341,12 +341,13 @@ below the ignition fold at 335.654 K, is charged as tracking error and is
 always recoverable, since at a 310 K coolant the only steady state (383.89 K)
 lies above the trip and full heating re-ignites the plant from the low state
 in 18 steps (section 4). A trip is part of the kernel (`failure_kernel`). The
-step is charged the trip cost, and the plant restarts from the fresh draw
-`reset_env` makes from the step's key, with a new schedule and drift and the
-block clock at 0, while `time` runs on
-(`test_a_trip_restarts_fresh_on_the_same_clock`). With a constant rollout key,
-as every shipped rollout helper passes, every trip in an episode restarts from
-the episode's own initial state.
+step is charged the trip cost, and the plant restarts from a fresh draw of
+`reset_env` (with `continuing = False` the episode ends there instead), with a new schedule and drift and
+the block clock at 0, while `time` runs on
+(`test_a_trip_restarts_fresh_on_the_same_clock`). The draw is keyed on the
+step (`base.restart_key`), so even under a constant rollout key, as every
+shipped rollout helper passes, a run of trips does not replay the episode's
+initial state.
 
 **The drift.** A zero-mean Ornstein-Uhlenbeck process in the feed temperature,
 sd 2 K, correlation time 10 min (`test_feed_drift_is_a_zero_mean_ou_process`).
@@ -712,7 +713,8 @@ envelope can produce, and `restart_steps` the time a restart would take, so a
 trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
 ends the window (`base.failure_kernel`). The step that leaves the envelope is
 charged the trip cost, with tracking zeroed, and the plant restarts at once as
-`reset_env` would, on the same clock. `terminated` is never raised;
+`reset_env` would, on the same clock. `terminated` stays
+false unless `continuing = False`, which ends the episode on that step instead;
 `info["tripped"]` marks the event for the evaluator. `reward_version = 1`
 selects the version-1 reward of section 8 (`precision_floor` and
 `CA_error_max` are read only by it).
@@ -740,8 +742,8 @@ selects the version-1 reward of section 8 (`precision_floor` and
   feed drift −6, 0 and +6 K) in 5 to 20 steps, median 9, 15 to 60 s (derived,
   `--section reach`), the row in `docs/model-review-checklist.md`. Full
   cooling from the same corners never trips it.
-- **Seeds.** Under a constant rollout key every trip in an episode restarts
-  from the episode's own initial state (section 5).
+- **Seeds.** Each trip restarts from a fresh draw keyed on its step, even
+  under a constant rollout key (section 5).
 - **The shared floor check cannot fail here.**
   `test_mpc_does_not_beat_a_measured_floor` in `tests/test_reward_contract.py`
   compares the protocol's whole-episode MPC tracking cost, 4.03e3, with

@@ -239,9 +239,9 @@ achievable there and the resolution only sets the unit;
 `failure_cost` is the per-step cost of a tripped plant, above the largest tracking
 cost the envelope can produce, and `restart_steps` the time a restart would take,
 so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
-ends the window (`base.failure_kernel`): the step that leaves the envelope is
-charged the trip cost, with tracking and running cost zeroed, and the plant
-restarts at once as `reset_env` would, on the same clock. `terminated` is never
-raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+ends the window, in either mode (`base.failure_kernel`): the building keeps its
+state (`restart_in_place`), and every step outside the envelope is charged the
+trip cost, with tracking and running cost zeroed, until the controller brings
+it back. `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).

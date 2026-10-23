@@ -93,7 +93,7 @@ class CementKilnParams(EnvParams):
     running_weight: float = 1.0
     failure_cost: float = (
         2.0 * ((0.05 - 0.008) / 5e-4) ** 2
-    )  # a cold kiln's 5 % free lime (provisional) against the lowest target
+    )  # ``lime_max``, a cold kiln's 5 % free lime, against the lowest target
     #: Restart time priced into a trip (``reward.trip_cost``; 24 h at 30 s steps: cool-down, inspection and re-heat, provisional).
     restart_steps: int = 2880
     #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
@@ -176,6 +176,13 @@ class CementKilnParams(EnvParams):
     T_bz_min: float = 1620.0  # K  the kiln has gone cold: the charge stops
     #                                 clinkering and recovery takes hours,
     #                                 longer than an episode
+    #: Discharge free lime at which the kiln is running raw and trips
+    #: (provisional, 5 %). Below ``T_bz_min`` is not the only way to go cold:
+    #: at minimum fuel the burning zone holds just above it while free lime
+    #: climbs past 30 %, so without this limit a cold kiln was charged its
+    #: tracking cost for as long as it ran, and ``failure_cost`` (sized on
+    #: this 5 %) was worth only ~400 such steps.
+    lime_max: float = 0.05
     # ``T_wall_max`` is gone. It terminated the episode 111 K above a
     # refractory the contract says runs several hundred degrees too hot,
     # because clinker coating is not modelled -- deviation D1 states plainly
@@ -480,11 +487,15 @@ def check_is_terminal(state: CementKilnState, params: CementKilnParams, xp=jnp):
     """Both failure modes are irrecoverable in practice.
 
     Overheating sinters the charge into rings that block the kiln; a kiln that
-    goes cold stops reacting and takes hours to bring back.
+    goes cold stops reacting and takes hours to bring back. Cold is read two
+    ways: a burning zone below ``T_bz_min``, or raw clinker, discharge free
+    lime at or above ``lime_max``.
     """
     T_bz = xp.max(state.T_solid)
     overheat = T_bz >= params.T_bz_max
-    gone_cold = T_bz <= params.T_bz_min
+    gone_cold = xp.logical_or(
+        T_bz <= params.T_bz_min, discharge_lime(state) >= params.lime_max
+    )
     terminated = xp.logical_or(overheat, gone_cold)
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated

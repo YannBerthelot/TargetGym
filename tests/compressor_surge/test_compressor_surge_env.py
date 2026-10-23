@@ -30,6 +30,7 @@ from jax.experimental import enable_x64
 from scipy.optimize import brentq
 
 from target_gym import reward as R
+from target_gym.base import restart_key
 from target_gym.compressor_surge.env import (
     KPA,
     N_DEMAND_BLOCKS,
@@ -697,7 +698,7 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
     assert not bool(terminated)
     # Equal to float32 rounding: the step's copy of the reset is compiled
     # inside the step, where XLA may fuse its arithmetic differently.
-    fresh = env.reset_env(key, params)[1].replace(time=new.time)
+    fresh = env.reset_env(restart_key(key, new.time), params)[1].replace(time=new.time)
     for name in CompressorSurgeState.__dataclass_fields__:
         np.testing.assert_allclose(
             np.asarray(getattr(new, name)),

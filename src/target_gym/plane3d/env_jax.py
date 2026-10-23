@@ -16,7 +16,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, failure_kernel
+from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
 from target_gym.plane.dynamics import total_wind_3d
 from target_gym.plane3d.env import (
     _RACETRACK_LEG,
@@ -108,20 +108,23 @@ class _Airplane3DBase(environment.Environment[PlaneState3D, PlaneParams3D]):
             key=key,
         )
         # A crash is part of the kernel: the step is charged the trip cost and
-        # the flight restarts at once; ``terminated`` is never raised
-        # (``base.failure_kernel``).
-        new_state, tripped, scored = failure_kernel(self, key, state, new_state, params)
+        # the flight restarts at once, or is lost (``terminated``) with
+        # ``params.continuing = False`` (``base.failure_kernel``).
+        new_state, tripped, scored, terminated = failure_kernel(
+            self, key, state, new_state, params
+        )
         reward = self.compute_reward(scored, params)
         obs = self.get_obs(new_state, params)
         return (
             obs,
             new_state,
             reward,
-            jnp.zeros((), dtype=bool),
+            terminated,
             {
                 "metrics": metrics,
                 "last_state": new_state,
                 "tripped": tripped,
+                "trip_cost": charged_trip_cost(tripped, params),
             },
         )
 
