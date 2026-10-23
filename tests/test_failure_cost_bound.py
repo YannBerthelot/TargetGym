@@ -69,9 +69,11 @@ def _worst_surviving_cost(name: str) -> float:
 @pytest.mark.parametrize(
     "name",
     [
-        pytest.param(n, marks=pytest.mark.xfail(reason=KNOWN_BELOW[n], strict=True))
-        if n in KNOWN_BELOW
-        else n
+        (
+            pytest.param(n, marks=pytest.mark.xfail(reason=KNOWN_BELOW[n], strict=True))
+            if n in KNOWN_BELOW
+            else n
+        )
         for n in sorted(REGISTRY)
     ],
 )
