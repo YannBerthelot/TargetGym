@@ -164,9 +164,7 @@ def _params_table(params) -> str:
     ]
     missing = [k for k, _ in fields if k not in units]
     if missing:
-        raise ValueError(
-            f"{type(params).__name__}: no PARAM_UNITS entry for {missing}"
-        )
+        raise ValueError(f"{type(params).__name__}: no PARAM_UNITS entry for {missing}")
     rows = ["| parameter | default | unit |", "|---|---|---|"]
     for k, v in fields:
         value = f"{v:g}" if isinstance(v, float) else f"{v}"
