@@ -65,21 +65,64 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 30 |
-| `max_steps_in_episode` | 700 |
-| `reward_version` | 2 |
-| `e_floor` | 0.0005 |
-| `e_tol` | 0 |
-| `tracking_exponent` | 2 |
-| `c_hold` | 1.824 |
-| `running_weight` | 1 |
-| `failure_cost` | 14112 |
-| `restart_steps` | 2880 |
-| `rho_floor_tracking` | 0.00956484 |
-| `rho_floor` | 0.00956484 |
-| `diameter` | 4 |
-| `length` | 60 |
-| … | 44 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 30 | s |
+| `max_steps_in_episode` | 700 | steps |
+| `reward_version` | 2 | - |
+| `e_floor` | 0.0005 | - |
+| `e_tol` | 0 | - |
+| `tracking_exponent` | 2 | - |
+| `c_hold` | 1.824 | kg/s |
+| `running_weight` | 1 | - |
+| `failure_cost` | 14112 | reward |
+| `restart_steps` | 2880 | steps |
+| `rho_floor_tracking` | 0.00956484 | reward |
+| `rho_floor` | 0.00956484 | reward |
+| `diameter` | 4 | m |
+| `length` | 60 | m |
+| `slope` | 0.035 | - |
+| `n_zones` | 16 | - |
+| `w_bed_gas` | 2.906 | m |
+| `w_wall_gas` | 9.313 | m |
+| `w_wall_bed` | 3.253 | m |
+| `refractory_thickness` | 0.2 | m |
+| `rho_refractory` | 2200 | kg/m^3 |
+| `cp_refractory` | 900 | J/(kg K) |
+| `U_shell` | 4 | W/(m^2 K) |
+| `raw_meal_nominal` | 53.82 | kg/s |
+| `caco3_fraction` | 0.79 | - |
+| `calcination_upstream` | 0.92 | - |
+| `cp_solid` | 1000 | J/(kg K) |
+| `cp_gas` | 1150 | J/(kg K) |
+| `bulk_density` | 1400 | kg/m^3 |
+| `angle_of_repose` | 35 | deg |
+| `h_calcination` | 1.78e+06 | J/kg |
+| `h_clinkerisation` | 420000 | J/kg |
+| `A_calcination` | 151990 | 1/s |
+| `E_calcination` | 170000 | J/mol |
+| `A_clinker` | 4.7308e+06 | 1/s |
+| `E_clinker` | 280000 | J/mol |
+| `fuel_lhv` | 2.6e+07 | J/kg |
+| `air_fuel_ratio` | 10.5 | - |
+| `excess_air` | 1.15 | - |
+| `flame_length` | 15 | m |
+| `emissivity_gas` | 0.25 | - |
+| `h_convective` | 30 | W/(m^2 K) |
+| `h_wall_bed` | 500 | W/(m^2 K) |
+| `T_feed` | 1073 | K |
+| `T_secondary_air` | 1373 | K |
+| `T_ambient` | 300 | K |
+| `fuel_min` | 1.2 | kg/s |
+| `precision_floor` | 0.0005 | - |
+| `fuel_max` | 2.4 | kg/s |
+| `rpm_min` | 2 | rpm |
+| `rpm_max` | 4.5 | rpm |
+| `fuel_nominal` | 1.78 | kg/s |
+| `rpm_nominal` | 3 | rpm |
+| `feed_noise_std` | 2 | kg/s |
+| `lime_band` | 0.006 | - |
+| `T_bz_max` | 1900 | K |
+| `T_bz_min` | 1620 | K |
+| `fuel_weight` | 0 | - |
 

@@ -65,6 +65,39 @@ class CSTRParams(EnvParams):
     floor_is_documented_minimum: bool = True
 
 
+#: Units of the CSTRParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "q": "L/min",
+    "V": "L",
+    "rho": "g/L",
+    "C": "J/(g*K)",
+    "deltaHr": "J/mol",
+    "EA_over_R": "K",
+    "k0": "1/min",
+    "UA": "J/(min*K)",
+    "Ti": "K",
+    "Caf": "mol/L",
+    "T_c_max": "K",
+    "T_c_min": "K",
+    "T_max": "K",
+    "T_min": "K",
+    "C_a_min": "mol/L",
+    "precision_floor": "mol/L",
+    "C_a_max": "mol/L",
+    "initial_T": "K",
+    "delta_t": "min",
+    "time_unit_seconds": "s",
+    "e_floor": "mol/L",
+    "reward_version": "-",
+    "e_tol": "mol/L",
+    "tracking_exponent": "-",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+}
+
+
 @struct.dataclass
 class CSTRState(EnvState):
     C_a: float

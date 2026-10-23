@@ -89,6 +89,15 @@ class PatrolMARLParams(PatrolParams):
     back_spacing: float = 180.0  # metres of trailing offset per rank
 
 
+#: Units of the PatrolMARLParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "w_track": "-",
+    "w_lead": "-",
+    "lateral_spacing": "m",
+    "back_spacing": "m",
+}
+
+
 def formation_slots(num_wingmen: int, lateral_spacing: float, back_spacing: float):
     """Return (back, right, up) arrays for a symmetric V, evenly spread both sides.
 

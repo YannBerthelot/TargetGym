@@ -179,6 +179,56 @@ class CompressorSurgeParams(EnvParams):
     floor_is_documented_minimum: bool = False
 
 
+#: Units of the CompressorSurgeParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "P01": "Pa",
+    "T01": "K",
+    "R_gas": "J/(kg K)",
+    "gamma": "-",
+    "A_c": "m^2",
+    "L_c": "m",
+    "V_p": "m^3",
+    "U_r": "m/s",
+    "psi_c0": "-",
+    "H": "-",
+    "W": "-",
+    "phi_join": "-",
+    "k_d": "kg/(s Pa^0.5)",
+    "dp_out": "Pa",
+    "k_r": "kg/(s Pa^0.5)",
+    "check_width": "Pa",
+    "N_min": "-",
+    "N_max": "-",
+    "drive_rate": "1/s",
+    "tau_N": "s",
+    "valve_open_rate": "1/s",
+    "valve_close_rate": "1/s",
+    "setpoint_block_steps": "steps",
+    "demand_block_steps": "steps",
+    "demand_ramp_s": "s",
+    "demand_sigma": "-",
+    "demand_theta": "1/s",
+    "demand_dev_reset_clip": "-",
+    "N_reset": "-",
+    "x_reset": "-",
+    "reset_newton_iters": "-",
+    "soft_min_temperature": "-",
+    "time_unit_seconds": "s",
+    "reward_version": "-",
+    "e_floor": "kPa",
+    "e_tol": "kPa",
+    "tracking_exponent": "-",
+    "dp_error_max": "kPa",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "c_hold": "W",
+    "running_weight": "-",
+    "precision_floor": "kPa",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+}
+
+
 @struct.dataclass
 class CompressorSurgeState(EnvState):
     m_c: float

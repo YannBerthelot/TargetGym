@@ -65,21 +65,53 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 0.1 |
-| `max_steps_in_episode` | 1200 |
-| `P01` | 101325 |
-| `T01` | 288.15 |
-| `R_gas` | 287.05 |
-| `gamma` | 1.4 |
-| `A_c` | 0.1 |
-| `L_c` | 4 |
-| `V_p` | 15 |
-| `U_r` | 200 |
-| `psi_c0` | 0.3 |
-| `H` | 0.18 |
-| `W` | 0.25 |
-| `phi_join` | 0.78 |
-| … | 33 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 0.1 | s |
+| `max_steps_in_episode` | 1200 | steps |
+| `P01` | 101325 | Pa |
+| `T01` | 288.15 | K |
+| `R_gas` | 287.05 | J/(kg K) |
+| `gamma` | 1.4 | - |
+| `A_c` | 0.1 | m^2 |
+| `L_c` | 4 | m |
+| `V_p` | 15 | m^3 |
+| `U_r` | 200 | m/s |
+| `psi_c0` | 0.3 | - |
+| `H` | 0.18 | - |
+| `W` | 0.25 | - |
+| `phi_join` | 0.78 | - |
+| `k_d` | 0.12 | kg/(s Pa^0.5) |
+| `dp_out` | 10000 | Pa |
+| `k_r` | 0.15 | kg/(s Pa^0.5) |
+| `check_width` | 50 | Pa |
+| `N_min` | 0.7 | - |
+| `N_max` | 1.05 | - |
+| `drive_rate` | 0.03 | 1/s |
+| `tau_N` | 1 | s |
+| `valve_open_rate` | 0.5 | 1/s |
+| `valve_close_rate` | 0.1 | 1/s |
+| `setpoint_block_steps` | 300 | steps |
+| `demand_block_steps` | 200 | steps |
+| `demand_ramp_s` | 5 | s |
+| `demand_sigma` | 0.02 | - |
+| `demand_theta` | 0.2 | 1/s |
+| `demand_dev_reset_clip` | 3 | - |
+| `N_reset` | 1 | - |
+| `x_reset` | 0.35 | - |
+| `reset_newton_iters` | 6 | - |
+| `soft_min_temperature` | 0.001 | - |
+| `time_unit_seconds` | 1 | s |
+| `reward_version` | 2 | - |
+| `e_floor` | 0.0275 | kPa |
+| `e_tol` | 0 | kPa |
+| `tracking_exponent` | 2 | - |
+| `dp_error_max` | 20.68 | kPa |
+| `failure_cost` | 1.13101e+06 | reward |
+| `restart_steps` | 9000 | steps |
+| `c_hold` | 62270 | W |
+| `running_weight` | 1 | - |
+| `precision_floor` | 0.0275 | kPa |
+| `rho_floor_tracking` | 1.40284e-05 | reward |
+| `rho_floor` | 1.40284e-05 | reward |
 
