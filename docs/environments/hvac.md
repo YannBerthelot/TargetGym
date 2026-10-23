@@ -47,7 +47,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Episode end
 
-**Termination.** None. `terminated` is always false, and leaving the operating envelope trips the plant instead. The plant keeps its state through a trip instead of restarting, and every step spent outside the envelope is charged the trip cost and sets `info["tripped"]` until the controller brings it back. See [Reward shaping](../reward-shaping.md#failure).
+**Termination.** None. `terminated` is always false: the plant keeps its state through a trip instead of restarting, and every step spent outside the envelope is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]` until the controller brings it back. See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 720 steps.
 

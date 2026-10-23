@@ -932,6 +932,9 @@ _SPECS: tuple[EnvSpec, ...] = (
     EnvSpec(
         name="cement_kiln",
         group="industrial",
+        # v3: a raw kiln trips (discharge free lime >= ``lime_max``, 5 %);
+        # before, a kiln at minimum fuel ran cold at 30 % free lime untripped.
+        version=3,
         env_factory=_cement_kiln,
         params_cls=_LazyParams("target_gym.cement_kiln.env", "CementKilnParams"),
         make_pid=_pid("make_cement_kiln_stateful_pid"),

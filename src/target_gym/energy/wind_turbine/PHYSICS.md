@@ -218,7 +218,7 @@ cost the envelope can produce, and `restart_steps` the time a restart would take
 so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
 ends the window (`base.failure_kernel`): the step that leaves the envelope is
 charged the trip cost, with tracking and running cost zeroed, and the plant
-restarts at once as `reset_env` would, on the same clock. `terminated` is never
-raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+restarts at once as `reset_env` would, on the same clock. `terminated` stays
+false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).

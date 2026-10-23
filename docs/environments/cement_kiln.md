@@ -11,7 +11,7 @@ Cement rotary kiln — 1-D axial model with counter-current gas.
 | Tracked variable(s) | discharge free lime (%) |
 | Episode length | 700 steps (21000 s at 30 s per step) |
 | Import | `from target_gym import CementKiln, CementKilnParams` |
-| Cite as | `cement_kiln-v2` |
+| Cite as | `cement_kiln-v3` |
 
 ## Action space
 
@@ -48,7 +48,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Episode end
 
-**Termination.** None. `terminated` is always false, and leaving the operating envelope trips the plant instead. The step that leaves the envelope is charged the trip cost and sets `info["tripped"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Both failure modes are irrecoverable in practice. See [Reward shaping](../reward-shaping.md#failure).
+**Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. Both failure modes are irrecoverable in practice. See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 700 steps.
 
@@ -81,5 +81,5 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 | `rho_floor` | 0.00956484 |
 | `diameter` | 4 |
 | `length` | 60 |
-| … | 44 more, see the params dataclass |
+| … | 45 more, see the params dataclass |
 

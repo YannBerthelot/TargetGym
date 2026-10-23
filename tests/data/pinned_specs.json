@@ -731,7 +731,7 @@
   {
     "name": "cement_kiln",
     "group": "industrial",
-    "version": 2,
+    "version": 3,
     "display_name": "Cement Kiln",
     "params_cls": [
       "target_gym.cement_kiln.env",

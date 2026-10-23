@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, failure_kernel
+from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
 from target_gym.boiler_drum.env import (
     BoilerDrumParams,
     BoilerDrumState,
@@ -66,16 +66,22 @@ class BoilerDrum(environment.Environment[BoilerDrumState, BoilerDrumParams]):
             action, state, params, key, integration_method=self.integration_method
         )
         # A trip is part of the kernel: the step is charged the trip cost and
-        # the plant restarts at once; ``terminated`` is never raised
-        # (``base.failure_kernel``).
-        new_state, tripped, scored = failure_kernel(self, key, state, new_state, params)
+        # the plant restarts at once, or is lost (``terminated``) with
+        # ``params.continuing = False`` (``base.failure_kernel``).
+        new_state, tripped, scored, terminated = failure_kernel(
+            self, key, state, new_state, params
+        )
         reward = compute_reward(scored, params, xp=jnp)
         return (
             self.get_obs(new_state),
             new_state,
             reward,
-            jnp.zeros((), dtype=bool),
-            {"last_state": new_state, "tripped": tripped},
+            terminated,
+            {
+                "last_state": new_state,
+                "tripped": tripped,
+                "trip_cost": charged_trip_cost(tripped, params),
+            },
         )
 
     def get_obs(self, state: BoilerDrumState, params: BoilerDrumParams = None):

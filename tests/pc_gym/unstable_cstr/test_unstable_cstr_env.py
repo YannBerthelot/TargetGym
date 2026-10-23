@@ -22,6 +22,7 @@ from scipy.optimize import brentq
 
 import target_gym.pc_gym.cstr.env as cstr_env
 from target_gym import reward as R
+from target_gym.base import restart_key
 from target_gym.pc_gym.unstable_cstr.env import (
     N_BLOCKS,
     UnstableCSTRParams,
@@ -517,7 +518,7 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
 
     # Equal to float32 rounding: the step's copy of the reset is compiled
     # inside the step, where XLA may fuse its arithmetic differently.
-    fresh = env.reset_env(key, params)[1].replace(time=new.time)
+    fresh = env.reset_env(restart_key(key, new.time), params)[1].replace(time=new.time)
     for name in UnstableCSTRState.__dataclass_fields__:
         np.testing.assert_allclose(
             np.asarray(getattr(new, name)),

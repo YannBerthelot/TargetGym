@@ -332,9 +332,11 @@ terms the parabola dp = 215.51 m^2 (`test_trip_reads_the_substep_minimum`,
 `test_surge_line_is_a_parabola`). A dip between control samples trips. The
 step is charged the trip cost and the plant restarts at once from a fresh
 draw of the reset, schedule clock at 0 (`base.failure_kernel`,
-`test_a_trip_restarts_fresh_on_the_same_clock`). Under a constant rollout
-key every trip restarts from the episode's own initial state, so a policy
-that trips in the first block trips again at about the same point. On seeds
+`test_a_trip_restarts_fresh_on_the_same_clock`); with `continuing = False`
+the episode ends on that step instead.
+Each restart draws from a key of its own step (`base.restart_key`), so
+under a constant rollout key a run of trips does not replay the episode's
+initial state. On seeds
 0 to 31 the recycle shut under a pressure PI, a fixed recycle of 0.10 and
 the margin-blind chaser at bias 0.2 each trip at least once per episode on
 average (`test_v1_ranks_tripping_below_safe` asserts it). On seeds 1000 to
@@ -1071,8 +1073,8 @@ lowest hold. `failure_cost` is unchanged by the measurement, since
   `test_full_travel_low_trips` asserts the trips and their order). Full
   travel high never trips (`--section reach`,
   `test_full_travel_high_never_trips`).
-- **Seeds.** Under a constant rollout key every trip in an episode restarts
-  from the episode's own initial state (section 5). A valve loop that rings
+- **Seeds.** Each trip restarts from a fresh draw keyed on its step, even
+  under a constant rollout key (section 5). A valve loop that rings
   against the valve's rate limits amplifies float32 rounding: the battery's
   valve travel for the anti-surge sets (3, 3) and (3, 0.3) differs between
   float32 and float64 runs (measured, `--section guard`). Code that rounds
