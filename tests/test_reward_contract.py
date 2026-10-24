@@ -21,6 +21,7 @@ import numpy as np
 import pytest
 
 from target_gym import reward as R
+from target_gym.base import restart_key
 from target_gym.provenance import BASELINES_PATH
 from target_gym.registry import REGISTRY
 
@@ -325,9 +326,11 @@ def test_the_recorded_mpc_cost_is_what_the_mpc_measures_now():
 def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     """``base.failure_kernel``: when the physics' proposal leaves the envelope
     the step is scored on that proposal -- every term zero, the failure term
-    the trip cost ``restart_steps * failure_cost`` -- and the state the window
-    continues from is a fresh draw on the same clock. A proposal inside the
-    envelope passes through unchanged."""
+    the trip cost ``restart_steps * failure_cost``. In the continuing mode, the
+    default, the state the window continues from is a fresh draw on the same
+    clock and the episode does not end; with ``continuing=False`` the state is
+    the proposal and the episode ends. A proposal inside the envelope
+    passes through unchanged in both."""
     from target_gym.base import failure_kernel
 
     env, p, state = _a_state(spec)
@@ -340,24 +343,38 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
         is_terminated = staticmethod(lambda s, params: jnp.ones((), bool))
         reset_env = staticmethod(env.reset_env)
 
-    out, tripped, scored = failure_kernel(Trips(), key, state, proposal, p)
-    assert bool(tripped)
+    assert bool(p.continuing)
+    out, tripped, scored, terminated = failure_kernel(Trips(), key, state, proposal, p)
+    assert bool(tripped) and not bool(terminated)
     assert int(out.time) == int(proposal.time)
     assert scored is proposal
-    fresh = env.reset_env(key, p)[1]
+    fresh = env.reset_env(restart_key(key, proposal.time), p)[1]
     for name in vars(fresh):
         if name == "time":
             continue
         np.testing.assert_array_equal(
             np.asarray(getattr(out, name)), np.asarray(getattr(fresh, name))
         )
-    out, tripped, scored = failure_kernel(env, key, state, proposal, p)
-    assert not bool(tripped)
+    lost = p.replace(continuing=False)
+    out, tripped, scored, terminated = failure_kernel(
+        Trips(), key, state, proposal, lost
+    )
+    assert bool(tripped) and bool(terminated)
     assert scored is proposal
     for name in vars(proposal):
         np.testing.assert_array_equal(
             np.asarray(getattr(out, name)), np.asarray(getattr(proposal, name))
         )
+    for params in (p, lost):
+        out, tripped, scored, terminated = failure_kernel(
+            env, key, state, proposal, params
+        )
+        assert not bool(tripped) and not bool(terminated)
+        assert scored is proposal
+        for name in vars(proposal):
+            np.testing.assert_array_equal(
+                np.asarray(getattr(out, name)), np.asarray(getattr(proposal, name))
+            )
     # The reward's failure term is the trip cost, and nothing else, on a
     # state outside the envelope; zero on one inside.
     terms = env.reward_terms(state, p)
@@ -371,18 +388,20 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
 def test_a_plant_that_restarts_in_place_keeps_its_state_and_pays_every_step():
     """``restart_in_place``: the building keeps its state through a trip --
     the proposal is both the state the window continues from and the state
-    scored -- so every step outside the envelope is charged."""
+    scored -- so every step outside the envelope is charged, and the episode
+    never ends, in either mode."""
     from target_gym.base import failure_kernel
 
     spec = REGISTRY["hvac"]
     env, p, state = _a_state(spec)
     assert bool(p.restart_in_place)
     proposal = state.replace(time=state.time + 1, T_air=jnp.asarray(p.T_air_max + 1.0))
-    out, tripped, scored = failure_kernel(
-        env, jax.random.PRNGKey(0), state, proposal, p
-    )
-    assert bool(tripped)
-    assert scored is proposal
+    for params in (p, p.replace(continuing=False)):
+        out, tripped, scored, terminated = failure_kernel(
+            env, jax.random.PRNGKey(0), state, proposal, params
+        )
+        assert bool(tripped) and not bool(terminated)
+        assert scored is proposal
     assert float(out.T_air) == pytest.approx(float(p.T_air_max) + 1.0)
     terms = env.reward_terms(out, p)
     assert float(terms["failure"]) == pytest.approx(float(R.trip_cost(p)))

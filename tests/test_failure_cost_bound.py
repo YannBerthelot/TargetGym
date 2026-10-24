@@ -26,11 +26,10 @@ from target_gym.registry import REGISTRY
 SEEDS = 8
 
 #: Plants whose ``failure_cost`` is known to sit below a reachable step cost.
-KNOWN_BELOW = {
-    # A kiln starved of fuel runs cold to ~17 % free lime without tripping,
-    # a tracking cost near 1e5 per step; failure_cost assumes a cold kiln
-    # stops at 5 % (1.4e4, marked provisional in cement_kiln/env.py).
-    "cement_kiln": "cold kiln reaches ~17 % free lime; failure_cost assumes 5 %",
+KNOWN_BELOW: dict[str, str] = {
+    # cement_kiln sat here until v3: a kiln starved of fuel ran cold to ~17 %
+    # free lime without tripping. It now trips at ``lime_max`` (5 %), the
+    # level its failure_cost is sized on.
 }
 
 
