@@ -172,6 +172,52 @@ class HVACParams(EnvParams):
     floor_is_documented_minimum: bool = False
 
 
+#: Units of the HVACParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "A_floor": "m^2",
+    "lambda_at": "-",
+    "f_class": "-",
+    "cm_per_area": "J/(K m^2)",
+    "h_is": "W/(m^2 K)",
+    "h_ms": "W/(m^2 K)",
+    "A_wall": "m^2",
+    "U_wall": "W/(m^2 K)",
+    "A_roof": "m^2",
+    "U_roof": "W/(m^2 K)",
+    "A_window": "m^2",
+    "U_window": "W/(m^2 K)",
+    "g_window": "-",
+    "air_changes_per_hour": "1/h",
+    "room_height": "m",
+    "Q_heat_max": "W",
+    "emitter_tau": "s",
+    "T_out_mean": "degC",
+    "T_out_amplitude": "K",
+    "T_out_noise_std": "K",
+    "solar_peak": "W/m^2",
+    "gain_occupied": "W/m^2",
+    "gain_unoccupied": "W/m^2",
+    "occupied_start_h": "h",
+    "occupied_end_h": "h",
+    "setpoint_occupied": "degC",
+    "setpoint_setback": "degC",
+    "T_air_min": "degC",
+    "precision_floor": "K",
+    "T_air_max": "degC",
+    "comfort_band": "K",
+    "energy_weight": "-",
+    "reward_version": "-",
+    "comfort_tolerance": "K",
+    "comfort_price": "EUR/(K^2 h)",
+    "gas_price": "EUR/kWh",
+    "tracking_exponent": "-",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+}
+
+
 @struct.dataclass
 class HVACState(EnvState):
     T_mass: float  # thermal mass node -- HIDDEN, holds the building's memory

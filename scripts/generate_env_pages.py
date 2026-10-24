@@ -37,6 +37,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from target_gym.provenance import BASELINES_PATH  # noqa: E402
 from target_gym.registry import REGISTRY, display_name  # noqa: E402
+from target_gym.units import param_units  # noqa: E402
 
 OUT_DIR = ROOT / "docs" / "environments"
 # The recorded baselines, from where the package reads them. This used to be
@@ -154,19 +155,20 @@ def _space_table(space, labels: list[str]) -> str:
     return "\n".join(rows)
 
 
-def _params_table(params, limit: int = 14) -> str:
+def _params_table(params) -> str:
+    units = param_units(type(params))
     fields = [
         (k, v)
         for k, v in vars(params).items()
-        if isinstance(v, (int, float, bool)) and not isinstance(v, bool)
+        if isinstance(v, (int, float)) and not isinstance(v, bool)
     ]
-    rows = ["| parameter | default |", "|---|---|"]
-    for k, v in fields[:limit]:
-        rows.append(
-            f"| `{k}` | {v:g} |" if isinstance(v, float) else f"| `{k}` | {v} |"
-        )
-    if len(fields) > limit:
-        rows.append(f"| … | {len(fields) - limit} more, see the params dataclass |")
+    missing = [k for k, _ in fields if k not in units]
+    if missing:
+        raise ValueError(f"{type(params).__name__}: no PARAM_UNITS entry for {missing}")
+    rows = ["| parameter | default | unit |", "|---|---|---|"]
+    for k, v in fields:
+        value = f"{v:g}" if isinstance(v, float) else f"{v}"
+        rows.append(f"| `{k}` | {value} | {units[k]} |")
     return "\n".join(rows)
 
 

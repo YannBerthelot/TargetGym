@@ -279,6 +279,55 @@ class ReactorParams(EnvParams):
     floor_is_documented_minimum: bool = False
 
 
+#: Units of the ReactorParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "Lambda_gen": "s",
+    "alpha_fuel": "1/K",
+    "alpha_coolant": "1/K",
+    "T_fuel_ref": "K",
+    "T_coolant_ref": "K",
+    "rho_ext_min": "-",
+    "rho_ext_max": "-",
+    "rod_speed_insert": "1/s",
+    "rod_speed_withdraw": "1/s",
+    "P_thermal_ref": "W",
+    "C_fuel": "J/K",
+    "C_coolant": "J/K",
+    "UA": "W/K",
+    "m_dot_cp": "W/K",
+    "T_inlet": "K",
+    "sigma_phi0": "1/s",
+    "gamma_ratio": "-",
+    "rho_Xe_full": "-",
+    "n_min": "-",
+    "precision_floor": "-",
+    "n_max": "-",
+    "T_fuel_max": "K",
+    "T_fuel_min": "K",
+    "T_coolant_max": "K",
+    "T_coolant_min": "K",
+    "rod_motion_weight": "-",
+    "reward_band": "-",
+    "demand_theta": "1/s",
+    "demand_sigma": "1/s^0.5",
+    "P_electric_GW": "GW",
+    "spot_price_per_MWh": "$/MWh",
+    "imbalance_factor": "-",
+    "initial_T_fuel": "K",
+    "initial_T_coolant": "K",
+    "reward_version": "-",
+    "e_floor": "-",
+    "e_tol": "-",
+    "tracking_exponent": "-",
+    "imbalance_multiple": "-",
+    "rod_wear_weight": "-",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+}
+
+
 @struct.dataclass
 class ReactorState(EnvState):
     n: float  # normalised neutron density (n=1 = nominal)

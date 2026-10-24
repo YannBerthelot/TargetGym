@@ -64,21 +64,40 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 0.05 |
-| `max_steps_in_episode` | 1200 |
-| `q` | 100 |
-| `V` | 100 |
-| `rho` | 1000 |
-| `C` | 0.239 |
-| `deltaHr` | -50000 |
-| `EA_over_R` | 8750 |
-| `k0` | 7.2e+10 |
-| `UA` | 50000 |
-| `Ti` | 350 |
-| `Caf` | 1 |
-| `precision_floor` | 0.0001 |
-| `time_unit_seconds` | 60 |
-| … | 20 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 0.05 | min |
+| `max_steps_in_episode` | 1200 | steps |
+| `q` | 100 | L/min |
+| `V` | 100 | L |
+| `rho` | 1000 | g/L |
+| `C` | 0.239 | J/(g*K) |
+| `deltaHr` | -50000 | J/mol |
+| `EA_over_R` | 8750 | K |
+| `k0` | 7.2e+10 | 1/min |
+| `UA` | 50000 | J/(min*K) |
+| `Ti` | 350 | K |
+| `Caf` | 1 | mol/L |
+| `precision_floor` | 0.0001 | mol/L |
+| `time_unit_seconds` | 60 | s |
+| `T_c_min` | 290 | K |
+| `T_c_max` | 310 | K |
+| `tau_j` | 0.1 | min |
+| `T_trip` | 365 | K |
+| `T_valid_min` | 250 | K |
+| `Ti_sigma` | 2 | K |
+| `Ti_tau` | 10 | min |
+| `Ti_dev_reset_clip` | 3 | - |
+| `block_steps` | 200 | steps |
+| `initial_CA_offset` | 0.01 | mol/L |
+| `initial_T_offset` | 1.5 | K |
+| `reward_version` | 2 | - |
+| `e_floor` | 0.0001 | mol/L |
+| `e_tol` | 0 | mol/L |
+| `tracking_exponent` | 2 | - |
+| `CA_error_max` | 0.55 | mol/L |
+| `failure_cost` | 6.05e+07 | reward |
+| `restart_steps` | 1200 | steps |
+| `rho_floor_tracking` | 0.00395641 | reward |
+| `rho_floor` | 0.00395641 | reward |
 

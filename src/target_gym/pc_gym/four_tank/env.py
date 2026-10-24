@@ -110,6 +110,38 @@ class FourTankParams(EnvParams):
     floor_is_documented_minimum: bool = True
 
 
+#: Units of the FourTankParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "g": "m/s^2",
+    "gamma1": "-",
+    "gamma2": "-",
+    "k1": "m^3/(V*s)",
+    "k2": "m^3/(V*s)",
+    "a1": "m^2",
+    "a2": "m^2",
+    "a3": "m^2",
+    "a4": "m^2",
+    "A1": "m^2",
+    "A2": "m^2",
+    "A3": "m^2",
+    "A4": "m^2",
+    "v_min": "V",
+    "v_max": "V",
+    "h_min": "m",
+    "precision_floor": "m",
+    "h_max": "m",
+    "tracking_band": "m",
+    "e_floor": "m",
+    "reward_version": "-",
+    "e_tol": "m",
+    "tracking_exponent": "-",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+}
+
+
 @struct.dataclass
 class FourTankState(EnvState):
     h1: float  # Level of tank 1 (controlled)

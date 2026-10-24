@@ -575,3 +575,13 @@ def test_the_baseline_fingerprint_covers_the_burn_in(tmp_path, monkeypatch):
     assert fingerprint_with(burn_in=rows["cstr"]["burn_in"] + 1) != before
     capped = fingerprint_with(burn_in=half)
     assert fingerprint_with(burn_in=half + 1) == capped
+
+
+def test_param_units_do_not_move_a_fingerprint():
+    """``PARAM_UNITS`` only documents values, so adding or editing it must not
+    stale a version stamp or a recorded baseline. Anything else still does."""
+    base = "X = 1.0\n"
+    digest = provenance._stable_ast_digest
+    assert digest(base + 'PARAM_UNITS = {"X": "m"}\n') == digest(base)
+    assert digest(base + 'PARAM_UNITS: dict = {"X": "s"}\n') == digest(base)
+    assert digest(base + 'OTHER = {"X": "m"}\n') != digest(base)
