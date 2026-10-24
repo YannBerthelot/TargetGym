@@ -134,7 +134,6 @@ def test_the_screened_extremes_stay_inside_the_envelope():
         assert ratio.min() > 0.83, (seed, ratio.min())
 
 
-@pytest.mark.slow
 def test_protocol_seed_0_holds_without_sagging():
     """Over measure_hold's 700 steps a hard 0.90-1.15 band (no ramp) let the
     rotor sag after a gust on protocol seed 0, holding 27.2 kW; the ramp holds

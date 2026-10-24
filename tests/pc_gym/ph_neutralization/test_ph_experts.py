@@ -35,7 +35,6 @@ def test_the_forecast_is_the_noise_free_q2_path():
     np.testing.assert_allclose(forecast, path, rtol=1e-5)
 
 
-@pytest.mark.slow
 def test_the_oracle_holds_well_below_the_nominal_model():
     """Seed 1 is the protocol seed where the buffer drifts furthest: planning on
     the nominal flow held 0.022 pH there, reading it holds 0.0031."""

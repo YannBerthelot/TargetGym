@@ -117,7 +117,6 @@ def test_steeper_bank_turns_faster_and_tighter():
     assert abs(steep_V / steep_rate) < abs(shallow_V / shallow_rate)
 
 
-@pytest.mark.slow
 def test_turn_radius_at_cruise_is_kilometres():
     """Which is why the circle task's reference path is km-scale."""
     phi, V, rate = _fly_bank(30.0)
@@ -134,7 +133,6 @@ def test_load_factor_grows_with_bank():
     assert loads[0] < loads[1] < loads[2]
 
 
-@pytest.mark.slow
 def test_a_constant_aileron_commands_a_rate_not_an_angle():
     """Real roll behaviour: hold the stick over and the aircraft keeps rolling.
 

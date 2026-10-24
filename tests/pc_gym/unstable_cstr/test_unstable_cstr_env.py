@@ -726,7 +726,6 @@ def test_full_heating_trips_from_every_corner(env, params):
     assert np.median(first) == 9
 
 
-@pytest.mark.slow
 def test_full_cooling_never_trips(env, params):
     """Full cooling held for a whole episode from the same 135 starts never
     trips: every start is inside the point of no return. The hottest it gets
@@ -766,7 +765,6 @@ def test_extinction_is_recoverable(params):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.slow
 def test_the_error_envelope_is_certified(env, params):
     """``CA_error_max`` (0.55 mol/L) rests on a closed form, and this is its
     non-trivial half. While T stays below the trip, C_a cannot fall below the
@@ -799,7 +797,6 @@ def test_the_error_envelope_is_certified(env, params):
     assert C_a[kept].min() >= floor
 
 
-@pytest.mark.slow
 def test_states_stay_physical_on_the_reachable_set(env, params):
     """Wherever random coolant takes the plant with the drift within 3
     standard deviations (64 episodes of random bang-bang, the drift pinned at
@@ -827,7 +824,6 @@ def test_states_stay_physical_on_the_reachable_set(env, params):
     assert not np.any((T <= params.T_valid_min) | (C_a < 0.0))
 
 
-@pytest.mark.slow
 def test_rk4_1_matches_rk4_16(params):
     """One RK4 step per 3 s env step is converged. Over a whole episode of the
     shipped cascade (seed 0), 16 substeps move T by at most 9.16e-4 K and C_a
