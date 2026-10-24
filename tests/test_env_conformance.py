@@ -918,7 +918,11 @@ def test_plant_does_not_accelerate_without_input(spec):
     traj = [np.array([float(getattr(state, f)) for f in fields])]
     for _ in range(min(int(params.max_steps_in_episode), 600)):
         key, sub = jax.random.split(key)
-        _, state, _, terminated, _ = step(sub, state, action, params)
+        _, state, _, terminated, info = step(sub, state, action, params)
+        # A trip restarts the plant from a fresh draw under the continuing
+        # default; that jump is a reset, not growth, so the run ends there.
+        if bool(info["tripped"]):
+            break
         traj.append(np.array([float(getattr(state, f)) for f in fields]))
         if bool(terminated):
             break
