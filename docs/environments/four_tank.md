@@ -63,21 +63,35 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 1 |
-| `max_steps_in_episode` | 500 |
-| `g` | 9.81 |
-| `gamma1` | 0.2 |
-| `gamma2` | 0.2 |
-| `k1` | 0.00085 |
-| `k2` | 0.00095 |
-| `a1` | 0.0035 |
-| `a2` | 0.003 |
-| `a3` | 0.002 |
-| `a4` | 0.0025 |
-| `A1` | 1 |
-| `A2` | 1 |
-| `A3` | 1 |
-| … | 15 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 1 | s |
+| `max_steps_in_episode` | 500 | steps |
+| `g` | 9.81 | m/s^2 |
+| `gamma1` | 0.2 | - |
+| `gamma2` | 0.2 | - |
+| `k1` | 0.00085 | m^3/(V*s) |
+| `k2` | 0.00095 | m^3/(V*s) |
+| `a1` | 0.0035 | m^2 |
+| `a2` | 0.003 | m^2 |
+| `a3` | 0.002 | m^2 |
+| `a4` | 0.0025 | m^2 |
+| `A1` | 1 | m^2 |
+| `A2` | 1 | m^2 |
+| `A3` | 1 | m^2 |
+| `A4` | 1 | m^2 |
+| `v_min` | 0 | V |
+| `v_max` | 10 | V |
+| `h_min` | 0.05 | m |
+| `precision_floor` | 0.001 | m |
+| `h_max` | 1.5 | m |
+| `tracking_band` | 0.05 | m |
+| `reward_version` | 2 | - |
+| `e_floor` | 0.001 | m |
+| `e_tol` | 0 | m |
+| `tracking_exponent` | 2 | - |
+| `failure_cost` | 292042 | reward |
+| `restart_steps` | 600 | steps |
+| `rho_floor_tracking` | 0 | reward |
+| `rho_floor` | 0 | reward |
 

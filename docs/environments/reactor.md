@@ -64,21 +64,52 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 1 |
-| `max_steps_in_episode` | 864 |
-| `Lambda_gen` | 0.0001 |
-| `alpha_fuel` | -3e-05 |
-| `alpha_coolant` | -5e-05 |
-| `T_fuel_ref` | 900 |
-| `T_coolant_ref` | 580 |
-| `rho_ext_min` | -0.01 |
-| `rho_ext_max` | 0.005 |
-| `rod_speed_insert` | 0.0004 |
-| `rod_speed_withdraw` | 0.0002 |
-| `P_thermal_ref` | 3e+09 |
-| `C_fuel` | 3.3e+07 |
-| `C_coolant` | 7e+07 |
-| … | 32 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 1 | s |
+| `max_steps_in_episode` | 864 | steps |
+| `Lambda_gen` | 0.0001 | s |
+| `alpha_fuel` | -3e-05 | 1/K |
+| `alpha_coolant` | -5e-05 | 1/K |
+| `T_fuel_ref` | 900 | K |
+| `T_coolant_ref` | 580 | K |
+| `rho_ext_min` | -0.01 | - |
+| `rho_ext_max` | 0.005 | - |
+| `rod_speed_insert` | 0.0004 | 1/s |
+| `rod_speed_withdraw` | 0.0002 | 1/s |
+| `P_thermal_ref` | 3e+09 | W |
+| `C_fuel` | 3.3e+07 | J/K |
+| `C_coolant` | 7e+07 | J/K |
+| `UA` | 6.6e+06 | W/K |
+| `m_dot_cp` | 9e+07 | W/K |
+| `T_inlet` | 555 | K |
+| `sigma_phi0` | 7.95e-05 | 1/s |
+| `gamma_ratio` | 0.049 | - |
+| `rho_Xe_full` | 0.025 | - |
+| `n_min` | 0.01 | - |
+| `precision_floor` | 0.0001 | - |
+| `n_max` | 1.5 | - |
+| `T_fuel_max` | 1473 | K |
+| `T_fuel_min` | 500 | K |
+| `T_coolant_max` | 620 | K |
+| `T_coolant_min` | 500 | K |
+| `rod_motion_weight` | 0.02 | - |
+| `reward_band` | 0.03 | - |
+| `demand_theta` | 0.00015 | 1/s |
+| `demand_sigma` | 0.0025 | 1/s^0.5 |
+| `P_electric_GW` | 1 | GW |
+| `spot_price_per_MWh` | 80 | $/MWh |
+| `imbalance_factor` | 3 | - |
+| `initial_T_fuel` | 900 | K |
+| `initial_T_coolant` | 580 | K |
+| `reward_version` | 2 | - |
+| `e_floor` | 0.00451 | - |
+| `e_tol` | 0 | - |
+| `tracking_exponent` | 1 | - |
+| `imbalance_multiple` | 1.25 | - |
+| `rod_wear_weight` | 1 | - |
+| `failure_cost` | 666.667 | reward |
+| `restart_steps` | 17280 | steps |
+| `rho_floor_tracking` | 1.25278 | reward |
+| `rho_floor` | 1.25278 | reward |
 

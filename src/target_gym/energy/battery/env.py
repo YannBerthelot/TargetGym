@@ -203,6 +203,58 @@ class BatteryParams(EnvParams):
     floor_is_documented_minimum: bool = False
 
 
+#: Units of the BatteryParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "energy_nominal": "J",
+    "power_max": "W",
+    "n_series": "-",
+    "capacity_As": "A s",
+    "R0": "ohm",
+    "R1": "ohm",
+    "C1": "F",
+    "ocv_a": "V",
+    "ocv_b": "V",
+    "ocv_c": "V",
+    "ocv_d": "-",
+    "ocv_e": "V",
+    "ocv_f": "-",
+    "ocv_g": "-",
+    "C_thermal": "J/K",
+    "UA_thermal": "W/K",
+    "T_ambient": "degC",
+    "k_calendar": "1/s",
+    "E_activation": "J/mol",
+    "T_ref_aging": "K",
+    "k_cycle": "1/(kA s)",
+    "soc_min": "-",
+    "soc_max": "-",
+    "T_max": "degC",
+    "V_cell_min": "V",
+    "V_cell_max": "V",
+    "power_band": "W",
+    "precision_floor": "W",
+    "max_step_cost": "reward",
+    "cost_weight": "-",
+    "degradation_weight": "reward",
+    "soc_comfort_weight": "reward",
+    "dispatch_block_seconds": "s",
+    "dispatch_range": "W",
+    "dispatch_noise_std": "W",
+    "reward_version": "-",
+    "e_floor": "W",
+    "e_tol": "W",
+    "tracking_exponent": "-",
+    "imbalance_price": "$/MWh",
+    "c_hold": "1/step",
+    "fade_price": "$/kWh",
+    "pack_kWh": "kWh",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+}
+
+
 @struct.dataclass
 class BatteryState(EnvState):
     soc: float  # state of charge (0-1)

@@ -44,6 +44,15 @@ class EnvParams:
     continuing: bool = True
 
 
+#: Unit of each numeric params field, read by the generated environment pages.
+#: Every module that defines a params class keeps one of these for the fields
+#: it adds; "-" marks a dimensionless value.
+PARAM_UNITS = {
+    "delta_t": "s",
+    "max_steps_in_episode": "steps",
+}
+
+
 @struct.dataclass
 class EnvState:
     time: int

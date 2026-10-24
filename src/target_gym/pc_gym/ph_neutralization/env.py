@@ -170,6 +170,42 @@ class PHParams(EnvParams):
     floor_is_documented_minimum: bool = False
 
 
+#: Units of the PHParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "V": "mL",
+    "q1": "mL/s",
+    "Wa1": "mol/L",
+    "Wb1": "mol/L",
+    "q2_nominal": "mL/s",
+    "q2_noise_std": "mL/s",
+    "q2_min": "mL/s",
+    "q2_max": "mL/s",
+    "Wa2": "mol/L",
+    "Wb2": "mol/L",
+    "q3_min": "mL/s",
+    "q3_max": "mL/s",
+    "Wa3": "mol/L",
+    "Wb3": "mol/L",
+    "pK1": "-",
+    "pK2": "-",
+    "pH_min": "pH",
+    "precision_floor": "pH",
+    "pH_max": "pH",
+    "tracking_band": "pH",
+    "reagent_cost_weight": "-",
+    "e_floor": "pH",
+    "reward_version": "-",
+    "e_tol": "pH",
+    "tracking_exponent": "-",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+    "c_hold": "mL/s",
+    "running_weight": "-",
+}
+
+
 @struct.dataclass
 class PHState(EnvState):
     Wa: float  # charge-related reaction invariant (HIDDEN)
