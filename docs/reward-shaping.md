@@ -94,19 +94,27 @@ vanishes when it should bind is not a cost.
 
 ### Failure
 
-Leaving the operating envelope trips the plant. A reach-and-hold task is
-continuing, so a trip is not the end of an episode: the step that leaves the
-envelope is charged the **trip cost**, `restart_steps * failure_cost` -- the
-time a real restart takes, priced at a per-step failure cost of twice the
-largest tracking cost the plant can *reach* (its target range against its
-trip bounds, or its steady-state range; not a nominal span it never visits)
--- with that step's tracking and running cost zeroed, and the plant restarts
-at once as `reset_env` would, on the same window clock
-(`base.failure_kernel`, `reward.trip_cost`). A plant that does not restart
-cold -- the building, whose thermal mass persists through a lockout --
-carries `restart_in_place = True`: it keeps its state, and every step outside
-the envelope is charged until the controller brings it back.
-The long-run cost then decomposes as
+Leaving the operating envelope trips the plant. Operation is continuing and
+only ever truncated, so a trip is not the end of an episode: the step that
+leaves the envelope is charged the **trip cost**, `restart_steps *
+failure_cost` -- the time a real restart takes, priced at a per-step failure
+cost of twice the largest tracking cost the plant can *reach* (its target
+range against its trip bounds, or its steady-state range; not a nominal span
+it never visits) -- with that step's tracking and running cost zeroed, and
+the plant restarts at once as `reset_env` would, on the same window clock
+(`base.failure_kernel`, `reward.trip_cost`). `terminated` stays false. The
+restart is an ordinary transition with a cost, the form continuing and
+average-reward work uses (Naik et al., 2025, arXiv 2501.06937, reset MuJoCo
+robots that fall and charge each reset), and every window is the same
+length. Each restart is a fresh draw from a key of its own step
+(`base.restart_key`), so a run of trips under a constant rollout key does not
+replay one initial state.
+
+A plant that does not restart cold -- the building, whose thermal mass
+persists through a lockout -- carries `restart_in_place = True`: it keeps its
+state, and every step outside the envelope is charged until the controller
+brings it back.
+The long-run cost decomposes as
 `rho_hold + p * B + lambda * (restart_steps * failure_cost + B_restart)`,
 with `lambda` the trip rate, which the protocol reports separately; the
 absorbing failure of the Target-MDP note is the `restart_steps -> inf`
@@ -123,14 +131,52 @@ test window shorter than the restart (every plant but the building) the
 restart never came, so the price was again set by the window. The lump is
 that total, paid where it is incurred.
 
-No plant raises `terminated`. Raising it tells a discounted learner the
-crashed state is worth zero -- the cheapest state in the plant, and the
-bootstrap behind every agent that learns to crash -- and cuts the chain an
-average-reward learner estimates its gain on. The trip is `info["tripped"]`,
-read by the evaluator and by nothing an agent runs. Two plants never trip:
-the pH loop's effluent is a convex mix of its inlet streams and cannot reach
-the 2 / 12 limits, and the CSTR settles between 318 and 329 K under any
-coolant setting; their envelope limits are documentation.
+The lump has to outweigh what a fresh start is worth: a restart hands the
+agent a new target and an easy initial state, and Naik et al. found
+continuing learners take resets more often than episodic ones. The trip is
+`info["tripped"]`, and the cost it charged `info["trip_cost"]`, read by the
+evaluator, which counts trips. Two plants never trip: the pH loop's effluent
+is a convex mix of its inlet streams and cannot reach the 2 / 12 limits, and
+the CSTR settles between 318 and 329 K under any coolant setting; their
+envelope limits are documentation.
+
+**Episodic use (optional).** With `continuing = False` a trip ends the
+episode instead: `terminated` is raised on that step, the state is the one
+that left the envelope, and the reward and `info` are the same. This is the
+form of Gymnasium's MuJoCo tasks and gym-electric-motor's limit violations.
+The trip cost then also keeps a discounted learner from crashing on purpose.
+Every per-step reward here is a cost, so a terminal state worth zero would be
+the cheapest state in the plant unless the lump outweighs the cost of
+carrying on. It does whenever `restart_steps >= 1 / (2 (1 - gamma))`, since
+`failure_cost` is twice the largest per-step cost: 50 steps at
+`gamma = 0.99`, which every plant clears, and 500 at `gamma = 0.999`, which
+`first_order` (100), `cstr` and `distillation` (240) do not (the bound is
+worst-case). This is gym-electric-motor's rule (Traue et al., 2019) of a
+penalty of `-1 / (1 - gamma)` in reward units.
+
+### Learning with trips
+
+The trip cost is large on purpose: it prices the real downtime, so a trip
+costs `2 * restart_steps` steps of the worst tracking cost, from 8 for the
+building to over 80,000 for the glass furnace. On the step it lands, it is up
+to several orders of magnitude above every other reward. A learner that does not normalise its targets sees that one number
+and little else: value regression and advantage estimates are dominated by
+the rare trip steps, and the per-step tracking signal, which is what a
+controller has to learn from, drowns.
+
+Remedies that leave the objective unchanged:
+
+- **Treat the trip cost as its own channel.** `info["trip_cost"]` is the
+  lump the step charged (0 on every other step). Subtract it from the reward
+  to learn the tracking value, and learn or normalise the trip part
+  separately, then add the two back. The sum is the same objective.
+- **Use scale-invariant value targets.** PopArt (van Hasselt et al., 2016)
+  and similar adaptive target normalisation keep the value head's targets
+  well scaled without changing what is optimal.
+
+Do not clip the reward. Clipping caps the trip at the size of an ordinary
+step, so a policy that trips often can score better than a safe one: it
+changes the objective, not just its scale.
 
 ## Why the floor: loop performance assessment, in cost units
 

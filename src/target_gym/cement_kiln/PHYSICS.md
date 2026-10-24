@@ -132,7 +132,11 @@ omitting the clinker-formation term entirely.
    a handful of readings.
 5. **Both failure modes are irrecoverable.** Overheat and the charge sinters
    into rings that block the kiln; go cold and recovery takes hours, longer
-   than an episode.
+   than an episode. Cold is a burning zone below `T_bz_min` (1620 K) or raw
+   clinker, discharge free lime at or above `lime_max` (5 %, provisional).
+   The second matters: at minimum fuel the burning zone holds just above
+   1620 K while free lime passes 5 % within 19 steps and climbs past 30 %,
+   and before version 3 that cold kiln never tripped.
 
 **Observation** `[lime_pct, T_burning_zone, T_exhaust, T_back_end, feed_rate,
 fuel_pct, speed_pct, target_lime_pct]` — a burning-zone pyrometer, a back-end
@@ -259,7 +263,7 @@ baselines use.
 | `tracking_exponent` | 2 | quadratic |
 | `c_hold` | 1.824 kg/s | fuel while holding, PID (MPC 1.790) (`scripts/measure_hold.py`) |
 | `running_weight` | 1 | sweep 0.5 / 1 / 2 |
-| `failure_cost` | 1.41e4 | twice the reachable free-lime excursion's cost, 2 x ((0.05 - 0.008) / 5e-4)^2: a cold kiln's 5 % free lime (provisional) against the lowest target; the trips are on burning-zone temperature |
+| `failure_cost` | 1.41e4 | twice the reachable free-lime excursion's cost, 2 x ((0.05 - 0.008) / 5e-4)^2: a cold kiln's 5 % free lime against the lowest target; the kiln trips there (`lime_max`), so no in-envelope state costs more than half of it |
 | `restart_steps` | 2880 (24 h) | restart time priced into a trip, `restart_steps x failure_cost` (cool-down, inspection and re-heat; provisional); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
@@ -275,7 +279,7 @@ cost the envelope can produce, and `restart_steps` the time a restart would take
 so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
 ends the window (`base.failure_kernel`): the step that leaves the envelope is
 charged the trip cost, with tracking and running cost zeroed, and the plant
-restarts at once as `reset_env` would, on the same clock. `terminated` is never
-raised; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
+restarts at once as `reset_env` would, on the same clock. `terminated` stays
+false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).

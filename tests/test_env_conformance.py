@@ -30,6 +30,7 @@ import numpy as np
 import pytest
 
 from target_gym import registry
+from target_gym import reward as R
 
 ALL_SPECS = list(registry.all_specs())
 SPEC_IDS = [s.name for s in ALL_SPECS]
@@ -173,6 +174,28 @@ def test_time_advances_monotonically(spec):
         previous = int(state.time)
         if bool(terminated):
             break
+
+
+def test_a_trip_ends_the_episode_unless_continuing(spec):
+    """``base.failure_kernel`` through each plant's own ``step_env``: a trip
+    sets ``info["tripped"]`` and ``info["trip_cost"]`` in both modes, leaves
+    ``terminated`` false in the default continuing mode and raises it with
+    ``continuing=False``. A plant that restarts in place never ends."""
+    env = spec.env_factory()  # a private instance: the cached one is shared
+    env.is_terminated = lambda state, params: jnp.ones((), bool)
+    p = spec.make_test_params()
+    assert bool(p.continuing)
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, p)
+    action = jnp.zeros(env.action_space(p).shape)
+    in_place = bool(getattr(p, "restart_in_place", False))
+    for params, ends in ((p, False), (p.replace(continuing=False), not in_place)):
+        _, _, _, terminated, info = env.step_env(key, state, action, params)
+        assert bool(info["tripped"])
+        assert float(info["trip_cost"]) == pytest.approx(
+            float(R.trip_cost(params)), rel=1e-6
+        )
+        assert bool(terminated) is ends, (spec.name, bool(params.continuing))
 
 
 def test_truncation_fires_at_the_step_limit(spec):

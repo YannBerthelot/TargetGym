@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, failure_kernel
+from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
 from target_gym.compressor_surge.env import (
     CompressorSurgeParams,
     CompressorSurgeState,
@@ -81,9 +81,11 @@ class CompressorSurge(
 
         # A trip is part of the kernel: the step is charged the trip cost and
         # the plant restarts at once from a fresh draw (new schedule, new
-        # deviation, block clock 0) on the same window clock; ``terminated``
-        # is never raised (``base.failure_kernel``).
-        new_state, tripped, scored = failure_kernel(self, key, state, new_state, params)
+        # deviation, block clock 0) on the same window clock, or is lost (``terminated``) with
+        # ``params.continuing = False`` (``base.failure_kernel``).
+        new_state, tripped, scored, terminated = failure_kernel(
+            self, key, state, new_state, params
+        )
         # Scored on the proposal, against the live setpoint of the advanced
         # clock: the step that enters a block is scored against its level,
         # which the returned observation also shows.
@@ -92,8 +94,12 @@ class CompressorSurge(
             self.get_obs(new_state, params),
             new_state,
             reward,
-            jnp.zeros((), dtype=bool),
-            {"last_state": new_state, "tripped": tripped},
+            terminated,
+            {
+                "last_state": new_state,
+                "tripped": tripped,
+                "trip_cost": charged_trip_cost(tripped, params),
+            },
         )
 
     def get_obs(

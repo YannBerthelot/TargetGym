@@ -356,24 +356,28 @@ def page(name: str, spec, recorded: dict) -> str:
         if module and hasattr(module, "check_is_terminal")
         else None
     )
-    # No plant raises ``terminated`` (``base.failure_kernel``): a trip is
-    # charged and the plant restarts, so ``check_is_terminal`` is the trip
-    # condition and its docstring, where there is one, says what trips.
+    # A trip restarts the plant, and ends the episode only with
+    # ``continuing = False`` (``base.failure_kernel``), so ``check_is_terminal``
+    # is the trip condition and its docstring, where there is one, says what trips.
     if getattr(params, "restart_in_place", False):
         trip = (
-            "The plant keeps its state through a trip instead of restarting, "
-            "and every step spent outside the envelope is charged the trip "
-            'cost and sets `info["tripped"]` until the controller brings it back.'
+            "**Termination.** None. `terminated` is always false: the plant "
+            "keeps its state through a trip instead of restarting, and every "
+            "step spent outside the envelope is charged the trip cost and sets "
+            '`info["tripped"]` and `info["trip_cost"]` until the controller '
+            "brings it back."
         )
     else:
         trip = (
-            "The step that leaves the envelope is charged the trip cost and "
-            'sets `info["tripped"]`, and the plant restarts as `reset_env` '
-            "would while the episode clock keeps running."
+            "**Termination.** None by default. Leaving the operating envelope "
+            "trips the plant: the step that leaves it is charged the trip cost "
+            'and sets `info["tripped"]` and `info["trip_cost"]`, and the plant '
+            "restarts as `reset_env` would while the episode clock keeps "
+            "running. Episodic use is optional: with `continuing = False` the "
+            "plant is lost and `terminated` is raised on that step instead."
         )
     out += [
-        "**Termination.** None. `terminated` is always false, and leaving the "
-        f"operating envelope trips the plant instead. {trip}"
+        trip
         + (f" {term_doc}" if term_doc else "")
         + " See [Reward shaping](../reward-shaping.md#failure).",
         "",
