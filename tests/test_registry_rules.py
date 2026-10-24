@@ -577,6 +577,22 @@ def test_the_baseline_fingerprint_covers_the_burn_in(tmp_path, monkeypatch):
     assert fingerprint_with(burn_in=half + 1) == capped
 
 
+@pytest.mark.parametrize("name", sorted(registry.REGISTRY))
+def test_every_env_exposes_its_registry_experts(name):
+    """The README promises ``env.make_pid()`` and ``env.make_mpc()`` on every
+    environment, and they must build what the registry ships."""
+    spec = registry.REGISTRY[name]
+    env = spec.make_env()
+    assert callable(getattr(env, "make_pid", None))
+    assert callable(getattr(env, "make_mpc", None))
+    if spec.has_pid:
+        pid = env.make_pid()
+        assert callable(pid) and hasattr(pid, "reset")
+    if spec.has_mpc and getattr(type(env), "registry_name", None) == name:
+        mpc = env.make_mpc(spec.make_test_params())
+        assert hasattr(mpc, "step") and hasattr(mpc, "reset")
+
+
 def test_param_units_do_not_move_a_fingerprint():
     """``PARAM_UNITS`` only documents values, so adding or editing it must not
     stale a version stamp or a recorded baseline. Anything else still does."""

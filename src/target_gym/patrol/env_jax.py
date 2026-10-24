@@ -21,6 +21,7 @@ import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.experts.pid import make_plane3d_heading_pid
 from target_gym.patrol.env import (
     N_LEAD_LEGS,
@@ -39,7 +40,9 @@ from target_gym.patrol.rendering import _render
 from target_gym.utils import save_video
 
 
-class _PlanePatrolBase(environment.Environment[PatrolState, PatrolParams]):
+class _PlanePatrolBase(
+    RegistryExperts, environment.Environment[PatrolState, PatrolParams]
+):
     """Shared machinery for the close-patrol tasks.
 
     Subclasses set ``obs_shape``, ``obs_value_index``, ``obs_target_index`` and
@@ -278,6 +281,7 @@ class PlanePatrol(_PlanePatrolBase):
     tracked_names: tuple = ("slot error (m)",)
     obs_target_index: int = 25  # constant 0
     task_type: str = "patrol"
+    registry_name: str = "patrol"
 
     def __init__(self, integration_method: str = "rk4_2"):
         super().__init__(integration_method)
@@ -298,6 +302,7 @@ class PlanePatrolBearingOnly(_PlanePatrolBase):
     tracked_names: tuple = ("measured range (m)",)
     obs_target_index: int = 20  # commanded slot range
     task_type: str = "patrol"
+    registry_name: str = "patrol_bearing_only"
 
     def __init__(self, integration_method: str = "rk4_2"):
         super().__init__(integration_method)
