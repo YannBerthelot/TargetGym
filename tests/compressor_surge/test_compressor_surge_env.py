@@ -740,7 +740,6 @@ def test_restart_and_failure_cost_are_derived(params):
     assert R.trip_cost(params) == pytest.approx(1.0179e10, rel=1e-4)
 
 
-@pytest.mark.slow
 def test_the_error_envelope_is_certified(env, params):
     """``dp_error_max`` (20.68 kPa) rests on the steady closed form; this is
     its dynamic check. 512 episodes of random bang-bang on both actuators,
@@ -958,7 +957,6 @@ def test_full_travel_low_trips(env, params):
     assert tripped.any(axis=1).all()
 
 
-@pytest.mark.slow
 def test_full_travel_high_never_trips(env, params):
     """Full travel high (105 %, recycle open) over 20 schedules of 1200
     steps: no trip, and Phi stays at or below 0.777, under the join of the

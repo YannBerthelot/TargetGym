@@ -888,7 +888,6 @@ def test_unreachable_terminals_are_still_unreachable(spec):
             )
 
 
-@pytest.mark.slow
 def test_plant_does_not_accelerate_without_input(spec):
     """Check 7: can the energy budget be bounded from outside?
 
