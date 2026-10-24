@@ -132,6 +132,44 @@ class UnstableCSTRParams(EnvParams):
     floor_is_documented_minimum: bool = False
 
 
+#: Units of the UnstableCSTRParams fields, for the generated environment pages.
+PARAM_UNITS = {
+    "q": "L/min",
+    "V": "L",
+    "rho": "g/L",
+    "C": "J/(g*K)",
+    "deltaHr": "J/mol",
+    "EA_over_R": "K",
+    "k0": "1/min",
+    "UA": "J/(min*K)",
+    "Ti": "K",
+    "Caf": "mol/L",
+    "precision_floor": "mol/L",
+    "time_unit_seconds": "s",
+    "T_c_min": "K",
+    "T_c_max": "K",
+    "tau_j": "min",
+    "T_trip": "K",
+    "T_valid_min": "K",
+    "Ti_sigma": "K",
+    "Ti_tau": "min",
+    "Ti_dev_reset_clip": "-",
+    "block_steps": "steps",
+    "initial_CA_offset": "mol/L",
+    "initial_T_offset": "K",
+    "delta_t": "min",
+    "e_floor": "mol/L",
+    "reward_version": "-",
+    "e_tol": "mol/L",
+    "tracking_exponent": "-",
+    "failure_cost": "reward",
+    "restart_steps": "steps",
+    "rho_floor_tracking": "reward",
+    "rho_floor": "reward",
+    "CA_error_max": "mol/L",
+}
+
+
 @struct.dataclass
 class UnstableCSTRState(EnvState):
     C_a: float

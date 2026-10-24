@@ -89,3 +89,21 @@ def test_wrapper_multi_step(jax_env_class, dummy_action):
         assert isinstance(done, bool)
         assert isinstance(truncated, bool)
         assert isinstance(info, dict)
+
+
+def test_wrapper_draws_a_fresh_key_per_reset_and_step():
+    """One key reused everywhere gave every unseeded episode the same start
+    (and every trip restart the same draw). A seed still makes a run repeat."""
+    GymEnv = gym_wrapper_factory(Airplane2D)
+    env = GymEnv(env_params=PlaneParams(turbulence_sigma=2.0))
+
+    def rollout(seed):
+        obs = [env.reset(seed=seed)[0]]
+        for _ in range(5):
+            obs.append(env.step(np.array([0.8, 0.0]))[0])
+        return np.stack(obs)
+
+    np.testing.assert_array_equal(rollout(0), rollout(0))
+    a, _ = env.reset()
+    b, _ = env.reset()
+    assert not np.array_equal(a, b)

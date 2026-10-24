@@ -591,3 +591,13 @@ def test_every_env_exposes_its_registry_experts(name):
     if spec.has_mpc and getattr(type(env), "registry_name", None) == name:
         mpc = env.make_mpc(spec.make_test_params())
         assert hasattr(mpc, "step") and hasattr(mpc, "reset")
+
+
+def test_param_units_do_not_move_a_fingerprint():
+    """``PARAM_UNITS`` only documents values, so adding or editing it must not
+    stale a version stamp or a recorded baseline. Anything else still does."""
+    base = "X = 1.0\n"
+    digest = provenance._stable_ast_digest
+    assert digest(base + 'PARAM_UNITS = {"X": "m"}\n') == digest(base)
+    assert digest(base + 'PARAM_UNITS: dict = {"X": "s"}\n') == digest(base)
+    assert digest(base + 'OTHER = {"X": "m"}\n') != digest(base)

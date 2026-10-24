@@ -75,7 +75,10 @@ def gym_wrapper_factory(jax_env_class: Type):
         def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
             if seed is not None:
                 self.key = jax.random.PRNGKey(seed)
-            obs, self.state = self.jax_env.reset_env(self.key, self.env_params)
+            # A fresh subkey per call: reusing one key gave every unseeded
+            # episode the same start and every trip restart the same draw.
+            self.key, key = jax.random.split(self.key)
+            obs, self.state = self.jax_env.reset_env(key, self.env_params)
             self.frames = []
             self.screen = None
             self.clock = None
@@ -88,8 +91,9 @@ def gym_wrapper_factory(jax_env_class: Type):
             return self.jax_env.is_truncated(*args, **kwargs)
 
         def step(self, action: np.ndarray):
+            self.key, key = jax.random.split(self.key)
             obs, new_state, reward, terminated, info = self.jax_env.step_env(
-                self.key,
+                key,
                 self.state,
                 jnp.array(action, dtype=jnp.float32),
                 self.env_params,

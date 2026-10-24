@@ -62,21 +62,23 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 0.05 |
-| `max_steps_in_episode` | 100 |
-| `K` | 1 |
-| `tau` | 0.5 |
-| `u_min` | -2 |
-| `u_max` | 2 |
-| `x_min` | -3 |
-| `x_max` | 3 |
-| `reward_version` | 2 |
-| `e_floor` | 0.006 |
-| `e_tol` | 0 |
-| `tracking_exponent` | 2 |
-| `failure_cost` | 2e+06 |
-| `restart_steps` | 100 |
-| … | 3 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 0.05 | s |
+| `max_steps_in_episode` | 100 | steps |
+| `K` | 1 | - |
+| `tau` | 0.5 | s |
+| `u_min` | -2 | - |
+| `u_max` | 2 | - |
+| `x_min` | -3 | - |
+| `x_max` | 3 | - |
+| `reward_version` | 2 | - |
+| `e_floor` | 0.006 | - |
+| `e_tol` | 0 | - |
+| `tracking_exponent` | 2 | - |
+| `failure_cost` | 2e+06 | reward |
+| `restart_steps` | 100 | steps |
+| `rho_floor_tracking` | 0 | reward |
+| `rho_floor` | 0 | reward |
+| `precision_floor` | 0.006 | - |
 

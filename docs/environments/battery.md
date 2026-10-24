@@ -64,21 +64,55 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default |
-|---|---|
-| `delta_t` | 5 |
-| `max_steps_in_episode` | 360 |
-| `energy_nominal` | 7.2e+09 |
-| `power_max` | 1e+06 |
-| `n_series` | 192 |
-| `capacity_As` | 9e+06 |
-| `R0` | 0.02 |
-| `R1` | 0.01 |
-| `C1` | 20000 |
-| `ocv_a` | 3 |
-| `ocv_b` | 1.15 |
-| `ocv_c` | 0.3 |
-| `ocv_d` | 12 |
-| `ocv_e` | 0.05 |
-| … | 35 more, see the params dataclass |
+| parameter | default | unit |
+|---|---|---|
+| `delta_t` | 5 | s |
+| `max_steps_in_episode` | 360 | steps |
+| `energy_nominal` | 7.2e+09 | J |
+| `power_max` | 1e+06 | W |
+| `n_series` | 192 | - |
+| `capacity_As` | 9e+06 | A s |
+| `R0` | 0.02 | ohm |
+| `R1` | 0.01 | ohm |
+| `C1` | 20000 | F |
+| `ocv_a` | 3 | V |
+| `ocv_b` | 1.15 | V |
+| `ocv_c` | 0.3 | V |
+| `ocv_d` | 12 | - |
+| `ocv_e` | 0.05 | V |
+| `ocv_f` | 8 | - |
+| `ocv_g` | 0.85 | - |
+| `C_thermal` | 9e+06 | J/K |
+| `UA_thermal` | 3000 | W/K |
+| `T_ambient` | 25 | degC |
+| `k_calendar` | 3e-09 | 1/s |
+| `E_activation` | 20000 | J/mol |
+| `T_ref_aging` | 298.15 | K |
+| `k_cycle` | 1.5e-09 | 1/(kA s) |
+| `soc_min` | 0.05 | - |
+| `soc_max` | 0.95 | - |
+| `T_max` | 60 | degC |
+| `V_cell_min` | 2.7 | V |
+| `V_cell_max` | 4.25 | V |
+| `power_band` | 150000 | W |
+| `precision_floor` | 1000 | W |
+| `max_step_cost` | 0.03 | reward |
+| `cost_weight` | 0.1 | - |
+| `degradation_weight` | 200000 | reward |
+| `soc_comfort_weight` | 0.1 | reward |
+| `dispatch_block_seconds` | 300 | s |
+| `dispatch_range` | 800000 | W |
+| `dispatch_noise_std` | 2000 | W |
+| `reward_version` | 2 | - |
+| `e_floor` | 1596 | W |
+| `e_tol` | 0 | W |
+| `tracking_exponent` | 1 | - |
+| `imbalance_price` | 100 | $/MWh |
+| `c_hold` | 1.92e-08 | 1/step |
+| `fade_price` | 300 | $/kWh |
+| `pack_kWh` | 1692 | kWh |
+| `failure_cost` | 0.5 | reward |
+| `restart_steps` | 720 | steps |
+| `rho_floor_tracking` | 0.000221667 | reward |
+| `rho_floor` | 0.000221667 | reward |
 
