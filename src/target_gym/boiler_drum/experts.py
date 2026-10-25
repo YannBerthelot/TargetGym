@@ -8,12 +8,14 @@ CasadiMPC, SamplingMPC and the v2 objective helpers) stays in
 
 import jax
 import jax.numpy as jnp
+from flax import struct
 
 from target_gym.experts.mpc import (
     GradientMPC,
     _floor_units,
     _is_v1,
 )
+from target_gym.experts.pid import Controller, _load_gains
 
 
 class BoilerDrumGradientMPC(GradientMPC):
@@ -113,3 +115,105 @@ def make_boiler_drum_mpc(
         lr=lr,
         lr_end=lr_end,
     )
+
+
+# ---------------------------------------------------------------------------
+# Three-element PID as one pure step (host NumPy and jit/vmap alike)
+# ---------------------------------------------------------------------------
+
+
+@struct.dataclass
+class BoilerDrumPIDParams:
+    """Gains and plant constants of the three-element controller.
+
+    Every field is a Python float, so NumPy treats it as weakly typed and the
+    host arithmetic stays in the observation's dtype, as it did when
+    the baseline was recorded.
+    """
+
+    Kp_level: float
+    Ki_level: float
+    Kp_pressure: float
+    Ki_pressure: float
+    Kd_pressure: float
+    q_feed_max: float
+    Q_max: float
+    h_feedwater: float
+    dt: float = 2.0
+    # The level trim is bounded so the feedforward always dominates.
+    trim_max: float = 25.0
+
+
+@struct.dataclass
+class BoilerDrumPIDState:
+    """Level and pressure integrators, and the last pressure error."""
+
+    level_int: float = 0.0
+    press_int: float = 0.0
+    prev_press_err: float = 0.0
+
+
+def boiler_drum_pid_step(params, state, obs, xp=jnp):
+    """One step of the boiler drum's level and pressure PIDs, against ``xp``.
+
+    Keep the arithmetic order: under ``numpy`` it reproduces the scored
+    baseline bit for bit.
+
+    obs: [level, pressure, q_steam, fuel_pct, feed_pct, target_level, target_pressure]
+    """
+    p = params
+    level = obs[..., 0]
+    pressure = obs[..., 1]
+    q_steam = obs[..., 2]
+    target_level = obs[..., 5]
+    target_pressure = obs[..., 6]
+
+    # --- Feedwater: steam-flow feedforward, trimmed by a slow level PI ---
+    err_l = target_level - level
+    level_int = state.level_int + err_l * p.dt
+    trim = p.Kp_level * err_l + p.Ki_level * level_int
+    trim_clipped = xp.clip(trim, -p.trim_max, p.trim_max)
+    level_int = xp.where(trim != trim_clipped, level_int - err_l * p.dt, level_int)
+    q_feed = xp.clip(q_steam + trim_clipped, 0.0, p.q_feed_max)
+    feed_raw = 2.0 * (q_feed / p.q_feed_max) - 1.0
+
+    # --- Firing: enthalpy feedforward plus a PI on pressure ---
+    Q_ff = q_steam * (2.75e6 - p.h_feedwater)
+    err_p = target_pressure - pressure
+    press_int = state.press_int + err_p * p.dt
+    deriv = (err_p - state.prev_press_err) / p.dt
+    Q = Q_ff + p.Q_max * (
+        p.Kp_pressure * err_p + p.Ki_pressure * press_int + p.Kd_pressure * deriv
+    )
+    Q_clipped = xp.clip(Q, 0.0, p.Q_max)
+    press_int = xp.where(Q != Q_clipped, press_int - err_p * p.dt, press_int)
+    fuel_raw = 2.0 * (Q_clipped / p.Q_max) - 1.0
+
+    new_state = BoilerDrumPIDState(
+        level_int=level_int, press_int=press_int, prev_press_err=err_p
+    )
+    return xp.stack([fuel_raw, feed_raw], axis=-1), new_state
+
+
+def make_boiler_drum_pid_controller() -> Controller:
+    """The three-element controller as a :class:`Controller`.
+
+    Reads the same tuned gains, with the same defaults, as
+    ``make_boiler_drum_stateful_pid``.
+    """
+    from target_gym.boiler_drum.env import BoilerDrumParams
+
+    pr = BoilerDrumParams()
+    _p = _load_gains().get("boiler_drum", {})
+    params = BoilerDrumPIDParams(
+        Kp_level=float(_p.get("Kp_level", 60.0)),
+        Ki_level=float(_p.get("Ki_level", 0.6)),
+        Kp_pressure=float(_p.get("Kp_pressure", 0.05)),
+        Ki_pressure=float(_p.get("Ki_pressure", 0.002)),
+        Kd_pressure=float(_p.get("Kd_pressure", 0.0)),
+        q_feed_max=pr.q_feed_max,
+        Q_max=pr.Q_max,
+        h_feedwater=pr.h_feedwater,
+        dt=pr.delta_t,
+    )
+    return Controller(params, BoilerDrumPIDState(), boiler_drum_pid_step)

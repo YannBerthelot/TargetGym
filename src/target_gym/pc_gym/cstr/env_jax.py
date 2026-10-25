@@ -8,6 +8,7 @@ import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.cstr.env import (
     CSTRParams,
     CSTRState,
@@ -21,11 +22,13 @@ from target_gym.pc_gym.cstr.rendering import _render
 from target_gym.utils import save_video
 
 
-class CSTR(environment.Environment[CSTRState, CSTRParams]):
+class CSTR(RegistryExperts, environment.Environment[CSTRState, CSTRParams]):
     """Exothermic CSTR holding concentration against runaway.
 
     Action (1,): [coolant temperature], raw in [-1, 1] -> [T_c_min, T_c_max]
     """
+
+    registry_name: str = "cstr"
 
     render_car = classmethod(_render)
     screen_width = 600
@@ -191,23 +194,6 @@ class CSTR(environment.Environment[CSTRState, CSTRParams]):
         """
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
-
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_cstr_pid,
-            pid_step,
-        )
-
-        params, zero_state = make_cstr_pid()
-        return FunctionalExpertPolicy(params, zero_state, pid_step)
-
-    def make_pid(self):
-        """Return a ready-to-use StatefulPID for concentration tracking."""
-        from target_gym.experts.pid import make_cstr_stateful_pid
-
-        return make_cstr_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return the oracle, a shrinking-horizon NLP, for concentration tracking."""

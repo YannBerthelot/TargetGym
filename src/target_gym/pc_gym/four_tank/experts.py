@@ -115,3 +115,31 @@ def make_four_tank_mpc(
         pre_weight=pre_weight,
         resolve_every=resolve_every,
     )
+
+
+def make_four_tank_pid_controller():
+    """The scored PID as a pure :class:`~target_gym.experts.pid.Controller`;
+    ``.host()`` is what ``make_pid()`` returns. Crossed pairing: pump v1 holds tank 2 and v2 holds tank 1.
+    """
+    from target_gym.experts.pid import _load_gains, mimo_pid, siso_pid
+
+    _p = _load_gains().get("four_tank", {})
+    _p1, _p2 = _p.get("pid1", {}), _p.get("pid2", {})
+    return mimo_pid(
+        siso_pid(
+            Kp=float(_p1.get("Kp", 40.0)),
+            Ki=float(_p1.get("Ki", 0.6)),
+            Kd=float(_p1.get("Kd", 0.0)),
+            dt=1.0,
+            state_index=1,
+            setpoint_index=5,
+        ),
+        siso_pid(
+            Kp=float(_p2.get("Kp", 40.0)),
+            Ki=float(_p2.get("Ki", 0.6)),
+            Kd=float(_p2.get("Kd", 0.0)),
+            dt=1.0,
+            state_index=0,
+            setpoint_index=4,
+        ),
+    )

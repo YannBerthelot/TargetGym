@@ -41,8 +41,9 @@ A PID is a small stateful object:
   MPC is the opposite: it reads the true state and is an upper bound, not a
   peer.)
 
-It runs on the host, in plain Python, so call it outside `jax.jit`. See
-[Inside a jitted loop](#inside-a-jitted-loop) for the JAX-traceable form.
+It runs on the host, in NumPy, so call it outside `jax.jit`. The same
+controller as a pure function, for `jit`, `vmap` and GPU, is in
+[Inside a jitted loop](#inside-a-jitted-loop-on-gpu).
 
 ## Running it in a loop
 
@@ -215,29 +216,50 @@ for seed in range(3):
 print(len(transitions), "transitions")
 ```
 
-### Inside a jitted loop
+### Inside a jitted loop, on GPU
 
 A fully jitted learner (a `jax.lax.scan` over environment steps, as in
-PureJaxRL-style agents) cannot call the host-side PID. Some environments also
-expose `env.expert_policy`, a JAX-traceable form that is batched and threads
-its own state:
+PureJaxRL-style agents) cannot call the host-side object. Every environment
+also gives the same PID as a pure function, `spec.make_pid_controller()`:
+`ctrl.act(pid_state, obs)` returns `(action, pid_state)`, starting from
+`ctrl.init_state`, so it sits inside `jit`, `vmap` and `lax.scan` and runs on
+GPU. It is the same step function `make_pid()` runs with NumPy, so the two act
+alike up to float32 rounding (`tests/test_registry_rules.py` checks this on
+every environment).
 
 ```python
 import jax
+import numpy as np
+from target_gym.provenance import load_recorded_baselines
 from target_gym.registry import REGISTRY
 
 spec = REGISTRY["cstr"]
 env, params = spec.make_env(), spec.make_test_params()
-expert = env.expert_policy
+ctrl = spec.make_pid_controller()
 
-expert_state = expert.init_state(num_envs=1)
-obs, state = env.reset(jax.random.PRNGKey(0), params)
-actions, expert_state = expert(expert_state, obs[None])   # (num_envs, action_dim)
+
+def episode_return(key):
+    obs, env_state = env.reset_env(key, params)
+
+    def step(carry, _):
+        obs, env_state, pid_state = carry
+        action, pid_state = ctrl.act(pid_state, obs)
+        obs, env_state, reward, _, _ = env.step_env(key, env_state, action, params)
+        return (obs, env_state, pid_state), reward
+
+    carry = (obs, env_state, ctrl.init_state)
+    _, rewards = jax.lax.scan(step, carry, None, length=params.max_steps_in_episode)
+    return rewards.sum()
+
+
+keys = jax.numpy.stack([jax.random.PRNGKey(s) for s in range(10)])
+returns = jax.jit(jax.vmap(episode_return))(keys)   # ten episodes at once
+
+recorded = load_recorded_baselines()["cstr"]["pid_returns"]
+assert np.allclose(returns, recorded, rtol=1e-3)     # the host-scored numbers
 ```
 
-It is the scored PID on six environments only: `cstr`, `first_order`,
-`four_tank`, `glass_furnace`, `hvac` and `patrol`.
-`tests/test_registry_rules.py` checks this list against `make_pid` every run.
-Elsewhere `expert_policy` is either missing or a different controller from the scored one,
-so on those environments compute the PID's actions on the host, or compare
-against the recorded numbers rather than a jitted re-run.
+`env.expert_policy` is the same controller already batched, for agents that
+keep one PID state per parallel environment:
+`state = env.expert_policy.init_state(num_envs)`, then
+`actions, state = env.expert_policy(state, obs_batch)`.

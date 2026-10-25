@@ -19,15 +19,20 @@ from target_gym.energy.battery.env import (
     get_obs,
 )
 from target_gym.energy.battery.rendering import _render
+from target_gym.expert_access import RegistryExperts
 from target_gym.utils import save_video
 
 
-class GridBattery(environment.Environment[BatteryState, BatteryParams]):
+class GridBattery(
+    RegistryExperts, environment.Environment[BatteryState, BatteryParams]
+):
     """Grid battery storage tracking a dispatch signal.
 
     Observation (5,): [soc, V_cell, T_cell, P_MW, target_P_MW]
     Action      (1,): power, raw in [-1, 1] -> [-P_max, +P_max] (positive = discharge)
     """
+
+    registry_name: str = "battery"
 
     render_battery = classmethod(_render)
     screen_width = 700
@@ -152,12 +157,6 @@ class GridBattery(environment.Environment[BatteryState, BatteryParams]):
         return spaces.Box(
             -inf, inf, len(BatteryState.__dataclass_fields__), dtype=jnp.float32
         )
-
-    def make_pid(self):
-        """Return the dispatch-following controller with state-of-charge guarding."""
-        from target_gym.experts.pid import make_battery_stateful_pid
-
-        return make_battery_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return the oracle: feedforward of the scheduled dispatch level."""

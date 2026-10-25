@@ -111,7 +111,7 @@ baseline cannot quietly disappear.
 ## PID
 
 The PID baselines are stateful objects with `reset()` and `__call__(obs)`.
-They range from a single loop to gain-scheduled and cascaded structures, and
+They range from a single loop to cascaded and override structures, and
 for the multi-loop plants a MIMO form with a deliberate pairing -- the
 four-tank's loops are **crossed**, because its relative gain array puts
 λ11 at −0.067 and the obvious pairing is unstable.
@@ -611,12 +611,12 @@ neither cap is needed once the rollouts happen by hand. Both were lifted, which
 is what exposed the glass furnace's MPC (see below).
 
 **What it costs.** The fingerprint covers the shared controller modules, so
-editing `experts/pid.py` or the shared machinery in `experts/mpc.py`
-invalidates every environment's record even when the change provably touches
-one environment. Each task's oracle lives in its own package's `experts.py`,
-which only that package's fingerprint covers, so oracle work re-records only
-that package. That is deliberate. A finer,
-symbol-level fingerprint would have to resolve `_pid("make_glass_furnace_stateful_pid")` --
+editing the shared PID core in `experts/pid.py` or the shared machinery in
+`experts/mpc.py` invalidates every environment's record even when the change
+provably touches one environment. Each task's PID and oracle live in its own
+package's `experts.py`, which only that package's fingerprint covers, so
+retuning or reworking one controller re-records only that package. That is deliberate. A finer,
+symbol-level fingerprint would have to resolve `_pid("make_glass_furnace_pid_controller", ...)` --
 a string lookup -- and a miss there produces a record that is stale and *looks*
 fresh, which is the one direction this design refuses. The price is a
 re-measurement after controller work; the alternative price is a false green.

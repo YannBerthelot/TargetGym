@@ -18,9 +18,17 @@ full-state bound (:func:`make_patrol_bearing_only_mpc`).
 import jax
 import jax.numpy as jnp
 import numpy as np
+from flax import struct
 
 from target_gym.experts.mpc import GradientMPC, _is_v1
-from target_gym.experts.pid import Plane3DPIDState, plane3d_heading_pid_step
+from target_gym.experts.pid import (
+    Controller,
+    PatrolPIDParams,
+    Plane3DPIDState,
+    _wrap_angle,
+    make_patrol_pid,
+    plane3d_heading_pid_step,
+)
 from target_gym.patrol.env import (
     _relative_velocity_lead_frame,
     get_obs_heading,
@@ -413,3 +421,238 @@ def make_patrol_bearing_only_mpc(env, params, **kwargs):
     agree (scripts/evaluate_baselines.py).
     """
     return make_patrol_mpc(env, params, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# The PID baselines as Controllers: one step, NumPy on the host, jnp traced
+# ---------------------------------------------------------------------------
+
+# Indices into the full patrol observation (patrol.env.get_obs_full).
+_X_DOT, _Y_DOT, _Z_DOT = 0, 1, 3
+_PHI, _PHI_DOT, _PSI = 6, 7, 9
+_E_BACK, _E_RIGHT, _E_UP, _RV_UP, _REL_HEADING = 10, 11, 12, 15, 19
+# Indices into the bearing-only observation; 0-9 are as above.
+_RANGE, _AZ, _EL = 10, 11, 12
+_SLOT_BACK, _SLOT_RIGHT, _SLOT_UP = 13, 14, 15
+
+# As in experts.pid: the follower's cruise, and g for the coordinated turn.
+_NOMINAL_SPEED = 230.0
+_GRAVITY = 9.81
+
+
+@struct.dataclass
+class PatrolPIDState:
+    """The pursuit law's memory: three integrators, two previous errors (the
+    vertical loop reads the measured rate instead) and the previous lead
+    heading for the turn-rate feedforward."""
+
+    alt_integral: float = 0.0
+    track_integral: float = 0.0
+    track_prev: float = 0.0
+    power_integral: float = 0.0
+    power_prev: float = 0.0
+    lead_psi_prev: float = 0.0
+
+
+@struct.dataclass
+class BearingOnlyPatrolPIDParams:
+    """The pursuit law's gains plus the lead estimator's step and filters."""
+
+    pid: PatrolPIDParams
+    dt: float  # the environment step (s), for differencing the bearing
+    psi_alpha: float  # lead-heading filter, exp(-dt / psi_tau)
+    rate_alpha: float  # lead vertical-rate filter, exp(-dt / rate_tau)
+
+
+@struct.dataclass
+class BearingOnlyPatrolPIDState:
+    """The pursuit law's memory plus the lead estimator's: the previous
+    lead-minus-follower position (world frame), the filtered lead heading and
+    vertical rate, and whether a previous sample exists."""
+
+    pid: PatrolPIDState = PatrolPIDState()
+    prev_dx: float = 0.0
+    prev_dy: float = 0.0
+    prev_dz: float = 0.0
+    psi_lead: float = 0.0
+    lead_zdot: float = 0.0
+    started: bool = False
+
+
+def _pursuit_law(params, state, obs, e_back, e_right, e_up, rv_up, rel_heading, xp):
+    """The patrol pursuit law over ``xp``, in the order the baseline was scored with.
+
+    Own state (speed, roll, roll rate, heading) is read from ``obs`` 0-9, the
+    slot quantities are passed in. The callers always pass ``jnp``, also on
+    the host: the scored patrol PIDs ran this law eagerly in JAX, whose float32
+    ``sin``/``cos`` differ from NumPy's in the last bit on about one input in
+    eight, which is enough to move an episode. ``arctan`` is spelled ``arctan2(z, 1)``:
+    XLA lowers it that way, and NumPy's float32 ``arctan2`` agrees with XLA's
+    bit for bit where its float32 ``arctan`` does not.
+    """
+    phi = obs[_PHI]
+    phi_dot = obs[_PHI_DOT]
+    psi = obs[_PSI]
+
+    alt_err = -e_up
+    alt_rate = -rv_up
+    new_alt_int = state.alt_integral + alt_err * params.dt
+    stick_u = (
+        params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_rate
+    )
+    stick = xp.clip(stick_u, -1.0, 1.0)
+    new_alt_int = xp.where(stick_u == stick, new_alt_int, state.alt_integral)
+
+    new_power_int = state.power_integral + e_back * params.dt
+    power_u = (
+        params.cruise
+        + params.Kp_power * e_back
+        + params.Ki_power * new_power_int
+        + params.Kd_power * (e_back - state.power_prev) / params.dt
+    )
+    power = xp.clip(power_u, -1.0, 1.0)
+    new_power_int = xp.where(power_u == power, new_power_int, state.power_integral)
+
+    psi_lead = psi + rel_heading
+    c, s = xp.cos(psi_lead), xp.sin(psi_lead)
+    v0 = e_back * c - e_right * s
+    v1 = e_back * s - e_right * (-c)
+    dist_h = xp.sqrt(e_back**2 + e_right**2 + 1e-6)
+    pursuit_err = _wrap_angle(xp.arctan2(v1, v0) - psi, xp)
+    blend = xp.clip(dist_h / params.blend_dist, 0.0, 1.0)
+    heading_err = _wrap_angle(blend * pursuit_err + (1.0 - blend) * rel_heading, xp)
+
+    new_hdg_int = state.track_integral + heading_err * params.dt
+    hdg_d = (heading_err - state.track_prev) / params.dt
+    speed = xp.sqrt(obs[_X_DOT] ** 2 + obs[_Y_DOT] ** 2 + obs[_Z_DOT] ** 2 + 1e-6)
+    bank_cmd = (
+        params.Kp_hdg * heading_err
+        + params.Ki_hdg * new_hdg_int
+        + params.Kd_hdg * hdg_d
+    )
+    psi_lead_now = _wrap_angle(psi_lead, xp)
+    lead_rate = _wrap_angle(psi_lead_now - state.lead_psi_prev, xp) / params.dt
+    lead_rate = xp.clip(lead_rate, -params.lead_rate_max, params.lead_rate_max)
+    turn_rate_cmd = params.Kff_lead * lead_rate + _GRAVITY * bank_cmd / _NOMINAL_SPEED
+    # The old step took tan of the Python float under jnp, i.e. in float32.
+    max_bank = xp.asarray(params.max_bank_rad, dtype=speed.dtype)
+    turn_rate_max = _GRAVITY * xp.tan(max_bank) / speed
+    turn_rate_cmd = xp.clip(turn_rate_cmd, -turn_rate_max, turn_rate_max)
+    desired_bank = xp.arctan2(speed * turn_rate_cmd / _GRAVITY, 1.0)
+    bank_err = phi - desired_bank
+    aileron = xp.clip(params.Kp_bank * bank_err - params.Kd_bank * phi_dot, -1.0, 1.0)
+    new_hdg_int = xp.where(xp.abs(aileron) >= 1.0, state.track_integral, new_hdg_int)
+
+    new_state = PatrolPIDState(
+        alt_integral=new_alt_int,
+        track_integral=new_hdg_int,
+        track_prev=heading_err,
+        power_integral=new_power_int,
+        power_prev=e_back,
+        lead_psi_prev=psi_lead_now,
+    )
+    return xp.stack([power, stick, aileron]), new_state
+
+
+def patrol_pid_controller_step(params, state, obs, xp=jnp):
+    """The full-observation patrol PID: the pursuit law on obs 10-19."""
+    return _pursuit_law(
+        params,
+        state,
+        obs,
+        obs[_E_BACK],
+        obs[_E_RIGHT],
+        obs[_E_UP],
+        obs[_RV_UP],
+        obs[_REL_HEADING],
+        jnp,
+    )
+
+
+def patrol_bearing_only_pid_step(params, state, obs, xp=jnp):
+    """The bearing-only patrol PID: estimate the lead, then the pursuit law.
+
+    The bearing is turned into a world-frame offset in the observation's
+    float32, the estimator then runs in float64 (as the scored baseline did,
+    through Python floats), and the eight
+    quantities the law reads are rounded back to float32. Under ``jnp``
+    without x64 the estimator runs in float32.
+    """
+    wide = xp.result_type(float)
+
+    psi32 = obs[_PSI]
+    rng, az, el = obs[_RANGE], obs[_AZ], obs[_EL]
+    horiz = rng * xp.cos(el)
+    d_fwd = horiz * xp.cos(az)
+    d_rgt = horiz * xp.sin(az)
+    dz = (rng * xp.sin(el)).astype(wide)
+    dx = (d_fwd * xp.cos(psi32) + d_rgt * xp.sin(psi32)).astype(wide)
+    dy = (d_fwd * xp.sin(psi32) - d_rgt * xp.cos(psi32)).astype(wide)
+    psi = psi32.astype(wide)
+    z_dot = obs[_Z_DOT].astype(wide)
+
+    # Lead velocity from the follower's plus the rate of the relative position;
+    # filtered on the heading innovation so the estimate wraps correctly. The
+    # first step has no previous sample and seeds with the follower's heading.
+    lead_vx = obs[_X_DOT].astype(wide) + (dx - state.prev_dx) / params.dt
+    lead_vy = obs[_Y_DOT].astype(wide) + (dy - state.prev_dy) / params.dt
+    raw_psi = xp.arctan2(lead_vy, lead_vx)
+    innov = _wrap_angle(raw_psi - state.psi_lead, xp)
+    psi_lead = state.psi_lead + (1.0 - params.psi_alpha) * innov
+    lead_zdot = params.rate_alpha * state.lead_zdot + (1.0 - params.rate_alpha) * (
+        z_dot + (dz - state.prev_dz) / params.dt
+    )
+    psi_lead = xp.where(state.started, psi_lead, psi)
+    lead_zdot = xp.where(state.started, lead_zdot, z_dot)
+
+    fwd = xp.stack([xp.cos(psi_lead), xp.sin(psi_lead)])
+    rgt = xp.stack([xp.sin(psi_lead), -xp.cos(psi_lead)])
+    d = xp.stack([-dx, -dy])  # follower minus lead
+    back = -(d @ fwd)
+    lateral = d @ rgt
+
+    f32 = obs.dtype
+    e_back = (back - obs[_SLOT_BACK].astype(wide)).astype(f32)
+    e_right = (lateral - obs[_SLOT_RIGHT].astype(wide)).astype(f32)
+    e_up = (-dz - obs[_SLOT_UP].astype(wide)).astype(f32)
+    rv_up = (z_dot - lead_zdot).astype(f32)
+    rel_heading = _wrap_angle(psi_lead - psi, xp).astype(f32)
+
+    action, pid = _pursuit_law(
+        params.pid, state.pid, obs, e_back, e_right, e_up, rv_up, rel_heading, jnp
+    )
+    new_state = BearingOnlyPatrolPIDState(
+        pid=pid,
+        prev_dx=dx,
+        prev_dy=dy,
+        prev_dz=dz,
+        psi_lead=psi_lead,
+        lead_zdot=lead_zdot,
+        started=True,
+    )
+    return action, new_state
+
+
+def make_patrol_pid_controller() -> Controller:
+    """The patrol PID as a :class:`Controller`, with ``make_patrol_pid``'s gains
+    (``pid_gains.json`` under ``patrol``, same defaults)."""
+    params, _ = make_patrol_pid()
+    return Controller(params, PatrolPIDState(), patrol_pid_controller_step)
+
+
+def make_patrol_bearing_only_pid_controller(
+    psi_tau: float = 0.6, rate_tau: float = 0.4
+) -> Controller:
+    """The bearing-only patrol PID as a :class:`Controller`: the patrol gains,
+    the environment's step for differencing, and the estimator's filters."""
+    from target_gym.patrol.env import PatrolParams
+
+    pid, _ = make_patrol_pid()
+    dt = float(PatrolParams().delta_t)
+    params = BearingOnlyPatrolPIDParams(
+        pid=pid,
+        dt=dt,
+        psi_alpha=float(np.exp(-dt / max(psi_tau, 1e-6))),
+        rate_alpha=float(np.exp(-dt / max(rate_tau, 1e-6))),
+    )
+    return Controller(params, BearingOnlyPatrolPIDState(), patrol_bearing_only_pid_step)

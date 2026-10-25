@@ -6,12 +6,8 @@ import numpy as np
 import pytest
 
 from target_gym import PlanePatrolMARL
-from target_gym.experts.pid import (
-    make_patrol_pid,
-    make_plane3d_heading_pid,
-    patrol_pid_step,
-    plane3d_heading_pid_step,
-)
+from target_gym.experts.pid import make_plane3d_heading_pid, plane3d_heading_pid_step
+from target_gym.patrol.experts import make_patrol_pid_controller
 from target_gym.patrol.marl import LEAD, formation_slots, wingman_name
 
 
@@ -139,7 +135,8 @@ class TestCooperativeSolution:
     def _mean_reward(self, k, seed, n=1200):
         env = PlanePatrolMARL(num_wingmen=k)
         params = env.default_params.replace(max_steps_in_episode=n)
-        fpp, fp0 = make_patrol_pid()
+        follower = make_patrol_pid_controller()
+        fp0 = follower.init_state
         lpp, lp0 = make_plane3d_heading_pid()
         obs, state = env.reset(jax.random.PRNGKey(seed), params)
         wps = [fp0] * k
@@ -150,7 +147,7 @@ class TestCooperativeSolution:
             acts = {LEAD: la}
             new = []
             for i in range(k):
-                wa, nwp = patrol_pid_step(fpp, wps[i], obs[wingman_name(i)])
+                wa, nwp = follower.act(wps[i], obs[wingman_name(i)])
                 acts[wingman_name(i)] = wa
                 new.append(nwp)
             obs, state, r, d, info = env.step_env(

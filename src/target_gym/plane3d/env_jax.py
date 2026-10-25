@@ -302,17 +302,6 @@ class Plane3DHeading(_Airplane3DBase):
         )
         return self.get_obs(state, params), state
 
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_plane3d_heading_pid,
-            plane3d_heading_pid_step,
-        )
-
-        params, zero_state = make_plane3d_heading_pid()
-        return FunctionalExpertPolicy(params, zero_state, plane3d_heading_pid_step)
-
 
 # ─── Circle task ───────────────────────────────────────
 
@@ -494,17 +483,6 @@ class Plane3DCircle(_Airplane3DBase):
         )
         return self.get_obs(state, params), state
 
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_plane3d_circle_pid,
-            plane3d_circle_pid_step,
-        )
-
-        params, zero_state = make_plane3d_circle_pid()
-        return FunctionalExpertPolicy(params, zero_state, plane3d_circle_pid_step)
-
 
 # ─── Figure-8 task ─────────────────────────────────────
 
@@ -603,17 +581,6 @@ class Plane3DFigureEight(_Airplane3DBase):
             target_radius=target_radius,
         )
         return self.get_obs(state, params), state
-
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_plane3d_figure8_pid,
-            plane3d_figure8_pid_step,
-        )
-
-        params, zero_state = make_plane3d_figure8_pid()
-        return FunctionalExpertPolicy(params, zero_state, plane3d_figure8_pid_step)
 
 
 # ─── Backward-compatible alias ─────────────────────────

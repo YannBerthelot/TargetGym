@@ -10,6 +10,7 @@ CasadiMPC, SamplingMPC and the v2 objective helpers) stays in
 import jax
 import jax.numpy as jnp
 import numpy as np
+from flax import struct
 
 from target_gym.experts import pid as _pid_mod
 from target_gym.experts.mpc import (
@@ -165,7 +166,7 @@ def cascaded_pid_factory(gains_key: str):
     """A factory for the cascaded altitude-hold PID on the gains stored under
     ``gains_key`` in ``data/pid_gains.json`` (its ``"note"`` is skipped).
 
-    ``make_plane_cascaded_pid`` reads ``plane_cascaded``, which only
+    ``make_plane_pid_controller`` reads ``plane_cascaded``, which only
     ``plane``'s fingerprint collects. Reads ``_load_gains()`` at call time,
     so a tuner that patches the cache is seen. A missing key raises rather
     than falling back to the constructor's defaults, which would fly a
@@ -176,13 +177,16 @@ def cascaded_pid_factory(gains_key: str):
         stored = _pid_mod._load_gains()
         if gains_key not in stored:
             raise KeyError(f"no {gains_key!r} entry in data/pid_gains.json")
-        return _pid_mod.StatefulCascadedAltitudePID(
+        params = PlaneCascadedPIDParams(
             **{
                 k: float(v)
                 for k, v in stored[gains_key].items()
                 if not isinstance(v, (str, dict, list))
             }
         )
+        return _pid_mod.Controller(
+            params, PlaneCascadedPIDState(), plane_cascaded_pid_step
+        ).host()
 
     return make
 
@@ -261,7 +265,7 @@ def _speed_loop_gains(pid) -> tuple[float, float, float, float, float]:
 
 
 def _speed_loop(integ, x_dot, gains):
-    """One step of ``StatefulCascadedAltitudePID``'s throttle branch, in JAX:
+    """One step of the cascaded autopilot's throttle branch, in JAX:
     the PI on the airspeed error with its anti-windup (the step that
     saturates is not integrated). Returns the throttle and the integrator."""
     v_target, cruise, kp, ki, dt = gains
@@ -379,7 +383,7 @@ class PlaneMPC(GradientMPC):
             if obs is not None
             else np.asarray(get_obs(state, self.params))
         )
-        integ0 = float(np.asarray(self._pid._speed_integral))  # before this step
+        integ0 = float(np.asarray(self._pid.state.speed_integral))  # before this step
         throttle = float(np.asarray(self._pid.step(o), dtype=np.float32)[0])
         aug = (state, jnp.asarray(integ0, jnp.float32))
         if self._fresh and self.initial_plan_fn is not None:
@@ -476,11 +480,13 @@ class PlaneHandoverMPC:
         capture, hold = self.capture, self.hold
         hold.reset()
         if self._last is not None:
-            hold._pid._speed_integral = _bumpless_integral(
-                float(self._last[0]),
-                float(state.x_dot),
-                _speed_loop_gains(hold._pid),
-                self.bumpless_tol,
+            hold._pid.state = hold._pid.state.replace(
+                speed_integral=_bumpless_integral(
+                    float(self._last[0]),
+                    float(state.x_dot),
+                    _speed_loop_gains(hold._pid),
+                    self.bumpless_tol,
+                )
             )
         hold._actions = capture._actions
         hold._fresh = False
@@ -654,4 +660,108 @@ def make_plane_mpc(
         return planner(speed_loop, n_iter, lr_end)
     return PlaneHandoverMPC(
         planner(False, **_CAPTURE_SETTINGS), planner(True, n_iter, lr_end)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cascaded altitude-hold PID as one pure step (host NumPy and jax.jit)
+# ---------------------------------------------------------------------------
+
+
+@struct.dataclass
+class PlaneCascadedPIDParams:
+    """Gains of the cascaded altitude-hold autopilot.
+
+    The field names are the keys stored under ``plane_cascaded`` in the gains
+    file, so tuned gains apply unchanged.
+    """
+
+    Kp_alt: float = 0.03  # altitude error (m) -> vertical speed (m/s)
+    vs_max: float = 15.0  # m/s climb/descent limit (~3000 ft/min)
+    Kp_vs: float = 0.010  # vertical-speed error (m/s) -> pitch (rad)
+    Ki_vs: float = 4.0e-4
+    theta_trim: float = 0.032  # rad, ~1.85 deg cruise trim
+    theta_max: float = 0.26  # rad, ~15 deg pitch limit
+    Kp_theta: float = 4.0  # pitch error (rad) -> elevator (raw)
+    Kd_theta: float = 3.0  # pitch-rate damping
+    alpha_max: float = 0.19  # rad, ~11 deg, inside the 15 deg stall
+    target_speed: float = 230.0  # m/s, held by the throttle loop
+    cruise_power: float = -0.65  # raw, ~0.175 throttle at cruise
+    Kp_speed: float = 0.025
+    Ki_speed: float = 3.0e-4
+    dt: float = 1.0
+
+
+@struct.dataclass
+class PlaneCascadedPIDState:
+    """The two integrators the cascaded autopilot carries between steps."""
+
+    vs_integral: float = 0.0
+    speed_integral: float = 0.0
+
+
+def plane_cascaded_pid_step(params, state, obs, xp=jnp):
+    """One step of the cascaded altitude-hold autopilot.
+
+    Keep the arithmetic order: the NumPy run reproduces the scored baseline
+    bit for bit. Returns
+    ``([power, stick], new_state)``.
+    """
+    p = params
+    x_dot = obs[..., 0]
+    z = obs[..., 1]
+    z_dot = obs[..., 2]
+    theta = obs[..., 3]
+    theta_dot = obs[..., 4]
+    gamma = obs[..., 5]
+    target_altitude = obs[..., 6]
+
+    # Outer loop: altitude -> commanded vertical speed.
+    vs_cmd = xp.clip(p.Kp_alt * (target_altitude - z), -p.vs_max, p.vs_max)
+
+    # Middle loop: vertical speed -> commanded pitch.
+    vs_err = vs_cmd - z_dot
+    vs_integral = state.vs_integral + vs_err * p.dt
+    theta_cmd = p.theta_trim + p.Kp_vs * vs_err + p.Ki_vs * vs_integral
+    theta_cmd = xp.clip(theta_cmd, -p.theta_max, p.theta_max)
+
+    # Alpha protection: alpha = theta - gamma.
+    theta_cmd = xp.minimum(theta_cmd, gamma + p.alpha_max)
+    theta_cmd = xp.maximum(theta_cmd, gamma - p.alpha_max)
+
+    # Anti-windup: stop integrating once the pitch demand is limited.
+    limited = xp.abs(theta_cmd - p.theta_trim) >= p.theta_max - 1e-6
+    vs_integral = xp.where(limited, vs_integral - vs_err * p.dt, vs_integral)
+
+    # Inner loop: pitch -> elevator, with rate damping.
+    stick = p.Kp_theta * (theta_cmd - theta) - p.Kd_theta * theta_dot
+    stick = xp.clip(stick, -1.0, 1.0)
+
+    # Throttle loop: hold airspeed.
+    speed_err = p.target_speed - x_dot
+    speed_integral = state.speed_integral + speed_err * p.dt
+    power = p.cruise_power + p.Kp_speed * speed_err + p.Ki_speed * speed_integral
+    power_clipped = xp.clip(power, -1.0, 1.0)
+    speed_integral = xp.where(
+        power != power_clipped, speed_integral - speed_err * p.dt, speed_integral
+    )
+
+    new_state = PlaneCascadedPIDState(
+        vs_integral=vs_integral, speed_integral=speed_integral
+    )
+    return xp.stack([power_clipped, stick], axis=-1), new_state
+
+
+def make_plane_pid_controller() -> _pid_mod.Controller:
+    """The cascaded altitude-hold PID as a ``Controller``, on the gains stored
+    under ``plane_cascaded`` (the params' defaults for any key it lacks).
+    """
+    _p = _pid_mod._load_gains().get("plane_cascaded", {})
+    params = PlaneCascadedPIDParams(
+        **{k: float(v) for k, v in _p.items() if not isinstance(v, (str, dict, list))}
+    )
+    return _pid_mod.Controller(
+        params=params,
+        init_state=PlaneCascadedPIDState(),
+        step=plane_cascaded_pid_step,
     )

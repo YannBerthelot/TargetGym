@@ -8,6 +8,7 @@ import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.hvac.env import (
     HVACParams,
     HVACState,
@@ -27,12 +28,14 @@ from target_gym.hvac.rendering import _render
 from target_gym.utils import save_video
 
 
-class BuildingHVAC(environment.Environment[HVACState, HVACParams]):
+class BuildingHVAC(RegistryExperts, environment.Environment[HVACState, HVACParams]):
     """Single-zone building HVAC (ISO 13790 5R1C).
 
     Observation (7,): [T_air, T_out, heat_pct, solar_norm, sin_h, cos_h, target_T]
     Action      (1,): commanded heating power, raw in [-1, 1] -> [0, Q_heat_max]
     """
+
+    registry_name: str = "hvac"
 
     render_hvac = classmethod(_render)
     screen_width = 700
@@ -167,12 +170,6 @@ class BuildingHVAC(environment.Environment[HVACState, HVACParams]):
             -inf, inf, len(HVACState.__dataclass_fields__), dtype=jnp.float32
         )
 
-    def make_pid(self):
-        """Return a ready-to-use StatefulPID for zone temperature control."""
-        from target_gym.experts.pid import make_hvac_stateful_pid
-
-        return make_hvac_stateful_pid()
-
     def make_mpc(self, params=None, **kwargs):
         """Return a CasADi MPC oracle for zone temperature control."""
         from target_gym.hvac.experts import make_hvac_mpc
@@ -180,17 +177,6 @@ class BuildingHVAC(environment.Environment[HVACState, HVACParams]):
         if params is None:
             params = self.default_params
         return make_hvac_mpc(self, params, **kwargs)
-
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_hvac_pid,
-            pid_step,
-        )
-
-        pid_params, zero_state = make_hvac_pid()
-        return FunctionalExpertPolicy(pid_params, zero_state, pid_step)
 
     def save_video(
         self,

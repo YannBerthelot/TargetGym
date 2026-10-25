@@ -8,6 +8,7 @@ import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.ph_neutralization.env import (
     PHParams,
     PHState,
@@ -23,12 +24,14 @@ from target_gym.pc_gym.ph_neutralization.rendering import _render
 from target_gym.utils import save_video
 
 
-class PHNeutralization(environment.Environment[PHState, PHParams]):
+class PHNeutralization(RegistryExperts, environment.Environment[PHState, PHParams]):
     """pH neutralisation CSTR (reaction-invariant formulation).
 
     Observation (3,): [pH, q3_pct, target_pH]
     Action      (1,): base flow, raw in [-1, 1] -> [q3_min, q3_max]
     """
+
+    registry_name: str = "ph_neutralization"
 
     render_ph = classmethod(_render)
     screen_width = 700
@@ -151,12 +154,6 @@ class PHNeutralization(environment.Environment[PHState, PHParams]):
         return spaces.Box(
             -inf, inf, len(PHState.__dataclass_fields__), dtype=jnp.float32
         )
-
-    def make_pid(self):
-        """Return a ready-to-use StatefulPID for pH tracking."""
-        from target_gym.experts.pid import make_ph_stateful_pid
-
-        return make_ph_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return a CasADi MPC oracle for pH tracking."""

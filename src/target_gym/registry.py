@@ -234,6 +234,13 @@ class EnvSpec:
     def has_pid(self) -> bool:
         return self.make_pid is not None
 
+    def make_pid_controller(self):
+        """The scored PID as a pure ``Controller``: ``.act`` traces under
+        ``jit``/``vmap``, ``.host()`` is what ``make_pid()`` returns."""
+        if not self.has_pid:
+            raise NotImplementedError(self.baselines_note or "no PID ships")
+        return self.make_pid.controller()
+
     @property
     def has_mpc(self) -> bool:
         return self.make_mpc is not None
@@ -444,17 +451,21 @@ class _LazyParams:
 # -- PID factories ----------------------------------------------------------
 
 
-def _pid(
-    factory_name: str, module: str = "target_gym.experts.pid"
-) -> Callable[[], Any]:
-    # A task added after the 21 passes its own package's ``experts`` module:
-    # experts/pid.py and experts/mpc.py are in every task's baseline
-    # fingerprint, so a controller added there would stale all of them.
-    def make():
+def _pid(factory_name: str, module: str) -> Callable[[], Any]:
+    # Every task's PID lives in its own package's ``experts`` module, as a
+    # factory returning a pure ``Controller``: experts/pid.py holds only the
+    # shared core and is in every task's baseline fingerprint, so a controller
+    # kept there would stale all of them. ``make()`` is the host form the
+    # baselines are scored with; ``make.controller()`` the traceable one.
+    def controller():
         from importlib import import_module
 
         return getattr(import_module(module), factory_name)()
 
+    def make():
+        return controller().host()
+
+    make.controller = controller
     return make
 
 
@@ -481,7 +492,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="aircraft",
         env_factory=_plane,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
-        make_pid=_pid("make_plane_cascaded_pid"),
+        make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
         make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.experts"),
         test_params={"max_steps_in_episode": 280},
         tuned_gains_key="plane",
@@ -504,7 +515,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="aircraft",
         env_factory=_plane,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
-        make_pid=_pid("make_plane_cascaded_pid"),
+        make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
         make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.experts"),
         # Altitude *and* airspeed. The aircraft has always carried two
         # actuators, thrust and elevator, against one scored objective, so a
@@ -562,7 +573,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="aircraft",
         env_factory=_plane,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
-        make_pid=_pid("make_plane_cascaded_pid"),
+        make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
         make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.experts"),
         # 800 steps is 3.3 periods of the 240 s sinusoid, satisfying the three
         # periods the episode-length criterion asks of a periodic task.
@@ -605,7 +616,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="aircraft",
         env_factory=_plane3d_heading,
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
-        make_pid=_pid("make_plane3d_heading_cascaded_pid"),
+        make_pid=_pid(
+            "make_plane3d_heading_pid_controller", module="target_gym.plane3d.experts"
+        ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
         # The floors are set here, not taken from the PlaneParams3D class
         # defaults, because PatrolParams inherits those defaults and patrol's
@@ -634,7 +647,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="aircraft",
         env_factory=_plane3d_circle,
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
-        make_pid=_pid("make_plane3d_circle_cascaded_pid"),
+        make_pid=_pid(
+            "make_plane3d_circle_pid_controller", module="target_gym.plane3d.experts"
+        ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
         test_params={
             "max_steps_in_episode": 300,
@@ -662,7 +677,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="aircraft",
         env_factory=_plane3d_racetrack,
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
-        make_pid=_pid("make_plane3d_racetrack_cascaded_pid"),
+        make_pid=_pid(
+            "make_plane3d_racetrack_pid_controller", module="target_gym.plane3d.experts"
+        ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
         # A lap is two legs plus two half-circles: 2 * (2 * 2r) + 2 * pi * r,
         # about 8.3 r of path. At an 8.4 km radius and 230 m/s that is ~300 s,
@@ -721,7 +738,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="aircraft",
         env_factory=_plane3d_figure8,
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
-        make_pid=_pid("make_plane3d_figure8_stateful_pid"),
+        make_pid=_pid(
+            "make_plane3d_figure8_pid_controller", module="target_gym.plane3d.experts"
+        ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
         test_params={
             "max_steps_in_episode": 400,
@@ -746,7 +765,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="aircraft",
         env_factory=_patrol,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
-        make_pid=_pid("make_patrol_stateful_pid"),
+        make_pid=_pid("make_patrol_pid_controller", module="target_gym.patrol.experts"),
         make_mpc=_mpc("make_patrol_mpc", module="target_gym.patrol.experts"),
         test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
@@ -763,7 +782,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="aircraft",
         env_factory=_patrol_bearing_only,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
-        make_pid=_pid("make_patrol_bearing_only_stateful_pid"),
+        make_pid=_pid(
+            "make_patrol_bearing_only_pid_controller",
+            module="target_gym.patrol.experts",
+        ),
         make_mpc=_mpc(
             "make_patrol_bearing_only_mpc", module="target_gym.patrol.experts"
         ),
@@ -795,7 +817,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="process",
         env_factory=_cstr,
         params_cls=_LazyParams("target_gym.pc_gym.cstr.env", "CSTRParams"),
-        make_pid=_pid("make_cstr_stateful_pid"),
+        make_pid=_pid(
+            "make_cstr_pid_controller", module="target_gym.pc_gym.cstr.experts"
+        ),
         make_mpc=_mpc("make_cstr_mpc", module="target_gym.pc_gym.cstr.experts"),
         tuned_gains_key="cstr",
     ),
@@ -804,7 +828,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="process",
         env_factory=_first_order,
         params_cls=_LazyParams("target_gym.pc_gym.first_order.env", "FirstOrderParams"),
-        make_pid=_pid("make_first_order_stateful_pid"),
+        make_pid=_pid(
+            "make_first_order_pid_controller",
+            module="target_gym.pc_gym.first_order.experts",
+        ),
         make_mpc=_mpc(
             "make_first_order_mpc", module="target_gym.pc_gym.first_order.experts"
         ),
@@ -815,7 +842,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="process",
         env_factory=_four_tank,
         params_cls=_LazyParams("target_gym.pc_gym.four_tank.env", "FourTankParams"),
-        make_pid=_pid("make_four_tank_stateful_pid"),
+        make_pid=_pid(
+            "make_four_tank_pid_controller",
+            module="target_gym.pc_gym.four_tank.experts",
+        ),
         make_mpc=_mpc(
             "make_four_tank_mpc", module="target_gym.pc_gym.four_tank.experts"
         ),
@@ -830,7 +860,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="process",
         env_factory=_ph_neutralization,
         params_cls=_LazyParams("target_gym.pc_gym.ph_neutralization.env", "PHParams"),
-        make_pid=_pid("make_ph_stateful_pid"),
+        make_pid=_pid(
+            "make_ph_pid_controller",
+            module="target_gym.pc_gym.ph_neutralization.experts",
+        ),
         make_mpc=_mpc(
             "make_ph_mpc", module="target_gym.pc_gym.ph_neutralization.experts"
         ),
@@ -849,7 +882,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams(
             "target_gym.pc_gym.distillation.env", "DistillationParams"
         ),
-        make_pid=_pid("make_distillation_stateful_pid"),
+        make_pid=_pid(
+            "make_distillation_pid_controller",
+            module="target_gym.pc_gym.distillation.experts",
+        ),
         make_mpc=_mpc(
             "make_distillation_mpc", module="target_gym.pc_gym.distillation.experts"
         ),
@@ -869,7 +905,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="industrial",
         env_factory=_glass_furnace,
         params_cls=_LazyParams("target_gym.glass_furnace.env", "GlassFurnaceParams"),
-        make_pid=_pid("make_glass_furnace_stateful_pid"),
+        make_pid=_pid(
+            "make_glass_furnace_pid_controller",
+            module="target_gym.glass_furnace.experts",
+        ),
         # 13.3 h at dt=30 s, 12.1 tau
         make_mpc=_mpc(
             "make_glass_furnace_mpc", module="target_gym.glass_furnace.experts"
@@ -887,7 +926,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="industrial",
         env_factory=_reactor,
         params_cls=_LazyParams("target_gym.reactor.env", "ReactorParams"),
-        make_pid=_pid("make_reactor_stateful_pid"),
+        make_pid=_pid(
+            "make_reactor_pid_controller", module="target_gym.reactor.experts"
+        ),
         make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.experts"),
         # Env steps of 10 s (``control_period`` physics sub-steps each): 2.4 h.
         #
@@ -920,7 +961,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="industrial",
         env_factory=_hvac,
         params_cls=_LazyParams("target_gym.hvac.env", "HVACParams"),
-        make_pid=_pid("make_hvac_stateful_pid"),
+        make_pid=_pid("make_hvac_pid_controller", module="target_gym.hvac.experts"),
         make_mpc=_mpc("make_hvac_mpc", module="target_gym.hvac.experts"),
         # 720 steps at dt = 900 s is 7.5 days, so fifteen setback recoveries
         # and as many solar cycles -- which is what distinguishes controllers
@@ -937,7 +978,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         version=3,
         env_factory=_cement_kiln,
         params_cls=_LazyParams("target_gym.cement_kiln.env", "CementKilnParams"),
-        make_pid=_pid("make_cement_kiln_stateful_pid"),
+        make_pid=_pid(
+            "make_cement_kiln_pid_controller", module="target_gym.cement_kiln.experts"
+        ),
         make_mpc=_mpc("make_cement_kiln_mpc", module="target_gym.cement_kiln.experts"),
         # 700 steps = 5.8 hours at dt = 30 s, about fourteen transport delays,
         # so a controller lives with the consequences of its own fuel changes
@@ -956,7 +999,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="industrial",
         env_factory=_boiler_drum,
         params_cls=_LazyParams("target_gym.boiler_drum.env", "BoilerDrumParams"),
-        make_pid=_pid("make_boiler_drum_stateful_pid"),
+        make_pid=_pid(
+            "make_boiler_drum_pid_controller", module="target_gym.boiler_drum.experts"
+        ),
         make_mpc=_mpc("make_boiler_drum_mpc", module="target_gym.boiler_drum.experts"),
         # 400 steps = 800 s at dt = 2 s, about 20 times the ~35 s swell peak,
         # so a controller has to survive many inverse-response transients.
@@ -974,7 +1019,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams(
             "target_gym.energy.wind_turbine.env", "WindTurbineParams"
         ),
-        make_pid=_pid("make_wind_turbine_stateful_pid"),
+        make_pid=_pid(
+            "make_wind_turbine_pid_controller",
+            module="target_gym.energy.wind_turbine.experts",
+        ),
         make_mpc=_mpc(
             "make_wind_turbine_mpc", module="target_gym.energy.wind_turbine.experts"
         ),
@@ -988,7 +1036,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="energy",
         env_factory=_battery,
         params_cls=_LazyParams("target_gym.energy.battery.env", "BatteryParams"),
-        make_pid=_pid("make_battery_stateful_pid"),
+        make_pid=_pid(
+            "make_battery_pid_controller", module="target_gym.energy.battery.experts"
+        ),
         make_mpc=_mpc("make_battery_mpc", module="target_gym.energy.battery.experts"),
         # 360 steps = 30 min, a real fraction of the ~96 min it takes to
         # traverse the usable state-of-charge range at full power.
@@ -1008,7 +1058,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "target_gym.pc_gym.unstable_cstr.env", "UnstableCSTRParams"
         ),
         make_pid=_pid(
-            "make_unstable_cstr_pid", module="target_gym.pc_gym.unstable_cstr.experts"
+            "make_unstable_cstr_pid_controller",
+            module="target_gym.pc_gym.unstable_cstr.experts",
         ),
         make_mpc=_mpc(
             "make_unstable_cstr_mpc", module="target_gym.pc_gym.unstable_cstr.experts"
@@ -1030,7 +1081,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "target_gym.compressor_surge.env", "CompressorSurgeParams"
         ),
         make_pid=_pid(
-            "make_compressor_surge_pid", module="target_gym.compressor_surge.experts"
+            "make_compressor_surge_pid_controller",
+            module="target_gym.compressor_surge.experts",
         ),
         make_mpc=_mpc(
             "make_compressor_surge_mpc", module="target_gym.compressor_surge.experts"

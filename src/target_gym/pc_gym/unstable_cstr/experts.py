@@ -33,6 +33,7 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+from flax import struct
 from jax.experimental import enable_x64
 from jax.tree_util import Partial as partial
 from scipy.linalg import solve_discrete_are
@@ -384,6 +385,60 @@ def make_unstable_cstr_pid() -> UnstableCSTRCascadePID:
     gains = load_gains()
     check_cascade_gains(gains)
     return UnstableCSTRCascadePID(gains)
+
+
+@struct.dataclass
+class UnstableCSTRPIDParams:
+    """The cascade's gains (the ``DEFAULT_GAINS`` keys) and the plant it reads."""
+
+    Kp_T: float
+    Kd_T: float
+    Kc_Ca: float
+    Ti_Ca: float
+    sp_rate: float
+    sp_below: float
+    sp_above: float
+    sp_line_margin: float
+    Tc_bias: float
+    plant: UnstableCSTRParams
+
+
+@struct.dataclass
+class UnstableCSTRPIDState:
+    """``CascadeState`` plus whether it has been started from an observation."""
+
+    integral: float
+    T_prev: float
+    T_sp_prev: float
+    started: bool
+
+
+def unstable_cstr_pid_step(params, state, obs, xp=jnp):
+    """``UnstableCSTRCascadePID.step`` as a pure step: the first call starts
+    the memory from ``obs`` (``cascade_init``), as the class does lazily."""
+    obs = xp.asarray(obs, float)
+    gains = {k: getattr(params, k) for k in DEFAULT_GAINS}
+    fresh = cascade_init(obs, gains, params.plant, xp)
+    cs = CascadeState(
+        integral=xp.where(state.started, state.integral, fresh.integral),
+        T_prev=xp.where(state.started, state.T_prev, fresh.T_prev),
+        T_sp_prev=xp.where(state.started, state.T_sp_prev, fresh.T_sp_prev),
+    )
+    u_raw, cs = cascade_step(gains, cs, obs, params.plant, xp)
+    return xp.reshape(u_raw, (1,)), UnstableCSTRPIDState(
+        integral=cs.integral, T_prev=cs.T_prev, T_sp_prev=cs.T_sp_prev, started=True
+    )
+
+
+def make_unstable_cstr_pid_controller() -> _pid_mod.Controller:
+    """``make_unstable_cstr_pid`` as a ``Controller``: the same stored gains,
+    the same guard and the same checks on the gain names."""
+    cascade = make_unstable_cstr_pid()
+    return _pid_mod.Controller(
+        UnstableCSTRPIDParams(**cascade.gains, plant=cascade.params),
+        UnstableCSTRPIDState(integral=0.0, T_prev=0.0, T_sp_prev=0.0, started=False),
+        unstable_cstr_pid_step,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.unstable_cstr.env import (
     UnstableCSTRParams,
     UnstableCSTRState,
@@ -22,11 +23,15 @@ from target_gym.pc_gym.unstable_cstr.rendering import _render
 from target_gym.utils import save_video
 
 
-class UnstableCSTR(environment.Environment[UnstableCSTRState, UnstableCSTRParams]):
+class UnstableCSTR(
+    RegistryExperts, environment.Environment[UnstableCSTRState, UnstableCSTRParams]
+):
     """Exothermic CSTR held on its unstable middle steady state.
 
     Action (1,): coolant command, raw in [-1, 1] -> [T_c_min, T_c_max] K.
     """
+
+    registry_name: str = "unstable_cstr"
 
     render_car = classmethod(_render)
     screen_width = 600
@@ -221,12 +226,6 @@ class UnstableCSTR(environment.Environment[UnstableCSTRState, UnstableCSTRParams
         """
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
-
-    def make_pid(self):
-        """Return the cascade PID (outer PI on C_a, inner PD on T)."""
-        from target_gym.pc_gym.unstable_cstr.experts import make_unstable_cstr_pid
-
-        return make_unstable_cstr_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return the CasADi NMPC oracle, which falls back to the cascade PID."""

@@ -8,8 +8,10 @@ REGISTRY is its benchmark seed index. New tasks are appended after them.
 
 Every task builds its oracle (the MPC slot) from its own package's
 ``experts.py``; ``experts/mpc.py`` holds only the shared machinery, and it is
-in every task's baseline fingerprint. A task added after the 21 keeps its PID
-there too (``experts/pid.py`` is also in every baseline fingerprint), declares any physics it imports from another package in
+in every task's baseline fingerprint. Every task keeps its PID there too, as a
+pure ``Controller`` (``experts/pid.py`` holds only the shared core and is also
+in every baseline fingerprint). A task added after the 21 declares any physics
+it imports from another package in
 ``fingerprint_sources``, has a name that cannot collide with another task's
 gains keys, ships as ``-v2`` with a ``compute_reward_v1`` of its own, has a
 hold row, and, if it ships a PID, has a row in ``TUNERS`` in
@@ -70,8 +72,10 @@ def _factory(f):
     it imports from, and the name it looks up there, read from its closure."""
     if f is None:
         return None
+    # A PID factory's ``make()`` wraps ``make.controller()``, which holds the lookup.
+    g = getattr(f, "controller", f)
     cells = dict(
-        zip(f.__code__.co_freevars, (c.cell_contents for c in f.__closure__ or ()))
+        zip(g.__code__.co_freevars, (c.cell_contents for c in g.__closure__ or ()))
     )
     module = cells.get("module", _FACTORY_MODULES.get(f.__qualname__))
     return [f.__qualname__, module, cells.get("factory_name")]
@@ -220,6 +224,9 @@ _SHARED_MODULES = {
     "target_gym.utils",
     "target_gym.integration",
     "target_gym.reward",
+    # Unhashed on purpose: it only looks controllers up in the registry, so it
+    # cannot change what a plant or a controller computes.
+    "target_gym.expert_access",
 }
 # And, in experts*.py only, the shared controller code.
 _CONTROLLER_MODULES = {
@@ -593,33 +600,19 @@ def test_every_env_exposes_its_registry_experts(name):
         assert hasattr(mpc, "step") and hasattr(mpc, "reset")
 
 
-#: Where ``env.expert_policy`` (JAX-traceable) acts exactly as the scored PID
-#: from ``make_pid``. docs/using-the-pids.md lists these; elsewhere it is
-#: either absent or a different controller.
-EXPERT_POLICY_IS_THE_SCORED_PID = {
-    "cstr",
-    "first_order",
-    "four_tank",
-    "glass_furnace",
-    "hvac",
-    "patrol",
-}
-
-
 @pytest.mark.parametrize("name", sorted(registry.REGISTRY))
-def test_expert_policy_matches_the_scored_pid_where_documented(name):
-    """The guide tells JAX learners where ``expert_policy`` can stand in for
-    ``make_pid`` inside ``jit``. Both directions are checked, so a controller
-    that starts or stops matching forces the guide to be updated."""
+def test_expert_policy_is_the_scored_pid(name):
+    """``env.expert_policy`` (batched, traceable) and ``make_pid()`` (host) run
+    the same step function, so along one episode they act alike up to float32
+    rounding: JAX computes in float32 where the host keeps some float64."""
     import jax
     import jax.numpy as jnp
     import numpy as np
 
     spec = registry.REGISTRY[name]
     env, params = spec.make_env(), spec.make_test_params()
-    if not hasattr(type(env), "expert_policy"):
-        assert name not in EXPERT_POLICY_IS_THE_SCORED_PID
-        return
+    space = env.action_space(params)
+    span = np.maximum(np.asarray(space.high) - np.asarray(space.low), 1e-12)
     expert = env.expert_policy
     expert_state = expert.init_state(1)
     pid = env.make_pid()
@@ -632,11 +625,11 @@ def test_expert_policy_matches_the_scored_pid_where_documented(name):
         shipped = np.atleast_1d(pid(np.asarray(obs)))
         traced, expert_state = expert(expert_state, jnp.asarray(obs)[None])
         traced = np.atleast_1d(np.asarray(traced[0]))
-        worst = max(worst, float(np.max(np.abs(shipped - traced))))
+        worst = max(worst, float(np.max(np.abs(shipped - traced) / span)))
         obs, state, _, _, _ = step(key, state, jnp.asarray(shipped), params)
-    assert (worst < 1e-5) == (name in EXPERT_POLICY_IS_THE_SCORED_PID), (
-        f"{name}: expert_policy differs from make_pid by up to {worst:.3g}; "
-        "update EXPERT_POLICY_IS_THE_SCORED_PID and docs/using-the-pids.md"
+    assert worst < 1e-3, (
+        f"{name}: expert_policy differs from make_pid by {worst:.3g} of the "
+        "action range"
     )
 
 

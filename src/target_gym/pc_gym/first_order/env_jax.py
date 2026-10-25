@@ -8,6 +8,7 @@ import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.first_order.env import (
     FirstOrderParams,
     FirstOrderState,
@@ -21,11 +22,15 @@ from target_gym.pc_gym.first_order.rendering import _render
 from target_gym.utils import save_video
 
 
-class FirstOrderSystem(environment.Environment[FirstOrderState, FirstOrderParams]):
+class FirstOrderSystem(
+    RegistryExperts, environment.Environment[FirstOrderState, FirstOrderParams]
+):
     """First-order lag: the simplest target MDP in the suite.
 
     Action (1,): [input], raw in [-1, 1] -> [u_min, u_max]
     """
+
+    registry_name: str = "first_order"
 
     render_car = classmethod(_render)
     screen_width = 600
@@ -167,23 +172,6 @@ class FirstOrderSystem(environment.Environment[FirstOrderState, FirstOrderParams
     ):
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
-
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_first_order_pid,
-            pid_step,
-        )
-
-        params, zero_state = make_first_order_pid()
-        return FunctionalExpertPolicy(params, zero_state, pid_step)
-
-    def make_pid(self):
-        """Return a ready-to-use StatefulPID for state tracking."""
-        from target_gym.experts.pid import make_first_order_stateful_pid
-
-        return make_first_order_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return a GradientMPC oracle for state tracking."""

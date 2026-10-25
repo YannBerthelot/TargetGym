@@ -19,15 +19,20 @@ from target_gym.energy.wind_turbine.env import (
     omega_rated,
 )
 from target_gym.energy.wind_turbine.rendering import _render
+from target_gym.expert_access import RegistryExperts
 from target_gym.utils import save_video
 
 
-class WindTurbine(environment.Environment[WindTurbineState, WindTurbineParams]):
+class WindTurbine(
+    RegistryExperts, environment.Environment[WindTurbineState, WindTurbineParams]
+):
     """NREL 5 MW reference turbine, collective-pitch power regulation.
 
     Observation (5,): [omega_rpm, pitch_deg, torque_pct, P_MW, target_P_MW]
     Action      (2,): [pitch_raw, torque_raw] in [-1, 1]
     """
+
+    registry_name: str = "wind_turbine"
 
     render_turbine = classmethod(_render)
     screen_width = 700
@@ -162,12 +167,6 @@ class WindTurbine(environment.Environment[WindTurbineState, WindTurbineParams]):
         return spaces.Box(
             -inf, inf, len(WindTurbineState.__dataclass_fields__), dtype=jnp.float32
         )
-
-    def make_pid(self):
-        """Return the standard above-rated turbine controller."""
-        from target_gym.experts.pid import make_wind_turbine_stateful_pid
-
-        return make_wind_turbine_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return the oracle: Newton torque and slew-capped PI pitch (version 2)."""

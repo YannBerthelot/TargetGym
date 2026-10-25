@@ -485,7 +485,7 @@ def _tune_glass_furnace_search(n_points: int, tuning_rule: str, **kw) -> dict:
     import numpy as np
 
     from target_gym import GlassFurnace, GlassFurnaceParams
-    from target_gym.experts.pid import StatefulPID
+    from target_gym.experts.pid import siso_pid
 
     env = GlassFurnace()
     params = GlassFurnaceParams(max_steps_in_episode=kw.get("max_steps", 1920))
@@ -494,9 +494,9 @@ def _tune_glass_furnace_search(n_points: int, tuning_rule: str, **kw) -> dict:
     def score(Kp, Ki, Kd):
         totals = []
         for seed in seeds:
-            pid = StatefulPID(
+            pid = siso_pid(
                 Kp=Kp, Ki=Ki, Kd=Kd, dt=params.delta_t, state_index=0, setpoint_index=4
-            )
+            ).host()
             key = jax.random.PRNGKey(seed)
             obs, state = env.reset_env(key, params)
             total = 0.0
@@ -1196,21 +1196,20 @@ def _controller_defaults(gains_key):
     reported success and changed nothing. Seeding from the constructor's own
     defaults is what the controller has in fact been running on.
     """
-    import inspect
-
-    import target_gym.experts.pid as pid_mod
+    import dataclasses
 
     if gains_key == "plane_cascaded":
-        sig = inspect.signature(pid_mod.StatefulCascadedAltitudePID.__init__)
+        from target_gym.plane.experts import PlaneCascadedPIDParams
+
         return {
-            name: float(prm.default)
-            for name, prm in sig.parameters.items()
-            if name not in ("self", "dt") and isinstance(prm.default, (int, float))
+            f.name: float(f.default)
+            for f in dataclasses.fields(PlaneCascadedPIDParams)
+            if f.name != "dt" and isinstance(f.default, (int, float))
         }
     if gains_key == "plane3d_racetrack":
         # Read them off the controller the factory builds rather than
         # restating the numbers, which live as ``_g3d`` fallbacks in
-        # ``make_plane3d_racetrack_cascaded_pid``. Restating them here would
+        # ``make_plane3d_racetrack_pid_controller``. Restating them here would
         # be a second copy that silently stops matching.
         #
         # Only the two proportional gains are searched. The integral and
@@ -1219,7 +1218,9 @@ def _controller_defaults(gains_key):
         # invented nonzero value would be choosing a controller rather than
         # tuning the one that ships, which is a separate change and needs its
         # own before-and-after.
-        lateral = pid_mod.make_plane3d_racetrack_cascaded_pid().lateral
+        from target_gym.plane3d.experts import make_plane3d_racetrack_pid_controller
+
+        lateral = make_plane3d_racetrack_pid_controller().params
         return {
             "track": {
                 "Kp": float(lateral.Kp_track),

@@ -8,6 +8,7 @@ import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.glass_furnace.env import (
     FUEL_DEAD_TIME_STEPS,
     N_REGEN_NODES,
@@ -25,11 +26,15 @@ from target_gym.glass_furnace.rendering import _render
 from target_gym.utils import save_video
 
 
-class GlassFurnace(environment.Environment[GlassFurnaceState, GlassFurnaceParams]):
+class GlassFurnace(
+    RegistryExperts, environment.Environment[GlassFurnaceState, GlassFurnaceParams]
+):
     """Regenerative glass furnace; six of nine states are hidden.
 
     Action (1,): [fuel rate], raw in [-1, 1] -> [fuel_min, fuel_max] kg/s
     """
+
+    registry_name: str = "glass_furnace"
 
     render_furnace = classmethod(_render)
     screen_width = 700
@@ -196,23 +201,6 @@ class GlassFurnace(environment.Environment[GlassFurnaceState, GlassFurnaceParams
         return spaces.Box(
             -inf, inf, len(GlassFurnaceState.__dataclass_fields__), dtype=jnp.float32
         )
-
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_glass_furnace_pid,
-            pid_step,
-        )
-
-        params, zero_state = make_glass_furnace_pid()
-        return FunctionalExpertPolicy(params, zero_state, pid_step)
-
-    def make_pid(self):
-        """Return a ready-to-use StatefulPID for crown-temperature tracking."""
-        from target_gym.experts.pid import make_glass_furnace_stateful_pid
-
-        return make_glass_furnace_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return a CasADi MPC oracle for crown-temperature tracking."""

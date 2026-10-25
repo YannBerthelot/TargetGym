@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from target_gym import PlanePatrol, PlanePatrolBearingOnly
-from target_gym.experts.pid import make_patrol_pid, patrol_pid_step
 from target_gym.patrol.env import (
     PatrolParams,
     check_is_terminal_patrol,
@@ -16,6 +15,7 @@ from target_gym.patrol.env import (
     slot_error,
     slot_error_vector,
 )
+from target_gym.patrol.experts import make_patrol_pid_controller
 
 # ─── Construction & spaces ──────────────────────────────
 
@@ -191,12 +191,13 @@ class TestExpert:
         params = env.default_params.replace(
             max_steps_in_episode=n, lead_turn_rate_range=(turn_rate, turn_rate)
         )
-        pid_params, pid0 = make_patrol_pid()
+        ctrl = make_patrol_pid_controller()
+        pid0 = ctrl.init_state
         obs, state = env.reset(jax.random.PRNGKey(seed), params)
 
         def step(carry, _):
             obs, state, pid = carry
-            action, pid = patrol_pid_step(pid_params, pid, obs)
+            action, pid = ctrl.act(pid, obs)
             obs, state, r, done, _ = env.step_env(
                 jax.random.PRNGKey(seed), state, action, params
             )

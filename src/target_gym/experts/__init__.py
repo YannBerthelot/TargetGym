@@ -1,97 +1,40 @@
+"""Shared controller machinery.
+
+Every task's controllers live in its own package's ``experts`` module and are
+reached through the registry, which is stable where the per-task factories
+are not:
+
+    spec = target_gym.registry.REGISTRY["cstr"]
+    pid = spec.make_pid()                    # host form, as the baselines run it
+    ctrl = spec.make_pid_controller()        # pure form: ctrl.act under jit/vmap
+    mpc = spec.make_mpc(spec.make_env(), spec.make_test_params())
+
+``env.make_pid()``, ``env.make_mpc()`` and ``env.expert_policy`` resolve the
+same way.
+"""
+
 from target_gym.experts.mpc import CasadiMPC, GradientMPC, SamplingMPC
 from target_gym.experts.pid import (
-    GainSchedulePIDParams,
-    MIMOGainSchedulePIDParams,
-    StatefulGainScheduledPID,
-    StatefulMIMOPID,
-    StatefulPatrolPID,
-    StatefulPID,
-    gain_scheduled_pid_step,
-    make_cstr_gain_scheduled_pid,
-    make_cstr_pid,
-    make_cstr_stateful_gs_pid,
-    make_cstr_stateful_pid,
-    make_first_order_gain_scheduled_pid,
-    make_first_order_pid,
-    make_first_order_stateful_gs_pid,
-    make_first_order_stateful_pid,
-    make_four_tank_pid,
-    make_four_tank_stateful_gs_pid,
-    make_four_tank_stateful_pid,
-    make_glass_furnace_gain_scheduled_pid,
-    make_glass_furnace_pid,
-    make_glass_furnace_stateful_gs_pid,
-    make_glass_furnace_stateful_pid,
-    make_hvac_pid,
-    make_hvac_stateful_pid,
-    make_patrol_stateful_pid,
-    make_plane3d_circle_cascaded_pid,
-    make_plane3d_circle_stateful_pid,
-    make_plane3d_figure8_stateful_pid,
-    make_plane3d_heading_cascaded_pid,
-    make_plane3d_heading_stateful_pid,
-    make_plane_cascaded_pid,
-    make_plane_pid,
-    make_plane_stateful_gs_pid,
-    make_plane_stateful_pid,
-    make_reactor_gain_scheduled_pid,
-    make_reactor_pid,
-    make_reactor_stateful_gs_pid,
-    make_reactor_stateful_pid,
-    mimo_gain_scheduled_pid_step,
+    Controller,
+    FunctionalExpertPolicy,
+    HostController,
+    mimo_pid,
     mimo_pid_step,
     pid_step,
+    register_learnable_gains,
+    siso_pid,
 )
 
 __all__ = [
-    # PID core
+    "Controller",
+    "HostController",
+    "FunctionalExpertPolicy",
+    "siso_pid",
+    "mimo_pid",
     "pid_step",
-    "gain_scheduled_pid_step",
     "mimo_pid_step",
-    "mimo_gain_scheduled_pid_step",
-    "StatefulPID",
-    "StatefulGainScheduledPID",
-    "StatefulMIMOPID",
-    "GainSchedulePIDParams",
-    "MIMOGainSchedulePIDParams",
-    # Per-env PID factories (flat gains)
-    "make_cstr_pid",
-    "make_cstr_stateful_pid",
-    "make_first_order_pid",
-    "make_first_order_stateful_pid",
-    "make_four_tank_pid",
-    "make_four_tank_stateful_pid",
-    "make_glass_furnace_pid",
-    "make_glass_furnace_stateful_pid",
-    "make_hvac_pid",
-    "make_hvac_stateful_pid",
-    "make_plane_pid",
-    "make_plane_cascaded_pid",
-    "make_plane_stateful_pid",
-    "make_reactor_pid",
-    "make_reactor_stateful_pid",
-    # Per-env gain-scheduled PID factories
-    "make_cstr_gain_scheduled_pid",
-    "make_cstr_stateful_gs_pid",
-    "make_first_order_gain_scheduled_pid",
-    "make_first_order_stateful_gs_pid",
-    "make_reactor_gain_scheduled_pid",
-    "make_reactor_stateful_gs_pid",
-    "make_glass_furnace_gain_scheduled_pid",
-    "make_glass_furnace_stateful_gs_pid",
-    "make_four_tank_stateful_gs_pid",
-    "make_plane_stateful_gs_pid",
-    # Plane 3D
-    "make_plane3d_heading_cascaded_pid",
-    "make_plane3d_heading_stateful_pid",
-    "make_patrol_stateful_pid",
-    "StatefulPatrolPID",
-    "make_plane3d_circle_cascaded_pid",
-    "make_plane3d_circle_stateful_pid",
-    "make_plane3d_figure8_stateful_pid",
-    # MPC machinery. Each task's oracle factory lives in its own package's
-    # experts.py; reach it through EnvSpec.make_mpc.
-    "CasadiMPC",
+    "register_learnable_gains",
     "GradientMPC",
+    "CasadiMPC",
     "SamplingMPC",
 ]
