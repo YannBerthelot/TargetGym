@@ -24,9 +24,13 @@ Usage
 -----
     uv run python scripts/record_baselines.py              # everything
     uv run python scripts/record_baselines.py --envs plane cstr
+    uv run python scripts/record_baselines.py --pid-only   # check, write nothing
 
 Run it whenever the test suite tells you a record is stale, and commit the
-result alongside the change that invalidated it.
+result alongside the change that invalidated it. Or let CI do it: the
+``re-record`` label on a pull request runs this and ``evaluate_baselines.py``
+for every stale environment, one job each, and commits the rows to the branch
+(``.github/workflows/record-baselines.yml``).
 """
 
 from __future__ import annotations
@@ -414,14 +418,50 @@ def _run_jobs(jobs, workers, inflight, durations, pid_out, mpc_out, batch_out, e
     )
 
 
+def _check_pids(names: list[str]) -> int:
+    """Re-run only the PIDs and report any return that moved; write nothing.
+
+    The quick local check for a change meant to leave the PIDs alone: minutes
+    against the full re-record's hour or more, because nearly all of that is
+    MPC. It cannot refresh a record, since a row's fingerprint covers its MPC
+    too. Rows recorded on CI's Linux runners can differ from a Mac's in the
+    last bits, so a refactor that must be bit-identical is better compared
+    against a run of its base commit on the same machine.
+    """
+    rows = json.loads(BASELINES_PATH.read_text()) if BASELINES_PATH.exists() else {}
+    jobs = [(name, seed, None) for name in names for seed in range(SEEDS)]
+    with cf.ProcessPoolExecutor(max_workers=min(os.cpu_count() or 2, 8)) as pool:
+        got = dict(zip(jobs, (value for value, _ in pool.map(_pid_one_seed, jobs))))
+    moved = 0
+    for name in names:
+        new = [round(got[(name, seed, None)], 6) for seed in range(SEEDS)]  # as _row
+        old = rows.get(name, {}).get("pid_returns")
+        same = old == new
+        moved += not same
+        gap = (
+            ""
+            if same or old is None
+            else f" (max |d| {np.max(np.abs(np.subtract(old, new))):.3g})"
+        )
+        print(f"  {name:20s} PID {'unchanged' if same else 'MOVED'}{gap}", flush=True)
+    return 1 if moved else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--envs", nargs="*", default=None, help="default: all with an MPC")
+    ap.add_argument(
+        "--pid-only",
+        action="store_true",
+        help="re-run the PIDs only and report returns that moved; writes nothing",
+    )
     args = ap.parse_args()
 
     names = args.envs or [
         n for n, s in REGISTRY.items() if s.has_pid and s.make_mpc is not None
     ]
+    if args.pid_only:
+        return _check_pids(names)
     batched, per_seed = _split_by_planner(names)
     live = batched + per_seed
 
