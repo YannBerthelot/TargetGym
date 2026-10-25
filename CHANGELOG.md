@@ -70,6 +70,11 @@ than by commit.
 
 ### Changed
 
+- **stable-baselines3, torch and tensorboard left the `dev` group** for an
+  opt-in `agent` group (`uv sync --group agent`). They added about 550 MB to
+  every development environment and CI job for one PPO smoke test, which now
+  skips without them. Gymnasium's own `check_env` on `GymnasiumPlane` takes
+  its place in the default suite.
 - **The glass furnace's oracle applies the move it plans, plans on the known
   loads, and estimates its model error as a heat rate.** Three changes to its
   CasADi MPC. It applies the plan's input at index `FUEL_DEAD_TIME_STEPS`, the
@@ -429,6 +434,11 @@ than by commit.
 
 ### Fixed
 
+- **The Gymnasium wrapper follows two more of Gymnasium's rules.** A seeded
+  `reset` now calls `super().reset(seed=seed)`, so `env.np_random` is seeded
+  as the API promises (the dynamics still draw from the wrapper's JAX key, so
+  returns do not move). `step` returns its `info` leaves as NumPy, like the
+  observation, instead of JAX arrays.
 - **The reactor's recorded baselines were understated about fivefold, and it
   is now `reactor-v2`.** The plant integrates ten 1 s physics sub-steps per
   environment step, and both `state.time` and `max_steps_in_episode` counted

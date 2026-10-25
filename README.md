@@ -89,7 +89,7 @@ how to run, evaluate against and train on the tuned PIDs.
 End-to-end GPU requires a JAX-based library.
 
 ```python
-# doc: skip (trains for 10 000 steps; tests/plane/test_agent.py covers this path)
+# doc: skip (trains for 10 000 steps; tests/plane/test_agent.py covers this path with `uv sync --group agent`)
 from target_gym import GymnasiumPlane
 from stable_baselines3 import SAC
 

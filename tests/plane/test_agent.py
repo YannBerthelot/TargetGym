@@ -2,7 +2,7 @@ import gymnasium as gym
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from stable_baselines3 import PPO
+from gymnasium.utils.env_checker import check_env
 
 from target_gym import GymnasiumPlane as Airplane2D
 
@@ -33,9 +33,17 @@ def test_can_step_env():
             obs, info = env.reset()
 
 
-# @pytest.mark.skip
+def test_passes_gymnasium_env_checker():
+    """Gymnasium's own API check, the contract SB3 and other non-JAX
+    libraries rely on. Rendering is checked by tests/test_wrapper.py."""
+    check_env(Airplane2D(), skip_render_check=True)
+
+
 def test_sb3_ppo_can_learn():
-    """Test that environment works with SB3's PPO"""
+    """Test that environment works with SB3's PPO. SB3 and torch are the
+    opt-in ``agent`` group (``uv sync --group agent``), so this skips without
+    them."""
+    PPO = pytest.importorskip("stable_baselines3").PPO
     # Create environment
     env = Airplane2D()
 

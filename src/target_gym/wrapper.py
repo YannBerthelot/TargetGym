@@ -73,6 +73,9 @@ def gym_wrapper_factory(jax_env_class: Type):
             self.key = jax.random.PRNGKey(0)
 
         def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
+            # Seeds Gymnasium's ``np_random``, which the API promises after a
+            # seeded reset. The dynamics draw from ``self.key`` alone.
+            super().reset(seed=seed)
             if seed is not None:
                 self.key = jax.random.PRNGKey(seed)
             # A fresh subkey per call: reusing one key gave every unseeded
@@ -109,7 +112,9 @@ def gym_wrapper_factory(jax_env_class: Type):
                 float(reward),
                 bool(terminated),
                 bool(truncated),
-                info,
+                # NumPy like the rest of the step: Gymnasium compares info
+                # leaves as NumPy or Python values and has no case for JAX's.
+                jax.tree_util.tree_map(np.asarray, info),
             )
 
         def render(self):

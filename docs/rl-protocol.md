@@ -522,8 +522,8 @@ everyone can predict and nobody reads.
 
 **If RL loses**, the result is on trial rather than the environments, and it has
 to survive "your agent was under-trained". Cross-check three or four
-environments against stable-baselines3, already a dev dependency with a working
-PPO smoke test. If the two agree within noise, the JAX numbers inherit that
+environments against stable-baselines3, the opt-in `agent` group
+(`uv sync --group agent`) with a working PPO smoke test. If the two agree within noise, the JAX numbers inherit that
 credibility; if they do not, that is a finding worth having before publishing.
 
 **If RL wins**, check what it beat. This library has shipped a PID pinned to the
