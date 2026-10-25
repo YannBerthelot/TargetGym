@@ -84,7 +84,8 @@ of `src/target_gym/data/baseline_returns.json` rather than paying to regenerate 
 
 The underlying objects are reachable directly if you need them, through
 `spec.make_pid()` and `spec.make_mpc(env, params)`; both are stateful and want
-`reset()` between episodes.
+`reset()` between episodes. [Using the PIDs](using-the-pids.md) walks through
+the PID end to end, including its use in training.
 
 ## Coverage
 

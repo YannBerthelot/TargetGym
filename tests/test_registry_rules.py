@@ -593,6 +593,53 @@ def test_every_env_exposes_its_registry_experts(name):
         assert hasattr(mpc, "step") and hasattr(mpc, "reset")
 
 
+#: Where ``env.expert_policy`` (JAX-traceable) acts exactly as the scored PID
+#: from ``make_pid``. docs/using-the-pids.md lists these; elsewhere it is
+#: either absent or a different controller.
+EXPERT_POLICY_IS_THE_SCORED_PID = {
+    "cstr",
+    "first_order",
+    "four_tank",
+    "glass_furnace",
+    "hvac",
+    "patrol",
+}
+
+
+@pytest.mark.parametrize("name", sorted(registry.REGISTRY))
+def test_expert_policy_matches_the_scored_pid_where_documented(name):
+    """The guide tells JAX learners where ``expert_policy`` can stand in for
+    ``make_pid`` inside ``jit``. Both directions are checked, so a controller
+    that starts or stops matching forces the guide to be updated."""
+    import jax
+    import jax.numpy as jnp
+    import numpy as np
+
+    spec = registry.REGISTRY[name]
+    env, params = spec.make_env(), spec.make_test_params()
+    if not hasattr(type(env), "expert_policy"):
+        assert name not in EXPERT_POLICY_IS_THE_SCORED_PID
+        return
+    expert = env.expert_policy
+    expert_state = expert.init_state(1)
+    pid = env.make_pid()
+    pid.reset()
+    key = jax.random.PRNGKey(0)
+    obs, state = env.reset_env(key, params)
+    step = jax.jit(env.step_env)
+    worst = 0.0
+    for _ in range(60):
+        shipped = np.atleast_1d(pid(np.asarray(obs)))
+        traced, expert_state = expert(expert_state, jnp.asarray(obs)[None])
+        traced = np.atleast_1d(np.asarray(traced[0]))
+        worst = max(worst, float(np.max(np.abs(shipped - traced))))
+        obs, state, _, _, _ = step(key, state, jnp.asarray(shipped), params)
+    assert (worst < 1e-5) == (name in EXPERT_POLICY_IS_THE_SCORED_PID), (
+        f"{name}: expert_policy differs from make_pid by up to {worst:.3g}; "
+        "update EXPERT_POLICY_IS_THE_SCORED_PID and docs/using-the-pids.md"
+    )
+
+
 def test_param_units_do_not_move_a_fingerprint():
     """``PARAM_UNITS`` only documents values, so adding or editing it must not
     stale a version stamp or a recorded baseline. Anything else still does."""

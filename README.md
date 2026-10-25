@@ -80,7 +80,8 @@ print("PID return:", total)
 [gymnax](https://github.com/RobertTLange/gymnax) API and take an optional
 `params`; each environment exports its parameter class (`PlaneParams`, and so
 on) for custom configurations. Every environment also exposes `make_pid()`,
-`make_mpc()` and `save_video()`.
+`make_mpc()` and `save_video()`. [Using the PIDs](docs/using-the-pids.md) shows
+how to run, evaluate against and train on the tuned PIDs.
 
 <details>
 <summary>Non-JAX libraries, e.g. stable-baselines3</summary>
