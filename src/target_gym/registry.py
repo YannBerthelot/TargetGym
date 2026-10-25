@@ -465,7 +465,9 @@ def _pid(factory_name: str, module: str) -> Callable[[], Any]:
     def make():
         return controller().host()
 
-    make.controller = controller
+    # An attribute on the function rather than a small class, because the
+    # pinned-spec test reads the factory name from this closure's cells.
+    make.controller = controller  # type: ignore[attr-defined]
     return make
 
 
