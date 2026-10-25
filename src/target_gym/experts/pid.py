@@ -113,7 +113,12 @@ class Controller:
     step: object = struct.field(pytree_node=False)
 
     def act(self, state, obs):
-        """One traced step for a single environment; vmap it for a batch."""
+        """One traced step for a single environment; vmap it for a batch.
+
+        Pure, not memoryless: the PID's memory is ``state``, which the caller
+        passes in and keeps. Start from ``init_state`` and reset with
+        ``reset_where_done`` at episode ends.
+        """
         return self.step(self.params, state, obs, jnp)
 
     def host(self) -> "HostController":
@@ -126,9 +131,11 @@ class Controller:
 
 
 class HostController:
-    """Runs a :class:`Controller` on the host, holding its state.
+    """Runs a :class:`Controller` on the host, holding its memory.
 
     ``reset()`` at the start of every episode, then ``pid(obs) -> action``.
+    Every call reads and replaces ``self.state``, so call it exactly once per
+    environment step.
     """
 
     def __init__(self, controller: Controller):
@@ -555,6 +562,9 @@ class FunctionalExpertPolicy:
         actions, pid_state = policy(pid_state, obs)     # (num_envs, action_dim)
 
     The step_fn is vmapped over the env batch dimension automatically.
+    Always pass the state: the one-argument form ``policy(obs)`` starts every
+    call from a fresh state, so it has no integral or derivative memory and is
+    not the tuned PID.
     Pass as ``eval_expert_policy`` to Ajax agents; thread ``pid_state``
     through the while-loop carry in ``step_environment_expert``.
 
@@ -620,6 +630,8 @@ class FunctionalExpertPolicy:
         # Two-arg form: (state, obs) -> (action, new_state). State threaded by caller.
         # One-arg form: (obs,) -> action. Stateless per call (fresh zero state),
         # matching the pre-state-threading interface still used across Ajax agents.
+        # It has no memory, so it is not the tuned PID: no integral, and a
+        # derivative against a zero last error on every call.
         if len(args) == 2:
             state, obs = args
             return self._vmapped_step(self._params, state, obs)

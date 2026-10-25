@@ -14,6 +14,13 @@ than by commit.
 
 ### Added
 
+- **`target_gym.experts.reset_where_done`**, the jitted form of `pid.reset()`:
+  inside `lax.scan` it puts a carried PID state back to its initial value
+  where an episode ended, for one environment or a batch. Without it, a loop
+  over an auto-resetting `env.step` had to clear the memory by hand, or each
+  episode started with the last one's integral. `docs/using-the-pids.md` now
+  tells the PID's three forms apart by where their memory lives, and warns
+  that `env.expert_policy(obs)` with one argument has none.
 - **Eleven environments**: building HVAC, pH neutralisation, Skogestad's
   distillation Column A, the NREL 5 MW reference wind turbine, a grid battery,
   a boiler drum, and a cement kiln; then four aircraft tasks that move the

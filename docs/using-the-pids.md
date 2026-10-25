@@ -30,22 +30,45 @@ them. [Baselines](baselines.md) describes how each one is structured and tuned.
 
 ## The interface
 
-A PID is a small stateful object:
+A PID has memory: its integral and its last error. The same PID comes in three
+forms, which run one step function and act alike. They differ in where that
+memory lives, and mistaking one form for another gives a different controller.
 
-- `pid(obs)` takes the observation as a NumPy array and returns the action, in
-  the environment's own action units and already clipped to its bounds.
-- `pid.reset()` clears the integrator and derivative memory. Call it at the
-  start of every episode, or the previous episode's integral leaks in.
-- It reads the observation only, as a plant controller does. It never sees the
-  hidden state, which is what makes it a fair peer for a learned policy. (The
-  MPC is the opposite: it reads the true state and is an upper bound, not a
-  peer.)
+| Form | Get it with | Call it as | Its memory | At each episode start |
+|---|---|---|---|---|
+| **Host object**: keeps its own memory | `env.make_pid()` | `action = pid(obs)` | on the object; every call reads and replaces it | `pid.reset()` |
+| **Pure controller**: you carry its memory | `spec.make_pid_controller()` | `action, pid_state = ctrl.act(pid_state, obs)` | the `pid_state` you pass in and keep | `ctrl.init_state` |
+| **Batched pure controller**: you carry its memory | `env.expert_policy` | `actions, pid_state = env.expert_policy(pid_state, obs_batch)` | the same, one row per environment | `env.expert_policy.init_state(num_envs)` |
 
-It runs on the host, in NumPy, so call it outside `jax.jit`. The same
-controller as a pure function, for `jit`, `vmap` and GPU, is in
+!!! warning "`env.expert_policy(obs)`, with one argument, has no memory"
+    Called with the observation alone, `env.expert_policy` starts every call
+    from a fresh state. Its integral never builds, and its derivative is taken
+    against a zero last error. That is not the tuned PID and does not reproduce
+    its scores. It stays for older callers; pass the state.
+
+What holds for all three:
+
+- They take the observation and return the action, in the environment's own
+  units and already clipped to its bounds.
+- They read the observation only, as a plant controller does. They never see
+  the hidden state, which is what makes the PID a fair peer for a learned
+  policy. (The MPC is the opposite: it reads the true state and is an upper
+  bound, not a peer.)
+- Reset the memory at the start of every episode, or the previous episode's
+  integral leaks in. In a jitted loop nothing does this for you; see
+  [Episode boundaries](#episode-boundaries).
+
+The host object runs in NumPy, outside `jax.jit`, and is what every baseline
+was scored with. Call it **exactly once per environment step**: each call
+advances its memory, so an extra call (for logging, or on a batch of replayed
+observations) counts as a step that never happened. The pure forms advance only
+the state you keep, so an extra call whose state you discard changes nothing.
+They run under `jit`, `vmap` and `lax.scan`, on GPU; see
 [Inside a jitted loop](#inside-a-jitted-loop-on-gpu).
 
 ## Running it in a loop
+
+The host object, as the baselines run it:
 
 ```python
 import jax
@@ -186,6 +209,20 @@ act = residual_policy(pid, lambda obs: np.zeros_like(low))   # untrained: the PI
 The protocol sweeps the scale over 0.1, 0.25 and 1.0 and reports all three, so
 a reader can tell "learning improved the PID" from "learning ignored it".
 
+The PID's memory matters for a residual agent in three more ways:
+
+- **Store the PID's action with each transition.** Its action depends on its
+  memory as well as on `obs`, so calling the host object again on a replayed
+  observation gives a different action, and advances the live controller.
+- **Give the network the PID's action as an input.** The integral is not in the
+  observation, so the combined policy is not a function of `obs` alone. Feeding
+  the network the PID's action (or its integral) restores that.
+- **Large corrections can wind the integral up.** The PID's anti-windup holds
+  its integral while the PID's own output saturates, but it cannot see the
+  correction. When the sum is clipped and the PID's own output is not, the
+  integral keeps growing. A zero correction is exactly the PID; the larger
+  scales are where this shows.
+
 ### As demonstrations
 
 To pre-fill a replay buffer or pretrain by behavioural cloning, record the
@@ -219,13 +256,13 @@ print(len(transitions), "transitions")
 ### Inside a jitted loop, on GPU
 
 A fully jitted learner (a `jax.lax.scan` over environment steps, as in
-PureJaxRL-style agents) cannot call the host-side object. Every environment
-also gives the same PID as a pure function, `spec.make_pid_controller()`:
+PureJaxRL-style agents) cannot call the host object. It uses the pure
+controller, `spec.make_pid_controller()`, and carries the memory itself:
 `ctrl.act(pid_state, obs)` returns `(action, pid_state)`, starting from
-`ctrl.init_state`, so it sits inside `jit`, `vmap` and `lax.scan` and runs on
-GPU. It is the same step function `make_pid()` runs with NumPy, so the two act
-alike up to float32 rounding (`tests/test_registry_rules.py` checks this on
-every environment).
+`ctrl.init_state`. In the example, `pid_state` is part of the scan's carry; that
+is where the integral lives. It is the same step function `make_pid()` runs
+with NumPy, so the two act alike up to float32 rounding
+(`tests/test_registry_rules.py` checks this on every environment).
 
 ```python
 import jax
@@ -262,4 +299,45 @@ assert np.allclose(returns, recorded, rtol=1e-3)     # the host-scored numbers
 `env.expert_policy` is the same controller already batched, for agents that
 keep one PID state per parallel environment:
 `state = env.expert_policy.init_state(num_envs)`, then
-`actions, state = env.expert_policy(state, obs_batch)`.
+`actions, state = env.expert_policy(state, obs_batch)`. Always pass the state:
+the one-argument form has no memory (see [The interface](#the-interface)).
+
+#### Episode boundaries
+
+Nothing calls `pid.reset()` inside a scan. `env.step` restarts the environment
+when an episode ends, but the `pid_state` you carry keeps the old episode's
+integral unless you reset it too. `reset_where_done` does that, for one
+environment or a batch:
+
+```python
+import jax
+from target_gym.experts import reset_where_done
+from target_gym.registry import REGISTRY
+
+spec = REGISTRY["cstr"]
+env, params = spec.make_env(), spec.make_test_params()
+policy, num_envs = env.expert_policy, 4
+keys = jax.random.split(jax.random.PRNGKey(0), num_envs)
+obs, env_state = jax.vmap(env.reset, in_axes=(0, None))(keys, params)
+step_all = jax.vmap(env.step, in_axes=(0, 0, 0, None))
+
+
+def step(carry, _):
+    obs, env_state, pid_state = carry
+    actions, pid_state = policy(pid_state, obs)
+    obs, env_state, reward, terminated, truncated, _ = step_all(keys, env_state, actions, params)
+    # env.step has already restarted the environments that finished; restart their PIDs too.
+    pid_state = reset_where_done(terminated | truncated, pid_state, policy.init_state(num_envs))
+    return (obs, env_state, pid_state), reward
+
+
+carry = (obs, env_state, policy.init_state(num_envs))
+run = jax.jit(lambda c: jax.lax.scan(step, c, None, length=2 * params.max_steps_in_episode))
+_, rewards = run(carry)   # two episodes per environment, back to back
+```
+
+For a single environment it is the same call with a scalar `done` and
+`ctrl.init_state`. Reset on `terminated | truncated` only. In a continuing
+environment a trip restarts the plant inside the episode without raising
+either flag, and the PID keeps its memory through it, as in the scored
+baselines.
