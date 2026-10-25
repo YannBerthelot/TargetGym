@@ -160,3 +160,21 @@ The order that keeps every step verifiable:
    each with the benchmark re-measured — because check 12's lesson is that a
    controller refactor which changes *nothing* has usually missed its target,
    and an identical number is stronger evidence of that than a plausible one.
+
+## Status (2026-10-25)
+
+Step 4 is done for the PIDs. `Controller(params, init_state, step)` in
+`experts/pid.py` holds one pure `step(params, state, obs, xp)`. `.host()` runs
+it with `np`, which is the `Stateful` adapter above under the name
+`HostController`, and `.act` and `.batched()` run it with `jnp` for jit, vmap
+and GPU. All 23 shipped PIDs are written this way in their packages'
+`experts.py`. The hand-written classes are gone, except the compressor surge
+and unstable CSTR ones, which their MPCs still read. The gain-scheduled
+variants were removed rather than ported, since no environment shipped them.
+
+Every baseline and protocol return re-recorded identical. Here that is the
+goal rather than check 12's warning sign: the registry now builds every PID
+from the new step functions, so the recording ran the new code, and a change
+meant to preserve behaviour should alter nothing. The jitted form agrees with the
+host to within 1.3e-4 of the action range, the worst case being the unstable
+CSTR, whose host form runs in float64 and whose jitted form runs in float32.

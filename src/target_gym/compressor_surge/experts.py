@@ -35,6 +35,7 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+from flax import struct
 from jax.experimental import enable_x64
 from scipy.optimize import brentq
 
@@ -317,6 +318,59 @@ def make_compressor_surge_pid() -> CompressorSurgePair:
     gains = load_gains()
     check_pair_gains(gains)
     return CompressorSurgePair(gains)
+
+
+@struct.dataclass
+class CompressorSurgePIDParams:
+    """The pair's gains (the ``DEFAULT_GAINS`` keys) and the plant it reads."""
+
+    kp_speed: float
+    ki_speed: float
+    kp_surge: float
+    ki_surge: float
+    surge_line: float
+    override_line: float
+    override_hold: float
+    reset_band: float
+    plant: CompressorSurgeParams
+
+
+@struct.dataclass
+class CompressorSurgePIDState:
+    """``PairState`` plus whether it has been started from an observation."""
+
+    I_N: float
+    I_x: float
+    timer: float
+    started: bool
+
+
+def compressor_surge_pid_step(params, state, obs, xp=jnp):
+    """``CompressorSurgePair.step`` as a pure step: the first call starts the
+    memory from ``obs`` (``pair_init``), as the class does lazily."""
+    obs = xp.asarray(obs, float)
+    gains = {k: getattr(params, k) for k in DEFAULT_GAINS}
+    fresh = pair_init(obs, xp)
+    ps = PairState(
+        I_N=xp.where(state.started, state.I_N, fresh.I_N),
+        I_x=xp.where(state.started, state.I_x, fresh.I_x),
+        timer=xp.where(state.started, state.timer, fresh.timer),
+    )
+    u_raw, ps = pair_step(gains, ps, obs, params.plant, xp)
+    return u_raw, CompressorSurgePIDState(
+        I_N=ps.I_N, I_x=ps.I_x, timer=ps.timer, started=True
+    )
+
+
+def make_compressor_surge_pid_controller() -> _pid_mod.Controller:
+    """``make_compressor_surge_pid`` as a ``Controller``: the same stored
+    gains, the same guard and the same checks on the gain names."""
+    pair = make_compressor_surge_pid()
+    return _pid_mod.Controller(
+        CompressorSurgePIDParams(**pair.gains, plant=pair.params),
+        CompressorSurgePIDState(I_N=0.0, I_x=0.0, timer=0.0, started=False),
+        compressor_surge_pid_step,
+    )
 
 
 # ---------------------------------------------------------------------------

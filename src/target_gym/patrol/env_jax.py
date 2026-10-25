@@ -241,16 +241,6 @@ class _PlanePatrolBase(
         )
 
     # -- expert ------------------------------------------------------------
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_patrol_pid,
-            patrol_pid_step,
-        )
-
-        params, zero_state = make_patrol_pid()
-        return FunctionalExpertPolicy(params, zero_state, patrol_pid_step)
 
     # -- spaces ------------------------------------------------------------
     def action_space(self, params: PatrolParams | None = None) -> spaces.Box:

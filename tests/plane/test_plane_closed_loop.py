@@ -11,9 +11,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym.experts.pid import make_plane_cascaded_pid
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
+from target_gym.plane.experts import make_plane_pid_controller
 
 pytestmark = pytest.mark.slow
 
@@ -24,7 +24,7 @@ TOLERANCE_M = 150.0
 def _run_pid(seed, steps=STEPS):
     env = Airplane2D()
     params = PlaneParams(max_steps_in_episode=steps)
-    pid = make_plane_cascaded_pid()
+    pid = make_plane_pid_controller().host()
     pid.reset()
     key = jax.random.PRNGKey(seed)
     obs, state = env.reset_env(key, params)

@@ -22,16 +22,20 @@ from target_gym.compressor_surge.env import (
     suction_density,
 )
 from target_gym.compressor_surge.rendering import _render
+from target_gym.expert_access import RegistryExperts
 from target_gym.utils import save_video
 
 
 class CompressorSurge(
-    environment.Environment[CompressorSurgeState, CompressorSurgeParams]
+    RegistryExperts,
+    environment.Environment[CompressorSurgeState, CompressorSurgeParams],
 ):
     """Compressor feeding a header, with surge as the trip.
 
     Action (2,): [speed command, recycle command], raw in [-1, 1] -> [N_min, N_max] of rated and [0, 1] opening.
     """
+
+    registry_name: str = "compressor_surge"
 
     render_car = classmethod(_render)
     screen_width = 600
@@ -223,13 +227,6 @@ class CompressorSurge(
         """
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
-
-    def make_pid(self):
-        """Return the classic pair: a pressure PI on speed and an anti-surge PI
-        on the recycle."""
-        from target_gym.compressor_surge.experts import make_compressor_surge_pid
-
-        return make_compressor_surge_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return the CasADi NMPC oracle, which falls back to the PID pair."""

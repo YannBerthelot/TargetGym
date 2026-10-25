@@ -202,3 +202,19 @@ def make_hvac_mpc(env, params, horizon: int = 24):
     anticipation advantage over PID comes from.
     """
     return HVACCasadiMPC(env, params, horizon=horizon)
+
+
+def make_hvac_pid_controller():
+    """The scored PID as a pure :class:`~target_gym.experts.pid.Controller`;
+    ``.host()`` is what ``make_pid()`` returns. Gains from
+    src/target_gym/data/pid_gains.json."""
+    from target_gym.experts.pid import _g, siso_pid
+
+    return siso_pid(
+        Kp=_g("hvac", "Kp", 0.4),
+        Ki=_g("hvac", "Ki", 0.0001),
+        Kd=_g("hvac", "Kd", 0.0),
+        dt=900.0,
+        state_index=0,
+        setpoint_index=6,
+    )

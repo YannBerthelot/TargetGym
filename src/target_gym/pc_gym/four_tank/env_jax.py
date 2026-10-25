@@ -8,6 +8,7 @@ import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.four_tank.env import (
     FourTankParams,
     FourTankState,
@@ -21,11 +22,13 @@ from target_gym.pc_gym.four_tank.rendering import _render
 from target_gym.utils import save_video
 
 
-class FourTank(environment.Environment[FourTankState, FourTankParams]):
+class FourTank(RegistryExperts, environment.Environment[FourTankState, FourTankParams]):
     """Quadruple-tank rig; the obvious loop pairing is non-minimum phase.
 
     Action (2,): [pump 1 voltage, pump 2 voltage], raw in [-1, 1] -> [v_min, v_max]
     """
+
+    registry_name: str = "four_tank"
 
     render_car = classmethod(_render)
     screen_width = 600
@@ -183,36 +186,6 @@ class FourTank(environment.Environment[FourTankState, FourTankParams]):
     ):
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
-
-    @property
-    def expert_policy(self):
-        # Prefer gain-scheduled gains (per-operating-point Kp/Ki tables)
-        # when available in src/target_gym/data/pid_gains.json, since they do
-        # significantly better than a single midpoint pair across the full
-        # target range.
-        # Falls back to the SISO version if no schedule is present.
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_four_tank_gs_pid,
-            make_four_tank_pid,
-            mimo_gain_scheduled_pid_step,
-            mimo_pid_step,
-        )
-
-        try:
-            params, zero_state = make_four_tank_gs_pid()
-            return FunctionalExpertPolicy(
-                params, zero_state, mimo_gain_scheduled_pid_step
-            )
-        except RuntimeError:
-            params, zero_state = make_four_tank_pid()
-            return FunctionalExpertPolicy(params, zero_state, mimo_pid_step)
-
-    def make_pid(self):
-        """Return a ready-to-use StatefulMIMOPID for level tracking."""
-        from target_gym.experts.pid import make_four_tank_stateful_pid
-
-        return make_four_tank_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return the oracle, a shrinking-horizon NLP, for level tracking."""

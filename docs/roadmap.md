@@ -194,8 +194,10 @@ what is broken and recorded rather than hidden.
       added 93 lines to `pid.py` and deleted none, and that alone invalidated
       all twenty recorded baselines, though no existing controller's behaviour moved.
       Partly done: each task's oracle now lives in its own package's
-      `experts.py`, so oracle work re-records only that package. The PIDs of
-      the 21 and the shared MPC machinery still invalidate everything.
+      `experts.py`, so oracle work re-records only that package, and since
+      2026-10 every PID lives there too, as a pure `Controller`. Only the
+      shared cores, `experts/pid.py` and `experts/mpc.py`, still invalidate
+      everything.
       Re-recording is cheap enough today (the aircraft variants dominate the
       cost and needed re-recording regardless), so this was paid rather than
       fixed, but it scales badly: it is a full re-measure per environment added.

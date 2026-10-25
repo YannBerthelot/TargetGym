@@ -36,6 +36,7 @@ from target_gym.plane.experts import (
     _speed_loop_gains,
     cascaded_pid_factory,
     make_plane_mpc,
+    make_plane_pid_controller,
     task_settings,
 )
 
@@ -156,14 +157,11 @@ def test_each_oracle_reads_gains_its_fingerprint_collects(name):
     on_disk = json.loads(pid_mod._GAINS_FILE.read_text())
     assert _numeric(on_disk[key]) == _numeric(on_disk["plane_cascaded"])
     oracle = _oracle(name)
-    shipped = vars(pid_mod.make_plane_cascaded_pid())
+    shipped = make_plane_pid_controller().params
     for planner in (oracle.capture, oracle.hold) if HANDOVER[name] else (oracle,):
-        assert vars(planner.initial_plan_fn.make_pid()) == shipped
+        assert planner.initial_plan_fn.make_pid().controller.params == shipped
     if HANDOVER[name]:
-        live = vars(oracle.hold._pid)
-        assert {k: v for k, v in live.items() if not k.startswith("_")} == {
-            k: v for k, v in shipped.items() if not k.startswith("_")
-        }
+        assert oracle.hold._pid.controller.params == shipped
 
 
 def test_the_tuner_writes_the_copies_with_plane_cascaded(monkeypatch):
@@ -206,7 +204,7 @@ def test_a_missing_gains_key_raises():
 def test_the_jax_speed_loop_is_the_pids_throttle_branch():
     """The port inside the rollout steps the integrator and the anti-windup
     exactly as the live PID does, through saturation both ways."""
-    pid = pid_mod.make_plane_cascaded_pid()
+    pid = make_plane_pid_controller().host()
     pid.reset()
     gains = _speed_loop_gains(pid)
     speeds = np.concatenate(
@@ -224,7 +222,7 @@ def test_the_jax_speed_loop_is_the_pids_throttle_branch():
         expected = float(pid.step(obs)[0])
         throttle, integ = step(integ, jnp.float32(v), gains)
         assert float(throttle) == pytest.approx(expected, abs=1e-6)
-        assert float(integ) == pytest.approx(float(pid._speed_integral), abs=1e-3)
+        assert float(integ) == pytest.approx(float(pid.state.speed_integral), abs=1e-3)
 
 
 def test_the_bumpless_integral_starts_cold_at_full_throttle():
@@ -233,7 +231,7 @@ def test_the_bumpless_integral_starts_cold_at_full_throttle():
     Seeding it to match a command a hair inside full throttle would make the
     integral term cancel the proportional one, and with the loop's small
     integral gain the airspeed would take hundreds of steps to recover."""
-    pid = pid_mod.make_plane_cascaded_pid()
+    pid = make_plane_pid_controller().host()
     gains = _speed_loop_gains(pid)
     assert _bumpless_integral(0.9986, 200.0, gains) == 0.0
     assert _bumpless_integral(-0.9986, 290.0, gains) == 0.0
@@ -243,7 +241,7 @@ def test_the_bumpless_integral_matches_a_throttle_off_its_stops():
     """4 m/s fast at 0.03 throttle, the cold loop would cut to about -0.44;
     seeded, its first command lands within the tolerance of 0.03, from below,
     and the step after it moves on the proportional term alone."""
-    pid = pid_mod.make_plane_cascaded_pid()
+    pid = make_plane_pid_controller().host()
     gains = _speed_loop_gains(pid)
     obs = np.zeros(10, dtype=np.float32)
     obs[0] = 234.2
@@ -251,7 +249,9 @@ def test_the_bumpless_integral_matches_a_throttle_off_its_stops():
     cold = float(pid.step(obs)[0])
     assert cold < -0.4
     pid.reset()
-    pid._speed_integral = _bumpless_integral(0.03, float(obs[0]), gains, tol=0.01)
+    pid.state = pid.state.replace(
+        speed_integral=_bumpless_integral(0.03, float(obs[0]), gains, tol=0.01)
+    )
     first = float(pid.step(obs)[0])
     assert first == pytest.approx(0.02, abs=1e-5)
 
@@ -263,7 +263,7 @@ class _Stub:
         self.speed_loop, self.throttle = speed_loop, throttle
         self.env = self.params = None
         self.horizon = 3
-        self._pid = pid_mod.make_plane_cascaded_pid() if speed_loop else None
+        self._pid = make_plane_pid_controller().host() if speed_loop else None
         self.reset()
 
     def reset(self):
@@ -300,7 +300,7 @@ def test_the_handover_waits_for_a_settled_aircraft_and_falls_back():
             assert oracle.mode == "capture" and action[0] == np.float32(0.9986)
         if t == 5:
             assert oracle.mode == "hold" and action[0] == np.float32(0.4)
-            assert hold._pid._speed_integral == 0.0  # both at full throttle
+            assert hold._pid.state.speed_integral == 0.0  # both at full throttle
     assert oracle.handovers == [(5, "hold"), (7, "capture")]
     assert (capture.steps, hold.steps) == (7, 2)
     assert oracle.mode == "capture"
@@ -332,18 +332,18 @@ def test_the_plant_gets_the_pids_throttle_and_the_plan_moves_the_elevator():
     params = plan_params(spec, spec.make_test_params())
     oracle = make_plane_mpc(env, params, horizon=3, n_iter=3, handover=False)
     obs, state = env.reset_env(jax.random.PRNGKey(0), spec.make_test_params())
-    pid = pid_mod.make_plane_cascaded_pid()
+    pid = make_plane_pid_controller().host()
     pid.reset()
     action = oracle.step(obs, state)
     assert action.shape == (2,)
     assert action[0] == np.float32(pid.step(np.asarray(obs))[0])
-    assert oracle._pid._speed_integral == pid._speed_integral
+    assert oracle._pid.state.speed_integral == pid.state.speed_integral
     plan = jnp.zeros((3, 2), dtype=jnp.float32)
     grad = jax.grad(lambda a: oracle._rollout(a, (state, jnp.float32(0.0))))(plan)
     assert np.all(np.asarray(grad[:, 0]) == 0.0)
     assert np.any(np.asarray(grad[:, 1]) != 0.0)
     oracle.reset()
-    assert oracle._pid._speed_integral == 0.0
+    assert oracle._pid.state.speed_integral == 0.0
     assert jnp.all(oracle._actions == 0.0)
 
 

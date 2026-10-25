@@ -6,6 +6,7 @@ import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.plane.dynamics import total_wind_2d
 from target_gym.plane.env import (
     PlaneParams,
@@ -26,12 +27,14 @@ from target_gym.plane.rendering_console import _render
 from target_gym.utils import compute_norm_from_coordinates, save_video
 
 
-class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
+class Airplane2D(RegistryExperts, environment.Environment[PlaneState, PlaneParams]):
     """
     JAX-compatible 2D airplane environment.
 
     Action (2,): [power, stick], raw in [-1, 1]
     """
+
+    registry_name: str = "plane"
 
     render_plane = classmethod(_render)
     screen_width = 600
@@ -229,19 +232,6 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
             save_trajectory=save_trajectory,
         )
 
-    def make_pid(self):
-        """Return the cascaded altitude-hold autopilot.
-
-        Three loops (altitude -> vertical speed -> pitch -> elevator) with a
-        limit between each stage plus alpha protection. The older flat PID,
-        which maps altitude error straight to elevator, is still available as
-        ``experts.pid.make_plane_stateful_pid``; it departs controlled flight
-        on large climbs now that the lift curve is correct (PHYSICS.md D1/D2).
-        """
-        from target_gym.experts.pid import make_plane_cascaded_pid
-
-        return make_plane_cascaded_pid()
-
     def make_mpc(self, params=None, **kwargs):
         """Return the 2D aircraft's gradient MPC (``plane.experts.make_plane_mpc``).
 
@@ -257,17 +247,6 @@ class Airplane2D(environment.Environment[PlaneState, PlaneParams]):
         if params is None:
             params = self.default_params
         return make_plane_mpc(self, params, **kwargs)
-
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_plane_pid,
-            mimo_pid_step,
-        )
-
-        params, zero_state = make_plane_pid()
-        return FunctionalExpertPolicy(params, zero_state, mimo_pid_step)
 
     def action_space(self, params: PlaneParams | None = None) -> spaces.Discrete:
         """Action space of the environment."""

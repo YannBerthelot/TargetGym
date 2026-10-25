@@ -9,6 +9,7 @@ from gymnax.environments import environment, spaces
 
 from target_gym import reward as R
 from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.reactor.env import (
     ReactorParams,
     ReactorState,
@@ -29,13 +30,15 @@ from target_gym.utils import save_video
 CONTROL_PERIOD: int = 10
 
 
-class Reactor(environment.Environment[ReactorState, ReactorParams]):
+class Reactor(RegistryExperts, environment.Environment[ReactorState, ReactorParams]):
     """
     Nuclear reactor (point kinetics + thermal feedback).
 
     Observation (4,): [n, T_coolant, rho_ext_norm, target_n]
     Action      (1,): [rho_ext_norm] in [-1, 1] (control rod position)
     """
+
+    registry_name: str = "reactor"
 
     render_reactor = classmethod(_render)
     screen_width = 700
@@ -253,23 +256,6 @@ class Reactor(environment.Environment[ReactorState, ReactorParams]):
         return spaces.Box(
             -inf, inf, len(ReactorState.__dataclass_fields__), dtype=jnp.float32
         )
-
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_reactor_pid,
-            pid_step,
-        )
-
-        params, zero_state = make_reactor_pid()
-        return FunctionalExpertPolicy(params, zero_state, pid_step)
-
-    def make_pid(self):
-        """Return a ready-to-use StatefulPID for neutron-power tracking."""
-        from target_gym.experts.pid import make_reactor_stateful_pid
-
-        return make_reactor_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return a CasADi MPC oracle for neutron-power tracking."""

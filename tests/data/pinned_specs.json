@@ -15,8 +15,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_plane_cascaded_pid"
+      "target_gym.plane.experts",
+      "make_plane_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -59,8 +59,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_plane_cascaded_pid"
+      "target_gym.plane.experts",
+      "make_plane_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -114,8 +114,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_plane_cascaded_pid"
+      "target_gym.plane.experts",
+      "make_plane_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -168,8 +168,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_plane3d_heading_cascaded_pid"
+      "target_gym.plane3d.experts",
+      "make_plane3d_heading_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -217,8 +217,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_plane3d_circle_cascaded_pid"
+      "target_gym.plane3d.experts",
+      "make_plane3d_circle_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -267,8 +267,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_plane3d_racetrack_cascaded_pid"
+      "target_gym.plane3d.experts",
+      "make_plane3d_racetrack_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -317,8 +317,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_plane3d_figure8_stateful_pid"
+      "target_gym.plane3d.experts",
+      "make_plane3d_figure8_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -366,8 +366,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_patrol_stateful_pid"
+      "target_gym.patrol.experts",
+      "make_patrol_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -407,8 +407,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_patrol_bearing_only_stateful_pid"
+      "target_gym.patrol.experts",
+      "make_patrol_bearing_only_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -448,8 +448,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_cstr_stateful_pid"
+      "target_gym.pc_gym.cstr.experts",
+      "make_cstr_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -483,8 +483,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_first_order_stateful_pid"
+      "target_gym.pc_gym.first_order.experts",
+      "make_first_order_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -518,8 +518,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_four_tank_stateful_pid"
+      "target_gym.pc_gym.four_tank.experts",
+      "make_four_tank_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -553,8 +553,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_ph_stateful_pid"
+      "target_gym.pc_gym.ph_neutralization.experts",
+      "make_ph_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -592,8 +592,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_distillation_stateful_pid"
+      "target_gym.pc_gym.distillation.experts",
+      "make_distillation_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -631,8 +631,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_glass_furnace_stateful_pid"
+      "target_gym.glass_furnace.experts",
+      "make_glass_furnace_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -670,8 +670,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_reactor_stateful_pid"
+      "target_gym.reactor.experts",
+      "make_reactor_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -707,8 +707,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_hvac_stateful_pid"
+      "target_gym.hvac.experts",
+      "make_hvac_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -744,8 +744,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_cement_kiln_stateful_pid"
+      "target_gym.cement_kiln.experts",
+      "make_cement_kiln_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -783,8 +783,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_boiler_drum_stateful_pid"
+      "target_gym.boiler_drum.experts",
+      "make_boiler_drum_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -822,8 +822,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_wind_turbine_stateful_pid"
+      "target_gym.energy.wind_turbine.experts",
+      "make_wind_turbine_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
@@ -861,8 +861,8 @@
     ],
     "make_pid": [
       "_pid.<locals>.make",
-      "target_gym.experts.pid",
-      "make_battery_stateful_pid"
+      "target_gym.energy.battery.experts",
+      "make_battery_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",

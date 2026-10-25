@@ -19,16 +19,21 @@ from target_gym.boiler_drum.env import (
     steady_state,
 )
 from target_gym.boiler_drum.rendering import _render
+from target_gym.expert_access import RegistryExperts
 from target_gym.utils import save_video
 
 
-class BoilerDrum(environment.Environment[BoilerDrumState, BoilerDrumParams]):
+class BoilerDrum(
+    RegistryExperts, environment.Environment[BoilerDrumState, BoilerDrumParams]
+):
     """Natural-circulation drum boiler with shrink-and-swell.
 
     Observation (7): [level, pressure, q_steam, fuel_pct, feed_pct,
                       target_level, target_pressure]
     Action      (2): [fuel, feedwater], raw in [-1, 1]
     """
+
+    registry_name: str = "boiler_drum"
 
     render_boiler = classmethod(_render)
     screen_width = 700
@@ -168,29 +173,12 @@ class BoilerDrum(environment.Environment[BoilerDrumState, BoilerDrumParams]):
             -inf, inf, len(BoilerDrumState.__dataclass_fields__), dtype=jnp.float32
         )
 
-    def make_pid(self):
-        """Return a ready-to-use three-element level + pressure controller."""
-        from target_gym.experts.pid import make_boiler_drum_stateful_pid
-
-        return make_boiler_drum_stateful_pid()
-
     def make_mpc(self, params=None, **kwargs):
         from target_gym.boiler_drum.experts import make_boiler_drum_mpc
 
         if params is None:
             params = self.default_params
         return make_boiler_drum_mpc(self, params, **kwargs)
-
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_boiler_drum_pid,
-            mimo_pid_step,
-        )
-
-        pid_params, zero_state = make_boiler_drum_pid()
-        return FunctionalExpertPolicy(pid_params, zero_state, mimo_pid_step)
 
     def save_video(
         self,

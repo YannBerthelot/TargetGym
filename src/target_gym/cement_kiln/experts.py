@@ -6,11 +6,15 @@ CasadiMPC, SamplingMPC and the v2 objective helpers) stays in
 ``target_gym.experts.mpc``, which is in every task's baseline fingerprint.
 """
 
+import jax.numpy as jnp
+from flax import struct
+
 from target_gym.experts.mpc import (
     SamplingMPC,
     _is_v1,
     _v2_objective,
 )
+from target_gym.experts.pid import Controller, _load_gains
 
 
 def _cement_kiln_objective(state, params):
@@ -75,3 +79,111 @@ def make_cement_kiln_mpc(
         return_best=return_best,
         **kwargs,
     )
+
+
+# ---------------------------------------------------------------------------
+# Cascade PID as one pure step (host NumPy and jit/vmap alike)
+# ---------------------------------------------------------------------------
+
+
+@struct.dataclass
+class CementKilnPIDParams:
+    """Gains and plant constants of the cascade controller.
+
+    Every field is a Python float, so NumPy treats it as weakly typed and the
+    host arithmetic stays in the observation's dtype, as it did when
+    the baseline was recorded.
+    """
+
+    Kp_outer: float
+    Ki_outer: float
+    Kp_inner: float
+    Ki_inner: float
+    T_bz_base: float
+    fuel_min: float
+    fuel_max: float
+    fuel_nominal: float
+    rpm_min: float
+    rpm_max: float
+    rpm_nominal: float
+    feed_nominal: float
+    dt: float = 30.0
+    # The setpoint trim is bounded so the outer loop cannot drive the kiln to
+    # a temperature that would form rings or let it go cold.
+    sp_trim_max: float = 120.0
+
+
+@struct.dataclass
+class CementKilnPIDState:
+    """Outer (free lime) and inner (burning zone) integrators."""
+
+    outer_int: float = 0.0
+    inner_int: float = 0.0
+
+
+def cement_kiln_pid_step(params, state, obs, xp=jnp):
+    """One step of the cement kiln's cascaded PID, written against ``xp``.
+
+    Keep the arithmetic order: under ``numpy`` it reproduces the scored
+    baseline bit for bit.
+
+    obs: [lime_pct, T_bz, T_exhaust, T_back_end, feed, fuel_pct, speed_pct,
+          target_lime_pct]
+    """
+    p = params
+    lime = obs[..., 0] / 100.0
+    T_bz = obs[..., 1]
+    feed = obs[..., 4]
+    target_lime = obs[..., 7] / 100.0
+
+    # --- Outer: free lime sets the burning-zone target ---
+    err_o = lime - target_lime
+    outer_int = state.outer_int + err_o * p.dt
+    trim = p.Kp_outer * err_o + p.Ki_outer * outer_int
+    trim_clipped = xp.clip(trim, -p.sp_trim_max, p.sp_trim_max)
+    outer_int = xp.where(trim != trim_clipped, outer_int - err_o * p.dt, outer_int)
+    T_bz_sp = p.T_bz_base + trim_clipped
+
+    # --- Inner: fuel holds the burning-zone temperature ---
+    err_i = T_bz_sp - T_bz
+    inner_int = state.inner_int + err_i * p.dt
+    fuel = p.fuel_nominal + p.Kp_inner * err_i + p.Ki_inner * inner_int
+    fuel_clipped = xp.clip(fuel, p.fuel_min, p.fuel_max)
+    inner_int = xp.where(fuel != fuel_clipped, inner_int - err_i * p.dt, inner_int)
+    fuel_raw = 2.0 * (fuel_clipped - p.fuel_min) / (p.fuel_max - p.fuel_min) - 1.0
+
+    # --- Speed follows feed, holding bed depth constant ---
+    rpm = p.rpm_nominal * feed / p.feed_nominal
+    rpm = xp.clip(rpm, p.rpm_min, p.rpm_max)
+    rpm_raw = 2.0 * (rpm - p.rpm_min) / (p.rpm_max - p.rpm_min) - 1.0
+
+    new_state = CementKilnPIDState(outer_int=outer_int, inner_int=inner_int)
+    return xp.stack([fuel_raw, rpm_raw], axis=-1), new_state
+
+
+def make_cement_kiln_pid_controller() -> Controller:
+    """The cascade controller as a :class:`Controller`.
+
+    Reads the same tuned gains, with the same defaults, as
+    ``make_cement_kiln_stateful_pid``.
+    """
+    from target_gym.cement_kiln.env import CementKilnParams
+
+    pr = CementKilnParams()
+    _p = _load_gains().get("cement_kiln", {})
+    params = CementKilnPIDParams(
+        Kp_outer=float(_p.get("Kp_outer", 12000.0)),
+        Ki_outer=float(_p.get("Ki_outer", 6.0)),
+        Kp_inner=float(_p.get("Kp_inner", 0.025)),
+        Ki_inner=float(_p.get("Ki_inner", 5.0e-6)),
+        T_bz_base=float(_p.get("T_bz_base", 1765.0)),
+        fuel_min=pr.fuel_min,
+        fuel_max=pr.fuel_max,
+        fuel_nominal=pr.fuel_nominal,
+        rpm_min=pr.rpm_min,
+        rpm_max=pr.rpm_max,
+        rpm_nominal=pr.rpm_nominal,
+        feed_nominal=pr.raw_meal_nominal,
+        dt=pr.delta_t,
+    )
+    return Controller(params, CementKilnPIDState(), cement_kiln_pid_step)

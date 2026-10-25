@@ -8,6 +8,7 @@ import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.distillation.env import (
     N_STAGES,
     DistillationParams,
@@ -23,13 +24,15 @@ from target_gym.utils import save_video
 
 
 class DistillationColumn(
-    environment.Environment[DistillationState, DistillationParams]
+    RegistryExperts, environment.Environment[DistillationState, DistillationParams]
 ):
     """Binary distillation column, Skogestad's "Column A".
 
     Observation (6,): [yD, xB, L_pct, V_pct, target_yD, target_xB]
     Action      (2,): [L_raw, V_raw] in [-1, 1] -> reflux and boilup
     """
+
+    registry_name: str = "distillation"
 
     render_column = classmethod(_render)
     screen_width = 700
@@ -163,12 +166,6 @@ class DistillationColumn(
         return spaces.Box(
             -inf, inf, len(DistillationState.__dataclass_fields__), dtype=jnp.float32
         )
-
-    def make_pid(self):
-        """Return a ready-to-use MIMO PID (LV pairing) for dual composition control."""
-        from target_gym.experts.pid import make_distillation_stateful_pid
-
-        return make_distillation_stateful_pid()
 
     def make_mpc(self, params=None, **kwargs):
         """Return a gradient MPC oracle for dual composition control."""

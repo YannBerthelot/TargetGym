@@ -20,6 +20,7 @@ import math
 import jax
 import jax.numpy as jnp
 import numpy as np
+from flax import struct
 
 from target_gym.experts.mpc import (
     GradientMPC,
@@ -28,6 +29,7 @@ from target_gym.experts.mpc import (
     _pid_rollout_plan,
     _v2_objective,
 )
+from target_gym.experts.pid import Controller, _g
 
 _WT_BARRIER_ONSET = 0.85  # fraction of the trip speed at which the barrier starts
 _WT_BARRIER_WEIGHT = 10.0
@@ -204,12 +206,12 @@ def make_wind_turbine_gradient_mpc(
         )
         done_value = _done_value(params, squared=True)
 
-    from target_gym.experts.pid import make_wind_turbine_stateful_pid
-
     initial_plan = (
         None
         if v1
-        else _pid_rollout_plan(env, make_wind_turbine_stateful_pid, horizon, 2)
+        else _pid_rollout_plan(
+            env, lambda: make_wind_turbine_pid_controller().host(), horizon, 2
+        )
     )
     guide_plan = initial_plan
 
@@ -311,13 +313,12 @@ class WindTurbineNewtonPI:
             compute_next_state,
             electrical_power,
         )
-        from target_gym.experts.pid import make_wind_turbine_stateful_pid
 
         self.env = env
         # Plan on the mean wind whatever the caller passed: with the
         # turbulence zeroed the step key draws nothing.
         self.params = params.replace(turbulence_std=0.0)
-        pid = make_wind_turbine_stateful_pid()
+        pid = make_wind_turbine_pid_controller().params
         self.Kp, self.Ki = float(pid.Kp_pitch), float(pid.Ki_pitch)
         self.protect_lo, self.protect_hi = float(pid.protect_lo), float(pid.protect_hi)
         self.speed_setpoint = float(speed_setpoint)
@@ -448,3 +449,90 @@ def make_wind_turbine_mpc(
         slew_ramp=slew_ramp,
         newton_iters=newton_iters,
     )
+
+
+# ---------------------------------------------------------------------------
+# The shipped PID as one pure step (host and jit)
+# ---------------------------------------------------------------------------
+
+
+@struct.dataclass
+class WindTurbinePIDParams:
+    """Gains and plant constants of the above-rated turbine controller.
+
+    These are the values the baseline was scored with. Keep them Python
+    floats so the host arithmetic on constants runs in double precision, as
+    it did when the baseline was recorded.
+    """
+
+    Kp_pitch: float = 3.0
+    Ki_pitch: float = 0.6
+    Kd_pitch: float = 0.0
+    omega_rated_rpm: float = 12.1
+    eta_gen: float = 0.944
+    N_gear: float = 97.0
+    torque_max: float = 47_400.0
+    pitch_max: float = 40.0
+    protect_lo: float = 0.60
+    protect_hi: float = 0.90
+    dt: float = 0.25
+
+
+@struct.dataclass
+class WindTurbinePIDState:
+    """Integral and previous error of the pitch PI on rotor speed."""
+
+    integral: float
+    prev_err: float
+
+
+def wind_turbine_pid_step(params, state, obs, xp=jnp):
+    """Generator torque from the power feedforward, pitch from a PI on speed.
+
+    The classical above-rated split. Generator torque sets power by
+    feedforward, since ``P = eta N tau w`` is exact and rotor speed is
+    measured. Collective pitch regulates rotor speed: a PI on
+    ``omega - omega_rated`` spills whatever aerodynamic power the torque does
+    not absorb. The gain is positive because a rotor above rated has excess
+    power to spill, so pitch must increase.
+
+    obs: [omega_rpm, pitch_deg, torque_pct, P_MW, target_P_MW]. Keep the
+    arithmetic order: under ``numpy`` it reproduces the scored baseline bit
+    for bit.
+    """
+    p = params
+    omega_rpm = obs[..., 0]
+    target_MW = obs[..., 4]
+
+    # Torque: power feedforward, backed off as the rotor slows below rated.
+    omega = omega_rpm * 2.0 * np.pi / 60.0
+    torque = (target_MW * 1.0e6) / (p.eta_gen * p.N_gear * xp.maximum(omega, 1e-3))
+    speed_ratio = omega / (p.omega_rated_rpm * 2.0 * np.pi / 60.0)
+    protection = xp.clip(
+        (speed_ratio - p.protect_lo) / (p.protect_hi - p.protect_lo), 0.0, 1.0
+    )
+    torque = torque * protection
+    torque_raw = 2.0 * xp.clip(torque / p.torque_max, 0.0, 1.0) - 1.0
+
+    # Pitch: PI on rotor-speed error, with anti-windup at the stops.
+    err = omega_rpm - p.omega_rated_rpm
+    integral = state.integral + err * p.dt
+    deriv = (err - state.prev_err) / p.dt
+    pitch = p.Kp_pitch * err + p.Ki_pitch * integral + p.Kd_pitch * deriv
+    pitch_clipped = xp.clip(pitch, 0.0, p.pitch_max)
+    integral = xp.where(pitch != pitch_clipped, integral - err * p.dt, integral)
+    pitch_raw = 2.0 * (pitch_clipped / p.pitch_max) - 1.0
+
+    action = xp.stack([pitch_raw, torque_raw], axis=-1)
+    return action, WindTurbinePIDState(integral=integral, prev_err=err)
+
+
+def make_wind_turbine_pid_controller() -> Controller:
+    """The shipped turbine PID as a :class:`Controller`, gains as tuned."""
+    params = WindTurbinePIDParams(
+        Kp_pitch=_g("wind_turbine", "Kp_pitch", 3.0),
+        Ki_pitch=_g("wind_turbine", "Ki_pitch", 0.6),
+        Kd_pitch=_g("wind_turbine", "Kd_pitch", 0.0),
+    )
+    state = WindTurbinePIDState(integral=0.0, prev_err=0.0)
+    return Controller(params, state, wind_turbine_pid_step)

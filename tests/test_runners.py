@@ -253,7 +253,7 @@ def test_env_make_pid_returns_controller(env_cls, params_cls):
     env = env_cls()
     pid = env.make_pid()
     assert pid is not None
-    # StatefulPID / StatefulMIMOPID both expose a step() method
+    # A HostController: step(obs) -> action, plus reset()
     assert callable(getattr(pid, "step", None))
 
 

@@ -20,16 +20,21 @@ from target_gym.cement_kiln.env import (
     steady_profile,
 )
 from target_gym.cement_kiln.rendering import _render
+from target_gym.expert_access import RegistryExperts
 from target_gym.utils import save_video
 
 
-class CementKiln(environment.Environment[CementKilnState, CementKilnParams]):
+class CementKiln(
+    RegistryExperts, environment.Environment[CementKilnState, CementKilnParams]
+):
     """Cement rotary kiln with a half-hour transport delay.
 
     Observation (8): [lime_pct, T_burning_zone, T_exhaust, T_back_end,
                       feed_rate, fuel_pct, speed_pct, target_lime_pct]
     Action      (2): [fuel, kiln_speed], raw in [-1, 1]
     """
+
+    registry_name: str = "cement_kiln"
 
     render_kiln = classmethod(_render)
     screen_width = 700
@@ -154,29 +159,12 @@ class CementKiln(environment.Environment[CementKilnState, CementKilnParams]):
             -inf, inf, len(CementKilnState.__dataclass_fields__), dtype=jnp.float32
         )
 
-    def make_pid(self):
-        """Return the cascade controller (free lime -> burning zone -> fuel)."""
-        from target_gym.experts.pid import make_cement_kiln_stateful_pid
-
-        return make_cement_kiln_stateful_pid()
-
     def make_mpc(self, params=None, **kwargs):
         from target_gym.cement_kiln.experts import make_cement_kiln_mpc
 
         if params is None:
             params = self.default_params
         return make_cement_kiln_mpc(self, params, **kwargs)
-
-    @property
-    def expert_policy(self):
-        from target_gym.experts.pid import (
-            FunctionalExpertPolicy,
-            make_cement_kiln_pid,
-            mimo_pid_step,
-        )
-
-        pid_params, zero_state = make_cement_kiln_pid()
-        return FunctionalExpertPolicy(pid_params, zero_state, mimo_pid_step)
 
     def save_video(
         self,
