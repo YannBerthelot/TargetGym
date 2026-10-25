@@ -133,8 +133,8 @@ print("MPC:", load_recorded_baselines()["plane"]["mpc_returns"][0])
 
 The PID reads `obs` only, as a plant controller does. The MPC reads the full
 state, including quantities the observation withholds, which is what makes it
-an upper bound rather than a peer; [docs/baselines.md](docs/baselines.md)
-quantifies the resulting advantage.
+an upper bound rather than a peer; [docs/baseline-results.md](docs/baseline-results.md)
+gives the numbers.
 
 Vectorised rollouts, the registry API, the patrol interface and the wind model
 are covered in [docs/getting-started.md](docs/getting-started.md).

@@ -200,8 +200,8 @@ uv run python scripts/record_baselines.py                  # everything
 uv run python scripts/record_baselines.py --envs plane cstr # just these
 ```
 
-The headline table in `docs/baselines.md` and the per-environment pages both
-show those records, so regenerate them afterwards:
+The results page, `docs/baseline-results.md`, and the per-environment pages
+both show those records, so regenerate them afterwards:
 
 ```bash
 uv run python scripts/generate_baseline_table.py
@@ -224,8 +224,9 @@ The long-run protocol costs in `src/target_gym/data/protocol_results.json` work
 the same way. They are what the floor check in `tests/test_reward_contract.py`
 compares each measured floor against, and they carry the same fingerprint, so
 the same change that makes a baseline stale makes its row stale too. Re-run the
-protocol for the environments the test names, and if the numbers moved, paste
-the table it prints into the protocol section of `docs/baselines.md`:
+protocol for the environments the test names. If the numbers moved, regenerate
+the results page, which reads the file, and paste the full table it prints
+into the protocol section of `docs/baselines.md`:
 
 ```bash
 uv run python scripts/evaluate_baselines.py --envs plane cstr
@@ -249,10 +250,10 @@ trusted, by `tests/test_docs.py`:
 - **The environment pages are generated** from the registry:
   `docs/environments.md` by `scripts/generate_env_reference.py`, and the
   per-environment pages under `docs/environments/` by
-  `scripts/generate_env_pages.py`. The recorded baseline table in
-  `docs/baselines.md` is generated as well, by
+  `scripts/generate_env_pages.py`. The results page,
+  `docs/baseline-results.md`, is generated as well, by
   `scripts/generate_baseline_table.py` from
-  `src/target_gym/data/baseline_returns.json`. Adding an environment or a
+  `src/target_gym/data/baseline_returns.json` and `protocol_results.json`. Adding an environment or a
   baseline means regenerating all three, and so does re-recording baselines,
   since the pages and the table show the recorded numbers. `make ci-docs` runs
   each with `--check` and then `mkdocs build --strict`, which fails on a

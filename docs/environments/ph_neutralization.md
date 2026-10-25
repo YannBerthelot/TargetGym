@@ -53,7 +53,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 300-step episode (see [Baselines](../baselines.md)). The reward is a cost, so a return closer to zero is better.
+Recorded over 10 seeds of the 300-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
 
 | controller | mean return | cost per step |
 |---|---|---|

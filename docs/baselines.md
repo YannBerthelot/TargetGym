@@ -5,6 +5,9 @@ real to beat. A benchmark whose only reference point is a random policy tells
 you an agent learned *something*; one with a tuned PID tells you whether it
 learned anything worth having.
 
+The numbers are on [Baseline results](baseline-results.md). This page explains
+how the controllers are built and measured, and how to read those numbers.
+
 ## What a PID losing here does and does not mean
 
 This suite is built to collect tasks where **anticipation pays**. It is not
@@ -34,7 +37,7 @@ skill, and the fix was to the environment: a scheduled dispatch signal for the
 battery, a routed lead for the patrol. Both changes are described in the
 relevant `PHYSICS.md`.
 
-So read the table below as a statement about **these tasks**, chosen because
+So read the [results](baseline-results.md) as a statement about **these tasks**, chosen because
 lookahead, constraint handling or a model earn their keep in them. Where a PID
 sits close to the MPC, the usual explanation is that the task is one a good
 reactive controller can solve, which is a fact about the problem and often the
@@ -337,8 +340,8 @@ it plans on; on the reactor it reads
 the xenon and iodine inventories and the fuel temperature. Those are exactly
 the quantities each environment hides on purpose, and several environments are
 built as genuine POMDPs on the strength of that. The PID, and any learned
-policy, gets the observation vector alone. **The table below is therefore not a
-controller-class comparison at equal information**, and part of every MPC lead
+policy, gets the observation vector alone. **The [results](baseline-results.md) are therefore
+not a controller-class comparison at equal information**, and part of every MPC lead
 is the hidden state rather than the planning.
 
 **The gradient and sampling planners plan on the mean disturbance.** Both roll
@@ -728,7 +731,8 @@ path is what those tasks are for and a sub-lap episode never asked for it.
 > the sections after it that describe "the shipped reward" as log-scaled and
 > capped describe version 1 too. The current numbers, under the
 > floor-normalised cost of version 2 (docs/reward-shaping.md), are the
-> generated table at the end of this page and the protocol table after it.
+> on [Baseline results](baseline-results.md), with the full protocol table at
+> the end of this page.
 
 Return, paired per seed, on each environment's own episode. Every number here
 was re-measured after the reward unification -- returns are not comparable
@@ -912,60 +916,16 @@ that is then advected down the kiln, so reverse-mode gradients overflow to NaN
 after about eight steps while finite differences on the same objective stay
 clean. Hence cross-entropy sampling rather than a gradient method.
 
-<!-- BEGIN GENERATED BASELINE TABLE -->
-
-<!-- Written by scripts/generate_baseline_table.py from
-     src/target_gym/data/baseline_returns.json. Do not edit by hand. -->
-
-| environment | steps | PID cost/step | MPC cost/step | MPC saves | MPC wins | trips |
-| --- | --- | --- | --- | --- | --- | --- |
-| `plane3d_figure8` | 400 | 1.112e+06 | 14.73 | 1.000 | 10/10 | 0 |
-| `plane3d_racetrack` | 650 | 7.429e+05 | 1414 | 0.998 | 10/10 | 0 |
-| `boiler_drum` | 400 | 641.9 | 15.31 | 0.976 | 10/10 | 0 |
-| `patrol` | 200 | 298.6 | 14.22 | 0.952 | 10/10 | 0 |
-| `patrol_bearing_only` | 200 | 290.4 | 14.22 | 0.951 | 10/10 | 0 |
-| `plane_energy` | 1200 | 1.963e+04 | 1013 | 0.948 | 10/10 | 0 |
-| `reactor` | 864 | 24.37 | 1.373 | 0.944 | 10/10 | 0 |
-| `cement_kiln` | 700 | 6.368 | 0.4048 | 0.936 | 10/10 | 0 |
-| `unstable_cstr` | 1200 | 5.714e+04 | 4178 | 0.927 | 10/10 | 0 |
-| `compressor_surge` | 1200 | 1790 | 161.4 | 0.910 | 10/10 | 0 |
-| `distillation` | 200 | 262.3 | 29.9 | 0.886 | 10/10 | 0 |
-| `plane3d_circle` | 300 | 1.919e+04 | 3142 | 0.836 | 10/10 | 0 |
-| `plane3d_heading` | 200 | 4.634e+04 | 8266 | 0.822 | 10/10 | 0 |
-| `glass_furnace` | 1600 | 1.352 | 0.2743 | 0.797 | 10/10 | 0 |
-| `plane_sine` | 480 | 5184 | 1249 | 0.759 | 10/10 | 0 |
-| `battery` | 360 | 0.003457 | 0.0008876 | 0.743 | 10/10 | 0 |
-| `ph_neutralization` | 300 | 336.3 | 91.22 | 0.729 | 10/10 | 0 |
-| `four_tank` | 500 | 1167 | 336.2 | 0.712 | 10/10 | 0 |
-| `wind_turbine` | 400 | 4.541e-05 | 1.378e-05 | 0.697 | 10/10 | 0 |
-| `plane` | 280 | 1.04e+04 | 3273 | 0.685 | 10/10 | 0 |
-| `hvac` | 720 | 0.01966 | 0.01064 | 0.459 | 10/10 | 0 |
-| `cstr` | 100 | 6319 | 5752 | 0.090 | 10/10 | 0 |
-| `first_order` | 100 | 1018 | 1002 | 0.015 | 10/10 | 0 |
-
-`cost/step` is minus the mean return over the episode length: tracking in
-floor-widths plus avoidable consumption (dimensionless plants) or dollars /
-euros per step (reactor, battery, wind turbine, HVAC). `MPC saves` is the
-fraction of the PID's cost the MPC removes. Episode returns mix the reach
-transient with the hold; the protocol table below separates them.
-
-`MPC wins` counts seeds where the MPC out-scored the PID, paired.
-A ⚠️ marks an environment where it loses more often than it wins, which
-means it is not the upper bound this table presents it as; those carry an
-`EnvSpec.mpc_degraded` note saying why.
-
-`trips` counts the MPC's trips over the ten windows: a trip never ends a
-window, the plant is down at the failure cost and restarts, or stays
-down (`base.failure_kernel`). A permanent zero can mean the controller
-is safe or that the plant cannot leave its envelope; `first_order` is
-the latter.
-
-<!-- END GENERATED BASELINE TABLE -->
+The ten-seed episode returns, paired per seed, are on
+[Baseline results](baseline-results.md#episode-returns).
 
 ## The protocol numbers: hold and reach, separately
 
-Written from `src/target_gym/data/protocol_results.json` (`scripts/evaluate_baselines.py`;
-re-run it after any change and paste the table). Gain is the mean cost per
+Its headline columns, gain and NEA, are on
+[Baseline results](baseline-results.md#protocol-score); this is the full table,
+with hold and reach. Written from `src/target_gym/data/protocol_results.json`
+(`scripts/evaluate_baselines.py`; re-run it after any change and paste the
+table). Gain is the mean cost per
 step over every step after the plant's burn-in (three cost-bearing time
 constants, capped at half the test episode), transients included, split into
 tracking and running cost -- no settling time enters it, so the two
