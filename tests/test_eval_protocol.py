@@ -43,6 +43,23 @@ def test_gain_is_hold_plus_change_rate_times_reach_cost():
     assert m["nea"] == pytest.approx(0.5, abs=0.05)
 
 
+def test_reach_fraction_is_change_rate_times_excursion_length():
+    """The same excursions, now out of band: reach_fraction ~ p * 5 and the
+    rest of the time is in band."""
+    rng = np.random.default_rng(0)
+    T, p = 20000, 0.01
+    tc = rng.random(T) < p
+    cost = np.full(T, 0.1)
+    band = np.ones(T, bool)
+    for i in np.flatnonzero(tc):
+        cost[i : i + 5] += 1.0
+        band[i : i + 5] = False
+    ep = E.Episode(cost=cost, in_band=band, target_change=tc, failed=np.zeros(T, bool))
+    m = E.evaluate([ep], burn_in=100, rho_floor=0.1, rho_ref=0.2)
+    assert m["reach_fraction"] == pytest.approx(p * 5.0, abs=0.005)
+    assert m["time_in_band"] == pytest.approx(1.0 - p * 5.0, abs=0.005)
+
+
 def test_transient_cost_compares_controllers_that_reach_cost_cannot():
     """Reach B is the transient above the cycle's own hold level, over a
     transient detected against that level: a controller holding far off has
