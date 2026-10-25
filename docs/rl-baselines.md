@@ -93,8 +93,9 @@ Two failure modes to keep in mind when the table exists.
 
 **If RL loses**, the result is on trial rather than the environments, and the
 answer needs to survive "your agent was under-trained". One cross-check against
-a standard implementation -- stable-baselines3 is already a dev dependency with
-a working PPO smoke test -- on three or four environments settles it. If the two
+a standard implementation -- stable-baselines3 is the opt-in `agent` group
+(`uv sync --group agent`), with a working PPO smoke test -- on three or four
+environments settles it. If the two
 agree within noise, the JAX numbers inherit that credibility.
 
 **If RL wins**, check what it is beating. The PID is only a fair opponent when it

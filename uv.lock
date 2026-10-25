@@ -2234,10 +2234,6 @@ dev = [
     { name = "pytest-readme" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "stable-baselines3" },
-    { name = "tensorboard" },
-    { name = "torch", version = "2.13.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
-    { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
 ]
 docs = [
     { name = "mkdocs" },
@@ -2297,10 +2293,6 @@ dev = [
     { name = "pytest-readme", specifier = ">=1.0.2" },
     { name = "pytest-xdist", specifier = ">=3.6" },
     { name = "ruff", specifier = ">=0.12.11" },
-    { name = "stable-baselines3", specifier = ">=2.7.0" },
-    { name = "tensorboard", specifier = ">=2.20.0" },
-    { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.0" },
-    { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.0", index = "https://download.pytorch.org/whl/cpu" },
 ]
 docs = [
     { name = "mkdocs", specifier = ">=1.6" },
