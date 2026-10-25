@@ -178,9 +178,22 @@ cement kiln whose adjoint overflows through its transport delay, use the samplin
 
 ### Re-recording the baselines
 
-How well each controller actually controls is measured by hand and committed,
-not measured in CI: a full run takes hours, nearly all of it in the aircraft,
-and the answer only moves when the physics, the controllers or their gains do.
+How well each controller actually controls is measured once and committed,
+not measured on every push: a full run takes hours, nearly all of it in the
+MPCs, and the answer only moves when the physics, the controllers or their
+gains do.
+
+The easy way is to let CI do it. Add the `re-record` label to your pull
+request: one job per stale environment records it on GitHub's runners and
+commits the rows, the table and the pages to your branch, and the checks run
+again on that commit. To check locally that a change left every PID's returns
+alone, which takes under a minute and writes nothing:
+
+```bash
+uv run python scripts/record_baselines.py --pid-only
+```
+
+To record by hand instead:
 
 ```bash
 uv run python scripts/record_baselines.py                  # everything

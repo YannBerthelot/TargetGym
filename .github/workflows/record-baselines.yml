@@ -1,0 +1,174 @@
+# Re-records the baselines on GitHub's runners, so nobody waits for them
+# locally.
+#
+# Recording is nearly all MPC: in the last protocol run the PID rows took
+# 136 s of compute and the MPC rows 16,460 s. On a laptop a full re-record is
+# one to two hours; here it is one job per environment, all at once, on free
+# runners (the repository is public).
+#
+# Three triggers:
+#   - the `re-record` label on a pull request records every environment whose
+#     row is stale on that branch and commits the rows to it, so the PR's
+#     fingerprint checks pass on the next run;
+#   - by hand (Actions, "record baselines", Run workflow), for the environments
+#     named or every stale one, opening a pull request with the result;
+#   - weekly, every environment, which catches what the fingerprint cannot
+#     see: a dependency bump that moves the numbers without touching the code.
+#     A week that reproduces every number commits nothing.
+#
+# The commit is pushed with RECORD_TOKEN, a fine-grained token with contents
+# and pull-request write access to this repository. GitHub starts no workflow
+# for a push made with its built-in token, so without it the required checks
+# never run on the recorded commit and the PR cannot merge. Pull requests from
+# forks get no secrets, so the label only works on branches of this repository.
+
+name: record baselines
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      envs:
+        description: "Environments to record, space-separated (empty: every stale one)"
+        required: false
+        default: ""
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.11.28"
+  # The interpreter the records have been taken with locally.
+  UV_PYTHON: "3.11"
+
+jobs:
+  plan:
+    if: github.event_name != 'pull_request' || github.event.label.name == 're-record'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      envs: ${{ steps.plan.outputs.envs }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: ${{ env.UV_VERSION }}
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+    - run: uv sync --frozen
+    - id: plan
+      env:
+        NAMED: ${{ inputs.envs }}
+        EVENT: ${{ github.event_name }}
+      run: |
+        if [ -n "$NAMED" ]; then
+          envs=$(python3 -c 'import json, sys; print(json.dumps(sys.argv[1:]))' $NAMED)
+        elif [ "$EVENT" = schedule ]; then
+          envs=$(uv run python scripts/stale_records.py list --all)
+        else
+          envs=$(uv run python scripts/stale_records.py list)
+        fi
+        echo "envs=$envs" >> "$GITHUB_OUTPUT"
+        echo "Recording: $envs" >> "$GITHUB_STEP_SUMMARY"
+
+  record:
+    needs: plan
+    if: needs.plan.outputs.envs != '[]'
+    runs-on: ubuntu-latest
+    # The slowest environment, the glass furnace, took 4405 s to record and
+    # 2532 s to score locally; four slower cores here.
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        env: ${{ fromJSON(needs.plan.outputs.envs) }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: ${{ env.UV_VERSION }}
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+    - run: uv sync --frozen
+    - name: Record and score
+      env:
+        ENV_NAME: ${{ matrix.env }}
+      run: |
+        mkdir -p rows
+        uv run python scripts/record_baselines.py --envs "$ENV_NAME"
+        uv run python scripts/evaluate_baselines.py --envs "$ENV_NAME" --out rows/protocol.json
+        uv run python scripts/stale_records.py extract "$ENV_NAME" rows
+    - uses: actions/upload-artifact@v4
+      with:
+        name: rows-${{ matrix.env }}
+        path: rows/
+        retention-days: 7
+
+  commit:
+    needs: [plan, record]
+    # A failed environment stays stale and keeps failing its tests; the rest
+    # are still worth committing.
+    if: ${{ !cancelled() && needs.plan.outputs.envs != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.head_ref || github.ref_name }}
+        token: ${{ secrets.RECORD_TOKEN || github.token }}
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: ${{ env.UV_VERSION }}
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+    - run: uv sync --frozen --group dev --group docs
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: rows-*
+        path: rows
+    - name: Fold the rows in and regenerate the pages that show them
+      id: fold
+      run: |
+        echo "moved=$(uv run python scripts/stale_records.py merge rows/*/)" >> "$GITHUB_OUTPUT"
+        uv run python scripts/generate_baseline_table.py
+        uv run python scripts/generate_env_pages.py
+    - name: Commit
+      if: steps.fold.outputs.moved != ''
+      env:
+        GH_TOKEN: ${{ secrets.RECORD_TOKEN || github.token }}
+        HAS_TOKEN: ${{ secrets.RECORD_TOKEN != '' }}
+        MOVED: ${{ steps.fold.outputs.moved }}
+        EVENT: ${{ github.event_name }}
+      run: |
+        if [ "$HAS_TOKEN" != true ]; then
+          echo "::warning::RECORD_TOKEN is not set, so the checks will not run on this commit."
+        fi
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        if [ "$EVENT" != pull_request ]; then
+          git switch -c "bot/re-record-$(date -u +%Y%m%d-%H%M)"
+        fi
+        git add src/target_gym/data docs
+        git commit -m "Re-record baselines on CI: $MOVED"
+        git push -u origin HEAD
+        if [ "$EVENT" != pull_request ]; then
+          gh pr create --base main --title "Re-record baselines: $MOVED" \
+            --body "Recorded by the $EVENT run of the record baselines workflow."
+          gh pr merge --auto --merge
+        fi
+    - name: Remove the label
+      if: github.event_name == 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR: ${{ github.event.pull_request.number }}
+      run: gh pr edit "$PR" --remove-label re-record

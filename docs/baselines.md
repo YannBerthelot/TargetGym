@@ -597,6 +597,11 @@ make baselines              # everything, ~40 min
 make baselines-plane        # or one environment
 ```
 
+Or let CI do it: the `re-record` label on a pull request records every stale
+environment on GitHub's runners, one job each, and commits the result to the
+branch. A weekly run re-records everything, to catch a dependency bump that
+moves the numbers without touching the code.
+
 `scripts/record_baselines.py` writes `src/target_gym/data/baseline_returns.json`, and the
 contract is asserted from that. Reading a number rather than producing it makes
 the check *stronger*: it now runs in the fast job on every push and across the
