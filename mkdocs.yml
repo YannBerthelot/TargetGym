@@ -115,6 +115,7 @@ nav:
           - Battery: environments/battery.md
   - Beating the baselines:
       - Baselines: baselines.md
+      - Using the PIDs: using-the-pids.md
       - Throughput: performance.md
       - RL protocol: rl-protocol.md
       - RL results: rl-baselines.md

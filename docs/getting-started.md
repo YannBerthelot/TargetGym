@@ -103,7 +103,9 @@ pid = spec.make_pid()          # the shipped baseline, or None
 pid.reset()
 ```
 
-See the [environment reference](environments.md) for every registry name.
+See the [environment reference](environments.md) for every registry name, and
+[Using the PIDs](using-the-pids.md) for running, evaluating against and
+training on the shipped PIDs.
 
 ## Rendering
 
