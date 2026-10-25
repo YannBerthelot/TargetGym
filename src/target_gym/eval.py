@@ -625,20 +625,3 @@ def evaluate_controller(
         rho_floor=float(getattr(p, "rho_floor", float("nan"))),
         rho_ref=rho_ref,
     )
-
-
-if __name__ == "__main__":
-    # Smoke test against Theorem 4 of the note: constant hold cost 0.1 with reach
-    # excursions of 5 at change rate p = 0.01 gives gain ~ 0.1 + p * 5 = 0.15,
-    # hold ~ 0.1, reach_cost ~ 5, reach_fraction ~ p * 5.
-    rng = np.random.default_rng(0)
-    T, p = 20000, 0.01
-    tc = rng.random(T) < p
-    cost = np.full(T, 0.1)
-    band = np.ones(T, bool)
-    for i in np.flatnonzero(tc):
-        cost[i : i + 5] += 1.0
-        band[i : i + 5] = False
-    ep = Episode(cost=cost, in_band=band, target_change=tc, failed=np.zeros(T, bool))
-    m = evaluate([ep], burn_in=100, rho_floor=0.1, rho_ref=0.2)
-    print({k: round(float(v), 4) for k, v in m.items()})
