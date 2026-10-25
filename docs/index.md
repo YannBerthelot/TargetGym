@@ -17,7 +17,7 @@ hide:
 
 **23 environments**: 9 aircraft, 6 process control, 6 industrial / energy, 2 renewable energy. Every one of them is in the
 [gallery](environments.md) with its own page and clip, and its recorded baseline
-numbers are in [Baselines](baselines.md).
+numbers are in [Baseline results](baseline-results.md).
 
 ---
 
@@ -82,7 +82,7 @@ to beat. And **where a baseline is weak, the docs say how weak**.
 
 - **Beat the baselines**
 
-    [Baselines](baselines.md) ·
+    [Baseline results](baseline-results.md) ·
     [RL protocol](rl-protocol.md) ·
     [RL results](rl-baselines.md)
 

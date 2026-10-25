@@ -186,7 +186,7 @@ def _baseline_section(spec, row: dict | None) -> str:
         steps = int(row["steps"])
         lines.append(
             f"Recorded over {row['seeds']} seeds of the {steps}-step episode "
-            "(see [Baselines](../baselines.md)). The reward is a cost, so a "
+            "(see [Baseline results](../baseline-results.md)). The reward is a cost, so a "
             "return closer to zero is better.\n"
         )
         lines.append("| controller | mean return | cost per step |")

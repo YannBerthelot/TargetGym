@@ -139,7 +139,7 @@ def test_every_environment_without_an_mpc_says_why():
 # an eight-point gap that no sane tolerance separates. Tightening the threshold
 # until it caught this one bug would be fitting the test to a known answer and
 # would make it flaky. A subtle objective error is below this contract's
-# resolution; the ten-seed table in docs/baselines.md is what finds those.
+# resolution; the ten-seed table in docs/baseline-results.md is what finds those.
 #
 # The tolerance is set from the defects rather than chosen. As a fraction of the
 # PID's return the gross failures cost -100% (turbine), -88% (four tank) and

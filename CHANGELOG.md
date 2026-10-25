@@ -31,6 +31,13 @@ than by commit.
   (altitude and airspeed together, which removes the spare actuator), and
   `plane3d_racetrack` (a holding pattern, which is heading hold and a sustained
   coordinated turn in one task). Twenty-one in total.
+- **A Baseline results page** (`docs/baseline-results.md`), first under
+  "Beating the baselines": the PID's and MPC's protocol scores (gain and NEA)
+  and episode returns for every environment, in two tables grouped by family.
+  It is generated from the recorded data by `scripts/generate_baseline_table.py`,
+  which CI checks, so the protocol headline is no longer pasted by hand. The
+  tables used to sit at the end of the 1,000-line methodology page, now titled
+  "How the baselines work".
 - **Environment versioning.** `EnvSpec.version` and `spec.versioned_name` give
   every environment a public identity such as `plane-v1`, stamped in
   `data/env_versions.json` by `scripts/stamp_env_versions.py`.

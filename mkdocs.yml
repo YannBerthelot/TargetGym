@@ -114,8 +114,9 @@ nav:
           - Wind Turbine: environments/wind_turbine.md
           - Battery: environments/battery.md
   - Beating the baselines:
-      - Baselines: baselines.md
+      - Baseline results: baseline-results.md
       - Using the PIDs: using-the-pids.md
+      - How the baselines work: baselines.md
       - Throughput: performance.md
       - RL protocol: rl-protocol.md
       - RL results: rl-baselines.md
