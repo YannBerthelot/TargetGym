@@ -27,9 +27,11 @@ class RegistryExperts:
 
     @property
     def expert_policy(self):
-        """The scored PID in batched JAX form, for ``jit``/``vmap``/GPU:
+        """The scored PID in batched JAX form, for ``jit``/``vmap``/GPU: the
+        pure controller batched, so the caller carries its memory.
         ``policy.init_state(num_envs)``, then
-        ``actions, state = policy(state, obs)``. Built from the same step
+        ``actions, state = policy(state, obs)``; never ``policy(obs)``, which
+        has no memory. Built from the same step
         function as ``make_pid()``, so the two act alike."""
         from target_gym.registry import REGISTRY
 
