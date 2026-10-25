@@ -69,6 +69,7 @@ from target_gym.pc_gym.unstable_cstr.experts import (
     setpoint_clip_margins,
     setpoint_window,
     terminal_weight,
+    unstable_cstr_pid_step,
 )
 from target_gym.utils import convert_raw_action_to_range
 
@@ -517,10 +518,11 @@ def test_pid_holds_every_target(env, params):
     subset, the smallest exact margin is 1.336 K and T stays 0.333 K or more
     below the line (measured)."""
     pid = registry.get("unstable_cstr").make_pid()
-    assert isinstance(pid, UnstableCSTRCascadePID)
+    assert pid.controller.step is unstable_cstr_pid_step
+    gains = {k: getattr(pid, k) for k in DEFAULT_GAINS}
     states, keys, hold = _scheduled_starts(env, params)
     C_a, T, T_j, Ti_dev, e, tripped = _scheduled_episodes(
-        env, params, pid.gains, states, keys, hold
+        env, params, gains, states, keys, hold
     )
     n_episodes, n = C_a.shape
     assert n_episodes == 130
