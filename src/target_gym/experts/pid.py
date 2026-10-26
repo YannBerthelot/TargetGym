@@ -27,13 +27,7 @@ from flax import struct
 # Persistent gains store
 # ---------------------------------------------------------------------------
 
-# Resolved relative to this file so it works regardless of cwd.
-# ``parents[1]`` is the package, so this resolves inside it whether the code
-# is run from a checkout or an installed wheel. It was ``parents[3]``, the
-# repository root from a checkout and the interpreter's lib directory from
-# site-packages, so an installed target-gym announced "No PID gains file
-# found at /usr/local/lib/python3.13/data/pid_gains.json" and silently
-# re-ran gradient tuning for minutes on every user's first call.
+# Inside the package, so it resolves from a checkout and from an installed wheel.
 _GAINS_FILE = pathlib.Path(__file__).resolve().parents[1] / "data" / "pid_gains.json"
 _gains_cache: dict | None = None
 
@@ -215,14 +209,8 @@ class MIMOPIDParams:
 
 
 def pid_update(e, integral, prev_error, Kp, Ki, Kd, dt, action_min, action_max, xp):
-    """The PID recurrence itself, over whichever array module is passed.
-
-    This exists because it was once written twice, in ``pid_step`` for tracing
-    and in a host-side class for the Python loop, with the anti-windup
-    spelled two different but equivalent ways. That is the duplication check 12
-    of the model review checklist is about, and the environments already avoid
-    it -- ``compute_reward(state, params, xp=jnp)`` is one function read by
-    ``numpy`` on the host and by ``jax`` under trace.
+    """The PID recurrence, over whichever array module is passed (``jnp``
+    under trace, ``numpy`` on the host), so both forms run one function.
 
     Anti-windup: on saturation the integral is left where it was, so a
     controller pinned at its limit does not wind up a term it cannot spend.
@@ -468,11 +456,7 @@ class PatrolPIDParams:
 _PATROL_NOMINAL_SPEED = 230.0  # m/s, the follower's cruise
 
 # Standard gravity, for the coordinated-turn relation tan(phi) = v^2 / (g R).
-# The circle and patrol lateral laws already take this as a constructor
-# argument; the patrol turn-rate conversion below spelled it three times as a
-# literal. Named here so the coupling to the plant's own ``gravity`` parameter
-# is at least visible: a plant configured with a different one would disagree
-# with every controller that hardcodes this.
+# A plant configured with a different ``gravity`` would disagree with this.
 _G = 9.81
 
 
@@ -690,17 +674,8 @@ def make_plane3d_heading_pid() -> tuple[Plane3DHeadingPIDParams, Plane3DPIDState
 def _wrap_angle(a, xp=jnp):
     """Wrap an angle to (-pi, pi], over whichever array module is passed.
 
-    This was written twice, and the two were not the same function. The traced
-    form used ``arctan2(sin, cos)`` and the host form ``(a + pi) % (2 pi) - pi``,
-    which agree everywhere except at exactly ``a = pi``, where the first returns
-    ``+pi`` and the second ``-pi``. That is a heading error of half a turn
-    resolving to opposite signs in the two implementations -- one controller
-    turning left where the other turns right -- in a file that keeps a traced
-    and a host copy of the same control laws. See check 12 in
-    docs/model-review-checklist.md.
-
-    ``arctan2(sin, cos)`` is kept because it is the numerically better of the
-    two near the wrap, and it works unchanged under numpy.
+    The traced and host controllers share this one function, so a heading
+    error of exactly pi resolves the same way in both.
     """
     return xp.arctan2(xp.sin(a), xp.cos(a))
 

@@ -23,7 +23,7 @@ class ScheduleFeedforward:
     left is the noise, whose expected absolute value is ``e_floor`` exactly.
     No optimiser is needed: this is the tracking optimum.
 
-    Measured in the oracle audit (2026-10-01, protocol seeds 0-2): gain
+    Measured on protocol seeds 0-2: gain
     7.82e-4 against 1.115e-3 for the GradientMPC it replaces (-30%), all of it
     tracking (mean error 1577 W against 3947 W, with e_floor 1596 W). A
     controller that knew the noise would remove only the noise. Shading the

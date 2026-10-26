@@ -77,7 +77,7 @@ class GlassFurnaceCasadiMPC(CasadiMPC):
       the mean;
     * a heat-rate disturbance on the crown, estimated online (see ``step``).
 
-    Three things changed in the oracle audit (2026-10). The numbers are the
+    Three changes made this oracle. The numbers are the
     protocol's window cost per step on seeds 0-2 (``eval.evaluate_controller``
     after its 800-step burn-in, as ``scripts/evaluate_baselines.py`` records
     it; lower is better), against 0.2996 / 1.7834 / 0.3263 (mean 0.8031) for
@@ -586,7 +586,7 @@ def make_glass_furnace_mpc(
     see each scheduled setpoint change and pre-cool or pre-heat for it, which
     a PID cannot do, and to start pre-cooling early enough for a large trim.
 
-    Measured in the oracle audit (2026-10) on protocol seeds 0-2: 0.1683 /
+    Measured on protocol seeds 0-2: 0.1683 /
     0.8449 / 0.1675, mean 0.3936, against 0.1784 / 1.0547 / 0.1709 (mean
     0.4680) at 30 minutes (horizon 60): better on every seed, mostly seed 1
     (-20%), where it starts pre-cooling earlier. It costs 1.7 to 1.9 times

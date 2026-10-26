@@ -95,7 +95,7 @@ def make_four_tank_mpc(
     oracle's.
 
     It replaced a do-mpc controller on a 10-step horizon of 20 s steps, whose
-    stage cost charged every step alike (oracle audit, 2026-10). That one
+    stage cost charged every step alike. That one
     gave 0.0074 per step on the protocol seeds and this one 3.1e-8, with zero
     trips (``tests/pc_gym/four_tank``).
     """

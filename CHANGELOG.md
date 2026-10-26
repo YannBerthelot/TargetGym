@@ -84,6 +84,9 @@ than by commit.
 
 ### Changed
 
+- **Shorter docstrings in the core modules** (registry, experts, eval, reward,
+  runners, base): they keep the contracts and drop the measurement history,
+  and `eval.evaluate` now documents every number it returns.
 - **The docs are reorganised and trimmed for users.** The sidebar is now User
   guide, Environments, Results, Background and Contributing, and design drafts
   under `docs/proposals/` are no longer published. `baselines.md` (1,042 lines

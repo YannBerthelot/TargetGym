@@ -70,8 +70,8 @@ def make_cstr_mpc(
     before it weigh ``pre_weight``. The plant is deterministic, so the
     closed loop reaches the plant's optimum to float32 rounding.
 
-    It replaced a do-mpc controller on PC-gym's 5-step horizon (oracle audit,
-    2026-10), whose move penalty, in raw mol/L, was 1e4 in floor units and
+    It replaced a do-mpc controller on PC-gym's 5-step horizon, whose move
+    penalty, in raw mol/L, was 1e4 in floor units and
     alone made its 0.317 per step on the protocol seeds. This one gives
     9.4e-9 there with zero trips (``tests/pc_gym/cstr``).
     """

@@ -127,8 +127,8 @@ class DistillationParams(EnvParams):
     # long-run hold errors under the shipped feed-composition disturbance
     # (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in)
     # are top 7.6e-7 and bottom 5.2e-7 mole fraction, each its lowest of three
-    # seeds (PID down to 5.7e-5 and 1.3e-4): the oracle since the oracle audit
-    # (2026-10-01), planning on the mean feed with a decaying step. It held
+    # seeds (PID down to 5.7e-5 and 1.3e-4): the current oracle,
+    # planning on the mean feed with a decaying step. It held
     # 1.35e-5 and 3.3e-5 before. Upper bounds on the achievable floors.
     # e_tol = 0 provisionally: the product purity specifications a column is
     # run against come from the sales contract and are to be supplied. Boilup

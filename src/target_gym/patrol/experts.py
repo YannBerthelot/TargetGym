@@ -40,8 +40,8 @@ from target_gym.patrol.env import (
 # The twin-autopilot law
 # ---------------------------------------------------------------------------
 
-#: Correction gains of the twin-autopilot law. Tuned in the oracle audit
-#: (2026-10) by cross-entropy search on training seeds 100-115 (never the
+#: Correction gains of the twin-autopilot law. Tuned by cross-entropy
+#: search on training seeds 100-115 (never the
 #: protocol seeds 0-2), on the protocol window's mean cost of the law alone
 #: under the version-2 reward with the earlier 18.6 m slot floor. Held-out
 #: seeds 200-263 under that floor: mean 0.095, p90 0.197, worst 0.385, no
@@ -159,7 +159,7 @@ class PatrolTwinOracle:
 
     ``horizon=0`` or ``n_iter=0`` gives the law alone.
 
-    Measured in the oracle audit (2026-10) on protocol seeds 0-2, the way
+    Measured on protocol seeds 0-2, the way
     ``eval.evaluate_controller`` runs it. Under the earlier 18.6 m slot
     floor: gain 0.0316 (seeds 0.0339 / 0.0437 / 0.0172), no trip, against
     3.0176 for the 20-step GradientMPC it replaced and 0.1094 for the law

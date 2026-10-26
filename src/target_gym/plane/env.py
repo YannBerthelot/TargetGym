@@ -171,8 +171,8 @@ class PlaneParams(EnvParams):
     # step, twice the envelope.
     reward_version: int = 2
     # The 1 m barometric resolution. The oracle holds finer than that in the
-    # test turbulence, 0.46 m on its best seed (`scripts/measure_hold.py`,
-    # oracle audit 2026-10), so the instrument sets the scale. ``plane_sine``
+    # test turbulence, 0.46 m on its best seed (`scripts/measure_hold.py`), so
+    # the instrument sets the scale. ``plane_sine``
     # and ``plane_energy`` set their own floors in the registry.
     e_floor: float = 1.0  # m
     e_tol: float = (
