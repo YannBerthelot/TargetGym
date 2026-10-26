@@ -31,7 +31,7 @@ stamps the provenance:
         library="ajax",
         library_version=ajax.__version__,
         returns=[...],          # one episode return per seed
-        episode_steps=600,
+        episode_steps=280,      # plane's scored episode
         total_timesteps=1_000_000,
         config={"n_envs": 64, "lr": 3e-4, ...},
     )

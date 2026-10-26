@@ -806,7 +806,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "its NEA measures information and control together: what the "
             "hidden lead state is worth plus what a policy leaves on the "
             "table. It never reads the observation, so its per-step costs "
-            "equal patrol's seed for seed (oracle audit, 2026-10)."
+            "equal patrol's seed for seed."
         ),
         noise_fields=("turbulence_sigma",),
         # v3 with patrol: they share PatrolParams, and the slot floor moved.

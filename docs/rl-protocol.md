@@ -114,16 +114,12 @@ A single `gamma` across this suite would be indefensible: `delta_t` ranges from
 0.05 s to 900 s, so `gamma = 0.99` means a five-second horizon in one
 environment and a twenty-five-hour one in another.
 
-The first rule drafted here was `gamma = exp(-delta_t / tau)`, setting the
-horizon to a fixed number of the plant's own time constants. Measuring the time
-constants killed it. The reactor's tracked flux answers the control rod in **one
-step** -- prompt neutron response really is that fast -- so five time constants
-is a five-step horizon, while the agent must hold that flux for 1200 steps
-against xenon poisoning it cannot see resolve. The wind turbine and battery are
-the same shape. A horizon set from the actuator response would have made three
-environments myopic by construction.
+A rule based on the plant's own time constant fails here: the reactor's flux
+answers the control rod in one step, so five time constants would be a
+five-step horizon on a task held for 1200 steps. The wind turbine and battery
+are the same shape.
 
-**The rule is therefore the episode:**
+**The rule is the episode:**
 
     gamma = 1 - 1/N          (N = the environment's own episode length)
 
@@ -169,189 +165,53 @@ before reading any result from it.
 | unstable_cstr | 1200 | 6.3 to 14.4 | 32 to 72 | 0.99917 |
 | compressor_surge | 1200 | 49.3 | 247 | 0.99917 |
 
-The `unstable_cstr` row is filled by hand, because
-`scripts/measure_time_constants.py` has no step response to fit on that plant
-(see the next section). Its tau is the unstable time constant 1/lambda+, the
-time an uncontrolled error takes to grow e-fold. Over the five targets it runs
-from 19.0 s at C_a 0.45 to 43.1 s at 0.65, which is 6.3 to 14.4 steps of 3 s
-(derived, `scripts/unstable_cstr_numbers.py --section targets`).
-
-The `compressor_surge` row is filled by hand as well, from the plant's numbers
-script, which times the header pressure's response to five actuator steps from
-a steady operating point: speed 87.5 % of rated and recycle opening 0.5, the
-commands a zero action maps to, with the consumer valve at 0.9. Its tau is the
-slowest of them, a speed step from 87.5 to 105 % of rated whose pressure
-reaches 63.2 % of its change in 4.93 s, 49.3 steps of 0.1 s (derived,
-`scripts/compressor_surge_numbers.py --section steady`). The recycle valve
-moves the pressure faster, in 0.41 to 3.57 s over the same section's three
-valve steps.
+Two rows are filled by hand. `unstable_cstr` has no step response to fit (it
+runs away open loop), so its tau is the unstable time constant, the time an
+uncontrolled error takes to grow e-fold over its five targets
+(`scripts/unstable_cstr_numbers.py --section targets`). `compressor_surge`'s
+is the slowest header-pressure response to its actuator steps
+(`scripts/compressor_surge_numbers.py --section steady`).
 
 ### How long an episode has to be
 
 Two time scales bind, and an episode has to clear both.
 
-**Settling.** A first-order system reaches 98% of a step in 4 tau and 99.3% in
-5 tau. This library is about reaching a target *and holding it*, so for holding
-to be what the score measures rather than the approach, the episode needs room
-for both: **a floor of 10 tau** -- roughly five to arrive and five to hold, so
-maintenance is at least half of what is scored -- and a target nearer **15 tau**.
+**Settling.** This library is about reaching a target *and holding it*, so
+for holding to be what the score measures, the episode needs room for both:
+**a floor of 10 tau**, roughly five to arrive and five to hold.
 
-That is not an invented figure. Excluding four plants whose output answers the
-actuator within a step or two, where the ratio is meaningless, the suite's
-median was already **13.7 tau** with a cluster from 8.7 to 25. The floor names
-the norm the environments mostly already followed.
-
-**Period.** For a path-following or otherwise periodic task the binding scale is
-the task's own period, not the actuator's response, and the requirement is
-**one lap**. Less than a lap proves nothing about holding a path, and the model
-review checklist records why: these tasks start the aircraft exactly on the
-path, so a controller that flies straight ahead looks correct for a whole
-episode that is shorter than one lap.
+**Period.** For a path-following or periodic task the binding scale is the
+task's own period, and the requirement is **one lap**. These tasks start the
+aircraft on the path, so an episode shorter than a lap cannot tell a controller
+that holds the path from one that flies straight ahead. `plane_sine` keeps two
+periods, because it is a frequency probe: the first sheds the initial
+transient.
 
     N >= max(10 * tau_actuator, 1 * T_period)
 
-**The period clause is one lap, not three.** It was three when the criterion was
-first written, and a later pass relaxed it on the grounds that a controller
-flying one lap on the path will fly the next. `plane_sine` keeps two, because it
-is a frequency probe rather than a path: the first cycle sheds the initial
-transient and the second is what an amplitude ratio and a phase lag are read
-off.
-
-**The actuator clause only applies where a settling time exists, which is a
-minority of the suite.** `tau_actuator` is the time to 63.2% of an open-loop
-step response, and that number exists only for a plant whose response is
-monotone and settles. Measured across the registry:
-
-* **Nine integrate.** A tank level, a drum level, an aircraft altitude under a
-  held stick: there is no steady state to settle to, so there is no `tau_63`.
-* **The aircraft oscillate.** A fixed elevator deflection excites the phugoid,
-  so altitude rises and falls rather than approaching a value. Fitting a first
-  order response to it returns a number that grows with the window it is
-  measured in, and nothing else.
-* **The glass furnace does not settle** inside eight thousand steps. Its crown
-  response reads 822 steps at a 1600-step window, 1520 at 3200, 2383 at 5760 and
-  3415 at 11520. Since the furnace physics gained a regenerator, a reversal
-  cycle, a thermocouple lag and a fuel dead time, it has no time constant on the
-  episode timescale.
-* **The unstable CSTR runs away.** It is held on an open-loop unstable steady
-  state, so under a constant coolant command it leaves that state and either
-  trips or falls to the extinguished branch (derived,
-  `scripts/unstable_cstr_numbers.py --section reach`). There is no step
-  response, and its row above uses the unstable time constant instead.
-
-So the clause binds on roughly a third of the environments, and for the rest the
-episode is set by laps (the path-following aircraft), by the disturbance
-timescale (the reactor, the turbine, the battery, the boiler drum) or by the
-setpoint schedule (the furnace, the building, the kiln, the unstable CSTR).
-**A criterion stated in terms of a quantity that does not exist for two thirds
-of the suite should not be read as a universal check**, and an earlier attempt to enforce it as a test was
-withdrawn for that reason: measuring `tau` inside the episode under judgement
-makes the rule circular, since a longer episode sees more of the response,
-reports a larger `tau`, and demands a longer episode.
-
-**The unstable CSTR's episode length is set by its setpoint schedule.** Read
-with its unstable time constant as tau, the actuator clause asks for 10 tau,
-63 to 144 steps, and N = 1200 holds 83 to 189 of them. An episode is six
-blocks of 200 steps (10 min), and each block has to hold a switch's settle
-with room left to hold after it. The block length is three times the settle
-of the cascade's default gains after the worst switch, 62 steps, rounded up
-to whole minutes (derived,
-`scripts/unstable_cstr_numbers.py --section settle`). The shipped cascade's
-slowest settle to 2 % of a switch is 60 steps (3.0 min; derived, same
-section), 0.3 of a block. `scripts/measure_hold.py` scores the hold from
-step 120 of each block until the controller starts moving toward the next
-level, which `target_gym.eval.anticipations` detects, so at most 80 steps of a
-block are scored. Over three seeds, 18 blocks, it scored 1440 steps for the
-PID and 1141 for the MPC (measured, `hold_steps_scored` in
-`src/target_gym/data/hold_measurements.json`). There is no period clause,
-since the task is not periodic.
-
-**The compressor's episode clears the actuator clause.** With tau at 49.3
-steps, 10 tau is 493 steps, and N = 1200 holds 24.3 tau (derived from the row
-above). The episode is four setpoint blocks of 300 steps (30 s, ours), each
-6.1 tau long. After a 150-step burn-in, `scripts/measure_hold.py` scores each
-block from 100 steps after its change until the controller starts moving
-toward the next level. Over three seeds it scored 2250 steps for the PID and
-2165 for the MPC (measured, `hold_steps_scored` in
-`src/target_gym/data/hold_measurements.json`). There is no period clause,
-since the task is not periodic.
-
-**Six benchmark episodes were below the original criterion and were lengthened.** The
-environments themselves were fine -- their own defaults are long -- but
-`EnvSpec.test_params` overrode them with much shorter ones, a compromise from
-when this measurement ran inside CI. It no longer does, so the compromise is no
-longer needed.
-
-| environment | was | now | binding criterion |
-| --- | --- | --- | --- |
-| glass_furnace | 240 (1.8 tau) | 1600 | 12.1 tau |
-| hvac | 192 (3.1 tau) | 720 | 11.6 tau |
-| cement_kiln | 240 (4.1 tau) | 700 | 12.1 tau |
-| plane | 200 (8.7 tau) | 280 | 12.2 tau |
-| plane3d_circle | 200 (**0.76 laps**) | 800 | 3.0 laps |
-| plane3d_figure8 | 200 (**0.91 laps**) | 800 | 3.6 laps |
-
-The circle is the instructive one: at 14.3 tau it passed the settling test
-comfortably and was still being scored over three-quarters of a single lap. A
-single criterion would have missed it.
-
-**And then five were shortened again.** The table above records what happened
-when the criterion was first applied; it is not the current state. Applying the
-same criterion a second time, after the setpoint schedules changed, found the
-opposite problem: several episodes had drifted far above what it asks, and
-recording them was the dominant cost in the suite. The three-period requirement
-was also relaxed to one lap, on the grounds that a controller that flies one lap
-on the path will fly the next.
-
-| environment | was | now | binding criterion | recording cost |
-| --- | --- | --- | --- | --- |
-| plane_energy | 2400 (104.3 tau) | 1200 | 52.2 tau | 14 595 s -> ~7 300 |
-| plane_sine | 800 (34.8 tau) | 480 | 2.0 periods | 4 980 s -> ~3 000 |
-| plane3d_circle | 800 (3.0 laps) | 300 | 1.14 laps | 2 256 s -> ~850 |
-| plane3d_racetrack | 900 (1.5 laps) | 650 | 1.08 laps | 2 010 s -> ~1 450 |
-| plane3d_figure8 | 800 (3.6 laps) | 400 | 10.5 tau | 2 205 s -> ~1 100 |
-
-`plane_sine` keeps two periods rather than one because it is a frequency probe:
-the first cycle sheds the initial transient and the second is what an amplitude
-ratio and a phase lag can be read off. `plane3d_figure8` is bound by settling
-rather than by laps, since its 38-step time constant is the longest in the
-aircraft family.
-
-The process plants were left alone. They cost 3 to 600 s each to record, so
-nothing is bought by trimming them, and the four that look like outliers on the
-tau ratio -- the reactor, the boiler drum, the turbine and the battery -- are the
-ones whose output answers the actuator within a step or two, where section 6
-already says the ratio means nothing and the episode is set by the disturbance
-timescale instead.
+**The actuator clause applies only where a settling time exists**, which is
+about a third of the suite. Nine plants integrate (a tank level, a drum level,
+an aircraft altitude under a held stick), the aircraft oscillate in the
+phugoid, the glass furnace does not settle on the episode timescale, and the
+unstable CSTR runs away. For those the episode is set by laps, by the
+disturbance timescale (reactor, turbine, battery, boiler drum) or by the
+setpoint schedule (furnace, building, kiln, unstable CSTR). So the
+criterion is a design rule, not a test: measuring tau inside the episode under
+judgement would make it circular.
 
 ### A second, separate shortfall: slow dynamics that never move
 
-Settling is about whether a controller can demonstrate holding. A different
-question is whether the *slow* dynamics a task advertises actually happen inside
-its episode, and for one environment they do not.
+Settling asks whether a controller can demonstrate holding. A separate question
+is whether the slow dynamics a task advertises happen inside its episode.
 
-Over a full reactor episode the xenon state moves **2.5%** and iodine 1.6%. Xenon
-poisoning is the reactor's headline difficulty, and at this episode length it is
-effectively a constant bias rather than something to anticipate. Its actuator
-response is one step, so no settling criterion catches this.
-
-Fixing it means an episode on the order of a xenon time constant -- 17 hours
-against the current 20 minutes, some fifty times longer -- which is a different
-and much larger decision than lengthening the six above, with consequences for
-what the task is. It is recorded here and left open rather than folded into this
-change. Until then, results on the reactor should be read as measuring flux
-tracking, not xenon management.
-
-**The distillation column has a milder version of the same gap.** Its benchmark
-episode is 200 steps against a 194 min dominant mode, so the slowest dynamics
-get through about 63% of one response and never settle. By the actuator-to-output
-measure this section uses it is 25 tau, well clear of the floor, and the
-registry records the length as a deliberate cost compromise: 41 states with 16
-integration substeps make it the slowest environment per step in the suite. But
-the difficulty the column advertises is the hidden interior profile acting as
-memory, and one time constant exercises that only partly. Read its results as
-product-composition tracking under an ill-conditioned plant, which they measure
-well, rather than as profile management.
+- **Reactor.** Over a full episode xenon moves 2.5% and iodine 1.6%, so xenon
+  poisoning acts as a constant bias, not something to anticipate. A
+  xenon-scale episode would be about fifty times longer, and is left open.
+  Read reactor results as flux tracking, not xenon management.
+- **Distillation.** The 200-step episode covers about 63% of the column's
+  194-minute dominant mode, a deliberate cost compromise for the slowest
+  environment per step. Read its results as product-composition tracking on an
+  ill-conditioned plant, not as profile management.
 
 ## 7. Hyperparameters, and why they must be tuned
 
@@ -359,11 +219,8 @@ well, rather than as profile management.
 the comparison is rigged in classical control's favour and the result is
 worthless.**
 
-This project has hard evidence for how much tuning matters. Re-tuning the
-aircraft PIDs was worth between +26% and +139% on held-out seeds. The glass
-furnace's gains sat pinned at the edge of their search grid and widening it was
-worth 3.5%. A comparison against an untuned opponent measures the tuning, not
-the method.
+Re-tuning the aircraft PIDs was worth 26% to 139% on held-out seeds, so a
+comparison against an untuned opponent measures the tuning, not the method.
 
 So: a **per-environment, per-algorithm hyperparameter search**, from a single
 published search space, with a declared and equal budget (TPE, 64 trials, 3
@@ -372,9 +229,7 @@ the same mechanical procedure everywhere and not the experimenter's taste.
 
 **Tune on seeds disjoint from the ones reported.** The winner of a search is the
 maximum of many noisy draws and is biased upward; reporting it on the same seeds
-publishes that bias. Search on agent seeds 0–2, report on 10–39. This is the
-discipline the aircraft PID tuner already follows — searched on seeds 0–2, quoted
-on held-out 3–9 — and the learned side is held to the same rule.
+publishes that bias. Search on agent seeds 0–2, report on 10–39.
 
 ### The search space
 
@@ -459,13 +314,10 @@ Variation is reported over **agent seeds**, at least 30 of them. Each trained
 agent is then evaluated on the **same fixed set of episodes** the PID and MPC
 were measured on, which is what makes the comparison paired.
 
-Thirty is affordable and ten would not have been: Ajax's own seed-scaling
-measurements on `Plane3DCircle` show 15.8 s for one seed against 18.4 s for a
-hundred, because fixed compilation overhead amortises. This project has been
-misled by two-seed measurements three separate times — the wind turbine at "98%
-of the PID", the aircraft at "no crashes", and an original verdict of MPC ahead
-on 14 of 16 — each overturned by widening the seed count. Cheap seeds remove the
-excuse.
+Thirty is affordable: in JAX, compilation dominates, so a hundred seeds cost
+little more than one (15.8 s against 18.4 s on `Plane3DCircle` in Ajax). Small
+seed counts have misled this project three times, each overturned by widening
+the count.
 
 ## 10. The expert-based arm
 
@@ -474,9 +326,11 @@ the headline.
 
 **Residual policy (primary).**
 
-    a = clip(PID(obs) + alpha * pi_theta(obs), -1, 1)
+    a = clip(PID(obs) + alpha * (high - low) / 2 * pi_theta(obs), low, high)
 
-The agent learns a bounded correction to the shipped controller. This is the
+The agent learns a bounded correction to the shipped controller: `pi_theta`
+outputs values in [-1, 1], and `alpha` is the correction's share of the action
+range. This is the
 right primary for four reasons: it answers Q2 literally; it is the form industry
 would actually deploy, since deviation from a known-good controller is bounded by
 construction; it degrades gracefully, because `pi_theta -> 0` recovers the PID
@@ -511,12 +365,9 @@ rather than floating:
 These are what `src/target_gym/data/baseline_returns.json` records, ten episode seeds each, and
 they are what a learned policy is compared against.
 
-A random-policy floor and a best-constant-action bar were specified here as well
-and are not recorded. The constant-action bar is not lost: the conformance suite
-already asserts that every PID beats the best constant action, which is the
-claim that bar existed to support, and `runners.figure_comparison` draws it when
-a figure needs it. A random floor on a setpoint-tracking task is a number
-everyone can predict and nobody reads.
+No random-policy floor is recorded: on a setpoint task it is a number everyone
+can predict. The conformance suite already asserts that every PID beats the
+best constant action.
 
 ## 12. How to read the result
 
@@ -527,10 +378,8 @@ environments against stable-baselines3, the opt-in `agent` group
 credibility; if they do not, that is a finding worth having before publishing.
 
 **If RL wins**, check what it beat. This library has shipped a PID pinned to the
-edge of its search grid, and an expert that could not fly a third of its own
-task's radius range until it was allowed to trade speed for turn radius — worth
-3.5% and 31% respectively once fixed. A win against a defective baseline
-measures the defect.
+edge of its search grid, and one that could not fly a third of its task's radius
+range. A win against a defective baseline measures the defect.
 
 **If RL wins on a partially observed environment**, suspect a simulator exploit
 before celebrating. The figure-8's reward once paid for tracking precision its
