@@ -199,6 +199,7 @@ and the table below records it, because it determines the ceiling.
 | `reactor` | flux demand | Ornstein-Uhlenbeck, stochastic |
 | `battery` | dispatch request | scheduled 300 s blocks, next level and switching times not observed, plus white jitter: stochastic |
 | `patrol`, `patrol_bearing_only` | slot on a manoeuvring lead | exogenous aircraft, autopilot with a hidden constant turn rate |
+| `formation` | lead: the patrol's route; wingmen: slots on the lead | lead: scheduled turn rates, in the state and observed one leg at a time; wingmen: a co-player, the learning lead |
 
 **A remark on phase space.** A sinusoid of amplitude $A$ and angular frequency
 $\omega$ in a variable $z$ traces a fixed ellipse in $(z, \dot z)$,
@@ -317,8 +318,8 @@ consequence: whatever drives the reference, here the lead's autopilot, is
 environment code and must be versioned as such.
 
 The definition does change when the other aircraft crosses that line and
-becomes a player: when it reacts to the follower, or carries its own reward. The unregistered formation
-module in `patrol/marl.py`, where the lead is also a learner, is that case. A
+becomes a player: when it reacts to the follower, or carries its own reward. The `formation`
+task, where the lead is also a learner, is that case. A
 **multi-agent target MDP** is a Markov game in which each agent $i$ has an
 admissible target set $G_i$ in the joint state and a reward
 $r_i = \varphi_i(e_i)(1 - c_i)$. Three things move.
@@ -332,8 +333,11 @@ $r_i = \varphi_i(e_i)(1 - c_i)$. Three things move.
 - Anticipatability becomes strategic. The reference's next move depends on a
   policy that is itself learning.
 
-The registered suite stays single-agent, and the multi-agent form is recorded
-here so that the boundary is explicit.
+`formation` shares one team reward, so its ceiling is a joint supremum. It is
+registered in its joint form, one action for every aircraft, so the suite's
+single-agent tools score it as a centralised controller would fly it; the
+multi-agent view (`FormationMARL`) is the same game with one policy per
+aircraft.
 
 ## Prior art
 

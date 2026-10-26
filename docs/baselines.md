@@ -92,7 +92,7 @@ the PID end to end, including its use in training.
 
 ## Coverage
 
-All twenty-three environments ship a PID and an MPC. On
+All twenty-four environments ship a PID and an MPC. On
 `patrol_bearing_only` the MPC slot holds `patrol`'s oracle reading the true
 state, and `EnvSpec.baselines_note` labels it: a full-state bound on a task
 defined by what its observation withholds, so its NEA there measures
@@ -214,7 +214,7 @@ dynamics allow:
 | Handover between two gradient planners | plane, plane_sine | The capture of the initial altitude offset needs both actuators planned, and the hold is tighter with the throttle on the PID's airspeed loop and only the elevator planned; the oracle switches once the aircraft holds within 3 m, and back past 20 m |
 | `SamplingMPC` | cement kiln | Cross-entropy sampling, for when gradients are unusable |
 | Feedforward | battery | The best causal action is known in closed form: the battery commands the scheduled level of the block the next step is scored against, which leaves only the dispatch noise |
-| Feedback law with a residual planner | patrol, patrol_bearing_only | A good law is known but not the optimum: the follower flies the lead's own autopilot on its own state with slot corrections, so the shared gust drops out, and a 30-step planner adds a residual to the law inside its rollout of `step_env` |
+| Feedback law with a residual planner | patrol, patrol_bearing_only, formation | A good law is known but not the optimum: the follower flies the lead's own autopilot on its own state with slot corrections, so the shared gust drops out, and a 30-step planner adds a residual to the law inside its rollout of `step_env`. On `formation` the lead flies the patrol's lead autopilot and one planner adds a residual to every seat, each wingman's on top of the lead's |
 | Feedback law | wind turbine | Generator torque by four Newton steps on the noise-free plant model, so the next step's power meets the target and only the wind innovation is left; pitch by the PID's PI on rotor speed with its command slew capped near the setpoint. It replaced a `GradientMPC` whose descent did not converge on the torque (oracle audit, 2026-10) |
 
 

@@ -12,7 +12,7 @@ Measured on arm64 CPU, Darwin, single process, no GPU.
 
 **These are not properties of the plants.** They move with the machine and with
 the batch size, which is why they are measured here rather than claimed in the
-seventeen `PHYSICS.md` contracts, where every other number is a fact about the
+eighteen `PHYSICS.md` contracts, where every other number is a fact about the
 process being modelled. Nothing in CI checks them, because a check that fails on
 somebody else's laptop is worse than no check.
 
@@ -41,6 +41,7 @@ somebody else's laptop is worse than no check.
 | `distillation` | 0.82 M | 0.38 M |
 | `patrol_bearing_only` | 0.64 M | 0.54 M |
 | `patrol` | 0.62 M | 0.53 M |
+| `formation` | 0.38 M | 0.27 M |
 
 The `unstable_cstr` row was measured later than the others (2026-09-30), with
 the command above and with `--batch 256` at the default 1000 steps, on an
@@ -54,13 +55,20 @@ commands, on an arm64 Darwin machine at a load average of about 2.5, with
 about 5 % of its row. A second pair of runs gave 2.55 M and 1.48 M for
 `compressor_surge`, so the two pairs differ by up to 6 %.
 
+The `formation` row was measured on 2026-10-26 with the same two commands, on
+an arm64 Darwin machine at a load average of about 4, with `cstr` and `patrol`
+in the same runs. `cstr` came out at 202.94 M and 169.68 M, within about 4 %
+of its row, and `patrol` at 0.50 M and 0.36 M, so under that load the
+formation, three aircraft to the patrol's two, runs at about three quarters
+of the patrol's rate.
+
 ## What this means for RL
 
 The protocol's largest sample budget is 1e7 environment steps. At the slowest
 environment here that is about 16 seconds of environment time; at the fastest
 it is under a millisecond. Network forward and backward passes dominate any
 learning loop by two to three orders of magnitude, so **the environment is never
-the bottleneck at these budgets**, and none of the twenty-three is unfit on
+the bottleneck at these budgets**, and none of the twenty-four is unfit on
 speed.
 
 The spread is arithmetic per step, not anything fixable. The distillation column

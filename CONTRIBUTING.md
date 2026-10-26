@@ -135,7 +135,9 @@ checks each one, and checks the tuner row only for a task that ships a PID.
 - **A name that is no prefix of another.** Gains keys are collected by name
   prefix, and names starting with `plane` or `patrol` are treated as aircraft.
   A new name must not start another registered name or start with one, and
-  must not start with `plane` or `patrol`.
+  must not start with `plane` or `patrol`. A new aircraft task adds its name
+  to those prefix lists instead (`runners._MEDIA_REALTIME_GROUPS` and the
+  seed cap in `scripts/measure_hold.py`), as `formation` does.
 - **Ships as `-v2` with its own `compute_reward_v1`.** The spec keeps the
   default `version=2`, and the package's `env.py` defines
   `compute_reward_v1`, which TargetFoundation looks up by that name.

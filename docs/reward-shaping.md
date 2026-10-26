@@ -7,7 +7,7 @@ Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`, and so
 Version 2 of every environment (the `-v2` stamps; the reactor is `-v3`, and so
 are `patrol`, `patrol_bearing_only`, `plane_energy` and the four 3D aircraft
 tasks, whose floors were reset in the oracle audit, 2026-10) scores through it.
-Nineteen normalise the tracking term by a floor, and four (reactor, battery,
+Twenty normalise the tracking term by a floor, and four (reactor, battery,
 wind turbine, building) put tracking and consumption in the owner's currency,
 where the floor enters as the reference cost `rho_floor` rather than as a
 divisor. Version 1, the capped log-scaled reward, is kept constructible
@@ -289,6 +289,7 @@ the evaluator measures.
 | `plane`, `plane_sine`, `plane_energy` | p=2 | 1 / 1.26 / 1.20 m: `plane`'s is the altimeter resolution (the MPC holds 0.46 m); `plane_sine`'s an earlier MPC's hold, kept within 1.5x of that resolution (the MPC holds 0.53 m); `plane_energy`'s its MPC's lowest per-seed hold between ladder steps, from 4.55 m in `-v3` (the MPC holds 1.18 m under it); lowest per-seed holds in the test turbulence | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
 | `plane3d_*` | p=2 | altitude 1 m (altimeter resolution; the MPC holds 0.67 / 0.67 / 0.68 m on heading / circle / racetrack), heading 0.0087 rad (AHRS resolution; the MPC holds 2.1e-5), path 3 m (GPS resolution; the MPC holds 0.45 / 0.47 / 1.29 m on circle / racetrack / figure-8); lowest per-seed holds in turbulence | 0 | none | dimensionless |
 | `patrol`, `patrol_bearing_only` | p=2 x2 | slot 3 m (relative-GPS resolution; the oracle holds 0.10 m, lowest per seed; 18.6 m, an earlier planner's hold, until version 3), heading 0.0087 rad (AHRS resolution; the oracle holds 1.6e-3 rad), so `rho* = (0.1021 / 3)^2 + (1.631e-3 / 0.0087)^2 = 0.0363` | 0 (provisional) | none | dimensionless |
+| `formation` | p=2 x6 | the lead's altitude 1 m (altimeter resolution; the oracle holds 0.82 m) and heading 0.0087 rad (AHRS resolution; 1.1e-3 rad), each wingman's slot 3 m (relative-GPS resolution; 0.24 and 0.27 m) and alignment 0.0087 rad (1.1e-3 and 1.2e-3 rad); lowest per-seed holds, so `rho* = 0.735`, 0.670 of it the lead's altitude | 0 (provisional, the patrol's) | none | dimensionless |
 
 "Provisional" marks a number the plant's owner would supply -- a tolerance
 from the quality system, permit or grid code; a price from a tariff; a wear
@@ -542,8 +543,8 @@ can never beat a long one — which also made the aircraft's flat `-200` crash
 penalty redundant, and it has been removed. Termination already costs every step
 it forgoes.
 
-`unstable_cstr` and `compressor_surge`, added after version 2, have the two
-version-1 rewards outside that bound. A trip on `unstable_cstr` restarts the
+`unstable_cstr`, `compressor_surge` and `formation`, added after version 2,
+have the three version-1 rewards outside that bound. A trip on `unstable_cstr` restarts the
 plant at once and charges the downtime on the tripped step
 (`base.failure_kernel`), so a score of 0 on that step made a trip nearly
 free. Over 12 policies and a constant-coolant scan, 128 seeds each, 16 pairs
@@ -572,6 +573,12 @@ same flag runs two policies that trip rarely on 5120 episodes each: the
 guarded heuristic at a 5 % control line trips 4 times and the chaser at bias
 0.4 trips 13 times. Version 1 as shipped still ranks both above the fixed
 0.30, and version 2 ranks both below it.
+
+`formation`'s version 1 is the team reward the unregistered formation module
+shipped, which ended the episode on a trip. Under the restart a 0 on the
+tripped step would make a trip nearly free, since the formation restarts in
+its slots, so it also scores a tripped step as `-restart_steps`, -3600 (an
+hour of 1 s steps, the patrol's).
 
 ### The gradient is not scale-free, only the value is
 

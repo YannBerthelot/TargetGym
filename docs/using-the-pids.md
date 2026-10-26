@@ -22,7 +22,7 @@ spec = REGISTRY["cstr"]
 print(spec.has_pid, spec.baselines_note or "no caveat")
 ```
 
-All 23 environments ship one (`spec.has_pid` is true everywhere). Where a
+All 24 environments ship one (`spec.has_pid` is true everywhere). Where a
 baseline comes with a caveat, `spec.baselines_note` states it. The gains were
 tuned by `scripts/tune_pid.py` and live in
 `src/target_gym/data/pid_gains.json`; you do not need to read that file to use

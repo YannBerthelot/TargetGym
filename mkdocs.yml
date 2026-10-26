@@ -96,6 +96,8 @@ nav:
           - Plane3D Figure8: environments/plane3d_figure8.md
           - Patrol: environments/patrol.md
           - Patrol Bearing Only: environments/patrol_bearing_only.md
+          - Formation: environments/formation.md
+          - Multi-agent formation: multi-agent.md
       - Process control:
           - Cstr: environments/cstr.md
           - First Order: environments/first_order.md

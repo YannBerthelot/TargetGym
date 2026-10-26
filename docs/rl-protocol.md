@@ -168,6 +168,7 @@ before reading any result from it.
 | reactor | 1200 | 1 | 5 | 0.99917 |
 | unstable_cstr | 1200 | 6.3 to 14.4 | 32 to 72 | 0.99917 |
 | compressor_surge | 1200 | 49.3 | 247 | 0.99917 |
+| formation | 200 | 36 | 180 | 0.99500 |
 
 The `unstable_cstr` row is filled by hand, because
 `scripts/measure_time_constants.py` has no step response to fit on that plant

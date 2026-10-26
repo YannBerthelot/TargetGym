@@ -26,7 +26,7 @@ horizon, partial observability).
 | 5 (Extreme) | Plane Patrol | 26 | 3 | 3D + moving target | **Non-stationary manoeuvring reference**, relative-frame observation, collision (irrecoverable) |
 | 6 (Extreme+) | Cement Kiln | 8 | 2 | Distributed (1D advection + Arrhenius) | **Transport delay**: half the response to a fuel change takes a full 25-min residence time. 64 hidden states behind 8 measurements, one input that moves the delay itself |
 | 6 (Extreme+) | Plane 3D Figure Eight | 19 | 3 | 3D + twisted lemniscate | 3D path with altitude crossovers, direction reversal |
-| 6 (Extreme+) | Plane Patrol MARL | 18 / 26 | 3 + 3 | 3D two-body | **Multi-agent coordination**, non-stationary co-player, shared collision state |
+| 6 (Extreme+) | Formation | 22 / 26 / 26 | 3 + 3 + 3 | 3D three-body | **Multi-agent coordination**: the lead is a learner flying a patrol route, so each wingman's reference is a co-player; one team cost, and a collision between any two aircraft trips all three |
 
 The target-pattern variants (`plane_sine`, `plane_energy`) and
 the 3D holding pattern (`plane3d_racetrack`) share their base aircraft's plant

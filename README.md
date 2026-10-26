@@ -1,7 +1,7 @@
 <h1 align="center">TargetGym</h1>
 
 <h3 align="center">
-  23 JAX environments for setpoint tracking,<br/>
+  24 JAX environments for setpoint tracking,<br/>
   with tuned PID and MPC baselines.
 </h3>
 
@@ -37,7 +37,7 @@ reactor, a cement kiln, a grid battery and a wind turbine.
 - **JAX throughout.** `jit`, `vmap` and `scan` compatible, end-to-end GPU,
   0.6 M to 700 M steps/s on CPU depending on the plant.
 - **gymnax API**, with a Gymnasium wrapper for non-JAX libraries and a JaxMARL
-  interface for the multi-agent patrol task.
+  interface for the multi-agent formation task.
 
 Learned-policy results are not published yet. The measurement protocol is
 defined in [docs/rl-protocol.md](docs/rl-protocol.md).
@@ -145,7 +145,7 @@ are covered in [docs/getting-started.md](docs/getting-started.md).
 
 | Family | Count | Environments |
 |---|---|---|
-| **Aircraft** | 9 | A320-like 2D aircraft on three reference patterns; four 3D path-following tasks; two formation-patrol variants |
+| **Aircraft** | 10 | A320-like 2D aircraft on three reference patterns; four 3D path-following tasks; two formation-patrol variants; a multi-agent formation |
 | **Process control** | 6 | CSTR, first-order lag, four-tank, pH neutralisation, binary distillation, CSTR on its unstable steady state |
 | **Industrial / energy** | 6 | Glass furnace, nuclear reactor, building HVAC, boiler drum, cement kiln, compressor held off its surge line |
 | **Renewable energy** | 2 | Wind turbine, grid battery |
@@ -157,14 +157,16 @@ The CSTR, first-order and four-tank models are adapted from
 [PC-gym](https://github.com/MaximilianB2/pc-gym) and checked against its source
 term by term, as each `PHYSICS.md` provenance line records.
 
-The two patrol environments are multi-agent: wingmen hold a slot on a lead
-flying its own route, so the reference is another aircraft and collision ends
-the episode.
+In the two patrol environments a follower holds a slot on a scripted lead, so
+the reference is another aircraft. In `formation` the lead is a learner too: a
+lead and two wingmen share one team cost, with a JaxMARL-style interface that
+gives each aircraft its own observation and action. See
+[Multi-agent formation](docs/multi-agent.md).
 
 Environments span six difficulty tiers, graded on dynamics (linearity,
 coupling, stiffness) and on the RL side (dimensionality, horizon, partial
 observability), from a first-order lag at tier 1 to the cement kiln and the
-multi-agent patrol at tier 6. See the
+multi-agent formation at tier 6. See the
 **[complexity ladder](docs/complexity.md)**.
 
 Each environment renders a control-room dashboard: plant schematic, gauges with
@@ -255,7 +257,7 @@ Tests assert consequences rather than formulas: ISA table values, L/D ratios,
 thermal time constants, energy balances, equilibria. A test that recomputes the
 implementation's own expression would pass on a wrong one.
 
-All 23 environments are covered by seventeen contracts, since aircraft variants
+All 24 environments are covered by eighteen contracts, since aircraft variants
 share a plant. A shared conformance suite additionally checks determinism, PRNG
 handling, `jit`/`vmap`/`scan` compatibility and numerical health over full
 episodes.
@@ -271,7 +273,7 @@ method and lists what each model is validated against.
 |---|---|
 | **[Getting started](docs/getting-started.md)** | Episodes, vectorised rollouts, the registry, Gymnasium |
 | **[Target MDPs](docs/target-mdp.md)** | The formal setting |
-| **[Environment reference](docs/environments.md)** | All 23: shapes, tracked variables, baselines, contracts |
+| **[Environment reference](docs/environments.md)** | All 24: shapes, tracked variables, baselines, contracts |
 | **[Public API](docs/api.md)** | Stable and provisional surface |
 | **[Baselines](docs/baselines.md)** | PID and MPC controllers, tuning, solver reporting |
 | **[RL protocol](docs/rl-protocol.md)** | Measuring a learned policy |
@@ -302,7 +304,7 @@ GitHub and is rewritten for the site at build time.
   in intent, comparing classical control, MPC and RL on shared tasks. It covers
   more controllers, TargetGym covers more plants.
 - **[JaxMARL](https://github.com/FLAIROX/JaxMARL)**: the multi-agent API the
-  patrol formation task follows.
+  formation task follows.
 
 ---
 
