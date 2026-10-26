@@ -53,7 +53,7 @@ _TASK_DEFAULT = object()
 #: costs about 1 per step. The shared objective divides by
 #: ``rho_floor_tracking`` instead, and that is the NEA reference these holds
 #: set, so each re-measured floor changed the oracle that measured it, and
-#: the iteration did not settle (oracle audit, 2026-10). On
+#: the iteration did not settle. On
 #: ``plane_energy``, raising it from 0.997 to 1.29 moved seed 1's hold from
 #: 1.45 to 1.18 m, so the holds gave 1.29 and then 0.96; on ``plane``, 0.237
 #: gave 0.242 and 0.242 gave 0.232. Fixed, the reference no longer feeds
@@ -140,8 +140,8 @@ _SHIPPED_SETTINGS = dict(
     objective_scale=0.84**2,
 )
 
-#: The capture planner: the shipped two-actuator planner, as it was before
-#: the oracle audit (50 iterations at a fixed step).
+#: The capture planner: the earlier two-actuator planner (50 iterations
+#: at a fixed step).
 _CAPTURE_SETTINGS = dict(n_iter=50, lr_end=None)
 
 #: The handover (``PlaneHandoverMPC``). The aircraft counts as settled after
@@ -299,8 +299,8 @@ class PlaneMPC(GradientMPC):
 
     ``speed_loop=True``: the throttle is the cascaded PID's airspeed loop,
     closed loop, and the planner optimises the elevator alone. The shared
-    planner never moved its throttle after its first plan (the oracle audit,
-    2026-10): over the scored window of ``plane`` the command was constant
+    planner never moved its throttle after its first plan: over the scored
+    window of ``plane`` the command was constant
     to three decimals on every protocol seed while the airspeed sat 10 to
     27 m/s off cruise on average, which was the whole of its running cost.
     Neither 200 iterations nor a terminal airspeed cost moved it. The likely
@@ -418,7 +418,7 @@ class PlaneHandoverMPC:
     the PID's airspeed loop, the other holds about four times tighter but
     captures more slowly, most likely because its decaying steps travel less
     far per solve. So the capture planner (``PlaneMPC`` with
-    ``speed_loop=False``, the oracle the tasks had before the oracle audit:
+    ``speed_loop=False``, the tasks' earlier oracle:
     on ``plane`` it reproduces that oracle's ten recorded returns to the last
     digit) flies until the aircraft has been within ``e_on`` metres of the
     commanded altitude for ``settle_steps`` consecutive steps, and the hold
@@ -558,7 +558,7 @@ def make_plane_mpc(
     ``n_iter``, ``lr_end``, ``speed_loop`` and ``handover`` default to the
     task's entry in ``_TASK_SETTINGS`` under version 2; pass them to
     override (``lr_end=None`` is the fixed step, ``speed_loop=False`` the
-    planner-driven throttle the tasks had before the oracle audit,
+    earlier planner-driven throttle,
     ``handover=False`` the speed-loop planner from the first step). With the
     handover, ``n_iter`` and ``lr_end`` set the hold planner; the capture
     planner keeps the shipped settings (``_CAPTURE_SETTINGS``). Under

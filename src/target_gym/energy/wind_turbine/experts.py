@@ -5,7 +5,7 @@ only the tasks of that package. The shared machinery (GradientMPC,
 CasadiMPC, SamplingMPC and the v2 objective helpers) stays in
 ``target_gym.experts.mpc``, which is in every task's baseline fingerprint.
 
-Since the oracle audit (2026-10) the version-2 oracle is not a planner but a
+The version-2 oracle is not a planner but a
 feedback law, :class:`WindTurbineNewtonPI`: generator torque from a Newton
 solve on the noise-free plant model, so that the next step's power equals the
 target, and collective pitch from the shipped PI with its command slew capped
@@ -146,7 +146,7 @@ def make_wind_turbine_gradient_mpc(
     objective_fn=_wind_turbine_objective,
 ):
     """Gradient MPC for the NREL 5 MW turbine: the version-1 oracle, and the
-    version-2 one until the oracle audit (2026-10).
+    version-2 one until the feedback law replaced it.
 
     Gradient-based for the same reason as the aircraft and the column: the
     plant is already differentiable JAX, and the Cp surface is an empirical
@@ -172,7 +172,7 @@ def make_wind_turbine_gradient_mpc(
     the seed where they disagree scored *higher*), and the inner optimiser
     (Adam, and a decaying step size, are both worse here than the plain one).
 
-    The oracle audit (2026-10) found two weaknesses in the version-2 planner.
+    Two weaknesses retired this planner under version 2.
     Its descent (500 fixed steps at lr 0.005) does not converge on the
     torque: the applied action left a mean of 1.8 kW of power error that its
     own model predicted on protocol seed 0 (0.9 kW on seeds 1 and 2). And its
@@ -251,7 +251,7 @@ class WindTurbineNewtonPI:
     protection, which backs the demand off linearly between 0.60 and 0.90 of
     rated speed so that a slowing rotor can recover, and is inactive at and
     above 0.90. What is left of the tracking error is the one-step wind
-    innovation, which no causal controller can see: in the oracle audit the
+    innovation, which no causal controller can see: measured, the
     power error the model predicted for the applied action was 0 W on every
     protocol seed, where the gradient planner left a mean of 0.9 to 1.8 kW
     per seed.

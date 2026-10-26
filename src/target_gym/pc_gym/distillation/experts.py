@@ -35,7 +35,7 @@ def make_distillation_mpc(
     The step decays from ``lr`` to ``lr_end`` over each solve. A fixed
     normalised step cannot place the reflux and boilup closer than about
     ``lr`` to the optimum, and on this plant that was the whole hold error.
-    Measured in the oracle audit (2026-10-01) on the protocol seeds, planning
+    Measured on the protocol seeds, planning
     on the mean feed composition: the fixed step scored 0.34, the decaying
     step 0.0126 at 40 iterations and 0.0125 at 80, against a floor of about
     0.0122 set by seed 0's running cost. More iterations still shrink the

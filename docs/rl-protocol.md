@@ -116,7 +116,7 @@ environment and a twenty-five-hour one in another.
 
 A rule based on the plant's own time constant fails here: the reactor's flux
 answers the control rod in one step, so five time constants would be a
-five-step horizon on a task held for 1200 steps. The wind turbine and battery
+five-step horizon on a task held for 864 steps. The wind turbine and battery
 are the same shape.
 
 **The rule is the episode:**
@@ -161,7 +161,7 @@ before reading any result from it.
 | wind_turbine | 400 | 1 | 5 | 0.99750 |
 | four_tank | 500 | 38 | 190 | 0.99800 |
 | ph_neutralization | 300 | 14 | 70 | 0.99667 |
-| reactor | 1200 | 1 | 5 | 0.99917 |
+| reactor | 864 | 1 | 5 | 0.99884 |
 | unstable_cstr | 1200 | 6.3 to 14.4 | 32 to 72 | 0.99917 |
 | compressor_surge | 1200 | 49.3 | 247 | 0.99917 |
 
@@ -204,10 +204,10 @@ judgement would make it circular.
 Settling asks whether a controller can demonstrate holding. A separate question
 is whether the slow dynamics a task advertises happen inside its episode.
 
-- **Reactor.** Over a full episode xenon moves 2.5% and iodine 1.6%, so xenon
-  poisoning acts as a constant bias, not something to anticipate. A
-  xenon-scale episode would be about fifty times longer, and is left open.
-  Read reactor results as flux tracking, not xenon management.
+- **Reactor.** The scored episode is 2.4 h, about 0.18 xenon time constants:
+  the poison moves materially while the controller works, but the full
+  xenon pit (about ten hours) is out of reach. Read reactor results as flux
+  tracking with partial xenon management.
 - **Distillation.** The 200-step episode covers about 63% of the column's
   194-minute dominant mode, a deliberate cost compromise for the slowest
   environment per step. Read its results as product-composition tracking on an

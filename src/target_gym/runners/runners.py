@@ -1,26 +1,18 @@
 """Figures and videos for every registered environment.
 
-One runner, driven by :data:`target_gym.registry.REGISTRY`. It replaced seven
-per-environment modules that shared an identical six-function skeleton and
-between them covered eight environments; this covers all of them, because
-nothing here names an environment.
-
-Three pieces of the environment interface make that possible:
+One runner, driven by :data:`target_gym.registry.REGISTRY`; nothing here names
+an environment. Three pieces of the environment interface make that possible:
 
 ``obs_value_index`` / ``obs_target_index``
     Class attributes on every environment giving the observation slots that
-    hold the tracked variable and its setpoint (a tuple of slots for the
-    multi-loop plants). Reading the pair back out of the observation is what
-    lets a plot label itself without knowing which plant it is looking at.
+    hold the tracked variable and its setpoint (a tuple for multi-loop plants).
 ``action_space(params)``
     Supplies the bounds a constant-action sweep should span.
 ``EnvSpec.make_pid`` / ``make_mpc``
     The baselines, already registered.
 
-Setpoints are varied by *seed* rather than by writing into a named state
-field: every environment samples its own target on reset, so a handful of
-seeds gives a spread drawn from the distribution the environment actually
-defines, and no per-environment field name is needed.
+Setpoints are varied by *seed*: every environment samples its own target on
+reset, so a handful of seeds gives a spread from its own distribution.
 
 Usage
 -----
@@ -62,24 +54,16 @@ VIDEO_DIR = "videos"
 
 @functools.lru_cache(maxsize=None)
 def _jitted_step(env):
-    """One jitted ``step_env`` per environment, reused across rollouts.
-
-    ``jax.jit`` hands back a fresh wrapper carrying its own cache, so calling it
-    per rollout recompiles every time: profiling a *warmed* rollout put 0.222 s
-    of its 0.355 s in ``backend_compile_and_load``, called once, and every
-    rollout paid it again. Environments are shared singletons now
-    (``EnvSpec.make_env``), so caching on the instance is enough to reuse the
-    executable for the life of the process.
-    """
+    """One jitted ``step_env`` per environment, reused across rollouts, so the
+    executable compiles once per process instead of once per rollout."""
     return jax.jit(env.step_env)
 
 
 def _wants_state(policy: Callable) -> bool:
     """True when *policy* takes ``(obs, state)`` rather than ``(obs,)``.
 
-    Decided from the signature rather than by calling and catching TypeError,
-    which would also swallow a TypeError raised legitimately inside a
-    single-argument policy and silently call it with the wrong arity.
+    Decided from the signature: catching a TypeError would also swallow one
+    raised inside a single-argument policy.
     """
     try:
         return len(inspect.signature(policy).parameters) >= 2
@@ -128,19 +112,15 @@ def rollout(spec, params, policy: Callable, seed: int = 0, return_trips: bool = 
 
     values, targets, rewards = [], [], []
     trips = 0
-    # Loop on the environment's own clock rather than on a fixed count, so a
-    # plant whose ``state.time`` ever counted something other than env steps
-    # (the reactor did, until its clock was unified) cannot be scored past its
-    # time limit on a frozen state.
+    # Loop on the environment's own clock, so a plant cannot be scored past
+    # its time limit.
     while int(state.time) < int(params.max_steps_in_episode):
         obs_np = np.asarray(obs)
         values.append(obs_np[list(value_idx)])
         targets.append(obs_np[list(target_idx)])
-        # Hand the policy the NumPy view, which this loop has already paid for.
-        # The stateful PIDs are plain Python doing scalar arithmetic; given a JAX
-        # array every operation -- the indexing, the clip, the anti-windup
-        # ``where`` -- is a separate un-jitted dispatch, and the controller ends
-        # up costing several times the environment step it is controlling.
+        # Hand the policy the NumPy view: given a JAX array, every operation in
+        # a host PID is a separate un-jitted dispatch, several times the step's
+        # own cost.
         action = policy(obs_np, state) if _wants_state(policy) else policy(obs_np)
         obs, state, reward, terminated, info = step(
             key, state, jnp.atleast_1d(jnp.asarray(action)), params
@@ -157,18 +137,11 @@ def rollout(spec, params, policy: Callable, seed: int = 0, return_trips: bool = 
 def baseline_policy(spec, kind: str, params=None) -> Callable | None:
     """A shipped baseline as one uniform ``(obs, state) -> action`` callable.
 
-    Both kinds take the same two arguments and return the same type, so a
-    single evaluation loop serves either, and a learned policy written to the
-    same shape drops straight in beside them.
-
-    The asymmetry underneath is deliberate and is *why* both signatures carry
-    both arguments rather than each taking what it happens to need. **The PID
-    ignores ``state``**: it reads the observation, as a plant controller does.
-    **The MPC ignores ``obs``**: it reads the true state, because it is
-    presented as a full-state upper bound rather than as a peer to a policy
-    that sees only what a plant instruments. Two different call shapes made
-    that easy to miss, and a benchmark whose ceiling quietly sees more than its
-    contestants is worth being loud about.
+    Both kinds take ``(obs, state)``, so one evaluation loop serves either,
+    and a learned policy written to the same shape drops in beside them. **The
+    PID reads only ``obs``**, as a plant controller does. **The MPC reads only
+    ``state``**, the true simulator state: it is a full-state upper bound, not
+    a peer.
 
     ``kind`` is ``"pid"`` or ``"mpc"``. Returns ``None`` when the environment
     does not ship that baseline; every registered environment ships both.
@@ -186,11 +159,8 @@ def baseline_policy(spec, kind: str, params=None) -> Callable | None:
         if not spec.has_mpc:
             return None
         params = spec.make_test_params() if params is None else params
-        # The planner's model predicts the mean disturbance (``plan_params``
-        # zeroes ``spec.noise_fields``), as the batched recorder's does. Built
-        # on the raw params it planned against one fixed noise realisation --
-        # a wrong forecast rather than none -- and on the wind turbine that
-        # was the difference between a 4.7 kW and a 7.8 kW hold.
+        # The planner predicts the mean disturbance: ``plan_params`` zeroes
+        # ``spec.noise_fields``, as the batched recorder does.
         from target_gym.experts.mpc import plan_params
 
         mpc = spec.make_mpc(spec.make_env(), plan_params(spec, params))
@@ -203,21 +173,13 @@ def baseline_policy(spec, kind: str, params=None) -> Callable | None:
 def rollout_mpc_batch(spec, params, n_seeds: int):
     """Run ``n_seeds`` MPC episodes at once, vmapped over the seed axis.
 
-    Only for ``GradientMPC``: its ``_optimize(actions_init, state)`` is already a
-    pure function of its two arguments, the warm start being the only thing the
-    object carries between steps, so it vmaps as it stands. The CasADi planners
-    cannot follow -- IPOPT is a solver outside JAX -- and are parallelised by
-    process instead.
-
-    This is the whole reason the recording was slow. Seeds are independent by
-    construction: different PRNG key, no shared state, ``reset()`` between them.
-    Running them one after another left thirteen of fourteen cores idle while
-    ``plane_energy`` took two hours.
+    Only for ``GradientMPC``, whose ``_optimize(actions_init, state)`` is a
+    pure function and vmaps as it stands; the CasADi planners call IPOPT,
+    outside JAX, and are parallelised by process instead.
 
     Returns ``(values, targets, rewards, trips)``: the first three with a
-    leading seed axis, matching what :func:`rollout` returns for one, and the
-    number of trips per seed (``info["tripped"]``; a trip never ends the
-    window). ``mpc_trips`` is a published field.
+    leading seed axis, matching :func:`rollout`, and the trips per seed
+    (``info["tripped"]``; a trip never ends the window).
     """
     env = spec.make_env()
     from target_gym.experts.mpc import plan_params
@@ -296,9 +258,7 @@ def mpc_policy(spec, env, params) -> Callable | None:
     def policy(obs, state):
         return np.atleast_1d(mpc.step(obs, state))
 
-    # The planner itself, so a caller can read its solver health afterwards.
-    # Without this the controller is captured in a closure and unreachable, and
-    # a CasADi baseline could be recorded from solves that never converged.
+    # Expose the planner, so a caller can read its solver health afterwards.
     # mypy does not model attributes on function objects, hence the ignore.
     policy.controller = mpc  # type: ignore[attr-defined]
     return policy
@@ -410,33 +370,14 @@ MEDIA_SECONDS = 10.0
 
 
 def _media_params(spec):
-    """Parameters for a figure or a video: the environment as registered.
-
-    These used to be ``spec.params_cls()`` -- the bare dataclass defaults --
-    which quietly rendered something other than the registered environment.
-    ``plane_steps`` and ``plane_sine`` differ from ``plane`` only through
-    ``EnvSpec.test_params``, so with the defaults all three produced the same
-    clip, byte-identical down to a total reward of 9783.414.
-
-    Episode length is the one exception. The benchmark caps it to bound the cost
-    of measuring, and a 280-step clip is over before anything has happened, so
-    media keeps the environment's own longer default there.
-    """
+    """Parameters for a figure or a video: the scored configuration
+    (``spec.make_test_params()``), with the episode lengthened to something
+    worth watching."""
     params = spec.make_test_params()
     steps = int(params.max_steps_in_episode)
     default_steps = int(spec.params_cls().max_steps_in_episode)
-    # Long enough to be worth watching, short enough to stay readable: the
-    # aircraft's own default is 10 000 steps, which is 41 cycles of the sinusoid
-    # and unwatchable, while the benchmark's 280 is over before the climb ends.
-    #
-    # Take the longer of the two lengths, *then* bound it. This used to read
-    # ``min(max(steps, MIN), default_steps, MAX)``, which applied the floor and
-    # then let ``default_steps`` undo it: every environment whose own default is
-    # under 600 got a clip shorter than the floor exists to prevent. The CSTR
-    # default is 100, so its clip was 100 steps, which at the renderer's stride
-    # is five frames. The committed gallery still holds an 80-frame CSTR clip
-    # from before this regressed, so the shipped videos and the code that makes
-    # them had silently stopped agreeing.
+    # Long enough to watch, short enough to read: the longer of the scored
+    # and default lengths, then bounded (the aircraft default to 10,000).
     target = int(np.clip(max(steps, default_steps), _MEDIA_MIN_STEPS, _MEDIA_MAX_STEPS))
     if target != steps:
         params = params.replace(max_steps_in_episode=target)
@@ -564,15 +505,9 @@ def _save(fig, stem: str) -> None:
 def retime_gif(path: str, fps: int = GIF_FPS) -> str:
     """Rewrite a GIF's frame delays in place, leaving the frames alone.
 
-    Duration is frames over fps, and only one of those costs anything. Adding
-    frames grows the file linearly and permanently, since these live in git
-    history; slowing the playback is free. Measured on a plane clip, 46 frames
-    re-timed from 33 fps to 10 went from 1.4 s to 4.6 s for the same bytes.
-
-    Done here rather than in ``utils.save_video`` deliberately. ``utils`` is
-    hashed into both ``provenance`` fingerprints, so editing it would mark all
-    nineteen recorded baselines and all twenty-one environment version stamps
-    stale to change a frame delay. This module is in neither.
+    Slowing playback is free, where adding frames grows the file. Done here
+    rather than in ``utils.save_video`` because ``utils`` is in the
+    fingerprints, and editing it would stale every recorded baseline.
     """
     from PIL import Image, ImageSequence
 
@@ -601,10 +536,8 @@ def video(name: str, params=None, seed: int = 0) -> str | None:
     params = params or _clip_params(spec)
     folder = f"{VIDEO_DIR}/{name}"
     os.makedirs(folder, exist_ok=True)
-    # FPS=30, matching the rate ``utils.save_video`` passes to ``write_gif``.
-    # Left at its default of 60 the clip is built at 60 and written at 30, and
-    # moviepy drops every other frame -- a 100-step clip came out 49 frames, so
-    # the speed-up was quietly double what the length arithmetic above says.
+    # FPS=30, the rate ``utils.save_video`` writes at; at the default 60,
+    # moviepy would drop every other frame.
     written = env.save_video(
         policy, seed, params=params, folder=folder, format="gif", FPS=30
     )

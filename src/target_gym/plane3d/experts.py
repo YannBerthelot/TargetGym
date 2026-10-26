@@ -41,9 +41,9 @@ _TURN_BANK_MARGIN = 0.85
 #: solve. A normalised descent cannot place an action closer than about its
 #: step to the optimum. At a fixed 0.05 for 50 iterations the planner held
 #: the circle 4.1 to 4.5 m off its altitude and 14.3 to 15.5 m off its path
-#: (the hold rows recorded before the oracle audit, 2026-10). On the
-#: circle's protocol seeds 0 and 1, under the -v2 floors, the audit measured
-#: the mean errors after the burn-in: the decay at 50 iterations took them
+#: (the earlier hold rows). On the circle's protocol seeds 0 and 1, under
+#: the -v2 floors, the mean errors after the burn-in: the decay at 50
+#: iterations took them
 #: to 1.6 to 1.7 m and 4.6 to 7.6 m, and at 200 iterations to 0.86 to 1.0 m
 #: and 0.42 to 2.4 m. The figure-8 needs the 200: at 50 its protocol seed 0
 #: cost 3.3x the fixed step's (40 m excursions at the lobe tips, where the

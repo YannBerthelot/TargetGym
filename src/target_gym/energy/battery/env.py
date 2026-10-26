@@ -37,7 +37,7 @@ Why it is a hard target MDP
   state: the pack trips, and the reward charges an hour of downtime. A
   dispatch held in one direction long enough would get there, but over the
   scored 360-step (30 min) episode a controller that follows the schedule
-  exactly stays within 0.17-0.85 and never trips (oracle audit, 2026-10-01).
+  exactly stays within 0.17-0.85 and never trips.
   The limits are a hazard for a policy that strays, not a budget that exact
   tracking runs down.
 * **Efficiency depends on where you are.** Losses scale with current squared,
@@ -164,7 +164,7 @@ class BatteryParams(EnvParams):
     # 10-90 % state of charge at full power takes ~96 min. The default 360
     # steps of 5 s is a 30 min episode, about a third of that traverse; a
     # controller that follows the schedule exactly stays within 0.17-0.85
-    # state of charge over it (oracle audit, 2026-10-01).
+    # state of charge over it.
     delta_t: float = 5.0
     max_steps_in_episode: int = 360
 
