@@ -53,8 +53,8 @@ configuration (`spec.make_test_params()`):
 - **MPC**: reads the true state, including what the observation hides, so it is
   an upper bound rather than a peer.
 
-Every reward is a cost, so lower is better. To score your own policy against
-these numbers, see [Evaluating against it](using-the-pids.md#evaluating-against-it).
+Every number on this page is a cost, so lower is better. To score your own
+policy against them, see [Evaluating against it](using-the-pids.md#evaluating-against-it).
 How the controllers are built and measured is in
 [How the baselines work](baselines.md).
 """

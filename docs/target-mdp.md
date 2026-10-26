@@ -33,24 +33,27 @@ A target MDP adds four things.
   observation, not of the state. This is the whole content of the admissibility
   criterion below.
 - The **target set** $G = \{ s \in S : e(g(s)) = 0 \}$.
-- A **tracking shape** $\varphi : \mathbb{R}^k \to [0, 1]$ with $\varphi(0) = 1$,
-  strictly decreasing in every $|e_i|$ inside the envelope where the plant is
-  still alive, and zero outside it. Formally, if $|e_i| \le |e'_i|$ for every
-  $i$ and the inequality is strict for at least one, and $e'$ lies inside the
-  envelope, then $\varphi(e) > \varphi(e')$.
-- A **cost** $c : S \to [0, c_{\max}]$ with $c_{\max} < 1$.
+- A **tracking cost** $\ell : \mathbb{R}^k \to [0, \infty)$ with $\ell(0) = 0$,
+  non-decreasing in every $|e_i|$ and strictly increasing outside a tolerance
+  band (none, on most plants). Formally, if $|e_i| \le |e'_i|$ for every $i$,
+  then $\ell(e) \le \ell(e')$, strictly when some $|e'_i|$ is larger and lies
+  outside the band.
+- A **running cost** $c : S \to [0, \infty)$, what the plant consumes (fuel,
+  reagent, wear) beyond what holding the target needs.
 
 The per-step reward is
 
 $$
-r(s) = \varphi\big(e(g(s))\big)\,\big(1 - c(s)\big).
+r(s) = -\Big(\ell\big(e(g(s))\big) + c(s)\Big),
 $$
 
-Episodes end on a time limit or on an irrecoverable state (a crash, a tank
-overflow, a battery at its charge limit). They never end because the target was
-reached. The natural optimality criterion is therefore the long-run average
-reward, the gain, with the bias breaking ties among gain-optimal policies. The
-thesis works in exactly that setting.
+minus a one-off **trip cost** on a step that leaves the operating envelope (a
+crash, a tank overflow, a battery at its charge limit). The plant then restarts,
+so episodes end on a time limit only, and never because the target was reached.
+The [reward shaping](reward-shaping.md) page gives the suite's choice of each
+term. The natural optimality criterion is the long-run average reward, the gain,
+with the bias breaking ties among gain-optimal policies. The thesis works in
+exactly that setting.
 
 ### How this relates to the thesis
 
@@ -59,7 +62,7 @@ pseudo-distance $d$ and a setpoint $x$ such that a larger $d(s_i, x)$ always
 means a smaller reward. That is the case $k = 1$, $e(o) = o_i - x$,
 $c \equiv 0$ of the definition above. Definition 8.2 defines the target states
 as the states of maximal reward, $S_{\text{target}} = \{ s : r(s) = r^* \}$.
-With no cost term that set is exactly $G$.
+With no running cost and no tolerance band that set is exactly $G$.
 
 The suite needs the set form because its targets are not single coordinates. A
 holding pattern is a curve in the horizontal plane, a formation slot is a point
@@ -69,29 +72,22 @@ degradation, and those payments are part of the reward.
 
 ### Monotonicity and what the cost does to it
 
-The tracking shape alone is strictly monotone in the error, and every sublevel
-set of the error is a superlevel set of the tracking reward. The thesis's
+The tracking cost alone is monotone in the error, and every sublevel set of the
+error is a sublevel set of the tracking cost. The thesis's
 $\varepsilon$-target, the states within $\varepsilon$ of the maximum, is the
-set $\{ s : \varphi(e) \ge 1 - \varepsilon \}$. That is the object the
+set $\{ s : \ell(e) \le \varepsilon \}$. That is the object the
 [reward shaping](reward-shaping.md) page is about when it distinguishes a
-resolution floor from a tolerance band: a floor keeps the sublevel sets nested
-and strictly ordered all the way down, a band collapses them below its width.
+floor from a tolerance band: scaling the error by the plant's achievable floor
+keeps the sublevel sets nested and strictly ordered all the way down, while a
+band collapses them below its width.
 
-The cost is a bounded multiplier, so
-
-$$
-(1 - c_{\max})\,\varphi(e) \;\le\; r(s) \;\le\; \varphi(e).
-$$
-
-Two states whose tracking rewards differ by more than the factor $1 - c_{\max}$
-are still ordered by their error. Within that factor a cost may reorder them,
-which is what a tiebreaker is for. In particular the states of maximal reward
-lie inside the $c_{\max}$-target rather than exactly on $G$, and the maximum
-$r^* = 1$ is attained only if some state has zero error and zero cost. The
-battery's calendar ageing is never zero, so its ceiling sits below 1 even with
-a fixed dispatch. The suite therefore treats the **ceiling**
-$\bar r = \sup_\pi \rho^\pi$, the best achievable gain, as a property of each
-environment rather than assuming it equals 1.
+The running cost is added to the tracking cost, so a state with a smaller error
+can still score worse if it consumes more. That trade is what a running cost is
+for. In particular the states of maximal reward need not lie exactly on $G$, and
+the maximum $r^* = 0$ is attained only if some state has zero error and consumes
+nothing avoidable. No real plant holds its target with zero error, so the suite
+treats the **ceiling** $\bar r = \sup_\pi \rho^\pi$, the best achievable gain,
+as a property of each environment rather than assuming it equals 0.
 
 ## The admissibility criterion
 
@@ -221,7 +217,8 @@ A target can satisfy the criterion and still be unpredictable. The two are
 different properties, and the second determines what the ceiling is.
 
 **Static.** The set is known from the first step. Holding exactly is achievable
-and the ceiling is 1, less whatever cost cannot be driven to zero.
+in principle, and the ceiling is 0, less whatever cost cannot be driven to
+zero.
 
 **Deterministic exosystem.** The reference is generated by a finite-dimensional
 autonomous system whose initial state is hidden. The current setpoint is
@@ -321,7 +318,7 @@ becomes a player: when it reacts to the follower, or carries its own reward. The
 module in `patrol/marl.py`, where the lead is also a learner, is that case. A
 **multi-agent target MDP** is a Markov game in which each agent $i$ has an
 admissible target set $G_i$ in the joint state and a reward
-$r_i = \varphi_i(e_i)(1 - c_i)$. Three things move.
+$r_i = -\big(\ell_i(e_i) + c_i\big)$. Three things move.
 
 - Feasibility becomes joint. The slots must be mutually compatible, and the
   invariant set is the intersection of the agents' $\varepsilon$-targets under

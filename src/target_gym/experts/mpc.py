@@ -934,8 +934,8 @@ def _done_value(params, squared: bool = False) -> float:
     the plant has terminated: 0 for the non-negative version-1 reward (the
     forgone reward is the penalty), the failure charge for version 2, whose
     healthy steps are negative -- in the planner's units. Under version 2 no
-    plant raises ``terminated`` any more (a trip freezes it at the failure
-    cost inside the rollout, ``base.failure_kernel``), so the planner sees the
+    plant raises ``terminated`` any more (a trip is charged the trip cost and
+    the plant restarts, ``base.failure_kernel``), so the planner sees the
     trip's cost in the rollout itself and this value is never applied; it is
     kept for the version-1 planners."""
     if _is_v1(params):

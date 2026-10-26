@@ -1,4 +1,4 @@
-# Patrol - MARL, bearing-only
+# Patrol - wingman, bearing-only
 
 <p align="center"><img src="../../videos/patrol_bearing_only/pid_output.gif" width="480px"/></p>
 

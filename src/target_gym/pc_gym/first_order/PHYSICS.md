@@ -67,10 +67,8 @@ that the four-tank environment failed, and it costs nothing to assert here.
 
 ## 4. Task design
 
-**Observation** `[x, target_x]`. **Reward** — `log_scaled_reward` against the
-6.0 envelope with a floor at `precision_floor = 6e-3`, the same form the rest of
-the suite uses. It replaced a squared normalised band, which spent nearly all of
-its range on errors a controller had already closed.
+**Observation** `[x, target_x]`. **Reward** — the floor-normalised cost described in *Reward (version 2)*
+below.
 
 There is no disturbance, nothing hidden, and no irrecoverable state. The
 terminal guard on `|x| > 3` is unreachable: `x` is first-order toward `K·u`,

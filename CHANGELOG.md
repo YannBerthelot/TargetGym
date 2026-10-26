@@ -448,6 +448,15 @@ than by commit.
 
 ### Fixed
 
+- **Docs that contradicted the code.** `docs/target-mdp.md` and seven
+  physics notes stated the version-1 reward as the current one. Four
+  docstrings described a trip four ways; they now match `base.failure_kernel`
+  (one charge, then a restart). The README said the defaults are the scored
+  configuration almost everywhere, when they differ on every aircraft task
+  and the reactor. The two patrol tasks were labelled multi-agent, though each
+  has one learner behind a scripted lead. Stale numbers in the complexity
+  ladder, the HVAC episode length, the `pid.py` usage example and the
+  versioning examples are corrected.
 - **The Gymnasium wrapper follows two more of Gymnasium's rules.** A seeded
   `reset` now calls `super().reset(seed=seed)`, so `env.np_random` is seeded
   as the API promises (the dynamics still draw from the wrapper's JAX key, so

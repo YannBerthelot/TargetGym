@@ -30,8 +30,8 @@ controller must not throw away a training run that cost GPU-hours. A change to
 the dynamics, the reward, the parameters, the integrator or the shared reward
 helper must.
 
-This is not hypothetical. Unifying the reward contract across all eighteen
-environments invalidated every return-based number in the repository at a
+This is not hypothetical. Unifying the reward contract across every
+environment invalidated every return-based number in the repository at a
 stroke, and the glass furnace's PID moved 3.5% when a boundary bug in its tuner
 was fixed. A learned result recorded before either would still be a real
 measurement, and would no longer be a statement about this library.

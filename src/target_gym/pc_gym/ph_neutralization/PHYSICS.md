@@ -114,7 +114,8 @@ feed concentrations and flows jointly against the published benchmark.
 knows its own valve position. It does not have an on-line assay of carbonate
 speciation, so `Wa`, `Wb` and the buffer flow are hidden.
 
-**Reward** `log_scaled_reward(|err|, precision_floor, envelope) − reagent_cost_weight·q3_norm`, with `reagent_cost_weight = 0` for the 0.6 line so the reward scores tracking alone. The reagent term stays wired; see the roadmap item on framing running cost.
+**Reward** — the floor-normalised cost described in *Reward (version 2)*
+below.
 
 ---
 

@@ -1,4 +1,4 @@
-# Patrol - MARL formation
+# Patrol - wingman
 
 <p align="center"><img src="../../videos/patrol/pid_output.gif" width="480px"/></p>
 

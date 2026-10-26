@@ -106,9 +106,8 @@ independent and diagonal will destabilise itself.
 measured, so unlike most of this suite the plant is fully observed. The
 difficulty is structural, not informational.
 
-**Reward** — mean of two `log_scaled_reward` terms, one per controlled level,
-against the `h_max − h_min` span with a floor at `precision_floor = 1e-3` m, a
-millimetre, which is what a level transmitter resolves.
+**Reward** — the floor-normalised cost described in *Reward (version 2)*
+below.
 
 **The oracle plans the rest of the episode.** The plant is deterministic, so
 the MPC slot holds its optimum: an NLP over every remaining step, solved by
