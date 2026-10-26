@@ -82,9 +82,9 @@ Report the tracking and running costs beside it.
 **Report the interquartile mean with a 95% stratified bootstrap confidence
 interval**, plus the win rate against the PID. Not the mean alone. This is
 standard practice after Agarwal et al. (2021), and this repository has its own
-evidence for it: the battery MPC scores `+14.0` on the mean and `−4.1` on the
-median, winning 1 seed in 10. A mean alone would have published the opposite of
-what happened.
+evidence for it: an earlier battery MPC scored `+14.0` on the mean and `−4.1`
+on the median, winning 1 seed in 10. A mean alone would have published the
+opposite of what happened.
 
 ## 5. Algorithms
 

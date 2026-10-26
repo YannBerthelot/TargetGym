@@ -58,8 +58,8 @@ DISPLAY_NAMES: dict[str, str] = {
     "plane_sine": "Altitude - sinusoid",
     "plane_energy": "Altitude and airspeed",
     "plane": "Altitude hold",
-    "patrol": "Patrol - MARL formation",
-    "patrol_bearing_only": "Patrol - MARL, bearing-only",
+    "patrol": "Patrol - wingman",
+    "patrol_bearing_only": "Patrol - wingman, bearing-only",
     "unstable_cstr": "Unstable CSTR",
 }
 
@@ -117,8 +117,8 @@ class EnvSpec:
         ``step(obs, state) -> action``.  ``None`` means no MPC baseline
         exists for this environment yet.
     test_params:
-        Parameter overrides producing an episode short enough for the test
-        suite while still exercising the interesting dynamics.  Applied via
+        Parameter overrides for the scored configuration, the one the
+        baselines and the protocol are measured on.  Applied via
         ``params_cls(**test_params)``.
     tuned_gains_key:
         Key under which this environment's PID gains live in
@@ -191,16 +191,15 @@ class EnvSpec:
     make_pid: Callable[[], Any] | None
     make_mpc: Callable[[Any, Any], Any] | None
     # Behavioural version of the environment, part of its public identity as
-    # ``<name>-v<version>``. Every environment ships as v1 in the 0.6 release,
-    # which is where versioning starts; nothing before that is versioned,
-    # because the package had no users to preserve results for. Bump it
-    # whenever the dynamics, the reward, the parameters or the observation
-    # layout change, so that a published number keeps meaning what it meant.
+    # ``<name>-v<version>``. Bump it whenever the dynamics, the reward, the
+    # parameters or the observation layout change, so that a published number
+    # keeps meaning what it meant.
     #
-    # v2 for every environment: the floor-normalised reward replaced the
-    # capped log-scaled one (docs/reward-shaping.md). The v1 reward is still
-    # constructible with ``reward_version=1`` on any params, and the v1
-    # baselines are kept in ``src/target_gym/data/baseline_returns_v1.json``.
+    # Versioning starts at v1 in the 0.6 release. v2 is the floor-normalised
+    # reward (docs/reward-shaping.md), and some tasks have reached v3 since.
+    # The v1 reward is still constructible with ``reward_version=1`` on any
+    # params, and the v1 baselines are kept in
+    # ``src/target_gym/data/baseline_returns_v1.json``.
     version: int = 2
     test_params: dict[str, Any] = field(default_factory=dict)
     tuned_gains_key: str | None = None
@@ -220,7 +219,7 @@ class EnvSpec:
 
     @property
     def versioned_name(self) -> str:
-        """The name a published result should cite, e.g. ``plane-v1``.
+        """The name a published result should cite, e.g. ``plane-v2``.
 
         Registry keys stay unversioned because they are an internal handle,
         used for gains, recorded baselines and file paths. This is the public
@@ -272,7 +271,7 @@ class EnvSpec:
         return cached
 
     def make_test_params(self, **overrides):
-        """Parameters for a short test episode, plus any extra overrides."""
+        """The scored configuration (``test_params``), plus any extra overrides."""
         return self.params_cls(**{**self.test_params, **overrides})
 
 

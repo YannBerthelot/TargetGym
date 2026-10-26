@@ -92,13 +92,12 @@ aspirational.
 ### The environments
 
 Every environment carries a version, and `spec.versioned_name` gives the name a
-published result should cite: `plane-v1`, `cstr-v1`. Versioning starts at the
-0.6 release, where everything ships as `v1`. Nothing before that is versioned,
-because the package had no users and so no published numbers to keep meaningful.
+published result should cite, such as `plane-v2` or `reactor-v3`. Versioning
+starts at the 0.6 release, where everything shipped as `v1`.
 
 Registry keys stay unversioned, since they are an internal handle used for
 gains, recorded baselines and file paths. `REGISTRY["plane"]` is how you load
-it; `plane-v1` is what you cite.
+it; `plane-v2` is what you cite.
 
 The version changes when the environment does: its dynamics, its reward, the
 parameters it is measured at, or its observation layout. Re-tuning a controller

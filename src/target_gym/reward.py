@@ -30,16 +30,15 @@ product ``tracking * (1 - w * running)`` charges nothing for consumption
 exactly where tracking is worst, and a cost that vanishes when it should
 bind is not a cost.
 
-**Failure.** Leaving the operating envelope trips the plant. A tripped plant
-is down at ``failure_cost`` per step -- above the largest tracking cost the
-envelope can produce, with tracking and running cost zeroed -- for
-``restart_steps`` steps, then restarts (``base.failure_kernel``); a plant
-that cannot restart stays down to the end of the window. That is the
-absorbing state of the Target-MDP note lived through inside the window, so a
-policy which fails with any probability has the worst long-run cost (safety
-enters through the gain, Proposition 5), and under a finite restart the gain
-decomposes as ``rho_hold + p * B + lambda * (restart_steps * failure_cost +
-B_restart)`` with ``lambda`` the trip rate. No episode ends at a trip.
+**Failure.** Leaving the operating envelope trips the plant. The step that
+leaves it is charged the trip cost, ``restart_steps * failure_cost``: the
+restart's downtime priced at ``failure_cost`` per step, which is above the
+largest tracking cost the envelope can produce. The plant then restarts at
+once, as ``reset_env`` would (``base.failure_kernel``). A policy that trips
+with any rate pays for it in its long-run cost (safety enters through the
+gain, Proposition 5 of the Target-MDP note): the gain decomposes as
+``rho_hold + p * B + lambda * (restart_steps * failure_cost + B_restart)``
+with ``lambda`` the trip rate. By default no episode ends at a trip.
 
 The best achievable per-step reward is then about -1 (tracking at the floor,
 nothing avoidable consumed), not 0 or 1: cross-plant comparability comes from

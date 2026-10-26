@@ -137,7 +137,9 @@ Usage::
 
     from target_gym.eval import evaluate_controller
     m = evaluate_controller("reactor", "pid", seeds=5)
-    m["gain"], m["tracking"], m["running"], m["reach_cost"], m["nea"]
+    m["gain"], m["tracking"], m["running"], m["reach_cost"]
+
+``m["nea"]`` is there too when ``rho_ref``, the PID's gain, is passed.
 
 or, for a policy of your own, build ``Episode`` records with ``run_episode``
 and call ``evaluate``.

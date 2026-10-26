@@ -354,7 +354,7 @@
     "name": "patrol",
     "group": "aircraft",
     "version": 3,
-    "display_name": "Patrol - MARL formation",
+    "display_name": "Patrol - wingman",
     "params_cls": [
       "target_gym.patrol.env",
       "PatrolParams"
@@ -395,7 +395,7 @@
     "name": "patrol_bearing_only",
     "group": "aircraft",
     "version": 3,
-    "display_name": "Patrol - MARL, bearing-only",
+    "display_name": "Patrol - wingman, bearing-only",
     "params_cls": [
       "target_gym.patrol.env",
       "PatrolParams"

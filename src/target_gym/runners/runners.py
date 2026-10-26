@@ -105,8 +105,8 @@ def _action_bounds(env, params) -> tuple[np.ndarray, np.ndarray]:
 def rollout(spec, params, policy: Callable, seed: int = 0, return_trips: bool = False):
     """Run one episode, returning tracked values, targets and rewards.
 
-    A trip never ends the window (``base.failure_kernel``): the plant is down
-    at the failure cost and restarts, or stays down. With ``return_trips`` the
+    A trip never ends the window (``base.failure_kernel``): the step is
+    charged the trip cost and the plant restarts. With ``return_trips`` the
     number of trips in the window is returned as a fourth value.
 
     ``policy`` is called as ``policy(obs)`` or, when it accepts two arguments,

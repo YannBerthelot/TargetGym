@@ -90,10 +90,10 @@ for _ in range(params.max_steps_in_episode):
 print("PID return:", total)
 ```
 
-Use `spec.make_test_params()` rather than the default params. On most
-environments they are the same, but the plane variants share one parameter
-class and are scored over different episode lengths, which only the test
-params resolve.
+Use `spec.make_test_params()` rather than the default params. On every
+aircraft task and the reactor the defaults run a longer episode, and some
+aircraft tasks also set a different reference, so only the test params
+reproduce the scored numbers.
 
 ## Evaluating against it
 
