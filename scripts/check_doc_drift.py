@@ -101,8 +101,9 @@ def check_symbols() -> list[str]:
                 if other.is_file()
                 else "\n".join(q.read_text() for q in other.rglob("*.py"))
             )
-        # Shared physics lives one level up for the aircraft; allow it.
-        for extra in (SRC / "plane", SRC / "plane3d", SRC / "utils.py"):
+        # Shared physics lives one level up for the aircraft, and the
+        # formation's slot geometry in the patrol; allow both.
+        for extra in (SRC / "plane", SRC / "plane3d", SRC / "patrol", SRC / "utils.py"):
             if extra.exists():
                 source += "\n" + (
                     extra.read_text()

@@ -119,6 +119,28 @@ def _patrol_errors(obs, state, params):
     )
 
 
+def _formation_errors(obs, state, params):
+    """The lead's altitude and heading errors, then each wingman's slot error
+    and heading misalignment with the lead: the terms of the team cost."""
+    from target_gym.formation.env import slot_errors, wrap_angle
+
+    lead = state.lead
+    per_wingman = np.stack(
+        [
+            np.asarray(slot_errors(state)),
+            np.abs(np.asarray(wrap_angle(state.wingmen.psi - lead.psi))),
+        ],
+        axis=1,
+    )
+    return np.concatenate(
+        [
+            [abs(float(lead.target_altitude - lead.z))],
+            [abs(float(wrap_angle(lead.psi - lead.target_heading)))],
+            per_wingman.reshape(-1),
+        ]
+    )
+
+
 def _plane_speed(obs, state, params):
     return abs(float(np.sqrt(state.x_dot**2 + state.z_dot**2) - params.target_speed))
 
@@ -299,6 +321,8 @@ PLANTS = {
         None,
         100,
     ),
+    # The patrol's aircraft and route, so the patrol's window.
+    "formation": (_formation_errors, None, 70, "phugoid ~1 min", None),
 }
 
 
@@ -468,7 +492,7 @@ def main() -> int:
     out = json.loads(out_path.read_text()) if out_path.exists() else {}
     for name in names:
         seeds = args.seeds
-        if name.startswith(("plane", "patrol")):
+        if name.startswith(("plane", "patrol", "formation")):
             seeds = min(seeds, 2)  # deterministic plants, expensive planners
         out[name] = measure(name, seeds)
         out_path.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")

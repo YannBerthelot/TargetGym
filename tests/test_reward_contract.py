@@ -323,6 +323,15 @@ def test_the_recorded_mpc_cost_is_what_the_mpc_measures_now():
     assert m["tracking"] == pytest.approx(row["mpc"]["tracking"], rel=1e-3)
 
 
+def _assert_tree_equal(a, b):
+    """Leaf for leaf, so a nested state (an aircraft, or a formation's batched
+    wingmen) is compared array by array rather than as one object."""
+    leaves_a, leaves_b = jax.tree.leaves(a), jax.tree.leaves(b)
+    assert len(leaves_a) == len(leaves_b)
+    for x, y in zip(leaves_a, leaves_b):
+        np.testing.assert_array_equal(np.asarray(x), np.asarray(y))
+
+
 def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     """``base.failure_kernel``: when the physics' proposal leaves the envelope
     the step is scored on that proposal -- every term zero, the failure term
@@ -352,29 +361,21 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     for name in vars(fresh):
         if name == "time":
             continue
-        np.testing.assert_array_equal(
-            np.asarray(getattr(out, name)), np.asarray(getattr(fresh, name))
-        )
+        _assert_tree_equal(getattr(out, name), getattr(fresh, name))
     lost = p.replace(continuing=False)
     out, tripped, scored, terminated = failure_kernel(
         Trips(), key, state, proposal, lost
     )
     assert bool(tripped) and bool(terminated)
     assert scored is proposal
-    for name in vars(proposal):
-        np.testing.assert_array_equal(
-            np.asarray(getattr(out, name)), np.asarray(getattr(proposal, name))
-        )
+    _assert_tree_equal(out, proposal)
     for params in (p, lost):
         out, tripped, scored, terminated = failure_kernel(
             env, key, state, proposal, params
         )
         assert not bool(tripped) and not bool(terminated)
         assert scored is proposal
-        for name in vars(proposal):
-            np.testing.assert_array_equal(
-                np.asarray(getattr(out, name)), np.asarray(getattr(proposal, name))
-            )
+        _assert_tree_equal(out, proposal)
     # The reward's failure term is the trip cost, and nothing else, on a
     # state outside the envelope; zero on one inside.
     terms = env.reward_terms(state, p)

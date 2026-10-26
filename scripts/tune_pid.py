@@ -1478,6 +1478,17 @@ TUNERS = {
         ),
         "CompressorSurge",
     ),
+    # Coordinate descent on the wingman seats' pursuit gains over the test
+    # episode (200 steps, three turn onsets of the route), starting from the
+    # package's DEFAULT_GAINS, the patrol's. The lead seat is the patrol's
+    # lead autopilot and is not searched. pid_gains.json has no "formation"
+    # entry: the shipped team flies the patrol's own gains.
+    "formation": (
+        lambda n_points=0, tuning_rule="", **kw: _tune_aircraft_search(
+            "formation", "formation", steps=200, seeds=8, **kw
+        ),
+        "Formation",
+    ),
 }
 
 

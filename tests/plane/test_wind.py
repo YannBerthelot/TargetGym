@@ -11,11 +11,11 @@ import numpy as np
 import pytest
 
 from target_gym import (
+    Formation,
     Plane,
     Plane3D,
     PlaneParams,
     PlanePatrol,
-    PlanePatrolMARL,
 )
 from target_gym.plane.dynamics import total_wind_2d
 from target_gym.plane3d.env import PlaneParams3D
@@ -239,13 +239,13 @@ class TestFormationTurbulence:
         assert per_plane == 0.0  # shared, not per-aircraft
         assert gust_std(0.0)[0] == 0.0  # sigma=0 -> no turbulence
 
-    def test_marl_formation_turbulence(self):
-        env = PlanePatrolMARL(num_wingmen=4)
+    def test_formation_turbulence(self):
+        env = Formation(num_wingmen=4)
         params = env.default_params.replace(
             max_steps_in_episode=150, turbulence_sigma=4.0
         )
-        obs, state = env.reset(jax.random.PRNGKey(0), params)
-        zero = {a: jnp.zeros(3) for a in env.agents}
+        obs, state = env.reset_env(jax.random.PRNGKey(0), params)
+        zero = jnp.zeros(env.action_space().shape)
 
         def step(carry, _):
             s, k = carry
