@@ -224,12 +224,12 @@ The long-run protocol costs in `src/target_gym/data/protocol_results.json` work
 the same way. They are what the floor check in `tests/test_reward_contract.py`
 compares each measured floor against, and they carry the same fingerprint, so
 the same change that makes a baseline stale makes its row stale too. Re-run the
-protocol for the environments the test names. If the numbers moved, regenerate
-the results page, which reads the file, and paste the full table it prints
-into the protocol section of `docs/baselines.md`:
+protocol for the environments the test names, then regenerate the results
+page, which reads the file:
 
 ```bash
 uv run python scripts/evaluate_baselines.py --envs plane cstr
+uv run python scripts/generate_baseline_table.py
 ```
 
 Two things to know before starting a run. It reads `src/target_gym/data/baseline_returns.json`

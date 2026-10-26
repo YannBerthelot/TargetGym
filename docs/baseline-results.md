@@ -58,6 +58,46 @@ compares across rows. 3 seeds each.
 | [`wind_turbine`](environments/wind_turbine.md) | 2.64e-5 | 1.3e-5 | 1.01e-5 | 0.821 |
 | [`battery`](environments/battery.md) | 0.00346 | 7.82e-4 | 2.22e-4 | 0.827 |
 
+## Hold and transient
+
+The gain mixes holding a target with reaching it. **Hold** is the cost per
+step once a controller has settled on each target, and **transient** is the
+summed cost of getting there, per target change. Steps a controller spends
+moving early toward a previewed target count in the transient. Same units
+and seeds as the gain.
+
+| environment | PID hold | MPC hold | PID transient | MPC transient |
+| --- | --- | --- | --- | --- |
+| **Aircraft** | | | | |
+| [`plane`](environments/plane.md) | 6.21 | 0.516 | 2.73e6 | 1.19e6 |
+| [`plane_energy`](environments/plane_energy.md) | 740 | 48.1 | 1.84e6 | 1.81e5 |
+| [`plane_sine`](environments/plane_sine.md) | 1,493 | 0.527 | 2.14e6 | 7.61e5 |
+| [`plane3d_heading`](environments/plane3d_heading.md) | 19,023 | 0.726 | 8.86e6 | 2.01e6 |
+| [`plane3d_circle`](environments/plane3d_circle.md) | 832 | 1.93 | 7.04e6 | 1.23e6 |
+| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 1.35e6† | 1.01 | 6.89e6 | 1.21e6 |
+| [`plane3d_figure8`](environments/plane3d_figure8.md) | 5.92e5 | 0.77 | 3.04e8 | 5,320 |
+| [`patrol`](environments/patrol.md) | 265 | 0.0371 | 45,322 | 6,041 |
+| [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 199 | 0.0371 | 38,481 | 6,041 |
+| **Process Control** | | | | |
+| [`cstr`](environments/cstr.md) | 5.96e-7 | 0 | 6.6e5 | 6.1e5 |
+| [`first_order`](environments/first_order.md) | 7.89e-11 | 0 | 1.19e5 | 1.17e5 |
+| [`four_tank`](environments/four_tank.md) | 30.3 | 3.08e-8 | 6.58e5 | 1.85e5 |
+| [`ph_neutralization`](environments/ph_neutralization.md) | 9.73 | 0.0756 | 91,237 | 22,144 |
+| [`distillation`](environments/distillation.md) | 62.6 | 0.0125 | 13,342 | 1,396 |
+| [`unstable_cstr`](environments/unstable_cstr.md) | 2.68 | 0.00649 | 5.84e5 | 2.52e5 |
+| **Industrial / Energy** | | | | |
+| [`glass_furnace`](environments/glass_furnace.md) | 2.09† | 0.394† | 1,139 | 247 |
+| [`reactor`](environments/reactor.md) | 23.7 | 1.38 | 12,374 | 597 |
+| [`hvac`](environments/hvac.md) | 0.0154 | 0.00368 | 0.913 | 0.514 |
+| [`cement_kiln`](environments/cement_kiln.md) | 5.75 | 0.0728 | 2,463 | 255 |
+| [`boiler_drum`](environments/boiler_drum.md) | 460 | 3.44 | 38,413 | 2,378 |
+| [`compressor_surge`](environments/compressor_surge.md) | 9.41 | 0.214 | 8.94e5 | 1.01e5 |
+| **Renewable Energy** | | | | |
+| [`wind_turbine`](environments/wind_turbine.md) | 2.64e-5 | 1.3e-5 | 0.0132 | 0.00298 |
+| [`battery`](environments/battery.md) | 0.00132 | 8.68e-4 | 0.0292 | 6.87e-4 |
+
+† No hold was reached: the cost was still rising when the window ended, for the PID on `glass_furnace`, the MPC on `glass_furnace`, the PID on `plane3d_racetrack`.
+
 ## Episode returns
 
 The cost per step over the whole test episode (minus the return divided by
@@ -97,4 +137,4 @@ the PID.
 
 ## Caveats
 
-- [`patrol_bearing_only`](environments/patrol_bearing_only.md): The PID is a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator recovers it by differencing the estimated relative position and filtering. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its NEA measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed (oracle audit, 2026-10).
+- [`patrol_bearing_only`](environments/patrol_bearing_only.md): The PID is a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator recovers it by differencing the estimated relative position and filtering. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its NEA measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.

@@ -107,8 +107,7 @@ present locally.
 **What is committed:** only the five gallery mosaics, `videos/mosaic_*.webp`,
 because they are the only media a published page embeds. The per-environment
 clips are rendered by the `docs-deploy` workflow before it builds the site, so
-a clean checkout stays light and the published pages still have pictures. See
-[baselines.md](baselines.md) for why that convention changed.
+a clean checkout stays light and the published pages still have pictures.
 
 ## Adding a renderer
 

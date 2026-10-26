@@ -84,6 +84,14 @@ than by commit.
 
 ### Changed
 
+- **The docs are reorganised and trimmed for users.** The sidebar is now User
+  guide, Environments, Results, Background and Contributing, and design drafts
+  under `docs/proposals/` are no longer published. `baselines.md` (1,042 lines
+  to 233), `reward-shaping.md` (621 to 229), `rl-protocol.md` and
+  `rl-baselines.md` keep what a user needs to use and quote the numbers; the
+  history they carried is in this file and in git. The hold and transient
+  table moved from a hand-pasted block into the generated
+  `docs/baseline-results.md`.
 - **stable-baselines3, torch and tensorboard left the `dev` group** for an
   opt-in `agent` group (`uv sync --group agent`). They added about 550 MB to
   every development environment and CI job for one PPO smoke test, which now

@@ -235,12 +235,13 @@ documented as such on their environment page.
 > pays. Where reacting to the reference and the disturbances is sufficient, a
 > PID is optimal or close enough that the difference does not appear in a
 > return. Two environments were corrected after measurement showed exactly
-> this: a battery whose dispatch signal was so noisy that no controller could
-> exceed 0.43 of the reward ceiling, and a patrol follower tracking a lead at
-> one fixed turn rate, which a single feedforward term cancels.
+> this: a battery whose dispatch signal was mostly noise, and a patrol follower
+> tracking a lead at one fixed turn rate, which a single feedforward term
+> cancels.
 
-**[docs/baselines.md](docs/baselines.md)** covers the MPC implementations,
-tuning and caching, solver reporting and per-environment coverage.
+**[How the baselines work](docs/baselines.md)** says how each controller is
+built and what to know before quoting an MPC number; the numbers are on
+**[Baseline results](docs/baseline-results.md)**.
 
 ---
 
@@ -270,13 +271,15 @@ method and lists what each model is validated against.
 | | |
 |---|---|
 | **[Getting started](docs/getting-started.md)** | Episodes, vectorised rollouts, the registry, Gymnasium |
-| **[Target MDPs](docs/target-mdp.md)** | The formal setting |
+| **[Using the PIDs](docs/using-the-pids.md)** | Running the baseline, scoring against it, using it in training |
 | **[Environment reference](docs/environments.md)** | All 23: shapes, tracked variables, baselines, contracts |
-| **[Public API](docs/api.md)** | Stable and provisional surface |
-| **[Baselines](docs/baselines.md)** | PID and MPC controllers, tuning, solver reporting |
-| **[RL protocol](docs/rl-protocol.md)** | Measuring a learned policy |
-| **[Reward shaping](docs/reward-shaping.md)** | The tracking reward and why it has that shape |
 | **[Complexity ladder](docs/complexity.md)** | Six tiers, for curriculum use |
+| **[Public API](docs/api.md)** | Stable and provisional surface |
+| **[Baseline results](docs/baseline-results.md)** | PID and MPC scores on every environment |
+| **[RL protocol](docs/rl-protocol.md)** | Measuring a learned policy |
+| **[Target MDPs](docs/target-mdp.md)** | The formal setting |
+| **[How the baselines work](docs/baselines.md)** | PID and MPC controllers, tuning, solver reporting |
+| **[Reward shaping](docs/reward-shaping.md)** | The reward and why it has that shape |
 | **[Rendering](docs/rendering.md)** | Dashboards, toolkits, regenerating media |
 | **[Throughput](docs/performance.md)** | Steps per second per environment |
 | **[Physics methodology](docs/PHYSICS_METHODOLOGY.md)** | Sourcing, validation, bounds |
