@@ -109,12 +109,12 @@ while True:
 
 ### Comparing against the baselines
 
-For most environments the defaults *are* the scored configuration, so a plain
-rollout is comparable to the published numbers. The exceptions are the plants
-that host several task variants: `PlaneParams` is shared by `plane`,
-`plane_sine` and `plane_energy`, which are scored over 280, 480 and 1200 steps,
-so one class cannot default to all three. `EnvSpec.test_params` carries the
-per-variant settings, and `spec.make_test_params()` resolves them:
+The defaults are not always the scored configuration. Every aircraft task and
+the reactor are scored over a shorter episode than their default (the aircraft
+default to 10,000 steps and are scored over 200 to 1,200), and several aircraft
+tasks also set their reference and reward scale there. `EnvSpec.test_params`
+carries those settings, and `spec.make_test_params()` resolves them for any
+task, so use it whenever you compare with the published numbers:
 
 ```python
 import numpy as np
@@ -182,7 +182,7 @@ does not:
 
 | Property | In the suite | Why it is hard to learn |
 |---|---|---|
-| **Irrecoverable states** | A drum that carries water into the turbine, a reactor past runaway, a kiln gone cold | Exploration that reaches them ends the episode permanently |
+| **Irrecoverable states** | A drum that carries water into the turbine, a reactor past runaway, a kiln gone cold | Reaching one trips the plant, and that one step is charged the restart's whole downtime |
 | **Deep partial observability** | The furnace hides 6 of 9 states, the reactor 7 of 11, the kiln 64 behind 8 measurements | The policy has to infer what it cannot measure |
 | **Wrong-way-first response** | Opening the steam valve makes drum level *rise* before it falls, as steam bubbles expand | A controller following the immediate trend pushes the loop the wrong way |
 | **Transport delay** | Half the kiln's response to a fuel change arrives a 25-minute residence time later | Credit assignment spans hundreds of steps |
@@ -218,8 +218,8 @@ Controller structure is chosen per plant:
   is the pairing industrial anti-surge systems use, and the recycle valve gets
   a loop of its own because the margin it protects is not a tracked output.
 
-Five kinds of controller fill the MPC slot: CasADi/IPOPT where a symbolic model
-exists, gradient-based planning through the JAX dynamics elsewhere,
+The MPC slot holds the best controller each task allows: CasADi/IPOPT where a
+symbolic model exists, gradient-based planning through the JAX dynamics elsewhere,
 cross-entropy sampling for the cement kiln, on the battery a feedforward of the
 scheduled dispatch level, which is the best causal action there, on the wind
 turbine a feedback law (generator torque solved so that the next step's power
@@ -237,12 +237,13 @@ documented as such on their environment page.
 > pays. Where reacting to the reference and the disturbances is sufficient, a
 > PID is optimal or close enough that the difference does not appear in a
 > return. Two environments were corrected after measurement showed exactly
-> this: a battery whose dispatch signal was so noisy that no controller could
-> exceed 0.43 of the reward ceiling, and a patrol follower tracking a lead at
-> one fixed turn rate, which a single feedforward term cancels.
+> this: a battery whose dispatch signal was mostly noise, and a patrol follower
+> tracking a lead at one fixed turn rate, which a single feedforward term
+> cancels.
 
-**[docs/baselines.md](docs/baselines.md)** covers the MPC implementations,
-tuning and caching, solver reporting and per-environment coverage.
+**[How the baselines work](docs/baselines.md)** says how each controller is
+built and what to know before quoting an MPC number; the numbers are on
+**[Baseline results](docs/baseline-results.md)**.
 
 ---
 
@@ -272,13 +273,15 @@ method and lists what each model is validated against.
 | | |
 |---|---|
 | **[Getting started](docs/getting-started.md)** | Episodes, vectorised rollouts, the registry, Gymnasium |
-| **[Target MDPs](docs/target-mdp.md)** | The formal setting |
+| **[Using the PIDs](docs/using-the-pids.md)** | Running the baseline, scoring against it, using it in training |
 | **[Environment reference](docs/environments.md)** | All 24: shapes, tracked variables, baselines, contracts |
-| **[Public API](docs/api.md)** | Stable and provisional surface |
-| **[Baselines](docs/baselines.md)** | PID and MPC controllers, tuning, solver reporting |
-| **[RL protocol](docs/rl-protocol.md)** | Measuring a learned policy |
-| **[Reward shaping](docs/reward-shaping.md)** | The tracking reward and why it has that shape |
 | **[Complexity ladder](docs/complexity.md)** | Six tiers, for curriculum use |
+| **[Public API](docs/api.md)** | Stable and provisional surface |
+| **[Baseline results](docs/baseline-results.md)** | PID and MPC scores on every environment |
+| **[RL protocol](docs/rl-protocol.md)** | Measuring a learned policy |
+| **[Target MDPs](docs/target-mdp.md)** | The formal setting |
+| **[How the baselines work](docs/baselines.md)** | PID and MPC controllers, tuning, solver reporting |
+| **[Reward shaping](docs/reward-shaping.md)** | The reward and why it has that shape |
 | **[Rendering](docs/rendering.md)** | Dashboards, toolkits, regenerating media |
 | **[Throughput](docs/performance.md)** | Steps per second per environment |
 | **[Physics methodology](docs/PHYSICS_METHODOLOGY.md)** | Sourcing, validation, bounds |
@@ -311,8 +314,7 @@ GitHub and is rewritten for the site at build time.
 ## Roadmap
 
 Rewards, physics, baselines and the measurement protocol are settled.
-Outstanding before 1.0: published learned-policy results and hosted
-documentation. Known gaps are recorded rather than omitted.
+Outstanding before 1.0: published learned-policy results. Known gaps are recorded rather than omitted.
 
 **[Full roadmap →](docs/roadmap.md)**
 

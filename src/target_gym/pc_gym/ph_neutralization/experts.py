@@ -41,7 +41,7 @@ class PHCasadiMPC(CasadiMPC):
     value by the env's own OU mean decay toward nominal. Planning on the
     nominal q2 instead, as this controller once did, made almost all of its
     hold error: reading q2 cut the protocol cost from 3.06 to 0.096 and the
-    hold error from 0.0146 to 0.0022 pH (oracle audit, 2026-10-01, seeds 0-2).
+    hold error from 0.0146 to 0.0022 pH (seeds 0-2).
     What remains is the OU innovation itself, which no causal controller can
     predict: a planner told the realised next q2 tracks to about 1e-5 pH, so
     the whole remaining tracking cost is that one-step innovation.

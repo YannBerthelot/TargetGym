@@ -53,8 +53,8 @@ configuration (`spec.make_test_params()`):
 - **MPC**: reads the true state, including what the observation hides, so it is
   an upper bound rather than a peer.
 
-Every reward is a cost, so lower is better. To score your own policy against
-these numbers, see [Evaluating against it](using-the-pids.md#evaluating-against-it).
+Every number on this page is a cost, so lower is better. To score your own
+policy against them, see [Evaluating against it](using-the-pids.md#evaluating-against-it).
 How the controllers are built and measured is in
 [How the baselines work](baselines.md).
 """
@@ -133,6 +133,43 @@ def _protocol() -> list[str]:
     return lines
 
 
+def _hold() -> list[str]:
+    data = json.loads(PROTOCOL.read_text())
+    rows, unsettled = {}, []
+    for name, r in data.items():
+        cells = []
+        for who in ("pid", "mpc"):
+            m = r.get(who)
+            # A negative reach cost means the cost was still rising when the
+            # window ended: there was no hold to measure the transient from.
+            mark = "†" if m and m["reach_cost"] < 0 else ""
+            if mark:
+                unsettled.append(f"the {who.upper()} on `{name}`")
+            cells.append(f"{_fmt(m and m['hold'])}{mark}")
+        cells += [_fmt(r.get(w) and r[w]["transient_cost"]) for w in ("pid", "mpc")]
+        rows[name] = " | ".join(cells)
+    lines = [
+        "## Hold and transient",
+        "",
+        "The gain mixes holding a target with reaching it. **Hold** is the cost per",
+        "step once a controller has settled on each target, and **transient** is the",
+        "summed cost of getting there, per target change. Steps a controller spends",
+        "moving early toward a previewed target count in the transient. Same units",
+        "and seeds as the gain.",
+        "",
+        "| environment | PID hold | MPC hold | PID transient | MPC transient |",
+        "| --- | --- | --- | --- | --- |",
+        *_grouped(rows, 5),
+    ]
+    if unsettled:
+        lines += [
+            "",
+            "† No hold was reached: the cost was still rising when the window ended, "
+            "for " + ", ".join(unsettled) + ".",
+        ]
+    return lines
+
+
 def _returns() -> list[str]:
     from target_gym.provenance import load_recorded_baselines
 
@@ -204,7 +241,8 @@ def _caveats() -> list[str]:
 
 
 def _page() -> str:
-    parts = [INTRO, *("\n".join(p) for p in (_protocol(), _returns(), _caveats()) if p)]
+    sections = (_protocol(), _hold(), _returns(), _caveats())
+    parts = [INTRO, *("\n".join(p) for p in sections if p)]
     return "\n\n".join(s.strip("\n") for s in parts) + "\n"
 
 

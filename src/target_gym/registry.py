@@ -59,8 +59,8 @@ DISPLAY_NAMES: dict[str, str] = {
     "plane_sine": "Altitude - sinusoid",
     "plane_energy": "Altitude and airspeed",
     "plane": "Altitude hold",
-    "patrol": "Patrol - MARL formation",
-    "patrol_bearing_only": "Patrol - MARL, bearing-only",
+    "patrol": "Patrol - wingman",
+    "patrol_bearing_only": "Patrol - wingman, bearing-only",
     "unstable_cstr": "Unstable CSTR",
 }
 
@@ -77,16 +77,10 @@ _ENV_CACHE: dict[str, Any] = {}
 def control_step_seconds(env, params) -> float:
     """Seconds of simulated time one ``step_env`` call advances.
 
-    ``delta_t`` alone is not it. Two plants carry their models' native minutes
-    (the PC-gym CSTR and distillation column declare ``time_unit_seconds``),
-    and the reactor holds one action across ``control_period`` physics
-    sub-steps. Without both factors the generated facts table labelled a
-    200-minute distillation episode "3 min" and a 25-minute CSTR one "25 s",
-    and the reactor's 2.4 h would read as 864 s.
-
-    Lives here rather than in ``utils.py`` because that module is part of every
-    environment's provenance fingerprint, and a bookkeeping helper must not
-    move every environment's fingerprint.
+    ``delta_t`` times ``time_unit_seconds`` (the PC-gym CSTR and distillation
+    column run in minutes) times ``control_period`` (the reactor holds one
+    action across several physics sub-steps). Kept out of ``utils.py``, which
+    is in every fingerprint.
     """
     dt = float(getattr(params, "delta_t", 1.0))
     unit = float(getattr(params, "time_unit_seconds", 1.0))
@@ -101,8 +95,8 @@ class EnvSpec:
     Attributes
     ----------
     name:
-        Registry key.  Matches the runner module prefix and the key used in
-        ``src/target_gym/data/pid_gains.json`` where gains are tuned.
+        Registry key, and the key of its gains in
+        ``src/target_gym/data/pid_gains.json`` where they are tuned.
     group:
         One of :data:`GROUPS`.
     env_factory:
@@ -118,8 +112,8 @@ class EnvSpec:
         ``step(obs, state) -> action``.  ``None`` means no MPC baseline
         exists for this environment yet.
     test_params:
-        Parameter overrides producing an episode short enough for the test
-        suite while still exercising the interesting dynamics.  Applied via
+        Parameter overrides for the scored configuration, the one the
+        baselines and the protocol are measured on.  Applied via
         ``params_cls(**test_params)``.
     tuned_gains_key:
         Key under which this environment's PID gains live in
@@ -128,18 +122,10 @@ class EnvSpec:
         ``provenance.baseline_fingerprint`` hashes this key's entry.
     gains_keys:
         Other keys of ``pid_gains.json`` this task's baseline and protocol
-        records depend on. ``provenance.baseline_fingerprint`` hashes the
-        entries whose key starts with the task's name and the
-        ``tuned_gains_key`` entry; a key outside both is declared here, or a
-        retune of it would leave those records looking fresh. ``plane_sine``
-        and ``plane_energy`` declare ``plane_cascaded``, the key their
-        cascaded PID baseline reads, and patrol declares ``plane3d_heading``,
-        the autopilot its oracle and its scripted lead fly. The field feeds
-        the baseline fingerprint only. The version stamp
-        (``provenance.environment_fingerprint``) hashes neither
-        ``pid_gains.json`` nor ``experts/pid.py``, so it does not see a gains
-        entry the physics reads; patrol's lead is the one such case today.
-        ``tests/test_registry_rules.py`` checks every declared key exists.
+        records depend on, beyond those starting with its name and
+        ``tuned_gains_key``; without them a retune of that key would leave the
+        records looking fresh (``plane_sine`` declares ``plane_cascaded``).
+        Feeds the baseline fingerprint only, not the version stamp.
     baselines_note:
         Set when ``make_pid``/``make_mpc`` are ``None``: a short explanation
         of why, surfaced by the baseline-coverage test so a missing expert is
@@ -149,34 +135,28 @@ class EnvSpec:
     disturbance_fields:
         State fields holding a *zero-mean stochastic disturbance* (gusts, load
         noise). The conformance suite asserts these behave like disturbances --
-        in particular that they do not ratchet monotonically when the
-        environment is stepped with a constant PRNG key, which is how every
-        rollout helper in this repo drives ``step_env``. Deliberately excludes
-        deliberately-drifting processes such as the reactor's OU demand.
+        in particular that they do not ratchet under a constant PRNG key, as
+        every rollout helper here steps them. Excludes deliberately drifting
+        processes such as the reactor's demand.
     disturbance_overrides:
         Parameter overrides that switch the disturbance on, when it is off by
         default (e.g. the aircraft's ``turbulence_sigma``).
     effectiveness_overrides:
         Parameter overrides for the controller-effectiveness contract, when the
         default ``test_params`` episode is too short to tell a working
-        controller from a constant. The reactor needs this: its xenon transient
-        runs for hours, so a 20-minute episode separates nothing.
+        controller from a constant (the reactor, whose xenon transient outlasts
+        the scored episode).
     expert_degraded:
-        Set when a baseline *exists and is well-formed* but does not yet meet
-        the effectiveness contract -- it loses to a constant action. Distinct
-        from ``baselines_note``, which explains a baseline that is absent, or
-        labels one that needs qualifying (``patrol_bearing_only``'s
-        full-state MPC). Surfaced by the conformance suite so a weak expert is a
-        recorded, explained gap rather than a silently bad benchmark number.
+        Set when a baseline exists but loses to a constant action, so the gap
+        is recorded and explained rather than a silently bad number.
     mpc_degraded:
         The same, for the MPC: set when the MPC exists and runs but returns
         materially less than the PID, so it is not the upper bound the benchmark
         presents it as. The reason should carry the measured numbers.
     noise_fields:
-        Names of parameters that scale process noise. A planner that rolls the
-        real environment forward gets a copy of the params with these set to
-        zero, so it plans on the mean disturbance instead of one invented
-        realisation of it.
+        Parameters that scale process noise. A planner's copy of the params
+        has them zeroed, so it plans on the mean disturbance
+        (``experts.mpc.plan_params``).
     fingerprint_sources:
         Source files outside the task's own package that its physics imports,
         relative to ``src/target_gym`` (e.g. ``"pc_gym/cstr/env.py"``). Both
@@ -192,16 +172,15 @@ class EnvSpec:
     make_pid: Callable[[], Any] | None
     make_mpc: Callable[[Any, Any], Any] | None
     # Behavioural version of the environment, part of its public identity as
-    # ``<name>-v<version>``. Every environment ships as v1 in the 0.6 release,
-    # which is where versioning starts; nothing before that is versioned,
-    # because the package had no users to preserve results for. Bump it
-    # whenever the dynamics, the reward, the parameters or the observation
-    # layout change, so that a published number keeps meaning what it meant.
+    # ``<name>-v<version>``. Bump it whenever the dynamics, the reward, the
+    # parameters or the observation layout change, so that a published number
+    # keeps meaning what it meant.
     #
-    # v2 for every environment: the floor-normalised reward replaced the
-    # capped log-scaled one (docs/reward-shaping.md). The v1 reward is still
-    # constructible with ``reward_version=1`` on any params, and the v1
-    # baselines are kept in ``src/target_gym/data/baseline_returns_v1.json``.
+    # Versioning starts at v1 in the 0.6 release. v2 is the floor-normalised
+    # reward (docs/reward-shaping.md), and some tasks have reached v3 since.
+    # The v1 reward is still constructible with ``reward_version=1`` on any
+    # params, and the v1 baselines are kept in
+    # ``src/target_gym/data/baseline_returns_v1.json``.
     version: int = 2
     test_params: dict[str, Any] = field(default_factory=dict)
     tuned_gains_key: str | None = None
@@ -221,7 +200,7 @@ class EnvSpec:
 
     @property
     def versioned_name(self) -> str:
-        """The name a published result should cite, e.g. ``plane-v1``.
+        """The name a published result should cite, e.g. ``plane-v2``.
 
         Registry keys stay unversioned because they are an internal handle,
         used for gains, recorded baselines and file paths. This is the public
@@ -249,23 +228,11 @@ class EnvSpec:
     def make_env(self):
         """The environment for this spec, built once and shared.
 
-        Deliberately not a fresh instance per call. ``env.step_env`` is a *bound
-        method*, so every new instance is a new callable to JAX, which keys its
-        compilation cache on the callable and holds the resulting executable for
-        the life of the process. Building environments in a loop therefore leaks:
-        measured on the 2D aircraft, forty fresh instances retained 104 MB, about
-        2.6 MB apiece, and each one also paid its compile again. Re-wrapping the
-        *same* instance in ``jax.jit`` repeatedly costs nothing, so the instance
-        is what matters.
-
-        Sharing is safe because these environments carry no per-episode state:
-        every field is configuration (``obs_shape``, ``integration_method``,
-        ``observe_wind``), and ``positions_history`` is a render buffer the
-        stepping code never writes. All state lives in the ``EnvState`` passed
-        through each call.
-
-        Anyone constructing an environment directly rather than through the
-        registry should hold onto the instance for the same reason.
+        Not a fresh instance per call: ``env.step_env`` is a bound method, so
+        every new instance is a new callable to JAX, compiled again and held for
+        the life of the process. Sharing is safe because environments carry no
+        per-episode state; it all lives in the ``EnvState`` passed through each
+        call. Hold onto an instance you construct directly for the same reason.
         """
         cached = _ENV_CACHE.get(self.name)
         if cached is None:
@@ -273,7 +240,7 @@ class EnvSpec:
         return cached
 
     def make_test_params(self, **overrides):
-        """Parameters for a short test episode, plus any extra overrides."""
+        """The scored configuration (``test_params``), plus any extra overrides."""
         return self.params_cls(**{**self.test_params, **overrides})
 
 
@@ -509,16 +476,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
     ),
-    # Two moving-setpoint variants of the same aircraft. They are the same plant
-    # and the same controllers; only the commanded altitude differs, which is
-    # the point -- holding one altitude is a task a tuned PID finishes with
-    # 0.0 m of settled error, so it can no longer distinguish controllers.
-    #
-    # Measured with the shipped PID: hold scores 1595 at 0.0 m, steps 1472 at
-    # 57.6 m, sinusoid 870 at 120.3 m. Monotone in difficulty, and each exposes
-    # something a constant setpoint cannot -- steps the transient response,
-    # repeatedly, and the sinusoid the closed loop's bandwidth, since amplitude
-    # ratio and phase lag against frequency *are* its frequency response.
+    # Two moving-setpoint variants of the same aircraft: same plant, same
+    # controllers, a different commanded altitude. Steps expose the transient
+    # response repeatedly, and the sinusoid the closed loop's bandwidth.
     EnvSpec(
         name="plane_energy",
         group="aircraft",
@@ -526,27 +486,13 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
         make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.experts"),
-        # Altitude *and* airspeed. The aircraft has always carried two
-        # actuators, thrust and elevator, against one scored objective, so a
-        # controller had a spare degree of freedom and could trade airspeed for
-        # altitude for free. Scoring both removes it: thrust is finite, climbing
-        # and accelerating compete, and the exchange between them is the
-        # phugoid. Steps on the altitude so the trade is forced repeatedly
-        # rather than settled once.
+        # Altitude *and* airspeed: with two actuators against one scored
+        # objective a controller could trade airspeed for altitude for free.
+        # Scoring both forces the trade, repeatedly, on an altitude staircase.
+        # The pure staircase is ``PlaneParams(speed_weight=0.0)``.
         #
-        # This absorbed ``plane_steps``, which was this environment with
-        # ``speed_weight`` at zero and nothing else different: same plant, same
-        # schedule, same disturbances, same episode. Two registered environments
-        # for one reward coefficient is not two tasks, and the pair cost 9 h of
-        # the 12.9 h it took to record the aircraft. The pure altitude staircase
-        # is still available, as ``PlaneParams(speed_weight=0.0)`` -- the term is
-        # a parameter, not a fork.
-        #
-        # Gains come from ``tuned_gains_key="plane"``, tuned on the plain
-        # altitude-hold task and deliberately not re-tuned here. The PID is the
-        # baseline a learner has to beat, and a PID that has been fitted to the
-        # airspeed trade is no longer the honest reference for whether that
-        # trade is worth making.
+        # Gains are the altitude-hold task's, deliberately not re-tuned here,
+        # so the PID stays an honest reference for whether the trade pays.
         test_params={
             "max_steps_in_episode": 1200,
             "target_pattern": 1,
@@ -557,11 +503,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             # (`scripts/measure_hold.py`).
             "c_hold": 5.23,
             # The oracle's lowest per-seed altitude hold between ladder steps,
-            # 1.198 m, rounded (oracle audit, 2026-10). It was 4.55 m, an
-            # earlier oracle's hold taken before its moves toward the next
-            # target were separated from its hold. Under this floor the same
-            # planner holds 1.35 / 1.18 m per seed, and rho is the lower in
-            # floor units (`scripts/measure_hold.py`).
+            # 1.198 m rounded; rho is its 1.18 m in floor units
+            # (`scripts/measure_hold.py`).
             "e_floor": 1.20,
             "rho_floor_tracking": (1.1773 / 1.20) ** 2,
             "rho_floor": (1.1773 / 1.20) ** 2,
@@ -573,8 +516,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
-        # v3: the altitude floor is the oracle's own 1.20 m hold, from the
-        # 4.55 m an earlier oracle held (oracle audit, 2026-10).
+        # v3: the altitude floor moved from 4.55 m to the oracle's 1.20 m.
         version=3,
     ),
     EnvSpec(
@@ -584,29 +526,22 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
         make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.experts"),
-        # 800 steps is 3.3 periods of the 240 s sinusoid, satisfying the three
-        # periods the episode-length criterion asks of a periodic task.
+        # 480 steps is two periods of the 240 s sinusoid: the first sheds the
+        # initial transient, the second is what a bandwidth probe reads.
         #
-        # The amplitude is set by the aircraft's climb rate, not by taste. A
-        # sinusoid of amplitude A and period T commands a peak vertical rate of
-        # 2*pi*A/T, and the aircraft's best sustained climb at these altitudes
-        # measures 14.6 m/s. At the 800 m this ran at, the command peaked at
-        # 20.9 m/s -- half again what the aircraft can produce -- so the target
-        # was unreachable by construction and no controller could score near
-        # the top of the range. 300 m peaks at 7.9 m/s, comfortably inside the
-        # envelope, which is what a bandwidth probe needs: the response has to
-        # be limited by the closed loop, not by the actuator saturating.
+        # The amplitude is set by the climb rate: amplitude A and period T
+        # command a peak vertical rate of 2*pi*A/T. 300 m peaks at 7.9 m/s,
+        # inside the aircraft's 14.6 m/s best sustained climb, so the response
+        # is limited by the closed loop, not by the actuator saturating.
         test_params={
             "max_steps_in_episode": 480,
             "target_pattern": 3,
             "target_amplitude": 300.0,
             "target_period": 240.0,
             "c_hold": 8.15,  # PID hold-phase airspeed deviation on the sinusoid
-            # The altitude floor is an earlier oracle's lowest per-seed hold on
-            # the sinusoid. The current oracle holds 0.53 m, below the 1 m
-            # barometric resolution, and the resolution is within 1.5x of
-            # 1.26 m, so the floor stays (oracle audit, 2026-10). rho is the
-            # oracle's lowest per-seed hold, 0.5285 m, in floor units
+            # The altitude floor is an earlier oracle's hold, kept because the
+            # 1 m barometric resolution is within 1.5x of it; rho is the
+            # current oracle's lowest per-seed hold, 0.5285 m, in floor units
             # (`scripts/measure_hold.py`).
             "e_floor": 1.26,
             "rho_floor_tracking": (0.5285 / 1.26) ** 2,
@@ -647,8 +582,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
-        # v3: the altitude floor is the 1 m altimeter resolution, from the
-        # 1.44 m an earlier oracle held (oracle audit, 2026-10).
+        # v3: the altitude floor became the 1 m altimeter resolution (was 1.44 m).
         version=3,
     ),
     EnvSpec(
@@ -675,10 +609,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
-        # v3: the floors are the instrument resolutions (oracle audit,
-        # 2026-10), from the 4.06 m altitude an earlier oracle held and an
-        # 8.12 m path floor labelled as its hold, though it equals 2 x 4.06 m
-        # and the recorded hold was 14.27 m.
+        # v3: the floors became the instrument resolutions (were 4.06 m
+        # altitude and 8.12 m path).
         version=3,
     ),
     EnvSpec(
@@ -709,38 +641,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
-        # v3: the floors are the instrument resolutions, from the 1.39 m
-        # altitude and 6.17 m path an earlier oracle held (oracle audit,
-        # 2026-10).
+        # v3: the floors became the instrument resolutions (were 1.39 m
+        # altitude and 6.17 m path).
         version=3,
-        # No ``expert_degraded``: this expert used to carry one, and what it
-        # said was that its gains had never been searched. They have been now.
-        # Coordinate descent on the cross-track gain alone, over five seeds and
-        # full 900-step episodes, takes the settled cross-track error from
-        # 3.02 km to 0.31 km against an 8.4 km turn radius, and the return from
-        # 269.2 to 319.0. It holds the pattern rather than merely flying its
-        # shape.
-        #
-        # Getting there needed one fix outside the gains: the class declared
-        # ``obs_value_index`` and no ``obs_target_index``, so ``rollout``
-        # raised on it, the search scored every candidate as -inf inside its
-        # own ``try`` and reported success having changed nothing, and no
-        # baseline could be recorded for this environment at all.
-        # ``tests/test_env_conformance.py`` now checks both indices across the
-        # whole registry.
-        #
-        # Three earlier defects, kept because two of them are mistakes this
-        # repository has made before. The cross-track error was taken straight
-        # from the geometry as side * (|v| - r), which reverses meaning between
-        # the outbound and return legs, so the correction steered *away* from
-        # the path on one of them; it is now signed in the tangent's own frame.
-        # There was no coordinated-turn feedforward, so the law chased the
-        # tangent through the turns and lagged by construction -- the same
-        # failure the circle expert had, and the geometry supplies the exact
-        # curvature, so it is now fed forward. And the roll-damping term had
-        # the sign that makes it positive feedback, which let bank reach 52
-        # degrees against a 30 degree command limit. Together those took the
-        # settled error from 48.7 km to 4.4 km.
+        # No ``expert_degraded``: the cross-track gain has been searched, and
+        # the expert holds the pattern rather than merely flying its shape.
     ),
     EnvSpec(
         name="plane3d_figure8",
@@ -765,8 +670,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
-        # v3: the path floor is the 3 m GPS resolution, from the 14.6 m an
-        # earlier oracle held (oracle audit, 2026-10).
+        # v3: the path floor became the 3 m GPS resolution (was 14.6 m).
         version=3,
     ),
     EnvSpec(
@@ -781,9 +685,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # The oracle and the lead fly the 3D heading autopilot.
         gains_keys=("plane3d_heading",),
         noise_fields=("turbulence_sigma",),
-        # v3: the slot floor is the 3 m relative-GPS resolution, from 18.6 m
-        # (an earlier planner's hold), so the reward changed (oracle audit,
-        # 2026-10). PatrolParams is shared, so patrol_bearing_only moves too.
+        # v3: the slot floor became the 3 m relative-GPS resolution (was
+        # 18.6 m). PatrolParams is shared, so patrol_bearing_only moves too.
         version=3,
     ),
     EnvSpec(
@@ -814,7 +717,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "its NEA measures information and control together: what the "
             "hidden lead state is worth plus what a policy leaves on the "
             "table. It never reads the observation, so its per-step costs "
-            "equal patrol's seed for seed (oracle audit, 2026-10)."
+            "equal patrol's seed for seed."
         ),
         noise_fields=("turbulence_sigma",),
         # v3 with patrol: they share PatrolParams, and the slot floor moved.
@@ -903,9 +806,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # test episode is kept short.
         tuned_gains_key="distillation",
         disturbance_fields=("zF",),
-        # The feed composition's OU innovation. The JAX planner rolls its model with a fixed key, so
-        # undeclared it saw the exact noise of protocol seed 0 and a wrong path on
-        # every other seed (oracle audit, 2026-10-01).
+        # The feed composition's OU innovation. Declared so the planner plans on the
+        # mean (``plan_params``) rather than on one fixed noise path.
         noise_fields=("zF_noise_std",),
     ),
     # -- Industrial / energy ------------------------------------------------
@@ -993,14 +895,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_cement_kiln_mpc", module="target_gym.cement_kiln.experts"),
         # 700 steps = 5.8 hours at dt = 30 s, about fourteen transport delays,
         # so a controller lives with the consequences of its own fuel changes
-        # many times over. (This comment read "240 steps = 2 hours ... about
-        # five transport delays" long after the episode-length audit raised it
-        # to 700.)
+        # many times over.
         tuned_gains_key="cement_kiln",
         disturbance_fields=("raw_meal",),
-        # The raw-meal feed's OU innovation. The JAX planner rolls its model with a fixed key, so
-        # undeclared it saw the exact noise of protocol seed 0 and a wrong path on
-        # every other seed (oracle audit, 2026-10-01).
+        # The raw-meal feed's OU innovation. Declared so the planner plans on the
+        # mean (``plan_params``) rather than on one fixed noise path.
         noise_fields=("feed_noise_std",),
     ),
     EnvSpec(
@@ -1016,9 +915,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # so a controller has to survive many inverse-response transients.
         tuned_gains_key="boiler_drum",
         disturbance_fields=("q_steam",),
-        # The steam demand's OU innovation. The JAX planner rolls its model with a fixed key, so
-        # undeclared it saw the exact noise of protocol seed 0 and a wrong path on
-        # every other seed (oracle audit, 2026-10-01).
+        # The steam demand's OU innovation. Declared so the planner plans on the
+        # mean (``plan_params``) rather than on one fixed noise path.
         noise_fields=("q_steam_noise_std",),
     ),
     EnvSpec(

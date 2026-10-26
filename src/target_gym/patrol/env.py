@@ -143,7 +143,7 @@ class PatrolParams(PlaneParams3D):
     # costs, per step, twice the 1500 m slot-loss bound plus the heading term.
     #
     # patrol-v3: the slot floor was 18.6 m, an earlier planner's lowest
-    # per-seed hold, until the oracle audit (2026-10). The twin-autopilot
+    # per-seed hold. The twin-autopilot
     # oracle that replaced it held 0.41 m under that floor and holds 0.10 m
     # under this one (lowest per-seed holds), so the floor is now the
     # instrument rather than the next oracle's hold.

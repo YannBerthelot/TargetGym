@@ -1,44 +1,18 @@
-"""
-JAX-compatible PID expert controllers for target_gym environments.
+"""PID controllers: the shared loops, the forms they run in, and the gains store.
 
-Design mirrors gymnax: explicit state structs + pure functions so everything
-is jit/vmap/scan-able.
+A :class:`Controller` is gains, an initial memory and one pure step function,
+so it can sit inside ``jit``, ``vmap`` and ``lax.scan``. It runs in two forms,
+and docs/using-the-pids.md says which to pick:
 
-Usage pattern (single episode with jax.lax.scan):
+- :class:`HostController` (``env.make_pid()``) keeps its own memory; call it
+  once per step and ``reset()`` it at each episode start.
+- The pure form (``spec.make_pid_controller()``) has you carry the memory;
+  :class:`FunctionalExpertPolicy` (``env.expert_policy``) is it batched.
 
-    from target_gym.experts.pid import make_cstr_pid, pid_step
-
-    params, state0 = make_cstr_pid()
-
-    def step_fn(carry, obs):
-        pid_state = carry
-        action, new_pid_state = pid_step(params, pid_state, obs)
-        return new_pid_state, action
-
-    final_state, actions = jax.lax.scan(step_fn, state0, obs_sequence)
-
-Observation layouts (matches each env's get_obs):
-    CSTR       : [Ca, T, target_Ca]
-    FirstOrder : [x, target_x]
-    Nonsmooth  : [x1, x2, target_x1]
-    FourTank   : [h1, h2, h3, h4, target_h1, target_h2]
-    Car        : [velocity, target_velocity, ...]  (uses only first two)
-    Plane      : uses [z, target_altitude] (minimal obs in runner)
-
-All actions are raw-normalized in [-1, 1] (what step_env expects).
-
-Tuning methodology
-------------------
-Gains are optimised by gradient descent (Adam) on an ITAE loss averaged over
-many uniformly-spaced setpoints, via JAX autodiff through the full closed-loop
-rollout.  See ``target_gym.experts.pid_tuning`` to re-run the optimisation.
-
-Notes per environment:
-- CSTR       : L2 regularisation prevents Kp runaway in the saturation regime.
-- Nonsmooth  : targets (1.0–2.0) lie outside the actuator's steady-state range
-               (u∈[−1,1] → x1_ss∈[−0.5, 0.5]); gains cannot solve this.
-- FourTank   : cross-coupling (v1↔h2, v2↔h1) limits independent-loop PID; the
-               asymmetric gains (pid2 stronger) reflect the coupling structure.
+Each environment's PID is built in its package's ``experts.py`` from the loops
+here (``siso_pid``, ``mimo_pid``, the aircraft and patrol laws). The gains are
+tuned by ``scripts/tune_pid.py`` (relay autotuning, AMIGO rule by default) and
+read from ``src/target_gym/data/pid_gains.json``.
 """
 
 import json
@@ -53,13 +27,7 @@ from flax import struct
 # Persistent gains store
 # ---------------------------------------------------------------------------
 
-# Resolved relative to this file so it works regardless of cwd.
-# ``parents[1]`` is the package, so this resolves inside it whether the code
-# is run from a checkout or an installed wheel. It was ``parents[3]``, the
-# repository root from a checkout and the interpreter's lib directory from
-# site-packages, so an installed target-gym announced "No PID gains file
-# found at /usr/local/lib/python3.13/data/pid_gains.json" and silently
-# re-ran gradient tuning for minutes on every user's first call.
+# Inside the package, so it resolves from a checkout and from an installed wheel.
 _GAINS_FILE = pathlib.Path(__file__).resolve().parents[1] / "data" / "pid_gains.json"
 _gains_cache: dict | None = None
 
@@ -241,14 +209,8 @@ class MIMOPIDParams:
 
 
 def pid_update(e, integral, prev_error, Kp, Ki, Kd, dt, action_min, action_max, xp):
-    """The PID recurrence itself, over whichever array module is passed.
-
-    This exists because it was once written twice, in ``pid_step`` for tracing
-    and in a host-side class for the Python loop, with the anti-windup
-    spelled two different but equivalent ways. That is the duplication check 12
-    of the model review checklist is about, and the environments already avoid
-    it -- ``compute_reward(state, params, xp=jnp)`` is one function read by
-    ``numpy`` on the host and by ``jax`` under trace.
+    """The PID recurrence, over whichever array module is passed (``jnp``
+    under trace, ``numpy`` on the host), so both forms run one function.
 
     Anti-windup: on saturation the integral is left where it was, so a
     controller pinned at its limit does not wind up a term it cannot spend.
@@ -494,11 +456,7 @@ class PatrolPIDParams:
 _PATROL_NOMINAL_SPEED = 230.0  # m/s, the follower's cruise
 
 # Standard gravity, for the coordinated-turn relation tan(phi) = v^2 / (g R).
-# The circle and patrol lateral laws already take this as a constructor
-# argument; the patrol turn-rate conversion below spelled it three times as a
-# literal. Named here so the coupling to the plant's own ``gravity`` parameter
-# is at least visible: a plant configured with a different one would disagree
-# with every controller that hardcodes this.
+# A plant configured with a different ``gravity`` would disagree with this.
 _G = 9.81
 
 
@@ -716,17 +674,8 @@ def make_plane3d_heading_pid() -> tuple[Plane3DHeadingPIDParams, Plane3DPIDState
 def _wrap_angle(a, xp=jnp):
     """Wrap an angle to (-pi, pi], over whichever array module is passed.
 
-    This was written twice, and the two were not the same function. The traced
-    form used ``arctan2(sin, cos)`` and the host form ``(a + pi) % (2 pi) - pi``,
-    which agree everywhere except at exactly ``a = pi``, where the first returns
-    ``+pi`` and the second ``-pi``. That is a heading error of half a turn
-    resolving to opposite signs in the two implementations -- one controller
-    turning left where the other turns right -- in a file that keeps a traced
-    and a host copy of the same control laws. See check 12 in
-    docs/model-review-checklist.md.
-
-    ``arctan2(sin, cos)`` is kept because it is the numerically better of the
-    two near the wrap, and it works unchanged under numpy.
+    The traced and host controllers share this one function, so a heading
+    error of exactly pi resolves the same way in both.
     """
     return xp.arctan2(xp.sin(a), xp.cos(a))
 

@@ -143,7 +143,7 @@ class WindTurbineParams(EnvParams):
     # hold steps of the test episode: 1.68 kW on seed 1 of five. A per-seed
     # minimum rather than a mean, so that no run of the reference controller
     # sits below it. An upper bound on the achievable floor. The oracle that
-    # replaced the planner (oracle audit, 2026-10) holds 1454 W on its best
+    # replaced the planner holds 1454 W on its best
     # seed and 1749 W on average, the PID 4563 W (`scripts/measure_hold.py`,
     # 400 hold steps after a 300-step burn-in, 3 seeds). 1680 W is within
     # 1.5x of that best hold (1.16x), so the floor, and with it the reward,

@@ -177,7 +177,7 @@ def _baseline_section(spec, row: dict | None) -> str:
         return f"No baseline ships for this environment. {spec.baselines_note or ''}".strip()
     lines = []
     if row and row.get("pid_returns"):
-        # Reported the way docs/baselines.md reports them: every reward is
+        # Reported the way docs/baseline-results.md reports them: every reward is
         # minus a sum of costs, so the mean return is negative and the cost
         # per step is its positive counterpart. Four significant figures
         # because the plants span ten orders of magnitude; a fixed ``.1f``

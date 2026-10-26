@@ -78,11 +78,18 @@ extra_javascript:
   - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
+# Design drafts, kept in the repository but not published.
+exclude_docs: |
+  proposals/
+
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
-  - Target MDPs: target-mdp.md
-  - Rendering: rendering.md
+  - User guide:
+      - Getting started: getting-started.md
+      - Using the PIDs: using-the-pids.md
+      - Rendering: rendering.md
+      - Throughput: performance.md
+      - API reference: api.md
   - Environments:
       - Overview: environments.md
       - Complexity ladder: complexity.md
@@ -115,19 +122,18 @@ nav:
       - Energy:
           - Wind Turbine: environments/wind_turbine.md
           - Battery: environments/battery.md
-  - Beating the baselines:
+  - Results:
       - Baseline results: baseline-results.md
-      - Using the PIDs: using-the-pids.md
-      - How the baselines work: baselines.md
-      - Throughput: performance.md
       - RL protocol: rl-protocol.md
       - RL results: rl-baselines.md
-      - Certainty-equivalence study: certainty-equivalence-study.md
-  - Trusting the numbers:
-      - Physics methodology: PHYSICS_METHODOLOGY.md
-      - Model review checklist: model-review-checklist.md
+  - Background:
+      - Target MDPs: target-mdp.md
+      - How the baselines work: baselines.md
       - Reward shaping: reward-shaping.md
+      - Physics methodology: PHYSICS_METHODOLOGY.md
+  - Contributing:
       - Testing: testing.md
-  - API reference: api.md
-  - Roadmap: roadmap.md
-  - Functional structure: functional-structure.md
+      - Model review checklist: model-review-checklist.md
+      - Functional structure: functional-structure.md
+      - Certainty-equivalence study: certainty-equivalence-study.md
+      - Roadmap: roadmap.md

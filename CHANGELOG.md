@@ -84,6 +84,17 @@ than by commit.
 
 ### Changed
 
+- **Shorter docstrings in the core modules** (registry, experts, eval, reward,
+  runners, base): they keep the contracts and drop the measurement history,
+  and `eval.evaluate` now documents every number it returns.
+- **The docs are reorganised and trimmed for users.** The sidebar is now User
+  guide, Environments, Results, Background and Contributing, and design drafts
+  under `docs/proposals/` are no longer published. `baselines.md` (1,042 lines
+  to 233), `reward-shaping.md` (621 to 229), `rl-protocol.md` and
+  `rl-baselines.md` keep what a user needs to use and quote the numbers; the
+  history they carried is in this file and in git. The hold and transient
+  table moved from a hand-pasted block into the generated
+  `docs/baseline-results.md`.
 - **stable-baselines3, torch and tensorboard left the `dev` group** for an
   opt-in `agent` group (`uv sync --group agent`). They added about 550 MB to
   every development environment and CI job for one PPO smoke test, which now
@@ -448,6 +459,15 @@ than by commit.
 
 ### Fixed
 
+- **Docs that contradicted the code.** `docs/target-mdp.md` and seven
+  physics notes stated the version-1 reward as the current one. Four
+  docstrings described a trip four ways; they now match `base.failure_kernel`
+  (one charge, then a restart). The README said the defaults are the scored
+  configuration almost everywhere, when they differ on every aircraft task
+  and the reactor. The two patrol tasks were labelled multi-agent, though each
+  has one learner behind a scripted lead. Stale numbers in the complexity
+  ladder, the HVAC episode length, the `pid.py` usage example and the
+  versioning examples are corrected.
 - **The Gymnasium wrapper follows two more of Gymnasium's rules.** A seeded
   `reset` now calls `super().reset(seed=seed)`, so `env.np_random` is seeded
   as the API promises (the dynamics still draw from the wrapper's JAX key, so

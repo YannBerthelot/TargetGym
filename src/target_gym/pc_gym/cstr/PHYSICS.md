@@ -119,10 +119,8 @@ range buys 0.078 mol/L of concentration — a narrow, nonlinear authority.
 composition analyser. Nothing is hidden here, which makes this one of the two
 fully-observed environments in the suite.
 
-**Reward** — `log_scaled_reward` on `Ca` against the 0.3 mol/L envelope, with a
-floor at `precision_floor = 1e-4` mol/L, the resolution of an online analyser.
-It replaced a squared normalised band, which divided the error by the whole
-envelope and was nearly flat over any error a working controller produces.
+**Reward** — the floor-normalised cost described in *Reward (version 2)*
+below.
 
 **No disturbance.** Unusually for this suite, the CSTR is deterministic apart
 from the sampled setpoint. That is inherited from PC-gym and is why the shared

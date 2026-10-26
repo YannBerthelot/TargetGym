@@ -43,11 +43,9 @@ what is broken and recorded rather than hidden.
 
       **Blocking, and fatal on first contact if missed:**
 
-      - [ ] **Release before advertising.** PyPI is at 0.5.0. The 21
-        environments, the restructured README, the gallery and the versioning
-        are all unreleased, so anyone acting on a post today installs the old
-        package. This also clears the stale PyPI summary, which still mentions a
-        "Car" environment that does not exist.
+      - [ ] **Release before advertising.** PyPI is at 0.6.1 (2026-09-11),
+        which predates the version-2 rewards, the two newest tasks and the PID
+        interface, so anyone acting on a post today installs an older package.
       - [x] **Environment versioning.** Done: `EnvSpec.version`,
         `spec.versioned_name`, `src/target_gym/data/env_versions.json`, and
         `tests/test_env_versions.py`, which fails when an environment's

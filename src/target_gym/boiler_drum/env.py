@@ -77,7 +77,7 @@ class BoilerDrumParams(EnvParams):
     # an earlier oracle's lowest per-seed hold, measured when that oracle saw
     # the steam noise of its best seed; the pressure floor is the 0.05 bar
     # transmitter resolution. The current oracle plans on the mean steam
-    # demand (oracle audit, 2026-10-01) and holds 2.45 mm and 0.0519 bar on its
+    # demand and holds 2.45 mm and 0.0519 bar on its
     # best seed (`scripts/measure_hold.py`, 1200 hold steps after a 60-step
     # burn-in; PID 37-70 mm, 0.035-0.050 bar). Both are within 1.5x of the
     # floors, so the floors stay the scale. Upper bounds on the achievable

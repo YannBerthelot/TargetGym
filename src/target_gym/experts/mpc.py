@@ -7,17 +7,12 @@ it is in every task's baseline fingerprint, so editing it re-records all of
 them.
 
 GradientMPC  (JAX)
-    Single-shooting gradient MPC: differentiates through a JAX scan rollout
-    and runs gradient descent on the action sequence.  Requires a long horizon
-    to be accurate, and suffers from vanishing gradients for stiff systems.
+    Single-shooting gradient MPC: differentiates through a ``lax.scan``
+    rollout of ``step_env`` and descends the action sequence.
 
 CasadiMPC  (CasADi / IPOPT)
-    Proper NLP-based receding-horizon MPC solved by IPOPT via do_mpc.  The
-    solver receives analytic Jacobians and finds the exact optimum in each
-    window, matching the PC-gym oracle approach.  Each CasADi plant subclasses
-    it with its own model.  Requires::
-
-        pip install casadi do-mpc
+    Receding-horizon NLP solved by IPOPT through do-mpc, with analytic
+    Jacobians. Each CasADi plant subclasses it with its own model.
 
 ShrinkingHorizonNLP  (CasADi / IPOPT)
     One NLP over the rest of the episode on the environment's own discrete
@@ -67,19 +62,10 @@ def plan_params(spec, params):
     """The params a planner should use for its own internal model.
 
     Identical to *params* except that anything named in ``spec.noise_fields``
-    is zeroed, so the planner predicts the **mean** disturbance rather than one
-    invented realisation of it. That is certainty equivalence, and it is the
-    standard treatment for additive zero-mean noise.
-
-    Without it the planners rolled the true environment forward under a
-    hardcoded ``jax.random.PRNGKey(0)`` while ``rollout`` drives the plant with
-    ``PRNGKey(seed)``. On **seed 0 those coincide**, so the planner's simulated
-    disturbance was the plant's actual disturbance and the MPC had perfect
-    foresight for one seed in ten. On the battery, whose tracked target *was*
-    the noise, that was worth 350.4 against 151.8: a median tracking error of
-    22 W where the honest figure is 60 630 W. It inflated seed 0 of every
-    environment with a gradient or sampling planner, and it inflated the
-    published mean of all of them.
+    is zeroed, so the planner predicts the **mean** disturbance (certainty
+    equivalence). Without it a planner rolling the environment under a fixed
+    key would plan on one invented noise path, which is the plant's own path
+    on seed 0 and gives the MPC perfect foresight there.
     """
     fields = getattr(spec, "noise_fields", ())
     if not fields:
@@ -105,12 +91,10 @@ class GradientMPC:
         Learning rate for gradient descent.
     lr_end : float or None
         If set, the step decays geometrically from ``lr`` to ``lr_end`` over
-        the ``n_iter`` iterations of each solve. The fixed step of a
-        normalised descent is also its resolution: it cannot place an action
-        closer than about ``lr`` to the optimum, which left steady offsets on
-        the 3D aircraft and on distillation (the oracle audit, 2026-10). A
-        decaying step keeps the early reach and resolves the end. ``None``
-        keeps the fixed step.
+        the ``n_iter`` iterations of each solve. A fixed normalised step cannot
+        place an action closer than about ``lr`` to the optimum, which leaves a
+        steady offset; a decaying one keeps the early reach and resolves the
+        end. ``None`` keeps the fixed step.
     action_dim : int
         Dimensionality of the action vector.
     action_lb, action_ub : float
@@ -123,28 +107,18 @@ class GradientMPC:
         look excellent for ``horizon`` steps and reach a terminal state just
         after it.
 
-        It assumes holding the last action approximates continuing sensibly.
-        That is true where holding is close to trim and false where the plant
-        needs active stabilisation, so it is enabled per environment on
-        measurement rather than by default -- see ``make_plane_mpc``.
+        It assumes holding the last action approximates continuing sensibly,
+        so it is enabled per environment (``make_plane_mpc``).
     done_value : float
-        Per-step objective charged for every step *after* the planned rollout
-        reaches a terminal state. ``step_env`` reports termination and the
-        rollout previously ignored it, summing rewards straight through a plant
-        that had already tripped or crashed -- so a plan that destroyed the
-        plant at step 21 of 60 scored the same as one that flew it to the end.
-        The default of 0.0 is the right charge whenever the objective is
-        positive while the plant is healthy, which makes ending early cost the
-        rest of the horizon. An objective that is negative when healthy has to
-        set this below its own worst per-step value, or terminating early looks
-        like an improvement.
+        Per-step objective charged for every step after the planned rollout
+        reaches a terminal state, so a plan that trips the plant early is not
+        scored as if it flew on. 0.0 suits an objective that is positive while
+        healthy; a negative objective must set this below its worst per-step
+        value.
     objective_fn : callable or None
         ``f(state, params) -> scalar`` summed over the rollout in place of the
-        environment's own reward. Use it where that reward has a flat or clipped
-        region: the controller descends it, and a gradient of zero is not a
-        statement that the state is good. The surrogate must share the reward's
-        *minimiser* while being smooth -- see ``make_wind_turbine_mpc`` for the
-        case that motivates it.
+        environment's reward. It must share the reward's minimiser and be
+        smooth where the reward is flat or clipped (``_v2_objective``).
     """
 
     def __init__(
@@ -177,23 +151,16 @@ class GradientMPC:
         self.done_value = float(done_value)
         self.objective_fn = objective_fn
         # ``f(state, params) -> raw action`` (or a whole ``(horizon,
-        # action_dim)`` plan) the first plan of an episode is filled with. Without it the plan starts at zero -- mid-range on every
-        # actuator -- and the normalised-gradient steps take several env steps
-        # to walk it to the operating point: on the wind turbine the first
-        # action left a 1.5 MW error where the PID, which starts from the
-        # actuator's current position, left 3 kW. A warm start from the
-        # actuator state is what a real MPC does at commissioning.
+        # action_dim)`` plan) for the first plan of an episode. Without it the
+        # plan starts mid-range and takes several steps to reach the operating
+        # point; a real MPC warm-starts from the actuator state.
         self.initial_plan_fn = initial_plan_fn
         self._fresh = True
         # ``f(state, params) -> plan`` evaluated at every step: the descent
-        # runs from the shifted previous plan as always, and the better of
-        # the two plans under the planner's objective is kept. With a
-        # stabilising controller's rollout as the guide, the planner's plan is
-        # never worse than that controller's under its own model -- which is
-        # what makes it an upper bound over it rather than a competitor that
-        # can lose to it where the descent stalls (measured on the 2D
-        # aircraft: from its own shifted plan it held ten floor-widths worse
-        # than the cascaded PID; guided, it cannot).
+        # runs from the shifted previous plan, and the better of the two under
+        # the planner's objective is kept. With a stabilising controller's
+        # rollout as the guide, the plan is never worse than that controller's
+        # under the planner's model.
         self.guide_plan_fn = guide_plan_fn
         self._jit_rollout = jax.jit(self._rollout)
 
@@ -242,72 +209,24 @@ class GradientMPC:
     def _descend(self, actions_init: jnp.ndarray, state, n_iter: int) -> jnp.ndarray:
         """Projected gradient descent, kept strictly inside the action bounds.
 
-        The margin is the whole point, and it is not cosmetic. These plants
-        saturate: an engine cannot produce less than zero thrust, a valve
-        cannot open past fully open. Saturation is written with ``clip`` or
-        ``maximum``, and at exactly the kink those hand back a derivative of
-        zero, which is a valid subgradient and the wrong one for an optimiser.
-        Projecting onto the closed interval parks an action precisely on the
-        bound whenever a step overshoots, and the bound is then *absorbing*:
-        the derivative there is exactly zero, so gradient descent can never
-        move that action again, however it is scaled or preconditioned.
+        These plants saturate, written with ``clip`` or ``maximum``, whose
+        derivative at the kink is zero. An action projected exactly onto a
+        bound therefore never moves again: the bound is absorbing. Holding the
+        iterates ``_BOUND_MARGIN`` inside the bounds is the interior-point
+        principle in miniature, and on the 2D aircraft it was the difference
+        between gliding into the ground and flying the episode.
 
-        Measured on ``plane_steps`` seed 2, at the plan where the aircraft
-        gives up and glides into the ground with the setpoint 2000 m above it::
-
-            thrust  autodiff d(obj)/d(thrust)   finite difference   objective
-            -1.00           0.0000                   +2.998           23.989
-            -0.99          +2.9998                   +3.003           24.019
-            -0.95          +3.0266                   +3.030           24.140
-            -0.50          +3.5376                   +3.545           25.597
-
-        The derivative is right everywhere except on the bound, where the true
-        one-sided slope is +3.0 and autodiff returns 0. Thrust sat at exactly
-        -1.000 for 800 steps while the elevator went on being optimised
-        normally, which is why the controller looked alive the whole time: a
-        planner that has stopped searching still emits finite, in-bounds
-        actions. Holding the iterates 1e-3 inside the bounds takes the episode
-        from terminating at t=1732 to flying all 2400 steps, and the return
-        from 1013.6 to 2109.9 against the PID's 1717.6.
-
-        This is the interior-point principle in miniature, and it is the reason
-        real NLP solvers keep their iterates off the bounds. Two alternatives
-        were measured and are worse. Normalising the gradient per actuator
-        rather than over the whole sequence crashes earlier, at t=971, because
-        it lets a noisy actuator take a full-size step every iteration. A
-        finite-difference line search over a constant offset per actuator does
-        work, since it never consults the derivative, but it scores below this
-        on both seeds tried and costs ``action_dim * 7`` extra rollouts a step.
-
-        Twelve of the twenty environments with an MPC used this optimiser at
-        the time. The four plants among them (battery, boiler drum,
-        distillation, wind turbine) were re-recorded after the change and moved by under half a
-        point of return, distillation not at all, so the defect was latent for
-        them and real only for the aircraft.
-
-        The NaN scrub below is a second instance of the same family, and is
-        left as it is: this project has a documented, unlocalised reverse-mode
-        NaN in the aircraft dynamics (see ``NAN_TUNERS`` in
+        The NaN scrub below guards against a known, unlocalised reverse-mode
+        NaN in the aircraft dynamics (``NAN_TUNERS`` in
         ``tests/experts/test_pid_tuning.py``).
         """
         cost_and_grad = jax.value_and_grad(lambda a: -self._rollout(a, state))
         margin = self._BOUND_MARGIN * 0.5 * (self.action_ub - self.action_lb)
 
-        # The descent is not monotone: a fixed step along a normalised
-        # gradient overshoots wherever the objective has an edge -- a
-        # tolerance band, a barrier -- and the last iterate can then be far
-        # worse than the warm start it began from. Measured on the 2D
-        # aircraft (seed 1, step 144 of the test episode): the shifted plan
-        # scored -0.003, the plan after 50 iterations -3.31, and three steps
-        # later -0.99 against -19.7; taking the descended plan regardless,
-        # the planner then reached for the guide, dived 33 m out of the
-        # tolerance band and lost to the PID on the hold it had just
-        # reached. So the plan returned is the best iterate seen, the warm
-        # start included: under its own model the planner never leaves a
-        # solve with a worse plan than it entered it with. The steps
-        # themselves stay fixed: an accept-only backtracking step was tried
-        # and flew the aircraft 55 m/s slow again (running cost 0.15 against
-        # the PID's 0.002 on seed 1) -- it makes too little progress per solve.
+        # The descent is not monotone: a fixed step along a normalised gradient
+        # overshoots wherever the objective has an edge (a tolerance band, a
+        # barrier). So the plan returned is the best iterate seen, the warm
+        # start included, and a solve never leaves a worse plan than it found.
         lb, ub, lr = self.action_lb + margin, self.action_ub - margin, self.lr
         if self.lr_end is None:
 
@@ -399,17 +318,11 @@ class GradientMPC:
 # ============================================================================
 
 
-# IPOPT defaults to 3000 iterations and no time limit. In a receding-horizon
-# loop that is not a safety net, it is a hang: one badly conditioned step can
-# run for half an hour while its neighbours take a tenth of a second, and the
-# episode never finishes. A real MPC has a sample period and returns the best
-# iterate it holds when the clock runs out, so ours does the same.
-#
-# The iteration cap is the one meant to bind. It is deterministic, so a
-# baseline recorded on one machine reproduces on another -- which a wall-clock
-# cap would not be, since a slower machine would record a different return.
-# ``max_cpu_time`` is only a backstop against a solve that is pathological
-# rather than merely hard, and sits far above anything a healthy step needs.
+# IPOPT defaults to 3000 iterations and no time limit, which in a
+# receding-horizon loop can hang one step for half an hour. A real MPC has a
+# sample period and applies the best iterate it holds, so ours does too. The
+# iteration cap is the one meant to bind, because it is deterministic and a
+# record then reproduces on another machine; the CPU-time cap is a backstop.
 IPOPT_MAX_ITER = 150
 IPOPT_MAX_CPU_TIME = 60.0
 
@@ -423,11 +336,8 @@ _IPOPT_CAP_STATUSES = frozenset(
 
 class CasadiMPC:
     """
-    Receding-horizon MPC solved exactly by IPOPT via do_mpc / CasADi.
-
-    Equivalent to the PC-gym oracle approach (N=5 by default).  The NLP solver
-    receives analytic Jacobians so even a short horizon gives near-optimal
-    performance — no gradient vanishing, no learning-rate tuning.
+    Receding-horizon MPC solved by IPOPT through do-mpc and CasADi, with
+    analytic Jacobians (horizon 5 by default, as in PC-gym's oracle).
 
     Subclasses implement:
       - ``_build_mpc()`` → returns a configured, set-up ``do_mpc.controller.MPC``
@@ -523,17 +433,10 @@ class CasadiMPC:
         """Tell the solver what a unit is, before ``setup`` freezes the NLP.
 
         IPOPT auto-scales the objective and the constraints, but not the
-        decision variables: step norms, bound handling and the warm start all
-        run in whatever units the model happens to use. Left alone, the reactor
-        hands it a vector spanning ``rho_ext`` around 0.0016 up to a precursor
-        concentration around 377 -- a factor of 605 000, measured over a PID
-        episode -- and puts hard bounds on the smallest entry of it. That is a
-        badly conditioned KKT system built out of nothing but unit choices, and
-        it shows up as iteration counts, which is what makes a seed take twenty
-        times its siblings.
-
-        The numbers below are means of ``|x|`` over a PID episode, rounded to
-        one figure. They only have to be the right order of magnitude.
+        decision variables. Without this, units alone make the system badly
+        conditioned (the reactor's states span a factor of about 600,000),
+        which shows up as iteration counts. ``SCALING`` holds the typical
+        ``|x|`` of each variable over a PID episode, to one figure.
         """
         for kind, entries in self.SCALING.items():
             for var, value in entries.items():
@@ -546,11 +449,9 @@ class CasadiMPC:
     def _record_solve(self) -> bool:
         """Fold the last solve's outcome into the running counters.
 
-        do-mpc neither raises nor warns when IPOPT gives up: it stores the
-        failed iterate, hands it back as the action, and warm-starts the next
-        step from it. Nothing downstream can tell that apart from a converged
-        solve, so an MPC baseline can quietly stop being an upper bound. These
-        counters are what ``solver_report`` publishes alongside the return.
+        do-mpc neither raises nor warns when IPOPT gives up, so without these
+        counters a failed solve looks like a converged one. ``solver_report``
+        publishes them alongside the return.
         """
         stats = getattr(self._mpc, "solver_stats", None) or {}
         self.solve_calls += 1
@@ -676,12 +577,8 @@ def protocol_burn_in(name: str, params) -> int:
 
 
 # IPOPT settings of the shrinking-horizon NLP. The iteration cap is the one
-# that binds, and it is deterministic; there is no wall-clock limit, so a
-# record reproduces on a slower machine. 500 is the cap the oracle audit
-# (2026-10) measured with. On the CSTR and the four-tank a solve averages 6.1
-# to 11.8 iterations per seed over the ten baseline seeds, and none of their
-# 1000 and 200 solves reached the cap. Single solves vary around that mean:
-# the cold first solve of an episode is among the slowest.
+# that binds, and it is deterministic, so a record reproduces on a slower
+# machine. Solves average 6 to 12 iterations on the CSTR and the four-tank.
 NLP_MAX_ITER = 500
 NLP_TOL = 1e-9
 NLP_ACCEPTABLE_TOL = 1e-6
@@ -710,13 +607,8 @@ class ShrinkingHorizonNLP:
     protocol's own burn-in (``protocol_burn_in``, the hold row in
     ``data/hold_measurements.json``), so the oracle optimises the window the
     protocol scores. A small ``pre_weight`` keeps the approach from being
-    free, which a window-only objective leaves degenerate, without letting
-    it trade against the window: on the four-tank, whose response is
-    non-minimum-phase, the exact optimum of an unweighted all-step objective
-    leaves 0.0098 per step in the scored window, and weighting the window
-    1000 times removes that tail for 0.004% more reach cost (oracle audit,
-    2026-10). The cost is divided by the number of steps planned, as in the
-    measurements.
+    free (a window-only objective is degenerate) without letting it trade
+    against the window. The cost is divided by the number of steps planned.
 
     Inputs are bounded to the action box ``[-1, 1]``, hard. ``x_lb`` and
     ``x_ub``, when given, bound every planned state after the current one,
@@ -934,8 +826,8 @@ def _done_value(params, squared: bool = False) -> float:
     the plant has terminated: 0 for the non-negative version-1 reward (the
     forgone reward is the penalty), the failure charge for version 2, whose
     healthy steps are negative -- in the planner's units. Under version 2 no
-    plant raises ``terminated`` any more (a trip freezes it at the failure
-    cost inside the rollout, ``base.failure_kernel``), so the planner sees the
+    plant raises ``terminated`` any more (a trip is charged the trip cost and
+    the plant restarts, ``base.failure_kernel``), so the planner sees the
     trip's cost in the rollout itself and this value is never applied; it is
     kept for the version-1 planners."""
     if _is_v1(params):
@@ -956,21 +848,15 @@ class _PIDRolloutPlan:
     from the current state over the horizon and hands its action sequence to
     the planner.
 
-    A normalised-gradient planner moves its whole plan by at most ``lr`` per
-    iteration, spread over ``horizon * action_dim`` entries, so a solve
-    cannot travel far from wherever it starts: on the wind turbine, from a
-    constant plan it braked the rotor with the torque (a 700 kW error for the
-    whole horizon) because the pitch schedule it needed was out of reach, and
-    on the 2D aircraft it parked at the edge of the altitude tolerance 55 m/s
-    below cruise. Starting from, and at every step compared against, a
-    stabilising controller's plan makes the planner an upper bound over that
-    controller under its own model.
+    A normalised-gradient planner cannot travel far from where a solve
+    starts, so from a constant plan it can miss a manoeuvre the plant needs.
+    Starting from, and at every step compared against, a stabilising
+    controller's plan makes the planner an upper bound over that controller
+    under its own model.
 
-    The PID is cold-started for every rollout -- its integrators at zero,
-    what a controller switched on in this state would do. A PID stepped
-    along the planner's own trajectory instead winds its integrators up on
-    a control history that is not its own, and on the aircraft its plan then
-    crashed (objective -1e8) while the shipped PID held perfectly.
+    The PID is cold-started for every rollout, as a controller switched on in
+    this state would be: one stepped along the planner's trajectory winds its
+    integrators up on a control history that is not its own.
     """
 
     def __init__(self, env, make_pid, horizon: int, action_dim: int):
@@ -1027,25 +913,15 @@ def _v2_objective(reward_fn, barrier_fn=None, terms_fn=None, shaping_fn=None):
     weighted like the failure charge.
 
     ``terms_fn`` (the environment's ``compute_reward_terms``) is passed for
-    the plants whose tracking cost is linear in |error| (p = 1: the wind
-    turbine). Projected descent with a normalised gradient on a
-    linear cost is sign descent -- the step never shrinks near the optimum,
-    so the plan chatters (measured on the turbine: the rotor speed wandered to
-    1.12x rated with the barrier active two thirds of the time, and the hold
-    error was 6x the PID's). The tracking term is squared in floor units
-    instead, which has the same minimiser and a gradient that vanishes at it;
-    the running and failure terms are kept as they are.
+    the plants whose tracking cost is linear in |error| (p = 1). Normalised
+    descent on a linear cost never shrinks its step near the optimum, so the
+    plan chatters; the tracking term is squared in floor units instead (same
+    minimiser, a gradient that vanishes at it), and the other terms are kept.
 
-    The version-1 surrogates in this module exist because the log-scaled
-    reward was flat where a planner needed a gradient. The version-2 reward
-    is convex and additive (docs/reward-shaping.md), so the planner can
-    descend the plant's own cost -- which is the only way the MPC is an upper
-    bound *on that cost*: a surrogate with the version-1 minimiser sells the
-    consumption term the new reward charges, and the wind turbine and the
-    aircraft measurably lost to their PIDs that way. The barriers stay: a
-    terminal state is a boolean and gives the optimiser no derivative pointing
-    away from it, so the soft version is weighted at the failure charge
-    itself, in the same units.
+    The version-2 reward is convex and additive, so the planner descends the
+    plant's own cost, which is what makes the MPC an upper bound on that
+    cost. A trip is a boolean with no derivative pointing away from it, so
+    the barrier stays, weighted at the failure charge in the same units.
     """
 
     def f(state, params):
@@ -1073,19 +949,11 @@ def _v2_objective(reward_fn, barrier_fn=None, terms_fn=None, shaping_fn=None):
 class SamplingMPC:
     """Cross-entropy-method MPC — a gradient-free shooting controller.
 
-    Exists because some plants are not differentiable in practice even when
-    they are differentiable in principle. On the cement kiln the *forward*
-    rollout is perfectly well behaved, but the adjoint is not: free lime
-    depends on temperature through an Arrhenius term with a 280 kJ/mol
-    activation energy, that temperature is itself advected down the kiln, and
-    the resulting tangent system grows by roughly two orders of magnitude per
-    step. Reverse-mode gradients overflow to NaN after about eight steps --
-    measured at 1.6e-3 over five steps and 8.3e3 over eight -- while finite
-    differences on the same objective stay clean.
-
-    So this samples instead of differentiating: draw action sequences, roll
-    them out, keep the elite fraction, refit, repeat. Everything is vmapped and
-    jitted, so the cost is dominated by forward rollouts, which are cheap.
+    For plants whose forward rollout is well behaved but whose adjoint is not:
+    on the cement kiln, reverse-mode gradients through the Arrhenius term and
+    the kiln's transport delay overflow to NaN after about eight steps. So
+    this samples instead: draw action sequences, roll them out, keep the elite
+    fraction, refit, repeat. Everything is vmapped and jitted.
     """
 
     def __init__(

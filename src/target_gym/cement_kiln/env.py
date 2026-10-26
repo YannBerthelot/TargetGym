@@ -78,7 +78,7 @@ class CementKilnParams(EnvParams):
     # raw-meal disturbance, 4.9e-5 (fraction; the lowest of three seeds,
     # 4.9 / 6.5 / 8.4e-5, PID 7.0-10.1e-4) over 1560 hold steps after a
     # 180-step burn-in, `scripts/measure_hold.py`; an upper bound on the
-    # achievable floor. That is the oracle since the oracle audit (2026-10-01),
+    # achievable floor. That is the current oracle,
     # planning on the mean feed with a larger sampling budget; it held 3.3e-4
     # before. e_tol = 0 provisionally: the free-lime specification band comes
     # from the plant's quality system and is to be supplied. Fuel above the

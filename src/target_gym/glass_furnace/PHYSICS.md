@@ -144,14 +144,8 @@ episode with single trims of 2.8 °C median, 6 °C worst. Reset places the crown
 within ±4 °C of the first slot for the same reason: a running furnace is found
 at its setpoint, not 18 °C off it.
 
-**Reward.** `log_scaled_reward(|err|, precision_floor, 250 °C) -
-fuel_cost_weight·fuel_norm`. Every halving of the error is worth the same
-increment, from the operating envelope down to the 1 °C the crown thermocouple
-resolves, so the reward keeps separating controllers exactly where a good one
-operates: 1 °C scores 0.875, 2 °C scores 0.801, 4 °C scores 0.709. It replaced
-a clipped square, `clip(1 - |err|/40, 0, 1)²`, which was flat at zero for any
-error beyond 40 °C and so gave no gradient where it was most needed. See
-`docs/reward-shaping.md`.
+**Reward.** The floor-normalised cost described in *Reward (version 2)*
+below.
 
 **Instrumentation and dead time.** The crown reading in the observation is
 ``T_crown_meas``, a first-order lag of ``tau_thermocouple`` = 120 s on the true

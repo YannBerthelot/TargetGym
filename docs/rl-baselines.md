@@ -8,10 +8,8 @@ results are published yet.**
 ## Why the numbers live in a file
 
 Training costs GPU-hours, and the answer only moves when the environment or the
-agent moves. That is the same shape as the MPC baselines, which were costing
-forty minutes of CI on every merge before they were recorded instead of
-reproduced, so learned results reuse the mechanism rather than inventing a
-second one.
+agent moves, so learned results are recorded once and checked, like the
+baselines.
 
 Results go in `src/target_gym/data/rl_results.json`, written through
 `target_gym.rl_results.record_result`, and the suite checks three things about
@@ -29,12 +27,6 @@ one the shipped baselines use. An agent never calls a PID, so re-tuning a
 controller must not throw away a training run that cost GPU-hours. A change to
 the dynamics, the reward, the parameters, the integrator or the shared reward
 helper must.
-
-This is not hypothetical. Unifying the reward contract across all eighteen
-environments invalidated every return-based number in the repository at a
-stroke, and the glass furnace's PID moved 3.5% when a boundary bug in its tuner
-was fixed. A learned result recorded before either would still be a real
-measurement, and would no longer be a statement about this library.
 
 The agent's own configuration -- learning rate, network width, timesteps -- is
 stored verbatim and is deliberately *not* fingerprinted: two runs of the same
@@ -59,13 +51,6 @@ truncation, and preserving the terminal observation at a time-limit truncation
 so the value bootstrap is correct. These episodes truncate at `max_steps`
 constantly, so getting that wrong would quietly distort every result.
 
-It is also fast in the way this benchmark needs. Ajax's own seed-scaling
-measurements on `Plane3DCircle` show 15.8 s for one seed and 18.4 s for a
-hundred -- 86x throughput, superlinear, because the fixed compilation overhead
-amortises across seeds. That matters here specifically: this project has been
-misled by two-seed measurements three separate times, and at those rates ten
-seeds is not a budget decision.
-
 ```python
 # doc: skip -- the call shape; it needs a trained agent's returns to run
 from target_gym.rl_results import record_result
@@ -76,7 +61,7 @@ record_result(
     library="ajax",
     library_version=ajax.__version__,
     returns=per_seed_episode_returns,   # undiscounted, one per seed
-    episode_steps=600,
+    episode_steps=280,                  # plane's scored episode
     total_timesteps=1_000_000,
     config={"n_envs": 64, "lr": 3e-4},
 )
@@ -89,18 +74,7 @@ the environment's own.
 
 ## Reading the result, when there is one
 
-Two failure modes to keep in mind when the table exists.
-
-**If RL loses**, the result is on trial rather than the environments, and the
-answer needs to survive "your agent was under-trained". One cross-check against
-a standard implementation -- stable-baselines3 is the opt-in `agent` group
-(`uv sync --group agent`), with a working PPO smoke test -- on three or four
-environments settles it. If the two
-agree within noise, the JAX numbers inherit that credibility.
-
-**If RL wins**, check what it is beating. The PID is only a fair opponent when it
-is tuned, and this library has already shipped one that was not: the glass
-furnace's gains sat at the edge of their search grid, and widening it was worth
-3.5%. The circle expert could not fly a third of its own task's radius range
-until it was allowed to trade speed for turn radius, which was worth 31%. A win
-against a baseline with a defect in it is a measurement of the defect.
+Before trusting a win or a loss, run the checks in
+[How to read the result](rl-protocol.md#12-how-to-read-the-result): cross-check
+a loss against a standard implementation, and check that a win was not against
+a defective baseline or a simulator exploit.

@@ -182,8 +182,8 @@ class PlaneParams3D(EnvParams):
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # One quadratic term per tracked output, summed, each normalised by its
     # floor. The test configurations fly in the turbulence below. Each 3D
-    # task's registry entry sets its own floors: since the oracle audit
-    # (2026-10) they are the instrument resolutions above (1 m altitude,
+    # task's registry entry sets its own floors: they
+    # are the instrument resolutions above (1 m altitude,
     # 0.0087 rad heading, 3 m path), which the oracle holds below on every
     # task (`scripts/measure_hold.py`; the holds are in PHYSICS.md). No
     # tolerance and no running cost on these tasks. Leaving the envelope

@@ -278,8 +278,8 @@ class GlassFurnaceParams(EnvParams):
     # 0.0614 K (the lowest of three seeds: 0.061 / 0.077 / 0.088; PID
     # 0.49-0.52) over 3600 hold steps (30 h) after a 10 800-step (90 h)
     # burn-in, about stationary across the window (0.086 / 0.065 K halves),
-    # `scripts/measure_hold.py`. That is the oracle of the oracle audit
-    # (2026-10-03); the one before it held 0.175 K. An upper bound on the
+    # `scripts/measure_hold.py`. That is the current oracle; the one
+    # before it held 0.175 K. An upper bound on the
     # achievable floor. Fuel above the hold-phase flow (0.590 kg/s, the same
     # for PID and MPC) is charged at weight 1 (provisional: no fuel price
     # supplied). A trip costs twice the reachable crown excursion's cost per
@@ -301,7 +301,7 @@ class GlassFurnaceParams(EnvParams):
     restart_steps: int = 40320
     #: The NEA reference: the lowest per-seed hold cost the shipped MPC
     #: demonstrated, in the reward's units (the MPC's 0.0614 K hold in 1 K
-    #: units; 0.175 K before the oracle audit, 2026-10-03).
+    #: units; 0.175 K under the previous oracle).
     rho_floor_tracking: float = (0.0614 / 1.0) ** 2
     rho_floor: float = (0.0614 / 1.0) ** 2
     floor_is_documented_minimum: bool = False

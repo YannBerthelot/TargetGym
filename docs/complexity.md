@@ -12,14 +12,14 @@ horizon, partial observability).
 | 2 (Medium) | Grid Battery | 5 | 1 | Nonlinear ECM | **Finite charge window**: its limits trip the pack, but exact tracking stays inside them over the 30 min episode, so what tracking costs is wear, priced per step; state-dependent efficiency |
 | 3 (Hard) | Building HVAC | 7 | 1 | Linear RC network | **Partial observability** (thermal mass hidden), 43 h time constant, setback anticipation, comfort/energy trade-off |
 | 3 (Hard) | Four Tank | 6 | 2 | Nonlinear MIMO | **Non-minimum phase** (gamma1+gamma2 = 0.4): the RGA element is *negative*, so the obvious diagonal pairing is unstable and the loops must be crossed |
-| 4 (Very Hard) | Wind Turbine | 6 | 2 | Nonlinear aero-elastic | Turbulent unmeasured inflow, region switching, drive-train torsion, thrust/power trade-off |
+| 4 (Very Hard) | Wind Turbine | 5 | 2 | Nonlinear aero-elastic | Turbulent unmeasured inflow, region switching, drive-train torsion, thrust/power trade-off |
 | 4 (Very Hard) | pH Neutralisation | 3 | 1 | Implicit algebraic | 45x steady-state gain variation across the range, unmeasured buffering, same pH from different states |
 | 4 (Very Hard) | Binary Distillation | 6 | 2 | Stiff nonlinear MIMO | **Ill-conditioned** (condition number ~140): the two purities move together far more easily than apart |
 | 4 (Very Hard) | Unstable CSTR | 4 | 1 | Nonlinear SISO, open-loop unstable | **Unstable operating point**: every target is a saddle whose error grows e-fold in 19 to 43 s (derived, `scripts/unstable_cstr_numbers.py --section targets`), held a few kelvin below a point of no return. A trip costs an hour of downtime, and the target moves five times per episode |
 | 4 (Very Hard) | Compressor Surge | 7 | 2 | Nonlinear MIMO, Helmholtz resonance | **Trip on an untracked variable**: surge trips the plant when the flow margin runs out, no reward term reads that margin, and the recycle valve that prevents it has no tracked output of its own. No fixed recycle opening both keeps every block off the surge line and lets the drive hold every setpoint (derived, `test_no_fixed_valve_is_both_safe_and_able`). The setpoint moves three times and the demand five times per episode |
 | 4 (Very Hard) | Plane 2D | 10 | 2 | 2D aerodynamics | Coupled nonlinear aerodynamics, very long horizon |
 | 4 (Very Hard) | Glass Furnace | 5 | 1 | Nonlinear radiation (T^4) | **Partial observability** (6/9 states hidden), regenerator reversal cycle, multi-hour transients, batch-blanket nonlinearity |
-| 4 (Very Hard) | Nuclear Reactor | 4 | 1 | Stiff multi-timescale | **Partial observability** (7/11 states hidden), xenon memory trap, 86k-step horizon |
+| 4 (Very Hard) | Nuclear Reactor | 4 | 1 | Stiff multi-timescale | **Partial observability** (7/11 states hidden), xenon memory trap, long horizon (864 scored steps, 8,640 by default) |
 | 5 (Extreme) | Boiler Drum | 7 | 2 | Nonlinear, two-phase | **Non-minimum phase**: the level's first move is the wrong way. Integrating output, irrecoverable trips both sides, hidden riser voidage |
 | 5 (Extreme) | Plane 3D Heading | 15 | 3 | 3D aerodynamics | Multi-objective (altitude + heading), roll/pitch/yaw coupling |
 | 5 (Extreme) | Plane 3D Circle | 17 | 3 | 3D + path following | Sustained coordinated banked turns, km-scale circular path |
@@ -30,4 +30,7 @@ horizon, partial observability).
 
 The target-pattern variants (`plane_sine`, `plane_energy`) and
 the 3D holding pattern (`plane3d_racetrack`) share their base aircraft's plant
-and therefore its tier; what differs is the reference they must track.
+and therefore its tier; what differs is the reference they must track. The
+bearing-only patrol (`patrol_bearing_only`, 21 observations) flies the patrol's
+task from range and bearing alone, so the lead's heading, which places the
+slot, has to be inferred.

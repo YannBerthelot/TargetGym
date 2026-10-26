@@ -1,50 +1,24 @@
 """The floor-normalised reward every environment scores through.
 
-``reward = -(tracking_cost + running_cost + failure_cost)``, three additive
-terms, each a cost in a unit the plant can defend. See docs/reward-shaping.md
-for the argument; this module is the arithmetic.
+``reward = -(tracking_cost + running_cost + failure_cost)``: three
+non-negative costs, added. docs/reward-shaping.md gives the argument; this
+module is the arithmetic.
 
-**Tracking.** ``(max(|e| - e_tol, 0) / e_floor) ** p``. ``e_floor`` is the
-achievable floor: the smallest long-run mean |error| any controller can hold
-on this plant under its shipped reference and disturbance, computed or bounded
-per plant (each PHYSICS.md names the script). An error at the floor costs 1 per
-step; the scale is the plant's own irreducible error, not a sensor resolution
-or an envelope. ``e_tol`` is a specification tolerance where the plant has one
-(a comfort band, a purity spec, a permit limit): the cost is zero inside it,
-which is a dead-zone relaxation and forfeits at most the tolerance in long-run
-cost (Target-MDP note, Theorem 3). ``p`` is 1 where the owner's cost is linear
-in the error (an energy imbalance settled at a price per MWh) and 2 otherwise.
-Convex in |e| by construction: a log-scaled tracking term, the previous
-choice, is concave and pays a controller that trades rare large excursions
-for frequent small ones (Proposition 8 of the note), which is the wrong
-preference for a hold.
+- **Tracking**: ``(max(|e| - e_tol, 0) / e_floor) ** p``. ``e_floor`` is the
+  achievable floor (the smallest long-run mean |error| any controller holds on
+  the plant, never finer than its instrument resolves), so an error at the
+  floor costs 1 per step. ``e_tol`` is a specification tolerance where the plant
+  has one; ``p`` is 1 where the owner's cost is linear in the error, else 2.
+- **Running**: consumption above ``c_hold``, what the best shipped controller
+  consumes while holding: ``w * max(c - c_hold, 0) / c_hold``, or
+  ``price * quantity`` where the owner's tariff is known.
+- **Failure**: the step that leaves the operating envelope is charged
+  ``restart_steps * failure_cost`` and the plant restarts at once
+  (``base.failure_kernel``). By default no episode ends at a trip.
 
-**Running.** Consumption is charged only above ``c_hold``, what the best shipped
-controller (MPC or PID) consumes per step while holding: the part of the fuel, energy, boilup, reagent
-or actuator travel that a controller could avoid. Dimensionless form
-``w * max(c - c_hold, 0) / c_hold``, with ``w`` documented per plant as "one
-floor-width of tracking error is worth w times the hold-phase consumption";
-priced form ``price * quantity`` where the owner's tariff is known, with the
-tracking cost then in the same currency. Additive, never multiplicative: a
-product ``tracking * (1 - w * running)`` charges nothing for consumption
-exactly where tracking is worst, and a cost that vanishes when it should
-bind is not a cost.
-
-**Failure.** Leaving the operating envelope trips the plant. A tripped plant
-is down at ``failure_cost`` per step -- above the largest tracking cost the
-envelope can produce, with tracking and running cost zeroed -- for
-``restart_steps`` steps, then restarts (``base.failure_kernel``); a plant
-that cannot restart stays down to the end of the window. That is the
-absorbing state of the Target-MDP note lived through inside the window, so a
-policy which fails with any probability has the worst long-run cost (safety
-enters through the gain, Proposition 5), and under a finite restart the gain
-decomposes as ``rho_hold + p * B + lambda * (restart_steps * failure_cost +
-B_restart)`` with ``lambda`` the trip rate. No episode ends at a trip.
-
-The best achievable per-step reward is then about -1 (tracking at the floor,
-nothing avoidable consumed), not 0 or 1: cross-plant comparability comes from
-the normalised expert advantage ``(PID - x) / (PID - floor)`` and from
-reporting the two costs separately (``target_gym.eval``), not from a cap.
+The best per-step reward is about -1 (tracking at the floor, nothing
+avoidable consumed). Compare across plants with the normalised expert
+advantage and the two costs reported separately (``target_gym.eval``).
 """
 
 from __future__ import annotations
@@ -90,54 +64,25 @@ def _erfc_np(z):
 
 
 def proximity_cost(margin, sigma, cost, reaction_steps=1.0, risk=1.0, xp=jnp):
-    """The trip's cost charged by EXPECTATION instead of by realisation:
-    ``cost * Phi(-margin / (sigma sqrt(reaction_steps)))``, the probability
-    that the disturbance carries the state past the envelope before the
-    controller can arrest it.
+    """The trip cost charged by expectation instead of by realisation:
+    ``risk * cost * Phi(-margin / (sigma sqrt(reaction_steps)))``, the
+    probability that the disturbance carries the state past the envelope
+    before the controller can arrest it, times the cost. Smooth where the
+    realised charge is a step, so a planner gets a gradient toward the edge;
+    at ``reaction_steps = risk = 1`` it has the realised charge's mean.
 
-    ``margin``: the distance from the current state to the envelope, in the
-    envelope's own units - positive inside it, NEGATIVE outside, where the
-    charge saturates at the whole lump. On a deterministic rollout (a planner's
-    model, which has no noise of its own) the charge is then a smoothed step:
-    ~0 far inside, half at the boundary, ~1 lump well outside, and it carries a
-    gradient across the crossing where the step function has none. ``sigma``: the plant's one-step
-    disturbance scale in the same units - ``e_floor sqrt(pi/2)`` where the
-    floor is the irreducible error of a driven plant, since
-    ``e_floor = sd sqrt(2/pi)`` is how that floor is computed. ``cost``:
-    :func:`trip_cost`.
-
-    WHY EXPECTATION. Charging the realised trip makes the cost discontinuous
-    at the envelope - zero derivative on both sides and a jump between - so no
-    gradient method can see the cliff coming, and two controllers that spend
-    the same time at the edge score differently according to whether one was
-    pushed over. The conditional expectation of the same lump is smooth, has a
-    gradient wherever the margin does, and is the Rao-Blackwellisation of the
-    indicator: at ``reaction_steps = risk = 1`` it has the SAME mean as the
-    realised charge and strictly lower variance. Report the realised cost as
-    the KPI and optimise this one, and the two agree in expectation.
-
-    RISK AVERSION is the other two arguments, and both change the objective
-    rather than the estimator - state them wherever a number produced with
-    them is reported. ``reaction_steps``: judge the margin against the
-    disturbance accumulated over the time the loop needs to arrest an
-    excursion (dead time plus a dominant time constant), not over one step -
-    the random-walk bound ``sigma sqrt(h)``, conservative where the
-    disturbance is mean-reverting. This is the physical form of "hold a
-    margin": a plant that cannot be arrested quickly is charged more for the
-    same distance, which is why it bites hardest on long dead times and
-    non-minimum-phase plants. ``risk``: a bare multiplier on the charge; a
-    poor instrument on its own, since a Gaussian tail is steep enough that
-    100x moves the point where the charge overtakes tracking by about one
-    sigma."""
+    ``margin``: distance to the envelope in its own units, positive inside and
+    negative outside, where the charge saturates at the whole ``cost``.
+    ``sigma``: the one-step disturbance scale in the same units.
+    ``reaction_steps``: the steps the loop needs to arrest an excursion; the
+    margin is judged against ``sigma * sqrt(reaction_steps)``. It and ``risk``
+    (a plain multiplier) change the objective, so state them with any number
+    they produce."""
     from jax.scipy.stats import norm
 
     scale = xp.maximum(sigma, 1e-12) * xp.sqrt(xp.maximum(reaction_steps, 1.0))
-    # the margin is NOT clamped at 0: a NEGATIVE margin is a state already past
-    # the envelope, and the charge must go to the whole lump there, not stay at
-    # the half it takes at the boundary. Clamping made this a smoothed step
-    # that saturated at 1/2, so a planner rolling a trajectory deep outside the
-    # envelope was charged half of what crossing costs and took the trip
-    # (measured on 8 lag plants: trips 568 -> 1143 with the clamp in)
+    # Not clamped at 0: past the envelope the charge must reach the whole
+    # cost, or a planner rolling deep outside is charged half and trips.
     z = margin / scale
     tail = norm.cdf(-z) if xp is jnp else 0.5 * _erfc_np(z)
     return risk * cost * tail
@@ -161,8 +106,6 @@ def total(terms: dict, xp=jnp):
 
 
 def select(version, legacy, current, xp=jnp):
-    """The reward for ``params.reward_version``: 1 is the log-scaled, capped
-    reward the v1 environments shipped with, kept so a number published against
-    a v1 environment can be reproduced; anything else is the floor-normalised
-    cost above."""
+    """``legacy`` (the version-1 reward) where ``version == 1``, else
+    ``current``. Version 1 is kept so v1 results can be reproduced."""
     return xp.where(version == 1, legacy, current)

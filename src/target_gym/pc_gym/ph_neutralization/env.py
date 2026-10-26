@@ -139,7 +139,7 @@ class PHParams(EnvParams):
     # buffer-flow disturbance (q2 noise), 0.0013 pH (the lowest of three
     # seeds: 0.0021 / 0.0031 / 0.0013; PID 0.016-0.054) over 900 hold steps
     # after a 108-step burn-in, `scripts/measure_hold.py`. That is the oracle
-    # reading the buffer flow (oracle audit, 2026-10-01); the planner that
+    # reading the buffer flow; the planner that
     # assumed nominal flow held 0.0080. An upper bound on the achievable
     # floor (no reduced-model optimum exists for this plant).
     # e_tol = 0 provisionally: the discharge permit band a plant would use

@@ -52,8 +52,8 @@ def make_cement_kiln_mpc(
 
     Each solve starts from the shifted previous plan, so it searches near it
     (``init_std`` 0.1) and runs enough iterations for the smoothed CEM spread
-    to contract; it returns the best sequence it evaluated. Measured in the
-    oracle audit (2026-10-01) on the protocol seeds, planning on the mean
+    to contract; it returns the best sequence it evaluated. Measured on the
+    protocol seeds, planning on the mean
     feed: the earlier budget (4 iterations from a 0.5 spread, smoothed mean)
     scored 1.26; 384 samples and 8 iterations 0.264; this 96 x 32 setting
     0.0705 at the same cost per step, and 64 iterations 0.0699. What is left
