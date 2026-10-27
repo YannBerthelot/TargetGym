@@ -149,7 +149,7 @@ Until the reward was converted, all three tasks divided the error by the
 altitude envelope and raised it to the tenth power, and the two path tasks used
 a Gaussian a tenth of the path radius wide. Both are near-flat over the range a
 working controller occupies — the second scored a 0.1 m and a 100 m cross-track
-error within 0.005 of each other — which makes the PID-versus-RL comparison the
+error within 0.005 of each other — which makes the expert-versus-RL comparison the
 suite exists for unmeasurable.
 
 **Cross-track error on the figure-8 is searched, not solved.** There is no
@@ -191,6 +191,44 @@ machine you are reading this from are in
 [docs/performance.md](../../docs/performance.md). The 2D aircraft's own
 error at one substep was 0.823 m, inside its 1 m floor rather than outside it,
 but it is set the same way so the family stays consistent.
+
+### The expert
+
+The PID slot holds what a fixed-wing autopilot flies (PX4, ArduPilot), from the
+observation alone:
+
+- **Height and speed: TECS** (Lambregts; `plane/experts_tecs.py`). Throttle
+  closes the total energy error and pitch the balance between height and speed,
+  weighted to hold height (`TECS_SPDWEIGHT` 0), over a PI pitch loop damped on
+  pitch rate. Its aircraft numbers come from a flight test of the model at
+  230 m/s: full throttle climbs 7.9 to 10.2 m/s and idle sinks 23 to 27 m/s
+  between 7500 and 3500 m.
+- **Bank: a loop damped on roll rate**, since the aileron commands a rate.
+  The 45 deg limit is ArduPilot's default and the edge of this model's
+  validity. Stall prevention, as ArduPilot's, keeps the speed above 1.3 times
+  the clean stall (104 m/s equivalent airspeed) scaled for the full bank, and
+  the bank within what the speed supports.
+- **Guidance:** a course hold on the heading task; L1 guidance (Park, Deyst and
+  How, 2004), the law ArduPilot flies paths and loiters with, on the circle,
+  racetrack and figure-8, with the path's curvature as a coordinated-turn
+  feedforward. The figure-8 does not observe its curvature, so the expert
+  estimates it from how the observed tangent turns.
+
+It was tuned inner loop first, as ArduPilot's guide orders it, by a bounded
+search on training seeds 100-109, and checked on held-out seeds 200-209; the
+scored seeds 0-9 were never flown (`scripts/tune_aircraft_guidance.py`). On
+the held-out seeds, after the scored burn-in, it holds altitude within 1.6 /
+1.6 / 1.7 m on average (heading, circle, racetrack) and heading within
+1e-4 rad, the circle within 0.96 m and the racetrack within 2.3 m: what small
+autopilots hold in flight tests. The figure-8 is the exception, at 4.2 m of
+altitude and a median seed 18 m off the path: on the smaller patterns at
+altitude, stall prevention keeps the airliner too fast for the lobe tips
+(radius a / 3) at 45 deg of bank, so it cuts them, as a real autopilot would.
+
+It replaced, in 2026-10, cascades tuned on the scored seeds: the heading and
+circle ones fed roll rate back with the wrong sign and held 44 m and 1 rad
+off, and the racetrack's chased an observed tangent that pointed backwards on
+one cap (the `-v4` fix), drifting kilometres.
 
 ### The oracle
 
@@ -312,10 +350,10 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_altitude` | 1 m (`plane3d_heading`, `plane3d_circle`, `plane3d_racetrack`); `plane3d_figure8` scores no altitude and keeps the 1.44 m class default | the barometric altimeter's resolution. The oracle holds below it in the test turbulence: its lowest per-seed long-run mean \|error\| is 0.67 / 0.67 / 0.68 m (`scripts/measure_hold.py`, 2 seeds, hold steps after a 210-step burn-in, the second half of the episode on the 200-step heading task). Measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. Until the oracle audit (2026-10) the floors were an earlier oracle's holds, 1.44 / 4.06 / 1.39 m (the `-v2` tasks). PID: 44 / 7.2 / 5.2 m |
+| `e_floor_altitude` | 1 m (`plane3d_heading`, `plane3d_circle`, `plane3d_racetrack`); `plane3d_figure8` scores no altitude and keeps the 1.44 m class default | the barometric altimeter's resolution. The oracle holds below it in the test turbulence: its lowest per-seed long-run mean \|error\| is 0.67 / 0.67 / 0.68 m (`scripts/measure_hold.py`, 2 seeds, hold steps after a 210-step burn-in, the second half of the episode on the 200-step heading task). Measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. Until the oracle audit (2026-10) the floors were an earlier oracle's holds, 1.44 / 4.06 / 1.39 m (the `-v2` tasks). Expert: 1.6 / 1.6 / 1.7 m on held-out seeds (the cascade it replaced: 44 / 7.2 / 5.2 m) |
 | `e_tol_altitude` | 0 | no dead zone; a +-30 m band made the altitude hold vacuous (see the 2D aircraft) |
-| `e_floor_heading` | 0.0087 rad | the 0.5 deg AHRS resolution. The oracle holds far below it in the test turbulence (2.1e-5 rad, lowest per seed; `scripts/measure_hold.py`), so the instrument, not the simulator, sets the scale; the PID never captures the heading (0.96 rad) |
-| `e_floor_path` | 3 m (`plane3d_circle`, `plane3d_racetrack`, `plane3d_figure8`; also the default where no path term is scored) | civil GPS horizontal accuracy. The oracle holds below it: its lowest per-seed path-distance holds are 0.45 / 0.47 / 1.29 m (`scripts/measure_hold.py`). Until the oracle audit (2026-10) the floors were 8.12 / 6.17 / 14.6 m: the racetrack's and figure-8's were an earlier oracle's holds, while the circle's 8.12 m was labelled one but equals 2 x 4.06 m, and that oracle's recorded hold there was 14.3 m. PID: 53 / 408 / 1767 m |
+| `e_floor_heading` | 0.0087 rad | the 0.5 deg AHRS resolution. The oracle holds far below it in the test turbulence (2.1e-5 rad, lowest per seed; `scripts/measure_hold.py`), so the instrument, not the simulator, sets the scale; the expert holds about 1e-4 rad on held-out seeds |
+| `e_floor_path` | 3 m (`plane3d_circle`, `plane3d_racetrack`, `plane3d_figure8`; also the default where no path term is scored) | civil GPS horizontal accuracy. The oracle holds below it: its lowest per-seed path-distance holds are 0.45 / 0.47 / 1.29 m (`scripts/measure_hold.py`). Until the oracle audit (2026-10) the floors were 8.12 / 6.17 / 14.6 m: the racetrack's and figure-8's were an earlier oracle's holds, while the circle's 8.12 m was labelled one but equals 2 x 4.06 m, and that oracle's recorded hold there was 14.3 m. Expert: 0.96 / 2.3 m on held-out seeds, and a median seed 18 m off on the figure-8 (the cascades it replaced: 53 / 408 / 1767 m) |
 | `tracking_exponent` | 2 | quadratic |
 | `failure_cost` | 2.97e8 (`plane3d_heading`, `plane3d_circle`, `plane3d_racetrack`), 8.89e7 (`plane3d_figure8`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor_altitude)^2; the figure-8 scores the path alone, 2 x (20 000 / e_floor_path)^2 |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |

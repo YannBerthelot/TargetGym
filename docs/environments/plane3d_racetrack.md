@@ -11,7 +11,7 @@
 | Tracked variable(s) | altitude (m) |
 | Episode length | 650 steps (650 s at 1 s per step) |
 | Import | `from target_gym import Plane3DRacetrack, PlaneParams3D` |
-| Cite as | `plane3d_racetrack-v3` |
+| Cite as | `plane3d_racetrack-v4` |
 
 ## Action space
 

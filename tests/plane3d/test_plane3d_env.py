@@ -698,3 +698,62 @@ def test_path_experts_hold_their_path_for_three_laps(make_env, error_fn):
 
     settled = float(np.mean(errors[int(0.8 * len(errors)) :]))
     assert settled < 100.0, f"settled {settled:.0f} m from the commanded path"
+
+
+class TestRacetrackGuidance:
+    """The holding pattern's guidance comes out of its geometry in closed form,
+    so it can be checked against the geometry directly."""
+
+    def _circuit(self):
+        """A state, and one circuit of the pattern in its own direction, in
+        the pattern's frame: up the far leg, round one cap, down the near leg
+        and round the other cap, both caps turning the same way."""
+        from target_gym.plane3d.env_jax import Plane3DRacetrack
+
+        env = Plane3DRacetrack()
+        _, state = env.reset_env(jax.random.PRNGKey(0), env.default_params)
+        r, half = float(state.target_radius), 2.0 * float(state.target_radius)
+        legs = np.linspace(-half, half, 40)
+        caps = np.linspace(np.pi / 2, -np.pi / 2, 40)
+        pts = np.concatenate(
+            [
+                np.stack([legs, np.full(40, r)], 1),
+                np.stack([half + r * np.cos(caps), r * np.sin(caps)], 1),
+                np.stack([-legs, np.full(40, -r)], 1),
+                np.stack([-half - r * np.cos(caps), -r * np.sin(caps)], 1),
+            ]
+        )
+        return state, pts
+
+    def _at(self, state, u, v):
+        from target_gym.plane3d.env import racetrack_guidance
+
+        c, s = np.cos(float(state.target_heading)), np.sin(float(state.target_heading))
+        x = float(state.target_x) + c * u - s * v
+        y = float(state.target_y) + s * u + c * v
+        cross, tangent, _ = racetrack_guidance(state.replace(x=x, y=y))
+        return float(cross), float(tangent)
+
+    def test_the_tangent_runs_one_way_round_the_pattern(self):
+        """At every point of a circuit the tangent is the direction of travel:
+        a tangent reversed on one cap sends a controller back the way it came."""
+        state, pts = self._circuit()
+        th = float(state.target_heading)
+        for a, p, b in zip(pts[:-2], pts[1:-1], pts[2:]):
+            travel = th + np.arctan2(b[1] - a[1], b[0] - a[0])
+            cross, tangent = self._at(state, *p)
+            off = np.angle(np.exp(1j * (tangent - travel)))
+            assert abs(off) < 0.1, (p, tangent, travel)
+            assert abs(cross) < 1.0, (p, cross)
+
+    def test_cross_track_is_positive_on_the_left_of_travel(self):
+        """``cross`` is positive on the side a positive bank turns toward, the
+        left of travel, on the legs and on both caps."""
+        state, pts = self._circuit()
+        for i in (20, 60, 100, 140):
+            u, v = pts[i]
+            _, tangent = self._at(state, u, v)
+            local = tangent - float(state.target_heading)
+            left = np.array([-np.sin(local), np.cos(local)])
+            cross, _ = self._at(state, *(pts[i] + 50.0 * left))
+            assert cross == pytest.approx(50.0, abs=1.0), (i, cross)

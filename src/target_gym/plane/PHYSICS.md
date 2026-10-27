@@ -220,6 +220,19 @@ commanded level and the tracking term scored nothing, so the benchmark was
 deciding on airspeed alone. The planners plan on the mean wind
 (`turbulence_sigma` is in the spec's `noise_fields`), as a real MPC would.
 
+### The expert
+
+The PID slot holds TECS over a PI pitch loop (`plane_tecs_step` in
+`experts.py`), what PX4 and ArduPilot fly for height and speed and the 3D
+expert's longitudinal half, with the same aircraft numbers and tuning
+(`plane3d/PHYSICS.md`, `scripts/tune_aircraft_guidance.py`). Throttle closes
+the total energy error and pitch holds height. On held-out seeds 200-209 it
+holds altitude within 1.5 m on average on `plane`, 1.9 m on `plane_sine`, and
+1.6 m on `plane_energy` once each ladder step is captured; the airliner climbs
+those 360-720 m steps at its 8 m/s, which fills most of each 150 s rung. It
+replaced, in 2026-10, the cascaded PID below, which was tuned on the scored
+seeds and stays as the oracle's speed loop and hold.
+
 ### The reference controller
 
 The MPC slot holds a gradient MPC that rolls out the simulator itself
@@ -410,10 +423,10 @@ baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1 m (`plane`), 1.26 (`plane_sine`), 1.20 (`plane_energy`) | the long-run mean \|error\| the shipped MPC holds in the test turbulence, lowest per seed (`scripts/measure_hold.py`, 2 seeds), floored at the 1 m barometric resolution: a hold the instrument cannot see is not a floor. `plane`: the resolution; the MPC holds 0.55 / 0.46 m (PID 1.83 / 0.87). `plane_sine`: an earlier MPC's hold. The current one holds 0.53 / 0.53 m (PID 45.4 / 44.7), below the resolution, and the resolution is within 1.5x of 1.26 m, so the floor stays (oracle audit, 2026-10). `plane_energy` (`-v3`): the MPC's 1.198 m between ladder steps, rounded; under that floor it holds 1.35 / 1.18 m (PID 8.5 / 12.1). It was 4.55 m, an earlier MPC's hold taken before its moves toward the next target were separated from its hold. Upper bounds otherwise |
+| `e_floor` | 1 m (`plane`), 1.26 (`plane_sine`), 1.20 (`plane_energy`) | the long-run mean \|error\| the shipped MPC holds in the test turbulence, lowest per seed (`scripts/measure_hold.py`, 2 seeds), floored at the 1 m barometric resolution: a hold the instrument cannot see is not a floor. `plane`: the resolution; the MPC holds 0.55 / 0.46 m (the cascaded PID 1.83 / 0.87; the expert 1.5 on held-out seeds). `plane_sine`: an earlier MPC's hold. The current one holds 0.53 / 0.53 m (the cascaded PID 45.4 / 44.7; the expert 1.9 on held-out seeds), below the resolution, and the resolution is within 1.5x of 1.26 m, so the floor stays (oracle audit, 2026-10). `plane_energy` (`-v3`): the MPC's 1.198 m between ladder steps, rounded; under that floor it holds 1.35 / 1.18 m (the cascaded PID 8.5 / 12.1). It was 4.55 m, an earlier MPC's hold taken before its moves toward the next target were separated from its hold. Upper bounds otherwise |
 | `e_tol` | 0 | no dead zone. A +-30 m band (the pilot's instrument tolerance; the autopilot's is +-20 m, RVSM +-65 ft) was tried and made the hold vacuous: both controllers held within 0.1 m in still air, and the tracking cost was identically zero |
 | `tracking_exponent` | 2 | quadratic outside the tolerance |
-| `c_hold` | 5.06 m/s (`plane`), 8.15 (`plane_sine`), 5.23 (`plane_energy`) | airspeed deviation from `target_speed` while holding, PID (`scripts/measure_hold.py`), the better controller on speed. The MPC holds 5.13 and 8.25 m/s on `plane` and `plane_sine`, where its throttle is the PID's own airspeed loop once it holds, and 19.6 on `plane_energy`, where it plans the throttle itself |
+| `c_hold` | 5.06 m/s (`plane`), 8.15 (`plane_sine`), 5.23 (`plane_energy`) | airspeed deviation from `target_speed` while holding, the cascaded PID's (`scripts/measure_hold.py`), the better controller on speed when it was the expert. The MPC holds 5.13 and 8.25 m/s on `plane` and `plane_sine`, where its throttle is the PID's own airspeed loop once it holds, and 19.6 on `plane_energy`, where it plans the throttle itself |
 | `running_weight` | 1 | the speed term stands in for fuel; sweep 0.5 / 1 / 2 |
 | `failure_cost` | 3e8 (`plane`), 1.9e8 (`plane_sine`), 2.1e8 (`plane_energy`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor)^2 |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
