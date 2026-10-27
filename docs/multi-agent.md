@@ -103,7 +103,7 @@ the episode, and `dones["__all__"]` is true in the multi-agent view.
 Two baselines ship, recorded on the [Baseline results](baseline-results.md)
 page.
 
-- **PID team** (`env.make_pid()`, or `env.expert_policy` for batched JAX): the
+- **PID team** (`tg.make_expert("formation").host()`, or `.batched()` for JAX): the
   patrol's controllers, seat for seat. The lead seat flies the patrol's lead
   autopilot, and each wingman seat flies the patrol's pursuit PID. It never
   trips, but the autopilot leaves the lead about 140 m off its altitude, which

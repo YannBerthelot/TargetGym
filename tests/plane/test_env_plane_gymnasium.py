@@ -1,11 +1,16 @@
 import pytest
 
-from target_gym import GymnasiumPlane as Airplane2D
 from target_gym.plane.env import (
     PlaneParams,
     PlaneState,
     compute_reward,
 )
+from target_gym.plane.env_jax import Airplane2D as _Plane
+from target_gym.wrapper import GymnasiumEnv
+
+
+def Airplane2D(env_params=None, render_mode=None):
+    return GymnasiumEnv(_Plane(), env_params, render_mode)
 
 
 def test_init():

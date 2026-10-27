@@ -18,7 +18,7 @@ def reset_where_done(done, state, fresh):
         pid_state = reset_where_done(terminated | truncated, pid_state, ctrl.init_state)
 
     ``done`` is a scalar for one environment, or ``(num_envs,)`` for a batch
-    such as ``env.expert_policy``'s state; ``fresh`` may be batched or not, as
+    such as a batched expert's state; ``fresh`` may be batched or not, as
     it broadcasts. Any pytree works, so an environment's state resets the same
     way. Reset at episode ends only: a trip restart inside a continuing
     episode keeps the memory, as the scored baselines do.

@@ -50,6 +50,9 @@ defined in [docs/rl-protocol.md](docs/rl-protocol.md).
 pip install target-gym
 ```
 
+The full-state MPC oracles on nine tasks plan with CasADi; add it with
+`pip install 'target-gym[mpc]'`.
+
 ## Quickstart
 
 Also available as a [Colab notebook](https://colab.research.google.com/github/YannBerthelot/TargetGym/blob/main/notebooks/quickstart.ipynb).
@@ -57,31 +60,41 @@ Also available as a [Colab notebook](https://colab.research.google.com/github/Ya
 ```python
 import jax
 import numpy as np
-from target_gym import Plane
+import target_gym as tg
 
-env = Plane()
-pid = env.make_pid()            # the shipped baseline, tuned
+env, params = tg.make("plane")          # the scored configuration
+pid = tg.make_expert("plane").host()    # the shipped expert; keeps its own memory
 
 key = jax.random.PRNGKey(0)
-obs, state = env.reset(key)
+obs, state = env.reset(key, params)
 
 total = 0.0
-for _ in range(env.default_params.max_steps_in_episode):
+for _ in range(params.max_steps_in_episode):
     action = pid(np.asarray(obs))
-    obs, state, reward, terminated, truncated, _ = env.step(key, state, action)
+    obs, state, reward, terminated, truncated, _ = env.step(key, state, action, params)
     total += float(reward)
     if terminated or truncated:
         break
 
-print("PID return:", total)
+print("Expert return:", total)
 ```
 
-`reset` and `step` follow the
-[gymnax](https://github.com/RobertTLange/gymnax) API and take an optional
-`params`; each environment exports its parameter class (`PlaneParams`, and so
-on) for custom configurations. Every environment also exposes `make_pid()`,
-`make_mpc()` and `save_video()`. [Using the PIDs](docs/using-the-pids.md) shows
-how to run, evaluate against and train on the tuned PIDs.
+`tg.make(name)` returns the environment and the configuration the published
+baselines are scored on, as `gymnax.make` does, and `reset` and `step` follow
+the [gymnax](https://github.com/RobertTLange/gymnax) API. Keyword arguments
+change single fields, as in `tg.make("plane", max_steps_in_episode=500)`, and
+`tg.list_envs()` gives the 24 names.
+
+| To get | Call |
+|---|---|
+| The expert for a Python loop (it keeps its own memory) | `tg.make_expert(name).host()` |
+| The expert under `jit` or `vmap` (you carry its memory) | `tg.make_expert(name).batched()` |
+| The full-state MPC oracle | `tg.make_oracle(name)` |
+| A Gymnasium environment | `tg.make_gymnasium(name)` |
+| A score against the expert | `tg.score_policy(name, make_policy)` |
+
+[Using the PIDs](docs/using-the-pids.md) shows how to run, evaluate against and
+train on the experts.
 
 <details>
 <summary>Non-JAX libraries, e.g. stable-baselines3</summary>
@@ -90,10 +103,10 @@ End-to-end GPU requires a JAX-based library.
 
 ```python
 # doc: skip (trains for 10 000 steps; tests/plane/test_agent.py covers this path with `uv sync --group agent`)
-from target_gym import GymnasiumPlane
+import target_gym as tg
 from stable_baselines3 import SAC
 
-env = GymnasiumPlane()
+env = tg.make_gymnasium("plane")
 model = SAC("MlpPolicy", env, verbose=1)
 model.learn(total_timesteps=10_000, log_interval=4)
 
@@ -107,36 +120,35 @@ while True:
 
 </details>
 
-### Comparing against the baselines
+### Comparing against the expert
 
-The defaults are not always the scored configuration. Every aircraft task and
-the reactor are scored over a shorter episode than their default (the aircraft
-default to 10,000 steps and are scored over 200 to 1,200), and several aircraft
-tasks also set their reference and reward scale there. `EnvSpec.test_params`
-carries those settings, and `spec.make_test_params()` resolves them for any
-task, so use it whenever you compare with the published numbers:
+`tg.score_policy` runs your policy and the expert on the same seeds of the
+scored configuration:
 
 ```python
-import numpy as np
+import target_gym as tg
 
-from target_gym.provenance import load_recorded_baselines
-from target_gym.registry import REGISTRY
-from target_gym.runners.runners import baseline_policy, rollout
 
-spec = REGISTRY["plane"]
-params = spec.make_test_params()                     # the scored configuration
-pid = baseline_policy(spec, "pid", params)
+def make_policy():                        # a fresh policy for each episode
+    return tg.make_expert("four_tank").host()   # stand-in: put yours here
 
-print("PID:", float(np.sum(rollout(spec, params, pid, seed=0)[2])))
-print("MPC:", load_recorded_baselines()["plane"]["mpc_returns"][0])
+
+m = tg.score_policy("four_tank", make_policy, seeds=3)   # 10 for a result
+print(m["ratio"], m["win_rate"], m["score"], m["headroom"])
 ```
 
-The PID reads `obs` only, as a plant controller does. The MPC reads the full
-state, including quantities the observation withholds, which is what makes it
-an upper bound rather than a peer; [docs/baseline-results.md](docs/baseline-results.md)
-gives the numbers.
+`ratio` is the expert's cost over yours, so above 1 beats the expert. `score`
+runs from 0 at the expert to 1 at the task's ceiling, and `headroom` is the room
+the task leaves beyond the expert, in decades; [docs/rl-protocol.md](docs/rl-protocol.md)
+defines all three.
 
-Vectorised rollouts, the registry API, the patrol interface and the wind model
+The expert reads `obs` only, as a plant controller does. The oracle
+(`tg.make_oracle`) reads the full state, including quantities the observation
+withholds, so it shows what a perfect model could do rather than competing with
+a policy; [docs/baseline-results.md](docs/baseline-results.md) gives the
+numbers.
+
+Vectorised rollouts, the registry, the patrol interface and the wind model
 are covered in [docs/getting-started.md](docs/getting-started.md).
 
 ---

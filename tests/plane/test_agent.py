@@ -1,10 +1,14 @@
+from functools import partial
+
 import gymnasium as gym
 import jax.numpy as jnp
 import numpy as np
 import pytest
 from gymnasium.utils.env_checker import check_env
 
-from target_gym import GymnasiumPlane as Airplane2D
+from target_gym import make_gymnasium
+
+Airplane2D = partial(make_gymnasium, "plane")
 
 
 def test_can_create_env():

@@ -249,9 +249,10 @@ def test_mpc_reset_zeroes_actions():
     ],
 )
 def test_env_make_pid_returns_controller(env_cls, params_cls):
-    """env.make_pid() returns a usable PID controller."""
+    """env.make_pid() still returns a usable PID controller, and warns."""
     env = env_cls()
-    pid = env.make_pid()
+    with pytest.warns(DeprecationWarning, match="make_expert"):
+        pid = env.make_pid()
     assert pid is not None
     # A HostController: step(obs) -> action, plus reset()
     assert callable(getattr(pid, "step", None))
@@ -259,7 +260,8 @@ def test_env_make_pid_returns_controller(env_cls, params_cls):
 
 def test_plane_env_make_pid_returns_controller():
     env = Airplane2D()
-    pid = env.make_pid()
+    with pytest.warns(DeprecationWarning, match="make_expert"):
+        pid = env.make_pid()
     assert pid is not None
     assert callable(getattr(pid, "step", None))
 
