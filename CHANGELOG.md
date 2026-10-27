@@ -112,11 +112,11 @@ than by commit.
   the episodes reset on one key and take a fresh key at every step, as in
   gymnax and TargetFoundation (`benchmark.episode_keys`). They reused one key
   for the whole episode before, so every recorded baseline and protocol number
-  was re-recorded, and the `cstr` and `first_order` PID returns of
+  was re-recorded, with the `cstr` and `first_order` PID returns of
   `baseline_returns_v1.json`, which a test reproduces; the episodes differ from
-  the reset on. `run_policy`'s own
-  episodes are unchanged, and it now compiles its step once per process. The
-  examples in the README and the guides take a fresh key every step too.
+  the reset on. `run_policy`'s own episodes are unchanged, and it now compiles
+  its step once per process. The examples in the README and the guides take a
+  fresh key every step too.
 - **`experts.pid.load_gains` and `gain`** are the public names of
   `_load_gains` and `_g`, which a task's experts use to read the tuned gains.
   The private names stay as aliases.
