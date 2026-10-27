@@ -12,6 +12,15 @@ now and an observation-only MPC later on the column and the furnace
 (decision 3), and a published rule base on the kiln (decision 4). The metric
 is the first pull request; the experts follow, one family at a time.
 
+The aircraft copy UAV autopilot practice (PX4, ArduPilot) on every task,
+chosen on 2026-10-27 over airliner modes: TECS, L1 guidance, a course hold
+and a 45 deg bank limit with stall prevention, on the A320-class airframe,
+which flies 45 deg within its limits and the model's validity. Airliner
+autopilots cap bank at 25-30 deg for comfort, which would leave the heading
+expert mid-turn when scoring starts. The single-aircraft tasks are the second
+pull request; the patrol family and formation, a flight-test formation hold
+(no deployed product exists), the third.
+
 ## What a result has to say
 
 1. **Against the expert:** is the policy better or worse than the solution

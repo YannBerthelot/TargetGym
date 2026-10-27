@@ -511,8 +511,6 @@ _SPECS: tuple[EnvSpec, ...] = (
             "failure_cost": 2.0 * (12192.0 / 1.20) ** 2,
         },
         tuned_gains_key="plane",
-        # The cascaded PID baseline reads ``plane_cascaded``.
-        gains_keys=("plane_cascaded",),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -549,8 +547,6 @@ _SPECS: tuple[EnvSpec, ...] = (
             "failure_cost": 2.0 * (12192.0 / 1.26) ** 2,
         },
         tuned_gains_key="plane",
-        # The cascaded PID baseline reads ``plane_cascaded``.
-        gains_keys=("plane_cascaded",),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -582,6 +578,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # The 2D aircraft's dynamics, which the 3D model extends, and the
+        # TECS its experts fly (an experts file, so in the baseline
+        # fingerprint only).
+        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
         # v3: the altitude floor became the 1 m altimeter resolution (was 1.44 m).
         version=3,
     ),
@@ -609,6 +609,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # The 2D aircraft's dynamics, which the 3D model extends, and the
+        # TECS its experts fly (an experts file, so in the baseline
+        # fingerprint only).
+        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
         # v3: the floors became the instrument resolutions (were 4.06 m
         # altitude and 8.12 m path).
         version=3,
@@ -641,11 +645,14 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # The 2D aircraft's dynamics, which the 3D model extends, and the
+        # TECS its experts fly (an experts file, so in the baseline
+        # fingerprint only).
+        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
         # v3: the floors became the instrument resolutions (were 1.39 m
-        # altitude and 6.17 m path).
-        version=3,
-        # No ``expert_degraded``: the cross-track gain has been searched, and
-        # the expert holds the pattern rather than merely flying its shape.
+        # altitude and 6.17 m path). v4: the observed tangent and cross-track
+        # error on one cap pointed against the direction of travel.
+        version=4,
     ),
     EnvSpec(
         name="plane3d_figure8",
@@ -670,6 +677,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        # The 2D aircraft's dynamics, which the 3D model extends, and the
+        # TECS its experts fly (an experts file, so in the baseline
+        # fingerprint only).
+        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
         # v3: the path floor became the 3 m GPS resolution (was 14.6 m).
         version=3,
     ),

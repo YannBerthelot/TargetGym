@@ -498,7 +498,9 @@ def racetrack_guidance(state: PlaneState3D):
     cu = u - jnp.sign(u) * half_leg
     rho = jnp.sqrt(cu**2 + v**2) + 1e-6
     cap_n = jnp.stack([jnp.sign(u) * half_leg + r * cu / rho, r * v / rho])
-    cap_tan = state.target_heading + jnp.arctan2(v, cu) - jnp.sign(u) * jnp.pi / 2.0
+    # Clockwise about either end, so a quarter turn behind the radius on both:
+    # the sign of ``u`` belongs to the centre, not to the direction of travel.
+    cap_tan = state.target_heading + jnp.arctan2(v, cu) - jnp.pi / 2.0
 
     nearest = jnp.where(on_leg, leg_n, cap_n)
     tangent = jnp.where(on_leg, leg_tan, cap_tan)

@@ -333,18 +333,32 @@ def test_imports_stay_inside_the_fingerprint():
     assert not problems, "\n".join(problems)
 
 
+#: The only extra sources the 21 declare: the 3D aircraft extend the 2D
+#: dynamics and their experts fly the 2D package's TECS.
+DECLARED_BY_THE_21 = {
+    name: ("plane/dynamics.py", "plane/experts_tecs.py")
+    for name in (
+        "plane3d_heading",
+        "plane3d_circle",
+        "plane3d_racetrack",
+        "plane3d_figure8",
+    )
+}
+
+
 def test_controllers_are_in_the_baseline_fingerprint_only():
     """A package's experts.py is in the baseline fingerprint of its tasks and
     out of their version stamp, since retuning a controller does not change
     the environment. The stamp is otherwise the baseline's file list, and the
-    21 declare no extra sources, so their stamps read the same files as before
-    their oracles moved out of experts/mpc.py (test_env_versions holds the
-    stamps themselves)."""
+    21 declare no extra sources but the 3D aircraft's (``DECLARED_BY_THE_21``),
+    so their stamps read the same files as before their oracles moved out of
+    experts/mpc.py (test_env_versions holds the stamps themselves)."""
     problems = []
     for s in registry.all_specs():
         sources = provenance._env_sources(s)
         stamped = provenance._env_sources(s, controllers=False)
-        if s.name in PINNED_21 and s.fingerprint_sources:
+        declared = DECLARED_BY_THE_21.get(s.name, ())
+        if s.name in PINNED_21 and s.fingerprint_sources != declared:
             problems.append(f"{s.name}: declares {s.fingerprint_sources}")
         if stamped != [p for p in sources if not p.name.startswith("experts")]:
             problems.append(f"{s.name}: the version stamp drops more than experts*")
@@ -503,11 +517,9 @@ def test_declared_gains_keys_exist():
 def test_the_baseline_fingerprint_covers_the_gains_a_task_reads():
     """The fingerprint hashes the entries whose key starts with the task's
     name, its ``tuned_gains_key``'s and its declared ``gains_keys``. It once
-    took only the first, so ``plane_sine`` and ``plane_energy`` (whose PID
-    baseline reads ``plane_cascaded``, reaching their fingerprints only
-    through the copies their oracle reads) and patrol (whose oracle and lead
-    read ``plane3d_heading``) could be retuned under a record that still
-    looked fresh."""
+    took only the first, so patrol (whose oracle and lead read
+    ``plane3d_heading``) could be retuned under a record that still looked
+    fresh."""
     gains = _gains()
     problems = []
     for s in registry.all_specs():
@@ -522,14 +534,12 @@ def test_the_baseline_fingerprint_covers_the_gains_a_task_reads():
     assert not problems, "\n".join(problems)
     assert "plane3d_heading" in registry.REGISTRY["patrol"].gains_keys
     assert "plane3d_heading" in registry.REGISTRY["patrol_bearing_only"].gains_keys
-    assert "plane_cascaded" in registry.REGISTRY["plane_sine"].gains_keys
-    assert "plane_cascaded" in registry.REGISTRY["plane_energy"].gains_keys
 
 
 @pytest.mark.parametrize(
     "name,key",
     [
-        ("plane_sine", "plane_cascaded"),
+        ("plane_sine", "plane_sine_cascaded"),
         ("patrol", "plane3d_heading"),
         ("cstr", "cstr"),
     ],

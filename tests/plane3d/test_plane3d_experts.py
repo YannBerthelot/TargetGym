@@ -70,10 +70,11 @@ def test_an_unknown_task_keeps_the_fixed_step():
 def test_the_floors_are_the_instrument_resolutions(name):
     """Every floor is the resolution of the instrument that reads it, and the
     failure cost is twice the envelope's cost in those units (the altitude
-    envelope's, or the path's on the figure-8, which scores no altitude)."""
+    envelope's, or the path's on the figure-8, which scores no altitude). The
+    floors arrived with v3; the racetrack's v4 changed only its observation."""
     spec = registry.get(name)
     p = spec.make_test_params()
-    assert spec.version == 3
+    assert spec.version == (4 if name == "plane3d_racetrack" else 3)
     if name == "plane3d_figure8":
         assert p.e_floor_path == p.position_precision_floor == 3.0
         assert p.failure_cost == pytest.approx(2.0 * (20000.0 / 3.0) ** 2)

@@ -96,6 +96,22 @@ than by commit.
 
 ### Changed
 
+- **The aircraft experts are what fixed-wing autopilots fly.** All seven
+  aircraft tasks now use TECS for height and speed (`plane/experts_tecs.py`)
+  over a PI pitch loop. The 3D tasks add a bank loop damped on roll rate,
+  stall prevention, and a course hold (`plane3d_heading`) or L1 path guidance
+  with curvature feedforward (circle, racetrack, figure-8), as PX4 and
+  ArduPilot do. `scripts/tune_aircraft_guidance.py` tunes them inner loop
+  first on training seeds 100-109 and checks them on held-out seeds 200-209,
+  never on the scored seeds. On the held-out seeds they hold altitude within
+  1.5 to 1.9 m on every task but the figure-8, the circle within 1 m and the
+  racetrack within 2.3 m. The cascades they replace were tuned on the scored
+  seeds, and two of them fed roll rate back with the wrong sign: they held 44 m
+  and 1 rad off on `plane3d_heading` and drifted kilometres on the racetrack
+  and figure-8. The figure-8 expert still cuts the tips of the smaller lobes,
+  where stall prevention keeps the airliner too fast to turn that tight.
+  Every aircraft record is re-recorded.
+
 - **Shorter docstrings in the core modules** (registry, experts, eval, reward,
   runners, base): they keep the contracts and drop the measurement history,
   and `eval.evaluate` now documents every number it returns.
@@ -470,6 +486,12 @@ than by commit.
   fifteen minutes to under two.
 
 ### Fixed
+
+- **`plane3d_racetrack-v4`: the observed path ran backwards on one cap.** On
+  the cap at the pattern's `-u` end the tangent heading in the observation
+  pointed against the direction of travel, and the signed cross-track error
+  flipped with it, so a controller following the observation turned back
+  there. The reward and the dynamics are unchanged.
 
 - **Docs that contradicted the code.** `docs/target-mdp.md` and seven
   physics notes stated the version-1 reward as the current one. Four

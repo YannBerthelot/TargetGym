@@ -76,14 +76,15 @@ gains cannot:
 - **Crossed loops on the four-tank.** Its relative gain array puts λ11 at
   −0.067, so pairing each pump with the tank beneath it is unstable. The
   shipped PID pairs them the other way.
-- **A cascaded autopilot for the aircraft** (altitude, then vertical speed,
-  then pitch, then elevator) with attitude limits and angle-of-attack
-  protection. A single loop from altitude error to elevator departs controlled
-  flight on large climbs.
+- **A fixed-wing autopilot for the aircraft**, as PX4 and ArduPilot fly it:
+  TECS for height and speed over a pitch loop, and on the 3D tasks a bank loop
+  under a course hold or L1 path guidance. A single loop from altitude error
+  to elevator departs controlled flight on large climbs.
 
-Gains are tuned by `scripts/tune_pid.py`, by relay autotuning on the process
-plants and by coordinate descent on episode return for the aircraft, whose
-altitude loop will not sustain a relay oscillation. They live in
+The aircraft experts are tuned by `scripts/tune_aircraft_guidance.py`, on
+training seeds and never on the scored ones, and their numbers live beside
+them in code. The other gains are tuned by `scripts/tune_pid.py` (relay
+autotuning on the process plants) and live in
 `src/target_gym/data/pid_gains.json`:
 
 ```bash
