@@ -106,6 +106,20 @@ than by commit.
 
 ### Changed
 
+- **One rollout loop, with a fresh key every step.** `runners.rollout`,
+  `runners.rollout_mpc_batch` and `eval.run_episode` now run
+  `benchmark.run_policy`, so seed `s` is its one-episode run on `PRNGKey(s)`:
+  the episodes reset on one key and take a fresh key at every step, as in
+  gymnax and TargetFoundation (`benchmark.episode_keys`). They reused one key
+  for the whole episode before, so every recorded baseline and protocol number
+  was re-recorded, and the `cstr` and `first_order` PID returns of
+  `baseline_returns_v1.json`, which a test reproduces; the episodes differ from
+  the reset on. `run_policy`'s own
+  episodes are unchanged, and it now compiles its step once per process. The
+  examples in the README and the guides take a fresh key every step too.
+- **`experts.pid.load_gains` and `gain`** are the public names of
+  `_load_gains` and `_g`, which a task's experts use to read the tuned gains.
+  The private names stay as aliases.
 - **CasADi and do-mpc moved to the `[mpc]` extra.** `pip install target-gym` no
   longer pulls them; `pip install "target-gym[mpc]"` does. The experts and the
   JAX oracles work without them, and a CasADi oracle names the extra when it is

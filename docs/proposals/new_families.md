@@ -503,7 +503,7 @@ The mechanism costs about 3.5 days, paid once for all new tasks.
   high-temperature override. Tuning reuses the coordinate-descent search in
   `scripts/tune_pid.py` (`_tune_aircraft_search`), which takes a `TUNERS` row, a
   starting entry for the gains, a lookup through `registry.get`, and a
-  controller that reads its gains through `experts.pid._load_gains`. A CasADi
+  controller that reads its gains through `experts.pid.load_gains`. A CasADi
   NMPC over 40 steps that previews the campaign and falls back to the PID when a
   solve fails.
 - **What it adds.** A 2x2 process plant with two moving references, coupled

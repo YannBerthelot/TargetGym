@@ -32,10 +32,10 @@ _GAINS_FILE = pathlib.Path(__file__).resolve().parents[1] / "data" / "pid_gains.
 _gains_cache: dict | None = None
 
 
-def _load_gains() -> dict:
-    """Load gains from src/target_gym/data/pid_gains.json, running tuning first if the
-    file is absent.
-    """
+def load_gains() -> dict:
+    """The tuned gains, ``{task: {gain: value}}``, from
+    src/target_gym/data/pid_gains.json, running tuning first if the file is
+    absent. A task's experts read it at call time, so a tuner's update shows."""
     global _gains_cache
     if _gains_cache is None:
         if not _GAINS_FILE.exists():
@@ -51,9 +51,14 @@ def _load_gains() -> dict:
     return _gains_cache
 
 
-def _g(env: str, key: str, default: float) -> float:
-    """Return gain ``key`` for ``env`` from the JSON store, or ``default``."""
-    return float(_load_gains().get(env, {}).get(key, default))
+def gain(env: str, key: str, default: float) -> float:
+    """Gain ``key`` of task ``env`` from the tuned gains, or ``default``."""
+    return float(load_gains().get(env, {}).get(key, default))
+
+
+# The private names the task packages imported; they go once every package
+# reads the public ones.
+_load_gains, _g = load_gains, gain
 
 
 # ---------------------------------------------------------------------------
@@ -466,7 +471,7 @@ def make_patrol_pid() -> tuple[PatrolPIDParams, Plane3DPIDState]:
     Gains default to hand-set values that hold a trailing slot; they can be
     overridden from ``src/target_gym/data/pid_gains.json`` under the ``patrol`` key.
     """
-    _p = _load_gains().get("patrol", {})
+    _p = load_gains().get("patrol", {})
     params = PatrolPIDParams(
         Kp_alt=float(_p.get("Kp_alt", 0.02)),
         Ki_alt=float(_p.get("Ki_alt", 1e-4)),
@@ -639,7 +644,7 @@ def make_plane3d_heading_pid() -> tuple[Plane3DHeadingPIDParams, Plane3DPIDState
         Ki_hdg=_g3d("heading", "hdg", "Ki", 0.0),
         Kd_hdg=_g3d("heading", "hdg", "Kd", 0.0),
         Kp_bank=_g3d("heading", "bank", "Kp", -2.0),
-        power=float(_load_gains().get("plane3d_heading", {}).get("power", 0.6)),
+        power=float(load_gains().get("plane3d_heading", {}).get("power", 0.6)),
         max_bank_rad=float(np.deg2rad(25.0)),
         dt=1.0,
         Kp_power=_g3d("heading", "power_pid", "Kp", 2e-4),
@@ -683,5 +688,5 @@ def _wrap_angle(a, xp=jnp):
 def _g3d(task: str, group: str, key: str, default: float) -> float:
     """Read a plane3d gain: gains["plane3d_<task>"][group][key]."""
     return float(
-        _load_gains().get(f"plane3d_{task}", {}).get(group, {}).get(key, default)
+        load_gains().get(f"plane3d_{task}", {}).get(group, {}).get(key, default)
     )

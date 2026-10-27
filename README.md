@@ -65,13 +65,14 @@ import target_gym as tg
 env, params = tg.make("plane")          # the scored configuration
 pid = tg.make_expert("plane").host()    # the shipped expert; keeps its own memory
 
-key = jax.random.PRNGKey(0)
-obs, state = env.reset(key, params)
+key, reset_key = jax.random.split(jax.random.PRNGKey(0))
+obs, state = env.reset(reset_key, params)
 
 total = 0.0
 for _ in range(params.max_steps_in_episode):
+    key, step_key = jax.random.split(key)   # a fresh key every step
     action = pid(np.asarray(obs))
-    obs, state, reward, terminated, truncated, _ = env.step(key, state, action, params)
+    obs, state, reward, terminated, truncated, _ = env.step(step_key, state, action, params)
     total += float(reward)
     if terminated or truncated:
         break

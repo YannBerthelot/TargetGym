@@ -988,8 +988,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 20-second demand blocks. The defaults are the task, so there is no
         # test_params override and no effectiveness_overrides.
         tuned_gains_key="compressor_surge",
-        # The OU deviation of the consumers' opening, zero-mean under a
-        # constant key; demand_sigma is its stationary sd.
+        # The OU deviation of the consumers' opening, zero-mean;
+        # demand_sigma is its stationary sd.
         disturbance_fields=("demand_dev",),
         noise_fields=("demand_sigma",),
         # No fingerprint_sources: the package imports only itself and the

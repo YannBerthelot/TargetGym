@@ -1310,7 +1310,7 @@ def _tune_aircraft_search(
 
     spec = REGISTRY[env_name]
     params = spec.make_test_params(max_steps_in_episode=steps)
-    all_gains = dict(pid_mod._load_gains())
+    all_gains = dict(pid_mod.load_gains())
     start = (
         all_gains.get(gains_key)
         or _controller_defaults(gains_key)

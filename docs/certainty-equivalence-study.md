@@ -175,13 +175,14 @@ reproduced on every test run, guarded by a source fingerprint.
 
 ### 3.3 Scenario and oracle feasibility
 
-**The oracle arm is nearly free on the JAX planners.** The evaluation harness
-calls `jax.jit(env.step_env)` directly with a constant `jax.random.PRNGKey(seed)`,
-bypassing gymnax's `Environment.step` (which would split the key). So during
-evaluation the disturbance is exactly `normal(fold_in(PRNGKey(seed), t))`.
-Passing that same key into `SamplingMPC._score` instead of `PRNGKey(0)` makes
-the planner simulate the exact realisation the environment will deliver. That
-is the oracle, and it is a constructor argument plus one substitution.
+**The oracle arm is cheap on the JAX planners.** The evaluation harness calls
+`env.step_env` directly, bypassing gymnax's `Environment.step` (which would
+split the key), with step `t` of seed `s` on the key
+`benchmark.episode_keys(PRNGKey(s), 1, T)[1][t, 0]`. So during evaluation the
+disturbance is a pure function of the seed and the step, independent of the
+actions. Handing the planner the step keys of its horizon instead of
+`PRNGKey(0)` makes it simulate the exact realisation the environment will
+deliver. That is the oracle.
 
 One trap: because the reactor keys its demand off `state.demand_key`, which is
 carried in the state and therefore copied into any planner rollout, **a
