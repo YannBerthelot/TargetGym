@@ -217,8 +217,10 @@ modules, the shared controller and integration code, the gains, the parameter
 values, and the burn-in the protocol scores from (the task's row in
 `hold_measurements.json`, capped at half the episode). The suite refuses to
 read one whose fingerprint no longer matches the tree. So if you change any of
-those, a test will tell you which records went stale; re-record them and
-commit the result with the change that invalidated it.
+those, CI's `records` check fails and names the records that went stale;
+re-record them and commit the result with the change that invalidated it.
+The record checks run only in that job, so a failing test job always means a
+real bug. To run them locally: `uv run pytest -m records`.
 `src/target_gym/provenance.py` explains why the fingerprint is taken over source
 rather than over behaviour, and what that trade buys.
 

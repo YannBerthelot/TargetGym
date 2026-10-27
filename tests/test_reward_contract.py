@@ -256,6 +256,7 @@ def _recorded_protocol_row(spec) -> dict:
     return row
 
 
+@pytest.mark.records
 def test_recorded_protocol_row_still_describes_this_tree(spec):
     """Every shipped PID has a protocol row taken against this tree, whether
     or not its floor is measured. The floor check below skips the three
@@ -283,6 +284,7 @@ def _sampling_slack(spec, row) -> float:
     return max(0.02, 3.0 * se / float(p.e_floor))
 
 
+@pytest.mark.records
 def test_mpc_does_not_beat_a_measured_floor(spec):
     """Floor sanity: where ``e_floor`` is a measured or certified floor (not a
     documented minimum on a deterministic plant), the shipped MPC's long-run
@@ -307,6 +309,7 @@ def test_mpc_does_not_beat_a_measured_floor(spec):
     )
 
 
+@pytest.mark.records
 @pytest.mark.slow
 def test_the_recorded_mpc_cost_is_what_the_mpc_measures_now():
     """The recorded floor check above is only as good as the recording. Re-run

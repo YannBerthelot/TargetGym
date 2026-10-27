@@ -219,7 +219,9 @@ without touching the code.
 that determines it: the environment's modules, the shared controller and
 integration code, its tuned gains, the parameters it was measured at, and the
 protocol's burn-in. A test refuses a record whose fingerprint no longer matches
-the tree, and names the command that regenerates it. Comments and docstrings
+the tree, and names the command that regenerates it. These checks run as CI's
+`records` check, apart from the other tests, so a stale record never hides a
+real failure. Comments and docstrings
 are excluded, so prose edits never stale a record. `src/target_gym/provenance.py`
 explains why the fingerprint is taken over source rather than behaviour.
 
