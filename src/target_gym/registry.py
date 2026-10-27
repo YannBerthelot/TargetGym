@@ -500,7 +500,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
-        # v3: the altitude floor moved from 4.55 m to the oracle's 1.20 m.
         version=3,
     ),
     EnvSpec(
@@ -532,7 +531,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        # v3: the altitude floor became the 1 m altimeter resolution (was 1.44 m).
         version=3,
     ),
     EnvSpec(
@@ -551,8 +549,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        # v3: the floors became the instrument resolutions (were 4.06 m
-        # altitude and 8.12 m path).
         version=3,
     ),
     EnvSpec(
@@ -571,9 +567,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        # v3: the floors became the instrument resolutions (were 1.39 m
-        # altitude and 6.17 m path). v4: the observed tangent and cross-track
-        # error on one cap pointed against the direction of travel.
         version=4,
     ),
     EnvSpec(
@@ -592,7 +585,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        # v3: the path floor became the 3 m GPS resolution (was 14.6 m).
         version=3,
     ),
     EnvSpec(
@@ -614,8 +606,6 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/env.py",
             "experts/pid.py",
         ),
-        # v3: the slot floor became the 3 m relative-GPS resolution (was
-        # 18.6 m). PatrolParams is shared, so patrol_bearing_only moves too.
         version=3,
     ),
     EnvSpec(
@@ -656,7 +646,6 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/env.py",
             "experts/pid.py",
         ),
-        # v3 with patrol: they share PatrolParams, and the slot floor moved.
         version=3,
     ),
     # -- Process control ----------------------------------------------------
@@ -697,10 +686,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_four_tank_mpc", module="target_gym.pc_gym.four_tank.experts"
         ),
-        # 500 steps. The lower tanks have a ~58 s time constant at these
-        # levels, so the previous 100-step horizon was under two of them --
-        # every controller was still mid-transient and they all scored alike,
-        # which is why the effectiveness contract could not separate them here.
+        # 500 steps: the lower tanks have a ~58 s time constant at these
+        # levels, and a shorter episode leaves every controller mid-transient.
         tuned_gains_key="four_tank",
     ),
     EnvSpec(
@@ -778,11 +765,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.experts"),
         tuned_gains_key="reactor",
-        # v2: ``max_steps_in_episode`` and ``state.time`` count env steps, not
-        # physics sub-steps. The physics within an episode is unchanged, but a
-        # return published against v1 was taken over 8640 env steps of which
-        # 7776 scored a frozen plant, so its numbers do not carry over.
-        # v3: the floor-normalised reward, like every other plant's v2.
         version=3,
     ),
     EnvSpec(
@@ -793,17 +775,14 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid("make_hvac_pid_controller", module="target_gym.hvac.experts"),
         make_mpc=_mpc("make_hvac_mpc", module="target_gym.hvac.experts"),
         # 720 steps at dt = 900 s is 7.5 days, so fifteen setback recoveries
-        # and as many solar cycles -- which is what distinguishes controllers
-        # here. (This comment read "2 days" long after the episode-length audit
-        # raised it from the 192 steps that actually was two days.)
+        # and as many solar cycles, which is what distinguishes controllers
+        # here.
         tuned_gains_key="hvac",
         disturbance_fields=("weather_dev",),
     ),
     EnvSpec(
         name="cement_kiln",
         group="industrial",
-        # v3: a raw kiln trips (discharge free lime >= ``lime_max``, 5 %);
-        # before, a kiln at minimum fuel ran cold at 30 % free lime untripped.
         version=3,
         env_factory=_cement_kiln,
         params_cls=_LazyParams("target_gym.cement_kiln.env", "CementKilnParams"),
@@ -915,8 +894,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 1200 steps = 120 s at 0.1 s: four 30-second setpoint blocks and six
         # 20-second demand blocks, with no effectiveness_overrides.
         tuned_gains_key="compressor_surge",
-        # The OU deviation of the consumers' opening, zero-mean under a
-        # constant key; demand_sigma is its stationary sd.
+        # The OU deviation of the consumers' opening, zero-mean;
+        # demand_sigma is its stationary sd.
         disturbance_fields=("demand_dev",),
         noise_fields=("demand_sigma",),
         # No fingerprint_sources: the package imports only itself and the

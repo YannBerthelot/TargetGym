@@ -42,14 +42,8 @@ import pathlib
 
 _ROOT = pathlib.Path(__file__).resolve().parent
 
-# Inside the package, not beside it.
-#
-# These used to resolve as ``_REPO / "data"``, which is the repository root from
-# a source checkout and nonsense from an installed package: site-packages's
-# grandparent is the interpreter's lib directory, so an installed target-gym
-# looked for ``/usr/local/lib/python3.13/data/pid_gains.json``, never found the
-# tuned gains, and silently re-ran gradient tuning for several minutes on every
-# user's first call. The wheel did not ship the files either.
+# Inside the package, not beside it, so they resolve from a source checkout and
+# from an installed wheel alike.
 GAINS_PATH = _ROOT / "data" / "pid_gains.json"
 BASELINES_PATH = _ROOT / "data" / "baseline_returns.json"
 

@@ -37,13 +37,13 @@ spec = REGISTRY["cstr"]
 env, params = spec.make_env(), spec.make_test_params()
 policy = baseline_policy(spec, "pid", params)      # or "mpc", or your agent
 
-obs, state = env.reset_env(jax.random.PRNGKey(0), params)
+key, reset_key = jax.random.split(jax.random.PRNGKey(0))
+obs, state = env.reset_env(reset_key, params)
 total = 0.0
 for _ in range(int(params.max_steps_in_episode)):
+    key, step_key = jax.random.split(key)   # a fresh key every step
     action = policy(np.asarray(obs), state)
-    obs, state, reward, terminated, _ = env.step_env(
-        jax.random.PRNGKey(0), state, action, params
-    )
+    obs, state, reward, terminated, _ = env.step_env(step_key, state, action, params)
     total += float(reward)
     if bool(terminated):
         break

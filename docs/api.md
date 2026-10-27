@@ -84,7 +84,7 @@ print(len(REGISTRY), "environments in", len(GROUPS), "groups")
 | `target_gym.runners` | Figure and video generation. A tool, not a library surface. |
 | `target_gym.render_kit` | The dashboard toolkit. Stable enough to build on, but its primitives are still moving. |
 | `target_gym.utils` | Small numeric helpers. Video writing lives in `target_gym.video`. |
-| `target_gym.benchmark` | One policy interface and a paired runner over every task (`Policy`, `TaskInfo`, `run_policy`, `run_policy_on_benchmark`, `shipped_policy`). New; its `TaskInfo.extras` conventions are still settling with its first downstream user. |
+| `target_gym.benchmark` | One policy interface and a paired runner over every task (`Policy`, `TaskInfo`, `run_policy`, `run_policy_on_benchmark`, `shipped_policy`). `run_policy` is the one rollout loop, and `episode_keys` its key convention: a fresh key every step. New; its `TaskInfo.extras` conventions are still settling with its first downstream user. |
 
 ## Deprecated
 

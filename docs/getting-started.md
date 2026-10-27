@@ -29,14 +29,15 @@ import target_gym as tg
 
 env, params = tg.make("cstr", max_steps_in_episode=100)
 
-key = jax.random.PRNGKey(0)
-obs, state = env.reset_env(key, params)
+key, reset_key = jax.random.split(jax.random.PRNGKey(0))
+obs, state = env.reset_env(reset_key, params)
 
 step = jax.jit(env.step_env)
 total = 0.0
 for _ in range(params.max_steps_in_episode):
+    key, step_key = jax.random.split(key)   # a fresh key every step
     action = jnp.array([0.0])
-    obs, state, reward, terminated, info = step(key, state, action, params)
+    obs, state, reward, terminated, info = step(step_key, state, action, params)
     total += float(reward)
     if bool(terminated):
         break
@@ -61,14 +62,16 @@ import target_gym as tg
 env, params = tg.make("cstr", max_steps_in_episode=100)
 
 def episode_return(key):
-    _, state = env.reset_env(key, params)
+    reset_key, steps_key = jax.random.split(key)
+    _, state = env.reset_env(reset_key, params)
 
-    def body(carry, _):
+    def body(carry, step_key):
         state, total = carry
-        _, state, reward, _, _ = env.step_env(key, state, jnp.zeros(1), params)
+        _, state, reward, _, _ = env.step_env(step_key, state, jnp.zeros(1), params)
         return (state, total + reward), None
 
-    (_, total), _ = jax.lax.scan(body, (state, 0.0), None, params.max_steps_in_episode)
+    step_keys = jax.random.split(steps_key, params.max_steps_in_episode)
+    (_, total), _ = jax.lax.scan(body, (state, 0.0), step_keys)
     return total
 
 keys = jax.random.split(jax.random.PRNGKey(0), 256)

@@ -21,14 +21,15 @@ this library's protocol (:mod:`target_gym.eval`). Episodes are PAIRED: the
 reset states and every step's key depend only on ``(key, n, T)``, so two
 policies run on the same key meet the same plants, the same set-point
 schedules and the same noise, and their per-episode costs can be compared
-episode by episode. The convention: ``k_reset, k_steps = split(key)``, the
-episodes reset on ``split(k_reset, n)`` and step ``t`` of episode ``i`` on
-``split(k_steps, T n).reshape(T, n, 2)[t, i]`` (the convention of
-TargetFoundation's paired runs, which a policy run here reproduces action for
-action, the rewards to float rounding); the policy's own key is
-``fold_in(key, 1)``. Each step gets its own key (gymnax's convention; the
-older single-episode helpers here reuse one key for a whole episode, so their
-numbers on a stochastic plant are not these).
+episode by episode. The convention (:func:`episode_keys`):
+``k_reset, k_steps = split(key)``, the episodes reset on ``split(k_reset, n)``
+and step ``t`` of episode ``i`` on ``split(k_steps, T n).reshape(T, n, 2)[t,
+i]`` (the convention of TargetFoundation's paired runs, which a policy run
+here reproduces action for action, the rewards to float rounding); the
+policy's own key is ``fold_in(key, 1)``. Each step gets its own key, as in
+gymnax. It is the only loop here: seed ``s`` of ``runners.rollout``,
+``eval.run_episode`` and the recorded baselines is the one-episode run on
+``PRNGKey(s)``.
 
 A policy may be written in JAX (jit its own ``act``; the loop runs on the
 host so a policy that cannot be traced still fits) or in plain numpy.
@@ -48,9 +49,18 @@ row then carries the reason instead of numbers.
 
 from __future__ import annotations
 
+import functools
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Mapping, Protocol, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Mapping,
+    Protocol,
+    Sequence,
+    runtime_checkable,
+)
 
 import numpy as np
 
@@ -163,15 +173,56 @@ def target_changes(targets: np.ndarray, first: np.ndarray) -> np.ndarray:
     return (np.abs(targets - prev) > 0.05 * span).any(axis=1)
 
 
+def episode_keys(key, n: int, n_steps: int):
+    """The keys of ``n`` episodes of ``n_steps`` on ``key``: the reset keys
+    ``(n, 2)`` and the step keys ``(n_steps, n, 2)`` (module docstring)."""
+    import jax
+
+    k_reset, k_steps = jax.random.split(key)
+    steps = jax.random.split(k_steps, n_steps * n).reshape(n_steps, n, 2)
+    return jax.random.split(k_reset, n), steps
+
+
+@functools.lru_cache(maxsize=None)
+def _batched(env, per_episode_params: bool):
+    """The vmapped, jitted reset, step and reward terms of ``env``, built once
+    per process, so a run compiles them once rather than on every call. The
+    step freezes a terminated episode inside the jit, one dispatch per step."""
+    import jax
+    import jax.numpy as jnp
+
+    pa = 0 if per_episode_params else None
+    step_all = jax.vmap(env.step_env, in_axes=(0, 0, 0, pa))
+
+    def advance(keys, state, obs, action, params, done):
+        obs_n, state_n, r, term, info = step_all(keys, state, action, params)
+        live = ~done
+
+        def freeze(new, old):
+            return jnp.where(
+                jnp.reshape(live, live.shape + (1,) * (new.ndim - 1)), new, old
+            )
+
+        return freeze(obs_n, obs), jax.tree.map(freeze, state_n, state), r, term, info
+
+    terms_fn = getattr(env, "reward_terms", None)
+    return (
+        jax.jit(jax.vmap(env.reset_env, in_axes=(0, pa))),
+        jax.jit(advance),
+        None if terms_fn is None else jax.jit(jax.vmap(terms_fn, in_axes=(0, pa))),
+    )
+
+
 def run_policy(
     policy: Policy,
     env,
     params,
     task: TaskInfo,
-    key,
+    key=None,
     n_steps: int | None = None,
     per_episode_params: bool = False,
     record: Mapping[str, Callable[[Any, Any, Any], Any]] | None = None,
+    seeds: Sequence[int] | None = None,
 ) -> dict[str, Any]:
     """``task.n_episodes`` closed-loop episodes of ``policy`` on ``env``.
 
@@ -179,7 +230,8 @@ def run_policy(
     (``info["tripped"]``, False where the plant reports none), ``in_band``
     (every tracked error within ``e_floor``), ``target_change``, ``action``
     ``(n, T, n_act)``, ``value`` / ``target`` ``(n, T, n_out)`` (the measured
-    outputs and their targets after the step), ``terminated`` (latched from
+    outputs and their targets after the step; ``value0`` / ``target0``
+    ``(n, n_out)`` at the reset), ``terminated`` (latched from
     the step on which the episode terminated), and ``info_error`` where the
     plant reports its true tracking error; per episode ``length`` (its own
     ``max_steps``, cut at a termination); ``terms`` (name -> ``(n, T)``) where
@@ -192,23 +244,35 @@ def run_policy(
     here) on the state after the step, its parameters, and whether the step
     tripped (False where the plant reports no trips; after a trip the state is
     the restarted plant, so ``tripped`` is how a function scores that step).
-    Returned as ``records`` (name -> ``(n, T)``)."""
+    Returned as ``records`` (name -> ``(n, T)``).
+
+    ``seeds`` replaces ``key``: episode ``i`` is then the one-episode run on
+    ``PRNGKey(seeds[i])``, as ``runners.rollout`` and ``eval.run_episode`` run
+    seed ``s``, and the policy's key is the first seed's."""
     import jax
     import jax.numpy as jnp
 
     n = task.n_episodes
     T = int(task.max_steps.max()) if n_steps is None else int(n_steps)
     pa = 0 if per_episode_params else None
-    k_reset, k_steps = jax.random.split(key)
-    step_keys = jax.random.split(k_steps, T * n).reshape(T, n, 2)
-    reset = jax.jit(jax.vmap(env.reset_env, in_axes=(0, pa)))
-    step = jax.jit(jax.vmap(env.step_env, in_axes=(0, 0, 0, pa)))
-    obs, state = reset(jax.random.split(k_reset, n), params)
+    if seeds is None:
+        reset_keys, step_keys = episode_keys(key, n, T)
+    else:
+        if len(seeds) != n:
+            raise ValueError(f"{len(seeds)} seeds for {n} episodes")
+        key = jax.random.PRNGKey(seeds[0])
+        pairs = [episode_keys(jax.random.PRNGKey(s), 1, T) for s in seeds]
+        reset_keys = jnp.concatenate([r for r, _ in pairs])
+        step_keys = jnp.concatenate([k for _, k in pairs], axis=1)
+    try:
+        reset, advance, terms_b = _batched(env, per_episode_params)
+    except TypeError:  # an unhashable env: built for this run alone
+        reset, advance, terms_b = _batched.__wrapped__(env, per_episode_params)
+    obs, state = reset(reset_keys, params)
+    first_value = np.asarray(obs)[:, list(task.value_index)]
     first_target = np.asarray(obs)[:, list(task.target_index)]
     carry = policy.reset(jax.random.fold_in(key, 1), obs, task)
     oracle = bool(getattr(policy, "oracle", False))
-    terms_fn = getattr(env, "reward_terms", None)
-    terms_b = None if terms_fn is None else jax.jit(jax.vmap(terms_fn, in_axes=(0, pa)))
     record_b = {
         k: jax.jit(jax.vmap(fn, in_axes=(0, pa, 0))) for k, fn in (record or {}).items()
     }
@@ -227,16 +291,9 @@ def run_policy(
         else:
             action, carry = policy.act(carry, obs, t)
         action = jnp.reshape(jnp.asarray(action, jnp.float32), (n, task.n_act))
-        keys = step_keys[t]
-        obs_n, state_n, r, term, info = step(keys, state, action, params)
-        live = jnp.asarray(~done)
-
-        def freeze(new, old, live=live):
-            return jnp.where(
-                jnp.reshape(live, live.shape + (1,) * (new.ndim - 1)), new, old
-            )
-
-        obs, state = freeze(obs_n, obs), jax.tree.map(freeze, state_n, state)
+        obs, state, r, term, info = advance(
+            step_keys[t], state, obs, action, params, jnp.asarray(done)
+        )
         o = np.asarray(obs)
         rec["reward"].append(np.where(done, 0.0, np.asarray(r, float)))
         tripped = info.get("tripped") if isinstance(info, dict) else None
@@ -271,6 +328,7 @@ def run_policy(
         out["info_error"] = np.stack(err_rec, axis=1)
     out["terms"] = {k: np.stack(v, axis=1) for k, v in terms_rec.items()}
     out["records"] = {k: np.stack(v, axis=1) for k, v in records_rec.items()}
+    out["value0"], out["target0"] = first_value, first_target
     out["length"] = length
     out["carry"] = carry  # the policy's final carry, for its own diagnostics
     out["wall_s"] = time.perf_counter() - t0
@@ -466,6 +524,7 @@ __all__ = [
     "Policy",
     "TaskInfo",
     "Unsupported",
+    "episode_keys",
     "episodes_of",
     "run_policy",
     "run_policy_on_benchmark",

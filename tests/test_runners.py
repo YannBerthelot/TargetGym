@@ -4,6 +4,10 @@ obs_value_index / obs_target_index / tracked_names attributes, and
 MPC / make_pid / make_mpc env methods.
 """
 
+import os
+import subprocess
+import sys
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -63,6 +67,21 @@ def test_figure_modes_run_headless(name):
     params = spec.make_test_params(max_steps_in_episode=N)
     assert R.figure_sweep(name, params=params, resolution=3, plot=False)
     assert R.figure_pid(name, params=params, n_seeds=2, plot=False)
+
+
+def test_importing_the_runners_keeps_the_callers_matplotlib_backend():
+    """Only the command line picks a headless backend; a library import must
+    leave the caller's own backend alone."""
+    code = (
+        "import matplotlib; import target_gym.runners.runners; "
+        "print(matplotlib.get_backend())"
+    )
+    env = {**os.environ, "MPLBACKEND": "svg"}
+    out = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip().lower() == "svg"
 
 
 def test_every_registered_environment_exposes_a_tracked_label():
