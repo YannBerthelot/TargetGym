@@ -14,6 +14,16 @@ than by commit.
 
 ### Added
 
+- **One way in by registry name.** `env, params = target_gym.make(name)`
+  returns the environment and its scored parameters, in the shape of
+  `gymnax.make`. `make_expert(name)` returns the shipped PID as a pure
+  controller, so the caller picks its form: `.host()` for a NumPy loop, as the
+  baselines are scored, or `.batched()` for `jit`, `vmap` and GPU.
+  `make_oracle(name)` builds the full-state MPC as the records build it,
+  `make_gymnasium(name)` wraps any task for Gymnasium, `list_envs()` lists the
+  tasks and `score_policy` is `scoring.score_policy`. `env.make_pid()`,
+  `env.expert_policy`, `GymnasiumPlane` and `gym_wrapper_factory` still work
+  and warn. `wrapper.GymnasiumEnv` takes an environment instance.
 - **`target_gym.scoring`, which replaces NEA.** A policy is scored against the
   expert on three numbers: `b / x`, how many times cheaper it is over the
   episode, with the share of seeds it wins; `S = log(b / x) / log(b / c)`, where
@@ -96,6 +106,13 @@ than by commit.
 
 ### Changed
 
+- **CasADi and do-mpc moved to the `[mpc]` extra.** `pip install target-gym` no
+  longer pulls them; `pip install "target-gym[mpc]"` does. The experts and the
+  JAX oracles work without them, and a CasADi oracle names the extra when it is
+  missing.
+- **Importing `target_gym` keeps your matplotlib backend.** The runners and
+  the renderers switched every caller to Agg on import; now only the runners'
+  command line does, and the renderers draw on an Agg canvas of their own.
 - **The aircraft experts are what fixed-wing autopilots fly.** All seven
   aircraft tasks now use TECS for height and speed (`plane/experts_tecs.py`)
   over a PI pitch loop. The 3D tasks add a bank loop damped on roll rate,
