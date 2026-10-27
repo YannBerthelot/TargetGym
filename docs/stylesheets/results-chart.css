@@ -1,0 +1,48 @@
+/* The results chart (docs/javascripts/results-chart.js), on the theme's own
+   colours so it follows the light and dark toggle. */
+.tg-results-chart {
+  --tg-s1: #2a78d6; --tg-s2: #eb6834; --tg-conn: #c3c2b7; --tg-grid: #e1e0d9;
+  --tg-shade: rgba(11, 11, 11, 0.035); --tg-hov: rgba(11, 11, 11, 0.04); --tg-cl: #52514e;
+  position: relative; margin: 1rem 0 1.5rem; font-size: 0.7rem;
+}
+[data-md-color-scheme="slate"] .tg-results-chart {
+  --tg-s1: #3987e5; --tg-s2: #d95926; --tg-conn: #383835; --tg-grid: #2c2c2a;
+  --tg-shade: rgba(255, 255, 255, 0.04); --tg-hov: rgba(255, 255, 255, 0.05); --tg-cl: #c3c2b7;
+}
+.tg-results-chart .tg-bar, .tg-results-chart .tg-legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem;
+  color: var(--md-default-fg-color--light); margin-bottom: 0.4rem;
+}
+.tg-results-chart .tg-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.tg-results-chart button {
+  font: inherit; color: var(--md-default-fg-color--light); background: transparent;
+  border: 1px solid var(--md-default-fg-color--lighter); border-radius: 4px;
+  padding: 0.1rem 0.6rem; cursor: pointer;
+}
+.tg-results-chart button[aria-pressed="true"] {
+  color: var(--md-default-fg-color); background: var(--md-default-fg-color--lightest);
+}
+.tg-results-chart .tg-table-toggle { margin-left: auto; }
+.tg-results-chart svg text { font-family: var(--md-text-font-family); font-size: 11px; }
+.tg-results-chart .tg-name { font-family: var(--md-code-font-family); fill: var(--md-default-fg-color--light); }
+.tg-results-chart .tg-head { font-size: 12px; font-weight: 700; fill: var(--md-default-fg-color); }
+.tg-results-chart .tg-sub { font-size: 12px; fill: var(--md-default-fg-color--light); }
+.tg-results-chart .tg-muted { fill: var(--md-default-fg-color--lighter); }
+.tg-results-chart .tg-grid { stroke: var(--tg-grid); stroke-width: 1; }
+.tg-results-chart .tg-ref { stroke: var(--md-default-fg-color--lighter); stroke-width: 1; stroke-dasharray: 3 3; }
+.tg-results-chart .tg-shade { fill: var(--tg-shade); }
+.tg-results-chart .tg-hit { fill: transparent; }
+.tg-results-chart .tg-hit.tg-on { fill: var(--tg-hov); }
+.tg-results-chart .tg-conn { stroke: var(--tg-conn); stroke-width: 2; stroke-linecap: round; }
+.tg-results-chart .tg-ceiling { fill: var(--tg-cl); }
+.tg-results-chart .tg-oracle { fill: var(--tg-s2); stroke: var(--md-default-bg-color); stroke-width: 2; }
+.tg-results-chart .tg-expert { fill: var(--tg-s1); stroke: var(--md-default-bg-color); stroke-width: 2; }
+.tg-results-chart .tg-tip {
+  position: absolute; pointer-events: none; opacity: 0; z-index: 2; min-width: 220px;
+  background: var(--md-default-bg-color); border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 4px; padding: 0.5rem 0.7rem; line-height: 1.5;
+  color: var(--md-default-fg-color--light); box-shadow: var(--md-shadow-z1);
+}
+.tg-results-chart .tg-tip b { font-weight: 400; color: var(--md-default-fg-color); }
+.tg-results-chart .tg-tip-name { font-family: var(--md-code-font-family); color: var(--md-default-fg-color); margin-bottom: 0.2rem; }
+.tg-results-chart .tg-tip-raw { margin-top: 0.2rem; color: var(--md-default-fg-color--lighter); }
