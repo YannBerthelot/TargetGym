@@ -113,6 +113,8 @@ def test_records_are_the_protocols():
     s = B.score(r, burn_in=10)
     assert s["metrics"]["gain"] == pytest.approx(E.evaluate(eps, burn_in=10)["gain"])
     assert s["gain"].shape == (2,)
+    held = B.score(r, burn_in=10, settle=7)["metrics"]["hold"]
+    assert held == pytest.approx(E.evaluate(eps, burn_in=10, settle=7)["hold"])
 
 
 def test_target_changes_follow_run_episodes_rule():
