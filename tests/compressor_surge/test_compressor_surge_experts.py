@@ -1001,7 +1001,7 @@ def test_the_pair_holds_the_validation_seeds():
 
 
 def test_floor_is_the_recorded_mpc_hold(params):
-    """``e_floor``, ``c_hold`` and the NEA references come from the NMPC's
+    """``e_floor``, ``c_hold`` and the oracle's best holds come from the NMPC's
     recorded hold. With e_hold_min the smallest per-seed hold error that
     scripts/measure_hold.py recorded for the NMPC, ``e_floor`` is the larger
     of the transmitter's accuracy (``precision_floor``, 0.0275 kPa) and

@@ -134,39 +134,31 @@ print(f"beats the PID on {wins} of {len(mine)} seeds")
 ### The protocol score
 
 Returns mix the cost of reaching a target with the cost of holding it, in a
-proportion set by the episode length. The [RL protocol](rl-protocol.md) scores
-the two apart, and its headline is the long-run cost while holding (the
-*gain*) and the normalised expert advantage, NEA, which is 0 at PID parity and
-1 at the achievable floor. The PID's protocol row is in
-`src/target_gym/data/protocol_results.json`, so a policy of yours is scored
-against it like this:
+proportion set by the episode length. The [RL protocol](rl-protocol.md#4-metrics)
+scores a policy against the expert on three numbers: how many times cheaper it
+is over the episode (`ratio`, with the share of seeds it wins), where it sits
+between the expert (0) and the ceiling (1) while holding (`score`), and how much
+room the task leaves (`headroom`, in decades). One call runs your policy and the
+expert on the same seeds:
 
 ```python
-import json
-from importlib.resources import files
-
-from target_gym.eval import evaluate, run_episode, scored_burn_in
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import baseline_policy
+from target_gym.scoring import score_policy
 
 name = "cstr"
 spec = REGISTRY[name]
 params = spec.make_test_params()
-row = json.loads((files("target_gym") / "data" / "protocol_results.json").read_text())[name]
 
 make_policy = lambda: baseline_policy(spec, "pid", params)   # swap in your own
-episodes = [run_episode(spec, params, make_policy(), seed=s) for s in range(row["seeds"])]
-score = evaluate(
-    episodes,
-    burn_in=scored_burn_in(name, params),
-    rho_floor=float(params.rho_floor),
-    rho_ref=row["pid"]["gain"],
-)
-print(f"gain {score['gain']:.4g} (PID {row['pid']['gain']:.4g}), NEA {score['nea']:.3f}")
+m = score_policy(name, make_policy, seeds=3)                 # 10 for a result
+print(f"{m['ratio']:.3g}x cheaper than the expert on {m['win_rate']:.0%} of seeds")
+print(f"score {m['score']:.2f}, room {m['headroom']:.2f} decades")
 ```
 
-With the PID itself in the slot, NEA comes out at 0. For a shipped controller
-there is a one-line shortcut, `target_gym.eval.evaluate_controller("cstr", "pid")`.
+With the expert itself in the slot, the ratio comes out at 1 and the score at
+0. A score of `nan` means the expert already tracks within the instrument's
+resolution, so the task has no room to score.
 
 ## Using it in learning
 

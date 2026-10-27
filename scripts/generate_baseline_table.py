@@ -17,8 +17,9 @@ consumption, a failure charge -- so the per-step cost is comparable across
 seeds of one plant and reads directly ("how many floor-widths off, on
 average, over the episode"). It is *not* comparable across plants: the priced
 plants are in dollars or euros per step, and an episode return mixes the
-reach transient with the hold in a proportion set by the episode length. NEA,
-from the protocol scores, is the number to compare across plants.
+reach transient with the hold in a proportion set by the episode length. The
+room to grow and the score (``target_gym.scoring``) are the numbers to compare
+across plants.
 
 Under version 1 the rewards were products of terms in [0, 1] and the table
 reported the return as a share of the episode's ceiling; a positive mean return
@@ -48,13 +49,14 @@ INTRO = """\
 Every environment ships two reference controllers, scored on its test
 configuration (`spec.make_test_params()`):
 
-- **PID**: reads the observation only, as your agent does. It is the score to
-  beat.
-- **MPC**: reads the true state, including what the observation hides, so it is
-  an upper bound rather than a peer.
+- **The expert** (the `"pid"` slot): reads the observation only, as your agent
+  does. It is the score to beat.
+- **The oracle** (the `"mpc"` slot): reads the true state, including what the
+  observation hides. It shows what information and planning are worth.
 
-Every number on this page is a cost, so lower is better. To score your own
-policy against them, see [Evaluating against it](using-the-pids.md#evaluating-against-it).
+Costs on this page are per step, lower is better, in each environment's own
+units. To score your own policy, see
+[Evaluating against it](using-the-pids.md#evaluating-against-it).
 How the controllers are built and measured is in
 [How the baselines work](baselines.md).
 """
@@ -97,76 +99,66 @@ def _seeds(counts) -> str:
     )
 
 
-def _protocol() -> list[str]:
-    from target_gym.eval import nea
+def _room() -> list[str]:
+    from target_gym.scoring import headroom, score
 
+    data = json.loads(PROTOCOL.read_text())
+    rows = {}
+    for name, r in data.items():
+        pid, mpc, c = r.get("pid"), r.get("mpc"), r["ceiling"]
+        b = pid and pid["hold_tracking"]
+        x = mpc and mpc["hold_tracking"]
+        s = score(x, b, c) if pid and mpc else None
+        rows[name] = (
+            f"{_fmt(b)} | {_fmt(c)} | {headroom(b, c):.2f} | {_fmt(x)} | "
+            f"{'—' if s is None or s != s else f'{s:.2f}'}"
+        )
+    return [
+        "## Room to grow",
+        "",
+        "**Hold** is the tracking cost per step once a controller has settled on",
+        "each target, after a settle fixed per environment. The **ceiling** is",
+        "tracking every quantity within its instrument's resolution: as good as a",
+        "real plant can verify. **Room** is the number of decades from the expert's",
+        "hold down to the ceiling; 0 means the expert is already there. The",
+        "**oracle score** places the oracle between the expert (0) and the ceiling",
+        "(1). Score a policy the same way with `target_gym.scoring.score_policy`.",
+        f"{_seeds(r['seeds'] for r in data.values())} each.",
+        "",
+        "| environment | expert hold | ceiling | room (decades) | oracle hold | oracle score |",
+        "| --- | --- | --- | --- | --- | --- |",
+        *_grouped(rows, 6),
+    ]
+
+
+def _episode() -> list[str]:
     data = json.loads(PROTOCOL.read_text())
     rows, failing = {}, []
     for name, r in data.items():
-        pid, mpc, floor = r.get("pid"), r.get("mpc"), r["rho_floor"]
-        score = nea(mpc["gain"], pid["gain"], floor) if pid and mpc else None
+        pid, mpc = r.get("pid"), r.get("mpc")
+        ratio = pid["gain"] / mpc["gain"] if pid and mpc and mpc["gain"] > 0 else None
         rows[name] = (
             f"{_fmt(pid and pid['gain'])} | {_fmt(mpc and mpc['gain'])} | "
-            f"{_fmt(floor)} | {'—' if score is None else f'{score:.3f}'}"
+            f"{_fmt(ratio)} | {_fmt(r.get('pid') and r['pid']['transient_cost'])} | "
+            f"{_fmt(r.get('mpc') and r['mpc']['transient_cost'])}"
         )
-        for who, m in (("PID", pid), ("MPC", mpc)):
+        for who, m in (("expert", pid), ("oracle", mpc)):
             if m and m["failure_rate"] > 0:
                 failing.append(f"the {who} on `{name}` ({m['failure_rate']:.3g})")
     lines = [
-        "## Protocol score",
+        "## Whole episode",
         "",
-        "The headline of the [RL protocol](rl-protocol.md). The **gain** is the mean",
-        "cost per step after the plant's burn-in, and **NEA** places a controller on a",
-        "scale where the PID is 0 and the achievable floor is 1:",
+        "The **gain** is the mean cost per step after the plant's burn-in, moves",
+        "between targets included: what the plant pays. **Oracle vs expert** is",
+        "the expert's gain divided by the oracle's, so 10 means the oracle pays a",
+        "tenth. The **transient** is the summed cost around each target change.",
         "",
-        "    NEA = (PID gain - your gain) / (PID gain - floor)",
-        "",
-        "Gains are in each environment's own units, so compare them along a row; NEA",
-        f"compares across rows. {_seeds(r['seeds'] for r in data.values())} each.",
-        "",
-        "| environment | PID gain | MPC gain | floor | MPC NEA |",
-        "| --- | --- | --- | --- | --- |",
-        *_grouped(rows, 5),
+        "| environment | expert gain | oracle gain | oracle vs expert | expert transient | oracle transient |",
+        "| --- | --- | --- | --- | --- | --- |",
+        *_grouped(rows, 6),
     ]
     if failing:
         lines += ["", "Trip rate per target change: " + ", ".join(failing) + "."]
-    return lines
-
-
-def _hold() -> list[str]:
-    data = json.loads(PROTOCOL.read_text())
-    rows, unsettled = {}, []
-    for name, r in data.items():
-        cells = []
-        for who in ("pid", "mpc"):
-            m = r.get(who)
-            # A negative reach cost means the cost was still rising when the
-            # window ended: there was no hold to measure the transient from.
-            mark = "†" if m and m["reach_cost"] < 0 else ""
-            if mark:
-                unsettled.append(f"the {who.upper()} on `{name}`")
-            cells.append(f"{_fmt(m and m['hold'])}{mark}")
-        cells += [_fmt(r.get(w) and r[w]["transient_cost"]) for w in ("pid", "mpc")]
-        rows[name] = " | ".join(cells)
-    lines = [
-        "## Hold and transient",
-        "",
-        "The gain mixes holding a target with reaching it. **Hold** is the cost per",
-        "step once a controller has settled on each target, and **transient** is the",
-        "summed cost of getting there, per target change. Steps a controller spends",
-        "moving early toward a previewed target count in the transient. Same units",
-        "and seeds as the gain.",
-        "",
-        "| environment | PID hold | MPC hold | PID transient | MPC transient |",
-        "| --- | --- | --- | --- | --- |",
-        *_grouped(rows, 5),
-    ]
-    if unsettled:
-        lines += [
-            "",
-            "† No hold was reached: the cost was still rising when the window ended, "
-            "for " + ", ".join(unsettled) + ".",
-        ]
     return lines
 
 
@@ -210,21 +202,21 @@ def _returns() -> list[str]:
         "",
         "The cost per step over the whole test episode (minus the return divided by",
         "the episode length): reaching the targets and holding them, together.",
-        f"{_seeds(seeds)}, paired: **MPC wins** counts the seeds where the MPC beat",
-        "the PID.",
+        f"{_seeds(seeds)}, paired: **oracle wins** counts the seeds where the oracle",
+        "beat the expert.",
         "",
-        "| environment | steps | PID cost/step | MPC cost/step | MPC wins |",
+        "| environment | steps | expert cost/step | oracle cost/step | oracle wins |",
         "| --- | --- | --- | --- | --- |",
         *_grouped(rows, 5),
     ]
     if losing:
         lines += [
             "",
-            "⚠️ The MPC loses more seeds than it wins here, so it is not an upper "
+            "⚠️ The oracle loses more seeds than it wins here, so it is not an upper "
             "bound: " + ", ".join(losing) + ".",
         ]
     if tripping:
-        lines += ["", "MPC trips over the seeds: " + ", ".join(tripping) + "."]
+        lines += ["", "Oracle trips over the seeds: " + ", ".join(tripping) + "."]
     return lines
 
 
@@ -241,7 +233,7 @@ def _caveats() -> list[str]:
 
 
 def _page() -> str:
-    sections = (_protocol(), _hold(), _returns(), _caveats())
+    sections = (_room(), _episode(), _returns(), _caveats())
     parts = [INTRO, *("\n".join(p) for p in sections if p)]
     return "\n\n".join(s.strip("\n") for s in parts) + "\n"
 

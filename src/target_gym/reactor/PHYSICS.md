@@ -219,7 +219,7 @@ baselines use.
 | `failure_cost` | 667 $ per step | twice the imbalance of the reachable 1.2 of rated (a 0.3 target against the 1.5 `n_max` trip) for one 10 s step |
 | `restart_steps` | 17280 (48 h) | restart time priced into a trip, `restart_steps x failure_cost` (a SCRAM's xenon-limited restart; provisional); where a plant engineer would get it: the plant's restart procedure |
 
-`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
 at the instrument resolution -- and `rho_floor` the same with consumption

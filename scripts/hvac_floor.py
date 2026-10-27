@@ -1,4 +1,4 @@
-"""The building's NEA reference: the shipped MPC's lowest per-seed hold cost.
+"""The building's best hold: the shipped MPC's lowest per-seed hold cost.
 
 Run with ``uv run python scripts/hvac_floor.py [--seeds N]``. The building
 has no certified floor -- its hold error is overheating the weather sets,

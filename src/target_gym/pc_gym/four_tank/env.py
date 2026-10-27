@@ -101,9 +101,8 @@ class FourTankParams(EnvParams):
     )  # reachable errors: steady tops 0.360 / 0.429 m against the lowest targets
     #: Restart time priced into a trip (``reward.trip_cost``; 10 min at 1 s steps: refill after an overflow or dry-out, provisional).
     restart_steps: int = 600
-    #: The NEA reference. Zero: the plant is deterministic, so exact hold is
-    #: achievable and ``e_floor`` is a scale, not a floor (a reference of 2,
-    #: the cost at the resolution, put the MPC above the reference and NEA > 1).
+    #: The oracle's best hold. Zero: the plant is deterministic, so exact hold
+    #: is achievable and ``e_floor`` is a scale, not a floor.
     rho_floor_tracking: float = 0.0
     rho_floor: float = 0.0
     #: True where e_floor is a resolution, not a measured or certified floor.

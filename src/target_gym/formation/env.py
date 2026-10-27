@@ -113,7 +113,7 @@ class FormationParams(PatrolParams):
         + (3.14159 / 0.0087) ** 2
         + 2 * ((1500.0 / 3.0) ** 2 + (3.14159 / 0.0087) ** 2)
     )
-    #: The NEA reference: the oracle's lowest per-seed holds
+    #: The oracle's best hold: its lowest per-seed holds
     #: (scripts/measure_hold.py) in the reward's units, the lead's altitude
     #: and heading plus each wingman's slot and alignment.
     rho_floor_tracking: float = (

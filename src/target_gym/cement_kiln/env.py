@@ -96,8 +96,8 @@ class CementKilnParams(EnvParams):
     )  # ``lime_max``, a cold kiln's 5 % free lime, against the lowest target
     #: Restart time priced into a trip (``reward.trip_cost``; 24 h at 30 s steps: cool-down, inspection and re-heat, provisional).
     restart_steps: int = 2880
-    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: Tracking cost per step at the floor, in the reward's units.
+    #: The oracle's best hold: the lowest per-seed hold cost the shipped MPC
     #: demonstrated, in the reward's units (the MPC's 4.89e-5 hold in 5e-4 units).
     rho_floor_tracking: float = (4.89e-5 / 5e-4) ** 2
     rho_floor: float = (4.89e-5 / 5e-4) ** 2

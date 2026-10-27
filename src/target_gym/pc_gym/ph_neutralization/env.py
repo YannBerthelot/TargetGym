@@ -161,8 +161,8 @@ class PHParams(EnvParams):
     failure_cost: float = 3.1e6
     #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 5 s steps: flush the tank after a gross excursion, provisional).
     restart_steps: int = 720
-    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: Tracking cost per step at the floor, in the reward's units.
+    #: The oracle's best hold: the lowest per-seed hold cost the shipped MPC
     #: demonstrated, in the reward's units (the MPC's 0.0013 pH hold in 0.01 units).
     rho_floor_tracking: float = (0.0013 / 0.01) ** 2
     rho_floor: float = (0.0013 / 0.01) ** 2

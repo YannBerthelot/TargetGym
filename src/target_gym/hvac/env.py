@@ -164,7 +164,7 @@ class HVACParams(EnvParams):
     #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 15 min steps: reset after a freeze or overheat alarm, provisional).
     restart_steps: int = 4
     #: The shipped MPC's lowest per-seed hold cost on the test episode (EUR
-    #: per step, five seeds, `scripts/hvac_floor.py`): the NEA reference, an
+    #: per step, five seeds, `scripts/hvac_floor.py`): the oracle's best hold, an
     #: upper bound on the floor -- overheating sets it, and the weather moves
     #: it 2x between seeds, hence the minimum.
     rho_floor_tracking: float = 0.0010

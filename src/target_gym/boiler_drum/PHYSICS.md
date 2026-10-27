@@ -247,7 +247,7 @@ baselines use.
 | `failure_cost` | 4.4e5 | twice the level-trip plus the reachable pressure excursion's cost, 2 x ((0.25 / 2.67e-3)^2 + (23 / 0.05)^2): the 88 bar target to the 65 bar trip, per trip step |
 | `restart_steps` | 7200 (4 h) | restart time priced into a trip, `restart_steps x failure_cost` (a drum trip's restart; provisional); where a plant engineer would get it: the plant's restart procedure |
 
-`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
 at the instrument resolution. On this plant neither holds exactly: the level

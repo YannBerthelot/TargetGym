@@ -64,23 +64,39 @@ superior control.
 
 ## 4. Metrics
 
-**Within an environment**, the statistic is the *paired per-seed difference*
-against the PID on identical evaluation episodes. Pairing removes the variance
-from initial conditions and targets, which on these tasks is large: the circle
-task's radius alone moved the PID's return by a factor of two.
+Three questions, three numbers, all from `target_gym.scoring`, whose
+`score_policy` runs a policy and the expert on the same seeds. Costs are per
+step and lower is better: `x` is the policy's, `b` the expert's (today the
+shipped PID) and `c` the ceiling's.
 
-**Across environments**, raw returns are not comparable. Test episodes
-(`EnvSpec.test_params`) run from 100 steps (cstr, first_order) to 1600
-(glass_furnace), and the per-step cost differs by orders of magnitude between
-plants, since each plant's tracking is in its own floor-widths or its owner's
-currency ([docs/reward-shaping.md](reward-shaping.md)). Compare with the
-**normalised expert advantage** `NEA = (PID - x) / (PID - rho*)`, computed on
-each controller's gain, its mean cost per step after the plant's burn-in as
-`target_gym.eval` measures it. NEA is 1 at the floor and 0 at PID parity.
-Report the tracking and running costs beside it.
+**Against the expert: `b / x`** per seed, on identical evaluation episodes,
+with the share of seeds the policy wins. Pairing removes the variance from
+initial conditions and targets, which on these tasks is large: the circle
+task's radius alone moved the PID's return by a factor of two. It covers the
+whole scored episode, consumption and target changes included, so it is the
+verdict.
+
+**Across environments: the score `S = log(b / x) / log(b / c)`**, on the
+tracking cost while holding. It is 0 at the expert, 1 at the ceiling and never
+above, and negative below the expert. The ceiling is every tracked quantity
+within its instrument's resolution, at the reward's price: as good as a real
+plant can verify. Being a ratio of logarithms, `S` has no units and does not
+change with the tracking exponent, so a plant priced in euros compares with
+one scored in floor-widths. A linear share of the cost gap fails both tests:
+costs span orders of magnitude between controllers, so it put almost any
+working policy near 1.
+
+**Room to grow: `H = log10(b / c)`**, the decades between the expert's hold and
+the ceiling. 0 means the expert already tracks within the resolution, and the
+task has nothing left to score.
+
+The hold starts after a settle fixed per plant, so every controller is scored
+over the same window. Beside the score, `transient_ratio` compares the cost
+after each target change with the expert's, and `consumption_ratio` compares
+the fuel, energy or wear, which no resolution bounds.
 
 **Report the interquartile mean with a 95% stratified bootstrap confidence
-interval**, plus the win rate against the PID. Not the mean alone. This is
+interval**, plus the win rate against the expert. Not the mean alone. This is
 standard practice after Agarwal et al. (2021), and this repository has its own
 evidence for it: an earlier battery MPC scored `+14.0` on the mean and `−4.1`
 on the median, winning 1 seed in 10. A mean alone would have published the

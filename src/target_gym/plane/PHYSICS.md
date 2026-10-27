@@ -268,7 +268,7 @@ own baseline fingerprint collects: `plane_cascaded` on `plane`, and a copy
 of it under the task's own name on the other two (`plane_sine_cascaded`,
 `plane_energy_cascaded`), which a test holds equal to it. The planner's
 objective is the reward over a fixed scale per task, not over
-`rho_floor_tracking`: that is the NEA reference, set from this oracle's own
+`rho_floor_tracking`: that is the oracle's best hold, set from its own
 holds, and while the planner read it every re-measured floor changed the
 oracle that measured it.
 
@@ -418,7 +418,7 @@ baselines use.
 | `failure_cost` | 3e8 (`plane`), 1.9e8 (`plane_sine`), 2.1e8 (`plane_energy`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor)^2 |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
 
-`rho_floor_tracking` is the NEA reference for tracking: the lowest per-seed
+`rho_floor_tracking` is the oracle's best hold for tracking: the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
 at the instrument resolution. Here it is (0.4581 / 1)^2 = 0.210 on `plane`,

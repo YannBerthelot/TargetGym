@@ -830,7 +830,7 @@ def test_mpc_factory_takes_the_cheap_horizon(env, planned, mpc):
 
 
 def test_floor_is_the_recorded_mpc_hold():
-    """``e_floor`` and the NEA reference come from the MPC's recorded
+    """``e_floor`` and the oracle's best hold come from the MPC's recorded
     hold. With e_hold_min the smallest per-seed hold error that
     scripts/measure_hold.py recorded for the MPC (from minute 6 of each block
     to the switch, less the steps in which the MPC already moves toward the

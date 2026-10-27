@@ -196,7 +196,7 @@ class BatteryParams(EnvParams):
     )  # twice the imbalance of the reachable 1.8 MW (0.8 MW target vs 1 MW power), per 5 s step
     #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 5 s steps: a protection trip's reset, provisional).
     restart_steps: int = 720
-    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    #: Tracking cost per step at the floor, in the reward's units.
     rho_floor_tracking: float = 100.0 / 1.0e6 * 5.0 / 3600.0 * 1596.0
     rho_floor: float = 100.0 / 1.0e6 * 5.0 / 3600.0 * 1596.0
     #: True where e_floor is a resolution, not a measured or certified floor.

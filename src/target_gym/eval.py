@@ -14,7 +14,8 @@ Score a shipped controller::
     m["gain"], m["tracking"], m["running"], m["reach_cost"]
 
 or a policy of your own: build ``Episode`` records with ``run_episode`` and
-pass them to ``evaluate``, with ``rho_ref`` (the PID's gain) to get ``nea``.
+pass them to ``evaluate``. ``target_gym.scoring`` compares a policy with the
+expert and the ceiling.
 
 How a cycle is split. A target cycle runs from one target change to the next
 (the first starts at the reset). ``cycle_segments`` splits each into
@@ -34,6 +35,7 @@ which uses the same anticipation rule on its squared errors).
 from __future__ import annotations
 
 import json
+import math
 import pathlib
 from dataclasses import dataclass, field
 from typing import NamedTuple
@@ -367,18 +369,7 @@ def time_in_band(episodes, burn_in: int):
     return float(np.mean(vals)) if vals else float("nan")
 
 
-def nea(rho_pi, rho_ref, rho_floor):
-    d = rho_ref - rho_floor
-    return (rho_ref - rho_pi) / d if d > 0 else float("nan")
-
-
-def evaluate(
-    episodes,
-    burn_in: int,
-    settle: int | None = None,
-    rho_floor: float | None = None,
-    rho_ref: float | None = None,
-):
+def evaluate(episodes, burn_in: int, settle: int | None = None):
     """The protocol's numbers for a list of ``Episode`` records, as a dict.
 
     - ``gain`` (and ``gain_ci``): mean cost per step after ``burn_in``,
@@ -392,9 +383,6 @@ def evaluate(
       cycle) and ``time_in_band`` (a KPI, never a training signal).
     - One entry per reward term (``tracking``, ``running``, ...) and its
       ``hold_`` counterpart, when the episodes carry terms.
-    - ``abs_gap`` (gain minus ``rho_floor``) when ``rho_floor`` is given, and
-      ``nea``, ``(rho_ref - gain) / (rho_ref - rho_floor)``, when ``rho_ref``
-      is too: 1 at the floor, 0 at the reference's level.
 
     ``settle`` overrides the per-cycle settle with a fixed count.
     """
@@ -419,10 +407,6 @@ def evaluate(
     for key in episodes[0].terms:
         out[key] = gain(episodes, burn_in, key)[0]
         out["hold_" + key] = hold(episodes, burn_in, key, settle=settle)[0]
-    if rho_floor is not None:
-        out["abs_gap"] = g - rho_floor
-    if rho_floor is not None and rho_ref is not None:
-        out["nea"] = nea(g, rho_ref, rho_floor)
     return out
 
 
@@ -436,6 +420,17 @@ def hold_settings(name: str) -> dict:
     rows = json.loads(_DATA.read_text()) if _DATA.exists() else {}
     row = rows.get(name)
     return {"burn_in": int(row["burn_in"]) if row else 0}
+
+
+def fixed_settle(name: str) -> int:
+    """The settle every controller is scored with on ``name``: the slower of
+    the shipped controllers' measured settles (``scripts/measure_hold.py``),
+    rounded up. Fixed per plant, so a hold is the same window whoever flies
+    it."""
+    rows = json.loads(_DATA.read_text()) if _DATA.exists() else {}
+    row = rows.get(name, {})
+    measured = [row[k]["settle"] for k in ("pid", "mpc") if k in row]
+    return int(math.ceil(max(measured, default=0)))
 
 
 def scored_burn_in(name: str, params) -> int:
@@ -507,10 +502,9 @@ def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
     )
 
 
-def evaluate_controller(
-    name: str, kind: str = "pid", seeds: int = 3, params=None, rho_ref=None
-):
-    """Score a shipped controller (``"pid"`` or ``"mpc"``) on a plant."""
+def evaluate_controller(name: str, kind: str = "pid", seeds: int = 3, params=None):
+    """Score a shipped controller (``"pid"`` or ``"mpc"``) on a plant, with the
+    plant's fixed settle."""
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
 
@@ -521,8 +515,5 @@ def evaluate_controller(
         for s in range(seeds)
     ]
     return evaluate(
-        episodes,
-        burn_in=scored_burn_in(name, p),
-        rho_floor=float(getattr(p, "rho_floor", float("nan"))),
-        rho_ref=rho_ref,
+        episodes, burn_in=scored_burn_in(name, p), settle=fixed_settle(name)
     )

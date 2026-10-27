@@ -266,7 +266,7 @@ A solve takes 1.7 to 1.9 times as long as at 30 minutes. Over the ten
 baseline seeds the episode cost falls 37-53% on every seed (0.494 to 0.274 per
 step), with none of 16 000 solves failed or capped. The long-run hold is
 0.061 / 0.077 / 0.088 K per seed, against 0.192 / 0.175 / 0.228 K before, so
-the NEA reference follows it: `rho_floor = rho_floor_tracking = (0.0614 / 1)^2`,
+`rho_floor` follows it: `rho_floor = rho_floor_tracking = (0.0614 / 1)^2`,
 from `(0.175 / 1)^2` (see the reward table below; `e_floor` stays the 1 K
 thermocouple resolution).
 
@@ -323,7 +323,7 @@ baselines use.
 | `failure_cost` | 6.7e4 | twice the reachable crown excursion's cost, 2 x (183 / 1)^2 (1610 C target to the 1427 C trip), per trip step |
 | `restart_steps` | 40320 (2 weeks) | restart time priced into a trip, `restart_steps x failure_cost` (refractory damage or glass out of range ends the campaign; a furnace heat-up schedule runs about two weeks, provisional); where a plant engineer would get it: the plant's restart procedure |
 
-`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
 at the instrument resolution -- and `rho_floor` the same with consumption

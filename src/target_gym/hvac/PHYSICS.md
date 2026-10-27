@@ -226,7 +226,7 @@ reduced-model optimum under this cost is not yet computed (the earlier
 certified HVAC runs used the version-1 comfort cost). `e_floor` is not a
 parameter of this priced reward; `rho_floor` carries the MPC reference.
 
-`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
 at the instrument resolution -- and `rho_floor` the same with consumption

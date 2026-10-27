@@ -543,13 +543,13 @@ or capped, at 13.3 IPOPT iterations on average.
 **Protocol row** (`scripts/evaluate_baselines.py --envs unstable_cstr`, 3
 seeds, measured, recorded in `src/target_gym/data/protocol_results.json`).
 
-| controller | gain (all tracking) | hold | reach cost per change | transient cost per change | NEA | failure rate |
-|---|---|---|---|---|---|---|
-| PID | 5.74e4 | 2.68 | 1.15e7 | 5.84e5 | | 0 |
-| MPC | 4.03e3 (± 476) | 0.00649 | 8.07e5 | 2.52e5 | 0.93 | 0 |
+| controller | gain (all tracking) | hold | reach cost per change | transient cost per change | failure rate |
+|---|---|---|---|---|---|
+| PID | 5.74e4 | 2.68 | 1.15e7 | 5.84e5 | 0 |
+| MPC | 4.03e3 (± 476) | 0.00649 | 8.07e5 | 2.52e5 | 0 |
 
 The gain is the mean cost over every step. The MPC's is 4.03e3 against the
-PID's 5.74e4, an NEA of 0.93 against the reference `rho_floor` of 0.00396.
+PID's 5.74e4.
 The MPC's hold cost is 0.00649 and the PID's 2.68. The hold leaves out the
 steps in which the MPC already moves toward the next level, which
 `target_gym.eval` finds from the cost and counts in the reach and transient
@@ -700,7 +700,7 @@ and the PID's 1.39e-4, 1.23e-4 and 1.40e-4 mol/L, 1.34e-4 over all three
 and `rho_floor` against the recorded holds to 1 %, and that the protocol's MPC
 hold cost, 0.00649, is at least 0.98 of the reference.
 
-`rho_floor_tracking` is the NEA reference for tracking. It is the lowest
+`rho_floor_tracking` is the oracle's best hold for tracking. It is the lowest
 per-seed hold the reference controller demonstrated, divided by `e_floor`
 and squared, as the tracking term squares an error. It would be 1 if the
 floor were that hold. It is 0.00396 here because the floor is clamped at the

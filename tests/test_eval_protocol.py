@@ -35,12 +35,11 @@ def test_gain_is_hold_plus_change_rate_times_reach_cost():
     cost = np.full(T, 0.1)
     for i in np.flatnonzero(tc):
         cost[i : i + 5] += 1.0
-    m = E.evaluate([_episode(cost, tc)], burn_in=100, rho_floor=0.1, rho_ref=0.2)
+    m = E.evaluate([_episode(cost, tc)], burn_in=100)
     assert m["hold"] == pytest.approx(0.1, abs=0.01)
     assert m["reach_cost"] == pytest.approx(5.0, abs=0.5)
     assert m["gain"] == pytest.approx(0.1 + p * 5.0, abs=0.01)
     assert m["unsettled_fraction"] == 0.0
-    assert m["nea"] == pytest.approx(0.5, abs=0.05)
 
 
 def test_reach_fraction_is_change_rate_times_excursion_length():
@@ -55,7 +54,7 @@ def test_reach_fraction_is_change_rate_times_excursion_length():
         cost[i : i + 5] += 1.0
         band[i : i + 5] = False
     ep = E.Episode(cost=cost, in_band=band, target_change=tc, failed=np.zeros(T, bool))
-    m = E.evaluate([ep], burn_in=100, rho_floor=0.1, rho_ref=0.2)
+    m = E.evaluate([ep], burn_in=100)
     assert m["reach_fraction"] == pytest.approx(p * 5.0, abs=0.005)
     assert m["time_in_band"] == pytest.approx(1.0 - p * 5.0, abs=0.005)
 

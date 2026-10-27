@@ -147,7 +147,7 @@ class WindTurbineParams(EnvParams):
     # seed and 1749 W on average, the PID 4563 W (`scripts/measure_hold.py`,
     # 400 hold steps after a 300-step burn-in, 3 seeds). 1680 W is within
     # 1.5x of that best hold (1.16x), so the floor, and with it the reward,
-    # was kept; only the NEA reference below follows the new hold. Fatigue:
+    # was kept; only ``rho_floor`` below follows the new hold. Fatigue:
     # pitch activity |cmd - achieved| / pitch_max above the PID's hold-phase level
     # (0.0013 of pitch_max) is charged, per unit of avoidable fraction, at
     # ``fatigue_weight`` times what tracking at the floor costs per step --
@@ -172,7 +172,7 @@ class WindTurbineParams(EnvParams):
     failure_cost: float = 2.0 * 100.0 * 7.0 * 0.25 / 3600.0
     #: Restart time priced into a trip (``reward.trip_cost``; 10 min at 0.25 s steps: an overspeed trip's reset and re-synchronisation, provisional).
     restart_steps: int = 2400
-    #: The NEA reference: the tracking cost per step, in the reward's units, of
+    #: The oracle's best hold: the tracking cost per step, in the reward's units, of
     #: the oracle's lowest per-seed hold, 1454 W (seed 0, `scripts/measure_hold.py`;
     #: (1454 / 1680)^1 = 0.865 of the cost at ``e_floor``).
     rho_floor_tracking: float = 100.0 / 1.0e6 * 0.25 / 3600.0 * 1454.0
