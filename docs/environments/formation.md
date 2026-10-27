@@ -61,7 +61,16 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+Recorded over 10 seeds of the 200-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
+
+| controller | mean return | cost per step |
+|---|---|---|
+| PID | -9.336e+06 | 4.668e+04 |
+| MPC | -6235 | 31.18 |
+
+The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+
+The PID is the patrol's, seat for seat: the patrol's lead autopilot in the lead seat, aimed at the heading the route commands, and the patrol PID in each wingman seat. It holds the lead's altitude poorly (about 140 m off), the patrol's scripted lead never needing better. The MPC slot is the patrol oracle's design applied to the whole formation: the patrol's lead autopilot in the lead seat and its twin-autopilot law in each wingman seat, with one residual planner over every seat on the team cost.
 
 ## Arguments
 
