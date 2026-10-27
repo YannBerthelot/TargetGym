@@ -357,6 +357,17 @@ MAX_POOL_RESTARTS = 3
 
 _WORKERS = {"batch": _mpc_batch_one_env, "pid": _pid_one_seed, "mpc": _mpc_one_seed}
 
+#: Every child process is spawned, never forked. JAX has threads running in
+#: this process before any pool starts, and a process forked with threads
+#: running can deadlock: Linux forks by default, and on GitHub's runners every
+#: recording job hung with no seed done until its timeout. macOS spawns by
+#: default, which is why local runs never showed it.
+_spawn = mp.get_context("spawn")
+
+
+def _pool(workers: int) -> cf.ProcessPoolExecutor:
+    return cf.ProcessPoolExecutor(max_workers=workers, mp_context=_spawn)
+
 
 def _run_jobs(jobs, workers, inflight, durations, pid_out, mpc_out, batch_out, emit):
     """Run *jobs* to completion, surviving a pool that dies under us.
@@ -386,7 +397,7 @@ def _run_jobs(jobs, workers, inflight, durations, pid_out, mpc_out, batch_out, e
             )
         done: set[tuple[str, str, int]] = set()
         try:
-            with cf.ProcessPoolExecutor(max_workers=workers) as pool:
+            with _pool(workers) as pool:
                 futures = {
                     pool.submit(
                         _WORKERS[kind],
@@ -430,7 +441,7 @@ def _check_pids(names: list[str]) -> int:
     """
     rows = json.loads(BASELINES_PATH.read_text()) if BASELINES_PATH.exists() else {}
     jobs = [(name, seed, None) for name in names for seed in range(SEEDS)]
-    with cf.ProcessPoolExecutor(max_workers=min(os.cpu_count() or 2, 8)) as pool:
+    with _pool(min(os.cpu_count() or 2, 8)) as pool:
         got = dict(zip(jobs, (value for value, _ in pool.map(_pid_one_seed, jobs))))
     moved = 0
     for name in names:
@@ -557,7 +568,7 @@ def main() -> int:
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, _reap)
 
-    manager = mp.Manager()
+    manager = _spawn.Manager()
     inflight = manager.dict()
     durations: dict[str, list[float]] = {}
     stop = threading.Event()
