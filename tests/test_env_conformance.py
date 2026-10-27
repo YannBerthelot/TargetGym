@@ -559,7 +559,7 @@ def _episode_return(spec, policy, seed, params=None):
 # it exists to detect (a mis-indexed setpoint) is not a marginal one.
 CONSTANT_ACTIONS = (-0.5, 0.0, 0.5)
 EFFECTIVENESS_SEEDS = 2
-# No extra episode cap: ``EnvSpec.test_params`` already sizes each episode to
+# No extra episode cap: the scored configuration already sizes each episode to
 # that environment's own dynamics. A flat cap is meaningless across envs whose
 # characteristic times differ by orders of magnitude -- 150 steps is 25 min
 # for the reactor, whose xenon transient runs for hours, so the PID had no time

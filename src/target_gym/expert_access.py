@@ -5,6 +5,8 @@ are hashed into every provenance fingerprint, and how a controller is looked
 up is not part of what an environment is.
 """
 
+import warnings
+
 
 class RegistryExperts:
     """``make_pid`` and ``make_mpc`` resolved through the registry.
@@ -38,7 +40,16 @@ class RegistryExperts:
         return REGISTRY[self.registry_name].make_pid_controller().batched()
 
     def make_mpc(self, params=None, **kwargs):
-        """Return the shipped MPC oracle for ``params`` (default params if None)."""
+        """Deprecated: ``target_gym.make_oracle(name)``, which plans on the mean
+        disturbance as the recorded baselines do.
+
+        Returns the shipped MPC oracle for ``params`` (default params if None),
+        planning on ``params`` as given."""
+        warnings.warn(
+            "env.make_mpc is deprecated; use target_gym.make_oracle(name)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from target_gym.registry import REGISTRY
 
         spec = REGISTRY[self.registry_name]

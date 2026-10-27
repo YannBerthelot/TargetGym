@@ -46,6 +46,16 @@ def test_an_unknown_method_is_refused():
         casadi_step_map(lambda p, u: p, 1, 1, 1.0, "midpoint_1")
 
 
+def test_the_step_map_names_the_extra_without_casadi(monkeypatch):
+    """Without CasADi the map raises an ImportError naming the extra, not a
+    NameError on the missing module."""
+    from target_gym.experts import mpc
+
+    monkeypatch.setattr(mpc, "_CASADI_AVAILABLE", False)
+    with pytest.raises(ImportError, match=r"target-gym\[mpc\]"):
+        casadi_step_map(lambda p, u: p, 1, 1, 1.0, "rk4_1")
+
+
 def _toy(steps=6, window_start=3, **kw):
     x, u = casadi.MX.sym("x", 1), casadi.MX.sym("u", 1)
     F = casadi.Function("F", [x, u], [x + 0.5 * u])

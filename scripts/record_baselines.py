@@ -71,7 +71,7 @@ from target_gym.runners.runners import (
 # a guarantee they eventually disagree. The published table is generated from
 # this artifact instead, so the contract and the claim cannot drift apart.
 #
-# Episodes come from each environment's own EnvSpec.test_params, which since the
+# Episodes come from each environment's scored configuration, which since the
 # episode-length audit satisfy N >= max(10 * tau_actuator, 1 * T_period) -- long
 # enough that holding the target, not reaching it, is what is being scored.
 SEEDS = 10

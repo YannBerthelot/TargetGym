@@ -1,13 +1,11 @@
-import os
-from typing import Callable, Tuple
+from typing import Tuple
 
 import chex
 import jax
 import jax.numpy as jnp
-import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.base import canonical_reset, finish_step
 from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.cstr.env import (
     CSTRParams,
@@ -19,10 +17,10 @@ from target_gym.pc_gym.cstr.env import (
     get_obs,
 )
 from target_gym.pc_gym.cstr.rendering import _render
-from target_gym.utils import save_video
+from target_gym.video import SavesVideo
 
 
-class CSTR(RegistryExperts, environment.Environment[CSTRState, CSTRParams]):
+class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRParams]):
     """Exothermic CSTR holding concentration against runaway.
 
     Action (1,): [coolant temperature], raw in [-1, 1] -> [T_c_min, T_c_max]
@@ -77,22 +75,11 @@ class CSTR(RegistryExperts, environment.Environment[CSTRState, CSTRParams]):
 
         # A trip is part of the kernel: the step is charged the trip cost and
         # the plant restarts at once, or is lost (``terminated``) with
-        # ``params.continuing = False`` (``base.failure_kernel``).
-        new_state, tripped, scored, terminated = failure_kernel(
+        # ``params.continuing = False`` (``base.finish_step``).
+        new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        reward = compute_reward(scored, params, xp=jnp)
-        return (
-            self.get_obs(new_state),
-            new_state,
-            reward,
-            terminated,
-            {
-                "last_state": new_state,
-                "tripped": tripped,
-                "trip_cost": charged_trip_cost(tripped, params),
-            },
-        )
+        return self.get_obs(new_state), new_state, reward, terminated, info
 
     def get_obs(self, state: CSTRState, params: CSTRParams = None):
         """
@@ -167,53 +154,9 @@ class CSTR(RegistryExperts, environment.Environment[CSTRState, CSTRParams]):
             -inf, inf, len(CSTRState.__dataclass_fields__), dtype=jnp.float32
         )
 
-    def save_video(
-        self,
-        select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        seed: int,
-        params=None,
-        folder="videos",
-        episode_index=0,
-        FPS=60,
-        format="mp4",
-    ):
-        return save_video(
-            self,
-            select_action,
-            folder,
-            episode_index,
-            FPS,
-            params,
-            seed=seed,
-            format=format,
-        )
-
     def render(self, screen, state: CSTRState, params: CSTRParams, frames, clock):
         """
         JAX-compatible rendering wrapper
         """
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
-
-    def make_mpc(self, params=None, **kwargs):
-        """Return the oracle, a shrinking-horizon NLP, for concentration tracking."""
-        from target_gym.pc_gym.cstr.experts import make_cstr_mpc
-
-        if params is None:
-            params = self.default_params
-        return make_cstr_mpc(self, params, **kwargs)
-
-
-if __name__ == "__main__":
-    env = CSTR()
-    seed = 42
-    env_params = CSTRParams(max_steps_in_episode=1_000, delta_t=1e-3)
-    os.makedirs("videos/cstr", exist_ok=True)
-    env.save_video(
-        lambda o: np.random.uniform(-1, 1),
-        seed,
-        folder="videos/cstr",
-        episode_index=0,
-        params=env_params,
-        format="gif",
-    )

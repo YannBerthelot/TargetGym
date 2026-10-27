@@ -1206,32 +1206,6 @@ def _controller_defaults(gains_key):
             for f in dataclasses.fields(PlaneCascadedPIDParams)
             if f.name != "dt" and isinstance(f.default, (int, float))
         }
-    if gains_key == "plane3d_racetrack":
-        # Read them off the controller the factory builds rather than
-        # restating the numbers, which live as ``_g3d`` fallbacks in
-        # ``make_plane3d_racetrack_pid_controller``. Restating them here would
-        # be a second copy that silently stops matching.
-        #
-        # Only the two proportional gains are searched. The integral and
-        # derivative terms ship at zero, and coordinate descent multiplies, so
-        # zero stays zero however many passes it runs. Seeding them at some
-        # invented nonzero value would be choosing a controller rather than
-        # tuning the one that ships, which is a separate change and needs its
-        # own before-and-after.
-        from target_gym.plane3d.experts import make_plane3d_racetrack_pid_controller
-
-        lateral = make_plane3d_racetrack_pid_controller().params
-        return {
-            "track": {
-                "Kp": float(lateral.Kp_track),
-                "Ki": float(lateral.Ki_track),
-                "Kd": float(lateral.Kd_track),
-            },
-            "bank": {
-                "Kp": float(lateral.Kp_bank),
-                "Kd": float(lateral.Kd_bank),
-            },
-        }
     return None
 
 
@@ -1398,41 +1372,6 @@ TUNERS = {
             _e, _k, **kw
         ),
         "Plane3DHeading",
-    ),
-    "plane3d_circle": (
-        lambda n_points=0, tuning_rule="", _k="plane3d_circle", _e="plane3d_circle", **kw: _tune_aircraft_search(
-            _e, _k, **kw
-        ),
-        "Plane3DCircle",
-    ),
-    "plane3d_figure8": (
-        lambda n_points=0, tuning_rule="", _k="plane3d_figure8", _e="plane3d_figure8", **kw: _tune_aircraft_search(
-            _e, _k, **kw
-        ),
-        "Plane3DFigureEight",
-    ),
-    # Scored over the full 900 steps rather than the 400 the others use. A lap
-    # of this pattern is about 300 s, so 400 steps is one lap and a third: it
-    # would tune the acquisition and barely see the hold, which is the part
-    # that is not working.
-    #
-    # The roll loop is held, and this is the interesting part. Left free, the
-    # search stiffens it (Kp_bank -2.0 -> -4.0) and *removes* damping
-    # (Kd_bank -1.5 -> -0.75), because nothing in the reward objects to how the
-    # aircraft is banked. Measured over five seeds, that buys 340.6 of return
-    # against 319.0 while taking the achieved bank from 35.7 to 48.2 deg
-    # against a 30 deg command limit, and it makes the actual tracking *worse*
-    # (0.54 km of cross-track against 0.31 km). The whole improvement here is
-    # in the cross-track gain: Kp_track alone takes the settled error from
-    # 3.02 km to 0.31 km. An autopilot that overshoots its own bank limit by
-    # two thirds is not a credible expert whatever it scores, which is the
-    # judgement already recorded in ``_RacetrackLateral``'s docstring, so the
-    # search is not offered the choice.
-    "plane3d_racetrack": (
-        lambda n_points=0, tuning_rule="", _k="plane3d_racetrack", _e="plane3d_racetrack", **kw: _tune_aircraft_search(
-            _e, _k, steps=900, seeds=5, hold=("bank.Kp", "bank.Kd"), **kw
-        ),
-        "Plane3DRacetrack",
     ),
     # Tasks added after the 21. A plain run leaves them out (``_plain_run_envs``).
     #

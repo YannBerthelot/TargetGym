@@ -4,7 +4,6 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 from gymnax.environments import EnvParams
 
 from target_gym.utils import compute_norm_from_coordinates
@@ -534,34 +533,3 @@ def clamp_altitude(z, z_dot):
     z_clamped = jnp.maximum(z, 0.0)
     z_dot_clamped = jnp.where((z <= 0.0) & (z_dot < 0.0), 0.0, z_dot)
     return z_clamped, z_dot_clamped
-
-
-if __name__ == "__main__":
-    # experiment with power
-    power = [
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.6,
-        0.6,
-        0.6,
-        0.6,
-        0.6,
-        0.5,
-        0.3,
-        0.3,
-        0.3,
-        0.3,
-    ]
-    current_power = 0
-    vals = []
-    max_output = 1000
-    for i in range(len(power)):
-        current_power = compute_next_power(power[i], current_power, 1.0)
-        vals.append(current_power)
-
-    plt.plot(vals)
-    plt.show()

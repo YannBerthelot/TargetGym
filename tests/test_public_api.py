@@ -10,6 +10,8 @@ These are cheap, and each one pins a mistake that had actually been made.
 
 from __future__ import annotations
 
+import subprocess
+import sys
 import types
 
 import pytest
@@ -70,3 +72,44 @@ def test_version_is_a_string():
     produced it."""
     assert isinstance(target_gym.__version__, str)
     assert target_gym.__version__
+
+
+@pytest.mark.parametrize("name", sorted(REGISTRY))
+def test_default_params_are_the_scored_configuration(name):
+    """``env.default_params`` is the configuration the task is scored on, so
+    an environment reset without parameters runs the benchmark task."""
+    spec = REGISTRY[name]
+    assert spec.make_env().default_params == spec.make_test_params()
+
+
+@pytest.mark.parametrize("name", sorted(REGISTRY))
+def test_shared_env_methods_come_from_the_mixins(name):
+    """``save_video`` and ``make_mpc`` live once, in unhashed mixins, so no
+    environment package carries its own copy."""
+    from target_gym.expert_access import RegistryExperts
+    from target_gym.video import SavesVideo
+
+    cls = type(REGISTRY[name].make_env())
+    assert cls.save_video is SavesVideo.save_video
+    assert cls.make_mpc is RegistryExperts.make_mpc
+
+
+def test_env_make_mpc_is_deprecated():
+    env = REGISTRY["battery"].make_env()
+    with pytest.warns(DeprecationWarning, match="make_oracle"):
+        env.make_mpc()
+
+
+def test_building_every_environment_needs_no_render_extra():
+    """pygame and moviepy are the ``[render]`` extra: importing the package
+    and building every environment must not import them."""
+    code = (
+        "import sys\n"
+        "from target_gym.registry import all_specs\n"
+        "[s.make_env() for s in all_specs()]\n"
+        "print(sorted(m for m in ('pygame', 'moviepy') if m in sys.modules))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip().splitlines()[-1] == "[]"

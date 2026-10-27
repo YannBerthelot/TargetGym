@@ -37,7 +37,7 @@ def _gains(obj) -> list[float]:
 def _first_obs(name):
     spec = REGISTRY[name]
     env = spec.make_env()
-    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": 20})
+    params = spec.make_test_params(max_steps_in_episode=20)
     obs, _state = env.reset_env(jax.random.PRNGKey(0), params)
     return env, params, obs
 

@@ -45,7 +45,7 @@ RUNNER_ENVS = ["plane", "cstr", "first_order", "four_tank"]
 @pytest.mark.parametrize("name", RUNNER_ENVS)
 def test_rollout_with_pid_tracks_shapes_and_stays_finite(name):
     spec = REGISTRY[name]
-    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": N})
+    params = spec.make_test_params(max_steps_in_episode=N)
     values, targets, rewards = R.rollout(spec, params, R.pid_policy(spec), seed=0)
 
     n_tracked = len(R._as_tuple(spec.make_env().obs_value_index))
@@ -60,7 +60,7 @@ def test_rollout_with_pid_tracks_shapes_and_stays_finite(name):
 def test_figure_modes_run_headless(name):
     """The figure modes must complete without a display or a writable figures/."""
     spec = REGISTRY[name]
-    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": N})
+    params = spec.make_test_params(max_steps_in_episode=N)
     assert R.figure_sweep(name, params=params, resolution=3, plot=False)
     assert R.figure_pid(name, params=params, n_seeds=2, plot=False)
 

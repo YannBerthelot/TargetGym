@@ -112,7 +112,7 @@ RENDER_STEPS = 12
 def test_every_environment_renders(name):
     spec = REGISTRY[name]
     env = spec.make_env()
-    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": 30})
+    params = spec.make_test_params(max_steps_in_episode=30)
 
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)

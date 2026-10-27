@@ -96,6 +96,28 @@ than by commit.
 
 ### Changed
 
+- **`env.default_params` is the scored configuration on every task.** An
+  environment reset without parameters now runs the task the baselines are
+  recorded on: the aircraft over 200 to 1,200 steps instead of 10,000, the
+  reactor over 864, and the 3D aircraft with their own floors. What is scored
+  did not change, so no version moved. The values live in each environment
+  (`default_params`), `spec.make_test_params()` returns them, and
+  `EnvSpec.test_params` is gone. `plane_energy` and `plane_sine` get their own
+  classes, `PlaneEnergy` and `PlaneSine`, since one `Airplane2D` cannot carry
+  three defaults. The params classes keep their own defaults.
+- **`env.make_mpc` is deprecated** in favour of `target_gym.make_oracle(name)`,
+  which plans on the mean disturbance as the recorded baselines do. The
+  environments' own copies of it are gone, so every environment takes it from
+  `expert_access.RegistryExperts`, which warns.
+- **pygame and moviepy are the `[render]` extra**, imported only when an
+  aircraft panel is drawn or a video is written; `[all]` installs every extra.
+  `save_video` and `convert_frames_from_gym_to_wandb` moved from
+  `target_gym.utils` to `target_gym.video`, and `env.save_video` comes from one
+  mixin there (`SavesVideo`) instead of a copy in each environment.
+- **patrol declares the code its physics imports** (the 3D aircraft and the
+  shared heading PID its lead flies) in `fingerprint_sources`, so an edit to
+  them now moves patrol's version stamp and baseline fingerprint.
+
 - **The aircraft experts are what fixed-wing autopilots fly.** All seven
   aircraft tasks now use TECS for height and speed (`plane/experts_tecs.py`)
   over a PI pitch loop. The 3D tasks add a bank loop damped on roll rate,
@@ -487,6 +509,11 @@ than by commit.
 
 ### Fixed
 
+- **`experts.mpc.casadi_step_map` without CasADi** raised a `NameError` on
+  the missing module; it now raises an `ImportError` naming the `[mpc]` extra.
+- **`Airplane2D.reset_env(key)` without parameters** read a class attribute
+  that does not exist; it now uses `default_params`.
+
 - **`plane3d_racetrack-v4`: the observed path ran backwards on one cap.** On
   the cap at the pattern's `-u` end the tangent heading in the observation
   pointed against the direction of travel, and the signed cross-track error
@@ -767,6 +794,16 @@ than by commit.
   ten seconds.
 
 ### Removed
+
+- **Dead code from the hashed modules**: `plane.env_jax.run_timesteps` (it
+  unpacked five values from a six-value step), the `__main__` demos at the end
+  of 13 environment modules and `plane/dynamics.py`, `reward.proximity_cost`,
+  `utils.plot_curve` and `utils.plot_features_from_trajectory`, and the 3D
+  circle and figure-8 PID tuners in `experts/pid_tuning.py` with the
+  `plane3d_circle`, `plane3d_figure8` and `plane3d_racetrack` entries of
+  `pid_gains.json`, which no expert has read since the aircraft experts moved
+  to TECS and L1 guidance. The `plane3d_heading` entry stays: patrol's lead
+  flies on it.
 
 - **`plane_steps`**, absorbed into `plane_energy`. They were the same
   environment: same plant, same setpoint schedule, same disturbances, same

@@ -30,7 +30,7 @@ from target_gym.pc_gym.ph_neutralization.env_jax import PHNeutralization
 from target_gym.pc_gym.unstable_cstr.env import UnstableCSTRParams
 from target_gym.pc_gym.unstable_cstr.env_jax import UnstableCSTR
 from target_gym.plane.env import PlaneParams
-from target_gym.plane.env_jax import Airplane2D
+from target_gym.plane.env_jax import Airplane2D, PlaneEnergy, PlaneSine
 from target_gym.plane3d.env import PlaneParams3D
 from target_gym.plane3d.env_jax import (
     Plane3DCircle,
@@ -61,6 +61,8 @@ __all__ = (
     "gym_wrapper_factory",
     "Plane",
     "Airplane2D",  # the class's own name; Plane is the friendly alias
+    "PlaneEnergy",
+    "PlaneSine",
     "PlaneParams",
     "Plane3D",
     "Plane3DHeading",

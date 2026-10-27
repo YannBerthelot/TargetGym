@@ -41,7 +41,16 @@ import matplotlib.pyplot as plt  # noqa: E402
 from tqdm import tqdm  # noqa: E402
 
 from target_gym.registry import REGISTRY  # noqa: E402
-from target_gym.utils import truncate_colormap  # noqa: E402
+
+
+def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
+    """Return a truncated colormap from minval to maxval."""
+    new_cmap = cm.colors.LinearSegmentedColormap.from_list(
+        f"trunc({cmap.name},{minval:.2f},{maxval:.2f})",
+        cmap(np.linspace(minval, maxval, n)),
+    )
+    return new_cmap
+
 
 FIGURE_DIR = "figures"
 VIDEO_DIR = "videos"
