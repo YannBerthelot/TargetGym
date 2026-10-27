@@ -40,6 +40,7 @@ compares across rows. 3 seeds each.
 | [`plane3d_figure8`](environments/plane3d_figure8.md) | 5.92e5 | 0.77 | 0.184 | 1.000 |
 | [`patrol`](environments/patrol.md) | 265 | 0.0371 | 0.0363 | 1.000 |
 | [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 199 | 0.0371 | 0.0363 | 1.000 |
+| [`formation`](environments/formation.md) | 23,239 | 1.17 | 0.704 | 1.000 |
 | **Process Control** | | | | |
 | [`cstr`](environments/cstr.md) | 41.2 | 9.42e-9 | 0 | 1.000 |
 | [`first_order`](environments/first_order.md) | 3.57e-6 | 0 | 0 | 1.000 |
@@ -76,8 +77,9 @@ and seeds as the gain.
 | [`plane3d_circle`](environments/plane3d_circle.md) | 832 | 1.93 | 7.04e6 | 1.23e6 |
 | [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 1.35e6† | 1.01 | 6.89e6 | 1.21e6 |
 | [`plane3d_figure8`](environments/plane3d_figure8.md) | 5.92e5 | 0.77 | 3.04e8 | 5,320 |
-| [`patrol`](environments/patrol.md) | 265 | 0.0371 | 45,322 | 6,041 |
-| [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 199 | 0.0371 | 38,481 | 6,041 |
+| [`patrol`](environments/patrol.md) | 265 | 0.0371 | 45,321 | 6,041 |
+| [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 199 | 0.0371 | 38,482 | 6,041 |
+| [`formation`](environments/formation.md) | 23,239 | 1.17 | 5.36e6 | 6,273 |
 | **Process Control** | | | | |
 | [`cstr`](environments/cstr.md) | 5.96e-7 | 0 | 6.6e5 | 6.1e5 |
 | [`first_order`](environments/first_order.md) | 7.89e-11 | 0 | 1.19e5 | 1.17e5 |
@@ -117,6 +119,7 @@ the PID.
 | [`plane3d_figure8`](environments/plane3d_figure8.md) | 400 | 1.11e6 | 14.7 | 10/10 |
 | [`patrol`](environments/patrol.md) | 200 | 299 | 14.2 | 10/10 |
 | [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 200 | 290 | 14.2 | 10/10 |
+| [`formation`](environments/formation.md) | 200 | 46,678 | 31.2 | 10/10 |
 | **Process Control** | | | | |
 | [`cstr`](environments/cstr.md) | 100 | 6,319 | 5,752 | 10/10 |
 | [`first_order`](environments/first_order.md) | 100 | 1,018 | 1,002 | 10/10 |
@@ -138,3 +141,4 @@ the PID.
 ## Caveats
 
 - [`patrol_bearing_only`](environments/patrol_bearing_only.md): The PID is a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator recovers it by differencing the estimated relative position and filtering. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its NEA measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
+- [`formation`](environments/formation.md): The PID is the patrol's, seat for seat: the patrol's lead autopilot in the lead seat, aimed at the heading the route commands, and the patrol PID in each wingman seat. It holds the lead's altitude poorly (about 140 m off), the patrol's scripted lead never needing better. The MPC slot is the patrol oracle's design applied to the whole formation: the patrol's lead autopilot in the lead seat and its twin-autopilot law in each wingman seat, with one residual planner over every seat on the team cost.

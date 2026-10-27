@@ -401,7 +401,7 @@ def plane3d_heading_pid_step(
 
 
 # ---------------------------------------------------------------------------
-# Close-patrol (formation-keeping) pursuit-guidance PID
+# Close-patrol (station-keeping) pursuit-guidance PID
 # ---------------------------------------------------------------------------
 
 
@@ -417,7 +417,7 @@ class PatrolPIDParams:
     The horizontal loop is a *pursuit* controller (position error steers a
     desired heading, not the bank directly), mirroring the circle/figure-8
     experts — direct position->bank bleeds energy in turns and destabilises
-    formation-keeping.  When the follower is far from the slot it points at
+    station-keeping.  When the follower is far from the slot it points at
     it; as it closes (within ``blend_dist``) it blends onto the lead heading
     so the two fly parallel.
 

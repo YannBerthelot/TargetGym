@@ -115,7 +115,7 @@ holds that instead of a planner. Each task's controller lives in its package's
 | Two gradient planners with a handover | plane, plane_sine | Both actuators planned to capture the initial altitude, then the elevator only, with the throttle on the PID's airspeed loop |
 | `SamplingMPC` | cement_kiln | Cross-entropy sampling: gradients through the kiln's transport delay overflow |
 | Feedforward | battery | Commands the scheduled level of the next block, which leaves only the dispatch noise |
-| Feedback law plus a residual planner | patrol, patrol_bearing_only | Flies the lead's own autopilot on the follower's state, and a 30-step planner adds a correction |
+| Feedback law plus a residual planner | patrol, patrol_bearing_only, formation | Flies the lead's own autopilot on the follower's state, and a 30-step planner adds a correction; on formation one planner corrects every seat, the lead's too |
 | Feedback law | wind_turbine | Generator torque solved so the next step's power meets the target; pitch from the PID with its slew capped |
 
 The MPC has no learned parameters. It solves its problem online at every step

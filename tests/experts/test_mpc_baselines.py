@@ -25,6 +25,13 @@ from target_gym.registry import REGISTRY
 MPC_ENVS = [name for name, spec in REGISTRY.items() if spec.has_mpc]
 CLOSED_LOOP_STEPS = 3
 
+#: Planners too heavy to compile in the fast job even at the smallest size.
+#: The formation oracle differentiates through three aircraft at once, and its
+#: compile peaks at about 7 GB and takes over a minute: next to the other test
+#: workers, enough to take down a CI runner. The slow oracle test in
+#: tests/formation/test_formation_experts.py drives it in closed loop.
+HEAVY_COMPILE = {"formation"}
+
 
 def _bounds(space, shape):
     low = np.broadcast_to(np.asarray(space.low, dtype=float), shape)
@@ -64,7 +71,13 @@ def _cheap_mpc(spec, env, params):
     return spec.make_mpc(env, params)
 
 
-@pytest.mark.parametrize("name", MPC_ENVS)
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(name, marks=pytest.mark.slow) if name in HEAVY_COMPILE else name
+        for name in MPC_ENVS
+    ],
+)
 def test_registered_mpc_builds_and_controls(name):
     spec = REGISTRY[name]
     env = spec.make_env()

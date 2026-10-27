@@ -164,6 +164,7 @@ before reading any result from it.
 | reactor | 864 | 1 | 5 | 0.99884 |
 | unstable_cstr | 1200 | 6.3 to 14.4 | 32 to 72 | 0.99917 |
 | compressor_surge | 1200 | 49.3 | 247 | 0.99917 |
+| formation | 200 | 36 | 180 | 0.99500 |
 
 Two rows are filled by hand. `unstable_cstr` has no step response to fit (it
 runs away open loop), so its tau is the unstable time constant, the time an

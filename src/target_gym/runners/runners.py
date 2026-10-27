@@ -364,7 +364,7 @@ _MEDIA_MAX_STEPS = 1200
 #: hours, and the first ten seconds of one says nothing at all. The point of a
 #: gallery clip is to convey the task, and for those the task *is* the whole
 #: episode.
-_MEDIA_REALTIME_GROUPS = ("plane", "patrol")
+_MEDIA_REALTIME_GROUPS = ("plane", "patrol", "formation")
 MEDIA_SPEEDUP = 10.0
 MEDIA_SECONDS = 10.0
 

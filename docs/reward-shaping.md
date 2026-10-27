@@ -4,7 +4,7 @@ TargetGym asks one question: **can a learned policy hold a setpoint better than
 a PID or an MPC?** That question lives in the reward, so the reward is the
 measuring instrument, and this page says how it is built.
 
-Every environment scores through the version-2 reward described here. Nineteen
+Every environment scores through the version-2 reward described here. Twenty
 normalise the tracking error by an achievable floor; four (reactor, battery,
 wind turbine, building) put tracking and consumption in the owner's currency,
 where the floor enters as the reference cost `rho_floor` instead. Version 1 is
@@ -206,6 +206,7 @@ within sampling error. A floor the MPC beats by more is wrong. Each plant's
 | `plane`, `plane_sine`, `plane_energy` | p=2 | 1 / 1.26 / 1.20 m: `plane`'s is the altimeter resolution (the MPC holds 0.46 m); `plane_sine`'s an earlier MPC's hold, kept within 1.5x of that resolution (the MPC holds 0.53 m); `plane_energy`'s its MPC's lowest per-seed hold between ladder steps, from 4.55 m in `-v3` (the MPC holds 1.18 m under it); lowest per-seed holds in the test turbulence | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
 | `plane3d_*` | p=2 | altitude 1 m (altimeter resolution; the MPC holds 0.67 / 0.67 / 0.68 m on heading / circle / racetrack), heading 0.0087 rad (AHRS resolution; the MPC holds 2.1e-5), path 3 m (GPS resolution; the MPC holds 0.45 / 0.47 / 1.29 m on circle / racetrack / figure-8); lowest per-seed holds in turbulence | 0 | none | dimensionless |
 | `patrol`, `patrol_bearing_only` | p=2 x2 | slot 3 m (relative-GPS resolution; the oracle holds 0.10 m, lowest per seed; 18.6 m, an earlier planner's hold, until version 3), heading 0.0087 rad (AHRS resolution; the oracle holds 1.6e-3 rad), so `rho* = (0.1021 / 3)^2 + (1.631e-3 / 0.0087)^2 = 0.0363` | 0 (provisional) | none | dimensionless |
+| `formation` | p=2 x6 | the lead's altitude 1 m (altimeter resolution; the oracle holds 0.80 m) and heading 0.0087 rad (AHRS resolution; 1.0e-3 rad), each wingman's slot 3 m (relative-GPS resolution; 0.23 and 0.23 m) and alignment 0.0087 rad (1.1e-3 and 1.1e-3 rad); lowest per-seed holds, so `rho* = 0.704`, 0.646 of it the lead's altitude | 0 (provisional, the patrol's) | none | dimensionless |
 
 "Provisional" marks a number the plant's owner would supply (a tolerance from
 the quality system, permit or grid code; a price from a tariff; a wear weight

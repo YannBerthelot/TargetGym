@@ -128,16 +128,18 @@ env.save_video(
 )
 ```
 
-## The multi-agent patrol
+## The multi-agent formation
 
-(both aircraft learn a cooperative formation):
+In `formation` every aircraft of a three-ship formation is a learner, scored
+by one team cost. `FormationMARL` gives each aircraft its own observation and
+action, in the JaxMARL style; see [Multi-agent formation](multi-agent.md).
 
 ```python
 import jax
-from target_gym import PlanePatrolMARL
+from target_gym import FormationMARL, registry
 
-env = PlanePatrolMARL(num_wingmen=4)         # 5 planes: 1 lead + 4 wingmen
-params = env.default_params
+env = FormationMARL()                        # a lead and two wingmen
+params = registry.get("formation").make_test_params()
 key = jax.random.PRNGKey(0)
 
 obs, state = env.reset(key, params)          # obs = {"lead": ..., "wingman_0": ..., ...}
@@ -148,7 +150,7 @@ obs, state, rewards, dones, info = env.step(key, state, actions, params)
 
 ## Wind and turbulence
 
-Every plane-based env (`Plane`, `Plane3D`, `PlanePatrol`, `PlanePatrolMARL`)
+Every plane-based env (`Plane`, `Plane3D`, `PlanePatrol`, `Formation`)
 inherits a wind model applied to the air-relative aerodynamics. It is an
 **unobservable** disturbance by default — pass `observe_wind=True` for a
 fully-observable baseline. Formations feel a single shared gust field.

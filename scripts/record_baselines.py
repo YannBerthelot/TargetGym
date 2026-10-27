@@ -357,6 +357,37 @@ MAX_POOL_RESTARTS = 3
 
 _WORKERS = {"batch": _mpc_batch_one_env, "pid": _pid_one_seed, "mpc": _mpc_one_seed}
 
+#: Every child process is spawned, never forked. JAX has threads running in
+#: this process before any pool starts, and a process forked with threads
+#: running can deadlock: Linux forks by default, and on GitHub's runners every
+#: recording job hung with no seed done until its timeout. macOS spawns by
+#: default, which is why local runs never showed it.
+_spawn = mp.get_context("spawn")
+
+
+def _pool(workers: int) -> cf.ProcessPoolExecutor:
+    return cf.ProcessPoolExecutor(max_workers=workers, mp_context=_spawn)
+
+
+#: Resident memory one worker reaches, in GB, for the tasks far above the
+#: default. A per-seed worker compiles its own planner, and these compiles
+#: peak at several GB (measured on macOS: the formation oracle 7.4, the
+#: patrol's 4.0), so four at once take down a 16 GB CI runner.
+WORKER_GB = {"formation": 8.0, "patrol": 4.5, "patrol_bearing_only": 4.5}
+DEFAULT_WORKER_GB = 2.0
+
+
+def _pools(jobs, available: float, cores: int):
+    """Split ``jobs`` into ``(jobs, workers)`` pools, one per memory class,
+    heaviest first, each as wide as memory and cores allow and never empty."""
+    by_need: dict[float, list] = {}
+    for job in jobs:
+        by_need.setdefault(WORKER_GB.get(job[1], DEFAULT_WORKER_GB), []).append(job)
+    return [
+        (group, max(1, min(cores, int(available / (need * 1024**3)))))
+        for need, group in sorted(by_need.items(), reverse=True)
+    ]
+
 
 def _run_jobs(jobs, workers, inflight, durations, pid_out, mpc_out, batch_out, emit):
     """Run *jobs* to completion, surviving a pool that dies under us.
@@ -386,7 +417,7 @@ def _run_jobs(jobs, workers, inflight, durations, pid_out, mpc_out, batch_out, e
             )
         done: set[tuple[str, str, int]] = set()
         try:
-            with cf.ProcessPoolExecutor(max_workers=workers) as pool:
+            with _pool(workers) as pool:
                 futures = {
                     pool.submit(
                         _WORKERS[kind],
@@ -430,7 +461,7 @@ def _check_pids(names: list[str]) -> int:
     """
     rows = json.loads(BASELINES_PATH.read_text()) if BASELINES_PATH.exists() else {}
     jobs = [(name, seed, None) for name in names for seed in range(SEEDS)]
-    with cf.ProcessPoolExecutor(max_workers=min(os.cpu_count() or 2, 8)) as pool:
+    with _pool(min(os.cpu_count() or 2, 8)) as pool:
         got = dict(zip(jobs, (value for value, _ in pool.map(_pid_one_seed, jobs))))
     moved = 0
     for name in names:
@@ -521,8 +552,9 @@ def main() -> int:
     # memory, not contention for cores, which is why capping threads earlier
     # changed nothing.
     #
-    # So budget roughly 1.5 GB a worker against total RAM and stay under the
-    # core count. Keep at least two so the pool is still a pool.
+    # So budget a worker against available RAM and stay under the core count:
+    # 2 GB a worker by default, more for the tasks in ``WORKER_GB``, which run
+    # first in pools of their own (:func:`_pools`).
     import psutil  # noqa: PLC0415  -- optional, fall back if absent
 
     try:
@@ -531,14 +563,10 @@ def main() -> int:
         # i.e. no cap at all -- while the run that thrashed used only ~10 GB.
         # The difference is everything already resident: the compressor alone
         # held 3.4 M pages before the run started.
-        budget = int(psutil.virtual_memory().available / (2.0 * 1024**3))
+        available = psutil.virtual_memory().available
     except Exception:
-        budget = 6
-    workers = max(2, min(os.cpu_count() or 2, budget))
-    print(
-        f"  {workers} workers (cores {os.cpu_count()}, memory budget {budget})",
-        flush=True,
-    )
+        available = 12 * 1024**3
+    cores = os.cpu_count() or 2
 
     # Reap our own pool if we are killed.
     #
@@ -557,7 +585,7 @@ def main() -> int:
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, _reap)
 
-    manager = mp.Manager()
+    manager = _spawn.Manager()
     inflight = manager.dict()
     durations: dict[str, list[float]] = {}
     stop = threading.Event()
@@ -596,7 +624,16 @@ def main() -> int:
     )
     watcher.start()
 
-    _run_jobs(jobs, workers, inflight, durations, pid_out, mpc_out, batch_out, emit)
+    for group, workers in _pools(jobs, available, cores):
+        names = ", ".join(dict.fromkeys(name for _, name, _ in group))
+        print(
+            f"  {workers} workers for {names} "
+            f"(cores {cores}, {available / 1024**3:.0f} GB available)",
+            flush=True,
+        )
+        _run_jobs(
+            group, workers, inflight, durations, pid_out, mpc_out, batch_out, emit
+        )
     stop.set()
 
     _write(rows)

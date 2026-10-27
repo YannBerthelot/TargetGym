@@ -430,7 +430,7 @@ deliberate — one is differentiable and jit-friendly, the other is cheap to ste
 from Python — so the duplication is not itself the defect. Silently diverging
 is. Since 2026-10-25 each shipped PID is one step function that both forms
 run, `Controller.act` with `jnp` and `Controller.host()` with `np`, and
-`test_expert_policy_is_the_scored_pid` checks they agree on all 23
+`test_expert_policy_is_the_scored_pid` checks they agree on all 24
 environments.
 
 ## 13. Does a reduced prediction model still answer the actuator like the plant?

@@ -16,10 +16,11 @@ over "all environments" -- the conformance test suite, the runner CLI, the
 docs table -- reads it from here, so adding an environment to the library is
 one edit and a missing baseline is a test failure rather than silence.
 
-Multi-agent environments (``PlanePatrolMARL``) are deliberately *not*
-registered: they expose a dict-based JaxMARL-style API rather than the
-single-agent gymnax one, so the shared conformance contract does not apply.
-They are covered by their own tests in ``tests/patrol/``.
+The multi-agent formation is registered in its joint form: ``formation`` takes
+one action for every aircraft and returns their observations concatenated, so
+the shared contract, the baselines and the protocol apply to it as to any
+task. ``target_gym.formation.marl.FormationMARL`` is the same step with one
+observation and one action per aircraft, in the JaxMARL style.
 """
 
 from __future__ import annotations
@@ -376,6 +377,12 @@ def _compressor_surge():
     from target_gym.compressor_surge.env_jax import CompressorSurge
 
     return CompressorSurge()
+
+
+def _formation():
+    from target_gym.formation.env_jax import Formation
+
+    return Formation()
 
 
 # -- params classes (imported lazily through the same mechanism) -------------
@@ -997,6 +1004,44 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("demand_sigma",),
         # No fingerprint_sources: the package imports only itself and the
         # shared plumbing.
+    ),
+    EnvSpec(
+        name="formation",
+        group="aircraft",
+        env_factory=_formation,
+        params_cls=_LazyParams("target_gym.formation.env", "FormationParams"),
+        make_pid=_pid(
+            "make_formation_pid_controller", module="target_gym.formation.experts"
+        ),
+        make_mpc=_mpc("make_formation_mpc", module="target_gym.formation.experts"),
+        # 200 steps, the patrol's episode: three turn onsets of the route.
+        test_params={"max_steps_in_episode": 200},
+        tuned_gains_key="formation",
+        # The wingmen fly the patrol's gains, and the lead autopilot of the
+        # PID team and the oracle reads plane3d_heading's.
+        gains_keys=("patrol", "plane3d_heading"),
+        baselines_note=(
+            "The PID is the patrol's, seat for seat: the patrol's lead "
+            "autopilot in the lead seat, aimed at the heading the route "
+            "commands, and the patrol PID in each wingman seat. It holds the "
+            "lead's altitude poorly (about 140 m off), the patrol's scripted "
+            "lead never needing better. The MPC slot is the patrol oracle's design applied to the "
+            "whole formation: the patrol's lead autopilot in the lead seat and "
+            "its twin-autopilot law in each wingman seat, with one residual "
+            "planner over every seat on the team cost."
+        ),
+        disturbance_fields=("gust_x", "gust_y", "gust_z"),
+        noise_fields=("turbulence_sigma",),
+        # The aircraft and the patrol's geometry and observation, and the
+        # patrol's controllers, which the PID team and the oracle reuse (an
+        # experts file, so in the baseline fingerprint only).
+        fingerprint_sources=(
+            "patrol/env.py",
+            "patrol/experts.py",
+            "plane3d/env.py",
+            "plane3d/dynamics.py",
+            "plane/dynamics.py",
+        ),
     ),
 )
 
