@@ -54,7 +54,7 @@ from typing import Any, Callable, Iterable, Mapping, Protocol, runtime_checkable
 
 import numpy as np
 
-from target_gym.eval import Episode, evaluate, hold_settings
+from target_gym.eval import Episode, evaluate, fixed_settle, hold_settings
 
 
 class Unsupported(Exception):
@@ -299,25 +299,24 @@ def episodes_of(rollout: Mapping[str, Any]) -> list[Episode]:
 def score(
     rollout: Mapping[str, Any],
     burn_in,
-    rho_floor: float | None = None,
+    settle: int | None = None,
 ) -> dict[str, Any]:
     """The protocol's numbers for a rollout: ``metrics`` (``eval.evaluate``
     over the episodes pooled, the library's convention for one plant run
     several times; with a ``burn_in`` per episode, the mean over episodes of
-    each one's own metrics) and the per-episode ``gain`` / ``failure_rate``
+    each one's own metrics; holds after ``settle`` steps, the plant's
+    ``eval.fixed_settle`` in the benchmark) and the per-episode ``gain`` / ``failure_rate``
     arrays, for paired comparisons between policies run on the same seed;
     ``records``: each recorded quantity's mean over each episode's own steps
     (the burn-in included), per episode."""
     eps = episodes_of(rollout)
     b = np.asarray(burn_in, int)
     per = [
-        evaluate(
-            [e], burn_in=int(np.broadcast_to(b, (len(eps),))[i]), rho_floor=rho_floor
-        )
+        evaluate([e], burn_in=int(np.broadcast_to(b, (len(eps),))[i]), settle=settle)
         for i, e in enumerate(eps)
     ]
     if b.ndim == 0:
-        metrics = evaluate(eps, burn_in=int(b), rho_floor=rho_floor)
+        metrics = evaluate(eps, burn_in=int(b), settle=settle)
     else:
         keys = [k for k in per[0] if np.isscalar(per[0][k])]
         metrics = {k: float(np.nanmean([m[k] for m in per])) for k in keys}
@@ -399,7 +398,7 @@ def run_policy_on_benchmark(
             continue
         T = int(rollout["reward"].shape[1])
         burn_in = min(hold_settings(name)["burn_in"], T // 2)
-        row = score(rollout, burn_in, rho_floor=getattr(params, "rho_floor", None))
+        row = score(rollout, burn_in, settle=fixed_settle(name))
         row.update(n_episodes=n_episodes, n_steps=T, wall_s=float(rollout["wall_s"]))
         if hasattr(policy, "diagnostics"):
             row["diagnostics"] = policy.diagnostics(rollout["carry"])
