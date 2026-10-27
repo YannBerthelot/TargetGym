@@ -104,13 +104,15 @@ than by commit.
   ArduPilot do. `scripts/tune_aircraft_guidance.py` tunes them inner loop
   first on training seeds 100-109 and checks them on held-out seeds 200-209,
   never on the scored seeds. On the held-out seeds they hold altitude within
-  1.5 to 1.9 m on every task but the figure-8, the circle within 1 m and the
-  racetrack within 2.3 m. The cascades they replace were tuned on the scored
-  seeds, and two of them fed roll rate back with the wrong sign: they held 44 m
-  and 1 rad off on `plane3d_heading` and drifted kilometres on the racetrack
-  and figure-8. The figure-8 expert still cuts the tips of the smaller lobes,
-  where stall prevention keeps the airliner too fast to turn that tight.
-  Every aircraft record is re-recorded.
+  1.9 m on average on every task, the circle within 1 m, the racetrack within
+  2.3 m and the figure-8 within 1.4 m where its lobes are flyable. The
+  figure-8 does not observe its curvature, so its expert reads it from where
+  it is on the pattern, using the altitude twist. It still cuts the tips of
+  the smaller lobes, where stall prevention keeps the airliner too fast to
+  turn that tight. The cascades they replace were tuned on the scored seeds,
+  and two of them fed roll rate back with the wrong sign: they held 44 m and
+  1 rad off on `plane3d_heading` and drifted kilometres on the racetrack and
+  figure-8. Every aircraft record is re-recorded.
 
 - **Shorter docstrings in the core modules** (registry, experts, eval, reward,
   runners, base): they keep the contracts and drop the measurement history,

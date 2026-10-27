@@ -32,10 +32,6 @@ from target_gym.plane.experts_tecs import (
 # so an explicit ``lr_end=None`` (a fixed step) stays expressible.
 _TASK_DEFAULT = object()
 
-# Fraction of the bank limit a steady turn may use, leaving the rest as control
-# authority for the radial correction that sits on top of the feedforward.
-_TURN_BANK_MARGIN = 0.85
-
 #: Solver settings per task, keyed by the environment class. They live here,
 #: not in the registry, because this file is in the four tasks' baseline
 #: fingerprint and the registry is not: a setting passed from the registry
@@ -149,11 +145,14 @@ class Plane3DGuidanceParams:
     ``tau_hdg`` is the course hold's time constant (heading task). ``period``
     and ``damping`` are L1's, as ArduPilot names them ``NAVL1_PERIOD`` and
     ``NAVL1_DAMPING``. ``max_bank_rad`` is ArduPilot's default roll limit and
-    the edge of the model's validity (PHYSICS.md). ``k_curv`` smooths the
-    figure-8's curvature estimate, the only path whose geometry
-    the observation does not give in closed form. The pitch loop holds TECS's
-    pitch demand, with the extra pitch a banked turn needs and the angle of
-    attack kept inside ``alpha_max``. ``v_min_eas`` is the slowest equivalent
+    the edge of the model's validity (PHYSICS.md). A curved path is flown at
+    the speed whose steady bank in its tightest turn is ``turn_bank_margin``
+    of the limit, leaving the rest for L1's corrections. The figure-8, the
+    only path whose curvature the observation does not give, reads it from
+    the pattern it was given: ``figure8_altitude_amplitude``, the scored
+    task's, and ``curvature_lead`` seconds ahead, the bank loop's lag. The
+    pitch loop holds TECS's pitch demand, with the extra pitch a banked turn
+    needs and the angle of attack kept inside ``alpha_max``. ``v_min_eas`` is the slowest equivalent
     airspeed the autopilot flies (ArduPilot's ``ARSPD_FBW_MIN``): 1.3 times
     the model's clean 1 g stall, 80 m/s at 73.5 t, CL_max 1.5 and 122.6 m^2.
     """
@@ -161,10 +160,12 @@ class Plane3DGuidanceParams:
     Kp_roll: float = 6.0
     Kd_roll: float = 3.0
     max_bank_rad: float = _BANK_45
+    turn_bank_margin: float = 0.85
     tau_hdg: float = 10.0
     period: float = 35.0
     damping: float = 0.75
-    k_curv: float = 0.3
+    figure8_altitude_amplitude: float = 200.0
+    curvature_lead: float = 1.0
     Kp_theta: float = 8.0
     Ki_theta: float = 2.0
     Kd_theta: float = 0.3
@@ -179,14 +180,16 @@ class Plane3DGuidanceParams:
 
 @struct.dataclass
 class Plane3DGuidanceState:
-    """TECS's state, the pitch loop's integral, and the figure-8's last path
-    point and estimates."""
+    """TECS's state, the pitch loop's integral, and on the figure-8 the last
+    path point's altitude, the way the path turns, and the pattern's
+    orientation averaged over ``samples`` observations."""
 
     tecs: TECSState = struct.field(default_factory=TECSState)
     theta_integ: float = 0.0
-    tangent_prev: float = 0.0
-    curvature: float = 0.0
-    started: float = 0.0
+    path_z: float = 0.0
+    turn_sign: float = 1.0
+    orientation: float = 0.0
+    samples: float = 0.0
 
 
 def _ground_speed(obs, xp):
@@ -196,7 +199,7 @@ def _ground_speed(obs, xp):
 def _turn_speed(params, radius, xp):
     """Cruise speed, or slower where the tightest turn of radius ``radius``
     would otherwise need more bank than the limit leaves in hand."""
-    usable = _TURN_BANK_MARGIN * params.max_bank_rad
+    usable = params.turn_bank_margin * params.max_bank_rad
     limit = xp.sqrt(params.gravity * xp.maximum(radius, 1.0) * xp.tan(usable))
     return xp.minimum(params.target_speed, limit)
 
@@ -283,24 +286,43 @@ def plane3d_racetrack_step(params, state, obs, xp=jnp):
 
 
 def plane3d_figure8_step(params, state, obs, xp=jnp):
-    """L1 on the figure-8. Its curvature is not observed, so it is estimated
-    from how the nearest point's tangent turns."""
-    a = xp.maximum(obs[..., 11], 1.0)
-    dx, dy, dz, tangent = obs[..., 12], obs[..., 13], obs[..., 14], obs[..., 15]
-    cross = dx * xp.sin(tangent) - dy * xp.cos(tangent)
-    curve_z = obs[..., 2] + dz
+    """L1 on the figure-8, whose curvature is not observed but follows from
+    where the aircraft is on it.
 
-    # A lemniscate's tightest turn has radius a / 3, at its tips.
-    k_max = 4.5 / a
-    turned = _wrap_angle(tangent - state.tangent_prev, xp)
-    curvature_now = xp.clip(
-        turned / (_ground_speed(obs, xp) * params.dt), -k_max, k_max
+    The pattern is Bernoulli's lemniscate of half-width ``a``, its altitude
+    z_mean + dz sin(tau) along its parameter tau (PHYSICS.md), so the nearest
+    point's altitude gives sin(tau). The curvature there is
+    3 cos(tau) / (a sqrt(1 + sin^2 tau)), and the path turns the way it
+    climbs. The tangent is 3 arctan(sin tau) from its heading at the lobe
+    tip, which is constant over the flight; the observed tangent, read off
+    the env's sampled curve, gives it to within the sampling, so the expert
+    averages it."""
+    a = xp.maximum(obs[..., 11], 1.0)
+    dx, dy, dz = obs[..., 12], obs[..., 13], obs[..., 14]
+    path_z = obs[..., 2] + dz
+    sin_tau = xp.clip(
+        (path_z - obs[..., 10]) / params.figure8_altitude_amplitude, -1.0, 1.0
     )
-    started = state.started > 0.0
-    k = params.k_curv
-    curvature = xp.where(
-        started, state.curvature + k * (curvature_now - state.curvature), 0.0
+
+    # The first observation sets the orientation; later ones are averaged in
+    # modulo pi, since the observed tangent flips to follow the velocity.
+    shape = _HALF_PI + 3.0 * xp.arctan(sin_tau)
+    error = _wrap_angle(obs[..., 15] - shape - state.orientation, xp)
+    started = state.samples > 0.0
+    error = xp.where(started, 0.5 * _wrap_angle(2.0 * error, xp), error)
+    orientation = state.orientation + error / (state.samples + 1.0)
+    tangent = orientation + shape
+    cross = dx * xp.sin(tangent) - dy * xp.cos(tangent)
+
+    # Read ``curvature_lead`` seconds ahead along tau, so the sign flips at a
+    # crossover before the aircraft reaches it.
+    climb = path_z - state.path_z
+    turn_sign = xp.where(
+        started & (xp.abs(climb) > 1e-3), xp.sign(climb), state.turn_sign
     )
+    tau_rate = _ground_speed(obs, xp) * xp.sqrt(1.0 + sin_tau**2) / a
+    tau = xp.arcsin(sin_tau) + turn_sign * tau_rate * params.curvature_lead
+    curvature = turn_sign * 3.0 * xp.cos(tau) / (a * xp.sqrt(1.0 + xp.sin(tau) ** 2))
 
     accel = l1_lateral_accel(params, cross, tangent, curvature, obs, xp)
     target = _turn_speed(params, a / 3.0, xp)
@@ -309,12 +331,13 @@ def plane3d_figure8_step(params, state, obs, xp=jnp):
         state,
         obs,
         xp,
-        curve_z,
+        path_z,
         accel,
         target,
-        tangent_prev=tangent,
-        curvature=curvature,
-        started=xp.ones_like(dz),
+        path_z=path_z,
+        turn_sign=turn_sign,
+        orientation=orientation,
+        samples=state.samples + 1.0,
     )
 
 
@@ -341,7 +364,7 @@ def make_plane3d_racetrack_pid_controller() -> Controller:
 
 def make_plane3d_figure8_pid_controller() -> Controller:
     """The figure-8's expert: L1 guidance over the autopilot's loops."""
-    return Controller(_PATH, Plane3DGuidanceState(), plane3d_figure8_step)
+    return Controller(_FIGURE8, Plane3DGuidanceState(), plane3d_figure8_step)
 
 
 # Tuned inner loop first, as ArduPilot's tuning guide orders it, on training
@@ -349,3 +372,14 @@ def make_plane3d_figure8_pid_controller() -> Controller:
 # seeds 0-9 (scripts/tune_aircraft_guidance.py).
 _HEADING = Plane3DGuidanceParams()
 _PATH = Plane3DGuidanceParams()
+# The figure-8 flies slower and higher than the other tasks, banked most of
+# the way. At that lower dynamic pressure the pitch loop above oscillated,
+# about 9 s a cycle, so it gets pitch-rate damping and a faster, better damped
+# TECS, chosen to hold with any one gain 25% off. Over the training patterns,
+# ten turbulence draws each, it holds height within 1.9 m and path within
+# 2.3 m. Its lobe tips are flown with a quarter of the bank in hand.
+_FIGURE8 = Plane3DGuidanceParams(
+    Kd_theta=6.0,
+    turn_bank_margin=0.75,
+    tecs=AIRLINER.replace(time_const=1.5, ptch_damp=2.0),
+)
