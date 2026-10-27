@@ -539,6 +539,19 @@ than by commit.
 
 ### Fixed
 
+- **The time-in-band KPI held 12 tasks to no band.** The band read a single
+  `e_floor` from the params, so the tasks that give a tolerance per output
+  (the four 3D aircraft tasks, the two patrol tasks, formation, distillation,
+  boiler_drum, hvac) were held to an infinite one, and battery and
+  wind_turbine compared a floor in W with a power observed in MW. All 12 read
+  `time_in_band` 1.00
+  and `reach_fraction` 0.00, formation included, whose PID holds about 140 m
+  off. `benchmark.task_info` now gives each observed output its own floor,
+  in the observation's units (the kiln's free lime, observed in %, was held
+  100 times too tight), and `TaskInfo.in_band(obs)` applies it.
+  plane3d_figure8 declares none: its observed output is the altitude about
+  the path's mean, not a tracked error. The two KPIs in
+  `protocol_results.json` change at the next record; no fingerprint moves.
 - **`experts.mpc.casadi_step_map` without CasADi** raised a `NameError` on
   the missing module; it now raises an `ImportError` naming the `[mpc]` extra.
 - **`Airplane2D.reset_env(key)` without parameters** read a class attribute

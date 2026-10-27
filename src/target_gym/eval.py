@@ -448,8 +448,8 @@ def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
     ``policy`` is ``policy(obs)`` or ``policy(obs, state)``. The cost is
     ``-reward``; the terms come from ``env.reward_terms`` when the environment
     provides one. ``band`` is a per-output error tolerance for the
-    time-in-band KPI (defaults to each output's ``e_floor`` if the params carry
-    one, else the reach segmentation uses the target changes alone).
+    time-in-band KPI, in the observation's units (defaults to the task's own,
+    ``benchmark.task_info``'s ``e_floor``).
     """
     import dataclasses
 

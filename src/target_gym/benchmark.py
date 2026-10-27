@@ -78,6 +78,8 @@ class TaskInfo:
     ``e_floor`` is ``(n, n_out)`` and ``dt`` / ``max_steps`` ``(n,)``, so a
     family whose episodes are different plants (per-episode parameters) is
     described by the same object as a single plant run ``n`` times.
+    ``e_floor[:, j]`` is the tolerance on output ``value_index[j]``, in the
+    observation's units (infinite where the task declares none).
     ``extras`` carries declared information a benchmark family adds beyond
     this library's (a trip envelope on the error, the loop's direction); a
     policy that needs one of them names it."""
@@ -93,6 +95,15 @@ class TaskInfo:
     e_floor: np.ndarray
     max_steps: np.ndarray
     extras: Mapping[str, Any] = field(default_factory=dict)
+
+    def in_band(self, obs) -> np.ndarray:
+        """``(n, ...)`` bool: every output of the observations ``obs``
+        ``(n, ..., obs_dim)`` is within its ``e_floor`` of its target."""
+        obs = np.asarray(obs)
+        value = obs[..., list(self.value_index)]
+        err = np.abs(value - obs[..., list(self.target_index)])
+        shape = (self.n_episodes,) + (1,) * (err.ndim - 2) + (err.shape[-1],)
+        return (err <= self.e_floor.reshape(shape)).all(axis=-1)
 
 
 @runtime_checkable
@@ -112,6 +123,30 @@ def _as_tuple(index) -> tuple[int, ...]:
         if isinstance(index, (tuple, list))
         else (int(index),)
     )
+
+
+#: Per task, the params field holding each observed output's tolerance, in
+#: ``obs_value_index`` order, and the factor from that field's units
+#: (``PARAM_UNITS``) to the observation's. The last field also covers any
+#: further outputs (formation: one slot per wingman). A task not listed holds
+#: every output to its ``e_floor``, already in the observation's units.
+#: plane3d_figure8 observes its altitude about the path's mean altitude, which
+#: the path itself swings 200 m around, so it declares no tolerance.
+_OUTPUT_FLOORS: dict[str, tuple[tuple[str, float], ...]] = {
+    "plane3d_heading": (("e_floor_altitude", 1.0),),
+    "plane3d_circle": (("e_floor_altitude", 1.0),),
+    "plane3d_racetrack": (("e_floor_altitude", 1.0),),
+    "plane3d_figure8": (),
+    "patrol": (("e_floor_slot", 1.0),),
+    "patrol_bearing_only": (("e_floor_slot", 1.0),),  # its measured slot range
+    "formation": (("e_floor_altitude", 1.0), ("e_floor_slot", 1.0)),
+    "distillation": (("e_floor_top", 1.0),),  # yD; xB is not an observed output
+    "boiler_drum": (("e_floor_level", 1.0), ("e_floor_pressure", 1.0)),
+    "hvac": (("comfort_tolerance", 1.0),),  # the reward's dead band; no e_floor
+    "cement_kiln": (("e_floor", 100.0),),  # a mass fraction; observed in %
+    "battery": (("e_floor", 1e-6),),  # W; observed in MW
+    "wind_turbine": (("e_floor", 1e-6),),  # W; observed in MW
+}
 
 
 def task_info(
@@ -147,6 +182,11 @@ def task_info(
         )
     else:
         dt = np.full(n, control_step_seconds(env, params))
+    floors = _OUTPUT_FLOORS.get(name, (("e_floor", 1.0),))
+    e_floor = np.hstack(
+        [rows(np.asarray(getattr(params, f, np.inf)) * k) for f, k in floors]
+        or [rows(np.inf)]
+    )
     return TaskInfo(
         name=name,
         n_episodes=n,
@@ -156,7 +196,7 @@ def task_info(
         action_low=np.broadcast_to(np.asarray(space.low, float), shape).copy(),
         action_high=np.broadcast_to(np.asarray(space.high, float), shape).copy(),
         dt=dt,
-        e_floor=rows(getattr(params, "e_floor", np.inf), len(vi)),
+        e_floor=np.pad(e_floor, ((0, 0), (0, len(vi) - e_floor.shape[1])), "edge"),
         max_steps=rows(params.max_steps_in_episode)[:, 0].astype(int),
         extras=dict(extras or {}),
     )
@@ -283,7 +323,7 @@ def run_policy(
     rec: dict[str, list] = {
         k: [] for k in ("reward", "tripped", "terminated", "action", "value", "target")
     }
-    err_rec, terms_rec = [], {}
+    err_rec, band_rec, terms_rec = [], [], {}
     t0 = time.perf_counter()
     for t in range(T):
         if oracle:
@@ -306,6 +346,7 @@ def run_policy(
         rec["action"].append(np.asarray(action))
         rec["value"].append(o[:, vi])
         rec["target"].append(o[:, ti])
+        band_rec.append(task.in_band(o))
         if isinstance(info, dict) and "error" in info:
             err_rec.append(np.asarray(info["error"], float))
         step_terms = info.get("reward_terms") if isinstance(info, dict) else None
@@ -318,9 +359,7 @@ def run_policy(
         done |= np.asarray(term, bool)
         rec["terminated"].append(done.copy())
     out: dict[str, Any] = {k: np.stack(v, axis=1) for k, v in rec.items()}
-    err = np.abs(out["value"] - out["target"])
-    band = task.e_floor[:, None, :]
-    out["in_band"] = (err <= band).all(axis=-1)
+    out["in_band"] = np.stack(band_rec, axis=1)
     out["target_change"] = np.stack(
         [target_changes(out["target"][i], first_target[i]) for i in range(n)]
     )

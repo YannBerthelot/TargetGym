@@ -12,6 +12,8 @@ import pytest
 
 from target_gym import benchmark as B
 from target_gym import eval as E
+from target_gym.cement_kiln.env import discharge_lime
+from target_gym.energy.wind_turbine.env import electrical_power as wind_power
 from target_gym.registry import REGISTRY
 
 
@@ -87,6 +89,83 @@ def test_task_info_describes_the_task():
     assert info.e_floor.shape == (3, len(info.value_index))
     assert (info.max_steps == int(params.max_steps_in_episode)).all()
     assert info.dt.shape == (3,) and (info.dt > 0).all()
+
+
+# The band (``TaskInfo.e_floor`` and ``TaskInfo.in_band``). Contract, from the
+# TaskInfo and run_policy docstrings: output j of ``value_index`` is within
+# band when its error is at most its own tolerance, in the observation's
+# units, and a step is in band when every output is. The tolerances are the
+# params' floor fields, in the units ``PARAM_UNITS`` gives them.
+
+
+def _off_target(name, **offsets):
+    """A hand-built state of ``name``: its reset state with the given fields
+    moved, as ``field=fn(state, params)``; its observation, params, task."""
+    env, params, task = _setup(name, 1)
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    state = state.replace(**{k: fn(state, params) for k, fn in offsets.items()})
+    return env.get_obs(state, params)[None], params, task
+
+
+@pytest.mark.parametrize(
+    "level, pressure, inside",
+    [
+        (0.5, 0.5, True),  # both within half their own floor
+        (2.0, 0.0, False),  # the level two floors off: under the pressure's
+        (0.0, 2.0, False),  # the pressure two floors off
+    ],
+)
+def test_each_output_is_held_to_its_own_floor(level, pressure, inside):
+    """boiler_drum observes the drum level (m, target 0) and the drum pressure
+    (bar), and gives each its own floor: ``e_floor_level``, ``e_floor_pressure``."""
+    obs, params, task = _off_target(
+        "boiler_drum",
+        level=lambda s, p: jnp.asarray(level * p.e_floor_level),
+        pressure=lambda s, p: s.target_pressure + pressure * p.e_floor_pressure,
+    )
+    assert task.in_band(obs).tolist() == [inside]
+
+
+@pytest.mark.parametrize("off, inside", [(0.5, True), (2.0, False)])
+@pytest.mark.parametrize(
+    "name, moved, ref",
+    [
+        # e_floor in W, the power observed in MW
+        ("battery", "power", lambda s, p: s.target_power),
+        ("wind_turbine", "target_power", lambda s, p: wind_power(s.omega, s.torque, p)),
+        # e_floor a mass fraction, the free lime observed in %
+        ("cement_kiln", "target_lime", lambda s, p: discharge_lime(s)),
+    ],
+)
+def test_a_floor_is_held_in_the_observations_units(name, moved, ref, off, inside):
+    """The output's error set to ``off`` floors, in the floor's own units: the
+    field ``moved`` put at ``ref + off * e_floor``."""
+    obs, _, task = _off_target(
+        name, **{moved: lambda s, p: ref(s, p) + off * p.e_floor}
+    )
+    assert task.in_band(obs).tolist() == [inside]
+
+
+def test_every_wingman_is_held_to_the_slot_floor():
+    """formation observes the lead's altitude, then each wingman's slot error."""
+    env, params, task = _setup("formation", 1)
+    assert env.num_wingmen == 2
+    np.testing.assert_array_equal(
+        task.e_floor,
+        [[params.e_floor_altitude, params.e_floor_slot, params.e_floor_slot]],
+    )
+
+
+@pytest.mark.parametrize("name", sorted(REGISTRY))
+def test_every_task_declares_a_tolerance_on_each_output(name):
+    """All but plane3d_figure8, whose one observed output is the altitude
+    about the path's mean altitude, which the path swings 200 m around."""
+    _, _, task = _setup(name, 2)
+    assert task.e_floor.shape == (2, len(task.value_index))
+    if name == "plane3d_figure8":
+        assert np.isinf(task.e_floor).all()
+    else:
+        assert (np.isfinite(task.e_floor) & (task.e_floor > 0)).all()
 
 
 def test_episodes_are_paired_across_policies_and_runs():
