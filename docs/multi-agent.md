@@ -22,10 +22,9 @@ registered task is `Formation`, and its scored episode is 200 steps of 1 s:
 
 ```python
 import jax
-from target_gym import Formation, registry
+import target_gym as tg
 
-spec = registry.get("formation")
-env, params = spec.make_env(), spec.make_test_params()   # 200-step episode
+env, params = tg.make("formation")   # the scored 200-step episode
 
 obs, state = env.reset_env(jax.random.PRNGKey(0), params)   # obs.shape == (74,)
 action = env.action_space(params).sample(jax.random.PRNGKey(1))   # (9,)
@@ -41,10 +40,10 @@ everything is `jit`, `vmap` and `scan` compatible.
 
 ```python
 import jax
-from target_gym import FormationMARL, registry
+import target_gym as tg
 
-env = FormationMARL()
-params = registry.get("formation").make_test_params()
+env = tg.FormationMARL()
+_, params = tg.make("formation")
 key = jax.random.PRNGKey(0)
 
 obs, state = env.reset(key, params)   # {"lead": (22,), "wingman_0": (26,), "wingman_1": (26,)}
