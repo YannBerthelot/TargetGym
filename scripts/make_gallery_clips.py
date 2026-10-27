@@ -93,7 +93,7 @@ def render_frames(name: str, steps: int, want: int) -> list:
     spec = REGISTRY[name]
     env = spec.make_env()
     params = spec.params_cls().replace(max_steps_in_episode=steps + 5)
-    policy = spec.make_pid() if spec.has_pid else env.expert_policy
+    policy = spec.make_pid()
     if hasattr(policy, "reset"):
         policy.reset()
 

@@ -1,16 +1,12 @@
 """Shared controller machinery.
 
 Every task's controllers live in its own package's ``experts`` module and are
-reached through the registry, which is stable where the per-task factories
-are not:
+reached by registry name, which is stable where the per-task factories are
+not:
 
-    spec = target_gym.registry.REGISTRY["cstr"]
-    pid = spec.make_pid()                    # host form: keeps its own memory
-    ctrl = spec.make_pid_controller()        # pure form: you carry its memory
-    mpc = spec.make_mpc(spec.make_env(), spec.make_test_params())
-
-``env.make_pid()``, ``env.make_mpc()`` and ``env.expert_policy`` resolve the
-same way.
+    expert = target_gym.make_expert("cstr")  # pure form: you carry its memory
+    pid = expert.host()                      # host form: keeps its own memory
+    oracle = target_gym.make_oracle("cstr")  # full-state MPC, scored params
 """
 
 from target_gym.experts.episodes import reset_where_done

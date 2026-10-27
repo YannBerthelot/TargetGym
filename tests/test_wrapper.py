@@ -5,7 +5,7 @@ import pytest
 
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
-from target_gym.wrapper import gym_wrapper_factory
+from target_gym.wrapper import GymnasiumEnv
 
 max_steps_for_video = 100
 
@@ -21,9 +21,7 @@ max_steps_for_video = 100
     ],
 )
 def test_wrapper_reset_step_render(jax_env_class, env_params, dummy_action, tmp_path):
-    # Create Gym wrapper class
-    GymEnv = gym_wrapper_factory(jax_env_class)
-    env = GymEnv(render_mode="rgb_array", env_params=env_params)
+    env = GymnasiumEnv(jax_env_class(), env_params, render_mode="rgb_array")
 
     # Reset environment
     obs, info = env.reset(seed=0)
@@ -60,11 +58,10 @@ def test_wrapper_reset_step_render(jax_env_class, env_params, dummy_action, tmp_
 )
 def test_wrapper_reset_random_consistency(jax_env_class):
     """Resetting with same seed produces same observation"""
-    GymEnv = gym_wrapper_factory(jax_env_class)
-    env1 = GymEnv()
+    env1 = GymnasiumEnv(jax_env_class())
     obs1, _ = env1.reset(seed=42)
 
-    env2 = GymEnv()
+    env2 = GymnasiumEnv(jax_env_class())
     obs2, _ = env2.reset(seed=42)
 
     np.testing.assert_allclose(obs1, obs2, rtol=1e-6)
@@ -78,8 +75,7 @@ def test_wrapper_reset_random_consistency(jax_env_class):
 )
 def test_wrapper_multi_step(jax_env_class, dummy_action):
     """Run multiple steps without crashing"""
-    GymEnv = gym_wrapper_factory(jax_env_class)
-    env = GymEnv()
+    env = GymnasiumEnv(jax_env_class())
 
     obs, _ = env.reset(seed=0)
     for _ in range(5):
@@ -94,8 +90,7 @@ def test_wrapper_multi_step(jax_env_class, dummy_action):
 def test_wrapper_draws_a_fresh_key_per_reset_and_step():
     """One key reused everywhere gave every unseeded episode the same start
     (and every trip restart the same draw). A seed still makes a run repeat."""
-    GymEnv = gym_wrapper_factory(Airplane2D)
-    env = GymEnv(env_params=PlaneParams(turbulence_sigma=2.0))
+    env = GymnasiumEnv(Airplane2D(), PlaneParams(turbulence_sigma=2.0))
 
     def rollout(seed):
         obs = [env.reset(seed=seed)[0]]

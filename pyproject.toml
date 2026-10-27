@@ -81,8 +81,14 @@ dependencies = [
     "pygame>=2.6.1; python_version < '3.14'",
     "pygame-ce>=2.5.8; python_version >= '3.14'",
     "tqdm>=4.66",
-    # MPC baselines. do-mpc 5.1.1 breaks against casadi 3.8 with
-    # "module 'casadi.tools' has no attribute 'SX'", hence the upper bound.
+]
+
+[project.optional-dependencies]
+# The nine CasADi oracles (full-state MPCs) and baseline recording. Their
+# imports are guarded, and ``target_gym.make_oracle`` names this extra when
+# they are missing. do-mpc 5.1.1 breaks against casadi 3.8 with
+# "module 'casadi.tools' has no attribute 'SX'", hence the upper bound.
+mpc = [
     "casadi>=3.7.2,<3.8",
     "do-mpc>=5.1.1,<6",
 ]
@@ -126,6 +132,8 @@ agent = [
 dev = [
     { include-group = "test" },
     { include-group = "lint" },
+    # The oracles' tests and baseline recording need the optional extra.
+    "target-gym[mpc]",
     "pre-commit>=3.5.0",
     # scripts/record_baselines.py sizes its worker pool against available
     # memory: one planner per core exhausted RAM and sent the machine

@@ -48,12 +48,12 @@ def test_done_restores_the_initial_state_and_not_done_keeps_it(name):
 
 
 def test_a_batch_resets_only_the_rows_that_are_done():
-    """On ``env.expert_policy``'s batched state, with a nested state and a
+    """On the batched expert's state, with a nested state and a
     boolean leaf (the unstable CSTR's cascade), from a batched or an unbatched
     ``fresh``."""
     env = REGISTRY["unstable_cstr"].make_env()
     params = REGISTRY["unstable_cstr"].make_test_params()
-    policy = env.expert_policy
+    policy = REGISTRY["unstable_cstr"].make_pid_controller().batched()
     keys = jax.random.split(jax.random.PRNGKey(0), 3)
     obs, _ = jax.vmap(env.reset_env, in_axes=(0, None))(keys, params)
     state = policy.init_state(3)
