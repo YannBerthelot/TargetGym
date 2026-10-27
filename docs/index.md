@@ -30,16 +30,16 @@ Or try it in the browser: [Colab quickstart](https://colab.research.google.com/g
 ```python
 import jax
 import numpy as np
-from target_gym import Plane
+import target_gym as tg
 
-env = Plane()
-pid = env.make_pid()          # the shipped baseline, tuned
-obs, state = env.reset(jax.random.PRNGKey(0))
+env, params = tg.make("plane")          # the scored configuration
+pid = tg.make_expert("plane").host()    # the shipped expert; keeps its own memory
+obs, state = env.reset(jax.random.PRNGKey(0), params)
 
 for t in range(200):
     action = np.atleast_1d(pid(np.asarray(obs)))
     obs, state, reward, terminated, truncated, info = env.step(
-        jax.random.PRNGKey(t), state, action
+        jax.random.PRNGKey(t), state, action, params
     )
     if terminated or truncated:
         break

@@ -2196,9 +2196,7 @@ wheels = [
 name = "target-gym"
 source = { editable = "." }
 dependencies = [
-    { name = "casadi" },
     { name = "chex" },
-    { name = "do-mpc" },
     { name = "flax" },
     { name = "gymnasium" },
     { name = "gymnax" },
@@ -2214,6 +2212,12 @@ dependencies = [
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "tqdm" },
+]
+
+[package.optional-dependencies]
+mpc = [
+    { name = "casadi" },
+    { name = "do-mpc" },
 ]
 
 [package.dev-dependencies]
@@ -2234,6 +2238,7 @@ dev = [
     { name = "pytest-readme" },
     { name = "pytest-xdist" },
     { name = "ruff" },
+    { name = "target-gym", extra = ["mpc"] },
 ]
 docs = [
     { name = "mkdocs" },
@@ -2256,9 +2261,9 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "casadi", specifier = ">=3.7.2,<3.8" },
+    { name = "casadi", marker = "extra == 'mpc'", specifier = ">=3.7.2,<3.8" },
     { name = "chex", specifier = ">=0.1.86" },
-    { name = "do-mpc", specifier = ">=5.1.1,<6" },
+    { name = "do-mpc", marker = "extra == 'mpc'", specifier = ">=5.1.1,<6" },
     { name = "flax", specifier = ">=0.10" },
     { name = "gymnasium", specifier = ">=1.1,<1.4" },
     { name = "gymnax", specifier = ">=1.0.0" },
@@ -2274,6 +2279,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.11" },
     { name = "tqdm", specifier = ">=4.66" },
 ]
+provides-extras = ["mpc"]
 
 [package.metadata.requires-dev]
 agent = [
@@ -2293,6 +2299,7 @@ dev = [
     { name = "pytest-readme", specifier = ">=1.0.2" },
     { name = "pytest-xdist", specifier = ">=3.6" },
     { name = "ruff", specifier = ">=0.12.11" },
+    { name = "target-gym", extras = ["mpc"] },
 ]
 docs = [
     { name = "mkdocs", specifier = ">=1.6" },
