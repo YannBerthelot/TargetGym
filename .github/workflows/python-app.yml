@@ -157,14 +157,14 @@ jobs:
       # --durations keeps the slowest tests visible, so the suite's cost stays
       # something we notice rather than something that creeps.
       if: matrix.python-version != '3.13'
-      run: uv run pytest tests/ -q -n auto --durations=10 -m "not slow"
+      run: uv run pytest tests/ -q -n auto --durations=10 -m "not slow and not records"
 
     - name: Test with pytest, enforcing coverage
       # One column carries the coverage gate. pytest-cov aggregates the xdist
       # workers, so this costs about twenty seconds more than the plain run
       # rather than requiring a serial one.
       if: matrix.python-version == '3.13'
-      run: uv run pytest tests/ -q -n auto --durations=10 -m "not slow" --cov=target_gym
+      run: uv run pytest tests/ -q -n auto --durations=10 -m "not slow and not records" --cov=target_gym
 
   slow-test:
     # Closed-loop contracts that still roll the plant out here: PID beats the
@@ -235,4 +235,37 @@ jobs:
       run: uv sync --frozen --group dev
 
     - name: Run slow closed-loop tests
-      run: uv run pytest tests/ -q -n auto --durations=10 -m "slow"
+      run: uv run pytest tests/ -q -n auto --durations=10 -m "slow and not records"
+
+  records:
+    # The checks a `re-record` fixes, apart from the rest of the suite. They
+    # fail whenever a change leaves a recorded baseline or protocol row stale,
+    # which says nothing about whether the change is right, so a stale record
+    # fails this check alone and a failing test job always means a real bug.
+    # They read committed JSON: one interpreter is enough, and the one slow
+    # check re-runs the protocol on the pH plant in seconds.
+    name: records
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UV_PYTHON: "3.13"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        version: ${{ env.UV_VERSION }}
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+
+    - name: Install dependencies
+      run: uv sync --frozen --group dev
+
+    - name: Check every recorded row describes this tree
+      run: uv run pytest tests/ -q -n auto --durations=5 -m records
+
+    - name: Say how to fix a stale record
+      if: failure()
+      run: echo "::error::A recorded baseline or protocol row is stale or missing. Add the re-record label to the pull request to record it on CI, or record it locally as CONTRIBUTING.md describes."
