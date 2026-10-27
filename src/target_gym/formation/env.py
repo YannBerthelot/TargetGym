@@ -117,20 +117,20 @@ class FormationParams(PatrolParams):
     #: (scripts/measure_hold.py) in the reward's units, the lead's altitude
     #: and heading plus each wingman's slot and alignment.
     rho_floor_tracking: float = (
-        (0.8187 / 1.0) ** 2
-        + (1.125e-3 / 0.0087) ** 2
-        + (0.2388 / 3.0) ** 2
-        + (1.096e-3 / 0.0087) ** 2
-        + (0.2743 / 3.0) ** 2
-        + (1.165e-3 / 0.0087) ** 2
+        (0.8036 / 1.0) ** 2
+        + (1.006e-3 / 0.0087) ** 2
+        + (0.2305 / 3.0) ** 2
+        + (1.113e-3 / 0.0087) ** 2
+        + (0.2347 / 3.0) ** 2
+        + (1.133e-3 / 0.0087) ** 2
     )
     rho_floor: float = (
-        (0.8187 / 1.0) ** 2
-        + (1.125e-3 / 0.0087) ** 2
-        + (0.2388 / 3.0) ** 2
-        + (1.096e-3 / 0.0087) ** 2
-        + (0.2743 / 3.0) ** 2
-        + (1.165e-3 / 0.0087) ** 2
+        (0.8036 / 1.0) ** 2
+        + (1.006e-3 / 0.0087) ** 2
+        + (0.2305 / 3.0) ** 2
+        + (1.113e-3 / 0.0087) ** 2
+        + (0.2347 / 3.0) ** 2
+        + (1.133e-3 / 0.0087) ** 2
     )
 
     # ---- Version 1 (the team reward the unregistered module shipped) ----
@@ -393,24 +393,28 @@ def compute_next_state_formation(
     )
     controls = jnp.reshape(action, (-1, 3))
 
+    # The lead and its wingmen in one batch, so the dynamics are traced once:
+    # a planner differentiates the step through every aircraft, and a separate
+    # call for the lead doubled the gradient program.
     lead_cmd = state.lead.replace(target_heading=commanded_heading(state))
-    new_lead, metrics = compute_next_state_3d(
-        *decode_action(controls[0]),
+    fleet = jax.tree.map(
+        lambda lead, wingmen: jnp.concatenate([lead[None], wingmen]),
         lead_cmd,
-        eff_params,
-        integration_method=integration_method,
+        state.wingmen,
     )
 
-    def fly(control, wingman):
-        new, _ = compute_next_state_3d(
+    def fly(control, aircraft):
+        return compute_next_state_3d(
             *decode_action(control),
-            wingman,
+            aircraft,
             eff_params,
             integration_method=integration_method,
         )
-        return new
 
-    new_wingmen = jax.vmap(fly)(controls[1:], state.wingmen)
+    new_fleet, fleet_metrics = jax.vmap(fly)(controls, fleet)
+    new_lead = jax.tree.map(lambda x: x[0], new_fleet)
+    new_wingmen = jax.tree.map(lambda x: x[1:], new_fleet)
+    metrics = jax.tree.map(lambda x: x[0], fleet_metrics)
 
     new_state = state.replace(
         lead=new_lead,

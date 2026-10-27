@@ -119,8 +119,8 @@ A PID and an MPC ship with this environment, but no comparison has been recorded
 | `tracking_exponent` | 2 | - |
 | `failure_cost` | 2.99072e+08 | reward |
 | `restart_steps` | 3600 | steps |
-| `rho_floor_tracking` | 0.735489 | reward |
-| `rho_floor` | 0.735489 | reward |
+| `rho_floor_tracking` | 0.704494 | reward |
+| `rho_floor` | 0.704494 | reward |
 | `figure8_altitude_amplitude` | 200 | m |
 | `initial_z_dot` | 0 | m/s |
 | `initial_x_dot` | 200 | m/s |

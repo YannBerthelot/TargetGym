@@ -123,8 +123,8 @@ alone, the patrol's scripted lead, holds its altitude about 140 m off target
 after the climb out of the untrimmed start, which never mattered in the
 patrol, where only relative position is scored. Here it would be about 2e4 per
 step at the 1 m floor. With the planner the oracle holds the lead's altitude
-to 0.82 to 0.86 m, its heading to 1.1e-3 to 1.2e-3 rad, each slot to 0.24 to
-0.32 m and each wingman's alignment to 1.1e-3 to 1.3e-3 rad, with no trip
+to 0.80 to 0.91 m, its heading to 1.0e-3 to 1.1e-3 rad, each slot to 0.23 to
+0.27 m and each wingman's alignment to 1.1e-3 to 1.4e-3 rad, with no trip
 (lowest to highest per-seed hold, `scripts/measure_hold.py`, seeds 0-1). Its
 residual bound is the full action range, not the patrol's +-0.3: at +-0.3 the
 lead is still about 50 m off at the end of the episode (training seeds
@@ -174,7 +174,7 @@ aircraft's and the patrol's reward parameters; `e_floor_path` is unused here.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_altitude` | 1 m | the barometric altimeter resolution, as in the 3D tasks: the oracle holds the lead's altitude below it (0.82 m, lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; PID 141 m), so the instrument sets the scale |
+| `e_floor_altitude` | 1 m | the barometric altimeter resolution, as in the 3D tasks: the oracle holds the lead's altitude below it (0.80 m, lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; PID 141 m), so the instrument sets the scale |
 | `e_tol_altitude` | 0 | inherited; no altitude band |
 | `e_floor_heading` | 0.0087 rad | the 0.5 deg AHRS resolution, for the lead's heading against its route and each wingman's alignment with the lead; the oracle holds both below it |
 | `e_floor_slot` | 3 m | the relative-GPS resolution, the patrol's: the oracle holds each slot below it |
@@ -183,8 +183,8 @@ aircraft's and the patrol's reward parameters; `e_floor_path` is unused here.
 | `tracking_exponent` | 2 | quadratic, as every aircraft task |
 | `failure_cost` | 2 x the largest team tracking cost = 2.99e8 per step | twice the lead at the altitude envelope and half a turn off heading, plus each wingman at the slot-loss bound and half a turn off: `2 ((12192 / 1)^2 + (pi / 0.0087)^2 + 2 ((1500 / 3)^2 + (pi / 0.0087)^2))`; it still covers four wingmen |
 | `restart_steps` | 3600 (1 h) | the patrol's: a crash, collision or lost wingman loses the sortie, an hour of flight (provisional) |
-| `rho_floor_tracking` | 0.735 | the oracle's lowest per-seed holds in floor units (`scripts/measure_hold.py`): `(0.8187 / 1)^2 + (1.125e-3 / 0.0087)^2 + (0.2388 / 3)^2 + (1.096e-3 / 0.0087)^2 + (0.2743 / 3)^2 + (1.165e-3 / 0.0087)^2`, of which the lead's altitude is 0.670 |
-| `rho_floor` | 0.735 | the same; there is no running cost |
+| `rho_floor_tracking` | 0.704 | the oracle's lowest per-seed holds in floor units (`scripts/measure_hold.py`): `(0.8036 / 1)^2 + (1.006e-3 / 0.0087)^2 + (0.2305 / 3)^2 + (1.113e-3 / 0.0087)^2 + (0.2347 / 3)^2 + (1.133e-3 / 0.0087)^2`, of which the lead's altitude is 0.646 |
+| `rho_floor` | 0.704 | the same; there is no running cost |
 
 `reward_version = 1` reconstructs the team reward the unregistered formation
 module shipped (`compute_reward_v1`): `w_lead` times the lead's log-scaled

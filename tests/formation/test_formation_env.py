@@ -347,3 +347,27 @@ def test_one_gust_for_the_whole_formation_and_any_size():
     g = np.asarray(g)
     assert np.std(g) > 1.0
     assert len(np.unique(np.round(g, 6))) > 100
+
+
+def test_every_aircraft_flies_through_one_batched_dynamics_call(monkeypatch):
+    """The lead and its wingmen share one traced copy of the aircraft
+    dynamics. A planner differentiates the step through every aircraft, and a
+    second copy for the lead alone doubled the gradient program: the oracle's
+    compile then took about 10 GB, enough to kill a CI runner."""
+    import target_gym.formation.env as formation_env
+
+    calls = []
+    real = formation_env.compute_next_state_3d
+
+    def spy(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(formation_env, "compute_next_state_3d", spy)
+    env = Formation()
+    params = env.default_params
+    _, state = env.reset_env(KEY, params)
+    jax.make_jaxpr(lambda a: env.step_env(KEY, state, a, params))(
+        jnp.zeros(env.action_space().shape)
+    )
+    assert len(calls) == 1

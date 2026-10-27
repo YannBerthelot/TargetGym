@@ -27,7 +27,7 @@ from target_gym.patrol.experts import (
 )
 
 #: Held over the scored second half on seed 1 (scripts/measure_hold.py): the
-#: lead 0.82 m off its altitude, the wingmen 0.24 and 0.32 m off their slots.
+#: lead 0.80 m off its altitude, the wingmen 0.23 and 0.27 m off their slots.
 #: The bounds are three altimeter floors and a third of the slot floor; the
 #: PID team holds about 140 m and 40 m.
 ALT_HOLD_BOUND = 3.0
