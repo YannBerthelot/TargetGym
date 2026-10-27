@@ -181,6 +181,7 @@ def test_every_environment_without_an_mpc_says_why():
 PID_SHORTFALL_TOLERANCE = 0.10
 
 
+@pytest.mark.records
 @pytest.mark.parametrize("name", MPC_ENVS)
 def test_recorded_baseline_still_describes_this_tree(name):
     """A recorded measurement must not be believed after the code moved.
@@ -215,6 +216,7 @@ def test_recorded_baseline_still_describes_this_tree(name):
     )
 
 
+@pytest.mark.records
 @pytest.mark.parametrize("name", MPC_ENVS)
 def test_mpc_controls_at_least_as_well_as_the_pid(name):
     """The MPC is presented as an upper bound; hold it to that.

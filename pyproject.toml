@@ -247,4 +247,5 @@ fail_under = 89
 testpaths = ["tests"]
 markers = [
     "slow: closed-loop / multi-seed checks too slow for the default CI run",
+    "records: reads the rows the re-record label writes; CI runs these in the records job",
 ]
