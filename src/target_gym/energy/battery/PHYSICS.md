@@ -242,7 +242,7 @@ The version-1 SOC-comfort term is dropped (**provisional**): it has no owner
 price, and a pack driven to the edge of its window pays through the dispatch
 it can then not follow.
 
-`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
 at the instrument resolution -- and `rho_floor` the same with consumption

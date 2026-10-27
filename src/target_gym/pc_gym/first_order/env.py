@@ -34,9 +34,8 @@ class FirstOrderParams(EnvParams):
     failure_cost: float = 2.0e6
     #: Restart time priced into a trip (``reward.trip_cost``; 5 s at 0.05 s steps; a generic loop's reset, provisional).
     restart_steps: int = 100
-    #: The NEA reference. Zero: the plant is deterministic, so exact hold is
-    #: achievable and ``e_floor`` is a scale, not a floor (a reference of 1,
-    #: the cost at the resolution, put the MPC above the reference and NEA > 1).
+    #: The oracle's best hold. Zero: the plant is deterministic, so exact hold
+    #: is achievable and ``e_floor`` is a scale, not a floor.
     rho_floor_tracking: float = 0.0
     rho_floor: float = 0.0
     #: True where e_floor is a resolution, not a measured or certified floor.

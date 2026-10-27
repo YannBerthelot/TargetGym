@@ -97,8 +97,8 @@ class BoilerDrumParams(EnvParams):
     )  # level trip, and the reachable 23 bar (88 -> 65)
     #: Restart time priced into a trip (``reward.trip_cost``; 4 h at 2 s steps: a drum trip's restart, provisional).
     restart_steps: int = 7200
-    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: Tracking cost per step at the floor, in the reward's units.
+    #: The oracle's best hold: the lowest per-seed hold cost the shipped MPC
     #: demonstrated, in the reward's units (the MPC's 2.45 mm level and 0.0519 bar
     #: pressure holds, in 2.67 mm and 0.05 bar units).
     rho_floor_tracking: float = (2.45e-3 / 2.67e-3) ** 2 + (0.0519 / 0.05) ** 2

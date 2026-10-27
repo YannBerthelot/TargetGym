@@ -5,9 +5,9 @@ For every plant with a PID (and an MPC where one exists) it runs
 ``target_gym.eval.evaluate_controller`` on the test episode and writes
 ``src/target_gym/data/protocol_results.json``: the long-run cost after burn-in
 split into tracking and running cost, the reach cost per target change, the
-failure rate, and the normalised expert advantage of the MPC against the PID,
-``NEA = (PID - MPC) / (PID - rho_floor)``. ``--table`` prints the room map
-(the markdown table in the audit) from the file without re-running anything.
+failure rate, with each plant's fixed settle and its ceiling
+(``target_gym.scoring``). ``--table`` prints the room map from the file without
+re-running anything.
 
 Unlike the recorded baselines (``record_baselines.py``, one return per
 episode), this is the number the benchmark is about: what a controller pays
@@ -36,9 +36,10 @@ warnings.filterwarnings("ignore")
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from target_gym.eval import evaluate_controller, nea  # noqa: E402
+from target_gym.eval import evaluate_controller, fixed_settle  # noqa: E402
 from target_gym.provenance import baseline_fingerprint  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
+from target_gym.scoring import ceiling, headroom, score  # noqa: E402
 
 OUT = ROOT / "src" / "target_gym" / "data" / "protocol_results.json"
 
@@ -51,13 +52,13 @@ def _fmt(x):
 
 def table(rows: dict) -> str:
     lines = [
-        "| plant | floor ρ* | PID gain (track / run) | MPC gain (track / run) | NEA(MPC) | PID hold | MPC hold | PID reach B (transient) | MPC reach B (transient) | fail |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| plant | ceiling | PID gain (track / run) | MPC gain (track / run) | room | MPC score | PID hold | MPC hold | PID reach B (transient) | MPC reach B (transient) | fail |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     unsettled = []
     for name, r in rows.items():
         pid, mpc = r.get("pid"), r.get("mpc")
-        floor = r["rho_floor"]
+        c = r.get("ceiling", float("nan"))
 
         def cell(m):
             if not m:
@@ -77,10 +78,12 @@ def table(rows: dict) -> str:
                 f"{_fmt(b)}{mark} ({_fmt(t)})" if t is not None else f"{_fmt(b)}{mark}"
             )
 
-        n = nea(mpc["gain"], pid["gain"], floor) if (pid and mpc) else float("nan")
+        b = pid["hold_tracking"] if pid else float("nan")
+        room = headroom(b, c) if pid else float("nan")
+        s = score(mpc["hold_tracking"], b, c) if (pid and mpc) else float("nan")
         fail = max((m["failure_rate"] for m in (pid, mpc) if m), default=float("nan"))
         lines.append(
-            f"| `{name}` | {_fmt(floor)} | {cell(pid)} | {cell(mpc)} | {_fmt(n)} | "
+            f"| `{name}` | {_fmt(c)} | {cell(pid)} | {cell(mpc)} | {_fmt(room)} | {_fmt(s)} | "
             f"{_fmt(pid['hold']) if pid else '—'} | {_fmt(mpc['hold']) if mpc else '—'} | "
             f"{reach(pid, 'PID')} | {reach(mpc, 'MPC')} | {_fmt(fail)} |"
         )
@@ -123,6 +126,8 @@ def main() -> int:
         row = {
             "fingerprint": baseline_fingerprint(spec),
             "rho_floor": float(getattr(p, "rho_floor", float("nan"))),
+            "ceiling": ceiling(name, p),
+            "settle": fixed_settle(name),
             "seeds": args.seeds,
         }
         for kind in ("pid", "mpc"):
@@ -139,10 +144,6 @@ def main() -> int:
                 f"run={m.get('running', float('nan')) or 0:.4g} reach={m['reach_cost']:.4g} "
                 f"fail={m['failure_rate']:.2f} [{m['seconds']}s]",
                 flush=True,
-            )
-        if "pid" in row and "mpc" in row:
-            row["mpc"]["nea"] = nea(
-                row["mpc"]["gain"], row["pid"]["gain"], row["rho_floor"]
             )
         rows[name] = row
         out_path.write_text(json.dumps(rows, indent=2, sort_keys=True) + "\n")

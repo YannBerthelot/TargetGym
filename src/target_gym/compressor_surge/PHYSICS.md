@@ -851,13 +851,13 @@ and applied, and no other solve failed.
 **Protocol row** (`scripts/evaluate_baselines.py --envs compressor_surge`, 3
 seeds, measured, recorded in `src/target_gym/data/protocol_results.json`).
 
-| controller | gain (tracking / running) | hold | reach cost per change | transient cost per change | NEA | failure rate |
-|---|---|---|---|---|---|---|
-| pair (PID) | 1781 (1781 / 0.388) | 9.41 | 8.93e5 | 8.94e5 | | 0 |
-| NMPC | 60.8 (60.4 / 0.393) | 0.214 | 1.01e5 | 1.01e5 | 0.966 | 0 |
+| controller | gain (tracking / running) | hold | reach cost per change | transient cost per change | failure rate |
+|---|---|---|---|---|---|
+| pair (PID) | 1781 (1781 / 0.388) | 9.41 | 8.93e5 | 8.94e5 | 0 |
+| NMPC | 60.8 (60.4 / 0.393) | 0.214 | 1.01e5 | 1.01e5 | 0 |
 
 The gain is the mean cost over every step. The NMPC's is 60.8 against the
-pair's 1781, an NEA of 0.966 against the reference `rho_floor` of 1.40e-5.
+pair's 1781.
 The NMPC's hold cost, 0.214, is almost all running cost (0.212 running,
 0.0018 tracking), and the pair's, 9.41, almost all tracking (9.05). The
 reach cost is a controller's cost above its own hold level from a change
@@ -1041,7 +1041,7 @@ Over the hold the NMPC spends a mean recycle power of 62.27 kW and the pair
 that the protocol's NMPC hold tracking cost, 0.0018, is at least 0.98 of the
 reference.
 
-`rho_floor_tracking` is the NEA reference for tracking: the lowest per-seed
+`rho_floor_tracking` is the oracle's best hold for tracking: the lowest per-seed
 hold the reference controller demonstrated, divided by `e_floor` and
 squared, as the tracking term squares an error. It is 1.40e-5 here because
 the floor is clamped at the transmitter accuracy, 267 times the NMPC's

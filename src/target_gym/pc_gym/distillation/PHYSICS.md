@@ -205,7 +205,7 @@ baselines use.
 | `failure_cost` | 3.61e6 | twice the reachable two-product excursion's cost, 2 x 2 x (0.095 / 1e-4)^2: a 0.98 top target to the 0.90 trip, a 0.02 bottom target to the 0.10 trip, per trip step |
 | `restart_steps` | 240 (4 h) | restart time priced into a trip, `restart_steps x failure_cost` (column shutdown and re-establishment of the profile; provisional); where a plant engineer would get it: the plant's restart procedure |
 
-`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
 at the instrument resolution -- and `rho_floor` the same with consumption

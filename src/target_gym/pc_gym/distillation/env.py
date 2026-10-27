@@ -149,8 +149,8 @@ class DistillationParams(EnvParams):
     )  # reachable 0.095 on each product (0.98 -> 0.90 trip; 0.02 -> 0.10)
     #: Restart time priced into a trip (``reward.trip_cost``; 4 h at 1 min steps: column shutdown and re-establishment of the profile, provisional).
     restart_steps: int = 240
-    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
-    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: Tracking cost per step at the floor, in the reward's units.
+    #: The oracle's best hold: the lowest per-seed hold cost the shipped MPC
     #: demonstrated, in the reward's units (the MPC's 7.64e-7 / 5.19e-7 holds in 1e-4 units).
     rho_floor_tracking: float = (7.64e-7 / 1e-4) ** 2 + (5.19e-7 / 1e-4) ** 2
     rho_floor: float = (7.64e-7 / 1e-4) ** 2 + (5.19e-7 / 1e-4) ** 2

@@ -154,7 +154,7 @@ class PatrolParams(PlaneParams3D):
     #: Restart time priced into a trip (``reward.trip_cost``): a crash, collision
     #: or lost formation loses the sortie, 1 h of flight at 1 s steps (provisional).
     restart_steps: int = 3600
-    #: Two terms (slot, heading). The NEA reference: the lowest per-seed hold
+    #: Two terms (slot, heading). The oracle's best hold: the lowest per-seed hold
     #: cost the oracle demonstrated, in the reward's units (its slot hold in
     #: 3 m units plus its alignment hold in 0.5 deg units).
     rho_floor_tracking: float = (0.1021 / 3.0) ** 2 + (1.631e-3 / 0.0087) ** 2

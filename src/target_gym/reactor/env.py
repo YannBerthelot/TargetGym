@@ -272,7 +272,7 @@ class ReactorParams(EnvParams):
     )  # twice the imbalance of the reachable 1.2 of rated (0.3 target vs 1.5 n_max), per 10 s step
     #: Restart time priced into a trip (``reward.trip_cost``; 48 h at 10 s steps: a SCRAM's xenon-limited restart, provisional).
     restart_steps: int = 17280
-    #: Tracking cost per step at the floor, in the reward's units; the NEA floor.
+    #: Tracking cost per step at the floor, in the reward's units.
     rho_floor_tracking: float = 100.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
     rho_floor: float = 100.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
     #: True where e_floor is a resolution, not a measured or certified floor.

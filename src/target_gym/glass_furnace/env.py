@@ -299,7 +299,7 @@ class GlassFurnaceParams(EnvParams):
     #: glass out of range ends the campaign; a furnace heat-up schedule is about two
     #: weeks, 40 320 steps at 30 s (provisional).
     restart_steps: int = 40320
-    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: The oracle's best hold: the lowest per-seed hold cost the shipped MPC
     #: demonstrated, in the reward's units (the MPC's 0.0614 K hold in 1 K
     #: units; 0.175 K under the previous oracle).
     rho_floor_tracking: float = (0.0614 / 1.0) ** 2

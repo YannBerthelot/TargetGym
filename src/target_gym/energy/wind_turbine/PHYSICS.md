@@ -205,7 +205,7 @@ On this plant `rho_floor` and `rho_floor_tracking` are the tracking cost of
 the oracle's best per-seed hold, 1454 W: 1.01e-5 $ per step, 0.865 of the cost
 at `e_floor`.
 
-`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
 at the instrument resolution -- and `rho_floor` the same with consumption

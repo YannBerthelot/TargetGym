@@ -205,7 +205,7 @@ baselines use.
 | `failure_cost` | 3.1e6 | twice the span's cost in units of the earlier 0.0080 pH hold, (10 / 0.0080)^2, left as it is when the hold improved. **Never charged**: the effluent is a convex mix of the inlet streams, so its pH stays within about 3.1-10.6 whatever the valves do; the 2 / 12 limits are documentation of the off-spec range |
 | `restart_steps` | 720 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (flush the tank after a gross excursion; provisional; never exercised, see `failure_cost`); where a plant engineer would get it: the plant's restart procedure |
 
-`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
 at the instrument resolution -- and `rho_floor` the same with consumption

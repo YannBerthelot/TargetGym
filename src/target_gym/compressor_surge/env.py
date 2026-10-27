@@ -170,7 +170,7 @@ class CompressorSurgeParams(EnvParams):
     #: Below it the instrument cannot tell a smaller error. Version 1's floor,
     #: and the resolution ``e_floor`` is clamped at.
     precision_floor: float = 0.0275  # kPa
-    #: The NEA references, (e_hold_min / e_floor) ** 2 with the MPC's lowest
+    #: The oracle's best holds, (e_hold_min / e_floor) ** 2 with the MPC's lowest
     #: per-seed hold from scripts/measure_hold.py; below 1 because the floor is
     #: clamped at the transmitter resolution.
     rho_floor_tracking: float = (1.03e-4 / 0.0275) ** 2

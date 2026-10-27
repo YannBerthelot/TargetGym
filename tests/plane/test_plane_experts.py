@@ -13,7 +13,7 @@ shipped planner, and its altitude floor was reset from an earlier oracle's
 package's ``experts.py``, which is in the three tasks' baseline fingerprint,
 and each task's oracle reads its PID gains from a key that fingerprint
 collects. The planner's objective is the reward over a fixed scale per task,
-so the NEA reference its own holds set does not change it.
+so the best hold its own runs set does not change it.
 """
 
 import json
@@ -91,8 +91,8 @@ def test_the_registry_builds_each_task_with_its_settings(name):
 
 def test_the_objective_scale_is_fixed_per_task():
     """The planner's objective is the reward over a fixed scale, the one each
-    oracle was measured with, not over ``rho_floor_tracking``: that is the NEA
-    reference, set from this oracle's own holds, and reading it made each
+    oracle was measured with, not over ``rho_floor_tracking``: that is the oracle's
+    best hold, set from its own holds, and reading it made each
     re-measured floor change the oracle that measured it."""
     scales = {0: 0.84**2, 3: 1.0, 1: 1.0}
     for pattern, scale in scales.items():

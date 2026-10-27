@@ -130,7 +130,7 @@ column's interior profile and the turbine's rotor-effective wind, which are
 exactly what those environments hide. So part of every MPC lead is
 information rather than planning, and the results are not a comparison at equal
 information. On `patrol_bearing_only` the slot holds `patrol`'s oracle reading
-the true state, so its NEA there measures what the hidden lead heading is worth
+the true state, so its score there measures what the hidden lead heading is worth
 plus what the PID leaves on the table.
 
 **It plans on the mean disturbance.** The planners zero the noise amplitudes the

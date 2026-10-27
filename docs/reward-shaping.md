@@ -140,14 +140,14 @@ turned it into the measures industrial loop auditing uses, Huang and Shah
 surveys its industrial uptake.
 
 `e_floor` is that bound computed on the simulator rather than estimated from
-plant data. The normalised expert advantage, `NEA = (PID - x) / (PID - rho*)`,
-is a Harris-type index in cost units: 1 at the floor, 0 at PID parity,
-negative below the PID. `rho*` is the lowest per-seed hold cost the reference
-controller demonstrated, in the reward's units: 1 per tracked term where the
-floor is that hold, less where the floor is the instrument resolution. On the
-deterministic plants, where exact hold is achievable, `rho*` is 0. The
-two-cost report, tracking against consumption, is Huang and Shah's LQG
-performance curve: the trade-off frontier a controller is judged against.
+plant data. The benchmark's score is a Harris-type index too, in decades of
+cost rather than cost: how far a policy has moved from the expert toward
+tracking within the instrument's resolution
+([RL protocol, section 4](rl-protocol.md#4-metrics)). `rho_floor` is the
+lowest per-seed hold cost the oracle demonstrated, in the reward's units; the
+score does not use it. The two-cost report, tracking against consumption, is
+Huang and Shah's LQG performance curve: the trade-off frontier a controller is
+judged against.
 
 - T. J. Harris (1989). Assessment of control loop performance. *The Canadian
   Journal of Chemical Engineering* 67(5), 856-861.

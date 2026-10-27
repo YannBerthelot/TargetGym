@@ -714,7 +714,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "filtering. The MPC slot holds patrol's oracle reading the true "
             "state, so it is a full-state bound, not a bearing-only "
             "controller. On a task defined by what the observation withholds, "
-            "its NEA measures information and control together: what the "
+            "its score measures information and control together: what the "
             "hidden lead state is worth plus what a policy leaves on the "
             "table. It never reads the observation, so its per-step costs "
             "equal patrol's seed for seed."

@@ -187,7 +187,7 @@ class PlaneParams(EnvParams):
     #: Restart time priced into a trip (``reward.trip_cost``): a crash loses the
     #: sortie, 1 h of flight at 1 s steps (provisional).
     restart_steps: int = 3600
-    #: The NEA reference: the lowest per-seed hold cost the shipped MPC
+    #: The oracle's best hold: the lowest per-seed hold cost the shipped MPC
     #: demonstrated, in the reward's units (its 0.4581 m hold in 1 m units,
     #: `scripts/measure_hold.py`; per task in the registry). ``rho_floor``
     #: leaves out the airspeed term, as on the other plants whose running

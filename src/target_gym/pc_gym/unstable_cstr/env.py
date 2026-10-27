@@ -122,7 +122,7 @@ class UnstableCSTRParams(EnvParams):
     #: Restart time priced into a trip (``reward.trip_cost``): cstr's
     #: provisional 1 h restart (240 steps of 15 s) at 3 s steps.
     restart_steps: int = round(_CSTR.restart_steps * _CSTR.delta_t / _DT)
-    #: The NEA reference, (e_hold_min / e_floor) ** 2. The MPC holds C_a to
+    #: The oracle's best hold, (e_hold_min / e_floor) ** 2. The MPC holds C_a to
     #: 6.29e-6 mol/L (measured, the lowest per-seed hold scripts/measure_hold.py
     #: recorded), under the analyser resolution, so e_floor stays at the
     #: resolution and the reference is that finer hold in floor-widths, squared.

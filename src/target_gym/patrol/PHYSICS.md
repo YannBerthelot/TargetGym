@@ -144,7 +144,7 @@ largest turn rate and slot (0.003 rad/s, 300 m, 200 m/s).
 
 On `patrol_bearing_only` the same oracle reads the true state. It is a
 full-state bound, not a bearing-only controller: on a task defined by what the
-observation withholds, its NEA measures information and control together.
+observation withholds, its score measures information and control together.
 
 ## 6. Known deviations
 
@@ -228,7 +228,7 @@ is unchanged. `rho_floor = rho_floor_tracking = (0.1021 / 3)^2 +
 (1.631e-3 / 0.0087)^2 = 0.0363`, the oracle's lowest per-seed holds in floor
 units.
 
-`rho_floor_tracking` is the NEA reference for tracking -- the lowest per-seed
+`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
 is 1 per term where the floor is that hold and less where the floor is clamped
 at the instrument resolution -- and `rho_floor` the same with consumption

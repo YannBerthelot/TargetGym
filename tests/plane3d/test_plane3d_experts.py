@@ -7,8 +7,8 @@ path offsets. Since the oracle audit (2026-10) the step decays from 0.05 to
 had 50 until it was measured at 200). The settings live in the package's
 ``experts.py``, which is in the four tasks' baseline fingerprint, so these
 tests pin the registry's oracles to them. The floors were reset to the
-instrument resolutions with it (the -v3 tasks), and the NEA reference follows
-the oracle's recorded holds.
+instrument resolutions with it (the -v3 tasks), and the oracle's best hold
+follows its recorded holds.
 """
 
 import json

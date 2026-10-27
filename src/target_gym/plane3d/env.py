@@ -204,7 +204,7 @@ class PlaneParams3D(EnvParams):
     #: Restart time priced into a trip (``reward.trip_cost``): a crash loses the
     #: sortie, 1 h of flight at 1 s steps (provisional).
     restart_steps: int = 3600
-    #: The NEA reference: the lowest per-seed hold cost the oracle
+    #: The oracle's best hold: the lowest per-seed hold cost the oracle
     #: demonstrated, in the reward's units. These defaults are heading-v2's
     #: (altitude at its floor, an earlier oracle's 1e-4 rad heading hold in
     #: 0.5 deg units); each 3D task sets its own in the registry.

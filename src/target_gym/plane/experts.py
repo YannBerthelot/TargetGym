@@ -51,7 +51,7 @@ _TASK_DEFAULT = object()
 #: of it under their own name. ``objective_scale``: the planner's objective
 #: is the reward divided by this fixed number, so tracking at the floor
 #: costs about 1 per step. The shared objective divides by
-#: ``rho_floor_tracking`` instead, and that is the NEA reference these holds
+#: ``rho_floor_tracking`` instead, the oracle's best hold, which these holds
 #: set, so each re-measured floor changed the oracle that measured it, and
 #: the iteration did not settle. On
 #: ``plane_energy``, raising it from 0.997 to 1.29 moved seed 1's hold from
@@ -563,8 +563,8 @@ def make_plane_mpc(
     handover, ``n_iter`` and ``lr_end`` set the hold planner; the capture
     planner keeps the shipped settings (``_CAPTURE_SETTINGS``). Under
     version 2 the objective is the reward over the task's fixed
-    ``objective_scale``, not over ``rho_floor_tracking``, so the NEA
-    reference does not change the oracle. Version 1, and a caller's own
+    ``objective_scale``, not over ``rho_floor_tracking``, so its own best
+    hold does not change the oracle. Version 1, and a caller's own
     ``objective_fn``, keep the planner they had: 50 iterations at a fixed
     step, both actuators planned.
     """
@@ -582,8 +582,8 @@ def make_plane_mpc(
         make_pid = cascaded_pid_factory(settings["gains_key"])
         from target_gym.plane.env import compute_reward
 
-        # The shared objective divides by ``rho_floor_tracking``, the NEA
-        # reference that this oracle's own holds set; ``units`` pins that
+        # The shared objective divides by ``rho_floor_tracking``, the best
+        # hold that this oracle's own runs set; ``units`` pins that
         # divisor to the task's fixed scale instead (see ``_TASK_SETTINGS``).
         # compute_reward does not read it, so only the scale changes.
         scale = settings["objective_scale"]

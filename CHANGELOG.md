@@ -14,6 +14,18 @@ than by commit.
 
 ### Added
 
+- **`target_gym.scoring`, which replaces NEA.** A policy is scored against the
+  expert on three numbers: `b / x`, how many times cheaper it is over the
+  episode, with the share of seeds it wins; `S = log(b / x) / log(b / c)`, where
+  it sits between the expert (0) and the ceiling (1) while holding; and
+  `H = log10(b / c)`, the decades of room the task leaves. The ceiling is every
+  tracked quantity within its instrument's resolution. `score_policy(name,
+  make_policy)` runs a policy and the expert on the same seeds. NEA, the linear
+  share of the gap from the PID to the oracle's best hold, put almost any
+  working policy above 0.99 on 19 of 24 tasks, so `eval.nea` and the `nea`
+  and `abs_gap` entries of `eval.evaluate` are gone. The hold is now scored
+  after a settle fixed per plant (`eval.fixed_settle`), the same window for
+  every controller. The design is in `docs/proposals/scoring-and-experts.md`.
 - **`target_gym.experts.reset_where_done`**, the jitted form of `pid.reset()`:
   inside `lax.scan` it puts a carried PID state back to its initial value
   where an episode ended, for one environment or a batch. Without it, a loop
