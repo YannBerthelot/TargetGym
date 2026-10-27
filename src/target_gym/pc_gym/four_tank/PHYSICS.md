@@ -97,13 +97,30 @@ found in this environment was in the lower half of the table, never the model.
 
 ## 4. Task design
 
+### Task: `four_tank`
+
+Hold the levels of the two lower tanks of Johansson's quadruple-tank process
+with two pumps. Each pump sends most of its flow to the upper tank on the other
+side, which drains into the opposite lower tank, so pairing each pump with the
+tank below it is the wrong move and the response is non-minimum phase. All four
+levels are measured: the difficulty is the coupling, not what is seen.
+
+| obs | meaning |
+|---|---|
+| 0 | `h1`, level of lower tank 1 (m) |
+| 1 | `h2`, level of lower tank 2 (m) |
+| 2 | `h3`, level of upper tank 3 (m) |
+| 3 | `h4`, level of upper tank 4 (m) |
+| 4 | target `h1` (m) |
+| 5 | target `h2` (m) |
+
 **Why it is hard.** Two coupled loops whose obvious pairing is unstable, with
 each pump sending 80 % of its flow to the tank on the *other* side. The useful
 control move is a coordinated one, and a controller that treats the loops as
 independent and diagonal will destabilise itself.
 
-**Observation** `[h1, h2, h3, h4, target_h1, target_h2]` — all four levels are
-measured, so unlike most of this suite the plant is fully observed. The
+**Observation.** All four levels are measured, so unlike most of this suite the
+plant is fully observed. The
 difficulty is structural, not informational.
 
 **Reward** — the floor-normalised cost described in *Reward (version 2)*

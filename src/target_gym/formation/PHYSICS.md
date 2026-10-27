@@ -85,6 +85,24 @@ spawn noise and trip thresholds from `PatrolParams`
 
 ## 4. Task design
 
+### Task: `formation`
+
+Fly a lead and two wingmen in a V, every aircraft controlled by the policy.
+The lead holds an altitude and a heading that follows a patrol route, and
+each wingman holds a slot fixed in the lead's frame. Because the lead is
+learned too, each wingman's reference is a co-player rather than a script;
+the team shares one cost, and a collision between any two aircraft trips all
+three. The action is the three aircraft's controls, the lead's first.
+
+| obs | meaning |
+|---|---|
+| 0-14 | the lead's observation as in `plane3d_heading`, its target heading being the one the route commands this step |
+| 15 | the route's current turn rate (rad per step) |
+| 16-18 | wingman 0's offset from its slot in the lead's frame: back, right, up (m) |
+| 19-21 | wingman 1's offset from its slot, likewise (m) |
+| 22-47 | wingman 0's observation, as in `patrol` |
+| 48-73 | wingman 1's observation, as in `patrol` |
+
 The tracked values are the lead's altitude, against its target, and each
 wingman's slot error, against zero. The lead observes 22 values: the 3D
 heading task's 15, whose target is the heading the route commands this step;

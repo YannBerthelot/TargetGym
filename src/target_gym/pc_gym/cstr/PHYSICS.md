@@ -110,14 +110,28 @@ four-tank environment.
 
 ## 4. Task design
 
+### Task: `cstr`
+
+Hold the concentration of reactant A in a cooled, exothermic stirred-tank
+reactor at a target drawn at reset, by setting the coolant temperature. The
+coolant reaches the concentration only through the reactor temperature and an
+exponential reaction rate, so the authority is narrow and nonlinear. Nothing is
+hidden and nothing is random after reset, which makes this the first step up
+from `first_order`.
+
+| obs | meaning |
+|---|---|
+| 0 | `C_a`, concentration of A (mol/L) |
+| 1 | `T`, reactor temperature (K) |
+| 2 | target `C_a` (mol/L) |
+
 **Why it is interesting.** Concentration is controlled indirectly: the coolant
 sets the temperature, and the temperature sets the reaction rate through an
 exponential. The gain is roughly −0.011 mol/L per K, so the entire 7 K input
 range buys 0.078 mol/L of concentration — a narrow, nonlinear authority.
 
-**Observation** `[Ca, T, target_CA]` — a real reactor has a thermocouple and a
-composition analyser. Nothing is hidden here, which makes this one of the two
-fully-observed environments in the suite.
+**Observation.** A real reactor has a thermocouple and a composition analyser.
+Nothing is hidden here.
 
 **Reward** — the floor-normalised cost described in *Reward (version 2)*
 below.

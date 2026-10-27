@@ -2,14 +2,22 @@
 
 <p align="center"><img src="../../videos/first_order/pid_output.gif" width="480px"/></p>
 
+Drive a single first-order lag to a target drawn at reset. It is the suite's sanity check, not a physical plant: linear, fully observed, with no disturbance and no way to trip, so it is the place to check a new algorithm or wrapper against a known answer before moving on.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("first_order")
+```
+
 | | |
 |---|---|
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((2,))` |
 | Tracked variable(s) | x |
-| Episode length | 100 steps (5 s at 0.05 s per step) |
-| Import | `from target_gym import FirstOrderSystem, FirstOrderParams` |
+| Episode length | 100 steps of 0.05 s (5 s) |
 | Cite as | `first_order-v2` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
 
 ## Action space
 
@@ -22,8 +30,12 @@ actuator range inside the environment.
 
 ## Observation space
 
-2 values. Indices (0,) carry the tracked variable(s) that the
-reward scores.
+2 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[1]`.
+
+| # | meaning |
+|---|---|
+| 0 | `x`, the system's output |
+| 1 | target `x` |
 
 ## Rewards
 
@@ -62,7 +74,9 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("first_order", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 0.05 | s |
 | `max_steps_in_episode` | 100 | steps |

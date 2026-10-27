@@ -2,14 +2,22 @@
 
 <p align="center"><img src="../../videos/plane_sine/pid_output.gif" width="480px"/></p>
 
+Track an altitude that moves as a sinusoid, with the same airliner, throttle and elevator as `plane`. A moving reference tests how well a controller follows a frequency, not only how well it holds a level.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("plane_sine")
+```
+
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((10,))` |
 | Tracked variable(s) | altitude (m) |
-| Episode length | 480 steps (480 s at 1 s per step) |
-| Import | `from target_gym import Airplane2D, PlaneParams` |
+| Episode length | 480 steps of 1 s (8 min) |
 | Cite as | `plane_sine-v2` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
 
 ## Action space
 
@@ -23,8 +31,20 @@ actuator range inside the environment.
 
 ## Observation space
 
-10 values. Indices (1,) carry the tracked variable(s) that the
-reward scores.
+10 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[1]` against `obs[6]`.
+
+| # | meaning |
+|---|---|
+| 0 | `x_dot`, horizontal speed (m/s) |
+| 1 | `z`, altitude (m) |
+| 2 | `z_dot`, vertical speed (m/s) |
+| 3 | `theta`, pitch angle (rad) |
+| 4 | `theta_dot`, pitch rate (rad/s) |
+| 5 | `gamma`, flight-path angle (rad) |
+| 6 | target altitude (m) |
+| 7 | throttle, 0 to 1 |
+| 8 | elevator deflection (rad) |
+| 9 | commanded airspeed (m/s) |
 
 ## Rewards
 
@@ -63,7 +83,9 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("plane_sine", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 480 | steps |

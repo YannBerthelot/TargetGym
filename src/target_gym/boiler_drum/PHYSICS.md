@@ -113,6 +113,25 @@ magnitude and shrink magnitude — not fitted to any single one.
 
 ## 4. Task design
 
+### Task: `boiler_drum`
+
+Hold the drum level and the steam pressure of a 160 MW natural-circulation drum
+boiler with fuel and feedwater, while the turbine's steam draw moves. Drum
+level is the classic non-minimum-phase loop: a pressure drop swells the level
+while water is leaving, and cold feedwater shrinks it before it rises. The
+level integrates, the riser voidage behind both effects is hidden, and both a
+high and a low level trip the boiler.
+
+| obs | meaning |
+|---|---|
+| 0 | drum level relative to normal water level (m) |
+| 1 | drum pressure (bar) |
+| 2 | `q_steam`, steam flow to the turbine (kg/s), the disturbance |
+| 3 | fuel, percent of maximum |
+| 4 | feedwater, percent of maximum |
+| 5 | target level, always 0 (m) |
+| 6 | target pressure (bar) |
+
 **Why it is hard.** Drum level is the classic non-minimum-phase control
 problem, and nothing else in this suite has that shape.
 
@@ -130,8 +149,7 @@ problem, and nothing else in this suite has that shape.
    instrument reads riser void fraction, and it is exactly the state driving
    the inverse response.
 
-**Observation** `[level, pressure, q_steam, fuel_pct, feed_pct, target_level,
-target_pressure]` — drum level, drum pressure and steam flow are the three
+**Observation.** Drum level, drum pressure and steam flow are the three
 measurements of classic three-element control, plus the controller's own
 demands.
 

@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/plane3d_racetrack/pid_output.gif" width="480px"/></p>
 
-3D airplane environment state, parameters, and transition logic.
+Fly a holding pattern, two straight legs joined by half circles, at a target altitude with the 3D airliner. The observation gives the signed cross-track error, the tangent heading and the curvature at the nearest point of the pattern, so the work is in the transitions between straight and turning flight.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("plane3d_racetrack")
+```
 
 | | |
 |---|---|
 | Action space | `Box((3,))`, all actions in [-1, 1] |
 | Observation space | `Box((21,))` |
 | Tracked variable(s) | altitude (m) |
-| Episode length | 650 steps (650 s at 1 s per step) |
-| Import | `from target_gym import Plane3DRacetrack, PlaneParams3D` |
+| Episode length | 650 steps of 1 s (10.8 min) |
 | Cite as | `plane3d_racetrack-v3` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
 
@@ -26,8 +32,22 @@ actuator range inside the environment.
 
 ## Observation space
 
-21 values. Indices (2,) carry the tracked variable(s) that the
-reward scores.
+21 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[2]` against `obs[10]`.
+
+| # | meaning |
+|---|---|
+| 0-9 | the aircraft's state, as in `plane3d_heading` |
+| 10 | target altitude (m) |
+| 11 | x offset from the pattern's centre (m) |
+| 12 | y offset from the pattern's centre (m) |
+| 13 | turn radius of the pattern (m) |
+| 14 | direction of the legs (rad) |
+| 15 | throttle, 0 to 1 |
+| 16 | elevator deflection (rad) |
+| 17 | aileron deflection (rad) |
+| 18 | cross-track error to the nearest point, positive outside the pattern (m) |
+| 19 | heading of the pattern at the nearest point (rad) |
+| 20 | signed curvature at the nearest point, 0 on the legs (1/m) |
 
 ## Rewards
 
@@ -66,7 +86,9 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("plane3d_racetrack", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 650 | steps |

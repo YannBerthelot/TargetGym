@@ -92,36 +92,38 @@ nav:
       - API reference: api.md
   - Environments:
       - Overview: environments.md
-      - Complexity ladder: complexity.md
+      - Choosing an environment: complexity.md
+      # Environment pages take their nav title from their heading, which
+      # scripts/generate_env_pages.py writes from registry.display_name.
       - Aircraft:
-          - Plane: environments/plane.md
-          - Plane Sine: environments/plane_sine.md
-          - Plane Energy: environments/plane_energy.md
-          - Plane3D Heading: environments/plane3d_heading.md
-          - Plane3D Circle: environments/plane3d_circle.md
-          - Plane3D Racetrack: environments/plane3d_racetrack.md
-          - Plane3D Figure8: environments/plane3d_figure8.md
-          - Patrol: environments/patrol.md
-          - Patrol Bearing Only: environments/patrol_bearing_only.md
-          - Formation: environments/formation.md
+          - environments/plane.md
+          - environments/plane_sine.md
+          - environments/plane_energy.md
+          - environments/plane3d_heading.md
+          - environments/plane3d_circle.md
+          - environments/plane3d_racetrack.md
+          - environments/plane3d_figure8.md
+          - environments/patrol.md
+          - environments/patrol_bearing_only.md
+          - environments/formation.md
           - Multi-agent formation: multi-agent.md
       - Process control:
-          - Cstr: environments/cstr.md
-          - First Order: environments/first_order.md
-          - Four Tank: environments/four_tank.md
-          - Ph Neutralization: environments/ph_neutralization.md
-          - Distillation: environments/distillation.md
-          - Unstable Cstr: environments/unstable_cstr.md
+          - environments/cstr.md
+          - environments/first_order.md
+          - environments/four_tank.md
+          - environments/ph_neutralization.md
+          - environments/distillation.md
+          - environments/unstable_cstr.md
       - Industrial:
-          - Glass Furnace: environments/glass_furnace.md
-          - Reactor: environments/reactor.md
-          - Hvac: environments/hvac.md
-          - Cement Kiln: environments/cement_kiln.md
-          - Boiler Drum: environments/boiler_drum.md
-          - Compressor Surge: environments/compressor_surge.md
+          - environments/glass_furnace.md
+          - environments/reactor.md
+          - environments/hvac.md
+          - environments/cement_kiln.md
+          - environments/boiler_drum.md
+          - environments/compressor_surge.md
       - Energy:
-          - Wind Turbine: environments/wind_turbine.md
-          - Battery: environments/battery.md
+          - environments/wind_turbine.md
+          - environments/battery.md
   - Results:
       - Baseline results: baseline-results.md
       - RL protocol: rl-protocol.md

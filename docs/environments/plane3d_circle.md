@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/plane3d_circle/pid_output.gif" width="480px"/></p>
 
-3D airplane environment state, parameters, and transition logic.
+Hold altitude while orbiting a fixed circle kilometres across with the 3D airliner. The orbit asks for a sustained, coordinated bank, and the circle is large compared with what the aircraft can change in a few steps.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("plane3d_circle")
+```
 
 | | |
 |---|---|
 | Action space | `Box((3,))`, all actions in [-1, 1] |
 | Observation space | `Box((17,))` |
 | Tracked variable(s) | altitude (m) |
-| Episode length | 300 steps (300 s at 1 s per step) |
-| Import | `from target_gym import Plane3DCircle, PlaneParams3D` |
+| Episode length | 300 steps of 1 s (5 min) |
 | Cite as | `plane3d_circle-v3` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
 
@@ -26,8 +32,18 @@ actuator range inside the environment.
 
 ## Observation space
 
-17 values. Indices (2,) carry the tracked variable(s) that the
-reward scores.
+17 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[2]` against `obs[10]`.
+
+| # | meaning |
+|---|---|
+| 0-9 | the aircraft's state, as in `plane3d_heading` |
+| 10 | target altitude (m) |
+| 11 | x offset from the circle's centre (m) |
+| 12 | y offset from the circle's centre (m) |
+| 13 | circle radius (m) |
+| 14 | throttle, 0 to 1 |
+| 15 | elevator deflection (rad) |
+| 16 | aileron deflection (rad) |
 
 ## Rewards
 
@@ -66,7 +82,9 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("plane3d_circle", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 300 | steps |

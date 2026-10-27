@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/hvac/pid_output.gif" width="480px"/></p>
 
-Building HVAC — single thermal zone, ISO 13790 5R1C reduced-order model.
+Keep a heavyweight, well-insulated single-zone building at its comfort setpoint through occupied hours and a night setback, with hydronic heating, over a week of heating-season weather. The cost is in euros: discomfort outside a 0.5 K band, plus the gas bill. The building's thermal mass is hidden and responds over tens of hours, so recovery from setback has to start well before the setpoint steps up.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("hvac")
+```
 
 | | |
 |---|---|
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | zone air temperature (deg C) |
-| Episode length | 720 steps (648000 s at 900 s per step) |
-| Import | `from target_gym import BuildingHVAC, HVACParams` |
+| Episode length | 720 steps of 900 s (7.5 days) |
 | Cite as | `hvac-v2` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
 
 ## Action space
 
@@ -24,8 +30,17 @@ actuator range inside the environment.
 
 ## Observation space
 
-7 values. Indices (0,) carry the tracked variable(s) that the
-reward scores.
+7 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[6]`.
+
+| # | meaning |
+|---|---|
+| 0 | zone air temperature (°C) |
+| 1 | outdoor temperature (°C) |
+| 2 | heat output, percent of maximum |
+| 3 | solar irradiance, fraction of its peak |
+| 4 | sine of the hour of day |
+| 5 | cosine of the hour of day |
+| 6 | target zone temperature (°C) |
 
 ## Rewards
 
@@ -64,7 +79,9 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("hvac", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 900 | s |
 | `max_steps_in_episode` | 720 | steps |

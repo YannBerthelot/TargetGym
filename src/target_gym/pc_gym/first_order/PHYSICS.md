@@ -67,7 +67,19 @@ that the four-tank environment failed, and it costs nothing to assert here.
 
 ## 4. Task design
 
-**Observation** `[x, target_x]`. **Reward** — the floor-normalised cost described in *Reward (version 2)*
+### Task: `first_order`
+
+Drive a single first-order lag to a target drawn at reset. It is the suite's
+sanity check, not a physical plant: linear, fully observed, with no disturbance
+and no way to trip, so it is the place to check a new algorithm or wrapper
+against a known answer before moving on.
+
+| obs | meaning |
+|---|---|
+| 0 | `x`, the system's output |
+| 1 | target `x` |
+
+**Reward** — the floor-normalised cost described in *Reward (version 2)*
 below.
 
 There is no disturbance, nothing hidden, and no irrecoverable state. The

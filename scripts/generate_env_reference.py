@@ -70,22 +70,29 @@ whole of what differs between them:
 - **Physics** links the environment's contract: sourced parameters, published
   validation targets asserted by tests, and quantified known deviations.
 
-Load any of them by registry name:
+Load any of them by registry name, on the configuration it is scored on:
 
 ```python
-from target_gym.registry import REGISTRY
+import target_gym as tg
 
-spec = REGISTRY["boiler_drum"]
-env, params = spec.make_env(), spec.params_cls()
+env, params = tg.make("boiler_drum")
 ```
+
+To pick one by what you want to test, see
+[Choosing an environment](complexity.md).
 """
 
 
-def _physics_link(env) -> str:
+def physics_path(env) -> pathlib.Path:
+    """The contract beside *env*'s package, relative to the repository root."""
     module = type(env).__module__
     for suffix in (".env_jax", ".marl"):
         module = module.removesuffix(suffix)
-    path = pathlib.Path("src") / module.replace(".", "/") / "PHYSICS.md"
+    return pathlib.Path("src") / module.replace(".", "/") / "PHYSICS.md"
+
+
+def _physics_link(env) -> str:
+    path = physics_path(env)
     if not (ROOT / path).exists():
         return "--"
     # Absolute, not relative: each PHYSICS.md lives beside the code it

@@ -284,9 +284,25 @@ All derived from the parameter table (`--section params` and
 
 ## 5. Task design
 
-**Observation** (7): header pressure (kPa), compressor flow m_c (kg/s, the
-anti-surge flow element), delivered flow m_d (kg/s), speed and drive setpoint
-(percent of rated), recycle opening (percent), live setpoint (kPa). m_d is the
+### Task: `compressor_surge`
+
+Hold the header pressure of a variable-speed compressor on a stepped setpoint
+while the consumers' demand ramps between levels, with the drive speed and an
+anti-surge recycle valve. Flow below the surge line trips the plant, and
+neither the reward nor any observation reads the surge margin directly, so the
+policy has to learn to keep it from the flows it does observe.
+
+| obs | meaning |
+|---|---|
+| 0 | header pressure (kPa) |
+| 1 | `m_c`, compressor flow (kg/s) |
+| 2 | `m_d`, flow delivered to the consumers (kg/s) |
+| 3 | drive speed, percent of rated |
+| 4 | drive speed setpoint, percent of rated |
+| 5 | recycle valve opening (%) |
+| 6 | target header pressure (kPa) |
+
+**Observation.** The compressor flow m_c is the anti-surge flow element. m_d is the
 consumers' flow at the state's clock with the deviation the coming step
 integrates with, so the total opening can be inferred from it. Hidden: how
 that opening splits into block level and deviation, both schedules' future
