@@ -42,11 +42,10 @@ def advance_gust(
 def step_key(key, time):
     """Per-step PRNG key derived from the episode key *and* the step index.
 
-    ``step_env`` receives whatever key the caller supplies, and every rollout
-    helper in this repository (``runners.rollout``, ``save_video``, the
-    ``lax.scan`` bodies in the runners) supplies the *same* key at every
-    step. Drawing noise straight from it therefore redraws one identical
-    innovation forever, collapsing a zero-mean disturbance into a deterministic
+    ``step_env`` receives whatever key the caller supplies, and a caller may
+    supply the *same* key at every step (``save_video`` does, and the runners
+    did until they moved onto ``benchmark.run_policy``). Drawing noise
+    straight from it would then redraw one identical innovation forever, collapsing a zero-mean disturbance into a deterministic
     ramp toward ``innovation / (1 - rho)``.
 
     Folding the step index in makes each step's draw distinct regardless of

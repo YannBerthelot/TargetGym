@@ -132,8 +132,8 @@ class EnvSpec:
     disturbance_fields:
         State fields holding a *zero-mean stochastic disturbance* (gusts, load
         noise). The conformance suite asserts these behave like disturbances --
-        in particular that they do not ratchet under a constant PRNG key, as
-        every rollout helper here steps them. Excludes deliberately drifting
+        in particular that they do not ratchet under a constant PRNG key,
+        which a caller may pass at every step. Excludes deliberately drifting
         processes such as the reactor's demand.
     disturbance_overrides:
         Parameter overrides that switch the disturbance on, when it is off by

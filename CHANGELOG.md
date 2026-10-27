@@ -140,7 +140,7 @@ than by commit.
   fresh key every step too.
 - **`experts.pid.load_gains` and `gain`** are the public names of
   `_load_gains` and `_g`, which a task's experts use to read the tuned gains.
-  The private names stay as aliases.
+  Every task package now reads the public names, and the private ones are gone.
 - **CasADi and do-mpc moved to the `[mpc]` extra.** `pip install target-gym` no
   longer pulls them; `pip install "target-gym[mpc]"` does. The experts and the
   JAX oracles work without them, and a CasADi oracle names the extra when it is

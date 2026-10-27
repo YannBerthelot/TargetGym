@@ -174,14 +174,14 @@ def cascaded_pid_factory(gains_key: str):
     ``gains_key`` in ``data/pid_gains.json`` (its ``"note"`` is skipped).
 
     ``make_plane_pid_controller`` reads ``plane_cascaded``, which only
-    ``plane``'s fingerprint collects. Reads ``_load_gains()`` at call time,
+    ``plane``'s fingerprint collects. Reads ``load_gains()`` at call time,
     so a tuner that patches the cache is seen. A missing key raises rather
     than falling back to the constructor's defaults, which would fly a
     different autopilot without saying so.
     """
 
     def make():
-        stored = _pid_mod._load_gains()
+        stored = _pid_mod.load_gains()
         if gains_key not in stored:
             raise KeyError(f"no {gains_key!r} entry in data/pid_gains.json")
         params = PlaneCascadedPIDParams(

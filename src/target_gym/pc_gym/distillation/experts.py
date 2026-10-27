@@ -59,9 +59,9 @@ def make_distillation_pid_controller():
     """The scored PID as a pure :class:`~target_gym.experts.pid.Controller`;
     ``.host()`` is what ``make_pid()`` returns. LV pairing: yD on reflux, xB on boilup (negative gain).
     """
-    from target_gym.experts.pid import _load_gains, mimo_pid, siso_pid
+    from target_gym.experts.pid import load_gains, mimo_pid, siso_pid
 
-    _p = _load_gains().get("distillation", {})
+    _p = load_gains().get("distillation", {})
     _p1, _p2 = _p.get("pid1", {}), _p.get("pid2", {})
     return mimo_pid(
         siso_pid(

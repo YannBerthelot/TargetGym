@@ -276,8 +276,8 @@ def compute_next_state(
     )
 
     # OU feed-composition disturbance, drawn from a key folded with
-    # ``state.time`` so a caller passing a constant key -- which every rollout
-    # helper here does -- still gets a genuine zero-mean process.
+    # ``state.time`` so a caller passing a constant key still gets a genuine
+    # zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     sigma = p.zF_noise_std * jnp.sqrt(2.0 * FEED_OU_THETA * p.delta_t)
     zF = jnp.clip(

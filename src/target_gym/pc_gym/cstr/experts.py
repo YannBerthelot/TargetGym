@@ -95,12 +95,12 @@ def make_cstr_pid_controller():
     """The scored PID as a pure :class:`~target_gym.experts.pid.Controller`;
     ``.host()`` is what ``make_pid()`` returns. Gains from
     src/target_gym/data/pid_gains.json."""
-    from target_gym.experts.pid import _g, siso_pid
+    from target_gym.experts.pid import gain, siso_pid
 
     return siso_pid(
-        Kp=_g("cstr", "Kp", -103.6),
-        Ki=_g("cstr", "Ki", -1.86),
-        Kd=_g("cstr", "Kd", -26.87),
+        Kp=gain("cstr", "Kp", -103.6),
+        Ki=gain("cstr", "Ki", -1.86),
+        Kd=gain("cstr", "Kd", -26.87),
         dt=0.25,
         state_index=0,
         setpoint_index=2,

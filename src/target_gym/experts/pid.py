@@ -56,11 +56,6 @@ def gain(env: str, key: str, default: float) -> float:
     return float(load_gains().get(env, {}).get(key, default))
 
 
-# The private names the task packages imported; they go once every package
-# reads the public ones.
-_load_gains, _g = load_gains, gain
-
-
 # ---------------------------------------------------------------------------
 # One controller, two runtimes
 # ---------------------------------------------------------------------------

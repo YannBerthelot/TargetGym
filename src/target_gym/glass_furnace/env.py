@@ -735,9 +735,9 @@ def compute_next_state(
     new_pipeline = jnp.concatenate([state.fuel_pipeline[1:], jnp.array([m_fuel_cmd])])
 
     # AR(1) pull-rate disturbance. The innovation is drawn from a key folded
-    # with ``state.time`` so a caller passing a constant key (as every rollout
-    # helper here does) still gets a genuine zero-mean process rather than one
-    # repeated innovation ramping the disturbance to ~100x its intended scale.
+    # with ``state.time`` so a caller passing a constant key still gets a
+    # genuine zero-mean process rather than one repeated innovation ramping the
+    # disturbance to ~100x its intended scale.
     innovation = (
         jax.random.normal(jax.random.fold_in(key, state.time))
         * params.m_pull_noise_std
