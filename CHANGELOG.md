@@ -14,6 +14,20 @@ than by commit.
 
 ### Added
 
+- **A capability profile, `target_gym.suite`.** Every task is tagged with the
+  difficulties its physics poses (instability, delay, coupling, a hidden
+  state and nine more), and `run_suite(make_policy)` averages a policy's
+  scores per capability into two radars, hold and reach, with the expert as
+  the 0.5 ring and the ceiling or the best known as the edge.
+  `docs/capability-profile.md` says how to read them and why each task has
+  its tags.
+- **Scores for the moves.** `transient_ratio` now counts the approach from the
+  reset as a move, so `first_order` and `cstr`, which have no other, are no
+  longer NaN, and it is paired per seed with an interval and a win rate.
+  `settling_ratio` compares the steps until the tracking cost settles within
+  the plant's band (`scoring.settle_band`), and `score_policy` adds the
+  oracle's recorded ratios as the best known. `eval.evaluate` records
+  `move_cost` and `settling_time`.
 - **`target_gym.scoring`, which replaces NEA.** A policy is scored against the
   expert on three numbers: `b / x`, how many times cheaper it is over the
   episode, with the share of seeds it wins; `S = log(b / x) / log(b / c)`, where
