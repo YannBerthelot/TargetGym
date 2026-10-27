@@ -8,22 +8,26 @@ pip install target-gym
 uv add target-gym
 ```
 
-Python 3.11 through 3.14. For development, see [CONTRIBUTING](https://github.com/YannBerthelot/TargetGym/blob/main/CONTRIBUTING.md).
+Python 3.11 through 3.13. The full-state MPC oracles on nine tasks plan with
+CasADi, which is optional: `pip install 'target-gym[mpc]'`. Videos and the
+aircraft dashboards need `pip install 'target-gym[render]'`, and
+`target-gym[all]` brings both. For development, see [CONTRIBUTING](https://github.com/YannBerthelot/TargetGym/blob/main/CONTRIBUTING.md).
 
 ## An episode, directly
 
 Environments follow the [gymnax](https://github.com/RobertTLange/gymnax)
 interface: pure functions taking a PRNG key, a state and parameters, and
 returning the next state. Nothing is hidden in instance attributes, so the
-whole thing composes with `jit`, `vmap` and `scan`.
+whole thing composes with `jit`, `vmap` and `scan`. `tg.make` returns the
+environment and its scored configuration; keyword arguments change single
+fields of it.
 
 ```python
 import jax
 import jax.numpy as jnp
-from target_gym import CSTR, CSTRParams
+import target_gym as tg
 
-env = CSTR()
-params = CSTRParams(max_steps_in_episode=100)
+env, params = tg.make("cstr", max_steps_in_episode=100)
 
 key = jax.random.PRNGKey(0)
 obs, state = env.reset_env(key, params)
@@ -52,9 +56,9 @@ The reason for the functional interface: rollouts vectorise.
 ```python
 import jax
 import jax.numpy as jnp
-from target_gym import CSTR, CSTRParams
+import target_gym as tg
 
-env, params = CSTR(), CSTRParams(max_steps_in_episode=100)
+env, params = tg.make("cstr", max_steps_in_episode=100)
 
 def episode_return(key):
     _, state = env.reset_env(key, params)
@@ -74,38 +78,47 @@ print(returns.mean())
 
 ## The Gymnasium interface
 
-For libraries that expect the classic API, every environment has a wrapper:
+For libraries that expect the classic API, any task comes wrapped, on its
+scored configuration:
 
 ```python
-from target_gym import GymnasiumPlane
+import target_gym as tg
 
-env = GymnasiumPlane()
+env = tg.make_gymnasium("plane")
 obs, info = env.reset(seed=0)
 obs, reward, terminated, truncated, info = env.step((0.8, 0.0))
 ```
 
-`gym_wrapper_factory` builds the same wrapper for any of the JAX environments.
-Note that the wrapper is **stateful** and returns NumPy -- unlike `step_env`,
-it must not be wrapped in `jax.jit`.
+The wrapper is **stateful** and returns NumPy, so unlike `step_env` it cannot
+be wrapped in `jax.jit`.
 
-## Working from the registry
+## Experts and oracles
 
-The registry is how the library refers to environments generically -- it is
-what the test suite, the baselines and the figure generation are all driven
-by, and the most convenient way to write code that works across environments.
+Every task ships an expert, a copy of the controller practitioners deploy,
+which reads the observation only. Pick its form where you use it:
 
 ```python
-from target_gym.registry import REGISTRY
+import jax
+import numpy as np
+import target_gym as tg
 
-spec = REGISTRY["boiler_drum"]
-env, params = spec.make_env(), spec.params_cls()
-pid = spec.make_pid()          # the shipped baseline, or None
-pid.reset()
+env, params = tg.make("boiler_drum")
+obs, state = env.reset(jax.random.PRNGKey(0), params)
+
+pid = tg.make_expert("boiler_drum").host()      # keeps its own memory
+action = pid(np.asarray(obs))                   # pid.reset() between episodes
+
+policy = tg.make_expert("boiler_drum").batched()   # you carry its memory
+memory = policy.init_state(1)
+actions, memory = policy(memory, obs[None])
 ```
 
-See the [environment reference](environments.md) for every registry name, and
-[Using the PIDs](using-the-pids.md) for running, evaluating against and
-training on the shipped PIDs.
+`tg.make_oracle(name)` returns the full-state MPC, which reads the true state
+and so shows what a perfect model could do. `tg.list_envs()` gives every name;
+the [environment reference](environments.md) describes each task, and
+[Using the PIDs](using-the-pids.md) covers evaluating against and training on
+the experts. For code that needs more than this, `target_gym.registry.REGISTRY`
+holds each task's `EnvSpec`.
 
 ## Rendering
 
@@ -118,10 +131,9 @@ Full guide, including the two rendering toolkits, headless setup and how to
 regenerate the shipped media: **[Rendering](rendering.md)**.
 
 ```python
-from target_gym import Plane, PlaneParams
+import target_gym as tg
 
-env = Plane()
-params = PlaneParams(max_steps_in_episode=1_000)
+env, params = tg.make("plane", max_steps_in_episode=1_000)
 env.save_video(
     lambda obs: (0.8, 0.0), seed=42,
     folder="videos", episode_index=0, params=params, format="gif",
@@ -136,10 +148,10 @@ action, in the JaxMARL style; see [Multi-agent formation](multi-agent.md).
 
 ```python
 import jax
-from target_gym import FormationMARL, registry
+import target_gym as tg
 
-env = FormationMARL()                        # a lead and two wingmen
-params = registry.get("formation").make_test_params()
+env = tg.FormationMARL()                     # a lead and two wingmen
+_, params = tg.make("formation")
 key = jax.random.PRNGKey(0)
 
 obs, state = env.reset(key, params)          # obs = {"lead": ..., "wingman_0": ..., ...}
@@ -152,7 +164,7 @@ obs, state, rewards, dones, info = env.step(key, state, actions, params)
 
 Every plane-based env (`Plane`, `Plane3D`, `PlanePatrol`, `Formation`)
 inherits a wind model applied to the air-relative aerodynamics. It is an
-**unobservable** disturbance by default — pass `observe_wind=True` for a
+**unobservable** disturbance by default; pass `observe_wind=True` for a
 fully-observable baseline. Formations feel a single shared gust field.
 
 ```python

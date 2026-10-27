@@ -3,9 +3,21 @@
 Kept out of ``base.py`` and the environment packages on purpose: those files
 are hashed into every provenance fingerprint, and how a controller is looked
 up is not part of what an environment is.
+
+``make_pid`` and ``expert_policy`` are deprecated in favour of
+``target_gym.make_expert(name)``, which makes the caller pick the expert's
+form, and ``make_mpc`` in favour of ``target_gym.make_oracle(name)``.
 """
 
 import warnings
+
+
+def _deprecated(old: str, new: str) -> None:
+    warnings.warn(
+        f"env.{old} is deprecated; use target_gym.{new}",
+        DeprecationWarning,
+        stacklevel=3,
+    )
 
 
 class RegistryExperts:
@@ -19,7 +31,8 @@ class RegistryExperts:
     registry_name: str
 
     def make_pid(self):
-        """Return the shipped PID baseline, ready to call on observations."""
+        """Deprecated: ``target_gym.make_expert(name).host()``."""
+        _deprecated("make_pid()", "make_expert(name).host()")
         from target_gym.registry import REGISTRY
 
         spec = REGISTRY[self.registry_name]
@@ -29,12 +42,8 @@ class RegistryExperts:
 
     @property
     def expert_policy(self):
-        """The scored PID in batched JAX form, for ``jit``/``vmap``/GPU: the
-        pure controller batched, so the caller carries its memory.
-        ``policy.init_state(num_envs)``, then
-        ``actions, state = policy(state, obs)``; never ``policy(obs)``, which
-        has no memory. Built from the same step
-        function as ``make_pid()``, so the two act alike."""
+        """Deprecated: ``target_gym.make_expert(name).batched()``."""
+        _deprecated("expert_policy", "make_expert(name).batched()")
         from target_gym.registry import REGISTRY
 
         return REGISTRY[self.registry_name].make_pid_controller().batched()
@@ -45,11 +54,7 @@ class RegistryExperts:
 
         Returns the shipped MPC oracle for ``params`` (default params if None),
         planning on ``params`` as given."""
-        warnings.warn(
-            "env.make_mpc is deprecated; use target_gym.make_oracle(name)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        _deprecated("make_mpc()", "make_oracle(name)")
         from target_gym.registry import REGISTRY
 
         spec = REGISTRY[self.registry_name]

@@ -4,10 +4,10 @@ A :class:`Controller` is gains, an initial memory and one pure step function,
 so it can sit inside ``jit``, ``vmap`` and ``lax.scan``. It runs in two forms,
 and docs/using-the-pids.md says which to pick:
 
-- :class:`HostController` (``env.make_pid()``) keeps its own memory; call it
-  once per step and ``reset()`` it at each episode start.
-- The pure form (``spec.make_pid_controller()``) has you carry the memory;
-  :class:`FunctionalExpertPolicy` (``env.expert_policy``) is it batched.
+- :class:`HostController` (``target_gym.make_expert(name).host()``) keeps its
+  own memory; call it once per step and ``reset()`` it at each episode start.
+- The pure form (``target_gym.make_expert(name)``) has you carry the memory;
+  :class:`FunctionalExpertPolicy` (``.batched()``) is it batched.
 
 Each environment's PID is built in its package's ``experts.py`` from the loops
 here (``siso_pid``, ``mimo_pid``, the aircraft and patrol laws). The gains are
@@ -90,11 +90,11 @@ class Controller:
         return self.step(self.params, state, obs, jnp)
 
     def host(self) -> "HostController":
-        """The stateful NumPy form, as ``make_pid()`` returns it."""
+        """The stateful NumPy form, which keeps its own memory."""
         return HostController(self)
 
     def batched(self) -> "FunctionalExpertPolicy":
-        """The batched JAX form, as ``env.expert_policy`` returns it."""
+        """The batched JAX form, whose memory the caller carries."""
         return FunctionalExpertPolicy(self.params, self.init_state, self.step)
 
 

@@ -68,9 +68,25 @@ dependencies = [
     "pandas>=2.0",
     "matplotlib>=3.8.1",
     # Used directly by the gallery-clip tooling and the patrol runner. It
-    # arrives transitively through matplotlib and moviepy anyway, but an
+    # arrives transitively through matplotlib anyway, but an
     # import in our own code is our own dependency to declare.
     "pillow>=10.0",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+# The nine CasADi oracles (full-state MPCs) and baseline recording. Their
+# imports are guarded, and ``target_gym.make_oracle`` names this extra when
+# they are missing. do-mpc 5.1.1 breaks against casadi 3.8 with
+# "module 'casadi.tools' has no attribute 'SX'", hence the upper bound.
+mpc = [
+    "casadi>=3.7.2,<3.8",
+    "do-mpc>=5.1.1,<6",
+]
+# Videos (moviepy) and the aircraft dashboards (pygame). Both are imported
+# only when a frame is drawn or a video written, and ``render_kit.render_extra``
+# names this extra when they are missing.
+render = [
     "moviepy>=2.2.1",
     # pygame's last release (2.6.1, 2024) ships wheels only through CPython
     # 3.13; on 3.14 it builds from source and its font module comes up broken,
@@ -80,12 +96,8 @@ dependencies = [
     # already work keep the implementation they were tested against.
     "pygame>=2.6.1; python_version < '3.14'",
     "pygame-ce>=2.5.8; python_version >= '3.14'",
-    "tqdm>=4.66",
-    # MPC baselines. do-mpc 5.1.1 breaks against casadi 3.8 with
-    # "module 'casadi.tools' has no attribute 'SX'", hence the upper bound.
-    "casadi>=3.7.2,<3.8",
-    "do-mpc>=5.1.1,<6",
 ]
+all = ["target-gym[mpc,render]"]
 
 [project.urls]
 # PyPI renders these as a labelled sidebar and recognises these key names, so
@@ -126,6 +138,9 @@ agent = [
 dev = [
     { include-group = "test" },
     { include-group = "lint" },
+    # The oracles' tests, baseline recording and the rendering tests need the
+    # optional extras.
+    "target-gym[all]",
     "pre-commit>=3.5.0",
     # scripts/record_baselines.py sizes its worker pool against available
     # memory: one planner per core exhausted RAM and sent the machine

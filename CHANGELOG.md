@@ -117,7 +117,6 @@ than by commit.
 - **patrol declares the code its physics imports** (the 3D aircraft and the
   shared heading PID its lead flies) in `fingerprint_sources`, so an edit to
   them now moves patrol's version stamp and baseline fingerprint.
-
 - **The aircraft experts are what fixed-wing autopilots fly.** All seven
   aircraft tasks now use TECS for height and speed (`plane/experts_tecs.py`)
   over a PI pitch loop. The 3D tasks add a bank loop damped on roll rate,

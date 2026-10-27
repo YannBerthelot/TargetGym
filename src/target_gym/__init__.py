@@ -1,6 +1,13 @@
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _version
 
+from target_gym.api import (
+    list_envs,
+    make,
+    make_expert,
+    make_gymnasium,
+    make_oracle,
+)
 from target_gym.boiler_drum.env import BoilerDrumParams
 from target_gym.boiler_drum.env_jax import BoilerDrum
 from target_gym.cement_kiln.env import CementKilnParams
@@ -40,7 +47,7 @@ from target_gym.plane3d.env_jax import (
 )
 from target_gym.reactor.env import ReactorParams
 from target_gym.reactor.env_jax import Reactor
-from target_gym.wrapper import gym_wrapper_factory
+from target_gym.scoring import score_policy
 
 try:
     __version__ = _version("target-gym")
@@ -54,11 +61,37 @@ except _PackageNotFoundError:
 Plane = Airplane2D
 Plane3D = Plane3DHeading
 
-GymnasiumPlane = gym_wrapper_factory(Plane)
+
+def __getattr__(name):
+    # Deprecated names, kept working for a release. Served here rather than
+    # bound, so using them warns and the import of the package does not.
+    import warnings
+    from importlib import import_module
+
+    if name not in ("gym_wrapper_factory", "GymnasiumPlane"):
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    # import_module, not ``from target_gym import wrapper``: that form looks
+    # the name up on this module first, which lands back here.
+    wrapper = import_module("target_gym.wrapper")
+    if name == "gym_wrapper_factory":
+        return wrapper.gym_wrapper_factory
+    warnings.warn(
+        "GymnasiumPlane is deprecated; use target_gym.make_gymnasium('plane')",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return wrapper._class_wrapper(Plane)
 
 
 __all__ = (
-    "gym_wrapper_factory",
+    # The front door: every task by its registry name
+    "make",
+    "make_expert",
+    "make_oracle",
+    "make_gymnasium",
+    "list_envs",
+    "score_policy",
+    # Environment and parameter classes
     "Plane",
     "Airplane2D",  # the class's own name; Plane is the friendly alias
     "PlaneEnergy",
@@ -78,7 +111,6 @@ __all__ = (
     "Formation",
     "FormationMARL",
     "FormationParams",
-    "GymnasiumPlane",
     # PC-Gym environments
     "CSTR",
     "CSTRParams",

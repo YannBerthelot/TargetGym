@@ -103,14 +103,14 @@ the episode, and `dones["__all__"]` is true in the multi-agent view.
 Two baselines ship, recorded on the [Baseline results](baseline-results.md)
 page.
 
-- **PID team** (`env.make_pid()`, or `env.expert_policy` for batched JAX): the
+- **PID team** (`tg.make_expert("formation").host()`, or `.batched()` for JAX): the
   patrol's controllers, seat for seat. The lead seat flies the patrol's lead
   autopilot, and each wingman seat flies the patrol's pursuit PID. It never
   trips, but the autopilot leaves the lead about 140 m off its altitude, which
   dominates its cost. That is the easiest gain for a learner: the 3D heading
   task's own PID holds the lead to about 38 m, but the patrol PID's wingmen
   collide behind it.
-- **Oracle** (`env.make_mpc()`): each seat flies a law, the patrol's lead
+- **Oracle** (`make_oracle(name)`): each seat flies a law, the patrol's lead
   autopilot or the patrol's twin-autopilot law, and one planner adds a
   correction to every seat over a 30-step horizon, on the true team cost. It
   holds the lead to under 1 m and each slot to about 0.3 m. Like every oracle
