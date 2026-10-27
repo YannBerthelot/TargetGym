@@ -22,14 +22,18 @@ HELD_OUT = (200, 201, 202)
 
 def _on_target(name):
     """A first observation moved onto the task's target, along its track and
-    at the bank the path needs (level, but for the circle's steady turn), so
-    nothing saturates."""
+    at the bank the path needs (level, but for the circle's steady turn and
+    the figure-8's lobe tip), so nothing saturates."""
     spec = registry.get(name)
     obs, _ = spec.make_env().reset_env(jax.random.PRNGKey(0), spec.make_test_params())
     o = np.array(obs)
     track = np.arctan2(o[1], o[0])
     if name == "plane3d_figure8":
+        # It starts at a lobe tip, where the lemniscate's curvature is 3 / a,
+        # turning toward increasing heading: as much of it as the 45 deg
+        # bank limit allows.
         o[12:15], o[15] = 0.0, track
+        o[6] = min(np.arctan((o[0] ** 2 + o[1] ** 2) * 3.0 / (9.81 * o[11])), np.pi / 4)
         return o
     o[10] = o[2]
     if name == "plane3d_heading":
@@ -67,6 +71,60 @@ def test_l1_flies_the_curvature_on_the_path():
     assert X.l1_lateral_accel(p, 0.0, 0.1, 0.0, obs, np) > 0.0
 
 
+def _on_the_figure8(tau, direction, a=10_000.0, z_mean=5_000.0, speed=160.0):
+    """An observation on the scored figure-8, at its parameter ``tau``, flying
+    along it (``direction`` +1 with tau, -1 against), at the bank its
+    curvature needs. The pattern is the env's (PHYSICS.md): Bernoulli's
+    lemniscate of half-width ``a``, rotated, its altitude rising and falling
+    ``figure8_altitude_amplitude`` with sin(tau).
+
+    The curvature is the classical result for the lemniscate, 3 r / a^2 at a
+    distance r from its centre, signed by the way the path turns, which is
+    read off the curve's own derivatives."""
+    dz = registry.get("plane3d_figure8").make_test_params().figure8_altitude_amplitude
+    orientation = 0.2
+
+    def xy(t):
+        x, y = a * np.cos(t), a * np.sin(t) * np.cos(t)
+        x, y = x / (1.0 + np.sin(t) ** 2), y / (1.0 + np.sin(t) ** 2)
+        c, s = np.cos(orientation), np.sin(orientation)
+        return np.array([c * x - s * y, s * x + c * y])
+
+    h = 1e-4
+    d1 = direction * (xy(tau + h) - xy(tau - h)) / (2 * h)
+    d2 = (xy(tau + h) - 2 * xy(tau) + xy(tau - h)) / h**2
+    turn = np.sign(d1[0] * d2[1] - d1[1] * d2[0])
+    curvature = turn * 3.0 * np.hypot(*xy(tau)) / a**2
+    track = np.arctan2(d1[1], d1[0])
+
+    o = np.zeros(19)
+    o[0:2] = speed * np.cos(track), speed * np.sin(track)
+    o[2] = z_mean + dz * np.sin(tau)
+    o[6] = np.arctan(speed**2 * curvature / 9.81)
+    o[9], o[10], o[11], o[15] = track, z_mean, a, track
+    return o
+
+
+@pytest.mark.parametrize("direction", (1, -1))
+@pytest.mark.parametrize("tau", (0.0, 0.8, 2.6, np.pi, 4.4))
+def test_the_figure8_expert_banks_for_the_curvature_on_the_path(tau, direction):
+    """On the figure-8 and along it, at the bank its curvature needs, the
+    expert holds that bank: it reads the curvature, which the observation
+    does not carry, from where it is on the pattern. One observation a little
+    earlier along the path comes first, as any second of flight would. The
+    look-ahead, which banks ahead of the curvature for the roll loop's lag,
+    is turned off so the bank is the curvature's own."""
+    params = X.make_plane3d_figure8_pid_controller().params.replace(curvature_lead=0.0)
+    state = X.Plane3DGuidanceState()
+    _, state = X.plane3d_figure8_step(
+        params, state, _on_the_figure8(tau - 0.02 * direction, direction), np
+    )
+    action, _ = X.plane3d_figure8_step(
+        params, state, _on_the_figure8(tau, direction), np
+    )
+    assert action[2] == pytest.approx(0.0, abs=1e-4)
+
+
 # The contract for the accuracy tests, set before measuring:
 # - the proposal's sanity targets (docs/proposals/scoring-and-experts.md):
 #   small autopilots in flight tests hold altitude within 1-2 m and, with L1
@@ -85,16 +143,6 @@ def _finding(reason):
     and kept as an expected failure on their decision. Strict, so a fix
     shows up as XPASS and the mark has to come off."""
     return pytest.mark.xfail(strict=True, reason=f"finding: {reason}")
-
-
-_FIGURE8_HEIGHT = _finding(
-    "the figure-8 expert loses more than 2 m of height on average (2.1, 2.4 and "
-    "5.2 m on seeds 200-202), most where stall prevention limits its bank"
-)
-_FIGURE8_PATH = _finding(
-    "the figure-8 expert holds its path 13-20 m off even where the lobes are "
-    "flyable: it estimates the curvature it does not observe, and lags it"
-)
 
 
 def _fly(name, seed):
@@ -167,9 +215,7 @@ def test_the_racetrack_expert_holds_altitude_and_path(seed):
 
 
 @pytest.mark.large
-@pytest.mark.parametrize(
-    "seed", [pytest.param(s, marks=_FIGURE8_HEIGHT) for s in HELD_OUT]
-)
+@pytest.mark.parametrize("seed", HELD_OUT)
 def test_the_figure8_expert_keeps_its_height_on_every_pattern(seed):
     """Stall prevention gives up path, not height, where the lobes are too
     tight for the airliner."""
@@ -179,17 +225,7 @@ def test_the_figure8_expert_keeps_its_height_on_every_pattern(seed):
 
 
 @pytest.mark.large
-@pytest.mark.parametrize(
-    "seed",
-    [
-        (
-            pytest.param(s, marks=_FIGURE8_PATH)
-            if s in (200, 201, 203, 206, 207, 208)
-            else s
-        )
-        for s in range(200, 210)
-    ],
-)
+@pytest.mark.parametrize("seed", range(200, 210))
 def test_the_figure8_expert_holds_its_path_where_the_lobes_are_flyable(seed):
     first, seen, _, params = _fly("plane3d_figure8", seed)
     if not _lobes_flyable(params, first):

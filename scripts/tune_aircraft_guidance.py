@@ -12,14 +12,18 @@ reproduces how their numbers were set:
 2. A bounded search on training seeds 100-109, inner loops first: the pitch
    loop and TECS on ``plane3d_heading``; the roll loop and the L1 period on
    ``plane3d_circle`` and ``plane3d_racetrack``, with L1's damping left at
-   ArduPilot's 0.75 as its guide tunes; the figure-8's curvature smoothing.
-3. The held-out check on seeds 200-209, for all seven aircraft tasks.
+   ArduPilot's 0.75 as its guide tunes.
+3. The figure-8's own longitudinal loops and bank margin, against its
+   flight-test spec (height within 2 m, path within 3 m where the lobes are
+   flyable): the worst episode over the training patterns, each in a few
+   turbulence draws, and the worst when any one gain is 25% off.
+4. The held-out check on seeds 200-209, for all seven aircraft tasks.
 
 It prints what it finds; the shipped values are set by hand in the two
 modules, with the reasons beside them. The scored seeds 0-9 are never flown.
 
-    uv run python scripts/tune_aircraft_guidance.py            # all, ~15 min
-    uv run python scripts/tune_aircraft_guidance.py --check    # step 3 only
+    uv run python scripts/tune_aircraft_guidance.py            # all, ~20 min
+    uv run python scripts/tune_aircraft_guidance.py --check    # step 4 only
 """
 
 from __future__ import annotations
@@ -47,6 +51,12 @@ STEPS = {
     "plane3d_circle": P3.plane3d_circle_step,
     "plane3d_racetrack": P3.plane3d_racetrack_step,
     "plane3d_figure8": P3.plane3d_figure8_step,
+}
+SHIPPED = {
+    "plane3d_heading": P3.make_plane3d_heading_pid_controller().params,
+    "plane3d_circle": P3.make_plane3d_circle_pid_controller().params,
+    "plane3d_racetrack": P3.make_plane3d_racetrack_pid_controller().params,
+    "plane3d_figure8": P3.make_plane3d_figure8_pid_controller().params,
 }
 _ROLLOUTS = {}
 
@@ -125,17 +135,21 @@ def flight_test():
         )
 
 
+def _with(params, fields):
+    for field, value in fields.items():
+        if field.startswith("tecs."):
+            params = params.replace(tecs=params.tecs.replace(**{field[5:]: value}))
+        else:
+            params = params.replace(**{field: value})
+    return params
+
+
 def search(label, names, base, grid):
     """Every combination of ``grid`` on ``base``, ranked by the geometric mean
     of the tasks' training holds."""
     rows = []
     for values in itertools.product(*grid.values()):
-        params = base
-        for field, value in zip(grid, values):
-            if field.startswith("tecs."):
-                params = params.replace(tecs=params.tecs.replace(**{field[5:]: value}))
-            else:
-                params = params.replace(**{field: value})
+        params = _with(base, dict(zip(grid, values)))
         holds = [hold(n, STEPS[n], params, TRAIN) for n in names]
         rows.append((float(np.exp(np.mean(np.log(holds)))), values))
     rows.sort()
@@ -144,11 +158,78 @@ def search(label, names, base, grid):
         print(f"  {score:9.3f}  {values}")
 
 
+_FIG8 = {}
+
+
+def figure8_spec(params, draws=3):
+    """The figure-8's worst episode on the training patterns, each flown in
+    ``draws`` turbulence draws (the step keys split as the tests split them):
+    ``(height, path where the lobes are flyable, trips)``, mean |error| after
+    the scored burn-in, as tests/plane3d/test_plane3d_guidance.py measures."""
+    if "fly" not in _FIG8:
+        spec = REGISTRY["plane3d_figure8"]
+        env, p = spec.make_env(), spec.make_test_params()
+
+        def one(ctrl_params, seed, draw):
+            k = jax.random.PRNGKey(seed)
+            obs, st = env.reset_env(k, p)
+
+            def body(carry, _):
+                obs, st, cs, k = carry
+                a, cs = P3.plane3d_figure8_step(ctrl_params, cs, obs, jnp)
+                k, sub = jax.random.split(k)
+                obs, st, _, _, info = env.step_env(sub, st, a, p)
+                return (obs, st, cs, k), (obs, info["tripped"])
+
+            k_steps = jnp.where(draw > 0, jax.random.fold_in(k, draw), k)
+            init = (obs, st, P3.Plane3DGuidanceState(), k_steps)
+            seen, trips = lax.scan(body, init, None, int(p.max_steps_in_episode))[1]
+            return obs, seen, trips
+
+        _FIG8["fly"] = jax.jit(jax.vmap(one, in_axes=(None, 0, 0)))
+        _FIG8["burn"] = E.scored_burn_in("plane3d_figure8", p)
+        _FIG8["dz"] = p.figure8_altitude_amplitude
+    seeds, ds = np.meshgrid(np.array(TRAIN), np.arange(draws))
+    first, seen, trips = _FIG8["fly"](params, seeds.ravel(), ds.ravel())
+    first, seen = np.asarray(first), np.asarray(seen)[:, _FIG8["burn"] :]
+    # The lobe tips (radius a / 3) inside 45 deg of bank at the slowest
+    # speed stall prevention allows there, as the test's _lobes_flyable.
+    sigma = (1.0 - 2.2558e-5 * (first[:, 10] + _FIG8["dz"])) ** 4.2559
+    flyable = (104.0**2 / sigma) / (9.81 * np.cos(np.pi / 4)) <= first[:, 11] / 3.0
+    height = np.abs(seen[..., 14]).mean(1)
+    path = np.hypot(seen[..., 12], seen[..., 13]).mean(1)[flyable]
+    return height.max(), path.max(), int(np.asarray(trips).any(1).sum())
+
+
+def figure8_search(grid):
+    """Every combination of ``grid`` on the default parameters, ranked by the
+    worse of the worst height and path in units of their targets, then the
+    five best also with each gain in turn 25% off either way."""
+    rows = []
+    for values in itertools.product(*grid.values()):
+        fields = dict(zip(grid, values))
+        h, p, trips = figure8_spec(_with(P3.Plane3DGuidanceParams(), fields))
+        rows.append((max(h / 2.0, p / 3.0) + trips, h, p, fields))
+    rows.sort(key=lambda r: r[0])
+    print(f"figure-8: worst height and path on training seeds, {list(grid)}")
+    for _, h, p, fields in rows[:5]:
+        worst = [h, p]
+        for field in grid:
+            for factor in (0.75, 1.25):
+                off = dict(fields, **{field: fields[field] * factor})
+                hh, pp, trips = figure8_spec(_with(P3.Plane3DGuidanceParams(), off))
+                worst = [max(worst[0], hh + 100 * trips), max(worst[1], pp)]
+        print(
+            f"  height {h:5.2f} path {p:5.2f} | gains 25% off: "
+            f"{worst[0]:6.2f} {worst[1]:6.2f}  {tuple(fields.values())}"
+        )
+
+
 def check():
-    base3, base2 = P3.Plane3DGuidanceParams(), P2.PlaneTECSParams()
+    base2 = P2.PlaneTECSParams()
     print("held-out seeds 200-209, mean tracking cost over the hold window")
     for name in STEPS:
-        print(f"  {name:18s} {hold(name, STEPS[name], base3, HELD_OUT):9.3f}")
+        print(f"  {name:18s} {hold(name, STEPS[name], SHIPPED[name], HELD_OUT):9.3f}")
     for name in ("plane", "plane_sine", "plane_energy"):
         print(f"  {name:18s} {hold(name, P2.plane_tecs_step, base2, HELD_OUT):9.3f}")
 
@@ -184,11 +265,14 @@ def main() -> int:
             "period": (25.0, 30.0, 35.0),
         },
     )
-    search(
-        "figure-8 curvature smoothing",
-        ["plane3d_figure8"],
-        base,
-        {"k_curv": (0.3, 0.5, 0.7)},
+    figure8_search(
+        {
+            "Kp_theta": (8.0, 10.0),
+            "Kd_theta": (0.3, 4.0, 6.0, 8.0),
+            "tecs.time_const": (1.25, 1.5, 2.0),
+            "tecs.ptch_damp": (1.0, 1.5, 2.0),
+            "turn_bank_margin": (0.75, 0.85),
+        }
     )
     check()
     return 0
