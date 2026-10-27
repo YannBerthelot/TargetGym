@@ -32,16 +32,16 @@ hold down to the ceiling; 0 means the expert is already there. The
 | environment | expert hold | ceiling | room (decades) | oracle hold | oracle score |
 | --- | --- | --- | --- | --- | --- |
 | **Aircraft** | | | | | |
-| [`plane`](environments/plane.md) | 6.04 | 1 | 0.78 | 0.422 | 1.00 |
-| [`plane_energy`](environments/plane_energy.md) | 1,778 | 0.694 | 3.41 | 55.1 | 0.44 |
-| [`plane_sine`](environments/plane_sine.md) | 1,522 | 0.63 | 3.38 | 0.29 | 1.00 |
-| [`plane3d_heading`](environments/plane3d_heading.md) | 19,023 | 2 | 3.98 | 0.726 | 1.00 |
-| [`plane3d_circle`](environments/plane3d_circle.md) | 832 | 2 | 2.62 | 1.93 | 1.00 |
-| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 1.35e6 | 2 | 5.83 | 1.07 | 1.00 |
-| [`plane3d_figure8`](environments/plane3d_figure8.md) | 5.92e5 | 1 | 5.77 | 0.77 | 1.00 |
+| [`plane`](environments/plane.md) | 3.95 | 1 | 0.60 | 0.434 | 1.00 |
+| [`plane_energy`](environments/plane_energy.md) | 7,944 | 0.694 | 4.06 | 55 | 0.53 |
+| [`plane_sine`](environments/plane_sine.md) | 3.49 | 0.63 | 0.74 | 0.291 | 1.00 |
+| [`plane3d_heading`](environments/plane3d_heading.md) | 4.56 | 2 | 0.36 | 0.735 | 1.00 |
+| [`plane3d_circle`](environments/plane3d_circle.md) | 4.4 | 2 | 0.34 | 1.94 | 1.00 |
+| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 8.38 | 2 | 0.62 | 1.06 | 1.00 |
+| [`plane3d_figure8`](environments/plane3d_figure8.md) | 8,298 | 1 | 3.92 | 0.772 | 1.00 |
 | [`patrol`](environments/patrol.md) | 265 | 2 | 2.12 | 0.0371 | 1.00 |
 | [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 199 | 2 | 2.00 | 0.0371 | 1.00 |
-| [`formation`](environments/formation.md) | 23,239 | 6 | 3.59 | 1.19 | 1.00 |
+| [`formation`](environments/formation.md) | 23,239 | 6 | 3.59 | 1.17 | 1.00 |
 | **Process Control** | | | | | |
 | [`cstr`](environments/cstr.md) | 0.538 | 1 | 0.00 | 4.5e-9 | — |
 | [`first_order`](environments/first_order.md) | 2.91e-7 | 1 | 0.00 | 0 | — |
@@ -70,16 +70,16 @@ tenth. The **transient** is the summed cost around each target change.
 | environment | expert gain | oracle gain | oracle vs expert | expert transient | oracle transient |
 | --- | --- | --- | --- | --- | --- |
 | **Aircraft** | | | | | |
-| [`plane`](environments/plane.md) | 6.21 | 0.516 | 12 | 2.73e6 | 1.19e6 |
-| [`plane_energy`](environments/plane_energy.md) | 11,210 | 511 | 21.9 | 1.84e6 | 1.81e5 |
-| [`plane_sine`](environments/plane_sine.md) | 1,522 | 0.546 | 2,788 | 2.14e6 | 7.61e5 |
-| [`plane3d_heading`](environments/plane3d_heading.md) | 19,023 | 0.726 | 26,193 | 8.86e6 | 2.01e6 |
-| [`plane3d_circle`](environments/plane3d_circle.md) | 832 | 1.93 | 431 | 7.04e6 | 1.23e6 |
-| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 1.35e6 | 1.07 | 1.26e6 | 6.89e6 | 1.21e6 |
-| [`plane3d_figure8`](environments/plane3d_figure8.md) | 5.92e5 | 0.77 | 7.69e5 | 3.04e8 | 5,320 |
+| [`plane`](environments/plane.md) | 3.95 | 0.529 | 7.47 | 4.84e6 | 1.19e6 |
+| [`plane_energy`](environments/plane_energy.md) | 18,910 | 511 | 37 | 3.17e6 | 1.81e5 |
+| [`plane_sine`](environments/plane_sine.md) | 3.49 | 0.543 | 6.42 | 4.87e6 | 7.61e5 |
+| [`plane3d_heading`](environments/plane3d_heading.md) | 4.56 | 0.735 | 6.21 | 6.06e6 | 2.01e6 |
+| [`plane3d_circle`](environments/plane3d_circle.md) | 4.4 | 1.94 | 2.27 | 4.84e6 | 1.23e6 |
+| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 8.38 | 1.06 | 7.88 | 4.84e6 | 1.21e6 |
+| [`plane3d_figure8`](environments/plane3d_figure8.md) | 8,298 | 0.771 | 10,756 | 4.9e6 | 5,323 |
 | [`patrol`](environments/patrol.md) | 265 | 0.0371 | 7,130 | 45,322 | 6,041 |
 | [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 199 | 0.0371 | 5,366 | 38,481 | 6,041 |
-| [`formation`](environments/formation.md) | 23,239 | 1.19 | 19,592 | 5.36e6 | 6,276 |
+| [`formation`](environments/formation.md) | 23,239 | 1.17 | 19,784 | 5.36e6 | 6,273 |
 | **Process Control** | | | | | |
 | [`cstr`](environments/cstr.md) | 41.2 | 9.42e-9 | 4.38e9 | 6.6e5 | 6.1e5 |
 | [`first_order`](environments/first_order.md) | 3.57e-6 | 0 | — | 1.19e5 | 1.17e5 |
@@ -108,13 +108,13 @@ beat the expert.
 | environment | steps | expert cost/step | oracle cost/step | oracle wins |
 | --- | --- | --- | --- | --- |
 | **Aircraft** | | | | |
-| [`plane`](environments/plane.md) | 280 | 10,401 | 3,273 | 10/10 |
-| [`plane_energy`](environments/plane_energy.md) | 1200 | 19,627 | 1,013 | 10/10 |
-| [`plane_sine`](environments/plane_sine.md) | 480 | 5,184 | 1,249 | 10/10 |
-| [`plane3d_heading`](environments/plane3d_heading.md) | 200 | 46,344 | 8,266 | 10/10 |
-| [`plane3d_circle`](environments/plane3d_circle.md) | 300 | 19,185 | 3,142 | 10/10 |
-| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 650 | 7.43e5 | 1,414 | 10/10 |
-| [`plane3d_figure8`](environments/plane3d_figure8.md) | 400 | 1.11e6 | 14.7 | 10/10 |
+| [`plane`](environments/plane.md) | 280 | 13,489 | 3,273 | 10/10 |
+| [`plane_energy`](environments/plane_energy.md) | 1200 | 19,892 | 1,009 | 10/10 |
+| [`plane_sine`](environments/plane_sine.md) | 480 | 9,493 | 1,249 | 10/10 |
+| [`plane3d_heading`](environments/plane3d_heading.md) | 200 | 24,895 | 8,267 | 10/10 |
+| [`plane3d_circle`](environments/plane3d_circle.md) | 300 | 12,582 | 3,142 | 9/10 |
+| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 650 | 5,818 | 1,414 | 10/10 |
+| [`plane3d_figure8`](environments/plane3d_figure8.md) | 400 | 18,260 | 14.7 | 10/10 |
 | [`patrol`](environments/patrol.md) | 200 | 299 | 14.2 | 10/10 |
 | [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 200 | 290 | 14.2 | 10/10 |
 | [`formation`](environments/formation.md) | 200 | 46,678 | 31.2 | 10/10 |
