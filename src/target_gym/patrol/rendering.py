@@ -21,10 +21,12 @@ text box and blue-sky-and-grass scene this used to draw.
 """
 
 import numpy as np
-import pygame
-from pygame import gfxdraw
 
 from target_gym import render_aircraft as ra
+from target_gym.render_kit import render_extra
+
+pygame = render_extra("pygame")
+gfxdraw = render_extra("pygame.gfxdraw")
 
 _LEAD = ra.BLUE
 _SLOT = ra.GOOD

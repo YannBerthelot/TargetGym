@@ -383,8 +383,8 @@ def compute_next_state(
 
     # Scheduled dispatch: the level for the block that is live at the *next*
     # step, plus regulation jitter. The jitter is drawn from a key folded with
-    # ``state.time`` so a caller passing a constant key -- which every rollout
-    # helper here does -- still gets a genuine zero-mean process.
+    # ``state.time`` so a caller passing a constant key still gets a genuine
+    # zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     level = state.dispatch_schedule[dispatch_block(state.time + 1, p)]
     target = jnp.clip(level + p.dispatch_noise_std * noise, -p.power_max, p.power_max)

@@ -8,14 +8,12 @@ TargetGym tool reads (the conformance suite, the baselines, the protocol).
 :mod:`.env` for the transition, slot geometry, reward and observations.
 """
 
-from typing import Callable
-
 import chex
 import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.base import canonical_reset, finish_step
 from target_gym.expert_access import RegistryExperts
 from target_gym.formation.env import (
     LEAD_OBS_BASE,
@@ -32,11 +30,13 @@ from target_gym.formation.env import (
 )
 from target_gym.formation.rendering import _render
 from target_gym.patrol.env import N_LEAD_LEGS, make_cruise_state
-from target_gym.utils import save_video
+from target_gym.video import SavesVideo
 
 
 class Formation(
-    RegistryExperts, environment.Environment[FormationState, FormationParams]
+    RegistryExperts,
+    SavesVideo,
+    environment.Environment[FormationState, FormationParams],
 ):
     """A lead and ``num_wingmen`` wingmen (1 to 4; 2 is the scored task).
 
@@ -83,7 +83,9 @@ class Formation(
 
     @property
     def default_params(self) -> FormationParams:
-        return FormationParams()
+        # The scored configuration: 200 steps, the patrol's episode, three
+        # turn onsets of the route.
+        return FormationParams(max_steps_in_episode=200)
 
     # -- core --------------------------------------------------------------
     def get_obs(self, state: FormationState, params=None) -> jnp.ndarray:
@@ -110,22 +112,10 @@ class Formation(
         # A crash, a collision or a lost wingman trips the whole formation:
         # the step is charged the trip cost and the formation restarts, or is
         # lost (``terminated``) with ``params.continuing = False``.
-        new_state, tripped, scored, terminated = failure_kernel(
-            self, key, state, new_state, params
+        new_state, reward, terminated, info = finish_step(
+            self, key, state, new_state, params, metrics=metrics
         )
-        reward = self.compute_reward(scored, params)
-        return (
-            self.get_obs(new_state),
-            new_state,
-            reward,
-            terminated,
-            {
-                "metrics": metrics,
-                "last_state": new_state,
-                "tripped": tripped,
-                "trip_cost": charged_trip_cost(tripped, params),
-            },
-        )
+        return self.get_obs(new_state), new_state, reward, terminated, info
 
     def is_terminated(self, state: FormationState, params: FormationParams):
         """Natural termination only; the time limit is gymnax's ``is_truncated``."""
@@ -214,29 +204,6 @@ class Formation(
     # -- rendering / video -------------------------------------------------
     def render(self, screen, state: FormationState, params, frames, clock):
         return self.render_plane(screen, state, params, frames, clock)
-
-    def save_video(
-        self,
-        select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        seed: int,
-        params=None,
-        folder="videos",
-        episode_index=0,
-        FPS=60,
-        format="mp4",
-        save_trajectory: bool = False,
-    ):
-        return save_video(
-            self,
-            select_action,
-            folder,
-            episode_index,
-            FPS,
-            params,
-            seed=seed,
-            format=format,
-            save_trajectory=save_trajectory,
-        )
 
     # -- spaces ------------------------------------------------------------
     def action_space(self, params: FormationParams | None = None) -> spaces.Box:

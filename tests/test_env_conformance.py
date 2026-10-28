@@ -8,7 +8,7 @@ one environment while the others were fine. The glass furnace's pull-rate
 disturbance is the worked example: it read its randomness from the PRNG key
 handed to ``step_env``, but every rollout helper in this repository
 (``runners.rollout``, ``save_video``, the ``lax.scan`` bodies in the
-runners) passes *the same key at every step*. The "AR(1) noise" was therefore a
+runners) passed *the same key at every step*. The "AR(1) noise" was therefore a
 deterministic monotone ramp, and 334 passing tests said nothing about it.
 
 Anything asserted here is a claim about *all* environments, so a new
@@ -260,7 +260,7 @@ def _terminal_disturbances(spec, seeds, split_key, steps):
             if split_key:
                 rolling, sub = jax.random.split(rolling)
             else:
-                sub = key  # constant -- what every rollout helper here does
+                sub = key  # constant, as save_video passes it
             _, state, _, terminated, _ = step(sub, state, action, params)
             if bool(terminated):
                 break
@@ -271,10 +271,10 @@ def _terminal_disturbances(spec, seeds, split_key, steps):
 def test_disturbance_magnitude_is_independent_of_key_splitting(spec):
     """A disturbance must not depend on whether the *caller* splits the key.
 
-    Every rollout helper in this repository (``runners.rollout``,
-    ``save_video``, the ``lax.scan`` bodies in the runners, and gymnax's own
-    ``Environment.step`` when handed a constant key) drives ``step_env`` with
-    the same key at every step. An environment that draws its per-step noise
+    A caller may drive ``step_env`` with the same key at every step:
+    ``save_video`` does, the runners did before they moved onto
+    ``benchmark.run_policy``, and so does gymnax's own ``Environment.step``
+    when handed a constant key. An environment that draws its per-step noise
     directly from that key then redraws the *identical* innovation forever,
     collapsing a zero-mean process into a deterministic ramp toward
     ``innovation / (1 - rho)``. Randomness must instead be derived from the
@@ -559,7 +559,7 @@ def _episode_return(spec, policy, seed, params=None):
 # it exists to detect (a mis-indexed setpoint) is not a marginal one.
 CONSTANT_ACTIONS = (-0.5, 0.0, 0.5)
 EFFECTIVENESS_SEEDS = 2
-# No extra episode cap: ``EnvSpec.test_params`` already sizes each episode to
+# No extra episode cap: the scored configuration already sizes each episode to
 # that environment's own dynamics. A flat cap is meaningless across envs whose
 # characteristic times differ by orders of magnitude -- 150 steps is 25 min
 # for the reactor, whose xenon transient runs for hours, so the PID had no time

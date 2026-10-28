@@ -2202,22 +2202,30 @@ dependencies = [
     { name = "gymnax" },
     { name = "jax" },
     { name = "matplotlib" },
-    { name = "moviepy" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "optax" },
     { name = "pandas" },
     { name = "pillow" },
-    { name = "pygame" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "tqdm" },
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "casadi" },
+    { name = "do-mpc" },
+    { name = "moviepy" },
+    { name = "pygame" },
+]
 mpc = [
     { name = "casadi" },
     { name = "do-mpc" },
+]
+render = [
+    { name = "moviepy" },
+    { name = "pygame" },
 ]
 
 [package.dev-dependencies]
@@ -2238,7 +2246,7 @@ dev = [
     { name = "pytest-readme" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "target-gym", extra = ["mpc"] },
+    { name = "target-gym", extra = ["all"] },
 ]
 docs = [
     { name = "mkdocs" },
@@ -2261,25 +2269,30 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "casadi", marker = "extra == 'all'", specifier = ">=3.7.2,<3.8" },
     { name = "casadi", marker = "extra == 'mpc'", specifier = ">=3.7.2,<3.8" },
     { name = "chex", specifier = ">=0.1.86" },
+    { name = "do-mpc", marker = "extra == 'all'", specifier = ">=5.1.1,<6" },
     { name = "do-mpc", marker = "extra == 'mpc'", specifier = ">=5.1.1,<6" },
     { name = "flax", specifier = ">=0.10" },
     { name = "gymnasium", specifier = ">=1.1,<1.4" },
     { name = "gymnax", specifier = ">=1.0.0" },
     { name = "jax", specifier = ">=0.6.2" },
     { name = "matplotlib", specifier = ">=3.8.1" },
-    { name = "moviepy", specifier = ">=2.2.1" },
+    { name = "moviepy", marker = "extra == 'all'", specifier = ">=2.2.1" },
+    { name = "moviepy", marker = "extra == 'render'", specifier = ">=2.2.1" },
     { name = "numpy", specifier = ">=1.26.1" },
     { name = "optax", specifier = ">=0.2" },
     { name = "pandas", specifier = ">=2.0" },
     { name = "pillow", specifier = ">=10.0" },
-    { name = "pygame", marker = "python_full_version < '3.14'", specifier = ">=2.6.1" },
-    { name = "pygame-ce", marker = "python_full_version >= '3.14'", specifier = ">=2.5.8" },
+    { name = "pygame", marker = "python_full_version < '3.14' and extra == 'all'", specifier = ">=2.6.1" },
+    { name = "pygame", marker = "python_full_version < '3.14' and extra == 'render'", specifier = ">=2.6.1" },
+    { name = "pygame-ce", marker = "python_full_version >= '3.14' and extra == 'all'", specifier = ">=2.5.8" },
+    { name = "pygame-ce", marker = "python_full_version >= '3.14' and extra == 'render'", specifier = ">=2.5.8" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "tqdm", specifier = ">=4.66" },
 ]
-provides-extras = ["mpc"]
+provides-extras = ["all", "mpc", "render"]
 
 [package.metadata.requires-dev]
 agent = [
@@ -2299,7 +2312,7 @@ dev = [
     { name = "pytest-readme", specifier = ">=1.0.2" },
     { name = "pytest-xdist", specifier = ">=3.6" },
     { name = "ruff", specifier = ">=0.12.11" },
-    { name = "target-gym", extras = ["mpc"] },
+    { name = "target-gym", extras = ["all"] },
 ]
 docs = [
     { name = "mkdocs", specifier = ">=1.6" },

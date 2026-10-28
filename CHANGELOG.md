@@ -36,6 +36,20 @@ than by commit.
   and `abs_gap` entries of `eval.evaluate` are gone. The hold is now scored
   after a settle fixed per plant (`eval.fixed_settle`), the same window for
   every controller. The design is in `docs/proposals/scoring-and-experts.md`.
+- **A capability profile, `target_gym.suite`.** Every task is tagged with the
+  difficulties its physics poses (instability, delay, coupling, a hidden
+  state and nine more), and `run_suite(make_policy)` averages a policy's
+  scores per capability into two radars, hold and reach, with the expert as
+  the 0.5 ring and the ceiling or the best known as the edge.
+  `docs/capability-profile.md` says how to read them and why each task has
+  its tags.
+- **Scores for the moves.** `transient_ratio` now counts the approach from the
+  reset as a move, so `first_order` and `cstr`, which have no other, are no
+  longer NaN, and it is paired per seed with an interval and a win rate.
+  `settling_ratio` compares the steps until the tracking cost settles within
+  the plant's band (`scoring.settle_band`), and `score_policy` adds the
+  oracle's recorded ratios as the best known. `eval.evaluate` records
+  `move_cost` and `settling_time`.
 - **`target_gym.experts.reset_where_done`**, the jitted form of `pid.reset()`:
   inside `lax.scan` it puts a carried PID state back to its initial value
   where an episode ended, for one environment or a batch. Without it, a loop
@@ -106,6 +120,41 @@ than by commit.
 
 ### Changed
 
+- **`env.default_params` is the scored configuration on every task.** An
+  environment reset without parameters now runs the task the baselines are
+  recorded on: the aircraft over 200 to 1,200 steps instead of 10,000, the
+  reactor over 864, and the 3D aircraft with their own floors. What is scored
+  did not change, so no version moved. The values live in each environment
+  (`default_params`), `spec.make_test_params()` returns them, and
+  `EnvSpec.test_params` is gone. `plane_energy` and `plane_sine` get their own
+  classes, `PlaneEnergy` and `PlaneSine`, since one `Airplane2D` cannot carry
+  three defaults. The params classes keep their own defaults.
+- **`env.make_mpc` is deprecated** in favour of `target_gym.make_oracle(name)`,
+  which plans on the mean disturbance as the recorded baselines do. The
+  environments' own copies of it are gone, so every environment takes it from
+  `expert_access.RegistryExperts`, which warns.
+- **pygame and moviepy are the `[render]` extra**, imported only when an
+  aircraft panel is drawn or a video is written; `[all]` installs every extra.
+  `save_video` and `convert_frames_from_gym_to_wandb` moved from
+  `target_gym.utils` to `target_gym.video`, and `env.save_video` comes from one
+  mixin there (`SavesVideo`) instead of a copy in each environment.
+- **patrol declares the code its physics imports** (the 3D aircraft and the
+  shared heading PID its lead flies) in `fingerprint_sources`, so an edit to
+  them now moves patrol's version stamp and baseline fingerprint.
+- **One rollout loop, with a fresh key every step.** `runners.rollout`,
+  `runners.rollout_mpc_batch` and `eval.run_episode` now run
+  `benchmark.run_policy`, so seed `s` is its one-episode run on `PRNGKey(s)`:
+  the episodes reset on one key and take a fresh key at every step, as in
+  gymnax and TargetFoundation (`benchmark.episode_keys`). They reused one key
+  for the whole episode before, so every recorded baseline and protocol number
+  was re-recorded, with the `cstr` and `first_order` PID returns of
+  `baseline_returns_v1.json`, which a test reproduces; the episodes differ from
+  the reset on. `run_policy`'s own episodes are unchanged, and it now compiles
+  its step once per process. The examples in the README and the guides take a
+  fresh key every step too.
+- **`experts.pid.load_gains` and `gain`** are the public names of
+  `_load_gains` and `_g`, which a task's experts use to read the tuned gains.
+  Every task package now reads the public names, and the private ones are gone.
 - **CasADi and do-mpc moved to the `[mpc]` extra.** `pip install target-gym` no
   longer pulls them; `pip install "target-gym[mpc]"` does. The experts and the
   JAX oracles work without them, and a CasADi oracle names the extra when it is
@@ -504,6 +553,21 @@ than by commit.
 
 ### Fixed
 
+- **The scorer missed small setpoint changes and invented cycles on drifting
+  targets.** A target change counted only above 5 % of the first target's
+  value, so the transient after a smaller step was scored as hold:
+  `glass_furnace` saw none of its four 4 C trims, and `compressor_surge` and
+  `plane_energy` missed some of theirs. The reactor's drifting demand crossed
+  the 5 % now and then and was cut into up to 22 cycles. A change is now a
+  step at least ten times the target's median step over the episode
+  (`benchmark.target_changes`), which catches every scheduled step and no
+  drift. The protocol rows of `glass_furnace`, `compressor_surge` and
+  `reactor` are re-recorded; no environment changed.
+- **`experts.mpc.casadi_step_map` without CasADi** raised a `NameError` on
+  the missing module; it now raises an `ImportError` naming the `[mpc]` extra.
+- **`Airplane2D.reset_env(key)` without parameters** read a class attribute
+  that does not exist; it now uses `default_params`.
+
 - **`plane3d_racetrack-v4`: the observed path ran backwards on one cap.** On
   the cap at the pattern's `-u` end the tangent heading in the observation
   pointed against the direction of travel, and the signed cross-track error
@@ -784,6 +848,16 @@ than by commit.
   ten seconds.
 
 ### Removed
+
+- **Dead code from the hashed modules**: `plane.env_jax.run_timesteps` (it
+  unpacked five values from a six-value step), the `__main__` demos at the end
+  of 13 environment modules and `plane/dynamics.py`, `reward.proximity_cost`,
+  `utils.plot_curve` and `utils.plot_features_from_trajectory`, and the 3D
+  circle and figure-8 PID tuners in `experts/pid_tuning.py` with the
+  `plane3d_circle`, `plane3d_figure8` and `plane3d_racetrack` entries of
+  `pid_gains.json`, which no expert has read since the aircraft experts moved
+  to TECS and L1 guidance. The `plane3d_heading` entry stays: patrol's lead
+  flies on it.
 
 - **`plane_steps`**, absorbed into `plane_energy`. They were the same
   environment: same plant, same setpoint schedule, same disturbances, same

@@ -406,8 +406,8 @@ def compute_next_state(
     )
 
     # OU steam demand. The innovation is drawn from a key folded with
-    # ``state.time`` so a caller passing a constant key -- which every rollout
-    # helper in this repo does -- still gets a genuine zero-mean process.
+    # ``state.time`` so a caller passing a constant key still gets a genuine
+    # zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     sigma = pr.q_steam_noise_std * jnp.sqrt(2.0 * STEAM_OU_THETA * pr.delta_t)
     q_steam = (

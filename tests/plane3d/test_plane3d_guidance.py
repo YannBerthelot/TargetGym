@@ -11,16 +11,12 @@ import jax
 import numpy as np
 import pytest
 
+import target_gym as tg
 from target_gym import registry
 from target_gym.eval import scored_burn_in
 from target_gym.plane3d import experts as X
 
-FACTORIES = {
-    "plane3d_heading": X.make_plane3d_heading_pid_controller,
-    "plane3d_circle": X.make_plane3d_circle_pid_controller,
-    "plane3d_racetrack": X.make_plane3d_racetrack_pid_controller,
-    "plane3d_figure8": X.make_plane3d_figure8_pid_controller,
-}
+TASKS = ("plane3d_heading", "plane3d_circle", "plane3d_racetrack", "plane3d_figure8")
 HELD_OUT = (200, 201, 202)
 
 
@@ -46,7 +42,7 @@ def _on_target(name):
     return o
 
 
-@pytest.mark.parametrize("name", FACTORIES)
+@pytest.mark.parametrize("name", TASKS)
 def test_the_bank_loop_damps_the_roll_rate(name):
     """The aileron commands a roll rate, so a roll already under way must be
     met with opposite aileron, whatever the guidance asks for."""
@@ -55,7 +51,7 @@ def test_the_bank_loop_damps_the_roll_rate(name):
     for rate in (-0.1, 0.1):
         o = obs.copy()
         o[7] = rate
-        ailerons.append(float(FACTORIES[name]().host()(o)[2]))
+        ailerons.append(float(tg.make_expert(name).host()(o)[2]))
     assert ailerons[1] < ailerons[0]
 
 
@@ -71,51 +67,131 @@ def test_l1_flies_the_curvature_on_the_path():
     assert X.l1_lateral_accel(p, 0.0, 0.1, 0.0, obs, np) > 0.0
 
 
-def _errors(name, obs):
-    """Altitude, and heading or path, errors from the task's observation."""
-    if name == "plane3d_figure8":
-        return np.abs(obs[:, 14]), np.hypot(obs[:, 12], obs[:, 13])
-    altitude = np.abs(obs[:, 10] - obs[:, 2])
-    if name == "plane3d_heading":
-        return altitude, np.abs(np.angle(np.exp(1j * (obs[:, 11] - obs[:, 9]))))
-    if name == "plane3d_circle":
-        return altitude, np.abs(np.hypot(obs[:, 11], obs[:, 12]) - obs[:, 13])
-    return altitude, np.abs(obs[:, 18])
+# The contract for the accuracy tests, set before measuring:
+# - the proposal's sanity targets (docs/proposals/scoring-and-experts.md):
+#   small autopilots in flight tests hold altitude within 1-2 m and, with L1
+#   guidance, a path within 2-3 m;
+# - heading within the AHRS resolution the task declares
+#   (``heading_precision_floor``, 0.5 deg);
+# - the figure-8's path target applies where its lobes are flyable at the
+#   expert's declared envelope (``_lobes_flyable``); elsewhere it must still
+#   hold its height and never trip.
+ALTITUDE_M = 2.0
+PATH_M = 3.0
 
 
-#: Mean altitude (m) and heading (rad) or path (m) limits after the burn-in.
-#: The figure-8's are looser for a physical reason: stall prevention keeps the
-#: airliner fast enough that its tightest turn at 45 deg is wider than the
-#: smaller lobes' tips (radius a/3), so an honest autopilot cuts them.
-LIMITS = {
-    "plane3d_heading": (2.5, np.deg2rad(1.0)),
-    "plane3d_circle": (2.5, 5.0),
-    "plane3d_racetrack": (2.5, 5.0),
-    "plane3d_figure8": (15.0, 60.0),
-}
+def _finding(reason):
+    """A held-out case the expert misses, reported to the user 2026-10-27
+    and kept as an expected failure on their decision. Strict, so a fix
+    shows up as XPASS and the mark has to come off."""
+    return pytest.mark.xfail(strict=True, reason=f"finding: {reason}")
+
+
+_FIGURE8_HEIGHT = _finding(
+    "the figure-8 expert loses more than 2 m of height on average (2.1, 2.4 and "
+    "5.2 m on seeds 200-202), most where stall prevention limits its bank"
+)
+_FIGURE8_PATH = _finding(
+    "the figure-8 expert holds its path 13-20 m off even where the lobes are "
+    "flyable: it estimates the curvature it does not observe, and lags it"
+)
+
+
+def _fly(name, seed):
+    """One held-out episode of the shipped expert on the scored
+    configuration: ``(first observation, observations after the scored
+    burn-in, tripped, params)``."""
+    env, params = tg.make(name)
+    pid = tg.make_expert(name).host()
+    step = jax.jit(env.step_env)
+    key = jax.random.PRNGKey(seed)
+    obs, state = env.reset_env(key, params)
+    first, seen, tripped = np.asarray(obs), [], False
+    for _ in range(int(params.max_steps_in_episode)):
+        key, sub = jax.random.split(key)
+        obs, state, _, _, info = step(sub, state, pid(np.asarray(obs)), params)
+        tripped = tripped or bool(info["tripped"])
+        seen.append(np.asarray(obs))
+    return first, np.array(seen)[scored_burn_in(name, params) :], tripped, params
+
+
+def _lobes_flyable(params, first):
+    """Whether the figure-8's tightest turn, radius a / 3 at the lobe tips,
+    is inside the expert's declared envelope: 45 deg of bank at the slowest
+    speed stall prevention allows for it, v_min / sqrt(cos 45), turns on a
+    radius v^2 / (g tan 45) = v_min^2 / (g cos 45). v_min is 104 m/s
+    equivalent airspeed as a true airspeed at the lobe's highest point, by
+    the standard atmosphere's density ratio."""
+    top = first[10] + params.figure8_altitude_amplitude
+    v_min = 104.0 / np.sqrt((1.0 - 2.2558e-5 * top) ** 4.2559)
+    return v_min**2 / (9.81 * np.cos(np.pi / 4)) <= first[11] / 3.0
+
+
+def _wrapped(angle):
+    return np.abs(np.angle(np.exp(1j * angle)))
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("name", FACTORIES)
-def test_the_expert_holds_like_an_autopilot(name):
-    """After the scored burn-in, on held-out seeds, each expert holds about
-    what fixed-wing autopilots achieve in flight tests (altitude within 1-2 m,
-    a path within 2-3 m with L1 guidance), here in moderate turbulence and at
-    one control step a second."""
-    spec = registry.get(name)
-    env, params = spec.make_env(), spec.make_test_params()
-    step = jax.jit(env.step_env)
-    burn_in = scored_burn_in(name, params)
-    alt_limit, limit = LIMITS[name]
-    for seed in HELD_OUT:
-        pid = FACTORIES[name]().host()
-        key = jax.random.PRNGKey(seed)
-        obs, state = env.reset_env(key, params)
-        seen = []
-        for _ in range(int(params.max_steps_in_episode)):
-            obs, state, _, _, info = step(key, state, pid(np.asarray(obs)), params)
-            assert not bool(info["tripped"])
-            seen.append(np.asarray(obs))
-        altitude, lateral = _errors(name, np.array(seen)[burn_in:])
-        assert altitude.mean() < alt_limit, (seed, altitude.mean())
-        assert lateral.mean() < limit, (seed, lateral.mean())
+@pytest.mark.parametrize("seed", HELD_OUT)
+def test_the_heading_expert_holds_altitude_and_heading(seed):
+    _, seen, tripped, params = _fly("plane3d_heading", seed)
+    assert not tripped
+    assert np.abs(seen[:, 10] - seen[:, 2]).mean() <= ALTITUDE_M
+    assert _wrapped(seen[:, 11] - seen[:, 9]).mean() <= params.heading_precision_floor
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("seed", HELD_OUT)
+def test_the_circle_expert_holds_altitude_and_path(seed):
+    _, seen, tripped, _ = _fly("plane3d_circle", seed)
+    assert not tripped
+    assert np.abs(seen[:, 10] - seen[:, 2]).mean() <= ALTITUDE_M
+    radial = np.abs(np.hypot(seen[:, 11], seen[:, 12]) - seen[:, 13])
+    assert radial.mean() <= PATH_M
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "seed",
+    [
+        200,
+        pytest.param(201, marks=_finding("racetrack altitude 2.007 m on seed 201")),
+        202,
+    ],
+)
+def test_the_racetrack_expert_holds_altitude_and_path(seed):
+    _, seen, tripped, _ = _fly("plane3d_racetrack", seed)
+    assert not tripped
+    assert np.abs(seen[:, 10] - seen[:, 2]).mean() <= ALTITUDE_M
+    assert np.abs(seen[:, 18]).mean() <= PATH_M
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "seed", [pytest.param(s, marks=_FIGURE8_HEIGHT) for s in HELD_OUT]
+)
+def test_the_figure8_expert_keeps_its_height_on_every_pattern(seed):
+    """Stall prevention gives up path, not height, where the lobes are too
+    tight for the airliner."""
+    _, seen, tripped, _ = _fly("plane3d_figure8", seed)
+    assert not tripped
+    assert np.abs(seen[:, 14]).mean() <= ALTITUDE_M
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "seed",
+    [
+        (
+            pytest.param(s, marks=_FIGURE8_PATH)
+            if s in (200, 201, 203, 206, 207, 208)
+            else s
+        )
+        for s in range(200, 210)
+    ],
+)
+def test_the_figure8_expert_holds_its_path_where_the_lobes_are_flyable(seed):
+    first, seen, _, params = _fly("plane3d_figure8", seed)
+    if not _lobes_flyable(params, first):
+        pytest.skip("the lobe tips are tighter than the expert's envelope")
+    assert np.hypot(seen[:, 12], seen[:, 13]).mean() <= PATH_M

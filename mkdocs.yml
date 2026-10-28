@@ -131,6 +131,7 @@ nav:
   - Results:
       - Baseline results: baseline-results.md
       - RL protocol: rl-protocol.md
+      - Capability profile: capability-profile.md
       - RL results: rl-baselines.md
   - Background:
       - Target MDPs: target-mdp.md

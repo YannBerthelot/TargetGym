@@ -120,8 +120,8 @@ transport delay — that the rest of the suite exists to pose.
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
-see. Episode lengths are `EnvSpec.test_params`, which is what the recorded
-baselines use.
+see. Episode lengths are the scored configuration's (`env.default_params`),
+which is what the recorded baselines use.
 
 <!-- END GENERATED FACTS -->
 

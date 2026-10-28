@@ -24,15 +24,13 @@ SMOKE_STEPS = 2
 # gradient steps above buy. It is not for the quality of the result, which no
 # two-step search could show.
 #
-# The three 3D-aircraft tuners default to a 2000-step BPTT rollout over 36 or 64
+# The 3D-aircraft tuner defaults to a 2000-step BPTT rollout over 36 or 64
 # target pairs and four seeds, and compiling and differentiating that cost 149 s
 # of a 1017 CPU-second fast job -- the largest single cluster in it. Shrinking
 # the problem exercises exactly the same lines for a fraction of the work, so
 # the coverage this test carries is unchanged.
 SMOKE_TUNER_KWARGS = {
     "tune_plane3d_heading_pid": {"n_targets": 2, "n_steps": 100},
-    "tune_plane3d_circle_pid": {"n_targets": 2, "n_steps": 100},
-    "tune_plane3d_figure8_pid": {"n_targets": 2, "n_steps": 100},
 }
 
 # The aircraft tuners used to return NaN gains, and the mechanism is now known:
@@ -53,8 +51,6 @@ TUNERS = [
     "tune_four_tank_pid",
     "tune_plane_pid",
     "tune_plane3d_heading_pid",
-    "tune_plane3d_circle_pid",
-    "tune_plane3d_figure8_pid",
 ]
 
 

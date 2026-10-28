@@ -163,8 +163,15 @@ jobs:
       # One column carries the coverage gate. pytest-cov aggregates the xdist
       # workers, so this costs about twenty seconds more than the plain run
       # rather than requiring a serial one.
+      #
+      # Three workers, not one per core, as a stopgap. This job's runner was
+      # shut down mid-suite four times on 2026-10-27, which is how a runner out
+      # of memory ends. Measured on 3.13 with coverage, each aircraft PID tuner
+      # smoke test peaks at 4.6 to 6.6 GB while it compiles, and the runner has
+      # 16 GB for four workers. Back to -n auto once those tests run apart from
+      # the fast tier.
       if: matrix.python-version == '3.13'
-      run: uv run pytest tests/ -q -n auto --durations=10 -m "not slow and not records" --cov=target_gym
+      run: uv run pytest tests/ -q -n 3 --durations=10 -m "not slow and not records" --cov=target_gym
 
   slow-test:
     # Closed-loop contracts that still roll the plant out here: PID beats the

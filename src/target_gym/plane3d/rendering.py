@@ -14,11 +14,12 @@ module is only the two scenes and the layout that composes them.
 """
 
 import numpy as np
-import pygame
-from pygame import gfxdraw
 
 from target_gym import render_aircraft as ra
-from target_gym.render_kit import frame_stride
+from target_gym.render_kit import frame_stride, render_extra
+
+pygame = render_extra("pygame")
+gfxdraw = render_extra("pygame.gfxdraw")
 
 # ─────────────────────────────────────────────────────────
 #  Side-view scene (x-z, centered, adaptive scale)

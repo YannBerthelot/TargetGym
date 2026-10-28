@@ -1,10 +1,8 @@
-import os
-from typing import Callable, Tuple
+from typing import Tuple
 
 import chex
 import jax
 import jax.numpy as jnp
-import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym import reward as R
@@ -22,7 +20,7 @@ from target_gym.reactor.env import (
     steady_state_xenon,
 )
 from target_gym.reactor.rendering import _render
-from target_gym.utils import save_video
+from target_gym.video import SavesVideo
 
 # Number of physics sub-steps per control step. Constant so JIT can treat it
 # as static in `lax.scan(length=...)`. Change here only — `env.py` reads it
@@ -30,7 +28,9 @@ from target_gym.utils import save_video
 CONTROL_PERIOD: int = 10
 
 
-class Reactor(RegistryExperts, environment.Environment[ReactorState, ReactorParams]):
+class Reactor(
+    RegistryExperts, SavesVideo, environment.Environment[ReactorState, ReactorParams]
+):
     """
     Nuclear reactor (point kinetics + thermal feedback).
 
@@ -60,7 +60,12 @@ class Reactor(RegistryExperts, environment.Environment[ReactorState, ReactorPara
 
     @property
     def default_params(self) -> ReactorParams:
-        return ReactorParams()
+        # The scored configuration. Env steps of 10 s (``control_period``
+        # physics sub-steps each): 2.4 h, 0.18 xenon time constants, enough
+        # that the poison moves materially while the controller works. Full
+        # pit dynamics would need about ten hours, which alone would cost
+        # more to record than the rest of the suite together.
+        return ReactorParams(max_steps_in_episode=864)
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
@@ -257,54 +262,8 @@ class Reactor(RegistryExperts, environment.Environment[ReactorState, ReactorPara
             -inf, inf, len(ReactorState.__dataclass_fields__), dtype=jnp.float32
         )
 
-    def make_mpc(self, params=None, **kwargs):
-        """Return a CasADi MPC oracle for neutron-power tracking."""
-        from target_gym.reactor.experts import make_reactor_mpc
-
-        if params is None:
-            params = self.default_params
-        return make_reactor_mpc(self, params, **kwargs)
-
-    def save_video(
-        self,
-        select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        seed: int,
-        params=None,
-        folder="videos",
-        episode_index=0,
-        FPS=60,
-        format="mp4",
-    ):
-        return save_video(
-            self,
-            select_action,
-            folder,
-            episode_index,
-            FPS,
-            params,
-            seed=seed,
-            format=format,
-        )
-
     def render(self, screen, state: ReactorState, params: ReactorParams, frames, clock):
         frames, screen, clock = self.render_reactor(
             screen, state, params, frames, clock
         )
         return frames, screen, clock
-
-
-if __name__ == "__main__":
-    env = Reactor()
-    seed = 42
-    env_params = ReactorParams(
-        max_steps_in_episode=2000
-    )  # 2000 physics = 200 control steps
-    os.makedirs("videos/reactor", exist_ok=True)
-    env.save_video(
-        lambda o: np.random.uniform(-1, 1),
-        seed,
-        folder="videos/reactor",
-        episode_index=0,
-        params=env_params,
-        format="gif",
-    )

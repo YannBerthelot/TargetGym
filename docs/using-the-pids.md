@@ -68,6 +68,7 @@ The host object, as the baselines run it:
 import jax
 import numpy as np
 import target_gym as tg
+from target_gym.benchmark import episode_keys
 from target_gym.registry import REGISTRY
 
 spec = REGISTRY["cstr"]
@@ -75,16 +76,19 @@ env = spec.make_env()
 params = spec.make_test_params()   # the configuration the baselines are scored on
 pid = tg.make_expert("cstr").host()
 
-key = jax.random.PRNGKey(0)
-obs, state = env.reset(key, params)
+# Seed 0's keys as the scored episodes take them: one to reset, a fresh one
+# every step.
+T = int(params.max_steps_in_episode)
+reset_keys, step_keys = episode_keys(jax.random.PRNGKey(0), 1, T)
+obs, state = env.reset_env(reset_keys[0], params)
 pid.reset()
 
 total = 0.0
-for _ in range(params.max_steps_in_episode):
+for t in range(T):
     action = pid(np.asarray(obs))
-    obs, state, reward, terminated, truncated, _ = env.step(key, state, action, params)
+    obs, state, reward, terminated, _ = env.step_env(step_keys[t, 0], state, action, params)
     total += float(reward)
-    if terminated or truncated:
+    if terminated:
         break
 
 print("PID return:", total)
@@ -225,12 +229,13 @@ pid = tg.make_expert("cstr").host()
 
 transitions = []
 for seed in range(3):
-    key = jax.random.PRNGKey(seed)
-    obs, state = env.reset(key, params)
+    key, reset_key = jax.random.split(jax.random.PRNGKey(seed))
+    obs, state = env.reset(reset_key, params)
     pid.reset()
     for _ in range(params.max_steps_in_episode):
+        key, step_key = jax.random.split(key)   # a fresh key every step
         action = np.atleast_1d(pid(np.asarray(obs)))
-        next_obs, state, reward, terminated, truncated, _ = env.step(key, state, action, params)
+        next_obs, state, reward, terminated, truncated, _ = env.step(step_key, state, action, params)
         transitions.append((np.asarray(obs), action, float(reward), np.asarray(next_obs)))
         obs = next_obs
         if terminated or truncated:
@@ -251,6 +256,7 @@ the recorded returns, as the example checks.
 import jax
 import numpy as np
 import target_gym as tg
+from target_gym.benchmark import episode_keys
 from target_gym.provenance import load_recorded_baselines
 from target_gym.registry import REGISTRY
 
@@ -260,16 +266,18 @@ ctrl = tg.make_expert("cstr")
 
 
 def episode_return(key):
-    obs, env_state = env.reset_env(key, params)
+    # The scored episodes' keys: one to reset, a fresh one every step.
+    reset_keys, step_keys = episode_keys(key, 1, int(params.max_steps_in_episode))
+    obs, env_state = env.reset_env(reset_keys[0], params)
 
-    def step(carry, _):
+    def step(carry, step_key):
         obs, env_state, pid_state = carry
         action, pid_state = ctrl.act(pid_state, obs)
-        obs, env_state, reward, _, _ = env.step_env(key, env_state, action, params)
+        obs, env_state, reward, _, _ = env.step_env(step_key, env_state, action, params)
         return (obs, env_state, pid_state), reward
 
     carry = (obs, env_state, ctrl.init_state)
-    _, rewards = jax.lax.scan(step, carry, None, length=params.max_steps_in_episode)
+    _, rewards = jax.lax.scan(step, carry, step_keys[:, 0])
     return rewards.sum()
 
 
@@ -299,14 +307,17 @@ from target_gym.registry import REGISTRY
 spec = REGISTRY["cstr"]
 env, params = spec.make_env(), spec.make_test_params()
 policy, num_envs = tg.make_expert("cstr").batched(), 4
-keys = jax.random.split(jax.random.PRNGKey(0), num_envs)
-obs, env_state = jax.vmap(env.reset, in_axes=(0, None))(keys, params)
+key, reset_key = jax.random.split(jax.random.PRNGKey(0))
+obs, env_state = jax.vmap(env.reset, in_axes=(0, None))(
+    jax.random.split(reset_key, num_envs), params
+)
 step_all = jax.vmap(env.step, in_axes=(0, 0, 0, None))
 
 
-def step(carry, _):
+def step(carry, step_key):
     obs, env_state, pid_state = carry
     actions, pid_state = policy(pid_state, obs)
+    keys = jax.random.split(step_key, num_envs)   # a fresh key every step
     obs, env_state, reward, terminated, truncated, _ = step_all(keys, env_state, actions, params)
     # env.step has already restarted the environments that finished; restart their PIDs too.
     pid_state = reset_where_done(terminated | truncated, pid_state, policy.init_state(num_envs))
@@ -314,8 +325,9 @@ def step(carry, _):
 
 
 carry = (obs, env_state, policy.init_state(num_envs))
-run = jax.jit(lambda c: jax.lax.scan(step, c, None, length=2 * params.max_steps_in_episode))
-_, rewards = run(carry)   # two episodes per environment, back to back
+n_steps = 2 * int(params.max_steps_in_episode)   # two episodes per environment
+run = jax.jit(lambda c, k: jax.lax.scan(step, c, jax.random.split(k, n_steps)))
+_, rewards = run(carry, key)
 ```
 
 For a single environment, pass a scalar `done` and `ctrl.init_state`. Reset on

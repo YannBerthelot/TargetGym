@@ -20,10 +20,11 @@ composition.
 """
 
 import numpy as np
-import pygame
 
 from target_gym import render_aircraft as ra
-from target_gym.render_kit import frame_stride
+from target_gym.render_kit import frame_stride, render_extra
+
+pygame = render_extra("pygame")
 
 HISTORY_KEYS = ("t", "altitude", "target", "speed", "pitch", "power", "reward")
 

@@ -10,10 +10,9 @@ import jax
 import numpy as np
 import pytest
 
-from target_gym import registry
+import target_gym as tg
 from target_gym.eval import scored_burn_in
-from target_gym.plane.experts import make_plane_pid_controller
-from target_gym.plane.experts_tecs import TECSParams, TECSState, tecs_step
+from target_gym.plane.experts_tecs import AIRLINER, TECSParams, TECSState, tecs_step
 
 P = TECSParams(climb_max=10.0, sink_min=3.0, sink_max=10.0, thr_trim=0.4)
 
@@ -58,38 +57,64 @@ def test_speed_weight_zero_leaves_speed_to_the_throttle():
     assert float(thr) > p.thr_trim
 
 
-def _held(name, targets, burn_in):
-    """The steps to score: after the burn-in, or on plane_energy, whose
-    target jumps 360-720 m every 150 s, the last 25 s of each cycle. Its climbs
-    at the airliner's 8 m/s fill most of a cycle, and are a climb rate, not
-    an accuracy."""
-    if name != "plane_energy":
-        return np.arange(burn_in, len(targets))
-    jumps = np.flatnonzero(np.abs(np.diff(targets)) > 50.0) + 1
-    starts, ends = np.append(0, jumps), np.append(jumps, len(targets))
-    cycles = [(a, b) for a, b in zip(starts, ends) if b - a >= 30]
-    return np.concatenate([np.arange(b - 25, b) for a, b in cycles])
+# The contract for the 2D accuracy test, set before measuring: the
+# proposal's sanity target, small autopilots holding altitude within 1-2 m in
+# flight tests (docs/proposals/scoring-and-experts.md). plane_energy's target
+# jumps between rungs, so it is held to that once each rung can have been
+# captured: the step at the airliner's declared climb or sink limit
+# (``AIRLINER.climb_max``, ``sink_max``), then five TECS time constants.
+ALTITUDE_M = 2.0
+
+
+def _captured(targets, burn_in):
+    """Indices after the burn-in at which every rung has had its capture
+    time."""
+    held = np.zeros(len(targets), bool)
+    held[burn_in:] = True
+    for i in np.flatnonzero(np.abs(np.diff(targets)) > 50.0) + 1:
+        step = targets[i] - targets[i - 1]
+        rate = AIRLINER.climb_max if step > 0 else AIRLINER.sink_max
+        held[i : i + int(np.ceil(abs(step) / rate + 5 * AIRLINER.time_const))] = False
+    return held
+
+
+def _finding(reason):
+    """A held-out case the expert misses, reported to the user 2026-10-27
+    and kept as an expected failure on their decision. Strict, so a fix
+    shows up as XPASS and the mark has to come off."""
+    return pytest.mark.xfail(strict=True, reason=f"finding: {reason}")
+
+
+_MISSES = {
+    ("plane_sine", 200): _finding("plane_sine altitude 2.19 m on seed 200"),
+    ("plane_energy", 202): _finding("plane_energy altitude 2.03 m on seed 202"),
+}
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("name", ["plane", "plane_sine", "plane_energy"])
-def test_the_2d_expert_holds_its_altitude(name):
+@pytest.mark.parametrize(
+    "name,seed",
+    [
+        pytest.param(n, s, marks=_MISSES[(n, s)]) if (n, s) in _MISSES else (n, s)
+        for n in ("plane", "plane_sine", "plane_energy")
+        for s in (200, 201, 202)
+    ],
+)
+def test_the_2d_expert_holds_its_altitude(name, seed):
     """The 2D aircraft's expert is TECS over the pitch loop, the 3D expert's
     longitudinal half. On held-out seeds it holds the commanded altitude
     within what autopilots achieve in flight."""
-    spec = registry.get(name)
-    env, params = spec.make_env(), spec.make_test_params()
+    env, params = tg.make(name)
+    pid = tg.make_expert(name).host()
     step = jax.jit(env.step_env)
-    burn_in = scored_burn_in(name, params)
-    for seed in (200, 201, 202):
-        pid = make_plane_pid_controller().host()
-        key = jax.random.PRNGKey(seed)
-        obs, state = env.reset_env(key, params)
-        seen = []
-        for _ in range(int(params.max_steps_in_episode)):
-            obs, state, _, _, info = step(key, state, pid(np.asarray(obs)), params)
-            assert not bool(info["tripped"])
-            seen.append(np.asarray(obs))
-        seen = np.array(seen)
-        errors = np.abs(seen[:, 6] - seen[:, 1])[_held(name, seen[:, 6], burn_in)]
-        assert errors.mean() < 2.5, (seed, errors.mean())
+    key = jax.random.PRNGKey(seed)
+    obs, state = env.reset_env(key, params)
+    seen = []
+    for _ in range(int(params.max_steps_in_episode)):
+        key, sub = jax.random.split(key)
+        obs, state, _, _, info = step(sub, state, pid(np.asarray(obs)), params)
+        assert not bool(info["tripped"])
+        seen.append(np.asarray(obs))
+    seen = np.array(seen)
+    held = _captured(seen[:, 6], scored_burn_in(name, params))
+    assert np.abs(seen[held, 6] - seen[held, 1]).mean() <= ALTITUDE_M

@@ -317,6 +317,21 @@ def transient_cost(episodes, window: int):
     return (float(np.mean(vals)), _ci(vals)) if vals else (float("nan"), float("nan"))
 
 
+def settling_time(episodes, band: float):
+    """Steps per move until the tracking cost enters ``band`` and stays there
+    until the cycle's anticipation of the next change: 0 when it never leaves,
+    the whole cycle when it ends outside. A move is the reset or a target
+    change. Reads the ``tracking`` term, or the cost when there are no terms;
+    ``scoring.settle_band`` is the plant's band."""
+    vals = []
+    for ep in episodes:
+        series = ep.terms.get("tracking", ep.cost)
+        for s in _segments(ep):
+            outside = np.flatnonzero(series[s.start : s.hold_end] > band + _TOL)
+            vals.append(int(outside[-1]) + 1 if len(outside) else 0)
+    return (float(np.mean(vals)), _ci(vals)) if vals else (float("nan"), float("nan"))
+
+
 def unsettled_fraction(episodes):
     """Share of cycles in which the cost over the second half exceeds the
     cost over the first half, with the anticipation of the next change left
@@ -369,7 +384,9 @@ def time_in_band(episodes, burn_in: int):
     return float(np.mean(vals)) if vals else float("nan")
 
 
-def evaluate(episodes, burn_in: int, settle: int | None = None):
+def evaluate(
+    episodes, burn_in: int, settle: int | None = None, band: float | None = None
+):
     """The protocol's numbers for a list of ``Episode`` records, as a dict.
 
     - ``gain`` (and ``gain_ci``): mean cost per step after ``burn_in``,
@@ -383,6 +400,9 @@ def evaluate(episodes, burn_in: int, settle: int | None = None):
       cycle) and ``time_in_band`` (a KPI, never a training signal).
     - One entry per reward term (``tracking``, ``running``, ...) and its
       ``hold_`` counterpart, when the episodes carry terms.
+    - With ``settle``, ``move_cost``: per move (the reset or a target change),
+      ``transient_cost`` over the ``settle`` steps after it. With ``band``,
+      ``settling_time``. ``scoring`` compares both with the expert's.
 
     ``settle`` overrides the per-cycle settle with a fixed count.
     """
@@ -404,6 +424,10 @@ def evaluate(episodes, burn_in: int, settle: int | None = None):
         failure_rate=failure_rate(episodes),
         time_in_band=time_in_band(episodes, burn_in),
     )
+    if settle is not None:
+        out["move_cost"], out["move_cost_ci"] = transient_cost(episodes, settle)
+    if band is not None:
+        out["settling_time"], out["settling_time_ci"] = settling_time(episodes, band)
     for key in episodes[0].terms:
         out[key] = gain(episodes, burn_in, key)[0]
         out["hold_" + key] = hold(episodes, burn_in, key, settle=settle)[0]
@@ -442,7 +466,8 @@ def scored_burn_in(name: str, params) -> int:
 
 
 def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
-    """One episode of a registered environment as an ``Episode`` record.
+    """One episode of a registered environment as an ``Episode`` record: the
+    benchmark's one-episode run on ``PRNGKey(seed)`` (``runners.one_episode``).
 
     ``policy`` is ``policy(obs)`` or ``policy(obs, state)``. The cost is
     ``-reward``; the terms come from ``env.reward_terms`` when the environment
@@ -450,63 +475,24 @@ def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
     time-in-band KPI (defaults to each output's ``e_floor`` if the params carry
     one, else the reach segmentation uses the target changes alone).
     """
-    import jax
-    import jax.numpy as jnp
+    import dataclasses
 
-    from target_gym.runners.runners import _as_tuple, _wants_state
+    from target_gym.benchmark import episodes_of, task_info
+    from target_gym.runners.runners import one_episode
 
-    env = spec.make_env()
-    ti = list(_as_tuple(env.obs_target_index))
-    vi = list(_as_tuple(env.obs_value_index))
-    key = jax.random.PRNGKey(seed)
-    obs, state = env.reset_env(key, params)
-    step = jax.jit(env.step_env)
-    terms_fn = getattr(env, "reward_terms", None)
-    costs, bands, changes, failed, terms = [], [], [], [], {}
-    prev_target = np.asarray(obs)[ti]
-    if band is None:
-        band = np.atleast_1d(np.asarray(getattr(params, "e_floor", np.inf), float))
-    span = None
-    while int(state.time) < int(params.max_steps_in_episode):
-        o = np.asarray(obs)
-        a = policy(o, state) if _wants_state(policy) else policy(o)
-        obs, state, r, term, info = step(
-            key, state, jnp.atleast_1d(jnp.asarray(a)), params
-        )
-        o = np.asarray(obs)
-        costs.append(-float(r))
-        err = np.abs(o[vi] - o[ti])
-        bands.append(bool((err <= band).all()))
-        tgt = o[ti]
-        if span is None:
-            span = np.maximum(np.abs(tgt), 1e-9)
-        changes.append(bool((np.abs(tgt - prev_target) > 0.05 * span).any()))
-        prev_target = tgt
-        failed.append(
-            bool(info.get("tripped", False)) if isinstance(info, dict) else False
-        )
-        # Exact per-step terms when the environment returns them (the
-        # reactor sums ten sub-steps); otherwise the terms at the new state.
-        step_terms = info.get("reward_terms") if isinstance(info, dict) else None
-        if step_terms is None and terms_fn is not None:
-            step_terms = terms_fn(state, params)
-        if step_terms is not None:
-            for k, v in step_terms.items():
-                terms.setdefault(k, []).append(float(v))
-    return Episode(
-        cost=np.array(costs),
-        in_band=np.array(bands),
-        target_change=np.array(changes),
-        failed=np.array(failed),
-        terms={k: np.array(v) for k, v in terms.items()},
-    )
+    task = task_info(spec.name, spec.make_env(), params, 1)
+    if band is not None:
+        e_floor = np.broadcast_to(np.asarray(band, float), task.e_floor.shape)
+        task = dataclasses.replace(task, e_floor=e_floor.copy())
+    return episodes_of(one_episode(spec, params, policy, seed, task=task))[0]
 
 
 def evaluate_controller(name: str, kind: str = "pid", seeds: int = 3, params=None):
     """Score a shipped controller (``"pid"`` or ``"mpc"``) on a plant, with the
-    plant's fixed settle."""
+    plant's fixed settle and settle band."""
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
+    from target_gym.scoring import settle_band
 
     spec = REGISTRY[name]
     p = params or spec.make_test_params()
@@ -515,5 +501,8 @@ def evaluate_controller(name: str, kind: str = "pid", seeds: int = 3, params=Non
         for s in range(seeds)
     ]
     return evaluate(
-        episodes, burn_in=scored_burn_in(name, p), settle=fixed_settle(name)
+        episodes,
+        burn_in=scored_burn_in(name, p),
+        settle=fixed_settle(name),
+        band=settle_band(name, p),
     )

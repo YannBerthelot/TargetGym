@@ -109,7 +109,7 @@ page.
   dominates its cost. That is the easiest gain for a learner: the 3D heading
   task's own PID holds the lead to about 38 m, but the patrol PID's wingmen
   collide behind it.
-- **Oracle** (`env.make_mpc()`): each seat flies a law, the patrol's lead
+- **Oracle** (`make_oracle(name)`): each seat flies a law, the patrol's lead
   autopilot or the patrol's twin-autopilot law, and one planner adds a
   correction to every seat over a 30-step horizon, on the true team cost. It
   holds the lead to under 1 m and each slot to about 0.3 m. Like every oracle

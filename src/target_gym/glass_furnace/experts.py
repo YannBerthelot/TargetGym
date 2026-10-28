@@ -605,12 +605,12 @@ def make_glass_furnace_pid_controller():
     """The scored PID as a pure :class:`~target_gym.experts.pid.Controller`;
     ``.host()`` is what ``make_pid()`` returns. Gains from
     src/target_gym/data/pid_gains.json."""
-    from target_gym.experts.pid import _g, siso_pid
+    from target_gym.experts.pid import gain, siso_pid
 
     return siso_pid(
-        Kp=_g("glass_furnace", "Kp", 0.01),
-        Ki=_g("glass_furnace", "Ki", 0.001),
-        Kd=_g("glass_furnace", "Kd", 0.0),
+        Kp=gain("glass_furnace", "Kp", 0.01),
+        Ki=gain("glass_furnace", "Ki", 0.001),
+        Kd=gain("glass_furnace", "Kd", 0.0),
         dt=30.0,
         state_index=0,
         setpoint_index=4,

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "generated": "2026-09-13T09:05:41+00:00",
-    "note": "Regenerate with scripts/record_baselines.py when a test reports a stale fingerprint. Commit the result with the change that invalidated it.",
+    "note": "The v1 baselines, frozen at the v1 to v2 reward change. cstr and first_order pid_returns were re-recorded on 2026-10-27 with runners.rollout's fresh key per step (reward_version=1, seeds 0-9), since tests/test_reward_contract.py reproduces them; every other number keeps the one-key-per-episode loop it was recorded with.",
     "seeds": 10
   },
   "battery": {
@@ -113,16 +113,16 @@
     ],
     "mpc_terminated_early": 0,
     "pid_returns": [
-      89.533492,
-      90.851778,
-      88.438006,
-      87.5389,
-      90.607347,
-      89.139625,
-      90.484214,
-      88.746702,
-      87.631955,
-      90.663478
+      89.03575,
+      90.231197,
+      90.413006,
+      88.95463,
+      89.600124,
+      89.672681,
+      90.222277,
+      89.606653,
+      89.150704,
+      90.51813
     ],
     "seconds": 5.9,
     "seeds": 10,
@@ -179,16 +179,16 @@
     ],
     "mpc_terminated_early": 0,
     "pid_returns": [
-      88.428098,
-      93.367374,
-      95.379603,
-      94.011747,
-      91.873807,
-      88.414198,
-      93.742971,
-      96.385994,
-      96.521838,
-      91.607423
+      95.117256,
+      96.132903,
+      91.150158,
+      96.472805,
+      94.69953,
+      95.944318,
+      95.649717,
+      92.487133,
+      95.261554,
+      89.947345
     ],
     "seconds": 2413.8,
     "seeds": 10,

@@ -125,51 +125,6 @@
     "tuning_rule": "amigo",
     "note": "MIMO relay: pid1=power loop, pid2=stick loop, both on altitude error."
   },
-  "plane3d_circle": {
-    "alt": {
-      "Kp": 0.00037733,
-      "Ki": 9.45e-06,
-      "Kd": 0.00478836
-    },
-    "rad": {
-      "Kp": 7.84e-06,
-      "Ki": 1e-08,
-      "Kd": 0.00064308
-    },
-    "bank": {
-      "Kp": -2.2651047999999996
-    },
-    "power_pid": {
-      "Kp": 0.00029661,
-      "Ki": 4.33e-06,
-      "Kd": 0.00646024
-    },
-    "power": 0.6,
-    "target_bank_deg": 15.0,
-    "note": "coordinate descent on episode return, 3 seeds"
-  },
-  "plane3d_figure8": {
-    "alt": {
-      "Kp": 0.007268,
-      "Ki": 3.477e-05,
-      "Kd": 0.00469
-    },
-    "hdg": {
-      "Kp": 3.840921,
-      "Ki": 1.05437024,
-      "Kd": 3.1111457999999996
-    },
-    "bank": {
-      "Kp": -6.47173
-    },
-    "power_pid": {
-      "Kp": 0.00029661,
-      "Ki": 4.33e-06,
-      "Kd": 0.00646025
-    },
-    "power": 0.15,
-    "note": "coordinate descent on episode return, 3 seeds"
-  },
   "reactor": {
     "Kp": 2.265556,
     "Ki": 1.33268,
@@ -476,18 +431,6 @@
     "Kp_speed": 0.05,
     "Ki_speed": 7.5e-05,
     "note": "a copy of plane_cascaded, read by the plane_energy oracle (plane/experts.py): baseline_fingerprint collects the gain keys that start with the task's name, so plane_energy's covers this one and not plane_cascaded. tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
-  },
-  "plane3d_racetrack": {
-    "track": {
-      "Kp": 0.0016799999999999999,
-      "Ki": 0.0,
-      "Kd": 0.0
-    },
-    "bank": {
-      "Kp": -2.0,
-      "Kd": -1.5
-    },
-    "note": "coordinate descent on episode return, 5 seeds"
   },
   "unstable_cstr": {
     "Kp_T": 9.799999999999999,

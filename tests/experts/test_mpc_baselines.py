@@ -81,7 +81,7 @@ def _cheap_mpc(spec, env, params):
 def test_registered_mpc_builds_and_controls(name):
     spec = REGISTRY[name]
     env = spec.make_env()
-    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": 20})
+    params = spec.make_test_params(max_steps_in_episode=20)
 
     mpc = _cheap_mpc(spec, env, params)
     mpc.reset()
@@ -166,7 +166,7 @@ def test_every_environment_without_an_mpc_says_why():
 # wrong conclusions in the work this file came from, and it applies to the
 # tripwire, not only to the ranking.
 #
-# Episodes are each environment's own, from EnvSpec.test_params, and are no
+# Episodes are each environment's own, from their scored configuration, and are no
 # longer capped. The cap was 250 steps and existed to bound CI cost back when
 # this test rolled the plants out itself; it truncated the reactor from 1200
 # steps, the four-tank from 500 and the boiler drum from 400, which measures

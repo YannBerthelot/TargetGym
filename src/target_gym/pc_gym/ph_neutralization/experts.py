@@ -204,12 +204,12 @@ def make_ph_pid_controller():
     """The scored PID as a pure :class:`~target_gym.experts.pid.Controller`;
     ``.host()`` is what ``make_pid()`` returns. Gains from
     src/target_gym/data/pid_gains.json."""
-    from target_gym.experts.pid import _g, siso_pid
+    from target_gym.experts.pid import gain, siso_pid
 
     return siso_pid(
-        Kp=_g("ph_neutralization", "Kp", 0.18),
-        Ki=_g("ph_neutralization", "Ki", 0.004),
-        Kd=_g("ph_neutralization", "Kd", 0.0),
+        Kp=gain("ph_neutralization", "Kp", 0.18),
+        Ki=gain("ph_neutralization", "Ki", 0.004),
+        Kd=gain("ph_neutralization", "Kd", 0.0),
         dt=5.0,
         state_index=0,
         setpoint_index=2,
