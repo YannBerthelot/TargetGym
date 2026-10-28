@@ -6,6 +6,13 @@ what makes the clips worth watching rather than decorative.
 
 ## Render one episode
 
+Writing a video needs moviepy, and drawing an aircraft needs pygame. Both come
+with the `[render]` extra:
+
+```bash
+pip install 'target-gym[render]'
+```
+
 `save_video` drives a policy through an episode and writes the frames:
 
 ```python

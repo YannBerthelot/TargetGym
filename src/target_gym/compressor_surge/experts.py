@@ -299,10 +299,10 @@ def load_gains() -> dict:
     ``"compressor_surge"`` in ``data/pid_gains.json`` (its ``"note"`` is
     skipped).
 
-    Reads ``target_gym.experts.pid._load_gains()`` at call time, so a tuner
+    Reads ``target_gym.experts.pid.load_gains()`` at call time, so a tuner
     that patches ``_gains_cache`` is seen.
     """
-    stored = _pid_mod._load_gains().get("compressor_surge", {})
+    stored = _pid_mod.load_gains().get("compressor_surge", {})
     return {
         **DEFAULT_GAINS,
         **{

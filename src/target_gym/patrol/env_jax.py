@@ -13,14 +13,12 @@ a gentle orbit); the follower is the learning agent.  See :mod:`.env` for the
 transition, slot geometry, reward and observation functions.
 """
 
-from typing import Callable
-
 import chex
 import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.base import canonical_reset, finish_step
 from target_gym.expert_access import RegistryExperts
 from target_gym.experts.pid import make_plane3d_heading_pid
 from target_gym.patrol.env import (
@@ -37,11 +35,11 @@ from target_gym.patrol.env import (
     make_cruise_state,
 )
 from target_gym.patrol.rendering import _render
-from target_gym.utils import save_video
+from target_gym.video import SavesVideo
 
 
 class _PlanePatrolBase(
-    RegistryExperts, environment.Environment[PatrolState, PatrolParams]
+    RegistryExperts, SavesVideo, environment.Environment[PatrolState, PatrolParams]
 ):
     """Shared machinery for the close-patrol tasks.
 
@@ -63,7 +61,8 @@ class _PlanePatrolBase(
 
     @property
     def default_params(self) -> PatrolParams:
-        return PatrolParams()
+        # The scored configuration, for both observation variants.
+        return PatrolParams(max_steps_in_episode=200)
 
     # -- to be provided by subclasses --------------------------------------
     def get_obs(self, state: PatrolState, params: PatrolParams = None) -> jnp.ndarray:
@@ -96,24 +95,11 @@ class _PlanePatrolBase(
         )
         # A crash is part of the kernel: the step is charged the trip cost and
         # the flight restarts at once, or is lost (``terminated``) with
-        # ``params.continuing = False`` (``base.failure_kernel``).
-        new_state, tripped, scored, terminated = failure_kernel(
-            self, key, state, new_state, params
+        # ``params.continuing = False`` (``base.finish_step``).
+        new_state, reward, terminated, info = finish_step(
+            self, key, state, new_state, params, metrics=metrics
         )
-        reward = self.compute_reward(scored, params)
-        obs = self.get_obs(new_state)
-        return (
-            obs,
-            new_state,
-            reward,
-            terminated,
-            {
-                "metrics": metrics,
-                "last_state": new_state,
-                "tripped": tripped,
-                "trip_cost": charged_trip_cost(tripped, params),
-            },
-        )
+        return self.get_obs(new_state), new_state, reward, terminated, info
 
     def is_terminated(self, state: PatrolState, params: PatrolParams) -> jax.Array:
         """Natural termination only; the time limit is gymnax's ``is_truncated``."""
@@ -216,29 +202,6 @@ class _PlanePatrolBase(
     # -- rendering / video -------------------------------------------------
     def render(self, screen, state: PatrolState, params: PatrolParams, frames, clock):
         return self.render_plane(screen, state, params, frames, clock)
-
-    def save_video(
-        self,
-        select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        seed: int,
-        params=None,
-        folder="videos",
-        episode_index=0,
-        FPS=60,
-        format="mp4",
-        save_trajectory: bool = False,
-    ):
-        return save_video(
-            self,
-            select_action,
-            folder,
-            episode_index,
-            FPS,
-            params,
-            seed=seed,
-            format=format,
-            save_trajectory=save_trajectory,
-        )
 
     # -- expert ------------------------------------------------------------
 

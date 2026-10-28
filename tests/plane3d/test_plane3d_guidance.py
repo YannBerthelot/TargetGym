@@ -179,7 +179,7 @@ def _wrapped(angle):
     return np.abs(np.angle(np.exp(1j * angle)))
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("seed", HELD_OUT)
 def test_the_heading_expert_holds_altitude_and_heading(seed):
     _, seen, tripped, params = _fly("plane3d_heading", seed)
@@ -188,7 +188,7 @@ def test_the_heading_expert_holds_altitude_and_heading(seed):
     assert _wrapped(seen[:, 11] - seen[:, 9]).mean() <= params.heading_precision_floor
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("seed", HELD_OUT)
 def test_the_circle_expert_holds_altitude_and_path(seed):
     _, seen, tripped, _ = _fly("plane3d_circle", seed)
@@ -198,7 +198,7 @@ def test_the_circle_expert_holds_altitude_and_path(seed):
     assert radial.mean() <= PATH_M
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize(
     "seed",
     [
@@ -214,7 +214,7 @@ def test_the_racetrack_expert_holds_altitude_and_path(seed):
     assert np.abs(seen[:, 18]).mean() <= PATH_M
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("seed", HELD_OUT)
 def test_the_figure8_expert_keeps_its_height_on_every_pattern(seed):
     """Stall prevention gives up path, not height, where the lobes are too
@@ -224,7 +224,7 @@ def test_the_figure8_expert_keeps_its_height_on_every_pattern(seed):
     assert np.abs(seen[:, 14]).mean() <= ALTITUDE_M
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("seed", range(200, 210))
 def test_the_figure8_expert_holds_its_path_where_the_lobes_are_flyable(seed):
     first, seen, _, params = _fly("plane3d_figure8", seed)

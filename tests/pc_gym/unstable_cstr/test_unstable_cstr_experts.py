@@ -167,7 +167,7 @@ def test_gains_are_read_under_the_task_key(monkeypatch):
     time (the tuner patches it), skips the ``note``, and nothing else in
     ``pid_gains.json`` starts with the task's name, since
     ``baseline_fingerprint`` collects gains by that prefix."""
-    stored = pid_mod._load_gains()
+    stored = pid_mod.load_gains()
     # On target, 0.2 K above T*: the inner loop alone acts, through Kp_T.
     obs = _obs(0.5, 350.2, 0.5, 300.0)
     shipped = make_unstable_cstr_pid()
@@ -228,7 +228,7 @@ def test_guard_refuses_unstable_and_marginal_gains(monkeypatch):
     monkeypatch.setattr(
         pid_mod,
         "_gains_cache",
-        {**pid_mod._load_gains(), "unstable_cstr": MARGINAL_6S},
+        {**pid_mod.load_gains(), "unstable_cstr": MARGINAL_6S},
     )
     with pytest.raises(UnstableCascadeGains):
         make_unstable_cstr_pid()
@@ -500,7 +500,7 @@ def _scheduled_episodes(env, params, gains, states, keys, hold):
     return tuple(np.asarray(x) for x in out)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_pid_holds_every_target(env, params):
     """The PID the registry builds (``make_pid``, so the tuned gains stored
     in ``src/target_gym/data/pid_gains.json``) on 130 scheduled episodes, 64
@@ -709,7 +709,7 @@ def test_mpc_falls_back_to_the_pid(env, params, planned, step, monkeypatch):
     monkeypatch.setattr(
         pid_mod,
         "_gains_cache",
-        {**pid_mod._load_gains(), "unstable_cstr": MARGINAL_6S},
+        {**pid_mod.load_gains(), "unstable_cstr": MARGINAL_6S},
     )
     with pytest.raises(UnstableCascadeGains):
         make_unstable_cstr_mpc(env, planned, horizon=5)

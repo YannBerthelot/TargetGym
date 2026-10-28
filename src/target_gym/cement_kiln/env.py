@@ -450,8 +450,8 @@ def compute_next_state(
     )
 
     # OU raw-meal feed. The innovation is drawn from a key folded with
-    # ``state.time`` so a caller passing a constant key -- which every rollout
-    # helper in this repo does -- still gets a genuine zero-mean process.
+    # ``state.time`` so a caller passing a constant key still gets a genuine
+    # zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     sigma = p.feed_noise_std * jnp.sqrt(2.0 * FEED_OU_THETA * p.delta_t)
     raw_meal = (

@@ -654,7 +654,7 @@ _FIGURE8_PATH_XFAIL = (
 )
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize(
     "make_env, error_fn",
     [

@@ -6,7 +6,7 @@ up is not part of what an environment is.
 
 ``make_pid`` and ``expert_policy`` are deprecated in favour of
 ``target_gym.make_expert(name)``, which makes the caller pick the expert's
-form. ``make_mpc`` follows once the environments' own overrides of it go.
+form, and ``make_mpc`` in favour of ``target_gym.make_oracle(name)``.
 """
 
 import warnings
@@ -49,10 +49,12 @@ class RegistryExperts:
         return REGISTRY[self.registry_name].make_pid_controller().batched()
 
     def make_mpc(self, params=None, **kwargs):
-        """Return the shipped MPC oracle for ``params`` (default params if None).
+        """Deprecated: ``target_gym.make_oracle(name)``, which plans on the mean
+        disturbance as the recorded baselines do.
 
-        Prefer ``target_gym.make_oracle(name)``, which plans on the mean
-        disturbance as the recorded baselines do."""
+        Returns the shipped MPC oracle for ``params`` (default params if None),
+        planning on ``params`` as given."""
+        _deprecated("make_mpc()", "make_oracle(name)")
         from target_gym.registry import REGISTRY
 
         spec = REGISTRY[self.registry_name]

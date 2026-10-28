@@ -23,10 +23,7 @@ advantage and the two costs reported separately (``target_gym.eval``).
 
 from __future__ import annotations
 
-import math
-
 import jax.numpy as jnp
-import numpy as np
 
 
 def tracking_cost(error, e_floor, e_tol=0.0, p=2.0, xp=jnp):
@@ -54,38 +51,6 @@ def trip_cost(params):
     """The cost of a trip, charged once on the step that leaves the envelope:
     the plant's restart time priced at the per-step failure cost."""
     return params.restart_steps * params.failure_cost
-
-
-def _erfc_np(z):
-    """erfc(z / sqrt 2) on numpy arrays, for the xp=np scoring path."""
-    from scipy.special import erfc
-
-    return erfc(np.asarray(z) / math.sqrt(2.0))
-
-
-def proximity_cost(margin, sigma, cost, reaction_steps=1.0, risk=1.0, xp=jnp):
-    """The trip cost charged by expectation instead of by realisation:
-    ``risk * cost * Phi(-margin / (sigma sqrt(reaction_steps)))``, the
-    probability that the disturbance carries the state past the envelope
-    before the controller can arrest it, times the cost. Smooth where the
-    realised charge is a step, so a planner gets a gradient toward the edge;
-    at ``reaction_steps = risk = 1`` it has the realised charge's mean.
-
-    ``margin``: distance to the envelope in its own units, positive inside and
-    negative outside, where the charge saturates at the whole ``cost``.
-    ``sigma``: the one-step disturbance scale in the same units.
-    ``reaction_steps``: the steps the loop needs to arrest an excursion; the
-    margin is judged against ``sigma * sqrt(reaction_steps)``. It and ``risk``
-    (a plain multiplier) change the objective, so state them with any number
-    they produce."""
-    from jax.scipy.stats import norm
-
-    scale = xp.maximum(sigma, 1e-12) * xp.sqrt(xp.maximum(reaction_steps, 1.0))
-    # Not clamped at 0: past the envelope the charge must reach the whole
-    # cost, or a planner rolling deep outside is charged half and trips.
-    z = margin / scale
-    tail = norm.cdf(-z) if xp is jnp else 0.5 * _erfc_np(z)
-    return risk * cost * tail
 
 
 def with_trip(terms: dict, tripped, cost, xp=jnp) -> dict:

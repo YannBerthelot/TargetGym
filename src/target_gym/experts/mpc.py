@@ -165,11 +165,8 @@ class GradientMPC:
         self._jit_rollout = jax.jit(self._rollout)
 
         self._actions = jnp.zeros((horizon, action_dim))
-        # One jitted entry point, deliberately. A second one for a larger
-        # first-solve budget was tried and removed: the batched path never
-        # called it, and two jitted functions with the same body compile
-        # twice -- about 50 s each for the patrol planner, paid once per
-        # process on the per-seed route.
+        # One jitted entry point: two with the same body compile twice, about
+        # 50 s each for the patrol planner.
         self._jit_optimize = jax.jit(self._optimize)
 
     def _env_action(self, u: jnp.ndarray):
@@ -525,6 +522,10 @@ def casadi_step_map(velocity, nx: int, nu: int, delta_t: float, method: str):
     is the environment's step in float64, wherever the plant is a
     first-order ODE integrated by that function.
     """
+    if not _CASADI_AVAILABLE:
+        raise ImportError(
+            "casadi is required for casadi_step_map: pip install 'target-gym[mpc]'"
+        )
     if "euler" in method:
         order, n_sub = "euler", int(method.split("_")[1])
     elif "rk" in method:

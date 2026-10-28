@@ -4,6 +4,10 @@ obs_value_index / obs_target_index / tracked_names attributes, and
 MPC / make_pid / make_mpc env methods.
 """
 
+import os
+import subprocess
+import sys
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -45,7 +49,7 @@ RUNNER_ENVS = ["plane", "cstr", "first_order", "four_tank"]
 @pytest.mark.parametrize("name", RUNNER_ENVS)
 def test_rollout_with_pid_tracks_shapes_and_stays_finite(name):
     spec = REGISTRY[name]
-    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": N})
+    params = spec.make_test_params(max_steps_in_episode=N)
     values, targets, rewards = R.rollout(spec, params, R.pid_policy(spec), seed=0)
 
     n_tracked = len(R._as_tuple(spec.make_env().obs_value_index))
@@ -60,9 +64,25 @@ def test_rollout_with_pid_tracks_shapes_and_stays_finite(name):
 def test_figure_modes_run_headless(name):
     """The figure modes must complete without a display or a writable figures/."""
     spec = REGISTRY[name]
-    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": N})
+    params = spec.make_test_params(max_steps_in_episode=N)
     assert R.figure_sweep(name, params=params, resolution=3, plot=False)
     assert R.figure_pid(name, params=params, n_seeds=2, plot=False)
+
+
+@pytest.mark.medium
+def test_importing_the_runners_keeps_the_callers_matplotlib_backend():
+    """Only the command line picks a headless backend; a library import must
+    leave the caller's own backend alone."""
+    code = (
+        "import matplotlib; import target_gym.runners.runners; "
+        "print(matplotlib.get_backend())"
+    )
+    env = {**os.environ, "MPLBACKEND": "svg"}
+    out = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip().lower() == "svg"
 
 
 def test_every_registered_environment_exposes_a_tracked_label():
@@ -209,6 +229,9 @@ def test_mpc_step_returns_finite(env_cls, params_cls, make_fn, make_kwargs, acti
         assert np.all(np.isfinite(arr)), "MPC action contains non-finite values"
 
 
+# Compiling an aircraft planner peaks at 2.5 to 4 GB and takes 25 to 95 s on a
+# cold cache (measured 2026-10-28), more than a small test's share of a machine.
+@pytest.mark.medium
 def test_plane_mpc_step_returns_finite():
     """PlaneMPC.step() returns a finite [power, stick] array."""
     env = Airplane2D(integration_method="rk4_1")
@@ -222,6 +245,7 @@ def test_plane_mpc_step_returns_finite():
     assert np.all(np.isfinite(action)), "PlaneMPC action contains non-finite values"
 
 
+@pytest.mark.medium  # an aircraft planner, as above
 def test_mpc_reset_zeroes_actions():
     """GradientMPC.reset() zeros out the internal action sequence."""
     env = Airplane2D(integration_method="rk4_1")

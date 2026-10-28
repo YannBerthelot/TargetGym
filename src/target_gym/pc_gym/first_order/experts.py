@@ -86,12 +86,12 @@ def make_first_order_pid_controller():
     """The scored PID as a pure :class:`~target_gym.experts.pid.Controller`;
     ``.host()`` is what ``make_pid()`` returns. Gains from
     src/target_gym/data/pid_gains.json."""
-    from target_gym.experts.pid import _g, siso_pid
+    from target_gym.experts.pid import gain, siso_pid
 
     return siso_pid(
-        Kp=_g("first_order", "Kp", 2.11),
-        Ki=_g("first_order", "Ki", 9.72),
-        Kd=_g("first_order", "Kd", 0.0039),
+        Kp=gain("first_order", "Kp", 2.11),
+        Ki=gain("first_order", "Ki", 9.72),
+        Kd=gain("first_order", "Kd", 0.0039),
         dt=0.05,
         state_index=0,
         setpoint_index=1,

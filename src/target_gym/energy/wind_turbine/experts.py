@@ -29,7 +29,7 @@ from target_gym.experts.mpc import (
     _pid_rollout_plan,
     _v2_objective,
 )
-from target_gym.experts.pid import Controller, _g
+from target_gym.experts.pid import Controller, gain
 
 _WT_BARRIER_ONSET = 0.85  # fraction of the trip speed at which the barrier starts
 _WT_BARRIER_WEIGHT = 10.0
@@ -530,9 +530,9 @@ def wind_turbine_pid_step(params, state, obs, xp=jnp):
 def make_wind_turbine_pid_controller() -> Controller:
     """The shipped turbine PID as a :class:`Controller`, gains as tuned."""
     params = WindTurbinePIDParams(
-        Kp_pitch=_g("wind_turbine", "Kp_pitch", 3.0),
-        Ki_pitch=_g("wind_turbine", "Ki_pitch", 0.6),
-        Kd_pitch=_g("wind_turbine", "Kd_pitch", 0.0),
+        Kp_pitch=gain("wind_turbine", "Kp_pitch", 3.0),
+        Ki_pitch=gain("wind_turbine", "Ki_pitch", 0.6),
+        Kd_pitch=gain("wind_turbine", "Kd_pitch", 0.0),
     )
     state = WindTurbinePIDState(integral=0.0, prev_err=0.0)
     return Controller(params, state, wind_turbine_pid_step)

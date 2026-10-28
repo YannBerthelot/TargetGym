@@ -668,3 +668,30 @@ def test_measure_hold_is_as_sensitive_as_the_protocol():
     assert antic == E.anticipations(e**2, cycles)
     assert np.mean([j > 0 for j in antic[:-1]]) > 0.8
     assert np.mean([j > 0 for j in E.anticipations(np.abs(e), cycles)]) < 0.05
+
+
+# Moves and settling (docs/capability-profile.md). A move is the reset or a
+# target change. The reset counts: first_order and cstr draw their target at
+# reset and have no other move.
+
+
+def test_the_move_cost_counts_the_approach_from_reset():
+    """No target change: the one move is the approach from the reset, 5 steps
+    at 4 then a hold at 1, so 20 over a 5-step settle. It settles in 5 steps
+    against a band of 2."""
+    cost = [4.0] * 5 + [1.0] * 15
+    m = E.evaluate([_episode(cost, [False] * 20)], burn_in=0, settle=5, band=2.0)
+    assert m["move_cost"] == pytest.approx(20.0)
+    assert m["settling_time"] == pytest.approx(5.0)
+
+
+def test_settling_time_is_the_steps_until_the_tracking_cost_stays_in_band():
+    """Band 1, three moves. The first last leaves the band at its fourth step
+    (tracking cost 2), so it settles in 4; the second never leaves it (0); the
+    third ends outside, so it counts its whole length (3). The total cost,
+    99 on every step, carries consumption and plays no part."""
+    tracking = [5, 3, 0.5, 2, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 3]
+    change = np.zeros(11, bool)
+    change[[4, 8]] = True
+    ep = _episode(np.full(11, 99.0), change, terms={"tracking": np.array(tracking)})
+    assert E.settling_time([ep], band=1.0)[0] == pytest.approx((4 + 0 + 3) / 3)

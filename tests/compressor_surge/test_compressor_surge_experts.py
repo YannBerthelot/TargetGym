@@ -172,7 +172,7 @@ def test_gains_are_read_under_the_task_key(monkeypatch, params):
     time (the tuner patches it), skips the ``note``, and nothing else in
     ``pid_gains.json`` starts with the task's name, since
     ``baseline_fingerprint`` collects gains by that prefix."""
-    stored = pid_mod._load_gains()
+    stored = pid_mod.load_gains()
     # 1 kPa under the setpoint on the control line at 90 % speed: the speed
     # loop acts through kp_speed.
     obs = _obs(params, 23.0, 0.15, N=0.9)
@@ -294,7 +294,7 @@ def test_guard_refuses_known_bad_gains(monkeypatch):
         pid_mod,
         "_gains_cache",
         {
-            **pid_mod._load_gains(),
+            **pid_mod.load_gains(),
             "compressor_surge": {**DEFAULT_GAINS, **REFUSED["anti-surge (3, 0.3)"]},
         },
     )
@@ -771,7 +771,7 @@ def test_mpc_falls_back_to_the_pair(env, params, planned, step, monkeypatch):
         pid_mod,
         "_gains_cache",
         {
-            **pid_mod._load_gains(),
+            **pid_mod.load_gains(),
             "compressor_surge": {**DEFAULT_GAINS, **REFUSED["anti-surge (3, 0.3)"]},
         },
     )
@@ -983,7 +983,7 @@ def _numbers_script():
     return module
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_pair_holds_the_validation_seeds():
     """The shipped pair, with the gains the registry's factory reads, on the
     first 1024 of the validation's seeds: no trip, and the smallest surge

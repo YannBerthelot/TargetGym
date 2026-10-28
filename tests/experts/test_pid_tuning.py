@@ -24,15 +24,13 @@ SMOKE_STEPS = 2
 # gradient steps above buy. It is not for the quality of the result, which no
 # two-step search could show.
 #
-# The three 3D-aircraft tuners default to a 2000-step BPTT rollout over 36 or 64
+# The 3D-aircraft tuner defaults to a 2000-step BPTT rollout over 36 or 64
 # target pairs and four seeds, and compiling and differentiating that cost 149 s
 # of a 1017 CPU-second fast job -- the largest single cluster in it. Shrinking
 # the problem exercises exactly the same lines for a fraction of the work, so
 # the coverage this test carries is unchanged.
 SMOKE_TUNER_KWARGS = {
     "tune_plane3d_heading_pid": {"n_targets": 2, "n_steps": 100},
-    "tune_plane3d_circle_pid": {"n_targets": 2, "n_steps": 100},
-    "tune_plane3d_figure8_pid": {"n_targets": 2, "n_steps": 100},
 }
 
 # The aircraft tuners used to return NaN gains, and the mechanism is now known:
@@ -47,14 +45,17 @@ SMOKE_TUNER_KWARGS = {
 # next tuner of this kind would be pinned.
 NAN_TUNERS: set[str] = set()
 
+# These two differentiate through an RK4 aircraft. Compiling that reverse-mode
+# graph peaks at 4.6 to 5 GB and takes 60 to 175 s on a cold cache (measured
+# 2026-10-28), more than a small test's share of a machine.
+MEDIUM_TUNERS = {"tune_plane_pid", "tune_plane3d_heading_pid"}
+
 TUNERS = [
     "tune_first_order_pid",
     "tune_cstr_pid",
     "tune_four_tank_pid",
     "tune_plane_pid",
     "tune_plane3d_heading_pid",
-    "tune_plane3d_circle_pid",
-    "tune_plane3d_figure8_pid",
 ]
 
 
@@ -93,7 +94,7 @@ def _flatten(gains) -> list[float]:
                 ),
             )
             if n in NAN_TUNERS
-            else n
+            else pytest.param(n, marks=pytest.mark.medium) if n in MEDIUM_TUNERS else n
         )
         for n in TUNERS
     ],

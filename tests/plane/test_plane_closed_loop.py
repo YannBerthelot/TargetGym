@@ -3,7 +3,7 @@
 Unlike ``test_flight_scenarios.py`` (open-loop, gain-independent), these tests
 exercise the shipped PID expert. They are the regression net for the claim the
 README makes -- that the PID is a usable expert demonstrator -- and they are
-marked ``slow`` because each runs a full 1500-step episode.
+marked ``large`` because each runs a full 1500-step episode.
 """
 
 import jax
@@ -15,7 +15,7 @@ from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
 from target_gym.plane.experts import make_plane_pid_controller
 
-pytestmark = pytest.mark.slow
+pytestmark = pytest.mark.large
 
 STEPS = 1500
 TOLERANCE_M = 150.0

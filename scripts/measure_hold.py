@@ -31,7 +31,7 @@ be far slower than the loop that tracks through it -- and it is checked here:
 the row records the hold error over the first and second halves of the window,
 which should agree if the burn-in was long enough.
 
-Episodes are run longer than ``EnvSpec.test_params`` where the burn-in needs
+Episodes are run longer than the scored configuration where the burn-in needs
 it, on the shipped reference and disturbance processes. The aircraft keep their
 test length: their targets are scheduled against the episode, so lengthening
 one changes the task.

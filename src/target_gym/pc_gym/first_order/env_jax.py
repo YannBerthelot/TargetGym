@@ -1,13 +1,11 @@
-import os
-from typing import Callable, Tuple
+from typing import Tuple
 
 import chex
 import jax
 import jax.numpy as jnp
-import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.base import canonical_reset, finish_step
 from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.first_order.env import (
     FirstOrderParams,
@@ -19,11 +17,13 @@ from target_gym.pc_gym.first_order.env import (
     get_obs,
 )
 from target_gym.pc_gym.first_order.rendering import _render
-from target_gym.utils import save_video
+from target_gym.video import SavesVideo
 
 
 class FirstOrderSystem(
-    RegistryExperts, environment.Environment[FirstOrderState, FirstOrderParams]
+    RegistryExperts,
+    SavesVideo,
+    environment.Environment[FirstOrderState, FirstOrderParams],
 ):
     """First-order lag: the simplest target MDP in the suite.
 
@@ -75,22 +75,11 @@ class FirstOrderSystem(
 
         # A trip is part of the kernel: the step is charged the trip cost and
         # the plant restarts at once, or is lost (``terminated``) with
-        # ``params.continuing = False`` (``base.failure_kernel``).
-        new_state, tripped, scored, terminated = failure_kernel(
+        # ``params.continuing = False`` (``base.finish_step``).
+        new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        reward = compute_reward(scored, params, xp=jnp)
-        return (
-            self.get_obs(new_state),
-            new_state,
-            reward,
-            terminated,
-            {
-                "last_state": new_state,
-                "tripped": tripped,
-                "trip_cost": charged_trip_cost(tripped, params),
-            },
-        )
+        return self.get_obs(new_state), new_state, reward, terminated, info
 
     def get_obs(self, state: FirstOrderState, params: FirstOrderParams = None):
         if params is None:
@@ -146,52 +135,8 @@ class FirstOrderSystem(
             -inf, inf, len(FirstOrderState.__dataclass_fields__), dtype=jnp.float32
         )
 
-    def save_video(
-        self,
-        select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        seed: int,
-        params=None,
-        folder="videos",
-        episode_index=0,
-        FPS=60,
-        format="mp4",
-    ):
-        return save_video(
-            self,
-            select_action,
-            folder,
-            episode_index,
-            FPS,
-            params,
-            seed=seed,
-            format=format,
-        )
-
     def render(
         self, screen, state: FirstOrderState, params: FirstOrderParams, frames, clock
     ):
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
-
-    def make_mpc(self, params=None, **kwargs):
-        """Return a GradientMPC oracle for state tracking."""
-        from target_gym.pc_gym.first_order.experts import make_first_order_mpc
-
-        if params is None:
-            params = self.default_params
-        return make_first_order_mpc(self, params, **kwargs)
-
-
-if __name__ == "__main__":
-    env = FirstOrderSystem()
-    seed = 42
-    env_params = FirstOrderParams(max_steps_in_episode=200)
-    os.makedirs("videos/first_order", exist_ok=True)
-    env.save_video(
-        lambda o: np.random.uniform(-1, 1),
-        seed,
-        folder="videos/first_order",
-        episode_index=0,
-        params=env_params,
-        format="gif",
-    )

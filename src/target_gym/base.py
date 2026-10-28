@@ -107,3 +107,33 @@ def charged_trip_cost(tripped, params):
     when it tripped, else 0. The reward already contains it; this is so a
     learner can normalise or subtract it separately."""
     return jnp.where(tripped, trip_cost(params), 0.0)
+
+
+def finish_step(env, key, state, new_state, params, **info):
+    """The end of every ``step_env``: the failure kernel, the reward, the info.
+
+    ``new_state`` is the physics' proposal. It goes through
+    ``failure_kernel``, and the reward is ``env.compute_reward`` on the state
+    the kernel scores, so an environment that overrides ``compute_reward``
+    (one per 3D aircraft task) is scored by its override. The caller builds
+    the observation from the returned state.
+
+    Returns ``(state, reward, terminated, info)``. ``info`` holds the keyword
+    arguments (``metrics``, say), plus:
+
+    - ``last_state``: the returned state. gymnax's ``step`` resets a finished
+      episode and keeps its final observation, not its final state, so this
+      keeps the state. After a trip in continuing mode it is the restart
+      state, not the state that tripped.
+    - ``tripped`` and ``trip_cost`` (``charged_trip_cost``).
+    """
+    new_state, tripped, scored, terminated = failure_kernel(
+        env, key, state, new_state, params
+    )
+    info = {
+        **info,
+        "last_state": new_state,
+        "tripped": tripped,
+        "trip_cost": charged_trip_cost(tripped, params),
+    }
+    return new_state, env.compute_reward(scored, params), terminated, info

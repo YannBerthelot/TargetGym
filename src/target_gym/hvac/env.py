@@ -431,8 +431,8 @@ def compute_next_state(
     )
 
     # OU weather deviation. The innovation is drawn from a key folded with
-    # ``state.time`` so a caller passing a constant key -- which every rollout
-    # helper in this repo does -- still gets a genuine zero-mean process.
+    # ``state.time`` so a caller passing a constant key still gets a genuine
+    # zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     sigma = p.T_out_noise_std * jnp.sqrt(2.0 * WEATHER_OU_THETA * p.delta_t)
     weather_dev = (

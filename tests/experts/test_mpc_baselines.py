@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from target_gym.provenance import baseline_fingerprint, load_recorded_baselines
-from target_gym.registry import REGISTRY
+from target_gym.registry import REGISTRY, specs_in_group
 
 MPC_ENVS = [name for name, spec in REGISTRY.items() if spec.has_mpc]
 CLOSED_LOOP_STEPS = 3
@@ -31,6 +31,16 @@ CLOSED_LOOP_STEPS = 3
 #: workers, enough to take down a CI runner. The slow oracle test in
 #: tests/formation/test_formation_experts.py drives it in closed loop.
 HEAVY_COMPILE = {"formation"}
+
+# Compiling an aircraft planner peaks at 2.5 to 4 GB and takes 25 to 95 s on a
+# cold cache (measured 2026-10-28), more than a small test's share of a machine.
+AIRCRAFT = {spec.name for spec in specs_in_group("aircraft")} - HEAVY_COMPILE
+
+
+def _size(name):
+    if name in HEAVY_COMPILE:
+        return pytest.mark.large
+    return pytest.mark.medium if name in AIRCRAFT else ()
 
 
 def _bounds(space, shape):
@@ -73,15 +83,12 @@ def _cheap_mpc(spec, env, params):
 
 @pytest.mark.parametrize(
     "name",
-    [
-        pytest.param(name, marks=pytest.mark.slow) if name in HEAVY_COMPILE else name
-        for name in MPC_ENVS
-    ],
+    [pytest.param(name, marks=_size(name)) for name in MPC_ENVS],
 )
 def test_registered_mpc_builds_and_controls(name):
     spec = REGISTRY[name]
     env = spec.make_env()
-    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": 20})
+    params = spec.make_test_params(max_steps_in_episode=20)
 
     mpc = _cheap_mpc(spec, env, params)
     mpc.reset()
@@ -166,7 +173,7 @@ def test_every_environment_without_an_mpc_says_why():
 # wrong conclusions in the work this file came from, and it applies to the
 # tripwire, not only to the ranking.
 #
-# Episodes are each environment's own, from EnvSpec.test_params, and are no
+# Episodes are each environment's own, from their scored configuration, and are no
 # longer capped. The cap was 250 steps and existed to bound CI cost back when
 # this test rolled the plants out itself; it truncated the reactor from 1200
 # steps, the four-tank from 500 and the boiler drum from 400, which measures

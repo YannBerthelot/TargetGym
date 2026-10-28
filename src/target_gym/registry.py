@@ -111,14 +111,11 @@ class EnvSpec:
         Callable ``(env, params) -> controller`` with ``reset()`` and
         ``step(obs, state) -> action``.  ``None`` means no MPC baseline
         exists for this environment yet.
-    test_params:
-        Parameter overrides for the scored configuration, the one the
-        baselines and the protocol are measured on.  Applied via
-        ``params_cls(**test_params)``.
     tuned_gains_key:
         Key under which this environment's PID gains live in
-        ``src/target_gym/data/pid_gains.json``.  ``None`` means the controller is not a
-        single flat SISO loop and the gains are stored per sub-loop.
+        ``src/target_gym/data/pid_gains.json``.  ``None`` means the controller
+        reads no single entry there: its gains are stored per sub-loop, or kept
+        in its package's ``experts.py`` (the 3D aircraft's guidance laws).
         ``provenance.baseline_fingerprint`` hashes this key's entry.
     gains_keys:
         Other keys of ``pid_gains.json`` this task's baseline and protocol
@@ -135,15 +132,15 @@ class EnvSpec:
     disturbance_fields:
         State fields holding a *zero-mean stochastic disturbance* (gusts, load
         noise). The conformance suite asserts these behave like disturbances --
-        in particular that they do not ratchet under a constant PRNG key, as
-        every rollout helper here steps them. Excludes deliberately drifting
+        in particular that they do not ratchet under a constant PRNG key,
+        which a caller may pass at every step. Excludes deliberately drifting
         processes such as the reactor's demand.
     disturbance_overrides:
         Parameter overrides that switch the disturbance on, when it is off by
         default (e.g. the aircraft's ``turbulence_sigma``).
     effectiveness_overrides:
         Parameter overrides for the controller-effectiveness contract, when the
-        default ``test_params`` episode is too short to tell a working
+        scored episode is too short to tell a working
         controller from a constant (the reactor, whose xenon transient outlasts
         the scored episode).
     expert_degraded:
@@ -182,7 +179,6 @@ class EnvSpec:
     # params, and the v1 baselines are kept in
     # ``src/target_gym/data/baseline_returns_v1.json``.
     version: int = 2
-    test_params: dict[str, Any] = field(default_factory=dict)
     tuned_gains_key: str | None = None
     #: Further ``pid_gains.json`` keys the task reads, hashed into its
     #: baseline fingerprint (``provenance.gains_entries``).
@@ -240,8 +236,9 @@ class EnvSpec:
         return cached
 
     def make_test_params(self, **overrides):
-        """The scored configuration (``test_params``), plus any extra overrides."""
-        return self.params_cls(**{**self.test_params, **overrides})
+        """The scored configuration, the environment's ``default_params``, plus
+        any extra overrides. The baselines and the protocol are measured on it."""
+        return self.make_env().default_params.replace(**overrides)
 
 
 # ---------------------------------------------------------------------------
@@ -257,6 +254,18 @@ def _plane():
     from target_gym.plane.env_jax import Airplane2D
 
     return Airplane2D()
+
+
+def _plane_energy():
+    from target_gym.plane.env_jax import PlaneEnergy
+
+    return PlaneEnergy()
+
+
+def _plane_sine():
+    from target_gym.plane.env_jax import PlaneSine
+
+    return PlaneSine()
 
 
 def _plane3d_heading():
@@ -470,7 +479,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
         make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.experts"),
-        test_params={"max_steps_in_episode": 280},
         tuned_gains_key="plane",
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
@@ -482,70 +490,25 @@ _SPECS: tuple[EnvSpec, ...] = (
     EnvSpec(
         name="plane_energy",
         group="aircraft",
-        env_factory=_plane,
+        env_factory=_plane_energy,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
         make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.experts"),
-        # Altitude *and* airspeed: with two actuators against one scored
-        # objective a controller could trade airspeed for altitude for free.
-        # Scoring both forces the trade, repeatedly, on an altitude staircase.
-        # The pure staircase is ``PlaneParams(speed_weight=0.0)``.
-        #
         # Gains are the altitude-hold task's, deliberately not re-tuned here,
         # so the PID stays an honest reference for whether the trade pays.
-        test_params={
-            "max_steps_in_episode": 1200,
-            "target_pattern": 1,
-            "target_amplitude": 900.0,
-            "target_steps": 8,
-            "speed_weight": 0.5,
-            # Hold-phase airspeed deviation of the PID on this task
-            # (`scripts/measure_hold.py`).
-            "c_hold": 5.23,
-            # The oracle's lowest per-seed altitude hold between ladder steps,
-            # 1.198 m rounded; rho is its 1.18 m in floor units
-            # (`scripts/measure_hold.py`).
-            "e_floor": 1.20,
-            "rho_floor_tracking": (1.1773 / 1.20) ** 2,
-            "rho_floor": (1.1773 / 1.20) ** 2,
-            "failure_cost": 2.0 * (12192.0 / 1.20) ** 2,
-        },
         tuned_gains_key="plane",
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
-        # v3: the altitude floor moved from 4.55 m to the oracle's 1.20 m.
         version=3,
     ),
     EnvSpec(
         name="plane_sine",
         group="aircraft",
-        env_factory=_plane,
+        env_factory=_plane_sine,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
         make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.experts"),
-        # 480 steps is two periods of the 240 s sinusoid: the first sheds the
-        # initial transient, the second is what a bandwidth probe reads.
-        #
-        # The amplitude is set by the climb rate: amplitude A and period T
-        # command a peak vertical rate of 2*pi*A/T. 300 m peaks at 7.9 m/s,
-        # inside the aircraft's 14.6 m/s best sustained climb, so the response
-        # is limited by the closed loop, not by the actuator saturating.
-        test_params={
-            "max_steps_in_episode": 480,
-            "target_pattern": 3,
-            "target_amplitude": 300.0,
-            "target_period": 240.0,
-            "c_hold": 8.15,  # PID hold-phase airspeed deviation on the sinusoid
-            # The altitude floor is an earlier oracle's hold, kept because the
-            # 1 m barometric resolution is within 1.5x of it; rho is the
-            # current oracle's lowest per-seed hold, 0.5285 m, in floor units
-            # (`scripts/measure_hold.py`).
-            "e_floor": 1.26,
-            "rho_floor_tracking": (0.5285 / 1.26) ** 2,
-            "rho_floor": (0.5285 / 1.26) ** 2,
-            "failure_cost": 2.0 * (12192.0 / 1.26) ** 2,
-        },
         tuned_gains_key="plane",
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
@@ -560,20 +523,6 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_plane3d_heading_pid_controller", module="target_gym.plane3d.experts"
         ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
-        # The floors are set here, not taken from the PlaneParams3D class
-        # defaults, because PatrolParams inherits those defaults and patrol's
-        # records must not move with this task's floor.
-        test_params={
-            "max_steps_in_episode": 200,
-            # The 1 m altimeter resolution; the heading floor is the class
-            # default, the 0.0087 rad AHRS resolution. The oracle holds below
-            # both, and rho is its lowest per-seed holds (0.6735 m, 2.14e-5
-            # rad; `scripts/measure_hold.py`) in floor units.
-            "e_floor_altitude": 1.0,
-            "rho_floor_tracking": (0.6735 / 1.0) ** 2 + (2.14e-5 / 0.0087) ** 2,
-            "rho_floor": (0.6735 / 1.0) ** 2 + (2.14e-5 / 0.0087) ** 2,
-            "failure_cost": 2.0 * (12192.0 / 1.0) ** 2,
-        },
         tuned_gains_key="plane3d_heading",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
@@ -582,7 +531,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        # v3: the altitude floor became the 1 m altimeter resolution (was 1.44 m).
         version=3,
     ),
     EnvSpec(
@@ -594,18 +542,6 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_plane3d_circle_pid_controller", module="target_gym.plane3d.experts"
         ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
-        test_params={
-            "max_steps_in_episode": 300,
-            # The 1 m altimeter and 3 m GPS resolutions. The oracle holds
-            # below both, and rho is its lowest per-seed holds (0.6657 m,
-            # 0.4504 m; `scripts/measure_hold.py`) in floor units.
-            "e_floor_altitude": 1.0,
-            "e_floor_path": 3.0,
-            "rho_floor_tracking": (0.6657 / 1.0) ** 2 + (0.4504 / 3.0) ** 2,
-            "rho_floor": (0.6657 / 1.0) ** 2 + (0.4504 / 3.0) ** 2,
-            "failure_cost": 2.0 * (12192.0 / 1.0) ** 2,
-        },
-        tuned_gains_key="plane3d_circle",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -613,8 +549,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        # v3: the floors became the instrument resolutions (were 4.06 m
-        # altitude and 8.12 m path).
         version=3,
     ),
     EnvSpec(
@@ -626,22 +560,6 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_plane3d_racetrack_pid_controller", module="target_gym.plane3d.experts"
         ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
-        # A lap is two legs plus two half-circles: 2 * (2 * 2r) + 2 * pi * r,
-        # about 8.3 r of path. At an 8.4 km radius and 230 m/s that is ~300 s,
-        # so 650 steps is the three laps the episode-length criterion asks of a
-        # periodic task.
-        test_params={
-            "max_steps_in_episode": 650,
-            # The 1 m altimeter and 3 m GPS resolutions. The oracle holds
-            # below both, and rho is its lowest per-seed holds (0.6803 m,
-            # 0.4660 m; `scripts/measure_hold.py`) in floor units.
-            "e_floor_altitude": 1.0,
-            "e_floor_path": 3.0,
-            "rho_floor_tracking": (0.6803 / 1.0) ** 2 + (0.4660 / 3.0) ** 2,
-            "rho_floor": (0.6803 / 1.0) ** 2 + (0.4660 / 3.0) ** 2,
-            "failure_cost": 2.0 * (12192.0 / 1.0) ** 2,
-        },
-        tuned_gains_key="plane3d_racetrack",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -649,9 +567,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        # v3: the floors became the instrument resolutions (were 1.39 m
-        # altitude and 6.17 m path). v4: the observed tangent and cross-track
-        # error on one cap pointed against the direction of travel.
         version=4,
     ),
     EnvSpec(
@@ -663,17 +578,6 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_plane3d_figure8_pid_controller", module="target_gym.plane3d.experts"
         ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
-        test_params={
-            "max_steps_in_episode": 400,
-            # Path term alone, its floor the 3 m GPS resolution. The oracle
-            # holds below it, and rho is its lowest per-seed hold (1.2871 m;
-            # `scripts/measure_hold.py`) in floor units.
-            "e_floor_path": 3.0,
-            "rho_floor_tracking": (1.2871 / 3.0) ** 2,
-            "rho_floor": (1.2871 / 3.0) ** 2,
-            "failure_cost": 2.0 * (20000.0 / 3.0) ** 2,
-        },
-        tuned_gains_key="plane3d_figure8",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -681,7 +585,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        # v3: the path floor became the 3 m GPS resolution (was 14.6 m).
         version=3,
     ),
     EnvSpec(
@@ -691,13 +594,18 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
         make_pid=_pid("make_patrol_pid_controller", module="target_gym.patrol.experts"),
         make_mpc=_mpc("make_patrol_mpc", module="target_gym.patrol.experts"),
-        test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
         # The oracle and the lead fly the 3D heading autopilot.
         gains_keys=("plane3d_heading",),
         noise_fields=("turbulence_sigma",),
-        # v3: the slot floor became the 3 m relative-GPS resolution (was
-        # 18.6 m). PatrolParams is shared, so patrol_bearing_only moves too.
+        # The 3D aircraft it flies, and the heading PID its lead flies on
+        # (physics here, so declared for the version stamp too).
+        fingerprint_sources=(
+            "plane/dynamics.py",
+            "plane3d/dynamics.py",
+            "plane3d/env.py",
+            "experts/pid.py",
+        ),
         version=3,
     ),
     EnvSpec(
@@ -712,7 +620,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_patrol_bearing_only_mpc", module="target_gym.patrol.experts"
         ),
-        test_params={"max_steps_in_episode": 200},
         tuned_gains_key="patrol",
         gains_keys=("plane3d_heading",),
         baselines_note=(
@@ -731,7 +638,14 @@ _SPECS: tuple[EnvSpec, ...] = (
             "equal patrol's seed for seed."
         ),
         noise_fields=("turbulence_sigma",),
-        # v3 with patrol: they share PatrolParams, and the slot floor moved.
+        # The 3D aircraft it flies, and the heading PID its lead flies on
+        # (physics here, so declared for the version stamp too).
+        fingerprint_sources=(
+            "plane/dynamics.py",
+            "plane3d/dynamics.py",
+            "plane3d/env.py",
+            "experts/pid.py",
+        ),
         version=3,
     ),
     # -- Process control ----------------------------------------------------
@@ -772,10 +686,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_four_tank_mpc", module="target_gym.pc_gym.four_tank.experts"
         ),
-        # 500 steps. The lower tanks have a ~58 s time constant at these
-        # levels, so the previous 100-step horizon was under two of them --
-        # every controller was still mid-transient and they all scored alike,
-        # which is why the effectiveness contract could not separate them here.
+        # 500 steps: the lower tanks have a ~58 s time constant at these
+        # levels, and a shorter episode leaves every controller mid-transient.
         tuned_gains_key="four_tank",
     ),
     EnvSpec(
@@ -852,30 +764,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_reactor_pid_controller", module="target_gym.reactor.experts"
         ),
         make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.experts"),
-        # Env steps of 10 s (``control_period`` physics sub-steps each): 2.4 h.
-        #
-        # This used to be written as 8640 *physics* steps while the shipped
-        # rollout counted env steps, so the recorded baselines ran 8640 env
-        # steps of which the last 7776 scored a frozen plant at a tenth of the
-        # reward (see ReactorParams.max_steps_in_episode). Same task, now
-        # counted in the unit every other plant uses.
-        #
-        # Before that it was 1200 physics steps, twenty minutes, with 8640
-        # applied only through ``effectiveness_overrides`` on the stated
-        # grounds that the shorter one was not long enough "for the
-        # xenon/demand dynamics to actually distinguish a controller": over
-        # twenty minutes the xenon state moves 2.5%, against a 13.2 h time
-        # constant. 2.4 h is 0.18 xenon time constants, enough that the poison
-        # moves materially while the controller works. Full pit dynamics would
-        # need about ten hours, which alone would cost more to record than the
-        # rest of the suite together.
-        test_params={"max_steps_in_episode": 864},
         tuned_gains_key="reactor",
-        # v2: ``max_steps_in_episode`` and ``state.time`` count env steps, not
-        # physics sub-steps. The physics within an episode is unchanged, but a
-        # return published against v1 was taken over 8640 env steps of which
-        # 7776 scored a frozen plant, so its numbers do not carry over.
-        # v3: the floor-normalised reward, like every other plant's v2.
         version=3,
     ),
     EnvSpec(
@@ -886,17 +775,14 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid("make_hvac_pid_controller", module="target_gym.hvac.experts"),
         make_mpc=_mpc("make_hvac_mpc", module="target_gym.hvac.experts"),
         # 720 steps at dt = 900 s is 7.5 days, so fifteen setback recoveries
-        # and as many solar cycles -- which is what distinguishes controllers
-        # here. (This comment read "2 days" long after the episode-length audit
-        # raised it from the 192 steps that actually was two days.)
+        # and as many solar cycles, which is what distinguishes controllers
+        # here.
         tuned_gains_key="hvac",
         disturbance_fields=("weather_dev",),
     ),
     EnvSpec(
         name="cement_kiln",
         group="industrial",
-        # v3: a raw kiln trips (discharge free lime >= ``lime_max``, 5 %);
-        # before, a kiln at minimum fuel ran cold at 30 % free lime untripped.
         version=3,
         env_factory=_cement_kiln,
         params_cls=_LazyParams("target_gym.cement_kiln.env", "CementKilnParams"),
@@ -982,8 +868,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_unstable_cstr_mpc", module="target_gym.pc_gym.unstable_cstr.experts"
         ),
-        # 1200 steps = 60 min at 3 s: six 10-minute blocks. The defaults are the
-        # task, so there is no test_params override and no effectiveness_overrides.
+        # 1200 steps = 60 min at 3 s: six 10-minute blocks, with no
+        # effectiveness_overrides.
         tuned_gains_key="unstable_cstr",
         disturbance_fields=("Ti_dev",),
         noise_fields=("Ti_sigma",),
@@ -1006,11 +892,10 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_compressor_surge_mpc", module="target_gym.compressor_surge.experts"
         ),
         # 1200 steps = 120 s at 0.1 s: four 30-second setpoint blocks and six
-        # 20-second demand blocks. The defaults are the task, so there is no
-        # test_params override and no effectiveness_overrides.
+        # 20-second demand blocks, with no effectiveness_overrides.
         tuned_gains_key="compressor_surge",
-        # The OU deviation of the consumers' opening, zero-mean under a
-        # constant key; demand_sigma is its stationary sd.
+        # The OU deviation of the consumers' opening, zero-mean;
+        # demand_sigma is its stationary sd.
         disturbance_fields=("demand_dev",),
         noise_fields=("demand_sigma",),
         # No fingerprint_sources: the package imports only itself and the
@@ -1025,8 +910,6 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_formation_pid_controller", module="target_gym.formation.experts"
         ),
         make_mpc=_mpc("make_formation_mpc", module="target_gym.formation.experts"),
-        # 200 steps, the patrol's episode: three turn onsets of the route.
-        test_params={"max_steps_in_episode": 200},
         tuned_gains_key="formation",
         # The wingmen fly the patrol's gains, and the lead autopilot of the
         # PID team and the oracle reads plane3d_heading's.

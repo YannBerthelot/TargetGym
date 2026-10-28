@@ -430,7 +430,7 @@ deliberate — one is differentiable and jit-friendly, the other is cheap to ste
 from Python — so the duplication is not itself the defect. Silently diverging
 is. Since 2026-10-25 each shipped PID is one step function that both forms
 run, `Controller.act` with `jnp` and `Controller.host()` with `np`, and
-`test_expert_policy_is_the_scored_pid` checks they agree on all 24
+`test_make_expert_is_the_scored_pid` checks they agree on all 24
 environments.
 
 ## 13. Does a reduced prediction model still answer the actuator like the plant?
@@ -541,7 +541,7 @@ within 1e-4 in the trip variable `phi_min`.
   checks 3, 4, 5, 7 and 8 against every registered environment, so a new
   environment inherits them by adding one line to the registry. Checks 3 and 4
   are repository-wide scans and cost seconds, so they run in the fast job;
-  checks 5, 7 and 8 step or differentiate every plant and are marked `slow`,
+  checks 5, 7 and 8 step or differentiate every plant and are marked `large`,
   adding about 100 s to that job.
 
   Each carries an allowlist (`KNOWN_WRITE_ONLY_STATE_FIELDS`,

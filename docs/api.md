@@ -44,8 +44,8 @@ Every environment implements the [gymnax](https://github.com/RobertTLange/gymnax
 | `step(key, state, action, params)` | gymnax's six-value step, which also applies the time limit |
 | `observation_space(params)`, `action_space(params)` | gymnax spaces |
 | `get_obs(state, params)` | The observation for a state |
-| `default_params` | A ready-made parameter set |
-| `render(...)`, `save_video(...)` | The control-room dashboard |
+| `default_params` | The scored configuration, the parameters the baselines are recorded on |
+| `render(...)`, `save_video(...)` | The control-room dashboard; needs `target-gym[render]` |
 
 Two conventions make generic code possible across environments, and are
 themselves stable:
@@ -64,7 +64,7 @@ running out of clock is a failure state.
 
 `target_gym.registry.REGISTRY` maps a name to an `EnvSpec`, the layer the front
 door resolves through. The spec's fields
-(`make_env`, `params_cls`, `make_pid`, `make_mpc`, `test_params`,
+(`make_env`, `params_cls`, `make_pid`, `make_mpc`,
 `disturbance_fields`, `baselines_note`, ...) are documented on the class and
 are stable.
 
@@ -83,8 +83,8 @@ print(len(REGISTRY), "environments in", len(GROUPS), "groups")
 | `target_gym.experts.pid`, `.mpc` | The per-environment factories are many and their signatures still vary. Reach them through `make_expert` and `make_oracle`, which are stable. |
 | `target_gym.runners` | Figure and video generation. A tool, not a library surface. |
 | `target_gym.render_kit` | The dashboard toolkit. Stable enough to build on, but its primitives are still moving. |
-| `target_gym.utils` | A grab-bag; parts of it will move or go. |
-| `target_gym.benchmark` | One policy interface and a paired runner over every task (`Policy`, `TaskInfo`, `run_policy`, `run_policy_on_benchmark`, `shipped_policy`). New; its `TaskInfo.extras` conventions are still settling with its first downstream user. |
+| `target_gym.utils` | Small numeric helpers. Video writing lives in `target_gym.video`. |
+| `target_gym.benchmark` | One policy interface and a paired runner over every task (`Policy`, `TaskInfo`, `run_policy`, `run_policy_on_benchmark`, `shipped_policy`). `run_policy` is the one rollout loop, and `episode_keys` its key convention: a fresh key every step. New; its `TaskInfo.extras` conventions are still settling with its first downstream user. |
 
 ## Deprecated
 
@@ -95,6 +95,7 @@ release.
 |---|---|
 | `env.make_pid()` | `make_expert(name).host()` |
 | `env.expert_policy` | `make_expert(name).batched()` |
+| `env.make_mpc(params)` | `make_oracle(name, params)` |
 | `GymnasiumPlane`, `gym_wrapper_factory` | `make_gymnasium(name)` |
 
 ## Not public

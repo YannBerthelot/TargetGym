@@ -123,7 +123,7 @@ def make_formation_pid_controller(num_wingmen: int = 2) -> Controller:
     more than any number of steps held off altitude.
     """
     lead_params, lead_state = make_plane3d_heading_pid()
-    overlay = _pid_mod._load_gains().get("formation", {})
+    overlay = _pid_mod.load_gains().get("formation", {})
     wingman = make_patrol_pid()[0].replace(
         **{k: float(v) for k, v in overlay.items() if k in WINGMAN_GAINS}
     )

@@ -10,16 +10,15 @@ Every task builds its oracle (the MPC slot) from its own package's
 ``experts.py``; ``experts/mpc.py`` holds only the shared machinery, and it is
 in every task's baseline fingerprint. Every task keeps its PID there too, as a
 pure ``Controller`` (``experts/pid.py`` holds only the shared core and is also
-in every baseline fingerprint). A task added after the 21 declares any physics
-it imports from another package in
-``fingerprint_sources``, has a name that cannot collide with another task's
-gains keys, ships as ``-v2`` with a ``compute_reward_v1`` of its own, has a
+in every baseline fingerprint). A task added after the 21 has a name that
+cannot collide with another task's gains keys, ships as ``-v2`` with a ``compute_reward_v1`` of its own, has a
 hold row, and, if it ships a PID, has a row in ``TUNERS`` in
 scripts/tune_pid.py. The checks loop over the added tasks and assert once, so
 they pass trivially while none exists.
 
-For every task, the 21 included: each gains key a spec declares in
-``gains_keys`` exists, and the baseline fingerprint covers the task's
+For every task, the 21 included: any physics it imports from another
+package is declared in ``fingerprint_sources``, each gains key a spec declares
+in ``gains_keys`` exists, and the baseline fingerprint covers the task's
 ``tuned_gains_key``, its declared keys and its burn-in.
 """
 
@@ -81,6 +80,13 @@ def _factory(f):
     return [f.__qualname__, module, cells.get("factory_name")]
 
 
+def _scored_overrides(spec) -> dict:
+    """Where the scored configuration (``env.default_params``) departs from
+    the params class's own defaults."""
+    scored, plain = vars(spec.make_test_params()), vars(spec.params_cls())
+    return {k: v for k, v in scored.items() if v != plain[k]}
+
+
 def _pinned_snapshot() -> list[dict]:
     """Every field of the 21 pinned specs that could change what they are,
     including the ones no fingerprint sees (the controller factories, the
@@ -100,7 +106,7 @@ def _pinned_snapshot() -> list[dict]:
                 "env_class": [type(env).__module__, type(env).__qualname__],
                 "make_pid": _factory(s.make_pid),
                 "make_mpc": _factory(s.make_mpc),
-                "test_params": s.test_params,
+                "scored_overrides": _scored_overrides(s),
                 "tuned_gains_key": s.tuned_gains_key,
                 "gains_keys": s.gains_keys,
                 "baselines_note": s.baselines_note,
@@ -216,8 +222,8 @@ def test_controllers_stay_out_of_the_shared_files():
     assert not problems, "\n".join(problems)
 
 
-# What a package added after the 21 may import from target_gym besides itself
-# and its declared fingerprint_sources: the shared plumbing, which every
+# What a task's package may import from target_gym besides itself and its
+# declared fingerprint_sources: the shared plumbing, which every
 # fingerprint already covers.
 _SHARED_MODULES = {
     "target_gym.base",
@@ -227,6 +233,9 @@ _SHARED_MODULES = {
     # Unhashed on purpose: it only looks controllers up in the registry, so it
     # cannot change what a plant or a controller computes.
     "target_gym.expert_access",
+    # Unhashed on purpose too: it films an episode, which cannot change what
+    # the episode scores.
+    "target_gym.video",
 }
 # And, in experts*.py only, the shared controller code.
 _CONTROLLER_MODULES = {
@@ -261,13 +270,12 @@ def _may_import(module: str, package: str, allowed: set[str]) -> bool:
 
 
 def test_imports_stay_inside_the_fingerprint():
-    """Imported code must be fingerprinted, so a package added after the 21
-    imports only itself, the shared plumbing and the modules its spec declares
-    in ``fingerprint_sources``, and every task's experts*.py imports only its
+    """Imported code must be fingerprinted, so a task's package imports
+    only itself, the shared plumbing and the modules its spec declares in
+    ``fingerprint_sources``, and every task's experts*.py imports only its
     own package, the shared plumbing, its declared sources and the shared
-    controller code. (The physics of the 21 predates the rule and is not
-    checked.) Relative imports are refused because the check reads absolute
-    names only. A file not named experts* imports its package's controllers
+    controller code. Relative imports are refused because the check reads
+    absolute names only. A file not named experts* imports its package's controllers
     only inside a function, as the env_jax files of the 21 do: the version
     stamp leaves experts* out, so physics that depended on them could change
     with no version bump."""
@@ -275,7 +283,6 @@ def test_imports_stay_inside_the_fingerprint():
     seen = set()
     for s in registry.all_specs():
         package = _package(s)
-        added = s.name not in PINNED_21
         declared = {
             "target_gym." + rel.removesuffix(".py").replace("/", ".")
             for rel in s.fingerprint_sources
@@ -285,8 +292,6 @@ def test_imports_stay_inside_the_fingerprint():
                 continue
             seen.add(path)
             is_experts = path.name.startswith("experts")
-            if not (added or is_experts):
-                continue
             allowed = _SHARED_MODULES | declared
             if is_experts:
                 allowed |= _CONTROLLER_MODULES
@@ -334,15 +339,27 @@ def test_imports_stay_inside_the_fingerprint():
 
 
 #: The only extra sources the 21 declare: the 3D aircraft extend the 2D
-#: dynamics and their experts fly the 2D package's TECS.
+#: dynamics and their experts fly the 2D package's TECS, and patrol flies the
+#: 3D aircraft with its lead on the shared heading PID.
 DECLARED_BY_THE_21 = {
-    name: ("plane/dynamics.py", "plane/experts_tecs.py")
-    for name in (
-        "plane3d_heading",
-        "plane3d_circle",
-        "plane3d_racetrack",
-        "plane3d_figure8",
-    )
+    **{
+        name: ("plane/dynamics.py", "plane/experts_tecs.py")
+        for name in (
+            "plane3d_heading",
+            "plane3d_circle",
+            "plane3d_racetrack",
+            "plane3d_figure8",
+        )
+    },
+    **{
+        name: (
+            "plane/dynamics.py",
+            "plane3d/dynamics.py",
+            "plane3d/env.py",
+            "experts/pid.py",
+        )
+        for name in ("patrol", "patrol_bearing_only")
+    },
 }
 
 
@@ -350,9 +367,10 @@ def test_controllers_are_in_the_baseline_fingerprint_only():
     """A package's experts.py is in the baseline fingerprint of its tasks and
     out of their version stamp, since retuning a controller does not change
     the environment. The stamp is otherwise the baseline's file list, and the
-    21 declare no extra sources but the 3D aircraft's (``DECLARED_BY_THE_21``),
-    so their stamps read the same files as before their oracles moved out of
-    experts/mpc.py (test_env_versions holds the stamps themselves)."""
+    21 declare no extra sources but the 3D aircraft's and patrol's
+    (``DECLARED_BY_THE_21``), so their stamps read the same files as before
+    their oracles moved out of experts/mpc.py, plus patrol's imports
+    (test_env_versions holds the stamps themselves)."""
     problems = []
     for s in registry.all_specs():
         sources = provenance._env_sources(s)
@@ -596,14 +614,15 @@ def test_the_baseline_fingerprint_covers_the_burn_in(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("name", sorted(registry.REGISTRY))
 def test_every_env_exposes_its_registry_experts(name):
-    """The README promises ``env.make_pid()`` and ``env.make_mpc()`` on every
-    environment, and they must build what the registry ships."""
+    """The README promises ``target_gym.make_expert(name)`` on every task, and
+    ``env.make_mpc()`` must build what the registry ships."""
+    from target_gym import make_expert
+
     spec = registry.REGISTRY[name]
     env = spec.make_env()
-    assert callable(getattr(env, "make_pid", None))
     assert callable(getattr(env, "make_mpc", None))
     if spec.has_pid:
-        pid = env.make_pid()
+        pid = make_expert(name).host()
         assert callable(pid) and hasattr(pid, "reset")
     if spec.has_mpc and getattr(type(env), "registry_name", None) == name:
         mpc = env.make_mpc(spec.make_test_params())
@@ -611,21 +630,24 @@ def test_every_env_exposes_its_registry_experts(name):
 
 
 @pytest.mark.parametrize("name", sorted(registry.REGISTRY))
-def test_expert_policy_is_the_scored_pid(name):
-    """``env.expert_policy`` (batched, traceable) and ``make_pid()`` (host) run
-    the same step function, so along one episode they act alike up to float32
-    rounding: JAX computes in float32 where the host keeps some float64."""
+def test_make_expert_is_the_scored_pid(name):
+    """``make_expert(name).batched()`` (traceable) and the host PID the
+    baselines are scored with run the same step function, so along one
+    episode they act alike up to float32 rounding: JAX computes in float32
+    where the host keeps some float64."""
     import jax
     import jax.numpy as jnp
     import numpy as np
+
+    from target_gym import make_expert
 
     spec = registry.REGISTRY[name]
     env, params = spec.make_env(), spec.make_test_params()
     space = env.action_space(params)
     span = np.maximum(np.asarray(space.high) - np.asarray(space.low), 1e-12)
-    expert = env.expert_policy
+    expert = make_expert(name).batched()
     expert_state = expert.init_state(1)
-    pid = env.make_pid()
+    pid = spec.make_pid()
     pid.reset()
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
@@ -638,8 +660,8 @@ def test_expert_policy_is_the_scored_pid(name):
         worst = max(worst, float(np.max(np.abs(shipped - traced) / span)))
         obs, state, _, _, _ = step(key, state, jnp.asarray(shipped), params)
     assert worst < 1e-3, (
-        f"{name}: expert_policy differs from make_pid by {worst:.3g} of the "
-        "action range"
+        f"{name}: the batched expert differs from the scored PID by {worst:.3g} "
+        "of the action range"
     )
 
 

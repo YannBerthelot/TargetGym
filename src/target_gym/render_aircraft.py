@@ -25,10 +25,11 @@ code between the aircraft renderers never marks a recorded baseline stale.
 """
 
 import numpy as np
-import pygame
-from pygame import gfxdraw
 
-from target_gym.render_kit import format_clock
+from target_gym.render_kit import format_clock, render_extra
+
+pygame = render_extra("pygame")
+gfxdraw = render_extra("pygame.gfxdraw")
 
 
 def draw_dashed_line(surface, color, start_pos, end_pos, dash_length=5, space_length=5):
