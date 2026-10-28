@@ -35,10 +35,6 @@ Typical use::
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
 
-import matplotlib
-
-matplotlib.use("Agg")
-
 import matplotlib.colors as mcolors
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt

@@ -596,14 +596,15 @@ def test_the_baseline_fingerprint_covers_the_burn_in(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("name", sorted(registry.REGISTRY))
 def test_every_env_exposes_its_registry_experts(name):
-    """The README promises ``env.make_pid()`` and ``env.make_mpc()`` on every
-    environment, and they must build what the registry ships."""
+    """The README promises ``target_gym.make_expert(name)`` on every task, and
+    ``env.make_mpc()`` must build what the registry ships."""
+    from target_gym import make_expert
+
     spec = registry.REGISTRY[name]
     env = spec.make_env()
-    assert callable(getattr(env, "make_pid", None))
     assert callable(getattr(env, "make_mpc", None))
     if spec.has_pid:
-        pid = env.make_pid()
+        pid = make_expert(name).host()
         assert callable(pid) and hasattr(pid, "reset")
     if spec.has_mpc and getattr(type(env), "registry_name", None) == name:
         mpc = env.make_mpc(spec.make_test_params())
@@ -611,21 +612,24 @@ def test_every_env_exposes_its_registry_experts(name):
 
 
 @pytest.mark.parametrize("name", sorted(registry.REGISTRY))
-def test_expert_policy_is_the_scored_pid(name):
-    """``env.expert_policy`` (batched, traceable) and ``make_pid()`` (host) run
-    the same step function, so along one episode they act alike up to float32
-    rounding: JAX computes in float32 where the host keeps some float64."""
+def test_make_expert_is_the_scored_pid(name):
+    """``make_expert(name).batched()`` (traceable) and the host PID the
+    baselines are scored with run the same step function, so along one
+    episode they act alike up to float32 rounding: JAX computes in float32
+    where the host keeps some float64."""
     import jax
     import jax.numpy as jnp
     import numpy as np
+
+    from target_gym import make_expert
 
     spec = registry.REGISTRY[name]
     env, params = spec.make_env(), spec.make_test_params()
     space = env.action_space(params)
     span = np.maximum(np.asarray(space.high) - np.asarray(space.low), 1e-12)
-    expert = env.expert_policy
+    expert = make_expert(name).batched()
     expert_state = expert.init_state(1)
-    pid = env.make_pid()
+    pid = spec.make_pid()
     pid.reset()
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
@@ -638,8 +642,8 @@ def test_expert_policy_is_the_scored_pid(name):
         worst = max(worst, float(np.max(np.abs(shipped - traced) / span)))
         obs, state, _, _, _ = step(key, state, jnp.asarray(shipped), params)
     assert worst < 1e-3, (
-        f"{name}: expert_policy differs from make_pid by {worst:.3g} of the "
-        "action range"
+        f"{name}: the batched expert differs from the scored PID by {worst:.3g} "
+        "of the action range"
     )
 
 

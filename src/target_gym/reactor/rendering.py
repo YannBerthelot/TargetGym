@@ -13,10 +13,6 @@ Right panel -- horizontal instrument-gauge bars:
 Bottom      -- rolling strip chart of power vs target.
 """
 
-import matplotlib
-
-matplotlib.use("Agg")
-
 import matplotlib.colors
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
