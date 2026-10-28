@@ -120,6 +120,23 @@ than by commit.
 
 ### Changed
 
+- **Every scored episode captures the expert reaching its hold.** The
+  expert is the reference a policy is scored against, so its scored hold has
+  to be its steady state. `tests/test_episode_length.py` holds every task to
+  two checks on the expert, on seeds 100 to 102:
+  - every target cycle with scored hold steps lasts at least twice the
+    task's settle;
+  - the expert's scored hold is at most twice its hold on an episode twice
+    as long.
+
+  Lengthened to pass them:
+  - `plane_energy-v4`: 1,200 to 1,600 steps, eight treads of 200;
+  - `plane3d_heading-v4`: 200 to 300 steps.
+
+  `four_tank`, `distillation`, `patrol` and `formation` are strict xfails
+  until their expert rework lengthens them. `compressor_surge` skips the
+  second check, because its schedule ends at step 1,200 and a longer run only
+  adds quiet steps.
 - **`env.default_params` is the scored configuration on every task.** An
   environment reset without parameters now runs the task the baselines are
   recorded on: the aircraft over 200 to 1,200 steps instead of 10,000, the

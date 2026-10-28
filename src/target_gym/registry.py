@@ -500,7 +500,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
-        version=3,
+        version=4,
     ),
     EnvSpec(
         name="plane_sine",
@@ -531,7 +531,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=3,
+        version=4,
     ),
     EnvSpec(
         name="plane3d_circle",

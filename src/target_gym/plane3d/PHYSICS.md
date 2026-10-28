@@ -334,7 +334,7 @@ xfail. That is a controller gap, not a physics gap; it is tracked in
 | --- | --- | --- | --- | --- | --- | --- |
 | `plane3d_circle` | 300 | 1 | 5 min | 3 in [-1, 1] | 17 | 26 |
 | `plane3d_figure8` | 400 | 1 | 7 min | 3 in [-1, 1] | 19 | 26 |
-| `plane3d_heading` | 200 | 1 | 3 min | 3 in [-1, 1] | 15 | 26 |
+| `plane3d_heading` | 300 | 1 | 5 min | 3 in [-1, 1] | 15 | 26 |
 | `plane3d_racetrack` | 650 | 1 | 11 min | 3 in [-1, 1] | 21 | 26 |
 
 `float state` counts the scalar and array float fields the state carries,
