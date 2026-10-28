@@ -1,7 +1,12 @@
-"""Write the baseline results page, ``docs/baseline-results.md``.
+"""Write the baseline results page, ``docs/baseline-results.md``, and its chart.
 
     uv run python scripts/generate_baseline_table.py            # write
     uv run python scripts/generate_baseline_table.py --check    # CI: exit 1 if stale
+
+The page opens with a chart of each task's oracle and ceiling against its
+expert: interactive on the docs site (``docs/javascripts/results-chart.js``
+draws it from the rows embedded in the page), and as two static images for
+the README, light and dark (``docs/images/results-vs-expert*.svg``).
 
 The page is the headline results of the whole library, so it is generated from
 the recorded data rather than transcribed: the protocol scores from
@@ -38,6 +43,10 @@ import numpy as np
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DOC = ROOT / "docs" / "baseline-results.md"
 PROTOCOL = ROOT / "src" / "target_gym" / "data" / "protocol_results.json"
+IMAGES = {
+    False: ROOT / "docs" / "images" / "results-vs-expert.svg",
+    True: ROOT / "docs" / "images" / "results-vs-expert-dark.svg",
+}
 
 INTRO = """\
 # Baseline results
@@ -97,6 +106,164 @@ def _seeds(counts) -> str:
         if len(counts) == 1
         else f"{counts[0]} to {counts[-1]} seeds"
     )
+
+
+def chart_rows(data: dict) -> list[dict]:
+    """One row per registered task in ``data``, in registry order: what the
+    chart draws, as recorded."""
+    from target_gym.registry import GROUPS, REGISTRY
+
+    return [
+        {
+            "name": name,
+            "group": GROUPS[spec.group],
+            "expert": data[name]["pid"]["hold_tracking"],
+            "oracle": data[name]["mpc"]["hold_tracking"],
+            "ceiling": data[name]["ceiling"],
+            "expert_gain": data[name]["pid"]["gain"],
+            "oracle_gain": data[name]["mpc"]["gain"],
+        }
+        for name, spec in REGISTRY.items()
+        if name in data
+    ]
+
+
+def _decades(x: float, ref: float) -> float:
+    return float(np.log10(x / ref)) if x > 0 else -np.inf
+
+
+#: The static image's colours, light and dark: the docs' chart palette on
+#: GitHub's own page backgrounds.
+_INK = {
+    False: dict(
+        bg="#ffffff", text="#0b0b0b", sub="#52514e", muted="#898781",
+        grid="#e1e0d9", conn="#c3c2b7", tick="#52514e",
+        expert="#2a78d6", oracle="#eb6834",
+    ),
+    True: dict(
+        bg="#0d1117", text="#f0efec", sub="#c3c2b7", muted="#898781",
+        grid="#2c2c2a", conn="#383835", tick="#c3c2b7",
+        expert="#3987e5", oracle="#d95926",
+    ),
+}  # fmt: skip
+
+
+def results_svg(rows: list[dict], dark: bool = False) -> str:
+    """The chart anchored on the expert, as a standalone image: each task's
+    oracle hold and ceiling in decades from its expert's hold (left is
+    cheaper), grouped by family and sorted by the room the task leaves."""
+    from target_gym.registry import GROUPS
+
+    ink, lo, hi = _INK[dark], -5.0, 1.5
+    width, left, right, row_h, head_h = 680, 170, 664, 19, 26
+
+    def x(v):
+        return left + (min(max(v, lo), hi) - lo) / (hi - lo) * (right - left)
+
+    def text(px, py, s, size=11, fill="sub", anchor="start", extra=""):
+        return (
+            f'<text x="{px:.1f}" y="{py:.1f}" font-size="{size}" '
+            f'fill="{ink[fill]}" text-anchor="{anchor}"{extra}>{s}</text>'
+        )
+
+    body, y = [], 58.0
+    for label in GROUPS.values():
+        group = [r for r in rows if r["group"] == label]
+        group.sort(key=lambda r: -_decades(r["expert"], r["ceiling"]))
+        if not group:
+            continue
+        body.append(text(0, y + 18, label, 12, "text", extra=' font-weight="500"'))
+        body.append(
+            f'<line x1="0" x2="{right}" y1="{y + 24}" y2="{y + 24}" '
+            f'stroke="{ink["grid"]}"/>'
+        )
+        y += head_h
+        for r in group:
+            cy = y + row_h / 2
+            oracle = _decades(r["oracle"], r["expert"])
+            ceiling = _decades(r["ceiling"], r["expert"])
+            mark = "off-axis" if not np.isfinite(oracle) else f"{oracle:.2f}"
+            parts = [
+                text(left - 24, cy + 4, r["name"], 11.5, anchor="end", extra=_MONO),
+                f'<line x1="{x(0):.1f}" x2="{x(oracle):.1f}" y1="{cy}" y2="{cy}" '
+                f'stroke="{ink["conn"]}" stroke-width="2" stroke-linecap="round"/>',
+            ]
+            for v in (oracle, ceiling):
+                if v < lo:
+                    parts.append(text(x(lo) - 11, cy + 4, "‹", 12, "muted", "middle"))
+                if v > hi:
+                    parts.append(text(x(hi) + 9, cy + 4, "›", 12, "muted", "middle"))
+            parts += [
+                f'<rect x="{x(ceiling) - 1:.1f}" y="{cy - 7}" width="2" '
+                f'height="14" rx="1" fill="{ink["tick"]}"/>',
+                f'<rect x="{x(oracle) - 5:.1f}" y="{cy - 5}" width="10" '
+                f'height="10" rx="1.5" fill="{ink["oracle"]}" '
+                f'stroke="{ink["bg"]}" stroke-width="2"/>',
+                f'<circle cx="{x(0):.1f}" cy="{cy}" r="5.5" '
+                f'fill="{ink["expert"]}" stroke="{ink["bg"]}" stroke-width="2"/>',
+            ]
+            body.append(
+                f'<g data-task="{r["name"]}" data-oracle="{mark}" '
+                f'data-ceiling="{ceiling:.2f}">' + "".join(parts) + "</g>"
+            )
+            y += row_h
+    top, axis = 52.0, []
+    ticks = [(-5, "10⁵×"), (-4, "10⁴×"), (-3, "1000×"), (-2, "100×"),
+             (-1, "10×"), (0, "expert"), (1, "10× costlier")]  # fmt: skip
+    for v, label in ticks:
+        dash = ' stroke-dasharray="3 3"' if v == 0 else ""
+        axis.append(
+            f'<line x1="{x(v):.1f}" x2="{x(v):.1f}" y1="{top}" y2="{y}" '
+            f'stroke="{ink["muted" if v == 0 else "grid"]}"{dash}/>'
+        )
+        axis.append(text(x(v), y + 16, label, 11, "muted", "middle"))
+    axis.append(
+        text((left + right) / 2, y + 36,
+             "Hold cost relative to the expert (log scale; left is cheaper)",
+             12, anchor="middle")
+    )  # fmt: skip
+    legend = [
+        text(0, 16, "Oracle and ceiling against each task's expert", 13, "text",
+             extra=' font-weight="500"'),
+        f'<circle cx="6" cy="36" r="5" fill="{ink["expert"]}"/>',
+        text(16, 40, "Expert", 12),
+        f'<rect x="76" y="31" width="10" height="10" rx="1.5" fill="{ink["oracle"]}"/>',
+        text(92, 40, "Oracle (full-state MPC)", 12),
+        f'<rect x="250" y="29" width="2" height="14" rx="1" fill="{ink["tick"]}"/>',
+        text(258, 40, "Ceiling (instrument resolution)", 12),
+    ]  # fmt: skip
+    height = y + 48
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height:.0f}" '
+        f'width="{width}" height="{height:.0f}" font-family="{_SANS}" role="img" '
+        "aria-label=\"Each task's oracle hold cost and ceiling relative to its "
+        'expert, in decades">'
+        f'<rect class="bg" width="100%" height="100%" fill="{ink["bg"]}"/>'
+        + "".join(legend + axis + body)
+        + "</svg>\n"
+    )
+
+
+_SANS = "-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif"
+_MONO = ' font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"'
+
+
+def _glance() -> list[str]:
+    rows = chart_rows(json.loads(PROTOCOL.read_text()))
+    return [
+        "## At a glance",
+        "",
+        "How many times cheaper the oracle holds each target than the expert,",
+        "and where the ceiling sits: tracking every quantity within its",
+        "instrument's resolution. Switch the anchor to the ceiling to see how far",
+        "each controller is from as good as a real plant can verify. Hover a row",
+        "for the numbers, including the whole episode.",
+        "",
+        '<div class="tg-results-chart"></div>',
+        '<script type="application/json" id="tg-results-data">'
+        + json.dumps(rows, separators=(",", ":"))
+        + "</script>",
+    ]
 
 
 def _room() -> list[str]:
@@ -233,7 +400,7 @@ def _caveats() -> list[str]:
 
 
 def _page() -> str:
-    sections = (_room(), _episode(), _returns(), _caveats())
+    sections = (_glance(), _room(), _episode(), _returns(), _caveats())
     parts = [INTRO, *("\n".join(p) for p in sections if p)]
     return "\n\n".join(s.strip("\n") for s in parts) + "\n"
 
@@ -243,17 +410,23 @@ def main() -> int:
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
 
-    new = _page()
-    old = DOC.read_text() if DOC.exists() else ""
-    if new == old:
-        print("baseline results page is current")
+    rows = chart_rows(json.loads(PROTOCOL.read_text()))
+    outputs = {DOC: _page(), **{p: results_svg(rows, d) for d, p in IMAGES.items()}}
+    stale = [
+        p for p, new in outputs.items() if (p.read_text() if p.exists() else "") != new
+    ]
+    if not stale:
+        print("baseline results page and chart are current")
         return 0
     if args.check:
-        print(f"  {DOC.relative_to(ROOT)} is out of date")
+        for p in stale:
+            print(f"  {p.relative_to(ROOT)} is out of date")
         print("run scripts/generate_baseline_table.py")
         return 1
-    DOC.write_text(new)
-    print(f"wrote {DOC.relative_to(ROOT)}")
+    for p in stale:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(outputs[p])
+        print(f"wrote {p.relative_to(ROOT)}")
     return 0
 
 

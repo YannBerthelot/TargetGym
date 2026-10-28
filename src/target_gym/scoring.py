@@ -15,9 +15,15 @@ Three numbers answer three questions (docs/rl-protocol.md, section 4). With
 
 The ceiling is as good as a plant can verify: every tracked quantity within
 its instrument's resolution, at the reward's price (``ceiling``). Consumption
-has no such bound, so ``consumption_ratio`` reports it beside the score, and
-``transient_ratio`` compares the cost after each target change with the
-expert's.
+has no such bound, so ``consumption_ratio`` reports it beside the score.
+
+Moves have no ceiling either. A move is the reset or a target change, and
+``transient_ratio`` is the expert's cost over the plant's fixed settle after
+each move divided by the policy's, paired per seed like ``ratio``, with
+``transient_win_rate`` and ``transient_ratio_ci``. ``settling_ratio`` compares
+the steps until the tracking cost enters the plant's band and stays
+(``settle_band``). ``score_policy`` adds the oracle's recorded ratios as the
+best known (``best_known``), for information.
 
 Score a policy of your own::
 
@@ -32,7 +38,9 @@ the same seeds.
 
 from __future__ import annotations
 
+import json
 import math
+import pathlib
 
 import numpy as np
 
@@ -40,7 +48,9 @@ from target_gym import eval as E
 from target_gym.eval import fixed_settle
 
 __all__ = ["TRACKED_TERMS", "ceiling", "compare", "fixed_settle", "headroom"]
-__all__ += ["score", "score_policy"]
+__all__ += ["best_known", "recorded", "score", "score_policy", "settle_band"]
+
+_PROTOCOL = pathlib.Path(__file__).resolve().parent / "data" / "protocol_results.json"
 
 _ALTITUDE = ("precision_floor", "e_floor_altitude", 1)
 _HEADING = ("heading_precision_floor", "e_floor_heading", 1)
@@ -103,11 +113,9 @@ def _currency_per_floor(name: str, p) -> float:
     return 1.0
 
 
-def ceiling(name: str, params=None, env=None) -> float:
-    """The cost per step of tracking every quantity within its instrument's
-    resolution: for each tracked term, the reward's charge for an error one
-    resolution beyond its tolerance, ``(resolution / e_floor) ** p``, in the
-    plant's currency where the reward prices tracking."""
+def _per_step(name: str, params, env, at_resolution: bool) -> float:
+    """The reward's tracking charge per step with every tracked error one
+    resolution (or one floor) beyond its tolerance."""
     from target_gym.registry import REGISTRY
 
     spec = REGISTRY[name]
@@ -120,9 +128,25 @@ def ceiling(name: str, params=None, env=None) -> float:
     for res, floor, count in TRACKED_TERMS[name]:
         if count == "wingmen":
             count = (env if env is not None else spec.make_env()).num_wingmen
-        term = (float(getattr(p, res)) / float(getattr(p, floor))) ** exponent
-        total += count * term
+        ratio = float(getattr(p, res)) / float(getattr(p, floor))
+        total += count * (ratio**exponent if at_resolution else 1.0)
     return float(_currency_per_floor(name, p) * total)
+
+
+def ceiling(name: str, params=None, env=None) -> float:
+    """The cost per step of tracking every quantity within its instrument's
+    resolution: for each tracked term, the reward's charge for an error one
+    resolution beyond its tolerance, ``(resolution / e_floor) ** p``, in the
+    plant's currency where the reward prices tracking."""
+    return _per_step(name, params, env, at_resolution=True)
+
+
+def settle_band(name: str, params=None, env=None) -> float:
+    """The tracking cost per step a move has settled within: every tracked
+    error at its floor beyond its tolerance, 1 per term, in the plant's
+    currency where the reward prices tracking. hvac has no floor, so its band
+    is its ceiling."""
+    return _per_step(name, params, env, at_resolution=False)
 
 
 def score(x: float, b: float, c: float) -> float:
@@ -152,36 +176,52 @@ def _ratio_ci(log_ratios: np.ndarray, n_boot: int = 2000) -> tuple[float, float]
     return float(10**lo), float(10**hi)
 
 
-def _transient(episodes, settle: int) -> float:
-    """Mean cost summed over the ``settle`` steps after each target change."""
-    sums = [
-        ep.cost[i : i + settle].sum()
-        for ep in episodes
-        for i in np.flatnonzero(ep.target_change)
-    ]
-    return float(np.mean(sums)) if sums else float("nan")
+def _paired(b: np.ndarray, x: np.ndarray) -> tuple[float, tuple, float]:
+    """Per-seed ratios ``b / x`` as an interquartile mean, its interval and
+    the share of seeds where ``x`` costs less."""
+    logs = np.log10(b / np.maximum(x, 1e-300))
+    return float(10 ** _iqm(logs)), _ratio_ci(logs), float(np.mean(x < b))
 
 
-def compare(policy, expert, ceiling: float, burn_in: int, settle: int) -> dict:
+def _ratio(b: float, x: float) -> float:
+    """``b / x``, 1 when both are 0 (neither ever left the band)."""
+    if b == x:
+        return 1.0
+    return b / x if x > 0 else float("inf")
+
+
+def compare(
+    policy, expert, ceiling: float, burn_in: int, settle: int, band=None
+) -> dict:
     """The three numbers and their companions for ``Episode`` lists run on the
-    same seeds, in the same order (module docstring)."""
+    same seeds, in the same order (module docstring). ``band`` adds the
+    settling ratio."""
     b = np.array([E.gain([ep], burn_in)[0] for ep in expert])
     x = np.array([E.gain([ep], burn_in)[0] for ep in policy])
-    logs = np.log10(b / np.maximum(x, 1e-300))
+    ratio, ratio_ci, win_rate = _paired(b, x)
+    moves_b = np.array([E.transient_cost([ep], settle)[0] for ep in expert])
+    moves_x = np.array([E.transient_cost([ep], settle)[0] for ep in policy])
+    t_ratio, t_ci, t_win = _paired(moves_b, moves_x)
     b_hold = E.hold(expert, burn_in, "tracking", settle)[0]
     x_hold = E.hold(policy, burn_in, "tracking", settle)[0]
     out = dict(
-        ratio=float(10 ** _iqm(logs)),
-        ratio_ci=_ratio_ci(logs),
-        win_rate=float(np.mean(x < b)),
+        ratio=ratio,
+        ratio_ci=ratio_ci,
+        win_rate=win_rate,
         score=score(x_hold, b_hold, ceiling),
         headroom=headroom(b_hold, ceiling),
         room_left=headroom(x_hold, ceiling),
         expert_hold=b_hold,
         policy_hold=x_hold,
         ceiling=ceiling,
-        transient_ratio=_transient(expert, settle) / _transient(policy, settle),
+        transient_ratio=t_ratio,
+        transient_ratio_ci=t_ci,
+        transient_win_rate=t_win,
     )
+    if band is not None:
+        out["expert_settling"] = E.settling_time(expert, band)[0]
+        out["policy_settling"] = E.settling_time(policy, band)[0]
+        out["settling_ratio"] = _ratio(out["expert_settling"], out["policy_settling"])
     if "running" in expert[0].terms:
         out["consumption_ratio"] = (
             E.gain(policy, burn_in, "running")[0]
@@ -190,9 +230,30 @@ def compare(policy, expert, ceiling: float, burn_in: int, settle: int) -> dict:
     return out
 
 
+def recorded(name: str | None = None) -> dict:
+    """``name``'s row of the recorded protocol results (``pid`` and ``mpc``,
+    3 seeds of the test configuration), ``{}`` if it has none, or every row
+    by task when ``name`` is None."""
+    rows = json.loads(_PROTOCOL.read_text()) if _PROTOCOL.exists() else {}
+    return rows if name is None else rows.get(name, {})
+
+
+def best_known(row: dict) -> dict:
+    """The oracle's recorded move and settling ratios against the expert's,
+    from a ``recorded`` row: the best known on the moves, for information.
+    NaN until the row records moves."""
+    pid, mpc = row.get("pid", {}), row.get("mpc", {})
+    out = {}
+    for key, name in (("move_cost", "transient"), ("settling_time", "settling")):
+        known = key in pid and key in mpc
+        ratio = _ratio(pid[key], mpc[key]) if known else float("nan")
+        out[f"oracle_{name}_ratio"] = ratio
+    return out
+
+
 def score_policy(name: str, make_policy, seeds: int = 10, params=None) -> dict:
     """Run ``make_policy()`` and the expert on seeds ``0 .. seeds - 1`` of the
-    test configuration and ``compare`` them."""
+    test configuration, ``compare`` them, and add the ``best_known`` moves."""
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
 
@@ -203,6 +264,12 @@ def score_policy(name: str, make_policy, seeds: int = 10, params=None) -> dict:
         for s in range(seeds)
     ]
     policy = [E.run_episode(spec, p, make_policy(), seed=s) for s in range(seeds)]
-    return compare(
-        policy, expert, ceiling(name, p), E.scored_burn_in(name, p), fixed_settle(name)
+    m = compare(
+        policy,
+        expert,
+        ceiling(name, p),
+        E.scored_burn_in(name, p),
+        fixed_settle(name),
+        band=settle_band(name, p),
     )
+    return {**m, **best_known(recorded(name))}

@@ -196,17 +196,6 @@ def test_records_are_the_protocols():
     assert held == pytest.approx(E.evaluate(eps, burn_in=10, settle=7)["hold"])
 
 
-def test_target_changes_follow_run_episodes_rule():
-    """More than 5 % of the first target's magnitude, on any output."""
-    first = np.array([10.0, 1.0])
-    targets = np.array(
-        [[10.0, 1.0], [10.4, 1.0], [11.0, 1.0], [11.0, 1.2], [11.0, 1.2]]
-    )
-    np.testing.assert_array_equal(
-        B.target_changes(targets, first), [False, False, True, True, False]
-    )
-
-
 def test_a_task_the_policy_cannot_run_is_reported_not_run():
     res = B.run_policy_on_benchmark(
         SingleInputOnly(), tasks=["cstr", "four_tank"], n_episodes=1, test_params=True,
@@ -424,7 +413,7 @@ def test_every_loop_runs_the_benchmarks_episodes(name):
     np.testing.assert_array_equal(ep.target_change, ref["target_change"][0])
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_batched_oracle_runs_the_same_episodes():
     """``rollout_mpc_batch`` vmaps the gradient planner over seeds; each seed is
     the episode ``rollout`` runs with the host planner, up to the float

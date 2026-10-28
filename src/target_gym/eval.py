@@ -317,6 +317,21 @@ def transient_cost(episodes, window: int):
     return (float(np.mean(vals)), _ci(vals)) if vals else (float("nan"), float("nan"))
 
 
+def settling_time(episodes, band: float):
+    """Steps per move until the tracking cost enters ``band`` and stays there
+    until the cycle's anticipation of the next change: 0 when it never leaves,
+    the whole cycle when it ends outside. A move is the reset or a target
+    change. Reads the ``tracking`` term, or the cost when there are no terms;
+    ``scoring.settle_band`` is the plant's band."""
+    vals = []
+    for ep in episodes:
+        series = ep.terms.get("tracking", ep.cost)
+        for s in _segments(ep):
+            outside = np.flatnonzero(series[s.start : s.hold_end] > band + _TOL)
+            vals.append(int(outside[-1]) + 1 if len(outside) else 0)
+    return (float(np.mean(vals)), _ci(vals)) if vals else (float("nan"), float("nan"))
+
+
 def unsettled_fraction(episodes):
     """Share of cycles in which the cost over the second half exceeds the
     cost over the first half, with the anticipation of the next change left
@@ -369,7 +384,9 @@ def time_in_band(episodes, burn_in: int):
     return float(np.mean(vals)) if vals else float("nan")
 
 
-def evaluate(episodes, burn_in: int, settle: int | None = None):
+def evaluate(
+    episodes, burn_in: int, settle: int | None = None, band: float | None = None
+):
     """The protocol's numbers for a list of ``Episode`` records, as a dict.
 
     - ``gain`` (and ``gain_ci``): mean cost per step after ``burn_in``,
@@ -383,6 +400,9 @@ def evaluate(episodes, burn_in: int, settle: int | None = None):
       cycle) and ``time_in_band`` (a KPI, never a training signal).
     - One entry per reward term (``tracking``, ``running``, ...) and its
       ``hold_`` counterpart, when the episodes carry terms.
+    - With ``settle``, ``move_cost``: per move (the reset or a target change),
+      ``transient_cost`` over the ``settle`` steps after it. With ``band``,
+      ``settling_time``. ``scoring`` compares both with the expert's.
 
     ``settle`` overrides the per-cycle settle with a fixed count.
     """
@@ -404,6 +424,10 @@ def evaluate(episodes, burn_in: int, settle: int | None = None):
         failure_rate=failure_rate(episodes),
         time_in_band=time_in_band(episodes, burn_in),
     )
+    if settle is not None:
+        out["move_cost"], out["move_cost_ci"] = transient_cost(episodes, settle)
+    if band is not None:
+        out["settling_time"], out["settling_time_ci"] = settling_time(episodes, band)
     for key in episodes[0].terms:
         out[key] = gain(episodes, burn_in, key)[0]
         out["hold_" + key] = hold(episodes, burn_in, key, settle=settle)[0]
@@ -465,9 +489,10 @@ def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
 
 def evaluate_controller(name: str, kind: str = "pid", seeds: int = 3, params=None):
     """Score a shipped controller (``"pid"`` or ``"mpc"``) on a plant, with the
-    plant's fixed settle."""
+    plant's fixed settle and settle band."""
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
+    from target_gym.scoring import settle_band
 
     spec = REGISTRY[name]
     p = params or spec.make_test_params()
@@ -476,5 +501,8 @@ def evaluate_controller(name: str, kind: str = "pid", seeds: int = 3, params=Non
         for s in range(seeds)
     ]
     return evaluate(
-        episodes, burn_in=scored_burn_in(name, p), settle=fixed_settle(name)
+        episodes,
+        burn_in=scored_burn_in(name, p),
+        settle=fixed_settle(name),
+        band=settle_band(name, p),
     )

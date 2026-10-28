@@ -202,15 +202,31 @@ def task_info(
     )
 
 
+#: A step is a change when it moves a target this many times further than the
+#: target's median step over the episode. A schedule holds between changes, so
+#: its median step is zero; a drift moves every step, and a Gaussian increment
+#: ten times its median (6.7 standard deviations) does not occur by chance.
+_CHANGE_OVER_MEDIAN_STEP = 10.0
+#: Relative movement below which a held target has only been rounded.
+_ROUNDING = 1e-6
+
+
 def target_changes(targets: np.ndarray, first: np.ndarray) -> np.ndarray:
-    """``(T,)`` bool: a new target became active at the step, by
-    :func:`target_gym.eval.run_episode`'s rule - some target moved by more than
-    5 % of its first value's magnitude since the previous step. ``targets``
-    ``(T, n_out)``, ``first`` the targets at reset."""
+    """``(T,)`` bool: a new target became active at the step, the rule
+    :func:`target_gym.eval.run_episode` splits cycles by. Some target moved
+    since the previous step by more than ``_CHANGE_OVER_MEDIAN_STEP`` times
+    its median step over the episode, and by more than rounding. Every step of
+    a schedule counts however small next to the target's value; a drifting or
+    smooth target, which moves about as much every step, never does.
+    ``targets`` ``(T, n_out)``, ``first`` the targets at reset."""
     targets = np.asarray(targets, float)
     prev = np.vstack([np.asarray(first, float)[None], targets[:-1]])
-    span = np.maximum(np.abs(targets[0]), 1e-9)
-    return (np.abs(targets - prev) > 0.05 * span).any(axis=1)
+    step = np.abs(targets - prev)
+    scale = np.abs(np.vstack([prev, targets])).max(axis=0)
+    floor = np.maximum(
+        _CHANGE_OVER_MEDIAN_STEP * np.median(step, axis=0), _ROUNDING * scale
+    )
+    return (step > floor).any(axis=1)
 
 
 def episode_keys(key, n: int, n_steps: int):

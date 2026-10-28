@@ -983,7 +983,7 @@ def _numbers_script():
     return module
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_pair_holds_the_validation_seeds():
     """The shipped pair, with the gains the registry's factory reads, on the
     first 1024 of the validation's seeds: no trip, and the smallest surge

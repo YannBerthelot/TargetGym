@@ -65,8 +65,8 @@ Recorded over 10 seeds of the 200-step episode (see [Baseline results](../baseli
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -9.336e+06 | 4.668e+04 |
-| MPC | -6235 | 31.18 |
+| PID | -1.109e+07 | 5.547e+04 |
+| MPC | -5321 | 26.61 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 

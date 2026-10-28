@@ -95,7 +95,7 @@ def test_the_jitted_step_compiles_once():
     assert oracle._jit_step._cache_size() == 1
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_plan_is_never_worse_than_its_warm_start():
     """The best iterate is kept, and the warm start is the first one scored.
     From a reset the follower is up to 40 m off its slot, so there is
@@ -135,7 +135,7 @@ def test_the_bearing_only_slot_is_the_patrol_oracle_on_the_true_state():
     )
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_oracle_holds_the_slot_well_inside_the_gps_resolution():
     """Protocol seed 0 from the protocol's burn-in (step 100) for 30 steps:
     the oracle holds a mean slot error of 0.12 m and a heading error of

@@ -104,7 +104,7 @@ def test_the_nea_reference_is_the_recorded_hold(name):
     assert p.rho_floor == pytest.approx(rho, rel=0.02)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_oracle_settles_on_the_heading_task():
     """On protocol seed 1 the shipped oracle is 37 m off its altitude on
     average over the first 20 steps and holds 0.74 m over steps 40 to 59; in

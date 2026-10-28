@@ -36,6 +36,20 @@ than by commit.
   and `abs_gap` entries of `eval.evaluate` are gone. The hold is now scored
   after a settle fixed per plant (`eval.fixed_settle`), the same window for
   every controller. The design is in `docs/proposals/scoring-and-experts.md`.
+- **A capability profile, `target_gym.suite`.** Every task is tagged with the
+  difficulties its physics poses (instability, delay, coupling, a hidden
+  state and nine more), and `run_suite(make_policy)` averages a policy's
+  scores per capability into two radars, hold and reach, with the expert as
+  the 0.5 ring and the ceiling or the best known as the edge.
+  `docs/capability-profile.md` says how to read them and why each task has
+  its tags.
+- **Scores for the moves.** `transient_ratio` now counts the approach from the
+  reset as a move, so `first_order` and `cstr`, which have no other, are no
+  longer NaN, and it is paired per seed with an interval and a win rate.
+  `settling_ratio` compares the steps until the tracking cost settles within
+  the plant's band (`scoring.settle_band`), and `score_policy` adds the
+  oracle's recorded ratios as the best known. `eval.evaluate` records
+  `move_cost` and `settling_time`.
 - **`target_gym.experts.reset_where_done`**, the jitted form of `pid.reset()`:
   inside `lax.scan` it puts a carried PID state back to its initial value
   where an episode ended, for one environment or a batch. Without it, a loop
@@ -552,6 +566,16 @@ than by commit.
   plane3d_figure8 declares none: its observed output is the altitude about
   the path's mean, not a tracked error. The two KPIs in
   `protocol_results.json` change at the next record; no fingerprint moves.
+- **The scorer missed small setpoint changes and invented cycles on drifting
+  targets.** A target change counted only above 5 % of the first target's
+  value, so the transient after a smaller step was scored as hold:
+  `glass_furnace` saw none of its four 4 C trims, and `compressor_surge` and
+  `plane_energy` missed some of theirs. The reactor's drifting demand crossed
+  the 5 % now and then and was cut into up to 22 cycles. A change is now a
+  step at least ten times the target's median step over the episode
+  (`benchmark.target_changes`), which catches every scheduled step and no
+  drift. The protocol rows of `glass_furnace`, `compressor_surge` and
+  `reactor` are re-recorded; no environment changed.
 - **`experts.mpc.casadi_step_map` without CasADi** raised a `NameError` on
   the missing module; it now raises an `ImportError` naming the `[mpc]` extra.
 - **`Airplane2D.reset_env(key)` without parameters** read a class attribute
