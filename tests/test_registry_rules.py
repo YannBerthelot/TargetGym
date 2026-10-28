@@ -463,30 +463,39 @@ def test_every_mpc_task_and_every_new_task_has_a_hold_row():
 
 
 def _tuner_rows() -> set[str]:
-    """The keys of ``TUNERS`` in scripts/tune_pid.py, read from its source.
-    Importing the script would put ``src`` on ``sys.path`` as a side effect."""
-    path = ROOT / "scripts" / "tune_pid.py"
-    for node in ast.parse(path.read_text()).body:
-        if (
-            isinstance(node, ast.Assign)
-            and any(isinstance(t, ast.Name) and t.id == "TUNERS" for t in node.targets)
-            and isinstance(node.value, ast.Dict)
-        ):
-            return {
-                key.value
-                for key in node.value.keys
-                if isinstance(key, ast.Constant) and isinstance(key.value, str)
-            }
-    raise AssertionError("scripts/tune_pid.py defines no TUNERS dict literal")
+    """The keys of ``TUNERS`` in scripts/tune_pid.py and
+    scripts/tune_process_experts.py, read from their source. Importing a
+    script would put ``src`` on ``sys.path`` as a side effect."""
+    rows = set()
+    for script in ("tune_pid.py", "tune_process_experts.py"):
+        path = ROOT / "scripts" / script
+        for node in ast.parse(path.read_text()).body:
+            if (
+                isinstance(node, ast.Assign)
+                and any(
+                    isinstance(t, ast.Name) and t.id == "TUNERS" for t in node.targets
+                )
+                and isinstance(node.value, ast.Dict)
+            ):
+                rows |= {
+                    key.value
+                    for key in node.value.keys
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                }
+                break
+        else:
+            raise AssertionError(f"scripts/{script} defines no TUNERS dict literal")
+    return rows
 
 
 def test_every_new_task_with_a_pid_has_a_tuner_row():
-    """A new task's gains are set by naming it to scripts/tune_pid.py, which
-    refuses a name with no row in ``TUNERS``. So every task added after the 21
-    that ships a PID has a row there."""
+    """A new task's gains are set by naming it to scripts/tune_pid.py, or to
+    scripts/tune_process_experts.py for the SIMC-tuned process plants, each of
+    which refuses a name with no row in its ``TUNERS``. So every task added
+    after the 21 that ships a PID has a row in one of them."""
     rows = _tuner_rows()
     missing = [s.name for s in _added() if s.has_pid and s.name not in rows]
-    assert not missing, f"no TUNERS row in scripts/tune_pid.py for {missing}"
+    assert not missing, f"no TUNERS row in either tuning script for {missing}"
 
 
 def test_allowlists_name_real_tasks():

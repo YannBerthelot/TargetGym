@@ -178,6 +178,21 @@ than by commit.
   where stall prevention keeps the airliner too fast to turn that tight.
   Every aircraft record is re-recorded.
 
+- **Four process experts are what practice runs, tuned by SIMC.**
+  `scripts/tune_process_experts.py` step-tests each plant on training seeds
+  100-109, fits a first-order-plus-delay model and applies the SIMC rules
+  (Skogestad and Grimholt 2012), then checks the expert on held-out seeds
+  200-209. `cstr` is now a cascade, concentration trimming a temperature loop
+  on the coolant, as reactor practice runs it. `ph_neutralization`
+  linearises the pH through the titration curve and biases the base valve by
+  the target's steady demand. `first_order` is a SIMC PI, and
+  `unstable_cstr` keeps its cascade with SIMC gains in place of a search
+  over seeds that included the scored ones. On the held-out seeds the
+  `first_order`, `cstr` and `ph_neutralization` experts hold within their
+  instruments' resolution (pH 0.94 against a ceiling of 1, from 43.6), and
+  the unstable CSTR holds 6.0, against 3.2 for the gains it replaces. The four
+  tasks are re-recorded.
+
 - **Shorter docstrings in the core modules** (registry, experts, eval, reward,
   runners, base): they keep the contracts and drop the measurement history,
   and `eval.evaluate` now documents every number it returns.

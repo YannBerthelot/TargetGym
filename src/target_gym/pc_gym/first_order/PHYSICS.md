@@ -94,6 +94,31 @@ transport delay — that the rest of the suite exists to pose.
 
 ---
 
+## 6. Expert
+
+A PI controller tuned by SIMC (Skogestad and Grimholt, "The SIMC method for
+smooth PID controller tuning", 2012), the rule this textbook plant is taught
+with. `scripts/tune_process_experts.py --envs first_order` derives the gains
+and stores them in `src/target_gym/data/pid_gains.json`; the factory is
+`make_first_order_pid_controller`.
+
+- **Step test.** From the steady state at each training seed's target (seeds
+  100 to 109), a step of 0.1 in the raw action. The fit is k = 2.0 per unit
+  raw action, tau1 = 0.50 s and no delay (measured), which is the plant's own
+  K (u_max - u_min) / 2 and tau. The 0.05 s sample adds half a step,
+  theta = 0.025 s (the half rule).
+- **Settings.** The tight choice tau_c = theta gives
+  Kc = tau1 / (k (tau_c + theta)) = 5.0 per unit error and
+  tau_I = min(tau1, 4 (tau_c + theta)) = 0.20 s, so Ki = 25 /s. tau_c = 2 theta
+  and 3 theta cost more on the training seeds (2.3e-4 per step against 0.014
+  and 0.17, measured).
+- **Held-out check** (seeds 200 to 209). It holds 2.8e-9 per step against a
+  ceiling of 1 and never trips (`tests/pc_gym/test_expert_specs.py`). It
+  replaced a PID grid-searched on the scored reward, which was also far
+  inside the resolution.
+
+---
+
 <!-- BEGIN GENERATED FACTS -->
 
 <!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:

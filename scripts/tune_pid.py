@@ -19,7 +19,7 @@ Usage
     python scripts/tune_pid.py
 
     # Tune specific envs, re-tuning them if they already have gains
-    python scripts/tune_pid.py --envs cstr first_order
+    python scripts/tune_pid.py --envs four_tank reactor
 
     # More operating points for finer gain scheduling
     python scripts/tune_pid.py --n-points 16
@@ -53,86 +53,6 @@ sys.path.insert(0, str(ROOT / "src"))
 # ---------------------------------------------------------------------------
 # Per-environment relay tuners
 # ---------------------------------------------------------------------------
-
-
-def _tune_cstr(n_points: int, tuning_rule: str, **kw) -> dict:
-    from target_gym import CSTR, CSTRParams
-    from target_gym.experts.relay_autotune import relay_sweep
-
-    env = CSTR()
-    params = CSTRParams()
-
-    def reset_fn(key, p, t):
-        _, state = env.reset_env(key, p)
-        return state.replace(target_CA=t, C_a=t)
-
-    result = relay_sweep(
-        env,
-        params,
-        reset_fn,
-        state_index=0,
-        setpoint_index=2,
-        target_range=tuple(params.target_CA_range),
-        n_points=n_points,
-        sign=-1,
-        tuning_rule=tuning_rule,
-        relay_amplitude=0.3,
-        max_steps=5000,
-    )
-    mid = len(result["operating_points"]) // 2
-    return {
-        "Kp": round(result["Kp"][mid], 6),
-        "Ki": round(result["Ki"][mid], 6),
-        "Kd": round(result["Kd"][mid], 6),
-        "gain_schedule": {
-            "operating_points": result["operating_points"],
-            "Kp": [round(k, 6) for k in result["Kp"]],
-            "Ki": [round(k, 6) for k in result["Ki"]],
-            "Kd": [round(k, 6) for k in result["Kd"]],
-        },
-        "tuning_rule": tuning_rule,
-        "note": "Relay autotuning, negative-gain system (higher Tc -> lower Ca).",
-    }
-
-
-def _tune_first_order(n_points: int, tuning_rule: str, **kw) -> dict:
-    from target_gym import FirstOrderParams, FirstOrderSystem
-    from target_gym.experts.relay_autotune import relay_sweep
-
-    env = FirstOrderSystem()
-    params = FirstOrderParams()
-
-    def reset_fn(key, p, t):
-        _, state = env.reset_env(key, p)
-        return state.replace(target_x=t, x=t)
-
-    result = relay_sweep(
-        env,
-        params,
-        reset_fn,
-        state_index=0,
-        setpoint_index=1,
-        target_range=tuple(params.target_x_range),
-        n_points=n_points,
-        sign=1,
-        tuning_rule=tuning_rule,
-        relay_amplitude=0.5,
-        max_steps=5000,
-    )
-    mid = len(result["operating_points"]) // 2
-    return {
-        "Kp": round(result["Kp"][mid], 6),
-        "Ki": round(result["Ki"][mid], 6),
-        "Kd": round(result["Kd"][mid], 6),
-        "gain_schedule": {
-            "operating_points": result["operating_points"],
-            "Kp": [round(k, 6) for k in result["Kp"]],
-            "Ki": [round(k, 6) for k in result["Ki"]],
-            "Kd": [round(k, 6) for k in result["Kd"]],
-        },
-        "tuning_rule": tuning_rule,
-        "note": "Relay autotuning, positive-gain first-order system.",
-    }
 
 
 def _tune_four_tank(n_points: int, tuning_rule: str, **kw) -> dict:
@@ -1356,8 +1276,6 @@ def _write_copies(gains: dict, save_key: str) -> None:
 
 
 TUNERS = {
-    "cstr": (_tune_cstr, "CSTR"),
-    "first_order": (_tune_first_order, "FirstOrder"),
     "four_tank": (_tune_four_tank_search, "FourTank"),
     "glass_furnace": (_tune_glass_furnace_search, "GlassFurnace"),
     "reactor": (_tune_reactor, "Reactor"),
@@ -1375,24 +1293,6 @@ TUNERS = {
     ),
     # Tasks added after the 21. A plain run leaves them out (``_plain_run_envs``).
     #
-    # Coordinate descent on the cascade's four gains over whole episodes (six
-    # target blocks, 24 seeds), starting from the package's DEFAULT_GAINS. The
-    # setpoint limits (experts.HELD_GAINS) are held: their right value is set by
-    # the distance to the point of no return, which the return sees only once a
-    # trip happens. Candidates whose linearised closed loop does not decay fast
-    # enough are refused by the task's own PID factory
-    # (experts.check_cascade_gains), and ``score`` maps that refusal to -inf.
-    "unstable_cstr": (
-        lambda n_points=0, tuning_rule="", **kw: _tune_aircraft_search(
-            "unstable_cstr",
-            "unstable_cstr",
-            steps=1200,
-            seeds=24,
-            hold=_task_experts("unstable_cstr").HELD_GAINS,
-            **kw,
-        ),
-        "UnstableCSTR",
-    ),
     # Coordinate descent on the pair's four gains (experts.TUNED_GAINS: the
     # speed PI and the anti-surge PI) over whole episodes (four setpoint
     # blocks, six demand blocks, 24 seeds), starting from the package's
