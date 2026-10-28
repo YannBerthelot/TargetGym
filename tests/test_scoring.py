@@ -89,6 +89,60 @@ def test_compare_scores_the_hold_after_the_fixed_settle():
     assert m["transient_ratio"] < 1.0
 
 
+def _move(per_step, n=200, settle=10):
+    """No target change: ``per_step`` over the settle after the reset, then a
+    hold at 1."""
+    return _episode(np.r_[np.full(settle, per_step), np.ones(n - settle)])
+
+
+def test_the_transient_ratio_counts_the_approach_from_reset():
+    """first_order and cstr draw their target at reset and never change it, so
+    the reset is their only move: a policy reaching it ten times cheaper
+    scores 10, not NaN."""
+    m = scoring.compare([_move(1.0)] * 2, [_move(10.0)] * 2, 0.1, 20, settle=10)
+    assert m["transient_ratio"] == pytest.approx(10.0)
+
+
+def test_the_transient_ratio_is_paired_per_seed_with_a_win_rate():
+    """The expert's move costs 100 on three seeds; the policy's cost 10, 50
+    and 1000. The per-seed ratios 10, 2 and 0.1 multiply to 2, so their
+    geometric mean (the interquartile mean of three logs) is 2 ** (1/3), and
+    the policy wins two seeds of three."""
+    expert = [_move(10.0)] * 3
+    policy = [_move(1.0), _move(5.0), _move(100.0)]
+    m = scoring.compare(policy, expert, 0.1, 20, settle=10)
+    assert m["transient_ratio"] == pytest.approx(2 ** (1 / 3))
+    assert m["transient_win_rate"] == pytest.approx(2 / 3)
+    lo, hi = m["transient_ratio_ci"]
+    assert 0.1 <= lo <= 2 ** (1 / 3) <= hi <= 10.0
+
+
+def test_the_settling_ratio_compares_the_steps_to_enter_the_band_and_stay():
+    """With a band of 1, the expert's tracking cost stays out of it for 8
+    steps after the reset and the policy's for 2: 4 times faster."""
+    expert = [_episode(np.r_[np.full(8, 10.0), np.full(92, 0.1)])] * 2
+    policy = [_episode(np.r_[np.full(2, 10.0), np.full(98, 0.1)])] * 2
+    m = scoring.compare(policy, expert, 0.01, 10, settle=10, band=1.0)
+    assert (m["expert_settling"], m["policy_settling"]) == (8.0, 2.0)
+    assert m["settling_ratio"] == pytest.approx(4.0)
+
+
+def test_the_best_known_move_is_the_oracles_recorded_ratio():
+    row = {
+        "pid": {"move_cost": 300.0, "settling_time": 12.0},
+        "mpc": {"move_cost": 100.0, "settling_time": 3.0},
+    }
+    best = scoring.best_known(row)
+    assert best["oracle_transient_ratio"] == pytest.approx(3.0)
+    assert best["oracle_settling_ratio"] == pytest.approx(4.0)
+
+
+def test_without_recorded_moves_the_best_known_is_unknown():
+    best = scoring.best_known({"pid": {"hold": 1.0}, "mpc": {"hold": 0.5}})
+    assert math.isnan(best["oracle_transient_ratio"])
+    assert math.isnan(best["oracle_settling_ratio"])
+
+
 # The ceiling of every environment. hvac prices comfort without
 # ``reward.tracking_cost`` and has its own test below.
 _VIA_TRACKING_COST = sorted(n for n in REGISTRY if n != "hvac")
@@ -134,6 +188,31 @@ def test_the_building_ceiling_is_the_comfort_price_of_one_resolution():
     assert tracking == pytest.approx(scoring.ceiling("hvac", params), rel=1e-5)
 
 
+@pytest.mark.parametrize("name", _VIA_TRACKING_COST)
+def test_the_settle_band_is_the_rewards_tracking_cost_at_the_floor(name, monkeypatch):
+    """Every ``tracking_cost`` the reward calls, at an error at its floor
+    beyond its tolerance, sums to the band: 1 per tracked term, in the plant's
+    currency where the reward prices tracking."""
+    spec = REGISTRY[name]
+    env, params = spec.make_env(), spec.make_test_params()
+    real = R.tracking_cost
+
+    def at_the_floor(error, e_floor, e_tol=0.0, p=2.0, xp=jnp):
+        return real(xp.zeros_like(error) + e_tol + e_floor, e_floor, e_tol, p, xp)
+
+    monkeypatch.setattr(R, "tracking_cost", at_the_floor)
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    tracking = float(np.sum(env.reward_terms(state, params)["tracking"]))
+    assert tracking == pytest.approx(scoring.settle_band(name, params), rel=1e-5)
+
+
+def test_the_building_settles_within_its_ceiling():
+    """hvac has no floor: its band is the comfort tolerance plus one
+    resolution, which is its ceiling."""
+    params = REGISTRY["hvac"].make_test_params()
+    assert scoring.settle_band("hvac", params) == scoring.ceiling("hvac", params)
+
+
 def test_every_environment_has_a_settle_no_shorter_than_its_measured_ones():
     rows = json.loads(E._DATA.read_text())
     for name in REGISTRY:
@@ -154,3 +233,5 @@ def test_score_policy_runs_the_expert_on_the_same_seeds():
     assert m["ratio"] == pytest.approx(1.0)
     assert m["headroom"] == 0.0
     assert math.isnan(m["score"])
+    assert m["transient_ratio"] == pytest.approx(1.0)
+    assert m["settling_ratio"] == pytest.approx(1.0)

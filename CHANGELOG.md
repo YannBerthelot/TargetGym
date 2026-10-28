@@ -36,6 +36,20 @@ than by commit.
   and `abs_gap` entries of `eval.evaluate` are gone. The hold is now scored
   after a settle fixed per plant (`eval.fixed_settle`), the same window for
   every controller. The design is in `docs/proposals/scoring-and-experts.md`.
+- **A capability profile, `target_gym.suite`.** Every task is tagged with the
+  difficulties its physics poses (instability, delay, coupling, a hidden
+  state and nine more), and `run_suite(make_policy)` averages a policy's
+  scores per capability into two radars, hold and reach, with the expert as
+  the 0.5 ring and the ceiling or the best known as the edge.
+  `docs/capability-profile.md` says how to read them and why each task has
+  its tags.
+- **Scores for the moves.** `transient_ratio` now counts the approach from the
+  reset as a move, so `first_order` and `cstr`, which have no other, are no
+  longer NaN, and it is paired per seed with an interval and a win rate.
+  `settling_ratio` compares the steps until the tracking cost settles within
+  the plant's band (`scoring.settle_band`), and `score_policy` adds the
+  oracle's recorded ratios as the best known. `eval.evaluate` records
+  `move_cost` and `settling_time`.
 - **`target_gym.experts.reset_where_done`**, the jitted form of `pid.reset()`:
   inside `lax.scan` it puts a carried PID state back to its initial value
   where an episode ended, for one environment or a batch. Without it, a loop
