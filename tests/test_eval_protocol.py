@@ -638,13 +638,32 @@ def test_measure_hold_leaves_out_the_same_steps():
 
     m, settle, bounds, antic = mh.split_seed(quiet, targets, burn_in=20)
     assert antic == [0] * n_cycles
-    lvl = quiet[mh._hold_mask(len(quiet), 20, bounds, 0)].mean(axis=0)
-    old_settle = mh._settle(quiet, bounds, lvl)
+    old_settle = mh._settle(quiet, bounds)
     assert settle == old_settle
     old = mh._hold_mask(
         len(quiet), 20, bounds, int(min(old_settle, (len(quiet) - 20) // 4))
     )
     assert (m == old).all()
+
+
+def test_measure_hold_settles_after_an_overshoot_not_at_its_crossing():
+    """Contract: a cycle's settle is the first step at which every error is
+    within twice the level the controller holds, and that level is the one it
+    reaches, the mean over the cycle's second half (as ``eval`` takes it). A
+    controller that overshoots and recovers slowly must not count as settled
+    where its error crosses zero on the way.
+
+    The error falls from 0.038 through zero between steps 4 and 5 into a tail
+    of 0.012 e^(-t/6), over a hold floor of 1e-6. The second half holds 1e-6,
+    so the band is 2e-6, which the tail enters once 0.012 e^(-t/6) <= 1e-6:
+    t >= 6 ln(12000) = 56.4, so at step 57. A level taken over the whole
+    window after the burn-in includes the tail itself (about 4e-4), and the
+    first sample past the crossing, 6.1e-4 at step 4, then looked settled."""
+    mh = _load_measure_hold()
+    t = np.arange(200.0)
+    e = np.abs(0.05 * np.exp(-t / 2) - 0.012 * np.exp(-t / 6)) + 1e-6
+    _, settle, _, _ = mh.split_seed(e[:, None], np.zeros((200, 1)), burn_in=2)
+    assert settle == 57
 
 
 def test_measure_hold_is_as_sensitive_as_the_protocol():
