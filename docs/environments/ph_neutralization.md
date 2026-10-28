@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/ph_neutralization/pid_output.gif" width="480px"/></p>
 
-pH neutralisation — CSTR with acid, buffer and base streams.
+Hold the pH of a stirred tank, where strong acid meets strong base in a carbonate buffer, at a target by setting the base flow. The titration curve makes the process gain swing by more than an order of magnitude across the range, and the buffer flow that moves the curve drifts unmeasured, so the same pH reading can call for very different moves.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("ph_neutralization")
+```
 
 | | |
 |---|---|
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((3,))` |
 | Tracked variable(s) | pH |
-| Episode length | 300 steps (1500 s at 5 s per step) |
-| Import | `from target_gym import PHNeutralization, PHParams` |
+| Episode length | 300 steps of 5 s (25 min) |
 | Cite as | `ph_neutralization-v2` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
 
 ## Action space
 
@@ -24,8 +30,13 @@ actuator range inside the environment.
 
 ## Observation space
 
-3 values. Indices (0,) carry the tracked variable(s) that the
-reward scores.
+3 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[2]`.
+
+| # | meaning |
+|---|---|
+| 0 | pH |
+| 1 | base flow valve, percent of its range |
+| 2 | target pH |
 
 ## Rewards
 
@@ -64,7 +75,9 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("ph_neutralization", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 5 | s |
 | `max_steps_in_episode` | 300 | steps |

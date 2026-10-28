@@ -25,6 +25,13 @@ numbers are in [Baseline results](baseline-results.md).
 pip install target-gym
 ```
 
+!!! note "Until 0.7.0 is on PyPI"
+    TargetGym is in active development: PyPI releases are the stable line, and
+    `main` can change quickly between them. This site documents `main`, whose
+    API (starting with `tg.make`) is not on PyPI until 0.7.0. Until then,
+    install from GitHub to use it:
+    `pip install "git+https://github.com/YannBerthelot/TargetGym"`.
+
 Or try it in the browser: [Colab quickstart](https://colab.research.google.com/github/YannBerthelot/TargetGym/blob/main/notebooks/quickstart.ipynb).
 
 ```python

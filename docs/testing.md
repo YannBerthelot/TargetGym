@@ -1,22 +1,55 @@
 # Testing
 
-Two jobs, both required to finish inside ten minutes on a GitHub runner.
+Tests come in three sizes, set by what a test uses rather than by how long it
+happens to take. The size decides where it runs.
 
-| job | when | local wall | what it covers |
-| --- | --- | --- | --- |
-| fast | every push, Python 3.11-3.14 | 34 s warm / 217 s cold | everything except closed-loop rollouts |
-| slow | merges to `main`, one interpreter | 42 s | PID beats the best constant action, states stay physical under extreme actions, regimes join |
+| size | marker | what a test may use | where it runs | budget |
+| --- | --- | --- | --- | --- |
+| small | none | one process, memory, `tmp_path` | a plain `pytest`; CI on every push, Python 3.11 to 3.13 | the whole tier within 60 s on a laptop |
+| medium | `medium` | another process, video files, a compile that needs gigabytes | CI on every push, Python 3.11 and 3.12, after the small tier | small and medium within 10 min on CI |
+| large | `large` | closed-loop rollouts at the scored length, many seeds | CI on merges to `main`, one interpreter | each test within 15 min |
 
-Both were far outside that budget until the two changes below, and both changes
-came from profiling rather than from trimming assertions -- coverage is
-unchanged at 90.7%.
+`records` is not a size. Those tests check that the recorded baselines still
+describe this tree, and they run in a job of their own, so a stale record fails
+that job alone and a failing test job always means a real bug.
+
+```bash
+pytest                   # small, on every core
+pytest -m medium -n 2    # medium; two workers keep two big compiles in memory
+pytest -m large          # large
+pytest -m records        # records
+pytest -m ""             # everything
+```
+
+A later `-m` replaces the default one, and `-n0` runs serially, which `--pdb`
+needs.
+
+Every run ends with its 15 slowest tests, so a test that outgrows its size
+shows up there before it shows up in the budget.
+
+## Which size a new test is
+
+Start small. A small test that is slow is a design problem first, and the usual
+cause is stepping a plant from Python: run it inside `jax.lax.scan` or
+`jax.lax.while_loop`, jit the step, and shorten episodes and shapes to what the
+property needs. That is how the glass furnace and boiler drum tests went from
+125 s and 44 s to a few seconds without changing an assertion.
+
+Mark it `medium` when it starts another process (`subprocess`, or moviepy
+running ffmpeg to write a video), or when it compiles an aircraft planner or
+gradient tuner. Those compiles peak at 2.5 to 5 GB and take up to three
+minutes on a cold cache; four at once shut CI runners down on 2026-10-27.
+
+Mark it `large` when the property only shows at the scored length: a closed
+loop that holds its target, a PID that beats the best constant action, a check
+over many seeds.
 
 ## The expensive measurement is recorded, not reproduced
 
 Checking that each shipped MPC really is an upper bound on its PID meant rolling
 sixteen controllers out on five seeds: about forty minutes of CPU, and
 `[plane]` alone was **836 s**. Because `pytest-xdist` distributes across tests
-and not within one, that single test set roughly 70% of the slow job's
+and not within one, that single test set roughly 70% of the large job's
 wall-clock floor and came close to its 30-minute timeout on CI's slower cores.
 
 It is now recorded by hand into `src/target_gym/data/baseline_returns.json` and asserted from
@@ -56,9 +89,8 @@ still seeds from the previous cache instead of starting empty.
 
 ## Conventions
 
-- `-m "not slow"` is the default; mark anything that rolls a plant out for
-  hundreds of steps as `slow`.
-- Coverage is gated at 89% and measured on the fast subset only, so moving a
-  test to `slow` removes it from the gate. Check the number before doing it.
+- Coverage is gated at 89% over the small tier alone, so moving a test to
+  `medium` or `large` removes it from the gate. Check the number before doing
+  it.
 - `strict=True` on every xfail. A known defect that gets fixed must fail the
   suite until its annotation is updated, so the record cannot quietly rot.

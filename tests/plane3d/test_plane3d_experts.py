@@ -71,10 +71,13 @@ def test_the_floors_are_the_instrument_resolutions(name):
     """Every floor is the resolution of the instrument that reads it, and the
     failure cost is twice the envelope's cost in those units (the altitude
     envelope's, or the path's on the figure-8, which scores no altitude). The
-    floors arrived with v3; the racetrack's v4 changed only its observation."""
+    floors arrived with v3; the racetrack's v4 changed only its observation,
+    and the heading task's v4 only its length (200 to 300 steps)."""
     spec = registry.get(name)
     p = spec.make_test_params()
-    assert spec.version == (4 if name == "plane3d_racetrack" else 3)
+    assert spec.version == (
+        4 if name in ("plane3d_racetrack", "plane3d_heading") else 3
+    )
     if name == "plane3d_figure8":
         assert p.e_floor_path == p.position_precision_floor == 3.0
         assert p.failure_cost == pytest.approx(2.0 * (20000.0 / 3.0) ** 2)
@@ -104,7 +107,7 @@ def test_the_nea_reference_is_the_recorded_hold(name):
     assert p.rho_floor == pytest.approx(rho, rel=0.02)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_oracle_settles_on_the_heading_task():
     """On protocol seed 1 the shipped oracle is 37 m off its altitude on
     average over the first 20 steps and holds 0.74 m over steps 40 to 59; in

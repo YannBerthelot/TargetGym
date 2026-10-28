@@ -70,15 +70,15 @@ def test_a_change_in_any_output_counts_from_the_target_at_reset():
 # schedule: the target at ``time`` t (steps taken) is level k for t in
 # [k block, (k + 1) block), and entry i of an episode is the step that takes
 # ``time`` from i to i + 1, so level k becomes active at entry k block - 1.
-#   plane_energy: target_steps = 8 treads over 1200 steps, 150 steps each
+#   plane_energy (v4): target_steps = 8 treads over 1600 steps, 200 steps each
 #     (``plane.env.commanded_altitude``); the eighth starts on the last step.
 #   compressor_surge: N_SETPOINT_BLOCKS = 4 blocks of setpoint_block_steps 300.
 #   glass_furnace: N_SETPOINTS = 5 slots over 1600 steps, 320 each.
-SCHEDULES = [("plane_energy", 150, 8), ("compressor_surge", 300, 3)]
+SCHEDULES = [("plane_energy", 200, 8), ("compressor_surge", 300, 3)]
 SCHEDULES += [("glass_furnace", 320, 4)]
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("name,block,n_changes", SCHEDULES)
 def test_the_scorer_starts_a_cycle_at_every_scheduled_setpoint(name, block, n_changes):
     spec = REGISTRY[name]
@@ -91,7 +91,7 @@ def test_the_scorer_starts_a_cycle_at_every_scheduled_setpoint(name, block, n_ch
         )
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("name", ["reactor", "plane_sine"])
 def test_a_drifting_or_smooth_target_starts_no_cycle_in_the_scorer(name):
     # reactor: an Ornstein-Uhlenbeck power demand; plane_sine: a sine altitude.

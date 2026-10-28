@@ -541,7 +541,7 @@ within 1e-4 in the trip variable `phi_min`.
   checks 3, 4, 5, 7 and 8 against every registered environment, so a new
   environment inherits them by adding one line to the registry. Checks 3 and 4
   are repository-wide scans and cost seconds, so they run in the fast job;
-  checks 5, 7 and 8 step or differentiate every plant and are marked `slow`,
+  checks 5, 7 and 8 step or differentiate every plant and are marked `large`,
   adding about 100 s to that job.
 
   Each carries an allowlist (`KNOWN_WRITE_ONLY_STATE_FIELDS`,

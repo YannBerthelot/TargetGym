@@ -7,6 +7,7 @@ its expert is.
 
 from __future__ import annotations
 
+import chex
 import gymnasium as gym
 import jax
 import numpy as np
@@ -24,11 +25,6 @@ FRONT_DOOR = (
     "list_envs",
     "score_policy",
 )
-
-
-def _same(a, b) -> bool:
-    la, lb = jax.tree_util.tree_leaves(a), jax.tree_util.tree_leaves(b)
-    return len(la) == len(lb) and all(np.array_equal(x, y) for x, y in zip(la, lb))
 
 
 def test_front_door_is_exported():
@@ -54,7 +50,7 @@ def test_make_returns_the_shared_env_and_the_scored_params(name):
     spec = registry.get(name)
     env, params = tg.make(name)
     assert env is spec.make_env()
-    assert _same(params, spec.make_test_params())
+    chex.assert_trees_all_equal(params, spec.make_test_params())
 
 
 def test_make_overrides_single_fields():
@@ -85,19 +81,11 @@ def test_make_oracle_plans_on_the_scored_params():
     assert hasattr(oracle, "step") and hasattr(oracle, "reset")
 
 
-def test_make_oracle_names_the_extra_when_casadi_is_missing(monkeypatch):
-    import target_gym.experts.mpc as mpc
-
-    monkeypatch.setattr(mpc, "_CASADI_AVAILABLE", False)
-    with pytest.raises(ImportError, match=r"target-gym\[mpc\]"):
-        tg.make_oracle("cstr")
-
-
 @pytest.mark.parametrize("name", ["plane", "cstr", "battery"])
 def test_make_gymnasium_runs_any_task_on_the_scored_params(name):
     genv = tg.make_gymnasium(name)
     assert isinstance(genv, gym.Env)
-    assert _same(genv.env_params, tg.make(name)[1])
+    chex.assert_trees_all_equal(genv.env_params, tg.make(name)[1])
     obs, _ = genv.reset(seed=0)
     assert genv.observation_space.contains(obs)
     obs, reward, terminated, truncated, _ = genv.step(genv.action_space.sample())

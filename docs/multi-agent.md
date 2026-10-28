@@ -22,10 +22,9 @@ registered task is `Formation`, and its scored episode is 200 steps of 1 s:
 
 ```python
 import jax
-from target_gym import Formation, registry
+import target_gym as tg
 
-spec = registry.get("formation")
-env, params = spec.make_env(), spec.make_test_params()   # 200-step episode
+env, params = tg.make("formation")   # the scored 200-step episode
 
 obs, state = env.reset_env(jax.random.PRNGKey(0), params)   # obs.shape == (74,)
 action = env.action_space(params).sample(jax.random.PRNGKey(1))   # (9,)
@@ -41,10 +40,10 @@ everything is `jit`, `vmap` and `scan` compatible.
 
 ```python
 import jax
-from target_gym import FormationMARL, registry
+import target_gym as tg
 
-env = FormationMARL()
-params = registry.get("formation").make_test_params()
+env = tg.FormationMARL()
+_, params = tg.make("formation")
 key = jax.random.PRNGKey(0)
 
 obs, state = env.reset(key, params)   # {"lead": (22,), "wingman_0": (26,), "wingman_1": (26,)}
@@ -103,13 +102,12 @@ the episode, and `dones["__all__"]` is true in the multi-agent view.
 Two baselines ship, recorded on the [Baseline results](baseline-results.md)
 page.
 
-- **PID team** (`tg.make_expert("formation").host()`, or `.batched()` for JAX): the
-  patrol's controllers, seat for seat. The lead seat flies the patrol's lead
-  autopilot, and each wingman seat flies the patrol's pursuit PID. It never
-  trips, but the autopilot leaves the lead about 140 m off its altitude, which
-  dominates its cost. That is the easiest gain for a learner: the 3D heading
-  task's own PID holds the lead to about 38 m, but the patrol PID's wingmen
-  collide behind it.
+- **PID team** (`tg.make_expert("formation").host()`, or `.batched()` for JAX):
+  the lead seat flies the route as a formation lead does, on the 3D heading
+  task's autopilot at a set power, and each wingman seat flies the patrol's
+  formation hold. On held-out seeds the lead holds its altitude within 1.6 m
+  and the wingmen their slots within 2.7 to 7.7 m RMS, except one wingman that
+  rejoins late from a high spawn (formation's PHYSICS.md, D3).
 - **Oracle** (`make_oracle(name)`): each seat flies a law, the patrol's lead
   autopilot or the patrol's twin-autopilot law, and one planner adds a
   correction to every seat over a 30-step horizon, on the true team cost. It

@@ -89,6 +89,20 @@ feed concentrations and flows jointly against the published benchmark.
 
 ## 4. Task design
 
+### Task: `ph_neutralization`
+
+Hold the pH of a stirred tank, where strong acid meets strong base in a
+carbonate buffer, at a target by setting the base flow. The titration curve
+makes the process gain swing by more than an order of magnitude across the
+range, and the buffer flow that moves the curve drifts unmeasured, so the same
+pH reading can call for very different moves.
+
+| obs | meaning |
+|---|---|
+| 0 | pH |
+| 1 | base flow valve, percent of its range |
+| 2 | target pH |
+
 **Why it is hard.** Three compounding difficulties, all physical:
 
 1. **The titration curve is savagely nonlinear.** Steady-state gain varies 45×
@@ -110,8 +124,7 @@ feed concentrations and flows jointly against the published benchmark.
    (Wa, Wb) pairs whose local gain differs substantially, so the plant is
    genuinely partially observed rather than merely noisy.
 
-**Observation** `[pH, q3_pct, target_pH]` — a plant has a pH electrode and
-knows its own valve position. It does not have an on-line assay of carbonate
+**Observation.** A plant has a pH electrode and knows its own valve position. It does not have an on-line assay of carbonate
 speciation, so `Wa`, `Wb` and the buffer flow are hidden.
 
 **Reward** — the floor-normalised cost described in *Reward (version 2)*
