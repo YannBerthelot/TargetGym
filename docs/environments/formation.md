@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/formation/pid_output.gif" width="480px"/></p>
 
-A lead and two wingmen in a V, every aircraft flown by the learner: the lead flies a patrol route while each wingman holds its slot on the lead, and the team shares one cost.
+Fly a lead and two wingmen in a V, every aircraft controlled by the policy. The lead holds an altitude and a heading that follows a patrol route, and each wingman holds a slot fixed in the lead's frame. Because the lead is learned too, each wingman's reference is a co-player rather than a script; the team shares one cost, and a collision between any two aircraft trips all three. The action is the three aircraft's controls, the lead's first.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("formation")
+```
 
 | | |
 |---|---|
 | Action space | `Box((9,))`, all actions in [-1, 1] |
 | Observation space | `Box((74,))` |
 | Tracked variable(s) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) |
-| Episode length | 200 steps (200 s at 1 s per step) |
-| Import | `from target_gym import Formation, FormationParams` |
+| Episode length | 200 steps of 1 s (3.33 min) |
 | Cite as | `formation-v2` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
 
 ## Action space
 
@@ -32,8 +38,16 @@ actuator range inside the environment.
 
 ## Observation space
 
-74 values. Indices (2, 46, 72) carry the tracked variable(s) that the
-reward scores.
+74 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[2]` against `obs[10]`, `obs[46]` against `obs[47]`, `obs[72]` against `obs[73]`.
+
+| # | meaning |
+|---|---|
+| 0-14 | the lead's observation as in `plane3d_heading`, its target heading being the one the route commands this step |
+| 15 | the route's current turn rate (rad per step) |
+| 16-18 | wingman 0's offset from its slot in the lead's frame: back, right, up (m) |
+| 19-21 | wingman 1's offset from its slot, likewise (m) |
+| 22-47 | wingman 0's observation, as in `patrol` |
+| 48-73 | wingman 1's observation, as in `patrol` |
 
 ## Rewards
 
@@ -65,16 +79,18 @@ Recorded over 10 seeds of the 200-step episode (see [Baseline results](../baseli
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -1.109e+07 | 5.547e+04 |
+| PID | -5.837e+04 | 291.9 |
 | MPC | -5321 | 26.61 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
-The PID is the patrol's, seat for seat: the patrol's lead autopilot in the lead seat, aimed at the heading the route commands, and the patrol PID in each wingman seat. It holds the lead's altitude poorly (about 140 m off), the patrol's scripted lead never needing better. The MPC slot is the patrol oracle's design applied to the whole formation: the patrol's lead autopilot in the lead seat and its twin-autopilot law in each wingman seat, with one residual planner over every seat on the team cost.
+The PID flies the lead seat as a formation lead: the 3D heading task's course hold and pitch on height, aimed at the heading the route commands, at a set power, so its wingmen have a steady reference. Each wingman seat flies the patrol's formation hold. The MPC slot is the patrol oracle's design applied to the whole formation: the patrol's lead autopilot in the lead seat and its twin-autopilot law in each wingman seat, with one residual planner over every seat on the team cost.
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("formation", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 200 | steps |

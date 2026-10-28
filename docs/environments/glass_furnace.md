@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/glass_furnace/pid_output.gif" width="480px"/></p>
 
-Glass furnace (float-glass process) — regenerative end-port fired furnace.
+Hold the crown temperature of a regenerative float-glass furnace on a slowly walking setpoint by setting the fuel flow. The crown is read through a lagging thermocouple, the glass and regenerator temperatures are hidden, the firing side reverses on a fixed cycle, and the furnace responds over hours, so a few instruments have to steer a large, slow plant.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("glass_furnace")
+```
 
 | | |
 |---|---|
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((5,))` |
 | Tracked variable(s) | crown temperature (K) |
-| Episode length | 1600 steps (48000 s at 30 s per step) |
-| Import | `from target_gym import GlassFurnace, GlassFurnaceParams` |
+| Episode length | 1600 steps of 30 s (13.3 h) |
 | Cite as | `glass_furnace-v2` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
 
 ## Action space
 
@@ -24,8 +30,15 @@ actuator range inside the environment.
 
 ## Observation space
 
-5 values. Indices (0,) carry the tracked variable(s) that the
-reward scores.
+5 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[4]`.
+
+| # | meaning |
+|---|---|
+| 0 | crown temperature as the thermocouple reads it (°C); it lags the true crown temperature the reward scores |
+| 1 | combustion air preheat temperature (°C) |
+| 2 | fuel flow, percent of maximum |
+| 3 | regenerator phase: 0 while regenerator A preheats the air, 1 while B does |
+| 4 | target crown temperature (°C) |
 
 ## Rewards
 
@@ -57,14 +70,16 @@ Recorded over 10 seeds of the 1600-step episode (see [Baseline results](../basel
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -2050 | 1.281 |
+| PID | -1878 | 1.174 |
 | MPC | -499.9 | 0.3125 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("glass_furnace", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 30 | s |
 | `max_steps_in_episode` | 1600 | steps |

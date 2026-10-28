@@ -13,8 +13,9 @@ pure ``Controller`` (``experts/pid.py`` holds only the shared core and is also
 in every baseline fingerprint). A task added after the 21 has a name that
 cannot collide with another task's gains keys, ships as ``-v2`` with a ``compute_reward_v1`` of its own, has a
 hold row, and, if it ships a PID, has a row in ``TUNERS`` in
-scripts/tune_pid.py. The checks loop over the added tasks and assert once, so
-they pass trivially while none exists.
+scripts/tune_pid.py or names the tuning script of its gains in code. The
+checks loop over the added tasks and assert once, so they pass trivially
+while none exists.
 
 For every task, the 21 included: any physics it imports from another
 package is declared in ``fingerprint_sources``, each gains key a spec declares
@@ -28,6 +29,7 @@ import ast
 import dataclasses
 import json
 import pathlib
+import re
 
 import pytest
 
@@ -357,6 +359,8 @@ DECLARED_BY_THE_21 = {
             "plane3d/dynamics.py",
             "plane3d/env.py",
             "experts/pid.py",
+            "plane3d/experts.py",
+            "plane/experts_tecs.py",
         )
         for name in ("patrol", "patrol_bearing_only")
     },
@@ -480,13 +484,31 @@ def _tuner_rows() -> set[str]:
     raise AssertionError("scripts/tune_pid.py defines no TUNERS dict literal")
 
 
-def test_every_new_task_with_a_pid_has_a_tuner_row():
-    """A new task's gains are set by naming it to scripts/tune_pid.py, which
-    refuses a name with no row in ``TUNERS``. So every task added after the 21
-    that ships a PID has a row there."""
+def _tuning_scripts(spec) -> list[str]:
+    """The ``scripts/tune_*.py`` a task's experts.py names, as the place its
+    gains in code are tuned (the 3D aircraft's and the formation's)."""
+    path = _package_dir(spec) / "experts.py"
+    text = path.read_text() if path.exists() else ""
+    return sorted(set(re.findall(r"scripts/(tune_\w+\.py)", text)))
+
+
+def test_every_new_task_with_a_pid_has_a_tuning_protocol():
+    """Every tuned gain keeps the protocol that set it. A task added after the
+    21 that ships a PID either has a row in ``TUNERS`` (scripts/tune_pid.py,
+    which writes pid_gains.json) or, with its gains in its experts.py, names
+    the tuning script there, and that script exists."""
     rows = _tuner_rows()
-    missing = [s.name for s in _added() if s.has_pid and s.name not in rows]
-    assert not missing, f"no TUNERS row in scripts/tune_pid.py for {missing}"
+    missing = [
+        s.name
+        for s in _added()
+        if s.has_pid
+        and s.name not in rows
+        and not any((ROOT / "scripts" / name).is_file() for name in _tuning_scripts(s))
+    ]
+    assert not missing, (
+        f"no TUNERS row in scripts/tune_pid.py and no tuning script named in "
+        f"experts.py for {missing}"
+    )
 
 
 def test_allowlists_name_real_tasks():

@@ -25,34 +25,34 @@ that shows up in a return.
 
 ## Calling a baseline like an agent
 
-Both baselines are available as one callable, so a single evaluation loop
-serves the PID, the MPC and a learned policy written to the same shape:
+The expert is a callable on the observation, so the loop that evaluates a
+learned policy runs it unchanged:
 
 ```python
-import jax, numpy as np
-from target_gym.registry import REGISTRY
-from target_gym.runners.runners import baseline_policy
+import jax
+import numpy as np
+import target_gym as tg
 
-spec = REGISTRY["cstr"]
-env, params = spec.make_env(), spec.make_test_params()
-policy = baseline_policy(spec, "pid", params)      # or "mpc", or your agent
+env, params = tg.make("cstr")
+policy = tg.make_expert("cstr").host()      # or your agent
+policy.reset()
 
 key, reset_key = jax.random.split(jax.random.PRNGKey(0))
 obs, state = env.reset_env(reset_key, params)
 total = 0.0
 for _ in range(int(params.max_steps_in_episode)):
     key, step_key = jax.random.split(key)   # a fresh key every step
-    action = policy(np.asarray(obs), state)
+    action = policy(np.asarray(obs))
     obs, state, reward, terminated, _ = env.step_env(step_key, state, action, params)
     total += float(reward)
     if bool(terminated):
         break
 ```
 
-Both take `(obs, state)`, but they read different things. **The PID reads only
-`obs`**, as a plant controller does. **The MPC reads only `state`**, the true
-simulator state, so it is an upper bound rather than a peer to a policy that
-sees what a plant instruments.
+**The expert reads only `obs`**, as a plant controller does. The MPC,
+`tg.make_oracle(name)`, is called as `oracle.step(obs, state)` and **reads the
+true simulator state**, so it is an upper bound rather than a peer to a policy
+that sees what a plant instruments.
 
 To compare your own agent, evaluate it on the seeds the baselines were recorded
 on, 0 to 9. The comparison is then paired, and the baseline returns can be read

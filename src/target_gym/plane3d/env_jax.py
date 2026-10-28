@@ -238,11 +238,13 @@ class Plane3DHeading(_Airplane3DBase):
         #
         # The 1 m altimeter resolution; the heading floor is the class
         # default, the 0.0087 rad AHRS resolution. The oracle holds below
-        # both, and rho is its lowest per-seed holds (0.6735 m, 2.14e-5 rad;
-        # `scripts/measure_hold.py`) in floor units.
-        rho = (0.6735 / 1.0) ** 2 + (2.14e-5 / 0.0087) ** 2
+        # both, and rho is its lowest per-seed holds over the 300-step episode
+        # (0.5867 m, 1.36e-5 rad; `scripts/measure_hold.py`) in floor units.
+        # 300 steps: at 200 the PID's hold was still twice what it holds on
+        # a longer flight (tests/test_episode_length.py).
+        rho = (0.5867 / 1.0) ** 2 + (1.36e-5 / 0.0087) ** 2
         return PlaneParams3D(
-            max_steps_in_episode=200,
+            max_steps_in_episode=300,
             e_floor_altitude=1.0,
             rho_floor_tracking=rho,
             rho_floor=rho,

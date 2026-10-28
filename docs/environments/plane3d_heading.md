@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/plane3d_heading/pid_output.gif" width="480px"/></p>
 
-3D airplane environment state, parameters, and transition logic.
+Hold a target altitude and turn onto and hold a target heading with the 3D airliner, using throttle, elevator and aileron. The aileron commands a roll rate, not a bank angle, so heading is controlled through a cascade of two integrators, and the turbulence is hidden.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("plane3d_heading")
+```
 
 | | |
 |---|---|
 | Action space | `Box((3,))`, all actions in [-1, 1] |
 | Observation space | `Box((15,))` |
 | Tracked variable(s) | altitude (m) |
-| Episode length | 200 steps (200 s at 1 s per step) |
-| Import | `from target_gym import Plane3DHeading, PlaneParams3D` |
-| Cite as | `plane3d_heading-v3` |
+| Episode length | 300 steps of 1 s (5 min) |
+| Cite as | `plane3d_heading-v4` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
 
@@ -26,8 +32,25 @@ actuator range inside the environment.
 
 ## Observation space
 
-15 values. Indices (2,) carry the tracked variable(s) that the
-reward scores.
+15 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[2]` against `obs[10]`.
+
+| # | meaning |
+|---|---|
+| 0 | `x_dot`, velocity along world x (m/s) |
+| 1 | `y_dot`, velocity along world y (m/s) |
+| 2 | `z`, altitude (m) |
+| 3 | `z_dot`, vertical speed (m/s) |
+| 4 | `theta`, pitch angle (rad) |
+| 5 | `theta_dot`, pitch rate (rad/s) |
+| 6 | `phi`, bank angle (rad) |
+| 7 | `phi_dot`, roll rate (rad/s) |
+| 8 | `gamma`, flight-path angle (rad) |
+| 9 | `psi`, heading (rad) |
+| 10 | target altitude (m) |
+| 11 | target heading (rad) |
+| 12 | throttle, 0 to 1 |
+| 13 | elevator deflection (rad) |
+| 14 | aileron deflection (rad) |
 
 ## Rewards
 
@@ -51,25 +74,27 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 200 steps.
+**Truncation.** After 300 steps.
 
 ## Baselines
 
-Recorded over 10 seeds of the 200-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
+Recorded over 10 seeds of the 300-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -1.671e+06 | 8357 |
-| MPC | -6.892e+05 | 3446 |
+| PID | -1.672e+06 | 5573 |
+| MPC | -6.893e+05 | 2298 |
 
 The MPC beats the PID on 9 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("plane3d_heading", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
-| `max_steps_in_episode` | 200 | steps |
+| `max_steps_in_episode` | 300 | steps |
 | `gravity` | 9.81 | m/s^2 |
 | `initial_mass` | 73500 | kg |
 | `thrust_output_at_sea_level` | 240000 | N |
@@ -120,8 +145,8 @@ The MPC beats the PID on 9 of 10 seeds and does not trip the plant on any of the
 | `tracking_exponent` | 2 | - |
 | `failure_cost` | 2.9729e+08 | reward |
 | `restart_steps` | 3600 | steps |
-| `rho_floor_tracking` | 0.453608 | reward |
-| `rho_floor` | 0.453608 | reward |
+| `rho_floor_tracking` | 0.344219 | reward |
+| `rho_floor` | 0.344219 | reward |
 | `figure8_altitude_amplitude` | 200 | m |
 | `initial_z_dot` | 0 | m/s |
 | `initial_x_dot` | 200 | m/s |

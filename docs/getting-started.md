@@ -8,6 +8,13 @@ pip install target-gym
 uv add target-gym
 ```
 
+!!! note "Until 0.7.0 is on PyPI"
+    TargetGym is in active development: PyPI releases are the stable line, and
+    `main` can change quickly between them. This site documents `main`, whose
+    API (starting with `tg.make`) is not on PyPI until 0.7.0. Until then,
+    install from GitHub to use it:
+    `pip install "git+https://github.com/YannBerthelot/TargetGym"`.
+
 Python 3.11 through 3.13. The full-state MPC oracles on nine tasks plan with
 CasADi, which is optional: `pip install 'target-gym[mpc]'`. Videos and the
 aircraft dashboards need `pip install 'target-gym[render]'`, and
@@ -118,7 +125,8 @@ actions, memory = policy(memory, obs[None])
 
 `tg.make_oracle(name)` returns the full-state MPC, which reads the true state
 and so shows what a perfect model could do. `tg.list_envs()` gives every name;
-the [environment reference](environments.md) describes each task, and
+the [environment reference](environments.md) describes each task,
+[Choosing an environment](complexity.md) says which to start with, and
 [Using the PIDs](using-the-pids.md) covers evaluating against and training on
 the experts. For code that needs more than this, `target_gym.registry.REGISTRY`
 holds each task's `EnvSpec`.

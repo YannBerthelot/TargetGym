@@ -113,6 +113,25 @@ omitting the clinker-formation term entirely.
 
 ## 4. Task design
 
+### Task: `cement_kiln`
+
+Hold the free lime in the clinker leaving a 3000 t/day rotary kiln with fuel
+and kiln speed. Free lime answers a fuel change only as material travels the
+kiln, half of it after about one residence time; kiln speed moves that delay
+itself; and eight readings stand in for 64 dynamic states. Overheating the kiln
+or letting it go cold trips it.
+
+| obs | meaning |
+|---|---|
+| 0 | free lime at discharge (%) |
+| 1 | burning-zone temperature, the hottest charge the pyrometer sees (K) |
+| 2 | gas temperature at the kiln inlet (K) |
+| 3 | material temperature at the back end (K) |
+| 4 | `raw_meal` feed rate (kg/s), the disturbance |
+| 5 | fuel, percent of its range |
+| 6 | kiln speed, percent of its range |
+| 7 | target free lime (%) |
+
 **Why it is hard.** This is the suite's transport-delay problem.
 
 1. **The product lags the input by a residence time.** Fuel heats the burning
@@ -138,10 +157,9 @@ omitting the clinker-formation term entirely.
    1620 K while free lime passes 5 % within 19 steps and climbs past 30 %,
    and before version 3 that cold kiln never tripped.
 
-**Observation** `[lime_pct, T_burning_zone, T_exhaust, T_back_end, feed_rate,
-fuel_pct, speed_pct, target_lime_pct]` — a burning-zone pyrometer, a back-end
-gas thermocouple, a back-end material pyrometer, a weighfeeder, and the
-discharge assay. The axial profile is hidden.
+**Observation.** The table above is what a burning-zone pyrometer, a back-end
+gas thermocouple, a back-end material pyrometer, a weighfeeder and the
+discharge assay report. The axial profile is hidden.
 
 **Reward** = free-lime tracking band − fuel.
 

@@ -16,13 +16,12 @@ pip install 'target-gym[render]'
 `save_video` drives a policy through an episode and writes the frames:
 
 ```python
-from target_gym.registry import REGISTRY
+import target_gym as tg
 
-spec = REGISTRY["glass_furnace"]
-env, params = spec.make_env(), spec.make_test_params()
+env, params = tg.make("glass_furnace")
 
 env.save_video(
-    spec.make_pid(),          # any callable taking the observation
+    tg.make_expert("glass_furnace").host(),   # any callable taking the observation
     seed=0,
     params=params,
     folder="videos/glass_furnace",

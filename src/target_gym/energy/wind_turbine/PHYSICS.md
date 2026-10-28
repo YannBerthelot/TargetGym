@@ -79,6 +79,21 @@ is the second independent check.
 
 ## 4. Task design
 
+### Task: `wind_turbine`
+
+Hold the electrical power of the NREL 5 MW reference turbine at a curtailed
+setpoint in turbulent, above-rated wind, with blade pitch and generator torque.
+The rotor-effective wind is hidden and has to be inferred from how the rotor
+behaves, while rotor speed stays regulated. Costs are in dollars.
+
+| obs | meaning |
+|---|---|
+| 0 | rotor speed (rpm) |
+| 1 | blade pitch (deg) |
+| 2 | generator torque, percent of maximum |
+| 3 | electrical power (MW) |
+| 4 | target power (MW) |
+
 **Curtailed power tracking in above-rated wind** — the problem a modern
 turbine actually faces when the grid dispatches it below available power. The
 turbine holds a setpoint while turbulence moves the available power around it,

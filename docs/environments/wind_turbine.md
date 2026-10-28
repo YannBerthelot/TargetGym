@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/wind_turbine/pid_output.gif" width="480px"/></p>
 
-Wind turbine — NREL 5 MW reference turbine, collective-pitch power regulation.
+Hold the electrical power of the NREL 5 MW reference turbine at a curtailed setpoint in turbulent, above-rated wind, with blade pitch and generator torque. The rotor-effective wind is hidden and has to be inferred from how the rotor behaves, while rotor speed stays regulated. Costs are in dollars.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("wind_turbine")
+```
 
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((5,))` |
 | Tracked variable(s) | electrical power (MW) |
-| Episode length | 400 steps (100 s at 0.25 s per step) |
-| Import | `from target_gym import WindTurbine, WindTurbineParams` |
+| Episode length | 400 steps of 0.25 s (100 s) |
 | Cite as | `wind_turbine-v2` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/wind_turbine/PHYSICS.md) |
 
 ## Action space
 
@@ -25,8 +31,15 @@ actuator range inside the environment.
 
 ## Observation space
 
-5 values. Indices (3,) carry the tracked variable(s) that the
-reward scores.
+5 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[3]` against `obs[4]`.
+
+| # | meaning |
+|---|---|
+| 0 | rotor speed (rpm) |
+| 1 | blade pitch (deg) |
+| 2 | generator torque, percent of maximum |
+| 3 | electrical power (MW) |
+| 4 | target power (MW) |
 
 ## Rewards
 
@@ -58,14 +71,16 @@ Recorded over 10 seeds of the 400-step episode (see [Baseline results](../baseli
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -0.05611 | 0.0001403 |
+| PID | -0.02169 | 5.423e-05 |
 | MPC | -0.005915 | 1.479e-05 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("wind_turbine", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 0.25 | s |
 | `max_steps_in_episode` | 400 | steps |

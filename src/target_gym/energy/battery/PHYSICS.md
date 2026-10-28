@@ -87,6 +87,22 @@ actively cooled.
 
 ## 4. Task design
 
+### Task: `battery`
+
+Follow a grid dispatch schedule, one setpoint per 5-minute market block, with a
+1 MW / 2 MWh lithium-ion battery. Every MWh moved wears the pack, and the
+running cost prices that wear in dollars at every step, so tracking is a trade
+against capacity fade. Leaving the 5 to 95 % charge window trips the pack,
+though exact tracking stays inside it over a scored episode.
+
+| obs | meaning |
+|---|---|
+| 0 | `soc`, state of charge (0 to 1) |
+| 1 | cell voltage (V) |
+| 2 | pack temperature (°C) |
+| 3 | delivered power (MW), positive when discharging |
+| 4 | target power (MW) |
+
 **Dispatch tracking, paid for in wear.** Following the grid's request moves
 charge in and out of the pack, and every MWh moved costs capacity fade, which
 the running cost prices at every step. The charge window is real: leaving
@@ -119,8 +135,7 @@ The whole schedule is in the state, so a predictive controller can see the next
 block coming; the observation exposes only the current request, which is what
 keeps that a real advantage rather than a free lunch.
 
-**Observation** `[soc, V_cell, T_cell, P_MW, target_P_MW]` — what a battery
-management system actually reports. The diffusion voltage `v_rc` and the
+**Observation.** What a battery management system actually reports. The diffusion voltage `v_rc` and the
 accumulated capacity fade `q_loss` are hidden: neither is directly measurable,
 and the fade in particular is the cost the controller is implicitly trading
 against.
@@ -162,6 +177,17 @@ and +0.0005: it can only move the command away from the target, which costs
 imbalance and saves a little wear. It stays because the limits are real and a
 trip is priced as an hour of downtime, and nothing else in the PID would keep
 it off them.
+
+**The expert, checked against practice (2026-10-28).** A grid battery
+follows a scheduled dispatch setpoint, inside state-of-charge limits, with an
+inner loop on the delivered power. The PID is that: the dispatch target as a
+feedforward, a PI trim for the conversion losses, and the guard above. It
+stays as it is. `tests/energy/battery/test_battery_pid.py` checks each part
+against hand-derived values (on target the command is the dispatch; a
+shortfall commands more; the guard halves a discharge halfway into its margin
+and leaves a charge alone), and that it never trips on the held-out seeds 200
+to 209. There it holds 1.33e-3 dollars per step against a ceiling of
+1.39e-4: 0.98 decades of room.
 
 **The oracle is a feedforward, not a planner.** Delivered power equals the
 command within the step, and the target is the scheduled level plus white

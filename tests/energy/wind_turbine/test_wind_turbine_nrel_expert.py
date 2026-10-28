@@ -145,7 +145,7 @@ def test_the_integral_waits_at_fine_pitch():
 HELD_OUT = range(200, 210)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.xfail(
     strict=True,
     reason="Finding (2026-10-28): speed holds within 10 % on every hold step, "
