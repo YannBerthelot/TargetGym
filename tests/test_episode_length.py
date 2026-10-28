@@ -39,9 +39,8 @@ SEEDS = (100, 101, 102)
 # PR lengthens the episode to its new expert and removes the mark. Strict, so a
 # task that starts passing says so.
 _PROCESS = "the process-plant experts PR (four_tank, distillation) lengthens it"
-_FORMATION = "the formation-hold experts PR (patrol, formation) lengthens it"
 CYCLE_GAPS = {"four_tank": _PROCESS, "distillation": _PROCESS}
-DOUBLING_GAPS = {**CYCLE_GAPS, "patrol": _FORMATION, "formation": _FORMATION}
+DOUBLING_GAPS = dict(CYCLE_GAPS)
 # compressor_surge's schedule ends at step 1200 and then holds its last levels,
 # so a run twice as long adds 1200 quiet steps and its hold falls 2.2x without
 # any settling (3.6x with its blocks stretched instead). Its expert is at 0.1x

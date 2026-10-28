@@ -133,8 +133,9 @@ than by commit.
   - `plane_energy-v4`: 1,200 to 1,600 steps, eight treads of 200;
   - `plane3d_heading-v4`: 200 to 300 steps.
 
-  `four_tank`, `distillation`, `patrol` and `formation` are strict xfails
-  until their expert rework lengthens them. `compressor_surge` skips the
+  `four_tank` and `distillation` are strict xfails until their expert rework
+  lengthens them; the formation-hold experts pass at today's lengths.
+  `compressor_surge` skips the
   second check, because its schedule ends at step 1,200 and a longer run only
   adds quiet steps.
 - **`env.default_params` is the scored configuration on every task.** An
