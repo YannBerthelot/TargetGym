@@ -107,13 +107,52 @@ not a control problem, it is an ill-posed one.
 The constants all trip on over- or under-speed, which is the point: rotor-speed
 regulation is not optional, and the reward cannot buy back a trip.
 
-**The torque loop needs rotor-speed protection.** Without it the power
-feedforward keeps demanding a setpoint the wind cannot supply, dragging the
-rotor to a stall — observed directly during development. Capping instead at the
-classical Region 2 law `τ = K ω²` is *worse*: at rated speed that law sits well
-below rated torque, so it under-brakes and the rotor runs away to an overspeed
-trip. The fix that works is backing the torque demand off linearly between 0.6
-and 0.9 of rated speed, which is inactive during normal Region 3 regulation.
+**The expert: the NREL 5 MW baseline controller.** The controller published
+with the reference turbine (Jonkman et al. 2009, NREL/TP-500-38060,
+chapter 7), on the observation only (`experts.py`, `nrel_baseline_step`):
+
+- **Speed filter.** A single pole at 0.25 Hz on generator speed. Both loops
+  read the filtered speed.
+- **Torque.** Jonkman's table on generator speed: none below 670 rpm, a line
+  to the region-2 curve at 871 rpm, `0.0255764 N m/rpm^2 w^2`, a 10 % slip
+  line ending at 1161.963 rpm, and region 3, constant power `P / w`, whenever
+  the previous pitch command is at least 1 deg or the filtered speed at least
+  1161.963 rpm. Limited to 47,402.91 N m and 15,000 N m/s.
+- **Pitch.** A PI on the filtered speed error against 1173.7 rpm, saturated
+  at the pitch limits, moving at most 8 deg/s, started bumpless from the
+  measured pitch.
+- **Ours, for the curtailed task.** `P` is the dispatched target over the
+  generator efficiency (Jonkman's 5.296610 MW is 5 MW / 0.944), and the
+  below-rated table is capped at region 3's torque, so a curtailed turbine
+  never exceeds its target. The pitch limit is the plant's 40 deg.
+- **Gains, fixed.** Jonkman's pole placement (`wn` 0.6 rad/s, `zeta` 0.7)
+  on the best-fit `dP/dtheta` along the region-3 curve
+  (`scripts/wind_turbine_gains.py`, wind 12 to 25 m/s in 0.5 m/s steps):
+  Kp 0.01514 s and Ki 0.00649 on generator rad/s, at -31.7 MW/rad. The
+  published 0.01882681 and 0.008068634 assume the real blade. On this
+  plant's analytic Cp (D1) the sensitivity is not monotone in pitch: about
+  -66 MW/rad near 1 deg, -4 at 9 deg and -58 at 33 deg. Its best-fit line is
+  flat (theta_K 512 deg), so Jonkman's schedule `1 / (1 + theta / theta_K)`
+  is 1. A schedule read off the exact sensitivity instead multiplies the
+  gains where the surface is almost flat, and tripped the turbine 48 times
+  over the ten training seeds.
+
+It replaces a PID that held power by the same constant-power torque but on
+the unfiltered speed, backed off linearly between 0.6 and 0.9 of rated speed,
+under a grid-searched pitch PI. Those constants are now
+`WindTurbineNewtonPI`'s own (Kp 12 deg/rpm, Ki 0.6), so the oracle is
+unchanged. The proposal's change, Region 2's `k w^2` below rated, does not
+apply here: the task runs only above rated wind with a curtailed target, and
+capping the torque at that law under-brakes at rated speed.
+
+On the held-out seeds 200 to 209 the expert holds 1.10e-4 $ per step, the PID
+it replaces 2.81e-5, against a ceiling of 6.94e-6: 1.20 decades of room,
+against 0.61. Spec, a strict xfail in
+`tests/energy/wind_turbine/test_wind_turbine_nrel_expert.py`: rotor speed
+within 10 % of rated on 99 % of hold steps (met on every step of every
+seed) and a mean power error under 1 % of the target. Measured 0.25 to
+1.10 %, 1.10 % on seed 200, against 0.08 to 0.14 % for the PID: region 3
+divides by the filtered speed, so the power lags the rotor's speed swings.
 
 **The oracle is a feedback law, not a planner.** Since the oracle audit
 (2026-10) the MPC slot holds `WindTurbineNewtonPI` (`experts.py`). Generator

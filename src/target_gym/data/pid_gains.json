@@ -311,11 +311,16 @@
     "note": "LV pairing: yD<-L (positive gain), xB<-V (negative -- more boilup strips the bottoms cleaner, lowering xB). Grid search over (Kp, Ki); return rises monotonically to Kp~400 with no instability, but 150 captures 98% of it at a quarter of the control activity, which is the safer margin on a plant with RGA ~50."
   },
   "wind_turbine": {
-    "Kp_pitch": 12.0,
-    "Ki_pitch": 0.6,
-    "Kd_pitch": 0.0,
-    "tuning_rule": "grid_search_max_reward",
-    "note": "Pitch PI on rotor-speed error; generator torque is a feedforward for the power setpoint with rotor-speed protection. Return is flat above Kp~12 (392 vs 394 at Kp=25) and all episodes complete without tripping, so 12 keeps a factor-2 gain margin on a rate-limited pitch actuator."
+    "Kp": 0.015144123621885518,
+    "Ki": 0.006490338695093793,
+    "model": {
+      "dP_dtheta": -31724882.679951087,
+      "theta_K_deg": 512.2277916696783,
+      "zeta": 0.7,
+      "wn": 0.6
+    },
+    "tuning_rule": "jonkman_pole_placement",
+    "note": "NREL 5 MW baseline (Jonkman et al. 2009, ch. 7): pitch PI on the filtered generator speed, Kp and Ki by pole placement (wn 0.6, zeta 0.7) on the best-fit dP/dtheta of this plant's Cp surface along the region-3 curve; that line is flat, so no gain schedule (scripts/wind_turbine_gains.py). Generator speed in rad/s to pitch in rad."
   },
   "cement_kiln": {
     "Kp_outer": 12000.0,

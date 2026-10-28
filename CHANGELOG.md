@@ -177,6 +177,16 @@ than by commit.
   and figure-8. The figure-8 expert still cuts the tips of the smaller lobes,
   where stall prevention keeps the airliner too fast to turn that tight.
   Every aircraft record is re-recorded.
+- **The wind turbine's expert is the NREL 5 MW baseline controller**
+  (Jonkman et al. 2009, chapter 7). It has a 0.25 Hz speed filter, the
+  region 1 to 3 torque table at the dispatched power, and a pitch PI with
+  Jonkman's pole-placement gains on this plant's Cp
+  (`scripts/wind_turbine_gains.py`). The gains are fixed: the sensitivity's
+  best-fit line is flat on this surface, so the gain schedule is 1.
+  On the held-out seeds it holds 1.10e-4 against the old PID's 2.81e-5. Its
+  filtered-speed torque law lets the power lag the rotor's speed swings. The
+  oracle keeps the old PID's pitch constants as its own and is unchanged. The
+  wind turbine's records are re-recorded.
 
 - **Shorter docstrings in the core modules** (registry, experts, eval, reward,
   runners, base): they keep the contracts and drop the measurement history,

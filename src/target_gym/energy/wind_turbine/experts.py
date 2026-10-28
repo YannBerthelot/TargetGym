@@ -256,8 +256,8 @@ class WindTurbineNewtonPI:
     protocol seed, where the gradient planner left a mean of 0.9 to 1.8 kW
     per seed.
 
-    **Pitch.** The shipped PI on rotor-speed error (``Kp_pitch`` and
-    ``Ki_pitch`` from the PID's tuned gains), in velocity form and bumpless
+    **Pitch.** A PI on rotor-speed error (``Kp`` 12 deg/rpm and ``Ki`` 0.6,
+    the gains of the PID this law was built on), in velocity form and bumpless
     from the command the plant is already holding (``state.pitch_cmd``).
     Two changes from the PID:
 
@@ -308,6 +308,10 @@ class WindTurbineNewtonPI:
         slew_hi: float = 1.13,
         slew_ramp: float = 0.04,
         newton_iters: int = 4,
+        Kp: float = 12.0,
+        Ki: float = 0.6,
+        protect_lo: float = 0.60,
+        protect_hi: float = 0.90,
     ):
         from target_gym.energy.wind_turbine.env import (
             compute_next_state,
@@ -318,9 +322,11 @@ class WindTurbineNewtonPI:
         # Plan on the mean wind whatever the caller passed: with the
         # turbulence zeroed the step key draws nothing.
         self.params = params.replace(turbulence_std=0.0)
-        pid = make_wind_turbine_pid_controller().params
-        self.Kp, self.Ki = float(pid.Kp_pitch), float(pid.Ki_pitch)
-        self.protect_lo, self.protect_hi = float(pid.protect_lo), float(pid.protect_hi)
+        # The pitch PI and low-speed protection of the PID this law was built
+        # on (grid-searched, 2026-10): its own constants since the expert
+        # became the NREL baseline.
+        self.Kp, self.Ki = float(Kp), float(Ki)
+        self.protect_lo, self.protect_hi = float(protect_lo), float(protect_hi)
         self.speed_setpoint = float(speed_setpoint)
         self.pitch_slew = float(pitch_slew)
         self.slew_lo, self.slew_hi = float(slew_lo), float(slew_hi)
@@ -452,87 +458,138 @@ def make_wind_turbine_mpc(
 
 
 # ---------------------------------------------------------------------------
-# The shipped PID as one pure step (host and jit)
+# The expert: the NREL 5 MW baseline controller (Jonkman et al. 2009, ch. 7)
 # ---------------------------------------------------------------------------
 
 
 @struct.dataclass
-class WindTurbinePIDParams:
-    """Gains and plant constants of the above-rated turbine controller.
+class NRELBaselineParams:
+    """The baseline controller's constants, as published, and the plant's.
 
-    These are the values the baseline was scored with. Keep them Python
-    floats so the host arithmetic on constants runs in double precision, as
-    it did when the baseline was recorded.
+    Speeds are generator-side, in rad/s; pitch in rad; torque in N m. The
+    pitch gains come from Jonkman's pole placement on our Cp surface
+    (``scripts/wind_turbine_gains.py``). The published ones (0.01882681 s,
+    0.008068634) assume the real blade's sensitivity, and its gain schedule
+    cannot be fitted on ours, so the gains are fixed.
     """
 
-    Kp_pitch: float = 3.0
-    Ki_pitch: float = 0.6
-    Kd_pitch: float = 0.0
-    omega_rated_rpm: float = 12.1
-    eta_gen: float = 0.944
-    N_gear: float = 97.0
-    torque_max: float = 47_400.0
-    pitch_max: float = 40.0
-    protect_lo: float = 0.60
-    protect_hi: float = 0.90
+    Kp: float
+    Ki: float
+    N_gear: float
+    eta_gen: float
+    torque_max_plant: float
+    pitch_max_deg: float
     dt: float = 0.25
+    filter_hz: float = 0.25
+    rated_speed: float = 1173.7 * 2.0 * np.pi / 60.0
+    region3_speed: float = 1161.963 * 2.0 * np.pi / 60.0
+    region15_lo: float = 670.0 * 2.0 * np.pi / 60.0
+    region15_hi: float = 871.0 * 2.0 * np.pi / 60.0
+    k_region2: float = 0.0255764 * (60.0 / (2.0 * np.pi)) ** 2
+    slip: float = 0.10
+    region3_pitch_deg: float = 1.0
+    torque_max: float = 47_402.91
+    torque_rate: float = 15_000.0
+    pitch_rate_deg: float = 8.0
 
 
 @struct.dataclass
-class WindTurbinePIDState:
-    """Integral and previous error of the pitch PI on rotor speed."""
+class NRELBaselineState:
+    """The filtered speed, the pitch integral (of the speed error, rad), the
+    previous commands, and whether the first observation has been read."""
 
-    integral: float
-    prev_err: float
+    speed_f: float = 0.0
+    integral: float = 0.0
+    pitch_prev: float = 0.0
+    torque_prev: float = 0.0
+    started: float = 0.0
 
 
-def wind_turbine_pid_step(params, state, obs, xp=jnp):
-    """Generator torque from the power feedforward, pitch from a PI on speed.
+def nrel_baseline_step(params, state, obs, xp=jnp):
+    """One 0.25 s step of the NREL 5 MW baseline controller.
 
-    The classical above-rated split. Generator torque sets power by
-    feedforward, since ``P = eta N tau w`` is exact and rotor speed is
-    measured. Collective pitch regulates rotor speed: a PI on
-    ``omega - omega_rated`` spills whatever aerodynamic power the torque does
-    not absorb. The gain is positive because a rotor above rated has excess
-    power to spill, so pitch must increase.
-
-    obs: [omega_rpm, pitch_deg, torque_pct, P_MW, target_P_MW]. Keep the
-    arithmetic order: under ``numpy`` it reproduces the scored baseline bit
-    for bit.
+    obs: ``[omega_rpm, pitch_deg, torque_pct, P_MW, target_P_MW]``.
     """
     p = params
-    omega_rpm = obs[..., 0]
-    target_MW = obs[..., 4]
+    w = obs[..., 0] * p.N_gear * (2.0 * np.pi / 60.0)
+    pitch = xp.radians(obs[..., 1])
+    torque = obs[..., 2] / 100.0 * p.torque_max_plant
+    first = state.started < 0.5
 
-    # Torque: power feedforward, backed off as the rotor slows below rated.
-    omega = omega_rpm * 2.0 * np.pi / 60.0
-    torque = (target_MW * 1.0e6) / (p.eta_gen * p.N_gear * xp.maximum(omega, 1e-3))
-    speed_ratio = omega / (p.omega_rated_rpm * 2.0 * np.pi / 60.0)
-    protection = xp.clip(
-        (speed_ratio - p.protect_lo) / (p.protect_hi - p.protect_lo), 0.0, 1.0
+    # Single-pole low-pass on the generator speed; starts at the reading.
+    alpha = np.exp(-2.0 * np.pi * p.dt * p.filter_hz)
+    speed_f = xp.where(first, w, alpha * state.speed_f + (1.0 - alpha) * w)
+    pitch_prev = xp.where(first, pitch, state.pitch_prev)
+    torque_prev = xp.where(first, torque, state.torque_prev)
+
+    # Torque. Region 3 is constant power at the dispatch (ours: the target
+    # over the generator efficiency); below it the baseline table, capped at
+    # region 3's torque so a curtailed turbine never exceeds its target.
+    power = obs[..., 4] * 1.0e6 / p.eta_gen
+    region3 = power / xp.maximum(speed_f, 1e-3)
+    sync = p.region3_speed / (1.0 + p.slip)
+    line = (power / p.region3_speed) / (p.region3_speed - sync) * (speed_f - sync)
+    curve = p.k_region2 * speed_f**2
+    ramp = (
+        p.k_region2
+        * p.region15_hi**2
+        * (speed_f - p.region15_lo)
+        / (p.region15_hi - p.region15_lo)
     )
-    torque = torque * protection
-    torque_raw = 2.0 * xp.clip(torque / p.torque_max, 0.0, 1.0) - 1.0
+    below = xp.where(
+        speed_f < p.region15_lo,
+        0.0,
+        xp.where(speed_f < p.region15_hi, ramp, xp.maximum(curve, line)),
+    )
+    in_region3 = (pitch_prev >= np.radians(p.region3_pitch_deg)) | (
+        speed_f >= p.region3_speed
+    )
+    tq = xp.where(in_region3, region3, xp.minimum(below, region3))
+    tq = xp.clip(tq, 0.0, p.torque_max)
+    step_tq = p.torque_rate * p.dt
+    tq = xp.clip(tq, torque_prev - step_tq, torque_prev + step_tq)
 
-    # Pitch: PI on rotor-speed error, with anti-windup at the stops.
-    err = omega_rpm - p.omega_rated_rpm
-    integral = state.integral + err * p.dt
-    deriv = (err - state.prev_err) / p.dt
-    pitch = p.Kp_pitch * err + p.Ki_pitch * integral + p.Kd_pitch * deriv
-    pitch_clipped = xp.clip(pitch, 0.0, p.pitch_max)
-    integral = xp.where(pitch != pitch_clipped, integral - err * p.dt, integral)
-    pitch_raw = 2.0 * (pitch_clipped / p.pitch_max) - 1.0
+    # Pitch: PI on the filtered speed error, the integral saturated at the
+    # pitch limits and started bumpless from the measured pitch.
+    pitch_max = np.radians(p.pitch_max_deg)
+    error = speed_f - p.rated_speed
+    integral = xp.where(first, pitch / p.Ki, state.integral) + error * p.dt
+    integral = xp.clip(integral, 0.0, pitch_max / p.Ki)
+    command = xp.clip(p.Kp * error + p.Ki * integral, 0.0, pitch_max)
+    step_pitch = np.radians(p.pitch_rate_deg) * p.dt
+    command = xp.clip(command, pitch - step_pitch, pitch + step_pitch)
 
-    action = xp.stack([pitch_raw, torque_raw], axis=-1)
-    return action, WindTurbinePIDState(integral=integral, prev_err=err)
+    action = xp.stack(
+        [
+            2.0 * command / pitch_max - 1.0,
+            2.0 * xp.clip(tq / p.torque_max_plant, 0.0, 1.0) - 1.0,
+        ],
+        axis=-1,
+    )
+    new_state = NRELBaselineState(
+        speed_f=speed_f,
+        integral=integral,
+        pitch_prev=command,
+        torque_prev=tq,
+        started=1.0 + 0.0 * w,
+    )
+    return action, new_state
 
 
 def make_wind_turbine_pid_controller() -> Controller:
-    """The shipped turbine PID as a :class:`Controller`, gains as tuned."""
-    params = WindTurbinePIDParams(
-        Kp_pitch=gain("wind_turbine", "Kp_pitch", 3.0),
-        Ki_pitch=gain("wind_turbine", "Ki_pitch", 0.6),
-        Kd_pitch=gain("wind_turbine", "Kd_pitch", 0.0),
+    """The expert: the NREL 5 MW baseline controller as a
+    :class:`~target_gym.experts.pid.Controller`. The pitch gains are stored in
+    ``pid_gains.json`` by ``scripts/wind_turbine_gains.py``."""
+    from target_gym.energy.wind_turbine.env import WindTurbineParams
+
+    wp = WindTurbineParams()
+    params = NRELBaselineParams(
+        Kp=gain("wind_turbine", "Kp", 0.01514),
+        Ki=gain("wind_turbine", "Ki", 0.00649),
+        N_gear=float(wp.N_gear),
+        eta_gen=float(wp.eta_gen),
+        torque_max_plant=float(wp.torque_max),
+        pitch_max_deg=float(wp.pitch_max),
+        dt=float(wp.delta_t),
     )
-    state = WindTurbinePIDState(integral=0.0, prev_err=0.0)
-    return Controller(params, state, wind_turbine_pid_step)
+    return Controller(params, NRELBaselineState(), nrel_baseline_step)
