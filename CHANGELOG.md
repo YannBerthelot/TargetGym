@@ -177,6 +177,26 @@ than by commit.
   and figure-8. The figure-8 expert still cuts the tips of the smaller lobes,
   where stall prevention keeps the airliner too fast to turn that tight.
   Every aircraft record is re-recorded.
+- **The patrol and formation experts hold a formation slot as flight research
+  flew it.** `patrol`, `patrol_bearing_only` and the formation's wingmen fly
+  a formation hold over the 3D tasks' autopilot, as in AFIT's and NASA's
+  F/A-18 formation-flight trials: the slot error closes along track on speed,
+  across it on course and vertically on height, with the lead's motion fed
+  forward. No deployed wingman autopilot exists, and the docs say so. The
+  bearing-only expert estimates the lead from range and bearings first. The
+  formation's lead flies the 3D heading autopilot at a set power, as a
+  formation lead does. `scripts/tune_formation_hold.py` tunes them on training
+  seeds 100-109 and checks them on held-out seeds 200-209: the followers hold
+  3.4 to 5.7 m RMS of the slot against an 8.5 m limit (NASA's 10 ft scaled by
+  span), and the formation's lead its altitude within 1.6 m. One formation
+  wingman, on seed 208, rejoins late from a high spawn (32.6 m RMS) and is a
+  strict expected failure. The pursuit PIDs they replace held 35 to 68 m, and
+  the formation's lead 141 m off its altitude. The patrol and formation records
+  are re-recorded. The new experts join their slot more slowly than the
+  pursuits closed on it, so the three tasks' expert settles are re-measured
+  (`scripts/measure_hold.py`): the fixed settle rises from 44 to 84 steps on
+  both patrol tasks and from 37 to 45 on the formation, and their protocol
+  rows are re-evaluated with it.
 
 - **Shorter docstrings in the core modules** (registry, experts, eval, reward,
   runners, base): they keep the contracts and drop the measurement history,

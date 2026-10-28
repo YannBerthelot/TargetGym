@@ -63,6 +63,8 @@ aircraft, in the JaxMARL style; every agent receives the team reward and
 | The V is symmetric, drawn per episode, and starts clear of a collision | 64 draws | `test_the_v_is_drawn_per_episode_within_the_ranges`, `test_the_formation_starts_clear_of_a_collision` |
 | One gust for the whole formation, from the step clock | distinct draws under a constant key | `test_one_gust_for_the_whole_formation_and_any_size` |
 | The multi-agent view is the joint task split by seat | same observations, same reward | `tests/formation/test_formation_marl.py` |
+| The expert's lead holds the route on held-out seeds | mean altitude error at most 2 m, heading at most 0.5 deg, seeds 200-209 | `test_the_formation_lead_holds_altitude_and_heading` |
+| The expert's wingmen hold their slots on held-out seeds | RMS slot error after the burn-in at most 8.5 m, no trip, seeds 200-209 (seed 208 a strict expected failure, D3) | `test_every_formation_wingman_holds_its_slot` |
 
 The environment also passes every shared contract in
 `tests/test_env_conformance.py`, including that its PID beats the best
@@ -94,18 +96,31 @@ other.
 
 ## 5. Baselines
 
-**The PID** is the patrol's, seat for seat: the patrol's lead autopilot in the
-lead seat, aimed at the heading the route commands, and the patrol pursuit PID
-in each wingman seat. Over the scored part of the test episode it holds the
-lead's altitude 141 to 155 m off target and the slots 35 to 56 m off, with no
-trip (lowest to highest per-seed hold, `scripts/measure_hold.py`, seeds 0-1).
+**The PID** flies the lead seat as a formation lead flies, and each wingman
+seat with the patrol's formation hold (`experts.py`, patrol's PHYSICS.md
+section 5). As in the patrol, this is the practice of formation-flight
+research (AFIT, NASA's F/A-18 Autonomous Formation Flight trials, West
+Virginia University's three-aircraft trials), not of a deployed product.
 
-The lead seat keeps the patrol's autopilot although the 3D heading task's own
-PID holds the lead's altitude better (about 38 m late in the test episode,
-against 141 m): behind that lead the patrol PID's wingmen collided in 5 of the
-10 baseline seeds, at about 5e11 per episode in trip costs, where behind the
-autopilot they never trip (about 9e6 per episode, measured on seeds 0-9). The
-patrol PID was tuned behind the autopilot.
+The lead holds the route with the 3D heading task's autopilot: a course hold
+on the heading the route commands, with the leg's turn rate fed forward, and
+TECS's pitch on the altitude. Its throttle stays at a set power (0.8, trimmed
+by 0.005 per m/s off the speed it engaged at), since a formation lead flies
+smooth and predictable and leaves the speed changes to its wingmen. Under
+TECS's throttle the airliner's 20 s engine lag sets up a slow throttle cycle
+(power 0.2 to 0.7 over about 40 s), and wingmen feeding the lead's speed
+forward chase it.
+
+The lead and the hold were tuned on training seeds 100-109 and checked once
+on held-out seeds 200-209 (`scripts/tune_formation_hold.py`,
+`tests/patrol/test_formation_hold.py`), against the 3D heading task's limits
+for the lead (2 m, 0.5 deg) and the patrol's for the wingmen (8.5 m RMS).
+Over the scored part of the episode the lead holds its altitude 0.94 to
+1.56 m off on average and its heading 0.05 to 0.14 deg off. Nineteen of the
+twenty wingmen hold 2.7 to 7.7 m RMS (median 4.2); the twentieth misses (D3).
+No seed trips. The team it replaced (2026-10), the patrol's scripted lead
+autopilot and pursuit PID, held the lead's altitude 141 to 155 m off and the
+slots 35 to 56 m off.
 
 **The oracle** in the MPC slot is `FormationOracle` (`experts.py`), the
 patrol oracle's design applied to the whole formation. Each seat flies a law:
@@ -144,6 +159,19 @@ can fly into the other wingman's path without seeing it. Its own slot error,
 which it does observe, is what keeps it out of that region, and the trip on
 a collision is what charges a policy that lets it happen.
 
+**D3: a wingman that spawns high can rejoin after the burn-in.** On held-out
+seed 208 the first wingman spawns 30 m above its slot. It idles its engine to
+come down, overshoots to 105 m below and falls 170 m behind while the lead
+accelerates on its set power from 200 to 226 m/s, and with only the power
+between the lead's 0.8 and full to close on, it rejoins only around step 140,
+past the scored burn-in at 100: 32.6 m RMS over the scored window, then 5 to
+8 m. On another turbulence draw of the same seeds (the tuning script's
+traced search) the worst wingman holds 10.3 m, so the join from a poor spawn
+is a weakness of the expert, not one seed's accident. It is kept as a strict
+expected failure. A fix (a lead set power with
+more margin, or the hold trading height before speed while it joins) would
+have to be tuned on training seeds and checked on fresh held-out ones.
+
 ---
 
 <!-- BEGIN GENERATED FACTS -->
@@ -174,7 +202,7 @@ aircraft's and the patrol's reward parameters; `e_floor_path` is unused here.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_altitude` | 1 m | the barometric altimeter resolution, as in the 3D tasks: the oracle holds the lead's altitude below it (0.80 m, lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; PID 141 m), so the instrument sets the scale |
+| `e_floor_altitude` | 1 m | the barometric altimeter resolution, as in the 3D tasks: the oracle holds the lead's altitude below it (0.80 m, lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; the expert 0.94 to 1.56 m on held-out seeds), so the instrument sets the scale |
 | `e_tol_altitude` | 0 | inherited; no altitude band |
 | `e_floor_heading` | 0.0087 rad | the 0.5 deg AHRS resolution, for the lead's heading against its route and each wingman's alignment with the lead; the oracle holds both below it |
 | `e_floor_slot` | 3 m | the relative-GPS resolution, the patrol's: the oracle holds each slot below it |
