@@ -186,6 +186,44 @@ this model markedly more benign than the real thing.
 
 ---
 
+## 6. The expert: Westinghouse rod control on average temperature
+
+The expert is a PWR's automatic rod control, as the NRC's Westinghouse
+Technology training manual describes it (HRTD 8.1, rod control; HRTD 5.0,
+the Tavg program and the rate/lag unit). It reads the observation only
+(`experts.py`, `rod_control_step`), and its program is published, so nothing
+is tuned on seeds.
+
+- **Temperature channel.** Tavg against a reference programmed linearly in
+  load. Here the cold leg is the inlet and the hot leg the coolant node, so
+  Tavg is their mean and rises `P / (2 m cp)` = 16.7 K from no load to full
+  power, close to the 15.4 K (557 to 584.7 F) of the NRC's program. The load
+  is the demand.
+- **Power-mismatch channel.** A rate/lag `40 s / (1 + 40 s)` on (demand -
+  power) in % power, sampled exactly at the 10 s step. A nonlinear gain turns
+  it into deg F: 0.3 F per % up to 1 %, 1.5 F per % beyond. A variable gain
+  multiplies it by 2 up to 50 % load and by 1 / load above. The channel only
+  acts on changes, so a steady mismatch is left to the temperature channel.
+- **Rod speed.** On the total error in deg F: no motion inside +-1.5 F from
+  rest; moving rods stop only at 1.0 F (lockup); 8 steps/min to 3 F, then 32
+  steps/min per F up to 72 steps/min from 5 F. A positive error withdraws.
+- **Ours: the stroke.** A speed in steps/min moves the rods over their range
+  as a 228-step stroke would (NUREG/CR-5555: 142.5 in at 5/8 in a step; HRTD
+  8.1's bank example reaches the top of the core at 231). At 72 steps/min the
+  full range takes 190 s. Mapping 72 steps/min to the plant's rate limit
+  instead moves 200 pcm a step and puts the rods in a two-step limit cycle.
+
+The flux PID it replaces ran its integral and derivative on a 0.5 s step
+against the 10 s control step, so its integral acted 20 times weaker and its
+derivative 20 times stronger than its gains said, and it reversed the rods on
+428 of 431 hold steps (training seed 100). On the held-out seeds 200 to 209
+the expert holds 4.40 dollars per step, the PID 22.1, against a ceiling of
+0.0028: 3.20 decades of room. Tavg stays within the 1.5 F deadband on at
+least 90 % of hold steps on every held-out seed
+(`tests/reactor/test_reactor_expert.py`).
+
+---
+
 <!-- BEGIN GENERATED FACTS -->
 
 <!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:

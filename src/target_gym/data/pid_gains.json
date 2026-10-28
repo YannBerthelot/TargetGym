@@ -290,11 +290,16 @@
     "note": "Re-searched after the heading loop was changed to command a turn rate rather than a bank angle. Commanding bank left the loop gain proportional to 1/V, a 45% swing across the speeds the follower flies, and every failing encounter spent 13-22% of its episode pinned at the 30 deg bank limit while the one that held formation never reached it. Inverting the coordinated-turn relation removed both. These gains are chosen for survival rather than settled error: 5 of 6 encounters completed against 2 of 6, at 135 m mean slot error against 130 m. Still outside the 60 m tolerance, so the formation tests remain xfail."
   },
   "glass_furnace": {
-    "Kp": 2.5,
-    "Ki": 0.15,
-    "Kd": 0.05,
-    "tuning_rule": "grid_search_max_reward",
-    "note": "Grid search over (Kp, Ki, Kd) maximising mean cumulative env reward. Relay autotuning fails on this plant: the crown temperature integrates the firing rate, so under a bang-bang relay it drifts without sustained zero-crossings and Astrom-Hagglund has no Ku/Tu to extract."
+    "Kp": 12.08439222573085,
+    "Ki": 0.10070326854775706,
+    "Kd": 0.0,
+    "model": {
+      "k": 0.0027583789660813795,
+      "theta": 15.000000000000004,
+      "tau_c": 15.000000000000004
+    },
+    "tuning_rule": "simc_integrating",
+    "note": "Crown-temperature PI by SIMC on the integrating approximation of a firing step's first hour, from step tests on seeds 100-109 (scripts/tune_industrial_experts.py). Practice runs an MPC over this loop; this is the base layer under it."
   },
   "distillation": {
     "pid1": {
@@ -327,13 +332,23 @@
     "note": "Cascade: free lime trims a burning-zone setpoint, fuel holds it, kiln speed follows feed to hold bed depth. The outer loop is strongly proportional with weak integral (Kp 12000 / Ki 6) -- integral action on a measurement half an hour behind the input oscillates at the delay period. Return 176 over 4 seeds against 37 for the best constant action."
   },
   "boiler_drum": {
-    "Kp_level": 60.0,
-    "Ki_level": 0.6,
-    "Kp_pressure": 0.05,
-    "Ki_pressure": 0.002,
+    "Kp_pressure": 0.671596574994995,
+    "Ki_pressure": 0.14403322022041107,
+    "model_pressure": {
+      "k": 0.35925121669704274,
+      "theta": 1.5542631391268964,
+      "lam": 1.5542631391268964
+    },
+    "Kp_level": 748.9829963723436,
+    "Ki_level": 18.48191294464852,
+    "model_level": {
+      "k": 7.412855282715136e-05,
+      "theta": 13.508395994423893,
+      "lam": 13.508395994423893
+    },
     "Kd_pressure": 0.0,
-    "tuning_rule": "hand_tuned_three_element",
-    "note": "Three-element: feedwater tracks measured steam flow as a feedforward and the level PI only trims it, bounded to 25 kg/s. A fast level loop reacts to swell by cutting feedwater exactly when mass is leaving fastest. Return 215-296 against 5 for the best constant action, which trips in 5-117 steps."
+    "tuning_rule": "lambda_integrating",
+    "note": "Three-element: feedwater follows measured steam flow, a level PI trims it; firing is an enthalpy feedforward plus a pressure PI. Both loops lambda-tuned for an integrating process from step tests on seeds 100-109 (scripts/tune_industrial_experts.py)."
   },
   "cstr": {
     "Kp": -112.216316,
@@ -447,12 +462,12 @@
   "compressor_surge": {
     "kp_speed": 0.11199999999999999,
     "ki_speed": 0.04,
-    "kp_surge": 1.4,
-    "ki_surge": 6.0,
+    "kp_surge": 2.0,
+    "ki_surge": 0.75,
     "surge_line": 0.15,
     "override_line": 0.075,
     "override_hold": 2.0,
     "reset_band": 0.05,
-    "note": "coordinate descent on episode return, 24 seeds"
+    "note": "coordinate descent on episode return, seeds 100-109, from DEFAULT_GAINS (scripts/tune_industrial_experts.py)"
   }
 }

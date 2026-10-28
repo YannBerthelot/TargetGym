@@ -3,7 +3,7 @@
 Each registry entry names one ``make_<env>_pid_controller`` in its package's
 ``experts.py``, returning a ``Controller``. ``test_registry_rules`` checks that
 its jitted form acts like the scored host form; this file checks the things
-that comparison cannot see: gains that are present and finite, an action of
+that comparison cannot see: constants that are present and finite, an action of
 the shape the environment takes, and a ``reset()`` that really clears state.
 """
 
@@ -19,18 +19,20 @@ from target_gym.registry import REGISTRY
 WITH_PID = sorted(name for name, spec in REGISTRY.items() if spec.has_pid)
 
 
-def _gains(obj) -> list[float]:
-    """Collect every Kp/Ki/Kd in a params struct, including nested MIMO loops."""
-    found = []
+def _parameters(obj) -> list[float]:
+    """Every numeric constant in a params struct, nested loops included."""
     fields = getattr(obj, "__dataclass_fields__", None)
     if not fields:
-        return found
+        return []
+    found = []
     for field in fields:
         value = getattr(obj, field)
-        if field.split("_")[0].lower() in ("kp", "ki", "kd"):
+        if isinstance(value, (bool, str)) or value is None:
+            continue
+        if isinstance(value, (int, float, np.ndarray, np.number)):
             found.extend(np.asarray(value, dtype=float).ravel().tolist())
         else:
-            found.extend(_gains(value))
+            found.extend(_parameters(value))
     return found
 
 
@@ -43,12 +45,14 @@ def _first_obs(name):
 
 
 @pytest.mark.parametrize("name", WITH_PID)
-def test_pid_controller_builds_with_finite_gains(name):
+def test_expert_builds_with_finite_parameters(name):
+    """Not every expert is a PID (the reactor runs Westinghouse's rod speed
+    program), so the check is on every numeric constant it carries."""
     ctrl = REGISTRY[name].make_pid_controller()
     assert isinstance(ctrl, Controller), f"{name}: got {type(ctrl).__name__}"
-    gains = _gains(ctrl.params)
-    assert gains, f"{name}: no gains found on {type(ctrl.params).__name__}"
-    assert all(np.isfinite(g) for g in gains), f"{name}: non-finite gain"
+    values = _parameters(ctrl.params)
+    assert values, f"{name}: no constants found on {type(ctrl.params).__name__}"
+    assert all(np.isfinite(v) for v in values), f"{name}: non-finite constant"
 
 
 @pytest.mark.parametrize("name", WITH_PID)

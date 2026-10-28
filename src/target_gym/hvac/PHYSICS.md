@@ -176,7 +176,49 @@ whose surface responds quickly while its core lags — the distinction EN ISO
 energy** — the anticipation advantage, from pre-heating ahead of setback
 recovery and coasting on forecast solar rather than reacting to it. It accepts
 slightly looser comfort (1.72 vs 1.38 °C MAE) for a large energy saving, which
-is exactly the trade the reward asks for.
+is exactly the trade the reward asks for. (The table predates the version-2
+reward and the expert below.)
+
+### The expert: Guideline 36 zone heating with optimal start
+
+The expert is what a building automation system running ASHRAE Guideline 36
+does, on the observation only (`experts.py`, `g36_step`). Every constant is
+published, and nothing is tuned on seeds.
+
+- **Heating loop.** A PI on the zone air temperature, gain 0.1 per K and
+  integral time 900 s, output 0 to 1 (G36 as LBL's Modelica Buildings library
+  implements it, `G36/ThermalZones/ControlLoops.mo`: `kHeaCon`, `TiHeaCon`).
+  The action maps that signal onto [-1, 1], so 0 is no heat. The integral
+  stops while the output is saturated.
+- **Optimal start.** LBL's `OBC/Utilities/OptimalStart` with its defaults.
+  Three hours before occupancy it samples the zone; if the zone is more than
+  0.5 K under the occupied setpoint, the warm-up lasts the deficit over the
+  learned heating rate, capped at 3 h. The rate is the mean of the last three
+  learned rates, floored at 1 K/h (so it is 1 K/h on the first morning). Each
+  warm-up learns one: the temperature gained over the time taken to reach the
+  setpoint, pushed at midnight. During the warm-up the heating setpoint is the
+  occupied one (G36 5.3.2.3).
+- **What it knows.** The clock (from the time-of-day channels), the
+  occupancy schedule (07:00 to 22:00) and the occupied setpoint last seen, the
+  design 21 C before the first. All are what a BMS is programmed with.
+- **Left out.** G36's loop-enable hysteresis and its zero-output hold.
+
+On the held-out seeds 200 to 209 the expert's hold is 0.0179 euro per step
+against a ceiling of 7.5e-5, 2.38 decades of room. The PI it replaces
+(in-code gains 0.4 per K and 1e-4 per K s) held 0.0172.
+
+On the training seeds 100 to 109, optimal start makes the expert costlier:
+0.0241 euro per step against 0.0205 for the same PI without it. The plant only
+heats, and its cost is afternoon overheating from solar and internal gains,
+1 to 2.7 K above target. Warming the building before occupancy stores more
+heat, so the afternoons run warmer. Optimal start stays because it is what
+G36 buildings run; the task's room for anticipation is what it costs.
+
+Spec, a strict xfail in `tests/hvac/test_hvac_expert.py`. The zone is within
+the comfort tolerance at the start of occupancy on 59 of 70 held-out
+mornings, against the 90 % stated. Every miss, 0.55 to 1.0 K cold, is a
+morning where the zone was less than 0.5 K short at the 04:00 sample.
+OptimalStart then runs no warm-up, and the zone keeps cooling until 07:00.
 
 **Cheap to step**: one differential state with closed-form algebraic nodes,
 which is what the 5R1C reduction buys. See

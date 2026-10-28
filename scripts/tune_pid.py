@@ -1275,6 +1275,8 @@ def _tune_aircraft_search(
     right value is set by something the episode return cannot see. Descending
     the return is the whole method, so a gain the return is indifferent to,
     or actively wrong about, has to be excluded rather than argued with.
+
+    ``seeds`` is a count (seeds ``0 .. seeds - 1``) or the seeds themselves.
     """
     import numpy as np
 
@@ -1284,6 +1286,7 @@ def _tune_aircraft_search(
 
     spec = REGISTRY[env_name]
     params = spec.make_test_params(max_steps_in_episode=steps)
+    seed_list = range(seeds) if isinstance(seeds, int) else list(seeds)
     all_gains = dict(pid_mod.load_gains())
     start = (
         all_gains.get(gains_key)
@@ -1303,7 +1306,7 @@ def _tune_aircraft_search(
                 np.mean(
                     [
                         np.sum(rollout(spec, params, pid_policy(spec), s)[2])
-                        for s in range(seeds)
+                        for s in seed_list
                     ]
                 )
             )
@@ -1329,7 +1332,12 @@ def _tune_aircraft_search(
     pid_mod._gains_cache = all_gains
     if verbose:
         print(f"  best return {best_score:.2f}")
-    return {**best, "note": f"coordinate descent on episode return, {seeds} seeds"}
+    which = (
+        f"{len(seed_list)} seeds"
+        if isinstance(seeds, int)
+        else f"seeds {min(seed_list)}-{max(seed_list)}"
+    )
+    return {**best, "note": f"coordinate descent on episode return, {which}"}
 
 
 GAINS_KEY = {"plane": "plane_cascaded"}
@@ -1411,7 +1419,8 @@ TUNERS = {
             "compressor_surge",
             "compressor_surge",
             steps=1200,
-            seeds=24,
+            # The training seeds: 0-9 are scored and never tuned on.
+            seeds=range(100, 110),
             hold=_task_experts("compressor_surge").HELD_GAINS,
             **kw,
         ),
