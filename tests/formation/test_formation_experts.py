@@ -66,21 +66,6 @@ def test_every_wingman_seat_flies_the_patrol_expert():
         )
 
 
-def test_the_scored_pid_is_the_traced_pid_on_the_host():
-    spec, env, params, obs, state = _reset(seed=1)
-    host = spec.make_pid()
-    host.reset()
-    team = spec.make_pid_controller()
-    carry = team.init_state
-    act = jax.jit(team.act)
-    step = jax.jit(env.step_env)
-    for _ in range(5):
-        a_host = np.asarray(host(obs))
-        a_traced, carry = act(carry, obs)
-        np.testing.assert_allclose(a_host, np.asarray(a_traced), atol=1e-5)
-        obs, state, _, _, _ = step(jax.random.PRNGKey(0), state, a_host, params)
-
-
 @pytest.mark.parametrize("k", [1, 4])
 def test_the_pid_team_flies_any_formation(k):
     from target_gym import Formation

@@ -467,19 +467,27 @@ class FormationHoldParams(Plane3DGuidanceParams):
     forward, and ``k_eng`` closes the throttle on the engine's power state.
     """
 
-    k_x: float = 0.08
-    a_x: float = 0.4
-    k_xi: float = 0.001
-    x_band: float = 30.0
-    k_y: float = 0.1
-    k_yi: float = 0.001
-    y_band: float = 30.0
-    k_omega: float = 0.3
-    k_ref: float = 0.3
-    k_eng: float = 1.0
-    dv_max: float = 20.0
-    max_intercept: float = 0.5
-    int_max: float = 2000.0
+    # Tuned on training seeds 100-109, one set for every follower (both
+    # patrol tasks and the formation's wingmen); the step of
+    # scripts/tune_formation_hold.py that searches each is in brackets.
+    k_x: float = 0.08  # 1/s [slot loops]
+    a_x: float = 0.4  # m/s^2 [slot loops]
+    k_xi: float = 0.001  # 1/s^2 [integrals and filter]
+    x_band: float = 30.0  # m [integrals and filter, with y_band]
+    k_y: float = 0.1  # 1/s [slot loops]
+    k_yi: float = 0.001  # 1/s^2 [integrals and filter]
+    y_band: float = 30.0  # m [integrals and filter, with x_band]
+    k_omega: float = 0.3  # per step [integrals and filter]
+    k_ref: float = 0.3  # per step [engine and energy]
+    k_eng: float = 1.0  # [engine and energy]
+    # Set, not tuned: limits for a join from far out, beyond the 40 m spawn
+    # noise. The closure reaches 20 m/s 500 m out, about 9% of cruise. A correction of 0.5 rad off the
+    # slot's track, inside L1's 45 deg capture limit, binds 1.3 km out, short
+    # of the 1.5 km slot loss. The integrals' authority is held to 2 m/s
+    # (k_xi or k_yi times int_max), one step of TECS's speed slew.
+    dv_max: float = 20.0  # m/s
+    max_intercept: float = 0.5  # rad
+    int_max: float = 2000.0  # m s
 
 
 @struct.dataclass
@@ -664,14 +672,16 @@ def patrol_bearing_only_hold_step(params, state, obs, xp=jnp):
     )
 
 
-#: The hold's tuning, on training seeds 100-109 of both patrol tasks and the
-#: formation's wingmen, checked on held-out seeds 200-209, never on the
-#: scored seeds 0-9 (scripts/tune_formation_hold.py). The course hold is
-#: tighter than the heading task's (3 s against 10 s), since the slot moves
-#: with the lead. TECS weighs height and speed evenly in the pitch channel
+#: The hold's tuning, on training seeds 100-109 of every follower, checked
+#: on held-out seeds 200-209, never on the scored seeds 0-9
+#: (scripts/tune_formation_hold.py). The course hold is tighter than the
+#: heading task's (3 s against 10 s, [slot loops]), since the slot moves
+#: with the lead. Every other autopilot value is the 3D tasks'
+#: (scripts/tune_aircraft_guidance.py). TECS weighs height and speed evenly in the pitch channel
 #: (``spd_weight`` 0.5, between the airliner's 0, which leaves the speed to
 #: the throttle alone, and ArduPilot's default 1), and damps the throttle on
-#: the energy rate harder (``thr_damp`` 6) against the engine's lag.
+#: the energy rate harder (``thr_damp`` 6 against 0.5) against the engine's
+#: lag, both [engine and energy].
 HOLD = FormationHoldParams(
     tau_hdg=3.0, tecs=AIRLINER.replace(spd_weight=0.5, thr_damp=6.0)
 )

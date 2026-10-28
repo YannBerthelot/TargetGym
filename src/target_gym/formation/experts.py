@@ -65,8 +65,10 @@ class FormationLeadParams(Plane3DGuidanceParams):
     it.
     """
 
-    power_set: float = 0.8
-    k_speed: float = 0.005
+    # Tuned on the formation's training seeds 100-109 for its wingmen flying
+    # HOLD ([lead power] in scripts/tune_formation_hold.py).
+    power_set: float = 0.8  # engine power fraction
+    k_speed: float = 0.005  # power per m/s
 
 
 @struct.dataclass
@@ -125,10 +127,11 @@ def formation_team_step(params, state, obs, xp=jnp):
 
 #: The lead's tuning, on the formation's training seeds 100-109 with the
 #: wingmen flying :data:`HOLD`, checked on held-out seeds 200-209
-#: (scripts/tune_formation_hold.py). With the throttle set, TECS flies the
-#: pitch on height alone (the airliner's ``spd_weight`` 0), a little faster
-#: and better damped than the heading task's (``time_const`` 1.5 against 2,
-#: ``Kd_theta`` 1.0 against 0.3).
+#: (scripts/tune_formation_hold.py, [lead pitch]). With the throttle set,
+#: TECS flies the pitch on height alone (the airliner's ``spd_weight`` 0), a
+#: little faster and better damped than the heading task's (``time_const``
+#: 1.5 against 2, ``Kd_theta`` 1.0 against 0.3). Every other autopilot value
+#: is the 3D heading task's (scripts/tune_aircraft_guidance.py).
 LEAD = FormationLeadParams(Kd_theta=1.0, tecs=AIRLINER.replace(time_const=1.5))
 
 

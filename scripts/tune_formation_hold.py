@@ -3,26 +3,32 @@
 The expert of ``patrol``, ``patrol_bearing_only`` and the formation's wingmen
 is a formation hold (``patrol.experts.FormationHoldParams``) over the 3D
 tasks' autopilot; the formation's lead flies that autopilot's course hold and
-pitch at a set power (``formation.experts.FormationLeadParams``). This script
-reproduces how their numbers were set:
+pitch at a set power (``formation.experts.FormationLeadParams``). Every value
+either module tunes is searched here, in the step its comment names:
 
-1. The engine and energy loops on both patrol tasks: TECS's speed weight and
-   throttle damping, the autothrottle's closure on the engine's power state,
-   and the filter on the demands' rates.
-2. The slot loops on both patrol tasks: along-track gain and closing
-   deceleration, cross-track gain and the course hold's time constant.
-3. The formation's lead behind wingmen flying the result: its pitch loop's
-   damping, TECS's time constant, the set power and its speed trim.
-4. The held-out check on seeds 200-209, against the tests' limits
-   (tests/patrol/test_formation_hold.py).
+1. [engine and energy]: TECS's speed weight and throttle damping, the
+   autothrottle's closure on the engine's power state, and the filter on the
+   demands' rates.
+2. [slot loops]: along-track gain and closing deceleration, cross-track gain
+   and the course hold's time constant.
+3. [integrals and filter]: the two integral gains, the band they integrate
+   within, and the filter on the lead's turn rate.
+4. [lead pitch]: the formation lead's pitch-loop damping and TECS's time
+   constant, on its altitude.
+5. [lead power]: its set power and speed trim, on its wingmen's slots.
+6. The held-out check on seeds 200-209, flown as the tests fly it
+   (tests/patrol/test_formation_hold.py: the host form, a split key chain),
+   against their limits.
 
-Steps 1-3 fly training seeds 100-109 only and rank by the worst seed's RMS
-slot error, the quantity the limit is set on. It prints what it finds; the
-shipped values are set by hand in the two modules, with the reasons beside
-them. The scored seeds 0-9 are never flown.
+Steps 1-5 fly training seeds 100-109 only, each around the shipped values,
+and rank by the worst seed, trips first. Steps 1-3 rank one gain set for
+every follower (both patrol tasks and the formation's wingmen behind the
+shipped lead) on RMS slot error, the quantity the limit is set on. It prints
+what it finds; the shipped values are set by hand in the two modules. The
+scored seeds 0-9 are never flown.
 
     uv run python scripts/tune_formation_hold.py            # all, ~10 min
-    uv run python scripts/tune_formation_hold.py --check    # step 4 only
+    uv run python scripts/tune_formation_hold.py --check    # step 6 only
 """
 
 from __future__ import annotations
@@ -54,7 +60,8 @@ def rollout(name, params, seeds):
     """Per seed, after the scored burn-in: RMS slot error of each wingman,
     the lead's mean altitude and heading errors (formation only) and whether
     it tripped. Jitted once per task and vmapped over the seeds; the gains
-    are an argument, so a search does not recompile. A new key every step."""
+    are an argument, so a search does not recompile. A new key every step,
+    folded from the seed's, as the values were tuned."""
     if name not in _ROLLOUTS:
         env, p = tg.make(name)
         ctrl = tg.make_expert(name)
@@ -96,46 +103,83 @@ def rollout(name, params, seeds):
 
 
 def _replace(params, field, value):
-    """``params`` with ``field`` set, ``tecs.x`` reaching into TECS's."""
-    if field.startswith("tecs."):
-        return params.replace(tecs=params.tecs.replace(**{field[5:]: value}))
-    return params.replace(**{field: value})
+    """``params`` with ``field`` set, ``tecs.x`` reaching into TECS's and
+    ``a+b`` setting both."""
+    for name in field.split("+"):
+        if name.startswith("tecs."):
+            params = params.replace(tecs=params.tecs.replace(**{name[5:]: value}))
+        else:
+            params = params.replace(**{name: value})
+    return params
 
 
-def search(label, names, base, grid, build=lambda p: p):
-    """Every combination of ``grid`` on ``base``, ranked by the worst
-    training seed's RMS slot error over ``names``, trips first."""
+def search(label, base, grid, flown, measure="slot"):
+    """Every combination of ``grid`` on ``base``, each flown on the tasks of
+    ``flown`` (task name to the controller params a candidate makes there),
+    ranked by the worst training seed's RMS slot error (``"slot"``) or the
+    lead's mean altitude error (``"altitude"``), trips first."""
     rows = []
     for values in itertools.product(*grid.values()):
         gains = base
         for field, value in zip(grid, values):
             gains = _replace(gains, field, value)
         worst, trips = 0.0, 0
-        for name in names:
-            rms, _, _, trip = rollout(name, build(gains), TRAIN)
-            worst, trips = max(worst, rms.max()), trips + int(trip.sum())
+        for name, build in flown.items():
+            rms, alt, _, trip = rollout(name, build(gains), TRAIN)
+            worst = max(worst, (rms if measure == "slot" else alt).max())
+            trips += int(trip.sum())
         rows.append((trips, worst, values))
     rows.sort()
-    print(f"{label}: best on training seeds, {list(grid)}")
+    print(f"{label}: best on training seeds, worst {measure} (m), {list(grid)}")
     for trips, worst, values in rows[:5]:
-        print(f"  worst seed {worst:6.2f} m, {trips} trips  {values}")
+        print(f"  {worst:6.2f}  {trips} trips  {values}")
+
+
+def _flown(name, seed):
+    """One held-out episode of the shipped expert as the tests fly it: the
+    host form, and a key split off a chain every step. Returns what
+    :func:`rollout` returns for one seed."""
+    env, p = tg.make(name)
+    expert, step = tg.make_expert(name).host(), jax.jit(env.step_env)
+    key = jax.random.PRNGKey(seed)
+    obs, state = env.reset_env(key, p)
+    rows, tripped = [], False
+    for _ in range(int(p.max_steps_in_episode)):
+        key, sub = jax.random.split(key)
+        obs, state, _, _, info = step(sub, state, expert(np.asarray(obs)), p)
+        tripped = tripped or bool(info["tripped"])
+        if name == "formation":
+            lead = state.lead
+            rows.append(
+                (
+                    np.asarray(slot_errors(state)),
+                    abs(float(lead.target_altitude - lead.z)),
+                    abs(float(wrap_angle(lead.psi - lead.target_heading))),
+                )
+            )
+        else:
+            rows.append((np.atleast_1d(np.asarray(slot_error(state))), 0.0, 0.0))
+    slot, alt, hdg = (np.array(x)[scored_burn_in(name, p) :] for x in zip(*rows))
+    return np.sqrt((slot**2).mean(axis=0)), alt.mean(), hdg.mean(), tripped
 
 
 def check():
-    hold = tg.make_expert("patrol").params
-    print("held-out seeds 200-209: worst seed, median, trips")
-    for name in PATROL:
-        rms, _, _, trip = rollout(name, hold, HELD_OUT)
+    """The held-out check, flown as tests/patrol/test_formation_hold.py
+    flies it, so it prints what the tests assert."""
+    print("held-out seeds 200-209: worst seed (which), median, trips")
+    for name in (*PATROL, "formation"):
+        runs = [_flown(name, s) for s in HELD_OUT]
+        rms = np.array([r[0].max() for r in runs])
+        worst = HELD_OUT[int(rms.argmax())]
         print(
-            f"  {name:20s} slot {rms.max():5.2f} m, {np.median(rms):5.2f} m "
-            f"(limit {SLOT_RMS_M}), {trip.sum()} trips"
+            f"  {name:20s} slot {rms.max():5.2f} m (seed {worst}), "
+            f"{np.median(rms):5.2f} m, limit {SLOT_RMS_M}, "
+            f"{sum(r[3] for r in runs)} trips"
         )
-    team = tg.make_expert("formation").params
-    rms, alt, hdg, trip = rollout("formation", team, HELD_OUT)
+    alt, hdg = np.array([r[1] for r in runs]), np.array([r[2] for r in runs])
     print(
-        f"  {'formation':20s} slot {rms.max():5.2f} m, {np.median(rms):5.2f} m, "
-        f"{trip.sum()} trips\n  {'':20s} lead altitude {alt.max():.2f} m "
-        f"(limit {ALTITUDE_M}), heading {np.rad2deg(hdg.max()):.3f} deg (limit 0.5)"
+        f"  {'formation lead':20s} altitude {alt.max():.2f} m (limit {ALTITUDE_M}), "
+        f"heading {np.rad2deg(hdg.max()):.3f} deg (limit 0.5)"
     )
 
 
@@ -146,9 +190,13 @@ def main() -> int:
         check()
         return 0
     hold = tg.make_expert("patrol").params
+    team = tg.make_expert("formation").params
+    followers = {
+        **{name: lambda g: g for name in PATROL},
+        "formation": lambda g: team.replace(wingman=g),
+    }
     search(
         "engine and energy",
-        PATROL,
         hold,
         {
             "tecs.spd_weight": (0.0, 0.5, 1.0),
@@ -156,10 +204,10 @@ def main() -> int:
             "k_eng": (0.0, 1.0),
             "k_ref": (0.3, 1.0),
         },
+        followers,
     )
     search(
         "slot loops",
-        PATROL,
         hold,
         {
             "k_x": (0.05, 0.08, 0.12),
@@ -167,19 +215,32 @@ def main() -> int:
             "k_y": (0.05, 0.1, 0.2),
             "tau_hdg": (3.0, 5.0),
         },
+        followers,
     )
-    team = tg.make_expert("formation").params
     search(
-        "formation lead",
-        ("formation",),
-        team.lead,
+        "integrals and filter",
+        hold,
         {
-            "Kd_theta": (0.3, 1.0, 3.0),
-            "tecs.time_const": (1.5, 2.0),
-            "power_set": (0.75, 0.8),
-            "k_speed": (0.002, 0.005, 0.01),
+            "k_xi": (0.0, 0.001, 0.003),
+            "k_yi": (0.0, 0.001, 0.003),
+            "x_band+y_band": (15.0, 30.0, 60.0),
+            "k_omega": (0.1, 0.3, 1.0),
         },
-        build=lambda lead: team.replace(lead=lead),
+        followers,
+    )
+    lead = {"formation": lambda g: team.replace(lead=g)}
+    search(
+        "lead pitch",
+        team.lead,
+        {"Kd_theta": (0.3, 1.0, 3.0), "tecs.time_const": (1.5, 2.0)},
+        lead,
+        measure="altitude",
+    )
+    search(
+        "lead power",
+        team.lead,
+        {"power_set": (0.75, 0.8, 0.85), "k_speed": (0.002, 0.005, 0.01)},
+        lead,
     )
     check()
     return 0

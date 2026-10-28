@@ -165,7 +165,10 @@ come down, overshoots to 105 m below and falls 170 m behind while the lead
 accelerates on its set power from 200 to 226 m/s, and with only the power
 between the lead's 0.8 and full to close on, it rejoins only around step 140,
 past the scored burn-in at 100: 32.6 m RMS over the scored window, then 5 to
-8 m. It is kept as a strict expected failure. A fix (a lead set power with
+8 m. On another turbulence draw of the same seeds (the tuning script's
+traced search) the worst wingman holds 10.3 m, so the join from a poor spawn
+is a weakness of the expert, not one seed's accident. It is kept as a strict
+expected failure. A fix (a lead set power with
 more margin, or the hold trading height before speed while it joins) would
 have to be tuned on training seeds and checked on fresh held-out ones.
 
