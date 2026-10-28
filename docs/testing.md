@@ -6,7 +6,7 @@ happens to take. The size decides where it runs.
 | size | marker | what a test may use | where it runs | budget |
 | --- | --- | --- | --- | --- |
 | small | none | one process, memory, `tmp_path` | a plain `pytest`; CI on every push, Python 3.11 to 3.13 | the whole tier within 60 s on a laptop |
-| medium | `medium` | another process, video files, a compile that needs gigabytes | CI on every push, after the small tier | small and medium within 10 min on CI |
+| medium | `medium` | another process, video files, a compile that needs gigabytes | CI on every push, Python 3.11 and 3.12, after the small tier | small and medium within 10 min on CI |
 | large | `large` | closed-loop rollouts at the scored length, many seeds | CI on merges to `main`, one interpreter | each test within 15 min |
 
 `records` is not a size. Those tests check that the recorded baselines still
@@ -89,7 +89,8 @@ still seeds from the previous cache instead of starting empty.
 
 ## Conventions
 
-- Coverage is gated at 89% over the small and medium tiers together, so moving
-  a test to `large` removes it from the gate. Check the number before doing it.
+- Coverage is gated at 89% over the small tier alone, so moving a test to
+  `medium` or `large` removes it from the gate. Check the number before doing
+  it.
 - `strict=True` on every xfail. A known defect that gets fixed must fail the
   suite until its annotation is updated, so the record cannot quietly rot.

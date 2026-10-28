@@ -256,6 +256,10 @@ show_missing = true
 # enough to build a loss, differentiate it and apply an update, which is where
 # their failures live. What is left is error branches and __main__ guards, where
 # a test costs more than it is worth.
+#
+# CI measures it over the small tier alone (93% on 2026-10-28); the medium
+# tests add 1.4 points but run on other interpreters, so moving a test to
+# medium takes it out of this number.
 fail_under = 89
 
 [tool.pytest.ini_options]
