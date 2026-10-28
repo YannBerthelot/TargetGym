@@ -92,7 +92,7 @@ def test_a_short_closed_loop_solves_once_per_period():
     assert report["solver_calls"] == 2 and report["solver_failures"] == 0
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_protocol_gain_is_at_the_plants_optimum():
     """Measured 3.08e-8 per step with zero trips, 28 s for three seeds; the
     oracle it replaced gave 0.0074."""

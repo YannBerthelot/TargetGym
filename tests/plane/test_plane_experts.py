@@ -325,7 +325,7 @@ def test_the_capture_resumes_from_the_hold_plan_at_the_applied_throttle():
     assert capture._fresh is False
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_plant_gets_the_pids_throttle_and_the_plan_moves_the_elevator():
     """One planner step: the plant gets the live PID's throttle, the plan's
     throttle column has no gradient, and ``reset`` clears the integrator.
@@ -376,7 +376,7 @@ def test_the_nea_reference_is_the_recorded_hold(name):
     assert p.rho_floor == pytest.approx((hold / p.e_floor) ** 2, rel=0.02)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_throttle_holds_cruise_on_plane():
     """On protocol seed 1 the planner-driven throttle froze at 0.70 and the
     airspeed sat 27.2 m/s off cruise on average after the protocol's

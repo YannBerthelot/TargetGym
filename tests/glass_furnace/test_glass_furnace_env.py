@@ -58,32 +58,45 @@ def _run_to_steady(fuel_raw, params=None, hours=140.0):
     )
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, p)
-    action = jnp.array([fuel_raw])
-    terminated = False
-    _jstep = jax.jit(env.step_env)
-    # A trip no longer ends the window (``base.failure_kernel``): the plant
-    # restarts at once and ``info["tripped"]`` says so. That is what
-    # "terminated" means to these checks: the furnace left its envelope. The
-    # state handed back is then the last one inside it.
-    for _ in range(p.max_steps_in_episode):
-        prev = state
-        _, state, _, _, info = _jstep(key, state, action, p)
-        terminated = bool(info["tripped"])
-        if terminated:
-            state = prev
-            break
+    state, terminated = _settle(key, state, jnp.array([fuel_raw]), p)
+    return state, bool(terminated), p
+
+
+@jax.jit
+def _settle(key, state, action, p):
+    """The stepping loop of ``_run_to_steady``, on the device.
+
+    A trip no longer ends the window (``base.failure_kernel``): the plant
+    restarts at once and ``info["tripped"]`` says so. That is what
+    "terminated" means to these checks: the furnace left its envelope. The
+    state handed back is then the last one inside it.
+    """
+    env = GlassFurnace()
+
+    def hold(carry):
+        prev, _ = carry
+        _, state, _, _, info = env.step_env(key, prev, action, p)
+        tripped = info["tripped"]
+        kept = jax.tree.map(lambda a, b: jnp.where(tripped, a, b), prev, state)
+        return kept, tripped
+
+    def window(carry):
+        step, inner = carry
+        return step + 1, hold(inner)
+
+    _, carry = jax.lax.while_loop(
+        lambda c: (c[0] < p.max_steps_in_episode) & ~c[1][1],
+        window,
+        (0, (state, jnp.array(False))),
+    )
     # Stop at a fully firing step. The burners are interrupted for 40 s at every
     # reversal, so a furnace sampled at an arbitrary step can be caught with its
     # flame out: the gas is then cooler than the crown and the instantaneous
     # specific energy is a quarter of the real figure. Neither says anything
     # about steady operation, which is what these checks are about.
-    while float(state.fuel_flow) < p.fuel_min and not terminated:
-        prev = state
-        _, state, _, _, info = _jstep(key, state, action, p)
-        terminated = bool(info["tripped"])
-        if terminated:
-            state = prev
-    return state, bool(terminated), p
+    return jax.lax.while_loop(
+        lambda c: (c[0].fuel_flow < p.fuel_min) & ~c[1], hold, carry
+    )
 
 
 # ---------------------------------------------------------------------------

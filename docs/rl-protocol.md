@@ -92,9 +92,18 @@ the ceiling. 0 means the expert already tracks within the resolution, and the
 task has nothing left to score.
 
 The hold starts after a settle fixed per plant, so every controller is scored
-over the same window. Beside the score, `transient_ratio` compares the cost
-after each target change with the expert's, and `consumption_ratio` compares
-the fuel, energy or wear, which no resolution bounds.
+over the same window. Beside the score, `consumption_ratio` compares the fuel,
+energy or wear, which no resolution bounds.
+
+**Reaching new targets: `transient_ratio`**, the expert's cost over the
+settle after each move divided by the policy's, per seed, with its own win
+rate. A move is the reset or a target change, so `first_order` and `cstr`,
+whose expert already holds within the resolution, are scored on reaching.
+`settling_ratio` says how much sooner the policy's tracking cost enters the
+plant's band and stays. Moves have no ceiling; the oracle's recorded ratio is
+shown as the best known, for information. [The capability
+profile](capability-profile.md) puts both kinds of score on a radar per
+capability.
 
 **Report the interquartile mean with a 95% stratified bootstrap confidence
 interval**, plus the win rate against the expert. Not the mean alone. This is

@@ -238,34 +238,33 @@ def test_step_is_deterministic_given_key_state_and_action(spec):
 def _terminal_disturbances(spec, seeds, split_key, steps):
     """Disturbance values after ``steps`` for each seed, one key regime.
 
-    The environment, its parameters and the compiled step are built once and
-    reused across every seed. ``jax.jit`` keys its cache on the function it
-    wraps, and ``env.step_env`` is a bound method, so building a fresh
-    environment per seed would compile the same step function again for each
-    one -- which for this parametrised test is where nearly all of its time
-    used to go.
+    The environment, its parameters and the compiled episode are built once and
+    reused across every seed, and the episode runs on the device: stepping it
+    from Python cost a host round trip per step.
     """
     env = spec.make_env()
     params = spec.make_test_params(**spec.disturbance_overrides)
     action = _zero_action(env, params)
-    step = jax.jit(env.step_env)
-    reset = jax.jit(env.reset_env)
 
-    out = []
-    for seed in seeds:
-        key = jax.random.PRNGKey(seed)
-        _, state = reset(key, params)
-        rolling = key
-        for _ in range(steps):
+    @jax.jit
+    def terminal(key):
+        _, state = env.reset_env(key, params)
+
+        def step(carry):
+            t, state, rolling, _ = carry
             if split_key:
                 rolling, sub = jax.random.split(rolling)
             else:
                 sub = key  # constant, as save_video passes it
-            _, state, _, terminated, _ = step(sub, state, action, params)
-            if bool(terminated):
-                break
-        out.append([float(getattr(state, f)) for f in spec.disturbance_fields])
-    return out
+            _, state, _, terminated, _ = env.step_env(sub, state, action, params)
+            return t + 1, state, rolling, terminated
+
+        _, state, _, _ = jax.lax.while_loop(
+            lambda c: (c[0] < steps) & ~c[3], step, (0, state, key, jnp.array(False))
+        )
+        return [getattr(state, f) for f in spec.disturbance_fields]
+
+    return [[float(v) for v in terminal(jax.random.PRNGKey(seed))] for seed in seeds]
 
 
 def test_disturbance_magnitude_is_independent_of_key_splitting(spec):
@@ -566,7 +565,7 @@ EFFECTIVENESS_SEEDS = 2
 # to demonstrate anything and lost to a constant.
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_pid_outperforms_the_best_constant_action(spec):
     """The shipped PID must beat every open-loop constant action.
 
@@ -612,7 +611,7 @@ def test_pid_outperforms_the_best_constant_action(spec):
     )
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_pid_is_deterministic_across_resets(spec):
     """Resetting the controller must reproduce the run exactly.
 
@@ -800,7 +799,7 @@ def test_no_state_component_is_silently_discarded():
     )
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_actuator_can_move_the_tracked_variable(spec):
     """Check 8: an actuator whose authority was written down, not derived.
 
@@ -1001,7 +1000,7 @@ KNOWN_SEAMS = {
 SEAM_LIMIT = 0.5
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_regimes_join_smoothly(spec):
     """Check 5: do the regimes join?
 
