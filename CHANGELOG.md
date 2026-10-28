@@ -553,6 +553,16 @@ than by commit.
 
 ### Fixed
 
+- **The scorer missed small setpoint changes and invented cycles on drifting
+  targets.** A target change counted only above 5 % of the first target's
+  value, so the transient after a smaller step was scored as hold:
+  `glass_furnace` saw none of its four 4 C trims, and `compressor_surge` and
+  `plane_energy` missed some of theirs. The reactor's drifting demand crossed
+  the 5 % now and then and was cut into up to 22 cycles. A change is now a
+  step at least ten times the target's median step over the episode
+  (`benchmark.target_changes`), which catches every scheduled step and no
+  drift. The protocol rows of `glass_furnace`, `compressor_surge` and
+  `reactor` are re-recorded; no environment changed.
 - **`experts.mpc.casadi_step_map` without CasADi** raised a `NameError` on
   the missing module; it now raises an `ImportError` naming the `[mpc]` extra.
 - **`Airplane2D.reset_env(key)` without parameters** read a class attribute
