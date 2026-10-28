@@ -50,6 +50,16 @@ defined in [docs/rl-protocol.md](docs/rl-protocol.md).
 pip install target-gym
 ```
 
+TargetGym is in active development: PyPI releases are the stable line, and
+`main` can change quickly between them. This README and the
+[documentation](https://yannberthelot.github.io/TargetGym/) follow `main`,
+whose API (starting with `tg.make`) is not on PyPI until 0.7.0. Until then,
+install from GitHub to use it:
+
+```bash
+pip install "git+https://github.com/YannBerthelot/TargetGym"
+```
+
 The full-state MPC oracles on nine tasks plan with CasADi; add it with
 `pip install 'target-gym[mpc]'`. Videos and the aircraft dashboards need
 `pip install 'target-gym[render]'`, and `target-gym[all]` brings both.
