@@ -563,6 +563,14 @@ than by commit.
   (`benchmark.target_changes`), which catches every scheduled step and no
   drift. The protocol rows of `glass_furnace`, `compressor_surge` and
   `reactor` are re-recorded; no environment changed.
+- **An overshooting expert no longer passes its zero crossing off as its
+  settle.** `scripts/measure_hold.py` took the hold level over everything
+  after the burn-in, so a slow tail widened the band it settles into and the
+  first crossing counted. The level is now each cycle's second half, as
+  `target_gym.eval` takes it. Thirteen fixed settles moved (the aircraft by
+  the most: `plane_sine` 24 to 81, `plane3d_heading` 50 to 116), their
+  protocol rows are re-evaluated, and the CSTR's relay PID now holds 5.4e-7
+  instead of 0.54 once its recovery is out of the hold.
 - **`experts.mpc.casadi_step_map` without CasADi** raised a `NameError` on
   the missing module; it now raises an `ImportError` naming the `[mpc]` extra.
 - **`Airplane2D.reset_env(key)` without parameters** read a class attribute
