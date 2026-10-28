@@ -7,9 +7,9 @@
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((10,))` |
 | Tracked variable(s) | altitude (m) |
-| Episode length | 1200 steps (1200 s at 1 s per step) |
+| Episode length | 1600 steps (1600 s at 1 s per step) |
 | Import | `from target_gym import PlaneEnergy, PlaneParams` |
-| Cite as | `plane_energy-v3` |
+| Cite as | `plane_energy-v4` |
 
 ## Action space
 
@@ -48,16 +48,16 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The aircraft trips when its altitude leaves ``[min_alt, max_alt]``. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 1200 steps.
+**Truncation.** After 1600 steps.
 
 ## Baselines
 
-Recorded over 10 seeds of the 1200-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
+Recorded over 10 seeds of the 1600-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -2.199e+07 | 1.832e+04 |
-| MPC | -7.913e+05 | 659.4 |
+| PID | -2.199e+07 | 1.375e+04 |
+| MPC | -7.908e+05 | 494.2 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
@@ -66,7 +66,7 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 | parameter | default | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
-| `max_steps_in_episode` | 1200 | steps |
+| `max_steps_in_episode` | 1600 | steps |
 | `gravity` | 9.81 | m/s^2 |
 | `initial_mass` | 73500 | kg |
 | `thrust_output_at_sea_level` | 240000 | N |

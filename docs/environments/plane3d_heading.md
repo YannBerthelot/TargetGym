@@ -9,9 +9,9 @@
 | Action space | `Box((3,))`, all actions in [-1, 1] |
 | Observation space | `Box((15,))` |
 | Tracked variable(s) | altitude (m) |
-| Episode length | 200 steps (200 s at 1 s per step) |
+| Episode length | 300 steps (300 s at 1 s per step) |
 | Import | `from target_gym import Plane3DHeading, PlaneParams3D` |
-| Cite as | `plane3d_heading-v3` |
+| Cite as | `plane3d_heading-v4` |
 
 ## Action space
 
@@ -51,16 +51,16 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 200 steps.
+**Truncation.** After 300 steps.
 
 ## Baselines
 
-Recorded over 10 seeds of the 200-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
+Recorded over 10 seeds of the 300-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -1.671e+06 | 8357 |
-| MPC | -6.892e+05 | 3446 |
+| PID | -1.672e+06 | 5573 |
+| MPC | -6.893e+05 | 2298 |
 
 The MPC beats the PID on 9 of 10 seeds and does not trip the plant on any of them.
 
@@ -69,7 +69,7 @@ The MPC beats the PID on 9 of 10 seeds and does not trip the plant on any of the
 | parameter | default | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
-| `max_steps_in_episode` | 200 | steps |
+| `max_steps_in_episode` | 300 | steps |
 | `gravity` | 9.81 | m/s^2 |
 | `initial_mass` | 73500 | kg |
 | `thrust_output_at_sea_level` | 240000 | N |
@@ -120,8 +120,8 @@ The MPC beats the PID on 9 of 10 seeds and does not trip the plant on any of the
 | `tracking_exponent` | 2 | - |
 | `failure_cost` | 2.9729e+08 | reward |
 | `restart_steps` | 3600 | steps |
-| `rho_floor_tracking` | 0.453608 | reward |
-| `rho_floor` | 0.453608 | reward |
+| `rho_floor_tracking` | 0.344219 | reward |
+| `rho_floor` | 0.344219 | reward |
 | `figure8_altitude_amplitude` | 200 | m |
 | `initial_z_dot` | 0 | m/s |
 | `initial_x_dot` | 200 | m/s |
