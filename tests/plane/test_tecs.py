@@ -91,7 +91,7 @@ _MISSES = {
 }
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize(
     "name,seed",
     [

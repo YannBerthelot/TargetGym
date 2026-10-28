@@ -134,6 +134,21 @@ levels stay available.
 
 ## 4. Task design
 
+### Task: `reactor`
+
+Follow a drifting power demand on a 3 GW pressurised-water reactor with the
+control rods. Xenon poisoning gives the core a memory of hours, so a power
+change constrains what is reachable long after it is made; rod authority is
+tight and insertion is faster than withdrawal; and only power, coolant
+temperature and rod position are measured. Costs are in dollars.
+
+| obs | meaning |
+|---|---|
+| 0 | `n`, neutron power relative to nominal (1 is full power) |
+| 1 | coolant temperature (K) |
+| 2 | rod position, normalised to [-1, 1] |
+| 3 | target `n` |
+
 **Why it is hard.**
 
 1. **Xenon is a multi-hour memory.** A power change today constrains what is
@@ -148,8 +163,8 @@ levels stay available.
 5. **Most of the state is hidden.** The six precursors, fuel temperature,
    iodine and xenon are all unobserved.
 
-**Observation** `[n, T_coolant, rho_ext_norm, target_n]` — a plant measures
-neutron flux, coolant temperature and rod position. Fuel temperature and the
+**Observation.** A plant measures neutron flux, coolant temperature and rod
+position. Fuel temperature and the
 fission-product inventory are not directly instrumented.
 
 **Reward** = power tracking − rod-motion penalty.

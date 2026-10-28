@@ -325,7 +325,7 @@ def test_the_capture_resumes_from_the_hold_plan_at_the_applied_throttle():
     assert capture._fresh is False
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_plant_gets_the_pids_throttle_and_the_plan_moves_the_elevator():
     """One planner step: the plant gets the live PID's throttle, the plan's
     throttle column has no gradient, and ``reset`` clears the integrator.
@@ -357,11 +357,12 @@ def test_the_floors(name):
     the 1 m resolution, which is within 1.5x of it. ``plane_energy``'s was
     reset from 4.55 m, an earlier oracle's hold 3.8x the current one, to
     1.20 m, the current oracle's best hold, which changes the reward
-    (``plane_energy-v3``). The failure cost is twice the altitude envelope's
-    cost in floor units."""
+    (``plane_energy-v3``); v4 lengthened the episode to 1600 steps and kept
+    the floor. The failure cost is twice the altitude envelope's cost in floor
+    units."""
     spec = registry.get(name)
     p = spec.make_test_params()
-    expected = {"plane": (1.0, 2), "plane_sine": (1.26, 2), "plane_energy": (1.2, 3)}
+    expected = {"plane": (1.0, 2), "plane_sine": (1.26, 2), "plane_energy": (1.2, 4)}
     assert (p.e_floor, spec.version) == pytest.approx(expected[name])
     assert p.failure_cost == pytest.approx(2.0 * (12192.0 / p.e_floor) ** 2)
 
@@ -376,7 +377,7 @@ def test_the_nea_reference_is_the_recorded_hold(name):
     assert p.rho_floor == pytest.approx((hold / p.e_floor) ** 2, rel=0.02)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_throttle_holds_cruise_on_plane():
     """On protocol seed 1 the planner-driven throttle froze at 0.70 and the
     airspeed sat 27.2 m/s off cruise on average after the protocol's

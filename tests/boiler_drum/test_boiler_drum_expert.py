@@ -79,7 +79,7 @@ def test_both_loops_follow_the_lambda_rule_for_their_step_test(loop, scale):
 HELD_OUT = range(200, 210)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.xfail(
     strict=True,
     reason="Finding (2026-10-28): mean level error 19-34 mm over the held-out "

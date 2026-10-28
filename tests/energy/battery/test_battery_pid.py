@@ -51,7 +51,7 @@ def test_the_soc_guard_fades_only_the_breaching_direction(soc, target, expected)
 HELD_OUT = range(200, 210)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_it_never_trips_on_held_out_seeds():
     spec = REGISTRY["battery"]
     env, p = spec.make_env(), spec.make_test_params()

@@ -110,14 +110,30 @@ way to buy it back.
 
 ## 5. Task design
 
-**Observation** `[yD, xB, L_pct, V_pct, target_yD, target_xB]` — a real column
-has analysers on the two product streams, not on all 40 trays. **39 of the 41
+### Task: `distillation`
+
+Hold both product purities of a 40-tray binary distillation column (Skogestad's
+Column A) with reflux and boilup. The two purities move together far more
+easily than apart, which makes the plant ill-conditioned, and only the two
+products are analysed: the tray profile that holds the column's memory, and the
+drifting feed composition, are hidden. The reward scores both purities.
+
+| obs | meaning |
+|---|---|
+| 0 | `yD`, light-component mole fraction in the distillate (top product) |
+| 1 | `xB`, light-component mole fraction in the bottoms |
+| 2 | reflux flow, fraction of its range (0 to 1) |
+| 3 | boilup, fraction of its range (0 to 1) |
+| 4 | target `yD` |
+| 5 | target `xB` |
+
+**Observation.** A real column has analysers on the two product streams, not on
+all 40 trays. **39 of the 41
 stage compositions are hidden**, and that interior profile is the column's
 memory. Feed composition is hidden too and drifts as an OU process.
 
-**Reward** multiplies the two purity terms rather than summing them: hitting
-one specification while losing the other is not half a success, it is an
-off-spec column.
+**Reward** charges each purity's tracking term, so holding one specification
+does not excuse losing the other.
 
 **Reset** starts from the converged nominal profile, computed once at import
 from the same dynamics rather than hard-coded. With a ~194 min dominant time

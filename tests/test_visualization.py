@@ -76,6 +76,7 @@ def test_render_trajectory_param(jax_env_cls, EnvParamsCls, EnvStateCls, action_
         frames_list.extend(rendered_frames)
 
 
+@pytest.mark.medium
 @pytest.mark.parametrize("jax_env_cls,EnvParamsCls,EnvStateCls,action_fn", ENVIRONMENTS)
 def test_save_renders_param(jax_env_cls, EnvParamsCls, EnvStateCls, action_fn):
     temp_dir = tempfile.mkdtemp()

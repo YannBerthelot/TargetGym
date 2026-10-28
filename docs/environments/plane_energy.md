@@ -2,14 +2,22 @@
 
 <p align="center"><img src="../../videos/plane_energy/pid_output.gif" width="480px"/></p>
 
+Walk a ladder of eight altitude levels while holding a commanded airspeed, with the same airliner as `plane`. Scoring airspeed as well as altitude removes the spare degree of freedom two actuators would have on one objective, so throttle and elevator have to share the work.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("plane_energy")
+```
+
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((10,))` |
 | Tracked variable(s) | altitude (m) |
-| Episode length | 1200 steps (1200 s at 1 s per step) |
-| Import | `from target_gym import PlaneEnergy, PlaneParams` |
-| Cite as | `plane_energy-v3` |
+| Episode length | 1600 steps of 1 s (26.7 min) |
+| Cite as | `plane_energy-v4` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
 
 ## Action space
 
@@ -23,8 +31,20 @@ actuator range inside the environment.
 
 ## Observation space
 
-10 values. Indices (1,) carry the tracked variable(s) that the
-reward scores.
+10 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[1]` against `obs[6]`.
+
+| # | meaning |
+|---|---|
+| 0 | `x_dot`, horizontal speed (m/s) |
+| 1 | `z`, altitude (m) |
+| 2 | `z_dot`, vertical speed (m/s) |
+| 3 | `theta`, pitch angle (rad) |
+| 4 | `theta_dot`, pitch rate (rad/s) |
+| 5 | `gamma`, flight-path angle (rad) |
+| 6 | target altitude (m) |
+| 7 | throttle, 0 to 1 |
+| 8 | elevator deflection (rad) |
+| 9 | commanded airspeed (m/s) |
 
 ## Rewards
 
@@ -48,25 +68,27 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The aircraft trips when its altitude leaves ``[min_alt, max_alt]``. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 1200 steps.
+**Truncation.** After 1600 steps.
 
 ## Baselines
 
-Recorded over 10 seeds of the 1200-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
+Recorded over 10 seeds of the 1600-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -2.199e+07 | 1.832e+04 |
-| MPC | -7.913e+05 | 659.4 |
+| PID | -2.199e+07 | 1.375e+04 |
+| MPC | -7.908e+05 | 494.2 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("plane_energy", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
-| `max_steps_in_episode` | 1200 | steps |
+| `max_steps_in_episode` | 1600 | steps |
 | `gravity` | 9.81 | m/s^2 |
 | `initial_mass` | 73500 | kg |
 | `thrust_output_at_sea_level` | 240000 | N |

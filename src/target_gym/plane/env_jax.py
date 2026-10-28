@@ -240,9 +240,12 @@ class PlaneEnergy(Airplane2D):
         # lowest per-seed altitude hold between ladder steps, 1.198 m
         # rounded; rho is its 1.18 m in floor units
         # (`scripts/measure_hold.py`).
+        # 1600 steps, eight 200-step treads: twice the PID's settle after an
+        # altitude step (about 90 steps), so every tread is half hold
+        # (tests/test_episode_length.py).
         rho = (1.1773 / 1.20) ** 2
         return PlaneParams(
-            max_steps_in_episode=1200,
+            max_steps_in_episode=1600,
             target_pattern=1,
             target_amplitude=900.0,
             target_steps=8,

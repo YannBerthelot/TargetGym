@@ -113,9 +113,27 @@ control problem what it is — a building that responds over *hours*.
 
 ## 4. Task design
 
-**Observation** `[T_air, T_out, heat_pct, solar_norm, sin_h, cos_h, target_T]` —
-what a building management system actually measures: zone and outdoor
-temperature, its own heat output, a pyranometer, and the clock. **`T_mass`,
+### Task: `hvac`
+
+Keep a heavyweight, well-insulated single-zone building at its comfort setpoint
+through occupied hours and a night setback, with hydronic heating, over a week
+of heating-season weather. The cost is in euros: discomfort outside a 0.5 K
+band, plus the gas bill. The building's thermal mass is hidden and responds
+over tens of hours, so recovery from setback has to start well before the
+setpoint steps up.
+
+| obs | meaning |
+|---|---|
+| 0 | zone air temperature (°C) |
+| 1 | outdoor temperature (°C) |
+| 2 | heat output, percent of maximum |
+| 3 | solar irradiance, fraction of its peak |
+| 4 | sine of the hour of day |
+| 5 | cosine of the hour of day |
+| 6 | target zone temperature (°C) |
+
+**Observation.** What a building management system actually measures: zone and
+outdoor temperature, its own heat output, a pyranometer, and the clock. **`T_mass`,
 `T_surface` and `weather_dev` are hidden**, and the mass is precisely the state
 governing the multi-hour response. The agent measures air temperature but is
 really fighting a mass it cannot see.

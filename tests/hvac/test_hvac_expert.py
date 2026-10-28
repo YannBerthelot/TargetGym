@@ -144,7 +144,7 @@ def test_the_warm_up_aims_at_the_occupied_setpoint_last_seen():
 HELD_OUT = range(200, 210)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.xfail(
     strict=True,
     reason="Finding (2026-10-28): 59 of 70 held-out mornings (84 %). Every miss "

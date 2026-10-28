@@ -119,7 +119,7 @@ def test_outside_the_band_the_pi_is_not_capped():
     assert cmd - 10.0 > 2.0  # more than the actuator can follow in one step
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_screened_extremes_stay_inside_the_envelope():
     """The oracle audit (2026-10) ran seeds 3-199 of the 400-step episode: no
     trip, rotor speed 0.836-1.178 of rated, against trips at 0.40 and 1.25.

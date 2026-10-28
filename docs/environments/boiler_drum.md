@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/boiler_drum/pid_output.gif" width="480px"/></p>
 
-Boiler drum — natural-circulation drum boiler with shrink-and-swell.
+Hold the drum level and the steam pressure of a 160 MW natural-circulation drum boiler with fuel and feedwater, while the turbine's steam draw moves. Drum level is the classic non-minimum-phase loop: a pressure drop swells the level while water is leaving, and cold feedwater shrinks it before it rises. The level integrates, the riser voidage behind both effects is hidden, and both a high and a low level trip the boiler.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("boiler_drum")
+```
 
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | drum level (m), drum pressure (bar) |
-| Episode length | 400 steps (800 s at 2 s per step) |
-| Import | `from target_gym import BoilerDrum, BoilerDrumParams` |
+| Episode length | 400 steps of 2 s (13.3 min) |
 | Cite as | `boiler_drum-v2` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |
 
 ## Action space
 
@@ -25,8 +31,17 @@ actuator range inside the environment.
 
 ## Observation space
 
-7 values. Indices (0, 1) carry the tracked variable(s) that the
-reward scores.
+7 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[5]`, `obs[1]` against `obs[6]`.
+
+| # | meaning |
+|---|---|
+| 0 | drum level relative to normal water level (m) |
+| 1 | drum pressure (bar) |
+| 2 | `q_steam`, steam flow to the turbine (kg/s), the disturbance |
+| 3 | fuel, percent of maximum |
+| 4 | feedwater, percent of maximum |
+| 5 | target level, always 0 (m) |
+| 6 | target pressure (bar) |
 
 ## Rewards
 
@@ -58,14 +73,16 @@ Recorded over 10 seeds of the 400-step episode (see [Baseline results](../baseli
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -6.783e+04 | 169.6 |
+| PID | -3.01e+05 | 752.5 |
 | MPC | -8847 | 22.12 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("boiler_drum", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 2 | s |
 | `max_steps_in_episode` | 400 | steps |

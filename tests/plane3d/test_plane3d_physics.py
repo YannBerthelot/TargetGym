@@ -92,7 +92,7 @@ def _fly_bank(target_deg, steps=2500, tail=500):
     return phi, V, rate
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("bank_deg", [10.0, 20.0, 30.0])
 def test_banked_turn_matches_the_coordinated_turn_relation(bank_deg):
     """psi_dot = g tan(phi) / V, and nothing in the model computes it.
@@ -108,7 +108,7 @@ def test_banked_turn_matches_the_coordinated_turn_relation(bank_deg):
     assert rate == pytest.approx(analytic, rel=0.05)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_steeper_bank_turns_faster_and_tighter():
     shallow_phi, shallow_V, shallow_rate = _fly_bank(10.0)
     steep_phi, steep_V, steep_rate = _fly_bank(30.0)
