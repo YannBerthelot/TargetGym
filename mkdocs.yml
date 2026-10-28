@@ -77,6 +77,10 @@ plugins:
 extra_javascript:
   - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+  - javascripts/results-chart.js
+
+extra_css:
+  - stylesheets/results-chart.css
 
 # Design drafts, kept in the repository but not published.
 exclude_docs: |

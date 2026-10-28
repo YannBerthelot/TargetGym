@@ -333,18 +333,32 @@ def test_imports_stay_inside_the_fingerprint():
     assert not problems, "\n".join(problems)
 
 
+#: The only extra sources the 21 declare: the 3D aircraft extend the 2D
+#: dynamics and their experts fly the 2D package's TECS.
+DECLARED_BY_THE_21 = {
+    name: ("plane/dynamics.py", "plane/experts_tecs.py")
+    for name in (
+        "plane3d_heading",
+        "plane3d_circle",
+        "plane3d_racetrack",
+        "plane3d_figure8",
+    )
+}
+
+
 def test_controllers_are_in_the_baseline_fingerprint_only():
     """A package's experts.py is in the baseline fingerprint of its tasks and
     out of their version stamp, since retuning a controller does not change
     the environment. The stamp is otherwise the baseline's file list, and the
-    21 declare no extra sources, so their stamps read the same files as before
-    their oracles moved out of experts/mpc.py (test_env_versions holds the
-    stamps themselves)."""
+    21 declare no extra sources but the 3D aircraft's (``DECLARED_BY_THE_21``),
+    so their stamps read the same files as before their oracles moved out of
+    experts/mpc.py (test_env_versions holds the stamps themselves)."""
     problems = []
     for s in registry.all_specs():
         sources = provenance._env_sources(s)
         stamped = provenance._env_sources(s, controllers=False)
-        if s.name in PINNED_21 and s.fingerprint_sources:
+        declared = DECLARED_BY_THE_21.get(s.name, ())
+        if s.name in PINNED_21 and s.fingerprint_sources != declared:
             problems.append(f"{s.name}: declares {s.fingerprint_sources}")
         if stamped != [p for p in sources if not p.name.startswith("experts")]:
             problems.append(f"{s.name}: the version stamp drops more than experts*")
@@ -503,11 +517,9 @@ def test_declared_gains_keys_exist():
 def test_the_baseline_fingerprint_covers_the_gains_a_task_reads():
     """The fingerprint hashes the entries whose key starts with the task's
     name, its ``tuned_gains_key``'s and its declared ``gains_keys``. It once
-    took only the first, so ``plane_sine`` and ``plane_energy`` (whose PID
-    baseline reads ``plane_cascaded``, reaching their fingerprints only
-    through the copies their oracle reads) and patrol (whose oracle and lead
-    read ``plane3d_heading``) could be retuned under a record that still
-    looked fresh."""
+    took only the first, so patrol (whose oracle and lead read
+    ``plane3d_heading``) could be retuned under a record that still looked
+    fresh."""
     gains = _gains()
     problems = []
     for s in registry.all_specs():
@@ -522,14 +534,12 @@ def test_the_baseline_fingerprint_covers_the_gains_a_task_reads():
     assert not problems, "\n".join(problems)
     assert "plane3d_heading" in registry.REGISTRY["patrol"].gains_keys
     assert "plane3d_heading" in registry.REGISTRY["patrol_bearing_only"].gains_keys
-    assert "plane_cascaded" in registry.REGISTRY["plane_sine"].gains_keys
-    assert "plane_cascaded" in registry.REGISTRY["plane_energy"].gains_keys
 
 
 @pytest.mark.parametrize(
     "name,key",
     [
-        ("plane_sine", "plane_cascaded"),
+        ("plane_sine", "plane_sine_cascaded"),
         ("patrol", "plane3d_heading"),
         ("cstr", "cstr"),
     ],
@@ -586,14 +596,15 @@ def test_the_baseline_fingerprint_covers_the_burn_in(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("name", sorted(registry.REGISTRY))
 def test_every_env_exposes_its_registry_experts(name):
-    """The README promises ``env.make_pid()`` and ``env.make_mpc()`` on every
-    environment, and they must build what the registry ships."""
+    """The README promises ``target_gym.make_expert(name)`` on every task, and
+    ``env.make_mpc()`` must build what the registry ships."""
+    from target_gym import make_expert
+
     spec = registry.REGISTRY[name]
     env = spec.make_env()
-    assert callable(getattr(env, "make_pid", None))
     assert callable(getattr(env, "make_mpc", None))
     if spec.has_pid:
-        pid = env.make_pid()
+        pid = make_expert(name).host()
         assert callable(pid) and hasattr(pid, "reset")
     if spec.has_mpc and getattr(type(env), "registry_name", None) == name:
         mpc = env.make_mpc(spec.make_test_params())
@@ -601,21 +612,24 @@ def test_every_env_exposes_its_registry_experts(name):
 
 
 @pytest.mark.parametrize("name", sorted(registry.REGISTRY))
-def test_expert_policy_is_the_scored_pid(name):
-    """``env.expert_policy`` (batched, traceable) and ``make_pid()`` (host) run
-    the same step function, so along one episode they act alike up to float32
-    rounding: JAX computes in float32 where the host keeps some float64."""
+def test_make_expert_is_the_scored_pid(name):
+    """``make_expert(name).batched()`` (traceable) and the host PID the
+    baselines are scored with run the same step function, so along one
+    episode they act alike up to float32 rounding: JAX computes in float32
+    where the host keeps some float64."""
     import jax
     import jax.numpy as jnp
     import numpy as np
+
+    from target_gym import make_expert
 
     spec = registry.REGISTRY[name]
     env, params = spec.make_env(), spec.make_test_params()
     space = env.action_space(params)
     span = np.maximum(np.asarray(space.high) - np.asarray(space.low), 1e-12)
-    expert = env.expert_policy
+    expert = make_expert(name).batched()
     expert_state = expert.init_state(1)
-    pid = env.make_pid()
+    pid = spec.make_pid()
     pid.reset()
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
@@ -628,8 +642,8 @@ def test_expert_policy_is_the_scored_pid(name):
         worst = max(worst, float(np.max(np.abs(shipped - traced) / span)))
         obs, state, _, _, _ = step(key, state, jnp.asarray(shipped), params)
     assert worst < 1e-3, (
-        f"{name}: expert_policy differs from make_pid by {worst:.3g} of the "
-        "action range"
+        f"{name}: the batched expert differs from the scored PID by {worst:.3g} "
+        "of the action range"
     )
 
 

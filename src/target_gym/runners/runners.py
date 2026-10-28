@@ -32,16 +32,14 @@ from typing import Callable, Sequence
 import jax
 import jax.numpy as jnp
 import matplotlib
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
-matplotlib.use("Agg")
-import matplotlib.cm as cm  # noqa: E402
-import matplotlib.colors as mcolors  # noqa: E402
-import matplotlib.pyplot as plt  # noqa: E402
-from tqdm import tqdm  # noqa: E402
-
-from target_gym.registry import REGISTRY  # noqa: E402
-from target_gym.utils import truncate_colormap  # noqa: E402
+from target_gym.registry import REGISTRY
+from target_gym.utils import truncate_colormap
 
 FIGURE_DIR = "figures"
 VIDEO_DIR = "videos"
@@ -591,6 +589,9 @@ def main() -> None:
         help="run only videos or only figures (default: both)",
     )
     args = parser.parse_args()
+    # Headless for the command line only: a library import keeps the caller's
+    # backend.
+    matplotlib.use("Agg")
     {"videos": run_videos, "figures": run_figures}.get(args.only, run_all)(args.env)
 
 

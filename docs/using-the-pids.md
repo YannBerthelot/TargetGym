@@ -8,15 +8,14 @@ how to run it, how to evaluate against it, and how to plug it into training.
 
 ## Where to get one
 
-Each environment builds its own PID, and the registry builds the same one by
-name, which is handier for code that loops over environments:
+`target_gym.make_expert` builds it by registry name:
 
 ```python
-from target_gym import CSTR
+import target_gym as tg
 from target_gym.registry import REGISTRY
 
-pid = CSTR().make_pid()                 # from the environment
-pid = REGISTRY["cstr"].make_pid()       # the same controller, by registry name
+ctrl = tg.make_expert("cstr")   # the pure controller
+pid = ctrl.host()               # the form the baselines are scored with
 
 spec = REGISTRY["cstr"]
 print(spec.has_pid, spec.baselines_note or "no caveat")
@@ -35,15 +34,15 @@ memory from one step to the next. Pick the form by where your loop runs:
 
 | Your loop | Use | Each step | At each episode start |
 |---|---|---|---|
-| Python, NumPy, outside `jax.jit` | `pid = env.make_pid()`, which keeps its own memory | `action = pid(obs)` | `pid.reset()` |
-| `jit`, `vmap`, `lax.scan`, GPU | `ctrl = spec.make_pid_controller()`; you carry its memory | `action, pid_state = ctrl.act(pid_state, obs)` | `pid_state = ctrl.init_state` |
+| Python, NumPy, outside `jax.jit` | `pid = tg.make_expert(name).host()`, which keeps its own memory | `action = pid(obs)` | `pid.reset()` |
+| `jit`, `vmap`, `lax.scan`, GPU | `ctrl = tg.make_expert(name)`; you carry its memory | `action, pid_state = ctrl.act(pid_state, obs)` | `pid_state = ctrl.init_state` |
 
-For many environments at once, `env.expert_policy` is the second form already
-batched: start from `pid_state = env.expert_policy.init_state(num_envs)`, then
-`actions, pid_state = env.expert_policy(pid_state, obs_batch)`.
+For many environments at once, `policy = tg.make_expert(name).batched()` is the
+second form already batched: start from `pid_state = policy.init_state(num_envs)`,
+then `actions, pid_state = policy(pid_state, obs_batch)`.
 
-!!! warning "Always pass the state to `env.expert_policy`"
-    `env.expert_policy(obs)`, with one argument, starts from a fresh state on
+!!! warning "Always pass the state to the batched expert"
+    `policy(obs)`, with one argument, starts from a fresh state on
     every call. It never builds an integral, so it is not the tuned PID and
     does not reproduce its scores.
 
@@ -68,12 +67,13 @@ The host object, as the baselines run it:
 ```python
 import jax
 import numpy as np
+import target_gym as tg
 from target_gym.registry import REGISTRY
 
 spec = REGISTRY["cstr"]
 env = spec.make_env()
 params = spec.make_test_params()   # the configuration the baselines are scored on
-pid = env.make_pid()
+pid = tg.make_expert("cstr").host()
 
 key = jax.random.PRNGKey(0)
 obs, state = env.reset(key, params)
@@ -170,6 +170,7 @@ correction recovers the PID exactly.
 
 ```python
 import numpy as np
+import target_gym as tg
 from target_gym.registry import REGISTRY
 
 spec = REGISTRY["cstr"]
@@ -188,7 +189,7 @@ def residual_policy(pid, correction):
     return act
 
 
-pid = env.make_pid()
+pid = tg.make_expert("cstr").host()
 pid.reset()
 act = residual_policy(pid, lambda obs: np.zeros_like(low))   # untrained: the PID
 ```
@@ -215,11 +216,12 @@ PID's own transitions:
 ```python
 import jax
 import numpy as np
+import target_gym as tg
 from target_gym.registry import REGISTRY
 
 spec = REGISTRY["cstr"]
 env, params = spec.make_env(), spec.make_test_params()
-pid = env.make_pid()
+pid = tg.make_expert("cstr").host()
 
 transitions = []
 for seed in range(3):
@@ -248,12 +250,13 @@ the recorded returns, as the example checks.
 ```python
 import jax
 import numpy as np
+import target_gym as tg
 from target_gym.provenance import load_recorded_baselines
 from target_gym.registry import REGISTRY
 
 spec = REGISTRY["cstr"]
 env, params = spec.make_env(), spec.make_test_params()
-ctrl = spec.make_pid_controller()
+ctrl = tg.make_expert("cstr")
 
 
 def episode_return(key):
@@ -277,8 +280,8 @@ recorded = load_recorded_baselines()["cstr"]["pid_returns"]
 assert np.allclose(returns, recorded, rtol=1e-3)     # the host-scored numbers
 ```
 
-For a batch of environments, `env.expert_policy` does the same with one state
-per environment, as in the next example.
+For a batch of environments, `tg.make_expert(name).batched()` does the same
+with one state per environment, as in the next example.
 
 #### Episode boundaries
 
@@ -289,12 +292,13 @@ batch:
 
 ```python
 import jax
+import target_gym as tg
 from target_gym.experts import reset_where_done
 from target_gym.registry import REGISTRY
 
 spec = REGISTRY["cstr"]
 env, params = spec.make_env(), spec.make_test_params()
-policy, num_envs = env.expert_policy, 4
+policy, num_envs = tg.make_expert("cstr").batched(), 4
 keys = jax.random.split(jax.random.PRNGKey(0), num_envs)
 obs, env_state = jax.vmap(env.reset, in_axes=(0, None))(keys, params)
 step_all = jax.vmap(env.step, in_axes=(0, 0, 0, None))

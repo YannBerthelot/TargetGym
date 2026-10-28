@@ -174,9 +174,8 @@ Throughput is measured in [docs/performance.md](../../docs/performance.md).
 point: feedwater tracks *measured steam flow* as a feedforward, closing the
 mass balance without going through the level gauge, and the level PI only
 trims it slowly. That is what makes it immune to the level lying during a
-transient. Single-element level control — the 2×2 diagonal PID available as
-`env.expert_policy` — is the weaker controller precisely because it has no
-such feedforward.
+transient. Single-element level control, a level loop on the feedwater alone,
+is the weaker controller precisely because it has no such feedforward.
 
 **MPC wins on horizon, not on tuning.** A 30-step horizon covers the ~35 s
 swell peak, so the optimiser sees the level reverse and keeps feeding through

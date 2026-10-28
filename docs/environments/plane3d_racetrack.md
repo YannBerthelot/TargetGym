@@ -16,7 +16,7 @@ env, params = tg.make("plane3d_racetrack")
 | Observation space | `Box((21,))` |
 | Tracked variable(s) | altitude (m) |
 | Episode length | 650 steps of 1 s (10.8 min) |
-| Cite as | `plane3d_racetrack-v3` |
+| Cite as | `plane3d_racetrack-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
@@ -79,7 +79,7 @@ Recorded over 10 seeds of the 650-step episode (see [Baseline results](../baseli
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -4.829e+08 | 7.429e+05 |
+| PID | -3.782e+06 | 5818 |
 | MPC | -9.191e+05 | 1414 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.

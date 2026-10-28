@@ -209,6 +209,17 @@ Ornstein-Uhlenbeck turbulence, unobservable by default.
 
 ## Baselines
 
+How the two shipped controllers compare on every task: how many times cheaper
+the oracle (a full-state MPC) holds each target than the expert, and where the
+ceiling sits, tracking within the instruments' resolution. The
+[interactive version](https://yannberthelot.github.io/TargetGym/baseline-results/#at-a-glance)
+can also anchor on the ceiling and gives the numbers.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/results-vs-expert-dark.svg">
+  <img alt="Each task's oracle hold cost and ceiling relative to its expert, on a log scale" src="docs/images/results-vs-expert.svg" width="680">
+</picture>
+
 Every environment ships a tuned PID and an MPC. On `patrol_bearing_only`, which
 withholds the slot error a planner would read, the MPC slot holds `patrol`'s
 oracle reading the true state, labelled a full-state bound.
