@@ -20,8 +20,8 @@ floor-normalised reward (docs/reward-shaping.md):
             travel) per step, same window. Only consumption above the best
             shipped controller's ``c_hold`` is charged by the reward.
 ``settle``  median steps after a target change until |error| first falls within
-            twice ``e_hold``; the hold drops that many steps from the start of
-            each cycle.
+            twice the level the cycle holds (the mean over its second half);
+            the hold drops that many steps from the start of each cycle.
 
 ``burn_in`` is three times the slowest *cost-bearing* time constant of the plant,
 in env steps, from each plant's PHYSICS.md (the table ``PLANTS`` below carries
@@ -371,13 +371,24 @@ def _hold_mask(n, burn_in, bounds, settle, antic=None):
     return m
 
 
-def _settle(errors, bounds, level, antic=None):
-    """Median steps per cycle until every output is within 2x its hold level,
-    looking only at the cycle before its anticipation of the next change."""
+def _settle(errors, bounds, antic=None):
+    """Median steps per cycle until every output is within 2x the level the
+    cycle holds, looking only at the cycle before its anticipation of the
+    next change.
+
+    The level is the mean over the cycle's second half, as
+    ``target_gym.eval`` takes it. A level taken over the whole window after
+    the burn-in includes the slow tail of a controller that overshoots, and a
+    band that wide let the overshoot's zero crossing pass for settled.
+    """
     antic = antic if antic is not None else [0] * (len(bounds) - 1)
     out = []
     for a, b, j in zip(bounds[:-1], bounds[1:], antic):
         seg = errors[a : b - j]
+        if len(seg) == 0:
+            out.append(0)
+            continue
+        level = seg[len(seg) // 2 :].mean(axis=0)
         ok = (seg <= 2.0 * level[None, :]).all(axis=1)
         idx = np.flatnonzero(ok)
         out.append(int(idx[0]) if len(idx) else b - j - a)
@@ -390,10 +401,9 @@ def split_seed(e, targets, burn_in, settle=None):
     The target cycles come from the target jumps, and the anticipation of each
     change from ``target_gym.eval.anticipations`` on the squared errors, so a
     rise counts as it does in the quadratic tracking cost the protocol
-    searches, with the same sensitivity. Then a provisional hold level over
-    everything after the burn-in outside the anticipation, the settle measured
-    against it (or ``settle``, a fixed count, when given), and the hold mask
-    that drops the settle from every cycle. Returns
+    searches, with the same sensitivity. Then the settle, measured against
+    each cycle's own hold level (or ``settle``, a fixed count, when given),
+    and the hold mask that drops the settle from every cycle. Returns
     ``(mask, settle, bounds, antic)``.
     """
     bounds = _cycles(targets)
@@ -403,9 +413,8 @@ def split_seed(e, targets, burn_in, settle=None):
     if m0.sum() < 10:
         # second half of the episode, anticipation still left out
         m0 = _hold_mask(len(e), len(e) // 2, bounds, 0, antic)
-    lvl = e[m0].mean(axis=0)
     if settle is None:
-        settle = _settle(e, bounds, lvl, antic)
+        settle = _settle(e, bounds, antic)
     settle = float(settle)
     m = _hold_mask(
         len(e), burn_in, bounds, int(min(settle, (len(e) - burn_in) // 4)), antic
@@ -415,7 +424,7 @@ def split_seed(e, targets, burn_in, settle=None):
     return m, settle, bounds, antic
 
 
-def measure(name, seeds):
+def measure(name, seeds, controllers=("pid", "mpc")):
     spec = REGISTRY[name]
     env = spec.make_env()
     p = spec.make_test_params()
@@ -439,6 +448,7 @@ def measure(name, seeds):
         "seeds": seeds,
     }
     kinds = ["pid"] + (["mpc"] if spec.make_mpc is not None else [])
+    kinds = [k for k in kinds if k in controllers]
     for kind in kinds:
         t0 = time.time()
         E, C, B, term, half1, half2 = [], [], [], 0, [], []
@@ -486,6 +496,13 @@ def main() -> int:
     ap.add_argument("--envs", nargs="*", default=None)
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--out", default=str(OUT), help="merge rows into this JSON")
+    ap.add_argument(
+        "--controllers",
+        nargs="+",
+        default=["pid", "mpc"],
+        choices=["pid", "mpc"],
+        help="rows to measure; a row left out keeps its stored value",
+    )
     args = ap.parse_args()
     names = args.envs or list(PLANTS)
     out_path = pathlib.Path(args.out)
@@ -494,7 +511,7 @@ def main() -> int:
         seeds = args.seeds
         if name.startswith(("plane", "patrol", "formation")):
             seeds = min(seeds, 2)  # deterministic plants, expensive planners
-        out[name] = measure(name, seeds)
+        out[name] = {**out.get(name, {}), **measure(name, seeds, args.controllers)}
         out_path.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
     print(f"wrote {out_path}")
     return 0
