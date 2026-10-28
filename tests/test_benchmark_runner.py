@@ -301,3 +301,67 @@ def test_the_benchmark_passes_a_studys_records_per_task():
         record=lambda name, env, params: {"one": lambda s, p, tripped: jnp.float32(1.0)},
     )  # fmt: skip
     np.testing.assert_allclose(res["cstr"]["records"]["one"], [1.0, 1.0])
+
+
+def test_episode_keys_are_the_benchmarks_convention():
+    """``k_reset, k_steps = split(key)``; episode i resets on
+    ``split(k_reset, n)[i]`` and takes step t on
+    ``split(k_steps, T n).reshape(T, n, 2)[t, i]``. TargetFoundation derives
+    the same keys."""
+    key = jax.random.PRNGKey(7)
+    resets, steps = B.episode_keys(key, n=3, n_steps=4)
+    k_reset, k_steps = jax.random.split(key)
+    np.testing.assert_array_equal(resets, jax.random.split(k_reset, 3))
+    np.testing.assert_array_equal(steps, jax.random.split(k_steps, 12).reshape(4, 3, 2))
+
+
+@pytest.mark.parametrize("name", ["battery", "ph_neutralization", "cstr"])
+def test_every_loop_runs_the_benchmarks_episodes(name):
+    """One loop, one key convention: seed s is ``run_policy``'s one-episode
+    run on ``PRNGKey(s)``, whether it comes from ``runners.rollout``,
+    ``eval.run_episode`` or the benchmark. A fresh key every step, so on a
+    noisy plant the noise is not one key's."""
+    from target_gym.runners import runners as R
+
+    spec = REGISTRY[name]
+    env = spec.make_env()
+    params = spec.make_test_params(max_steps_in_episode=30)
+    info = B.task_info(name, env, params, 1)
+    ref = B.run_policy(
+        B.shipped_policy("pid"), env, params, info, jax.random.PRNGKey(3)
+    )
+    values, targets, rewards = R.rollout(spec, params, R.pid_policy(spec), seed=3)
+    # Before the first step: the observation the convention's reset key gives.
+    resets, _ = B.episode_keys(jax.random.PRNGKey(3), 1, 30)
+    obs0 = np.asarray(env.reset_env(resets[0], params)[0])
+    np.testing.assert_array_equal(values[0], obs0[list(info.value_index)])
+    np.testing.assert_array_equal(targets[0], obs0[list(info.target_index)])
+    np.testing.assert_array_equal(rewards, ref["reward"][0])
+    np.testing.assert_array_equal(values[1:], ref["value"][0, :-1])
+    np.testing.assert_array_equal(targets[1:], ref["target"][0, :-1])
+    ep = E.run_episode(spec, params, R.baseline_policy(spec, "pid", params), seed=3)
+    np.testing.assert_array_equal(ep.cost, -ref["reward"][0])
+    np.testing.assert_array_equal(ep.in_band, ref["in_band"][0])
+    np.testing.assert_array_equal(ep.target_change, ref["target_change"][0])
+
+
+@pytest.mark.slow
+def test_the_batched_oracle_runs_the_same_episodes():
+    """``rollout_mpc_batch`` vmaps the gradient planner over seeds; each seed is
+    the episode ``rollout`` runs with the host planner, up to the float
+    rounding a vmapped solve may differ by."""
+    from target_gym.runners import runners as R
+
+    spec = REGISTRY["boiler_drum"]
+    params = spec.make_test_params(max_steps_in_episode=4)
+    values, targets, rewards, trips = R.rollout_mpc_batch(spec, params, 2)
+    for s in range(2):
+        mpc = R.baseline_policy(spec, "mpc", params)
+        v, t, r, n_trips = R.rollout(spec, params, mpc, seed=s, return_trips=True)
+        np.testing.assert_array_equal(t, targets[s])
+        # float32: the vmapped and the single solve round differently, and the
+        # descent's iterations compound it (2e-5 over these 4 steps). A wrong
+        # noise path moves the rewards by 8 to 57 %, so 1e-4 still tells the
+        # episodes apart.
+        np.testing.assert_allclose(r, rewards[s], rtol=1e-4)
+        assert n_trips == trips[s]

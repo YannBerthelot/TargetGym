@@ -27,7 +27,7 @@ each controller is from as good as a real plant can verify. Hover a row
 for the numbers, including the whole episode.
 
 <div class="tg-results-chart"></div>
-<script type="application/json" id="tg-results-data">[{"name":"plane","group":"Aircraft","expert":3.9494032927921836,"oracle":0.43404277960459386,"ceiling":1.0,"expert_gain":3.9494032927921836,"oracle_gain":0.5286854054734466},{"name":"plane_energy","group":"Aircraft","expert":7944.319651882765,"oracle":55.03556500118432,"ceiling":0.6944444444444445,"expert_gain":18909.907016076206,"oracle_gain":511.4264289681344},{"name":"plane_sine","group":"Aircraft","expert":3.4913954925983313,"oracle":0.2908504340464426,"ceiling":0.6298815822625345,"expert_gain":3.4913954925983313,"oracle_gain":0.5434684810655379},{"name":"plane3d_heading","group":"Aircraft","expert":4.564862690787219,"oracle":0.735469923974953,"ceiling":2.0,"expert_gain":4.564862690787219,"oracle_gain":0.735469923974953},{"name":"plane3d_circle","group":"Aircraft","expert":4.400324082128031,"oracle":1.94241143233298,"ceiling":2.0,"expert_gain":4.400318746195148,"oracle_gain":1.9424177083805099},{"name":"plane3d_racetrack","group":"Aircraft","expert":8.380952791908319,"oracle":1.0637917741973621,"ceiling":2.0,"expert_gain":8.380947574961692,"oracle_gain":1.063795931462234},{"name":"plane3d_figure8","group":"Aircraft","expert":8298.023415406287,"oracle":0.7715008953159365,"ceiling":1.0,"expert_gain":8298.02353023548,"oracle_gain":0.7714991115204368},{"name":"patrol","group":"Aircraft","expert":264.6584235954285,"oracle":0.037119886965956535,"ceiling":2.0,"expert_gain":264.6584248034159,"oracle_gain":0.037119884764930854},{"name":"patrol_bearing_only","group":"Aircraft","expert":199.20231346766153,"oracle":0.037119886965956535,"ceiling":2.0,"expert_gain":199.202312819163,"oracle_gain":0.037119884764930854},{"name":"cstr","group":"Process Control","expert":0.5384376945310133,"oracle":4.4971059225322795e-09,"ceiling":1.0,"expert_gain":41.23786548601277,"oracle_gain":9.420074148334663e-09},{"name":"first_order","group":"Process Control","expert":2.910890690389658e-07,"oracle":0.0,"ceiling":1.0,"expert_gain":3.5713776159847415e-06,"oracle_gain":0.0},{"name":"four_tank","group":"Process Control","expert":30.28834361658494,"oracle":3.077449156044243e-08,"ceiling":2.0,"expert_gain":30.28834361658494,"oracle_gain":3.077449156044243e-08},{"name":"ph_neutralization","group":"Process Control","expert":12.576964106020077,"oracle":0.08895924857341697,"ceiling":1.0,"expert_gain":12.583775967234233,"oracle_gain":0.09600657768150238},{"name":"distillation","group":"Process Control","expert":62.5916948646307,"oracle":0.0002610119988506199,"ceiling":2.0,"expert_gain":62.593887679775555,"oracle_gain":0.012482149792454702},{"name":"glass_furnace","group":"Industrial / Energy","expert":2.016519948622833,"oracle":0.35356583004196485,"ceiling":1.0,"expert_gain":2.0888898671325298,"oracle_gain":0.3935563686528501},{"name":"reactor","group":"Industrial / Energy","expert":23.32241257822808,"oracle":1.378374774031985,"ceiling":0.0027777777777777783,"expert_gain":23.707245022426417,"oracle_gain":1.3783988989199754},{"name":"hvac","group":"Industrial / Energy","expert":0.009820630252304181,"oracle":0.00521838269202782,"ceiling":7.500000000000001e-05,"expert_gain":0.018539571937530596,"oracle_gain":0.008839867491681438},{"name":"cement_kiln","group":"Industrial / Energy","expert":4.67806490569376,"oracle":0.02946235461633244,"ceiling":1.0,"expert_gain":4.751233760789392,"oracle_gain":0.07054527778497986},{"name":"boiler_drum","group":"Industrial / Energy","expert":524.1454528630912,"oracle":4.622581396118014,"ceiling":1.1402740955827686,"expert_gain":524.173030201605,"oracle_gain":4.668878252191159},{"name":"wind_turbine","group":"Renewable Energy","expert":2.4260000647882882e-05,"oracle":1.269647026355347e-05,"ceiling":6.944444444444445e-06,"expert_gain":2.6381257000084683e-05,"oracle_gain":1.3004420578930365e-05},{"name":"battery","group":"Renewable Energy","expert":0.0007932258506096794,"oracle":0.00021392915275035077,"ceiling":0.00013888888888888886,"expert_gain":0.0034647340856809954,"oracle_gain":0.000781631191645189},{"name":"unstable_cstr","group":"Process Control","expert":2.817811035836616,"oracle":0.006860461602341019,"ceiling":1.0,"expert_gain":57426.27775293447,"oracle_gain":4034.878881758566},{"name":"compressor_surge","group":"Industrial / Energy","expert":11.365509030165263,"oracle":0.006769536329358998,"ceiling":1.0,"expert_gain":1781.013958473079,"oracle_gain":60.788684407643096},{"name":"formation","group":"Aircraft","expert":23238.974378255207,"oracle":1.1746055503624182,"ceiling":6.0,"expert_gain":23238.974378255207,"oracle_gain":1.1746055504865944}]</script>
+<script type="application/json" id="tg-results-data">[{"name":"plane","group":"Aircraft","expert":4.359998088223594,"oracle":0.5189074476559957,"ceiling":1.0,"expert_gain":4.359998088223594,"oracle_gain":0.6772199529001401},{"name":"plane_energy","group":"Aircraft","expert":7047.206273243373,"oracle":1.474222170882661,"ceiling":0.6944444444444445,"expert_gain":18907.517388724373,"oracle_gain":497.063702120887},{"name":"plane_sine","group":"Aircraft","expert":3.190059790997431,"oracle":0.31903737962136236,"ceiling":0.6298815822625345,"expert_gain":3.190059790997431,"oracle_gain":0.5287779268776075},{"name":"plane3d_heading","group":"Aircraft","expert":3.519837652078495,"oracle":0.5718943605918836,"ceiling":2.0,"expert_gain":3.519837652078495,"oracle_gain":0.5718943605918836},{"name":"plane3d_circle","group":"Aircraft","expert":3.4643984409838193,"oracle":3.149454987810717,"ceiling":2.0,"expert_gain":3.4643984409838193,"oracle_gain":3.149454987810717},{"name":"plane3d_racetrack","group":"Aircraft","expert":12.675603139767235,"oracle":1.0657072450523792,"ceiling":2.0,"expert_gain":12.675603139767235,"oracle_gain":1.0657072450523792},{"name":"plane3d_figure8","group":"Aircraft","expert":204.95170444802383,"oracle":0.5189745273111233,"ceiling":1.0,"expert_gain":204.95170444802383,"oracle_gain":0.5189745273111233},{"name":"patrol","group":"Aircraft","expert":301.8681943766276,"oracle":0.053187578530050815,"ceiling":2.0,"expert_gain":301.8681943766276,"oracle_gain":0.053187578530050815},{"name":"patrol_bearing_only","group":"Aircraft","expert":284.3472917683919,"oracle":0.053187578530050815,"ceiling":2.0,"expert_gain":284.3472917683919,"oracle_gain":0.053187578530050815},{"name":"cstr","group":"Process Control","expert":0.1892389424184073,"oracle":6.295948291545192e-08,"ceiling":1.0,"expert_gain":40.574538447454565,"oracle_gain":6.055761952500853e-08},{"name":"first_order","group":"Process Control","expert":3.321861616353062e-08,"oracle":0.0,"ceiling":1.0,"expert_gain":2.5698207375745137e-06,"oracle_gain":0.0},{"name":"four_tank","group":"Process Control","expert":22.735496427203216,"oracle":1.0823311591142322e-07,"ceiling":2.0,"expert_gain":22.735496427203216,"oracle_gain":1.0823311591142322e-07},{"name":"ph_neutralization","group":"Process Control","expert":176.3924860568255,"oracle":0.08916053595838648,"ceiling":1.0,"expert_gain":176.3959451028495,"oracle_gain":0.09254092571742628},{"name":"distillation","group":"Process Control","expert":390.5616064810504,"oracle":0.022818469475365713,"ceiling":2.0,"expert_gain":390.5616064810504,"oracle_gain":0.022818469475365713},{"name":"glass_furnace","group":"Industrial / Energy","expert":0.966626035515219,"oracle":0.17642213267584642,"ceiling":1.0,"expert_gain":1.0621182994761815,"oracle_gain":0.23432330360491807},{"name":"reactor","group":"Industrial / Energy","expert":20.59371337383355,"oracle":1.4550849451448464,"ceiling":0.0027777777777777783,"expert_gain":20.976558486252657,"oracle_gain":1.4757691727100333},{"name":"hvac","group":"Industrial / Energy","expert":0.021412124613221593,"oracle":0.01344547818861362,"ceiling":7.500000000000001e-05,"expert_gain":0.024219282176287982,"oracle_gain":0.013743371182518891},{"name":"cement_kiln","group":"Industrial / Energy","expert":3.601929952938272,"oracle":0.024197413304495197,"ceiling":1.0,"expert_gain":3.6806122801828,"oracle_gain":0.0704716642920471},{"name":"boiler_drum","group":"Industrial / Energy","expert":890.8466335406198,"oracle":5.534708091409822,"ceiling":1.1402740955827686,"expert_gain":890.9114037591526,"oracle_gain":5.615284871186733},{"name":"wind_turbine","group":"Renewable Energy","expert":2.5207256451060072e-05,"oracle":1.1796639865255069e-05,"ceiling":6.944444444444445e-06,"expert_gain":2.789124735509555e-05,"oracle_gain":1.2609169900260989e-05},{"name":"battery","group":"Renewable Energy","expert":0.0007630208232339746,"oracle":0.00022955745437477045,"ceiling":0.00013888888888888886,"expert_gain":0.003327833411228935,"oracle_gain":0.0009253222078093081},{"name":"unstable_cstr","group":"Process Control","expert":3.2054767887849436,"oracle":0.007304711043748235,"ceiling":1.0,"expert_gain":56956.91191127999,"oracle_gain":3799.6714203457345},{"name":"compressor_surge","group":"Industrial / Energy","expert":15.834977883561267,"oracle":0.2390619778123484,"ceiling":1.0,"expert_gain":488.6196853882157,"oracle_gain":23.012493830370108},{"name":"formation","group":"Aircraft","expert":23788.02022542318,"oracle":1.011592126103739,"ceiling":6.0,"expert_gain":23788.02022542318,"oracle_gain":1.011592126103739}]</script>
 
 ## Room to grow
 
@@ -43,33 +43,33 @@ hold down to the ceiling; 0 means the expert is already there. The
 | environment | expert hold | ceiling | room (decades) | oracle hold | oracle score |
 | --- | --- | --- | --- | --- | --- |
 | **Aircraft** | | | | | |
-| [`plane`](environments/plane.md) | 3.95 | 1 | 0.60 | 0.434 | 1.00 |
-| [`plane_energy`](environments/plane_energy.md) | 7,944 | 0.694 | 4.06 | 55 | 0.53 |
-| [`plane_sine`](environments/plane_sine.md) | 3.49 | 0.63 | 0.74 | 0.291 | 1.00 |
-| [`plane3d_heading`](environments/plane3d_heading.md) | 4.56 | 2 | 0.36 | 0.735 | 1.00 |
-| [`plane3d_circle`](environments/plane3d_circle.md) | 4.4 | 2 | 0.34 | 1.94 | 1.00 |
-| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 8.38 | 2 | 0.62 | 1.06 | 1.00 |
-| [`plane3d_figure8`](environments/plane3d_figure8.md) | 8,298 | 1 | 3.92 | 0.772 | 1.00 |
-| [`patrol`](environments/patrol.md) | 265 | 2 | 2.12 | 0.0371 | 1.00 |
-| [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 199 | 2 | 2.00 | 0.0371 | 1.00 |
-| [`formation`](environments/formation.md) | 23,239 | 6 | 3.59 | 1.17 | 1.00 |
+| [`plane`](environments/plane.md) | 4.36 | 1 | 0.64 | 0.519 | 1.00 |
+| [`plane_energy`](environments/plane_energy.md) | 7,047 | 0.694 | 4.01 | 1.47 | 0.92 |
+| [`plane_sine`](environments/plane_sine.md) | 3.19 | 0.63 | 0.70 | 0.319 | 1.00 |
+| [`plane3d_heading`](environments/plane3d_heading.md) | 3.52 | 2 | 0.25 | 0.572 | 1.00 |
+| [`plane3d_circle`](environments/plane3d_circle.md) | 3.46 | 2 | 0.24 | 3.15 | 0.17 |
+| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 12.7 | 2 | 0.80 | 1.07 | 1.00 |
+| [`plane3d_figure8`](environments/plane3d_figure8.md) | 205 | 1 | 2.31 | 0.519 | 1.00 |
+| [`patrol`](environments/patrol.md) | 302 | 2 | 2.18 | 0.0532 | 1.00 |
+| [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 284 | 2 | 2.15 | 0.0532 | 1.00 |
+| [`formation`](environments/formation.md) | 23,788 | 6 | 3.60 | 1.01 | 1.00 |
 | **Process Control** | | | | | |
-| [`cstr`](environments/cstr.md) | 0.538 | 1 | 0.00 | 4.5e-9 | — |
-| [`first_order`](environments/first_order.md) | 2.91e-7 | 1 | 0.00 | 0 | — |
-| [`four_tank`](environments/four_tank.md) | 30.3 | 2 | 1.18 | 3.08e-8 | 1.00 |
-| [`ph_neutralization`](environments/ph_neutralization.md) | 12.6 | 1 | 1.10 | 0.089 | 1.00 |
-| [`distillation`](environments/distillation.md) | 62.6 | 2 | 1.50 | 2.61e-4 | 1.00 |
-| [`unstable_cstr`](environments/unstable_cstr.md) | 2.82 | 1 | 0.45 | 0.00686 | 1.00 |
+| [`cstr`](environments/cstr.md) | 0.189 | 1 | 0.00 | 6.3e-8 | — |
+| [`first_order`](environments/first_order.md) | 3.32e-8 | 1 | 0.00 | 0 | — |
+| [`four_tank`](environments/four_tank.md) | 22.7 | 2 | 1.06 | 1.08e-7 | 1.00 |
+| [`ph_neutralization`](environments/ph_neutralization.md) | 176 | 1 | 2.25 | 0.0892 | 1.00 |
+| [`distillation`](environments/distillation.md) | 391 | 2 | 2.29 | 0.0228 | 1.00 |
+| [`unstable_cstr`](environments/unstable_cstr.md) | 3.21 | 1 | 0.51 | 0.0073 | 1.00 |
 | **Industrial / Energy** | | | | | |
-| [`glass_furnace`](environments/glass_furnace.md) | 2.02 | 1 | 0.30 | 0.354 | 1.00 |
-| [`reactor`](environments/reactor.md) | 23.3 | 0.00278 | 3.92 | 1.38 | 0.31 |
-| [`hvac`](environments/hvac.md) | 0.00982 | 7.5e-5 | 2.12 | 0.00522 | 0.13 |
-| [`cement_kiln`](environments/cement_kiln.md) | 4.68 | 1 | 0.67 | 0.0295 | 1.00 |
-| [`boiler_drum`](environments/boiler_drum.md) | 524 | 1.14 | 2.66 | 4.62 | 0.77 |
-| [`compressor_surge`](environments/compressor_surge.md) | 11.4 | 1 | 1.06 | 0.00677 | 1.00 |
+| [`glass_furnace`](environments/glass_furnace.md) | 0.967 | 1 | 0.00 | 0.176 | — |
+| [`reactor`](environments/reactor.md) | 20.6 | 0.00278 | 3.87 | 1.46 | 0.30 |
+| [`hvac`](environments/hvac.md) | 0.0214 | 7.5e-5 | 2.46 | 0.0134 | 0.08 |
+| [`cement_kiln`](environments/cement_kiln.md) | 3.6 | 1 | 0.56 | 0.0242 | 1.00 |
+| [`boiler_drum`](environments/boiler_drum.md) | 891 | 1.14 | 2.89 | 5.53 | 0.76 |
+| [`compressor_surge`](environments/compressor_surge.md) | 15.8 | 1 | 1.20 | 0.239 | 1.00 |
 | **Renewable Energy** | | | | | |
-| [`wind_turbine`](environments/wind_turbine.md) | 2.43e-5 | 6.94e-6 | 0.54 | 1.27e-5 | 0.52 |
-| [`battery`](environments/battery.md) | 7.93e-4 | 1.39e-4 | 0.76 | 2.14e-4 | 0.75 |
+| [`wind_turbine`](environments/wind_turbine.md) | 2.52e-5 | 6.94e-6 | 0.56 | 1.18e-5 | 0.59 |
+| [`battery`](environments/battery.md) | 7.63e-4 | 1.39e-4 | 0.74 | 2.3e-4 | 0.71 |
 
 ## Whole episode
 
@@ -81,33 +81,33 @@ tenth. The **transient** is the summed cost around each target change.
 | environment | expert gain | oracle gain | oracle vs expert | expert transient | oracle transient |
 | --- | --- | --- | --- | --- | --- |
 | **Aircraft** | | | | | |
-| [`plane`](environments/plane.md) | 3.95 | 0.529 | 7.47 | 4.84e6 | 1.19e6 |
-| [`plane_energy`](environments/plane_energy.md) | 18,910 | 511 | 37 | 3.17e6 | 1.81e5 |
-| [`plane_sine`](environments/plane_sine.md) | 3.49 | 0.543 | 6.42 | 4.87e6 | 7.61e5 |
-| [`plane3d_heading`](environments/plane3d_heading.md) | 4.56 | 0.735 | 6.21 | 6.06e6 | 2.01e6 |
-| [`plane3d_circle`](environments/plane3d_circle.md) | 4.4 | 1.94 | 2.27 | 4.84e6 | 1.23e6 |
-| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 8.38 | 1.06 | 7.88 | 4.84e6 | 1.21e6 |
-| [`plane3d_figure8`](environments/plane3d_figure8.md) | 8,298 | 0.771 | 10,756 | 4.9e6 | 5,323 |
-| [`patrol`](environments/patrol.md) | 265 | 0.0371 | 7,130 | 45,322 | 6,041 |
-| [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 199 | 0.0371 | 5,366 | 38,481 | 6,041 |
-| [`formation`](environments/formation.md) | 23,239 | 1.17 | 19,784 | 5.36e6 | 6,273 |
+| [`plane`](environments/plane.md) | 4.36 | 0.677 | 6.44 | 1.64e6 | 3.2e5 |
+| [`plane_energy`](environments/plane_energy.md) | 18,908 | 497 | 38 | 2.49e6 | 86,410 |
+| [`plane_sine`](environments/plane_sine.md) | 3.19 | 0.529 | 6.03 | 2.84e6 | 2.27e5 |
+| [`plane3d_heading`](environments/plane3d_heading.md) | 3.52 | 0.572 | 6.15 | 2.9e6 | 9e5 |
+| [`plane3d_circle`](environments/plane3d_circle.md) | 3.46 | 3.15 | 1.1 | 1.63e6 | 3.42e5 |
+| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 12.7 | 1.07 | 11.9 | 1.64e6 | 3.26e5 |
+| [`plane3d_figure8`](environments/plane3d_figure8.md) | 205 | 0.519 | 395 | 8.41e6 | 6,068 |
+| [`patrol`](environments/patrol.md) | 302 | 0.0532 | 5,676 | 30,726 | 3,168 |
+| [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 284 | 0.0532 | 5,346 | 28,714 | 3,168 |
+| [`formation`](environments/formation.md) | 23,788 | 1.01 | 23,515 | 1.41e7 | 5,121 |
 | **Process Control** | | | | | |
-| [`cstr`](environments/cstr.md) | 41.2 | 9.42e-9 | 4.38e9 | 6.6e5 | 6.1e5 |
-| [`first_order`](environments/first_order.md) | 3.57e-6 | 0 | — | 1.19e5 | 1.17e5 |
-| [`four_tank`](environments/four_tank.md) | 30.3 | 3.08e-8 | 9.84e8 | 6.58e5 | 1.85e5 |
-| [`ph_neutralization`](environments/ph_neutralization.md) | 12.6 | 0.096 | 131 | 91,237 | 22,144 |
-| [`distillation`](environments/distillation.md) | 62.6 | 0.0125 | 5,015 | 13,342 | 1,396 |
-| [`unstable_cstr`](environments/unstable_cstr.md) | 57,426 | 4,035 | 14.2 | 5.84e5 | 2.52e5 |
+| [`cstr`](environments/cstr.md) | 40.6 | 6.06e-8 | 6.7e8 | 3.49e5 | 3.09e5 |
+| [`first_order`](environments/first_order.md) | 2.57e-6 | 0 | — | 55,292 | 53,873 |
+| [`four_tank`](environments/four_tank.md) | 22.7 | 1.08e-7 | 2.1e8 | 8.75e5 | 5e5 |
+| [`ph_neutralization`](environments/ph_neutralization.md) | 176 | 0.0925 | 1,906 | 41,669 | 2,557 |
+| [`distillation`](environments/distillation.md) | 391 | 0.0228 | 17,116 | 1.13e5 | 38,594 |
+| [`unstable_cstr`](environments/unstable_cstr.md) | 56,957 | 3,800 | 15 | 5.84e5 | 2.48e5 |
 | **Industrial / Energy** | | | | | |
-| [`glass_furnace`](environments/glass_furnace.md) | 2.09 | 0.394 | 5.31 | 1,139 | 247 |
-| [`reactor`](environments/reactor.md) | 23.7 | 1.38 | 17.2 | 12,374 | 597 |
-| [`hvac`](environments/hvac.md) | 0.0185 | 0.00884 | 2.1 | 0.913 | 0.514 |
-| [`cement_kiln`](environments/cement_kiln.md) | 4.75 | 0.0705 | 67.4 | 2,463 | 255 |
-| [`boiler_drum`](environments/boiler_drum.md) | 524 | 4.67 | 112 | 38,413 | 2,378 |
-| [`compressor_surge`](environments/compressor_surge.md) | 1,781 | 60.8 | 29.3 | 8.94e5 | 1.01e5 |
+| [`glass_furnace`](environments/glass_furnace.md) | 1.06 | 0.234 | 4.53 | 1,164 | 315 |
+| [`reactor`](environments/reactor.md) | 21 | 1.48 | 14.2 | 1,261 | 95 |
+| [`hvac`](environments/hvac.md) | 0.0242 | 0.0137 | 1.76 | 1.01 | 0.519 |
+| [`cement_kiln`](environments/cement_kiln.md) | 3.68 | 0.0705 | 52.2 | 1,410 | 153 |
+| [`boiler_drum`](environments/boiler_drum.md) | 891 | 5.62 | 159 | 31,194 | 6,919 |
+| [`compressor_surge`](environments/compressor_surge.md) | 489 | 23 | 21.2 | 9.58e5 | 46,463 |
 | **Renewable Energy** | | | | | |
-| [`wind_turbine`](environments/wind_turbine.md) | 2.64e-5 | 1.3e-5 | 2.03 | 0.0132 | 0.00298 |
-| [`battery`](environments/battery.md) | 0.00346 | 7.82e-4 | 4.43 | 0.0292 | 6.87e-4 |
+| [`wind_turbine`](environments/wind_turbine.md) | 2.79e-5 | 1.26e-5 | 2.21 | 0.0139 | 0.00324 |
+| [`battery`](environments/battery.md) | 0.00333 | 9.25e-4 | 3.6 | 0.0585 | 9.08e-4 |
 
 ## Episode returns
 
@@ -119,33 +119,33 @@ beat the expert.
 | environment | steps | expert cost/step | oracle cost/step | oracle wins |
 | --- | --- | --- | --- | --- |
 | **Aircraft** | | | | |
-| [`plane`](environments/plane.md) | 280 | 13,489 | 3,273 | 10/10 |
-| [`plane_energy`](environments/plane_energy.md) | 1200 | 19,892 | 1,009 | 10/10 |
-| [`plane_sine`](environments/plane_sine.md) | 480 | 9,493 | 1,249 | 10/10 |
-| [`plane3d_heading`](environments/plane3d_heading.md) | 200 | 24,895 | 8,267 | 10/10 |
-| [`plane3d_circle`](environments/plane3d_circle.md) | 300 | 12,582 | 3,142 | 9/10 |
-| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 650 | 5,818 | 1,414 | 10/10 |
-| [`plane3d_figure8`](environments/plane3d_figure8.md) | 400 | 18,260 | 14.7 | 10/10 |
-| [`patrol`](environments/patrol.md) | 200 | 299 | 14.2 | 10/10 |
-| [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 200 | 290 | 14.2 | 10/10 |
-| [`formation`](environments/formation.md) | 200 | 46,678 | 31.2 | 10/10 |
+| [`plane`](environments/plane.md) | 280 | 3,778 | 1,121 | 9/10 |
+| [`plane_energy`](environments/plane_energy.md) | 1200 | 18,323 | 659 | 10/10 |
+| [`plane_sine`](environments/plane_sine.md) | 480 | 2,241 | 387 | 10/10 |
+| [`plane3d_heading`](environments/plane3d_heading.md) | 200 | 8,357 | 3,446 | 9/10 |
+| [`plane3d_circle`](environments/plane3d_circle.md) | 300 | 3,535 | 1,123 | 8/10 |
+| [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 650 | 1,637 | 495 | 10/10 |
+| [`plane3d_figure8`](environments/plane3d_figure8.md) | 400 | 14,513 | 13.9 | 10/10 |
+| [`patrol`](environments/patrol.md) | 200 | 305 | 19.5 | 10/10 |
+| [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 200 | 301 | 19.5 | 10/10 |
+| [`formation`](environments/formation.md) | 200 | 55,472 | 26.6 | 10/10 |
 | **Process Control** | | | | |
-| [`cstr`](environments/cstr.md) | 100 | 6,319 | 5,752 | 10/10 |
-| [`first_order`](environments/first_order.md) | 100 | 1,018 | 1,002 | 10/10 |
-| [`four_tank`](environments/four_tank.md) | 500 | 1,167 | 336 | 10/10 |
-| [`ph_neutralization`](environments/ph_neutralization.md) | 300 | 336 | 91.2 | 10/10 |
-| [`distillation`](environments/distillation.md) | 200 | 262 | 29.9 | 10/10 |
-| [`unstable_cstr`](environments/unstable_cstr.md) | 1200 | 57,139 | 4,178 | 10/10 |
+| [`cstr`](environments/cstr.md) | 100 | 6,252 | 5,987 | 10/10 |
+| [`first_order`](environments/first_order.md) | 100 | 426 | 411 | 10/10 |
+| [`four_tank`](environments/four_tank.md) | 500 | 832 | 373 | 10/10 |
+| [`ph_neutralization`](environments/ph_neutralization.md) | 300 | 168 | 5.31 | 10/10 |
+| [`distillation`](environments/distillation.md) | 200 | 8.67e5 | 123 | 10/10 |
+| [`unstable_cstr`](environments/unstable_cstr.md) | 1200 | 57,083 | 3,950 | 10/10 |
 | **Industrial / Energy** | | | | |
-| [`glass_furnace`](environments/glass_furnace.md) | 1600 | 1.35 | 0.274 | 10/10 |
-| [`reactor`](environments/reactor.md) | 864 | 24.4 | 1.37 | 10/10 |
-| [`hvac`](environments/hvac.md) | 720 | 0.0197 | 0.0106 | 10/10 |
-| [`cement_kiln`](environments/cement_kiln.md) | 700 | 6.37 | 0.405 | 10/10 |
-| [`boiler_drum`](environments/boiler_drum.md) | 400 | 642 | 15.3 | 10/10 |
-| [`compressor_surge`](environments/compressor_surge.md) | 1200 | 1,790 | 161 | 10/10 |
+| [`glass_furnace`](environments/glass_furnace.md) | 1600 | 1.28 | 0.312 | 10/10 |
+| [`reactor`](environments/reactor.md) | 864 | 22.1 | 1.4 | 10/10 |
+| [`hvac`](environments/hvac.md) | 720 | 0.0203 | 0.0113 | 10/10 |
+| [`cement_kiln`](environments/cement_kiln.md) | 700 | 5.64 | 0.157 | 10/10 |
+| [`boiler_drum`](environments/boiler_drum.md) | 400 | 752 | 22.1 | 10/10 |
+| [`compressor_surge`](environments/compressor_surge.md) | 1200 | 1,885 | 102 | 10/10 |
 | **Renewable Energy** | | | | |
-| [`wind_turbine`](environments/wind_turbine.md) | 400 | 4.54e-5 | 1.38e-5 | 10/10 |
-| [`battery`](environments/battery.md) | 360 | 0.00346 | 8.88e-4 | 10/10 |
+| [`wind_turbine`](environments/wind_turbine.md) | 400 | 5.42e-5 | 1.48e-5 | 10/10 |
+| [`battery`](environments/battery.md) | 360 | 0.00354 | 9.48e-4 | 10/10 |
 
 ## Caveats
 

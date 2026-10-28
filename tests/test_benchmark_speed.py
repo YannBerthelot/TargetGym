@@ -25,7 +25,7 @@ SMALL = dict(steps=8, batch_size=4)
 @pytest.mark.parametrize("name", ["cstr", "hvac", "plane"])
 def test_benchmark_reports_a_positive_rate(name):
     spec = REGISTRY[name]
-    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": 50})
+    params = spec.make_test_params(max_steps_in_episode=50)
     rate = benchmark_env(spec.make_env(), params, **SMALL)
 
     assert jnp.isfinite(rate), f"{name}: benchmark returned {rate}"
@@ -51,7 +51,7 @@ def test_rate_counts_every_environment_in_the_batch(monkeypatch):
     monkeypatch.setattr(bs.time, "perf_counter", lambda: next(ticks))
 
     spec = REGISTRY["cstr"]
-    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": 50})
+    params = spec.make_test_params(max_steps_in_episode=50)
     env = spec.make_env()
 
     small = bs.benchmark_env(env, params, steps=8, batch_size=4)

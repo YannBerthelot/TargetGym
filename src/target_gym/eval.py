@@ -466,7 +466,8 @@ def scored_burn_in(name: str, params) -> int:
 
 
 def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
-    """One episode of a registered environment as an ``Episode`` record.
+    """One episode of a registered environment as an ``Episode`` record: the
+    benchmark's one-episode run on ``PRNGKey(seed)`` (``runners.one_episode``).
 
     ``policy`` is ``policy(obs)`` or ``policy(obs, state)``. The cost is
     ``-reward``; the terms come from ``env.reward_terms`` when the environment
@@ -474,56 +475,16 @@ def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
     time-in-band KPI (defaults to each output's ``e_floor`` if the params carry
     one, else the reach segmentation uses the target changes alone).
     """
-    import jax
-    import jax.numpy as jnp
+    import dataclasses
 
-    from target_gym.runners.runners import _as_tuple, _wants_state
+    from target_gym.benchmark import episodes_of, task_info
+    from target_gym.runners.runners import one_episode
 
-    env = spec.make_env()
-    ti = list(_as_tuple(env.obs_target_index))
-    vi = list(_as_tuple(env.obs_value_index))
-    key = jax.random.PRNGKey(seed)
-    obs, state = env.reset_env(key, params)
-    step = jax.jit(env.step_env)
-    terms_fn = getattr(env, "reward_terms", None)
-    costs, bands, changes, failed, terms = [], [], [], [], {}
-    prev_target = np.asarray(obs)[ti]
-    if band is None:
-        band = np.atleast_1d(np.asarray(getattr(params, "e_floor", np.inf), float))
-    span = None
-    while int(state.time) < int(params.max_steps_in_episode):
-        o = np.asarray(obs)
-        a = policy(o, state) if _wants_state(policy) else policy(o)
-        obs, state, r, term, info = step(
-            key, state, jnp.atleast_1d(jnp.asarray(a)), params
-        )
-        o = np.asarray(obs)
-        costs.append(-float(r))
-        err = np.abs(o[vi] - o[ti])
-        bands.append(bool((err <= band).all()))
-        tgt = o[ti]
-        if span is None:
-            span = np.maximum(np.abs(tgt), 1e-9)
-        changes.append(bool((np.abs(tgt - prev_target) > 0.05 * span).any()))
-        prev_target = tgt
-        failed.append(
-            bool(info.get("tripped", False)) if isinstance(info, dict) else False
-        )
-        # Exact per-step terms when the environment returns them (the
-        # reactor sums ten sub-steps); otherwise the terms at the new state.
-        step_terms = info.get("reward_terms") if isinstance(info, dict) else None
-        if step_terms is None and terms_fn is not None:
-            step_terms = terms_fn(state, params)
-        if step_terms is not None:
-            for k, v in step_terms.items():
-                terms.setdefault(k, []).append(float(v))
-    return Episode(
-        cost=np.array(costs),
-        in_band=np.array(bands),
-        target_change=np.array(changes),
-        failed=np.array(failed),
-        terms={k: np.array(v) for k, v in terms.items()},
-    )
+    task = task_info(spec.name, spec.make_env(), params, 1)
+    if band is not None:
+        e_floor = np.broadcast_to(np.asarray(band, float), task.e_floor.shape)
+        task = dataclasses.replace(task, e_floor=e_floor.copy())
+    return episodes_of(one_episode(spec, params, policy, seed, task=task))[0]
 
 
 def evaluate_controller(name: str, kind: str = "pid", seeds: int = 3, params=None):

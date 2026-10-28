@@ -37,7 +37,7 @@ def _gains(obj) -> list[float]:
 def _first_obs(name):
     spec = REGISTRY[name]
     env = spec.make_env()
-    params = spec.params_cls(**{**spec.test_params, "max_steps_in_episode": 20})
+    params = spec.make_test_params(max_steps_in_episode=20)
     obs, _state = env.reset_env(jax.random.PRNGKey(0), params)
     return env, params, obs
 
@@ -92,3 +92,19 @@ def test_pid_is_deterministic_across_resets(name):
         atol=1e-8,
         err_msg=f"{name}: reset() did not clear controller state",
     )
+
+
+def test_the_tuned_gains_have_public_names():
+    """Contract: ``load_gains()`` is the tuned-gains file as stored, and
+    ``gain(task, name, default)`` is that task's stored value as a float, or
+    the default when the file has none. Expected values come from the file
+    itself (``provenance.GAINS_PATH``), not from the loader."""
+    import json
+
+    from target_gym.experts.pid import gain, load_gains
+    from target_gym.provenance import GAINS_PATH
+
+    stored = json.loads(GAINS_PATH.read_text())
+    assert load_gains() == stored
+    assert gain("cstr", "Kp", 0.0) == float(stored["cstr"]["Kp"])
+    assert gain("cstr", "no_such_gain", 1.5) == 1.5

@@ -1,11 +1,11 @@
-from typing import Callable, Tuple
+from typing import Tuple
 
 import chex
 import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.base import canonical_reset, finish_step
 from target_gym.compressor_surge.env import (
     CompressorSurgeParams,
     CompressorSurgeState,
@@ -23,11 +23,12 @@ from target_gym.compressor_surge.env import (
 )
 from target_gym.compressor_surge.rendering import _render
 from target_gym.expert_access import RegistryExperts
-from target_gym.utils import save_video
+from target_gym.video import SavesVideo
 
 
 class CompressorSurge(
     RegistryExperts,
+    SavesVideo,
     environment.Environment[CompressorSurgeState, CompressorSurgeParams],
 ):
     """Compressor feeding a header, with surge as the trip.
@@ -86,25 +87,14 @@ class CompressorSurge(
         # A trip is part of the kernel: the step is charged the trip cost and
         # the plant restarts at once from a fresh draw (new schedule, new
         # deviation, block clock 0) on the same window clock, or is lost (``terminated``) with
-        # ``params.continuing = False`` (``base.failure_kernel``).
-        new_state, tripped, scored, terminated = failure_kernel(
-            self, key, state, new_state, params
-        )
+        # ``params.continuing = False`` (``base.finish_step``).
         # Scored on the proposal, against the live setpoint of the advanced
         # clock: the step that enters a block is scored against its level,
         # which the returned observation also shows.
-        reward = compute_reward(scored, params, xp=jnp)
-        return (
-            self.get_obs(new_state, params),
-            new_state,
-            reward,
-            terminated,
-            {
-                "last_state": new_state,
-                "tripped": tripped,
-                "trip_cost": charged_trip_cost(tripped, params),
-            },
+        new_state, reward, terminated, info = finish_step(
+            self, key, state, new_state, params
         )
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
     def get_obs(
         self, state: CompressorSurgeState, params: CompressorSurgeParams = None
@@ -193,27 +183,6 @@ class CompressorSurge(
             dtype=jnp.float32,
         )
 
-    def save_video(
-        self,
-        select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        seed: int,
-        params=None,
-        folder="videos",
-        episode_index=0,
-        FPS=60,
-        format="mp4",
-    ):
-        return save_video(
-            self,
-            select_action,
-            folder,
-            episode_index,
-            FPS,
-            params,
-            seed=seed,
-            format=format,
-        )
-
     def render(
         self,
         screen,
@@ -227,11 +196,3 @@ class CompressorSurge(
         """
         frames, screen, clock = self.render_car(screen, state, params, frames, clock)
         return frames, screen, clock
-
-    def make_mpc(self, params=None, **kwargs):
-        """Return the CasADi NMPC oracle, which falls back to the PID pair."""
-        from target_gym.compressor_surge.experts import make_compressor_surge_mpc
-
-        if params is None:
-            params = self.default_params
-        return make_compressor_surge_mpc(self, params, **kwargs)

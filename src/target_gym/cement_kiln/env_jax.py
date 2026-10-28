@@ -1,13 +1,11 @@
-import os
-from typing import Callable, Tuple
+from typing import Tuple
 
 import chex
 import jax
 import jax.numpy as jnp
-import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.base import canonical_reset, finish_step
 from target_gym.cement_kiln.env import (
     CementKilnParams,
     CementKilnState,
@@ -21,11 +19,13 @@ from target_gym.cement_kiln.env import (
 )
 from target_gym.cement_kiln.rendering import _render
 from target_gym.expert_access import RegistryExperts
-from target_gym.utils import save_video
+from target_gym.video import SavesVideo
 
 
 class CementKiln(
-    RegistryExperts, environment.Environment[CementKilnState, CementKilnParams]
+    RegistryExperts,
+    SavesVideo,
+    environment.Environment[CementKilnState, CementKilnParams],
 ):
     """Cement rotary kiln with a half-hour transport delay.
 
@@ -73,22 +73,11 @@ class CementKiln(
         )
         # A trip is part of the kernel: the step is charged the trip cost and
         # the plant restarts at once, or is lost (``terminated``) with
-        # ``params.continuing = False`` (``base.failure_kernel``).
-        new_state, tripped, scored, terminated = failure_kernel(
+        # ``params.continuing = False`` (``base.finish_step``).
+        new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        reward = compute_reward(scored, params, xp=jnp)
-        return (
-            self.get_obs(new_state),
-            new_state,
-            reward,
-            terminated,
-            {
-                "last_state": new_state,
-                "tripped": tripped,
-                "trip_cost": charged_trip_cost(tripped, params),
-            },
-        )
+        return self.get_obs(new_state), new_state, reward, terminated, info
 
     def get_obs(self, state: CementKilnState, params: CementKilnParams = None):
         if params is None:
@@ -159,49 +148,8 @@ class CementKiln(
             -inf, inf, len(CementKilnState.__dataclass_fields__), dtype=jnp.float32
         )
 
-    def make_mpc(self, params=None, **kwargs):
-        from target_gym.cement_kiln.experts import make_cement_kiln_mpc
-
-        if params is None:
-            params = self.default_params
-        return make_cement_kiln_mpc(self, params, **kwargs)
-
-    def save_video(
-        self,
-        select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        seed: int,
-        params=None,
-        folder="videos",
-        episode_index=0,
-        FPS=60,
-        format="mp4",
-    ):
-        return save_video(
-            self,
-            select_action,
-            folder,
-            episode_index,
-            FPS,
-            params,
-            seed=seed,
-            format=format,
-        )
-
     def render(
         self, screen, state: CementKilnState, params: CementKilnParams, frames, clock
     ):
         frames, screen, clock = self.render_kiln(screen, state, params, frames, clock)
         return frames, screen, clock
-
-
-if __name__ == "__main__":
-    env = CementKiln()
-    os.makedirs("videos/cement_kiln", exist_ok=True)
-    env.save_video(
-        lambda o: np.random.uniform(-1, 1, size=(2,)),
-        42,
-        folder="videos/cement_kiln",
-        episode_index=0,
-        params=CementKilnParams(max_steps_in_episode=240),
-        format="gif",
-    )

@@ -121,9 +121,9 @@ def make_four_tank_pid_controller():
     """The scored PID as a pure :class:`~target_gym.experts.pid.Controller`;
     ``.host()`` is what ``make_pid()`` returns. Crossed pairing: pump v1 holds tank 2 and v2 holds tank 1.
     """
-    from target_gym.experts.pid import _load_gains, mimo_pid, siso_pid
+    from target_gym.experts.pid import load_gains, mimo_pid, siso_pid
 
-    _p = _load_gains().get("four_tank", {})
+    _p = load_gains().get("four_tank", {})
     _p1, _p2 = _p.get("pid1", {}), _p.get("pid2", {})
     return mimo_pid(
         siso_pid(

@@ -15,7 +15,7 @@ from target_gym.experts.mpc import (
     _floor_units,
     _is_v1,
 )
-from target_gym.experts.pid import Controller, _load_gains
+from target_gym.experts.pid import Controller, load_gains
 
 
 class BoilerDrumGradientMPC(GradientMPC):
@@ -204,7 +204,7 @@ def make_boiler_drum_pid_controller() -> Controller:
     from target_gym.boiler_drum.env import BoilerDrumParams
 
     pr = BoilerDrumParams()
-    _p = _load_gains().get("boiler_drum", {})
+    _p = load_gains().get("boiler_drum", {})
     params = BoilerDrumPIDParams(
         Kp_level=float(_p.get("Kp_level", 60.0)),
         Ki_level=float(_p.get("Ki_level", 0.6)),

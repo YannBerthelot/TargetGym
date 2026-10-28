@@ -9,14 +9,12 @@ Three task variants sharing the same 3D physics:
 Actions: power (throttle), stick (elevator), aileron (roll control).
 """
 
-from typing import Callable
-
 import chex
 import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.base import canonical_reset, finish_step
 from target_gym.expert_access import RegistryExperts
 from target_gym.plane.dynamics import total_wind_3d
 from target_gym.plane3d.env import (
@@ -39,11 +37,12 @@ from target_gym.plane3d.env import (
     get_obs_racetrack,
 )
 from target_gym.plane3d.rendering import _render
-from target_gym.utils import compute_norm_from_coordinates, save_video
+from target_gym.utils import compute_norm_from_coordinates
+from target_gym.video import SavesVideo
 
 
 class _Airplane3DBase(
-    RegistryExperts, environment.Environment[PlaneState3D, PlaneParams3D]
+    RegistryExperts, SavesVideo, environment.Environment[PlaneState3D, PlaneParams3D]
 ):
     """
     Base class for all 3D airplane environments.
@@ -112,24 +111,11 @@ class _Airplane3DBase(
         )
         # A crash is part of the kernel: the step is charged the trip cost and
         # the flight restarts at once, or is lost (``terminated``) with
-        # ``params.continuing = False`` (``base.failure_kernel``).
-        new_state, tripped, scored, terminated = failure_kernel(
-            self, key, state, new_state, params
+        # ``params.continuing = False`` (``base.finish_step``).
+        new_state, reward, terminated, info = finish_step(
+            self, key, state, new_state, params, metrics=metrics
         )
-        reward = self.compute_reward(scored, params)
-        obs = self.get_obs(new_state, params)
-        return (
-            obs,
-            new_state,
-            reward,
-            terminated,
-            {
-                "metrics": metrics,
-                "last_state": new_state,
-                "tripped": tripped,
-                "trip_cost": charged_trip_cost(tripped, params),
-            },
-        )
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
     def is_terminated(self, state: PlaneState3D, params: PlaneParams3D) -> jax.Array:
         """Natural termination only; the time limit is gymnax's ``is_truncated``."""
@@ -205,29 +191,6 @@ class _Airplane3DBase(
         frames, screen, clock = self.render_plane(screen, state, params, frames, clock)
         return frames, screen, clock
 
-    def save_video(
-        self,
-        select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        seed: int,
-        params=None,
-        folder="videos",
-        episode_index=0,
-        FPS=60,
-        format="mp4",
-        save_trajectory: bool = False,
-    ):
-        return save_video(
-            self,
-            select_action,
-            folder,
-            episode_index,
-            FPS,
-            params,
-            seed=seed,
-            format=format,
-            save_trajectory=save_trajectory,
-        )
-
     def action_space(self, params: PlaneParams3D | None = None) -> spaces.Box:
         return spaces.Box(
             low=jnp.array([-1.0, -1.0, -1.0]),
@@ -266,6 +229,25 @@ class Plane3DHeading(_Airplane3DBase):
     obs_target_index: int = 10  # target_altitude
     task_type: str = "heading"
     registry_name: str = "plane3d_heading"
+
+    @property
+    def default_params(self) -> PlaneParams3D:
+        # The scored configuration. The floors are set here, not as
+        # PlaneParams3D class defaults, because PatrolParams inherits those
+        # and patrol's records must not move with this task's floor.
+        #
+        # The 1 m altimeter resolution; the heading floor is the class
+        # default, the 0.0087 rad AHRS resolution. The oracle holds below
+        # both, and rho is its lowest per-seed holds (0.6735 m, 2.14e-5 rad;
+        # `scripts/measure_hold.py`) in floor units.
+        rho = (0.6735 / 1.0) ** 2 + (2.14e-5 / 0.0087) ** 2
+        return PlaneParams3D(
+            max_steps_in_episode=200,
+            e_floor_altitude=1.0,
+            rho_floor_tracking=rho,
+            rho_floor=rho,
+            failure_cost=2.0 * (12192.0 / 1.0) ** 2,
+        )
 
     def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
@@ -341,6 +323,26 @@ class Plane3DRacetrack(_Airplane3DBase):
     # different task than the one being scored.
     task_type: str = "racetrack"
     registry_name: str = "plane3d_racetrack"
+
+    @property
+    def default_params(self) -> PlaneParams3D:
+        # The scored configuration. A lap is two legs plus two half-circles:
+        # 2 * (2 * 2r) + 2 * pi * r, about 8.3 r of path. At an 8.4 km radius
+        # and 230 m/s that is ~300 s, so 650 steps is the three laps the
+        # episode-length criterion asks of a periodic task.
+        #
+        # The 1 m altimeter and 3 m GPS resolutions. The oracle holds below
+        # both, and rho is its lowest per-seed holds (0.6803 m, 0.4660 m;
+        # `scripts/measure_hold.py`) in floor units.
+        rho = (0.6803 / 1.0) ** 2 + (0.4660 / 3.0) ** 2
+        return PlaneParams3D(
+            max_steps_in_episode=650,
+            e_floor_altitude=1.0,
+            e_floor_path=3.0,
+            rho_floor_tracking=rho,
+            rho_floor=rho,
+            failure_cost=2.0 * (12192.0 / 1.0) ** 2,
+        )
 
     def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
@@ -420,6 +422,23 @@ class Plane3DCircle(_Airplane3DBase):
     obs_target_index: int = 10
     task_type: str = "circle"
     registry_name: str = "plane3d_circle"
+
+    @property
+    def default_params(self) -> PlaneParams3D:
+        # The scored configuration: the 1 m altimeter and 3 m GPS
+        # resolutions. The oracle holds below both, and rho is its lowest
+        # per-seed holds (0.6657 m, 0.4504 m; `scripts/measure_hold.py`) in
+        # floor units.
+        rho = (0.6657 / 1.0) ** 2 + (0.4504 / 3.0) ** 2
+        return PlaneParams3D(
+            max_steps_in_episode=300,
+            e_floor_altitude=1.0,
+            e_floor_path=3.0,
+            rho_floor_tracking=rho,
+            rho_floor=rho,
+            failure_cost=2.0 * (12192.0 / 1.0) ** 2,
+        )
+
     tracked_names: tuple = ("altitude (m)",)
 
     def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
@@ -506,6 +525,21 @@ class Plane3DFigureEight(_Airplane3DBase):
     obs_target_index: int = 10
     task_type: str = "figure8"
     registry_name: str = "plane3d_figure8"
+
+    @property
+    def default_params(self) -> PlaneParams3D:
+        # The scored configuration: the path term alone, its floor the 3 m
+        # GPS resolution. The oracle holds below it, and rho is its lowest
+        # per-seed hold (1.2871 m; `scripts/measure_hold.py`) in floor units.
+        rho = (1.2871 / 3.0) ** 2
+        return PlaneParams3D(
+            max_steps_in_episode=400,
+            e_floor_path=3.0,
+            rho_floor_tracking=rho,
+            rho_floor=rho,
+            failure_cost=2.0 * (20000.0 / 3.0) ** 2,
+        )
+
     tracked_names: tuple = ("altitude (m)",)
 
     def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):

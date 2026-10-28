@@ -264,12 +264,12 @@ def make_reactor_pid_controller():
     """The scored PID as a pure :class:`~target_gym.experts.pid.Controller`;
     ``.host()`` is what ``make_pid()`` returns. Gains from
     src/target_gym/data/pid_gains.json."""
-    from target_gym.experts.pid import _g, siso_pid
+    from target_gym.experts.pid import gain, siso_pid
 
     return siso_pid(
-        Kp=_g("reactor", "Kp", 5.0),
-        Ki=_g("reactor", "Ki", 0.5),
-        Kd=_g("reactor", "Kd", 0.0),
+        Kp=gain("reactor", "Kp", 5.0),
+        Ki=gain("reactor", "Ki", 0.5),
+        Kd=gain("reactor", "Kd", 0.0),
         dt=0.5,
         state_index=0,
         setpoint_index=3,

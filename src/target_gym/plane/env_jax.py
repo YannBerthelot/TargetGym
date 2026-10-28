@@ -1,11 +1,9 @@
-from typing import Callable
-
 import chex
 import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.base import canonical_reset, finish_step
 from target_gym.expert_access import RegistryExperts
 from target_gym.plane.dynamics import total_wind_2d
 from target_gym.plane.env import (
@@ -24,10 +22,13 @@ from target_gym.plane.env import (
 # imported it, and once the aircraft renderers were unified it was drawing in a
 # style that matched nothing else shipped, so it is gone.
 from target_gym.plane.rendering_console import _render
-from target_gym.utils import compute_norm_from_coordinates, save_video
+from target_gym.utils import compute_norm_from_coordinates
+from target_gym.video import SavesVideo
 
 
-class Airplane2D(RegistryExperts, environment.Environment[PlaneState, PlaneParams]):
+class Airplane2D(
+    RegistryExperts, SavesVideo, environment.Environment[PlaneState, PlaneParams]
+):
     """
     JAX-compatible 2D airplane environment.
 
@@ -59,7 +60,8 @@ class Airplane2D(RegistryExperts, environment.Environment[PlaneState, PlaneParam
 
     @property
     def default_params(self) -> PlaneParams:
-        return PlaneParams()
+        # The scored configuration of ``plane``, the altitude hold.
+        return PlaneParams(max_steps_in_episode=280)
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
@@ -94,24 +96,11 @@ class Airplane2D(RegistryExperts, environment.Environment[PlaneState, PlaneParam
         )
         # A crash is part of the kernel: the step is charged the trip cost and
         # the flight restarts at once, or is lost (``terminated``) with
-        # ``params.continuing = False`` (``base.failure_kernel``).
-        new_state, tripped, scored, terminated = failure_kernel(
-            self, key, state, new_state, params
+        # ``params.continuing = False`` (``base.finish_step``).
+        new_state, reward, terminated, info = finish_step(
+            self, key, state, new_state, params, metrics=metrics
         )
-        reward = self.compute_reward(scored, params)
-        obs = self.get_obs(new_state, params)
-        return (
-            obs,
-            new_state,
-            reward,
-            terminated,
-            {
-                "metrics": metrics,
-                "last_state": new_state,
-                "tripped": tripped,
-                "trip_cost": charged_trip_cost(tripped, params),
-            },
-        )
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
     def is_terminated(self, state: PlaneState, params: PlaneParams) -> jax.Array:
         """Natural termination only; the time limit is gymnax's ``is_truncated``."""
@@ -124,7 +113,7 @@ class Airplane2D(RegistryExperts, environment.Environment[PlaneState, PlaneParam
         Reset the environment using JAX random keys
         """
         if params is None:
-            params = PlaneParams(max_steps_in_episode=Airplane2D.max_steps)
+            params = self.default_params
         key, altitude_key, target_key = jax.random.split(key, 3)
 
         initial_x = 0.0
@@ -209,45 +198,6 @@ class Airplane2D(RegistryExperts, environment.Environment[PlaneState, PlaneParam
         frames, screen, clock = self.render_plane(screen, state, params, frames, clock)
         return frames, screen, clock
 
-    def save_video(
-        self,
-        select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        seed: int,
-        params=None,
-        folder="videos",
-        episode_index=0,
-        FPS=60,
-        format="mp4",
-        save_trajectory: bool = False,
-    ):
-        return save_video(
-            self,
-            select_action,
-            folder,
-            episode_index,
-            FPS,
-            params,
-            seed=seed,
-            format=format,
-            save_trajectory=save_trajectory,
-        )
-
-    def make_mpc(self, params=None, **kwargs):
-        """Return the 2D aircraft's gradient MPC (``plane.experts.make_plane_mpc``).
-
-        On ``plane`` and ``plane_sine`` it plans power and stick until the
-        aircraft has captured its altitude, then plans the stick alone with
-        the throttle on the cascaded PID's airspeed loop (``PlaneHandoverMPC``
-        and ``_TASK_SETTINGS`` in plane/experts.py). On ``plane_energy``,
-        under reward version 1, or with a caller's own ``objective_fn``, it
-        plans both power and stick throughout.
-        """
-        from target_gym.plane.experts import make_plane_mpc
-
-        if params is None:
-            params = self.default_params
-        return make_plane_mpc(self, params, **kwargs)
-
     def action_space(self, params: PlaneParams | None = None) -> spaces.Discrete:
         """Action space of the environment."""
         return spaces.Box(
@@ -270,72 +220,75 @@ class Airplane2D(RegistryExperts, environment.Environment[PlaneState, PlaneParam
         )
 
 
-def run_timesteps(key, env, env_params, n_timesteps=10_000, action_type="constant"):
-    """Run n_timesteps in the env with constant or random action."""
-    # Reset environment
-    key_reset, key = jax.random.split(key)
-    obs, state = env.reset(key_reset, env_params)
+class PlaneEnergy(Airplane2D):
+    """``plane_energy``: the 2D aircraft on an altitude staircase, scored on
+    altitude *and* airspeed.
 
-    def step_fn(carry, _):
-        _obs, state, key = carry
-        key, key_step, key_action = jax.random.split(key, 3)
+    With two actuators against one scored objective a controller could trade
+    airspeed for altitude for free. Scoring both forces the trade,
+    repeatedly. The pure staircase is ``PlaneParams(speed_weight=0.0)``.
 
-        # Choose action
-        if action_type == "constant":
-            action = jnp.array([0.8, 0.0])
-        else:  # random
-            action = jax.random.uniform(key_action, (2,), minval=-1.0, maxval=1.0)
+    Action (2,): [power, stick], raw in [-1, 1]
+    """
 
-        # Step environment
-        next_obs, next_state, reward, done, _ = env.step(
-            key_step, state, action, env_params
+    registry_name: str = "plane_energy"
+
+    @property
+    def default_params(self) -> PlaneParams:
+        # The scored configuration. ``c_hold`` is the PID's hold-phase
+        # airspeed deviation on this task, and ``e_floor`` the oracle's
+        # lowest per-seed altitude hold between ladder steps, 1.198 m
+        # rounded; rho is its 1.18 m in floor units
+        # (`scripts/measure_hold.py`).
+        rho = (1.1773 / 1.20) ** 2
+        return PlaneParams(
+            max_steps_in_episode=1200,
+            target_pattern=1,
+            target_amplitude=900.0,
+            target_steps=8,
+            speed_weight=0.5,
+            c_hold=5.23,
+            e_floor=1.20,
+            rho_floor_tracking=rho,
+            rho_floor=rho,
+            failure_cost=2.0 * (12192.0 / 1.20) ** 2,
         )
 
-        carry = (next_obs, next_state, key)
-        return carry, (reward, done)
 
-    # Rollout with lax.scan
-    (_, _, _), (rewards, dones) = jax.lax.scan(
-        step_fn, (obs, state, key), xs=None, length=n_timesteps
-    )
-    return rewards, dones
+class PlaneSine(Airplane2D):
+    """``plane_sine``: the 2D aircraft tracking a sinusoidal altitude, a probe
+    of the closed loop's bandwidth.
 
+    Action (2,): [power, stick], raw in [-1, 1]
+    """
 
-# JIT-compiled version
-run_timesteps_jit = jax.jit(run_timesteps, static_argnums=(1, 2, 3, 4))
+    registry_name: str = "plane_sine"
 
-if __name__ == "__main__":
-    env = Airplane2D()
-    seed = 42
-
-    env_params = PlaneParams(
-        max_steps_in_episode=1_000,
-        target_altitude_range=(5000, 5000),
-        initial_altitude_range=(5000, 5000),
-    )
-    action = (0.5, 0.0)
-    env.save_video(
-        lambda _: action,
-        seed,
-        folder="videos",
-        episode_index=0,
-        params=env_params,
-        format="gif",
-        save_trajectory=True,
-    )
-
-    # import time
-
-    # import numpy as np
-
-    # # Benchmark parameters
-    # env = Airplane2D()
-    # env_params = PlaneParams(max_steps_in_episode=10_000)
-
-    # print("---- Constant action ----")
-    # benchmark(
-    #     env, env_params, n_timesteps=100_000, n_episodes=10, action_type="constant"
-    # )
-
-    # print("\n---- Random action ----")
-    # benchmark(env, env_params, n_timesteps=100_000, n_episodes=10, action_type="random")
+    @property
+    def default_params(self) -> PlaneParams:
+        # The scored configuration. 480 steps is two periods of the 240 s
+        # sinusoid: the first sheds the initial transient, the second is what
+        # a bandwidth probe reads.
+        #
+        # The amplitude is set by the climb rate: amplitude A and period T
+        # command a peak vertical rate of 2*pi*A/T. 300 m peaks at 7.9 m/s,
+        # inside the aircraft's 14.6 m/s best sustained climb, so the response
+        # is limited by the closed loop, not by the actuator saturating.
+        #
+        # ``c_hold`` is the PID's hold-phase airspeed deviation on the
+        # sinusoid. The altitude floor is an earlier oracle's hold, kept
+        # because the 1 m barometric resolution is within 1.5x of it; rho is
+        # the current oracle's lowest per-seed hold, 0.5285 m, in floor units
+        # (`scripts/measure_hold.py`).
+        rho = (0.5285 / 1.26) ** 2
+        return PlaneParams(
+            max_steps_in_episode=480,
+            target_pattern=3,
+            target_amplitude=300.0,
+            target_period=240.0,
+            c_hold=8.15,
+            e_floor=1.26,
+            rho_floor_tracking=rho,
+            rho_floor=rho,
+            failure_cost=2.0 * (12192.0 / 1.26) ** 2,
+        )

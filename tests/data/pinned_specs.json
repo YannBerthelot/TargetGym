@@ -23,7 +23,7 @@
       "target_gym.plane.experts",
       "make_plane_mpc"
     ],
-    "test_params": {
+    "scored_overrides": {
       "max_steps_in_episode": 280
     },
     "tuned_gains_key": "plane",
@@ -52,10 +52,10 @@
       "target_gym.plane.env",
       "PlaneParams"
     ],
-    "env_factory": "_plane",
+    "env_factory": "_plane_energy",
     "env_class": [
       "target_gym.plane.env_jax",
-      "Airplane2D"
+      "PlaneEnergy"
     ],
     "make_pid": [
       "_pid.<locals>.make",
@@ -67,17 +67,17 @@
       "target_gym.plane.experts",
       "make_plane_mpc"
     ],
-    "test_params": {
+    "scored_overrides": {
       "max_steps_in_episode": 1200,
-      "target_pattern": 1,
-      "target_amplitude": 900.0,
-      "target_steps": 8,
-      "speed_weight": 0.5,
-      "c_hold": 5.23,
       "e_floor": 1.2,
+      "c_hold": 5.23,
+      "failure_cost": 206451200.0,
       "rho_floor_tracking": 0.9625245069444446,
       "rho_floor": 0.9625245069444446,
-      "failure_cost": 206451200.0
+      "speed_weight": 0.5,
+      "target_pattern": 1,
+      "target_amplitude": 900.0,
+      "target_steps": 8
     },
     "tuned_gains_key": "plane",
     "gains_keys": [],
@@ -105,10 +105,10 @@
       "target_gym.plane.env",
       "PlaneParams"
     ],
-    "env_factory": "_plane",
+    "env_factory": "_plane_sine",
     "env_class": [
       "target_gym.plane.env_jax",
-      "Airplane2D"
+      "PlaneSine"
     ],
     "make_pid": [
       "_pid.<locals>.make",
@@ -120,16 +120,15 @@
       "target_gym.plane.experts",
       "make_plane_mpc"
     ],
-    "test_params": {
+    "scored_overrides": {
       "max_steps_in_episode": 480,
-      "target_pattern": 3,
-      "target_amplitude": 300.0,
-      "target_period": 240.0,
-      "c_hold": 8.15,
       "e_floor": 1.26,
+      "c_hold": 8.15,
+      "failure_cost": 187257324.26303852,
       "rho_floor_tracking": 0.1759336419753086,
       "rho_floor": 0.1759336419753086,
-      "failure_cost": 187257324.26303852
+      "target_pattern": 3,
+      "target_amplitude": 300.0
     },
     "tuned_gains_key": "plane",
     "gains_keys": [],
@@ -172,12 +171,12 @@
       "target_gym.plane3d.experts",
       "make_plane3d_mpc"
     ],
-    "test_params": {
+    "scored_overrides": {
       "max_steps_in_episode": 200,
       "e_floor_altitude": 1.0,
+      "failure_cost": 297289728.0,
       "rho_floor_tracking": 0.45360830046901834,
-      "rho_floor": 0.45360830046901834,
-      "failure_cost": 297289728.0
+      "rho_floor": 0.45360830046901834
     },
     "tuned_gains_key": "plane3d_heading",
     "gains_keys": [],
@@ -221,15 +220,14 @@
       "target_gym.plane3d.experts",
       "make_plane3d_mpc"
     ],
-    "test_params": {
+    "scored_overrides": {
       "max_steps_in_episode": 300,
       "e_floor_altitude": 1.0,
-      "e_floor_path": 3.0,
+      "failure_cost": 297289728.0,
       "rho_floor_tracking": 0.4656965077777777,
-      "rho_floor": 0.4656965077777777,
-      "failure_cost": 297289728.0
+      "rho_floor": 0.4656965077777777
     },
-    "tuned_gains_key": "plane3d_circle",
+    "tuned_gains_key": null,
     "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
@@ -271,15 +269,14 @@
       "target_gym.plane3d.experts",
       "make_plane3d_mpc"
     ],
-    "test_params": {
+    "scored_overrides": {
       "max_steps_in_episode": 650,
       "e_floor_altitude": 1.0,
-      "e_floor_path": 3.0,
+      "failure_cost": 297289728.0,
       "rho_floor_tracking": 0.48693653444444446,
-      "rho_floor": 0.48693653444444446,
-      "failure_cost": 297289728.0
+      "rho_floor": 0.48693653444444446
     },
-    "tuned_gains_key": "plane3d_racetrack",
+    "tuned_gains_key": null,
     "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
@@ -321,14 +318,13 @@
       "target_gym.plane3d.experts",
       "make_plane3d_mpc"
     ],
-    "test_params": {
+    "scored_overrides": {
       "max_steps_in_episode": 400,
-      "e_floor_path": 3.0,
+      "failure_cost": 88888888.8888889,
       "rho_floor_tracking": 0.1840696011111111,
-      "rho_floor": 0.1840696011111111,
-      "failure_cost": 88888888.8888889
+      "rho_floor": 0.1840696011111111
     },
-    "tuned_gains_key": "plane3d_figure8",
+    "tuned_gains_key": null,
     "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
@@ -370,7 +366,7 @@
       "target_gym.patrol.experts",
       "make_patrol_mpc"
     ],
-    "test_params": {
+    "scored_overrides": {
       "max_steps_in_episode": 200
     },
     "tuned_gains_key": "patrol",
@@ -411,7 +407,7 @@
       "target_gym.patrol.experts",
       "make_patrol_bearing_only_mpc"
     ],
-    "test_params": {
+    "scored_overrides": {
       "max_steps_in_episode": 200
     },
     "tuned_gains_key": "patrol",
@@ -452,7 +448,7 @@
       "target_gym.pc_gym.cstr.experts",
       "make_cstr_mpc"
     ],
-    "test_params": {},
+    "scored_overrides": {},
     "tuned_gains_key": "cstr",
     "gains_keys": [],
     "baselines_note": null,
@@ -487,7 +483,7 @@
       "target_gym.pc_gym.first_order.experts",
       "make_first_order_mpc"
     ],
-    "test_params": {},
+    "scored_overrides": {},
     "tuned_gains_key": "first_order",
     "gains_keys": [],
     "baselines_note": null,
@@ -522,7 +518,7 @@
       "target_gym.pc_gym.four_tank.experts",
       "make_four_tank_mpc"
     ],
-    "test_params": {},
+    "scored_overrides": {},
     "tuned_gains_key": "four_tank",
     "gains_keys": [],
     "baselines_note": null,
@@ -557,7 +553,7 @@
       "target_gym.pc_gym.ph_neutralization.experts",
       "make_ph_mpc"
     ],
-    "test_params": {},
+    "scored_overrides": {},
     "tuned_gains_key": "ph_neutralization",
     "gains_keys": [],
     "baselines_note": null,
@@ -596,7 +592,7 @@
       "target_gym.pc_gym.distillation.experts",
       "make_distillation_mpc"
     ],
-    "test_params": {},
+    "scored_overrides": {},
     "tuned_gains_key": "distillation",
     "gains_keys": [],
     "baselines_note": null,
@@ -635,7 +631,7 @@
       "target_gym.glass_furnace.experts",
       "make_glass_furnace_mpc"
     ],
-    "test_params": {},
+    "scored_overrides": {},
     "tuned_gains_key": "glass_furnace",
     "gains_keys": [],
     "baselines_note": null,
@@ -674,7 +670,7 @@
       "target_gym.reactor.experts",
       "make_reactor_mpc"
     ],
-    "test_params": {
+    "scored_overrides": {
       "max_steps_in_episode": 864
     },
     "tuned_gains_key": "reactor",
@@ -711,7 +707,7 @@
       "target_gym.hvac.experts",
       "make_hvac_mpc"
     ],
-    "test_params": {},
+    "scored_overrides": {},
     "tuned_gains_key": "hvac",
     "gains_keys": [],
     "baselines_note": null,
@@ -748,7 +744,7 @@
       "target_gym.cement_kiln.experts",
       "make_cement_kiln_mpc"
     ],
-    "test_params": {},
+    "scored_overrides": {},
     "tuned_gains_key": "cement_kiln",
     "gains_keys": [],
     "baselines_note": null,
@@ -787,7 +783,7 @@
       "target_gym.boiler_drum.experts",
       "make_boiler_drum_mpc"
     ],
-    "test_params": {},
+    "scored_overrides": {},
     "tuned_gains_key": "boiler_drum",
     "gains_keys": [],
     "baselines_note": null,
@@ -826,7 +822,7 @@
       "target_gym.energy.wind_turbine.experts",
       "make_wind_turbine_mpc"
     ],
-    "test_params": {},
+    "scored_overrides": {},
     "tuned_gains_key": "wind_turbine",
     "gains_keys": [],
     "baselines_note": null,
@@ -865,7 +861,7 @@
       "target_gym.energy.battery.experts",
       "make_battery_mpc"
     ],
-    "test_params": {},
+    "scored_overrides": {},
     "tuned_gains_key": "battery",
     "gains_keys": [],
     "baselines_note": null,

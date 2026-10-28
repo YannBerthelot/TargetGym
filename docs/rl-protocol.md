@@ -31,7 +31,8 @@ A number is only comparable to the PID and MPC beside it if it was produced
 under the same conditions:
 
 - the same reward, unmodified — no auxiliary shaping, no reward scaling;
-- the same episode length, the environment's own `test_params`;
+- the same episode length, the environment's scored configuration
+  (`env.default_params`);
 - the same evaluation episodes, so differences can be paired per seed;
 - a deterministic policy at evaluation (the distribution's mean action), because
   the PID and MPC are deterministic and a stochastic policy would be scored on a

@@ -1,13 +1,11 @@
-import os
-from typing import Callable, Tuple
+from typing import Tuple
 
 import chex
 import jax
 import jax.numpy as jnp
-import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.base import canonical_reset, finish_step
 from target_gym.expert_access import RegistryExperts
 from target_gym.glass_furnace.env import (
     FUEL_DEAD_TIME_STEPS,
@@ -23,11 +21,13 @@ from target_gym.glass_furnace.env import (
     get_target_from_schedule,
 )
 from target_gym.glass_furnace.rendering import _render
-from target_gym.utils import save_video
+from target_gym.video import SavesVideo
 
 
 class GlassFurnace(
-    RegistryExperts, environment.Environment[GlassFurnaceState, GlassFurnaceParams]
+    RegistryExperts,
+    SavesVideo,
+    environment.Environment[GlassFurnaceState, GlassFurnaceParams],
 ):
     """Regenerative glass furnace; six of nine states are hidden.
 
@@ -80,22 +80,11 @@ class GlassFurnace(
 
         # A trip is part of the kernel: the step is charged the trip cost and
         # the plant restarts at once, or is lost (``terminated``) with
-        # ``params.continuing = False`` (``base.failure_kernel``).
-        new_state, tripped, scored, terminated = failure_kernel(
+        # ``params.continuing = False`` (``base.finish_step``).
+        new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        reward = compute_reward(scored, params, xp=jnp)
-        return (
-            self.get_obs(new_state),
-            new_state,
-            reward,
-            terminated,
-            {
-                "last_state": new_state,
-                "tripped": tripped,
-                "trip_cost": charged_trip_cost(tripped, params),
-            },
-        )
+        return self.get_obs(new_state), new_state, reward, terminated, info
 
     def get_obs(self, state: GlassFurnaceState, params: GlassFurnaceParams = None):
         if params is None:
@@ -202,35 +191,6 @@ class GlassFurnace(
             -inf, inf, len(GlassFurnaceState.__dataclass_fields__), dtype=jnp.float32
         )
 
-    def make_mpc(self, params=None, **kwargs):
-        """Return a CasADi MPC oracle for crown-temperature tracking."""
-        from target_gym.glass_furnace.experts import make_glass_furnace_mpc
-
-        if params is None:
-            params = self.default_params
-        return make_glass_furnace_mpc(self, params, **kwargs)
-
-    def save_video(
-        self,
-        select_action: Callable[[jnp.ndarray], jnp.ndarray],
-        seed: int,
-        params=None,
-        folder="videos",
-        episode_index=0,
-        FPS=60,
-        format="mp4",
-    ):
-        return save_video(
-            self,
-            select_action,
-            folder,
-            episode_index,
-            FPS,
-            params,
-            seed=seed,
-            format=format,
-        )
-
     def render(
         self,
         screen,
@@ -243,18 +203,3 @@ class GlassFurnace(
             screen, state, params, frames, clock
         )
         return frames, screen, clock
-
-
-if __name__ == "__main__":
-    env = GlassFurnace()
-    seed = 42
-    env_params = GlassFurnaceParams(max_steps_in_episode=500)
-    os.makedirs("videos/glass_furnace", exist_ok=True)
-    env.save_video(
-        lambda o: np.random.uniform(-1, 1),
-        seed,
-        folder="videos/glass_furnace",
-        episode_index=0,
-        params=env_params,
-        format="gif",
-    )

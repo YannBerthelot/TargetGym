@@ -24,7 +24,6 @@ Usage
 from __future__ import annotations
 
 import argparse
-import functools
 import inspect
 import os
 from typing import Callable, Sequence
@@ -39,7 +38,16 @@ import numpy as np
 from tqdm import tqdm
 
 from target_gym.registry import REGISTRY
-from target_gym.utils import truncate_colormap
+
+
+def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
+    """Return a truncated colormap from minval to maxval."""
+    new_cmap = cm.colors.LinearSegmentedColormap.from_list(
+        f"trunc({cmap.name},{minval:.2f},{maxval:.2f})",
+        cmap(np.linspace(minval, maxval, n)),
+    )
+    return new_cmap
+
 
 FIGURE_DIR = "figures"
 VIDEO_DIR = "videos"
@@ -48,13 +56,6 @@ VIDEO_DIR = "videos"
 # ---------------------------------------------------------------------------
 # Generic rollout machinery
 # ---------------------------------------------------------------------------
-
-
-@functools.lru_cache(maxsize=None)
-def _jitted_step(env):
-    """One jitted ``step_env`` per environment, reused across rollouts, so the
-    executable compiles once per process instead of once per rollout."""
-    return jax.jit(env.step_env)
 
 
 def _wants_state(policy: Callable) -> bool:
@@ -84,52 +85,53 @@ def _action_bounds(env, params) -> tuple[np.ndarray, np.ndarray]:
     )
 
 
+def one_episode(spec, params, policy: Callable, seed: int = 0, task=None) -> dict:
+    """``benchmark.run_policy``'s one-episode run of ``policy`` on
+    ``PRNGKey(seed)``, the loop every helper here runs.
+
+    ``policy`` is called as ``policy(obs)`` or, when it accepts two arguments,
+    ``policy(obs, state)`` -- the MPC baselines need the full state. It gets
+    the NumPy view of the observation: given a JAX array, every operation in a
+    host PID is a separate un-jitted dispatch. ``task`` overrides the
+    :class:`~target_gym.benchmark.TaskInfo` (``eval.run_episode``'s band).
+    """
+    from target_gym.benchmark import CallablePolicy, run_policy, task_info
+
+    env = spec.make_env()
+    wants_state = _wants_state(policy)
+    call = policy if wants_state else (lambda obs, state: policy(obs))
+    adapter = CallablePolicy(lambda _task: call, name="policy", oracle=wants_state)
+    task = task_info(spec.name, env, params, 1) if task is None else task
+    return run_policy(adapter, env, params, task, jax.random.PRNGKey(seed))
+
+
+def _before_each_step(out: dict, key: str) -> np.ndarray:
+    """``(n, T, k)``: the series as each step saw it, the reset's first."""
+    return np.concatenate([out[key + "0"][:, None], out[key][:, :-1]], axis=1)
+
+
 def rollout(spec, params, policy: Callable, seed: int = 0, return_trips: bool = False):
-    """Run one episode, returning tracked values, targets and rewards.
+    """Run one episode (:func:`one_episode`), returning tracked values,
+    targets and rewards.
 
     A trip never ends the window (``base.failure_kernel``): the step is
     charged the trip cost and the plant restarts. With ``return_trips`` the
     number of trips in the window is returned as a fourth value.
 
-    ``policy`` is called as ``policy(obs)`` or, when it accepts two arguments,
-    ``policy(obs, state)`` -- the MPC baselines need the full state.
-
     Returns
     -------
-    values : ``(T, n_tracked)`` array of the tracked variable(s)
-    targets : ``(T, n_tracked)`` array of their setpoint(s)
+    values : ``(T, n_tracked)`` array of the tracked variable(s) before each step
+    targets : ``(T, n_tracked)`` array of their setpoint(s) before each step
     rewards : ``(T,)`` array
     """
-    env = spec.make_env()
-    value_idx = _as_tuple(env.obs_value_index)
-    target_idx = _as_tuple(env.obs_target_index)
-
-    key = jax.random.PRNGKey(seed)
-    obs, state = env.reset_env(key, params)
-    step = _jitted_step(env)
-
-    values, targets, rewards = [], [], []
-    trips = 0
-    # Loop on the environment's own clock, so a plant cannot be scored past
-    # its time limit.
-    while int(state.time) < int(params.max_steps_in_episode):
-        obs_np = np.asarray(obs)
-        values.append(obs_np[list(value_idx)])
-        targets.append(obs_np[list(target_idx)])
-        # Hand the policy the NumPy view: given a JAX array, every operation in
-        # a host PID is a separate un-jitted dispatch, several times the step's
-        # own cost.
-        action = policy(obs_np, state) if _wants_state(policy) else policy(obs_np)
-        obs, state, reward, terminated, info = step(
-            key, state, jnp.atleast_1d(jnp.asarray(action)), params
-        )
-        rewards.append(float(reward))
-        trips += int(bool(info.get("tripped", False)))
-        if bool(terminated):
-            break
+    out = one_episode(spec, params, policy, seed)
+    L = int(out["length"][0])
+    values = _before_each_step(out, "value")[0, :L]
+    targets = _before_each_step(out, "target")[0, :L]
+    rewards = out["reward"][0, :L]
     if return_trips:
-        return np.array(values), np.array(targets), np.array(rewards), trips
-    return np.array(values), np.array(targets), np.array(rewards)
+        return values, targets, rewards, int(out["tripped"][0, :L].sum())
+    return values, targets, rewards
 
 
 def baseline_policy(spec, kind: str, params=None) -> Callable | None:
@@ -168,8 +170,29 @@ def baseline_policy(spec, kind: str, params=None) -> Callable | None:
     raise ValueError(f"kind must be 'pid' or 'mpc', not {kind!r}")
 
 
+class _BatchedPlanner:
+    """A ``GradientMPC`` as a benchmark policy, its solve vmapped over the
+    episodes. The carry is the warm start, shifted by one step with the last
+    action repeated, exactly as ``GradientMPC.step`` does for one episode."""
+
+    name = "mpc"
+    oracle = True
+
+    def __init__(self, mpc):
+        self.mpc = mpc
+        self._optimize = jax.jit(jax.vmap(mpc._optimize, in_axes=(0, 0)))
+
+    def reset(self, key, obs, task):
+        return jnp.zeros((task.n_episodes, self.mpc.horizon, self.mpc.action_dim))
+
+    def act(self, carry, obs, t, state=None):
+        plan = self._optimize(jnp.concatenate([carry[:, 1:], carry[:, -1:]], 1), state)
+        return plan[:, 0], plan
+
+
 def rollout_mpc_batch(spec, params, n_seeds: int):
-    """Run ``n_seeds`` MPC episodes at once, vmapped over the seed axis.
+    """Run ``n_seeds`` MPC episodes at once, vmapped over the seed axis; seed
+    ``s`` is the episode :func:`rollout` runs on it.
 
     Only for ``GradientMPC``, whose ``_optimize(actions_init, state)`` is a
     pure function and vmaps as it stands; the CasADi planners call IPOPT,
@@ -179,43 +202,18 @@ def rollout_mpc_batch(spec, params, n_seeds: int):
     leading seed axis, matching :func:`rollout`, and the trips per seed
     (``info["tripped"]``; a trip never ends the window).
     """
-    env = spec.make_env()
+    from target_gym.benchmark import run_policy, task_info
     from target_gym.experts.mpc import plan_params
 
-    mpc = spec.make_mpc(env, plan_params(spec, params))
-    value_idx = _as_tuple(env.obs_value_index)
-    target_idx = _as_tuple(env.obs_target_index)
-    n_steps = int(params.max_steps_in_episode)
-
-    keys = jnp.stack([jax.random.PRNGKey(s) for s in range(n_seeds)])
-    obs, state = jax.jit(jax.vmap(env.reset_env, in_axes=(0, None)))(keys, params)
-    actions = jnp.zeros((n_seeds, mpc.horizon, mpc.action_dim))
-
-    optimize = jax.jit(jax.vmap(mpc._optimize, in_axes=(0, 0)))
-    step = jax.jit(jax.vmap(env.step_env, in_axes=(0, 0, 0, None)))
-
-    values, targets, rewards = [], [], []
-    trips = jnp.zeros((n_seeds,), dtype=jnp.int32)
-    for _ in range(n_steps):
-        values.append(obs[:, list(value_idx)])
-        targets.append(obs[:, list(target_idx)])
-        # Shift the warm start by one and repeat the last action, exactly as
-        # ``GradientMPC.step`` does for a single episode.
-        actions = optimize(
-            jnp.concatenate([actions[:, 1:], actions[:, -1:]], axis=1), state
-        )
-        u = actions[:, 0]
-        if mpc.action_dim == 1:
-            u = u[:, 0]
-        obs, state, reward, _terminated, info = step(keys, state, u, params)
-        rewards.append(reward)
-        trips = trips + jnp.asarray(info["tripped"], dtype=jnp.int32)
-
+    env = spec.make_env()
+    planner = _BatchedPlanner(spec.make_mpc(env, plan_params(spec, params)))
+    task = task_info(spec.name, env, params, n_seeds)
+    out = run_policy(planner, env, params, task, seeds=range(n_seeds))
     return (
-        np.asarray(jnp.stack(values, axis=1)),
-        np.asarray(jnp.stack(targets, axis=1)),
-        np.asarray(jnp.stack(rewards, axis=1)),
-        np.asarray(trips),
+        _before_each_step(out, "value"),
+        _before_each_step(out, "target"),
+        out["reward"],
+        out["tripped"].sum(axis=1),
     )
 
 

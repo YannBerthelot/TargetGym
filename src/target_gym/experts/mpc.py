@@ -522,6 +522,10 @@ def casadi_step_map(velocity, nx: int, nu: int, delta_t: float, method: str):
     is the environment's step in float64, wherever the plant is a
     first-order ODE integrated by that function.
     """
+    if not _CASADI_AVAILABLE:
+        raise ImportError(
+            "casadi is required for casadi_step_map: pip install 'target-gym[mpc]'"
+        )
     if "euler" in method:
         order, n_sub = "euler", int(method.split("_")[1])
     elif "rk" in method:

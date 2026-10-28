@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 from flax import struct
 
-from target_gym.experts.pid import Controller, _g
+from target_gym.experts.pid import Controller, gain
 
 
 class ScheduleFeedforward:
@@ -132,8 +132,8 @@ def battery_pid_step(params, state, obs, xp=jnp):
 def make_battery_pid_controller() -> Controller:
     """The shipped battery PID as a :class:`Controller`, gains as tuned."""
     params = BatteryPIDParams(
-        Kp=_g("battery", "Kp", 0.5),
-        Ki=_g("battery", "Ki", 0.02),
-        guard_margin=_g("battery", "guard_margin", 0.12),
+        Kp=gain("battery", "Kp", 0.5),
+        Ki=gain("battery", "Ki", 0.02),
+        guard_margin=gain("battery", "guard_margin", 0.12),
     )
     return Controller(params, BatteryPIDState(integral=0.0), battery_pid_step)

@@ -8,11 +8,10 @@ import pytest
 from target_gym.utils import (
     compute_episode_returns_vectorized,
     compute_norm_from_coordinates,
-    convert_frames_from_gym_to_wandb,
     convert_raw_action_to_range,
     run_n_steps,
-    save_video,
 )
+from target_gym.video import convert_frames_from_gym_to_wandb, save_video
 
 
 # -------------------------------
@@ -115,16 +114,8 @@ def dummy_action():
     return _action
 
 
-def test_save_video_creates_file(env, dummy_action, monkeypatch):
+def test_save_video_creates_file(env, dummy_action):
     with tempfile.TemporaryDirectory() as tmpdir:
-        original_join = os.path.join  # save original
-        monkeypatch.setattr(
-            "target_gym.utils.os.path.join",
-            lambda *args: original_join(
-                tmpdir, *args[1:]
-            ),  # skip the first arg (folder)
-        )
-
         video_path = save_video(
             env=env, select_action=dummy_action, folder=tmpdir, episode_index=0, FPS=1
         )

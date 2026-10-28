@@ -68,18 +68,9 @@ dependencies = [
     "pandas>=2.0",
     "matplotlib>=3.8.1",
     # Used directly by the gallery-clip tooling and the patrol runner. It
-    # arrives transitively through matplotlib and moviepy anyway, but an
+    # arrives transitively through matplotlib anyway, but an
     # import in our own code is our own dependency to declare.
     "pillow>=10.0",
-    "moviepy>=2.2.1",
-    # pygame's last release (2.6.1, 2024) ships wheels only through CPython
-    # 3.13; on 3.14 it builds from source and its font module comes up broken,
-    # which takes every renderer down with it. pygame-ce is the maintained
-    # fork of the same code under the same ``import pygame`` namespace, and it
-    # does publish 3.14 wheels. Split by version so the interpreters that
-    # already work keep the implementation they were tested against.
-    "pygame>=2.6.1; python_version < '3.14'",
-    "pygame-ce>=2.5.8; python_version >= '3.14'",
     "tqdm>=4.66",
 ]
 
@@ -92,6 +83,21 @@ mpc = [
     "casadi>=3.7.2,<3.8",
     "do-mpc>=5.1.1,<6",
 ]
+# Videos (moviepy) and the aircraft dashboards (pygame). Both are imported
+# only when a frame is drawn or a video written, and ``render_kit.render_extra``
+# names this extra when they are missing.
+render = [
+    "moviepy>=2.2.1",
+    # pygame's last release (2.6.1, 2024) ships wheels only through CPython
+    # 3.13; on 3.14 it builds from source and its font module comes up broken,
+    # which takes every renderer down with it. pygame-ce is the maintained
+    # fork of the same code under the same ``import pygame`` namespace, and it
+    # does publish 3.14 wheels. Split by version so the interpreters that
+    # already work keep the implementation they were tested against.
+    "pygame>=2.6.1; python_version < '3.14'",
+    "pygame-ce>=2.5.8; python_version >= '3.14'",
+]
+all = ["target-gym[mpc,render]"]
 
 [project.urls]
 # PyPI renders these as a labelled sidebar and recognises these key names, so
@@ -132,8 +138,9 @@ agent = [
 dev = [
     { include-group = "test" },
     { include-group = "lint" },
-    # The oracles' tests and baseline recording need the optional extra.
-    "target-gym[mpc]",
+    # The oracles' tests, baseline recording and the rendering tests need the
+    # optional extras.
+    "target-gym[all]",
     "pre-commit>=3.5.0",
     # scripts/record_baselines.py sizes its worker pool against available
     # memory: one planner per core exhausted RAM and sent the machine

@@ -14,7 +14,7 @@ from target_gym.experts.mpc import (
     _is_v1,
     _v2_objective,
 )
-from target_gym.experts.pid import Controller, _load_gains
+from target_gym.experts.pid import Controller, load_gains
 
 
 def _cement_kiln_objective(state, params):
@@ -170,7 +170,7 @@ def make_cement_kiln_pid_controller() -> Controller:
     from target_gym.cement_kiln.env import CementKilnParams
 
     pr = CementKilnParams()
-    _p = _load_gains().get("cement_kiln", {})
+    _p = load_gains().get("cement_kiln", {})
     params = CementKilnPIDParams(
         Kp_outer=float(_p.get("Kp_outer", 12000.0)),
         Ki_outer=float(_p.get("Ki_outer", 6.0)),

@@ -32,6 +32,7 @@ Typical use::
     return rk.finish(fig), history
 """
 
+import importlib
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
 
@@ -40,6 +41,33 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+
+
+class _RenderExtra:
+    """A module of the ``[render]`` extra, imported on first use.
+
+    The aircraft panels draw with pygame. Importing it where they are defined
+    would make building an aircraft environment need the extra; through this,
+    only drawing one does, and a missing install says which extra to add.
+    """
+
+    def __init__(self, name: str):
+        self._name = name
+
+    def __getattr__(self, attr):
+        try:
+            module = importlib.import_module(self._name)
+        except ImportError as err:
+            raise ImportError(
+                f"rendering needs {self._name}: pip install 'target-gym[render]'"
+            ) from err
+        return getattr(module, attr)
+
+
+def render_extra(name: str):
+    """``name`` (``"pygame"``, ``"pygame.gfxdraw"``), imported on first use."""
+    return _RenderExtra(name)
+
 
 # ---------------------------------------------------------------------------
 # Palette -- shared with target_gym.reactor.rendering
