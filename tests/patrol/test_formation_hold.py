@@ -93,7 +93,7 @@ def _episode(name, seed):
     return tripped, rms, alt[b:].mean(), hdg[b:].mean()
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("seed", HELD_OUT)
 @pytest.mark.parametrize("name", ("patrol", "patrol_bearing_only"))
 def test_the_follower_holds_its_slot(name, seed):
@@ -102,7 +102,7 @@ def test_the_follower_holds_its_slot(name, seed):
     assert rms.max() <= SLOT_RMS_M, f"RMS slot error {rms.max():.2f} m"
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize(
     "seed", [pytest.param(s, marks=_LATE_REJOIN) if s == 208 else s for s in HELD_OUT]
 )
@@ -112,7 +112,7 @@ def test_every_formation_wingman_holds_its_slot(seed):
     assert rms.max() <= SLOT_RMS_M, f"RMS slot errors {np.round(rms, 2)} m"
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("seed", HELD_OUT)
 def test_the_formation_lead_holds_altitude_and_heading(seed):
     _, _, alt, hdg = _episode("formation", seed)

@@ -151,29 +151,34 @@ jobs:
       if: matrix.python-version == '3.13'
       run: make mypy
 
-    - name: Test with pytest
-      # -n auto spreads the suite over the runner's cores; tests/conftest.py
-      # pins each worker to one compute thread so they do not fight for them.
-      # --durations keeps the slowest tests visible, so the suite's cost stays
-      # something we notice rather than something that creeps.
+    # The small tier, then the medium one: docs/testing.md says what goes where.
+    # pyproject.toml's addopts run each on every core with --durations, which
+    # keeps the slowest tests visible; tests/conftest.py pins each worker to one
+    # compute thread so they do not fight for them. The -m filters are spelled
+    # out, rather than left to the default, so a records test never runs here.
+    - name: Small tests
       if: matrix.python-version != '3.13'
-      run: uv run pytest tests/ -q -n auto --durations=10 -m "not slow and not records"
+      run: uv run pytest -q -m "not medium and not large and not records"
 
-    - name: Test with pytest, enforcing coverage
-      # One column carries the coverage gate. pytest-cov aggregates the xdist
-      # workers, so this costs about twenty seconds more than the plain run
-      # rather than requiring a serial one.
-      #
-      # Three workers, not one per core, as a stopgap. This job's runner was
-      # shut down mid-suite four times on 2026-10-27, which is how a runner out
-      # of memory ends. Measured on 3.13 with coverage, each aircraft PID tuner
-      # smoke test peaks at 4.6 to 6.6 GB while it compiles, and the runner has
-      # 16 GB for four workers. Back to -n auto once those tests run apart from
-      # the fast tier.
+    # Medium tests start other processes, write videos, or compile an aircraft
+    # planner or tuner, which peaks at 2.5 to 5 GB. Two workers keep two of
+    # those inside the runner's 16 GB; four of them at once shut runners down
+    # on 2026-10-27.
+    - name: Medium tests
+      if: matrix.python-version != '3.13'
+      run: uv run pytest -q -m "medium and not records" -n 2
+
+    # One column carries the coverage gate, over both tiers: pytest-cov
+    # aggregates the xdist workers, and the second step appends to the first.
+    - name: Small tests, measuring coverage
       if: matrix.python-version == '3.13'
-      run: uv run pytest tests/ -q -n 3 --durations=10 -m "not slow and not records" --cov=target_gym
+      run: uv run pytest -q -m "not medium and not large and not records" --cov=target_gym --cov-report= --cov-fail-under=0
 
-  slow-test:
+    - name: Medium tests, enforcing coverage over both tiers
+      if: matrix.python-version == '3.13'
+      run: uv run pytest -q -m "medium and not records" -n 2 --cov=target_gym --cov-append
+
+  large-test:
     # Closed-loop contracts that still roll the plant out here: PID beats the
     # best constant action, states stay bounded and physical under extreme
     # actions, the regimes join. Minutes of rollouts that exercise the baselines
@@ -201,10 +206,14 @@ jobs:
     # now reads the MPC's cost from src/target_gym/data/protocol_results.json
     # under the same fingerprint, and runs in the fast job; one slow test
     # re-runs the protocol on the pH plant to keep the recording honest.
-    name: slow tests
+    #
+    # 60 minutes: on 2026-10-28 the job reached 87% at 24 minutes and the old
+    # 30-minute limit cancelled it, which reports nothing at all. It runs after
+    # a merge, so the limit never holds up a pull request.
+    name: large tests
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       UV_PYTHON: "3.13"
 
@@ -241,8 +250,8 @@ jobs:
     - name: Install dependencies
       run: uv sync --frozen --group dev
 
-    - name: Run slow closed-loop tests
-      run: uv run pytest tests/ -q -n auto --durations=10 -m "slow and not records"
+    - name: Run the large closed-loop tests
+      run: uv run pytest -q -m "large and not records"
 
   records:
     # The checks a `re-record` fixes, apart from the rest of the suite. They

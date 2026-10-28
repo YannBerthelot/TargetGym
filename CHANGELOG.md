@@ -569,6 +569,37 @@ than by commit.
 
 ### Fixed
 
+- **The time-in-band KPI held 12 tasks to no band.** The band read a single
+  `e_floor` from the params, so the tasks that give a tolerance per output
+  (the four 3D aircraft tasks, the two patrol tasks, formation, distillation,
+  boiler_drum, hvac) were held to an infinite one, and battery and
+  wind_turbine compared a floor in W with a power observed in MW. All 12 read
+  `time_in_band` 1.00
+  and `reach_fraction` 0.00, formation included, whose PID holds about 140 m
+  off. `benchmark.task_info` now gives each observed output its own floor,
+  in the observation's units (the kiln's free lime, observed in %, was held
+  100 times too tight), and `TaskInfo.in_band(obs)` applies it.
+  plane3d_figure8 declares none: its observed output is the altitude about
+  the path's mean, not a tracked error. The two KPIs in
+  `protocol_results.json` change at the next record; no fingerprint moves.
+- **The scorer missed small setpoint changes and invented cycles on drifting
+  targets.** A target change counted only above 5 % of the first target's
+  value, so the transient after a smaller step was scored as hold:
+  `glass_furnace` saw none of its four 4 C trims, and `compressor_surge` and
+  `plane_energy` missed some of theirs. The reactor's drifting demand crossed
+  the 5 % now and then and was cut into up to 22 cycles. A change is now a
+  step at least ten times the target's median step over the episode
+  (`benchmark.target_changes`), which catches every scheduled step and no
+  drift. The protocol rows of `glass_furnace`, `compressor_surge` and
+  `reactor` are re-recorded; no environment changed.
+- **An overshooting expert no longer passes its zero crossing off as its
+  settle.** `scripts/measure_hold.py` took the hold level over everything
+  after the burn-in, so a slow tail widened the band it settles into and the
+  first crossing counted. The level is now each cycle's second half, as
+  `target_gym.eval` takes it. Thirteen fixed settles moved (the aircraft by
+  the most: `plane_sine` 24 to 81, `plane3d_heading` 50 to 116), their
+  protocol rows are re-evaluated, and the CSTR's relay PID now holds 5.4e-7
+  instead of 0.54 once its recovery is out of the hold.
 - **`experts.mpc.casadi_step_map` without CasADi** raised a `NameError` on
   the missing module; it now raises an `ImportError` naming the `[mpc]` extra.
 - **`Airplane2D.reset_env(key)` without parameters** read a class attribute

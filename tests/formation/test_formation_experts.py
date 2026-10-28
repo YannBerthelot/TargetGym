@@ -77,7 +77,7 @@ def test_the_pid_team_flies_any_formation(k):
     assert action.shape == (3 * (k + 1),)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_pid_team_holds_the_formation():
     """A full test episode on two seeds: no trip, and every wingman ends
     within patrol's 60 m formation tolerance of its slot."""
@@ -132,7 +132,7 @@ def test_without_a_plan_the_oracle_is_the_seat_laws():
         )
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_oracle_holds_the_whole_formation():
     """A full test episode: no trip, and over the scored second half the lead
     holds its altitude and every wingman its slot to within a few floors,

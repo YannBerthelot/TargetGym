@@ -109,6 +109,7 @@ class NotInstalled:
 sys.meta_path.insert(0, NotInstalled())
 import jax
 import target_gym as tg
+from target_gym import registry
 from target_gym.experts.mpc import casadi_step_map
 
 built = [tg.make(name)[0] for name in tg.list_envs()]
@@ -123,14 +124,29 @@ for what, call in {
         call()
     except ImportError as err:
         errors[what] = str(err)
-print(json.dumps({"built": len(built), "errors": errors}))
+oracles, oracle_errors = 0, {}
+for name in tg.list_envs():
+    if not registry.get(name).has_mpc:
+        continue
+    try:
+        tg.make_oracle(name)
+        oracles += 1
+    except ImportError as err:
+        oracle_errors[name] = str(err)
+print(json.dumps({"built": len(built), "errors": errors,
+                  "oracles": oracles, "oracle_errors": oracle_errors}))
 """
 
 
+@pytest.mark.medium
 def test_a_core_install_builds_every_task_and_names_the_missing_extra():
     """pygame and moviepy are the ``[render]`` extra and CasADi the ``[mpc]``
     one. Without them every task still builds, and drawing a frame or
-    building a CasADi step map raises an ImportError naming the extra."""
+    building a CasADi step map raises an ImportError naming the extra.
+
+    ``make_oracle`` documents that nine tasks plan with CasADi: without it
+    those nine raise an ImportError naming the extra, and every other oracle
+    still builds."""
     out = subprocess.run(
         [sys.executable, "-c", _WITHOUT_EXTRAS],
         capture_output=True,
@@ -142,3 +158,8 @@ def test_a_core_install_builds_every_task_and_names_the_missing_extra():
     assert result["built"] == len(REGISTRY)
     assert "target-gym[render]" in result["errors"].get("render", "")
     assert "target-gym[mpc]" in result["errors"].get("step_map", "")
+    with_oracle = sum(spec.has_mpc for spec in REGISTRY.values())
+    assert len(result["oracle_errors"]) == 9
+    assert result["oracles"] == with_oracle - 9
+    for name, message in result["oracle_errors"].items():
+        assert "target-gym[mpc]" in message, name

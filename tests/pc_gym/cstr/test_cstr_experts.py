@@ -89,7 +89,7 @@ def test_a_short_closed_loop_solves_every_step_and_resets_cold():
     assert mpc._plan is None
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_protocol_gain_is_at_the_plants_optimum():
     """Measured 9.42e-9 per step with zero trips, 15 s for three seeds; the
     oracle it replaced gave 0.317."""

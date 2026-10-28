@@ -260,7 +260,13 @@ fail_under = 89
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# A plain `pytest` runs the small tier on every core: unmarked tests, in one
+# process each, within 60 s. `pytest -m medium`, `-m large` or `-m records` runs
+# another tier (a later -m replaces this one), and `-n0` runs serially, which
+# --pdb needs. docs/testing.md has the tiers and what goes where.
+addopts = "-n auto --dist worksteal --strict-markers -m 'not medium and not large and not records' --durations=15"
 markers = [
-    "slow: closed-loop / multi-seed checks too slow for the default CI run",
+    "medium: another process, media files, or a compile that needs gigabytes; CI runs these after the small tier",
+    "large: closed-loop or multi-seed behaviour that only shows at the scored length; runs on merges to main",
     "records: reads the rows the re-record label writes; CI runs these in the records job",
 ]
