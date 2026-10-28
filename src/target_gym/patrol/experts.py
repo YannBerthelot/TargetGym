@@ -1,4 +1,9 @@
-"""Reference controller (the MPC slot) for the patrol tasks.
+"""The patrol tasks' expert (the PID slot) and reference controller (the MPC slot).
+
+The expert is a formation hold over the follower's own autopilot
+(:func:`make_patrol_pid_controller`), as flight-tested formation autopilots
+fly it; the bearing-only task's estimates the lead first
+(:func:`make_patrol_bearing_only_pid_controller`).
 
 Each task keeps its oracle in its own package, so changing one re-records
 only the tasks of that package. The shared machinery (GradientMPC,
@@ -23,10 +28,8 @@ from flax import struct
 from target_gym.experts.mpc import GradientMPC, _is_v1
 from target_gym.experts.pid import (
     Controller,
-    PatrolPIDParams,
     Plane3DPIDState,
     _wrap_angle,
-    make_patrol_pid,
     plane3d_heading_pid_step,
 )
 from target_gym.patrol.env import (
@@ -34,6 +37,12 @@ from target_gym.patrol.env import (
     get_obs_heading,
     slot_error_vector,
     wrap_angle,
+)
+from target_gym.plane.experts_tecs import AIRLINER
+from target_gym.plane3d.experts import (
+    Plane3DGuidanceParams,
+    Plane3DGuidanceState,
+    _fly,
 )
 
 # ---------------------------------------------------------------------------
@@ -424,235 +433,255 @@ def make_patrol_bearing_only_mpc(env, params, **kwargs):
 
 
 # ---------------------------------------------------------------------------
-# The PID baselines as Controllers: one step, NumPy on the host, jnp traced
+# The PID slot: a formation hold over the follower's own autopilot
 # ---------------------------------------------------------------------------
 
 # Indices into the full patrol observation (patrol.env.get_obs_full).
-_X_DOT, _Y_DOT, _Z_DOT = 0, 1, 3
-_PHI, _PHI_DOT, _PSI = 6, 7, 9
-_E_BACK, _E_RIGHT, _E_UP, _RV_UP, _REL_HEADING = 10, 11, 12, 15, 19
+_PSI, _E_BACK, _E_RIGHT, _E_UP = 9, 10, 11, 12
+_RV_FWD, _RV_RIGHT, _SLOT_BACK, _SLOT_RIGHT = 13, 14, 16, 17
+_REL_HEADING, _POWER = 19, 21
 # Indices into the bearing-only observation; 0-9 are as above.
 _RANGE, _AZ, _EL = 10, 11, 12
-_SLOT_BACK, _SLOT_RIGHT, _SLOT_UP = 13, 14, 15
-
-# As in experts.pid: the follower's cruise, and g for the coordinated turn.
-_NOMINAL_SPEED = 230.0
-_GRAVITY = 9.81
+_BO_SLOT_BACK, _BO_SLOT_RIGHT, _BO_SLOT_UP, _BO_POWER = 13, 14, 15, 16
 
 
 @struct.dataclass
-class PatrolPIDState:
-    """The pursuit law's memory: three integrators, two previous errors (the
-    vertical loop reads the measured rate instead) and the previous lead
-    heading for the turn-rate feedforward."""
+class FormationHoldParams(Plane3DGuidanceParams):
+    """A formation hold's gains, over the 3D tasks' autopilot.
 
-    alt_integral: float = 0.0
-    track_integral: float = 0.0
-    track_prev: float = 0.0
-    power_integral: float = 0.0
-    power_prev: float = 0.0
-    lead_psi_prev: float = 0.0
+    The hold is the one formation-flight research flew (AFIT's formation
+    hold, NASA's F/A-18 Autonomous Formation Flight trials): the
+    along-track error sets a speed demand, the cross-track error a course,
+    the vertical error a height, each a PI on top of the lead's own speed,
+    heading and turn rate fed forward. The autopilot underneath is
+    :func:`target_gym.plane3d.experts._fly` (TECS, a pitch loop, a damped
+    45 deg bank loop and stall prevention), the one the 3D tasks' experts fly.
 
-
-@struct.dataclass
-class BearingOnlyPatrolPIDParams:
-    """The pursuit law's gains plus the lead estimator's step and filters."""
-
-    pid: PatrolPIDParams
-    dt: float  # the environment step (s), for differencing the bearing
-    psi_alpha: float  # lead-heading filter, exp(-dt / psi_tau)
-    rate_alpha: float  # lead vertical-rate filter, exp(-dt / rate_tau)
-
-
-@struct.dataclass
-class BearingOnlyPatrolPIDState:
-    """The pursuit law's memory plus the lead estimator's: the previous
-    lead-minus-follower position (world frame), the filtered lead heading and
-    vertical rate, and whether a previous sample exists."""
-
-    pid: PatrolPIDState = PatrolPIDState()
-    prev_dx: float = 0.0
-    prev_dy: float = 0.0
-    prev_dz: float = 0.0
-    psi_lead: float = 0.0
-    lead_zdot: float = 0.0
-    started: bool = False
-
-
-def _pursuit_law(params, state, obs, e_back, e_right, e_up, rv_up, rel_heading, xp):
-    """The patrol pursuit law over ``xp``, in the order the baseline was scored with.
-
-    Own state (speed, roll, roll rate, heading) is read from ``obs`` 0-9, the
-    slot quantities are passed in. The callers always pass ``jnp``, also on
-    the host: the scored patrol PIDs ran this law eagerly in JAX, whose float32
-    ``sin``/``cos`` differ from NumPy's in the last bit on about one input in
-    eight, which is enough to move an episode. ``arctan`` is spelled ``arctan2(z, 1)``:
-    XLA lowers it that way, and NumPy's float32 ``arctan2`` agrees with XLA's
-    bit for bit where its float32 ``arctan`` does not.
+    Along track the closure is ``min(k_x |e|, sqrt(2 a_x |e|))``, the speed
+    from which ``a_x`` of thrust margin stops at the slot, plus ``k_xi`` of
+    the error's integral. Across track the course is the slot's velocity plus
+    ``k_y`` of the error and ``k_yi`` of its integral, at most
+    ``max_intercept`` off it. Both integrals run only within ``x_band`` and
+    ``y_band`` of the slot, and to at most ``int_max``. ``k_omega`` filters
+    the lead's turn rate, ``k_ref`` the demands' rates the autopilot is fed
+    forward, and ``k_eng`` closes the throttle on the engine's power state.
     """
-    phi = obs[_PHI]
-    phi_dot = obs[_PHI_DOT]
-    psi = obs[_PSI]
 
-    alt_err = -e_up
-    alt_rate = -rv_up
-    new_alt_int = state.alt_integral + alt_err * params.dt
-    stick_u = (
-        params.Kp_alt * alt_err + params.Ki_alt * new_alt_int + params.Kd_alt * alt_rate
+    k_x: float = 0.08
+    a_x: float = 0.4
+    k_xi: float = 0.001
+    x_band: float = 30.0
+    k_y: float = 0.1
+    k_yi: float = 0.001
+    y_band: float = 30.0
+    k_omega: float = 0.3
+    k_ref: float = 0.3
+    k_eng: float = 1.0
+    dv_max: float = 20.0
+    max_intercept: float = 0.5
+    int_max: float = 2000.0
+
+
+@struct.dataclass
+class FormationHoldState(Plane3DGuidanceState):
+    """The autopilot's memory, the two integrals, the lead's last heading and
+    filtered turn rate, the last demands and their filtered rates, and for
+    the bearing-only estimator the last relative position and own velocity
+    (``started`` is set from the second step on)."""
+
+    int_back: float = 0.0
+    int_right: float = 0.0
+    psi_lead_prev: float = 0.0
+    omega: float = 0.0
+    h_dem_prev: float = 0.0
+    v_dem_prev: float = 0.0
+    h_rate: float = 0.0
+    v_rate: float = 0.0
+    dx_prev: float = 0.0
+    dy_prev: float = 0.0
+    vx_prev: float = 0.0
+    vy_prev: float = 0.0
+
+
+def _lead_axes(psi_lead, xp):
+    """The lead's forward and right unit vectors in the world x-y plane."""
+    fwd = xp.stack([xp.cos(psi_lead), xp.sin(psi_lead)])
+    right = xp.stack([xp.sin(psi_lead), -xp.cos(psi_lead)])
+    return fwd, right
+
+
+def _hold(p, s, obs, xp, slot_err, v_lead, psi_lead, slot, power, **carry):
+    """The formation hold on the slot error ``(back, right, up)``, given the
+    lead's velocity and heading, the slot's ``(back, right)`` offsets and the
+    engine's power state.
+
+    In a turn at rate w the slot swings with the lead, so its velocity is the
+    lead's plus ``w * right_offset`` along the lead's track and ``w * back``
+    across it. The demands go to the autopilot exactly: TECS's slewed height
+    and speed references are set each step so that its slew lands on them,
+    with only their rates, filtered by ``k_ref``, fed forward. Unfiltered,
+    every step-to-step wobble of the lead's track reaches the pitch loop as a
+    rate demand. The engine lags its lever by 20 s (``power_response_rate``),
+    so the lever leads the demanded power by ``k_eng`` times the gap to the
+    engine's state, as an autothrottle closes on N1, not on the lever.
+    """
+    e_back, e_right, e_up = slot_err
+    started = s.started > 0.0
+    omega_now = _wrap_angle(psi_lead - s.psi_lead_prev, xp) / p.dt
+    omega = xp.where(started, s.omega + p.k_omega * (omega_now - s.omega), 0.0)
+    fwd, right = _lead_axes(psi_lead, xp)
+    v_slot = v_lead + omega * slot[1] * fwd + omega * slot[0] * right
+    slot_fwd, slot_right = v_slot @ fwd, v_slot @ right
+
+    int_back = xp.where(
+        xp.abs(e_back) < p.x_band, s.int_back + e_back * p.dt, s.int_back
     )
-    stick = xp.clip(stick_u, -1.0, 1.0)
-    new_alt_int = xp.where(stick_u == stick, new_alt_int, state.alt_integral)
-
-    new_power_int = state.power_integral + e_back * params.dt
-    power_u = (
-        params.cruise
-        + params.Kp_power * e_back
-        + params.Ki_power * new_power_int
-        + params.Kd_power * (e_back - state.power_prev) / params.dt
+    int_right = xp.where(
+        xp.abs(e_right) < p.y_band, s.int_right + e_right * p.dt, s.int_right
     )
-    power = xp.clip(power_u, -1.0, 1.0)
-    new_power_int = xp.where(power_u == power, new_power_int, state.power_integral)
-
-    psi_lead = psi + rel_heading
-    c, s = xp.cos(psi_lead), xp.sin(psi_lead)
-    v0 = e_back * c - e_right * s
-    v1 = e_back * s - e_right * (-c)
-    dist_h = xp.sqrt(e_back**2 + e_right**2 + 1e-6)
-    pursuit_err = _wrap_angle(xp.arctan2(v1, v0) - psi, xp)
-    blend = xp.clip(dist_h / params.blend_dist, 0.0, 1.0)
-    heading_err = _wrap_angle(blend * pursuit_err + (1.0 - blend) * rel_heading, xp)
-
-    new_hdg_int = state.track_integral + heading_err * params.dt
-    hdg_d = (heading_err - state.track_prev) / params.dt
-    speed = xp.sqrt(obs[_X_DOT] ** 2 + obs[_Y_DOT] ** 2 + obs[_Z_DOT] ** 2 + 1e-6)
-    bank_cmd = (
-        params.Kp_hdg * heading_err
-        + params.Ki_hdg * new_hdg_int
-        + params.Kd_hdg * hdg_d
+    int_back = xp.clip(int_back, -p.int_max, p.int_max)
+    int_right = xp.clip(int_right, -p.int_max, p.int_max)
+    closure = xp.minimum(p.k_x * xp.abs(e_back), xp.sqrt(2.0 * p.a_x * xp.abs(e_back)))
+    speed_fwd = slot_fwd + xp.clip(
+        xp.sign(e_back) * closure + p.k_xi * int_back, -p.dv_max, p.dv_max
     )
-    psi_lead_now = _wrap_angle(psi_lead, xp)
-    lead_rate = _wrap_angle(psi_lead_now - state.lead_psi_prev, xp) / params.dt
-    lead_rate = xp.clip(lead_rate, -params.lead_rate_max, params.lead_rate_max)
-    turn_rate_cmd = params.Kff_lead * lead_rate + _GRAVITY * bank_cmd / _NOMINAL_SPEED
-    # The old step took tan of the Python float under jnp, i.e. in float32.
-    max_bank = xp.asarray(params.max_bank_rad, dtype=speed.dtype)
-    turn_rate_max = _GRAVITY * xp.tan(max_bank) / speed
-    turn_rate_cmd = xp.clip(turn_rate_cmd, -turn_rate_max, turn_rate_max)
-    desired_bank = xp.arctan2(speed * turn_rate_cmd / _GRAVITY, 1.0)
-    bank_err = phi - desired_bank
-    aileron = xp.clip(params.Kp_bank * bank_err - params.Kd_bank * phi_dot, -1.0, 1.0)
-    new_hdg_int = xp.where(xp.abs(aileron) >= 1.0, state.track_integral, new_hdg_int)
-
-    new_state = PatrolPIDState(
-        alt_integral=new_alt_int,
-        track_integral=new_hdg_int,
-        track_prev=heading_err,
-        power_integral=new_power_int,
-        power_prev=e_back,
-        lead_psi_prev=psi_lead_now,
+    limit = speed_fwd * xp.tan(p.max_intercept)
+    speed_right = slot_right - xp.clip(
+        p.k_y * e_right + p.k_yi * int_right, -limit, limit
     )
-    return xp.stack([power, stick, aileron]), new_state
+    course = xp.arctan2(
+        speed_fwd * fwd[1] + speed_right * right[1],
+        speed_fwd * fwd[0] + speed_right * right[0],
+    )
+    track = xp.arctan2(obs[1], obs[0])
+    v_ground = xp.sqrt(obs[0] ** 2 + obs[1] ** 2 + 1e-6)
+    turn = omega + _wrap_angle(course - track, xp) / p.tau_hdg
+
+    v_dem = xp.sqrt(speed_fwd**2 + speed_right**2)
+    h_dem = obs[2] - e_up
+    t = p.tecs
+    h_rate = xp.where(
+        started, s.h_rate + p.k_ref * ((h_dem - s.h_dem_prev) / p.dt - s.h_rate), 0.0
+    )
+    v_rate = xp.where(
+        started, s.v_rate + p.k_ref * ((v_dem - s.v_dem_prev) / p.dt - s.v_rate), 0.0
+    )
+    h_from = h_dem - xp.clip(h_rate * t.dt, -t.sink_max * t.dt, t.climb_max * t.dt)
+    v_from = v_dem - xp.clip(v_rate * t.dt, -t.accel_max * t.dt, t.accel_max * t.dt)
+    tecs = s.tecs.replace(
+        h_ref=xp.where(started, h_from, s.tecs.h_ref),
+        v_ref=xp.where(started, v_from, s.tecs.v_ref),
+    )
+    action, new = _fly(
+        p,
+        s.replace(tecs=tecs),
+        obs,
+        xp,
+        h_dem,
+        v_ground * turn,
+        v_dem,
+        int_back=int_back,
+        int_right=int_right,
+        psi_lead_prev=psi_lead,
+        omega=omega,
+        h_dem_prev=h_dem,
+        v_dem_prev=v_dem,
+        h_rate=h_rate,
+        v_rate=v_rate,
+        started=xp.ones_like(e_up),
+        **carry,
+    )
+    demand = 0.5 * (action[0] + 1.0)
+    lever = demand + p.k_eng * (demand - power)
+    throttle = xp.clip(2.0 * lever - 1.0, -1.0, 1.0)
+    return xp.stack([throttle, action[1], action[2]]), new
 
 
-def patrol_pid_controller_step(params, state, obs, xp=jnp):
-    """The full-observation patrol PID: the pursuit law on obs 10-19."""
-    return _pursuit_law(
+def patrol_hold_step(params, state, obs, xp=jnp):
+    """The full-observation hold: the slot error, the lead's heading and its
+    velocity (own velocity less the relative one) are all observed."""
+    psi_lead = obs[_PSI] + obs[_REL_HEADING]
+    fwd, right = _lead_axes(psi_lead, xp)
+    v_lead = obs[0:2] - obs[_RV_FWD] * fwd - obs[_RV_RIGHT] * right
+    return _hold(
         params,
         state,
         obs,
-        obs[_E_BACK],
-        obs[_E_RIGHT],
-        obs[_E_UP],
-        obs[_RV_UP],
-        obs[_REL_HEADING],
-        jnp,
+        xp,
+        (obs[_E_BACK], obs[_E_RIGHT], obs[_E_UP]),
+        v_lead,
+        psi_lead,
+        (obs[_SLOT_BACK], obs[_SLOT_RIGHT]),
+        obs[_POWER],
     )
 
 
-def patrol_bearing_only_pid_step(params, state, obs, xp=jnp):
-    """The bearing-only patrol PID: estimate the lead, then the pursuit law.
+def patrol_bearing_only_hold_step(params, state, obs, xp=jnp):
+    """The same hold behind an estimator of the lead from range and bearings.
 
-    The bearing is turned into a world-frame offset in the observation's
-    float32, the estimator then runs in float64 (as the scored baseline did,
-    through Python floats), and the eight
-    quantities the law reads are rounded back to float32. Under ``jnp``
-    without x64 the estimator runs in float32.
+    Range, azimuth and elevation fix where the lead is; its velocity is the
+    follower's own over the last step plus the change in that relative
+    position. Both aircraft fly in the same air, so the lead's heading is its
+    track less the crab the follower itself flies at. The slot error follows
+    from the relative position in that lead frame.
     """
-    wide = xp.result_type(float)
-
-    psi32 = obs[_PSI]
+    psi = obs[_PSI]
     rng, az, el = obs[_RANGE], obs[_AZ], obs[_EL]
     horiz = rng * xp.cos(el)
-    d_fwd = horiz * xp.cos(az)
-    d_rgt = horiz * xp.sin(az)
-    dz = (rng * xp.sin(el)).astype(wide)
-    dx = (d_fwd * xp.cos(psi32) + d_rgt * xp.sin(psi32)).astype(wide)
-    dy = (d_fwd * xp.sin(psi32) - d_rgt * xp.cos(psi32)).astype(wide)
-    psi = psi32.astype(wide)
-    z_dot = obs[_Z_DOT].astype(wide)
-
-    # Lead velocity from the follower's plus the rate of the relative position;
-    # filtered on the heading innovation so the estimate wraps correctly. The
-    # first step has no previous sample and seeds with the follower's heading.
-    lead_vx = obs[_X_DOT].astype(wide) + (dx - state.prev_dx) / params.dt
-    lead_vy = obs[_Y_DOT].astype(wide) + (dy - state.prev_dy) / params.dt
-    raw_psi = xp.arctan2(lead_vy, lead_vx)
-    innov = _wrap_angle(raw_psi - state.psi_lead, xp)
-    psi_lead = state.psi_lead + (1.0 - params.psi_alpha) * innov
-    lead_zdot = params.rate_alpha * state.lead_zdot + (1.0 - params.rate_alpha) * (
-        z_dot + (dz - state.prev_dz) / params.dt
+    ahead, aside = horiz * xp.cos(az), horiz * xp.sin(az)
+    # Lead minus follower in the world frame.
+    dx = ahead * xp.cos(psi) + aside * xp.sin(psi)
+    dy = ahead * xp.sin(psi) - aside * xp.cos(psi)
+    dz = rng * xp.sin(el)
+    started = state.started > 0.0
+    v_own = obs[0:2]
+    v_prev = xp.stack([state.vx_prev, state.vy_prev])
+    d_rate = xp.stack([dx - state.dx_prev, dy - state.dy_prev]) / params.dt
+    v_lead = xp.where(started, 0.5 * (v_own + v_prev) + d_rate, v_own)
+    crab = _wrap_angle(xp.arctan2(obs[1], obs[0]) - psi, xp)
+    psi_lead = xp.arctan2(v_lead[1], v_lead[0]) - crab
+    fwd, right = _lead_axes(psi_lead, xp)
+    slot_back, slot_right = obs[_BO_SLOT_BACK], obs[_BO_SLOT_RIGHT]
+    slot_err = (
+        dx * fwd[0] + dy * fwd[1] - slot_back,
+        -(dx * right[0] + dy * right[1]) - slot_right,
+        -dz - obs[_BO_SLOT_UP],
     )
-    psi_lead = xp.where(state.started, psi_lead, psi)
-    lead_zdot = xp.where(state.started, lead_zdot, z_dot)
-
-    fwd = xp.stack([xp.cos(psi_lead), xp.sin(psi_lead)])
-    rgt = xp.stack([xp.sin(psi_lead), -xp.cos(psi_lead)])
-    d = xp.stack([-dx, -dy])  # follower minus lead
-    back = -(d @ fwd)
-    lateral = d @ rgt
-
-    f32 = obs.dtype
-    e_back = (back - obs[_SLOT_BACK].astype(wide)).astype(f32)
-    e_right = (lateral - obs[_SLOT_RIGHT].astype(wide)).astype(f32)
-    e_up = (-dz - obs[_SLOT_UP].astype(wide)).astype(f32)
-    rv_up = (z_dot - lead_zdot).astype(f32)
-    rel_heading = _wrap_angle(psi_lead - psi, xp).astype(f32)
-
-    action, pid = _pursuit_law(
-        params.pid, state.pid, obs, e_back, e_right, e_up, rv_up, rel_heading, jnp
+    return _hold(
+        params,
+        state,
+        obs,
+        xp,
+        slot_err,
+        v_lead,
+        psi_lead,
+        (slot_back, slot_right),
+        obs[_BO_POWER],
+        dx_prev=dx,
+        dy_prev=dy,
+        vx_prev=obs[0],
+        vy_prev=obs[1],
     )
-    new_state = BearingOnlyPatrolPIDState(
-        pid=pid,
-        prev_dx=dx,
-        prev_dy=dy,
-        prev_dz=dz,
-        psi_lead=psi_lead,
-        lead_zdot=lead_zdot,
-        started=True,
-    )
-    return action, new_state
+
+
+#: The hold's tuning, on training seeds 100-109 of both patrol tasks and the
+#: formation's wingmen, checked on held-out seeds 200-209, never on the
+#: scored seeds 0-9 (scripts/tune_formation_hold.py). The course hold is
+#: tighter than the heading task's (3 s against 10 s), since the slot moves
+#: with the lead. TECS weighs height and speed evenly in the pitch channel
+#: (``spd_weight`` 0.5, between the airliner's 0, which leaves the speed to
+#: the throttle alone, and ArduPilot's default 1), and damps the throttle on
+#: the energy rate harder (``thr_damp`` 6) against the engine's lag.
+HOLD = FormationHoldParams(
+    tau_hdg=3.0, tecs=AIRLINER.replace(spd_weight=0.5, thr_damp=6.0)
+)
 
 
 def make_patrol_pid_controller() -> Controller:
-    """The patrol PID as a :class:`Controller`, with ``make_patrol_pid``'s gains
-    (``pid_gains.json`` under ``patrol``, same defaults)."""
-    params, _ = make_patrol_pid()
-    return Controller(params, PatrolPIDState(), patrol_pid_controller_step)
+    """The patrol's expert: the formation hold on the full observation."""
+    return Controller(HOLD, FormationHoldState(), patrol_hold_step)
 
 
-def make_patrol_bearing_only_pid_controller(
-    psi_tau: float = 0.6, rate_tau: float = 0.4
-) -> Controller:
-    """The bearing-only patrol PID as a :class:`Controller`: the patrol gains,
-    the environment's step for differencing, and the estimator's filters."""
-    from target_gym.patrol.env import PatrolParams
-
-    pid, _ = make_patrol_pid()
-    dt = float(PatrolParams().delta_t)
-    params = BearingOnlyPatrolPIDParams(
-        pid=pid,
-        dt=dt,
-        psi_alpha=float(np.exp(-dt / max(psi_tau, 1e-6))),
-        rate_alpha=float(np.exp(-dt / max(rate_tau, 1e-6))),
-    )
-    return Controller(params, BearingOnlyPatrolPIDState(), patrol_bearing_only_pid_step)
+def make_patrol_bearing_only_pid_controller() -> Controller:
+    """The bearing-only patrol's expert: the same hold, behind the estimator."""
+    return Controller(HOLD, FormationHoldState(), patrol_bearing_only_hold_step)

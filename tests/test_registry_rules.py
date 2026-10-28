@@ -357,6 +357,8 @@ DECLARED_BY_THE_21 = {
             "plane3d/dynamics.py",
             "plane3d/env.py",
             "experts/pid.py",
+            "plane3d/experts.py",
+            "plane/experts_tecs.py",
         )
         for name in ("patrol", "patrol_bearing_only")
     },
