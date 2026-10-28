@@ -78,7 +78,7 @@ SCHEDULES = [("plane_energy", 150, 8), ("compressor_surge", 300, 3)]
 SCHEDULES += [("glass_furnace", 320, 4)]
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("name,block,n_changes", SCHEDULES)
 def test_the_scorer_starts_a_cycle_at_every_scheduled_setpoint(name, block, n_changes):
     spec = REGISTRY[name]
@@ -91,7 +91,7 @@ def test_the_scorer_starts_a_cycle_at_every_scheduled_setpoint(name, block, n_ch
         )
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("name", ["reactor", "plane_sine"])
 def test_a_drifting_or_smooth_target_starts_no_cycle_in_the_scorer(name):
     # reactor: an Ornstein-Uhlenbeck power demand; plane_sine: a sine altitude.
