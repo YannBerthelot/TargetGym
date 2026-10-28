@@ -171,7 +171,7 @@ def test_a_failed_solve_holds_the_action_and_skips_the_next_update(monkeypatch):
     assert oracle._pred_crown is not None
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_oracle_holds_the_crown_on_protocol_seed_2():
     """The protocol's construction (``runners.baseline_policy``: the factory
     on ``plan_params``, then ``reset``) and its rollout (``PRNGKey(seed)`` on

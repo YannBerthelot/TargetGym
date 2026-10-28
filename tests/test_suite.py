@@ -111,7 +111,7 @@ def test_the_chart_is_a_hold_and_a_reach_radar_with_every_profile():
     assert labels == ["expert"]
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_expert_run_through_the_suite_sits_on_the_half_ring():
     """The expert scored against itself on four_tank: parity on every number,
     so radius 0.5 on both of the task's capabilities."""

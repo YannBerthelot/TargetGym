@@ -310,7 +310,7 @@ def test_mpc_does_not_beat_a_measured_floor(spec):
 
 
 @pytest.mark.records
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_recorded_mpc_cost_is_what_the_mpc_measures_now():
     """The recorded floor check above is only as good as the recording. Re-run
     the protocol on the cheapest measured plant (pH neutralisation, about 5 s)
