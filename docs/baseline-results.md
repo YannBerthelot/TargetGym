@@ -144,7 +144,7 @@ beat the expert.
 | [`boiler_drum`](environments/boiler_drum.md) | 400 | 170 | 22.1 | 10/10 |
 | [`compressor_surge`](environments/compressor_surge.md) | 1200 | 1,840 | 102 | 10/10 |
 | **Renewable Energy** | | | | |
-| [`wind_turbine`](environments/wind_turbine.md) | 400 | 5.42e-5 | 1.48e-5 | 10/10 |
+| [`wind_turbine`](environments/wind_turbine.md) | 400 | 1.4e-4 | 1.48e-5 | 10/10 |
 | [`battery`](environments/battery.md) | 360 | 0.00354 | 9.48e-4 | 10/10 |
 
 ## Caveats
