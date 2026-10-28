@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/compressor_surge/pid_output.gif" width="480px"/></p>
 
-Compressor surge: a Greitzer compression system feeding a header.
+Hold the header pressure of a variable-speed compressor on a stepped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. Flow below the surge line trips the plant, and neither the reward nor any observation reads the surge margin directly, so the policy has to learn to keep it from the flows it does observe.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("compressor_surge")
+```
 
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | header pressure (kPa) |
-| Episode length | 1200 steps (120 s at 0.1 s per step) |
-| Import | `from target_gym import CompressorSurge, CompressorSurgeParams` |
+| Episode length | 1200 steps of 0.1 s (2 min) |
 | Cite as | `compressor_surge-v2` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/compressor_surge/PHYSICS.md) |
 
 ## Action space
 
@@ -25,8 +31,17 @@ actuator range inside the environment.
 
 ## Observation space
 
-7 values. Indices (0,) carry the tracked variable(s) that the
-reward scores.
+7 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[6]`.
+
+| # | meaning |
+|---|---|
+| 0 | header pressure (kPa) |
+| 1 | `m_c`, compressor flow (kg/s) |
+| 2 | `m_d`, flow delivered to the consumers (kg/s) |
+| 3 | drive speed, percent of rated |
+| 4 | drive speed setpoint, percent of rated |
+| 5 | recycle valve opening (%) |
+| 6 | target header pressure (kPa) |
 
 ## Rewards
 
@@ -65,7 +80,9 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("compressor_surge", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 0.1 | s |
 | `max_steps_in_episode` | 1200 | steps |

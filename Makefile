@@ -105,9 +105,8 @@ mypy-all:  ## Type-check everything -- exploratory, currently reports ~324
 # pytest-cov supplies the xdist plumbing coverage.py lacks on its own, so this
 # runs in parallel and still reports exactly the same total as a serial run --
 # 86s rather than 278s, measured. Threshold and omissions are in pyproject.toml.
-coverage:  ## Small and medium tests with coverage, enforcing the threshold
-	$(CPU_ENV) uv run pytest -q --cov=target_gym --cov-report= --cov-fail-under=0
-	$(CPU_ENV) uv run pytest -q -m medium -n 2 --cov=target_gym --cov-append
+coverage:  ## Small tests with coverage, enforcing the threshold, as CI does
+	$(CPU_ENV) uv run pytest -q --cov=target_gym
 
 missing-annotations:
 	uv run mypy --disallow-untyped-calls --disallow-untyped-defs --ignore-missing-imports src

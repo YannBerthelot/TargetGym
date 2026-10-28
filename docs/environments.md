@@ -21,14 +21,16 @@ whole of what differs between them:
 - **Physics** links the environment's contract: sourced parameters, published
   validation targets asserted by tests, and quantified known deviations.
 
-Load any of them by registry name:
+Load any of them by registry name, on the configuration it is scored on:
 
 ```python
-from target_gym.registry import REGISTRY
+import target_gym as tg
 
-spec = REGISTRY["boiler_drum"]
-env, params = spec.make_env(), spec.params_cls()
+env, params = tg.make("boiler_drum")
 ```
+
+To pick one by what you want to test, see
+[Choosing an environment](complexity.md).
 
 
 ## Aircraft

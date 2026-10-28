@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/plane3d_heading/pid_output.gif" width="480px"/></p>
 
-3D airplane environment state, parameters, and transition logic.
+Hold a target altitude and turn onto and hold a target heading with the 3D airliner, using throttle, elevator and aileron. The aileron commands a roll rate, not a bank angle, so heading is controlled through a cascade of two integrators, and the turbulence is hidden.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("plane3d_heading")
+```
 
 | | |
 |---|---|
 | Action space | `Box((3,))`, all actions in [-1, 1] |
 | Observation space | `Box((15,))` |
 | Tracked variable(s) | altitude (m) |
-| Episode length | 300 steps (300 s at 1 s per step) |
-| Import | `from target_gym import Plane3DHeading, PlaneParams3D` |
+| Episode length | 300 steps of 1 s (5 min) |
 | Cite as | `plane3d_heading-v4` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
 
@@ -26,8 +32,25 @@ actuator range inside the environment.
 
 ## Observation space
 
-15 values. Indices (2,) carry the tracked variable(s) that the
-reward scores.
+15 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[2]` against `obs[10]`.
+
+| # | meaning |
+|---|---|
+| 0 | `x_dot`, velocity along world x (m/s) |
+| 1 | `y_dot`, velocity along world y (m/s) |
+| 2 | `z`, altitude (m) |
+| 3 | `z_dot`, vertical speed (m/s) |
+| 4 | `theta`, pitch angle (rad) |
+| 5 | `theta_dot`, pitch rate (rad/s) |
+| 6 | `phi`, bank angle (rad) |
+| 7 | `phi_dot`, roll rate (rad/s) |
+| 8 | `gamma`, flight-path angle (rad) |
+| 9 | `psi`, heading (rad) |
+| 10 | target altitude (m) |
+| 11 | target heading (rad) |
+| 12 | throttle, 0 to 1 |
+| 13 | elevator deflection (rad) |
+| 14 | aileron deflection (rad) |
 
 ## Rewards
 
@@ -66,7 +89,9 @@ The MPC beats the PID on 9 of 10 seeds and does not trip the plant on any of the
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("plane3d_heading", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 300 | steps |

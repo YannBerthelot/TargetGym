@@ -165,10 +165,41 @@ Hold a sampled target altitude. The reward is the floor-normalised cost
 described in *Reward (version 2)* below; `docs/reward-shaping.md` explains why
 it replaced the logarithmic reward of version 1.
 
-### Observation
+### Task: `plane`
 
-`[x_dot, z, z_dot, theta, theta_dot, gamma, target_altitude, power, stick,
-target_speed]`.
+Hold an A320-class airliner at a target altitude in light-to-moderate
+turbulence with throttle and elevator. This is the suite's transparent
+aircraft: nearly the whole state is observed and only the gusts are hidden, so
+the difficulty is the plant itself, with slow climbs and pitch, speed and
+thrust all coupled.
+
+### Task: `plane_sine`
+
+Track an altitude that moves as a sinusoid, with the same airliner, throttle
+and elevator as `plane`. A moving reference tests how well a controller
+follows a frequency, not only how well it holds a level.
+
+### Task: `plane_energy`
+
+Walk a ladder of eight altitude levels while holding a commanded airspeed,
+with the same airliner as `plane`. Scoring airspeed as well as altitude
+removes the spare degree of freedom two actuators would have on one
+objective, so throttle and elevator have to share the work.
+
+### Observation: `plane`, `plane_sine`, `plane_energy`
+
+| obs | meaning |
+|---|---|
+| 0 | `x_dot`, horizontal speed (m/s) |
+| 1 | `z`, altitude (m) |
+| 2 | `z_dot`, vertical speed (m/s) |
+| 3 | `theta`, pitch angle (rad) |
+| 4 | `theta_dot`, pitch rate (rad/s) |
+| 5 | `gamma`, flight-path angle (rad) |
+| 6 | target altitude (m) |
+| 7 | throttle, 0 to 1 |
+| 8 | elevator deflection (rad) |
+| 9 | commanded airspeed (m/s) |
 
 Nearly full state, and deliberately so: this is the suite's *transparent*
 aircraft, where the difficulty is the plant rather than what can be seen of it.
