@@ -27,7 +27,7 @@ each controller is from as good as a real plant can verify. Hover a row
 for the numbers, including the whole episode.
 
 <div class="tg-results-chart"></div>
-<script type="application/json" id="tg-results-data">[{"name":"plane","group":"Aircraft","expert":4.359998088223594,"oracle":0.5189074476559957,"ceiling":1.0,"expert_gain":4.359998088223594,"oracle_gain":0.6772199529001401},{"name":"plane_energy","group":"Aircraft","expert":7047.206273243373,"oracle":1.474222170882661,"ceiling":0.6944444444444445,"expert_gain":18907.517388724373,"oracle_gain":497.063702120887},{"name":"plane_sine","group":"Aircraft","expert":3.190059790997431,"oracle":0.31903737962136236,"ceiling":0.6298815822625345,"expert_gain":3.190059790997431,"oracle_gain":0.5287779268776075},{"name":"plane3d_heading","group":"Aircraft","expert":3.519837652078495,"oracle":0.5718943605918836,"ceiling":2.0,"expert_gain":3.519837652078495,"oracle_gain":0.5718943605918836},{"name":"plane3d_circle","group":"Aircraft","expert":3.4643984409838193,"oracle":3.149454987810717,"ceiling":2.0,"expert_gain":3.4643984409838193,"oracle_gain":3.149454987810717},{"name":"plane3d_racetrack","group":"Aircraft","expert":12.675603139767235,"oracle":1.0657072450523792,"ceiling":2.0,"expert_gain":12.675603139767235,"oracle_gain":1.0657072450523792},{"name":"plane3d_figure8","group":"Aircraft","expert":204.95170444802383,"oracle":0.5189745273111233,"ceiling":1.0,"expert_gain":204.95170444802383,"oracle_gain":0.5189745273111233},{"name":"patrol","group":"Aircraft","expert":301.8681943766276,"oracle":0.053187578530050815,"ceiling":2.0,"expert_gain":301.8681943766276,"oracle_gain":0.053187578530050815},{"name":"patrol_bearing_only","group":"Aircraft","expert":284.3472917683919,"oracle":0.053187578530050815,"ceiling":2.0,"expert_gain":284.3472917683919,"oracle_gain":0.053187578530050815},{"name":"cstr","group":"Process Control","expert":0.1892389424184073,"oracle":6.295948291545192e-08,"ceiling":1.0,"expert_gain":40.574538447454565,"oracle_gain":6.055761952500853e-08},{"name":"first_order","group":"Process Control","expert":3.321861616353062e-08,"oracle":0.0,"ceiling":1.0,"expert_gain":2.5698207375745137e-06,"oracle_gain":0.0},{"name":"four_tank","group":"Process Control","expert":22.735496427203216,"oracle":1.0823311591142322e-07,"ceiling":2.0,"expert_gain":22.735496427203216,"oracle_gain":1.0823311591142322e-07},{"name":"ph_neutralization","group":"Process Control","expert":176.3924860568255,"oracle":0.08916053595838648,"ceiling":1.0,"expert_gain":176.3959451028495,"oracle_gain":0.09254092571742628},{"name":"distillation","group":"Process Control","expert":390.5616064810504,"oracle":0.022818469475365713,"ceiling":2.0,"expert_gain":390.5616064810504,"oracle_gain":0.022818469475365713},{"name":"glass_furnace","group":"Industrial / Energy","expert":0.966626035515219,"oracle":0.17642213267584642,"ceiling":1.0,"expert_gain":1.0621182994761815,"oracle_gain":0.23432330360491807},{"name":"reactor","group":"Industrial / Energy","expert":20.59371337383355,"oracle":1.4550849451448464,"ceiling":0.0027777777777777783,"expert_gain":20.976558486252657,"oracle_gain":1.4757691727100333},{"name":"hvac","group":"Industrial / Energy","expert":0.021412124613221593,"oracle":0.01344547818861362,"ceiling":7.500000000000001e-05,"expert_gain":0.024219282176287982,"oracle_gain":0.013743371182518891},{"name":"cement_kiln","group":"Industrial / Energy","expert":3.601929952938272,"oracle":0.024197413304495197,"ceiling":1.0,"expert_gain":3.6806122801828,"oracle_gain":0.0704716642920471},{"name":"boiler_drum","group":"Industrial / Energy","expert":890.8466335406198,"oracle":5.534708091409822,"ceiling":1.1402740955827686,"expert_gain":890.9114037591526,"oracle_gain":5.615284871186733},{"name":"wind_turbine","group":"Renewable Energy","expert":2.5207256451060072e-05,"oracle":1.1796639865255069e-05,"ceiling":6.944444444444445e-06,"expert_gain":2.789124735509555e-05,"oracle_gain":1.2609169900260989e-05},{"name":"battery","group":"Renewable Energy","expert":0.0007630208232339746,"oracle":0.00022955745437477045,"ceiling":0.00013888888888888886,"expert_gain":0.003327833411228935,"oracle_gain":0.0009253222078093081},{"name":"unstable_cstr","group":"Process Control","expert":3.2054767887849436,"oracle":0.007304711043748235,"ceiling":1.0,"expert_gain":56956.91191127999,"oracle_gain":3799.6714203457345},{"name":"compressor_surge","group":"Industrial / Energy","expert":15.834977883561267,"oracle":0.2390619778123484,"ceiling":1.0,"expert_gain":488.6196853882157,"oracle_gain":23.012493830370108},{"name":"formation","group":"Aircraft","expert":23788.02022542318,"oracle":1.011592126103739,"ceiling":6.0,"expert_gain":23788.02022542318,"oracle_gain":1.011592126103739}]</script>
+<script type="application/json" id="tg-results-data">[{"name":"plane","group":"Aircraft","expert":4.359949897584461,"oracle":0.5030408107099079,"ceiling":1.0,"expert_gain":4.359949897584461,"oracle_gain":0.6612176220065781},{"name":"plane_energy","group":"Aircraft","expert":286.36414842734695,"oracle":1.4346241595002847,"ceiling":0.6944444444444445,"expert_gain":18907.646672841467,"oracle_gain":496.8827473140606},{"name":"plane_sine","group":"Aircraft","expert":3.1900643624749065,"oracle":0.31763202802118234,"ceiling":0.6298815822625345,"expert_gain":3.1900643624749065,"oracle_gain":0.5273488745237559},{"name":"plane3d_heading","group":"Aircraft","expert":3.5197603332312184,"oracle":0.578064745851619,"ceiling":2.0,"expert_gain":3.5197603332312184,"oracle_gain":0.578064745851619},{"name":"plane3d_circle","group":"Aircraft","expert":3.464411363123347,"oracle":3.1829227025310196,"ceiling":2.0,"expert_gain":3.464411363123347,"oracle_gain":3.1829227025310196},{"name":"plane3d_racetrack","group":"Aircraft","expert":12.674099523878512,"oracle":1.0666768992227376,"ceiling":2.0,"expert_gain":12.674099523878512,"oracle_gain":1.0666768992227376},{"name":"plane3d_figure8","group":"Aircraft","expert":204.95170444802383,"oracle":0.5189745273111233,"ceiling":1.0,"expert_gain":204.95170444802383,"oracle_gain":0.5189745273111233},{"name":"patrol","group":"Aircraft","expert":301.8681943766276,"oracle":0.053187578530050815,"ceiling":2.0,"expert_gain":301.8681943766276,"oracle_gain":0.053187578530050815},{"name":"patrol_bearing_only","group":"Aircraft","expert":284.3472917683919,"oracle":0.053187578530050815,"ceiling":2.0,"expert_gain":284.3472917683919,"oracle_gain":0.053187578530050815},{"name":"cstr","group":"Process Control","expert":5.351844440435972e-07,"oracle":7.743093915334425e-08,"ceiling":1.0,"expert_gain":40.574538447454565,"oracle_gain":6.055761952500853e-08},{"name":"first_order","group":"Process Control","expert":4.1001887537476876e-10,"oracle":0.0,"ceiling":1.0,"expert_gain":2.5698207375745137e-06,"oracle_gain":0.0},{"name":"four_tank","group":"Process Control","expert":22.73549642829597,"oracle":1.0823311568404955e-07,"ceiling":2.0,"expert_gain":22.73549642829597,"oracle_gain":1.0823311568404955e-07},{"name":"ph_neutralization","group":"Process Control","expert":176.3924860568255,"oracle":0.08916053595838648,"ceiling":1.0,"expert_gain":176.3959451028495,"oracle_gain":0.09254092571742628},{"name":"distillation","group":"Process Control","expert":390.5597425599148,"oracle":0.022935034238076735,"ceiling":2.0,"expert_gain":390.5597425599148,"oracle_gain":0.022935034238076735},{"name":"glass_furnace","group":"Industrial / Energy","expert":0.966626035515219,"oracle":0.17642213267584642,"ceiling":1.0,"expert_gain":1.0621182994761815,"oracle_gain":0.23432330360491807},{"name":"reactor","group":"Industrial / Energy","expert":20.59371337383355,"oracle":1.4550849451448464,"ceiling":0.0027777777777777783,"expert_gain":20.976558486252657,"oracle_gain":1.4757691727100333},{"name":"hvac","group":"Industrial / Energy","expert":0.02296698320457724,"oracle":0.014208605279949188,"ceiling":7.500000000000001e-05,"expert_gain":0.024219282179737327,"oracle_gain":0.01374337118379892},{"name":"cement_kiln","group":"Industrial / Energy","expert":3.6019709180748767,"oracle":0.02572445288550525,"ceiling":1.0,"expert_gain":3.6806535686426454,"oracle_gain":0.07316629200316038},{"name":"boiler_drum","group":"Industrial / Energy","expert":890.8466335406198,"oracle":5.534708091409822,"ceiling":1.1402740955827686,"expert_gain":890.9114037591526,"oracle_gain":5.615284871186733},{"name":"wind_turbine","group":"Renewable Energy","expert":2.5207256451060072e-05,"oracle":1.1796639865255069e-05,"ceiling":6.944444444444445e-06,"expert_gain":2.789124735509555e-05,"oracle_gain":1.2609169900260989e-05},{"name":"battery","group":"Renewable Energy","expert":0.0006802680312170715,"oracle":0.00022913516181502782,"ceiling":0.00013888888888888886,"expert_gain":0.003327833331628043,"oracle_gain":0.0009253222457801855},{"name":"unstable_cstr","group":"Process Control","expert":3.2054767887849436,"oracle":0.007304711043748235,"ceiling":1.0,"expert_gain":56956.91191127999,"oracle_gain":3799.6714203457345},{"name":"compressor_surge","group":"Industrial / Energy","expert":15.834977883561267,"oracle":0.2390619778123484,"ceiling":1.0,"expert_gain":488.6196853882157,"oracle_gain":23.012493830370108},{"name":"formation","group":"Aircraft","expert":23788.02022542318,"oracle":1.011592126103739,"ceiling":6.0,"expert_gain":23788.02022542318,"oracle_gain":1.011592126103739}]</script>
 
 ## Room to grow
 
@@ -43,33 +43,33 @@ hold down to the ceiling; 0 means the expert is already there. The
 | environment | expert hold | ceiling | room (decades) | oracle hold | oracle score |
 | --- | --- | --- | --- | --- | --- |
 | **Aircraft** | | | | | |
-| [`plane`](environments/plane.md) | 4.36 | 1 | 0.64 | 0.519 | 1.00 |
-| [`plane_energy`](environments/plane_energy.md) | 7,047 | 0.694 | 4.01 | 1.47 | 0.92 |
-| [`plane_sine`](environments/plane_sine.md) | 3.19 | 0.63 | 0.70 | 0.319 | 1.00 |
-| [`plane3d_heading`](environments/plane3d_heading.md) | 3.52 | 2 | 0.25 | 0.572 | 1.00 |
-| [`plane3d_circle`](environments/plane3d_circle.md) | 3.46 | 2 | 0.24 | 3.15 | 0.17 |
+| [`plane`](environments/plane.md) | 4.36 | 1 | 0.64 | 0.503 | 1.00 |
+| [`plane_energy`](environments/plane_energy.md) | 286 | 0.694 | 2.62 | 1.43 | 0.88 |
+| [`plane_sine`](environments/plane_sine.md) | 3.19 | 0.63 | 0.70 | 0.318 | 1.00 |
+| [`plane3d_heading`](environments/plane3d_heading.md) | 3.52 | 2 | 0.25 | 0.578 | 1.00 |
+| [`plane3d_circle`](environments/plane3d_circle.md) | 3.46 | 2 | 0.24 | 3.18 | 0.15 |
 | [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 12.7 | 2 | 0.80 | 1.07 | 1.00 |
 | [`plane3d_figure8`](environments/plane3d_figure8.md) | 205 | 1 | 2.31 | 0.519 | 1.00 |
 | [`patrol`](environments/patrol.md) | 302 | 2 | 2.18 | 0.0532 | 1.00 |
 | [`patrol_bearing_only`](environments/patrol_bearing_only.md) | 284 | 2 | 2.15 | 0.0532 | 1.00 |
 | [`formation`](environments/formation.md) | 23,788 | 6 | 3.60 | 1.01 | 1.00 |
 | **Process Control** | | | | | |
-| [`cstr`](environments/cstr.md) | 0.189 | 1 | 0.00 | 6.3e-8 | — |
-| [`first_order`](environments/first_order.md) | 3.32e-8 | 1 | 0.00 | 0 | — |
+| [`cstr`](environments/cstr.md) | 5.35e-7 | 1 | 0.00 | 7.74e-8 | — |
+| [`first_order`](environments/first_order.md) | 4.1e-10 | 1 | 0.00 | 0 | — |
 | [`four_tank`](environments/four_tank.md) | 22.7 | 2 | 1.06 | 1.08e-7 | 1.00 |
 | [`ph_neutralization`](environments/ph_neutralization.md) | 176 | 1 | 2.25 | 0.0892 | 1.00 |
-| [`distillation`](environments/distillation.md) | 391 | 2 | 2.29 | 0.0228 | 1.00 |
+| [`distillation`](environments/distillation.md) | 391 | 2 | 2.29 | 0.0229 | 1.00 |
 | [`unstable_cstr`](environments/unstable_cstr.md) | 3.21 | 1 | 0.51 | 0.0073 | 1.00 |
 | **Industrial / Energy** | | | | | |
 | [`glass_furnace`](environments/glass_furnace.md) | 0.967 | 1 | 0.00 | 0.176 | — |
 | [`reactor`](environments/reactor.md) | 20.6 | 0.00278 | 3.87 | 1.46 | 0.30 |
-| [`hvac`](environments/hvac.md) | 0.0214 | 7.5e-5 | 2.46 | 0.0134 | 0.08 |
-| [`cement_kiln`](environments/cement_kiln.md) | 3.6 | 1 | 0.56 | 0.0242 | 1.00 |
+| [`hvac`](environments/hvac.md) | 0.023 | 7.5e-5 | 2.49 | 0.0142 | 0.08 |
+| [`cement_kiln`](environments/cement_kiln.md) | 3.6 | 1 | 0.56 | 0.0257 | 1.00 |
 | [`boiler_drum`](environments/boiler_drum.md) | 891 | 1.14 | 2.89 | 5.53 | 0.76 |
 | [`compressor_surge`](environments/compressor_surge.md) | 15.8 | 1 | 1.20 | 0.239 | 1.00 |
 | **Renewable Energy** | | | | | |
 | [`wind_turbine`](environments/wind_turbine.md) | 2.52e-5 | 6.94e-6 | 0.56 | 1.18e-5 | 0.59 |
-| [`battery`](environments/battery.md) | 7.63e-4 | 1.39e-4 | 0.74 | 2.3e-4 | 0.71 |
+| [`battery`](environments/battery.md) | 6.8e-4 | 1.39e-4 | 0.69 | 2.29e-4 | 0.68 |
 
 ## Whole episode
 
@@ -81,11 +81,11 @@ tenth. The **transient** is the summed cost around each target change.
 | environment | expert gain | oracle gain | oracle vs expert | expert transient | oracle transient |
 | --- | --- | --- | --- | --- | --- |
 | **Aircraft** | | | | | |
-| [`plane`](environments/plane.md) | 4.36 | 0.677 | 6.44 | 1.64e6 | 3.2e5 |
-| [`plane_energy`](environments/plane_energy.md) | 18,908 | 497 | 38 | 2.49e6 | 86,410 |
-| [`plane_sine`](environments/plane_sine.md) | 3.19 | 0.529 | 6.03 | 2.84e6 | 2.27e5 |
-| [`plane3d_heading`](environments/plane3d_heading.md) | 3.52 | 0.572 | 6.15 | 2.9e6 | 9e5 |
-| [`plane3d_circle`](environments/plane3d_circle.md) | 3.46 | 3.15 | 1.1 | 1.63e6 | 3.42e5 |
+| [`plane`](environments/plane.md) | 4.36 | 0.661 | 6.59 | 1.64e6 | 3.2e5 |
+| [`plane_energy`](environments/plane_energy.md) | 18,908 | 497 | 38.1 | 2.49e6 | 86,392 |
+| [`plane_sine`](environments/plane_sine.md) | 3.19 | 0.527 | 6.05 | 2.84e6 | 2.27e5 |
+| [`plane3d_heading`](environments/plane3d_heading.md) | 3.52 | 0.578 | 6.09 | 2.9e6 | 9e5 |
+| [`plane3d_circle`](environments/plane3d_circle.md) | 3.46 | 3.18 | 1.09 | 1.63e6 | 3.42e5 |
 | [`plane3d_racetrack`](environments/plane3d_racetrack.md) | 12.7 | 1.07 | 11.9 | 1.64e6 | 3.26e5 |
 | [`plane3d_figure8`](environments/plane3d_figure8.md) | 205 | 0.519 | 395 | 8.41e6 | 6,068 |
 | [`patrol`](environments/patrol.md) | 302 | 0.0532 | 5,676 | 30,726 | 3,168 |
@@ -96,13 +96,13 @@ tenth. The **transient** is the summed cost around each target change.
 | [`first_order`](environments/first_order.md) | 2.57e-6 | 0 | — | 55,292 | 53,873 |
 | [`four_tank`](environments/four_tank.md) | 22.7 | 1.08e-7 | 2.1e8 | 8.75e5 | 5e5 |
 | [`ph_neutralization`](environments/ph_neutralization.md) | 176 | 0.0925 | 1,906 | 41,669 | 2,557 |
-| [`distillation`](environments/distillation.md) | 391 | 0.0228 | 17,116 | 1.13e5 | 38,594 |
+| [`distillation`](environments/distillation.md) | 391 | 0.0229 | 17,029 | 1.13e5 | 38,594 |
 | [`unstable_cstr`](environments/unstable_cstr.md) | 56,957 | 3,800 | 15 | 5.84e5 | 2.48e5 |
 | **Industrial / Energy** | | | | | |
 | [`glass_furnace`](environments/glass_furnace.md) | 1.06 | 0.234 | 4.53 | 1,164 | 315 |
 | [`reactor`](environments/reactor.md) | 21 | 1.48 | 14.2 | 1,261 | 95 |
 | [`hvac`](environments/hvac.md) | 0.0242 | 0.0137 | 1.76 | 1.01 | 0.519 |
-| [`cement_kiln`](environments/cement_kiln.md) | 3.68 | 0.0705 | 52.2 | 1,410 | 153 |
+| [`cement_kiln`](environments/cement_kiln.md) | 3.68 | 0.0732 | 50.3 | 1,410 | 153 |
 | [`boiler_drum`](environments/boiler_drum.md) | 891 | 5.62 | 159 | 31,194 | 6,919 |
 | [`compressor_surge`](environments/compressor_surge.md) | 489 | 23 | 21.2 | 9.58e5 | 46,463 |
 | **Renewable Energy** | | | | | |
