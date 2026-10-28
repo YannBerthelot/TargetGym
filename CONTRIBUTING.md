@@ -16,9 +16,9 @@ uv run pre-commit install    # optional: runs the CI checks on each commit
 ## Running the checks
 
 ```bash
-make ci          # everything CI runs: ruff, black --check, docs, fast tests
-make test        # fast tests only, in parallel
-make test-all    # adds the slow closed-loop controller checks
+make ci          # everything CI runs: ruff, black --check, docs, small and medium tests
+make test        # small tests only, in parallel (the same as a plain `pytest`)
+make test-all    # every tier, including the large closed-loop controller checks
 make mypy        # type-check the enforced modules
 make coverage    # tests with the coverage threshold
 ```
@@ -31,13 +31,18 @@ compete for cores, and forces a headless SDL and matplotlib backend. Pass
 Note that `--durations` under `-n auto` reports wall time inflated by worker
 contention. Profile with `-n0` before concluding a test is slow.
 
-Two markers matter: tests are unmarked by default, and `@pytest.mark.slow`
-covers the closed-loop controller contracts, which run on merges to `main`
-rather than on every pull request.
+Tests come in three sizes, and [docs/testing.md](docs/testing.md) says which
+one a new test belongs in. Unmarked tests are small: one process, nothing
+written outside `tmp_path`, and the whole tier within 60 s on a laptop.
+`@pytest.mark.medium` covers tests that start another process, write videos,
+or compile an aircraft planner or tuner. `@pytest.mark.large` covers the
+closed-loop controller contracts, which run on merges to `main` rather than on
+every pull request. `@pytest.mark.records` is separate: those tests read the
+recorded baselines and run in their own job.
 
-CI runs the fast suite against Python 3.11, 3.12, 3.13 and 3.14 in parallel,
-plus a lint job, a docs job (`make ci-docs`) and, on merges to `main`, the slow
-suite on one interpreter.
+CI runs the small and medium tiers against Python 3.11, 3.12 and 3.13 in
+parallel, plus a lint job, a docs job (`make ci-docs`), the records job and, on
+merges to `main`, the large tier on one interpreter.
 If you add a dependency, check it resolves across that whole window --
 `uv lock --check --python 3.14` is the quickest way to find out. Note that
 `pygame` itself only ships wheels through 3.13, so on 3.14 the project pulls

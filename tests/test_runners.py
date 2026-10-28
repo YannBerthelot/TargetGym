@@ -69,6 +69,7 @@ def test_figure_modes_run_headless(name):
     assert R.figure_pid(name, params=params, n_seeds=2, plot=False)
 
 
+@pytest.mark.medium
 def test_importing_the_runners_keeps_the_callers_matplotlib_backend():
     """Only the command line picks a headless backend; a library import must
     leave the caller's own backend alone."""
@@ -228,6 +229,9 @@ def test_mpc_step_returns_finite(env_cls, params_cls, make_fn, make_kwargs, acti
         assert np.all(np.isfinite(arr)), "MPC action contains non-finite values"
 
 
+# Compiling an aircraft planner peaks at 2.5 to 4 GB and takes 25 to 95 s on a
+# cold cache (measured 2026-10-28), more than a small test's share of a machine.
+@pytest.mark.medium
 def test_plane_mpc_step_returns_finite():
     """PlaneMPC.step() returns a finite [power, stick] array."""
     env = Airplane2D(integration_method="rk4_1")
@@ -241,6 +245,7 @@ def test_plane_mpc_step_returns_finite():
     assert np.all(np.isfinite(action)), "PlaneMPC action contains non-finite values"
 
 
+@pytest.mark.medium  # an aircraft planner, as above
 def test_mpc_reset_zeroes_actions():
     """GradientMPC.reset() zeros out the internal action sequence."""
     env = Airplane2D(integration_method="rk4_1")

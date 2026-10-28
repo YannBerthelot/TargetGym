@@ -500,7 +500,7 @@ def _scheduled_episodes(env, params, gains, states, keys, hold):
     return tuple(np.asarray(x) for x in out)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_pid_holds_every_target(env, params):
     """The PID the registry builds (``make_pid``, so the tuned gains stored
     in ``src/target_gym/data/pid_gains.json``) on 130 scheduled episodes, 64

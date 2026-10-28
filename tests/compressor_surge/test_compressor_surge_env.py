@@ -856,7 +856,7 @@ def test_v1_is_log_scaled_and_charges_downtime(params):
     assert score(5.0, phi_min=0.49) == -9000.0
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_v1_ranks_tripping_below_safe(env, params):
     """The exploit version 1 is fixed against, on 32 seeds, with policies that
     trip in most episodes: the recycle shut under a pressure PI on speed, a
@@ -933,7 +933,7 @@ def test_zero_action_never_trips(env, params):
     assert x_alone == pytest.approx(0.454, abs=1e-3)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_full_travel_low_trips(env, params):
     """Conformance check 8's fact: full travel low (70 %, recycle shut) trips
     the plant from the PRNGKey(0) reset at every demand level from 0.20 to
@@ -968,7 +968,7 @@ def test_full_travel_high_never_trips(env, params):
     assert phi.max() < params.phi_join
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_setpoint_chasing_without_the_margin_trips(env, params):
     """The hardness claim on the env, 64 seeds: a pressure PI on speed with
     the recycle shut trips in every episode, and the margin-blind chaser at

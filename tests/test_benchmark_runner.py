@@ -334,7 +334,7 @@ def test_every_loop_runs_the_benchmarks_episodes(name):
     np.testing.assert_array_equal(ep.target_change, ref["target_change"][0])
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_batched_oracle_runs_the_same_episodes():
     """``rollout_mpc_batch`` vmaps the gradient planner over seeds; each seed is
     the episode ``rollout`` runs with the host planner, up to the float
