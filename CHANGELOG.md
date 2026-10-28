@@ -192,7 +192,11 @@ than by commit.
   wingman, on seed 208, rejoins late from a high spawn (32.6 m RMS) and is a
   strict expected failure. The pursuit PIDs they replace held 35 to 68 m, and
   the formation's lead 141 m off its altitude. The patrol and formation records
-  are re-recorded.
+  are re-recorded. The new experts join their slot more slowly than the
+  pursuits closed on it, so the three tasks' expert settles are re-measured
+  (`scripts/measure_hold.py`): the fixed settle rises from 44 to 84 steps on
+  both patrol tasks and from 37 to 45 on the formation, and their protocol
+  rows are re-evaluated with it.
 
 - **Shorter docstrings in the core modules** (registry, experts, eval, reward,
   runners, base): they keep the contracts and drop the measurement history,
