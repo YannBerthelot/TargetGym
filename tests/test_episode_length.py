@@ -31,7 +31,7 @@ from target_gym.registry import REGISTRY
 from target_gym.runners.runners import baseline_policy
 from target_gym.scoring import ceiling
 
-pytestmark = pytest.mark.slow
+pytestmark = pytest.mark.large
 
 SEEDS = (100, 101, 102)
 
