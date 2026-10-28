@@ -663,7 +663,11 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_cstr_pid_controller", module="target_gym.pc_gym.cstr.experts"
         ),
         make_mpc=_mpc("make_cstr_mpc", module="target_gym.pc_gym.cstr.experts"),
+        # 150 steps, over twice the 67 steps the SIMC cascade takes to come
+        # within twice the level it holds. At 100 the scored hold was the last
+        # third.
         tuned_gains_key="cstr",
+        version=3,
     ),
     EnvSpec(
         name="first_order",
@@ -677,7 +681,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_first_order_mpc", module="target_gym.pc_gym.first_order.experts"
         ),
+        # 150 steps, twice the 63 steps the SIMC PI takes to come within twice
+        # the level it holds. At 100 the scored hold was the last 37 steps.
         tuned_gains_key="first_order",
+        version=3,
     ),
     EnvSpec(
         name="four_tank",

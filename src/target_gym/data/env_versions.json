@@ -49,6 +49,11 @@
     "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
     "stamped": "2026-10-27T20:25:47+00:00"
   },
+  "cstr-v3": {
+    "fingerprint": "f6dcee2cab16336b",
+    "note": "the episode is 150 steps, from 100: over twice the SIMC cascade's 67-step settle",
+    "stamped": "2026-10-28T16:57:39+00:00"
+  },
   "distillation-v1": {
     "fingerprint": "a54022227b359ba6",
     "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",
@@ -73,6 +78,11 @@
     "fingerprint": "49305d8a3b59b266",
     "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
     "stamped": "2026-10-27T20:25:47+00:00"
+  },
+  "first_order-v3": {
+    "fingerprint": "23d7c85ac46af4f1",
+    "note": "the episode is 150 steps, from 100: twice the SIMC PI's 63-step settle",
+    "stamped": "2026-10-28T16:57:39+00:00"
   },
   "formation-v2": {
     "fingerprint": "5e91c00d37adefb2",
@@ -280,9 +290,9 @@
     "stamped": "2026-10-27T20:25:47+00:00"
   },
   "unstable_cstr-v2": {
-    "fingerprint": "a1ab52902e27d947",
-    "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
-    "stamped": "2026-10-27T20:25:47+00:00"
+    "fingerprint": "1137b0598356ec3c",
+    "note": "behaviour-preserving: cstr/env.py, a declared source, changed only cstr's episode length, which this task never reads",
+    "stamped": "2026-10-28T16:57:39+00:00"
   },
   "wind_turbine-v1": {
     "fingerprint": "889181b62fafcbed",

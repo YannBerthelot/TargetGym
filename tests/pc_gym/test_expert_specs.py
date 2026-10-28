@@ -51,7 +51,7 @@ PLANTS = [
 ]
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize("name", PLANTS)
 def test_the_expert_never_trips_the_plant(name):
     eps, _ = _episodes(name)
@@ -59,7 +59,7 @@ def test_the_expert_never_trips_the_plant(name):
     assert not failed, f"{name}: the expert tripped the plant on seeds {failed}"
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize(
     "name",
     [

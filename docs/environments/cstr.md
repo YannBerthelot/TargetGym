@@ -15,8 +15,8 @@ env, params = tg.make("cstr")
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((3,))` |
 | Tracked variable(s) | C_a (mol/L) |
-| Episode length | 100 steps of 15 s (25 min) |
-| Cite as | `cstr-v2` |
+| Episode length | 150 steps of 15 s (37.5 min) |
+| Cite as | `cstr-v3` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
 
 ## Action space
@@ -60,7 +60,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 100 steps.
+**Truncation.** After 150 steps.
 
 ## Baselines
 
@@ -80,7 +80,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | parameter | value | unit |
 |---|---|---|
 | `delta_t` | 0.25 | min |
-| `max_steps_in_episode` | 100 | steps |
+| `max_steps_in_episode` | 150 | steps |
 | `q` | 100 | L/min |
 | `V` | 100 | L |
 | `rho` | 1000 | g/L |

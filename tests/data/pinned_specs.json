@@ -427,7 +427,7 @@
   {
     "name": "cstr",
     "group": "process",
-    "version": 2,
+    "version": 3,
     "display_name": "CSTR",
     "params_cls": [
       "target_gym.pc_gym.cstr.env",
@@ -462,7 +462,7 @@
   {
     "name": "first_order",
     "group": "process",
-    "version": 2,
+    "version": 3,
     "display_name": "First order",
     "params_cls": [
       "target_gym.pc_gym.first_order.env",

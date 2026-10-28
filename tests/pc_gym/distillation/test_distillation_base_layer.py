@@ -60,7 +60,7 @@ def test_a_bottoms_above_spec_heats_stage_15():
     assert then[1] > first[1]
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_stage_15_has_the_largest_bottom_section_gain_to_boilup():
     """The maximum gain rule: of the bottom-section trays (stages 2 to 20),
     stage 15's temperature moves most per unit boilup at steady state."""

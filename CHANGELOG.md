@@ -277,7 +277,9 @@ than by commit.
   `first_order`, `cstr` and `ph_neutralization` experts hold within their
   instruments' resolution (pH 0.94 against a ceiling of 1, from 43.6), and
   the unstable CSTR holds 6.0, against 3.2 for the gains it replaces. The four
-  tasks are re-recorded.
+  tasks are re-recorded. `first_order` and `cstr` change (v3): their episodes
+  are 150 steps (100 in v2), twice the 63 and 67 steps their new experts take
+  to come within twice the level they hold, as the episode-length rule asks.
 
 - **Shorter docstrings in the core modules** (registry, experts, eval, reward,
   runners, base): they keep the contracts and drop the measurement history,

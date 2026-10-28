@@ -74,7 +74,7 @@ def make_cstr_mpc(
     It re-solves every step on the env's own step (``cstr_step_map``), with
     the concentration's tracking cost in floor units. ``window_start`` is
     where the protocol starts scoring, read by default from its burn-in
-    (``protocol_burn_in``: 12 steps of the registered 100), and the steps
+    (``protocol_burn_in``: 12 steps of the registered 150), and the steps
     before it weigh ``pre_weight``. The plant is deterministic, so the
     closed loop reaches the plant's optimum to float32 rounding.
 

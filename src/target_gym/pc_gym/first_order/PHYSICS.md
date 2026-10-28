@@ -42,7 +42,7 @@ Everything here is checked against the closed-form solution
 | Step response reaches 63.2 % of final at t = τ | analytic | matches | ✅ |
 | Settles to `K·u` | analytic | matches | ✅ |
 | Time-constant resolution | ≥ 5 steps per τ | **10 steps** | ✅ |
-| Episode covers settling | ≥ 4 τ | **100 steps = 10 τ** (benchmark; the class default of 200 is 20 τ) | ✅ |
+| Episode covers settling | ≥ 4 τ | **150 steps = 15 τ** | ✅ |
 | Every target reachable | required | `u = x/K` needs 0.5–1.5 of ±2.0 | ✅ |
 | No overshoot from a step | first order cannot overshoot | none | ✅ |
 | Monotone step response | required | yes | ✅ |
@@ -122,12 +122,15 @@ and stores them in `src/target_gym/data/pid_gains.json`; the factory is
 - **Settings.** The tight choice tau_c = theta gives
   Kc = tau1 / (k (tau_c + theta)) = 5.0 per unit error and
   tau_I = min(tau1, 4 (tau_c + theta)) = 0.20 s, so Ki = 25 /s. tau_c = 2 theta
-  and 3 theta cost more on the training seeds (2.3e-4 per step against 0.014
-  and 0.17, measured).
-- **Held-out check** (seeds 200 to 209). It holds 2.8e-9 per step against a
+  and 3 theta cost more on the training seeds (1.3e-4 per step against 0.0084
+  and 0.10, measured).
+- **Held-out check** (seeds 200 to 209). It holds 1.4e-12 per step against a
   ceiling of 1 and never trips (`tests/pc_gym/test_expert_specs.py`). It
   replaced a PID grid-searched on the scored reward, which was also far
   inside the resolution.
+- **Episode.** 150 steps (100 in v2), twice the 63 steps the PI takes to come
+  within twice the level it holds. The plant has no noise, so that level is
+  float32 rounding.
 
 ---
 
@@ -141,7 +144,7 @@ and stores them in `src/target_gym/data/pid_gains.json`; the factory is
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `first_order` | 100 | 0.05 | 5 s | 1 in [-1, 1] | 2 | 3 |
+| `first_order` | 150 | 0.05 | 8 s | 1 in [-1, 1] | 2 | 3 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

@@ -140,7 +140,7 @@ below.
 from the sampled setpoint. That is inherited from PC-gym and is why the shared
 conformance suite skips its PRNG-hygiene checks.
 
-**The oracle plans the rest of the episode.** Determinism and a 100-step
+**The oracle plans the rest of the episode.** Determinism and a 150-step
 episode make the plant's optimum computable, so the MPC slot holds it: an NLP
 over every remaining step, solved by IPOPT on `cstr_step_map`, the
 environment's own RK4 step written in CasADi (a test holds it equal to
@@ -208,7 +208,7 @@ smooth PID controller tuning", 2012) from step tests, and stored by
   is k = -0.00918 mol/L per K, tau1 = 0.861 min and theta = 0.354 min, which
   carries the inner loop's own response. Tight SIMC gives Kp = -132 K per
   mol/L and Ti = 0.861 min; 2 theta and 3 theta cost more on the training
-  seeds (57.6 per step against 95 and 194, measured).
+  seeds (36.7 per step against 60.6 and 124, measured).
 - **Bias.** The outer PI's output is added to the target's steady temperature,
   from the concentration balance and the design kinetics
   (`steady_temperature`), as the unstable CSTR's cascade does. The reset puts
@@ -217,10 +217,12 @@ smooth PID controller tuning", 2012) from step tests, and stored by
   concentration error reaches 17 % of its initial value the other way. The
   cascade is inside the analyser's band to stay after 20 to 40 steps on the
   training seeds, 26.5 at the median (measured). The protocol's
-  fixed settle, 54 steps, is where it comes within twice the level it holds.
+  fixed settle, 67 steps, is where it comes within twice the level it holds:
+  the plant has no noise, so that level is float32 rounding. The episode is 150
+  steps (100 in v2), over twice that settle.
   At the bottom of the target band (D1) the inner loop runs against the
   coolant stop.
-- **Held-out check** (seeds 200 to 209). It holds 1.8e-7 per step against a
+- **Held-out check** (seeds 200 to 209). It holds 9.7e-8 per step against a
   ceiling of 1 and never trips (`tests/pc_gym/test_expert_specs.py`).
 
 ---
@@ -235,7 +237,7 @@ smooth PID controller tuning", 2012) from step tests, and stored by
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `cstr` | 100 | 15 | 25 min | 1 in [-1, 1] | 3 | 4 |
+| `cstr` | 150 | 15 | 38 min | 1 in [-1, 1] | 3 | 4 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

@@ -15,8 +15,8 @@ env, params = tg.make("first_order")
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((2,))` |
 | Tracked variable(s) | x |
-| Episode length | 100 steps of 0.05 s (5 s) |
-| Cite as | `first_order-v2` |
+| Episode length | 150 steps of 0.05 s (7.5 s) |
+| Cite as | `first_order-v3` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
 
 ## Action space
@@ -59,7 +59,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 100 steps.
+**Truncation.** After 150 steps.
 
 ## Baselines
 
@@ -79,7 +79,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | parameter | value | unit |
 |---|---|---|
 | `delta_t` | 0.05 | s |
-| `max_steps_in_episode` | 100 | steps |
+| `max_steps_in_episode` | 150 | steps |
 | `K` | 1 | - |
 | `tau` | 0.5 | s |
 | `u_min` | -2 | - |

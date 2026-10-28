@@ -56,8 +56,8 @@ are the observation and action lengths, and the episode is the scored one.
 
 | Task | Name | What it asks | Obs | Act | Episode |
 |---|---|---|---|---|---|
-| [CSTR](environments/cstr.md) | `cstr` | Hold the concentration of reactant A in a cooled, exothermic stirred-tank reactor at a target drawn at reset, by setting the coolant temperature. | 3 | 1 | 100 steps, 25 min |
-| [First order](environments/first_order.md) | `first_order` | Drive a single first-order lag to a target drawn at reset. | 2 | 1 | 100 steps, 5 s |
+| [CSTR](environments/cstr.md) | `cstr` | Hold the concentration of reactant A in a cooled, exothermic stirred-tank reactor at a target drawn at reset, by setting the coolant temperature. | 3 | 1 | 150 steps, 37.5 min |
+| [First order](environments/first_order.md) | `first_order` | Drive a single first-order lag to a target drawn at reset. | 2 | 1 | 150 steps, 7.5 s |
 | [Four-tank](environments/four_tank.md) | `four_tank` | Hold the levels of the two lower tanks of Johansson's quadruple-tank process with two pumps. | 6 | 2 | 1200 steps, 20 min |
 | [pH neutralisation](environments/ph_neutralization.md) | `ph_neutralization` | Hold the pH of a stirred tank, where strong acid meets strong base in a carbonate buffer, at a target by setting the base flow. | 3 | 1 | 300 steps, 25 min |
 | [Distillation](environments/distillation.md) | `distillation` | Hold both product purities of a 40-tray binary distillation column (Skogestad's Column A) with reflux and boilup. | 7 | 2 | 200 steps, 3.33 h |
