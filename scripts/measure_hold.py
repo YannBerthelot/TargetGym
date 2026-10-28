@@ -190,7 +190,13 @@ PLANTS = {
     # name: (errors or None for obs-based, consumption, tau_cost steps, source,
     #        hold steps[, fixed settle steps])
     "plane": (None, _plane_speed, 70, "phugoid ~1 min at 1 s steps", None),
-    "plane_energy": (None, _plane_speed, 70, "phugoid ~1 min", None),
+    # One fixed settle serves every tread, so it is the expert's mean cost after
+    # an altitude step, the cost the hold averages, that sets it: within twice
+    # its level over the tread's second half from step 83 (seeds 100-102). The
+    # median tread enters by step 58, which left the largest steps' tails in the
+    # hold. The climb agrees: the largest step, 0.8 of the 900 m amplitude, is
+    # 49 s at the 14.6 m/s best sustained climb, plus the capture.
+    "plane_energy": (None, _plane_speed, 70, "phugoid ~1 min", None, 85),
     "plane_sine": (None, _plane_speed, 70, "phugoid ~1 min", None),
     "plane3d_heading": (_plane3d_errors("heading"), None, 70, "phugoid ~1 min", None),
     "plane3d_circle": (_plane3d_errors("circle"), None, 70, "phugoid ~1 min", None),
@@ -281,8 +287,10 @@ PLANTS = {
     ),
     # Six 10-minute blocks, and the last level holds past step 1200, so the task
     # keeps its own length and has no burn-in, as the battery does. A state is
-    # scored against level[block_clock // 200]. The hold starts at minute 6 of
-    # each block, a fixed settle of 120 steps, and ends where the MPC starts
+    # scored against level[block_clock // 200]. The hold starts 99 steps into
+    # each block, a fixed settle of just under five minutes, so that it fits
+    # twice in a 200-step block and the scorer drops all of it (both experts
+    # settle within about 30 steps), and ends where the MPC starts
     # moving toward the next level, which split_seed finds as anticipation.
     # The settle heuristic would take its provisional level from the whole
     # episode, switch transients included, and score transient tails as hold.
@@ -292,9 +300,9 @@ PLANTS = {
         None,
         None,
         0,
-        "per 10 min block, from minute 6; open-loop unstable",
+        "per 10 min block, from step 99; open-loop unstable",
         None,
-        120,
+        99,
     ),
     # Four 30-second setpoint blocks and six 20-second demand blocks, and both
     # last levels hold past step 1200, so the task keeps its own length, as

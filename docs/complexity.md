@@ -42,9 +42,9 @@ are the observation and action lengths, and the episode is the scored one.
 | Task | Name | What it asks | Obs | Act | Episode |
 |---|---|---|---|---|---|
 | [Altitude hold](environments/plane.md) | `plane` | Hold an A320-class airliner at a target altitude in light-to-moderate turbulence with throttle and elevator. | 10 | 2 | 280 steps, 4.67 min |
-| [Altitude and airspeed](environments/plane_energy.md) | `plane_energy` | Walk a ladder of eight altitude levels while holding a commanded airspeed, with the same airliner as `plane`. | 10 | 2 | 1200 steps, 20 min |
+| [Altitude and airspeed](environments/plane_energy.md) | `plane_energy` | Walk a ladder of eight altitude levels while holding a commanded airspeed, with the same airliner as `plane`. | 10 | 2 | 1600 steps, 26.7 min |
 | [Altitude - sinusoid](environments/plane_sine.md) | `plane_sine` | Track an altitude that moves as a sinusoid, with the same airliner, throttle and elevator as `plane`. | 10 | 2 | 480 steps, 8 min |
-| [3D heading](environments/plane3d_heading.md) | `plane3d_heading` | Hold a target altitude and turn onto and hold a target heading with the 3D airliner, using throttle, elevator and aileron. | 15 | 3 | 200 steps, 3.33 min |
+| [3D heading](environments/plane3d_heading.md) | `plane3d_heading` | Hold a target altitude and turn onto and hold a target heading with the 3D airliner, using throttle, elevator and aileron. | 15 | 3 | 300 steps, 5 min |
 | [3D circle](environments/plane3d_circle.md) | `plane3d_circle` | Hold altitude while orbiting a fixed circle kilometres across with the 3D airliner. | 17 | 3 | 300 steps, 5 min |
 | [3D holding pattern](environments/plane3d_racetrack.md) | `plane3d_racetrack` | Fly a holding pattern, two straight legs joined by half circles, at a target altitude with the 3D airliner. | 21 | 3 | 650 steps, 10.8 min |
 | [3D figure-8](environments/plane3d_figure8.md) | `plane3d_figure8` | Follow a twisted figure-8 that climbs and descends, with the 3D airliner. | 19 | 3 | 400 steps, 6.67 min |

@@ -46,7 +46,7 @@
   {
     "name": "plane_energy",
     "group": "aircraft",
-    "version": 3,
+    "version": 4,
     "display_name": "Altitude and airspeed",
     "params_cls": [
       "target_gym.plane.env",
@@ -68,7 +68,7 @@
       "make_plane_mpc"
     ],
     "scored_overrides": {
-      "max_steps_in_episode": 1200,
+      "max_steps_in_episode": 1600,
       "e_floor": 1.2,
       "c_hold": 5.23,
       "failure_cost": 206451200.0,
@@ -150,7 +150,7 @@
   {
     "name": "plane3d_heading",
     "group": "aircraft",
-    "version": 3,
+    "version": 4,
     "display_name": "3D heading",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -172,11 +172,11 @@
       "make_plane3d_mpc"
     ],
     "scored_overrides": {
-      "max_steps_in_episode": 200,
+      "max_steps_in_episode": 300,
       "e_floor_altitude": 1.0,
       "failure_cost": 297289728.0,
-      "rho_floor_tracking": 0.45360830046901834,
-      "rho_floor": 0.45360830046901834
+      "rho_floor_tracking": 0.34421933365173735,
+      "rho_floor": 0.34421933365173735
     },
     "tuned_gains_key": "plane3d_heading",
     "gains_keys": [],

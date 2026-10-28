@@ -40,9 +40,9 @@ To pick one by what you want to test, see
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
 | `plane` | `plane-v2` | (10,) | (2,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
-| `plane_energy` | `plane_energy-v3` | (10,) | (2,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
+| `plane_energy` | `plane_energy-v4` | (10,) | (2,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
 | `plane_sine` | `plane_sine-v2` | (10,) | (2,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
-| `plane3d_heading` | `plane3d_heading-v3` | (15,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
+| `plane3d_heading` | `plane3d_heading-v4` | (15,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `plane3d_circle` | `plane3d_circle-v3` | (17,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `plane3d_racetrack` | `plane3d_racetrack-v4` | (21,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `plane3d_figure8` | `plane3d_figure8-v3` | (19,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |

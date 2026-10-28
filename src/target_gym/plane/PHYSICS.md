@@ -438,7 +438,7 @@ sites (2D, 3D and patrol) now say so.
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `plane` | 280 | 1 | 5 min | 2 in [-1, 1] | 10 | 16 |
-| `plane_energy` | 1200 | 1 | 20 min | 2 in [-1, 1] | 10 | 16 |
+| `plane_energy` | 1600 | 1 | 27 min | 2 in [-1, 1] | 10 | 16 |
 | `plane_sine` | 480 | 1 | 8 min | 2 in [-1, 1] | 10 | 16 |
 
 `float state` counts the scalar and array float fields the state carries,
