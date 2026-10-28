@@ -41,7 +41,14 @@ def _episodes(name):
     return eps, p
 
 
-PLANTS = ["first_order", "cstr", "ph_neutralization", "unstable_cstr"]
+PLANTS = [
+    "first_order",
+    "cstr",
+    "ph_neutralization",
+    "unstable_cstr",
+    "four_tank",
+    "distillation",
+]
 
 
 @pytest.mark.slow
@@ -66,6 +73,8 @@ def test_the_expert_never_trips_the_plant(name):
                 "a ceiling of 1, through the unmeasured feed-temperature drift"
             ),
         ),
+        "four_tank",
+        "distillation",
     ],
 )
 def test_the_expert_holds_within_the_instruments_resolution(name):

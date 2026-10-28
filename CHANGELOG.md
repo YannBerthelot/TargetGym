@@ -178,6 +178,21 @@ than by commit.
   where stall prevention keeps the airliner too fast to turn that tight.
   Every aircraft record is re-recorded.
 
+- **The four-tank and the column run their practice's loops, and their tasks
+  change (v3).** `four_tank`'s expert is the rig's multi-loop PI on the
+  crossed pairing through a static decoupler, SIMC-tuned; its loops come
+  within 1.3 times the speed the plant's right-half-plane zero allows, and
+  reach the 1 mm resolution about 570 s in, so the episode is now 1200 steps
+  (500 in v2). `distillation`'s expert is the base layer under a column's
+  MPC: the LV-configuration with boilup holding the stage-15 temperature,
+  reflux on the distillate and the temperature setpoint on the bottoms. Its
+  observation gains that temperature (7 entries, from 6), on column A's
+  linear boiling-point curve. The column's tight SIMC settings saturate the
+  flows and run it off, so its temperature loop takes SIMC's input-usage
+  bound. Both experts replace grid searches on the scored reward. On the
+  held-out seeds both hold inside the ceiling of 2: the four-tank 1.33 (from
+  22.7) and the column 0.155 (from 391).
+
 - **Four process experts are what practice runs, tuned by SIMC.**
   `scripts/tune_process_experts.py` step-tests each plant on training seeds
   100-109, fits a first-order-plus-delay model and applies the SIMC rules

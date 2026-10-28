@@ -28,7 +28,7 @@ class DistillationColumn(
 ):
     """Binary distillation column, Skogestad's "Column A".
 
-    Observation (6,): [yD, xB, L_pct, V_pct, target_yD, target_xB]
+    Observation (7,): [yD, xB, L_pct, V_pct, target_yD, target_xB, T_15]
     Action      (2,): [L_raw, V_raw] in [-1, 1] -> reflux and boilup
     """
 
@@ -43,7 +43,7 @@ class DistillationColumn(
     obs_target_index: int = 4  # target_yD
 
     def __init__(self, integration_method: str = "rk4_16"):
-        self.obs_shape = (6,)
+        self.obs_shape = (7,)
         self.integration_method = integration_method
 
     @property

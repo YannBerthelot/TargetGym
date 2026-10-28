@@ -59,6 +59,11 @@
     "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
     "stamped": "2026-10-27T20:25:47+00:00"
   },
+  "distillation-v3": {
+    "fingerprint": "684a3f2b4b218a2e",
+    "note": "the observation gains the stage-15 temperature, on column A's linear boiling-point curve (7 entries, from 6)",
+    "stamped": "2026-10-28T08:51:59+00:00"
+  },
   "first_order-v1": {
     "fingerprint": "fa0ddbc733bf3f60",
     "note": "re-stamped without a note",
@@ -83,6 +88,11 @@
     "fingerprint": "22b2d1237bf51245",
     "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
     "stamped": "2026-10-27T20:25:47+00:00"
+  },
+  "four_tank-v3": {
+    "fingerprint": "82d6004860b13eeb",
+    "note": "the episode is 1200 steps, from 500: twice the decoupled SIMC expert's settle into the 1 mm resolution (about 570 s)",
+    "stamped": "2026-10-28T08:51:59+00:00"
   },
   "glass_furnace-v1": {
     "fingerprint": "272349cfabc95017",

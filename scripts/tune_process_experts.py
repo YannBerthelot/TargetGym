@@ -114,6 +114,28 @@ def fit_unstable_lag(t, dy, du, guess):
     return least_squares(residual, guess, bounds=(lo, hi)).x
 
 
+def fit_integrating_lag(t, dy, du, guess):
+    """``k' e^(-theta s) / (s (tau2 s + 1))`` fit: the start of a lag-dominant
+    response (Fig. 5.3), with ``k'`` the slope after the delay."""
+
+    def residual(q):
+        kp, tau2, theta = q
+        x = np.maximum(t - theta, 0.0)
+        return kp * du * (x - tau2 * (1 - np.exp(-x / tau2))) - dy
+
+    lo, hi = [-np.inf, 1e-3, 0.0], [np.inf, 50.0, 10.0]
+    return least_squares(residual, guess, bounds=(lo, hi)).x
+
+
+def tau_c_for_input(k, tau1, theta, ys, umax):
+    """The smallest tau_c whose first move on a setpoint step ``ys`` stays
+    within ``umax``, never below theta (5.35): ``|Kc ys| <= umax``. ``tau1`` is
+    ``None`` for an integrating process, whose ``k`` is the slope ``k'``."""
+    if tau1 is None:
+        return max(theta, abs(ys) / (abs(k) * umax) - theta)
+    return max(theta, tau1 * abs(ys) / (abs(k) * umax) - theta)
+
+
 def simc_pi(k, tau1, theta, tau_c):
     """SIMC PI (5.24-5.25), returned as ``(Kc, tau_I)``."""
     return tau1 / (k * (tau_c + theta)), min(tau1, 4.0 * (tau_c + theta))
@@ -361,11 +383,174 @@ class _HostOnly:
         return self.pid
 
 
+def tune_four_tank() -> dict:
+    from target_gym.pc_gym.four_tank.experts import (
+        four_tank_decoupled_pi,
+        steady_voltages,
+    )
+
+    env, p, step, reset = _plant("four_tank")
+    dt = float(p.delta_t)
+    prm = four_tank_decoupled_pi(1.0, 1.0, 1.0, 1.0, np.eye(2), p).params
+    raw = (
+        lambda v: 2 * (np.asarray(v) - p.v_min) / (p.v_max - p.v_min) - 1
+    )  # noqa: E731
+    g2 = np.sqrt(2 * p.g)
+    rests = []
+    for s in TRAIN:
+        o, st = reset(jax.random.PRNGKey(s))
+        t1, t2 = float(o[4]), float(o[5])
+        v = np.array(steady_voltages(t1, t2, prm, np), float)
+        h3 = ((1 - p.gamma2) * p.k2 * v[1] / (p.a3 * g2)) ** 2
+        h4 = ((1 - p.gamma1) * p.k1 * v[0] / (p.a4 * g2)) ** 2
+        st = st.replace(
+            **{
+                f: jnp.float32(h)
+                for f, h in zip(("h1", "h2", "h3", "h4"), (t1, t2, h3, h4))
+            }
+        )
+        rests.append((t1, t2, v, st))
+
+    # The steady-state gains: each pump stepped 0.3 V, run to rest.
+    gains = []
+    for t1, t2, v, st in rests:
+        G = np.zeros((2, 2))
+        for j in range(2):
+            dv = np.eye(2)[j] * 0.3
+            y = _run(step, st, lambda _s, u=raw(v + dv): u, 2000)[-1, :2]
+            G[:, j] = (y - [t1, t2]) / 0.3
+        gains.append(G)
+    G = np.median(np.asarray(gains), axis=0)
+    D = np.linalg.solve(G, np.diag([G[0, 1], G[1, 0]]))
+    print(f"  G(0) {np.round(G, 5).tolist()} m/V; decoupler {np.round(D, 4).tolist()}")
+
+    # Each decoupled loop stepped 0.3 V in its own w.
+    models = {0: [], 1: []}
+    for t1, t2, v, st in rests:
+        for j in range(2):
+            u = raw(v + D @ (np.eye(2)[j] * 0.3))
+            y = _run(step, st, lambda _s, u=u: u, 1500)[:, j]
+            t = np.arange(1, len(y) + 1) * dt
+            models[j].append(fit_fopdt(t, y - (t1, t2)[j], 0.3, (0.04, 100.0, 10.0)))
+    loops = [_median_model(models[j], dt) for j in range(2)]
+    for j, (k, tau1, theta) in enumerate(loops):
+        print(
+            f"  loop {j + 1} model k {k:.4g} m/V, tau1 {tau1:.4g}, theta {theta:.4g} s"
+        )
+
+    def build(n):
+        (k1, a1, th1), (k2, a2, th2) = loops
+        (Kp_1, Ti_1), (Kp_2, Ti_2) = simc_pi(k1, a1, th1, n * th1), simc_pi(
+            k2, a2, th2, n * th2
+        )
+        return four_tank_decoupled_pi(Kp_1, Ti_1, Kp_2, Ti_2, D, p)
+
+    costs = {n: _train_cost("four_tank", lambda n=n: build(n)) for n in (1, 2, 3)}
+    best = 1
+    for n in (2, 3):
+        if costs[n] < 0.99 * min(costs[m] for m in range(1, n)):
+            best = n
+    print(f"  tau_c = n theta, training cost per step: {costs}, n = {best}")
+    c = build(best).params
+    return {
+        "Kp_1": c.Kp_1,
+        "Ti_1": c.Ti_1,
+        "Kp_2": c.Kp_2,
+        "Ti_2": c.Ti_2,
+        "D11": D[0, 0],
+        "D12": D[0, 1],
+        "D21": D[1, 0],
+        "D22": D[1, 1],
+    }
+
+
+def tune_distillation() -> dict:
+    from target_gym.pc_gym.distillation.env import tray_temperature
+
+    env, p, step, reset = _plant("distillation")
+    dt = float(p.delta_t)
+    rL = lambda L: 2 * (L - p.L_min) / (p.L_max - p.L_min) - 1  # noqa: E731
+    rV = lambda V: 2 * (V - p.V_min) / (p.V_max - p.V_min) - 1  # noqa: E731
+    # The room each flow has from the nominal point to its nearer bound.
+    room_L = min(2.706 - p.L_min, p.L_max - 2.706)
+    room_V = min(3.206 - p.V_min, p.V_max - 3.206)
+    starts = [reset(jax.random.PRNGKey(s)) for s in TRAIN]
+    ys_D = max(abs(float(o[4] - o[0])) for o, _ in starts)
+    ys_B = max(abs(float(o[5] - o[1])) for o, _ in starts)
+
+    def run(st, act, n, key):
+        return _run(step, st, act, n, key=key)
+
+    # Temperature loop: boilup stepped 0.005 kmol/min, against an unstepped
+    # run on the same feed noise; the first 20 min for the slope, 400 for the
+    # steady gains that size the setpoint moves.
+    inner, gain_T, gain_B = [], [], []
+    for s, (o, st) in zip(TRAIN, starts):
+        L, V = float(st.L), float(st.V)
+        base = run(st, lambda _s: [rL(L), rV(V)], 400, s)
+        moved = run(st, lambda _s: [rL(L), rV(V + 0.005)], 400, s)
+        t = np.arange(1, 401) * dt
+        inner.append(
+            fit_integrating_lag(t[:20], (moved - base)[:20, 6], 0.005, (1.0, 1.0, 0.0))
+        )
+        gain_T.append((moved - base)[-1, 6] / 0.005)
+        gain_B.append((moved - base)[-1, 1] / 0.005)
+    kp, tau2, theta = np.median(np.asarray(inner), axis=0)
+    theta += dt / 2
+    dT_dxB = abs(np.median(gain_T) / np.median(gain_B))
+    ys_T = ys_B * dT_dxB
+    tau_c = tau_c_for_input(kp, None, theta, ys_T, room_V)
+    Kp_T, Ti_T = 1.0 / (kp * (tau_c + theta)), 4.0 * (tau_c + theta)
+    print(
+        f"  T loop: k' {kp:.4g} K/min per kmol/min, tau2 {tau2:.3g}, theta {theta:.3g}"
+        f" min; setpoint moves up to {ys_T:.3g} K, boilup room {room_V:.3g};"
+        f" tau_c {tau_c:.3g} min"
+    )
+
+    # Composition loops, the temperature loop closed at the reset temperature.
+    def closed(st, L_of, T_sp, n, key):
+        mem = {"I": 0.0}
+        V0 = float(st.V)
+
+        def act(state):
+            T = float(tray_temperature(state))
+            e = T_sp - T
+            I = mem["I"] + e * dt
+            V = V0 + Kp_T * (e + I / Ti_T)
+            if p.V_min <= V <= p.V_max:
+                mem["I"] = I
+            return [rL(L_of), rV(np.clip(V, p.V_min, p.V_max))]
+
+        return run(st, act, n, key)
+
+    top, bottom = [], []
+    for s, (o, st) in zip(TRAIN, starts):
+        L, T0 = float(st.L), float(tray_temperature(st))
+        base = closed(st, L, T0, 600, s)
+        t = np.arange(1, 601) * dt
+        y = closed(st, L + 0.005, T0, 600, s)
+        top.append(fit_fopdt(t, (y - base)[:, 0], 0.005, (0.02, 10.0, 1.0)))
+        y = closed(st, L, T0 - 0.2, 600, s)
+        bottom.append(fit_fopdt(t, (y - base)[:, 1], -0.2, (-0.005, 3.0, 1.0)))
+    out = {"Kp_T": Kp_T, "Ti_T": Ti_T}
+    for name, models, ys, room in (("D", top, ys_D, room_L), ("B", bottom, ys_B, ys_T)):
+        k, tau1, th = _median_model(models, dt)
+        tc = tau_c_for_input(k, tau1, th, ys, room)
+        out[f"Kp_{name}"], out[f"Ti_{name}"] = simc_pi(k, tau1, th, tc)
+        print(
+            f"  {'yD on L' if name == 'D' else 'xB on T_sp'}: k {k:.4g}, tau1"
+            f" {tau1:.3g}, theta {th:.3g} min; tau_c {tc:.3g} min"
+        )
+    return out
+
+
 TUNERS = {
     "first_order": tune_first_order,
     "cstr": tune_cstr,
     "ph_neutralization": tune_ph_neutralization,
     "unstable_cstr": tune_unstable_cstr,
+    "four_tank": tune_four_tank,
+    "distillation": tune_distillation,
 }
 
 

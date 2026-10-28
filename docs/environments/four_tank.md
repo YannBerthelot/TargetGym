@@ -7,9 +7,9 @@
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((6,))` |
 | Tracked variable(s) | h1 (m), h2 (m) |
-| Episode length | 500 steps (500 s at 1 s per step) |
+| Episode length | 1200 steps (1200 s at 1 s per step) |
 | Import | `from target_gym import FourTank, FourTankParams` |
-| Cite as | `four_tank-v2` |
+| Cite as | `four_tank-v3` |
 
 ## Action space
 
@@ -48,7 +48,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 500 steps.
+**Truncation.** After 1200 steps.
 
 ## Baselines
 
@@ -66,7 +66,7 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 | parameter | default | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
-| `max_steps_in_episode` | 500 | steps |
+| `max_steps_in_episode` | 1200 | steps |
 | `g` | 9.81 | m/s^2 |
 | `gamma1` | 0.2 | - |
 | `gamma2` | 0.2 | - |

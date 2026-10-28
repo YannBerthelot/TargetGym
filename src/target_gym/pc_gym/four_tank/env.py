@@ -83,7 +83,7 @@ class FourTankParams(EnvParams):
     initial_h4_range: Tuple[float, float] = (0.10, 0.16)
 
     delta_t: float = 1.0
-    max_steps_in_episode: int = 500
+    max_steps_in_episode: int = 1200
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # No disturbance and fixed targets: the shipped MPC holds both levels to

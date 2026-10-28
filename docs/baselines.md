@@ -83,9 +83,9 @@ gains cannot:
 
 The aircraft experts are tuned by `scripts/tune_aircraft_guidance.py`, on
 training seeds and never on the scored ones, and their numbers live beside
-them in code. The process plants `first_order`, `cstr`, `ph_neutralization`
-and `unstable_cstr` are tuned by SIMC from step tests on training seeds, with
-a held-out check on seeds 200 to 209:
+them in code. The process plants `first_order`, `cstr`, `ph_neutralization`,
+`unstable_cstr`, `four_tank` and `distillation` are tuned by SIMC from step
+tests on training seeds, with a held-out check on seeds 200 to 209:
 
 ```bash
 uv run python scripts/tune_process_experts.py --envs cstr --write --check

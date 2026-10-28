@@ -7,11 +7,11 @@ Binary distillation — Skogestad's "Column A".
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
-| Observation space | `Box((6,))` |
+| Observation space | `Box((7,))` |
 | Tracked variable(s) | yD (mole fraction) |
 | Episode length | 200 steps (12000 s at 60 s per step) |
 | Import | `from target_gym import DistillationColumn, DistillationParams` |
-| Cite as | `distillation-v2` |
+| Cite as | `distillation-v3` |
 
 ## Action space
 
@@ -25,7 +25,7 @@ actuator range inside the environment.
 
 ## Observation space
 
-6 values. Indices (0,) carry the tracked variable(s) that the
+7 values. Indices (0,) carry the tracked variable(s) that the
 reward scores.
 
 ## Rewards

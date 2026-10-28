@@ -72,8 +72,10 @@ def test_the_oracle_plans_on_the_protocols_window():
     p = plan_params(SPEC, SPEC.make_test_params())
     mpc = make_four_tank_mpc(SPEC.make_env(), p)
     assert isinstance(mpc, ShrinkingHorizonNLP)
-    assert mpc.window_start == E.scored_burn_in("four_tank", p) == 250
-    assert (mpc.resolve_every, mpc.pre_weight, mpc.horizon) == (25, 1e-3, 500)
+    # The burn-in row's 270 steps, under half the 1200-step episode; the
+    # horizon is the whole episode.
+    assert mpc.window_start == E.scored_burn_in("four_tank", p) == 270
+    assert (mpc.resolve_every, mpc.pre_weight, mpc.horizon) == (25, 1e-3, 1200)
     np.testing.assert_allclose(mpc.x_lb, p.h_min + _LEVEL_MARGIN)
     np.testing.assert_allclose(mpc.x_ub, p.h_max - _LEVEL_MARGIN)
 

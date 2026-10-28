@@ -175,102 +175,15 @@
     "note": "Relay autotuning, positive-gain (rod withdrawal raises power)."
   },
   "four_tank": {
-    "pid1": {
-      "Kp": 5.0,
-      "Ki": 0.05,
-      "Kd": 0.0
-    },
-    "pid2": {
-      "Kp": 100.0,
-      "Ki": 1.0,
-      "Kd": 0.0
-    },
-    "gain_schedule_pid1": {
-      "operating_points": [
-        0.11,
-        0.12142857142857143,
-        0.13285714285714287,
-        0.1442857142857143,
-        0.15571428571428572,
-        0.16714285714285715,
-        0.17857142857142858,
-        0.19
-      ],
-      "Kp": [
-        5.0,
-        5.0,
-        5.0,
-        5.0,
-        5.0,
-        5.0,
-        5.0,
-        5.0
-      ],
-      "Ki": [
-        0.0,
-        0.0,
-        0.05,
-        0.05,
-        0.05,
-        0.05,
-        0.05,
-        0.05
-      ],
-      "Kd": [
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0
-      ]
-    },
-    "gain_schedule_pid2": {
-      "operating_points": [
-        0.11,
-        0.12142857142857143,
-        0.13285714285714287,
-        0.1442857142857143,
-        0.15571428571428572,
-        0.16714285714285715,
-        0.17857142857142858,
-        0.19
-      ],
-      "Kp": [
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0
-      ],
-      "Ki": [
-        0.5,
-        0.5,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0
-      ],
-      "Kd": [
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0
-      ]
-    },
-    "tuning_rule": "grid_search_max_reward",
-    "note": "Sequential grid search over (Kp, Ki) maximizing cumulative env reward, alternating loop1/loop2 refinements. FourTank is a pure integrator -> relay autotuning fails (no zero-crossings)."
+    "Kp_1": 45.069595,
+    "Ti_1": 146.374594,
+    "Kp_2": 32.394183,
+    "Ti_2": 118.144275,
+    "D11": -0.293842,
+    "D12": 1.064773,
+    "D21": 1.064773,
+    "D22": -0.234713,
+    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
   },
   "patrol": {
     "Kp_alt": 0.01,
@@ -297,18 +210,13 @@
     "note": "Grid search over (Kp, Ki, Kd) maximising mean cumulative env reward. Relay autotuning fails on this plant: the crown temperature integrates the firing rate, so under a bang-bang relay it drifts without sustained zero-crossings and Astrom-Hagglund has no Ku/Tu to extract."
   },
   "distillation": {
-    "pid1": {
-      "Kp": 150.0,
-      "Ki": 1.0,
-      "Kd": 0.0
-    },
-    "pid2": {
-      "Kp": -150.0,
-      "Ki": -1.0,
-      "Kd": 0.0
-    },
-    "tuning_rule": "grid_search_max_reward",
-    "note": "LV pairing: yD<-L (positive gain), xB<-V (negative -- more boilup strips the bottoms cleaner, lowering xB). Grid search over (Kp, Ki); return rises monotonically to Kp~400 with no instability, but 150 captures 98% of it at a quarter of the control activity, which is the safer margin on a plant with RGA ~50."
+    "Kp_T": 0.160129,
+    "Ti_T": 21.051052,
+    "Kp_D": 36.191234,
+    "Ti_D": 1.980297,
+    "Kp_B": -222.74302,
+    "Ti_B": 2.182375,
+    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
   },
   "wind_turbine": {
     "Kp_pitch": 12.0,
