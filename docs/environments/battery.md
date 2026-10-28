@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/battery/pid_output.gif" width="480px"/></p>
 
-Grid battery storage — equivalent-circuit Li-ion pack tracking a dispatch signal.
+Follow a grid dispatch schedule, one setpoint per 5-minute market block, with a 1 MW / 2 MWh lithium-ion battery. Every MWh moved wears the pack, and the running cost prices that wear in dollars at every step, so tracking is a trade against capacity fade. Leaving the 5 to 95 % charge window trips the pack, though exact tracking stays inside it over a scored episode.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("battery")
+```
 
 | | |
 |---|---|
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((5,))` |
 | Tracked variable(s) | delivered power (MW) |
-| Episode length | 360 steps (1800 s at 5 s per step) |
-| Import | `from target_gym import GridBattery, BatteryParams` |
+| Episode length | 360 steps of 5 s (30 min) |
 | Cite as | `battery-v2` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/battery/PHYSICS.md) |
 
 ## Action space
 
@@ -24,8 +30,15 @@ actuator range inside the environment.
 
 ## Observation space
 
-5 values. Indices (3,) carry the tracked variable(s) that the
-reward scores.
+5 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[3]` against `obs[4]`.
+
+| # | meaning |
+|---|---|
+| 0 | `soc`, state of charge (0 to 1) |
+| 1 | cell voltage (V) |
+| 2 | pack temperature (°C) |
+| 3 | delivered power (MW), positive when discharging |
+| 4 | target power (MW) |
 
 ## Rewards
 
@@ -64,7 +77,9 @@ The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of th
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("battery", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 5 | s |
 | `max_steps_in_episode` | 360 | steps |

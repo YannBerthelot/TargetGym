@@ -118,7 +118,8 @@ actions, memory = policy(memory, obs[None])
 
 `tg.make_oracle(name)` returns the full-state MPC, which reads the true state
 and so shows what a perfect model could do. `tg.list_envs()` gives every name;
-the [environment reference](environments.md) describes each task, and
+the [environment reference](environments.md) describes each task,
+[Choosing an environment](complexity.md) says which to start with, and
 [Using the PIDs](using-the-pids.md) covers evaluating against and training on
 the experts. For code that needs more than this, `target_gym.registry.REGISTRY`
 holds each task's `EnvSpec`.

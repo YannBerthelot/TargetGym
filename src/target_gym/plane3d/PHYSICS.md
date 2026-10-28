@@ -88,15 +88,91 @@ Only the parameters the third dimension introduces. Everything else is in
 
 ## 4. Task design
 
-Three tasks share these dynamics and differ only in the reference:
+Four tasks share these dynamics and differ only in the reference. **Patrol**
+adds a second aircraft and a slot defined relative to it, but no new physics.
 
-* **Heading** — hold an altitude and a commanded heading.
-* **Circle** — hold an altitude while orbiting a fixed circular path.
-* **Figure-8** — follow a twisted lemniscate, which forces the bank to reverse
-  through wings-level at the crossover.
+### Task: `plane3d_heading`
 
-**Patrol** adds a second aircraft and a slot defined relative to it, but no new
-physics.
+Hold a target altitude and turn onto and hold a target heading with the 3D
+airliner, using throttle, elevator and aileron. The aileron commands a roll
+rate, not a bank angle, so heading is controlled through a cascade of two
+integrators, and the turbulence is hidden.
+
+| obs | meaning |
+|---|---|
+| 0 | `x_dot`, velocity along world x (m/s) |
+| 1 | `y_dot`, velocity along world y (m/s) |
+| 2 | `z`, altitude (m) |
+| 3 | `z_dot`, vertical speed (m/s) |
+| 4 | `theta`, pitch angle (rad) |
+| 5 | `theta_dot`, pitch rate (rad/s) |
+| 6 | `phi`, bank angle (rad) |
+| 7 | `phi_dot`, roll rate (rad/s) |
+| 8 | `gamma`, flight-path angle (rad) |
+| 9 | `psi`, heading (rad) |
+| 10 | target altitude (m) |
+| 11 | target heading (rad) |
+| 12 | throttle, 0 to 1 |
+| 13 | elevator deflection (rad) |
+| 14 | aileron deflection (rad) |
+
+### Task: `plane3d_circle`
+
+Hold altitude while orbiting a fixed circle kilometres across with the 3D
+airliner. The orbit asks for a sustained, coordinated bank, and the circle is
+large compared with what the aircraft can change in a few steps.
+
+| obs | meaning |
+|---|---|
+| 0-9 | the aircraft's state, as in `plane3d_heading` |
+| 10 | target altitude (m) |
+| 11 | x offset from the circle's centre (m) |
+| 12 | y offset from the circle's centre (m) |
+| 13 | circle radius (m) |
+| 14 | throttle, 0 to 1 |
+| 15 | elevator deflection (rad) |
+| 16 | aileron deflection (rad) |
+
+### Task: `plane3d_racetrack`
+
+Fly a holding pattern, two straight legs joined by half circles, at a target
+altitude with the 3D airliner. The observation gives the signed cross-track
+error, the tangent heading and the curvature at the nearest point of the
+pattern, so the work is in the transitions between straight and turning
+flight.
+
+| obs | meaning |
+|---|---|
+| 0-9 | the aircraft's state, as in `plane3d_heading` |
+| 10 | target altitude (m) |
+| 11 | x offset from the pattern's centre (m) |
+| 12 | y offset from the pattern's centre (m) |
+| 13 | turn radius of the pattern (m) |
+| 14 | direction of the legs (rad) |
+| 15 | throttle, 0 to 1 |
+| 16 | elevator deflection (rad) |
+| 17 | aileron deflection (rad) |
+| 18 | cross-track error to the nearest point, positive outside the pattern (m) |
+| 19 | heading of the pattern at the nearest point (rad) |
+| 20 | signed curvature at the nearest point, 0 on the legs (1/m) |
+
+### Task: `plane3d_figure8`
+
+Follow a twisted figure-8 that climbs and descends, with the 3D airliner. The
+bank has to reverse through wings level at every crossover, and the
+observation gives the vector to the nearest point of the path and the path's
+heading there, but not its curvature.
+
+| obs | meaning |
+|---|---|
+| 0-9 | the aircraft's state, as in `plane3d_heading` |
+| 10 | target altitude (m) |
+| 11 | size of the figure-8 (m) |
+| 12-14 | vector from the aircraft to the nearest point of the path, x, y and z (m) |
+| 15 | heading of the path at the nearest point (rad) |
+| 16 | throttle, 0 to 1 |
+| 17 | elevator deflection (rad) |
+| 18 | aileron deflection (rad) |
 
 ### Observation
 

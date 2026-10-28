@@ -177,11 +177,10 @@ lead and two wingmen share one team cost, with a JaxMARL-style interface that
 gives each aircraft its own observation and action. See
 [Multi-agent formation](docs/multi-agent.md).
 
-Environments span six difficulty tiers, graded on dynamics (linearity,
-coupling, stiffness) and on the RL side (dimensionality, horizon, partial
-observability), from a first-order lag at tier 1 to the cement kiln and the
-multi-agent formation at tier 6. See the
-**[complexity ladder](docs/complexity.md)**.
+To pick a task by what you want your method to face (an unstable plant,
+coupled inputs, a transport delay, hidden state, a moving or hidden reference,
+several agents), see
+**[Choosing an environment](docs/complexity.md)**.
 
 Each environment renders a control-room dashboard: plant schematic, gauges with
 limit and setpoint markers, strip charts, and explicit marking of quantities the
@@ -300,7 +299,7 @@ method and lists what each model is validated against.
 | **[Getting started](docs/getting-started.md)** | Episodes, vectorised rollouts, the registry, Gymnasium |
 | **[Using the PIDs](docs/using-the-pids.md)** | Running the baseline, scoring against it, using it in training |
 | **[Environment reference](docs/environments.md)** | All 24: shapes, tracked variables, baselines, contracts |
-| **[Complexity ladder](docs/complexity.md)** | Six tiers, for curriculum use |
+| **[Choosing an environment](docs/complexity.md)** | Which task to start with for what you want to test |
 | **[Public API](docs/api.md)** | Stable and provisional surface |
 | **[Baseline results](docs/baseline-results.md)** | PID and MPC scores on every environment |
 | **[RL protocol](docs/rl-protocol.md)** | Measuring a learned policy |

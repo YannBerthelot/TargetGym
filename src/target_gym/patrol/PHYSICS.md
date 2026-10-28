@@ -1,7 +1,7 @@
 # Close patrol — physics model, provenance and validation
 
-Two aircraft in formation. The **lead** flies a scripted patrol pattern; the
-**follower** is the agent and must reach and hold a *slot* — a position fixed
+Two aircraft in formation. The **lead** flies a scripted patrol route; the
+**follower** is the agent and must reach and hold a *slot*, a position fixed
 in the lead's body frame, so many metres behind, to one side, and above or
 below.
 
@@ -29,19 +29,28 @@ reference non-stationary: a constant slot in the lead's frame sweeps a circle
 in the world when the lead turns.
 
 **Heading alignment.** A wingman flies *parallel* to the lead, not merely at
-the right coordinates. The reward multiplies the slot-position term by a
-Gaussian on the heading difference, so occupying the slot while pointing the
-wrong way does not score.
+the right coordinates. The reward charges the squared heading difference
+beside the squared slot error, each in units of its floor, so occupying the
+slot while pointing the wrong way still costs.
 
-**Collision as an irrecoverable state.** Separation below `min_separation`
-terminates. This is the qualitative addition over the single-aircraft tasks:
-the follower is rewarded for approaching something it must not hit, so the
-optimal policy runs toward a terminal state and stops short.
+**Collision is a trip.** Separation below `min_separation` trips the plant, as
+do either aircraft leaving the altitude envelope and the follower ending up
+`max_slot_error` from its slot. The step is charged the trip cost and both
+aircraft restart as `reset_env` would, while the episode clock keeps running
+(with `continuing = False` the episode ends there instead). This is the
+qualitative addition over the single-aircraft tasks: the follower is scored
+for approaching something it must not hit, so the optimal policy closes in and
+stops short.
 
-**The lead's motion.** The lead is driven by the tuned 3D heading autopilot at
-a turn rate sampled per episode from `lead_turn_rate_range`. It is scripted,
-not adversarial — the difficulty is tracking a manoeuvring reference, not
-fighting an opponent.
+**The lead's motion.** The lead flies a route of eight legs, cycled. Each leg
+lasts `lead_leg_seconds` (60 s) at a turn rate drawn at reset from
+`lead_turn_rate_range`, 0 being straight and level, and the tuned 3D heading
+autopilot flies it. The schedule is part of the state, so a planner rolling
+the environment forward sees the next turn coming, while a policy sees only
+the current leg. It is scripted, not adversarial: the difficulty is tracking a
+reference that changes its turn every minute, not fighting an opponent. A
+single turn rate held for the whole episode was too easy, since feedforward of
+a constant, observable rate cancels it.
 
 ### The bearing-only variant
 
@@ -64,9 +73,9 @@ definition depends on.
 |---|---|---|
 | Slot error is zero when the follower is at the slot | exact | `test_slot_error_zero_at_slot` |
 | Commanded slot lies behind the lead | negative along-track offset | `test_desired_slot_offset_is_behind_lead` |
-| Reward approaches 1 in the slot and aligned | ≈ 1 | `test_reward_near_one_in_slot` |
-| Collision terminates, and is paid for by forfeit | reward stays in [0, 1]; the episode's remaining steps are lost | `test_collision_terminates_with_penalty` |
-| Losing formation terminates | at `max_slot_error` | `test_lost_formation_terminates` |
+| The version-1 reward approaches 1 in the slot and aligned | ≈ 1 | `test_reward_near_one_in_slot` |
+| Collision trips the plant | the version-2 reward is at most minus the trip cost | `test_collision_terminates_with_penalty` |
+| Losing formation trips the plant | at `max_slot_error` | `test_lost_formation_terminates` |
 | The shipped expert holds formation through a turn | across sampled turn rates | `test_expert_holds_formation` |
 | The expert never collides | separation > `min_separation` | `test_expert_never_collides` |
 | The expert holds its slot on held-out seeds, both variants | RMS slot error after the burn-in at most 8.5 m on seeds 200-209, no trip | `test_the_follower_holds_its_slot` |
@@ -86,11 +95,12 @@ Flight parameters are inherited from `PlaneParams3D`; see the
 | `slot_back_range` | (150, 300) m | Along-track slot offset, sampled per episode |
 | `slot_right_range` | (−150, 150) m | Cross-track offset |
 | `slot_up_range` | (−60, 60) m | Vertical offset |
-| `slot_tolerance` | 60 m | σ of the Gaussian slot reward |
-| `heading_tolerance` | 0.5236 rad (30°) | σ of the heading-alignment factor |
-| `min_separation` | 25 m | Collision distance → terminal |
-| `max_slot_error` | 1500 m | Formation lost → terminal |
-| `lead_turn_rate_range` | (−0.003, 0.003) rad/step | Lead's turn rate; 0 is straight and level |
+| `slot_tolerance` | 60 m | Version-1 reward only: σ of its slot term |
+| `heading_tolerance` | 0.5236 rad (30°) | Version-1 reward only: σ of its heading-alignment factor |
+| `min_separation` | 25 m | Collision distance, a trip |
+| `max_slot_error` | 1500 m | Formation lost, a trip |
+| `lead_turn_rate_range` | (−0.003, 0.003) rad/step | Range each route leg's turn rate is drawn from; 0 is straight and level |
+| `lead_leg_seconds` | 60 s | Length of each leg of the lead's route |
 | `follower_spawn_noise` | 40 m | Isotropic spawn offset, so the episode starts solvable but untrimmed |
 | `delta_t` | 1.0 s | Step size |
 
@@ -100,11 +110,56 @@ about 0.17 °/s — a gentle orbit, not an aerobatic one.
 
 ## 4. Task design
 
+### Task: `patrol`
+
+Fly as a wingman: reach and hold a slot fixed in the lead aircraft's frame,
+behind, beside and above or below it, while the lead flies a patrol route
+that turns onto a new rate every minute. The slot moves whenever the lead
+turns, so the reference is non-stationary, the heading difference to the lead
+is charged too, and coming too close to the lead trips the plant.
+
+| obs | meaning |
+|---|---|
+| 0-9 | the wingman's own state, as in `plane3d_heading` |
+| 10-12 | offset from the slot in the lead's frame: back, right, up (m) |
+| 13-15 | velocity relative to the lead in the lead's frame: forward, right, up (m/s) |
+| 16-18 | the slot in the lead's frame: back, right, up (m) |
+| 19 | the lead's heading relative to the wingman's (rad) |
+| 20 | the lead's speed (m/s) |
+| 21 | throttle, 0 to 1 |
+| 22 | elevator deflection (rad) |
+| 23 | aileron deflection (rad) |
+| 24 | slot error, the distance to the slot (m) |
+| 25 | target slot error, always 0 |
+
+### Task: `patrol_bearing_only`
+
+The `patrol` task flown from a passive sensor: the wingman sees range,
+azimuth and elevation to the lead instead of the lead's relative state. The
+lead's heading, which places the slot, is not measured and has to be inferred
+from how the bearing changes. The tracked value is the measured range,
+against the distance at which the slot sits from the lead.
+
+| obs | meaning |
+|---|---|
+| 0-9 | the wingman's own state, as in `plane3d_heading` |
+| 10 | range to the lead (m) |
+| 11 | azimuth of the lead in the wingman's body frame (rad) |
+| 12 | elevation of the lead (rad) |
+| 13-15 | the slot in the lead's frame: back, right, up (m) |
+| 16 | throttle, 0 to 1 |
+| 17 | elevator deflection (rad) |
+| 18 | aileron deflection (rad) |
+| 19 | range to the lead (m), the tracked value |
+| 20 | distance from the lead to the slot (m), its target |
+
+### Scoring
+
 The tracked scalar is the **slot error** for the full-observation variant and
 the **measured range** for the bearing-only one, each against its commanded
 value. The version-2 reward charges the squared slot error and the squared
-heading misalignment with the lead, each in units of its floor, plus a trip
-cost on an irrecoverable state (see *Reward (version 2)* below).
+heading misalignment with the lead, each in units of its floor, plus the trip
+cost on a step that trips (see *Reward (version 2)* below).
 
 ## 5. Baselines
 

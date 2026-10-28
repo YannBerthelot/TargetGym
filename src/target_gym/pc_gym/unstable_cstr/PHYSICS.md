@@ -287,7 +287,23 @@ All derived by the numbers script (`--section params`, `--section targets`,
 
 ## 5. Task design
 
-**Observation** `[C_a, T, T_j, live target]`. Hidden: the drift `Ti_dev`, the
+### Task: `unstable_cstr`
+
+Hold the concentration of A in a jacketed exothermic reactor on its open-loop
+unstable middle steady state, commanding the coolant through a lagging jacket
+while the feed temperature drifts unmeasured. Left alone the reactor runs away
+within tens of seconds, and the target steps five times per episode, so every
+move crosses the unstable region under control. A trip costs an hour of
+restart.
+
+| obs | meaning |
+|---|---|
+| 0 | `C_a`, concentration of A (mol/L) |
+| 1 | `T`, reactor temperature (K) |
+| 2 | `T_j`, jacket temperature (K) |
+| 3 | target `C_a`, the current block's level (mol/L) |
+
+**Observation.** Hidden: the drift `Ti_dev`, the
 later levels and the block clock. C_a is read instantly and without noise
 (D3, D5). T is observed because no P or PI loop on C_a alone can stabilise
 the plant (`test_no_p_or_pi_loop_on_c_a_stabilises`). On the linearisation

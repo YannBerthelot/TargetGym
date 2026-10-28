@@ -125,6 +125,22 @@ merely plausible-looking.
 
 ## 4. Task design
 
+### Task: `glass_furnace`
+
+Hold the crown temperature of a regenerative float-glass furnace on a slowly
+walking setpoint by setting the fuel flow. The crown is read through a lagging
+thermocouple, the glass and regenerator temperatures are hidden, the firing
+side reverses on a fixed cycle, and the furnace responds over hours, so a few
+instruments have to steer a large, slow plant.
+
+| obs | meaning |
+|---|---|
+| 0 | crown temperature as the thermocouple reads it (°C); it lags the true crown temperature the reward scores |
+| 1 | combustion air preheat temperature (°C) |
+| 2 | fuel flow, percent of maximum |
+| 3 | regenerator phase: 0 while regenerator A preheats the air, 1 while B does |
+| 4 | target crown temperature (°C) |
+
 **Setpoint band 1565–1610 °C.** Operationally realistic — a float furnace is
 trimmed ±10–20 °C around nominal. The previous 1500–1650 °C band was
 untrackable: the settling time is 140–300 h (measured), so a 150 °C step means
@@ -178,9 +194,8 @@ the settled steady state at nominal firing — not arbitrary temperatures. A
 furnace that takes days to equilibrate would otherwise spend the whole episode
 in an initial transient with nothing to control.
 
-**Observation** `[T_crown, T_air_preheat, fuel_pct, reversal_phase, target]` —
-a real furnace has crown and air-preheat thermocouples and the operator knows
-the reversal state. Glass temperatures, checker profile, batch mass and the
+**Observation.** A real furnace has crown and air-preheat thermocouples and the
+operator knows the reversal state. Glass temperatures, checker profile, batch mass and the
 pull-rate disturbance are hidden: **6 of 9 dynamic quantities**.
 
 ---

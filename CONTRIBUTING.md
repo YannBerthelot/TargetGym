@@ -260,7 +260,10 @@ trusted, by `tests/test_docs.py`:
 - **The environment pages are generated** from the registry:
   `docs/environments.md` by `scripts/generate_env_reference.py`, and the
   per-environment pages under `docs/environments/` by
-  `scripts/generate_env_pages.py`. The results page,
+  `scripts/generate_env_pages.py`. A page opens with the paragraph and the
+  observation table of the `` ### Task: `name` `` block in the task's
+  `PHYSICS.md`, so a new task needs one; the generator fails until every
+  observation index has a row. The results page,
   `docs/baseline-results.md`, is generated as well, by
   `scripts/generate_baseline_table.py` from
   `src/target_gym/data/baseline_returns.json` and `protocol_results.json`. Adding an environment or a
