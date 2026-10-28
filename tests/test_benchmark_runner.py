@@ -107,22 +107,36 @@ def _off_target(name, **offsets):
     return env.get_obs(state, params)[None], params, task
 
 
+# Two outputs, each moved ``a`` and ``b`` floors off its target.
+_TWO_OUTPUTS = {
+    # The drum level (m, target 0) against ``e_floor_level``, the drum
+    # pressure (bar) against ``e_floor_pressure``.
+    "boiler_drum": lambda a, b: dict(
+        level=lambda s, p: jnp.asarray(a * p.e_floor_level),
+        pressure=lambda s, p: s.target_pressure + b * p.e_floor_pressure,
+    ),
+    # The top and bottom products, the column's last and first stages, against
+    # ``e_floor_top`` and ``e_floor_bottom``.
+    "distillation": lambda a, b: dict(
+        x=lambda s, p: s.x.at[-1]
+        .set(s.target_yD + a * p.e_floor_top)
+        .at[0]
+        .set(s.target_xB + b * p.e_floor_bottom)
+    ),
+}
+
+
 @pytest.mark.parametrize(
-    "level, pressure, inside",
+    "a, b, inside",
     [
         (0.5, 0.5, True),  # both within half their own floor
-        (2.0, 0.0, False),  # the level two floors off: under the pressure's
-        (0.0, 2.0, False),  # the pressure two floors off
+        (2.0, 0.0, False),  # the first two floors off: under the second's
+        (0.0, 2.0, False),  # the second two floors off
     ],
 )
-def test_each_output_is_held_to_its_own_floor(level, pressure, inside):
-    """boiler_drum observes the drum level (m, target 0) and the drum pressure
-    (bar), and gives each its own floor: ``e_floor_level``, ``e_floor_pressure``."""
-    obs, params, task = _off_target(
-        "boiler_drum",
-        level=lambda s, p: jnp.asarray(level * p.e_floor_level),
-        pressure=lambda s, p: s.target_pressure + pressure * p.e_floor_pressure,
-    )
+@pytest.mark.parametrize("name", sorted(_TWO_OUTPUTS))
+def test_each_output_is_held_to_its_own_floor(name, a, b, inside):
+    obs, _, task = _off_target(name, **_TWO_OUTPUTS[name](a, b))
     assert task.in_band(obs).tolist() == [inside]
 
 
@@ -156,16 +170,25 @@ def test_every_wingman_is_held_to_the_slot_floor():
     )
 
 
+@pytest.mark.parametrize("off, inside", [(0.5, True), (2.0, False)])
+def test_the_figure8_is_held_to_its_distance_from_the_path(off, inside):
+    """The aircraft starts at the tip of the right lobe, the path's outermost
+    point along the figure's axis (``target_heading``), so moving it ``d``
+    outward along that axis puts it ``d`` from the path, against
+    ``e_floor_path``."""
+    obs, _, task = _off_target(
+        "plane3d_figure8",
+        x=lambda s, p: s.x + off * p.e_floor_path * jnp.cos(s.target_heading),
+        y=lambda s, p: s.y + off * p.e_floor_path * jnp.sin(s.target_heading),
+    )
+    assert task.in_band(obs).tolist() == [inside]
+
+
 @pytest.mark.parametrize("name", sorted(REGISTRY))
 def test_every_task_declares_a_tolerance_on_each_output(name):
-    """All but plane3d_figure8, whose one observed output is the altitude
-    about the path's mean altitude, which the path swings 200 m around."""
     _, _, task = _setup(name, 2)
     assert task.e_floor.shape == (2, len(task.value_index))
-    if name == "plane3d_figure8":
-        assert np.isinf(task.e_floor).all()
-    else:
-        assert (np.isfinite(task.e_floor) & (task.e_floor > 0)).all()
+    assert (np.isfinite(task.e_floor) & (task.e_floor > 0)).all()
 
 
 def test_episodes_are_paired_across_policies_and_runs():

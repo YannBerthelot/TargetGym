@@ -7,11 +7,11 @@
 | | |
 |---|---|
 | Action space | `Box((3,))`, all actions in [-1, 1] |
-| Observation space | `Box((19,))` |
-| Tracked variable(s) | altitude (m) |
+| Observation space | `Box((21,))` |
+| Tracked variable(s) | distance to path (m) |
 | Episode length | 400 steps (400 s at 1 s per step) |
 | Import | `from target_gym import Plane3DFigureEight, PlaneParams3D` |
-| Cite as | `plane3d_figure8-v3` |
+| Cite as | `plane3d_figure8-v4` |
 
 ## Action space
 
@@ -26,7 +26,7 @@ actuator range inside the environment.
 
 ## Observation space
 
-19 values. Indices (2,) carry the tracked variable(s) that the
+21 values. Indices (19,) carry the tracked variable(s) that the
 reward scores.
 
 ## Rewards

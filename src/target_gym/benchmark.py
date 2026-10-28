@@ -130,17 +130,15 @@ def _as_tuple(index) -> tuple[int, ...]:
 #: (``PARAM_UNITS``) to the observation's. The last field also covers any
 #: further outputs (formation: one slot per wingman). A task not listed holds
 #: every output to its ``e_floor``, already in the observation's units.
-#: plane3d_figure8 observes its altitude about the path's mean altitude, which
-#: the path itself swings 200 m around, so it declares no tolerance.
 _OUTPUT_FLOORS: dict[str, tuple[tuple[str, float], ...]] = {
     "plane3d_heading": (("e_floor_altitude", 1.0),),
     "plane3d_circle": (("e_floor_altitude", 1.0),),
     "plane3d_racetrack": (("e_floor_altitude", 1.0),),
-    "plane3d_figure8": (),
+    "plane3d_figure8": (("e_floor_path", 1.0),),  # the distance to the curve
     "patrol": (("e_floor_slot", 1.0),),
     "patrol_bearing_only": (("e_floor_slot", 1.0),),  # its measured slot range
     "formation": (("e_floor_altitude", 1.0), ("e_floor_slot", 1.0)),
-    "distillation": (("e_floor_top", 1.0),),  # yD; xB is not an observed output
+    "distillation": (("e_floor_top", 1.0), ("e_floor_bottom", 1.0)),  # yD, xB
     "boiler_drum": (("e_floor_level", 1.0), ("e_floor_pressure", 1.0)),
     "hvac": (("comfort_tolerance", 1.0),),  # the reward's dead band; no e_floor
     "cement_kiln": (("e_floor", 100.0),),  # a mass fraction; observed in %
@@ -185,7 +183,6 @@ def task_info(
     floors = _OUTPUT_FLOORS.get(name, (("e_floor", 1.0),))
     e_floor = np.hstack(
         [rows(np.asarray(getattr(params, f, np.inf)) * k) for f, k in floors]
-        or [rows(np.inf)]
     )
     return TaskInfo(
         name=name,

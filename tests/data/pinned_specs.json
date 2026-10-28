@@ -297,7 +297,7 @@
   {
     "name": "plane3d_figure8",
     "group": "aircraft",
-    "version": 3,
+    "version": 4,
     "display_name": "3D figure-8",
     "params_cls": [
       "target_gym.plane3d.env",

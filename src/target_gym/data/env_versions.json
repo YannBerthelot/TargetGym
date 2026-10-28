@@ -55,9 +55,9 @@
     "stamped": "2026-09-13T09:03:12+00:00"
   },
   "distillation-v2": {
-    "fingerprint": "59a60289bff64596",
-    "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
-    "stamped": "2026-10-27T20:25:47+00:00"
+    "fingerprint": "3264e345b6c6e797",
+    "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine. Then, behaviour-preserving: xB declared as a second tracked output (obs_value_index (0, 1), obs_target_index (4, 5)) for the time-in-band KPI; dynamics, reward and observation unchanged.",
+    "stamped": "2026-10-28T08:24:49+00:00"
   },
   "first_order-v1": {
     "fingerprint": "fa0ddbc733bf3f60",
@@ -70,9 +70,9 @@
     "stamped": "2026-10-27T20:25:47+00:00"
   },
   "formation-v2": {
-    "fingerprint": "5e91c00d37adefb2",
-    "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
-    "stamped": "2026-10-27T20:25:47+00:00"
+    "fingerprint": "f44ea802da6891aa",
+    "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine. Then, behaviour-preserving: the plane3d package changed only for plane3d_figure8's observation (its v4), and this task's dynamics, reward and observation are unchanged.",
+    "stamped": "2026-10-28T08:24:49+00:00"
   },
   "four_tank-v1": {
     "fingerprint": "da38eef254db0f34",
@@ -115,9 +115,9 @@
     "stamped": "2026-09-30T20:57:19+00:00"
   },
   "patrol-v3": {
-    "fingerprint": "01c1a26ea722bbd8",
-    "note": "Behaviour-preserving: experts/pid.py, which patrol declares, renamed _load_gains and _g to load_gains and gain (cleanup PR C) and dropped the private aliases once every task package read the public names. No computation changed.",
-    "stamped": "2026-10-27T21:08:53+00:00"
+    "fingerprint": "b0b1de9c1379bb2d",
+    "note": "Behaviour-preserving: experts/pid.py, which patrol declares, renamed _load_gains and _g to load_gains and gain (cleanup PR C) and dropped the private aliases once every task package read the public names. No computation changed. Then, behaviour-preserving: the plane3d package changed only for plane3d_figure8's observation (its v4), and this task's dynamics, reward and observation are unchanged.",
+    "stamped": "2026-10-28T08:24:49+00:00"
   },
   "patrol_bearing_only-v1": {
     "fingerprint": "96b9deebac83bd98",
@@ -130,9 +130,9 @@
     "stamped": "2026-09-30T20:57:19+00:00"
   },
   "patrol_bearing_only-v3": {
-    "fingerprint": "01c1a26ea722bbd8",
-    "note": "Behaviour-preserving: experts/pid.py, which patrol declares, renamed _load_gains and _g to load_gains and gain (cleanup PR C) and dropped the private aliases once every task package read the public names. No computation changed.",
-    "stamped": "2026-10-27T21:08:53+00:00"
+    "fingerprint": "b0b1de9c1379bb2d",
+    "note": "Behaviour-preserving: experts/pid.py, which patrol declares, renamed _load_gains and _g to load_gains and gain (cleanup PR C) and dropped the private aliases once every task package read the public names. No computation changed. Then, behaviour-preserving: the plane3d package changed only for plane3d_figure8's observation (its v4), and this task's dynamics, reward and observation are unchanged.",
+    "stamped": "2026-10-28T08:24:49+00:00"
   },
   "ph_neutralization-v1": {
     "fingerprint": "55f320195cb81ce2",
@@ -165,9 +165,9 @@
     "stamped": "2026-09-30T20:57:19+00:00"
   },
   "plane3d_circle-v3": {
-    "fingerprint": "297b398d3690f8a8",
-    "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
-    "stamped": "2026-10-27T20:25:47+00:00"
+    "fingerprint": "dab331741343247c",
+    "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine. Then, behaviour-preserving: the plane3d package changed only for plane3d_figure8's observation (its v4), and this task's dynamics, reward and observation are unchanged.",
+    "stamped": "2026-10-28T08:24:49+00:00"
   },
   "plane3d_figure8-v1": {
     "fingerprint": "925522f0cf3233f4",
@@ -184,6 +184,11 @@
     "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
     "stamped": "2026-10-27T20:25:47+00:00"
   },
+  "plane3d_figure8-v4": {
+    "fingerprint": "9df5a3a1f482101f",
+    "note": "The observation gains the distance to the curve and a constant-zero target (19 -> 21 entries, 22 -> 24 with observe_wind), declared as the tracked output in place of the altitude, which the path swings 200 m about. Dynamics, reward and the first 19 entries unchanged.",
+    "stamped": "2026-10-28T08:24:49+00:00"
+  },
   "plane3d_heading-v1": {
     "fingerprint": "2961df4b494a5ab7",
     "note": "re-stamped without a note",
@@ -195,9 +200,9 @@
     "stamped": "2026-09-30T20:57:19+00:00"
   },
   "plane3d_heading-v3": {
-    "fingerprint": "dcccbc0ab26bed44",
-    "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
-    "stamped": "2026-10-27T20:25:47+00:00"
+    "fingerprint": "0719a5ae1943cdcc",
+    "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine. Then, behaviour-preserving: the plane3d package changed only for plane3d_figure8's observation (its v4), and this task's dynamics, reward and observation are unchanged.",
+    "stamped": "2026-10-28T08:24:49+00:00"
   },
   "plane3d_racetrack-v1": {
     "fingerprint": "f1f9b8f7b7dcec42",
@@ -215,9 +220,9 @@
     "stamped": "2026-10-25T14:45:32+00:00"
   },
   "plane3d_racetrack-v4": {
-    "fingerprint": "b8e56cfcb069db42",
-    "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
-    "stamped": "2026-10-27T20:25:47+00:00"
+    "fingerprint": "b819e76b4e7d3af8",
+    "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine. Then, behaviour-preserving: the plane3d package changed only for plane3d_figure8's observation (its v4), and this task's dynamics, reward and observation are unchanged.",
+    "stamped": "2026-10-28T08:24:49+00:00"
   },
   "plane_energy-v1": {
     "fingerprint": "3994cf3273f563eb",

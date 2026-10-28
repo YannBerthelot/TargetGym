@@ -548,10 +548,19 @@ than by commit.
   and `reach_fraction` 0.00, formation included, whose PID holds about 140 m
   off. `benchmark.task_info` now gives each observed output its own floor,
   in the observation's units (the kiln's free lime, observed in %, was held
-  100 times too tight), and `TaskInfo.in_band(obs)` applies it.
-  plane3d_figure8 declares none: its observed output is the altitude about
-  the path's mean, not a tracked error. The two KPIs in
-  `protocol_results.json` change at the next record; no fingerprint moves.
+  100 times too tight), and `TaskInfo.in_band(obs)` applies it. The two KPIs
+  in `protocol_results.json` change at the next record; no fingerprint moves.
+- **plane3d_figure8 and distillation declared less than their rewards track.**
+  figure8 declared its altitude against the path's mean altitude, which the
+  path swings 200 m around, so it had no band to hold. Its reward charges the
+  distance to the curve, which it now observes, with a constant-zero target,
+  as its tracked output (21 values, 24 with `observe_wind`; `plane3d_figure8-v4`).
+  distillation declared yD alone, though its reward charges xB too; it now
+  declares both. Each output is held to its reward's floor (`e_floor_path`;
+  `e_floor_top` and `e_floor_bottom`). Eight version stamps move, since the
+  plane3d package is shared: the four plane3d tasks, the two patrol tasks,
+  formation and distillation. All but figure8 are re-stamped in place, as their
+  dynamics, rewards and observations are unchanged, and the eight re-record.
 - **`experts.mpc.casadi_step_map` without CasADi** raised a `NameError` on
   the missing module; it now raises an `ImportError` naming the `[mpc]` extra.
 - **`Airplane2D.reset_env(key)` without parameters** read a class attribute
