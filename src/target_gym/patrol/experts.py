@@ -497,6 +497,7 @@ class FormationHoldState(Plane3DGuidanceState):
     the bearing-only estimator the last relative position and own velocity
     (``started`` is set from the second step on)."""
 
+    started: float = 0.0
     int_back: float = 0.0
     int_right: float = 0.0
     psi_lead_prev: float = 0.0

@@ -73,8 +73,10 @@ class FormationLeadParams(Plane3DGuidanceParams):
 
 @struct.dataclass
 class FormationLeadState(Plane3DGuidanceState):
-    """The autopilot's memory and the speed the set power engaged at."""
+    """The autopilot's memory, the speed the set power engaged at, and
+    whether it has (``started``, set from the second step on)."""
 
+    started: float = 0.0
     v_set: float = 0.0
 
 
