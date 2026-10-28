@@ -323,13 +323,19 @@
     "note": "Pitch PI on rotor-speed error; generator torque is a feedforward for the power setpoint with rotor-speed protection. Return is flat above Kp~12 (392 vs 394 at Kp=25) and all episodes complete without tripping, so 12 keeps a factor-2 gain margin on a rate-limited pitch actuator."
   },
   "cement_kiln": {
-    "Kp_outer": 12000.0,
-    "Ki_outer": 6.0,
-    "Kp_inner": 0.025,
-    "Ki_inner": 5e-06,
+    "Kp_inner": 0.03720405423566248,
+    "Ki_inner": 4.368147686292763e-05,
+    "model_inner": {
+      "k": 406.8997080955525,
+      "tau": 3223.373352016678,
+      "theta": 106.46404639776924,
+      "tau_c": 106.46404639776924
+    },
+    "lime_halfwidth": 0.004,
+    "step": 0.1,
     "T_bz_base": 1765.0,
-    "tuning_rule": "grid_search_max_reward",
-    "note": "Cascade: free lime trims a burning-zone setpoint, fuel holds it, kiln speed follows feed to hold bed depth. The outer loop is strongly proportional with weak integral (Kp 12000 / Ki 6) -- integral action on a measurement half an hour behind the input oscillates at the delay period. Return 176 over 4 seeds against 37 for the best constant action."
+    "tuning_rule": "simc_inner_grid_scaling",
+    "note": "Swain and Subudhi (1996) rule base on free lime and the kiln-speed trend, moving the burning-zone setpoint, over a fuel PI on the burning zone (SIMC from a fuel step, tight); kiln speed follows feed. The two scaling factors are the lowest training cost of a 3 x 4 grid and its extension on seeds 100-109 (scripts/tune_industrial_experts.py)."
   },
   "boiler_drum": {
     "Kp_pressure": 0.671596574994995,
