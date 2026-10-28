@@ -177,6 +177,38 @@ trims it slowly. That is what makes it immune to the level lying during a
 transient. Single-element level control, a level loop on the feedwater alone,
 is the weaker controller precisely because it has no such feedforward.
 
+**The expert's tuning: lambda, from step tests on the training seeds.** Both
+loops are lambda-tuned for an integrating process, as drum level is in
+practice (`scripts/tune_industrial_experts.py`; the table above predates it).
+On each training seed (100 to 109), from the steady state the shipped
+controller reaches there, one loop is put in manual at its average output
+and stepped, against an unstepped run on the same noise:
+
+| loop | step | fitted `k' e^(-theta s) / s` | lambda | gains |
+|---|---|---|---|---|
+| level (pressure in auto) | feed trim +2 kg/s | 7.41e-5 m/s per kg/s, theta 13.5 s | theta | Kp 749 kg/s per m, Ki 18.5 |
+| pressure (level in auto) | firing +0.02 | 0.359 bar/s per unit action, theta 1.55 s | theta | Kp 0.672, Ki 0.144 per bar (of Q_max) |
+
+The level's inverse response, the shrink before the rise, is in its fitted
+delay. Theta includes half a sample. `Kc = (2 lam + theta) / (k' (lam +
+theta)^2)` and `Ti = 2 lam + theta`. Lambda is theta, 2 theta or 3 theta,
+the looser only if it is more than 1 % cheaper over the training seeds. The
+tight choice won on both loops. The hand-tuned gains it replaces were
+Kp 60, Ki 0.6 on level and Kp 0.05, Ki 0.002 on pressure.
+
+**The bad seed.** Under the hand tuning, protocol seed 1 cost 1058 a step
+against 322 and 192 on seeds 0 and 2. Level carried almost all of it: a mean
+level error of 28 to 79 mm against the 2.7 mm floor, with pressure within
+0.03 to 0.05 bar. Seed 1's steam demand swings the most (73 to 98 kg/s), and
+the slow level trim let the level wander with it. On the held-out seeds 200
+to 209 the lambda-tuned expert holds 142 a step (median 140, worst 222), the
+hand tuning 635 (median 580, worst 1383), against a ceiling of 1.14: 2.10
+decades of room, and no seed dominates.
+
+Spec, a strict xfail in `tests/boiler_drum/test_boiler_drum_expert.py`. Mean
+level error under 25 mm (about an inch) on every held-out seed. Measured
+19 to 34 mm, 6 of 10 seeds above.
+
 **MPC wins on horizon, not on tuning.** A 30-step horizon covers the ~35 s
 swell peak, so the optimiser sees the level reverse and keeps feeding through
 a swell. It buys a 10× reduction in level error for a small pressure trade.

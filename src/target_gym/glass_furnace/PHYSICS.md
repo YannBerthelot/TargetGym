@@ -242,11 +242,35 @@ flame-length effects.
 | PID | **4907 ± 286** | **2.51 °C** |
 | best constant action | 2481 | — |
 
-PID gains come from a grid search maximising mean episode reward
-(`scripts/tune_pid.py --envs glass_furnace`). Relay autotuning does *not* work
-on this plant: the crown temperature integrates the firing rate, so under a
-bang-bang relay it drifts without sustained zero-crossings and Åström–Hägglund
-has no ultimate gain or period to extract — the same failure mode as FourTank.
+(The table predates the version-2 reward and the tuning below.)
+
+**The expert: the base layer, SIMC-tuned.** Practice runs an MPC over the
+crown loop, and an observation-only MPC is planned (experts refactor, PR 2).
+Until it exists the expert is the base layer under it: a PI on the measured
+crown temperature (`scripts/tune_industrial_experts.py`). On each training
+seed (100 to 109), from the steady state there, the firing is put in manual
+at its average over one regenerator cycle (25 min; firing stops at each
+reversal, and the PI sits at full demand through it) and stepped by +0.05.
+The crown is still rising hours later, on two time scales, so SIMC tunes it
+on the integrating approximation of its first hour: k' 0.00276 K/s per unit
+action, theta 15 s (half a sample; the fit leaves no delay of its own).
+`Kc = 1 / (k' (tau_c + theta))` = 12.1 per K and `tau_I = 4 (tau_c +
+theta)` = 120 s, with tau_c = theta (2 and 3 theta were within 1 % on the
+training seeds). No derivative. The grid search it replaces (Kp 2.5,
+Ki 0.15, Kd 0.05) ran on the scored seeds 0 to 2. Relay autotuning does *not*
+work on this plant: the crown temperature integrates the firing rate, so
+under a bang-bang relay it drifts without sustained zero-crossings and
+Åström–Hägglund has no ultimate gain or period to extract.
+
+On the held-out seeds 200 to 209 it holds 0.739 a step, the grid-searched
+gains 0.837, against a ceiling of 1: the base layer already tracks within
+the thermocouple's resolution, so the task has no room left for the hold.
+Spec, a strict xfail in `tests/glass_furnace/test_glass_furnace_pid.py`: the
+true crown within 2 K on at least 95 % of hold steps. Measured 88.8 to
+97.0 %, 6 of 10 seeds under, with peaks of 4.3 to 6.9 K. The grid-searched
+gains score the same (88.8 to 96.9 %, peaks 4.4 to 7.1 K): the misses are
+the firing interruptions at each reversal, which a PI on the crown meets only
+after the fact.
 
 **The MPC (oracle audit, 2026-10-03).** The oracle is a CasADi model of the
 plant: two checker nodes per chamber against the plant's four, the flame solved

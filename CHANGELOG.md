@@ -217,6 +217,27 @@ than by commit.
   (`scripts/measure_hold.py`): the fixed settle rises from 44 to 84 steps on
   both patrol tasks and from 37 to 45 on the formation, and their protocol
   rows are re-evaluated with it.
+- **Six industrial and energy experts copy field practice.** Each was tuned
+  off the scored seeds, by its field's recipe.
+  - `hvac` runs ASHRAE Guideline 36's zone heating PI (0.1 per K, 900 s)
+    with LBL's optimal start.
+  - `reactor` runs Westinghouse rod control on average temperature: the
+    NRC's speed program, deadband and power-mismatch channel, in place of a
+    flux PID whose maths ran on a 0.5 s step against the 10 s control step.
+  - `boiler_drum` keeps three-element control, lambda-tuned from step tests.
+  - `glass_furnace` keeps its crown PI, SIMC-tuned. Practice adds an MPC
+    over that loop.
+  - `compressor_surge` keeps its vendor anti-surge pair, re-searched on the
+    training seeds.
+  - `battery` is checked against its spec and unchanged.
+
+  `scripts/tune_industrial_experts.py` tunes on seeds 100-109 and checks on
+  200-209. Held-out holds, old to new: `reactor` 22.1 to 4.40, `boiler_drum`
+  635 to 142, `compressor_surge` 5.29 to 3.93, `glass_furnace` 0.84 to 0.74
+  (within its ceiling), `hvac` 0.0172 to 0.0179. Their records are re-recorded.
+  `test_pid_controller_builds_with_finite_gains` becomes
+  `test_expert_builds_with_finite_parameters`, since not every expert is a
+  PID.
 
 - **Shorter docstrings in the core modules** (registry, experts, eval, reward,
   runners, base): they keep the contracts and drop the measurement history,

@@ -508,8 +508,9 @@ trips in twice as many episodes (22.3 % against 11.3 %) and the pair costs
 **Valve closing.** The task ships a 10 s full close, the slowest Mirsky et
 al. p.23 allow. Wilson and Sheldon's 3 s full close is the 33 %/s row. There
 the recycle-shut policy trips 94 times per episode against 37, and G10 trips
-once in the 256 episodes, with its margin down to 0.003. The shipped pair
-(kp_surge 1.4, ki_surge 6.0) trips 341 times over the 256 episodes, 1.33 per
+once in the 256 episodes, with its margin down to 0.003. The pair as shipped
+before 2026-10-28 (kp_surge 1.4, ki_surge 6.0; this row was not re-run with the
+current gains) trips 341 times over the 256 episodes, 1.33 per
 episode, with its smallest margin at 0, and costs 310 times G10. The pair at
 `DEFAULT_GAINS` (kp_surge 2.0, ki_surge 3.0) ran the same row with no trip
 and a smallest margin of 0.0469 (measured, `--sensitivity` with no
@@ -553,11 +554,11 @@ its control line. It persists through a trip (the suite's convention).
 
 | gain | shipped | `DEFAULT_GAINS` | tuned or held | label and source |
 |---|---|---|---|---|
-| `kp_speed` | 0.112 of rated per kPa | 0.08 | tuned | TUNED by `scripts/tune_pid.py` (below); the default is ours |
+| `kp_speed` | 0.112 of rated per kPa | 0.08 | tuned | TUNED by the search (below); the default is ours |
 | `ki_speed` | 0.04 of rated per kPa s | 0.04 | tuned | TUNED, left at the default (ours) |
-| `kp_surge` | 1.4 per unit margin | 2.0 | tuned | TUNED; the default is ours, above the nominal gain below 1 that Mirsky et al. p.13 call typical, which relies on open-loop steps that the override stands in for here; at 3.0 the valve rings in a limit cycle that the guard's travel check refuses (measured, `--section guard`) |
-| `ki_surge` | 6.0 per unit margin s | 3.0 | tuned | TUNED; the default is ours; at 0.3 the linearised loop keeps a mode decaying at 0.083 /s (derived, `--section guard`) |
-| `surge_line` | 0.15 | 0.15 | held | ours; wider than the control lines about 10 % in flow from the surge line that Mirsky et al. pp.11 and 13 describe; the shipped pair keeps a margin of at least 0.0877 over 4096 episodes (measured, `--pid-validation`) |
+| `kp_surge` | 2.0 per unit margin | 2.0 | tuned | TUNED, left at the default; the default is ours, above the nominal gain below 1 that Mirsky et al. p.13 call typical, which relies on open-loop steps that the override stands in for here; at 3.0 the valve rings in a limit cycle that the guard's travel check refuses (measured, `--section guard`) |
+| `ki_surge` | 0.75 per unit margin s | 3.0 | tuned | TUNED; the default is ours; at 0.3 the linearised loop keeps a mode decaying at 0.083 /s (derived, `--section guard`) |
+| `surge_line` | 0.15 | 0.15 | held | ours; wider than the control lines about 10 % in flow from the surge line that Mirsky et al. pp.11 and 13 describe; the shipped pair keeps a margin of at least 0.0951 over 4096 episodes (measured, `--pid-validation`) |
 | `override_line` | 0.075 | 0.075 | held | ours, read-consistent: half the control margin, near where Mirsky et al. p.13 place the open-loop line |
 | `override_hold` | 2 s | 2 s | held | ours |
 | `reset_band` | 0.05 of opening | 0.05 | held | ours |
@@ -640,31 +641,35 @@ validation on 4096 episodes below bounds the tail.
 since the gains are traced (measured, `--section guard`, five runs on a
 machine at load average 2.7 to 12).
 
-**Tuning.** `scripts/tune_pid.py --envs compressor_surge` runs a coordinate
-search on episode return over 24 seeds (0 to 23), from `DEFAULT_GAINS`, on
-the four tuned gains. A candidate the guard refuses scores minus infinity.
-The search multiplied `kp_speed` by 1.4 (0.08 to 0.112), `ki_surge` by 2 (3
-to 6) and `kp_surge` by 0.7 (2.0 to 1.4) and kept `ki_speed`, which moved
-the return from -2.371e6 to -2.354e6 (measured, printed by that script, at
-the provisional `c_hold`). Run again at the measured `c_hold`, the search
-starts at -2.353e6 and moves no gain (measured). The shipped gains are
-stored in `src/target_gym/data/pid_gains.json` under `compressor_surge`.
+**Tuning.** `scripts/tune_industrial_experts.py --envs compressor_surge`
+runs the coordinate search of `scripts/tune_pid.py` on episode return over
+the training seeds 100 to 109, from `DEFAULT_GAINS`, on the four tuned gains.
+A candidate the guard refuses scores minus infinity. The search multiplied
+`ki_surge` by 0.25 (3 to 0.75) and `kp_speed` by 1.4 (0.08 to 0.112) and
+kept `ki_speed` and `kp_surge`, which moved the training return from
+-2.003e6 to -1.938e6 (measured, printed by that script). The gains it
+replaces (kp_surge 1.4, ki_surge 6.0) came from the same search over seeds 0
+to 23, which include the scored ones. On the held-out seeds 200 to 209 the
+pair holds 3.93 a step, the previous gains 5.29, against a ceiling of 1:
+0.59 decades of room. The shipped gains are stored in
+`src/target_gym/data/pid_gains.json` under `compressor_surge`.
 
 **Validation** (`--pid-validation`, 4096 episodes, seeds 1000 to 5095,
 float32, measured). The shipped pair trips in none of them, a one-sided 95 %
-bound of 7.3e-4 trips per episode. Its smallest margin per episode is 0.0877
-at the minimum, 0.0901 at the 0.1 % quantile, 0.0941 at 1 %, 0.0982 at 5 %
-and 0.1112 at the median, and no episode goes under the override line. Per
-episode it averages 65.1 kW of recycle power, a mean absolute error of 0.386
-kPa, 2.81 openings of valve travel and a cost of 2.119e6. On the first 1024
+bound of 7.3e-4 trips per episode. Its smallest margin per episode is 0.0951
+at the minimum, 0.0992 at the 0.1 % quantile, 0.1035 at 1 %, 0.1071 at 5 %
+and 0.1144 at the median, and no episode goes under the override line. Per
+episode it averages 65.1 kW of recycle power, a mean absolute error of 0.379
+kPa, 4.76 openings of valve travel and a cost of 2.072e6 (the previous gains:
+0.0877 at the minimum, 0.386 kPa, 2.81 openings, 2.119e6). On the first 1024
 episodes, which `test_the_pair_holds_the_validation_seeds` runs, the smallest
-margin is 0.0878. Under the decision rule, a trip or a margin under the override line
-would raise `GUARD_MIN_MARGIN` by 0.01 and tune the pair once more, and a
-second failure would ship `DEFAULT_GAINS` (`--pid-validation` prints the
-rule with its verdict). The validation passes, so the tuned gains ship. Its
-smallest margin, 0.0877, is under the battery's floor of 0.098, which ranks
-gains on eight moves from settled points, and above the override line, which
-the rule reads.
+margin is 0.0954. Under the decision rule, a trip or a margin under the
+override line would raise `GUARD_MIN_MARGIN` by 0.01 and tune the pair once
+more, and a second failure would ship `DEFAULT_GAINS` (`--pid-validation`
+prints the rule with its verdict). The validation passes, so the tuned gains
+ship. Its smallest margin, 0.0951, is under the battery's floor of 0.098,
+which ranks gains on eight moves from settled points, and above the override
+line, which the rule reads.
 
 ### The NMPC
 

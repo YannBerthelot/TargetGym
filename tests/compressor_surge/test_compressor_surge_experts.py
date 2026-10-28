@@ -990,7 +990,7 @@ def test_the_pair_holds_the_validation_seeds():
     margin of every episode stays above the override line. The same episodes
     as ``scripts/compressor_surge_numbers.py --pid-validation``, which runs
     4096 and prints the margin quantiles. With the shipped gains it measured
-    no trip in 4096 and a smallest margin of 0.0877 over all of them, 0.0878
+    no trip in 4096 and a smallest margin of 0.0951 over all of them, 0.0954
     over the first 1024, against the override line's 0.075."""
     numbers = _numbers_script()
     gains = numbers.load_gains()
