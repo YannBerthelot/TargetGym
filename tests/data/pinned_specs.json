@@ -175,8 +175,8 @@
       "max_steps_in_episode": 300,
       "e_floor_altitude": 1.0,
       "failure_cost": 297289728.0,
-      "rho_floor_tracking": 0.45360830046901834,
-      "rho_floor": 0.45360830046901834
+      "rho_floor_tracking": 0.34421933365173735,
+      "rho_floor": 0.34421933365173735
     },
     "tuned_gains_key": "plane3d_heading",
     "gains_keys": [],

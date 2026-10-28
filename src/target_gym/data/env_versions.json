@@ -165,9 +165,9 @@
     "stamped": "2026-09-30T20:57:19+00:00"
   },
   "plane3d_circle-v3": {
-    "fingerprint": "90f380df794bd724",
-    "note": "plane_energy-v4 (1200 to 1600 steps, eight 200-step treads) and plane3d_heading-v4 (200 to 300 steps) are lengthened so the scored episode captures the expert reaching its hold (tests/test_episode_length.py). plane-v2, plane_sine-v2 and plane3d_circle, racetrack and figure8 are re-stamped in place, behaviour-preserving: their package's env_jax.py is hashed whole, and only those two tasks' default_params changed.",
-    "stamped": "2026-10-28T09:15:45+00:00"
+    "fingerprint": "eaf6156894075684",
+    "note": "plane_energy-v4 (1200 to 1600 steps, eight 200-step treads) and plane3d_heading-v4 (200 to 300 steps, rho_floor from the oracle's re-measured 300-step hold) are lengthened so the scored episode captures the expert reaching its hold (tests/test_episode_length.py). plane-v2, plane_sine-v2 and plane3d_circle, racetrack and figure8 are re-stamped in place, behaviour-preserving: their package's env_jax.py is hashed whole, and only those two tasks' default_params changed.",
+    "stamped": "2026-10-28T10:26:31+00:00"
   },
   "plane3d_figure8-v1": {
     "fingerprint": "925522f0cf3233f4",
@@ -180,9 +180,9 @@
     "stamped": "2026-09-30T20:57:19+00:00"
   },
   "plane3d_figure8-v3": {
-    "fingerprint": "7836e633a3927c98",
-    "note": "plane_energy-v4 (1200 to 1600 steps, eight 200-step treads) and plane3d_heading-v4 (200 to 300 steps) are lengthened so the scored episode captures the expert reaching its hold (tests/test_episode_length.py). plane-v2, plane_sine-v2 and plane3d_circle, racetrack and figure8 are re-stamped in place, behaviour-preserving: their package's env_jax.py is hashed whole, and only those two tasks' default_params changed.",
-    "stamped": "2026-10-28T09:15:45+00:00"
+    "fingerprint": "881f81c5d530b421",
+    "note": "plane_energy-v4 (1200 to 1600 steps, eight 200-step treads) and plane3d_heading-v4 (200 to 300 steps, rho_floor from the oracle's re-measured 300-step hold) are lengthened so the scored episode captures the expert reaching its hold (tests/test_episode_length.py). plane-v2, plane_sine-v2 and plane3d_circle, racetrack and figure8 are re-stamped in place, behaviour-preserving: their package's env_jax.py is hashed whole, and only those two tasks' default_params changed.",
+    "stamped": "2026-10-28T10:26:31+00:00"
   },
   "plane3d_heading-v1": {
     "fingerprint": "2961df4b494a5ab7",
@@ -200,9 +200,9 @@
     "stamped": "2026-10-27T20:25:47+00:00"
   },
   "plane3d_heading-v4": {
-    "fingerprint": "6c31c7fae9f42608",
-    "note": "plane_energy-v4 (1200 to 1600 steps, eight 200-step treads) and plane3d_heading-v4 (200 to 300 steps) are lengthened so the scored episode captures the expert reaching its hold (tests/test_episode_length.py). plane-v2, plane_sine-v2 and plane3d_circle, racetrack and figure8 are re-stamped in place, behaviour-preserving: their package's env_jax.py is hashed whole, and only those two tasks' default_params changed.",
-    "stamped": "2026-10-28T09:15:45+00:00"
+    "fingerprint": "02bddab9c1e4c8dd",
+    "note": "plane_energy-v4 (1200 to 1600 steps, eight 200-step treads) and plane3d_heading-v4 (200 to 300 steps, rho_floor from the oracle's re-measured 300-step hold) are lengthened so the scored episode captures the expert reaching its hold (tests/test_episode_length.py). plane-v2, plane_sine-v2 and plane3d_circle, racetrack and figure8 are re-stamped in place, behaviour-preserving: their package's env_jax.py is hashed whole, and only those two tasks' default_params changed.",
+    "stamped": "2026-10-28T10:26:31+00:00"
   },
   "plane3d_racetrack-v1": {
     "fingerprint": "f1f9b8f7b7dcec42",
@@ -220,9 +220,9 @@
     "stamped": "2026-10-25T14:45:32+00:00"
   },
   "plane3d_racetrack-v4": {
-    "fingerprint": "331fa1fe983f28f6",
-    "note": "plane_energy-v4 (1200 to 1600 steps, eight 200-step treads) and plane3d_heading-v4 (200 to 300 steps) are lengthened so the scored episode captures the expert reaching its hold (tests/test_episode_length.py). plane-v2, plane_sine-v2 and plane3d_circle, racetrack and figure8 are re-stamped in place, behaviour-preserving: their package's env_jax.py is hashed whole, and only those two tasks' default_params changed.",
-    "stamped": "2026-10-28T09:15:45+00:00"
+    "fingerprint": "b829ea0598363352",
+    "note": "plane_energy-v4 (1200 to 1600 steps, eight 200-step treads) and plane3d_heading-v4 (200 to 300 steps, rho_floor from the oracle's re-measured 300-step hold) are lengthened so the scored episode captures the expert reaching its hold (tests/test_episode_length.py). plane-v2, plane_sine-v2 and plane3d_circle, racetrack and figure8 are re-stamped in place, behaviour-preserving: their package's env_jax.py is hashed whole, and only those two tasks' default_params changed.",
+    "stamped": "2026-10-28T10:26:31+00:00"
   },
   "plane_energy-v1": {
     "fingerprint": "3994cf3273f563eb",
