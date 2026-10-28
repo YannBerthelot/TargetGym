@@ -594,17 +594,21 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
         make_pid=_pid("make_patrol_pid_controller", module="target_gym.patrol.experts"),
         make_mpc=_mpc("make_patrol_mpc", module="target_gym.patrol.experts"),
-        tuned_gains_key="patrol",
-        # The oracle and the lead fly the 3D heading autopilot.
+        # The oracle and the lead fly the 3D heading autopilot. The expert's
+        # gains are in its experts.py, as the 3D aircraft's are.
         gains_keys=("plane3d_heading",),
         noise_fields=("turbulence_sigma",),
         # The 3D aircraft it flies, and the heading PID its lead flies on
-        # (physics here, so declared for the version stamp too).
+        # (physics here, so declared for the version stamp too); the
+        # autopilot and TECS its expert flies under the formation hold (experts
+        # files, so in the baseline fingerprint only).
         fingerprint_sources=(
             "plane/dynamics.py",
             "plane3d/dynamics.py",
             "plane3d/env.py",
             "experts/pid.py",
+            "plane3d/experts.py",
+            "plane/experts_tecs.py",
         ),
         version=3,
     ),
@@ -620,16 +624,16 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_patrol_bearing_only_mpc", module="target_gym.patrol.experts"
         ),
-        tuned_gains_key="patrol",
         gains_keys=("plane3d_heading",),
         baselines_note=(
-            "The PID is a lead-state estimator feeding the same pursuit law "
-            "the full-observation variant uses. Range with azimuth and "
+            "The PID is a lead-state estimator feeding the same formation "
+            "hold the full-observation variant uses. Range with azimuth and "
             "elevation is a complete relative-position measurement, so the "
             "only unobservable quantity is the lead's heading, which the slot "
             "needs because it is expressed in the lead's frame; the estimator "
-            "recovers it by differencing the estimated relative position and "
-            "filtering. The MPC slot holds patrol's oracle reading the true "
+            "takes the lead's velocity from the follower's own and the change "
+            "in the relative position, and its heading from that track less "
+            "the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true "
             "state, so it is a full-state bound, not a bearing-only "
             "controller. On a task defined by what the observation withholds, "
             "its score measures information and control together: what the "
@@ -638,13 +642,14 @@ _SPECS: tuple[EnvSpec, ...] = (
             "equal patrol's seed for seed."
         ),
         noise_fields=("turbulence_sigma",),
-        # The 3D aircraft it flies, and the heading PID its lead flies on
-        # (physics here, so declared for the version stamp too).
+        # As patrol's.
         fingerprint_sources=(
             "plane/dynamics.py",
             "plane3d/dynamics.py",
             "plane3d/env.py",
             "experts/pid.py",
+            "plane3d/experts.py",
+            "plane/experts_tecs.py",
         ),
         version=3,
     ),
@@ -910,16 +915,15 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_formation_pid_controller", module="target_gym.formation.experts"
         ),
         make_mpc=_mpc("make_formation_mpc", module="target_gym.formation.experts"),
-        tuned_gains_key="formation",
-        # The wingmen fly the patrol's gains, and the lead autopilot of the
-        # PID team and the oracle reads plane3d_heading's.
-        gains_keys=("patrol", "plane3d_heading"),
+        # The oracle's lead autopilot reads plane3d_heading's gains. The
+        # expert's are in the experts.py files, as the 3D aircraft's are.
+        gains_keys=("plane3d_heading",),
         baselines_note=(
-            "The PID is the patrol's, seat for seat: the patrol's lead "
-            "autopilot in the lead seat, aimed at the heading the route "
-            "commands, and the patrol PID in each wingman seat. It holds the "
-            "lead's altitude poorly (about 140 m off), the patrol's scripted "
-            "lead never needing better. The MPC slot is the patrol oracle's design applied to the "
+            "The PID flies the lead seat as a formation lead: the 3D heading "
+            "task's course hold and pitch on height, aimed at the heading the "
+            "route commands, at a set power, so its wingmen have a steady "
+            "reference. Each wingman seat flies the patrol's formation hold. "
+            "The MPC slot is the patrol oracle's design applied to the "
             "whole formation: the patrol's lead autopilot in the lead seat and "
             "its twin-autopilot law in each wingman seat, with one residual "
             "planner over every seat on the team cost."
@@ -927,14 +931,17 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         noise_fields=("turbulence_sigma",),
         # The aircraft and the patrol's geometry and observation, and the
-        # patrol's controllers, which the PID team and the oracle reuse (an
-        # experts file, so in the baseline fingerprint only).
+        # controllers the PID team and the oracle reuse: the patrol's, the 3D
+        # autopilot and TECS (experts files, so in the baseline fingerprint
+        # only).
         fingerprint_sources=(
             "patrol/env.py",
             "patrol/experts.py",
             "plane3d/env.py",
             "plane3d/dynamics.py",
             "plane/dynamics.py",
+            "plane3d/experts.py",
+            "plane/experts_tecs.py",
         ),
     ),
 )
