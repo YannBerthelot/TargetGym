@@ -64,12 +64,12 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 100-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
+Recorded over 10 seeds of the 150-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -6.252e+05 | 6252 |
-| MPC | -5.987e+05 | 5987 |
+| PID | -6.264e+05 | 4176 |
+| MPC | -5.987e+05 | 3992 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
