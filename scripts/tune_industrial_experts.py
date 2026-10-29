@@ -102,6 +102,22 @@ def fit_integrating(t, dy, du):
     ).x
 
 
+def fit_fopdt(t, dy, du):
+    """Least-squares ``k e^(-theta s) / (tau s + 1)`` fit to a step of ``du``."""
+
+    def residual(q):
+        k, tau, theta = q
+        return k * du * (1 - np.exp(-np.maximum(t - theta, 0.0) / tau)) - dy
+
+    guess = [dy[-1] / du, t[len(t) // 4], 0.0]
+    return least_squares(residual, guess, bounds=([-np.inf, 1e-6, 0], np.inf)).x
+
+
+def simc_pi(k, tau, theta, tau_c):
+    """SIMC PI (Skogestad 2003): ``(Kc, Ti)``."""
+    return tau / (k * (tau_c + theta)), min(tau, 4.0 * (tau_c + theta))
+
+
 def lambda_integrating(k, theta, lam):
     """Lambda tuning of an integrating process: ``(Kc, Ti)``."""
     return (2 * lam + theta) / (k * (lam + theta) ** 2), 2 * lam + theta
@@ -281,10 +297,62 @@ def tune_compressor_surge() -> dict:
         pid_mod._gains_cache = stored
 
 
+def tune_cement_kiln() -> dict:
+    """The burning-zone loop by SIMC from a fuel step (the supervisor's
+    setpoint frozen), tight as the inner loop of a cascade; then the rule
+    base's two scaling factors on the training seeds."""
+    from target_gym.cement_kiln.env import CementKilnParams
+
+    kp = CementKilnParams()
+    span = float(kp.fuel_max - kp.fuel_min)
+
+    def hold(a, obs):  # fuel in manual at its average command
+        u0 = float(a[0])
+        return lambda o, d: float(np.clip(u0 + d, -1.0, 1.0))
+
+    models = []
+    for s in TRAIN:
+        t, dy, dt = step_response("cement_kiln", s, _OpenLoop(1, 0, hold), 180, 60, 0.1)
+        models.append(fit_fopdt(t, dy, 0.1 * span / 2.0))  # per kg/s of fuel
+    k, tau, theta = np.median(models, axis=0)
+    theta = float(theta) + dt / 2
+    print(f"burning zone: k {k:.4g} K per kg/s, tau {tau:.4g} s, theta {theta:.3g} s")
+    Kc, Ti = simc_pi(k, tau, theta, theta)
+    out = {"Kp_inner": Kc, "Ki_inner": Kc / Ti}
+    out["model_inner"] = {
+        "k": float(k),
+        "tau": float(tau),
+        "theta": theta,
+        "tau_c": theta,
+    }
+
+    costs = {}
+    for b in (0.001, 0.002, 0.004):
+        for u in (0.25, 0.5, 1.0, 2.0):
+            costs[(b, u)] = train_cost(
+                "cement_kiln", {**out, "lime_halfwidth": b, "step": u}
+            )
+            print(
+                f"  lime half-width {100 * b:.1f} pp, step {u} K: {costs[(b, u)]:.4g}"
+            )
+    b, u = min(costs, key=costs.get)
+    out.update({"lime_halfwidth": b, "step": u, "T_bz_base": 1765.0})
+    out["tuning_rule"] = "simc_inner_grid_scaling"
+    out["note"] = (
+        "Swain and Subudhi (1996) rule base on free lime and the kiln-speed "
+        "trend, moving the burning-zone setpoint, over a fuel PI on the "
+        "burning zone (SIMC from a fuel step, tight); kiln speed follows feed. "
+        "The two scaling factors are the lowest training cost of a 3 x 4 grid "
+        "on seeds 100-109 (scripts/tune_industrial_experts.py)."
+    )
+    return out
+
+
 TUNERS = {
     "boiler_drum": tune_boiler_drum,
     "glass_furnace": tune_glass_furnace,
     "compressor_surge": tune_compressor_surge,
+    "cement_kiln": tune_cement_kiln,
 }
 
 

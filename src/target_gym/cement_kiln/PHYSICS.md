@@ -179,13 +179,57 @@ moves with the batch size, and the superlative this line used to carry ("the
 slowest environment in the suite") was contradicted by the distillation column
 claiming the same thing, with the true answer depending on the batch.
 
-**Cascade is the right PID structure**, and for a structural reason. The inner
-loop puts fuel on the burning-zone pyrometer, which is fast and carries no
-transport delay; the outer loop lets free lime trim that setpoint, slowly.
-Kiln speed follows the measured feed so bed depth — and therefore the delay —
-stays put. Gains reflect this: the outer loop is strongly proportional with
-weak integral, because integral action on a measurement half an hour behind
-the input oscillates at the delay period.
+**The expert: a published fuzzy rule base over the burning-zone loop.** Kilns
+are most often run by rule-based expert systems built from operators' rules
+(decision 4 of `docs/proposals/scoring-and-experts.md`). The expert copies the
+one open rule base on free lime: Swain and Subudhi (1996), "Fuzzy logic based
+cement kiln control", IE(I) Journal-EL 77, pp. 58-61, run at a 2500 t/day dry
+kiln. It reads the observation only (`experts.py`,
+`cement_kiln_fuzzy_step`).
+
+- **Rules (theirs).** Free lime LOW / OK / HIGH against the kiln-speed trend
+  INCR / OK / DECR move the burning-zone setpoint:
+
+  | free lime | speed INCR | speed OK | speed DECR |
+  |---|---|---|---|
+  | LOW | small increase | medium decrease | large decrease |
+  | OK | medium increase | zero | medium decrease |
+  | HIGH | large increase | medium increase | small decrease |
+
+  A rising speed shortens the residence time, so free lime is about to rise:
+  the rules heat ahead of it.
+- **Below it.** A fuel PI holds the burning-zone pyrometer on that setpoint.
+  It is SIMC-tuned, tight as a cascade's inner loop, from a fuel step on the
+  training seeds: 407 K per kg/s, tau 3223 s, theta 106 s, so Kp 0.0372 kg/s
+  per K and Ti 852 s. Kiln speed follows the measured feed, so bed depth, and
+  with it the delay, stays put.
+- **Ours.** The paper gives no breakpoints, so the rest is ours:
+  - triangles on the free-lime error and on the speed's change over 5 min,
+    with shoulders beyond;
+  - singletons at 1, 2 and 3 steps for small, medium and large;
+  - min as AND and the centroid of the singletons;
+  - the setpoint bounded within 120 K of 1765 K.
+
+  The speed half-width is the change one feed standard deviation causes, 4.5 %
+  of the speed range. The free-lime half-width and the step are the two
+  scaling factors a fuzzy supervisor is commissioned with. They are the
+  lowest training cost on seeds 100 to 109 of a grid and its extension:
+  0.4 pp and 0.1 K per 30 s step (`scripts/tune_industrial_experts.py`).
+- **It is one block of a larger system.** Swain and Subudhi also ran blocks on
+  coal, feed, kiln torque, CO and O2 under a priority scheme, which the paper
+  does not print.
+
+The printed block only moves the setpoint in steps, so it acts like integral
+action on a measurement half an hour behind the input, and it must move
+slowly. On the training seeds the best scaling costs 20.2 a step, against 51.5
+with the supervisor switched off and 6.25 for the PID cascade it replaces: a
+free-lime PI trimming the setpoint, strongly proportional (Kp 12000, Ki 6),
+grid-searched on four seeds. On the held-out seeds 200 to 209 the rule base
+holds 20.1 a step, the cascade 5.09, against a ceiling of 1: 1.30 decades of
+room, against 0.71. The mean free-lime error stays under 0.25 pp on every
+held-out seed, with no trip (`tests/cement_kiln/test_cement_kiln_expert.py`).
+The user chose the published rule base over the stronger cascade
+(2026-10-28).
 
 **The MPC is gradient-free, by necessity rather than preference.** Every other
 JAX environment here uses a gradient MPC. This one cannot: free lime depends on

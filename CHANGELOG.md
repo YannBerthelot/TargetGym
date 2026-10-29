@@ -217,7 +217,7 @@ than by commit.
   (`scripts/measure_hold.py`): the fixed settle rises from 44 to 84 steps on
   both patrol tasks and from 37 to 45 on the formation, and their protocol
   rows are re-evaluated with it.
-- **Six industrial and energy experts copy field practice.** Each was tuned
+- **Seven industrial and energy experts copy field practice.** Each was tuned
   off the scored seeds, by its field's recipe.
   - `hvac` runs ASHRAE Guideline 36's zone heating PI (0.1 per K, 900 s)
     with LBL's optimal start.
@@ -230,6 +230,11 @@ than by commit.
   - `compressor_surge` keeps its vendor anti-surge pair, re-searched on the
     training seeds.
   - `battery` is checked against its spec and unchanged.
+  - `cement_kiln` runs the published fuzzy rule base of Swain and Subudhi
+    (1996), over a SIMC-tuned fuel loop. The rule base moves the
+    burning-zone setpoint on free lime and the kiln-speed trend. It acts only
+    by steps on a half-hour delay, so it holds 20.1 on the held-out seeds,
+    against the PID cascade's 5.09.
 
   `scripts/tune_industrial_experts.py` tunes on seeds 100-109 and checks on
   200-209. Held-out holds, old to new: `reactor` 22.1 to 4.40, `boiler_drum`
