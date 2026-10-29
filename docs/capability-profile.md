@@ -30,7 +30,13 @@ results, so they cost nothing to draw.
 ## Read the two radars
 
 Each spoke is a capability, and its point is the mean over the tasks that
-probe it.
+probe it. These are the expert and the oracle, drawn from the recorded
+results and redrawn whenever they are re-recorded:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/capability-profile-dark.svg">
+  <img alt="The expert and the oracle on each capability, hold and reach" src="images/capability-profile.svg" width="680">
+</picture>
 
 - **The dashed ring at 0.5 is the expert.** Outside it the policy is better
   than the shipped controller; inside it, worse.
@@ -40,12 +46,14 @@ probe it.
   log scale of the [holding score](rl-protocol.md#4-metrics).
 - **Reach** scores the moves: the approach from the reset and every target
   change. Moves have no ceiling, so the edge is the best known, the oracle's
-  recorded ratio to the expert. A policy that beats it is drawn on the edge,
+  recorded ratio to the expert. So on Reach the oracle is the edge itself,
+  and what differs between tasks is how much room that edge stands for
+  (`oracle_transient_ratio`). A policy that beats it is drawn on the edge,
   and its number in the table says by how much.
 - **0 at the centre** is as far below the expert as the edge is above it.
-- **A grayed label** means no task on that spoke leaves room: on Hold,
-  `first_order` and `cstr` already hold within the resolution, so only Reach
-  scores basic tracking.
+- **A grayed label** means no task on that spoke leaves room. An expert that
+  already holds within the resolution, as on `first_order`, leaves none on
+  Hold, so that task is scored on Reach alone.
 - **The oracle** reads the full state, which the policy cannot. It shows what
   is reachable, not what is fair.
 
@@ -98,8 +106,10 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
 
 ## Limits
 
-- Reach shows nothing until the protocol records moves; the weekly record adds
-  them. `transient_ratio` itself works at once, against the expert.
+- Where the oracle barely beats the expert on the moves, the Reach edge sits
+  just outside the ring, and a small difference swings that task's point
+  between 0 and 1. `oracle_transient_ratio` says how much room the edge
+  stands for.
 - The fixed settle is 0 steps on `hvac`, 1 on `reactor` and 4 on `battery`, so
   their move cost covers a step or a few. Read `settling_ratio` there.
 - Multi-agent rests on one task and instability on two, so a single task moves

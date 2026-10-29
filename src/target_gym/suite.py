@@ -172,15 +172,17 @@ def run_suite(make_policy, seeds: int = 10, tasks=None) -> dict:
     return {"tasks": results, "profile": profile(results)}
 
 
-# Light-surface categorical slots, in order (the expert is the gray ring).
-_COLORS = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300")
-_EXPERT_GRAY = "#898781"
+# The docs' colours: the expert blue and the oracle orange, as in
+# docs/images/capability-profile.svg; other profiles take the next slots.
+_FIXED = {"expert": "#2a78d6", "oracle": "#eb6834"}
+_COLORS = ("#1baf7a", "#eda100", "#e87ba4", "#008300")
 
 
 def plot_profile(profiles: dict, axes=AXES):
     """Two radars side by side, hold and reach, with one polygon per profile
-    in ``profiles`` (name -> ``profile``). ``"expert"`` is drawn as a dashed
-    gray ring; the others take the categorical colours in order. A capability
+    in ``profiles`` (name -> ``profile``), clockwise from the top as on the docs
+    page. ``"expert"`` is a dashed blue ring and ``"oracle"`` orange; the
+    others take the next categorical colours in order. A capability
     with no point in a polygon is skipped by it, and its label is grayed when
     no profile has one. Returns the matplotlib figure."""
     import matplotlib.pyplot as plt
@@ -198,12 +200,14 @@ def plot_profile(profiles: dict, axes=AXES):
             ok = ~np.isnan(r)
             anywhere |= ok
             th, rr = np.r_[angles[ok], angles[ok][:1]], np.r_[r[ok], r[ok][:1]]
+            color = _FIXED.get(name) or next(colors)
             if name == "expert":
-                ax.plot(th, rr, "--", color=_EXPERT_GRAY, lw=1.5, label=name)
+                ax.plot(th, rr, "--", color=color, lw=1.5, label=name)
                 continue
-            color = next(colors)
             ax.plot(th, rr, "-o", color=color, lw=2, ms=5, label=name)
             ax.fill(th, rr, color=color, alpha=0.12)
+        ax.set_theta_zero_location("N")
+        ax.set_theta_direction(-1)
         ax.set_xticks(angles, [LABELS[a] for a in axes], fontsize=9)
         ax.tick_params(axis="x", pad=10)
         for label, ok in zip(ax.get_xticklabels(), anywhere):
