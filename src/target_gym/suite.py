@@ -12,8 +12,9 @@ drawn as two radars:
 Each score is drawn at ``radius = 0.5 + 0.5 * score``, clipped to [0, 1]: the
 expert is the 0.5 ring, a policy worse than the expert falls inside it, and 0
 is as far below the expert as the ceiling (or the best known) is above. A task
-with no room (its expert already within the ceiling, or no best known move
-recorded) has no point, and a capability is the mean of its tasks' points.
+with no room (its expert already within the ceiling, or a best known move
+under ``MIN_REACH_ROOM`` times cheaper than the expert's) has no point, and a
+capability is the mean of its tasks' points.
 
 Profile a policy::
 
@@ -34,7 +35,7 @@ import numpy as np
 from target_gym import scoring
 
 __all__ = ["AXES", "CAPABILITIES", "LABELS", "plot_profile", "profile"]
-__all__ += ["radius", "references", "run_suite"]
+__all__ += ["MIN_REACH_ROOM", "radius", "references", "run_suite"]
 
 #: The capabilities, in their order around the radar.
 AXES = (
@@ -99,6 +100,11 @@ CAPABILITIES = {
 
 _NAN = float("nan")
 
+#: The least room a Reach edge may stand for: an oracle reaching new targets
+#: less than this many times cheaper than the expert puts the edge so close to
+#: the ring that seed noise decides the point, so the task has none.
+MIN_REACH_ROOM = 1.25
+
 
 def radius(s: float) -> float:
     """Where a score sits on the radar: ``0.5 + 0.5 * s`` in [0, 1]."""
@@ -108,10 +114,10 @@ def radius(s: float) -> float:
 
 
 def _reach_score(m: dict) -> float:
-    """``log(transient_ratio) / log(best known)``; NaN without a best known
-    above the expert."""
+    """``log(transient_ratio) / log(best known)``; NaN unless the best known
+    is at least ``MIN_REACH_ROOM`` times cheaper than the expert."""
     best = m.get("oracle_transient_ratio", _NAN)
-    if not best > 1.0:
+    if not best >= MIN_REACH_ROOM:
         return _NAN
     return math.log(max(m["transient_ratio"], 1e-300)) / math.log(best)
 

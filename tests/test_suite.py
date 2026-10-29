@@ -74,6 +74,25 @@ def test_a_capability_is_the_mean_of_its_tasks_radii():
     assert p["reach"] == pytest.approx({"x": 0.75, "y": 0.75})
 
 
+def test_a_task_whose_best_known_move_is_under_a_quarter_cheaper_has_no_reach_point():
+    """The user's rule (2026-10-29): where the oracle reaches new targets less
+    than 1.25 times cheaper than the expert, the edge sits too close to the
+    ring for seed noise, so the task has no Reach point. At 1.25 it counts: a
+    policy with half that log ratio sits at 0.75."""
+    nan = float("nan")
+    results = {
+        "a": {"score": nan, "transient_ratio": 1.1, "oracle_transient_ratio": 1.2},
+        "b": {
+            "score": nan,
+            "transient_ratio": 1.25**0.5,
+            "oracle_transient_ratio": 1.25,
+        },
+    }
+    p = suite.profile(results, tags={"a": ("x",), "b": ("y",)})
+    assert math.isnan(p["reach"]["x"])
+    assert p["reach"]["y"] == pytest.approx(0.75)
+
+
 def test_the_expert_is_the_half_ring_and_the_oracle_comes_from_the_records():
     """Task a: the expert holds at 100 and the oracle at 10 against a ceiling
     of 1, half the two decades (radius 0.75); the oracle's moves cost a
