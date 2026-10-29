@@ -114,9 +114,10 @@ way to buy it back.
 
 Hold both product purities of a 40-tray binary distillation column (Skogestad's
 Column A) with reflux and boilup. The two purities move together far more
-easily than apart, which makes the plant ill-conditioned, and only the two
-products are analysed: the tray profile that holds the column's memory, and the
-drifting feed composition, are hidden. The reward scores both purities.
+easily than apart, which makes the plant ill-conditioned. Only the two products
+are analysed, plus one tray temperature: the tray compositions that hold the
+column's memory, and the drifting feed composition, are hidden. The reward
+scores both purities.
 
 | obs | meaning |
 |---|---|
@@ -126,11 +127,18 @@ drifting feed composition, are hidden. The reward scores both purities.
 | 3 | boilup, fraction of its range (0 to 1) |
 | 4 | target `yD` |
 | 5 | target `xB` |
+| 6 | `T_15`, stage 15's temperature (K) |
 
-**Observation.** A real column has analysers on the two product streams, not on
-all 40 trays. **39 of the 41
-stage compositions are hidden**, and that interior profile is the column's
-memory. Feed composition is hidden too and drifts as an OU process.
+**Observation.** A real column has analysers on the two product streams and
+thermocouples on a few trays, not an assay of all 40. **39 of the 41 stage
+compositions are hidden**, and that interior profile is the column's memory.
+The one tray temperature, `T_15`, is stage 15's on column A's linear
+boiling-point curve, T = 341.9 x + 355.4 (1 - x) K (Skogestad, distillation
+mailing list, 19 May 1999): the stage the maximum gain rule picks in the bottom
+section (220 K per kmol/min of boilup at the nominal point, derived), and the
+location Skogestad recommends for column A ("Distillation control: dos and
+don'ts", section 6.3). It was added in v3 for the expert's temperature loop.
+Feed composition is hidden too and drifts as an OU process.
 
 **Reward** charges each purity's tracking term, so holding one specification
 does not excuse losing the other.
@@ -154,9 +162,9 @@ ill-conditioned plant: it makes *coordinated* reflux/boilup moves, which is
 precisely what two independent diagonal loops cannot do when the useful
 direction is a small difference between two large, nearly-cancelling effects.
 
-PID gains come from a grid search. Return rises monotonically to Kp ≈ 400 with
-no instability, but 150 captures 98 % of it at a quarter of the control
-activity — the safer margin given RGA ≈ 50.
+The PID in the table is the version-2 expert, two diagonal composition loops
+grid-searched on the scored reward. Section 8 has the base layer that
+replaced it.
 
 **The MPC plans on the mean feed, with a decaying step.** Until the oracle
 audit (2026-10-01) the feed-composition noise was not declared in the spec's
@@ -188,6 +196,50 @@ energy balance effects (varying latent heats, subcooling) cannot appear.
 
 ---
 
+## 8. Expert
+
+On columns an MPC over the temperature loops is the norm; under it runs the
+base layer this expert copies, the LV-configuration with a temperature loop
+using boilup ("Distillation control: dos and don'ts", sections 6.3 to 6.5,
+which calls it widely used in industry). Boilup holds the stage-15
+temperature, reflux holds the distillate and the temperature setpoint holds
+the bottoms (`make_distillation_pid_controller`, `base_layer_step`). It starts
+bumplessly from the observed flows and temperature. The observation-only MPC
+that practice adds on top is PR 2 of the experts refactor.
+
+SIMC (Skogestad and Grimholt 2012), from step tests on training seeds 100 to
+109 against unstepped runs on the same feed noise, by
+`scripts/tune_process_experts.py --envs distillation`:
+
+- **Temperature loop.** Boilup stepped 0.005 kmol/min. Over the first 20 min
+  the stage-15 temperature rises at k' = 1.19 K/min per kmol/min with no lag
+  beyond the 1 min sample, theta = 0.5 min; its time constant, about 160 min,
+  is over 300 delays, so the loop is lag-dominant and takes the integrating
+  rule. Tight SIMC would move boilup by its whole range on the setpoint
+  moves the bottoms loop makes (up to 2.5 K on the training seeds), and the
+  column then runs off, so tau_c is the smallest that keeps the first move
+  within boilup's room from the nominal point, 0.39 kmol/min (SIMC's input
+  usage rule, eq. 5.35): tau_c = 4.8 min, Kp_T = 0.160 kmol/min per K,
+  Ti_T = 21 min.
+- **Distillate loop**, yD on reflux with the temperature loop closed: a
+  0.005 kmol/min step. Median fit k = 0.0209, tau1 = 1.98 min,
+  theta = 1.31 min; the input bound does not bind, so tau_c = theta:
+  Kp_D = 36.2, Ti_D = 1.98 min.
+- **Bottoms loop**, xB on the temperature setpoint: a 0.2 K step. Median fit
+  k = -0.00526 per K, tau1 = 2.18 min, theta = 0.93 min; tau_c = theta:
+  Kp_B = -223 K, Ti_B = 2.18 min.
+- **Interaction.** With the temperature loop closed the steady-state relative
+  gain of the remaining pairing is about 0.85, against about 50 for LV
+  without it, the reduction the dos and don'ts describe (measured on the
+  nominal profile).
+- **Held-out check** (seeds 200 to 209). It holds 0.155 per step (worst seed
+  0.29) against a ceiling of 2, settles in 46 steps and never trips
+  (`tests/pc_gym/test_expert_specs.py`). The two diagonal composition loops
+  it replaced held 391 on the protocol seeds. Over 600-step episodes they
+  also tripped 3 of the 10 training seeds.
+
+---
+
 <!-- BEGIN GENERATED FACTS -->
 
 <!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
@@ -198,7 +250,7 @@ energy balance effects (varying latent heats, subcooling) cannot appear.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `distillation` | 200 | 60 | 3.3 h | 2 in [-1, 1] | 6 | 46 |
+| `distillation` | 200 | 60 | 3.3 h | 2 in [-1, 1] | 7 | 46 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

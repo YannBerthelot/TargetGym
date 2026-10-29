@@ -83,16 +83,23 @@ gains cannot:
 
 The aircraft experts are tuned by `scripts/tune_aircraft_guidance.py`, on
 training seeds and never on the scored ones, and their numbers live beside
-them in code. The other gains are tuned by `scripts/tune_pid.py` (relay
-autotuning on the process plants) and live in
-`src/target_gym/data/pid_gains.json`:
+them in code. The process plants `first_order`, `cstr`, `ph_neutralization`,
+`unstable_cstr`, `four_tank` and `distillation` are tuned by SIMC from step
+tests on training seeds, with a held-out check on seeds 200 to 209:
 
 ```bash
-uv run python scripts/tune_pid.py --envs cstr    # or `make tuning-cstr`
+uv run python scripts/tune_process_experts.py --envs cstr --write --check
 ```
 
-The script skips environments already in the file, so naming one with `--envs`
-is how you re-tune it. Before keeping a re-tune:
+The other gains are tuned by `scripts/tune_pid.py` (a search on episode
+return, or relay autotuning) and live in `src/target_gym/data/pid_gains.json`:
+
+```bash
+uv run python scripts/tune_pid.py --envs reactor    # or `make tuning-reactor`
+```
+
+That script skips environments already in the file, so naming one with
+`--envs` is how you re-tune it. Before keeping a re-tune:
 
 - **Measure it against the shipped gains.** The search is stochastic and
   sensitive to the operating point, and a fresh "best" can be worse.

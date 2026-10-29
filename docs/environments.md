@@ -60,11 +60,11 @@ To pick one by what you want to test, see
 
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
-| `cstr` | `cstr-v2` | (3,) | (1,) | C_a (mol/L) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
-| `first_order` | `first_order-v2` | (2,) | (1,) | x | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
-| `four_tank` | `four_tank-v2` | (6,) | (2,) | h1 (m), h2 (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
+| `cstr` | `cstr-v3` | (3,) | (1,) | C_a (mol/L) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
+| `first_order` | `first_order-v3` | (2,) | (1,) | x | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
+| `four_tank` | `four_tank-v3` | (6,) | (2,) | h1 (m), h2 (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
 | `ph_neutralization` | `ph_neutralization-v2` | (3,) | (1,) | pH | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
-| `distillation` | `distillation-v2` | (6,) | (2,) | yD (mole fraction) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
+| `distillation` | `distillation-v3` | (7,) | (2,) | yD (mole fraction) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
 | `unstable_cstr` | `unstable_cstr-v2` | (4,) | (1,) | C_a (mol/L) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Industrial / Energy

@@ -42,7 +42,7 @@ Everything here is checked against the closed-form solution
 | Step response reaches 63.2 % of final at t = τ | analytic | matches | ✅ |
 | Settles to `K·u` | analytic | matches | ✅ |
 | Time-constant resolution | ≥ 5 steps per τ | **10 steps** | ✅ |
-| Episode covers settling | ≥ 4 τ | **100 steps = 10 τ** (benchmark; the class default of 200 is 20 τ) | ✅ |
+| Episode covers settling | ≥ 4 τ | **150 steps = 15 τ** | ✅ |
 | Every target reachable | required | `u = x/K` needs 0.5–1.5 of ±2.0 | ✅ |
 | No overshoot from a step | first order cannot overshoot | none | ✅ |
 | Monotone step response | required | yes | ✅ |
@@ -106,6 +106,34 @@ transport delay — that the rest of the suite exists to pose.
 
 ---
 
+## 6. Expert
+
+A PI controller tuned by SIMC (Skogestad and Grimholt, "The SIMC method for
+smooth PID controller tuning", 2012), the rule this textbook plant is taught
+with. `scripts/tune_process_experts.py --envs first_order` derives the gains
+and stores them in `src/target_gym/data/pid_gains.json`; the factory is
+`make_first_order_pid_controller`.
+
+- **Step test.** From the steady state at each training seed's target (seeds
+  100 to 109), a step of 0.1 in the raw action. The fit is k = 2.0 per unit
+  raw action, tau1 = 0.50 s and no delay (measured), which is the plant's own
+  K (u_max - u_min) / 2 and tau. The 0.05 s sample adds half a step,
+  theta = 0.025 s (the half rule).
+- **Settings.** The tight choice tau_c = theta gives
+  Kc = tau1 / (k (tau_c + theta)) = 5.0 per unit error and
+  tau_I = min(tau1, 4 (tau_c + theta)) = 0.20 s, so Ki = 25 /s. tau_c = 2 theta
+  and 3 theta cost more on the training seeds (1.3e-4 per step against 0.0084
+  and 0.10, measured).
+- **Held-out check** (seeds 200 to 209). It holds 1.4e-12 per step against a
+  ceiling of 1 and never trips (`tests/pc_gym/test_expert_specs.py`). It
+  replaced a PID grid-searched on the scored reward, which was also far
+  inside the resolution.
+- **Episode.** 150 steps (100 in v2), twice the 63 steps the PI takes to come
+  within twice the level it holds. The plant has no noise, so that level is
+  float32 rounding.
+
+---
+
 <!-- BEGIN GENERATED FACTS -->
 
 <!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
@@ -116,7 +144,7 @@ transport delay — that the rest of the suite exists to pose.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `first_order` | 100 | 0.05 | 5 s | 1 in [-1, 1] | 2 | 3 |
+| `first_order` | 150 | 0.05 | 8 s | 1 in [-1, 1] | 2 | 3 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

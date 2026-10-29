@@ -467,21 +467,29 @@ def test_every_mpc_task_and_every_new_task_has_a_hold_row():
 
 
 def _tuner_rows() -> set[str]:
-    """The keys of ``TUNERS`` in scripts/tune_pid.py, read from its source.
-    Importing the script would put ``src`` on ``sys.path`` as a side effect."""
-    path = ROOT / "scripts" / "tune_pid.py"
-    for node in ast.parse(path.read_text()).body:
-        if (
-            isinstance(node, ast.Assign)
-            and any(isinstance(t, ast.Name) and t.id == "TUNERS" for t in node.targets)
-            and isinstance(node.value, ast.Dict)
-        ):
-            return {
-                key.value
-                for key in node.value.keys
-                if isinstance(key, ast.Constant) and isinstance(key.value, str)
-            }
-    raise AssertionError("scripts/tune_pid.py defines no TUNERS dict literal")
+    """The keys of ``TUNERS`` in scripts/tune_pid.py and
+    scripts/tune_process_experts.py, read from their source. Importing a
+    script would put ``src`` on ``sys.path`` as a side effect."""
+    rows = set()
+    for script in ("tune_pid.py", "tune_process_experts.py"):
+        path = ROOT / "scripts" / script
+        for node in ast.parse(path.read_text()).body:
+            if (
+                isinstance(node, ast.Assign)
+                and any(
+                    isinstance(t, ast.Name) and t.id == "TUNERS" for t in node.targets
+                )
+                and isinstance(node.value, ast.Dict)
+            ):
+                rows |= {
+                    key.value
+                    for key in node.value.keys
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                }
+                break
+        else:
+            raise AssertionError(f"scripts/{script} defines no TUNERS dict literal")
+    return rows
 
 
 def _tuning_scripts(spec) -> list[str]:
@@ -494,9 +502,10 @@ def _tuning_scripts(spec) -> list[str]:
 
 def test_every_new_task_with_a_pid_has_a_tuning_protocol():
     """Every tuned gain keeps the protocol that set it. A task added after the
-    21 that ships a PID either has a row in ``TUNERS`` (scripts/tune_pid.py,
-    which writes pid_gains.json) or, with its gains in its experts.py, names
-    the tuning script there, and that script exists."""
+    21 that ships a PID either has a row in ``TUNERS`` (scripts/tune_pid.py, or
+    scripts/tune_process_experts.py for the SIMC-tuned process plants, both of
+    which write pid_gains.json) or, with its gains in its experts.py, names the
+    tuning script there, and that script exists."""
     rows = _tuner_rows()
     missing = [
         s.name
@@ -506,7 +515,7 @@ def test_every_new_task_with_a_pid_has_a_tuning_protocol():
         and not any((ROOT / "scripts" / name).is_file() for name in _tuning_scripts(s))
     ]
     assert not missing, (
-        f"no TUNERS row in scripts/tune_pid.py and no tuning script named in "
+        f"no TUNERS row in either tuning script and no tuning script named in "
         f"experts.py for {missing}"
     )
 

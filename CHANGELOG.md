@@ -249,6 +249,38 @@ than by commit.
   oracle keeps the old PID's pitch constants as its own and is unchanged. The
   wind turbine's records are re-recorded.
 
+- **The four-tank and the column run their practice's loops, and their tasks
+  change (v3).** `four_tank`'s expert is the rig's multi-loop PI on the
+  crossed pairing through a static decoupler, SIMC-tuned; its loops come
+  within 1.3 times the speed the plant's right-half-plane zero allows, and
+  reach the 1 mm resolution about 570 s in, so the episode is now 1200 steps
+  (500 in v2). `distillation`'s expert is the base layer under a column's
+  MPC: the LV-configuration with boilup holding the stage-15 temperature,
+  reflux on the distillate and the temperature setpoint on the bottoms. Its
+  observation gains that temperature (7 entries, from 6), on column A's
+  linear boiling-point curve. The column's tight SIMC settings saturate the
+  flows and run it off, so its temperature loop takes SIMC's input-usage
+  bound. Both experts replace grid searches on the scored reward. On the
+  held-out seeds both hold inside the ceiling of 2: the four-tank 1.33 (from
+  22.7) and the column 0.155 (from 391).
+
+- **Four process experts are what practice runs, tuned by SIMC.**
+  `scripts/tune_process_experts.py` step-tests each plant on training seeds
+  100-109, fits a first-order-plus-delay model and applies the SIMC rules
+  (Skogestad and Grimholt 2012), then checks the expert on held-out seeds
+  200-209. `cstr` is now a cascade, concentration trimming a temperature loop
+  on the coolant, as reactor practice runs it. `ph_neutralization`
+  linearises the pH through the titration curve and biases the base valve by
+  the target's steady demand. `first_order` is a SIMC PI, and
+  `unstable_cstr` keeps its cascade with SIMC gains in place of a search
+  over seeds that included the scored ones. On the held-out seeds the
+  `first_order`, `cstr` and `ph_neutralization` experts hold within their
+  instruments' resolution (pH 0.94 against a ceiling of 1, from 43.6), and
+  the unstable CSTR holds 6.0, against 3.2 for the gains it replaces. The four
+  tasks are re-recorded. `first_order` and `cstr` change (v3): their episodes
+  are 150 steps (100 in v2), twice the 63 and 67 steps their new experts take
+  to come within twice the level they hold, as the episode-length rule asks.
+
 - **Shorter docstrings in the core modules** (registry, experts, eval, reward,
   runners, base): they keep the contracts and drop the measurement history,
   and `eval.evaluate` now documents every number it returns.

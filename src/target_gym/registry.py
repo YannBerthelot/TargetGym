@@ -663,7 +663,11 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_cstr_pid_controller", module="target_gym.pc_gym.cstr.experts"
         ),
         make_mpc=_mpc("make_cstr_mpc", module="target_gym.pc_gym.cstr.experts"),
+        # 150 steps, over twice the 67 steps the SIMC cascade takes to come
+        # within twice the level it holds. At 100 the scored hold was the last
+        # third.
         tuned_gains_key="cstr",
+        version=3,
     ),
     EnvSpec(
         name="first_order",
@@ -677,7 +681,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_first_order_mpc", module="target_gym.pc_gym.first_order.experts"
         ),
+        # 150 steps, twice the 63 steps the SIMC PI takes to come within twice
+        # the level it holds. At 100 the scored hold was the last 37 steps.
         tuned_gains_key="first_order",
+        version=3,
     ),
     EnvSpec(
         name="four_tank",
@@ -691,9 +698,12 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_four_tank_mpc", module="target_gym.pc_gym.four_tank.experts"
         ),
-        # 500 steps: the lower tanks have a ~58 s time constant at these
-        # levels, and a shorter episode leaves every controller mid-transient.
+        # 1200 steps, twice the 570 s the decoupled SIMC expert takes to bring
+        # both levels within the 1 mm transmitter resolution: the plant is
+        # non-minimum phase (gamma1 + gamma2 = 0.4), which caps any feedback
+        # loop near a 64 s time constant. At 500 steps it was still settling.
         tuned_gains_key="four_tank",
+        version=3,
     ),
     EnvSpec(
         name="ph_neutralization",
@@ -733,6 +743,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # environment per step (41 states, 16 substeps for stability), so the
         # test episode is kept short.
         tuned_gains_key="distillation",
+        # v3 observes the stage-15 temperature, the thermocouple the base
+        # layer's temperature loop holds.
+        version=3,
         disturbance_fields=("zF",),
         # The feed composition's OU innovation. Declared so the planner plans on the
         # mean (``plan_params``) rather than on one fixed noise path.
