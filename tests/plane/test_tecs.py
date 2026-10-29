@@ -87,11 +87,10 @@ def _finding(reason):
 
 _MISSES = {
     ("plane_sine", 200): _finding("plane_sine altitude 2.19 m on seed 200"),
-    ("plane_energy", 202): _finding("plane_energy altitude 2.03 m on seed 202"),
 }
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.parametrize(
     "name,seed",
     [

@@ -21,14 +21,16 @@ whole of what differs between them:
 - **Physics** links the environment's contract: sourced parameters, published
   validation targets asserted by tests, and quantified known deviations.
 
-Load any of them by registry name:
+Load any of them by registry name, on the configuration it is scored on:
 
 ```python
-from target_gym.registry import REGISTRY
+import target_gym as tg
 
-spec = REGISTRY["boiler_drum"]
-env, params = spec.make_env(), spec.params_cls()
+env, params = tg.make("boiler_drum")
 ```
+
+To pick one by what you want to test, see
+[Choosing an environment](complexity.md).
 
 
 ## Aircraft
@@ -38,9 +40,9 @@ env, params = spec.make_env(), spec.params_cls()
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
 | `plane` | `plane-v2` | (10,) | (2,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
-| `plane_energy` | `plane_energy-v3` | (10,) | (2,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
+| `plane_energy` | `plane_energy-v4` | (10,) | (2,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
 | `plane_sine` | `plane_sine-v2` | (10,) | (2,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
-| `plane3d_heading` | `plane3d_heading-v3` | (15,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
+| `plane3d_heading` | `plane3d_heading-v4` | (15,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `plane3d_circle` | `plane3d_circle-v3` | (17,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `plane3d_racetrack` | `plane3d_racetrack-v4` | (21,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `plane3d_figure8` | `plane3d_figure8-v3` | (19,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
@@ -48,9 +50,9 @@ env, params = spec.make_env(), spec.params_cls()
 | `patrol_bearing_only` | `patrol_bearing_only-v3` | (21,) | (3,) | measured range (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 | `formation` | `formation-v2` | (74,) | (9,) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
 
-> `patrol_bearing_only` -- The PID is a lead-state estimator feeding the same pursuit law the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator recovers it by differencing the estimated relative position and filtering. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
+> `patrol_bearing_only` -- The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity from the follower's own and the change in the relative position, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
 
-> `formation` -- The PID is the patrol's, seat for seat: the patrol's lead autopilot in the lead seat, aimed at the heading the route commands, and the patrol PID in each wingman seat. It holds the lead's altitude poorly (about 140 m off), the patrol's scripted lead never needing better. The MPC slot is the patrol oracle's design applied to the whole formation: the patrol's lead autopilot in the lead seat and its twin-autopilot law in each wingman seat, with one residual planner over every seat on the team cost.
+> `formation` -- The PID flies the lead seat as a formation lead: the 3D heading task's course hold and pitch on height, aimed at the heading the route commands, at a set power, so its wingmen have a steady reference. Each wingman seat flies the patrol's formation hold. The MPC slot is the patrol oracle's design applied to the whole formation: the patrol's lead autopilot in the lead seat and its twin-autopilot law in each wingman seat, with one residual planner over every seat on the team cost.
 
 ## Process Control
 
@@ -58,11 +60,11 @@ env, params = spec.make_env(), spec.params_cls()
 
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
-| `cstr` | `cstr-v2` | (3,) | (1,) | C_a (mol/L) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
-| `first_order` | `first_order-v2` | (2,) | (1,) | x | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
-| `four_tank` | `four_tank-v2` | (6,) | (2,) | h1 (m), h2 (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
+| `cstr` | `cstr-v3` | (3,) | (1,) | C_a (mol/L) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
+| `first_order` | `first_order-v3` | (2,) | (1,) | x | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
+| `four_tank` | `four_tank-v3` | (6,) | (2,) | h1 (m), h2 (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
 | `ph_neutralization` | `ph_neutralization-v2` | (3,) | (1,) | pH | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
-| `distillation` | `distillation-v2` | (6,) | (2,) | yD (mole fraction) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
+| `distillation` | `distillation-v3` | (7,) | (2,) | yD (mole fraction) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
 | `unstable_cstr` | `unstable_cstr-v2` | (4,) | (1,) | C_a (mol/L) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Industrial / Energy

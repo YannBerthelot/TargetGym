@@ -2,14 +2,22 @@
 
 <p align="center"><img src="../../videos/four_tank/pid_output.gif" width="480px"/></p>
 
+Hold the levels of the two lower tanks of Johansson's quadruple-tank process with two pumps. Each pump sends most of its flow to the upper tank on the other side, which drains into the opposite lower tank, so pairing each pump with the tank below it is the wrong move and the response is non-minimum phase. All four levels are measured: the difficulty is the coupling, not what is seen.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("four_tank")
+```
+
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((6,))` |
 | Tracked variable(s) | h1 (m), h2 (m) |
-| Episode length | 500 steps (500 s at 1 s per step) |
-| Import | `from target_gym import FourTank, FourTankParams` |
-| Cite as | `four_tank-v2` |
+| Episode length | 1200 steps of 1 s (20 min) |
+| Cite as | `four_tank-v3` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
 
 ## Action space
 
@@ -23,8 +31,16 @@ actuator range inside the environment.
 
 ## Observation space
 
-6 values. Indices (0, 1) carry the tracked variable(s) that the
-reward scores.
+6 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[4]`, `obs[1]` against `obs[5]`.
+
+| # | meaning |
+|---|---|
+| 0 | `h1`, level of lower tank 1 (m) |
+| 1 | `h2`, level of lower tank 2 (m) |
+| 2 | `h3`, level of upper tank 3 (m) |
+| 3 | `h4`, level of upper tank 4 (m) |
+| 4 | target `h1` (m) |
+| 5 | target `h2` (m) |
 
 ## Rewards
 
@@ -48,25 +64,27 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 500 steps.
+**Truncation.** After 1200 steps.
 
 ## Baselines
 
-Recorded over 10 seeds of the 500-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
+Recorded over 10 seeds of the 1200-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -4.158e+05 | 831.6 |
-| MPC | -1.864e+05 | 372.8 |
+| PID | -2.669e+05 | 222.4 |
+| MPC | -1.864e+05 | 155.3 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("four_tank", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
-| `max_steps_in_episode` | 500 | steps |
+| `max_steps_in_episode` | 1200 | steps |
 | `g` | 9.81 | m/s^2 |
 | `gamma1` | 0.2 | - |
 | `gamma2` | 0.2 | - |

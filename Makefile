@@ -42,11 +42,12 @@ ci-docs:  ## Generated pages are current and the site builds with no dangling li
 	uv run python scripts/check_doc_drift.py --check
 	uv run mkdocs build --strict
 
-# -n auto spreads the suite over every core; tests/conftest.py holds each
-# worker to one compute thread so they do not fight over them. Pass -n0 to
-# turn that off, which is what you want when reaching for --pdb.
-ci-test:  ## Fast test suite on CPU (skips `slow` closed-loop checks)
-	$(CPU_ENV) uv run pytest tests/ -q -n auto --durations=10 -m "not slow"
+# A plain pytest is the small tier on every core (pyproject.toml's addopts);
+# tests/conftest.py holds each worker to one compute thread so they do not
+# fight over them. Pass -n0 to turn that off, which --pdb needs.
+ci-test:  ## Small then medium tests, as the CI test job runs them
+	$(CPU_ENV) uv run pytest -q
+	$(CPU_ENV) uv run pytest -q -m medium -n 2
 
 all:
 	uv run python -m target_gym.runners.runners
@@ -84,11 +85,11 @@ baselines-%:  ## Re-measure one environment's recorded baseline
 time-constants:  ## Measure each plant's actuator-to-output time constant
 	uv run python scripts/measure_time_constants.py
 
-test:  ## Fast tests only
-	$(CPU_ENV) uv run pytest --tb=short --disable-warnings -n auto -m "not slow"
+test:  ## Small tests only, the default pytest run
+	$(CPU_ENV) uv run pytest --tb=short --disable-warnings
 
-test-all:  ## Every test, including the slow closed-loop controller checks
-	$(CPU_ENV) uv run pytest --tb=short --disable-warnings -n auto
+test-all:  ## Every tier, including the large closed-loop controller checks
+	$(CPU_ENV) uv run pytest --tb=short --disable-warnings -m ""
 
 # Modules that type-check cleanly today and are enforced in CI. Grow this
 # list by making a module pass and then adding it; pyproject.toml's [tool.mypy]
@@ -104,8 +105,8 @@ mypy-all:  ## Type-check everything -- exploratory, currently reports ~324
 # pytest-cov supplies the xdist plumbing coverage.py lacks on its own, so this
 # runs in parallel and still reports exactly the same total as a serial run --
 # 86s rather than 278s, measured. Threshold and omissions are in pyproject.toml.
-coverage:  ## Test suite with coverage, enforcing the threshold
-	$(CPU_ENV) uv run pytest tests/ -q -n auto --cov=target_gym
+coverage:  ## Small tests with coverage, enforcing the threshold, as CI does
+	$(CPU_ENV) uv run pytest -q --cov=target_gym
 
 missing-annotations:
 	uv run mypy --disallow-untyped-calls --disallow-untyped-defs --ignore-missing-imports src

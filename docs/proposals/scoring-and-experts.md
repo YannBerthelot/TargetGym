@@ -154,7 +154,7 @@ Tuning rules for every expert:
 | reactor | Rod control on average temperature against a load reference | Flux PID whose internal step (0.5 s) differs from the environment's control step | Check whether the gains absorb it; retune |
 | hvac | Guideline 36 PI (kp 0.1/K, Ti 900 s) | PI with in-code defaults | Use the Guideline 36 values |
 | battery | Scheduled setpoint, state-of-charge limits, inner PI | Feedforward, PI trim, state-of-charge guard | Keep |
-| wind_turbine | `k ω²` torque below rated, gain-scheduled pitch PI above | Torque by plant-model inversion | Replace the torque law with `k ω²` |
+| wind_turbine | `k ω²` torque below rated, gain-scheduled pitch PI above | Torque by plant-model inversion | Replace the torque law with `k ω²`. Corrected on 2026-10-28: the expert's torque was the constant-power law (the inversion is the oracle's), and `k ω²` is below-rated only. The NREL 5 MW baseline was built instead (the turbine's PHYSICS.md, section 5) |
 | plane, plane_sine | Altitude-hold cascade with autothrottle | Altitude cascade, tuned on seeds 0-2 | Retune off the scored seeds |
 | plane_energy | TECS (Lambregts) | The plane's cascade, not retuned | Implement TECS |
 | plane3d_heading | Heading to bank, altitude to pitch cascade | Same structure, but holds 51 m and 1 rad off; roll-rate damping has the opposite sign to the shared PID's | Check the sign; retune |

@@ -104,7 +104,7 @@ def test_power_below_demand_withdraws_and_above_inserts():
 HELD_OUT = range(200, 210)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_tavg_stays_inside_the_deadband_on_held_out_seeds():
     from target_gym.eval import scored_burn_in
 

@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/distillation/pid_output.gif" width="480px"/></p>
 
-Binary distillation — Skogestad's "Column A".
+Hold both product purities of a 40-tray binary distillation column (Skogestad's Column A) with reflux and boilup. The two purities move together far more easily than apart, which makes the plant ill-conditioned. Only the two products are analysed, plus one tray temperature: the tray compositions that hold the column's memory, and the drifting feed composition, are hidden. The reward scores both purities.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("distillation")
+```
 
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
-| Observation space | `Box((6,))` |
+| Observation space | `Box((7,))` |
 | Tracked variable(s) | yD (mole fraction) |
-| Episode length | 200 steps (12000 s at 60 s per step) |
-| Import | `from target_gym import DistillationColumn, DistillationParams` |
-| Cite as | `distillation-v2` |
+| Episode length | 200 steps of 60 s (3.33 h) |
+| Cite as | `distillation-v3` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
 
 ## Action space
 
@@ -25,8 +31,17 @@ actuator range inside the environment.
 
 ## Observation space
 
-6 values. Indices (0,) carry the tracked variable(s) that the
-reward scores.
+7 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[4]`.
+
+| # | meaning |
+|---|---|
+| 0 | `yD`, light-component mole fraction in the distillate (top product) |
+| 1 | `xB`, light-component mole fraction in the bottoms |
+| 2 | reflux flow, fraction of its range (0 to 1) |
+| 3 | boilup, fraction of its range (0 to 1) |
+| 4 | target `yD` |
+| 5 | target `xB` |
+| 6 | `T_15`, stage 15's temperature (K) |
 
 ## Rewards
 
@@ -58,14 +73,16 @@ Recorded over 10 seeds of the 200-step episode (see [Baseline results](../baseli
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -1.734e+08 | 8.671e+05 |
+| PID | -8.299e+04 | 415 |
 | MPC | -2.467e+04 | 123.4 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("distillation", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | min |
 | `max_steps_in_episode` | 200 | steps |

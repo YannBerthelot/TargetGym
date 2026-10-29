@@ -41,7 +41,8 @@ class CSTRParams(EnvParams):
     delta_t: float = 0.25
     #: ``delta_t`` is in minutes (the PC-gym model's unit); seconds per unit.
     time_unit_seconds: float = 60.0
-    max_steps_in_episode: int = 100
+    # Over twice the SIMC cascade's 67-step settle (v3; 100 in v2).
+    max_steps_in_episode: int = 150
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # No disturbance and a fixed target: the shipped MPC holds the

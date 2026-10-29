@@ -41,10 +41,13 @@ def _doc_cases() -> list[tuple[str, str]]:
     cases = []
     for md in [ROOT / "README.md", *sorted(DOCS.glob("*.md"))]:
         for i, code in enumerate(_runnable_blocks(md)):
-            cases.append(pytest.param(code, id=f"{md.name}:{i}"))
+            # An example that saves a video writes a file through ffmpeg.
+            marks = [pytest.mark.medium] if "save_video" in code else []
+            cases.append(pytest.param(code, id=f"{md.name}:{i}", marks=marks))
     return cases
 
 
+@pytest.mark.medium
 def test_environment_reference_is_in_sync_with_the_registry():
     """docs/environments.md must match what the generator produces."""
     result = subprocess.run(
@@ -208,6 +211,7 @@ def test_the_colab_notebook_still_runs():
             ) from exc
 
 
+@pytest.mark.medium
 def test_documentation_still_describes_the_code():
     """The contracts are read *instead of* the code, so drift misinforms.
 

@@ -171,9 +171,9 @@ before reading any result from it.
 | first_order | 100 | 10 | 50 | 0.99000 |
 | hvac | 720 | 62 | 310 | 0.99861 |
 | plane | 280 | 23 | 115 | 0.99643 |
-| plane_energy | 1200 | 23 | 115 | 0.99917 |
+| plane_energy | 1600 | 23 | 115 | 0.99938 |
 | plane_sine | 480 | 23 | 115 | 0.99792 |
-| plane3d_heading | 200 | 14 | 70 | 0.99500 |
+| plane3d_heading | 300 | 14 | 70 | 0.99667 |
 | plane3d_circle | 300 | 14 | 70 | 0.99667 |
 | plane3d_figure8 | 400 | 38 | 190 | 0.99750 |
 | plane3d_racetrack | 650 | 14 | 70 | 0.99846 |

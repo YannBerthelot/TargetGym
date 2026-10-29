@@ -31,9 +31,9 @@ Why this is a hard target MDP
   effects. This is the textbook example of an ill-conditioned plant.
 * **Slow and high-order.** 41 states with a dominant time constant of hours,
   and the composition profile inside the column is the memory.
-* **Only the products are measured.** 39 of the 41 stage compositions are
-  hidden -- a real column has analysers on the product streams, not on every
-  tray.
+* **Only the products are analysed.** 39 of the 41 stage compositions are
+  hidden -- a real column has analysers on the product streams and
+  thermocouples on a few trays, here one, on stage 15.
 * **Feed composition drifts and is unmeasured**, which moves the whole profile.
 """
 
@@ -56,6 +56,17 @@ N_FEED = 21  # feed stage, counting the reboiler as stage 1
 # 1/theta ~ 500 min, a few dominant time constants, so the feed drifts as a
 # changing operating condition rather than as noise.
 FEED_OU_THETA = 2.0e-3
+
+# The tray thermocouple. Stage 15, six below the feed, counting the reboiler as
+# stage 1: the bottom-section stage with the largest steady-state temperature
+# gain to boilup (the maximum gain rule; 220 K per kmol/min at the nominal
+# point, derived), and the location Skogestad recommends for column A
+# ("Distillation control: dos and don'ts", section 6.3). Its temperature is the
+# linear boiling-point curve T = x T_bL + (1 - x) T_bH, with column A's boiling
+# points (S. Skogestad, distillation mailing list, 19 May 1999).
+TEMPERATURE_STAGE = 15
+T_BOIL_LIGHT = 341.9  # K
+T_BOIL_HEAVY = 355.4  # K
 
 
 @struct.dataclass
@@ -311,13 +322,20 @@ def compute_next_state(
 # and MPC builds -- was a cache miss and a full recompile, measured at ~1600x the
 # cost of a cached call. Callers that want it fused already jit ``step_env``,
 # which traces this inline.
-def get_obs(state: DistillationState, params: DistillationParams):
-    """``[yD, xB, L_pct, V_pct, target_yD, target_xB]``.
+def tray_temperature(state: DistillationState):
+    """The stage-15 thermocouple's reading, K (``TEMPERATURE_STAGE``)."""
+    x = state.x[TEMPERATURE_STAGE - 1]
+    return T_BOIL_LIGHT * x + T_BOIL_HEAVY * (1.0 - x)
 
-    Only the two product compositions are measured -- a real column has
-    analysers on the product streams, not on all 40 trays. The interior
-    profile, which is the column's memory, is hidden, as is the feed
-    composition.
+
+def get_obs(state: DistillationState, params: DistillationParams):
+    """``[yD, xB, L_pct, V_pct, target_yD, target_xB, T_15]``.
+
+    The two product compositions are analysed and one tray temperature is
+    measured, as on a real column, which has analysers on the product
+    streams and thermocouples on a few trays, not an assay of all 40. The
+    interior profile, which is the column's memory, is otherwise hidden, as
+    is the feed composition.
     """
     L_pct = (state.L - params.L_min) / (params.L_max - params.L_min)
     V_pct = (state.V - params.V_min) / (params.V_max - params.V_min)
@@ -329,6 +347,7 @@ def get_obs(state: DistillationState, params: DistillationParams):
             V_pct,
             state.target_yD,
             state.target_xB,
+            tray_temperature(state),
         ]
     )
 

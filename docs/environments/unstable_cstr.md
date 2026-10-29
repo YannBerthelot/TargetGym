@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/unstable_cstr/pid_output.gif" width="480px"/></p>
 
-Unstable CSTR: cstr's reactor held on its open-loop unstable middle branch.
+Hold the concentration of A in a jacketed exothermic reactor on its open-loop unstable middle steady state, commanding the coolant through a lagging jacket while the feed temperature drifts unmeasured. Left alone the reactor runs away within tens of seconds, and the target steps five times per episode, so every move crosses the unstable region under control. A trip costs an hour of restart.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("unstable_cstr")
+```
 
 | | |
 |---|---|
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((4,))` |
 | Tracked variable(s) | C_a (mol/L) |
-| Episode length | 1200 steps (3600 s at 3 s per step) |
-| Import | `from target_gym import UnstableCSTR, UnstableCSTRParams` |
+| Episode length | 1200 steps of 3 s (60 min) |
 | Cite as | `unstable_cstr-v2` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Action space
 
@@ -24,8 +30,14 @@ actuator range inside the environment.
 
 ## Observation space
 
-4 values. Indices (0,) carry the tracked variable(s) that the
-reward scores.
+4 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[3]`.
+
+| # | meaning |
+|---|---|
+| 0 | `C_a`, concentration of A (mol/L) |
+| 1 | `T`, reactor temperature (K) |
+| 2 | `T_j`, jacket temperature (K) |
+| 3 | target `C_a`, the current block's level (mol/L) |
 
 ## Rewards
 
@@ -57,14 +69,16 @@ Recorded over 10 seeds of the 1200-step episode (see [Baseline results](../basel
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -6.85e+07 | 5.708e+04 |
+| PID | -7.312e+07 | 6.093e+04 |
 | MPC | -4.74e+06 | 3950 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("unstable_cstr", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 0.05 | min |
 | `max_steps_in_episode` | 1200 | steps |

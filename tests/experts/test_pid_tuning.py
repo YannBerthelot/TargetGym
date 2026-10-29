@@ -45,6 +45,11 @@ SMOKE_TUNER_KWARGS = {
 # next tuner of this kind would be pinned.
 NAN_TUNERS: set[str] = set()
 
+# These two differentiate through an RK4 aircraft. Compiling that reverse-mode
+# graph peaks at 4.6 to 5 GB and takes 60 to 175 s on a cold cache (measured
+# 2026-10-28), more than a small test's share of a machine.
+MEDIUM_TUNERS = {"tune_plane_pid", "tune_plane3d_heading_pid"}
+
 TUNERS = [
     "tune_first_order_pid",
     "tune_cstr_pid",
@@ -89,7 +94,7 @@ def _flatten(gains) -> list[float]:
                 ),
             )
             if n in NAN_TUNERS
-            else n
+            else pytest.param(n, marks=pytest.mark.medium) if n in MEDIUM_TUNERS else n
         )
         for n in TUNERS
     ],

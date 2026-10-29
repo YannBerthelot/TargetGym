@@ -123,7 +123,7 @@ def test_kiln_speed_follows_the_feed():
 HELD_OUT = range(200, 210)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_free_lime_holds_on_held_out_seeds():
     from target_gym.eval import scored_burn_in
 

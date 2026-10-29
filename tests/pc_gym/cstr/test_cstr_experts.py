@@ -70,7 +70,7 @@ def test_the_oracle_plans_on_the_protocols_window():
     mpc = make_cstr_mpc(SPEC.make_env(), p)
     assert isinstance(mpc, ShrinkingHorizonNLP)
     assert mpc.window_start == E.scored_burn_in("cstr", p) == 12
-    assert (mpc.resolve_every, mpc.pre_weight, mpc.horizon) == (1, 1e-3, 100)
+    assert (mpc.resolve_every, mpc.pre_weight, mpc.horizon) == (1, 1e-3, 150)
 
 
 def test_a_short_closed_loop_solves_every_step_and_resets_cold():
@@ -89,7 +89,7 @@ def test_a_short_closed_loop_solves_every_step_and_resets_cold():
     assert mpc._plan is None
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_the_protocol_gain_is_at_the_plants_optimum():
     """Measured 9.42e-9 per step with zero trips, 15 s for three seeds; the
     oracle it replaced gave 0.317."""

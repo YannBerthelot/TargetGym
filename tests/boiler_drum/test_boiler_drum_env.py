@@ -11,6 +11,8 @@ coefficient correct and produce no inverse response at all, which is what
 these tests are here to catch.
 """
 
+import functools
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -210,17 +212,27 @@ def _open_loop(params, Q, q_feed, q_steam, seconds=300.0, dt=0.5):
     """
     V_wt, m_sr, m_sd, level_ref, _ = steady_state(params)
     y = jnp.array([params.p_nominal, V_wt, m_sr, m_sd])
-    lvl, press = [], []
-    for _ in range(int(seconds / dt)):
+    lvl, press = _rk4_trace(
+        y, level_ref, Q, q_feed, q_steam, params, int(seconds / dt), dt
+    )
+    t = np.arange(1, len(lvl) + 1) * dt
+    return t, np.asarray(lvl), np.asarray(press)
+
+
+@functools.partial(jax.jit, static_argnums=(6, 7))
+def _rk4_trace(y, level_ref, Q, q_feed, q_steam, params, n_steps, dt):
+    """Level and pressure after each of ``n_steps`` RK4 steps of ``dt``."""
+
+    def rk4(y, _):
         k1, _ = compute_velocity(y, (Q, q_feed), q_steam, params)
         k2, _ = compute_velocity(y + 0.5 * dt * k1, (Q, q_feed), q_steam, params)
         k3, _ = compute_velocity(y + 0.5 * dt * k2, (Q, q_feed), q_steam, params)
         k4, _ = compute_velocity(y + dt * k3, (Q, q_feed), q_steam, params)
         y = y + dt / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4)
-        lvl.append(float(drum_level(y[1], y[2], y[3], level_ref, y[0], params)))
-        press.append(float(y[0]))
-    t = np.arange(1, len(lvl) + 1) * dt
-    return t, np.array(lvl), np.array(press)
+        return y, (drum_level(y[1], y[2], y[3], level_ref, y[0], params), y[0])
+
+    _, (lvl, press) = jax.lax.scan(rk4, y, None, length=n_steps)
+    return lvl, press
 
 
 def _nominal(params):

@@ -37,7 +37,7 @@ def test_the_gains_follow_simc_for_the_stored_step_test():
 HELD_OUT = range(200, 210)
 
 
-@pytest.mark.slow
+@pytest.mark.large
 @pytest.mark.xfail(
     strict=True,
     reason="Finding (2026-10-28): 88.8-97.0 % of hold steps within 2 K, 6 of 10 "

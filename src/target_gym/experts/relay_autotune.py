@@ -204,6 +204,8 @@ def relay_experiment(
     prev_sign = 0.0
 
     relay_state = 1.0  # start with positive relay
+    # Compiled once: stepping op by op costs about a millisecond a step.
+    step_env = jax.jit(env.step_env)
 
     for step in range(max_steps):
         measured = (
@@ -238,7 +240,7 @@ def relay_experiment(
                 action = jnp.array(action_arr)
 
         # Step environment
-        obs, state, _, done, _ = env.step_env(key, state, action, params)
+        obs, state, _, done, _ = step_env(key, state, action, params)
         if hasattr(obs, "shape") and obs.shape == ():
             obs = (
                 env.get_obs(state, params)
@@ -357,6 +359,8 @@ def _find_action_bias(
         max_steps_in_episode=max(settle_steps * 2, int(params.max_steps_in_episode))
     )
 
+    step_env = jax.jit(env.step_env)
+
     def settle(action_val: float) -> float:
         state = reset_fn(key, long_params, operating_point)
         for _ in range(settle_steps):
@@ -366,7 +370,7 @@ def _find_action_bias(
                 a = np.zeros(action_dim)
                 a[action_index] = action_val
                 action = jnp.array(a)
-            _, state, _, done, _ = env.step_env(key, state, action, long_params)
+            _, state, _, done, _ = step_env(key, state, action, long_params)
             if bool(done):
                 break
         obs = (

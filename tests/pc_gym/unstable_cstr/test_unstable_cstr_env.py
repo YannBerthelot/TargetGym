@@ -614,7 +614,7 @@ def test_v1_is_log_scaled_and_charges_downtime(params):
     assert score(0.3, T=366.0) == -1200.0
 
 
-@pytest.mark.slow
+@pytest.mark.large
 def test_v1_ranks_tripping_below_safe(env, params):
     """The exploit version 1 is fixed against, measured on 32 seeds. Full
     heating and a constant 305.75 K coolant trip over and over, and with 0 on

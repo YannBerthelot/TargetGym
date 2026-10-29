@@ -287,7 +287,23 @@ All derived by the numbers script (`--section params`, `--section targets`,
 
 ## 5. Task design
 
-**Observation** `[C_a, T, T_j, live target]`. Hidden: the drift `Ti_dev`, the
+### Task: `unstable_cstr`
+
+Hold the concentration of A in a jacketed exothermic reactor on its open-loop
+unstable middle steady state, commanding the coolant through a lagging jacket
+while the feed temperature drifts unmeasured. Left alone the reactor runs away
+within tens of seconds, and the target steps five times per episode, so every
+move crosses the unstable region under control. A trip costs an hour of
+restart.
+
+| obs | meaning |
+|---|---|
+| 0 | `C_a`, concentration of A (mol/L) |
+| 1 | `T`, reactor temperature (K) |
+| 2 | `T_j`, jacket temperature (K) |
+| 3 | target `C_a`, the current block's level (mol/L) |
+
+**Observation.** Hidden: the drift `Ti_dev`, the
 later levels and the block clock. C_a is read instantly and without noise
 (D3, D5). T is observed because no P or PI loop on C_a alone can stabilise
 the plant (`test_no_p_or_pi_loop_on_c_a_stabilises`). On the linearisation
@@ -450,17 +466,37 @@ put the coolant on a bound on 4.7 % of steps and hold 0.45 mol/L only to
 1.95e-3 mol/L over minutes 6 to 8.4 of a block, about 11 times the guarded
 gains' 1.71e-4 (measured, `--sensitivity`, 6 s row).
 
-The shipped gains are TUNED by `scripts/tune_pid.py --envs unstable_cstr`, a
-coordinate search on episode return over 24 seeds starting from
-`DEFAULT_GAINS`, and stored in `src/target_gym/data/pid_gains.json` under
-`unstable_cstr`. The search raises Kp_T from 7 to 9.8 and Kc_Ca from 100 to
-140, shortens Ti_Ca from 0.5 to 0.35 min, and keeps Kd_T at 0.4, moving the
-return from −6.967e7 to −6.907e7 (measured, printed by that script). The
-closed-loop rates at 0.45, 0.50, 0.55, 0.60 and 0.65 mol/L are −0.59, −1.40,
-−2.33, −3.33 and −3.37 /min, against −1.73 to −2.76 /min for `DEFAULT_GAINS`,
-and the drift does not change them (derived, `closed_loop_rates`,
-`--pid-validation` and `--section invariance`). The smallest margin of an
-equilibrium setpoint inside its window is 1.45 K.
+The shipped gains are SIMC settings (Skogestad and Grimholt, "The SIMC
+method for smooth PID controller tuning", 2012) from step tests on the
+simulator at the levels of the training seeds 100 to 109, derived and stored
+in `src/target_gym/data/pid_gains.json` under `unstable_cstr` by
+`scripts/tune_process_experts.py --envs unstable_cstr`. They replaced a
+coordinate search on episode return over seeds 0 to 23, which included the
+scored ones.
+
+- **Inner loop.** A 1 K coolant step from the equilibrium at each of the 37
+  training levels, read over its first 12 steps against an unstepped run on
+  the same drift. The fit `k' / ((s - a)(tau2 s + 1))` gives, at the median,
+  a slope k' = 2.34 K/min per K, an unstable pole a = 3.38 /min, the jacket
+  lag tau2 = 0.111 min and, with half the 3 s sample, theta = 0.025 min
+  (measured). 1/a is 11.8 theta, above SIMC's 8 theta, so the loop is
+  lag-dominant and takes the integrating-with-lag rule with tau_c = theta:
+  Kp_T = 1 / (k' (tau_c + theta)) = 8.49 and Kd_T = Kp_T tau2 = 0.946 min.
+  The integral is left to the outer loop, as the cascade had it.
+- **Outer loop.** A 0.5 K step of the temperature setpoint at every third
+  training level, with the inner PD closed. The median first-order fit is
+  k = -0.0185 mol/L per K, tau1 = 0.471 min and theta = 0.139 min. SIMC with
+  tau_c = theta gives Kc_Ca = 92.0 K per mol/L and Ti_Ca = 0.471 min.
+  2 theta and 3 theta cost the same on the training seeds to within 0.03 %,
+  so the tight default stays.
+
+The closed-loop rates at 0.45, 0.50, 0.55, 0.60 and 0.65 mol/L are −1.92,
+−2.05, −2.22, −2.46 and −2.52 /min, and the drift does not change them
+(derived, `closed_loop_rates`, `--pid-validation` and `--section
+invariance`). The smallest margin of an equilibrium setpoint inside its
+window is 1.37 K. On the held-out seeds 200 to 209 the cascade holds 6.0 per
+step (worst seed 9.0) against a ceiling of 1 and never trips
+(`tests/pc_gym/test_expert_specs.py`); the searched gains held 3.2 there.
 
 **PID validation** (`--pid-validation`, 300 episodes, float32 episodes and
 float64 margins, measured). The margin is to the exact point of no return;
@@ -468,11 +504,11 @@ the line margin is to `pnr_line`.
 
 | episodes | trips | re-extinctions after capture | smallest PNR margin (K) | smallest line margin (K) | mean abs error, minutes 6 to 8.4 of a block (mol/L) | v2 cost per step |
 |---|---|---|---|---|---|---|
-| 200 random schedules, drift on | 0 | 0 | 1.336 (p1 1.524, median 2.385) | 0.333 | 1.34e-4 | 5.753e4 |
-| 50 of the 0.55/0.45 alternation, dTi +6 K held | 0 | 0 | 1.413 | 0.719 | 1.59e-5 | 8.326e4 |
-| 50 catches from extinction, dTi −6, 0 or +6 K held | 0 | 0 | 1.389 (median 3.436) | 0.688 | 3.21e-2 | 1.485e6 |
+| 200 random schedules, drift on | 0 | 0 | 1.320 (p1 1.534, median 2.384) | 0.322 | 1.95e-4 | 6.124e4 |
+| 50 of the 0.55/0.45 alternation, dTi +6 K held | 0 | 0 | 1.422 | 0.743 | 2.23e-7 | 8.853e4 |
+| 50 catches from extinction, dTi −6, 0 or +6 K held | 0 | 0 | 1.396 (median 3.491) | 0.714 | 3.27e-2 | 1.505e6 |
 
-No step goes above the line. The smallest margin, 1.336 K, is above the
+No step goes above the line. The smallest margin, 1.320 K, is above the
 0.5 K the numbers script requires before it keeps `GUARD_MIN_DECAY` at
 0.5 /min. `test_pid_holds_every_target` builds and runs its own 130 episodes
 the same way: the first 64 random schedules, the first 16 alternating ones
@@ -509,11 +545,11 @@ is 2.2 to 5.1 unstable time constants (1.6 min times lambda+ of 1.391 to
 steps at dTi +6 K (section 2), so a plan that starts next to the point of no
 return runs past the peak of the excursion it is turning. 32 is the smallest
 whole number of steps at least 1.5 times 21. The horizon is shorter than the
-PID's longest 90 % closure of a switch, 47 steps or 2.35 min on 0.55 to 0.65
+PID's longest 90 % closure of a switch, 48 steps or 2.40 min on 0.55 to 0.65
 mol/L (derived, `--section settle`), and the terminal weight prices what lies
 beyond it. `scripts/audit_mpc_horizons.py --envs unstable_cstr` returns ok.
-It finds the PID closing 63 % of the reset error (0.0059 mol/L) in 11 steps,
-a ratio of 32 / 11 = 2.91 (measured). That audit times only the reset error,
+It finds the PID closing 63 % of the reset error (0.0059 mol/L) in 15 steps,
+a ratio of 32 / 15 = 2.13 (measured). That audit times only the reset error,
 so it never sees a 0.1 mol/L switch.
 
 **MPC gate** (`--mpc-gate --workers 8`, 110 episodes, float32 episodes and
