@@ -151,11 +151,11 @@ jobs:
       if: matrix.python-version == '3.13'
       run: make mypy
 
-    # The small tier, then the medium one: docs/testing.md says what goes where.
-    # pyproject.toml's addopts run each on every core with --durations, which
-    # keeps the slowest tests visible; tests/conftest.py pins each worker to one
-    # compute thread so they do not fight for them. The -m filters are spelled
-    # out, rather than left to the default, so a records test never runs here.
+    # docs/testing.md says which tier a test belongs in. pyproject.toml's
+    # addopts run each on every core with --durations, which keeps the slowest
+    # tests visible; tests/conftest.py pins each worker to one compute thread so
+    # they do not fight for them. The -m filters are spelled out, rather than
+    # left to the default, so a records test never runs here.
     - name: Small tests
       if: matrix.python-version != '3.13'
       run: uv run pytest -q -m "not medium and not large and not records"
@@ -163,20 +163,22 @@ jobs:
     # Medium tests start other processes, write videos, or compile an aircraft
     # planner or tuner, which peaks at 2.5 to 5 GB. Two workers keep two of
     # those inside the runner's 16 GB; four of them at once shut runners down
-    # on 2026-10-27.
+    # on 2026-10-27. Two interpreters run them: after the small tier with
+    # coverage, they would put the 3.13 column past ten minutes whenever the
+    # compile cache misses (14.5 minutes on 2026-10-28).
     - name: Medium tests
       if: matrix.python-version != '3.13'
       run: uv run pytest -q -m "medium and not records" -n 2
 
-    # One column carries the coverage gate, over both tiers: pytest-cov
-    # aggregates the xdist workers, and the second step appends to the first.
-    - name: Small tests, measuring coverage
+    # One column carries the coverage gate, over the small tier (93% on
+    # 2026-10-28, without the medium tests' 1.4 points). pytest-cov aggregates
+    # the xdist workers. sysmon is coverage's low-overhead tracer on Python
+    # 3.12 and later, and measures the same lines.
+    - name: Small tests, enforcing coverage
       if: matrix.python-version == '3.13'
-      run: uv run pytest -q -m "not medium and not large and not records" --cov=target_gym --cov-report= --cov-fail-under=0
-
-    - name: Medium tests, enforcing coverage over both tiers
-      if: matrix.python-version == '3.13'
-      run: uv run pytest -q -m "medium and not records" -n 2 --cov=target_gym --cov-append
+      env:
+        COVERAGE_CORE: sysmon
+      run: uv run pytest -q -m "not medium and not large and not records" --cov=target_gym
 
   large-test:
     # Closed-loop contracts that still roll the plant out here: PID beats the

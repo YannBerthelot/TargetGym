@@ -175,214 +175,89 @@
     "note": "Relay autotuning, positive-gain (rod withdrawal raises power)."
   },
   "four_tank": {
-    "pid1": {
-      "Kp": 5.0,
-      "Ki": 0.05,
-      "Kd": 0.0
-    },
-    "pid2": {
-      "Kp": 100.0,
-      "Ki": 1.0,
-      "Kd": 0.0
-    },
-    "gain_schedule_pid1": {
-      "operating_points": [
-        0.11,
-        0.12142857142857143,
-        0.13285714285714287,
-        0.1442857142857143,
-        0.15571428571428572,
-        0.16714285714285715,
-        0.17857142857142858,
-        0.19
-      ],
-      "Kp": [
-        5.0,
-        5.0,
-        5.0,
-        5.0,
-        5.0,
-        5.0,
-        5.0,
-        5.0
-      ],
-      "Ki": [
-        0.0,
-        0.0,
-        0.05,
-        0.05,
-        0.05,
-        0.05,
-        0.05,
-        0.05
-      ],
-      "Kd": [
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0
-      ]
-    },
-    "gain_schedule_pid2": {
-      "operating_points": [
-        0.11,
-        0.12142857142857143,
-        0.13285714285714287,
-        0.1442857142857143,
-        0.15571428571428572,
-        0.16714285714285715,
-        0.17857142857142858,
-        0.19
-      ],
-      "Kp": [
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0
-      ],
-      "Ki": [
-        0.5,
-        0.5,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0
-      ],
-      "Kd": [
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0
-      ]
-    },
-    "tuning_rule": "grid_search_max_reward",
-    "note": "Sequential grid search over (Kp, Ki) maximizing cumulative env reward, alternating loop1/loop2 refinements. FourTank is a pure integrator -> relay autotuning fails (no zero-crossings)."
-  },
-  "patrol": {
-    "Kp_alt": 0.01,
-    "Ki_alt": 5e-05,
-    "Kd_alt": 0.025,
-    "Kp_power": 0.003,
-    "Ki_power": 3e-05,
-    "Kd_power": 0.15,
-    "cruise": 0.6,
-    "Kp_hdg": 0.284,
-    "Ki_hdg": 0.0,
-    "Kd_hdg": 1.808,
-    "Kp_bank": -4.287,
-    "Kd_bank": 3.124,
-    "blend_dist": 500.0,
-    "tuning_rule": "random_search_survival",
-    "note": "Re-searched after the heading loop was changed to command a turn rate rather than a bank angle. Commanding bank left the loop gain proportional to 1/V, a 45% swing across the speeds the follower flies, and every failing encounter spent 13-22% of its episode pinned at the 30 deg bank limit while the one that held formation never reached it. Inverting the coordinated-turn relation removed both. These gains are chosen for survival rather than settled error: 5 of 6 encounters completed against 2 of 6, at 135 m mean slot error against 130 m. Still outside the 60 m tolerance, so the formation tests remain xfail."
+    "Kp_1": 45.069595,
+    "Ti_1": 146.374594,
+    "Kp_2": 32.394183,
+    "Ti_2": 118.144275,
+    "D11": -0.293842,
+    "D12": 1.064773,
+    "D21": 1.064773,
+    "D22": -0.234713,
+    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
   },
   "glass_furnace": {
-    "Kp": 2.5,
-    "Ki": 0.15,
-    "Kd": 0.05,
-    "tuning_rule": "grid_search_max_reward",
-    "note": "Grid search over (Kp, Ki, Kd) maximising mean cumulative env reward. Relay autotuning fails on this plant: the crown temperature integrates the firing rate, so under a bang-bang relay it drifts without sustained zero-crossings and Astrom-Hagglund has no Ku/Tu to extract."
+    "Kp": 12.08439222573085,
+    "Ki": 0.10070326854775706,
+    "Kd": 0.0,
+    "model": {
+      "k": 0.0027583789660813795,
+      "theta": 15.000000000000004,
+      "tau_c": 15.000000000000004
+    },
+    "tuning_rule": "simc_integrating",
+    "note": "Crown-temperature PI by SIMC on the integrating approximation of a firing step's first hour, from step tests on seeds 100-109 (scripts/tune_industrial_experts.py). Practice runs an MPC over this loop; this is the base layer under it."
   },
   "distillation": {
-    "pid1": {
-      "Kp": 150.0,
-      "Ki": 1.0,
-      "Kd": 0.0
-    },
-    "pid2": {
-      "Kp": -150.0,
-      "Ki": -1.0,
-      "Kd": 0.0
-    },
-    "tuning_rule": "grid_search_max_reward",
-    "note": "LV pairing: yD<-L (positive gain), xB<-V (negative -- more boilup strips the bottoms cleaner, lowering xB). Grid search over (Kp, Ki); return rises monotonically to Kp~400 with no instability, but 150 captures 98% of it at a quarter of the control activity, which is the safer margin on a plant with RGA ~50."
+    "Kp_T": 0.160129,
+    "Ti_T": 21.051052,
+    "Kp_D": 36.191234,
+    "Ti_D": 1.980297,
+    "Kp_B": -222.74302,
+    "Ti_B": 2.182375,
+    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
   },
   "wind_turbine": {
-    "Kp_pitch": 12.0,
-    "Ki_pitch": 0.6,
-    "Kd_pitch": 0.0,
-    "tuning_rule": "grid_search_max_reward",
-    "note": "Pitch PI on rotor-speed error; generator torque is a feedforward for the power setpoint with rotor-speed protection. Return is flat above Kp~12 (392 vs 394 at Kp=25) and all episodes complete without tripping, so 12 keeps a factor-2 gain margin on a rate-limited pitch actuator."
+    "Kp": 0.015144123621885518,
+    "Ki": 0.006490338695093793,
+    "model": {
+      "dP_dtheta": -31724882.679951087,
+      "theta_K_deg": 512.2277916696783,
+      "zeta": 0.7,
+      "wn": 0.6
+    },
+    "tuning_rule": "jonkman_pole_placement",
+    "note": "NREL 5 MW baseline (Jonkman et al. 2009, ch. 7): pitch PI on the filtered generator speed, Kp and Ki by pole placement (wn 0.6, zeta 0.7) on the best-fit dP/dtheta of this plant's Cp surface along the region-3 curve; that line is flat, so no gain schedule (scripts/wind_turbine_gains.py). Generator speed in rad/s to pitch in rad."
   },
   "cement_kiln": {
-    "Kp_outer": 12000.0,
-    "Ki_outer": 6.0,
-    "Kp_inner": 0.025,
-    "Ki_inner": 5e-06,
+    "Kp_inner": 0.03720405423566248,
+    "Ki_inner": 4.368147686292763e-05,
+    "model_inner": {
+      "k": 406.8997080955525,
+      "tau": 3223.373352016678,
+      "theta": 106.46404639776924,
+      "tau_c": 106.46404639776924
+    },
+    "lime_halfwidth": 0.004,
+    "step": 0.1,
     "T_bz_base": 1765.0,
-    "tuning_rule": "grid_search_max_reward",
-    "note": "Cascade: free lime trims a burning-zone setpoint, fuel holds it, kiln speed follows feed to hold bed depth. The outer loop is strongly proportional with weak integral (Kp 12000 / Ki 6) -- integral action on a measurement half an hour behind the input oscillates at the delay period. Return 176 over 4 seeds against 37 for the best constant action."
+    "tuning_rule": "simc_inner_grid_scaling",
+    "note": "Swain and Subudhi (1996) rule base on free lime and the kiln-speed trend, moving the burning-zone setpoint, over a fuel PI on the burning zone (SIMC from a fuel step, tight); kiln speed follows feed. The two scaling factors are the lowest training cost of a 3 x 4 grid and its extension on seeds 100-109 (scripts/tune_industrial_experts.py)."
   },
   "boiler_drum": {
-    "Kp_level": 60.0,
-    "Ki_level": 0.6,
-    "Kp_pressure": 0.05,
-    "Ki_pressure": 0.002,
+    "Kp_pressure": 0.671596574994995,
+    "Ki_pressure": 0.14403322022041107,
+    "model_pressure": {
+      "k": 0.35925121669704274,
+      "theta": 1.5542631391268964,
+      "lam": 1.5542631391268964
+    },
+    "Kp_level": 748.9829963723436,
+    "Ki_level": 18.48191294464852,
+    "model_level": {
+      "k": 7.412855282715136e-05,
+      "theta": 13.508395994423893,
+      "lam": 13.508395994423893
+    },
     "Kd_pressure": 0.0,
-    "tuning_rule": "hand_tuned_three_element",
-    "note": "Three-element: feedwater tracks measured steam flow as a feedforward and the level PI only trims it, bounded to 25 kg/s. A fast level loop reacts to swell by cutting feedwater exactly when mass is leaving fastest. Return 215-296 against 5 for the best constant action, which trips in 5-117 steps."
+    "tuning_rule": "lambda_integrating",
+    "note": "Three-element: feedwater follows measured steam flow, a level PI trims it; firing is an enthalpy feedforward plus a pressure PI. Both loops lambda-tuned for an integrating process from step tests on seeds 100-109 (scripts/tune_industrial_experts.py)."
   },
   "cstr": {
-    "Kp": -112.216316,
-    "Ki": -88.012797,
-    "Kd": -45.447608,
-    "gain_schedule": {
-      "operating_points": [
-        0.84,
-        0.85,
-        0.86,
-        0.87,
-        0.88,
-        0.89,
-        0.9,
-        0.91
-      ],
-      "Kp": [
-        -93.694982,
-        -74.490578,
-        -85.604186,
-        -91.458914,
-        -112.216316,
-        -123.381295,
-        -136.507586,
-        -153.132488
-      ],
-      "Ki": [
-        -44.091756,
-        -43.817987,
-        -67.140538,
-        -71.732481,
-        -88.012797,
-        -96.769643,
-        -107.064773,
-        -120.103912
-      ],
-      "Kd": [
-        -63.244113,
-        -40.224912,
-        -34.669695,
-        -37.04086,
-        -45.447608,
-        -49.969424,
-        -55.285572,
-        -62.018657
-      ]
-    },
-    "tuning_rule": "amigo",
-    "note": "Relay autotuning, negative-gain system (higher Tc -> lower Ca)."
+    "Kp": -132.409195,
+    "Ti": 0.861168,
+    "Kp_T": 0.268146,
+    "Ti_T": 0.634633,
+    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
   },
   "plane_cascaded": {
     "Kp_alt": 0.12,
@@ -433,26 +308,37 @@
     "note": "a copy of plane_cascaded, read by the plane_energy oracle (plane/experts.py): baseline_fingerprint collects the gain keys that start with the task's name, so plane_energy's covers this one and not plane_cascaded. tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
   },
   "unstable_cstr": {
-    "Kp_T": 9.799999999999999,
-    "Kd_T": 0.4,
-    "Kc_Ca": 140.0,
-    "Ti_Ca": 0.35,
+    "Kp_T": 8.491863,
+    "Kd_T": 0.945667,
+    "Kc_Ca": 91.976888,
+    "Ti_Ca": 0.470636,
     "sp_rate": 3.0,
     "sp_below": 8.0,
     "sp_above": 2.0,
     "sp_line_margin": 0.3,
     "Tc_bias": 300.0,
-    "note": "coordinate descent on episode return, 24 seeds"
+    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
   },
   "compressor_surge": {
     "kp_speed": 0.11199999999999999,
     "ki_speed": 0.04,
-    "kp_surge": 1.4,
-    "ki_surge": 6.0,
+    "kp_surge": 2.0,
+    "ki_surge": 0.75,
     "surge_line": 0.15,
     "override_line": 0.075,
     "override_hold": 2.0,
     "reset_band": 0.05,
-    "note": "coordinate descent on episode return, 24 seeds"
+    "note": "coordinate descent on episode return, seeds 100-109, from DEFAULT_GAINS (scripts/tune_industrial_experts.py)"
+  },
+  "first_order": {
+    "Kp": 4.999993,
+    "Ki": 24.999915,
+    "Kd": 0.0,
+    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
+  },
+  "ph_neutralization": {
+    "Kp": 8.785357,
+    "Ti": 40.000001,
+    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
   }
 }

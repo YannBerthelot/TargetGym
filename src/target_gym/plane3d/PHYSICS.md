@@ -88,15 +88,93 @@ Only the parameters the third dimension introduces. Everything else is in
 
 ## 4. Task design
 
-Three tasks share these dynamics and differ only in the reference:
+Four tasks share these dynamics and differ only in the reference. **Patrol**
+adds a second aircraft and a slot defined relative to it, but no new physics.
 
-* **Heading** — hold an altitude and a commanded heading.
-* **Circle** — hold an altitude while orbiting a fixed circular path.
-* **Figure-8** — follow a twisted lemniscate, which forces the bank to reverse
-  through wings-level at the crossover.
+### Task: `plane3d_heading`
 
-**Patrol** adds a second aircraft and a slot defined relative to it, but no new
-physics.
+Hold a target altitude and turn onto and hold a target heading with the 3D
+airliner, using throttle, elevator and aileron. The aileron commands a roll
+rate, not a bank angle, so heading is controlled through a cascade of two
+integrators, and the turbulence is hidden.
+
+| obs | meaning |
+|---|---|
+| 0 | `x_dot`, velocity along world x (m/s) |
+| 1 | `y_dot`, velocity along world y (m/s) |
+| 2 | `z`, altitude (m) |
+| 3 | `z_dot`, vertical speed (m/s) |
+| 4 | `theta`, pitch angle (rad) |
+| 5 | `theta_dot`, pitch rate (rad/s) |
+| 6 | `phi`, bank angle (rad) |
+| 7 | `phi_dot`, roll rate (rad/s) |
+| 8 | `gamma`, flight-path angle (rad) |
+| 9 | `psi`, heading (rad) |
+| 10 | target altitude (m) |
+| 11 | target heading (rad) |
+| 12 | throttle, 0 to 1 |
+| 13 | elevator deflection (rad) |
+| 14 | aileron deflection (rad) |
+
+### Task: `plane3d_circle`
+
+Hold altitude while orbiting a fixed circle kilometres across with the 3D
+airliner. The orbit asks for a sustained, coordinated bank, and the circle is
+large compared with what the aircraft can change in a few steps.
+
+| obs | meaning |
+|---|---|
+| 0-9 | the aircraft's state, as in `plane3d_heading` |
+| 10 | target altitude (m) |
+| 11 | x offset from the circle's centre (m) |
+| 12 | y offset from the circle's centre (m) |
+| 13 | circle radius (m) |
+| 14 | throttle, 0 to 1 |
+| 15 | elevator deflection (rad) |
+| 16 | aileron deflection (rad) |
+
+### Task: `plane3d_racetrack`
+
+Fly a holding pattern, two straight legs joined by half circles, at a target
+altitude with the 3D airliner. The observation gives the signed cross-track
+error, the tangent heading and the curvature at the nearest point of the
+pattern, so the work is in the transitions between straight and turning
+flight.
+
+| obs | meaning |
+|---|---|
+| 0-9 | the aircraft's state, as in `plane3d_heading` |
+| 10 | target altitude (m) |
+| 11 | x offset from the pattern's centre (m) |
+| 12 | y offset from the pattern's centre (m) |
+| 13 | turn radius of the pattern (m) |
+| 14 | direction of the legs (rad) |
+| 15 | throttle, 0 to 1 |
+| 16 | elevator deflection (rad) |
+| 17 | aileron deflection (rad) |
+| 18 | cross-track error to the nearest point, positive outside the pattern (m) |
+| 19 | heading of the pattern at the nearest point (rad) |
+| 20 | signed curvature at the nearest point, 0 on the legs (1/m) |
+
+### Task: `plane3d_figure8`
+
+Follow a twisted figure-8 that climbs and descends, with the 3D airliner. The
+bank has to reverse through wings level at every crossover, and the
+observation gives the vector to the nearest point of the path and the path's
+heading there, but not its curvature.
+
+| obs | meaning |
+|---|---|
+| 0-9 | the aircraft's state, as in `plane3d_heading` |
+| 10 | target altitude (m) |
+| 11 | size of the figure-8 (m) |
+| 12-14 | vector from the aircraft to the nearest point of the path, x, y and z (m) |
+| 15 | heading of the path at the nearest point (rad) |
+| 16 | throttle, 0 to 1 |
+| 17 | elevator deflection (rad) |
+| 18 | aileron deflection (rad) |
+| 19 | distance to the path, the tracked output (m) |
+| 20 | target distance to the path, always 0 (m) |
 
 ### Observation
 
@@ -211,8 +289,20 @@ observation alone:
 - **Guidance:** a course hold on the heading task; L1 guidance (Park, Deyst and
   How, 2004), the law ArduPilot flies paths and loiters with, on the circle,
   racetrack and figure-8, with the path's curvature as a coordinated-turn
-  feedforward. The figure-8 does not observe its curvature, so the expert
-  estimates it from how the observed tangent turns.
+  feedforward. A curved path is flown at the speed whose steady bank in its
+  tightest turn leaves part of the limit for L1's corrections: 15% on the
+  circle and racetrack, 25% on the figure-8.
+- **The figure-8's geometry.** Its observation gives the nearest point and
+  its tangent but not the curvature, and the tangent is read off the 400
+  sampled points, so it jumps by up to 1.4 deg. The expert knows the
+  pattern it was given, as an autopilot knows its mission: Bernoulli's
+  lemniscate of half-width a, its altitude z_mean + dz sin(tau). The nearest
+  point's altitude gives sin(tau), and with it the curvature,
+  3 cos(tau) / (a sqrt(1 + sin^2 tau)), which turns the way the path climbs,
+  and the tangent, 3 arctan(sin tau) from its heading at the lobe tip. That
+  heading is the pattern's orientation, constant over the flight, so the
+  expert averages it from the observed tangent. The curvature is read one
+  second ahead, the bank loop's lag.
 
 It was tuned inner loop first, as ArduPilot's guide orders it, by a bounded
 search on training seeds 100-109, and checked on held-out seeds 200-209; the
@@ -220,10 +310,18 @@ scored seeds 0-9 were never flown (`scripts/tune_aircraft_guidance.py`). On
 the held-out seeds, after the scored burn-in, it holds altitude within 1.6 /
 1.6 / 1.7 m on average (heading, circle, racetrack) and heading within
 1e-4 rad, the circle within 0.96 m and the racetrack within 2.3 m: what small
-autopilots hold in flight tests. The figure-8 is the exception, at 4.2 m of
-altitude and a median seed 18 m off the path: on the smaller patterns at
-altitude, stall prevention keeps the airliner too fast for the lobe tips
-(radius a / 3) at 45 deg of bank, so it cuts them, as a real autopilot would.
+autopilots hold in flight tests. The figure-8 holds its height within 1.7 m on
+every held-out seed (median 1.25 m) and its path within 1.4 m where the lobes
+are flyable (median 1.24 m). It flies slower and higher than the other tasks,
+banked most of the way, and at that lower dynamic pressure the pitch loop
+above oscillated with a period of about 9 s. So the figure-8's pitch loop is
+damped on pitch rate (gain 6 rather than 0.3), and its TECS is faster and
+better damped (time constant 1.5 s, pitch damping 2). Those were chosen to
+keep both targets with a margin when any one gain is 25% off. On the
+patterns whose lobe tips are tighter than 45 deg of bank at the slowest speed
+stall prevention allows (radius a / 3, at altitude), it cuts the tips, as a
+real autopilot would, by up to 220 m on the held-out seeds, and still holds
+its height.
 
 It replaced, in 2026-10, cascades tuned on the scored seeds: the heading and
 circle ones fed roll rate back with the wrong sign and held 44 m and 1 rad
@@ -334,7 +432,7 @@ xfail. That is a controller gap, not a physics gap; it is tracked in
 | --- | --- | --- | --- | --- | --- | --- |
 | `plane3d_circle` | 300 | 1 | 5 min | 3 in [-1, 1] | 17 | 26 |
 | `plane3d_figure8` | 400 | 1 | 7 min | 3 in [-1, 1] | 21 | 26 |
-| `plane3d_heading` | 200 | 1 | 3 min | 3 in [-1, 1] | 15 | 26 |
+| `plane3d_heading` | 300 | 1 | 5 min | 3 in [-1, 1] | 15 | 26 |
 | `plane3d_racetrack` | 650 | 1 | 11 min | 3 in [-1, 1] | 21 | 26 |
 
 `float state` counts the scalar and array float fields the state carries,
@@ -352,12 +450,12 @@ which is what the recorded baselines use.
 | --- | --- | --- |
 | `e_floor_altitude` | 1 m (`plane3d_heading`, `plane3d_circle`, `plane3d_racetrack`); `plane3d_figure8` scores no altitude and keeps the 1.44 m class default | the barometric altimeter's resolution. The oracle holds below it in the test turbulence: its lowest per-seed long-run mean \|error\| is 0.67 / 0.67 / 0.68 m (`scripts/measure_hold.py`, 2 seeds, hold steps after a 210-step burn-in, the second half of the episode on the 200-step heading task). Measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. Until the oracle audit (2026-10) the floors were an earlier oracle's holds, 1.44 / 4.06 / 1.39 m (the `-v2` tasks). Expert: 1.6 / 1.6 / 1.7 m on held-out seeds (the cascade it replaced: 44 / 7.2 / 5.2 m) |
 | `e_tol_altitude` | 0 | no dead zone; a +-30 m band made the altitude hold vacuous (see the 2D aircraft) |
-| `e_floor_heading` | 0.0087 rad | the 0.5 deg AHRS resolution. The oracle holds far below it in the test turbulence (2.1e-5 rad, lowest per seed; `scripts/measure_hold.py`), so the instrument, not the simulator, sets the scale; the expert holds about 1e-4 rad on held-out seeds |
-| `e_floor_path` | 3 m (`plane3d_circle`, `plane3d_racetrack`, `plane3d_figure8`; also the default where no path term is scored) | civil GPS horizontal accuracy. The oracle holds below it: its lowest per-seed path-distance holds are 0.45 / 0.47 / 1.29 m (`scripts/measure_hold.py`). Until the oracle audit (2026-10) the floors were 8.12 / 6.17 / 14.6 m: the racetrack's and figure-8's were an earlier oracle's holds, while the circle's 8.12 m was labelled one but equals 2 x 4.06 m, and that oracle's recorded hold there was 14.3 m. Expert: 0.96 / 2.3 m on held-out seeds, and a median seed 18 m off on the figure-8 (the cascades it replaced: 53 / 408 / 1767 m) |
+| `e_floor_heading` | 0.0087 rad | the 0.5 deg AHRS resolution. The oracle holds far below it in the test turbulence (1.4e-5 rad, lowest per seed over the 300-step episode; `scripts/measure_hold.py`), so the instrument, not the simulator, sets the scale; the expert holds about 1e-4 rad on held-out seeds |
+| `e_floor_path` | 3 m (`plane3d_circle`, `plane3d_racetrack`, `plane3d_figure8`; also the default where no path term is scored) | civil GPS horizontal accuracy. The oracle holds below it: its lowest per-seed path-distance holds are 0.45 / 0.47 / 1.29 m (`scripts/measure_hold.py`). Until the oracle audit (2026-10) the floors were 8.12 / 6.17 / 14.6 m: the racetrack's and figure-8's were an earlier oracle's holds, while the circle's 8.12 m was labelled one but equals 2 x 4.06 m, and that oracle's recorded hold there was 14.3 m. Expert: 0.96 / 2.3 / 1.4 m on held-out seeds, the figure-8's where its lobes are flyable (the cascades it replaced: 53 / 408 / 1767 m) |
 | `tracking_exponent` | 2 | quadratic |
 | `failure_cost` | 2.97e8 (`plane3d_heading`, `plane3d_circle`, `plane3d_racetrack`), 8.89e7 (`plane3d_figure8`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor_altitude)^2; the figure-8 scores the path alone, 2 x (20 000 / e_floor_path)^2 |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
-| `rho_floor_tracking`, `rho_floor` | 0.454 (`plane3d_heading`), 0.466 (`plane3d_circle`), 0.487 (`plane3d_racetrack`), 0.184 (`plane3d_figure8`) | the oracle's lowest per-seed holds above in floor units, (hold / floor)^2 summed over the scored outputs (`scripts/measure_hold.py`): (0.6735 / 1)^2 + (2.1e-5 / 0.0087)^2, (0.6657 / 1)^2 + (0.4504 / 3)^2, (0.6803 / 1)^2 + (0.4660 / 3)^2 and (1.2871 / 3)^2 |
+| `rho_floor_tracking`, `rho_floor` | 0.344 (`plane3d_heading`), 0.466 (`plane3d_circle`), 0.487 (`plane3d_racetrack`), 0.184 (`plane3d_figure8`) | the oracle's lowest per-seed holds above in floor units, (hold / floor)^2 summed over the scored outputs (`scripts/measure_hold.py`): (0.5867 / 1)^2 + (1.4e-5 / 0.0087)^2 over the heading task's 300 steps (`-v4`), (0.6657 / 1)^2 + (0.4504 / 3)^2, (0.6803 / 1)^2 + (0.4660 / 3)^2 and (1.2871 / 3)^2 |
 
 Each 3D task's values above are its registry parameters,
 `spec.make_test_params()`. The `PlaneParams3D()` class defaults, which patrol

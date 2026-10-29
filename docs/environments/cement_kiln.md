@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/cement_kiln/pid_output.gif" width="480px"/></p>
 
-Cement rotary kiln — 1-D axial model with counter-current gas.
+Hold the free lime in the clinker leaving a 3000 t/day rotary kiln with fuel and kiln speed. Free lime answers a fuel change only as material travels the kiln, half of it after about one residence time; kiln speed moves that delay itself; and eight readings stand in for 64 dynamic states. Overheating the kiln or letting it go cold trips it.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("cement_kiln")
+```
 
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((8,))` |
 | Tracked variable(s) | discharge free lime (%) |
-| Episode length | 700 steps (21000 s at 30 s per step) |
-| Import | `from target_gym import CementKiln, CementKilnParams` |
+| Episode length | 700 steps of 30 s (5.83 h) |
 | Cite as | `cement_kiln-v3` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |
 
 ## Action space
 
@@ -25,8 +31,18 @@ actuator range inside the environment.
 
 ## Observation space
 
-8 values. Indices (0,) carry the tracked variable(s) that the
-reward scores.
+8 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[7]`.
+
+| # | meaning |
+|---|---|
+| 0 | free lime at discharge (%) |
+| 1 | burning-zone temperature, the hottest charge the pyrometer sees (K) |
+| 2 | gas temperature at the kiln inlet (K) |
+| 3 | material temperature at the back end (K) |
+| 4 | `raw_meal` feed rate (kg/s), the disturbance |
+| 5 | fuel, percent of its range |
+| 6 | kiln speed, percent of its range |
+| 7 | target free lime (%) |
 
 ## Rewards
 
@@ -58,14 +74,16 @@ Recorded over 10 seeds of the 700-step episode (see [Baseline results](../baseli
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -3949 | 5.641 |
-| MPC | -110 | 0.1571 |
+| PID | -1.275e+04 | 18.21 |
+| MPC | -110.7 | 0.1582 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("cement_kiln", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 30 | s |
 | `max_steps_in_episode` | 700 | steps |

@@ -120,6 +120,24 @@ than by commit.
 
 ### Changed
 
+- **Every scored episode captures the expert reaching its hold.** The
+  expert is the reference a policy is scored against, so its scored hold has
+  to be its steady state. `tests/test_episode_length.py` holds every task to
+  two checks on the expert, on seeds 100 to 102:
+  - every target cycle with scored hold steps lasts at least twice the
+    task's settle;
+  - the expert's scored hold is at most twice its hold on an episode twice
+    as long.
+
+  Lengthened to pass them:
+  - `plane_energy-v4`: 1,200 to 1,600 steps, eight treads of 200;
+  - `plane3d_heading-v4`: 200 to 300 steps.
+
+  `four_tank` and `distillation` are strict xfails until their expert rework
+  lengthens them; the formation-hold experts pass at today's lengths.
+  `compressor_surge` skips the
+  second check, because its schedule ends at step 1,200 and a longer run only
+  adds quiet steps.
 - **`env.default_params` is the scored configuration on every task.** An
   environment reset without parameters now runs the task the baselines are
   recorded on: the aircraft over 200 to 1,200 steps instead of 10,000, the
@@ -170,13 +188,103 @@ than by commit.
   ArduPilot do. `scripts/tune_aircraft_guidance.py` tunes them inner loop
   first on training seeds 100-109 and checks them on held-out seeds 200-209,
   never on the scored seeds. On the held-out seeds they hold altitude within
-  1.5 to 1.9 m on every task but the figure-8, the circle within 1 m and the
-  racetrack within 2.3 m. The cascades they replace were tuned on the scored
-  seeds, and two of them fed roll rate back with the wrong sign: they held 44 m
-  and 1 rad off on `plane3d_heading` and drifted kilometres on the racetrack
-  and figure-8. The figure-8 expert still cuts the tips of the smaller lobes,
-  where stall prevention keeps the airliner too fast to turn that tight.
-  Every aircraft record is re-recorded.
+  1.9 m on average on every task, the circle within 1 m, the racetrack within
+  2.3 m and the figure-8 within 1.4 m where its lobes are flyable. The
+  figure-8 does not observe its curvature, so its expert reads it from where
+  it is on the pattern, using the altitude twist. It still cuts the tips of
+  the smaller lobes, where stall prevention keeps the airliner too fast to
+  turn that tight. The cascades they replace were tuned on the scored seeds,
+  and two of them fed roll rate back with the wrong sign: they held 44 m and
+  1 rad off on `plane3d_heading` and drifted kilometres on the racetrack and
+  figure-8. Every aircraft record is re-recorded.
+- **The patrol and formation experts hold a formation slot as flight research
+  flew it.** `patrol`, `patrol_bearing_only` and the formation's wingmen fly
+  a formation hold over the 3D tasks' autopilot, as in AFIT's and NASA's
+  F/A-18 formation-flight trials: the slot error closes along track on speed,
+  across it on course and vertically on height, with the lead's motion fed
+  forward. No deployed wingman autopilot exists, and the docs say so. The
+  bearing-only expert estimates the lead from range and bearings first. The
+  formation's lead flies the 3D heading autopilot at a set power, as a
+  formation lead does. `scripts/tune_formation_hold.py` tunes them on training
+  seeds 100-109 and checks them on held-out seeds 200-209: the followers hold
+  3.4 to 5.7 m RMS of the slot against an 8.5 m limit (NASA's 10 ft scaled by
+  span), and the formation's lead its altitude within 1.6 m. One formation
+  wingman, on seed 208, rejoins late from a high spawn (32.6 m RMS) and is a
+  strict expected failure. The pursuit PIDs they replace held 35 to 68 m, and
+  the formation's lead 141 m off its altitude. The patrol and formation records
+  are re-recorded. The new experts join their slot more slowly than the
+  pursuits closed on it, so the three tasks' expert settles are re-measured
+  (`scripts/measure_hold.py`): the fixed settle rises from 44 to 84 steps on
+  both patrol tasks and from 37 to 45 on the formation, and their protocol
+  rows are re-evaluated with it.
+- **Seven industrial and energy experts copy field practice.** Each was tuned
+  off the scored seeds, by its field's recipe.
+  - `hvac` runs ASHRAE Guideline 36's zone heating PI (0.1 per K, 900 s)
+    with LBL's optimal start.
+  - `reactor` runs Westinghouse rod control on average temperature: the
+    NRC's speed program, deadband and power-mismatch channel, in place of a
+    flux PID whose maths ran on a 0.5 s step against the 10 s control step.
+  - `boiler_drum` keeps three-element control, lambda-tuned from step tests.
+  - `glass_furnace` keeps its crown PI, SIMC-tuned. Practice adds an MPC
+    over that loop.
+  - `compressor_surge` keeps its vendor anti-surge pair, re-searched on the
+    training seeds.
+  - `battery` is checked against its spec and unchanged.
+  - `cement_kiln` runs the published fuzzy rule base of Swain and Subudhi
+    (1996), over a SIMC-tuned fuel loop. The rule base moves the
+    burning-zone setpoint on free lime and the kiln-speed trend. It acts only
+    by steps on a half-hour delay, so it holds 20.1 on the held-out seeds,
+    against the PID cascade's 5.09.
+
+  `scripts/tune_industrial_experts.py` tunes on seeds 100-109 and checks on
+  200-209. Held-out holds, old to new: `reactor` 22.1 to 4.40, `boiler_drum`
+  635 to 142, `compressor_surge` 5.29 to 3.93, `glass_furnace` 0.84 to 0.74
+  (within its ceiling), `hvac` 0.0172 to 0.0179. Their records are re-recorded.
+  `test_pid_controller_builds_with_finite_gains` becomes
+  `test_expert_builds_with_finite_parameters`, since not every expert is a
+  PID.
+- **The wind turbine's expert is the NREL 5 MW baseline controller**
+  (Jonkman et al. 2009, chapter 7). It has a 0.25 Hz speed filter, the
+  region 1 to 3 torque table at the dispatched power, and a pitch PI with
+  Jonkman's pole-placement gains on this plant's Cp
+  (`scripts/wind_turbine_gains.py`). The gains are fixed: the sensitivity's
+  best-fit line is flat on this surface, so the gain schedule is 1.
+  On the held-out seeds it holds 1.10e-4 against the old PID's 2.81e-5. Its
+  filtered-speed torque law lets the power lag the rotor's speed swings. The
+  oracle keeps the old PID's pitch constants as its own and is unchanged. The
+  wind turbine's records are re-recorded.
+
+- **The four-tank and the column run their practice's loops, and their tasks
+  change (v3).** `four_tank`'s expert is the rig's multi-loop PI on the
+  crossed pairing through a static decoupler, SIMC-tuned; its loops come
+  within 1.3 times the speed the plant's right-half-plane zero allows, and
+  reach the 1 mm resolution about 570 s in, so the episode is now 1200 steps
+  (500 in v2). `distillation`'s expert is the base layer under a column's
+  MPC: the LV-configuration with boilup holding the stage-15 temperature,
+  reflux on the distillate and the temperature setpoint on the bottoms. Its
+  observation gains that temperature (7 entries, from 6), on column A's
+  linear boiling-point curve. The column's tight SIMC settings saturate the
+  flows and run it off, so its temperature loop takes SIMC's input-usage
+  bound. Both experts replace grid searches on the scored reward. On the
+  held-out seeds both hold inside the ceiling of 2: the four-tank 1.33 (from
+  22.7) and the column 0.155 (from 391).
+
+- **Four process experts are what practice runs, tuned by SIMC.**
+  `scripts/tune_process_experts.py` step-tests each plant on training seeds
+  100-109, fits a first-order-plus-delay model and applies the SIMC rules
+  (Skogestad and Grimholt 2012), then checks the expert on held-out seeds
+  200-209. `cstr` is now a cascade, concentration trimming a temperature loop
+  on the coolant, as reactor practice runs it. `ph_neutralization`
+  linearises the pH through the titration curve and biases the base valve by
+  the target's steady demand. `first_order` is a SIMC PI, and
+  `unstable_cstr` keeps its cascade with SIMC gains in place of a search
+  over seeds that included the scored ones. On the held-out seeds the
+  `first_order`, `cstr` and `ph_neutralization` experts hold within their
+  instruments' resolution (pH 0.94 against a ceiling of 1, from 43.6), and
+  the unstable CSTR holds 6.0, against 3.2 for the gains it replaces. The four
+  tasks are re-recorded. `first_order` and `cstr` change (v3): their episodes
+  are 150 steps (100 in v2), twice the 63 and 67 steps their new experts take
+  to come within twice the level they hold, as the episode-length rule asks.
 
 - **Shorter docstrings in the core modules** (registry, experts, eval, reward,
   runners, base): they keep the contracts and drop the measurement history,
@@ -585,6 +693,14 @@ than by commit.
   (`benchmark.target_changes`), which catches every scheduled step and no
   drift. The protocol rows of `glass_furnace`, `compressor_surge` and
   `reactor` are re-recorded; no environment changed.
+- **An overshooting expert no longer passes its zero crossing off as its
+  settle.** `scripts/measure_hold.py` took the hold level over everything
+  after the burn-in, so a slow tail widened the band it settles into and the
+  first crossing counted. The level is now each cycle's second half, as
+  `target_gym.eval` takes it. Thirteen fixed settles moved (the aircraft by
+  the most: `plane_sine` 24 to 81, `plane3d_heading` 50 to 116), their
+  protocol rows are re-evaluated, and the CSTR's relay PID now holds 5.4e-7
+  instead of 0.54 once its recovery is out of the hold.
 - **`experts.mpc.casadi_step_map` without CasADi** raised a `NameError` on
   the missing module; it now raises an `ImportError` naming the `[mpc]` extra.
 - **`Airplane2D.reset_env(key)` without parameters** read a class attribute

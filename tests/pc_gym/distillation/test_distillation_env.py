@@ -217,15 +217,32 @@ def test_state_stays_finite_over_an_episode(params):
 
 
 def test_observation_hides_the_interior_profile(params):
-    """Only the two products are measured; 39 stage compositions are hidden."""
+    """The two products are analysed and one tray's temperature is measured;
+    the other stage compositions and the feed are hidden. Stages 11 and 31
+    are marked, away from the thermocouple on stage 15."""
     env = DistillationColumn()
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     marked = state.x.at[10].set(0.4242).at[30].set(0.7373)
     state = state.replace(x=marked, zF=0.4321)
     obs = env.get_obs(state, params)
-    assert obs.shape == (6,)
+    assert obs.shape == (7,)
     for hidden in (0.4242, 0.7373, 0.4321):
         assert not bool(jnp.any(jnp.isclose(obs, hidden)))
+
+
+@pytest.mark.parametrize(
+    "x15, kelvin",
+    # Column A's linear boiling-point curve, T = x 341.9 + (1 - x) 355.4 K
+    # (Skogestad, 1999): pure light, pure heavy, and the even mix at 348.65.
+    [(1.0, 341.9), (0.0, 355.4), (0.5, 348.65)],
+)
+def test_the_thermocouple_reads_stage_15_on_the_boiling_point_curve(
+    params, x15, kelvin
+):
+    env = DistillationColumn()
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    state = state.replace(x=state.x.at[14].set(x15))
+    assert float(env.get_obs(state, params)[6]) == pytest.approx(kelvin, abs=1e-4)
 
 
 def test_reward_requires_both_specifications(params):

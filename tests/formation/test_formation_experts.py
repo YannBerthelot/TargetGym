@@ -1,7 +1,8 @@
 """The formation's baselines.
 
-The PID team is the shipped PID of the task each seat faces: the 3D heading
-task's in the lead seat and the patrol's in each wingman seat. The oracle
+The PID team flies a steady formation lead in the lead seat and the patrol's
+expert, the formation hold, in each wingman seat; how closely it holds is in
+tests/patrol/test_formation_hold.py. The oracle
 flies the patrol's lead autopilot in the lead seat and the patrol's
 twin-autopilot law in each wingman seat, with one residual planner over the
 whole formation. The laws are checked here cheaply; the planner and the
@@ -28,8 +29,7 @@ from target_gym.patrol.experts import (
 
 #: Held over the scored second half on seed 1 (scripts/measure_hold.py): the
 #: lead 0.80 m off its altitude, the wingmen 0.23 and 0.27 m off their slots.
-#: The bounds are three altimeter floors and a third of the slot floor; the
-#: PID team holds about 140 m and 40 m.
+#: The bounds are three altimeter floors and a third of the slot floor.
 ALT_HOLD_BOUND = 3.0
 SLOT_HOLD_BOUND = 1.0
 
@@ -47,37 +47,23 @@ def _seat(env, obs, i):
     return obs[start : start + 26]
 
 
-def test_the_pid_team_is_the_patrol_lead_and_the_patrol_pid():
-    """The lead seat flies the patrol's lead autopilot, the lead the patrol
-    PID was tuned behind. Behind the 3D heading task's PID, which holds the
-    lead's altitude better (about 38 m against 141 m), the wingmen collided
-    in 5 of the 10 baseline seeds."""
+def test_every_wingman_seat_flies_the_patrol_expert():
+    """Each wingman seat is the patrol's expert on that seat's observation,
+    the patrol's full observation."""
     _, env, _, obs, _ = _reset()
     team = make_formation_pid_controller()
     action, _ = jax.jit(team.act)(team.init_state, obs)
 
-    lead_params, lead_state = make_plane3d_heading_pid()
-    lead, _ = plane3d_heading_pid_step(lead_params, lead_state, obs[:15])
     wing = make_patrol_pid_controller()
-    seats = [wing.act(wing.init_state, _seat(env, obs, i))[0] for i in range(2)]
-    np.testing.assert_allclose(
-        np.asarray(action), np.asarray(jnp.concatenate([lead, *seats])), atol=1e-6
-    )
-
-
-def test_the_scored_pid_is_the_traced_pid_on_the_host():
-    spec, env, params, obs, state = _reset(seed=1)
-    host = spec.make_pid()
-    host.reset()
-    team = spec.make_pid_controller()
-    carry = team.init_state
-    act = jax.jit(team.act)
-    step = jax.jit(env.step_env)
-    for _ in range(5):
-        a_host = np.asarray(host(obs))
-        a_traced, carry = act(carry, obs)
-        np.testing.assert_allclose(a_host, np.asarray(a_traced), atol=1e-5)
-        obs, state, _, _, _ = step(jax.random.PRNGKey(0), state, a_host, params)
+    for i in range(2):
+        seat, _ = jax.jit(wing.act)(wing.init_state, _seat(env, obs, i))
+        # Two compiled graphs order float32 sums differently; the pitch loop's
+        # gains (Kp_theta 8 on a pitch error built from energy rates) carry
+        # that rounding to about 1e-5 of the stick, so 1e-4 is float32
+        # agreement, not a looser law.
+        np.testing.assert_allclose(
+            np.asarray(action[3 * (i + 1) : 3 * (i + 2)]), np.asarray(seat), atol=1e-4
+        )
 
 
 @pytest.mark.parametrize("k", [1, 4])

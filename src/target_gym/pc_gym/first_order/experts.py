@@ -83,15 +83,16 @@ def make_first_order_mpc(env, params, horizon: int = 5):
 
 
 def make_first_order_pid_controller():
-    """The scored PID as a pure :class:`~target_gym.experts.pid.Controller`;
-    ``.host()`` is what ``make_pid()`` returns. Gains from
-    src/target_gym/data/pid_gains.json."""
+    """The scored PI as a pure :class:`~target_gym.experts.pid.Controller`;
+    ``.host()`` is what ``make_pid()`` returns. SIMC gains from a step test,
+    stored in src/target_gym/data/pid_gains.json by
+    ``scripts/tune_process_experts.py`` (PHYSICS.md section 6)."""
     from target_gym.experts.pid import gain, siso_pid
 
     return siso_pid(
-        Kp=gain("first_order", "Kp", 2.11),
-        Ki=gain("first_order", "Ki", 9.72),
-        Kd=gain("first_order", "Kd", 0.0039),
+        Kp=gain("first_order", "Kp", 5.0),
+        Ki=gain("first_order", "Ki", 25.0),
+        Kd=gain("first_order", "Kd", 0.0),
         dt=0.05,
         state_index=0,
         setpoint_index=1,

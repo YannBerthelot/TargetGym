@@ -2,16 +2,22 @@
 
 <p align="center"><img src="../../videos/reactor/pid_output.gif" width="480px"/></p>
 
-Nuclear reactor — point-kinetics with delayed neutrons, xenon poisoning, thermal feedback, and rate-limited control rods.
+Follow a drifting power demand on a 3 GW pressurised-water reactor with the control rods. Xenon poisoning gives the core a memory of hours, so a power change constrains what is reachable long after it is made; rod authority is tight and insertion is faster than withdrawal; and only power, coolant temperature and rod position are measured. Costs are in dollars.
+
+```python
+import target_gym as tg
+
+env, params = tg.make("reactor")
+```
 
 | | |
 |---|---|
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((4,))` |
 | Tracked variable(s) | neutron power (normalised) |
-| Episode length | 864 steps (8640 s at 10 s per step) |
-| Import | `from target_gym import Reactor, ReactorParams` |
+| Episode length | 864 steps of 10 s (2.4 h) |
 | Cite as | `reactor-v3` |
+| Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 
 ## Action space
 
@@ -24,8 +30,14 @@ actuator range inside the environment.
 
 ## Observation space
 
-4 values. Indices (0,) carry the tracked variable(s) that the
-reward scores.
+4 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[3]`.
+
+| # | meaning |
+|---|---|
+| 0 | `n`, neutron power relative to nominal (1 is full power) |
+| 1 | coolant temperature (K) |
+| 2 | rod position, normalised to [-1, 1] |
+| 3 | target `n` |
 
 ## Rewards
 
@@ -57,14 +69,16 @@ Recorded over 10 seeds of the 864-step episode (see [Baseline results](../baseli
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -1.911e+04 | 22.12 |
+| PID | -5736 | 6.639 |
 | MPC | -1209 | 1.4 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 
-| parameter | default | unit |
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("reactor", max_steps_in_episode=...)`.
+
+| parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 864 | steps |
