@@ -14,7 +14,7 @@ env, params = tg.make("distillation")
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((7,))` |
-| Tracked variable(s) | yD (mole fraction) |
+| Tracked variable(s) | yD (mole fraction), xB (mole fraction) |
 | Episode length | 200 steps of 60 s (3.33 h) |
 | Cite as | `distillation-v3` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
@@ -31,7 +31,7 @@ actuator range inside the environment.
 
 ## Observation space
 
-7 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[4]`.
+7 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[4]`, `obs[1]` against `obs[5]`.
 
 | # | meaning |
 |---|---|

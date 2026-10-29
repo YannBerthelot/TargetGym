@@ -173,6 +173,8 @@ heading there, but not its curvature.
 | 16 | throttle, 0 to 1 |
 | 17 | elevator deflection (rad) |
 | 18 | aileron deflection (rad) |
+| 19 | distance to the path, the tracked output (m) |
+| 20 | target distance to the path, always 0 (m) |
 
 ### Observation
 
@@ -429,7 +431,7 @@ xfail. That is a controller gap, not a physics gap; it is tracked in
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
 | `plane3d_circle` | 300 | 1 | 5 min | 3 in [-1, 1] | 17 | 26 |
-| `plane3d_figure8` | 400 | 1 | 7 min | 3 in [-1, 1] | 19 | 26 |
+| `plane3d_figure8` | 400 | 1 | 7 min | 3 in [-1, 1] | 21 | 26 |
 | `plane3d_heading` | 300 | 1 | 5 min | 3 in [-1, 1] | 15 | 26 |
 | `plane3d_racetrack` | 650 | 1 | 11 min | 3 in [-1, 1] | 21 | 26 |
 

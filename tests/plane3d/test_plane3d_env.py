@@ -295,7 +295,7 @@ class TestCircleReward:
 class TestFigureEightInit:
     def test_obs_shape(self):
         env = Plane3DFigureEight()
-        assert env.obs_shape == (19,)
+        assert env.obs_shape == (21,)
 
 
 class TestFigureEightReset:
@@ -303,7 +303,7 @@ class TestFigureEightReset:
         env = Plane3DFigureEight()
         key = jax.random.PRNGKey(42)
         obs, state = env.reset(key)
-        assert obs.shape == (19,)
+        assert obs.shape == (21,)
 
     def test_starts_on_twisted_lemniscate(self):
         """Aircraft starts on the 3D twisted lemniscate."""
@@ -345,7 +345,7 @@ class TestFigureEightStep:
         obs, state = env.reset(key)
         action = jnp.array([0.8, 0.0, 0.0])
         obs2, *_ = env.step(key, state, action)
-        assert obs2.shape == (19,)
+        assert obs2.shape == (21,)
 
 
 class TestFigureEightReward:

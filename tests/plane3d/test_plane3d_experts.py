@@ -72,11 +72,12 @@ def test_the_floors_are_the_instrument_resolutions(name):
     failure cost is twice the envelope's cost in those units (the altitude
     envelope's, or the path's on the figure-8, which scores no altitude). The
     floors arrived with v3; the racetrack's v4 changed only its observation,
-    and the heading task's v4 only its length (200 to 300 steps)."""
+    the heading task's v4 only its length (200 to 300 steps), and the
+    figure-8's v4 only its observation (the distance to the curve)."""
     spec = registry.get(name)
     p = spec.make_test_params()
     assert spec.version == (
-        4 if name in ("plane3d_racetrack", "plane3d_heading") else 3
+        4 if name in ("plane3d_racetrack", "plane3d_heading", "plane3d_figure8") else 3
     )
     if name == "plane3d_figure8":
         assert p.e_floor_path == p.position_precision_floor == 3.0

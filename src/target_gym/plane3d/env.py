@@ -788,19 +788,20 @@ def get_obs_circle(state: PlaneState3D, xp=jnp):
 
 def get_obs_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     """
-    Observation for figure-8 task (19 values).
+    Observation for figure-8 task (21 values).
 
     Provides the vector from aircraft to the nearest point on the 3D
     twisted lemniscate (nearest_dx, nearest_dy, nearest_dz) plus the
-    tangent heading at that point.
+    tangent heading at that point, and the tracked output: the distance to
+    the curve (value) against a constant-zero target.
 
     Layout:
       [x_dot, y_dot, z, z_dot, theta, theta_dot, phi, phi_dot,
        gamma, psi, target_altitude, target_radius,
        nearest_dx, nearest_dy, nearest_dz, tangent_heading,
-       power, stick, aileron]
+       power, stick, aileron, path_distance, target_path_distance(=0)]
     """
-    ndx, ndy, ndz, _, tang_hdg = nearest_point_on_twisted_lemniscate(state, params)
+    ndx, ndy, ndz, dist, tang_hdg = nearest_point_on_twisted_lemniscate(state, params)
     return xp.stack(
         [
             state.x_dot,
@@ -822,6 +823,8 @@ def get_obs_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
             state.power,
             state.stick,
             state.aileron,
+            dist,
+            jnp.zeros(()),
         ]
     )
 

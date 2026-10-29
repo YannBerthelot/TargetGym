@@ -13,10 +13,10 @@ env, params = tg.make("plane3d_figure8")
 | | |
 |---|---|
 | Action space | `Box((3,))`, all actions in [-1, 1] |
-| Observation space | `Box((19,))` |
-| Tracked variable(s) | altitude (m) |
+| Observation space | `Box((21,))` |
+| Tracked variable(s) | distance to path (m) |
 | Episode length | 400 steps of 1 s (6.67 min) |
-| Cite as | `plane3d_figure8-v3` |
+| Cite as | `plane3d_figure8-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
@@ -32,7 +32,7 @@ actuator range inside the environment.
 
 ## Observation space
 
-19 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[2]` against `obs[10]`.
+21 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[19]` against `obs[20]`.
 
 | # | meaning |
 |---|---|
@@ -44,6 +44,8 @@ actuator range inside the environment.
 | 16 | throttle, 0 to 1 |
 | 17 | elevator deflection (rad) |
 | 18 | aileron deflection (rad) |
+| 19 | distance to the path, the tracked output (m) |
+| 20 | target distance to the path, always 0 (m) |
 
 ## Rewards
 

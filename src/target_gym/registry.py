@@ -585,7 +585,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=3,
+        # v4: the distance to the curve observed as the tracked output.
+        version=4,
     ),
     EnvSpec(
         name="patrol",

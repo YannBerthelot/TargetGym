@@ -45,7 +45,7 @@ To pick one by what you want to test, see
 | `plane3d_heading` | `plane3d_heading-v4` | (15,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `plane3d_circle` | `plane3d_circle-v3` | (17,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `plane3d_racetrack` | `plane3d_racetrack-v4` | (21,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
-| `plane3d_figure8` | `plane3d_figure8-v3` | (19,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
+| `plane3d_figure8` | `plane3d_figure8-v4` | (21,) | (3,) | distance to path (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `patrol` | `patrol-v3` | (26,) | (3,) | slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 | `patrol_bearing_only` | `patrol_bearing_only-v3` | (21,) | (3,) | measured range (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 | `formation` | `formation-v2` | (74,) | (9,) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
@@ -64,7 +64,7 @@ To pick one by what you want to test, see
 | `first_order` | `first_order-v3` | (2,) | (1,) | x | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
 | `four_tank` | `four_tank-v3` | (6,) | (2,) | h1 (m), h2 (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
 | `ph_neutralization` | `ph_neutralization-v2` | (3,) | (1,) | pH | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
-| `distillation` | `distillation-v3` | (7,) | (2,) | yD (mole fraction) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
+| `distillation` | `distillation-v3` | (7,) | (2,) | yD (mole fraction), xB (mole fraction) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
 | `unstable_cstr` | `unstable_cstr-v2` | (4,) | (1,) | C_a (mol/L) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Industrial / Energy

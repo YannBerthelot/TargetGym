@@ -514,17 +514,19 @@ class Plane3DFigureEight(_Airplane3DBase):
 
     The aircraft starts at the rightmost point of the right lobe.
 
-    Observation (19,):
+    Observation (21,):
         [x_dot, y_dot, z, z_dot, theta, theta_dot, phi, phi_dot,
          gamma, psi, target_altitude, target_radius,
          nearest_dx, nearest_dy, nearest_dz, tangent_heading,
-         power, stick, aileron]
+         power, stick, aileron, path_distance, target_path_distance(=0)]
 
     Action (3,): [power, stick, aileron] each in [-1, 1]
     """
 
-    obs_value_index: int = 2
-    obs_target_index: int = 10
+    # The reward charges the distance to the curve, not the altitude: the
+    # observed target_altitude is the curve's mean, which it swings 200 m about.
+    obs_value_index: int = 19  # distance to the curve
+    obs_target_index: int = 20  # constant 0
     task_type: str = "figure8"
     registry_name: str = "plane3d_figure8"
 
@@ -542,11 +544,11 @@ class Plane3DFigureEight(_Airplane3DBase):
             failure_cost=2.0 * (20000.0 / 3.0) ** 2,
         )
 
-    tracked_names: tuple = ("altitude (m)",)
+    tracked_names: tuple = ("distance to path (m)",)
 
     def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
-        self.obs_shape = (22,) if observe_wind else (19,)
+        self.obs_shape = (24,) if observe_wind else (21,)
 
     def compute_reward(self, state, params):
         return compute_reward_figure8(state, params)
