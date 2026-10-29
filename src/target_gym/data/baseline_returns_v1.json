@@ -1,7 +1,7 @@
 {
   "_meta": {
     "generated": "2026-09-13T09:05:41+00:00",
-    "note": "The v1 baselines, frozen at the v1 to v2 reward change. cstr and first_order pid_returns were re-recorded on 2026-10-27 with runners.rollout's fresh key per step (reward_version=1, seeds 0-9), since tests/test_reward_contract.py reproduces them; every other number keeps the one-key-per-episode loop it was recorded with.",
+    "note": "The v1 baselines, frozen at the v1 to v2 reward change. cstr and first_order pid_returns were re-recorded on 2026-10-27 with runners.rollout's fresh key per step (reward_version=1, seeds 0-9), since tests/test_reward_contract.py reproduces them, and again on 2026-10-29 for the SIMC PID and the v3 episode length of 150 steps (their rows' steps and mpc fields are still the 100-step v1 record); every other number keeps the one-key-per-episode loop it was recorded with.",
     "seeds": 10
   },
   "battery": {
@@ -113,16 +113,16 @@
     ],
     "mpc_terminated_early": 0,
     "pid_returns": [
-      89.03575,
-      90.231197,
-      90.413006,
-      88.95463,
-      89.600124,
-      89.672681,
-      90.222277,
-      89.606653,
-      89.150704,
-      90.51813
+      136.363214,
+      139.529417,
+      142.057155,
+      137.799139,
+      138.064095,
+      138.258224,
+      142.029564,
+      138.177894,
+      139.111776,
+      141.479329
     ],
     "seconds": 5.9,
     "seeds": 10,
@@ -179,16 +179,16 @@
     ],
     "mpc_terminated_early": 0,
     "pid_returns": [
-      95.117256,
-      96.132903,
-      91.150158,
-      96.472805,
-      94.69953,
-      95.944318,
-      95.649717,
-      92.487133,
-      95.261554,
-      89.947345
+      145.138805,
+      146.64729,
+      141.159728,
+      146.021152,
+      144.353355,
+      145.232486,
+      145.746597,
+      142.632834,
+      145.981005,
+      139.569904
     ],
     "seconds": 2413.8,
     "seeds": 10,
