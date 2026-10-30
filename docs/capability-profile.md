@@ -33,9 +33,11 @@ Each spoke is a capability, and its point is the mean over the tasks that
 probe it. These are the expert and the oracle, drawn from the recorded
 results and redrawn whenever they are re-recorded:
 
+<!-- ``../``: this page is served at /capability-profile/, and MkDocs does
+     not rewrite paths inside raw HTML. -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="images/capability-profile-dark.svg">
-  <img alt="The expert and the oracle on each capability, hold and reach" src="images/capability-profile.svg" width="680">
+  <source media="(prefers-color-scheme: dark)" srcset="../images/capability-profile-dark.svg">
+  <img alt="The expert and the oracle on each capability, hold and reach" src="../images/capability-profile.svg" width="680">
 </picture>
 
 - **The dashed ring at 0.5 is the expert.** Outside it the policy is better
