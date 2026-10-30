@@ -1,5 +1,11 @@
 """MkDocs build hooks.
 
+**Generated pages.** The results page and its charts are written from the
+recorded data at build time (``scripts/generate_baseline_table.py``) rather
+than committed, so a re-record changes only its task's data files. They are
+added to the site in memory, which works the same under ``mkdocs serve``,
+``mkdocs build`` and ``mike deploy``.
+
 Two rewrites, both done before MkDocs resolves links.
 
 **Includes.** The per-environment physics contracts live next to the code they
@@ -18,14 +24,31 @@ means the sources stay right for both readers, rather than being made wrong in
 the repository to suit the site.
 """
 
+import importlib.util
 import pathlib
 import re
+
+from mkdocs.structure.files import File
 
 _INCLUDE = re.compile(r'^--8<--\s+"([^"]+)"\s*$', re.MULTILINE)
 # ``../plane3d/PHYSICS.md``, ``../src/target_gym/pc_gym/cstr/PHYSICS.md``, ...
 # The environment's directory name is the physics page's slug.
 _PHYSICS_LINK = re.compile(r"\((?:\.\./)+(?:[\w/]+/)?(\w+)/PHYSICS\.md(#[^)]*)?\)")
 _CONTRIBUTING_LINK = re.compile(r"\((?:\.\./)+CONTRIBUTING\.md(#[^)]*)?\)")
+
+
+def on_files(files, config):
+    root = pathlib.Path(config.config_file_path).parent
+    path = root / "scripts" / "generate_baseline_table.py"
+    spec = importlib.util.spec_from_file_location("_generate_baseline_table", path)
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    for src_uri, content in generator.outputs().items():
+        stale = files.get_file_from_path(src_uri)
+        if stale is not None:
+            files.remove(stale)
+        files.append(File.generated(config, src_uri, content=content))
+    return files
 
 
 def on_page_markdown(markdown, page, config, files):

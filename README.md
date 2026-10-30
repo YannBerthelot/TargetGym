@@ -30,7 +30,7 @@ reactor, a cement kiln, a grid battery and a wind turbine.
 
 - **Baselines included.** Every environment ships a tuned PID and an MPC
   with full state access, which serves as an upper bound. Both are recorded
-  over ten seeds in `src/target_gym/data/baseline_returns.json`.
+  over ten seeds in `src/target_gym/data/baseline_returns/`.
 - **Validated physics.** Each environment carries a `PHYSICS.md` with a sourced
   parameter table, published validation targets asserted by tests, and its
   documented approximations.
@@ -157,7 +157,7 @@ defines all three.
 The expert reads `obs` only, as a plant controller does. The oracle
 (`tg.make_oracle`) reads the full state, including quantities the observation
 withholds, so it shows what a perfect model could do rather than competing with
-a policy; [docs/baseline-results.md](docs/baseline-results.md) gives the
+a policy; [Baseline results](https://yannberthelot.github.io/TargetGym/baseline-results/) gives the
 numbers.
 
 Vectorised rollouts, the registry, the patrol interface and the wind model
@@ -228,8 +228,8 @@ ceiling sits, tracking within the instruments' resolution. The
 can also anchor on the ceiling and gives the numbers.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/results-vs-expert-dark.svg">
-  <img alt="Each task's oracle hold cost and ceiling relative to its expert, on a log scale" src="docs/images/results-vs-expert.svg" width="680">
+  <source media="(prefers-color-scheme: dark)" srcset="https://yannberthelot.github.io/TargetGym/images/results-vs-expert-dark.svg">
+  <img alt="Each task's oracle hold cost and ceiling relative to its expert, on a log scale" src="https://yannberthelot.github.io/TargetGym/images/results-vs-expert.svg" width="680">
 </picture>
 
 Every environment ships a tuned PID and an MPC. On `patrol_bearing_only`, which
@@ -277,7 +277,7 @@ documented as such on their environment page.
 
 **[How the baselines work](docs/baselines.md)** says how each controller is
 built and what to know before quoting an MPC number; the numbers are on
-**[Baseline results](docs/baseline-results.md)**.
+**[Baseline results](https://yannberthelot.github.io/TargetGym/baseline-results/)**.
 
 ---
 
@@ -311,7 +311,7 @@ method and lists what each model is validated against.
 | **[Environment reference](docs/environments.md)** | All 24: shapes, tracked variables, baselines, contracts |
 | **[Choosing an environment](docs/complexity.md)** | Which task to start with for what you want to test |
 | **[Public API](docs/api.md)** | Stable and provisional surface |
-| **[Baseline results](docs/baseline-results.md)** | PID and MPC scores on every environment |
+| **[Baseline results](https://yannberthelot.github.io/TargetGym/baseline-results/)** | PID and MPC scores on every environment |
 | **[RL protocol](docs/rl-protocol.md)** | Measuring a learned policy |
 | **[Target MDPs](docs/target-mdp.md)** | The formal setting |
 | **[How the baselines work](docs/baselines.md)** | PID and MPC controllers, tuning, solver reporting |

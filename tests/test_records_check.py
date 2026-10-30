@@ -50,3 +50,22 @@ def test_ci_runs_the_record_checks_in_their_own_job():
     assert len(own) == 1, own
     rest = [line for line in runs if line not in own]
     assert rest and all("not records" in line for line in rest), rest
+
+
+def test_the_tests_wait_for_the_record_checks():
+    """A stale record fails ``records`` alone, before the tests spend their
+    runner minutes (the task brief, 2026-10-29): every job that runs pytest
+    outside the ``records`` job needs it."""
+    import yaml
+
+    jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+    testing = [
+        name
+        for name, job in jobs.items()
+        if name != "records"
+        and any("pytest" in step.get("run", "") for step in job.get("steps", []))
+    ]
+    assert testing
+    for name in testing:
+        needs = jobs[name].get("needs", [])
+        assert "records" in ([needs] if isinstance(needs, str) else needs), name

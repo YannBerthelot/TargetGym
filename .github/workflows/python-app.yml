@@ -72,13 +72,12 @@ jobs:
       run: uv sync --frozen --group dev --group docs
 
     - name: Check the generated pages are current
-      # The results page, docs/baseline-results.md, is written from the
-      # recorded returns and protocol scores rather than the registry, so
-      # re-recording without regenerating it would leave the headline stale.
+      # The results page and its charts are not here: docs/hooks.py writes
+      # them from the recorded data during the build below, so they cannot
+      # go stale and a re-record does not touch them.
       run: |
         uv run python scripts/generate_env_reference.py --check
         uv run python scripts/generate_env_pages.py --check
-        uv run python scripts/generate_baseline_table.py --check
 
     - name: Check the documentation still describes the code
       run: |
@@ -98,6 +97,10 @@ jobs:
     # run concurrently, so covering four of them costs runner minutes but not
     # a contributor's wall-clock wait.
     name: test (py${{ matrix.python-version }})
+    # A stale record fails the records job alone, in a few minutes, before
+    # three interpreters spend their runner minutes on a tree that needs a
+    # re-record first.
+    needs: records
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -213,6 +216,7 @@ jobs:
     # 30-minute limit cancelled it, which reports nothing at all. It runs after
     # a merge, so the limit never holds up a pull request.
     name: large tests
+    needs: records
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 60

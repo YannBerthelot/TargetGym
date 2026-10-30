@@ -16,7 +16,7 @@ import re
 
 import pytest
 
-from target_gym import registry
+from target_gym import records, registry
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -41,7 +41,7 @@ def _row(name, expert, oracle, ceiling):
 def test_the_chart_shows_the_recorded_results(gen):
     """Every registered task, with its recorded expert hold, oracle hold and
     ceiling, as protocol_results.json has them."""
-    data = json.loads((ROOT / "src/target_gym/data/protocol_results.json").read_text())
+    data = records.load("protocol_results")
     rows = {r["name"]: r for r in gen.chart_rows(data)}
     assert list(rows) == list(registry.REGISTRY)
     for name, recorded in data.items():
@@ -53,7 +53,7 @@ def test_the_chart_shows_the_recorded_results(gen):
 def test_the_page_embeds_the_same_rows(gen):
     """The interactive chart reads its data from the page, so the page must
     carry exactly the rows the chart is built from."""
-    data = json.loads((ROOT / "src/target_gym/data/protocol_results.json").read_text())
+    data = records.load("protocol_results")
     block = re.search(
         r'<script type="application/json" id="tg-results-data">(.*?)</script>',
         gen._page(),
@@ -88,7 +88,7 @@ def test_both_images_are_standalone_svg(gen, dark):
     """GitHub shows the README images as plain images: no script, and a
     background of their own so the light and dark variants read on either
     theme."""
-    data = json.loads((ROOT / "src/target_gym/data/protocol_results.json").read_text())
+    data = records.load("protocol_results")
     svg = gen.results_svg(gen.chart_rows(data), dark=dark)
     assert svg.startswith("<svg") and svg.rstrip().endswith("</svg>")
     assert "<script" not in svg
@@ -122,7 +122,7 @@ def test_the_capability_image_draws_the_recorded_profiles(gen):
 
 @pytest.mark.parametrize("dark", [False, True])
 def test_the_capability_image_is_standalone_svg(gen, dark):
-    data = json.loads((ROOT / "src/target_gym/data/protocol_results.json").read_text())
+    data = records.load("protocol_results")
     svg = gen.capability_svg(data, dark=dark)
     assert svg.startswith("<svg") and svg.rstrip().endswith("</svg>")
     assert "<script" not in svg
@@ -137,7 +137,7 @@ def test_the_capability_image_is_the_same_on_every_platform(
     one committed from a Mac, and their maths libraries can differ in the last
     bit of sin, cos and log. Nudging every such result one unit in the last
     place, either way, must leave the image unchanged."""
-    data = json.loads((ROOT / "src/target_gym/data/protocol_results.json").read_text())
+    data = records.load("protocol_results")
     drawn = gen.capability_svg(data)
     for name in ("sin", "cos", "log"):
         real = getattr(math, name)
@@ -145,3 +145,21 @@ def test_the_capability_image_is_the_same_on_every_platform(
             math, name, lambda x, f=real: math.nextafter(f(x), direction)
         )
     assert gen.capability_svg(data) == drawn
+
+
+SITE = "https://yannberthelot.github.io/TargetGym/"
+
+
+def test_the_readme_chart_is_one_the_docs_build_publishes(gen):
+    """The chart images are built with the site, not committed, and PyPI
+    shows the README without the repository's files: so the README links
+    each image on the published site, each is a file the docs build writes,
+    and its link to the interactive version lands on the page's heading."""
+    readme = (ROOT / "README.md").read_text()
+    published = gen.outputs()
+    images = re.findall(r'(?:src|srcset)="([^"]*results-vs-expert[^"]*)"', readme)
+    assert len(images) == 2
+    for url in images:
+        assert url.startswith(SITE) and url[len(SITE) :] in published, url
+    assert f"{SITE}baseline-results/#at-a-glance" in readme
+    assert "\n## At a glance\n" in published[gen.PAGE]
