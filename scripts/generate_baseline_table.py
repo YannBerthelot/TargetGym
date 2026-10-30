@@ -272,8 +272,12 @@ def capability_svg(data: dict, dark: bool = False) -> str:
     edges = {"hold": "edge: ceiling", "reach": "edge: best known"}
 
     def at(cx, cy, k, r):
+        # Rounded before use: maths libraries differ in the last bit, and a
+        # point landing on 149.25 would print as 149.2 on one platform and
+        # 149.3 on another, failing the docs check.
         a = 2.0 * math.pi * k / n  # clockwise from the top
-        return cx + big * r * math.sin(a), cy - big * r * math.cos(a)
+        dx, dy, r = round(math.sin(a), 6), round(math.cos(a), 6), round(r, 4)
+        return cx + big * r * dx, cy - big * r * dy
 
     def pts(xy):
         return " ".join(f"{x:.1f},{y:.1f}" for x, y in xy)
@@ -293,7 +297,7 @@ def capability_svg(data: dict, dark: bool = False) -> str:
             )
             known = any(not math.isnan(refs[w][which][axis]) for w in refs)
             lx, ly = at(cx, cy, k, 1.13)
-            sin = math.sin(2.0 * math.pi * k / n)
+            sin = round(math.sin(2.0 * math.pi * k / n), 6)
             anchor = "middle" if abs(sin) < 0.1 else ("start" if sin > 0 else "end")
             lines = _label_lines(suite.LABELS[axis])
             ly += (
@@ -311,7 +315,7 @@ def capability_svg(data: dict, dark: bool = False) -> str:
                 f'text-anchor="{anchor}">{spans}</text>'
             )
         for who in ("expert", "oracle"):
-            r = [refs[who][which][a] for a in suite.AXES]
+            r = [round(refs[who][which][a], 4) for a in suite.AXES]
             ks = [k for k in range(n) if not math.isnan(r[k])]
             xy = [at(cx, cy, k, r[k]) for k in ks]
             dash = ' stroke-dasharray="5 4"' if who == "expert" else ""

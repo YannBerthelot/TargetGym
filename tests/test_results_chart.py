@@ -10,6 +10,7 @@ are regenerated from ``protocol_results.json``.
 
 import importlib.util
 import json
+import math
 import pathlib
 import re
 
@@ -126,3 +127,21 @@ def test_the_capability_image_is_standalone_svg(gen, dark):
     assert svg.startswith("<svg") and svg.rstrip().endswith("</svg>")
     assert "<script" not in svg
     assert re.search(r"<rect[^>]*class=\"bg\"", svg)
+
+
+@pytest.mark.parametrize("direction", [math.inf, -math.inf])
+def test_the_capability_image_is_the_same_on_every_platform(
+    gen, monkeypatch, direction
+):
+    """The docs check regenerates the image on Linux and compares it with the
+    one committed from a Mac, and their maths libraries can differ in the last
+    bit of sin, cos and log. Nudging every such result one unit in the last
+    place, either way, must leave the image unchanged."""
+    data = json.loads((ROOT / "src/target_gym/data/protocol_results.json").read_text())
+    drawn = gen.capability_svg(data)
+    for name in ("sin", "cos", "log"):
+        real = getattr(math, name)
+        monkeypatch.setattr(
+            math, name, lambda x, f=real: math.nextafter(f(x), direction)
+        )
+    assert gen.capability_svg(data) == drawn
