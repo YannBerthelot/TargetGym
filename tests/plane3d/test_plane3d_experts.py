@@ -11,14 +11,11 @@ instrument resolutions with it (the -v3 tasks), and the oracle's best hold
 follows its recorded holds.
 """
 
-import json
-import pathlib
-
 import jax
 import numpy as np
 import pytest
 
-from target_gym import registry
+from target_gym import records, registry
 from target_gym.experts.mpc import plan_params
 from target_gym.plane3d.experts import make_plane3d_mpc, task_settings
 
@@ -29,13 +26,6 @@ N_ITER = {
     "plane3d_racetrack": 200,
     "plane3d_figure8": 200,
 }
-HOLDS = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "src"
-    / "target_gym"
-    / "data"
-    / "hold_measurements.json"
-)
 
 
 def _oracle(name, **kwargs):
@@ -96,7 +86,7 @@ def test_the_nea_reference_is_the_recorded_hold(name):
     """rho_floor is the oracle's lowest per-seed hold in floor units, summed
     over the tracked outputs (``scripts/measure_hold.py``)."""
     p = registry.get(name).make_test_params()
-    holds = json.loads(HOLDS.read_text())[name]["mpc"]["e_hold_min"]
+    holds = records.load_row("hold_measurements", name)["mpc"]["e_hold_min"]
     floors = {
         "plane3d_heading": [p.e_floor_altitude, p.e_floor_heading],
         "plane3d_circle": [p.e_floor_altitude, p.e_floor_path],

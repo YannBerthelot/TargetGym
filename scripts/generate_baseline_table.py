@@ -1,19 +1,23 @@
-"""Write the baseline results page, ``docs/baseline-results.md``, and its chart.
+"""The baseline results page, ``baseline-results.md``, and its charts.
 
-    uv run python scripts/generate_baseline_table.py            # write
-    uv run python scripts/generate_baseline_table.py --check    # CI: exit 1 if stale
+The docs build makes them (``docs/hooks.py`` calls ``outputs``), so nothing
+here is committed and a re-record changes only its task's data files. To look
+at them outside the site::
+
+    uv run python scripts/generate_baseline_table.py --out DIR
 
 The page opens with a chart of each task's oracle and ceiling against its
 expert: interactive on the docs site (``docs/javascripts/results-chart.js``
 draws it from the rows embedded in the page), and as two static images for
-the README, light and dark (``docs/images/results-vs-expert*.svg``). It also
-draws the expert's and the oracle's capability profiles for
-``docs/capability-profile.md`` (``docs/images/capability-profile*.svg``).
+the README, light and dark (``images/results-vs-expert*.svg``, which the
+README links on the published site). It also draws the expert's and the
+oracle's capability profiles for ``docs/capability-profile.md``
+(``images/capability-profile*.svg``).
 
 The page is the headline results of the whole library, so it is generated from
 the recorded data rather than transcribed: the protocol scores from
-``src/target_gym/data/protocol_results.json`` (``scripts/evaluate_baselines.py``)
-and the episode returns from ``src/target_gym/data/baseline_returns.json``
+``src/target_gym/data/protocol_results/`` (``scripts/evaluate_baselines.py``)
+and the episode returns from ``src/target_gym/data/baseline_returns/``
 (``scripts/record_baselines.py``). Hand-transcription is exactly the drift this
 repository has spent a lot of effort eliminating everywhere else.
 
@@ -43,23 +47,22 @@ import sys
 
 import numpy as np
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-DOC = ROOT / "docs" / "baseline-results.md"
-PROTOCOL = ROOT / "src" / "target_gym" / "data" / "protocol_results.json"
+#: What the docs build publishes, by path under ``docs/``.
+PAGE = "baseline-results.md"
 IMAGES = {
-    False: ROOT / "docs" / "images" / "results-vs-expert.svg",
-    True: ROOT / "docs" / "images" / "results-vs-expert-dark.svg",
+    False: "images/results-vs-expert.svg",
+    True: "images/results-vs-expert-dark.svg",
 }
 CAPABILITY_IMAGES = {
-    False: ROOT / "docs" / "images" / "capability-profile.svg",
-    True: ROOT / "docs" / "images" / "capability-profile-dark.svg",
+    False: "images/capability-profile.svg",
+    True: "images/capability-profile-dark.svg",
 }
 
 INTRO = """\
 # Baseline results
 
 <!-- Written by scripts/generate_baseline_table.py from
-     src/target_gym/data/protocol_results.json and baseline_returns.json.
+     src/target_gym/data/protocol_results/ and baseline_returns/ at build time.
      Do not edit by hand. -->
 
 Every environment ships two reference controllers, scored on its test
@@ -362,7 +365,7 @@ _MONO = ' font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 
 
 def _glance() -> list[str]:
-    rows = chart_rows(json.loads(PROTOCOL.read_text()))
+    rows = chart_rows(_protocol())
     return [
         "## At a glance",
         "",
@@ -382,7 +385,7 @@ def _glance() -> list[str]:
 def _room() -> list[str]:
     from target_gym.scoring import headroom, score
 
-    data = json.loads(PROTOCOL.read_text())
+    data = _protocol()
     rows = {}
     for name, r in data.items():
         pid, mpc, c = r.get("pid"), r.get("mpc"), r["ceiling"]
@@ -412,7 +415,7 @@ def _room() -> list[str]:
 
 
 def _episode() -> list[str]:
-    data = json.loads(PROTOCOL.read_text())
+    data = _protocol()
     rows, failing = {}, []
     for name, r in data.items():
         pid, mpc = r.get("pid"), r.get("mpc")
@@ -518,30 +521,29 @@ def _page() -> str:
     return "\n\n".join(s.strip("\n") for s in parts) + "\n"
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--check", action="store_true")
-    args = ap.parse_args()
+def _protocol() -> dict:
+    from target_gym.scoring import recorded
 
-    rows = chart_rows(json.loads(PROTOCOL.read_text()))
-    data = json.loads(PROTOCOL.read_text())
-    outputs = {DOC: _page(), **{p: results_svg(rows, d) for d, p in IMAGES.items()}}
-    outputs |= {p: capability_svg(data, d) for d, p in CAPABILITY_IMAGES.items()}
-    stale = [
-        p for p, new in outputs.items() if (p.read_text() if p.exists() else "") != new
-    ]
-    if not stale:
-        print("baseline results page and chart are current")
-        return 0
-    if args.check:
-        for p in stale:
-            print(f"  {p.relative_to(ROOT)} is out of date")
-        print("run scripts/generate_baseline_table.py")
-        return 1
-    for p in stale:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(outputs[p])
-        print(f"wrote {p.relative_to(ROOT)}")
+    return recorded()
+
+
+def outputs() -> dict[str, str]:
+    """Every generated file, by its path under ``docs/``."""
+    data = _protocol()
+    rows = chart_rows(data)
+    out = {PAGE: _page(), **{p: results_svg(rows, d) for d, p in IMAGES.items()}}
+    return out | {p: capability_svg(data, d) for d, p in CAPABILITY_IMAGES.items()}
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--out", type=pathlib.Path, required=True)
+    args = ap.parse_args(argv)
+    for rel, content in outputs().items():
+        path = args.out / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+        print(f"wrote {path}")
     return 0
 
 

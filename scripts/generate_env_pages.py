@@ -15,7 +15,7 @@ Everything on a page is read from the environment itself: spaces from
 ``observation_space``/``action_space``, tracked variables from
 ``obs_value_index``, rewards and termination from the docstrings of
 ``compute_reward`` and ``check_is_terminal``, arguments from the scored
-params, baseline scores from ``src/target_gym/data/baseline_returns.json``.
+params, baseline scores from ``src/target_gym/data/baseline_returns/``.
 The task paragraph and the observation meanings come from the task's
 ``### Task:`` block in its ``PHYSICS.md`` (see ``task_blocks``), which also
 supplies the one-line summaries in the table of ``docs/complexity.md``.
@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import importlib
-import json
 import pathlib
 import re
 import sys
@@ -41,7 +40,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from generate_env_reference import BLOB, physics_path  # noqa: E402
 
-from target_gym.provenance import BASELINES_PATH  # noqa: E402
+from target_gym.provenance import BASELINES_PATH, load_recorded_baselines  # noqa: E402
 from target_gym.registry import GROUPS, REGISTRY, display_name  # noqa: E402
 from target_gym.units import param_units  # noqa: E402
 
@@ -53,8 +52,8 @@ CHOOSER_END = "<!-- END generated table -->"
 # a path of its own, ``data/baseline_returns.json`` at the repository root,
 # which stopped existing when the data moved into the package. The generator
 # checked ``exists()`` and fell back to a sentence, so every page quietly lost
-# its numbers and ``--check`` still passed. It reads the file unconditionally
-# now: if the file moves again, this script fails instead of degrading.
+# its numbers and ``--check`` still passed. It refuses an empty record now: if
+# the data moves again, this script fails instead of degrading.
 
 # Where each environment's gif lives, relative to the repository root. Only
 # environments with a rendered clip get a picture; the rest simply omit it.
@@ -545,7 +544,9 @@ def _chooser(rows: dict[str, str]) -> str:
 
 def build() -> dict[pathlib.Path, str]:
     """Every generated file and its content: one page per task, and the chooser."""
-    recorded = json.loads(BASELINES_PATH.read_text())
+    recorded = load_recorded_baselines()
+    if not recorded:
+        raise SystemExit(f"no recorded baselines in {BASELINES_PATH}")
     files, rows = {}, {}
     for name, spec in REGISTRY.items():
         files[OUT_DIR / f"{name}.md"], rows[name] = page(name, spec, recorded)

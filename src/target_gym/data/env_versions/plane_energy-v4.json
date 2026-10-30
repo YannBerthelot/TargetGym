@@ -1,0 +1,5 @@
+{
+  "fingerprint": "f97b1d57c2c1ae35",
+  "note": "plane_energy-v4 (1200 to 1600 steps, eight 200-step treads) and plane3d_heading-v4 (200 to 300 steps) are lengthened so the scored episode captures the expert reaching its hold (tests/test_episode_length.py). plane-v2, plane_sine-v2 and plane3d_circle, racetrack and figure8 are re-stamped in place, behaviour-preserving: their package's env_jax.py is hashed whole, and only those two tasks' default_params changed.",
+  "stamped": "2026-10-28T09:15:45+00:00"
+}

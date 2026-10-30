@@ -165,7 +165,7 @@ judged against.
 burn-in of three cost-bearing time constants and then a hold window, under the
 shipped reference and disturbances. It records the long-run mean |error| per
 output, the consumption per step and the settling time after a target change
-(`src/target_gym/data/hold_measurements.json`). Three kinds of floor come out
+(`src/target_gym/data/hold_measurements/`). Three kinds of floor come out
 of it:
 
 - **Certified or closed-form**, where the hold problem has a computable

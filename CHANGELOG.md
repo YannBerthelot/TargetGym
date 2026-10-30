@@ -120,6 +120,23 @@ than by commit.
 
 ### Changed
 
+- **One record file per task.** The recorded returns, protocol rows, hold
+  measurements and version stamps moved from one shared file per kind to
+  `src/target_gym/data/<kind>/<task>.json` (`env_versions/<task>-vN.json`),
+  read and written through the new `target_gym.records`. Re-recording a task
+  now changes that task's files only, so two recording pull requests no
+  longer conflict. Each new recording notes the CPU it ran on, and the CI
+  recorder keeps a row a re-record reproduces within 1 %
+  (`records.same`): runners with different CPUs moved plane3d_racetrack's
+  PID hold by 0.1 % with no code change. `provenance.load_recorded_baselines`
+  and `scoring.recorded` return what they did; `provenance.BASELINES_PATH`
+  is now the directory. `pid_gains.json` stays one file for now: its loader
+  is hashed into every baseline fingerprint. No recorded number changed.
+- **The results page and its charts are built with the docs.** The docs
+  build writes `baseline-results.md`, the README chart and the capability
+  radars from the records (`docs/hooks.py`), so they are no longer committed
+  or drift-checked. The README links the chart on the published site, so it
+  shows on PyPI too. The test jobs wait for the `records` job.
 - **Every scored episode captures the expert reaching its hold.** The
   expert is the reference a policy is scored against, so its scored hold has
   to be its steady state. `tests/test_episode_length.py` holds every task to

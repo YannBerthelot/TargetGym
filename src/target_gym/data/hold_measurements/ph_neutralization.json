@@ -1,0 +1,76 @@
+{
+  "burn_in": 108,
+  "mpc": {
+    "c_hold": 16.23934712621901,
+    "cycles_per_episode": 1,
+    "e_hold": [
+      0.0021642260253429413
+    ],
+    "e_hold_first_half": [
+      0.002315582474693656
+    ],
+    "e_hold_min": [
+      0.001295083318836987
+    ],
+    "e_hold_per_seed": [
+      [
+        0.0020922820549458265
+      ],
+      [
+        0.003105313051491976
+      ],
+      [
+        0.001295083318836987
+      ]
+    ],
+    "e_hold_rms": [
+      0.0029938064981251955
+    ],
+    "e_hold_second_half": [
+      0.0020128695759922266
+    ],
+    "hold_steps_scored": 900,
+    "seconds": 7.9,
+    "settle": 3.0,
+    "trips": 0
+  },
+  "pid": {
+    "c_hold": 16.238140257729423,
+    "cycles_per_episode": 1,
+    "e_hold": [
+      0.00719683850184083
+    ],
+    "e_hold_first_half": [
+      0.007584340404719114
+    ],
+    "e_hold_min": [
+      0.004937607329338789
+    ],
+    "e_hold_per_seed": [
+      [
+        0.004937607329338789
+      ],
+      [
+        0.010849288664758205
+      ],
+      [
+        0.0058036199770867825
+      ]
+    ],
+    "e_hold_rms": [
+      0.014637264423072338
+    ],
+    "e_hold_second_half": [
+      0.006809336598962545
+    ],
+    "hold_steps_scored": 900,
+    "seconds": 0.7,
+    "settle": 12.0,
+    "trips": 0
+  },
+  "seeds": 3,
+  "step_seconds": 5.0,
+  "steps": 408,
+  "tau_cost_source": "residence ~3 min at 5 s steps",
+  "tau_cost_steps": 36
+}

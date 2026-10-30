@@ -1,0 +1,70 @@
+{
+  "burn_in": 210,
+  "mpc": {
+    "c_hold": 8.254594703956887,
+    "cycles_per_episode": 1,
+    "e_hold": [
+      0.5303195714950562
+    ],
+    "e_hold_first_half": [
+      0.5584310293197632
+    ],
+    "e_hold_min": [
+      0.5284975171089172
+    ],
+    "e_hold_per_seed": [
+      [
+        0.5284975171089172
+      ],
+      [
+        0.5321415662765503
+      ]
+    ],
+    "e_hold_rms": [
+      0.6612274050712585
+    ],
+    "e_hold_second_half": [
+      0.5022081136703491
+    ],
+    "hold_steps_scored": 540,
+    "seconds": 449.4,
+    "settle": 9.5,
+    "trips": 0
+  },
+  "pid": {
+    "c_hold": 1.2052435980902778,
+    "cycles_per_episode": 1,
+    "e_hold": [
+      1.8011375665664673
+    ],
+    "e_hold_first_half": [
+      1.890049934387207
+    ],
+    "e_hold_min": [
+      1.7207049131393433
+    ],
+    "e_hold_per_seed": [
+      [
+        1.8815701007843018
+      ],
+      [
+        1.7207049131393433
+      ]
+    ],
+    "e_hold_rms": [
+      2.262157440185547
+    ],
+    "e_hold_second_half": [
+      1.712225079536438
+    ],
+    "hold_steps_scored": 540,
+    "seconds": 1.4,
+    "settle": 80.5,
+    "trips": 0
+  },
+  "seeds": 2,
+  "step_seconds": 1.0,
+  "steps": 480,
+  "tau_cost_source": "phugoid ~1 min",
+  "tau_cost_steps": 70
+}

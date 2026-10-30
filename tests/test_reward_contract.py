@@ -20,6 +20,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from target_gym import records
 from target_gym import reward as R
 from target_gym.base import restart_key
 from target_gym.provenance import BASELINES_PATH
@@ -232,9 +233,6 @@ def test_reward_parameters_are_documented(spec):
     ), f"{spec.name}: PHYSICS.md does not say how the floor was obtained"
 
 
-PROTOCOL_PATH = SRC / "data" / "protocol_results.json"
-
-
 def _recorded_protocol_row(spec) -> dict:
     """The row ``scripts/evaluate_baselines.py`` recorded for ``spec``, refused
     if its fingerprint no longer matches the tree (the same guard, and the same
@@ -243,10 +241,9 @@ def _recorded_protocol_row(spec) -> dict:
 
     rerun = (
         f"Re-run `uv run python scripts/evaluate_baselines.py --envs {spec.name}` "
-        f"and commit src/target_gym/data/protocol_results.json."
+        f"and commit src/target_gym/data/protocol_results/{spec.name}.json."
     )
-    rows = json.loads(PROTOCOL_PATH.read_text()) if PROTOCOL_PATH.exists() else {}
-    row = rows.get(spec.name)
+    row = records.load("protocol_results").get(spec.name)
     assert row is not None, f"{spec.name}: no recorded protocol row. {rerun}"
     current = baseline_fingerprint(spec)
     assert row.get("fingerprint") == current, (

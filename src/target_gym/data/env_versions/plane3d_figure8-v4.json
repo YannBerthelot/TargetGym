@@ -1,0 +1,5 @@
+{
+  "fingerprint": "bd8e7a6efa5d87d6",
+  "note": "The observation gains the distance to the curve and a constant-zero target (19 -> 21 entries, 22 -> 24 with observe_wind), declared as the tracked output in place of the altitude, which the path swings 200 m about. Dynamics, reward and the first 19 entries unchanged.",
+  "stamped": "2026-10-29T12:57:45+00:00"
+}

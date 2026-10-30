@@ -4,26 +4,24 @@ The CI recorder (``.github/workflows/record-baselines.yml``) runs one job per
 environment and uses this to plan and to collect::
 
     uv run python scripts/stale_records.py list [--all]     # JSON list to record
-    uv run python scripts/stale_records.py extract ENV DIR  # ENV's baseline row
+    uv run python scripts/stale_records.py extract ENV DIR  # copy ENV's rows to DIR
     uv run python scripts/stale_records.py merge DIR...     # fold rows back in
 
-``merge`` writes only rows that changed beyond their timings, so a weekly run
-that reproduces every number leaves the data files untouched and commits
-nothing.
+``merge`` writes only the tasks whose rows moved beyond the tolerance
+(``target_gym.records.same``), and only their files, so a weekly run that
+reproduces every number, on whichever CPU the runner has, commits nothing.
 """
 
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import json
 import pathlib
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-DATA = ROOT / "src" / "target_gym" / "data"
-BASELINES = DATA / "baseline_returns.json"
-PROTOCOL = DATA / "protocol_results.json"
-TIMING = {"seconds", "generated"}
+from target_gym import records
+
+#: The kinds of record a re-record writes.
+KINDS = ("baseline_returns", "protocol_results")
 
 
 def stale(baselines: dict, protocol: dict, current: dict) -> list[str]:
@@ -38,29 +36,16 @@ def stale(baselines: dict, protocol: dict, current: dict) -> list[str]:
     )
 
 
-def _content(row):
-    if isinstance(row, dict):
-        return {k: _content(v) for k, v in row.items() if k not in TIMING}
-    return row
-
-
 def merge(rows: dict, fragments: dict) -> tuple[dict, list[str]]:
-    """``rows`` with every fragment that differs from it beyond timing."""
+    """``rows`` with every fragment that differs from it beyond the tolerance
+    and the recording's own metadata (``records.same``)."""
     changed = sorted(
-        n for n, row in fragments.items() if _content(row) != _content(rows.get(n))
+        n for n, row in fragments.items() if not records.same(rows.get(n), row)
     )
     return {**rows, **{n: fragments[n] for n in changed}}, changed
 
 
-def _read(path: pathlib.Path) -> dict:
-    return json.loads(path.read_text()) if path.exists() else {}
-
-
-def _write(path: pathlib.Path, rows: dict) -> None:
-    path.write_text(json.dumps(rows, indent=2, sort_keys=True) + "\n")
-
-
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list").add_argument("--all", action="store_true")
@@ -68,7 +53,7 @@ def main() -> int:
     ex.add_argument("env")
     ex.add_argument("dir", type=pathlib.Path)
     sub.add_parser("merge").add_argument("dirs", nargs="+", type=pathlib.Path)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     if args.cmd == "list":
         from target_gym.provenance import baseline_fingerprint
@@ -76,7 +61,7 @@ def main() -> int:
 
         specs = {n: s for n, s in REGISTRY.items() if s.has_pid}
         current = {n: baseline_fingerprint(s) for n, s in specs.items()}
-        baselines = _read(BASELINES)
+        baselines = records.load("baseline_returns")
         # The recorder keeps no baseline row for a plant without an MPC.
         baselines.update(
             {
@@ -86,26 +71,29 @@ def main() -> int:
             }
         )
         names = (
-            sorted(current) if args.all else stale(baselines, _read(PROTOCOL), current)
+            sorted(current)
+            if args.all
+            else stale(baselines, records.load("protocol_results"), current)
         )
         print(json.dumps(names))
     elif args.cmd == "extract":
-        args.dir.mkdir(parents=True, exist_ok=True)
-        _write(args.dir / "baseline.json", {args.env: _read(BASELINES)[args.env]})
+        for kind in KINDS:
+            source = records.path(kind, args.env)
+            if source.exists():
+                target = args.dir / kind / source.name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(source.read_bytes())
     else:
         moved = set()
-        for path, name in ((BASELINES, "baseline.json"), (PROTOCOL, "protocol.json")):
-            fragments = {}
-            for d in args.dirs:
-                fragments.update(_read(d / name))
-            rows, changed = merge(_read(path), fragments)
-            if changed:
-                if "_meta" in rows:
-                    stamp = _dt.datetime.now(_dt.timezone.utc).isoformat(
-                        timespec="seconds"
-                    )
-                    rows["_meta"] = {**rows["_meta"], "generated": stamp}
-                _write(path, rows)
+        for kind in KINDS:
+            fragments = {
+                p.stem: json.loads(p.read_text())
+                for d in args.dirs
+                for p in sorted((d / kind).glob("*.json"))
+            }
+            _, changed = merge(records.load(kind), fragments)
+            for name in changed:
+                records.write(kind, name, fragments[name])
             moved.update(changed)
         print(" ".join(sorted(moved)))
     return 0

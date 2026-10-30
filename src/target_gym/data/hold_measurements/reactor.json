@@ -1,0 +1,76 @@
+{
+  "burn_in": 2001,
+  "mpc": {
+    "c_hold": 0.0,
+    "cycles_per_episode": 1,
+    "e_hold": [
+      0.006906307768076658
+    ],
+    "e_hold_first_half": [
+      0.007408371195197105
+    ],
+    "e_hold_min": [
+      0.006307762116193771
+    ],
+    "e_hold_per_seed": [
+      [
+        0.006307762116193771
+      ],
+      [
+        0.007768017239868641
+      ],
+      [
+        0.006644007284194231
+      ]
+    ],
+    "e_hold_rms": [
+      0.009291105903685093
+    ],
+    "e_hold_second_half": [
+      0.006404820363968611
+    ],
+    "hold_steps_scored": 5998,
+    "seconds": 434.8,
+    "settle": 0.5,
+    "trips": 0
+  },
+  "pid": {
+    "c_hold": 0.0,
+    "cycles_per_episode": 1,
+    "e_hold": [
+      0.01747366599738598
+    ],
+    "e_hold_first_half": [
+      0.01803525723516941
+    ],
+    "e_hold_min": [
+      0.01693047769367695
+    ],
+    "e_hold_per_seed": [
+      [
+        0.01693047769367695
+      ],
+      [
+        0.017421331256628036
+      ],
+      [
+        0.018069185316562653
+      ]
+    ],
+    "e_hold_rms": [
+      0.021310720592737198
+    ],
+    "e_hold_second_half": [
+      0.016912071034312248
+    ],
+    "hold_steps_scored": 6000,
+    "seconds": 3.1,
+    "settle": 0.0,
+    "trips": 0
+  },
+  "seeds": 3,
+  "step_seconds": 10.0,
+  "steps": 4001,
+  "tau_cost_source": "OU demand 1/theta = 6667 s at 10 s steps (xenon constrains reach only)",
+  "tau_cost_steps": 667
+}

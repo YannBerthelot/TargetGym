@@ -1,7 +1,7 @@
 """Measure what the shipped controllers hold, plant by plant.
 
 Run with ``uv run python scripts/measure_hold.py [--envs ...] [--seeds N]``.
-Writes ``src/target_gym/data/hold_measurements.json``, one row per
+Writes ``src/target_gym/data/hold_measurements/<task>.json``, one row per
 (environment, controller): the long-run mean tracking error after a burn-in, the
 running-cost quantity consumed per step while holding, and the time the
 controller takes to settle after a target change. These are the inputs to the
@@ -40,7 +40,6 @@ one changes the task.
 from __future__ import annotations
 
 import argparse
-import json
 import pathlib
 import sys
 import time
@@ -55,6 +54,7 @@ import numpy as np  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from target_gym import records  # noqa: E402
 from target_gym.eval import anticipations  # noqa: E402
 from target_gym.registry import REGISTRY, control_step_seconds  # noqa: E402
 from target_gym.runners.runners import (  # noqa: E402
@@ -62,9 +62,6 @@ from target_gym.runners.runners import (  # noqa: E402
     _wants_state,
     baseline_policy,
 )
-
-OUT = ROOT / "src" / "target_gym" / "data" / "hold_measurements.json"
-
 
 # ---------------------------------------------------------------------------
 # Per-plant accessors. ``errors`` returns the tracked errors the reward scores
@@ -503,7 +500,6 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--envs", nargs="*", default=None)
     ap.add_argument("--seeds", type=int, default=3)
-    ap.add_argument("--out", default=str(OUT), help="merge rows into this JSON")
     ap.add_argument(
         "--controllers",
         nargs="+",
@@ -513,15 +509,13 @@ def main() -> int:
     )
     args = ap.parse_args()
     names = args.envs or list(PLANTS)
-    out_path = pathlib.Path(args.out)
-    out = json.loads(out_path.read_text()) if out_path.exists() else {}
     for name in names:
         seeds = args.seeds
         if name.startswith(("plane", "patrol", "formation")):
             seeds = min(seeds, 2)  # deterministic plants, expensive planners
-        out[name] = {**out.get(name, {}), **measure(name, seeds, args.controllers)}
-        out_path.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
-    print(f"wrote {out_path}")
+        row = records.load_row("hold_measurements", name)
+        row = records.stamped({**row, **measure(name, seeds, args.controllers)})
+        print(f"wrote {records.write('hold_measurements', name, row)}")
     return 0
 
 

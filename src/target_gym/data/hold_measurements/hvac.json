@@ -1,0 +1,76 @@
+{
+  "burn_in": 516,
+  "mpc": {
+    "c_hold": 70.21881527920053,
+    "cycles_per_episode": 26,
+    "e_hold": [
+      1.5424556732177734
+    ],
+    "e_hold_first_half": [
+      1.4963726997375488
+    ],
+    "e_hold_min": [
+      0.9847899079322815
+    ],
+    "e_hold_per_seed": [
+      [
+        1.9713646173477173
+      ],
+      [
+        0.9847899079322815
+      ],
+      [
+        1.5034189224243164
+      ]
+    ],
+    "e_hold_rms": [
+      1.9263415336608887
+    ],
+    "e_hold_second_half": [
+      1.476676344871521
+    ],
+    "hold_steps_scored": 1830,
+    "seconds": 102.2,
+    "settle": 3.5,
+    "trips": 0
+  },
+  "pid": {
+    "c_hold": 421.74057345515155,
+    "cycles_per_episode": 26,
+    "e_hold": [
+      2.2371785640716553
+    ],
+    "e_hold_first_half": [
+      2.3775103092193604
+    ],
+    "e_hold_min": [
+      1.9081956148147583
+    ],
+    "e_hold_per_seed": [
+      [
+        2.66046404838562
+      ],
+      [
+        1.9081956148147583
+      ],
+      [
+        2.1428751945495605
+      ]
+    ],
+    "e_hold_rms": [
+      2.764805555343628
+    ],
+    "e_hold_second_half": [
+      2.096846342086792
+    ],
+    "hold_steps_scored": 2160,
+    "seconds": 1.4,
+    "settle": 0.0,
+    "trips": 0
+  },
+  "seeds": 3,
+  "step_seconds": 900.0,
+  "steps": 1236,
+  "tau_cost_source": "thermal mass 43 h at 15 min steps",
+  "tau_cost_steps": 172
+}

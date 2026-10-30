@@ -862,26 +862,17 @@ seed, so the 60-step horizon is 1.33 times that (measured). That audit times
 only the approach from the reset, so it never sees a 20 to 28 kPa move,
 which the horizon row above sizes.
 
-**Recorded baselines** (`scripts/record_baselines.py --envs
-compressor_surge`, 10 seeds, measured). The pair's mean return is -2.148e6
-and the NMPC's -1.937e5, so the NMPC costs 161 per step against the pair's
-1790 and leads on all 10 seeds. Neither trips. The NMPC made 12000 solver
-calls at 7.1 IPOPT iterations on average; one was stopped by an IPOPT cap
-and applied, and no other solve failed.
-
-**Protocol row** (`scripts/evaluate_baselines.py --envs compressor_surge`, 3
-seeds, measured, recorded in `src/target_gym/data/protocol_results.json`).
-
-| controller | gain (tracking / running) | hold | reach cost per change | transient cost per change | failure rate |
-|---|---|---|---|---|---|
-| pair (PID) | 1781 (1781 / 0.388) | 9.41 | 8.93e5 | 8.94e5 | 0 |
-| NMPC | 60.8 (60.4 / 0.393) | 0.214 | 1.01e5 | 1.01e5 | 0 |
-
-The gain is the mean cost over every step. The NMPC's is 60.8 against the
-pair's 1781.
-The NMPC's hold cost, 0.214, is almost all running cost (0.212 running,
-0.0018 tracking), and the pair's, 9.41, almost all tracking (9.05). The
-reach cost is a controller's cost above its own hold level from a change
+**Recorded results.** Both controllers' returns over 10 seeds
+(`scripts/record_baselines.py`) are on the
+[environment page](../../../docs/environments/compressor_surge.md#baselines), and their
+protocol row over 3 seeds (`scripts/evaluate_baselines.py`: gain, hold, reach
+and transient cost per change, failure rate) is on the
+[results page](https://yannberthelot.github.io/TargetGym/baseline-results/). Both are generated from the records in
+`src/target_gym/data/`, so neither is copied here to go stale. The NMPC's
+solver statistics are in its row of
+`src/target_gym/data/baseline_returns/compressor_surge.json`. The gain is the mean
+cost over every step.
+The reach cost is a controller's cost above its own hold level from a change
 until it settles, and the transient cost is the cost summed over the
 change's transient (`target_gym.eval`).
 

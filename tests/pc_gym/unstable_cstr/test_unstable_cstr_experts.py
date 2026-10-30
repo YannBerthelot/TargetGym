@@ -14,7 +14,6 @@ recorded hold sets.
 import copy
 import functools
 import json
-import pathlib
 
 import casadi
 import jax
@@ -25,7 +24,7 @@ from jax.experimental import enable_x64
 from scipy.optimize import brentq
 
 import target_gym.experts.pid as pid_mod
-from target_gym import registry
+from target_gym import records, registry
 from target_gym.experts.mpc import plan_params
 from target_gym.pc_gym.unstable_cstr.env import (
     N_BLOCKS,
@@ -95,8 +94,6 @@ PID_MIN_PNR_MARGIN_K = 0.25
 #: ours), for float32 rounding and a small overshoot of the setpoint ceiling,
 #: which sits ``sp_line_margin`` below the line at the target level.
 PID_LINE_TOL_K = 0.1
-#: The recorded measurements test_floor_is_the_recorded_mpc_hold reads.
-DATA = pathlib.Path(registry.__file__).parent / "data"
 
 
 @pytest.fixture(scope="module")
@@ -842,19 +839,19 @@ def test_floor_is_the_recorded_mpc_hold():
     reference. Each equality holds to 1 %."""
     spec = registry.get("unstable_cstr")
     p = spec.make_test_params()
-    holds = json.loads((DATA / "hold_measurements.json").read_text())
+    holds = records.load("hold_measurements")
     if "unstable_cstr" not in holds:
         pytest.fail(
             "no recorded MPC hold for unstable_cstr. Run `uv run python "
             "scripts/measure_hold.py --envs unstable_cstr` and commit "
-            "src/target_gym/data/hold_measurements.json."
+            "src/target_gym/data/hold_measurements/unstable_cstr.json."
         )
-    rows = json.loads((DATA / "protocol_results.json").read_text())
+    rows = records.load("protocol_results")
     if "unstable_cstr" not in rows:
         pytest.fail(
             "no recorded protocol row for unstable_cstr. Run `uv run python "
             "scripts/evaluate_baselines.py --envs unstable_cstr` and commit "
-            "src/target_gym/data/protocol_results.json."
+            "src/target_gym/data/protocol_results/unstable_cstr.json."
         )
 
     per_seed = holds["unstable_cstr"]["mpc"]["e_hold_per_seed"]

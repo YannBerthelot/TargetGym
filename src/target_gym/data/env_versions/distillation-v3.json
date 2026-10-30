@@ -1,0 +1,5 @@
+{
+  "fingerprint": "a42d284703d3f1e6",
+  "note": "the observation gains the stage-15 temperature, on column A's linear boiling-point curve (7 entries, from 6). Then, behaviour-preserving: xB declared as a second tracked output (obs_value_index (0, 1), obs_target_index (4, 5)) for the time-in-band KPI; dynamics, reward and observation unchanged.",
+  "stamped": "2026-10-29T12:57:45+00:00"
+}

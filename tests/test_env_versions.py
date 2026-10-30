@@ -6,7 +6,7 @@ published results to keep meaningful.
 
 What the version buys a reader is the ability to cite a number. `plane-v1` has
 to mean one thing forever, so the interesting test is not that the name exists
-but that the *thing behind it* has not moved. `src/target_gym/data/env_versions.json` records
+but that the *thing behind it* has not moved. `src/target_gym/data/env_versions/` records
 the fingerprint each version was stamped at, and this fails when the tree
 disagrees with it.
 
@@ -16,22 +16,13 @@ change what the environment is, and should not force a version bump.
 
 from __future__ import annotations
 
-import json
-import pathlib
-
 import pytest
 
+from target_gym import records
 from target_gym.provenance import environment_fingerprint
 from target_gym.registry import REGISTRY
 
-PATH = (
-    pathlib.Path(__file__).resolve().parent.parent
-    / "src"
-    / "target_gym"
-    / "data"
-    / "env_versions.json"
-)
-STORED = json.loads(PATH.read_text()) if PATH.exists() else {}
+STORED = records.load("env_versions")
 
 _INSTRUCTION = (
     "Decide which of these it is, then run scripts/stamp_env_versions.py:\n"

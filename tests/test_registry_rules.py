@@ -33,7 +33,7 @@ import re
 
 import pytest
 
-from target_gym import provenance, registry
+from target_gym import provenance, records, registry
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PINNED_SPECS_PATH = ROOT / "tests" / "data" / "pinned_specs.json"
@@ -190,7 +190,7 @@ def test_a_new_task_ships_as_v2_with_its_own_v1_reward():
     ``compute_reward_v1`` itself, since TargetFoundation looks it up by that
     name. That ``compute_reward`` honours ``reward_version`` is already checked
     for every spec by test_reward_contract.py."""
-    stamps = json.loads((SRC / "data" / "env_versions.json").read_text())
+    stamps = records.load("env_versions")
     problems = []
     for s in _added():
         if f"{s.name}-v1" in stamps:
@@ -454,14 +454,14 @@ def test_every_mpc_task_and_every_new_task_has_a_hold_row():
     hold_measurements.json, without a word, and the protocol would then score
     the approach as if it were the hold. Every task with an MPC has a row,
     and so does every new task."""
-    rows = json.loads((SRC / "data" / "hold_measurements.json").read_text())
+    rows = records.load("hold_measurements")
     missing = [
         s.name
         for s in registry.all_specs()
         if (s.has_mpc or s.name not in PINNED_21) and s.name not in rows
     ]
     assert not missing, (
-        f"no row in src/target_gym/data/hold_measurements.json for {missing}. "
+        f"no row in src/target_gym/data/hold_measurements/ for {missing}. "
         "Run scripts/measure_hold.py --envs with those names."
     )
 
@@ -622,19 +622,16 @@ def test_the_baseline_fingerprint_covers_the_burn_in(tmp_path, monkeypatch):
     on that value, so a change to it stales the record. A change the cap
     absorbs does not, and neither does the rest of the hold row, which is a
     measurement."""
-    from target_gym import eval as E
-
     spec = registry.REGISTRY["cstr"]
     params = spec.make_test_params()
     half = int(params.max_steps_in_episode) // 2
     before = provenance.baseline_fingerprint(spec)
-    rows = json.loads(E._DATA.read_text())
+    rows = records.load("hold_measurements")
     assert rows["cstr"]["burn_in"] < half  # so a bump is not absorbed
-    path = tmp_path / "hold_measurements.json"
-    monkeypatch.setattr(E, "_DATA", path)
+    monkeypatch.setattr(records, "DATA", tmp_path)
 
     def fingerprint_with(**changes):
-        path.write_text(json.dumps({**rows, "cstr": {**rows["cstr"], **changes}}))
+        records.write("hold_measurements", "cstr", {**rows["cstr"], **changes})
         return provenance.baseline_fingerprint(spec)
 
     assert fingerprint_with(seeds=rows["cstr"]["seeds"] + 1) == before

@@ -27,6 +27,7 @@ import pytest
 from jax.experimental import enable_x64
 
 import target_gym.experts.pid as pid_mod
+from target_gym import records
 from target_gym.compressor_surge.env import (
     KPA,
     CompressorSurgeParams,
@@ -93,8 +94,6 @@ REFUSED = {
     "anti-surge (1, 1)": {"kp_surge": 1.0, "ki_surge": 1.0},
     "speed (0.3, 0.3)": {"kp_speed": 0.3, "ki_speed": 0.3},
 }
-#: Where scripts/measure_hold.py and scripts/evaluate_baselines.py record.
-DATA = pathlib.Path(pid_mod.__file__).resolve().parents[1] / "data"
 
 
 @pytest.fixture(scope="module")
@@ -1012,20 +1011,20 @@ def test_floor_is_the_recorded_mpc_hold(params):
     power at ``c_hold`` costs nothing, and ``c_hold`` is the NMPC's own. The
     NMPC's hold tracking cost in the recorded protocol row is at least 0.98
     of that reference. Each equality holds to 1 %."""
-    holds = json.loads((DATA / "hold_measurements.json").read_text())
+    holds = records.load("hold_measurements")
     if "compressor_surge" not in holds:
         pytest.fail(
             "no recorded NMPC hold for compressor_surge. Run `uv run python "
             "scripts/measure_hold.py --envs compressor_surge`, set e_floor, "
             "c_hold, rho_floor_tracking and rho_floor from it, and commit "
-            "src/target_gym/data/hold_measurements.json."
+            "src/target_gym/data/hold_measurements/compressor_surge.json."
         )
-    rows = json.loads((DATA / "protocol_results.json").read_text())
+    rows = records.load("protocol_results")
     if "compressor_surge" not in rows:
         pytest.fail(
             "no recorded protocol row for compressor_surge. Run `uv run python "
             "scripts/evaluate_baselines.py --envs compressor_surge` and commit "
-            "src/target_gym/data/protocol_results.json."
+            "src/target_gym/data/protocol_results/compressor_surge.json."
         )
 
     mpc = holds["compressor_surge"]["mpc"]

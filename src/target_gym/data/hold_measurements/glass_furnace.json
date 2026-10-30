@@ -1,0 +1,76 @@
+{
+  "burn_in": 10800,
+  "mpc": {
+    "c_hold": 0.5898956350724196,
+    "cycles_per_episode": 5,
+    "e_hold": [
+      0.0755617618560791
+    ],
+    "e_hold_first_half": [
+      0.08642711490392685
+    ],
+    "e_hold_min": [
+      0.061365868896245956
+    ],
+    "e_hold_per_seed": [
+      [
+        0.061365868896245956
+      ],
+      [
+        0.07712973654270172
+      ],
+      [
+        0.08822619915008545
+      ]
+    ],
+    "e_hold_rms": [
+      0.13227179646492004
+    ],
+    "e_hold_second_half": [
+      0.06472078710794449
+    ],
+    "hold_steps_scored": 10743,
+    "seconds": 32121.1,
+    "settle": 18.0,
+    "trips": 0
+  },
+  "pid": {
+    "c_hold": 0.5901441872078419,
+    "cycles_per_episode": 5,
+    "e_hold": [
+      0.4511861801147461
+    ],
+    "e_hold_first_half": [
+      0.4634191691875458
+    ],
+    "e_hold_min": [
+      0.42752376198768616
+    ],
+    "e_hold_per_seed": [
+      [
+        0.47006919980049133
+      ],
+      [
+        0.42752376198768616
+      ],
+      [
+        0.4559931457042694
+      ]
+    ],
+    "e_hold_rms": [
+      0.5470879077911377
+    ],
+    "e_hold_second_half": [
+      0.43897685408592224
+    ],
+    "hold_steps_scored": 10776,
+    "seconds": 11.2,
+    "settle": 7.0,
+    "trips": 0
+  },
+  "seeds": 3,
+  "step_seconds": 30.0,
+  "steps": 14400,
+  "tau_cost_source": "T_melt, T_work ~30 h at 30 s steps",
+  "tau_cost_steps": 3600
+}

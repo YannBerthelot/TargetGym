@@ -52,7 +52,7 @@ sixteen controllers out on five seeds: about forty minutes of CPU, and
 and not within one, that single test set roughly 70% of the large job's
 wall-clock floor and came close to its 30-minute timeout on CI's slower cores.
 
-It is now recorded by hand into `src/target_gym/data/baseline_returns.json` and asserted from
+It is now recorded by hand into `src/target_gym/data/baseline_returns/` and asserted from
 there, guarded by a fingerprint that refuses a record whose code has moved. See
 [Baselines](baselines.md) for the design and the reasoning behind fingerprinting
 source rather than behaviour.

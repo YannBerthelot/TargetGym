@@ -28,21 +28,19 @@ How a cycle is split. A target cycle runs from one target change to the next
    the next target, not to the hold (``anticipation``, ``anticipations``).
 
 ``burn_in`` is per plant, three cost-bearing time constants, from
-``src/target_gym/data/hold_measurements.json`` (``scripts/measure_hold.py``,
+``src/target_gym/data/hold_measurements/`` (``scripts/measure_hold.py``,
 which uses the same anticipation rule on its squared errors).
 """
 
 from __future__ import annotations
 
-import json
 import math
-import pathlib
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
 import numpy as np
 
-_DATA = pathlib.Path(__file__).resolve().parent / "data" / "hold_measurements.json"
+from target_gym import records
 
 # Absolute slack on "within twice the level", as the settle rule has always had.
 _TOL = 1e-12
@@ -441,8 +439,7 @@ def evaluate(
 
 def hold_settings(name: str) -> dict:
     """``burn_in`` for a plant, from the measurement file."""
-    rows = json.loads(_DATA.read_text()) if _DATA.exists() else {}
-    row = rows.get(name)
+    row = records.load_row("hold_measurements", name)
     return {"burn_in": int(row["burn_in"]) if row else 0}
 
 
@@ -451,8 +448,7 @@ def fixed_settle(name: str) -> int:
     the shipped controllers' measured settles (``scripts/measure_hold.py``),
     rounded up. Fixed per plant, so a hold is the same window whoever flies
     it."""
-    rows = json.loads(_DATA.read_text()) if _DATA.exists() else {}
-    row = rows.get(name, {})
+    row = records.load_row("hold_measurements", name)
     measured = [row[k]["settle"] for k in ("pid", "mpc") if k in row]
     return int(math.ceil(max(measured, default=0)))
 

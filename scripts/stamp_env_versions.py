@@ -3,7 +3,7 @@
 An environment's version is a promise: a number published against `plane-v1`
 should keep meaning what it meant. That promise is only worth something if
 changing the environment without bumping the version is *caught*, which is what
-`src/target_gym/data/env_versions.json` and `tests/test_env_versions.py` are for.
+`src/target_gym/data/env_versions/` and `tests/test_env_versions.py` are for.
 
 The stamp is `provenance.environment_fingerprint`, which covers the
 environment's own modules, the shared physics and the parameter values, but not
@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
-import json
 import pathlib
 import sys
 import warnings
@@ -41,10 +40,9 @@ warnings.filterwarnings("ignore")
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from target_gym import records  # noqa: E402
 from target_gym.provenance import environment_fingerprint  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
-
-PATH = ROOT / "src" / "target_gym" / "data" / "env_versions.json"
 
 
 def current() -> dict[str, str]:
@@ -54,9 +52,8 @@ def current() -> dict[str, str]:
 
 
 def load() -> dict:
-    if not PATH.exists():
-        return {}
-    return json.loads(PATH.read_text())
+    """Every stamp, ``{"<task>-vN": entry}``."""
+    return records.load("env_versions")
 
 
 def main() -> int:
@@ -84,7 +81,6 @@ def main() -> int:
         print(f"{len(now)} environment versions are current")
         return 0
 
-    out = dict(stored)
     stamped = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
     for name, fp in now.items():
         previous = stored.get(name, {})
@@ -95,12 +91,8 @@ def main() -> int:
             entry["note"] = args.note
         elif previous:
             entry["note"] = "re-stamped without a note"
-        out[name] = entry
-        print(f"  stamped {name}")
-
-    PATH.parent.mkdir(parents=True, exist_ok=True)
-    PATH.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
-    print(f"wrote {PATH.relative_to(ROOT)} ({len(out)} versions)")
+        path = records.write("env_versions", name, entry)
+        print(f"  stamped {name} in {path.relative_to(ROOT)}")
     return 0
 
 
