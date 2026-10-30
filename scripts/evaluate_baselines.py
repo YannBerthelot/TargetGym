@@ -3,7 +3,7 @@
 Run with ``uv run python scripts/evaluate_baselines.py [--envs ...] [--seeds N]``.
 For every plant with a PID (and an MPC where one exists) it runs
 ``target_gym.eval.evaluate_controller`` on the test episode and writes
-``src/target_gym/data/protocol_results.json``: the long-run cost after burn-in
+``src/target_gym/data/protocol_results/<task>.json``: the long-run cost after burn-in
 split into tracking and running cost, the reach cost per target change, the
 failure rate, with each plant's fixed settle and its ceiling
 (``target_gym.scoring``). ``--table`` prints the room map from the file without
@@ -25,7 +25,6 @@ floor check.
 from __future__ import annotations
 
 import argparse
-import json
 import pathlib
 import sys
 import time
@@ -36,12 +35,11 @@ warnings.filterwarnings("ignore")
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from target_gym import records  # noqa: E402
 from target_gym.eval import evaluate_controller, fixed_settle  # noqa: E402
 from target_gym.provenance import baseline_fingerprint  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 from target_gym.scoring import ceiling, headroom, score  # noqa: E402
-
-OUT = ROOT / "src" / "target_gym" / "data" / "protocol_results.json"
 
 
 def _fmt(x):
@@ -112,10 +110,8 @@ def main() -> int:
     ap.add_argument(
         "--table", action="store_true", help="print the room map from the file"
     )
-    ap.add_argument("--out", default=str(OUT), help="merge rows into this JSON")
     args = ap.parse_args()
-    out_path = pathlib.Path(args.out)
-    rows = json.loads(out_path.read_text()) if out_path.exists() else {}
+    rows = records.load("protocol_results")
     if args.table:
         print(table(rows))
         return 0
@@ -145,8 +141,8 @@ def main() -> int:
                 f"fail={m['failure_rate']:.2f} [{m['seconds']}s]",
                 flush=True,
             )
-        rows[name] = row
-        out_path.write_text(json.dumps(rows, indent=2, sort_keys=True) + "\n")
+        rows[name] = records.stamped(row)
+        records.write("protocol_results", name, rows[name])
     print(table(rows))
     return 0
 

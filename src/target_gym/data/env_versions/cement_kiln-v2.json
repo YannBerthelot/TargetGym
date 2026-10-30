@@ -1,0 +1,5 @@
+{
+  "fingerprint": "931837e967ab598e",
+  "note": "rho_floor and rho_floor_tracking follow the re-measured oracle hold (oracle audit: the planner plans on the mean noise, with a larger optimiser budget). They are the NEA reference: no reward reads them, so the environment's behaviour is unchanged. The kiln planner divides its objective by the floor, but its CEM ranking does not depend on that scale; its rows were re-recorded with it.",
+  "stamped": "2026-10-01T18:09:02+00:00"
+}

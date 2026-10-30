@@ -4,7 +4,6 @@ environment's ceiling, and the fixed settle."""
 
 from __future__ import annotations
 
-import json
 import math
 
 import jax
@@ -13,8 +12,8 @@ import numpy as np
 import pytest
 
 from target_gym import eval as E
+from target_gym import records, scoring
 from target_gym import reward as R
-from target_gym import scoring
 from target_gym.registry import REGISTRY
 
 
@@ -214,7 +213,7 @@ def test_the_building_settles_within_its_ceiling():
 
 
 def test_every_environment_has_a_settle_no_shorter_than_its_measured_ones():
-    rows = json.loads(E._DATA.read_text())
+    rows = records.load("hold_measurements")
     for name in REGISTRY:
         measured = [rows[name][k]["settle"] for k in ("pid", "mpc") if k in rows[name]]
         assert scoring.fixed_settle(name) >= max(measured, default=0), name

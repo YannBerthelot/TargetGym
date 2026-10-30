@@ -1,0 +1,5 @@
+{
+  "fingerprint": "b0b1de9c1379bb2d",
+  "note": "Behaviour-preserving: experts/pid.py, which patrol declares, renamed _load_gains and _g to load_gains and gain (cleanup PR C) and dropped the private aliases once every task package read the public names. No computation changed. Then, behaviour-preserving: the plane3d package changed only for plane3d_figure8's observation (its v4), and this task's dynamics, reward and observation are unchanged.",
+  "stamped": "2026-10-29T12:57:45+00:00"
+}

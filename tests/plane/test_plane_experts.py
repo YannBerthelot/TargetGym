@@ -24,7 +24,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym import registry
+from target_gym import records, registry
 from target_gym.experts import pid as pid_mod
 from target_gym.experts.mpc import plan_params
 from target_gym.plane.env import PlaneParams
@@ -45,13 +45,6 @@ HANDOVER = {"plane": True, "plane_sine": True, "plane_energy": False}
 #: The cascade the oracles fly their speed loop and hold with (the expert is
 #: TECS since the aircraft-guidance rework).
 _cascade = cascaded_pid_factory("plane_cascaded")
-HOLDS = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "src"
-    / "target_gym"
-    / "data"
-    / "hold_measurements.json"
-)
 
 
 def _oracle(name, **kwargs):
@@ -372,7 +365,7 @@ def test_the_nea_reference_is_the_recorded_hold(name):
     """rho_floor is the oracle's lowest per-seed altitude hold in floor units
     (``scripts/measure_hold.py``)."""
     p = registry.get(name).make_test_params()
-    (hold,) = json.loads(HOLDS.read_text())[name]["mpc"]["e_hold_min"]
+    (hold,) = records.load_row("hold_measurements", name)["mpc"]["e_hold_min"]
     assert p.rho_floor == p.rho_floor_tracking
     assert p.rho_floor == pytest.approx((hold / p.e_floor) ** 2, rel=0.02)
 

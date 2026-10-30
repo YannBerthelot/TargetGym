@@ -1,0 +1,5 @@
+{
+  "fingerprint": "a7d9e286e7d0224d",
+  "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
+  "stamped": "2026-10-27T20:25:47+00:00"
+}

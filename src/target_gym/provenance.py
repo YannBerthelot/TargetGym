@@ -6,7 +6,7 @@ fifty times over. Paying that on every merge is wasteful: the answer only moves
 when the physics, the controllers or their gains move, and most merges touch
 none of the three.
 
-So the measurement is recorded to ``src/target_gym/data/baseline_returns.json`` by
+So the measurement is recorded to ``src/target_gym/data/baseline_returns/`` by
 ``scripts/record_baselines.py`` and CI compares the recorded numbers instead of
 reproducing them. That trade is only safe if a stale record cannot pass
 silently, which is what this module is for: each record carries a fingerprint of
@@ -45,7 +45,8 @@ _ROOT = pathlib.Path(__file__).resolve().parent
 # Inside the package, not beside it, so they resolve from a source checkout and
 # from an installed wheel alike.
 GAINS_PATH = _ROOT / "data" / "pid_gains.json"
-BASELINES_PATH = _ROOT / "data" / "baseline_returns.json"
+#: The recorded returns, one file per task (``target_gym.records``).
+BASELINES_PATH = _ROOT / "data" / "baseline_returns"
 
 # Shared controller code. A change here can move any environment's numbers, so
 # it belongs in every environment's fingerprint.
@@ -229,7 +230,7 @@ def baseline_fingerprint(spec) -> str:
     cannot change a return.
 
     The burn-in is the capped value the protocol and the oracles use
-    (``eval.scored_burn_in``: the task's row in ``hold_measurements.json``,
+    (``eval.scored_burn_in``: the task's row in ``hold_measurements/``,
     capped at half the episode), not the raw row. A change to the row or to
     the cap that moves the scored window stales the record, and one the cap
     absorbs does not. The rest of the hold row is a measurement taken with
@@ -276,7 +277,7 @@ def environment_fingerprint(spec) -> str:
 
     Composed separately rather than by reusing the baseline digest, so that
     adding this could not change any fingerprint already recorded in
-    ``src/target_gym/data/baseline_returns.json``.
+    ``src/target_gym/data/baseline_returns/``.
     """
     params = spec.make_test_params()
     values = {
@@ -293,7 +294,8 @@ def environment_fingerprint(spec) -> str:
 
 
 def load_recorded_baselines() -> dict:
-    """The recorded measurements, or an empty mapping if none exist yet."""
-    if not BASELINES_PATH.exists():
-        return {}
-    return json.loads(BASELINES_PATH.read_text())
+    """The recorded measurements by task, or an empty mapping if none exist
+    yet."""
+    from target_gym import records
+
+    return records.load("baseline_returns")

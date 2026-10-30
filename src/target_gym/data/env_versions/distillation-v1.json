@@ -1,0 +1,5 @@
+{
+  "fingerprint": "a54022227b359ba6",
+  "note": "time_unit_seconds added to params for the facts table; delta_t and every state update unchanged, so behaviour-preserving",
+  "stamped": "2026-09-13T09:03:12+00:00"
+}

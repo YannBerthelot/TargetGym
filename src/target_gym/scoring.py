@@ -38,19 +38,16 @@ the same seeds.
 
 from __future__ import annotations
 
-import json
 import math
-import pathlib
 
 import numpy as np
 
 from target_gym import eval as E
+from target_gym import records
 from target_gym.eval import fixed_settle
 
 __all__ = ["TRACKED_TERMS", "ceiling", "compare", "fixed_settle", "headroom"]
 __all__ += ["best_known", "recorded", "score", "score_policy", "settle_band"]
-
-_PROTOCOL = pathlib.Path(__file__).resolve().parent / "data" / "protocol_results.json"
 
 _ALTITUDE = ("precision_floor", "e_floor_altitude", 1)
 _HEADING = ("heading_precision_floor", "e_floor_heading", 1)
@@ -234,8 +231,9 @@ def recorded(name: str | None = None) -> dict:
     """``name``'s row of the recorded protocol results (``pid`` and ``mpc``,
     3 seeds of the test configuration), ``{}`` if it has none, or every row
     by task when ``name`` is None."""
-    rows = json.loads(_PROTOCOL.read_text()) if _PROTOCOL.exists() else {}
-    return rows if name is None else rows.get(name, {})
+    if name is None:
+        return records.load("protocol_results")
+    return records.load_row("protocol_results", name)
 
 
 def best_known(row: dict) -> dict:

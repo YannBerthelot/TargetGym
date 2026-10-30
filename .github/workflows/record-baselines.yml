@@ -21,6 +21,12 @@
 # for a push made with its built-in token, so without it the required checks
 # never run on the recorded commit and the PR cannot merge. Pull requests from
 # forks get no secrets, so the label only works on branches of this repository.
+#
+# Each environment's rows are files of their own
+# (src/target_gym/data/<kind>/<env>.json), so a commit touches the recorded
+# environments' files and pages and nothing another open PR records. A row
+# that a run reproduces within the tolerance (target_gym.records.same) is
+# left as it is, whichever CPU the runner had.
 
 name: record baselines
 
@@ -101,9 +107,8 @@ jobs:
       env:
         ENV_NAME: ${{ matrix.env }}
       run: |
-        mkdir -p rows
         uv run python scripts/record_baselines.py --envs "$ENV_NAME"
-        uv run python scripts/evaluate_baselines.py --envs "$ENV_NAME" --out rows/protocol.json
+        uv run python scripts/evaluate_baselines.py --envs "$ENV_NAME"
         uv run python scripts/stale_records.py extract "$ENV_NAME" rows
     - uses: actions/upload-artifact@v4
       with:
@@ -136,11 +141,12 @@ jobs:
       with:
         pattern: rows-*
         path: rows
+    # The results page and its charts are built with the site from these
+    # rows, so only the environment pages are regenerated here.
     - name: Fold the rows in and regenerate the pages that show them
       id: fold
       run: |
         echo "moved=$(uv run python scripts/stale_records.py merge rows/*/)" >> "$GITHUB_OUTPUT"
-        uv run python scripts/generate_baseline_table.py
         uv run python scripts/generate_env_pages.py
     - name: Commit
       if: steps.fold.outputs.moved != ''

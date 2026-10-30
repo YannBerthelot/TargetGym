@@ -1,0 +1,5 @@
+{
+  "fingerprint": "1137b0598356ec3c",
+  "note": "behaviour-preserving: cstr/env.py, a declared source, changed only cstr's episode length, which this task never reads",
+  "stamped": "2026-10-28T16:57:39+00:00"
+}

@@ -1,0 +1,5 @@
+{
+  "fingerprint": "63a0a2bd4b459422",
+  "note": "v2: max_steps_in_episode and state.time count env steps (10 s), not physics sub-steps; the shipped rollout had run 10x past the limit on a frozen plant, understating the recorded baselines ~5x",
+  "stamped": "2026-09-13T09:03:12+00:00"
+}

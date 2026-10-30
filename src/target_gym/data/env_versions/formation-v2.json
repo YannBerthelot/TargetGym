@@ -1,0 +1,5 @@
+{
+  "fingerprint": "f44ea802da6891aa",
+  "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine. Then, behaviour-preserving: the plane3d package changed only for plane3d_figure8's observation (its v4), and this task's dynamics, reward and observation are unchanged.",
+  "stamped": "2026-10-29T12:57:45+00:00"
+}

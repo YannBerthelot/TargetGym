@@ -1,0 +1,5 @@
+{
+  "fingerprint": "8a4ff4b1e479c4e4",
+  "note": "Behaviour-preserving: this change only deleted utils.py helpers that nothing outside their own tests called (save_comparison_gif, save_comparison_figure, load_or_run_mpc_episode, load_or_build_interpolator and the two headless runners). utils.py is in every environment's fingerprint, so every stamp moved. The baselines and protocol rows re-recorded on the same tree came out bit for bit identical.",
+  "stamped": "2026-09-30T20:57:19+00:00"
+}

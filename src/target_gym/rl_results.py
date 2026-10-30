@@ -7,7 +7,7 @@ that comparison is kept.
 It is recorded rather than reproduced, for the same reason the MPC baselines
 are: training costs GPU-hours, and the answer only moves when the environment
 or the agent moves. The mechanism is the one already used for
-``src/target_gym/data/baseline_returns.json`` -- each record carries a fingerprint of what
+``src/target_gym/data/baseline_returns/`` -- each record carries a fingerprint of what
 determines it, and a record whose fingerprint no longer matches the tree is
 refused rather than believed.
 

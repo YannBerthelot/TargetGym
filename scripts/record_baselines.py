@@ -11,7 +11,7 @@ runners it approached the job's 30-minute timeout on its own.
 
 The answer only changes when the physics, the controllers or their gains change,
 which most merges do not touch. So the measurement is taken here, by hand, and
-committed to ``src/target_gym/data/baseline_returns.json``; CI reads the recorded numbers and
+committed to ``src/target_gym/data/baseline_returns/<task>.json``; CI reads the recorded numbers and
 checks the contract against them.
 
 That is only safe if a stale record cannot pass silently. Each record carries a
@@ -38,7 +38,6 @@ from __future__ import annotations
 import argparse
 import concurrent.futures as cf
 import contextlib
-import datetime as _dt
 import json
 import multiprocessing as mp
 import os
@@ -51,7 +50,8 @@ import time
 import jax
 import numpy as np
 
-from target_gym.provenance import BASELINES_PATH, baseline_fingerprint
+from target_gym import records
+from target_gym.provenance import baseline_fingerprint
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import (
     mpc_policy,
@@ -116,12 +116,10 @@ def _by_cost(names: list[str]) -> list[str]:
     because an unknown cost is more likely to be a new expensive one than a new
     cheap one, and being wrong about that costs nothing.
     """
-    previous = {}
-    if BASELINES_PATH.exists():
-        try:
-            previous = json.loads(BASELINES_PATH.read_text())
-        except json.JSONDecodeError:
-            previous = {}
+    try:
+        previous = records.load("baseline_returns")
+    except json.JSONDecodeError:
+        previous = {}
     return sorted(
         names,
         key=lambda n: -float(previous.get(n, {}).get("seconds", float("inf"))),
@@ -333,7 +331,7 @@ def _row(name, pid, mpc, trips, reports, seconds) -> dict:
         "seconds": round(seconds, 1),
     }
     row.update(_merge_reports(reports))
-    return row
+    return records.stamped(row)
 
 
 def _report(name: str, row: dict) -> None:
@@ -456,10 +454,12 @@ def _check_pids(names: list[str]) -> int:
     against the full re-record's hour or more, because nearly all of that is
     MPC. It cannot refresh a record, since a row's fingerprint covers its MPC
     too. Rows recorded on CI's Linux runners can differ from a Mac's in the
-    last bits, so a refactor that must be bit-identical is better compared
-    against a run of its base commit on the same machine.
+    last bits, so a return counts as moved beyond ``records.same``'s
+    tolerance, and any difference at all is printed: a refactor that must be
+    bit-identical is better compared against a run of its base commit on the
+    same machine.
     """
-    rows = json.loads(BASELINES_PATH.read_text()) if BASELINES_PATH.exists() else {}
+    rows = records.load("baseline_returns")
     jobs = [(name, seed, None) for name in names for seed in range(SEEDS)]
     with _pool(min(os.cpu_count() or 2, 8)) as pool:
         got = dict(zip(jobs, (value for value, _ in pool.map(_pid_one_seed, jobs))))
@@ -467,11 +467,11 @@ def _check_pids(names: list[str]) -> int:
     for name in names:
         new = [round(got[(name, seed, None)], 6) for seed in range(SEEDS)]  # as _row
         old = rows.get(name, {}).get("pid_returns")
-        same = old == new
+        same = old is not None and records.same(old, new)
         moved += not same
         gap = (
             ""
-            if same or old is None
+            if old is None or old == new
             else f" (max |d| {np.max(np.abs(np.subtract(old, new))):.3g})"
         )
         print(f"  {name:20s} PID {'unchanged' if same else 'MOVED'}{gap}", flush=True)
@@ -637,43 +637,26 @@ def main() -> int:
     stop.set()
 
     _write(rows)
-    print(f"\n  wrote {BASELINES_PATH}")
+    print(
+        f"\n  wrote {' '.join(rows)} to {records.path('baseline_returns', '_').parent}"
+    )
     return 0
 
 
 def _write(rows: dict[str, dict]) -> None:
-    """Merge *rows* onto the file as it stands and write it back.
+    """Write each of *rows* to its own task's file, leaving the others as
+    they are, which is what makes a partial re-record safe."""
+    for name, row in rows.items():
+        records.write("baseline_returns", name, row)
 
-    Re-read at write time rather than held from startup, so a second job
-    running concurrently cannot revert rows recorded in the meantime.
-    """
-    out = {}
-    if BASELINES_PATH.exists():
-        out = json.loads(BASELINES_PATH.read_text())
-    out.update(rows)
-
-    # Drop rows for environments the registry no longer has. Without this a
-    # removed environment leaves a fossil for ever: the merge above preserves
-    # whatever the file already held, which is what makes a partial re-record
-    # safe, and is exactly why nothing ever cleans up. ``plane_steps`` sat in
-    # here after being absorbed into ``plane_energy``, describing a task that
-    # cannot be constructed.
-    dead = [k for k in out if k != "_meta" and k not in REGISTRY]
-    for k in dead:
-        del out[k]
-        print(f"  dropped {k}: no longer in the registry", flush=True)
-
-    out["_meta"] = {
-        "generated": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
-        "seeds": SEEDS,
-        "note": (
-            "Regenerate with scripts/record_baselines.py when a test reports a "
-            "stale fingerprint. Commit the result with the change that "
-            "invalidated it."
-        ),
-    }
-    BASELINES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    BASELINES_PATH.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
+    # Drop rows for environments the registry no longer has, or a removed
+    # environment leaves a fossil for ever. ``plane_steps`` sat in the
+    # records after being absorbed into ``plane_energy``, describing a task
+    # that cannot be constructed.
+    for name in records.load("baseline_returns"):
+        if name not in REGISTRY:
+            records.path("baseline_returns", name).unlink()
+            print(f"  dropped {name}: no longer in the registry", flush=True)
 
 
 if __name__ == "__main__":
