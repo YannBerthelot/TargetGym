@@ -12,6 +12,7 @@ import importlib.util
 import json
 import math
 import pathlib
+import posixpath
 import re
 
 import pytest
@@ -163,3 +164,27 @@ def test_the_readme_chart_is_one_the_docs_build_publishes(gen):
         assert url.startswith(SITE) and url[len(SITE) :] in published, url
     assert f"{SITE}baseline-results/#at-a-glance" in readme
     assert "\n## At a glance\n" in published[gen.PAGE]
+
+
+def test_every_image_a_page_embeds_is_one_the_site_publishes(gen):
+    """MkDocs serves ``docs/<page>.md`` at ``<page>/`` (``index.md`` at its
+    directory) and leaves raw HTML alone, so the browser resolves a relative
+    ``src`` or ``srcset`` from that directory. Each must land on a file the
+    site publishes: one under ``docs/``, one the build generates, or a
+    task's clip, which the deploy renders at ``videos/<task>/pid_output.gif``
+    (``docs-deploy.yml``; the clips are not committed)."""
+    docs = ROOT / "docs"
+    clips = {f"videos/{name}/pid_output.gif" for name in registry.REGISTRY}
+    published = set(gen.outputs()) | clips
+    missing = []
+    for page in sorted(docs.rglob("*.md")):
+        rel = page.relative_to(docs)
+        served = rel.parent if rel.stem == "index" else rel.with_suffix("")
+        for url in re.findall(r'(?:src|srcset)="([^"]+)"', page.read_text()):
+            url = url.split()[0]
+            if url.startswith(("http://", "https://", "/", "data:")):
+                continue
+            target = posixpath.normpath(posixpath.join(served.as_posix(), url))
+            if not ((docs / target).is_file() or target in published):
+                missing.append(f"{rel}: {url}")
+    assert not missing, missing
