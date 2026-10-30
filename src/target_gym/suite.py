@@ -12,8 +12,9 @@ drawn as two radars:
 Each score is drawn at ``radius = 0.5 + 0.5 * score``, clipped to [0, 1]: the
 expert is the 0.5 ring, a policy worse than the expert falls inside it, and 0
 is as far below the expert as the ceiling (or the best known) is above. A task
-with no room (its expert already within the ceiling, or no best known move
-recorded) has no point, and a capability is the mean of its tasks' points.
+with no room (its expert already within the ceiling, or a best known move
+under ``MIN_REACH_ROOM`` times cheaper than the expert's) has no point, and a
+capability is the mean of its tasks' points.
 
 Profile a policy::
 
@@ -34,7 +35,7 @@ import numpy as np
 from target_gym import scoring
 
 __all__ = ["AXES", "CAPABILITIES", "LABELS", "plot_profile", "profile"]
-__all__ += ["radius", "references", "run_suite"]
+__all__ += ["MIN_REACH_ROOM", "radius", "references", "run_suite"]
 
 #: The capabilities, in their order around the radar.
 AXES = (
@@ -99,6 +100,11 @@ CAPABILITIES = {
 
 _NAN = float("nan")
 
+#: The least room a Reach edge may stand for: an oracle reaching new targets
+#: less than this many times cheaper than the expert puts the edge so close to
+#: the ring that seed noise decides the point, so the task has none.
+MIN_REACH_ROOM = 1.25
+
 
 def radius(s: float) -> float:
     """Where a score sits on the radar: ``0.5 + 0.5 * s`` in [0, 1]."""
@@ -108,10 +114,10 @@ def radius(s: float) -> float:
 
 
 def _reach_score(m: dict) -> float:
-    """``log(transient_ratio) / log(best known)``; NaN without a best known
-    above the expert."""
+    """``log(transient_ratio) / log(best known)``; NaN unless the best known
+    is at least ``MIN_REACH_ROOM`` times cheaper than the expert."""
     best = m.get("oracle_transient_ratio", _NAN)
-    if not best > 1.0:
+    if not best >= MIN_REACH_ROOM:
         return _NAN
     return math.log(max(m["transient_ratio"], 1e-300)) / math.log(best)
 
@@ -172,15 +178,17 @@ def run_suite(make_policy, seeds: int = 10, tasks=None) -> dict:
     return {"tasks": results, "profile": profile(results)}
 
 
-# Light-surface categorical slots, in order (the expert is the gray ring).
-_COLORS = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300")
-_EXPERT_GRAY = "#898781"
+# The docs' colours: the expert blue and the oracle orange, as in
+# docs/images/capability-profile.svg; other profiles take the next slots.
+_FIXED = {"expert": "#2a78d6", "oracle": "#eb6834"}
+_COLORS = ("#1baf7a", "#eda100", "#e87ba4", "#008300")
 
 
 def plot_profile(profiles: dict, axes=AXES):
     """Two radars side by side, hold and reach, with one polygon per profile
-    in ``profiles`` (name -> ``profile``). ``"expert"`` is drawn as a dashed
-    gray ring; the others take the categorical colours in order. A capability
+    in ``profiles`` (name -> ``profile``), clockwise from the top as on the docs
+    page. ``"expert"`` is a dashed blue ring and ``"oracle"`` orange; the
+    others take the next categorical colours in order. A capability
     with no point in a polygon is skipped by it, and its label is grayed when
     no profile has one. Returns the matplotlib figure."""
     import matplotlib.pyplot as plt
@@ -198,12 +206,14 @@ def plot_profile(profiles: dict, axes=AXES):
             ok = ~np.isnan(r)
             anywhere |= ok
             th, rr = np.r_[angles[ok], angles[ok][:1]], np.r_[r[ok], r[ok][:1]]
+            color = _FIXED.get(name) or next(colors)
             if name == "expert":
-                ax.plot(th, rr, "--", color=_EXPERT_GRAY, lw=1.5, label=name)
+                ax.plot(th, rr, "--", color=color, lw=1.5, label=name)
                 continue
-            color = next(colors)
             ax.plot(th, rr, "-o", color=color, lw=2, ms=5, label=name)
             ax.fill(th, rr, color=color, alpha=0.12)
+        ax.set_theta_zero_location("N")
+        ax.set_theta_direction(-1)
         ax.set_xticks(angles, [LABELS[a] for a in axes], fontsize=9)
         ax.tick_params(axis="x", pad=10)
         for label, ok in zip(ax.get_xticklabels(), anywhere):

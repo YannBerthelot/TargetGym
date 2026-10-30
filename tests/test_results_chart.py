@@ -10,6 +10,7 @@ are regenerated from ``protocol_results.json``.
 
 import importlib.util
 import json
+import math
 import pathlib
 import re
 
@@ -92,3 +93,55 @@ def test_both_images_are_standalone_svg(gen, dark):
     assert svg.startswith("<svg") and svg.rstrip().endswith("</svg>")
     assert "<script" not in svg
     assert re.search(r"<rect[^>]*class=\"bg\"", svg)
+
+
+def test_the_capability_image_draws_the_recorded_profiles(gen):
+    """Worked by hand: on plane (disturbance) the expert holds at 100 and the
+    oracle at 10 against a ceiling of 1, half the two decades, so the oracle
+    sits at radius 0.75 on Hold and the expert on its 0.5 ring; the oracle's
+    moves cost a quarter of the expert's, so it is the best known (radius 1)
+    on Reach."""
+    row = _row("plane", expert=100.0, oracle=10.0, ceiling=1.0)
+    row["pid"]["move_cost"], row["mpc"]["move_cost"] = 400.0, 100.0
+    svg = gen.capability_svg({"plane": row})
+    points = {
+        (m["radar"], m["who"], m["axis"]): m["r"]
+        for m in re.finditer(
+            r'data-radar="(?P<radar>\w+)" data-who="(?P<who>\w+)" '
+            r'data-axis="(?P<axis>\w+)" data-r="(?P<r>[\d.]+)"',
+            svg,
+        )
+    }
+    assert points == {
+        ("hold", "expert", "disturbance"): "0.50",
+        ("hold", "oracle", "disturbance"): "0.75",
+        ("reach", "expert", "disturbance"): "0.50",
+        ("reach", "oracle", "disturbance"): "1.00",
+    }
+
+
+@pytest.mark.parametrize("dark", [False, True])
+def test_the_capability_image_is_standalone_svg(gen, dark):
+    data = json.loads((ROOT / "src/target_gym/data/protocol_results.json").read_text())
+    svg = gen.capability_svg(data, dark=dark)
+    assert svg.startswith("<svg") and svg.rstrip().endswith("</svg>")
+    assert "<script" not in svg
+    assert re.search(r"<rect[^>]*class=\"bg\"", svg)
+
+
+@pytest.mark.parametrize("direction", [math.inf, -math.inf])
+def test_the_capability_image_is_the_same_on_every_platform(
+    gen, monkeypatch, direction
+):
+    """The docs check regenerates the image on Linux and compares it with the
+    one committed from a Mac, and their maths libraries can differ in the last
+    bit of sin, cos and log. Nudging every such result one unit in the last
+    place, either way, must leave the image unchanged."""
+    data = json.loads((ROOT / "src/target_gym/data/protocol_results.json").read_text())
+    drawn = gen.capability_svg(data)
+    for name in ("sin", "cos", "log"):
+        real = getattr(math, name)
+        monkeypatch.setattr(
+            math, name, lambda x, f=real: math.nextafter(f(x), direction)
+        )
+    assert gen.capability_svg(data) == drawn

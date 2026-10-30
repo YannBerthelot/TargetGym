@@ -6,7 +6,9 @@
 The page opens with a chart of each task's oracle and ceiling against its
 expert: interactive on the docs site (``docs/javascripts/results-chart.js``
 draws it from the rows embedded in the page), and as two static images for
-the README, light and dark (``docs/images/results-vs-expert*.svg``).
+the README, light and dark (``docs/images/results-vs-expert*.svg``). It also
+draws the expert's and the oracle's capability profiles for
+``docs/capability-profile.md`` (``docs/images/capability-profile*.svg``).
 
 The page is the headline results of the whole library, so it is generated from
 the recorded data rather than transcribed: the protocol scores from
@@ -35,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import pathlib
 import sys
 
@@ -46,6 +49,10 @@ PROTOCOL = ROOT / "src" / "target_gym" / "data" / "protocol_results.json"
 IMAGES = {
     False: ROOT / "docs" / "images" / "results-vs-expert.svg",
     True: ROOT / "docs" / "images" / "results-vs-expert-dark.svg",
+}
+CAPABILITY_IMAGES = {
+    False: ROOT / "docs" / "images" / "capability-profile.svg",
+    True: ROOT / "docs" / "images" / "capability-profile-dark.svg",
 }
 
 INTRO = """\
@@ -244,6 +251,112 @@ def results_svg(rows: list[dict], dark: bool = False) -> str:
     )
 
 
+def _label_lines(label: str) -> list[str]:
+    """A long capability label on two lines, so the radars fit side by side."""
+    if len(label) > 12 and " " in label:
+        head, tail = label.rsplit(" ", 1)
+        return [head, tail]
+    return [label]
+
+
+def capability_svg(data: dict, dark: bool = False) -> str:
+    """The expert's and the oracle's capability profiles from the records,
+    as two standalone radars, hold and reach (docs/capability-profile.md):
+    the expert on its 0.5 ring, the oracle where its records put it."""
+    from target_gym import suite
+
+    refs = suite.references(data)
+    ink, n, big = _INK[dark], len(suite.AXES), 82.0
+    width, height = 700, 330
+    centres = {"hold": (180.0, 190.0), "reach": (520.0, 190.0)}
+    edges = {"hold": "edge: ceiling", "reach": "edge: best known"}
+
+    def at(cx, cy, k, r):
+        # Rounded before use: maths libraries differ in the last bit, and a
+        # point landing on 149.25 would print as 149.2 on one platform and
+        # 149.3 on another, failing the docs check.
+        a = 2.0 * math.pi * k / n  # clockwise from the top
+        dx, dy, r = round(math.sin(a), 6), round(math.cos(a), 6), round(r, 4)
+        return cx + big * r * dx, cy - big * r * dy
+
+    def pts(xy):
+        return " ".join(f"{x:.1f},{y:.1f}" for x, y in xy)
+
+    body = []
+    for which, (cx, cy) in centres.items():
+        for ring in (0.25, 0.5, 0.75, 1.0):
+            ring_xy = [at(cx, cy, k, ring) for k in range(n)]
+            body.append(
+                f'<polygon points="{pts(ring_xy)}" fill="none" stroke="{ink["grid"]}"/>'
+            )
+        for k, axis in enumerate(suite.AXES):
+            x, y = at(cx, cy, k, 1.0)
+            body.append(
+                f'<line x1="{cx:.1f}" y1="{cy:.1f}" x2="{x:.1f}" y2="{y:.1f}" '
+                f'stroke="{ink["grid"]}"/>'
+            )
+            known = any(not math.isnan(refs[w][which][axis]) for w in refs)
+            lx, ly = at(cx, cy, k, 1.13)
+            sin = round(math.sin(2.0 * math.pi * k / n), 6)
+            anchor = "middle" if abs(sin) < 0.1 else ("start" if sin > 0 else "end")
+            lines = _label_lines(suite.LABELS[axis])
+            ly += (
+                4.0
+                - 6.0 * (len(lines) - 1)
+                + (6.0 if abs(sin) < 0.1 and ly > cy else 0)
+            )
+            spans = "".join(
+                f'<tspan x="{lx:.1f}" dy="{0 if i == 0 else 12}">{t}</tspan>'
+                for i, t in enumerate(lines)
+            )
+            fill = ink["sub"] if known else ink["muted"]
+            body.append(
+                f'<text y="{ly:.1f}" font-size="10" fill="{fill}" '
+                f'text-anchor="{anchor}">{spans}</text>'
+            )
+        for who in ("expert", "oracle"):
+            r = [round(refs[who][which][a], 4) for a in suite.AXES]
+            ks = [k for k in range(n) if not math.isnan(r[k])]
+            xy = [at(cx, cy, k, r[k]) for k in ks]
+            dash = ' stroke-dasharray="5 4"' if who == "expert" else ""
+            fill = f'{ink[who]}" fill-opacity="0.12' if who == "oracle" else "none"
+            body.append(
+                f'<polygon points="{pts(xy)}" fill="{fill}" stroke="{ink[who]}" '
+                f'stroke-width="2"{dash}/>'
+            )
+            body += [
+                f'<circle data-radar="{which}" data-who="{who}" '
+                f'data-axis="{suite.AXES[k]}" data-r="{r[k]:.2f}" cx="{x:.1f}" '
+                f'cy="{y:.1f}" r="{3 if who == "oracle" else 0}" fill="{ink[who]}"/>'
+                for k, (x, y) in zip(ks, xy)
+            ]
+        body.append(
+            f'<text x="{cx:.1f}" y="62" font-size="12" fill="{ink["text"]}" '
+            f'text-anchor="middle" font-weight="500">{which.capitalize()} '
+            f'<tspan fill="{ink["muted"]}" font-weight="400">({edges[which]})'
+            "</tspan></text>"
+        )
+    legend = [
+        f'<text x="0" y="16" font-size="13" fill="{ink["text"]}" font-weight="500">'
+        "Capability profiles of the expert and the oracle</text>",
+        f'<line x1="0" y1="36" x2="18" y2="36" stroke="{ink["expert"]}" '
+        'stroke-width="2" stroke-dasharray="5 4"/>',
+        f'<text x="24" y="40" font-size="12" fill="{ink["sub"]}">Expert</text>',
+        f'<rect x="84" y="31" width="10" height="10" rx="1.5" fill="{ink["oracle"]}"/>',
+        f'<text x="100" y="40" font-size="12" fill="{ink["sub"]}">'
+        "Oracle (full-state MPC)</text>",
+    ]
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" '
+        f'width="{width}" height="{height}" font-family="{_SANS}" role="img" '
+        'aria-label="The expert and the oracle on each capability, hold and '
+        'reach">'
+        f'<rect class="bg" width="100%" height="100%" fill="{ink["bg"]}"/>'
+        + "".join(legend + body)
+        + "</svg>\n"
+    )
+
+
 _SANS = "-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif"
 _MONO = ' font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"'
 
@@ -411,7 +524,9 @@ def main() -> int:
     args = ap.parse_args()
 
     rows = chart_rows(json.loads(PROTOCOL.read_text()))
+    data = json.loads(PROTOCOL.read_text())
     outputs = {DOC: _page(), **{p: results_svg(rows, d) for d, p in IMAGES.items()}}
+    outputs |= {p: capability_svg(data, d) for d, p in CAPABILITY_IMAGES.items()}
     stale = [
         p for p, new in outputs.items() if (p.read_text() if p.exists() else "") != new
     ]
