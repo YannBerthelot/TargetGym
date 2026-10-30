@@ -130,7 +130,7 @@ The version changes when the environment does: its dynamics, its reward, the
 parameters it is measured at, or its observation layout. Re-tuning a controller
 is not such a change, and does not bump anything.
 
-That promise is enforced rather than asserted. `src/target_gym/data/env_versions.json` records
+That promise is enforced rather than asserted. `src/target_gym/data/env_versions/` records
 the fingerprint each version was stamped at, and `tests/test_env_versions.py`
 fails when the tree no longer matches. So an environment cannot change under a
 name that has already been published against without CI saying so.

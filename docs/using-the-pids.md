@@ -103,7 +103,7 @@ reproduce the scored numbers.
 
 ### Episode returns, paired on seeds
 
-The recorded PID returns are in `src/target_gym/data/baseline_returns.json`,
+The recorded PID returns are in `src/target_gym/data/baseline_returns/`,
 one per seed. `runners.rollout` is the loop they were recorded with, so running
 your policy through it on the same seeds gives a paired comparison without
 re-running the PID:

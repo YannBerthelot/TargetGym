@@ -56,7 +56,7 @@ that sees what a plant instruments.
 
 To compare your own agent, evaluate it on the seeds the baselines were recorded
 on, 0 to 9. The comparison is then paired, and the baseline returns can be read
-from `src/target_gym/data/baseline_returns.json` instead of re-run.
+from `src/target_gym/data/baseline_returns/` instead of re-run.
 [Using the PIDs](using-the-pids.md) walks through this, and through using the
 PID in training.
 

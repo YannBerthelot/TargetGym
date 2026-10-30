@@ -326,11 +326,10 @@ move would leave the band (`test_reset_draws_a_stratified_schedule`). The
 sizes are fixed so that every episode has the same total squared move,
 0.035 (mol/L)² (derived), which keeps the spread of returns across seeds
 small. Where each target is drawn on its own, as in cstr, the return is set
-mostly by how far the target sits from the start. cstr's recorded MPC
-returns run from −165 to −2.35e6 over its 10 seeds, and this task's recorded
-PID returns from −6.61e7 to −7.08e7 (both measured by
-`scripts/record_baselines.py` and recorded in
-`src/target_gym/data/baseline_returns.json`).
+mostly by how far the target sits from the start: compare the spread of the
+recorded returns over the 10 seeds of
+[cstr](../../data/baseline_returns/cstr.json) and of
+[this task](../../data/baseline_returns/unstable_cstr.json).
 
 **Scoring at a switch.** The reward and the observation of one state use the
 same live target, `level[min(block_clock // block_steps, 5)]`, as
@@ -570,23 +569,17 @@ the coolant from the one last applied. The median is 0.086 K and the largest
 inside `FALLBACK_STEP_BOUND_K` (0.5 K, ours), which
 `test_mpc_falls_back_to_the_pid` asserts.
 
-**Recorded baselines** (`scripts/record_baselines.py --envs unstable_cstr`,
-10 seeds, measured). The PID's mean return is −6.857e7 and the MPC's
-−5.014e6, so the MPC costs 4178 per step against the PID's 5.714e4 and leads
-on all 10 seeds. Neither trips. The MPC made 12000 solver calls, none failed
-or capped, at 13.3 IPOPT iterations on average.
-
-**Protocol row** (`scripts/evaluate_baselines.py --envs unstable_cstr`, 3
-seeds, measured, recorded in `src/target_gym/data/protocol_results.json`).
-
-| controller | gain (all tracking) | hold | reach cost per change | transient cost per change | failure rate |
-|---|---|---|---|---|---|
-| PID | 5.74e4 | 2.68 | 1.15e7 | 5.84e5 | 0 |
-| MPC | 4.03e3 (± 476) | 0.00649 | 8.07e5 | 2.52e5 | 0 |
-
-The gain is the mean cost over every step. The MPC's is 4.03e3 against the
-PID's 5.74e4.
-The MPC's hold cost is 0.00649 and the PID's 2.68. The hold leaves out the
+**Recorded results.** Both controllers' returns over 10 seeds
+(`scripts/record_baselines.py`) are on the
+[environment page](../../../../docs/environments/unstable_cstr.md#baselines), and their
+protocol row over 3 seeds (`scripts/evaluate_baselines.py`: gain, hold, reach
+and transient cost per change, failure rate) is on the
+[results page](https://yannberthelot.github.io/TargetGym/baseline-results/). Both are generated from the records in
+`src/target_gym/data/`, so neither is copied here to go stale. The MPC's solver
+statistics are in its row of
+`src/target_gym/data/baseline_returns/unstable_cstr.json`. The gain is the mean
+cost over every step.
+The hold leaves out the
 steps in which the MPC already moves toward the next level, which
 `target_gym.eval` finds from the cost and counts in the reach and transient
 cost of the change they prepare. The reach cost is a controller's cost above

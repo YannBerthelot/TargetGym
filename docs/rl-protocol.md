@@ -389,7 +389,7 @@ rather than floating:
 | **PID** | **the peer** |
 | MPC | the model-based, full-state upper bound |
 
-These are what `src/target_gym/data/baseline_returns.json` records, ten episode seeds each, and
+These are what `src/target_gym/data/baseline_returns/` records, ten episode seeds each, and
 they are what a learned policy is compared against.
 
 No random-policy floor is recorded: on a setpoint task it is a number everyone

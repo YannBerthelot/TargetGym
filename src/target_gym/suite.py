@@ -179,7 +179,7 @@ def run_suite(make_policy, seeds: int = 10, tasks=None) -> dict:
 
 
 # The docs' colours: the expert blue and the oracle orange, as in
-# docs/images/capability-profile.svg; other profiles take the next slots.
+# the capability-profile images; other profiles take the next slots.
 _FIXED = {"expert": "#2a78d6", "oracle": "#eb6834"}
 _COLORS = ("#1baf7a", "#eda100", "#e87ba4", "#008300")
 

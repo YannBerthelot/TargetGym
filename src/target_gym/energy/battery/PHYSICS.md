@@ -158,13 +158,14 @@ The reward is a cost, so a return closer to zero is better.
 
 | controller | return | mean power error | trips |
 |---|---|---|---|
-| PID + charge guard | **−1.244** | 0.020 MW | 0 |
+| PID + charge guard | recorded, see below | 0.020 MW | 0 |
 | constant −0.5 / 0 / +0.5 | −29.9 / −18.3 / −25.3 | 0.59 / 0.37 / 0.50 MW | 0 |
 
-The PID's return is the recorded baseline, as on the environment page
-(`docs/environments/battery.md`, which also carries the oracle's). The other
-numbers were measured on the same seeds (2026-10-01), with a replay of the
-PID that reproduces its recorded returns to within 5e-6.
+The PID's return is the recorded baseline, on the
+[environment page](../../../../docs/environments/battery.md#baselines), which
+also carries the oracle's; it is generated from the records rather than copied
+here. The other numbers were measured on the same seeds (2026-10-01), with a
+replay of the PID that reproduced its recorded returns to within 5e-6.
 
 The charge guard fades the demand out *only in the direction that would
 breach a limit*: discharge is throttled below 0.17 state of charge and charge

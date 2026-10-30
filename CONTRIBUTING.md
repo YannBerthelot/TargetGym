@@ -149,7 +149,7 @@ checks each one, and checks the tuner row only for a task that ships a PID.
   `compute_reward_v1`, which TargetFoundation looks up by that name.
 - **A hold row.** Add the task to `PLANTS` in `scripts/measure_hold.py` and run
   `scripts/measure_hold.py --envs <name>`. Without a row in
-  `src/target_gym/data/hold_measurements.json` the protocol gets a burn-in of
+  `src/target_gym/data/hold_measurements/<name>.json` the protocol gets a burn-in of
   0 and scores the approach as if it were the hold. The burn-in the protocol
   scores from (the row's, capped at half the episode) is part of the baseline
   fingerprint, so adding the row, or changing it in a way that moves that
@@ -208,15 +208,21 @@ uv run python scripts/record_baselines.py                  # everything
 uv run python scripts/record_baselines.py --envs plane cstr # just these
 ```
 
-The results page, `docs/baseline-results.md`, and the per-environment pages
-both show those records, so regenerate them afterwards:
+Each task's records are files of their own, `src/target_gym/data/<kind>/<task>.json`
+(`target_gym.records`), so re-recording a task changes that task's files and
+nothing another open pull request records. Each recording notes the CPU it ran
+on; recordings on different CPUs differ in the last bits, so compare two of
+them with `target_gym.records.same`, which allows 1 %, never with `==`.
+
+The per-environment pages show those records, so regenerate them afterwards:
 
 ```bash
-uv run python scripts/generate_baseline_table.py
 uv run python scripts/generate_env_pages.py
 ```
 
-`make ci-docs` and the CI docs job fail while either is stale.
+`make ci-docs` and the CI docs job fail while they are stale. The results
+page and its charts are not committed: the docs build writes them from the
+records (`docs/hooks.py`), so they cannot go stale.
 
 Each record carries a fingerprint of what determined it: the environment's
 modules, the shared controller and integration code, the gains, the parameter
@@ -230,23 +236,20 @@ real bug. To run them locally: `uv run pytest -m records`.
 `src/target_gym/provenance.py` explains why the fingerprint is taken over source
 rather than over behaviour, and what that trade buys.
 
-The long-run protocol costs in `src/target_gym/data/protocol_results.json` work
+The long-run protocol costs in `src/target_gym/data/protocol_results/` work
 the same way. They are what the floor check in `tests/test_reward_contract.py`
 compares each measured floor against, and they carry the same fingerprint, so
 the same change that makes a baseline stale makes its row stale too. Re-run the
-protocol for the environments the test names, then regenerate the results
-page, which reads the file:
+protocol for the environments the test names:
 
 ```bash
 uv run python scripts/evaluate_baselines.py --envs plane cstr
-uv run python scripts/generate_baseline_table.py
 ```
 
-Two things to know before starting a run. It reads `src/target_gym/data/baseline_returns.json`
-and merges its results into whatever the file holds *at the time it writes*, so
-a second run started later will not clobber it, but two runs recording the same
-environment will still race, and the last one wins. And gains changes invalidate
-records, so tune first, record second.
+Two things to know before starting a run. It writes each environment's own
+file, so runs recording different environments cannot clobber each other, but
+two runs recording the same environment race, and the last one wins. And gains
+changes invalidate records, so tune first, record second.
 
 ## Documentation
 
@@ -263,13 +266,14 @@ trusted, by `tests/test_docs.py`:
   `scripts/generate_env_pages.py`. A page opens with the paragraph and the
   observation table of the `` ### Task: `name` `` block in the task's
   `PHYSICS.md`, so a new task needs one; the generator fails until every
-  observation index has a row. The results page,
-  `docs/baseline-results.md`, is generated as well, by
-  `scripts/generate_baseline_table.py` from
-  `src/target_gym/data/baseline_returns.json` and `protocol_results.json`. Adding an environment or a
-  baseline means regenerating all three, and so does re-recording baselines,
-  since the pages and the table show the recorded numbers. `make ci-docs` runs
-  each with `--check` and then `mkdocs build --strict`, which fails on a
+  observation index has a row. Adding an environment or a baseline means
+  regenerating both, and so does re-recording baselines, since the pages show
+  the recorded numbers. The results page and its charts are generated too, by
+  `scripts/generate_baseline_table.py` from `src/target_gym/data/`, but during
+  the docs build (`docs/hooks.py`), so they are never committed and never
+  stale; the README links its chart on the published site, since PyPI does
+  not have the repository's files. `make ci-docs` runs the two generators with
+  `--check` and then `mkdocs build --strict`, which fails on a
   dangling link, including one that resolves on GitHub but not on the built
   site, since anything outside `docs/` (a `PHYSICS.md` under `src/`,
   `CONTRIBUTING.md`) has to be linked absolutely.
