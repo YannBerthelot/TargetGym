@@ -1,8 +1,9 @@
 # A release, by hand, as ~/.claude/RELEASING.md describes it. Each job needs
 # the one before it, so the first failure stops the release:
 #
-#   check    the version is X.Y.Z, its CHANGELOG entry is on main, its tag does
-#            not exist, and the commit is main's head (scripts/release_check.py)
+#   check    the version is X.Y.Z, its CHANGELOG entry is on the branch, its
+#            tag does not exist, and the commit is the branch's head: main, or
+#            release/X.Y for a patch to an older minor (scripts/release_check.py)
 #   slow     the large tier and the records check green on this commit: main's
 #            CI has run them on every merge, and they run here only if that
 #            run is missing or red
@@ -27,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: The version to release, X.Y.Z, with its "## [X.Y.Z]" CHANGELOG entry on main.
+        description: The version to release, X.Y.Z, with its "## [X.Y.Z]" CHANGELOG entry on this branch (main, or release/X.Y for a patch).
         required: true
 
 permissions:
@@ -43,7 +44,7 @@ env:
 
 jobs:
   check:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
