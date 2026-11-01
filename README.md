@@ -51,10 +51,10 @@ pip install target-gym
 ```
 
 TargetGym is in active development: PyPI releases are the stable line, and
-`main` can change quickly between them. This README and the
-[documentation](https://yannberthelot.github.io/TargetGym/) follow `main`,
-whose API (starting with `tg.make`) is not on PyPI until 0.7.0. Until then,
-install from GitHub to use it:
+`main` can change quickly between them. The
+[documentation](https://yannberthelot.github.io/TargetGym/) opens on the
+latest release, and its version menu also has `dev`, which follows `main`. To
+install `main`:
 
 ```bash
 pip install "git+https://github.com/YannBerthelot/TargetGym"
@@ -157,7 +157,7 @@ defines all three.
 The expert reads `obs` only, as a plant controller does. The oracle
 (`tg.make_oracle`) reads the full state, including quantities the observation
 withholds, so it shows what a perfect model could do rather than competing with
-a policy; [Baseline results](https://yannberthelot.github.io/TargetGym/baseline-results/) gives the
+a policy; [Baseline results](https://yannberthelot.github.io/TargetGym/latest/baseline-results/) gives the
 numbers.
 
 Vectorised rollouts, the registry, the patrol interface and the wind model
@@ -224,12 +224,12 @@ Ornstein-Uhlenbeck turbulence, unobservable by default.
 How the two shipped controllers compare on every task: how many times cheaper
 the oracle (a full-state MPC) holds each target than the expert, and where the
 ceiling sits, tracking within the instruments' resolution. The
-[interactive version](https://yannberthelot.github.io/TargetGym/baseline-results/#at-a-glance)
+[interactive version](https://yannberthelot.github.io/TargetGym/latest/baseline-results/#at-a-glance)
 can also anchor on the ceiling and gives the numbers.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://yannberthelot.github.io/TargetGym/images/results-vs-expert-dark.svg">
-  <img alt="Each task's oracle hold cost and ceiling relative to its expert, on a log scale" src="https://yannberthelot.github.io/TargetGym/images/results-vs-expert.svg" width="680">
+  <source media="(prefers-color-scheme: dark)" srcset="https://yannberthelot.github.io/TargetGym/latest/images/results-vs-expert-dark.svg">
+  <img alt="Each task's oracle hold cost and ceiling relative to its expert, on a log scale" src="https://yannberthelot.github.io/TargetGym/latest/images/results-vs-expert.svg" width="680">
 </picture>
 
 Every environment ships a tuned PID and an MPC. On `patrol_bearing_only`, which
@@ -277,7 +277,7 @@ documented as such on their environment page.
 
 **[How the baselines work](docs/baselines.md)** says how each controller is
 built and what to know before quoting an MPC number; the numbers are on
-**[Baseline results](https://yannberthelot.github.io/TargetGym/baseline-results/)**.
+**[Baseline results](https://yannberthelot.github.io/TargetGym/latest/baseline-results/)**.
 
 ---
 
@@ -311,7 +311,7 @@ method and lists what each model is validated against.
 | **[Environment reference](docs/environments.md)** | All 24: shapes, tracked variables, baselines, contracts |
 | **[Choosing an environment](docs/complexity.md)** | Which task to start with for what you want to test |
 | **[Public API](docs/api.md)** | Stable and provisional surface |
-| **[Baseline results](https://yannberthelot.github.io/TargetGym/baseline-results/)** | PID and MPC scores on every environment |
+| **[Baseline results](https://yannberthelot.github.io/TargetGym/latest/baseline-results/)** | PID and MPC scores on every environment |
 | **[RL protocol](docs/rl-protocol.md)** | Measuring a learned policy |
 | **[Target MDPs](docs/target-mdp.md)** | The formal setting |
 | **[How the baselines work](docs/baselines.md)** | PID and MPC controllers, tuning, solver reporting |

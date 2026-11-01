@@ -12,12 +12,11 @@
 #   tag      vX.Y.Z on the checked commit; tags come only from this workflow
 #   publish  those exact files to PyPI by trusted publishing, from the pypi
 #            environment, whose required reviewer approves the upload
+#   docs     the tag's documentation deployed as the site's X.Y, and made the
+#            default ("latest") when released from main (docs-deploy.yml)
 #   verify   target-gym==X.Y.Z installed back from PyPI and its documented
 #            examples run; a failure opens an issue, and yanking is the
 #            owner's call, never this workflow's
-#
-# The versioned documentation (mike, X.Y aliased latest) joins as a job after
-# publish with the 0.7.0 release, which sets mike up.
 #
 # PyPI's trusted publisher names this file, release.yml, and the pypi
 # environment: renaming either stops publishing.
@@ -52,6 +51,7 @@ jobs:
       actions: read
     outputs:
       green: ${{ steps.slow.outputs.green }}
+      minor: ${{ steps.slow.outputs.minor }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -68,6 +68,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         REPO: ${{ github.repository }}
+        VERSION: ${{ inputs.version }}
       run: |
         green=false
         runs=$(gh api "repos/$REPO/actions/workflows/python-app.yml/runs?head_sha=$GITHUB_SHA&event=push&status=success" -q '.workflow_runs[].id')
@@ -76,6 +77,7 @@ jobs:
           if [ "$large" = success ]; then green=true; fi
         done
         echo "green=$green" >> "$GITHUB_OUTPUT"
+        echo "minor=${VERSION%.*}" >> "$GITHUB_OUTPUT"
         echo "large tests green on $GITHUB_SHA: $green"
 
   slow:
@@ -146,6 +148,23 @@ jobs:
       with:
         version: ${{ env.UV_VERSION }}
     - run: uv publish --trusted-publishing always
+
+  # The tag pushed with the default token starts no workflow, so the site's X.Y
+  # is deployed from here, once the release is on PyPI. Only a release from
+  # main becomes "latest": a patch to an older minor, from its release/X.Y
+  # branch, must not take the default from the newer one.
+  docs:
+    needs: [check, publish]
+    if: always() && needs.publish.result == 'success'
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs-deploy.yml
+    with:
+      ref: v${{ inputs.version }}
+      version: ${{ needs.check.outputs.minor }}
+      alias: ${{ github.ref == 'refs/heads/main' && 'latest' || '' }}
 
   # What a user installs: target-gym[all]==X.Y.Z from PyPI, in a fresh
   # environment, retried while the index catches up, then the README's and the
