@@ -220,9 +220,11 @@ def compare(
         out["policy_settling"] = E.settling_time(policy, band)[0]
         out["settling_ratio"] = _ratio(out["expert_settling"], out["policy_settling"])
     if "running" in expert[0].terms:
-        out["consumption_ratio"] = (
-            E.gain(policy, burn_in, "running")[0]
-            / E.gain(expert, burn_in, "running")[0]
+        # Policy over expert. The expert consumes nothing on the tasks whose
+        # running weight is zero, so this takes _ratio's convention.
+        out["consumption_ratio"] = _ratio(
+            E.gain(policy, burn_in, "running")[0],
+            E.gain(expert, burn_in, "running")[0],
         )
     return out
 

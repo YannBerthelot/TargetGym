@@ -72,6 +72,19 @@ def test_compare_reads_the_verdict_the_score_and_the_room_from_paired_seeds():
     assert m["consumption_ratio"] == pytest.approx(2.0)
 
 
+def test_compare_reads_consumption_against_an_expert_that_consumes_nothing():
+    """Six rewards weight consumption at zero, so the expert's running cost
+    is 0 on those tasks. Assumed contract, following ``_ratio``'s convention
+    for the settling ratio (the docs leave this case open): the ratio is 1
+    when the policy consumes nothing either, and infinite when it does."""
+    expert = [_episode(np.full(200, 100.0), running=np.zeros(200))] * 3
+    same = scoring.compare(expert, expert, ceiling=1.0, burn_in=20, settle=10)
+    assert same["consumption_ratio"] == 1.0
+    policy = [_episode(np.full(200, 100.0), running=np.full(200, 1.0))] * 3
+    m = scoring.compare(policy, expert, ceiling=1.0, burn_in=20, settle=10)
+    assert m["consumption_ratio"] == float("inf")
+
+
 def test_compare_scores_the_hold_after_the_fixed_settle():
     """A policy that pays a large transient after each target change but holds
     at the ceiling scores 1 on the hold, and the transient ratio shows the

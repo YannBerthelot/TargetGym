@@ -8,12 +8,11 @@ pip install target-gym
 uv add target-gym
 ```
 
-!!! note "Until 0.7.0 is on PyPI"
+!!! note "Releases and `main`"
     TargetGym is in active development: PyPI releases are the stable line, and
-    `main` can change quickly between them. This site documents `main`, whose
-    API (starting with `tg.make`) is not on PyPI until 0.7.0. Until then,
-    install from GitHub to use it:
-    `pip install "git+https://github.com/YannBerthelot/TargetGym"`.
+    `main` can change quickly between them. This site is versioned: the menu
+    at the top switches between releases and `dev`, which follows `main` and
+    installs with `pip install "git+https://github.com/YannBerthelot/TargetGym"`.
 
 Python 3.11 through 3.13. The full-state MPC oracles on nine tasks plan with
 CasADi, which is optional: `pip install 'target-gym[mpc]'`. Videos and the

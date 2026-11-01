@@ -10,6 +10,8 @@ copyright: Copyright &copy; Yann Berthelot
 
 theme:
   name: material
+  # The banner on every version but the latest release (overrides/main.html).
+  custom_dir: overrides
   icon:
     repo: fontawesome/brands/github
   features:
@@ -144,3 +146,12 @@ nav:
       - Functional structure: functional-structure.md
       - Certainty-equivalence study: certainty-equivalence-study.md
       - Roadmap: roadmap.md
+
+# One site version per release, deployed by mike (docs-deploy.yml): X.Y for
+# each release, "latest" the newest, "dev" built from main.
+extra:
+  source_ref: !ENV [TARGETGYM_DOCS_REF, main]
+  version:
+    provider: mike
+    default: latest
+    alias: true

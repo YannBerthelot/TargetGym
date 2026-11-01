@@ -10,6 +10,8 @@ publisher the owner configured on 2026-10-28: repository TargetGym, workflow
 * Publishing is trusted publishing from the protected ``pypi`` environment:
   an OIDC token, and no PyPI token anywhere in the workflows.
 * Tags come only from ``release.yml``; nothing publishes on a GitHub release.
+* Once a release is on PyPI, its documentation is deployed as the site's
+  version ``X.Y``, aliased ``latest`` (RELEASING.md §2, step 7).
 * The package gate builds without ``[tool.uv.sources]``, installs the wheel
   on the oldest and the newest supported Python, and runs each extra on its
   own. It also runs on pull requests that change the packaging.
@@ -103,3 +105,14 @@ def test_the_package_gate_runs_on_packaging_changes_and_for_the_release():
     assert {"pyproject.toml", "uv.lock"} <= set(triggers["pull_request"]["paths"])
     release = _load("release.yml")["jobs"]["package"]
     assert release["uses"] == "./.github/workflows/package.yml"
+
+
+def test_a_published_release_deploys_its_docs_as_latest():
+    jobs = _load("release.yml")["jobs"]
+    assert "publish" in _upstream(jobs, "docs")
+    docs = jobs["docs"]
+    assert docs["uses"] == "./.github/workflows/docs-deploy.yml"
+    # "latest" for a release from main, nothing for a patch to an older minor.
+    assert "'latest'" in docs["with"]["alias"]
+    assert "refs/heads/main" in docs["with"]["alias"]
+    assert "workflow_call" in _triggers(_load("docs-deploy.yml"))

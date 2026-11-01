@@ -148,7 +148,8 @@ def test_the_capability_image_is_the_same_on_every_platform(
     assert gen.capability_svg(data) == drawn
 
 
-SITE = "https://yannberthelot.github.io/TargetGym/"
+# The newest release on the versioned site (mike, from 0.7.0).
+SITE = "https://yannberthelot.github.io/TargetGym/latest/"
 
 
 def test_the_readme_chart_is_one_the_docs_build_publishes(gen):

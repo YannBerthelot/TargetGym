@@ -1,0 +1,16 @@
+{#- Material shows the outdated block on every version but the default one
+    (latest): the development version built from main, or an earlier release. -#}
+{% extends "base.html" %}
+
+{% block outdated %}
+  {% if config.extra.source_ref == "main" %}
+    This is the development version, built from main: it may describe changes
+    not released yet. To use it, install from GitHub with
+    <code>pip install "git+https://github.com/YannBerthelot/TargetGym"</code>.
+  {% else %}
+    This is the documentation of an earlier release.
+  {% endif %}
+  <a href="{{ '../' ~ base_url }}">
+    <strong>Read the latest release's documentation.</strong>
+  </a>
+{% endblock %}

@@ -1,44 +1,79 @@
-# Publishes docs/ to GitHub Pages. Building and checking the site is the `docs`
-# job in python-app.yml, which runs on every pull request; this workflow only
-# adds the deploy, so a broken link still fails review rather than reaching the
-# published site. The build is repeated here rather than shared, because
-# passing an artifact between workflows costs more than the minute it takes to
-# rebuild.
+# Publishes docs/ to GitHub Pages, one site version per release (mike), as
+# ~/.claude/RELEASING.md §3 asks:
+#
+#   dev       built from main on every push, with a banner saying so
+#   X.Y       each release's docs, deployed by release.yml from its tag
+#   latest    an alias of the newest release, which the site's root opens
+#
+# mike commits each version to the gh-pages branch; the publish job uploads
+# that branch as the Pages artifact, so Pages keeps deploying from Actions.
+# Pages built before 0.7.0 lived at the root (/TargetGym/<page>/), and the
+# publish job writes a redirect at each of those paths to the same page of
+# the default version (scripts/docs_redirects.py), so old links keep working.
+#
+# Building and checking the site is the `docs` job in python-app.yml, on every
+# pull request; this workflow only deploys, so a broken link fails review
+# rather than reaching the published site.
 
 name: docs-deploy
 
 on:
   push:
     branches: [ "main" ]
-  # So the site can be republished without a commit, which is what you want the
-  # first time Pages is switched on and after any settings change.
+  # Republishes a version by hand: a tag, its X.Y, and "latest" to make it the
+  # default.
   workflow_dispatch:
+    inputs:
+      ref:
+        description: The tag to build, e.g. v0.7.0.
+        required: true
+      version:
+        description: The site version it becomes, X.Y.
+        required: true
+      alias:
+        description: latest to make it the default version, else empty.
+        default: ""
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      alias:
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
-# Pages allows one deployment at a time. Unlike the CI workflow this does not
-# cancel what is in flight: cancelling a half-finished deploy is how a site ends
-# up serving a partial build.
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 env:
   UV_VERSION: "0.11.28"
+  MIKE: mike==2.2.0
 
 jobs:
-  build:
-    name: build
+  deploy:
+    name: deploy ${{ inputs.version || 'dev' }}
     runs-on: ubuntu-latest
-    # Rendering one clip per registered environment, 24 today, is the bulk of
-    # this job. The first 21 took about eight minutes on a developer machine,
-    # and a GitHub runner has fewer and slower cores.
     timeout-minutes: 45
+    permissions:
+      contents: write
+    # One writer per version; a new push queues behind the one in flight.
+    concurrency:
+      group: docs-${{ inputs.version || 'dev' }}
+      cancel-in-progress: false
     env:
       UV_PYTHON: "3.13"
+      # The banner says which ref a version was built from (overrides/main.html).
+      TARGETGYM_DOCS_REF: ${{ inputs.ref || 'main' }}
+      VERSION: ${{ inputs.version || 'dev' }}
+      ALIAS: ${{ inputs.alias }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
+        fetch-depth: 0
     - uses: astral-sh/setup-uv@v5
       with:
         version: ${{ env.UV_VERSION }}
@@ -46,35 +81,28 @@ jobs:
         cache-dependency-glob: "uv.lock"
 
     - name: Install dependencies
-      # mkdocstrings imports the package to read its docstrings, so this needs
-      # the runtime as well as the docs group.
+      # The generators import every environment, so this needs the runtime as
+      # well as the docs group.
       run: uv sync --frozen --group dev --group docs
 
     # The per-environment clips are not in the repository.
     #
     # ``docs/videos`` is a symlink to ``videos/``, and ``.gitignore`` excludes
     # ``videos/**/*.gif`` because the rendered clips run to tens of megabytes.
-    # A local ``mkdocs build`` therefore passes on a working tree that happens
-    # to have them, and a CI build from a clean checkout would publish every
-    # environment page with a broken image. Rendering them here keeps the
-    # repository light and the site correct; only the five gallery mosaics,
-    # which the README and the environment index embed, are committed.
+    # Rendering them here keeps the repository light and the site correct; only
+    # the five gallery mosaics, which the README and the environment index
+    # embed, are committed.
     #
     # Headless: pygame needs a dummy video driver and matplotlib a
     # non-interactive backend, or the renderers abort with no display.
+    #
+    # One process per environment: in a single process XLA keeps every
+    # environment's executables alive, and the job was killed partway through
+    # the nineteenth.
     - name: Render the environment clips
       env:
         SDL_VIDEODRIVER: dummy
         MPLBACKEND: Agg
-      # One process per environment, not one for all of them.
-      #
-      # Rendering them in a single process is what the module does by default,
-      # and on a runner it dies: each environment compiles its own step_env and
-      # XLA keeps those executables and their device buffers alive, so the cost
-      # climbs from 9 s per environment for the aircraft to 92 s for the cement
-      # kiln, and the job was killed with SIGTERM partway through the nineteenth.
-      # A fresh process per environment releases all of it and the total comes
-      # in lower despite paying JAX start-up once per environment.
       run: |
         envs=$(uv run python -c "from target_gym.registry import REGISTRY; print(' '.join(REGISTRY))")
         for env in $envs; do
@@ -83,24 +111,61 @@ jobs:
           echo "::endgroup::"
         done
 
-    - name: Build the site
-      run: uv run mkdocs build --strict
+    # mike builds the site from mkdocs.yml (python-app.yml's docs job builds it
+    # with --strict on every pull request) and commits the version to
+    # gh-pages. Retried because two versions deploying at once (a release and
+    # a push to main) can race on the push.
+    - name: Commit the version to gh-pages
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        mike() { uv run --no-sync --with "$MIKE" mike "$@"; }
+        for attempt in 1 2 3; do
+          if git fetch -q origin gh-pages; then
+            git branch -f gh-pages origin/gh-pages
+          fi
+          mike deploy --update-aliases "$VERSION" $ALIAS
+          if [ "$ALIAS" = latest ]; then
+            mike set-default latest
+          elif ! git cat-file -e gh-pages:index.html 2> /dev/null; then
+            # No release yet: the root opens dev until the first one.
+            mike set-default "$VERSION"
+          fi
+          git push origin gh-pages && exit 0
+          sleep 10
+        done
+        exit 1
 
-    - uses: actions/upload-pages-artifact@v3
-      with:
-        path: site
-
-  deploy:
-    name: deploy
-    needs: build
+  publish:
+    name: publish
+    needs: deploy
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       pages: write
       id-token: write
+    # Pages allows one deployment at a time, and cancelling one halfway is how
+    # a site ends up serving a partial build.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: gh-pages
+        path: site
+    - uses: actions/checkout@v4
+      with:
+        sparse-checkout: scripts/docs_redirects.py
+        sparse-checkout-cone-mode: false
+        path: tools
+    - name: Redirect the pre-0.7.0 page URLs
+      run: python3 tools/scripts/docs_redirects.py site
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        path: site
     - id: deployment
       uses: actions/deploy-pages@v4

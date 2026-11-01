@@ -9,13 +9,13 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
-The work between `0.5.0` and 1.0. Grouped by what it changes for a user rather
-than by commit.
+## [0.7.0]
+
+Grouped by what it changes for a user rather than by commit.
 
 ### Upgrading from 0.6.1
 
-The next release is 0.7.0, a minor bump because these changes break code
-written for 0.6.1:
+A minor release, because these changes break code written for 0.6.1:
 
 - **Install the extras you use.** CasADi and do-mpc moved to the `[mpc]`
   extra, and pygame and moviepy to `[render]`. `pip install 'target-gym[all]'`
@@ -36,7 +36,6 @@ written for 0.6.1:
   key every step. The 0.6 reward is still built with `reward_version=1`, and
   its baselines are in `src/target_gym/data/baseline_returns_v1.json`.
 - **Removed names, and what replaces them:**
-  - `plane_steps`: use `plane_energy` with `PlaneParams(speed_weight=0.0)`.
   - `PlanePatrolMARL` and `PatrolMARLParams`: the multi-agent task is now
     `formation`, through `FormationMARL`.
   - `CSTRCasadiMPC`, `FourTankCasadiMPC`, and the per-task MPC factories that
@@ -56,6 +55,11 @@ written for 0.6.1:
   `target_gym.records.load(kind)` rather than by path.
 
 ### Added
+
+- **Versioned documentation.** The site keeps one version per release
+  (`0.7` onwards), opens on the latest, and has `dev` for `main`, with a
+  banner saying so and how to install it. Links into the site from before
+  0.7.0 redirect to the same page of the latest release.
 
 - **A release workflow that checks the package users install**
   (`.github/workflows/release.yml`), started by hand with the version. It
@@ -113,16 +117,6 @@ written for 0.6.1:
   episode started with the last one's integral. `docs/using-the-pids.md` now
   says which form of the PID to use in which loop and who holds its memory,
   and warns that `env.expert_policy(obs)` with one argument has none.
-- **Eleven environments**: building HVAC, pH neutralisation, Skogestad's
-  distillation Column A, the NREL 5 MW reference wind turbine, a grid battery,
-  a boiler drum, and a cement kiln; then four aircraft tasks that move the
-  setpoint instead of holding it, since a tuned PID finishes an altitude hold
-  with 0.0 m of settled error and can no longer tell two controllers apart:
-  `plane_steps` (a staircase), `plane_sine` (a sinusoid, whose amplitude ratio
-  and phase lag are the closed loop's frequency response), `plane_energy`
-  (altitude and airspeed together, which removes the spare actuator), and
-  `plane3d_racetrack` (a holding pattern, which is heading hold and a sustained
-  coordinated turn in one task). Twenty-one in total.
 - **A Baseline results page** (`docs/baseline-results.md`), first under
   "Beating the baselines": the PID's and MPC's protocol scores (gain and NEA)
   and episode returns for every environment, in two tables grouped by family.
@@ -130,24 +124,6 @@ written for 0.6.1:
   which CI checks, so the protocol headline is no longer pasted by hand. The
   tables used to sit at the end of the 1,000-line methodology page, now titled
   "How the baselines work".
-- **Environment versioning.** `EnvSpec.version` and `spec.versioned_name` give
-  every environment a public identity such as `plane-v1`, stamped in
-  `data/env_versions.json` by `scripts/stamp_env_versions.py`.
-  `tests/test_env_versions.py` fails when an environment's fingerprint moves
-  without its version being bumped, so a published number keeps meaning what it
-  meant. Everything ships as `v1`.
-- **A harness for learned-policy results**: `data/rl_results.json`, written
-  through `target_gym.rl_results.record_result` and guarded by an environment
-  fingerprint deliberately narrower than the one the shipped baselines use, so
-  re-tuning a controller cannot throw away a training run. The experimental
-  design is fixed in advance in `docs/rl-protocol.md`. No results are published
-  yet, and nothing in the suite presumes RL beats a PID.
-- **`docs/target-mdp.md`**, stating the definition the whole suite is built on:
-  the target set, the tracking shape, the admissibility criterion on the target
-  and the feasibility condition on the plant.
-- **A Colab quickstart** (`notebooks/quickstart.ipynb`), linked from the README
-  and the documentation index, and executed by the test suite so it cannot rot.
-- `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1).
 - **A benchmark runner** (`target_gym.benchmark`, provisional): one policy
   interface (`reset(key, obs, task)`, `act(carry, obs, t)`) and a runner that
   plays any controller on one task or on every registered task, on episodes
@@ -156,25 +132,13 @@ written for 0.6.1:
   shipped PID / MPC as policies. A study can record named per-step
   quantities beside the reward (`record=`, e.g. the version-1 tracking score)
   and get their per-episode means.
-- **A central registry** (`target_gym.registry`) describing every environment,
-  its parameters and its baselines, and a **shared conformance suite** that runs
-  the same contracts against all of them -- PRNG hygiene, determinism, the
-  gymnax six-value step API, and a PID that beats the best constant action.
-- **Physics contracts.** Every environment carries a `PHYSICS.md` with a sourced
-  parameter table, published validation targets asserted by tests, and numbered
-  known deviations. The method is written up in `docs/PHYSICS_METHODOLOGY.md`.
-- **Documentation** under `docs/`: getting started, a public API contract, a
-  baselines guide, and an environment reference generated from the registry.
-  Every runnable example is executed by the test suite.
-- `CONTRIBUTING.md`, `LICENSE`, `CITATION.cff`, and a pre-commit configuration.
-- `tracked_names`, `obs_value_index` and `obs_target_index` on every
-  environment, so generic tooling can find the tracked variable and its
-  setpoint without naming the environment.
-- Actuator lag parameters for the aircraft (`power_response_rate`,
-  `stick_response_rate`, `aileron_response_rate`), previously literals.
-- `CHANGELOG.md`, issue templates and a pull-request template.
 
 ### Changed
+
+- **The quickstart notebook uses the 0.7 API** (`tg.make`, `make_expert`,
+  `score_policy`, `make_gymnasium`), describes the version 2 cost, and no
+  longer refuses a Colab TPU runtime: gymnax 1.0.1 lifted the `jax<0.7` cap
+  that made installing there downgrade JAX.
 
 - **One record file per task.** The recorded returns, protocol rows, hold
   measurements and version stamps moved from one shared file per kind to
@@ -717,22 +681,13 @@ written for 0.6.1:
   three seeds on every plant, and writes `data/protocol_results.json`;
   `docs/baselines.md` carries the table.
 
-- **Migrated to the gymnax 1.0 six-value step API.** `step_env` now reports
-  natural termination alone; the time limit is gymnax's, via `step`.
-- **Every renderer rebuilt** on a shared control-room toolkit
-  (`target_gym.render_kit`), and the README gallery regenerated and extended to
-  every environment.
-- **Seven per-environment figure/video runners consolidated** into one
-  registry-driven module, which covers all twenty-one environments rather than
-  eight.
-- The PyPI development status classifier moves from `3 - Alpha` to
-  `4 - Beta`. Not a promise of an API freeze, which stays deferred; a statement
-  that the surface is settled enough to build against.
-- Python support is 3.11 through 3.14, tested on all four in CI.
-- The test suite runs in parallel; full-suite wall time went from about
-  fifteen minutes to under two.
-
 ### Fixed
+
+- **`score_policy` crashed on the tasks that weight consumption at zero.**
+  `consumption_ratio` divided by the expert's running cost, which is 0 there,
+  so `tg.score_policy("distillation", ...)` raised `ZeroDivisionError`. It now
+  reads 1 when neither consumes anything and infinite when only the policy
+  does, as the settling ratio already did.
 
 - **A fresh `pip install target-gym` could not be imported.** gymnax imports
   `six` without declaring it, and nothing brought it in after python-dateutil
@@ -835,6 +790,123 @@ written for 0.6.1:
   advances. The distillation episode reads 200 min rather than "3 min", the
   CSTR's 25 min rather than "25 s". The two fingerprints moved with the new
   field; the baselines were re-recorded and reproduced to the last digit.
+
+### Removed
+
+- **Dead code from the hashed modules**: `plane.env_jax.run_timesteps` (it
+  unpacked five values from a six-value step), the `__main__` demos at the end
+  of 13 environment modules and `plane/dynamics.py`, `reward.proximity_cost`,
+  `utils.plot_curve` and `utils.plot_features_from_trajectory`, and the 3D
+  circle and figure-8 PID tuners in `experts/pid_tuning.py` with the
+  `plane3d_circle`, `plane3d_figure8` and `plane3d_racetrack` entries of
+  `pid_gains.json`, which no expert has read since the aircraft experts moved
+  to TECS and L1 guidance. The `plane3d_heading` entry stays: patrol's lead
+  flies on it.
+
+- **The comparison helpers in `target_gym.utils`**: `save_comparison_gif`,
+  `save_comparison_figure`, `load_or_run_mpc_episode`,
+  `load_or_build_interpolator`, `run_episode_headless` and
+  `run_episode_headless_with_state`, along with the `make clear-mpc` target
+  that emptied their `data/mpc_cache/` and `data/interpolators/` caches. They
+  drew the constant, PID and MPC comparison figure and GIF for the seven
+  per-environment runners, and nothing has called them since
+  `target_gym.runners.runners` replaced those. Its `figure_comparison` draws
+  the reward comparison now and needs no cache, because it runs each MPC
+  episode once. `utils.py` is hashed into every fingerprint, so the baselines
+  and protocol rows were re-recorded, and came out bit for bit the same, and
+  the version stamps were re-stamped in place.
+
+### Known gaps
+
+- No published RL baseline results yet.
+
+[Unreleased]: https://github.com/YannBerthelot/TargetGym/compare/0.5.0...HEAD
+
+## [0.6.2] - 2026-11-01
+
+A patch to 0.6.1, released from the `release/0.6` branch. It changes nothing
+but the declared dependencies.
+
+### Fixed
+
+- **A fresh `pip install target-gym` could not be imported.** gymnax imports
+  `six` without declaring it, and nothing brought it in after python-dateutil
+  4.0 dropped it, so `import target_gym` failed with `No module named 'six'`
+  on any new install. `six` is now a declared dependency.
+
+## [0.6.1] - 2026-09-11
+
+The work between `0.5.0` and 0.6.1, released as 0.6.0 and 0.6.1: this file
+was not split by release until 0.7.0. Grouped by what it changes for a user
+rather than by commit.
+
+### Added
+
+- **Eleven environments**: building HVAC, pH neutralisation, Skogestad's
+  distillation Column A, the NREL 5 MW reference wind turbine, a grid battery,
+  a boiler drum, and a cement kiln; then four aircraft tasks that move the
+  setpoint instead of holding it, since a tuned PID finishes an altitude hold
+  with 0.0 m of settled error and can no longer tell two controllers apart:
+  `plane_steps` (a staircase), `plane_sine` (a sinusoid, whose amplitude ratio
+  and phase lag are the closed loop's frequency response), `plane_energy`
+  (altitude and airspeed together, which removes the spare actuator), and
+  `plane3d_racetrack` (a holding pattern, which is heading hold and a sustained
+  coordinated turn in one task). Twenty-one in total.
+- **Environment versioning.** `EnvSpec.version` and `spec.versioned_name` give
+  every environment a public identity such as `plane-v1`, stamped in
+  `data/env_versions.json` by `scripts/stamp_env_versions.py`.
+  `tests/test_env_versions.py` fails when an environment's fingerprint moves
+  without its version being bumped, so a published number keeps meaning what it
+  meant. Everything ships as `v1`.
+- **A harness for learned-policy results**: `data/rl_results.json`, written
+  through `target_gym.rl_results.record_result` and guarded by an environment
+  fingerprint deliberately narrower than the one the shipped baselines use, so
+  re-tuning a controller cannot throw away a training run. The experimental
+  design is fixed in advance in `docs/rl-protocol.md`. No results are published
+  yet, and nothing in the suite presumes RL beats a PID.
+- **`docs/target-mdp.md`**, stating the definition the whole suite is built on:
+  the target set, the tracking shape, the admissibility criterion on the target
+  and the feasibility condition on the plant.
+- **A Colab quickstart** (`notebooks/quickstart.ipynb`), linked from the README
+  and the documentation index, and executed by the test suite so it cannot rot.
+- `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1).
+- **A central registry** (`target_gym.registry`) describing every environment,
+  its parameters and its baselines, and a **shared conformance suite** that runs
+  the same contracts against all of them -- PRNG hygiene, determinism, the
+  gymnax six-value step API, and a PID that beats the best constant action.
+- **Physics contracts.** Every environment carries a `PHYSICS.md` with a sourced
+  parameter table, published validation targets asserted by tests, and numbered
+  known deviations. The method is written up in `docs/PHYSICS_METHODOLOGY.md`.
+- **Documentation** under `docs/`: getting started, a public API contract, a
+  baselines guide, and an environment reference generated from the registry.
+  Every runnable example is executed by the test suite.
+- `CONTRIBUTING.md`, `LICENSE`, `CITATION.cff`, and a pre-commit configuration.
+- `tracked_names`, `obs_value_index` and `obs_target_index` on every
+  environment, so generic tooling can find the tracked variable and its
+  setpoint without naming the environment.
+- Actuator lag parameters for the aircraft (`power_response_rate`,
+  `stick_response_rate`, `aileron_response_rate`), previously literals.
+- `CHANGELOG.md`, issue templates and a pull-request template.
+
+### Changed
+
+- **Migrated to the gymnax 1.0 six-value step API.** `step_env` now reports
+  natural termination alone; the time limit is gymnax's, via `step`.
+- **Every renderer rebuilt** on a shared control-room toolkit
+  (`target_gym.render_kit`), and the README gallery regenerated and extended to
+  every environment.
+- **Seven per-environment figure/video runners consolidated** into one
+  registry-driven module, which covers all twenty-one environments rather than
+  eight.
+- The PyPI development status classifier moves from `3 - Alpha` to
+  `4 - Beta`. Not a promise of an API freeze, which stays deferred; a statement
+  that the surface is settled enough to build against.
+- Python support is 3.11 through 3.14, tested on all four in CI.
+- The test suite runs in parallel; full-suite wall time went from about
+  fifteen minutes to under two.
+
+### Fixed
+
 - **An installed package could not find its own tuned gains.** Both
   `experts/pid.py` and `provenance.py` resolved the data directory relative to
   the repository root, which is correct from a source checkout and nonsense from
@@ -1072,16 +1144,6 @@ written for 0.6.1:
 
 ### Removed
 
-- **Dead code from the hashed modules**: `plane.env_jax.run_timesteps` (it
-  unpacked five values from a six-value step), the `__main__` demos at the end
-  of 13 environment modules and `plane/dynamics.py`, `reward.proximity_cost`,
-  `utils.plot_curve` and `utils.plot_features_from_trajectory`, and the 3D
-  circle and figure-8 PID tuners in `experts/pid_tuning.py` with the
-  `plane3d_circle`, `plane3d_figure8` and `plane3d_racetrack` entries of
-  `pid_gains.json`, which no expert has read since the aircraft experts moved
-  to TECS and L1 guidance. The `plane3d_heading` entry stays: patrol's lead
-  flies on it.
-
 - **`plane_steps`**, absorbed into `plane_energy`. They were the same
   environment: same plant, same setpoint schedule, same disturbances, same
   episode length, differing only in `speed_weight` being 0.0 rather than 0.5.
@@ -1111,19 +1173,6 @@ written for 0.6.1:
   locomotion experts for environments this project does not have), and
   `scripts/benchmark_integration.py`, which imported an undeclared dependency
   and could not run.
-
-- **The comparison helpers in `target_gym.utils`**: `save_comparison_gif`,
-  `save_comparison_figure`, `load_or_run_mpc_episode`,
-  `load_or_build_interpolator`, `run_episode_headless` and
-  `run_episode_headless_with_state`, along with the `make clear-mpc` target
-  that emptied their `data/mpc_cache/` and `data/interpolators/` caches. They
-  drew the constant, PID and MPC comparison figure and GIF for the seven
-  per-environment runners, and nothing has called them since
-  `target_gym.runners.runners` replaced those. Its `figure_comparison` draws
-  the reward comparison now and needs no cache, because it runs each MPC
-  episode once. `utils.py` is hashed into every fingerprint, so the baselines
-  and protocol rows were re-recorded, and came out bit for bit the same, and
-  the version stamps were re-stamped in place.
 
 ### Known gaps
 
