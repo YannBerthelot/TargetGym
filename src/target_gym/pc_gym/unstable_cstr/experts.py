@@ -34,7 +34,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax import struct
-from jax.experimental import enable_x64
 from jax.tree_util import Partial as partial
 from scipy.linalg import solve_discrete_are
 
@@ -50,6 +49,13 @@ from target_gym.pc_gym.unstable_cstr.env import (
     steady_coolant,
     steady_temperature,
 )
+
+try:
+    # Newer JAX; 0.10 removed the experimental one. The declared range starts
+    # at JAX 0.6, which has only that.
+    from jax import enable_x64
+except ImportError:
+    from jax.experimental import enable_x64
 
 # ---------------------------------------------------------------------------
 # Point of no return

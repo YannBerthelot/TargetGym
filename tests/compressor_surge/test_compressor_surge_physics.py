@@ -10,7 +10,7 @@ balance. Deviations D1, D2, D3, D4 and D5 are strict xfails at the end.
 
 Everything here runs the env's own functions: the closed forms with
 ``xp=np`` (float64), and the velocity, its Jacobian and the step under
-``jax.experimental.enable_x64`` unless a test says float32.
+``enable_x64`` unless a test says float32.
 """
 
 import functools
@@ -20,7 +20,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax.experimental import enable_x64
 from scipy.integrate import simpson
 from scipy.optimize import brentq
 
@@ -45,6 +44,11 @@ from target_gym.compressor_surge.env import (
     surge_flow_per_speed,
 )
 from target_gym.compressor_surge.env_jax import CompressorSurge
+
+try:
+    from jax import enable_x64
+except ImportError:  # JAX 0.6; 0.10 removed the experimental name
+    from jax.experimental import enable_x64
 
 #: U.S. Standard Atmosphere 1976, sea level (read): density and speed of sound.
 ISA_DENSITY = 1.2250  # kg/m^3

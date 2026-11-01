@@ -54,7 +54,7 @@ def test_step():
     n_obs, reward, terminated, truncated, new_info = env.step(action)
     new_state = env.state
     assert new_state.x > state.x
-    assert new_state.x_dot == pytest.approx(state.x_dot, rel=0.1)
+    assert float(new_state.x_dot) == pytest.approx(float(state.x_dot), rel=0.1)
     assert new_state.z_dot < state.z_dot
     if new_state.z_dot <= 0:
         assert new_state.z <= state.z

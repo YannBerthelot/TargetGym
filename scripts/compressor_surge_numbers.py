@@ -38,7 +38,7 @@ it ships; ``--section mpc-width`` and ``--mpc-gate`` run the NMPC's own
 CasADi step from ``experts.py``, which test_mpc_model_is_the_env_step and
 test_mpc_predicts_one_step_like_the_plant hold to the env. Closed forms,
 roots and Jacobians are computed in float64
-(``jax.experimental.enable_x64``), and so are single trajectories unless
+(``enable_x64``), and so are single trajectories unless
 their line says float32, as the integrator's rk4_10 against rk4_40
 comparison does. Closed-loop tables run in float32, as the env does; the
 guard section also repeats its battery in float64 to compare the two. Each
@@ -73,7 +73,6 @@ warnings.filterwarnings("ignore")
 import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
 import numpy as np  # noqa: E402
-from jax.experimental import enable_x64  # noqa: E402
 from scipy.optimize import brentq  # noqa: E402
 from scipy.stats import beta, chi2, spearmanr  # noqa: E402
 
@@ -139,6 +138,11 @@ from target_gym.compressor_surge.experts import (  # noqa: E402
     stage_openings,
 )
 from target_gym.experts.mpc import IPOPT_MAX_ITER  # noqa: E402
+
+try:
+    from jax import enable_x64
+except ImportError:  # JAX 0.6; 0.10 removed the experimental name
+    from jax.experimental import enable_x64
 
 P = CompressorSurgeParams()
 ENV = CompressorSurge()

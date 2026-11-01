@@ -1,0 +1,161 @@
+# The distribution as users get it (~/.claude/RELEASING.md, steps 3 and 4 of
+# the release). The wheel and the sdist are built once and checked, then the
+# wheel is installed outside the checkout and run on the oldest and the newest
+# supported Python.
+#
+# The Release workflow calls this on the commit to tag, with the version, and
+# publishes the files built here: an artifact uploaded in a called workflow
+# belongs to the caller's run. Pull requests that change the packaging run it
+# too, with the development version hatch-vcs derives from git.
+#
+# It exists because every test passing on the repository proved nothing about
+# the package: issue #104 was the docs showing an API the published package
+# did not have, and on 2026-11-01 this gate's first run found that a fresh
+# `pip install target-gym` could not be imported at all (gymnax imports six,
+# which nothing declared any more).
+
+name: Package
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version to build, X.Y.Z. Empty builds the development version.
+        type: string
+        default: ""
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/package.yml
+      - .github/workflows/release.yml
+      - tests/release_smoke.py
+
+concurrency:
+  group: package-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.11.28"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        # hatch-vcs derives the version from the tags.
+        fetch-depth: 0
+        fetch-tags: true
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: ${{ env.UV_VERSION }}
+
+    - name: Build the wheel and the sdist
+      env:
+        VERSION: ${{ inputs.version }}
+      # --no-sources: the metadata users get, without [tool.uv.sources]. A
+      # release is built before its tag exists, so hatch-vcs is told the
+      # version rather than reading it from git.
+      run: |
+        if [ -n "$VERSION" ]; then export SETUPTOOLS_SCM_PRETEND_VERSION="$VERSION"; fi
+        uv build --no-sources
+        ls -la dist/
+
+    - name: Check the wheel and the sdist
+      env:
+        VERSION: ${{ inputs.version }}
+      # W002 (duplicate files) is expected: patrol and patrol_bearing_only
+      # share their physics, so their version stamps are the same file.
+      run: |
+        wheel=$(ls dist/target_gym-*-py3-none-any.whl)
+        meta=$(unzip -p "$wheel" '*.dist-info/METADATA')
+        grep -qx "Name: target-gym" <<< "$meta" || { echo "the wheel is not target-gym"; exit 1; }
+        built=$(sed -n 's/^Version: //p' <<< "$meta")
+        if [ -n "$VERSION" ] && [ "$built" != "$VERSION" ]; then
+          echo "the wheel is $built, not $VERSION"; exit 1
+        fi
+        test -f "dist/target_gym-$built.tar.gz" || { echo "no sdist for $built"; exit 1; }
+        uvx check-wheel-contents@0.6.3 --ignore W002 "$wheel"
+        uvx twine@7.0.0 check --strict dist/*
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: dist/
+        if-no-files-found: error
+
+  # The wheel in a fresh environment outside the checkout, resolved as a user's
+  # pip would, so the newest dependencies the ranges allow (on 3.13 that is
+  # JAX 0.11). "docs" installs [all] and runs the README's and the docs'
+  # examples and the quickstart notebook, with the extraction tests/test_docs.py
+  # uses; the others install one extra each and run its smoke check.
+  installed:
+    name: installed (${{ matrix.check }}, py${{ matrix.python }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+        check: [docs, core, mpc, render]
+    env:
+      JAX_PLATFORMS: cpu
+      SDL_VIDEODRIVER: dummy
+      MPLBACKEND: Agg
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: ${{ env.UV_VERSION }}
+    - uses: actions/download-artifact@v4
+      with:
+        name: dist
+        path: ${{ runner.temp }}/dist
+
+    # In the runner's temporary directory, so no project file configures it.
+    - name: Install the wheel in a fresh environment
+      env:
+        CHECK: ${{ matrix.check }}
+        PYTHON: ${{ matrix.python }}
+      run: |
+        wheel=$(ls "$RUNNER_TEMP"/dist/target_gym-*.whl)
+        case "$CHECK" in
+          docs) requirements=("target-gym[all] @ file://$wheel" pytest pytest-xdist pytest-readme) ;;
+          core) requirements=("target-gym @ file://$wheel") ;;
+          *) requirements=("target-gym[$CHECK] @ file://$wheel") ;;
+        esac
+        cd "$RUNNER_TEMP"
+        uv venv --python "$PYTHON" env
+        uv pip install --python env/bin/python "${requirements[@]}"
+        uv pip list --python env/bin/python
+        echo "$RUNNER_TEMP/env/bin" >> "$GITHUB_PATH"
+
+    # Run from the checkout, as the examples and the smoke checks are:
+    # target_gym must still come from site-packages (the src/ layout keeps the
+    # repository's copy off sys.path).
+    - name: Check that target_gym is the installed wheel
+      run: |
+        python -c '
+        import pathlib, sysconfig, target_gym
+        location = pathlib.Path(target_gym.__file__).resolve()
+        site = pathlib.Path(sysconfig.get_paths()["purelib"]).resolve()
+        print(location)
+        assert location.is_relative_to(site), f"target_gym comes from {location}, not {site}"
+        '
+
+    - if: matrix.check == 'docs'
+      name: Run the README's and the docs' examples and the notebook
+      run: >-
+        python -m pytest -q -p no:cacheprovider tests/test_docs.py
+        -m "not records" -k "documented_example_runs or colab_notebook"
+
+    - if: matrix.check != 'docs'
+      name: Run the smoke check
+      run: python tests/release_smoke.py ${{ matrix.check }}

@@ -168,7 +168,7 @@ action and full travel high over 20 schedules is finite in float32
 
 Computed with the env's own functions by the tests named. The closed forms
 run with `xp=np` (float64); the velocity, its Jacobian and the step run under
-`jax.experimental.enable_x64` unless marked float32.
+`enable_x64` (float64) unless marked float32.
 
 | Quantity | Target | Model | Test | |
 |---|---|---|---|---|

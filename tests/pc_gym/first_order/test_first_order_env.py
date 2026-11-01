@@ -63,7 +63,7 @@ def test_larger_tau_slows_dynamics(params):
     v_slow, _ = compute_velocity(
         jnp.array([x]), action=u, params=FirstOrderParams(tau=1.0)
     )
-    assert abs(v_fast[0]) == pytest.approx(2 * abs(v_slow[0]), rel=1e-5)
+    assert float(abs(v_fast[0])) == pytest.approx(2 * float(abs(v_slow[0])), rel=1e-5)
 
 
 def test_larger_gain_increases_velocity(params):

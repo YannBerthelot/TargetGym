@@ -17,7 +17,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax.experimental import enable_x64
 from scipy.optimize import brentq
 
 import target_gym.pc_gym.cstr.env as cstr_env
@@ -45,6 +44,11 @@ from target_gym.pc_gym.unstable_cstr.experts import (
     point_of_no_return_batch,
     raw_from_coolant,
 )
+
+try:
+    from jax import enable_x64
+except ImportError:  # JAX 0.6; 0.10 removed the experimental name
+    from jax.experimental import enable_x64
 
 TARGETS = (0.45, 0.50, 0.55, 0.60, 0.65)
 #: Open-loop growth rate at each target (/min), asserted by

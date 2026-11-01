@@ -120,7 +120,7 @@ def test_outflow_proportional_to_sqrt_level(params):
         params=params,
     )
     # Outflow term: -(a/A)*sqrt(2g)*sqrt(h); so ratio should be sqrt(4) = 2
-    assert abs(v_quad[0]) == pytest.approx(2 * abs(v_base[0]), rel=1e-4)
+    assert float(abs(v_quad[0])) == pytest.approx(2 * float(abs(v_base[0])), rel=1e-4)
 
 
 def test_no_outflow_at_zero_level(params):

@@ -1,0 +1,68 @@
+# The declared dependency ranges, tested beyond uv.lock, which every other
+# job uses. "newest" resolves the latest versions the ranges allow, on the
+# newest supported Python (JAX 0.11 on 3.13); "lowest" puts every direct
+# dependency at its floor, on the oldest (JAX 0.6.2 on 3.11). A user's pip
+# can land anywhere between, so both ends have to work.
+#
+# It exists because the ranges had drifted from the truth without anything
+# noticing: on 2026-11-01 a fresh install could not import (gymnax's
+# undeclared six), two experts failed on JAX 0.10, and the numpy 1.26 floor
+# changed the HVAC expert's warm-up. Weekly, because new releases upstream
+# change the "newest" end without a commit here.
+
+name: Compatibility
+
+on:
+  schedule:
+    - cron: "0 4 * * 1"  # Mondays 04:00 UTC
+  workflow_dispatch:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/compat.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.11.28"
+  JAX_PLATFORMS: cpu
+
+jobs:
+  compat:
+    name: compat (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: newest
+            python: "3.13"
+            resolution: highest
+            sync: uv sync --upgrade --group dev
+          - name: lowest
+            python: "3.11"
+            resolution: lowest-direct
+            sync: uv sync --group dev
+    # Every uv command of the job resolves in the same mode: uv.lock records
+    # the mode it was resolved in, and the job re-resolves it in this one.
+    env:
+      UV_RESOLUTION: ${{ matrix.resolution }}
+      UV_PYTHON: ${{ matrix.python }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: ${{ env.UV_VERSION }}
+    - run: ${{ matrix.sync }}
+    - run: uv pip list
+    # The small tier, as on every pull request. The records tier is left out:
+    # it checks committed rows against this tree's code, not the dependencies.
+    - run: uv run --no-sync pytest -q -m "not medium and not large and not records"

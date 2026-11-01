@@ -54,7 +54,7 @@ def test_step():
     # Perform the step transition.
     n_obs, new_state, reward, terminated, truncated, _ = env.step(key, state, action)
     assert new_state.x > state.x
-    assert new_state.x_dot == pytest.approx(state.x_dot, rel=0.1)
+    assert float(new_state.x_dot) == pytest.approx(float(state.x_dot), rel=0.1)
     assert new_state.z < state.z
     assert new_state.z_dot < state.z_dot
     assert new_state.power >= state.power

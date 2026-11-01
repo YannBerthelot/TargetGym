@@ -49,6 +49,17 @@ If you add a dependency, check it resolves across that whole window --
 `pygame` itself only ships wheels through 3.13, so on 3.14 the project pulls
 `pygame-ce`, the maintained fork of the same code under the same import name.
 
+The declared ranges are tested at both ends, not only at `uv.lock`: the
+Compatibility workflow runs the small tier at the newest versions they allow
+and with every direct dependency at its floor, weekly and on any change to
+`pyproject.toml` or `uv.lock`. A pull request that changes the packaging also
+runs the Package workflow, which installs the built wheel outside the
+repository and runs the docs' examples and a smoke check per extra on it.
+
+Releases are cut by the maintainer with the Release workflow, started by hand
+with the version. It publishes only once the version's CHANGELOG entry is on
+`main` and those gates have passed on that exact commit.
+
 ## Style
 
 `ruff` and `black`, both enforced in CI and configured in `pyproject.toml`.

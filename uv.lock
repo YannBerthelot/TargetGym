@@ -2209,6 +2209,7 @@ dependencies = [
     { name = "pillow" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "six" },
     { name = "tqdm" },
 ]
 
@@ -2245,6 +2246,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-readme" },
     { name = "pytest-xdist" },
+    { name = "pyyaml" },
     { name = "ruff" },
     { name = "target-gym", extra = ["all"] },
 ]
@@ -2265,6 +2267,7 @@ test = [
     { name = "pytest-cov" },
     { name = "pytest-readme" },
     { name = "pytest-xdist" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
@@ -2278,18 +2281,19 @@ requires-dist = [
     { name = "gymnasium", specifier = ">=1.1,<1.4" },
     { name = "gymnax", specifier = ">=1.0.0" },
     { name = "jax", specifier = ">=0.6.2" },
-    { name = "matplotlib", specifier = ">=3.8.1" },
+    { name = "matplotlib", specifier = ">=3.8.4" },
     { name = "moviepy", marker = "extra == 'all'", specifier = ">=2.2.1" },
     { name = "moviepy", marker = "extra == 'render'", specifier = ">=2.2.1" },
-    { name = "numpy", specifier = ">=1.26.1" },
+    { name = "numpy", specifier = ">=2.0" },
     { name = "optax", specifier = ">=0.2" },
-    { name = "pandas", specifier = ">=2.0" },
+    { name = "pandas", specifier = ">=2.2.2" },
     { name = "pillow", specifier = ">=10.0" },
     { name = "pygame", marker = "python_full_version < '3.14' and extra == 'all'", specifier = ">=2.6.1" },
     { name = "pygame", marker = "python_full_version < '3.14' and extra == 'render'", specifier = ">=2.6.1" },
     { name = "pygame-ce", marker = "python_full_version >= '3.14' and extra == 'all'", specifier = ">=2.5.8" },
     { name = "pygame-ce", marker = "python_full_version >= '3.14' and extra == 'render'", specifier = ">=2.5.8" },
-    { name = "scipy", specifier = ">=1.11" },
+    { name = "scipy", specifier = ">=1.13" },
+    { name = "six", specifier = ">=1.16" },
     { name = "tqdm", specifier = ">=4.66" },
 ]
 provides-extras = ["all", "mpc", "render"]
@@ -2311,6 +2315,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=4.1.0" },
     { name = "pytest-readme", specifier = ">=1.0.2" },
     { name = "pytest-xdist", specifier = ">=3.6" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.12.11" },
     { name = "target-gym", extras = ["all"] },
 ]
@@ -2331,6 +2336,7 @@ test = [
     { name = "pytest-cov", specifier = ">=4.1.0" },
     { name = "pytest-readme", specifier = ">=1.0.2" },
     { name = "pytest-xdist", specifier = ">=3.6" },
+    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]

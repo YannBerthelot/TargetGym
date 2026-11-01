@@ -17,7 +17,7 @@ Every number goes through the task's own code: the closed forms,
 ``point_of_no_return`` and ``cascade_step(xp=jnp)`` under ``vmap`` and
 ``scan``. No dynamics are restated, so the numbers describe the env as it
 ships. Roots, folds, eigenvalues and the point of no return are computed in
-float64 (``jax.experimental.enable_x64``); every closed-loop table runs in
+float64 (``enable_x64``); every closed-loop table runs in
 float32, as the env does. Each table says which. The env cannot take a zero
 jacket lag (``tau_j`` divides), so the 0 s rows set the jacket to the command
 at the start of each step and make ``tau_j`` infinite, which holds it there
@@ -38,7 +38,6 @@ warnings.filterwarnings("ignore")
 import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
 import numpy as np  # noqa: E402
-from jax.experimental import enable_x64  # noqa: E402
 from scipy.linalg import expm  # noqa: E402
 from scipy.optimize import brentq, linprog  # noqa: E402
 from scipy.stats import spearmanr  # noqa: E402
@@ -85,6 +84,11 @@ from target_gym.pc_gym.unstable_cstr.experts import (  # noqa: E402
     trips_under_full_cooling,
 )
 from target_gym.utils import convert_raw_action_to_range  # noqa: E402
+
+try:
+    from jax import enable_x64
+except ImportError:  # JAX 0.6; 0.10 removed the experimental name
+    from jax.experimental import enable_x64
 
 P = UnstableCSTRParams()
 ENV = UnstableCSTR()
