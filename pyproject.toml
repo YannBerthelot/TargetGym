@@ -63,15 +63,25 @@ dependencies = [
     "flax>=0.10",
     "chex>=0.1.86",
     "optax>=0.2",
-    "numpy>=1.26.1",
-    "scipy>=1.11",
-    "pandas>=2.0",
-    "matplotlib>=3.8.1",
+    # NumPy 2 and the first releases built for it. Under numpy 1's value-based
+    # casting the HVAC expert's clock ran in float64, and its 04:00 warm-up
+    # decision flipped against the recorded episodes; the compatibility job
+    # tests these floors (2026-11-01).
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "pandas>=2.2.2",
+    "matplotlib>=3.8.4",
     # Used directly by the gallery-clip tooling and the patrol runner. It
     # arrives transitively through matplotlib anyway, but an
     # import in our own code is our own dependency to declare.
     "pillow>=10.0",
     "tqdm>=4.66",
+    # gymnax imports six (gymnax/utils/load_mnist.py) without declaring it.
+    # python-dateutil brought it in through matplotlib and pandas until
+    # dateutil 4.0 dropped it, and from then on a fresh `pip install
+    # target-gym` failed at `import target_gym`. Found by the release's
+    # installed-package gate on 2026-11-01.
+    "six>=1.16",
 ]
 
 [project.optional-dependencies]
@@ -117,6 +127,8 @@ test = [
     "pytest-readme>=1.0.2",
     "pytest-xdist>=3.6",
     "coverage>=7.3.2",
+    # tests/test_release_workflow.py reads the workflow files.
+    "pyyaml>=6.0",
 ]
 lint = [
     "ruff>=0.12.11",

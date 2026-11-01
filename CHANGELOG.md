@@ -12,7 +12,63 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 The work between `0.5.0` and 1.0. Grouped by what it changes for a user rather
 than by commit.
 
+### Upgrading from 0.6.1
+
+The next release is 0.7.0, a minor bump because these changes break code
+written for 0.6.1:
+
+- **Install the extras you use.** CasADi and do-mpc moved to the `[mpc]`
+  extra, and pygame and moviepy to `[render]`. `pip install 'target-gym[all]'`
+  installs what 0.6.1 did. Without `[mpc]`, `make_oracle` on the nine CasADi
+  tasks raises an `ImportError` that names the extra.
+- **NumPy 2 is required:** the floors are now numpy 2.0, scipy 1.13,
+  pandas 2.2.2 and matplotlib 3.8.4. Under numpy 1 the HVAC expert's clock
+  ran in float64 and its warm-up decision differed from the recorded
+  episodes. JAX stays open from 0.6.2 to the newest release gymnax allows,
+  and both ends are tested.
+- **Start from `target_gym.make(name)`**, which returns the environment and
+  its scored parameters. `env.default_params` is now that scored
+  configuration on every task, so code that relied on the old defaults
+  (episode lengths, schedules, disturbances) should pass its own `params`.
+- **Returns from 0.6.1 are not comparable.** Every reward is now a
+  floor-normalised cost (reward version 2), every task's version went up
+  (`<name>-vN`), the experts copy field practice, and rollouts draw a fresh
+  key every step. The 0.6 reward is still built with `reward_version=1`, and
+  its baselines are in `src/target_gym/data/baseline_returns_v1.json`.
+- **Removed names, and what replaces them:**
+  - `plane_steps`: use `plane_energy` with `PlaneParams(speed_weight=0.0)`.
+  - `PlanePatrolMARL` and `PatrolMARLParams`: the multi-agent task is now
+    `formation`, through `FormationMARL`.
+  - `CSTRCasadiMPC`, `FourTankCasadiMPC`, and the per-task MPC factories that
+    `target_gym.experts` re-exported: use `target_gym.make_oracle(name)`.
+  - The comparison helpers in `target_gym.utils` (`save_comparison_gif`,
+    `save_comparison_figure`, `load_or_run_mpc_episode`,
+    `load_or_build_interpolator`, `run_episode_headless`,
+    `run_episode_headless_with_state`, `plot_curve`,
+    `plot_features_from_trajectory`): `target_gym.runners.runners` draws the
+    comparisons.
+  - `plane.env_jax.run_timesteps`: use `env.step` in a loop or `lax.scan`.
+- **Deprecated, still working with a warning:** `env.make_mpc` (use
+  `target_gym.make_oracle(name)`) and `GymnasiumPlane` (use
+  `target_gym.make_gymnasium("plane")`).
+- **Recorded data moved** to one file per task under
+  `target_gym/data/<kind>/<task>.json`. Read it through
+  `target_gym.records.load(kind)` rather than by path.
+
 ### Added
+
+- **A release workflow that checks the package users install**
+  (`.github/workflows/release.yml`), started by hand with the version. It
+  publishes nothing until the version's CHANGELOG entry is on main, the large
+  tests and the records are green on that commit, and the built wheel,
+  installed outside the repository on Python 3.11 and 3.13, runs the README's
+  and the docs' examples, the quickstart notebook, a scored expert episode on
+  every task (matching its recorded return) and each extra on its own
+  (`.github/workflows/package.yml`, which also runs on pull requests that
+  change the packaging). It tags the release, publishes by PyPI trusted
+  publishing from the protected `pypi` environment, and installs the release
+  back from PyPI to check it. It replaces `publish.yml`, which uploaded
+  whatever a GitHub release built, with a stored token.
 
 - **One way in by registry name.** `env, params = target_gym.make(name)`
   returns the environment and its scored parameters, in the shape of
@@ -677,6 +733,18 @@ than by commit.
   fifteen minutes to under two.
 
 ### Fixed
+
+- **A fresh `pip install target-gym` could not be imported.** gymnax imports
+  `six` without declaring it, and nothing brought it in after python-dateutil
+  4.0 dropped it, so `import target_gym` failed on any new install. `six` is
+  now a declared dependency. The release workflow's installed-package gate
+  found it; the test suite, which installs every extra, could not.
+- **unstable_cstr and compressor_surge failed on current JAX.** Their experts
+  imported `jax.experimental.enable_x64`, which JAX 0.10 removed, while the
+  declared `jax>=0.6.2` let a fresh install pick JAX 0.10 or 0.11. They now
+  fall back from `jax.enable_x64` to the experimental name, which works on
+  both. The release gate and a weekly compatibility job now test the lowest
+  and the newest versions the ranges allow.
 
 - **The time-in-band KPI held 12 tasks to no band.** The band read a single
   `e_floor` from the params, so the tasks that give a tolerance per output

@@ -326,8 +326,8 @@ class TestFigureEightReset:
         expected_y = float(state.target_y) + float(state.target_radius) * jnp.sin(
             orientation
         )
-        assert float(state.x) == pytest.approx(expected_x, rel=1e-3)
-        assert float(state.y) == pytest.approx(expected_y, abs=1.0)
+        assert float(state.x) == pytest.approx(float(expected_x), rel=1e-3)
+        assert float(state.y) == pytest.approx(float(expected_y), abs=1.0)
 
     def test_initial_heading_tangent(self):
         """At τ=0, heading is orientation + π/2 (tangent to the lemniscate)."""

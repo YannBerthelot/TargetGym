@@ -36,7 +36,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax import struct
-from jax.experimental import enable_x64
 from scipy.optimize import brentq
 
 from target_gym.compressor_surge.env import (
@@ -58,6 +57,13 @@ from target_gym.compressor_surge.env import (
 )
 from target_gym.experts import pid as _pid_mod
 from target_gym.experts.mpc import CasadiMPC
+
+try:
+    # Newer JAX; 0.10 removed the experimental one. The declared range starts
+    # at JAX 0.6, which has only that.
+    from jax import enable_x64
+except ImportError:
+    from jax.experimental import enable_x64
 
 # ---------------------------------------------------------------------------
 # Gains

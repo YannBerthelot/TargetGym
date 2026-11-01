@@ -8,7 +8,7 @@ and that the line the controllers read stays below it, that energy is
 conserved, and that RK4 is stable wherever the plant can go. Deviations D1
 and D4 are strict xfails at the end. Everything here runs the env's own
 functions: the closed forms with ``xp=np`` (float64), and the velocity, its
-Jacobian and the step under ``jax.experimental.enable_x64``, since the
+Jacobian and the step under ``enable_x64``, since the
 figures are quoted to 0.01 K.
 """
 
@@ -21,7 +21,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax.experimental import enable_x64
 from scipy.optimize import brentq
 
 import target_gym.pc_gym.cstr.env as cstr_env
@@ -42,6 +41,11 @@ from target_gym.pc_gym.unstable_cstr.experts import (
     raw_from_coolant,
     trips_under_full_cooling,
 )
+
+try:
+    from jax import enable_x64
+except ImportError:  # JAX 0.6; 0.10 removed the experimental name
+    from jax.experimental import enable_x64
 
 #: The grid of targets PHYSICS.md tabulates, spanning the band.
 TARGETS = (0.45, 0.50, 0.55, 0.60, 0.65)

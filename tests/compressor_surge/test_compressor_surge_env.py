@@ -26,7 +26,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax.experimental import enable_x64
 from scipy.optimize import brentq
 
 from target_gym import reward as R
@@ -61,6 +60,11 @@ from target_gym.compressor_surge.experts import (
     raw_from_commands,
     surge_margin_from_obs,
 )
+
+try:
+    from jax import enable_x64
+except ImportError:  # JAX 0.6; 0.10 removed the experimental name
+    from jax.experimental import enable_x64
 
 
 @pytest.fixture(scope="module")

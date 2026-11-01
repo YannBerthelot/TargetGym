@@ -20,7 +20,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax.experimental import enable_x64
 from scipy.optimize import brentq
 
 import target_gym.experts.pid as pid_mod
@@ -71,6 +70,11 @@ from target_gym.pc_gym.unstable_cstr.experts import (
     unstable_cstr_pid_step,
 )
 from target_gym.utils import convert_raw_action_to_range
+
+try:
+    from jax import enable_x64
+except ImportError:  # JAX 0.6; 0.10 removed the experimental name
+    from jax.experimental import enable_x64
 
 #: The inner-loop moves of the tuner's unguarded search from DEFAULT_GAINS at
 #: the shipped 6 s lag, Kp_T x 2 and Kd_T x 0.7, on DEFAULT_GAINS' outer loop.

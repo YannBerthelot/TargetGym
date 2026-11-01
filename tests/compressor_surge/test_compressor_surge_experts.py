@@ -24,7 +24,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax.experimental import enable_x64
 
 import target_gym.experts.pid as pid_mod
 from target_gym import records
@@ -78,6 +77,11 @@ from target_gym.compressor_surge.experts import (
     stage_openings,
     surge_margin_from_obs,
 )
+
+try:
+    from jax import enable_x64
+except ImportError:  # JAX 0.6; 0.10 removed the experimental name
+    from jax.experimental import enable_x64
 
 #: Gain sets the guard must refuse, each with the other loop at
 #: ``DEFAULT_GAINS``: an anti-surge loop whose linearised slow mode decays at
