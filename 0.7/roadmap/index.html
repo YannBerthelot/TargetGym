@@ -1,0 +1,3197 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="JAX reinforcement learning environments for target MDPs: reach a setpoint and hold it, across aircraft, process control and industrial plants.">
+      
+      
+      
+        <link rel="canonical" href="https://yannberthelot.github.io/TargetGym/0.7/roadmap/">
+      
+      
+        <link rel="prev" href="../certainty-equivalence-study/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Roadmap - TargetGym</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/results-chart.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#roadmap-and-known-gaps" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+    This is the documentation of an earlier release.
+  
+  <a href="../..">
+    <strong>Read the latest release's documentation.</strong>
+  </a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TargetGym" class="md-header__button md-logo" aria-label="TargetGym" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TargetGym
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Roadmap
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Follow system theme"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Follow system theme" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/YannBerthelot/TargetGym" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    YannBerthelot/TargetGym
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TargetGym" class="md-nav__button md-logo" aria-label="TargetGym" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TargetGym
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/YannBerthelot/TargetGym" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    YannBerthelot/TargetGym
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../using-the-pids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the PIDs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rendering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Throughput
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environments
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Environments
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../complexity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an environment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aircraft
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Aircraft
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane_sine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude - sinusoid
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane_energy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude and airspeed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_heading/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D heading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_circle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D circle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_racetrack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D holding pattern
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_figure8/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D figure-8
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/patrol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patrol - wingman
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/patrol_bearing_only/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patrol - wingman, bearing-only
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/formation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Formation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-agent formation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process control
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Process control
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/cstr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSTR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/first_order/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/four_tank/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Four-tank
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/ph_neutralization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pH neutralisation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/distillation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distillation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/unstable_cstr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unstable CSTR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Industrial
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Industrial
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/glass_furnace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glass Furnace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/reactor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/hvac/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building HVAC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/cement_kiln/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cement Kiln
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/boiler_drum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boiler Drum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/compressor_surge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compressor Surge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Energy
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Energy
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/wind_turbine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wind Turbine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/battery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../baseline-results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baseline results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rl-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../capability-profile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability profile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rl-baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Background
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Background
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target-mdp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target MDPs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How the baselines work
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reward-shaping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reward shaping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PHYSICS_METHODOLOGY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Contributing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model-review-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model review checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../functional-structure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Functional structure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../certainty-equivalence-study/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certainty-equivalence study
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Roadmap
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Roadmap">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#before-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before 1.0
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#documentation-debt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation debt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known gaps
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Roadmap
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Roadmap">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#before-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before 1.0
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#documentation-debt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation debt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known gaps
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/YannBerthelot/TargetGym/edit/main/docs/roadmap.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="roadmap-and-known-gaps">Roadmap and known gaps<a class="headerlink" href="#roadmap-and-known-gaps" title="Permanent link">&para;</a></h1>
+<p>Moved out of the README, which is the shop window rather than the planning
+board. This is the honest state of the project: what is done, what is next, and
+what is broken and recorded rather than hidden.</p>
+<h2 id="roadmap">Roadmap<a class="headerlink" href="#roadmap" title="Permanent link">&para;</a></h2>
+<ul>
+<li>[x] Mature the glass furnace and reactor environments (physics, reward shaping, episode lengths).</li>
+<li>[x] Document and test every environment's physics against published data.</li>
+<li>[x] Rebuild every renderer on a shared control-room toolkit, and regenerate
+      the gallery clips against it.</li>
+<li>[x] Restore the Plane Patrol baselines with pursuit guidance. Done: both
+      variants ship a stateful wrapper around the functional pursuit expert,
+      and <code>patrol_bearing_only</code> adds a lead-state estimator in front of the
+      same law. Both now ship <code>PatrolTwinOracle</code> in the MPC slot as well;
+      on <code>patrol_bearing_only</code> it reads the true state, a full-state bound.</li>
+<li>[ ] Add microburst / spatially-varying wind fields (position-dependent, not just altitude-linear).</li>
+<li>[ ] Provide benchmark results for popular RL baselines.</li>
+<li>[ ] Add random orientation variations to circle and heading tasks.</li>
+</ul>
+<h3 id="before-10">Before 1.0<a class="headerlink" href="#before-10" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p>[ ] <strong>Ship 0.6, the first release meant to be advertised.</strong>
+      Deliberately 0.6 rather than 0.9: there will likely be further pre-1.0
+      releases, and numbering as though 1.0 were imminent would promise a
+      freeze that has not been decided. What 0.6 is for is getting the library
+      in front of people and finding out what breaks.</p>
+<p>Comparable projects reached 1.0 by freezing an API rather than by
+  finishing features. Gymnasium v1.0 says it "marks the end of major changes
+  to the project's central API", and its content was mostly removal and
+  consolidation; gymnax 1.0 made the break it knew it needed, shipped a
+  legacy wrapper, and promised not to do it again. Both ran a feedback
+  period first, Gymnasium's from v1.0.0a1 in February 2024 to v1.0.0 that
+  October. 0.6 starts that clock here, as a normal release rather than a
+  pre-release, because <code>pip install</code> skips pre-releases and this package
+  needs the feedback more than the ceremony.</p>
+<p>Everything below is doable on the machine this project is developed on.
+  None of it needs a GPU farm, which is the point: the large training grid
+  is a later release and is blocked on compute this project does not have.</p>
+<p><strong>Blocking, and fatal on first contact if missed:</strong></p>
+<ul>
+<li>[ ] <strong>Release before advertising.</strong> PyPI is at 0.6.1 (2026-09-11),
+    which predates the version-2 rewards, the two newest tasks and the PID
+    interface, so anyone acting on a post today installs an older package.</li>
+<li>[x] <strong>Environment versioning.</strong> Done: <code>EnvSpec.version</code>,
+    <code>spec.versioned_name</code>, <code>src/target_gym/data/env_versions.json</code>, and
+    <code>tests/test_env_versions.py</code>, which fails when an environment's
+    fingerprint moves without its version being bumped. Every environment
+    ships as <code>v1</code>.</li>
+<li>[x] <strong>Baselines re-recorded and green.</strong> Done: all twenty environments
+    with an MPC, recorded in one 39-minute run, every MPC leading its PID,
+    no environment terminating early on any seed, and all seven CasADi
+    plants reporting 100% solver convergence across 119 600 solves.
+    <code>EnvSpec.mpc_degraded</code> is empty for the first time, both entries retired
+    by fixing their cause. The furnace, which began at 16% behind its own
+    PID with one seed running seventy minutes against a three-minute
+    median, now leads on all ten seeds.</li>
+<li>[x] <strong>Host the documentation.</strong> Done: <code>.github/workflows/docs-deploy.yml</code>
+    builds with <code>mkdocs build --strict</code> and deploys via
+    <code>actions/deploy-pages@v4</code>, with a <code>workflow_dispatch</code> trigger so the
+    site can be published without a commit. The repository's Pages source
+    is set to GitHub Actions.</li>
+<li>[x] <strong><code>CODE_OF_CONDUCT.md</code>.</strong> Done: Contributor Covenant 2.1
+    verbatim, with the maintainer's address as the reporting contact,
+    linked from <code>CONTRIBUTING.md</code>. Verbatim because it is the text
+    GitHub's community profile recognises and contributors already
+    know; a house rewording would be neither.</li>
+</ul>
+<p><strong>Baseline gaps to close or document honestly:</strong></p>
+<ul>
+<li>
+<p>[x] <strong><code>plane_steps</code> MPC terminates on all ten seeds</strong> (656 against the
+    PID's 1593). Fixed, by two separate defects, and it was never the
+    moving setpoint: freezing the target reproduced the first crash
+    exactly, with the aircraft on the ground at t=372 and the first tread
+    change still 28 s away.</p>
+<p>The first defect is in the objective. The altitude reward scores one
+thing and the aircraft has two actuators, so over a 90 s planning
+window the best move is a zoom climb, trading airspeed for altitude
+faster than the engines can supply it. It touched the commanded
+altitude at t=90 with 30 m/s of airspeed left and departed.
+<code>_plane_objective</code> now carries a barrier on airspeed against the stall
+speed at that mass and altitude, the pattern the turbine's gradient
+planner (<code>make_wind_turbine_gradient_mpc</code>) already used. Fencing
+angle of attack instead does not work: it sits at
+4-8 deg through the whole manoeuvre and crosses 15 deg one step before
+the departure.</p>
+<p>The second defect is in the search, it is the more serious of the two,
+and it belongs to <code>GradientMPC</code> rather than to the aircraft. Saturating
+actuators are written with <code>clip</code> or <code>maximum</code>, whose derivative at the
+kink is exactly zero, and <code>_optimize</code> projected onto the closed
+interval, so any overshooting step parked an action exactly on a bound
+and it could never move again. Measured at the plan where the aircraft
+gave up: the true one-sided slope in thrust is +3.0 and autodiff
+returns 0.0, with thrust pinned at -1.000 for 800 steps while the
+elevator went on being optimised normally. Holding iterates 1e-3 inside
+the bounds fixes it, which is what interior-point solvers do and for
+this reason. Twelve of the twenty environments with an MPC use this
+optimiser, so any of them with a saturating actuator could have been
+silently sitting at a limit. Re-recording says none of the four plants
+among them was: they moved by under half a point of return, and
+distillation not at all. It was latent there and real on the aircraft.</p>
+<p>Worth recording that four other explanations were argued from a
+plausible mechanism and refuted by the next measurement: the moving
+setpoint, an energy trade the planner would not make, fuel exhaustion,
+and NaN gradients. Sampling the objective on a grid, which is what
+finally located it, cost five minutes and should have come first.
+      - [x] <strong>Tune the <code>plane3d_racetrack</code> PID.</strong> Done, and the settled
+cross-track error goes from 3.02 km to 0.31 km against an 8.4 km turn
+radius, with the return from 269.2 to 319.0. The <code>expert_degraded</code>
+note is gone: it now clears the effectiveness contract on its own.</p>
+<p>Two things were in the way. The class declared <code>obs_value_index</code> and
+no <code>obs_target_index</code>, so <code>runners.rollout</code> raised on it: the search
+scores candidates inside a <code>try</code> and reported every one as <code>-inf</code>,
+finishing successfully having changed nothing, and no baseline could
+have been recorded for the environment either. The conformance suite
+now checks both indices across the registry, where the tests that
+covered this named three classes by hand.</p>
+<p>And left free, the search stiffens the roll loop and removes its
+damping, because nothing in the reward objects to how the aircraft is
+banked: +21 of return for an achieved bank of 48 deg against a 30 deg
+command limit, and worse tracking. The roll gains are held, and the
+whole improvement is in the cross-track gain.</p>
+</li>
+</ul>
+<p><strong>Presentation, before anyone looks at it:</strong></p>
+<ul>
+<li>[x] <strong>The media is stale.</strong> Done: all 21 clips re-rendered, the console
+    ones re-quantised through <code>scripts/make_gallery_clips.py</code>, and the five
+    mosaics rebuilt. Nineteen <code>mpc_output*.gif</code> files were deleted with
+    them: nothing referenced them, not the page generator, not the mosaics,
+    not the Makefile, and they were 114 MB of a 246 MB directory. The
+    flagship captions also lost their jargon ("non-minimum phase" told a
+    reader nothing; the four-tank's problem is that the obvious valve
+    pairing is unstable).</li>
+<li>[x] <strong>The README is too long.</strong> Done: 410 lines and 3199 words to 331
+    and 1718. Reference material moved rather than deleted (the validation
+    findings to <code>PHYSICS_METHODOLOGY.md</code>, the complexity ladder to its own
+    page, the throughput table to a link), the second person removed
+    entirely, and the quickstart rewritten on the direct <code>Plane()</code> API
+    instead of the registry. Four wrong numbers came out with it, including
+    a throughput range this roadmap's own trim had invented.</li>
+<li>[x] <strong>Publishable media reaches the site.</strong> Done, and it was broken:
+    <code>docs/videos</code> is a symlink into a directory whose <code>*.gif</code> files are
+    gitignored, so a local <code>mkdocs build --strict</code> passed on a working tree
+    that happened to have the clips while a CI build from a clean checkout
+    would have published twenty-one environment pages of broken images.
+    <code>docs-deploy</code> now renders them before building. Only the five mosaics
+    are committed, which is what the README and the environment index embed.</li>
+</ul>
+<p><strong>Worth doing, cheap:</strong></p>
+<ul>
+<li>[x] A Colab or notebook linked from the README. Done:
+    <code>notebooks/quickstart.ipynb</code>, with a badge in the README, a link from
+    <code>docs/index.md</code>, and <code>tests/test_docs.py</code> executing it so it cannot
+    rot. gymnax and Brax both lead with one, and it turns a reader into a
+    user in a click.</li>
+<li>[x] Decide the <code>4 - Beta</code> classifier question. Decided: 0.6 ships as
+    <code>4 - Beta</code>. Twenty-two environments, a versioning scheme with a test
+    enforcing it, a documented public API contract and a conformance suite
+    that runs against every environment are not what <code>3 - Alpha</code> describes
+    to someone scanning PyPI. It is not a promise of an API freeze, which
+    stays explicitly deferred past 0.6.</li>
+</ul>
+<p>Left for a later release, explicitly: every learned-policy number, the
+  hyperparameter search, and the API freeze decisions (whether <code>Plane</code> or
+  <code>Airplane2D</code> is canonical, whether <code>step_env</code> stays public alongside
+  <code>step</code>, any remaining observation-layout changes).</p>
+<p>That includes the preliminary CPU slice that used to be planned here
+  (five environments, PPO and SAC, tabula-rasa, budgets 1e5 and 1e6, 30
+  seeds, published defaults). It is out of 0.6 by decision, not by
+  accident. What 0.6 is for is putting the environments and their expert
+  baselines in front of people; a small, deliberately underpowered RL
+  result is the one number a reader would over-read, and publishing it
+  alongside "no results yet" invites exactly the comparison the protocol
+  was written to prevent. <code>docs/rl-baselines.md</code> saying the harness exists
+  and nothing is published is a cleaner claim than a preliminary table
+  hedged with caveats.</p>
+</li>
+<li>
+<p>[ ] <strong>Scope the baseline fingerprint to the code each environment reaches.</strong>
+      <code>provenance.baseline_fingerprint</code> hashes the whole of <code>experts/pid.py</code> and
+      <code>experts/mpc.py</code>, so <em>adding</em> a controller for a new environment marks
+      every existing environment's record stale. Registering the racetrack hold
+      added 93 lines to <code>pid.py</code> and deleted none, and that alone invalidated
+      all twenty recorded baselines, though no existing controller's behaviour moved.
+      Partly done: each task's oracle now lives in its own package's
+      <code>experts.py</code>, so oracle work re-records only that package, and since
+      2026-10 every PID lives there too, as a pure <code>Controller</code>. Only the
+      shared cores, <code>experts/pid.py</code> and <code>experts/mpc.py</code>, still invalidate
+      everything.
+      Re-recording is cheap enough today (the aircraft variants dominate the
+      cost and needed re-recording regardless), so this was paid rather than
+      fixed, but it scales badly: it is a full re-measure per environment added.
+      The fix is to hash only the definitions an environment's own controllers
+      reach, transitively, plus module-level constants. It must stay
+      conservative, because the module's whole point is that it may cry stale when
+      nothing changed but must never report fresh when something did. So an
+      unresolvable entry point has to fall back to hashing the entire file.</p>
+</li>
+<li>
+<p>[x] <strong>Remove the <code>utils.py</code> helpers nothing calls, with the next re-record.</strong>
+      Done, without waiting for another change to pay for the re-record. The
+      helpers, their tests, the two imports, the allowlist entry and the stale
+      mentions are gone. The 20 baselines and 21 protocol rows were re-recorded
+      and matched the previous records bit for bit apart from their
+      fingerprints, and the 21 version stamps were re-stamped in place with a
+      note saying so. What follows is the item as it was written.</p>
+<p><code>load_or_run_mpc_episode</code>, <code>save_comparison_gif</code>, <code>save_comparison_figure</code>
+  and <code>load_or_build_interpolator</code> lost their last callers when 5458229
+  replaced the seven per-environment runners with <code>runners/runners.py</code>.
+  Only <code>tests/test_runners.py</code> and <code>tests/test_utils.py</code> still call them,
+  and <code>save_comparison_figure</code> has no caller at all. <code>run_episode_headless</code>
+  and <code>run_episode_headless_with_state</code> are only reachable through them.</p>
+<p>Deleting them changes no behaviour, but <code>utils.py</code> is hashed into both
+  provenance fingerprints. On the 21-environment registry the deletion
+  would stale all 21 version stamps, all 20 recorded baselines and all 21
+  protocol rows, which is about two hours of re-measurement to reproduce
+  the same numbers. So they go in the next change that has to re-record
+  anyway, or once fingerprints hash only the code each environment reaches
+  (the item above). That change should also drop the <code>pickle</code> and
+  <code>FigureCanvasAgg</code> imports, which nothing else in <code>utils.py</code> uses, the
+  helpers' tests, the <code>("utils.py", "_, rewards = result")</code> allowlist entry
+  in <code>tests/test_env_conformance.py</code>, and the mentions of
+  <code>run_episode_headless</code> in <code>plane/dynamics.py</code> and in that test file. It
+  needs a CHANGELOG entry, because <code>target_gym.utils</code> is importable.
+  <code>moviepy</code> stays, since <code>save_video</code> uses it.</p>
+</li>
+<li>
+<p>[ ] <strong>Find a defensible framing for running cost, then put it back.</strong>
+      Six environments carried a consumption term in their reward -- fuel on
+      the glass furnace, the boiler drum and the cement kiln, energy on the
+      building, reboiler duty on the column, and reagent on the pH loop. All six
+      are zero for the 0.6 line, and those tasks score setpoint tracking alone.</p>
+<p>The battery is not among them, though it was for a few hours. Its
+  <code>cost_weight</code> gates degradation and state-of-charge comfort rather than
+  pricing an input, and those keep the problem well posed rather than
+  trading against it -- which is the distinction this item has to get right
+  before restoring any weight anywhere. The fields and the terms are still there, so
+  restoring a weight is a one-line change once there is a reason to pick a
+  particular one.</p>
+<p>Running cost is real: nobody operates a furnace without caring what the
+  gas costs. The problem is the <em>weight</em>. Against a tracking term that is
+  already normalised into [0, 1], a cost weight silently chooses a point on
+  a Pareto front, and none of the seven had an argument behind its number.
+  The glass furnace showed what that costs: a 0.1 fuel weight against the
+  MPC's quadratic surrogate made a 3.3 K standing error optimal, so the
+  controller sat 6 K cold with fuel at minimum 80% of the time and lost to
+  its own PID. The reward and the controller disagreed about the trade, and
+  both were defensible readings of an undefined one.</p>
+<p>What a proper framing needs: the two terms in commensurable units rather
+  than one normalised and one priced, so the exchange rate is a physical
+  statement instead of a tuning constant. For the furnace that is money per
+  kelvin-hour of off-spec glass against money per GJ of gas, both of which
+  are quotable. It also needs the controller's surrogate to inherit the same
+  exchange rate rather than re-deriving it, which is the band item above.</p>
+</li>
+<li>
+<p>[ ] <strong>Justify the glass furnace's episode length with something measurable.</strong>
+      Its 1600 steps and the 0.99938 discount derived from them rest on a crown
+      response of 132 steps, and the physics no longer has one. Since it gained a
+      regenerator, a reversal cycle, a 120 s thermocouple lag and a two-step fuel
+      dead time, the open-loop step response does not settle at all on this
+      timescale: 822 steps at a 1600-step probe window, 1520 at 3200, 2383 at
+      5760, 3415 at 11520. It keeps growing with the window, which means there is
+      no time constant to quote rather than a large one.</p>
+<p>This does not invalidate the recorded return, which is measured over a
+  fixed 1600-step episode either way. What it invalidates is the <em>reason</em>
+  that episode is 1600. Something has to replace it: the setpoint schedule
+  (the crown target steps <code>N_SETPOINTS</code> times, so an episode could be defined
+  as some number of schedule segments), or the reversal period, or a settling
+  criterion measured on the closed loop rather than open loop.</p>
+<p>An attempt to enforce the episode-length rule as a test was withdrawn for
+  related reasons, recorded in the episode-length section of
+  <a href="../rl-protocol/">rl-protocol.md</a>: <code>tau_actuator</code> does not exist for two
+  thirds of this suite, and measuring it inside the episode under judgement
+  makes the criterion circular.</p>
+</li>
+<li>
+<p>[ ] <strong>Measurement noise, anywhere.</strong> Not one of the environments has any.
+      Every controller in the suite reads the exact state, filtered only where a
+      sensor lag was modelled deliberately (the glass furnace's crown
+      thermocouple, and nothing else). Real instruments are noisy, and a
+      benchmark that asks "can a learned policy hold a setpoint more precisely
+      than a PID" without noise is asking it in the one regime where derivative
+      action is free. This is a 1.0 item rather than a 0.6 one: adding noise
+      invalidates every baseline and every tuned gain, and the tuning has to be
+      redone against it rather than ported.</p>
+</li>
+<li>
+<p>[ ] <strong>Cullet ratio on the glass furnace.</strong> Declared as deviation D4 in its
+      PHYSICS.md. Batch is a mix of raw materials and recycled glass, and cullet
+      melts with roughly 2.5 % less energy per 10 % of the charge; real plants
+      see it move by tens of percent as supply changes, usually without
+      measuring it well. It is a <em>gain</em> disturbance, which is qualitatively
+      unlike every disturbance the suite currently carries: integral action
+      cancels a load and does not cancel a gain error. It would be the first of
+      its kind here.</p>
+</li>
+<li>
+<p>[ ] <strong>Transport delay on the aircraft, if it is warranted.</strong> The furnace had
+      no dead time and a PID held it thirty times tighter than a real furnace is
+      held; the aircraft has the same gap, with first-order lags on throttle and
+      elevator but no transport delay, and a real turbofan's 5-8 s spool-up is
+      flattered by a single lag. The difference is that the aircraft is a fast
+      plant given a slow task, so bandwidth is probably not what binds, and its
+      PID is nowhere near the ceiling. Measure before changing anything.</p>
+</li>
+<li>
+<p>[ ] <strong>Stop the controller models drifting from the plants.</strong> Seven
+      environments give their MPC a separate symbolic re-implementation in
+      do-mpc rather than differentiating <code>step_env</code>. That is the right call
+      where a faithful symbolic model exists -- it buys a properly constrained
+      NLP instead of projected gradient descent, native DAE support for the
+      furnace's algebraic flame, and convergence in 15-20 sparse iterations
+      instead of 50 differentiated rollouts. What it costs is a second copy of
+      the plant, and the glass furnace's has now diverged from its environment
+      three separate times: an error band inherited from a deleted reward, a
+      regenerator coarsened without the observation changing, and batch charging
+      the controller did not know was pulsed (until the oracle audit, 2026-10,
+      fed it the charge; the plant still runs about 0.15 K a step hotter than
+      the controller's model, which the oracle now estimates online). Nothing
+      detects any of that. The fix is a conformance check per environment: step
+      both models from the same state under the same input and assert the
+      one-step predictions agree to a stated tolerance, so a divergence is a
+      test failure rather than a slow loss of baseline quality.</p>
+</li>
+<li>
+<p>[x] <strong>A check for code that has drifted from its own documentation.</strong>
+      These contracts are what a reader consults <em>instead of</em> the code, so a
+      stale one does not merely age, it actively misinforms. Reviewing all
+      twenty-one environments found this to be the repository's most common
+      defect, and three of that review's own findings were wrong because of it:
+      a deviation claiming post-stall lift decays to zero when the fix had long
+      been implemented and a duplicate was written and reverted on the strength
+      of it; a docstring saying sub-step rewards are summed when the code takes
+      their mean; and a deviation crediting a reward fix to a band the reward
+      does not read.</p>
+<p><strong>Done</strong>, as <code>scripts/check_doc_drift.py</code>, run by <code>make ci-docs</code>, by CI
+  and by <code>tests/test_docs.py</code>. Four checks, all mechanical: a contract
+  naming a symbol its package no longer defines, allowing sentences that
+  say a thing <em>used to</em> exist; a parameter whose comment claims the reward
+  uses it when no reward function references it; an episode-length comment
+  quoting a number that disagrees with the value beside it; and a comment
+  containing a second <code>#</code>, which is the whole signature of the formatter
+  merge that damaged five contract files.</p>
+<p>On its first run, after the manual review had already swept by hand, it
+  found three more: <code>slot_tolerance</code> still driving a Gaussian in
+  <code>patrol/marl.py</code> after the single-agent reward migrated away from one an
+  hour earlier, a racetrack comment quoting 900 steps against a value of
+  650, and the doubled <code># bar</code> the manual pass had noticed and not fixed.</p>
+<p>The fifth check, a deviation whose defect no longer appears in the code,
+  needs judgement and is deliberately left out rather than approximated
+  badly. The two items below are how to reach it.</p>
+</li>
+<li>
+<p>[x] <strong>Generate the derived numbers into each <code>PHYSICS.md</code>.</strong>
+      <code>docs/environments.md</code> has never drifted, because a generator writes it
+      and CI checks it. Nothing else gets that treatment, and the drift is
+      concentrated where it is missing.</p>
+<p>Extend the generator to emit a per-environment facts block between
+  markers, computed from the registry and the params: episode length in
+  steps, seconds and time constants; <code>delta_t</code>; action bounds; the
+  observation layout with which state fields are hidden; terminal
+  conditions; the reward's envelope and floor. Then <code>--check</code> fails when a
+  file's block no longer matches.</p>
+<p>This is <em>less</em> maintenance than today, not more: generated text cannot be
+  wrong and nobody has to update it.</p>
+<p><strong>Done</strong>, as <code>scripts/generate_physics_facts.py</code>, writing a block into all
+  fifteen contracts between markers and checked by <code>make ci-docs</code>, CI and
+  <code>tests/test_docs.py</code>. It carries episode length in steps and in wall time,
+  <code>delta_t</code>, the action dimension and bounds, the observation width and the
+  float-state count, whose gap is what the controller cannot see.</p>
+<p>Deliberately narrow. Only facts that can be <em>computed</em> go in the block;
+  everything a contract says about why a number is what it is, what the
+  plant is, what is omitted and where the model stops being valid stays
+  hand-written, because none of it can be derived and all of it is the point
+  of the document. Terminal conditions and reward envelopes are not in there
+  for that reason: they are expressed as code, not as data, and generating
+  them would mean parsing rather than reading.</p>
+</li>
+<li>
+<p>[ ] <strong>Make deviations testable, the way validation rows already are.</strong>
+      Every row of a validation table names a test that asserts it, and no
+      validation row has drifted. Deviations name nothing, and they have
+      drifted badly. That is not a coincidence.</p>
+<p>Require each ⚠️ or ❌ deviation to cite a test <strong>demonstrating the
+  limitation still exists</strong>. Then repairing the code breaks the test, and a
+  deviation cannot outlive its own fix. Both of the worst cases would have
+  been caught automatically: the post-stall note the day the Viterna blend
+  landed, and the reactor's reward note when the sum became a mean.</p>
+<p>Cost is one test per deviation, and there are roughly sixty across
+  twenty-one contracts, so this is a real piece of work rather than an
+  afternoon. The honest limit is worth stating too: this forces a deviation
+  to stay <em>true</em>, but nothing can force its <em>rationale</em> to stay accurate.
+  The goal is to shrink the surface the drift checker has to police, not to
+  eliminate it.</p>
+</li>
+<li>
+<p>[ ] <strong>Derive the MPC error bands rather than choosing them one at a time.</strong>
+      Every MPC objective normalises its tracking error by a per-plant band:
+      <code>tracking_band</code> on the distillation column, the pH loop and now the
+      glass furnace, <code>power_band</code> on the turbine (its version-1 planner),
+      <code>comfort_band</code>, <code>lime_band</code>, <code>reward_band</code>. (The CSTR and four-tank
+      oracles track in floor units, <code>e_floor</code>, since the oracle audit
+      (2026-10). The four-tank's <code>tracking_band</code> has been unread since the
+      reward became log-scaled.) The surrogate is deliberate
+      and measured -- the log-scaled reward's gradient decays like <code>1/e</code>, so the
+      pull toward the setpoint is weakest where the controller is furthest from
+      it, and a quadratic in the normalised error scored 341.9 against 172.1 for
+      the reward itself on the turbine. What is not deliberate is the <em>sizing</em>.</p>
+<p>The glass furnace showed what that costs. Its band was <code>tracking_scale</code>,
+  40 K, inherited from the reward it had before the log-scaled one, and left
+  unread by the plant when the reward changed. With the loop operating at
+  about 1 K the tracking term was 6e-4 against an O(1) fuel penalty, so the
+  objective was nearly flat in the direction being scored: the MPC trailed
+  its own PID by 16% on 10 of 10 seeds and IPOPT needed 349 iterations a
+  step on the worst one. Re-sized to 10 K, with the controller's regenerator
+  coarsened at the same time, it runs 43x faster and beats the PID.</p>
+<p>Measuring each band against the error its PID actually holds puts the
+  suite between 0.1x and 45x, with no convention visible. The pass is to
+  derive the band from the log reward's own discriminating region -- the
+  error at which the tracking term halves, which is a function of
+  <code>precision_floor</code> and the envelope both already declared -- and to check
+  each plant's against it. Two rows of that comparison, the battery and the
+  turbine, first need their tracked observation expressed in physical units
+  rather than normalised ones, or the ratio means nothing: both report power
+  in MW in the observation while their bands are in W, so the measured ratio
+  came out a million times off and was discarded. Take the error from the
+  state rather than the observation.</p>
+<p>The measured ratios where the units did line up, band against the error
+  the PID actually holds: glass furnace 45, distillation 35, pH 13.5,
+  four-tank 10.5, reactor 1.3, cement kiln 0.1, HVAC 0.5. Both mis-scaling
+  directions are represented. The furnace's band was far too large, which
+  flattened its objective; the kiln's is fifteen times <em>smaller</em> than its
+  operating error, which saturates the surrogate instead. Only the reactor's
+  is sized to its own loop.</p>
+</li>
+<li>
+<p>[ ] <strong>Stronger model-based baselines: scenario and oracle MPC.</strong>
+      Scoped in <a href="../certainty-equivalence-study/">certainty-equivalence-study.md</a>,
+      which is the detail; this is the summary and the ordering.</p>
+<p>The point is that "RL beats MPC" is a weak claim when the MPC is
+  deterministic. Replacing the disturbance by its mean is exactly optimal
+  under LQG assumptions and breaks on constraints, non-quadratic costs,
+  nonlinearity and the value of information. Inserting a scenario MPC
+  between the two splits the gap into <em>the value of accounting for
+  uncertainty</em> and <em>what is left for learning</em>, and an oracle MPC given the
+  disturbance realisation in advance gives the achievable ceiling, so a
+  good policy can be told apart from a nearly-saturated problem.</p>
+<p>The scoping found the plants are already stochastic, and that the house
+  convention of deriving noise as <code>fold_in(key, state.time)</code> makes a
+  realisation a pure function of key and time, independent of the actions.
+  That makes the oracle arm nearly free on the JAX planners. In rough
+  order of effort:</p>
+<ul>
+<li>[ ] <strong>Distributional metrics.</strong> The point of the study is that the
+    <em>mean</em> is where certainty equivalence looks fine, and nothing here
+    reports a tail. <code>runners.rollout</code> already returns what IAE, overshoot
+    and settling time need; violation rate and quantiles do not exist. Ten
+    seeds is also thin for a tail.</li>
+<li>[ ] <strong>Oracle arm on <code>SamplingMPC</code>.</strong> The premise here has inverted, and
+    the warning in the old wording was righter than it knew. Because
+    <code>rollout</code> drives the plant with <code>PRNGKey(seed)</code> and the planners scored
+    under a fixed <code>PRNGKey(0)</code>, <strong>every</strong> stochastic environment was an
+    oracle on seed 0, not just the reactor: on the battery that was worth
+    350.4 against an honest 151.8. That is now closed by <code>plan_params</code>, so
+    an oracle arm is something to re-enable deliberately -- pass the
+    evaluation key through <code>plan_params</code> rather than around it -- and its
+    results must never reach <code>src/target_gym/data/baseline_returns.json</code>.</li>
+<li>[ ] <strong>Scenario arm on <code>SamplingMPC</code>.</strong> A vmap over K disturbance keys
+    and a mean, on top of the vmap over action samples it already does.
+    Then a decision about whether to average the objective or use a risk
+    measure.</li>
+<li>[ ] <strong>True-model planners for pH, glass furnace and reactor.</strong> The real
+    cost, and the finding that most changes the plan: on three of the four
+    priority environments the shipped MPC is a hand-written CasADi model,
+    not the simulator, so "it cannot be model error" does not hold today.
+    <code>SamplingMPC</code> needs only an objective, and it needs no gradients, which
+    matters because pH's bisection solve and the furnace's implicit gas
+    solve are both gradient risks and the kiln's adjoint already overflows.</li>
+<li>[x] <strong>Decide what the deterministic arm actually is.</strong> Decided and
+    measured: it plans on the <strong>mean</strong>. <code>experts.mpc.plan_params</code> zeroes the
+    parameters named in <code>EnvSpec.noise_fields</code> for the planner's copy of
+    the params, which is certainty equivalence. It controls better, not
+    merely more honestly: the wind turbine went from 343.9 to 348.3, and
+    the battery MPC from losing 9 seeds in 10 to leading. The boiler,
+    kiln and distillation planners only joined in the oracle audit
+    (2026-10), when their noise was declared.</li>
+<li>[ ] <strong>An asymmetric reward variant</strong>, if mechanism 2 is to be isolated
+    cleanly rather than merely present. Every reward here is symmetric in
+    the error, including the cement kiln's free lime; they are all
+    non-quadratic, which is the condition that actually matters, so the
+    effect is observable without this. Free lime is the defensible
+    candidate (high is a quality rejection, low merely wastes fuel) and
+    would need <code>PHYSICS.md</code> justification, a version bump and a re-record.</li>
+<li>[ ] <strong>Assert the reactor's stochastic demand.</strong> It is excluded from
+    <code>disturbance_fields</code> deliberately and correctly, since that field means
+    a zero-mean plant disturbance and this is a drifting setpoint. The
+    consequence is that nothing asserts the process at all. It wants its
+    own check rather than a registry edit.</li>
+<li>[ ] <strong>An observation-augmentation wrapper</strong>, if the action-queue
+    hypothesis is to be tested. No environment's observation carries any
+    history of past actions, only current actuator positions, against
+    transport delays of up to 25 minutes on the kiln. There is no frame
+    stacking and no wrapper; the aircraft's <code>observe_wind</code> is
+    constructor-level and specific to that plant.</li>
+</ul>
+<p>A new planner for one task goes in that task's own <code>experts.py</code>, which
+  re-records only its package. A change to the shared machinery in
+  <code>experts/mpc.py</code> still re-records every task.</p>
+</li>
+<li>
+<p>[x] <strong>Host the documentation.</strong> Done, and this was a duplicate of the 0.6
+      blocking entry above; it survived because nothing checks the roadmap
+      against itself.</p>
+</li>
+<li>
+<p>[ ] <strong>Publish RL baseline results.</strong> The environments claim a learned policy
+      has something real to beat; no learned policy's numbers are published yet.
+      The harness is in place: <code>src/target_gym/data/rl_results.json</code>, written through
+      <code>target_gym.rl_results.record_result</code> and guarded by a fingerprint of the
+      environment, so a result recorded before a reward or dynamics change is
+      refused rather than quoted. Training runs outside this package (the
+      dependency goes RL-library-to-here, never the reverse); see
+      <a href="../rl-baselines/">rl-baselines.md</a>.</p>
+<p><strong>Do this last, after the environments are frozen.</strong> That fingerprint is
+  the reason for the ordering. It covers each environment's own modules plus
+  the shared physics, so any change to an environment, the integrator or the
+  shared reward helper invalidates every result recorded against it. A
+  training run is the most expensive artefact this project produces and the
+  easiest to invalidate by accident. Everything else on this list should
+  land first, including the outstanding baseline gaps, since re-tuning a
+  controller is cheap and re-running the whole RL grid is not.</p>
+<p><strong>Compute plan: the TPU Research Cloud.</strong> Free access to Cloud TPUs for
+  researchers, JAX among the supported frameworks, rolling applications with
+  no review committee, and quota granted on accepting the invitation. The
+  condition is publishing the work, which this project does anyway. It fits
+  because Ajax is JAX-native and these environments run on the accelerator
+  beside the agent, so a rollout never leaves the device.</p>
+<p>What that costs is not the TPUs, which are free, but the surrounding
+  Google Cloud resources: a boot disk per TPU VM, a storage bucket and
+  egress. The artefacts here are learning curves, final returns and small
+  MLP checkpoints rather than datasets, so 10-20 GB covers it and storage is
+  well under a euro a month. Boot disks dominate: roughly 10 EUR a month for
+  five TPU VMs on small standard disks, nearer 40 if left on the default
+  100 GB balanced disks or run wide on preemptibles. Budget 10-50 EUR a
+  month and delete idle VMs, since a disk bills while it exists even
+  stopped. Keep the bucket in the TPU's own region so reads are free.</p>
+<p><strong>Size of the grid</strong>, from the protocol: 21 environments x 2 headline
+  algorithms x 3 arms x 3 budgets is 396 vmapped configurations, and seeds
+  vmap almost for free, so 30 seeds costs about what one does. Summing the
+  budgets gives roughly 44 billion environment steps for the reported runs,
+  plus about 8 billion for the hyperparameter search at 64 trials x 3 seeds.
+  The 1e7 budget is around 90% of that total, and the SAC arm at 1.0
+  gradient steps per environment step is far more expensive than PPO.</p>
+<p><strong>One measurement is missing before any of this can be scheduled.</strong> The
+  seed-scaling figure quoted in the protocol and in <code>rl-baselines.md</code>, 15.8 s
+  for one seed against 18.4 s for a hundred, has no step budget attached to
+  it, so it cannot be scaled into a wall-clock estimate. Running Ajax on one
+  environment at the 1e6 budget with 30 seeds and recording steps per second
+  turns the rest into arithmetic, and decides whether this is one month of
+  quota or three.
+* [x] <strong>Drop the git dependency on <code>gymnax</code>.</strong> Gone, and it turned out not to be
+  needed. The pin tracked upstream <code>main</code> on the reasoning that released
+  gymnax 1.0.0 caps <code>gymnasium&lt;1.2</code> and that "conflicts with newer
+  gymnasium", but nothing in this project requires newer gymnasium. It
+  declares <code>gymnasium&gt;=1.1,&lt;1.4</code>, and 1.1.1 satisfies that. Resolving from
+  PyPI alone gives gymnax 1.0.0 with gymnasium 1.1.1, on which the whole
+  suite passes unchanged: 1225 fast, 69 slow, same four and two xfails.
+  The tested configuration is now reproducible from PyPI, which was the
+  point. <code>uv.lock</code> carries no git dependencies at all.
+* [x] <strong>A performance phase.</strong> Four defects, all paid by every user and none
+  visible to a throughput benchmark, which measures steady state after
+  compilation. Every environment returned a <em>weakly typed</em> reset state, so
+  anything jitted over the state compiled twice. Each new environment
+  instance retained a compiled executable, leaking ~2.6 MB per construction.
+  The pH solver spent its whole runtime on 44 bisection halvings resolving to
+  1e-13. And <code>runners.rollout</code> re-jitted the environment on every call, so a
+  warmed rollout still spent 0.222 s of 0.355 s compiling. Fast CI 164 s -&gt;
+  128 s, <code>tests/experts</code> 143 s -&gt; 37 s, warm rollouts ~5x, pH throughput 2x.</p>
+<p>Two restructurings were measured and rejected: vectorising the aircraft's
+  three aerodynamic calls into one is 0.76x, and <code>donate_argnums</code> on the
+  batched rollout does nothing (the carried state is 0.26 MB). The remaining
+  slow environments are honestly slow, since distillation needs 16 substeps
+  across 41 stages for stability, the cement kiln sweeps 16 zones in
+  sequence.</p>
+<p>Two cautions for whoever picks this up. Benchmarks on a laptop vary 41%
+  across identical trials, so every number here is a min of many; a
+  single-shot measurement produced a confident and wrong conclusion partway
+  through this work. And the pass found a <em>correctness</em> bug while looking for
+  speed (see the integration order note below), which is the main reason
+  it was worth doing.</p>
+<p>The table's throughput column has since been re-measured with
+  <code>python -m target_gym.benchmark_speed</code> (batch 256, best of three, after
+  warm-up). Every process plant came back within 10% of its published figure,
+  which is what makes the aircraft rows conclusive: all five were about 2x
+  optimistic, because the post-stall aerodynamics, the three moment
+  decompositions, pitch damping and fuel burn were added to those dynamics
+  after the numbers were taken. They now read as measured.</p>
+<p>Throughput is also strongly batch-dependent for the aircraft, which the
+  single number does not convey: the 3D plane roughly doubles between batch
+  256 and batch 16384. Anyone training on these should batch at 4096 or more.</p>
+<p>The aircraft rows fell again when the integration order was corrected from
+  one RK4 substep to two (see <code>plane3d/PHYSICS.md</code>). That is the honest cost
+  of a converged trajectory: at one substep the altitude was 20 m out over
+  150 steps, against a reward that resolves to 1 m.
+* [x] <strong>Apply the model review checklist to the other environments.</strong> The
+  aircraft work produced twelve checks in
+  <a href="../model-review-checklist/">model-review-checklist.md</a>, derived
+  from real defects rather than from good intentions. All twelve have now
+  been run across all eighteen environments.</p>
+<p>The pass so far: check 3 found two write-only state fields a hand review
+  had missed; check 9 found the bank-commanded loop gain varies 2.38x on the
+  figure-8, and that removing it changes nothing measurable; check 10's own
+  advice cleared the integrator in one run. The circle's path-following
+  failure turned out not to be a guidance fault at all. A third of its
+  radius range is unflyable at the cruise speed its autopilot holds, and
+  trading speed for radius took the worst seed from 1860 m to 73 m, closing
+  half of a long-standing strict xfail. Check 12 exists because the first
+  version of that fix edited one of <em>three</em> copies of the same control law
+  and measurably did nothing.</p>
+<p>Checks 5, 7 and 8 each needed a plant-agnostic form to be run at all, and
+  each needed its first metric discarded. Check 5 is now done by autodiff:
+  comparing the two one-sided Jacobians of a step tells a kink from a steep
+  curve, which comparing sample-to-sample steps cannot. That ranked
+  Arrhenius above every real seam. Check 7 became an unforced run, with
+  linear growth separated from accelerating growth so that an aircraft is
+  not flagged for flying forwards. Both come back clean: no plant produces
+  energy from its own equations, and the only seams that survive refinement
+  are a mass clamped at zero, a power limit binding, and one in the aircraft
+  at 308 m/s that full actuator travel cannot reach.</p>
+<p>Checks 3, 4, 5, 7 and 8 now run in
+  <a href="https://github.com/YannBerthelot/TargetGym/blob/main/tests/test_env_conformance.py">the conformance suite</a> against every
+  registered environment, each with an allowlist so it reports <em>new</em>
+  defects rather than restating known-benign ones. A new environment
+  inherits them by adding one line to the registry.
+* [x] <strong>A reward-shaping phase.</strong> The rewards had been written per environment as
+  each was added, and the conventions had drifted: Gaussian versus
+  quadratic tracking terms, differing crash penalties, differing treatment
+  of the target band, and four environments whose reward was <em>identically
+  zero</em> across the first three halvings of their error. All eighteen now
+  share one contract: <code>(tracking terms, multiplied) x (1 - weighted costs)</code>,
+  bounded in <code>[0, 1]</code>, log-scaled around a floor taken from each plant's own
+  instrumentation. Costs multiply rather than subtract, so nothing is earned
+  without tracking and no episode can profit by ending early, which made
+  the flat crash penalties redundant, and they are gone. See
+  <a href="../reward-shaping/">reward-shaping.md</a>.
+* [x] <strong>Move off the Alpha classifier.</strong> Done: <code>pyproject.toml</code> declares
+  <code>Development Status :: 4 - Beta</code>, per the decision recorded above.</p>
+</li>
+</ul>
+<h3 id="documentation-debt">Documentation debt<a class="headerlink" href="#documentation-debt" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p>[x] <strong>Action labels for eight environments.</strong> ~~Eleven of twenty-two pages
+      showed action bounds with a blank meaning column.~~ Done, and the original
+      diagnosis was only half right. It was not simply eight missing docstring
+      lines: four public environment classes (<code>CSTR</code>, <code>FirstOrderSystem</code>,
+      <code>FourTank</code>, <code>GlassFurnace</code>) had no class docstring at all, <code>Airplane2D</code>
+      had one without an action line, and three more (<code>PHNeutralization</code>,
+      <code>BuildingHVAC</code>, <code>GridBattery</code>) documented their action perfectly well in
+      a spelling the generator could not read. Those write
+      <code>Action (1,): base flow, raw in [-1, 1]</code>, with the meaning <em>before</em> the
+      bracket, and the parser took the first <code>[</code> on the line, read the range
+      <code>-1, 1</code> as two labels, and matched no single-action environment. So the
+      fix was at both ends: docstrings at the source, and a parser that reads
+      both spellings. All twenty-two now carry labels. A few still read as
+      variable names rather than meanings (<code>rho_ext_norm</code>, <code>pitch_raw</code>,
+      <code>L_raw</code>), which is the environment's own wording and a smaller,
+      separate tidy.</p>
+</li>
+<li>
+<p>[x] <strong>Wire the page generators into the test suite.</strong> ~~<code>docs/environments.md</code>
+      already has a sync test.~~ Done, as a <code>docs</code> CI job that runs both
+      generators' <code>--check</code> and <code>mkdocs build --strict</code>, mirrored by
+      <code>make ci-docs</code>. It runs as its own job, concurrent with the interpreter
+      matrix, so it costs runner minutes but no wall-clock against the ten
+      minute budget. It found real drift immediately: both new environment
+      pages missing from the nav, twenty-five dangling links (every
+      <code>src/**/PHYSICS.md</code> and <code>CONTRIBUTING.md</code> reference resolves on GitHub
+      but 404s on the built site), and mkdocs itself absent from <code>uv.lock</code>
+      entirely, so the docs were only buildable on a machine that had installed
+      it out of band. The original text follows.</p>
+<p><code>scripts/generate_env_pages.py --check</code> and
+  <code>scripts/generate_env_reference.py --check</code> should both run in CI so a
+  parameter change cannot leave eighteen environment pages quietly
+  disagreeing with the code. The check costs seconds; the failure mode it
+  prevents is documentation that lies.</p>
+</li>
+</ul>
+<h3 id="known-gaps">Known gaps<a class="headerlink" href="#known-gaps" title="Permanent link">&para;</a></h3>
+<p>The test suite records these rather than hiding them, as <code>strict</code> xfail cases
+from two markers, plus the patrol baseline notes above:</p>
+<ul>
+<li><strong>Plane Patrol expert quality</strong>: both patrol variants now ship a PID, but it
+  completes roughly half of evaluation seeds. The failure is a lateral bank
+  oscillation that sets in once the follower overshoots <em>ahead</em> of the slot
+  chasing a steeply descending lead: pursuit guidance then commands a turn the
+  bank loop cannot make, and it rings between its limits. No lateral gain
+  combination clears it, so the guidance law needs energy management (the
+  follower cannot shed speed in a descent) rather than further tuning.</li>
+<li><strong>Four-tank zero is fixed</strong>: the real apparatus is celebrated for letting you
+  move the multivariable zero across the imaginary axis by turning two valves.
+  Here <code>gamma1</code> and <code>gamma2</code> are constants, so only the non-minimum-phase
+  configuration is available.</li>
+<li><strong>CSTR target margin</strong>: the bottom of its sampled band needs the coolant
+  within a fraction of a kelvin of its stop. Reachable, but with almost no
+  authority left for disturbance rejection.</li>
+</ul>
+<hr />
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; Yann Berthelot
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.indexes", "toc.follow", "content.code.copy", "content.action.edit", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+        <script src="../javascripts/results-chart.js"></script>
+      
+    
+  </body>
+</html>

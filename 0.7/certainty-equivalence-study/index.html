@@ -1,0 +1,3212 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="JAX reinforcement learning environments for target MDPs: reach a setpoint and hold it, across aircraft, process control and industrial plants.">
+      
+      
+      
+        <link rel="canonical" href="https://yannberthelot.github.io/TargetGym/0.7/certainty-equivalence-study/">
+      
+      
+        <link rel="prev" href="../functional-structure/">
+      
+      
+        <link rel="next" href="../roadmap/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Certainty-equivalence study - TargetGym</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/results-chart.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#scoping-deterministic-scenario-and-oracle-mpc" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+    This is the documentation of an earlier release.
+  
+  <a href="../..">
+    <strong>Read the latest release's documentation.</strong>
+  </a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TargetGym" class="md-header__button md-logo" aria-label="TargetGym" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TargetGym
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Certainty-equivalence study
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Follow system theme"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Follow system theme" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/YannBerthelot/TargetGym" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    YannBerthelot/TargetGym
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TargetGym" class="md-nav__button md-logo" aria-label="TargetGym" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TargetGym
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/YannBerthelot/TargetGym" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    YannBerthelot/TargetGym
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../using-the-pids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the PIDs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rendering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Throughput
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environments
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Environments
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../complexity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an environment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aircraft
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Aircraft
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane_sine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude - sinusoid
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane_energy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude and airspeed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_heading/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D heading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_circle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D circle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_racetrack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D holding pattern
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_figure8/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D figure-8
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/patrol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patrol - wingman
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/patrol_bearing_only/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patrol - wingman, bearing-only
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/formation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Formation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-agent formation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process control
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Process control
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/cstr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSTR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/first_order/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/four_tank/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Four-tank
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/ph_neutralization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pH neutralisation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/distillation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distillation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/unstable_cstr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unstable CSTR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Industrial
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Industrial
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/glass_furnace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glass Furnace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/reactor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/hvac/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building HVAC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/cement_kiln/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cement Kiln
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/boiler_drum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boiler Drum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/compressor_surge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compressor Surge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Energy
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Energy
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/wind_turbine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wind Turbine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/battery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../baseline-results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baseline results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rl-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../capability-profile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability profile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rl-baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Background
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Background
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target-mdp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target MDPs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How the baselines work
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reward-shaping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reward shaping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PHYSICS_METHODOLOGY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Contributing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model-review-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model review checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../functional-structure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Functional structure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certainty-equivalence study
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certainty-equivalence study
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-verdict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Verdict
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-per-environment-table-priority-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Per-environment table (priority set)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-findings-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Findings in detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Findings in detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-stochasticity-is-present-and-follows-a-house-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Stochasticity is present, and follows a house convention
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-the-three-mpc-implementations-and-which-model-each-plans-with" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 The three MPC implementations, and which model each plans with
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-scenario-and-oracle-feasibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Scenario and oracle feasibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-cost-asymmetry-the-framing-needs-adjusting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Cost asymmetry: the framing needs adjusting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-observations-and-the-action-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.5 Observations and the action queue
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#36-evaluation-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.6 Evaluation harness
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-what-would-need-building-by-effort" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. What would need building, by effort
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-confounds-in-the-existing-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Confounds in the existing comparison
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-which-environment-to-prototype-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Which environment to prototype on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-where-the-framing-needs-correcting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Where the framing needs correcting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-method-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Method note
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-verdict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Verdict
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-per-environment-table-priority-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Per-environment table (priority set)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-findings-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Findings in detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Findings in detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-stochasticity-is-present-and-follows-a-house-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Stochasticity is present, and follows a house convention
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-the-three-mpc-implementations-and-which-model-each-plans-with" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 The three MPC implementations, and which model each plans with
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-scenario-and-oracle-feasibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Scenario and oracle feasibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-cost-asymmetry-the-framing-needs-adjusting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Cost asymmetry: the framing needs adjusting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-observations-and-the-action-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.5 Observations and the action queue
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#36-evaluation-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.6 Evaluation harness
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-what-would-need-building-by-effort" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. What would need building, by effort
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-confounds-in-the-existing-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Confounds in the existing comparison
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-which-environment-to-prototype-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Which environment to prototype on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-where-the-framing-needs-correcting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Where the framing needs correcting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-method-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Method note
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/YannBerthelot/TargetGym/edit/main/docs/certainty-equivalence-study.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="scoping-deterministic-scenario-and-oracle-mpc">Scoping: deterministic, scenario and oracle MPC<a class="headerlink" href="#scoping-deterministic-scenario-and-oracle-mpc" title="Permanent link">&para;</a></h1>
+<p>A feasibility report for a study separating <em>the value of accounting for
+uncertainty</em> from <em>what is left for learning</em>, by inserting stronger
+model-based baselines between deterministic MPC and RL.</p>
+<p>Investigation only. Nothing in this report has been implemented, and no
+environment, baseline or test was modified to produce it. It describes the
+planners as they were then: the oracle audit (2026-10) has since changed some
+of them, for example the pH planner now forecasts the buffer flow from the
+state instead of assuming its nominal value, and the glass furnace's plans on
+the pull rate's conditional mean, read from the state.</p>
+<h2 id="1-verdict">1. Verdict<a class="headerlink" href="#1-verdict" title="Permanent link">&para;</a></h2>
+<p><strong>The study is feasible, and the largest obstacle is not the one anticipated.</strong></p>
+<p>The premise that had to hold is that the plants are stochastic. They are. All
+four priority environments carry a genuine per-step disturbance process, with
+parameters exposed through env params, and the repository has a convention that
+makes disturbance realisations reproducible and injectable almost for free. The
+oracle arm, which looked like the most awkward piece, is close to a one-line
+change on the right planner.</p>
+<p>What is <em>not</em> true is the assumption that the MPC can be handed the true model.
+On three of the four priority environments the shipped MPC is a hand-written
+CasADi re-implementation of the dynamics, not the simulator. Any result of the
+form "RL beats MPC, and it cannot be model error" does not currently hold on
+pH, glass furnace or reactor. Closing that is the main build cost.</p>
+<p>Two further things are worth knowing before designing the arms. The existing
+JAX planners are <strong>not</strong> certainty-equivalent: they plan against one fixed
+pseudo-random disturbance trajectory, which is neither the mean nor the truth.
+And the MPC baselines read the <strong>full simulator state</strong> while the PID and any
+learned policy see only the observation, which is undocumented and is the most
+serious confound found.</p>
+<h2 id="2-per-environment-table-priority-set">2. Per-environment table (priority set)<a class="headerlink" href="#2-per-environment-table-priority-set" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>pH neutralisation</th>
+<th>Cement kiln</th>
+<th>Glass furnace</th>
+<th>Nuclear reactor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stochastic in <code>step_env</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Disturbance process</td>
+<td>OU on buffer flow <code>q2</code></td>
+<td>OU on raw-meal feed</td>
+<td>AR(1) on pull rate</td>
+<td>OU on <strong>demand setpoint</strong></td>
+</tr>
+<tr>
+<td>Declared in registry</td>
+<td><code>('q2',)</code></td>
+<td><code>('raw_meal',)</code></td>
+<td><code>('m_pull_disturbance',)</code></td>
+<td><strong><code>()</code> — none</strong></td>
+</tr>
+<tr>
+<td>Disturbance observed?</td>
+<td>No, hidden</td>
+<td><strong>Yes</strong>, <code>raw_meal</code> in obs</td>
+<td>No, hidden</td>
+<td>Target is observed</td>
+</tr>
+<tr>
+<td>MPC implementation</td>
+<td><code>PHCasadiMPC</code></td>
+<td><code>SamplingMPC</code> (CEM)</td>
+<td><code>GlassFurnaceCasadiMPC</code></td>
+<td><code>ReactorCasadiMPC</code></td>
+</tr>
+<tr>
+<td>Uses the true model?</td>
+<td><strong>No</strong>, do-mpc model</td>
+<td><strong>Yes</strong>, <code>env.step_env</code></td>
+<td><strong>No</strong>, do-mpc model</td>
+<td><strong>No</strong>, do-mpc model</td>
+</tr>
+<tr>
+<td>Planner's disturbance</td>
+<td><code>q2 = q2_nominal</code></td>
+<td>fixed <code>PRNGKey(0)</code> scenario</td>
+<td>nominal + bias term</td>
+<td>nominal</td>
+</tr>
+<tr>
+<td>MPC cost = env reward?</td>
+<td><strong>No</strong>, quadratic proxy</td>
+<td>Yes, custom objective</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Reward symmetric in error</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Reward quadratic</td>
+<td><strong>No</strong>, log-scaled</td>
+<td><strong>No</strong>, log-scaled</td>
+<td><strong>No</strong></td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>Constraint handling</td>
+<td>Termination only</td>
+<td>Termination only</td>
+<td>Termination only</td>
+<td>Termination only</td>
+</tr>
+<tr>
+<td>Obs includes action history</td>
+<td><strong>No</strong></td>
+<td><strong>No</strong></td>
+<td><strong>No</strong></td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>Obs dims / hidden dims</td>
+<td>3 / buffer + invariants</td>
+<td>8 / <code>n_zones x 4</code> profile</td>
+<td>5 / 6 of 9 states</td>
+<td>4 / 9</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3-findings-in-detail">3. Findings in detail<a class="headerlink" href="#3-findings-in-detail" title="Permanent link">&para;</a></h2>
+<h3 id="31-stochasticity-is-present-and-follows-a-house-convention">3.1 Stochasticity is present, and follows a house convention<a class="headerlink" href="#31-stochasticity-is-present-and-follows-a-house-convention" title="Permanent link">&para;</a></h3>
+<p>Every priority plant draws per-step noise the same way:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>noise = jax.random.normal(jax.random.fold_in(key, state.time))
+</code></pre></div>
+<p>This convention exists for a reason that matters to this study, and it is
+enforced by <code>test_disturbance_magnitude_is_independent_of_key_splitting</code> in the
+conformance suite. Every rollout helper in the repository drives <code>step_env</code>
+with the <em>same</em> key at every step. An environment drawing noise directly from
+that key would redraw one identical innovation forever, collapsing a zero-mean
+process into a deterministic ramp. Folding in <code>state.time</code> fixes that.</p>
+<p>The side effect is the thing to exploit: <strong>the disturbance realisation is a
+pure function of <code>(key, t)</code>, independent of the actions taken.</strong> That is
+exactly the property the oracle arm needs, and it is already there.</p>
+<p>Structure per environment:</p>
+<ul>
+<li><strong>pH</strong>: Ornstein-Uhlenbeck on <code>q2</code>, the buffer flow, reverting to
+  <code>q2_nominal</code>, driven by <code>q2_noise_std</code> and <code>BUFFER_OU_THETA</code>, clipped to
+  <code>[q2_min, q2_max]</code>. It is carried in the state, so it evolves <em>within</em> an
+  episode as well as being sampled at reset. It is genuinely unmeasured: the
+  observation is <code>[pH, q3_pct, target_pH]</code>.</li>
+<li><strong>Cement kiln</strong>: OU on <code>raw_meal</code>, reverting to nominal, clipped to ±50%.
+  Note it <strong>is</strong> observed (the weighfeeder reading is in the observation).</li>
+<li><strong>Glass furnace</strong>: AR(1) on <code>m_pull_disturbance</code> with <code>M_PULL_AR_RHO</code>,
+  additive on the pull rate, hidden.</li>
+<li><strong>Reactor</strong>: OU on <code>target_n</code>. This is a drifting <strong>reference</strong>, not a plant
+  disturbance, and it is keyed off <code>state.demand_key</code> rather than the passed
+  key.</li>
+</ul>
+<p>Three corrections to the brief follow from this:</p>
+<ol>
+<li>The plane's OU machinery is <strong>not</strong> needed and is welded to the aircraft
+   state anyway. Each plant already carries its own disturbance. There is no
+   porting job.</li>
+<li>The reactor's disturbance is on the setpoint, not the plant. The four
+   certainty-equivalence mechanisms still apply to the tracking-error dynamics,
+   but "revealing the disturbance" means revealing the <em>future demand
+   trajectory</em>, which is a different and arguably easier oracle.</li>
+<li>The reactor declares <code>disturbance_fields=()</code>, so the conformance suite's two
+   disturbance tests skip it despite it having an OU process. This is
+   <strong>deliberate and documented</strong>: the <code>EnvSpec</code> docstring defines the field as
+   holding a <em>zero-mean stochastic disturbance</em> and says it excludes
+   "deliberately-drifting processes such as the reactor's OU demand". The
+   reactor's <code>target_n</code> is a drifting setpoint, not a plant disturbance, and it
+   is centred on the middle of its range rather than on zero, so it does not
+   meet the field's definition. Declaring it would make the tests pass (checked:
+   the constant-versus-split-key RMS ratio is exactly 1.00, because the process
+   keys off <code>state.demand_key</code> rather than the passed key) at the cost of
+   overloading what the field means. The residual point stands and belongs on
+   the roadmap rather than in the registry: <strong>the reactor's stochastic process
+   is currently asserted by nothing.</strong></li>
+</ol>
+<h3 id="32-the-three-mpc-implementations-and-which-model-each-plans-with">3.2 The three MPC implementations, and which model each plans with<a class="headerlink" href="#32-the-three-mpc-implementations-and-which-model-each-plans-with" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Implementation</th>
+<th>Count</th>
+<th>Internal model</th>
+<th>Vmappable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CasadiMPC</code> subclasses</td>
+<td>7</td>
+<td>Hand-written do-mpc symbolic model</td>
+<td>No (IPOPT, sequential)</td>
+</tr>
+<tr>
+<td><code>GradientMPC</code></td>
+<td>12</td>
+<td><strong>The true simulator</strong>, <code>env.step_env</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>SamplingMPC</code> (CEM)</td>
+<td>1</td>
+<td><strong>The true simulator</strong>, <code>env.step_env</code></td>
+<td>Yes, already vmapped</td>
+</tr>
+</tbody>
+</table>
+<p>(<code>docs/baselines.md</code> says <code>GradientMPC</code> covers 8 environments. That is stale;
+it is 12 since the four moving-setpoint aircraft tasks were added.)</p>
+<p>The model-fidelity split is the central design constraint. <code>PHCasadiMPC</code>
+rebuilds the reaction-invariant ODEs symbolically and states plainly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>q2 = p.q2_nominal  # unmeasured; nominal in the model
+</code></pre></div>
+<p>That is certainty equivalence, implemented, in one line. As a <em>deterministic
+MPC arm</em> this is ideal and needs no work. As a <em>true-model planner</em> it is
+disqualified, and worse, it carries model error in an unquantified direction:
+different integrator, algebraic pH via a charge-balance constraint rather than
+the simulator's bisection solve, and nominal buffer flow.</p>
+<p>The JAX planners are subtler and, I think, mischaracterised in the brief. Both
+<code>GradientMPC._rollout</code> and <code>SamplingMPC._score</code> set <code>key = jax.random.PRNGKey(0)</code>
+and step the true environment. Because noise is <code>fold_in(key, state.time)</code> and
+<code>state.time</code> advances through the plan, the planner does <strong>not</strong> see the mean
+disturbance. It sees one specific, fixed pseudo-random trajectory, consistent
+across the episode and unrelated to the realisation the environment will
+produce. So the shipped JAX "MPC" is neither certainty-equivalent nor robust:
+it is single-scenario-with-the-wrong-scenario. Any published deterministic-MPC
+arm should either fix this or state it.</p>
+<p>Cost functions: the CasADi controllers use a quadratic proxy, not the
+environment reward, and the code explains why. The reward is log-scaled and
+clipped, so it is flat once the error leaves the tracking band, and IPOPT had
+no gradient to descend; on pH it optimised the only live term, the reagent
+cost, railed the valve shut and sat at ~3.9 pH mean error. The proxy shares a
+minimiser and has a usable gradient. This is a defensible engineering choice
+and simultaneously a confound for any published comparison, since it is exactly
+mechanism 2 operating inside the baseline.</p>
+<p>Constraints: there are none in the optimisation. Every priority environment
+handles its irrecoverable states purely through termination, and there is no
+explicit crash penalty anywhere. <code>docs/reward-shaping.md</code> records the reasoning:
+rewards are non-negative, so termination already costs the agent every step it
+would have earned, and a flat penalty bought nothing that forgone reward did
+not. The consequence for this study is that mechanism 1 exists only in the weak
+form "a trajectory that touches the boundary ends the episode", and there is no
+constraint the planner is even aware of. Neither the CasADi nor the sampling
+planner has a state constraint declared.</p>
+<p>Tuning and caching: MPC hyperparameters are set per environment in the factory
+functions with the reasoning in the docstring, not searched. The caching the
+README mentions is two separate things, neither of which is MPC solution
+caching: an XLA persistent compilation cache in CI, and
+<code>src/target_gym/data/baseline_returns/</code>, which stores measured returns so that the
+MPC-versus-PID contract is asserted from a recorded number rather than
+reproduced on every test run, guarded by a source fingerprint.</p>
+<h3 id="33-scenario-and-oracle-feasibility">3.3 Scenario and oracle feasibility<a class="headerlink" href="#33-scenario-and-oracle-feasibility" title="Permanent link">&para;</a></h3>
+<p><strong>The oracle arm is cheap on the JAX planners.</strong> The evaluation harness calls
+<code>env.step_env</code> directly, bypassing gymnax's <code>Environment.step</code> (which would
+split the key), with step <code>t</code> of seed <code>s</code> on the key
+<code>benchmark.episode_keys(PRNGKey(s), 1, T)[1][t, 0]</code>. So during evaluation the
+disturbance is a pure function of the seed and the step, independent of the
+actions. Handing the planner the step keys of its horizon instead of
+<code>PRNGKey(0)</code> makes it simulate the exact realisation the environment will
+deliver. That is the oracle.</p>
+<p>One trap: because the reactor keys its demand off <code>state.demand_key</code>, which is
+carried in the state and therefore copied into any planner rollout, <strong>a
+sampling planner on the reactor is automatically a demand oracle</strong> whether you
+intended it or not. Any reactor arm needs this handled explicitly.</p>
+<p><strong>The scenario arm is cheap on <code>SamplingMPC</code> and awkward on CasADi.</strong>
+<code>SamplingMPC</code> already does <code>jax.vmap(self._score, in_axes=(0, None))</code> over
+action samples. Adding a scenario axis is a second vmap over K keys and a mean,
+maybe ten lines. Cost multiplies the rollout count by K but is parallel, so
+wall clock grows far slower than K until memory saturates.</p>
+<p>For CasADi, do-mpc has native multi-stage robust MPC via <code>n_robust</code>, and every
+controller here sets <code>n_robust=0</code>. Declaring the disturbance as an uncertain
+parameter and calling <code>set_uncertainty_values</code> builds a scenario tree
+automatically. Two caveats: the tree is over parameters held <em>constant per
+branch</em>, not over sampled disturbance trajectories, so it is robust-to-
+parametric-uncertainty rather than the scenario MPC described in the brief; and
+the NLP grows as <code>k^n_robust</code>.</p>
+<p><strong>Cost estimates.</strong> From the recorded per-environment timings in
+<code>src/target_gym/data/baseline_returns/</code> (ten seeds, full episodes):</p>
+<table>
+<thead>
+<tr>
+<th>env</th>
+<th>steps/episode</th>
+<th>10 seeds, MPC + PID</th>
+<th>implied per MPC solve</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>pH</td>
+<td>300</td>
+<td>23 s</td>
+<td>~7 ms</td>
+</tr>
+<tr>
+<td>cement kiln</td>
+<td>700</td>
+<td>196 s</td>
+<td>~28 ms</td>
+</tr>
+<tr>
+<td>glass furnace</td>
+<td>1600</td>
+<td>1356 s</td>
+<td>~85 ms</td>
+</tr>
+<tr>
+<td>reactor</td>
+<td>1200</td>
+<td>670 s</td>
+<td>~56 ms</td>
+</tr>
+</tbody>
+</table>
+<p>For the sampling planner these are the numbers that scale with K. Cement kiln
+at K=10 is roughly 30 minutes for ten seeds, at K=30 roughly 90 minutes, before
+any vmap parallelism is counted, so realistically less. This is affordable.
+The furnace and reactor would need true-model planners built first, at which
+point their cost is set by the new planner, not the CasADi figure above.</p>
+<h3 id="34-cost-asymmetry-the-framing-needs-adjusting">3.4 Cost asymmetry: the framing needs adjusting<a class="headerlink" href="#34-cost-asymmetry-the-framing-needs-adjusting" title="Permanent link">&para;</a></h3>
+<p>Every priority environment uses <code>log_scaled_reward(|error|, ...)</code>, multiplied
+by an actuator-cost factor of the form <code>(1 - w * usage)</code>. The house convention,
+documented in <code>docs/reward-shaping.md</code>, is that costs <em>multiply</em> rather than
+subtract.</p>
+<p>Consequences:</p>
+<ul>
+<li><strong>All four rewards are symmetric in the error.</strong> The cement kiln's free lime,
+  which the brief nominates as the obvious asymmetric case, is
+  <code>log_scaled_reward(|discharge_lime - target|)</code>. There is no asymmetry
+  anywhere in the priority set, and I did not find one elsewhere either.</li>
+<li><strong>But mechanism 2 is still live everywhere</strong>, because the condition for
+  <code>E[l(y)] != l(E[y])</code> is that <code>l</code> is <em>non-quadratic</em>, not that it is
+  asymmetric. Log-scaled tracking multiplied by a cost factor is emphatically
+  non-quadratic. The brief conflates the two slightly; asymmetry would sharpen
+  the test and make the direction of the bias interpretable, but it is not
+  required to observe the effect.</li>
+</ul>
+<p>So mechanism 2 can be studied today. If you want a clean, interpretable
+asymmetry, it has to be added, and under this repository's conventions that
+means justifying it in the environment's <code>PHYSICS.md</code> against the standard in
+<code>docs/PHYSICS_METHODOLOGY.md</code>. Free lime is the defensible candidate: high free
+lime is unsound cement and is a quality rejection, low free lime is merely
+overburnt and wastes fuel. That is a real process asymmetry, not a modelling
+convenience, so it would pass review. It is still a physics change and would
+invalidate every recorded baseline.</p>
+<h3 id="35-observations-and-the-action-queue">3.5 Observations and the action queue<a class="headerlink" href="#35-observations-and-the-action-queue" title="Permanent link">&para;</a></h3>
+<p><strong>Confirmed: no environment's observation contains any history of past
+actions.</strong> Each includes the <em>current</em> actuator positions (pH: valve percent;
+kiln: fuel and speed percent; furnace: fuel percent; reactor: normalised
+external reactivity), which is the actuator's present state, not the in-flight
+queue.</p>
+<p>The hypothesis in the brief is correct and the docstrings say so explicitly.
+The cement kiln's observation is eight numbers against an <code>n_zones x 4</code> axial
+state, and the docstring notes that kiln operators really do run the process on
+a few readings, "which is a large part of why the job is famously hard". The
+glass furnace hides six of nine dynamic states. pH's docstring states outright
+that the same pH can arise from different <code>(Wa, Wb)</code> pairs whose local process
+gain differs by an order of magnitude, making it a genuine POMDP.</p>
+<p>There is <strong>no</strong> frame-stacking or observation-augmentation wrapper. The only
+observation toggle in the repository is the aircraft's <code>observe_wind</code>, which is
+constructor-level and aircraft-specific. Building an augmentation wrapper is
+new work, though small.</p>
+<p><strong>The confound: the MPC baselines do not use the observation at all.</strong> Every
+planner's <code>step</code> signature is <code>step(self, _obs, state)</code> with <code>_obs</code> explicitly
+ignored, and <code>runners.mpc_policy</code> passes the full simulator state.
+<code>CasadiMPC._extract_x0(state)</code> reads hidden state directly. So on pH the MPC
+reads <code>Wa</code> and <code>Wb</code>; on the furnace it reads the glass and checker
+temperatures; on the reactor it reads the xenon and iodine estimates and the
+fuel temperature. The PID sees only the observation, and any learned policy
+would too.</p>
+<p>I found no acknowledgement of this anywhere in <code>docs/baselines.md</code> or
+<code>docs/rl-protocol.md</code>. It is the most serious confound in the current
+comparison: the published MPC-versus-PID table compares a full-state controller
+against an output-feedback one and reports the difference as a controller-class
+result.</p>
+<h3 id="36-evaluation-harness">3.6 Evaluation harness<a class="headerlink" href="#36-evaluation-harness" title="Permanent link">&para;</a></h3>
+<p><code>scripts/record_baselines.py</code> is the whole story. Ten seeds, <code>range(10)</code>, the
+same seeds for PID and MPC, so <strong>paired comparison is already possible</strong>. Per
+environment it stores both ten-element return vectors, an
+<code>mpc_terminated_early</code> count, the episode length and a source fingerprint.</p>
+<p>What exists that is useful here: the per-seed returns are kept, not just the
+mean, so a distribution over ten samples is available; and
+<code>mpc_terminated_early</code> is a constraint-violation count in the only sense the
+environments define constraints.</p>
+<p>What does not exist: IAE, overshoot, settling time, per-step constraint
+violation rate, or any quantile or tail statistic. <code>runners.rollout</code> returns
+tracked values, targets and rewards, so IAE and overshoot are derivable without
+touching the environments, but nothing computes them. Ten seeds is also thin
+for tail metrics; the recorded counts are integers out of ten.</p>
+<h2 id="4-what-would-need-building-by-effort">4. What would need building, by effort<a class="headerlink" href="#4-what-would-need-building-by-effort" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Distributional metrics and a paired evaluation harness.</strong> Smallest and
+   needed by every arm. <code>rollout</code> already returns what IAE, overshoot and
+   settling time need. Add violation rate and quantiles, and raise the seed
+   count for the study runs, which is a parameter not a code change. Half a day.</li>
+<li><strong>Oracle arm on the sampling planner.</strong> A key argument threaded into
+   <code>SamplingMPC._score</code> plus a runner that passes the evaluation seed. Hours,
+   given the <code>fold_in(key, t)</code> convention. Must handle the reactor's
+   state-carried demand key explicitly.</li>
+<li><strong>Scenario arm on the sampling planner.</strong> A vmap over K keys and a mean, plus
+   a decision about whether to average the objective or use a risk measure.
+   Around a day, plus compute.</li>
+<li><strong>True-model planners for pH, glass furnace and reactor.</strong> The real cost. A
+   <code>SamplingMPC</code> instance needs only an objective, so this is mostly tuning
+   horizon, sample count and elite fraction per plant, then demonstrating the
+   result is a credible expert rather than a strawman. Gradient MPC is the
+   cheaper option where it works, but pH's bisection solve and the furnace's
+   implicit gas-temperature solve are both gradient risks, and the kiln's
+   adjoint is already documented as overflowing to NaN after eight steps.
+   Several days per plant, dominated by convincing yourself the planner is good.</li>
+<li><strong>do-mpc scenario arm.</strong> Optional, and only if you want the comparison to
+   include the shipped CasADi controllers rather than replacing them.
+   <code>n_robust</code> plus uncertain parameters. A day per environment, with the caveat
+   that it is a different formulation from the sampled-trajectory one.</li>
+<li><strong>An asymmetric reward variant.</strong> Only if you want mechanism 2 isolated
+   cleanly rather than merely present. Physics justification, <code>PHYSICS.md</code>
+   update, model review checklist, new environment version, full baseline
+   re-record. Days, and it perturbs the release.</li>
+</ol>
+<h2 id="5-confounds-in-the-existing-comparison">5. Confounds in the existing comparison<a class="headerlink" href="#5-confounds-in-the-existing-comparison" title="Permanent link">&para;</a></h2>
+<p>Ordered by how much they would undermine a published result.</p>
+<ol>
+<li><strong>The MPC reads the full simulator state; the PID and any policy read the
+   observation.</strong> Undocumented. On environments explicitly designed as POMDPs,
+   with six or nine hidden dimensions, this is not a small effect. Any
+   "MPC beats PID" or "RL beats MPC" claim inherits it.</li>
+<li><strong>On three of four priority environments the MPC plans with a different
+   model than the simulator.</strong> Model error is unquantified and its direction is
+   unknown, so it can be used to explain away any result in either direction.</li>
+<li><strong>The JAX planners plan against a fixed, wrong disturbance scenario</strong>, not
+   the mean and not the truth. They are mislabelled as deterministic MPC.</li>
+<li><strong>The CasADi cost is a quadratic proxy for a log-scaled reward.</strong> Documented
+   and well-motivated, and still mechanism 2 operating inside the baseline. The
+   MPC is not optimising the quantity it is scored on.</li>
+<li><strong>The reactor's stochastic demand is asserted by nothing.</strong> Its exclusion
+   from <code>disturbance_fields</code> is deliberate and correct on that field's own
+   definition, so the fix is a separate check rather than a registry edit.</li>
+<li><strong>Ten seeds.</strong> Adequate for a mean, thin for the tails this study is about.</li>
+<li><strong>Fingerprint blast radius.</strong> <code>provenance.baseline_fingerprint</code> hashes
+   <code>experts/pid.py</code> and <code>experts/mpc.py</code> whole, so adding a scenario planner
+   invalidates all twenty recorded baselines and forces a full re-record, which
+   is a nine to eleven hour job. (Since then each task's oracle moved to its
+   own package, so a planner added for one task re-records only that
+   package.) The roadmap already carries an item to scope
+   this per environment. Doing that item <em>before</em> this study is a direct saving.</li>
+</ol>
+<h2 id="6-which-environment-to-prototype-on">6. Which environment to prototype on<a class="headerlink" href="#6-which-environment-to-prototype-on" title="Permanent link">&para;</a></h2>
+<p><strong>Build the machinery on the cement kiln. Test the hypothesis on pH.</strong></p>
+<p>The brief nominates pH, and for the hypothesis that is right: it is the
+environment where the prediction is a genuine RL win, its POMDP structure is
+real and documented rather than asserted, its buffer disturbance is unmeasured,
+and it is the cheapest to run at roughly 7 ms per solve.</p>
+<p>But pH is a poor place to <em>build</em>, because it has no true-model planner today
+and its bisection pH solve makes the gradient route risky. You would be
+debugging a new planner and a new study harness simultaneously.</p>
+<p>The cement kiln is the only environment in the repository that already has a
+true-model, gradient-free, fully vmapped planner. Scenario and oracle arms can
+be built and validated there against an existing, tuned, working controller,
+with no new planner to justify. Once the machinery is trusted, porting it to pH
+is a <code>SamplingMPC</code> instance plus tuning.</p>
+<p>The kiln also has an honest weakness worth knowing in advance: its disturbance
+is <em>observed</em>, so the dual-effect mechanism is largely absent there. That makes
+it a good machinery testbed and a poor hypothesis testbed, which is exactly the
+split proposed.</p>
+<h2 id="7-where-the-framing-needs-correcting">7. Where the framing needs correcting<a class="headerlink" href="#7-where-the-framing-needs-correcting" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>The plants are not deterministic.</strong> All four priority environments have
+  per-step stochastic disturbances with configurable parameters. The contingency
+  plan in the brief is not needed.</li>
+<li><strong>"Give the MPC the true model" is not the status quo</strong>, it is a build item,
+  on three of the four priority environments.</li>
+<li><strong>The existing MPCs are not deterministic MPC</strong> in the certainty-equivalence
+  sense, except the CasADi ones. The JAX planners use one fixed sampled
+  scenario.</li>
+<li><strong>Mechanism 2 needs non-quadratic, not asymmetric.</strong> It is testable now. No
+  environment has an asymmetric reward, including the cement kiln's free lime.</li>
+<li><strong>Mechanism 1 is the weakest of the four here.</strong> No planner has a state
+  constraint; irrecoverable states are handled purely by episode termination
+  with no explicit penalty. To study constraint violation properly you would be
+  adding constraints, not just measuring them.</li>
+<li><strong>The oracle is cheaper than expected</strong>, because disturbances are a pure
+  function of key and time by convention, and the evaluation harness uses one
+  fixed key per episode.</li>
+<li><strong>The reactor is a different problem from the other three.</strong> Its stochasticity
+  is a drifting setpoint, not a plant disturbance, and any planner that rolls out
+  <code>step_env</code> gets its demand oracle for free. The registry already draws this
+  distinction deliberately, which is worth respecting rather than flattening.</li>
+</ul>
+<h2 id="8-method-note">8. Method note<a class="headerlink" href="#8-method-note" title="Permanent link">&para;</a></h2>
+<p>Nothing was modified. I deliberately did not run the test suite: a full baseline
+re-record was in progress on this machine while this was written, and the fast
+suite would have competed with it for cores. Every claim above is from reading
+source, from <code>src/target_gym/data/baseline_returns/</code>, or from short read-only introspection
+of the registry and the do-mpc version.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; Yann Berthelot
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.indexes", "toc.follow", "content.code.copy", "content.action.edit", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+        <script src="../javascripts/results-chart.js"></script>
+      
+    
+  </body>
+</html>

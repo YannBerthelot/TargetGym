@@ -1,0 +1,3226 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="JAX reinforcement learning environments for target MDPs: reach a setpoint and hold it, across aircraft, process control and industrial plants.">
+      
+      
+      
+        <link rel="canonical" href="https://yannberthelot.github.io/TargetGym/0.7/baseline-results/">
+      
+      
+        <link rel="prev" href="../environments/battery/">
+      
+      
+        <link rel="next" href="../rl-protocol/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Baseline results - TargetGym</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/results-chart.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#baseline-results" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+    This is the documentation of an earlier release.
+  
+  <a href="../..">
+    <strong>Read the latest release's documentation.</strong>
+  </a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TargetGym" class="md-header__button md-logo" aria-label="TargetGym" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TargetGym
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Baseline results
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Follow system theme"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Follow system theme" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/YannBerthelot/TargetGym" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    YannBerthelot/TargetGym
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TargetGym" class="md-nav__button md-logo" aria-label="TargetGym" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TargetGym
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/YannBerthelot/TargetGym" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    YannBerthelot/TargetGym
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../using-the-pids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the PIDs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rendering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Throughput
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environments
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Environments
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../complexity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an environment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aircraft
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Aircraft
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane_sine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude - sinusoid
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane_energy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude and airspeed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_heading/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D heading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_circle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D circle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_racetrack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D holding pattern
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_figure8/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D figure-8
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/patrol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patrol - wingman
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/patrol_bearing_only/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patrol - wingman, bearing-only
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/formation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Formation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-agent formation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process control
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Process control
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/cstr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSTR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/first_order/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/four_tank/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Four-tank
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/ph_neutralization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pH neutralisation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/distillation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distillation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/unstable_cstr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unstable CSTR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Industrial
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Industrial
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/glass_furnace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glass Furnace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/reactor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/hvac/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building HVAC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/cement_kiln/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cement Kiln
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/boiler_drum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boiler Drum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/compressor_surge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compressor Surge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Energy
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Energy
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/wind_turbine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wind Turbine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/battery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baseline results
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baseline results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#room-to-grow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Room to grow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whole-episode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Whole episode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#episode-returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Episode returns
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caveats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caveats
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rl-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../capability-profile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability profile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rl-baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Background
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Background
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target-mdp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target MDPs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How the baselines work
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reward-shaping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reward shaping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PHYSICS_METHODOLOGY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Contributing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model-review-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model review checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../functional-structure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Functional structure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../certainty-equivalence-study/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certainty-equivalence study
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#room-to-grow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Room to grow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whole-episode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Whole episode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#episode-returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Episode returns
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caveats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caveats
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="baseline-results">Baseline results<a class="headerlink" href="#baseline-results" title="Permanent link">&para;</a></h1>
+<!-- Written by scripts/generate_baseline_table.py from
+     src/target_gym/data/protocol_results/ and baseline_returns/ at build time.
+     Do not edit by hand. -->
+
+<p>Every environment ships two reference controllers, scored on its test
+configuration (<code>spec.make_test_params()</code>):</p>
+<ul>
+<li><strong>The expert</strong> (the <code>"pid"</code> slot): reads the observation only, as your agent
+  does. It is the score to beat.</li>
+<li><strong>The oracle</strong> (the <code>"mpc"</code> slot): reads the true state, including what the
+  observation hides. It shows what information and planning are worth.</li>
+</ul>
+<p>Costs on this page are per step, lower is better, in each environment's own
+units. To score your own policy, see
+<a href="../using-the-pids/#evaluating-against-it">Evaluating against it</a>.
+How the controllers are built and measured is in
+<a href="../baselines/">How the baselines work</a>.</p>
+<h2 id="at-a-glance">At a glance<a class="headerlink" href="#at-a-glance" title="Permanent link">&para;</a></h2>
+<p>How many times cheaper the oracle holds each target than the expert,
+and where the ceiling sits: tracking every quantity within its
+instrument's resolution. Switch the anchor to the ceiling to see how far
+each controller is from as good as a real plant can verify. Hover a row
+for the numbers, including the whole episode.</p>
+<div class="tg-results-chart"></div>
+<script type="application/json" id="tg-results-data">[{"name":"plane","group":"Aircraft","expert":4.359998088223594,"oracle":0.5189074476559957,"ceiling":1.0,"expert_gain":4.359998088223594,"oracle_gain":0.6772199529001401},{"name":"plane_energy","group":"Aircraft","expert":2.7730005865103835,"oracle":1.403359061829007,"ceiling":0.6944444444444445,"expert_gain":14436.917891929175,"oracle_gain":354.24154668380703},{"name":"plane_sine","group":"Aircraft","expert":3.190059790997431,"oracle":0.31903737962136236,"ceiling":0.6298815822625345,"expert_gain":3.190059790997431,"oracle_gain":0.5287779268776075},{"name":"plane3d_heading","group":"Aircraft","expert":3.4683295226589554,"oracle":0.6124027895394485,"ceiling":2.0,"expert_gain":3.4683295226589554,"oracle_gain":0.6124027895394485},{"name":"plane3d_circle","group":"Aircraft","expert":3.4643984409838193,"oracle":3.149454987810717,"ceiling":2.0,"expert_gain":3.4643984409838193,"oracle_gain":3.149454987810717},{"name":"plane3d_racetrack","group":"Aircraft","expert":12.675603139767235,"oracle":1.0657072450523792,"ceiling":2.0,"expert_gain":12.675603139767235,"oracle_gain":1.0657072450523792},{"name":"plane3d_figure8","group":"Aircraft","expert":323.6253623751084,"oracle":0.5189747337713683,"ceiling":1.0,"expert_gain":323.6253623751084,"oracle_gain":0.5189747337713683},{"name":"patrol","group":"Aircraft","expert":0.8467207019031048,"oracle":0.053187578530050815,"ceiling":2.0,"expert_gain":0.8467207019031048,"oracle_gain":0.053187578530050815},{"name":"patrol_bearing_only","group":"Aircraft","expert":1.6501395238190888,"oracle":0.053187578530050815,"ceiling":2.0,"expert_gain":1.6501395238190888,"oracle_gain":0.053187578530050815},{"name":"cstr","group":"Process Control","expert":4.893898762363742e-07,"oracle":8.846114380949039e-08,"ceiling":1.0,"expert_gain":13.262660883021509,"oracle_gain":7.036775885546886e-08},{"name":"first_order","group":"Process Control","expert":3.0248734551634995e-12,"oracle":0.0,"ceiling":1.0,"expert_gain":3.318558861075671e-05,"oracle_gain":0.0},{"name":"four_tank","group":"Process Control","expert":1.3762761769259158,"oracle":2.5017740019553232e-08,"ceiling":2.0,"expert_gain":18.657582645413026,"oracle_gain":4.4496460656893563e-08},{"name":"ph_neutralization","group":"Process Control","expert":0.7534727982297921,"oracle":0.08916053595838648,"ceiling":1.0,"expert_gain":0.7567803024274755,"oracle_gain":0.09254092571742628},{"name":"distillation","group":"Process Control","expert":0.47669114260264905,"oracle":0.022818469475365713,"ceiling":2.0,"expert_gain":0.47669114260264905,"oracle_gain":0.022818469475365713},{"name":"glass_furnace","group":"Industrial / Energy","expert":0.6682064392413768,"oracle":0.10178233331443796,"ceiling":1.0,"expert_gain":0.9670707607672862,"oracle_gain":0.23432330360491807},{"name":"reactor","group":"Industrial / Energy","expert":4.708687170374173,"oracle":1.475739027706929,"ceiling":0.0027777777777777783,"expert_gain":4.708772241287393,"oracle_gain":1.4757691727100333},{"name":"hvac","group":"Industrial / Energy","expert":0.023774891919790975,"oracle":0.014208605278544277,"ceiling":7.500000000000001e-05,"expert_gain":0.024960180653985625,"oracle_gain":0.013743371182518891},{"name":"cement_kiln","group":"Industrial / Energy","expert":14.328179672953612,"oracle":0.0251005036649484,"ceiling":1.0,"expert_gain":14.38940006569491,"oracle_gain":0.07208621940159808},{"name":"boiler_drum","group":"Industrial / Energy","expert":119.82907929307525,"oracle":5.534708091409822,"ceiling":1.1402740955827686,"expert_gain":119.89451217349325,"oracle_gain":5.615284871186733},{"name":"wind_turbine","group":"Renewable Energy","expert":9.810998259960495e-05,"oracle":1.1796639865255069e-05,"ceiling":6.944444444444445e-06,"expert_gain":0.0001039954540455786,"oracle_gain":1.2609169900260989e-05},{"name":"battery","group":"Renewable Energy","expert":0.0006802680312170715,"oracle":0.00022913516181502782,"ceiling":0.00013888888888888886,"expert_gain":0.003327833331628043,"oracle_gain":0.0009253222457801855},{"name":"unstable_cstr","group":"Process Control","expert":6.353572398406044,"oracle":0.0073098183974868195,"ceiling":1.0,"expert_gain":60667.87017180141,"oracle_gain":3799.6714203457345},{"name":"compressor_surge","group":"Industrial / Energy","expert":3.60436833199817,"oracle":0.009274571730609143,"ceiling":1.0,"expert_gain":526.5797742271516,"oracle_gain":23.012493830370108},{"name":"formation","group":"Aircraft","expert":4.516368363549312,"oracle":1.011592126103739,"ceiling":6.0,"expert_gain":4.516368363549312,"oracle_gain":1.011592126103739}]</script>
+
+<h2 id="room-to-grow">Room to grow<a class="headerlink" href="#room-to-grow" title="Permanent link">&para;</a></h2>
+<p><strong>Hold</strong> is the tracking cost per step once a controller has settled on
+each target, after a settle fixed per environment. The <strong>ceiling</strong> is
+tracking every quantity within its instrument's resolution: as good as a
+real plant can verify. <strong>Room</strong> is the number of decades from the expert's
+hold down to the ceiling; 0 means the expert is already there. The
+<strong>oracle score</strong> places the oracle between the expert (0) and the ceiling
+(1). Score a policy the same way with <code>target_gym.scoring.score_policy</code>.
+3 seeds each.</p>
+<table>
+<thead>
+<tr>
+<th>environment</th>
+<th>expert hold</th>
+<th>ceiling</th>
+<th>room (decades)</th>
+<th>oracle hold</th>
+<th>oracle score</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Aircraft</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/plane/"><code>plane</code></a></td>
+<td>4.36</td>
+<td>1</td>
+<td>0.64</td>
+<td>0.519</td>
+<td>1.00</td>
+</tr>
+<tr>
+<td><a href="../environments/plane_energy/"><code>plane_energy</code></a></td>
+<td>2.77</td>
+<td>0.694</td>
+<td>0.60</td>
+<td>1.4</td>
+<td>0.49</td>
+</tr>
+<tr>
+<td><a href="../environments/plane_sine/"><code>plane_sine</code></a></td>
+<td>3.19</td>
+<td>0.63</td>
+<td>0.70</td>
+<td>0.319</td>
+<td>1.00</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_heading/"><code>plane3d_heading</code></a></td>
+<td>3.47</td>
+<td>2</td>
+<td>0.24</td>
+<td>0.612</td>
+<td>1.00</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_circle/"><code>plane3d_circle</code></a></td>
+<td>3.46</td>
+<td>2</td>
+<td>0.24</td>
+<td>3.15</td>
+<td>0.17</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_racetrack/"><code>plane3d_racetrack</code></a></td>
+<td>12.7</td>
+<td>2</td>
+<td>0.80</td>
+<td>1.07</td>
+<td>1.00</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_figure8/"><code>plane3d_figure8</code></a></td>
+<td>324</td>
+<td>1</td>
+<td>2.51</td>
+<td>0.519</td>
+<td>1.00</td>
+</tr>
+<tr>
+<td><a href="../environments/patrol/"><code>patrol</code></a></td>
+<td>0.847</td>
+<td>2</td>
+<td>0.00</td>
+<td>0.0532</td>
+<td>—</td>
+</tr>
+<tr>
+<td><a href="../environments/patrol_bearing_only/"><code>patrol_bearing_only</code></a></td>
+<td>1.65</td>
+<td>2</td>
+<td>0.00</td>
+<td>0.0532</td>
+<td>—</td>
+</tr>
+<tr>
+<td><a href="../environments/formation/"><code>formation</code></a></td>
+<td>4.52</td>
+<td>6</td>
+<td>0.00</td>
+<td>1.01</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Process Control</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/cstr/"><code>cstr</code></a></td>
+<td>4.89e-7</td>
+<td>1</td>
+<td>0.00</td>
+<td>8.85e-8</td>
+<td>—</td>
+</tr>
+<tr>
+<td><a href="../environments/first_order/"><code>first_order</code></a></td>
+<td>3.02e-12</td>
+<td>1</td>
+<td>0.00</td>
+<td>0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><a href="../environments/four_tank/"><code>four_tank</code></a></td>
+<td>1.38</td>
+<td>2</td>
+<td>0.00</td>
+<td>2.5e-8</td>
+<td>—</td>
+</tr>
+<tr>
+<td><a href="../environments/ph_neutralization/"><code>ph_neutralization</code></a></td>
+<td>0.753</td>
+<td>1</td>
+<td>0.00</td>
+<td>0.0892</td>
+<td>—</td>
+</tr>
+<tr>
+<td><a href="../environments/distillation/"><code>distillation</code></a></td>
+<td>0.477</td>
+<td>2</td>
+<td>0.00</td>
+<td>0.0228</td>
+<td>—</td>
+</tr>
+<tr>
+<td><a href="../environments/unstable_cstr/"><code>unstable_cstr</code></a></td>
+<td>6.35</td>
+<td>1</td>
+<td>0.80</td>
+<td>0.00731</td>
+<td>1.00</td>
+</tr>
+<tr>
+<td><strong>Industrial / Energy</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/glass_furnace/"><code>glass_furnace</code></a></td>
+<td>0.668</td>
+<td>1</td>
+<td>0.00</td>
+<td>0.102</td>
+<td>—</td>
+</tr>
+<tr>
+<td><a href="../environments/reactor/"><code>reactor</code></a></td>
+<td>4.71</td>
+<td>0.00278</td>
+<td>3.23</td>
+<td>1.48</td>
+<td>0.16</td>
+</tr>
+<tr>
+<td><a href="../environments/hvac/"><code>hvac</code></a></td>
+<td>0.0238</td>
+<td>7.5e-5</td>
+<td>2.50</td>
+<td>0.0142</td>
+<td>0.09</td>
+</tr>
+<tr>
+<td><a href="../environments/cement_kiln/"><code>cement_kiln</code></a></td>
+<td>14.3</td>
+<td>1</td>
+<td>1.16</td>
+<td>0.0251</td>
+<td>1.00</td>
+</tr>
+<tr>
+<td><a href="../environments/boiler_drum/"><code>boiler_drum</code></a></td>
+<td>120</td>
+<td>1.14</td>
+<td>2.02</td>
+<td>5.53</td>
+<td>0.66</td>
+</tr>
+<tr>
+<td><a href="../environments/compressor_surge/"><code>compressor_surge</code></a></td>
+<td>3.6</td>
+<td>1</td>
+<td>0.56</td>
+<td>0.00927</td>
+<td>1.00</td>
+</tr>
+<tr>
+<td><strong>Renewable Energy</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/wind_turbine/"><code>wind_turbine</code></a></td>
+<td>9.81e-5</td>
+<td>6.94e-6</td>
+<td>1.15</td>
+<td>1.18e-5</td>
+<td>0.80</td>
+</tr>
+<tr>
+<td><a href="../environments/battery/"><code>battery</code></a></td>
+<td>6.8e-4</td>
+<td>1.39e-4</td>
+<td>0.69</td>
+<td>2.29e-4</td>
+<td>0.68</td>
+</tr>
+</tbody>
+</table>
+<h2 id="whole-episode">Whole episode<a class="headerlink" href="#whole-episode" title="Permanent link">&para;</a></h2>
+<p>The <strong>gain</strong> is the mean cost per step after the plant's burn-in, moves
+between targets included: what the plant pays. <strong>Oracle vs expert</strong> is
+the expert's gain divided by the oracle's, so 10 means the oracle pays a
+tenth. The <strong>transient</strong> is the summed cost around each target change.</p>
+<table>
+<thead>
+<tr>
+<th>environment</th>
+<th>expert gain</th>
+<th>oracle gain</th>
+<th>oracle vs expert</th>
+<th>expert transient</th>
+<th>oracle transient</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Aircraft</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/plane/"><code>plane</code></a></td>
+<td>4.36</td>
+<td>0.677</td>
+<td>6.44</td>
+<td>1.64e6</td>
+<td>3.2e5</td>
+</tr>
+<tr>
+<td><a href="../environments/plane_energy/"><code>plane_energy</code></a></td>
+<td>14,437</td>
+<td>354</td>
+<td>40.8</td>
+<td>2.49e6</td>
+<td>86,448</td>
+</tr>
+<tr>
+<td><a href="../environments/plane_sine/"><code>plane_sine</code></a></td>
+<td>3.19</td>
+<td>0.529</td>
+<td>6.03</td>
+<td>2.84e6</td>
+<td>2.27e5</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_heading/"><code>plane3d_heading</code></a></td>
+<td>3.47</td>
+<td>0.612</td>
+<td>5.66</td>
+<td>2.9e6</td>
+<td>9e5</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_circle/"><code>plane3d_circle</code></a></td>
+<td>3.46</td>
+<td>3.15</td>
+<td>1.1</td>
+<td>1.63e6</td>
+<td>3.42e5</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_racetrack/"><code>plane3d_racetrack</code></a></td>
+<td>12.7</td>
+<td>1.07</td>
+<td>11.9</td>
+<td>1.64e6</td>
+<td>3.26e5</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_figure8/"><code>plane3d_figure8</code></a></td>
+<td>324</td>
+<td>0.519</td>
+<td>624</td>
+<td>5.5e6</td>
+<td>6,068</td>
+</tr>
+<tr>
+<td><a href="../environments/patrol/"><code>patrol</code></a></td>
+<td>0.847</td>
+<td>0.0532</td>
+<td>15.9</td>
+<td>57,985</td>
+<td>3,168</td>
+</tr>
+<tr>
+<td><a href="../environments/patrol_bearing_only/"><code>patrol_bearing_only</code></a></td>
+<td>1.65</td>
+<td>0.0532</td>
+<td>31</td>
+<td>73,792</td>
+<td>3,168</td>
+</tr>
+<tr>
+<td><a href="../environments/formation/"><code>formation</code></a></td>
+<td>4.52</td>
+<td>1.01</td>
+<td>4.46</td>
+<td>17,428</td>
+<td>5,121</td>
+</tr>
+<tr>
+<td><strong>Process Control</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/cstr/"><code>cstr</code></a></td>
+<td>13.3</td>
+<td>7.04e-8</td>
+<td>1.88e8</td>
+<td>3.51e5</td>
+<td>3.09e5</td>
+</tr>
+<tr>
+<td><a href="../environments/first_order/"><code>first_order</code></a></td>
+<td>3.32e-5</td>
+<td>0</td>
+<td>—</td>
+<td>54,064</td>
+<td>53,873</td>
+</tr>
+<tr>
+<td><a href="../environments/four_tank/"><code>four_tank</code></a></td>
+<td>18.7</td>
+<td>4.45e-8</td>
+<td>4.19e8</td>
+<td>5.94e5</td>
+<td>5e5</td>
+</tr>
+<tr>
+<td><a href="../environments/ph_neutralization/"><code>ph_neutralization</code></a></td>
+<td>0.757</td>
+<td>0.0925</td>
+<td>8.18</td>
+<td>3,017</td>
+<td>2,557</td>
+</tr>
+<tr>
+<td><a href="../environments/distillation/"><code>distillation</code></a></td>
+<td>0.477</td>
+<td>0.0228</td>
+<td>20.9</td>
+<td>50,808</td>
+<td>38,594</td>
+</tr>
+<tr>
+<td><a href="../environments/unstable_cstr/"><code>unstable_cstr</code></a></td>
+<td>60,668</td>
+<td>3,800</td>
+<td>16</td>
+<td>5.84e5</td>
+<td>2.48e5</td>
+</tr>
+<tr>
+<td><strong>Industrial / Energy</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/glass_furnace/"><code>glass_furnace</code></a></td>
+<td>0.967</td>
+<td>0.234</td>
+<td>4.13</td>
+<td>363</td>
+<td>100</td>
+</tr>
+<tr>
+<td><a href="../environments/reactor/"><code>reactor</code></a></td>
+<td>4.71</td>
+<td>1.48</td>
+<td>3.19</td>
+<td>3,794</td>
+<td>639</td>
+</tr>
+<tr>
+<td><a href="../environments/hvac/"><code>hvac</code></a></td>
+<td>0.025</td>
+<td>0.0137</td>
+<td>1.82</td>
+<td>1.11</td>
+<td>0.519</td>
+</tr>
+<tr>
+<td><a href="../environments/cement_kiln/"><code>cement_kiln</code></a></td>
+<td>14.4</td>
+<td>0.0721</td>
+<td>200</td>
+<td>3,650</td>
+<td>154</td>
+</tr>
+<tr>
+<td><a href="../environments/boiler_drum/"><code>boiler_drum</code></a></td>
+<td>120</td>
+<td>5.62</td>
+<td>21.4</td>
+<td>21,136</td>
+<td>6,919</td>
+</tr>
+<tr>
+<td><a href="../environments/compressor_surge/"><code>compressor_surge</code></a></td>
+<td>527</td>
+<td>23</td>
+<td>22.9</td>
+<td>6.32e5</td>
+<td>31,036</td>
+</tr>
+<tr>
+<td><strong>Renewable Energy</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/wind_turbine/"><code>wind_turbine</code></a></td>
+<td>1.04e-4</td>
+<td>1.26e-5</td>
+<td>8.25</td>
+<td>0.0316</td>
+<td>0.00324</td>
+</tr>
+<tr>
+<td><a href="../environments/battery/"><code>battery</code></a></td>
+<td>0.00333</td>
+<td>9.25e-4</td>
+<td>3.6</td>
+<td>0.0585</td>
+<td>9.08e-4</td>
+</tr>
+</tbody>
+</table>
+<h2 id="episode-returns">Episode returns<a class="headerlink" href="#episode-returns" title="Permanent link">&para;</a></h2>
+<p>The cost per step over the whole test episode (minus the return divided by
+the episode length): reaching the targets and holding them, together.
+10 seeds, paired: <strong>oracle wins</strong> counts the seeds where the oracle
+beat the expert.</p>
+<table>
+<thead>
+<tr>
+<th>environment</th>
+<th>steps</th>
+<th>expert cost/step</th>
+<th>oracle cost/step</th>
+<th>oracle wins</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Aircraft</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/plane/"><code>plane</code></a></td>
+<td>280</td>
+<td>3,778</td>
+<td>1,121</td>
+<td>9/10</td>
+</tr>
+<tr>
+<td><a href="../environments/plane_energy/"><code>plane_energy</code></a></td>
+<td>1600</td>
+<td>13,746</td>
+<td>494</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/plane_sine/"><code>plane_sine</code></a></td>
+<td>480</td>
+<td>2,241</td>
+<td>387</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_heading/"><code>plane3d_heading</code></a></td>
+<td>300</td>
+<td>5,573</td>
+<td>2,298</td>
+<td>9/10</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_circle/"><code>plane3d_circle</code></a></td>
+<td>300</td>
+<td>3,535</td>
+<td>1,123</td>
+<td>8/10</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_racetrack/"><code>plane3d_racetrack</code></a></td>
+<td>650</td>
+<td>1,637</td>
+<td>495</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/plane3d_figure8/"><code>plane3d_figure8</code></a></td>
+<td>400</td>
+<td>9,291</td>
+<td>13.9</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/patrol/"><code>patrol</code></a></td>
+<td>200</td>
+<td>142</td>
+<td>19.5</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/patrol_bearing_only/"><code>patrol_bearing_only</code></a></td>
+<td>200</td>
+<td>182</td>
+<td>19.5</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/formation/"><code>formation</code></a></td>
+<td>200</td>
+<td>292</td>
+<td>26.6</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><strong>Process Control</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/cstr/"><code>cstr</code></a></td>
+<td>150</td>
+<td>4,176</td>
+<td>3,992</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/first_order/"><code>first_order</code></a></td>
+<td>150</td>
+<td>276</td>
+<td>274</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/four_tank/"><code>four_tank</code></a></td>
+<td>1200</td>
+<td>222</td>
+<td>155</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/ph_neutralization/"><code>ph_neutralization</code></a></td>
+<td>300</td>
+<td>149</td>
+<td>5.31</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/distillation/"><code>distillation</code></a></td>
+<td>200</td>
+<td>415</td>
+<td>123</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/unstable_cstr/"><code>unstable_cstr</code></a></td>
+<td>1200</td>
+<td>60,930</td>
+<td>3,950</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><strong>Industrial / Energy</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/glass_furnace/"><code>glass_furnace</code></a></td>
+<td>1600</td>
+<td>1.17</td>
+<td>0.312</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/reactor/"><code>reactor</code></a></td>
+<td>864</td>
+<td>6.64</td>
+<td>1.4</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/hvac/"><code>hvac</code></a></td>
+<td>720</td>
+<td>0.0226</td>
+<td>0.0113</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/cement_kiln/"><code>cement_kiln</code></a></td>
+<td>700</td>
+<td>18.2</td>
+<td>0.158</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/boiler_drum/"><code>boiler_drum</code></a></td>
+<td>400</td>
+<td>170</td>
+<td>22.1</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/compressor_surge/"><code>compressor_surge</code></a></td>
+<td>1200</td>
+<td>1,840</td>
+<td>102</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><strong>Renewable Energy</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="../environments/wind_turbine/"><code>wind_turbine</code></a></td>
+<td>400</td>
+<td>1.4e-4</td>
+<td>1.48e-5</td>
+<td>10/10</td>
+</tr>
+<tr>
+<td><a href="../environments/battery/"><code>battery</code></a></td>
+<td>360</td>
+<td>0.00354</td>
+<td>9.48e-4</td>
+<td>10/10</td>
+</tr>
+</tbody>
+</table>
+<h2 id="caveats">Caveats<a class="headerlink" href="#caveats" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../environments/patrol_bearing_only/"><code>patrol_bearing_only</code></a>: The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity from the follower's own and the change in the relative position, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.</li>
+<li><a href="../environments/formation/"><code>formation</code></a>: The PID flies the lead seat as a formation lead: the 3D heading task's course hold and pitch on height, aimed at the heading the route commands, at a set power, so its wingmen have a steady reference. Each wingman seat flies the patrol's formation hold. The MPC slot is the patrol oracle's design applied to the whole formation: the patrol's lead autopilot in the lead seat and its twin-autopilot law in each wingman seat, with one residual planner over every seat on the team cost.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; Yann Berthelot
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.indexes", "toc.follow", "content.code.copy", "content.action.edit", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+        <script src="../javascripts/results-chart.js"></script>
+      
+    
+  </body>
+</html>

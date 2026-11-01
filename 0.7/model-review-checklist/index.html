@@ -1,0 +1,3295 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="JAX reinforcement learning environments for target MDPs: reach a setpoint and hold it, across aircraft, process control and industrial plants.">
+      
+      
+      
+        <link rel="canonical" href="https://yannberthelot.github.io/TargetGym/0.7/model-review-checklist/">
+      
+      
+        <link rel="prev" href="../testing/">
+      
+      
+        <link rel="next" href="../functional-structure/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Model review checklist - TargetGym</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/results-chart.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#model-review-checklist" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+    This is the documentation of an earlier release.
+  
+  <a href="../..">
+    <strong>Read the latest release's documentation.</strong>
+  </a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TargetGym" class="md-header__button md-logo" aria-label="TargetGym" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TargetGym
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Model review checklist
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Follow system theme"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Follow system theme" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/YannBerthelot/TargetGym" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    YannBerthelot/TargetGym
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TargetGym" class="md-nav__button md-logo" aria-label="TargetGym" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TargetGym
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/YannBerthelot/TargetGym" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    YannBerthelot/TargetGym
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../using-the-pids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the PIDs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rendering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Throughput
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environments
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Environments
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../complexity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an environment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aircraft
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Aircraft
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane_sine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude - sinusoid
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane_energy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Altitude and airspeed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_heading/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D heading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_circle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D circle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_racetrack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D holding pattern
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/plane3d_figure8/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D figure-8
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/patrol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patrol - wingman
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/patrol_bearing_only/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patrol - wingman, bearing-only
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/formation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Formation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-agent formation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process control
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Process control
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/cstr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSTR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/first_order/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/four_tank/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Four-tank
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/ph_neutralization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pH neutralisation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/distillation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distillation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/unstable_cstr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unstable CSTR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Industrial
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Industrial
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/glass_furnace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glass Furnace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/reactor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/hvac/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building HVAC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/cement_kiln/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cement Kiln
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/boiler_drum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boiler Drum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/compressor_surge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compressor Surge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Energy
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Energy
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/wind_turbine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wind Turbine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environments/battery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../baseline-results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baseline results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rl-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../capability-profile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability profile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rl-baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Background
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Background
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target-mdp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target MDPs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How the baselines work
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reward-shaping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reward shaping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PHYSICS_METHODOLOGY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Contributing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model review checklist
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model review checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-is-the-reward-normalised-by-a-tolerance-or-by-the-state-space" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Is the reward normalised by a tolerance, or by the state space?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-does-the-reward-still-pay-for-precision-once-you-are-close" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Does the reward still pay for precision once you are close?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-is-any-state-field-written-but-never-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Is any state field written but never read?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-is-any-state-discarded-where-it-is-unpacked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Is any state discarded where it is unpacked?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-do-the-regimes-join" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Do the regimes join?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-is-the-model-still-physical-where-an-optimiser-can-drive-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Is the model still physical where an optimiser can drive it?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-can-the-energy-budget-be-bounded-from-outside" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Can the energy budget be bounded from outside?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-is-actuator-authority-validated-or-merely-plausible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Is actuator authority validated, or merely plausible?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-does-a-control-loops-gain-depend-on-an-operating-variable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Does a control loop's gain depend on an operating variable?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-what-does-the-tuning-objectives-behaviour-tell-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. What does the tuning objective's behaviour tell you?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-can-the-error-metric-resolve-what-the-reward-is-asking-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Can the error metric resolve what the reward is asking for?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-is-this-logic-implemented-more-than-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Is this logic implemented more than once?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-does-a-reduced-prediction-model-still-answer-the-actuator-like-the-plant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Does a reduced prediction model still answer the actuator like the plant?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-items-this-produced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open items this produced
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../functional-structure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Functional structure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../certainty-equivalence-study/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certainty-equivalence study
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-is-the-reward-normalised-by-a-tolerance-or-by-the-state-space" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Is the reward normalised by a tolerance, or by the state space?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-does-the-reward-still-pay-for-precision-once-you-are-close" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Does the reward still pay for precision once you are close?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-is-any-state-field-written-but-never-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Is any state field written but never read?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-is-any-state-discarded-where-it-is-unpacked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Is any state discarded where it is unpacked?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-do-the-regimes-join" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Do the regimes join?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-is-the-model-still-physical-where-an-optimiser-can-drive-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Is the model still physical where an optimiser can drive it?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-can-the-energy-budget-be-bounded-from-outside" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Can the energy budget be bounded from outside?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-is-actuator-authority-validated-or-merely-plausible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Is actuator authority validated, or merely plausible?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-does-a-control-loops-gain-depend-on-an-operating-variable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Does a control loop's gain depend on an operating variable?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-what-does-the-tuning-objectives-behaviour-tell-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. What does the tuning objective's behaviour tell you?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-can-the-error-metric-resolve-what-the-reward-is-asking-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Can the error metric resolve what the reward is asking for?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-is-this-logic-implemented-more-than-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Is this logic implemented more than once?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-does-a-reduced-prediction-model-still-answer-the-actuator-like-the-plant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Does a reduced prediction model still answer the actuator like the plant?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-items-this-produced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open items this produced
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/YannBerthelot/TargetGym/edit/main/docs/model-review-checklist.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="model-review-checklist">Model review checklist<a class="headerlink" href="#model-review-checklist" title="Permanent link">&para;</a></h1>
+<p>A day spent correcting the 2D aircraft turned up seven defects in one
+environment, none of them found by inspection and every one of them outside the
+regime the model was designed for. This page turns those into checks, and
+records what each one finds when run against the other seventeen environments.</p>
+<p>The checks are ordered by what they cost to run, not by how clever they are.</p>
+<h2 id="1-is-the-reward-normalised-by-a-tolerance-or-by-the-state-space">1. Is the reward normalised by a tolerance, or by the state space?<a class="headerlink" href="#1-is-the-reward-normalised-by-a-tolerance-or-by-the-state-space" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> The aircraft's tracking reward divided the altitude error
+by the whole 12 km envelope. Over any realistic error that is effectively
+linear, worth 8e-4 per metre whether the aircraft is 10 m or 400 m out, so
+closing the last 9 m gained 0.007 where halving a 1600 m error gained 0.26. Fine
+tracking was invisible next to coarse approach.</p>
+<p><strong>How to check.</strong> Look for the tracked error divided by a difference of two
+<em>limits</em> rather than by a tolerance. <code>grep</code> for <code>_max - ..._min</code> inside a
+<code>compute_reward</code>.</p>
+<p><strong>What it finds here.</strong> It found three more instances after the 2D aircraft: the
+three 3D tasks in <code>plane3d/env.py</code> — whose docstring claimed it "mirrors Plane
+(2D)" while doing the opposite — and the lead term of the patrol formation. All
+are now on the shared <code>log_scaled_reward</code>. The four-tank had the same defect and
+records it as its own D1, so this shape has now appeared in four separate
+places, which is the argument for the check rather than for another one-off fix.</p>
+<h2 id="2-does-the-reward-still-pay-for-precision-once-you-are-close">2. Does the reward still pay for precision once you are close?<a class="headerlink" href="#2-does-the-reward-still-pay-for-precision-once-you-are-close" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> Two candidate replacements looked fine and were not. A
+band-scaled kernel concentrates its resolution <em>at</em> the band and collapses
+inside it, so a policy holding 1 m scores almost the same as one holding 10 m —
+which makes the comparison the benchmark exists for invisible.</p>
+<p><strong>How to check.</strong> Tabulate the reward gained per <em>halving</em> of the error across
+several decades. Constant means "closer is always better"; a collapse means
+"close enough".</p>
+<p><strong>What it finds here.</strong> See <code>docs/reward-shaping.md</code>. Only the log-scaled form
+is flat across decades. Every environment with a <code>band</code> or <code>tolerance</code>
+parameter is worth putting through this table.</p>
+<h2 id="3-is-any-state-field-written-but-never-read">3. Is any state field written but never read?<a class="headerlink" href="#3-is-any-state-field-written-but-never-read" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> <code>state.m</code> was set to <code>initial_mass + fuel</code> = 92 588 kg,
+above the aircraft's maximum takeoff weight, while the dynamics integrated
+<code>initial_mass</code> directly. Nothing read the field, so a 20-tonne disagreement sat
+there until fuel burn made mass load-bearing.</p>
+<p><strong>How to check.</strong> For each <code>*State</code> dataclass, count attribute reads of each
+field across the package. Automatable in about fifteen lines.</p>
+<p><strong>What it finds here.</strong> Four fields, once the scan was actually run rather than
+eyeballed: <code>hvac.T_surface</code>, <code>glass_furnace.T_stack</code>, <code>hvac.Q_command</code> and
+<code>wind_turbine.torque_cmd</code>. All four are benign, and the last two in an
+instructive way — the <em>local</em> variable of that name carries the value into the
+dynamics, and the state field is only a record of what was commanded. So the
+scan's hit rate is poor and its cost is a few seconds; keep it, but read every
+hit before believing it. The one time it mattered it would have caught a
+20-tonne error.</p>
+<h2 id="4-is-any-state-discarded-where-it-is-unpacked">4. Is any state discarded where it is unpacked?<a class="headerlink" href="#4-is-any-state-discarded-where-it-is-unpacked" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> <code>compute_acceleration</code> began <code>x_dot, z_dot, _ = velocities</code>.
+The pitch rate was passed in and thrown away on the first line, which is why the
+aircraft had no pitch damping and a departed airframe tumbled indefinitely.</p>
+<p><strong>How to check.</strong> <code>grep</code> for <code>_</code> in tuple unpacking of state vectors, then ask
+whether the physics genuinely does not depend on it.</p>
+<p><strong>What it finds here.</strong> Three sites across the package, and all three are
+correct: <code>x</code> in the 2D dynamics, <code>x</code> and <code>y</code> in the 3D dynamics — which the
+equations of motion genuinely do not depend on — and a <code>lax.scan</code> carry in
+<code>utils.py</code>. No rate is discarded anywhere. Now verified mechanically rather
+than by reading.</p>
+<h2 id="5-do-the-regimes-join">5. Do the regimes join?<a class="headerlink" href="#5-do-the-regimes-join" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> Past the stall the model collapsed lift, and because drag
+was defined as <code>cd0 + k·CL²</code>, it collapsed drag with it. A separated wing had
+<em>less</em> drag than in cruise, so a departed aircraft fell at 300 m/s against an
+implied terminal velocity of 767 m/s and tumbled without damping.</p>
+<p><strong>How to check.</strong> Sweep the regime boundary finely and measure the largest step
+in dissipated power against the typical step. A rapid transition is fine; a jump
+is not. The aircraft's blend gives 4.7x, a naive piecewise switch 32x, and the
+defect infinity.</p>
+<p><strong>What it applies to.</strong> Any plant assembled from more than one description:
+laminar and turbulent, charging and discharging, calcining and inert, boiling
+and single-phase. Most of these environments have such a seam.</p>
+<p><strong>Do this with autodiff, not finite differences.</strong> The prescription above --
+"measure the largest step against the typical step" -- cannot tell a kink from a
+steep curve, and run across all eighteen it ranked the cstr first at a ratio of
+8.5e18. That is not a discontinuity, it is Arrhenius: the metric flags any
+function whose derivative <em>grows</em>, and an exponential does that perfectly
+smoothly.</p>
+<p>Every plant here is differentiable, so ask the dynamics instead of sampling
+them. At a point <code>x</code>, take the exact Jacobian of one step just below and just
+above it:</p>
+<div class="highlight"><pre><span></span><code>jump(x) = |J(x+eps) - J(x-eps)| / (|J(x+eps)| + |J(x-eps)|)
+</code></pre></div>
+<p>For <em>any</em> smooth function, however steep, the two one-sided derivatives converge
+to the same value and <code>jump</code> falls to zero with <code>eps</code>. Across a genuine kink
+they converge to different values and <code>jump</code> holds. It is scale-free, so a plant
+whose derivative spans twenty orders of magnitude is not penalised for having
+one; and <code>jnp.where</code> switches are caught precisely <em>because</em> autodiff returns
+the selected branch's derivative. The thing that makes autodiff "wrong" at a
+seam is what makes it a detector for one. Shrinking <code>eps</code> by 4x settles each
+case: a smooth point decays with it, a seam does not.</p>
+<p>Two filters make the output readable. Score only where the increment is real --
+where a field is unaffected by the swept variable, both derivatives are float
+noise and their ratio is meaningless. And require <em>both</em> one-sided derivatives
+to be active: where one is exactly zero the ratio is 1 by construction, and that
+is a <strong>saturation</strong>, a clip on an action or a rate, not two physical
+descriptions failing to join. Every environment clips something, so scoring
+those buries what the check is for.</p>
+<p><strong>What it finds here.</strong> Nine candidates across eighteen environments, and most
+are benign:</p>
+<table>
+<thead>
+<tr>
+<th>environment</th>
+<th>seam</th>
+<th><code>jump</code></th>
+<th>held under refinement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>aircraft (all four)</td>
+<td><code>x_dot</code> near 308 m/s</td>
+<td>1.00</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>battery</code></td>
+<td><code>soc</code> near 0.115</td>
+<td>1.00</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>reactor</code></td>
+<td><code>T_fuel</code> near 718 K</td>
+<td>0.89</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>glass_furnace</code></td>
+<td><code>T_crown</code> near 1527 K</td>
+<td>0.17</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>boiler_drum</code></td>
+<td><code>pressure</code></td>
+<td>0.20</td>
+<td><strong>no</strong> (0.45) -- smooth</td>
+</tr>
+<tr>
+<td><code>wind_turbine</code></td>
+<td><code>v_wind</code></td>
+<td>0.12</td>
+<td><strong>no</strong> (0.54) -- smooth</td>
+</tr>
+</tbody>
+</table>
+<p>The furnace's is <code>m_batch = jnp.maximum(position[3], 0.0)</code>, the batch blanket
+running out -- a mass that cannot go negative, which is a legitimate kink. The
+battery's is its state-of-charge-dependent power limit binding. The boiler drum
+and wind turbine decay under refinement and are simply steep.</p>
+<p>The aircraft's is the one that needed checking, and it is <strong>outside the
+reachable state space</strong>: it sits at 308 m/s, and holding every actuator hard
+over from cruise reaches 251.5 m/s on the 2D aircraft and 285.8 m/s on the 3D
+one before the episode ends. A sustained dive is the case this does not cover.</p>
+<h2 id="6-is-the-model-still-physical-where-an-optimiser-can-drive-it">6. Is the model still physical where an optimiser can drive it?<a class="headerlink" href="#6-is-the-model-still-physical-where-an-optimiser-can-drive-it" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> Every drag test probed attached flow, where <code>CD</code> is
+<em>defined</em> from <code>CL</code> and is self-consistent whatever the values. The two tests
+that did reach past the stall were satisfied <em>by</em> the defect: a lift collapse to
+zero is a maximal collapse, and a sweep asserting <code>isfinite</code> and <code>cd &gt; 0</code> is
+content with a wing producing less drag than in cruise.</p>
+<p><strong>How to check.</strong> State contracts over the <em>reachable</em> state space, not the
+design point: drive the plant to its action limits and require the state stay
+physical or the episode end. <code>test_attitude_rates_stay_bounded_under_extreme_actions</code>
+in the conformance suite is the general form.</p>
+<h2 id="7-can-the-energy-budget-be-bounded-from-outside">7. Can the energy budget be bounded from outside?<a class="headerlink" href="#7-can-the-energy-budget-be-bounded-from-outside" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> Nothing — but only because it was never checked.</p>
+<p><strong>How to check.</strong> Two bounds, neither referencing the model's own forces.
+Energy may only enter through the actuator, so it cannot rise faster than the
+actuator can supply it. And it cannot fall faster than the largest dissipation
+the geometry admits. The weak form, <code>dE/dt = T·V − D·V</code>, closes by construction
+and tests the integrator rather than the physics.</p>
+<p><strong>What it applies to.</strong> Every environment has an energy or an equivalent
+conserved quantity — charge for the battery, enthalpy for the thermal plants,
+neutrons for the reactor.</p>
+<p><strong>How to run it without naming each plant's energy.</strong> Hold the actuator at zero
+and let the plant run. With nothing being supplied, nothing may grow without
+bound; anything that does is producing energy from its own equations, which is
+the class of defect that let a departed aircraft fall at 300 m/s against an
+implied terminal velocity of 767.</p>
+<p>The trap is that growth alone proves nothing. The first run of this flagged all
+four aircraft, because position grows -- the aircraft flies forward -- and
+flagged the battery, because cumulative capacity fade counts upward. Both are
+integrators, not instabilities. What separates them is whether the growth is
+linear or accelerating: compare the mean increment over the last fifth of the
+run against the first. An integrator holds near 1; an unstable mode runs away.</p>
+<p><strong>What it finds here.</strong> Nothing, which is the answer worth having. Over 3000
+unforced steps no environment accelerates: the largest is the glass furnace's
+<code>T_work</code> at 3.25x and the circle task's <code>psi</code> at 2.40x, both far below anything
+suggesting an unbounded mode, and the rest sit near 1. Five plants are driven by
+an exogenous input -- wind, dispatch, weather, a manoeuvring lead -- and are not
+unforced even at zero action, so they are marked rather than scored.</p>
+<p><strong>Plants unstable by design.</strong> <code>KNOWN_OPEN_LOOP_UNSTABLE</code> in
+<code>tests/test_env_conformance.py</code> lists the plants whose unforced mode grows on
+purpose, and the check skips them. It admits no other plant, since a plant
+that runs away without being designed to is the defect this check exists to
+find. The check could not score such a plant anyway, because a trip restarts
+it (<code>base.failure_kernel</code>) and the unforced run becomes a runaway-and-restart
+sawtooth whose ratio depends on where the restarts fall. So each entry records
+the measured growth rate and names the test in the plant's own suite that
+asserts it. The one entry today is <code>unstable_cstr</code>, held on a saddle at every
+target with lambda+ 1.39 to 3.16 /min (derived by
+<code>scripts/unstable_cstr_numbers.py --section targets</code>). The rate is asserted
+from the Jacobian by <code>test_every_target_is_a_saddle</code> and by stepping the env by
+<code>test_unforced_error_grows_at_the_saddle_rate</code>.</p>
+<h2 id="8-is-actuator-authority-validated-or-merely-plausible">8. Is actuator authority validated, or merely plausible?<a class="headerlink" href="#8-is-actuator-authority-validated-or-merely-plausible" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> The aileron moment applied the <em>wing's</em> lift-curve slope to
+the control deflection, implying a section lift change of 2.20 at full throw —
+larger than the entire wing's CL_max of 1.5. The aircraft rolled at 84 deg/s
+against a transport's 25-30.</p>
+<p><strong>How to check.</strong> Compute what full actuator travel commands and compare it with
+what the plant can physically produce. Then validate the resulting rate against
+a published figure.</p>
+<p><strong>What it applies to.</strong> Valve authority, heater duty, pump head, rod worth —
+any actuator whose gain was written down rather than derived.</p>
+<p><strong>The plant-agnostic form</strong> is a time constant. Hold the actuator hard over from
+reset and measure how far it drives the tracked variable and whether it destroys
+the plant. Both tails are suspicious: an actuator that can trip the plant in a
+few steps leaves the episode decided before the controller has acted, and one
+that cannot move it is decorative.</p>
+<p><strong>What it finds here.</strong> No environment is inert, since every actuator moves its
+tracked variable, but the margin varies by three orders of magnitude, and four
+plants can trip within twenty steps:</p>
+<table>
+<thead>
+<tr>
+<th>environment</th>
+<th>steps to trip at full travel</th>
+<th>in seconds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>boiler_drum</code></td>
+<td><strong>3</strong></td>
+<td>6 s</td>
+</tr>
+<tr>
+<td><code>unstable_cstr</code></td>
+<td>5 to 20 (median 9)</td>
+<td>15 to 60 s</td>
+</tr>
+<tr>
+<td><code>wind_turbine</code></td>
+<td>11</td>
+<td>2.75 s</td>
+</tr>
+<tr>
+<td><code>compressor_surge</code></td>
+<td>14 to 153 (median 25.5)</td>
+<td>1.4 to 15.3 s</td>
+</tr>
+<tr>
+<td>aircraft (3D)</td>
+<td>27</td>
+<td>27 s</td>
+</tr>
+<tr>
+<td><code>hvac</code></td>
+<td>56</td>
+<td>14 h</td>
+</tr>
+<tr>
+<td><code>distillation</code></td>
+<td>231</td>
+<td>231 s</td>
+</tr>
+<tr>
+<td><code>glass_furnace</code></td>
+<td>3162</td>
+<td>53 min</td>
+</tr>
+<tr>
+<td><code>cstr</code>, <code>first_order</code>, <code>ph_neutralization</code></td>
+<td>never</td>
+<td>--</td>
+</tr>
+</tbody>
+</table>
+<p>The boiler drum trips on <code>|level| &gt;= 0.25 m</code> at <code>dt = 2 s</code>, so a saturated
+feedwater valve destroys it in six seconds out of a 400-step episode. That is
+not obviously wrong -- drum shrink-and-swell really is that fast, and the drum
+is meant to be one of the hardest environments here -- but it does mean a
+controller that saturates has already lost, which is worth knowing before
+reading a poor score as a tuning problem. The three plants that cannot be
+tripped at all are the three simplest, as expected.</p>
+<p>The unstable CSTR's row is full heating from each of its 135 reset corners
+(five targets, nine corners, three feed drifts; derived by
+<code>scripts/unstable_cstr_numbers.py --section reach</code>). A fast trip under full
+heating is intended, since the plant is held a few kelvin below a point of no
+return. Full cooling from the same corners never trips it.</p>
+<p>The compressor's row is full travel low, 70 % speed with the recycle shut, over
+20 drawn schedules (measured, <code>scripts/compressor_surge_numbers.py --section
+reach</code>). It trips on surge in every one. From the PRNGKey(0) reset with the
+consumers' opening held at one level, the first trip comes after 3 steps at
+0.20 and 117 at 0.95, and never at full opening (same section). Full travel
+high never trips it. <code>test_full_travel_low_trips</code> and
+<code>test_full_travel_high_never_trips</code> in
+<code>tests/compressor_surge/test_compressor_surge_env.py</code> assert both.</p>
+<h2 id="9-does-a-control-loops-gain-depend-on-an-operating-variable">9. Does a control loop's gain depend on an operating variable?<a class="headerlink" href="#9-does-a-control-loops-gain-depend-on-an-operating-variable" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> The patrol follower's heading loop commanded <em>bank</em>, and a
+banked aircraft turns at <code>g·tan φ / V</code>, so the loop gain went as <code>1/V</code> — a 45 %
+swing across the speeds it flies. That is why the controller looked like a coin
+flip on the seed. Commanding a turn rate and inverting the relation removed it.</p>
+<p><strong>How to check.</strong> Ask what the inner loop actually delivers per unit of the
+commanded quantity, and whether that ratio moves with speed, level, temperature
+or load.</p>
+<p><strong>What it applies to.</strong> Any cascade. Gain-scheduled controllers are already
+acknowledging this; the ones that are not scheduled are the ones to look at.</p>
+<p><strong>What it finds here.</strong> The other three aircraft lateral loops still command
+bank, so the defect is present in all of them. Measuring the speeds each task
+actually flies puts a number on it: heading and circle range 201-244 m/s for a
+1.22x gain swing, and the figure-8 ranges 96-228 m/s for <strong>2.38x</strong> — larger than
+the 45% swing that was judged worth fixing on patrol.</p>
+<p><strong>And converting them changed nothing.</strong> Applying patrol's exact fix to all
+three — command a turn rate, invert <code>g*tan(phi)/V</code>, clip the rate rather than
+the bank — moved the three-lap path error by less than 1% and the ten-seed
+returns by less than the seed noise (heading -1.7, circle +0.1, figure-8 +0.9,
+patrol -1.6, against standard deviations of 14-76). It was reverted, on the same
+grounds the aircraft's stall-margin barrier was: a change that measures as
+nothing does not earn its complexity, and here it would have been <em>five</em> copies
+of it (see check 12).</p>
+<p>That is worth recording as a result rather than quietly dropping, because the
+check is still correct. A 2.38x gain swing is real and would matter to anyone
+re-tuning these loops or training against them. It simply was not what was
+holding the path — which is the lesson of check 10 arriving a second time, and
+this time it was <em>me</em> reaching for the nearest plausible structural candidate.</p>
+<p><strong>What was actually wrong with the circle is one line of geometry.</strong> A level
+coordinated turn needs <code>tan(phi) = V^2/(g R)</code>. The task samples its radius from
+<code>target_radius_range = (8000, 12000)</code> m while the autopilot holds a 230 m/s
+cruise and the bank limit is 30 deg — and the smallest radius that combination
+can fly is <strong>9.34 km</strong>, rising to 10.5 km at the top of the speed band. So a
+third to a half of the environment's own parameter range is unflyable at cruise:</p>
+<table>
+<thead>
+<tr>
+<th>seed</th>
+<th>radius</th>
+<th>speed</th>
+<th>bank needed</th>
+<th>pinned at limit</th>
+<th>settled error</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>8.42 km</td>
+<td>235 m/s</td>
+<td><strong>33.8 deg</strong></td>
+<td><strong>100%</strong> of the episode</td>
+<td>1860 m</td>
+</tr>
+<tr>
+<td>1</td>
+<td>11.31 km</td>
+<td>230 m/s</td>
+<td>25.5 deg</td>
+<td>0%</td>
+<td>31 m</td>
+</tr>
+<tr>
+<td>2</td>
+<td>11.46 km</td>
+<td>230 m/s</td>
+<td>25.1 deg</td>
+<td>0%</td>
+<td>52 m</td>
+</tr>
+</tbody>
+</table>
+<p>No guidance law can fix that, and the coin-flip-on-seed signature was check 10
+pointing at a saturation boundary exactly as it says it does. The aircraft can
+fly an 8 km circle — it just has to slow to 213 m/s first, and nothing told it
+to. The circle law now publishes the speed its radius admits and the shared
+airspeed channel holds it, which takes the failing seed from <strong>1860 m to 73 m</strong>
+and lets the strict xfail be narrowed to the figure-8 alone.</p>
+<p><strong>The figure-8's target is reachable; its expert simply cannot fly there.</strong> The
+MPC holds the same curve to <strong>0.5 m</strong> over the same 800-step episode, using up
+to 76.7 deg of bank at 160-204 m/s. The geometry is not asking for a path the
+aircraft cannot fly, so changing the task would be fixing the wrong thing --
+worth stating plainly, because "make the target reachable" is the tempting
+response to a controller that misses by kilometres, and here it would have made
+the benchmark easier while leaving the actual defect in place.</p>
+<p><strong>The same treatment made the figure-8 worse, which is the more interesting
+half.</strong> Its lemniscate has a minimum radius of curvature of <code>a/3</code>, so at the
+shipped 8.4 km lobe radius the lobes admit only 114 m/s — and on a fixed
+throttle the aircraft arrives at them having accelerated to 228 m/s. The defect
+is real and quantified. But holding one speed for the whole curve took the
+three-lap error from 1779 m to 2824 m, and scheduling it against local curvature
+(differentiating the observed tangent heading with respect to distance
+travelled) still gave 2098 m. Both were reverted. Speed is <em>not</em> the binding
+constraint on that curve. Nor is its bank limit: raising the expert's 25 deg cap
+through 75 deg bottoms out at 1547 m and then gets worse. Nor is a missing
+coordinated-turn feedforward -- the circle law has had one all along and this one
+never did, and adding it, with curvature estimated from the rate of change of
+the observed tangent heading, reaches 1532 m, which is real but does not change
+the outcome, so it went the way of the stall barrier.</p>
+<p>Five candidates are now eliminated by measurement rather than argument: the
+integrator, the loop-gain scheduling, the speed schedule, the bank limit and the
+feedforward. What remains untried is the blend at the centre of the law: beyond
+5% of the lobe radius it chases the <em>bearing to the nearest curve point</em> and
+ignores the tangent entirely. That is pure pursuit, and pure pursuit lags a
+curved path by construction -- which is the symptom. That is where the next
+attempt should go.</p>
+<h2 id="10-what-does-the-tuning-objectives-behaviour-tell-you">10. What does the tuning objective's behaviour tell you?<a class="headerlink" href="#10-what-does-the-tuning-objectives-behaviour-tell-you" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> A gain search on the patrol follower was chaotic — a 0.1 %
+change in one gain moved the objective by a factor of two — and a "best" point
+found in one run scored 2.6x worse when re-evaluated. That was not noise to be
+averaged away: it was the search finding which side of a <em>saturation</em> boundary
+each seed fell on.</p>
+<p><strong>What it finds here.</strong> Its own advice, applied to the path-following xfail,
+cleared the integrator immediately: the circle's three-lap error is identical to
+four significant figures at <code>rk4_2</code>, <code>rk4_4</code> and <code>rk4_8</code>, so that trajectory is
+converged and the fault was genuinely downstream. Cheap, and it stopped a second
+integration hunt before it started.</p>
+<p><strong>The lesson.</strong> A well-conditioned search means a genuine gain problem. A
+chaotic one means a structural fault, and tuning will not fix it. The
+figure-eight's search converged smoothly (185 → 153 → 110 → 98 → 90 m) and its
+gains really were the problem; patrol's did not. Structure first, then gains.</p>
+<p><strong>But the search does not tell you <em>which</em> structure.</strong> That last sentence used
+to end "and its guidance law was", and that was wrong. Patrol's expert sat 139 m
+from a 60 m slot, a grid search over every gain scaling got no closer, and the
+conclusion drawn — recorded in a strict xfail and left standing for a long time —
+was that the guidance law needed rework. It did not. The plant was integrated
+with one RK4 substep where two are needed, and correcting that took the settled
+slot error to 41 m with no change to the controller at all.</p>
+<p>An unimprovable search is evidence that something upstream of the gains is
+wrong. The guidance law is the nearest candidate and therefore the tempting one,
+but the plant, the observation and the integrator are all upstream too. Before
+concluding it is the controller, check that the <em>simulation</em> is converged: the
+cheapest version is to halve the integration step and see whether the controller
+you were about to rewrite suddenly works.</p>
+<h2 id="11-can-the-error-metric-resolve-what-the-reward-is-asking-for">11. Can the error metric resolve what the reward is asking for?<a class="headerlink" href="#11-can-the-error-metric-resolve-what-the-reward-is-asking-for" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> Fixing check 1 on the figure-8 exposed a second defect
+<em>underneath</em> it. Cross-track error there is an <code>argmin</code> over 400 samples of a
+44 km curve with no sub-sample refinement, so the reported distance is quantised
+by the sample spacing: an aircraft flying the commanded curve <strong>exactly</strong> was
+told it was up to 66 m off it. That is larger than the expert's own settled
+error, so the reward had been scoring its own discretisation rather than the
+controller, and no reward shape could have fixed it. Projecting onto the two
+adjacent chords brought the floor under a millimetre.</p>
+<p><strong>How to check.</strong> Feed the metric a state you know is perfect and check it
+returns zero, then feed it known offsets and check it returns them. Any metric
+built on <code>argmin</code>, a lookup table, a fixed grid or a finite-difference step has a
+resolution, and it has to be finer than the precision the reward is trying to
+buy.</p>
+<p><strong>What it applies to.</strong> Every reward whose error is <em>searched for</em> rather than
+computed in closed form. The circle task is safe because its distance is
+analytic; the figure-8 was not.</p>
+<h2 id="12-is-this-logic-implemented-more-than-once">12. Is this logic implemented more than once?<a class="headerlink" href="#12-is-this-logic-implemented-more-than-once" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> Check 9's fix was applied to <code>plane3d_heading_pid_step</code>,
+<code>plane3d_circle_pid_step</code> and <code>plane3d_figure8_pid_step</code>, measured, and found to
+change <em>nothing at all</em> — the before and after numbers were identical to the
+decimal. Not "within noise": identical. That is not a result, it is a symptom,
+and the cause was that <code>EnvSpec.make_pid</code> returns
+<code>StatefulCascadedPlane3DPID</code>, a <strong>separate</strong> host-side implementation of the
+same three control laws. The edited functions are real and are used — by
+<code>env_jax.py</code>'s <code>FunctionalExpertPolicy</code> and by the patrol lead — just not by
+anything the benchmark runs.</p>
+<p>The heading law exists in three places, the circle law in three, the figure-8 in
+two. They must agree, and nothing enforces it.</p>
+<p><strong>How to check.</strong> Before editing a control law or a piece of physics, <code>grep</code> for
+a distinctive line of it and count the hits. Afterwards, confirm the measurement
+moved: a change that alters <em>nothing</em> has usually missed its target, and an
+identical number is much stronger evidence of that than a plausible one.</p>
+<p><strong>What it applies to.</strong> Every environment here has a <code>env.py</code> / <code>env_jax.py</code>
+pair, and the experts have a traced form and a host-side form. The split is
+deliberate — one is differentiable and jit-friendly, the other is cheap to step
+from Python — so the duplication is not itself the defect. Silently diverging
+is. Since 2026-10-25 each shipped PID is one step function that both forms
+run, <code>Controller.act</code> with <code>jnp</code> and <code>Controller.host()</code> with <code>np</code>, and
+<code>test_make_expert_is_the_scored_pid</code> checks they agree on all 24
+environments.</p>
+<h2 id="13-does-a-reduced-prediction-model-still-answer-the-actuator-like-the-plant">13. Does a reduced prediction model still answer the actuator like the plant?<a class="headerlink" href="#13-does-a-reduced-prediction-model-still-answer-the-actuator-like-the-plant" title="Permanent link">&para;</a></h2>
+<p><strong>What went wrong.</strong> Each CasADi MPC (a <code>CasadiMPC</code> subclass in its task's
+<code>experts.py</code>) optimises against a hand-reduced model of its environment, and
+the glass furnace's
+reduction changed the model's response to fuel. That does not make the
+controller noisy, which is what one looks for; it makes it settle in the
+<em>wrong place</em>, because an MPC drives its
+own <strong>predicted</strong> error to zero and predicted is not actual. It re-measures the
+true state every step, so nothing accumulates and nothing looks wrong -- it
+simply picks the same slightly-wrong fuel flow again, forever, with no
+integrator to notice. A PID needs no model and its integrator does not care
+about gain error at all, so the two diverge only at steady state.</p>
+<p>Measured, the furnace MPC finished 16% behind its own PID and lost 10 seeds out
+of 10.</p>
+<p><strong>How to check.</strong> No optimiser required, which is what makes it cheap. Take
+states from a real rollout, hand the same state and the same action to the MPC's
+own prediction model, advance both by one control interval, and compare the
+tracked output. A model that tracks the plant gives a mean signed error near
+zero. A reduction that changed the response gives a persistent <em>one-signed</em>
+error, and that is what integrates into a standing offset.</p>
+<div class="highlight"><pre><span></span><code>do_mpc.simulator.Simulator(mpc._mpc.model)   # integration_tool="idas" if
+                                             # the model has algebraic vars
+</code></pre></div>
+<p><strong>What it finds here.</strong> On the glass furnace, with the single-stack
+regenerator model of the time, the plant ran <strong>+0.0275 K per control interval
+hotter than the model</strong>, one-signed on 71% of settled steps.
+Per step that is nothing. Multiplied by the plant's own 132-step time constant
+it is <strong>3.6 K</strong> -- which is precisely the 2-6 K plateau the closed-loop deciles
+showed, so the mechanism is quantified rather than argued.</p>
+<p><strong>Why the reduction looked safe when it was written.</strong> The reasoning was in the
+class docstring (rewritten in the oracle audit, 2026-10), and the two bullets
+quoted here are worth reading as a specimen. One keeps the
+regenerator <em>because</em> "a controller blind to it mis-predicts the steady-state
+gain badly"; the next averages away the reversal cycle because "predicting its
+phase buys nothing". The second is true about <em>phase</em> and slides silently from
+"I do not need the phase" to "I may replace the oscillation with its mean",
+which holds only if everything downstream is linear in those temperatures.
+Radiative coupling goes as T^4. Measured, the two chambers sit 86 K apart on
+average and 242 K at worst, and their average has a third of the real swing.</p>
+<p><strong>And nothing could have caught it.</strong> The MPC's contract at the time ran a
+240-step episode, which ends while <em>both</em> controllers are still on their way to
+the setpoint -- the deciles show them identical over exactly that span. A
+steady-state offset cannot be found by a measurement that never reaches steady
+state. It sat at "1.3% behind, passing" until the episode-length audit
+lengthened that episode to 1600 steps.</p>
+<p><strong>What it applies to.</strong> Every environment whose MPC plans against a model of
+its own, which here is all nine CasADi ones. The seven original ones plan
+against reduced models, and none of them had this comparison before. The unstable CSTR's CasADi model restates the env's
+equations without reducing them, because CasADi cannot trace the env's <code>jnp</code>
+code. Two tests in <code>tests/pc_gym/unstable_cstr/test_unstable_cstr_experts.py</code>
+hold that copy to the plant. <code>test_mpc_model_is_the_env_velocity</code> compares its
+right-hand side with the env's <code>compute_velocity</code> at 1000 random points, and
+<code>test_mpc_predicts_one_step_like_the_plant</code> runs this check on 120 states of a
+PID episode with the feed drift on. One control interval of the model lands
+within <code>e_floor</code> of <code>step_env</code> in C_a, and the mean signed error stays under a
+tenth of <code>e_floor</code>. The compressor's NMPC restates the env's discrete step in
+CasADi for the same reason, ten substeps of rate limits and RK4, with the
+rate-limit clips rounded so that IPOPT sees a smooth problem. Two tests in
+<code>tests/compressor_surge/test_compressor_surge_experts.py</code> hold it to the plant.
+<code>test_mpc_model_is_the_env_step</code> compares the step with the clips exact against
+<code>compute_next_state</code> at 1000 random states, and
+<code>test_mpc_predicts_one_step_like_the_plant</code> runs this check with the shipped
+rounding on 120 states, most of them from a PID episode. One step of the model
+lands within 0.05 <code>e_floor</code> of the env's float32 step in header pressure and
+within 1e-4 in the trip variable <code>phi_min</code>.</p>
+<hr />
+<h2 id="open-items-this-produced">Open items this produced<a class="headerlink" href="#open-items-this-produced" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The patrol slot reward is still a Gaussian on <code>slot_tolerance</code>. It is anchored
+  to a real tolerance rather than to the state space, so it is not a check-1
+  defect, but it is precision-blind in the sense of check 2. <code>max_slot_error</code>
+  (the error at which the formation is declared lost) is the natural envelope if
+  it is converted.</li>
+<li>~~<strong>The circle and figure-8 guidance laws do not hold their path.</strong>~~ Half
+  resolved. The circle was never a guidance fault at all: a third to a half of
+  its own radius range is unflyable at the cruise speed the autopilot holds, and
+  trading speed for radius takes the failing seed from 1860 m to 73 m. Its half
+  of the strict xfail is now a passing test. <strong>The figure-8 remains open</strong> and is
+  still a strict xfail at 1.3-2.7 km, with the integrator, the loop-gain
+  scheduling and the speed schedule all now ruled out by measurement.</li>
+<li>~~<strong>A test episode shorter than the task's own period proves nothing.</strong>~~
+  Fixed, and it needed a second criterion to find. These tasks were exercised
+  over <code>max_steps_in_episode=200</code>, which at <code>dt = 1 s</code> is less than one lap of a
+  221-264 s circuit, with the aircraft initialised exactly on the path -- so a
+  controller that simply flew straight ahead looked correct for the whole
+  episode. The circle is the instructive case: at 14.3 open-loop time constants
+  it passed every settling-based check comfortably while being scored over
+  <strong>0.76 of a single lap</strong>. Benchmark episodes now satisfy
+  <code>N &gt;= max(10 * tau_actuator, 1 * T_period)</code>, where a settling time exists;
+  six were below it and were
+  lengthened. See the episode-length section of docs/rl-protocol.md.</li>
+<li>~~The reward-shaping phase should apply checks 1 and 2 to every environment
+  with a band or tolerance parameter.~~ Done: all eighteen now share one
+  log-scaled, bounded reward contract. See <code>docs/reward-shaping.md</code>.</li>
+<li>~~Checks 3, 4 and 6 are automatable and could join the conformance suite.~~
+  Done, and more than those three. <code>tests/test_env_conformance.py</code> now runs
+  checks 3, 4, 5, 7 and 8 against every registered environment, so a new
+  environment inherits them by adding one line to the registry. Checks 3 and 4
+  are repository-wide scans and cost seconds, so they run in the fast job;
+  checks 5, 7 and 8 step or differentiate every plant and are marked <code>large</code>,
+  adding about 100 s to that job.</li>
+</ul>
+<p>Each carries an allowlist (<code>KNOWN_WRITE_ONLY_STATE_FIELDS</code>,
+  <code>KNOWN_DISCARDED_UNPACKS</code>, <code>KNOWN_SEAMS</code>, <code>KNOWN_OPEN_LOOP_UNSTABLE</code>), so
+  the tests report <em>new</em> defects instead of restating the known-benign ones
+  every run, and so that admitting a finding is a deliberate act with a reason
+  recorded next to it.
+- ~~Checks 5, 7 and 8 have still not been run against the other seventeen
+  environments.~~ Run. All twelve checks have now been applied to all eighteen.
+  Each turned out to have a plant-agnostic form needing no per-plant seam,
+  conserved quantity or actuator figure identified by hand -- autodiff for 5, an
+  unforced run for 7, a hard-over actuator for 8 -- which is why they were
+  cheaper than they looked, and why they should be re-run whenever the dynamics
+  change rather than treated as a one-off audit.
+- <strong>Each of checks 5, 7 and 8 needed its first metric thrown away.</strong> Largest
+  step against typical step ranked Arrhenius above every real seam; growth under
+  zero input flagged four aircraft for flying forwards; and the actuator scan
+  needed the tracked index the runners already use rather than a guess at which
+  state field is the output. In all three the fix was to ask what distinguishes
+  the defect from the benign thing that resembles it -- a kink from a steep
+  curve, an instability from an integrator -- rather than to raise a threshold.
+  A check whose output is a long list is usually measuring the wrong quantity.
+- The seams checks 5 and 8 flagged are recorded but <strong>not resolved</strong>: the
+  aircraft's is outside the reachable envelope only for level flight, and the
+  boiler drum's six-second trip is plausible but unverified against a real drum.
+  Both want a source rather than an argument.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; Yann Berthelot
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.indexes", "toc.follow", "content.code.copy", "content.action.edit", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+        <script src="../javascripts/results-chart.js"></script>
+      
+    
+  </body>
+</html>
