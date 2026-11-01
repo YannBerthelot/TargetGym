@@ -2213,6 +2213,7 @@ dependencies = [
     { name = "pygame" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "six" },
     { name = "tqdm" },
 ]
 
@@ -2276,6 +2277,7 @@ requires-dist = [
     { name = "pygame", marker = "python_full_version < '3.14'", specifier = ">=2.6.1" },
     { name = "pygame-ce", marker = "python_full_version >= '3.14'", specifier = ">=2.5.8" },
     { name = "scipy", specifier = ">=1.11" },
+    { name = "six", specifier = ">=1.16" },
     { name = "tqdm", specifier = ">=4.66" },
 ]
 

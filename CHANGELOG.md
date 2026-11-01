@@ -7,6 +7,18 @@ Notable changes to TargetGym. The format follows
 Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 `vX.Y.Z` form.
 
+## [0.6.2]
+
+A patch to 0.6.1, released from the `release/0.6` branch. It changes nothing
+but the declared dependencies.
+
+### Fixed
+
+- **A fresh `pip install target-gym` could not be imported.** gymnax imports
+  `six` without declaring it, and nothing brought it in after python-dateutil
+  4.0 dropped it, so `import target_gym` failed with `No module named 'six'`
+  on any new install. `six` is now a declared dependency.
+
 ## [Unreleased]
 
 The work between `0.5.0` and 1.0. Grouped by what it changes for a user rather

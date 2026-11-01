@@ -85,6 +85,12 @@ dependencies = [
     # "module 'casadi.tools' has no attribute 'SX'", hence the upper bound.
     "casadi>=3.7.2,<3.8",
     "do-mpc>=5.1.1,<6",
+    # gymnax imports six (gymnax/utils/load_mnist.py) without declaring it.
+    # python-dateutil brought it in through matplotlib and pandas until
+    # dateutil 4.0 dropped it, and from then on a fresh `pip install
+    # target-gym` failed at `import target_gym`. Found by the release's
+    # installed-package gate on 2026-11-01; fixed in 0.6.2.
+    "six>=1.16",
 ]
 
 [project.urls]
