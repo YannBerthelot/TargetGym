@@ -11,6 +11,9 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ### Added
 
+- Python 3.14. gymnax's floor is now 1.0.1, its first release that installs
+  on 3.14, where it needs JAX 0.8.1 or later.
+
 - Each release now has a GitHub Release, with its changelog entry as notes and
   the wheel and sdist PyPI received.
 
