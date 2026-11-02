@@ -10,7 +10,13 @@ Two failure modes this guards against, both of which happen quietly:
   new user.
 
 A fenced block is executed unless its first line is ``# doc: skip`` -- used for
-snippets that write files, install packages, or need a GPU.
+snippets that write files, install packages, or need a GPU. A block whose first
+line is ``# doc: agent`` needs the opt-in agent group (stable-baselines3 and
+torch): it is marked ``agent``, skips without the group, and CI's agent job
+runs it with the group installed.
+
+The commands the docs show are checked too: every ``make`` target, script,
+script flag and ``python -m`` module they name must exist.
 """
 
 from __future__ import annotations
@@ -27,6 +33,18 @@ DOCS = ROOT / "docs"
 GENERATOR = ROOT / "scripts" / "generate_env_reference.py"
 
 BLOCK = re.compile(r"^```python\n(.*?)^```", re.MULTILINE | re.DOTALL)
+# Every fence, so that a closing fence is never read as an opening one.
+FENCE = re.compile(r"^```(\w*)\n(.*?)^```", re.MULTILINE | re.DOTALL)
+# Commands also sit in fences with no language or ``text``.
+SHELL = {"bash", "sh", "shell", "text", ""}
+INLINE = re.compile(r"`([^`\n]+)`")
+AGENT = "# doc: agent"
+
+
+def _pages() -> list[pathlib.Path]:
+    # The pages one folder down too: each environment's page has its example.
+    pages = sorted([*DOCS.glob("*.md"), *DOCS.glob("*/*.md")])
+    return [ROOT / "README.md", *pages]
 
 
 def _runnable_blocks(path: pathlib.Path) -> list[str]:
@@ -39,11 +57,14 @@ def _runnable_blocks(path: pathlib.Path) -> list[str]:
 
 def _doc_cases() -> list[tuple[str, str]]:
     cases = []
-    for md in [ROOT / "README.md", *sorted(DOCS.glob("*.md"))]:
+    for md in _pages():
+        name = md.relative_to(ROOT).as_posix()
         for i, code in enumerate(_runnable_blocks(md)):
             # An example that saves a video writes a file through ffmpeg.
             marks = [pytest.mark.medium] if "save_video" in code else []
-            cases.append(pytest.param(code, id=f"{md.name}:{i}", marks=marks))
+            if code.lstrip().startswith(AGENT):
+                marks.append(pytest.mark.agent)
+            cases.append(pytest.param(code, id=f"{name}:{i}", marks=marks))
     return cases
 
 
@@ -71,8 +92,75 @@ def test_documented_example_runs(code, tmp_path, monkeypatch):
     of that quickstart imported a name the package does not export, and nothing
     would have caught it -- this test globbed ``docs/`` only.
     """
+    if code.lstrip().startswith(AGENT):
+        pytest.importorskip("stable_baselines3")
     monkeypatch.chdir(tmp_path)
     exec(compile(code, "<doc>", "exec"), {"__name__": "__doc_example__"})
+
+
+def _commands(text: str) -> list[str]:
+    """The commands a page shows: each line of its shell blocks, without its
+    comment, and its inline code (which includes code quoted in a comment)."""
+    lines = [
+        re.sub(r"(^|\s)#.*", "", line).strip()
+        for language, block in FENCE.findall(text)
+        if language in SHELL
+        for line in block.splitlines()
+    ]
+    return [c for c in [*lines, *INLINE.findall(text)] if c]
+
+
+def _command_cases() -> list:
+    cases = []
+    for md in _pages():
+        name = md.relative_to(ROOT).as_posix()
+        # Proposals also name other repositories' scripts and planned ones.
+        if name.startswith("docs/proposals/"):
+            continue
+        for command in dict.fromkeys(_commands(md.read_text())):
+            if command.startswith("make ") or re.search(
+                r"\bscripts/\w+\.py|python -m target_gym", command
+            ):
+                cases.append(pytest.param(command, id=f"{name}: {command}"))
+    return cases
+
+
+def _make_targets() -> list[re.Pattern]:
+    """Each Makefile target as a pattern; ``videos-%`` matches ``videos-cstr``."""
+    rules = re.findall(r"^([^\s#][^:=]*):(?!=)", (ROOT / "Makefile").read_text(), re.M)
+    names = {target for rule in rules for target in rule.split()}
+    return [re.compile(re.escape(n).replace("%", ".+") + "$") for n in names]
+
+
+@pytest.mark.parametrize("command", _command_cases())
+def test_every_command_the_docs_show_exists(command):
+    """A command in the docs names a make target, a script and its flags, or a
+    module, that exist: renaming one fails here, not in a reader's terminal."""
+    missing = []
+    if command.startswith("make "):
+        target = command.split()[1]
+        if not any(t.match(target) for t in _make_targets()):
+            missing.append(f"make target {target}")
+    programs = [
+        (f"scripts/{script}", ROOT / "scripts" / script, args)
+        for script, args in re.findall(r"\bscripts/(\w+\.py)((?:\s+[^\s`]+)*)", command)
+    ]
+    for module, args in re.findall(
+        r"python -m (target_gym[\w.]*)((?:\s+[^\s`]+)*)", command
+    ):
+        path = ROOT / "src" / module.replace(".", "/")
+        main = path / "__main__.py"
+        programs.append(
+            (module, main if main.exists() else path.with_suffix(".py"), args)
+        )
+    for name, path, args in programs:
+        if not path.exists():
+            missing.append(name)
+            continue
+        for flag in re.findall(r"(?<!\S)(--[\w-]+)", args):
+            if f'"{flag}"' not in path.read_text():
+                missing.append(f"{flag} of {name}")
+    assert not missing, f"{command!r} names what does not exist: {missing}"
 
 
 def _physics_contract(spec) -> pathlib.Path:

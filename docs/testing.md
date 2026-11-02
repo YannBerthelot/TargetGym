@@ -13,6 +13,15 @@ happens to take. The size decides where it runs.
 describe this tree, and they run in a job of their own, so a stale record fails
 that job alone and a failing test job always means a real bug.
 
+`agent` is not a size either. Those tests need stable-baselines3 and torch, the
+opt-in `agent` group, and skip without it. The README's SAC example is one. CI's
+agent job installs the group and runs them, and fails if any of them skips:
+
+```bash
+uv sync --group dev --group agent
+pytest -m agent
+```
+
 ```bash
 pytest                   # small, on every core
 pytest -m medium -n 2    # medium; two workers keep two big compiles in memory

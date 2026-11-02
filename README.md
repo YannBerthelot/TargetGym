@@ -114,7 +114,7 @@ train on the experts.
 End-to-end GPU requires a JAX-based library.
 
 ```python
-# doc: skip (trains for 10 000 steps; tests/plane/test_agent.py covers this path with `uv sync --group agent`)
+# doc: agent -- needs stable-baselines3: pip install stable-baselines3
 import target_gym as tg
 from stable_baselines3 import SAC
 
