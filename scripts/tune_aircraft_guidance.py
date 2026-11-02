@@ -41,6 +41,7 @@ import numpy as np  # noqa: E402
 from jax import lax  # noqa: E402
 
 from target_gym import eval as E  # noqa: E402
+from target_gym.benchmark import episode_keys  # noqa: E402
 from target_gym.plane import experts as P2  # noqa: E402
 from target_gym.plane3d import experts as P3  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
@@ -63,25 +64,29 @@ _ROLLOUTS = {}
 
 def rollout(name, step, params, seeds, env_params=None):
     """Observations and per-step tracking cost of ``step`` on ``seeds``,
-    jitted once per task and controller and vmapped over the seeds."""
+    jitted once per task and controller and vmapped over the seeds. Seed ``s``
+    is the protocol's episode ``s``: its reset and step keys come from
+    ``episode_keys``, so it starts where the scored run starts and meets the
+    same gusts."""
     spec = REGISTRY[name]
     p = env_params or spec.make_test_params()
     key = (name, step, repr(p))
     if key not in _ROLLOUTS:
         env = spec.make_env()
+        n_steps = int(p.max_steps_in_episode)
 
         def one(ctrl_params, seed):
-            k = jax.random.PRNGKey(seed)
-            obs, st = env.reset_env(k, p)
+            resets, steps = episode_keys(jax.random.PRNGKey(seed), 1, n_steps)
+            obs, st = env.reset_env(resets[0], p)
             init = P3.Plane3DGuidanceState() if name in STEPS else P2.PlaneTECSState()
 
-            def body(carry, _):
+            def body(carry, k):
                 obs, st, cs = carry
                 a, cs = step(ctrl_params, cs, obs, jnp)
                 obs, st, _, _, _ = env.step_env(k, st, a, p)
                 return (obs, st, cs), (obs, env.reward_terms(st, p)["tracking"])
 
-            return lax.scan(body, (obs, st, init), None, int(p.max_steps_in_episode))[1]
+            return lax.scan(body, (obs, st, init), steps[:, 0])[1]
 
         _ROLLOUTS[key] = jax.jit(jax.vmap(one, in_axes=(None, 0)))
     obs, track = _ROLLOUTS[key](params, jnp.array(list(seeds)))
