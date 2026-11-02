@@ -11,7 +11,10 @@ publisher the owner configured on 2026-10-28: repository TargetGym, workflow
   an OIDC token, and no PyPI token anywhere in the workflows.
 * Tags come only from ``release.yml``; nothing publishes on a GitHub release.
 * Once a release is on PyPI, its documentation is deployed as the site's
-  version ``X.Y``, aliased ``latest`` (RELEASING.md §2, step 7).
+  version ``X.Y``, aliased ``latest`` (RELEASING.md §2, step 8).
+* Once a release is on PyPI, it gets a GitHub Release for its tag, with its
+  CHANGELOG entry as notes and the files PyPI received; only a release from
+  main is marked Latest (RELEASING.md §2, step 7, added 2026-11-02).
 * The package gate builds without ``[tool.uv.sources]``, installs the wheel
   on the oldest and the newest supported Python, and runs each extra on its
   own. It also runs on pull requests that change the packaging.
@@ -35,6 +38,10 @@ def _load(name):
 def _triggers(workflow):
     # YAML 1.1 reads a bare ``on`` key as the boolean True.
     return workflow.get("on", workflow.get(True))
+
+
+def _script(job):
+    return "\n".join(step.get("run", "") for step in job.get("steps", []))
 
 
 def _upstream(jobs, name):
@@ -116,3 +123,15 @@ def test_a_published_release_deploys_its_docs_as_latest():
     assert "'latest'" in docs["with"]["alias"]
     assert "refs/heads/main" in docs["with"]["alias"]
     assert "workflow_call" in _triggers(_load("docs-deploy.yml"))
+
+
+def test_a_published_release_gets_a_github_release_with_its_files():
+    jobs = _load("release.yml")["jobs"]
+    [name] = [n for n, job in jobs.items() if "gh release create" in _script(job)]
+    assert "publish" in _upstream(jobs, name)
+    job = jobs[name]
+    # The files the package job built and PyPI received, not a rebuild.
+    assert any(step.get("with", {}).get("name") == "dist" for step in job["steps"])
+    assert "release_check.py --notes" in _script(job)
+    # Latest only for a release from main, as with the docs' alias.
+    assert "refs/heads/main" in yaml.safe_dump(job)

@@ -58,7 +58,8 @@ repository and runs the docs' examples and a smoke check per extra on it.
 
 Releases are cut by the maintainer with the Release workflow, started by hand
 with the version. It publishes only once the version's CHANGELOG entry is on
-`main` and those gates have passed on that exact commit.
+`main` and those gates have passed on that exact commit, then creates the
+GitHub Release with that entry as its notes.
 
 ## Style
 
