@@ -888,6 +888,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_unstable_cstr_mpc", module="target_gym.pc_gym.unstable_cstr.experts"
         ),
+        # v3: the oracle's best hold, rho_floor_tracking and rho_floor, re-measured
+        # for the JAX oracle (2.23e-6 mol/L against the CasADi one's 6.29e-6).
+        version=3,
         # 1200 steps = 60 min at 3 s: six 10-minute blocks, with no
         # effectiveness_overrides.
         tuned_gains_key="unstable_cstr",

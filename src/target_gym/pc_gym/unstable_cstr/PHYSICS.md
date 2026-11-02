@@ -534,7 +534,7 @@ The barrier is there for the noise. Planning on the mean drift, the planner
 without it crossed the conservative line ahead of a hot-going switch on a path
 that the mean drift makes recoverable, and a +3 K drift made it a runaway: one
 trip on the ten recorded seeds. With it none of seeds 0 to 29 trips, and the
-ten recorded seeds cost 3.9e6 per episode against 4.7e6 for the CasADi NMPC on
+ten recorded seeds cost 4.0e6 per episode against 4.7e6 for the CasADi NMPC on
 collocation it replaced in November 2026 (horizon 32, a soft bound 1 K inside
 the line, an LQR terminal weight, the PID as fallback).
 
@@ -690,8 +690,8 @@ tariff.
 | `tracking_exponent` | 2 | quadratic: the owner's cost is off-spec product |
 | `failure_cost` | 6.05e7, twice (0.55 / 1e-4)^2 | twice the largest tracking cost an untripped state reaches, with 0.55 mol/L the closed-form `CA_error_max` (derived, `--section params`) |
 | `restart_steps` | 1200 (1 h) | cstr's one-hour restart (240 steps of 15 s, marked provisional in cstr) at 3 s steps; a trip costs 1200 x 6.05e7 = 7.26e10 (derived, `test_restart_time_is_cstrs_hour`) |
-| `rho_floor_tracking` | 0.00396 | (lowest per-seed MPC hold / `e_floor`)^2 = (6.29e-6 / 1e-4)^2, from `scripts/measure_hold.py` (measured); below 1 because the clamp binds |
-| `rho_floor` | 0.00396 | equal to `rho_floor_tracking`, since there is no running cost |
+| `rho_floor_tracking` | 0.000497 | (lowest per-seed MPC hold / `e_floor`)^2 = (2.23e-6 / 1e-4)^2, from `scripts/measure_hold.py` (measured; 0.00396 from the CasADi oracle's 6.29e-6 before v3); below 1 because the clamp binds |
+| `rho_floor` | 0.000497 | equal to `rho_floor_tracking`, since there is no running cost |
 | `floor_is_documented_minimum` | False | the plant is disturbed; documented minima are for plants with no disturbance at all |
 
 **The hold window.** `scripts/measure_hold.py` scores this plant's hold
@@ -700,21 +700,21 @@ block by block. A fixed settle of 120 steps starts each block's hold at minute
 which the controller already moves toward the next level. Those steps are
 found from the squared errors by `target_gym.eval.anticipations`, the rule the
 protocol applies to the cost. The script's 3 seeds give 18 blocks and 1440
-steps after the settle. The PID's hold scores all 1440 and the MPC's 1141, so
-the rule leaves out 299 MPC steps, 20 per switch on average over the 15
-switches (derived from the recorded `hold_steps_scored`). The per-seed MPC
-holds are 6.33e-6, 6.29e-6 and 6.75e-6 mol/L, 6.46e-6 over all three seeds,
-and the PID's 1.39e-4, 1.23e-4 and 1.40e-4 mol/L, 1.34e-4 over all three
+steps after the settle. The PID's hold scores all 1440 and the MPC's 1513, so
+the rule leaves out none of the MPC's (derived from the recorded
+`hold_steps_scored`). The per-seed MPC holds are 2.25e-6, 2.23e-6 and
+2.69e-6 mol/L, 2.40e-6 over all three seeds (the CasADi oracle's before v3
+were 6.33e-6, 6.29e-6 and 6.75e-6), and the PID's 1.39e-4, 1.23e-4 and 1.40e-4 mol/L, 1.34e-4 over all three
 (measured, `src/target_gym/data/hold_measurements.json`).
 `test_floor_is_the_recorded_mpc_hold` checks `e_floor`, `rho_floor_tracking`
 and `rho_floor` against the recorded holds to 1 %, and that the protocol's MPC
-hold cost, 0.00649, is at least 0.98 of the reference.
+hold cost (6.9e-4, measured) is at least 0.98 of the reference.
 
 `rho_floor_tracking` is the oracle's best hold for tracking. It is the lowest
 per-seed hold the reference controller demonstrated, divided by `e_floor`
 and squared, as the tracking term squares an error. It would be 1 if the
-floor were that hold. It is 0.00396 here because the floor is clamped at the
-analyser resolution, about 16 times the MPC's lowest hold of 6.29e-6 mol/L
+floor were that hold. It is 0.000497 here because the floor is clamped at the
+analyser resolution, about 45 times the MPC's lowest hold of 2.23e-6 mol/L
 (the table above). `rho_floor` is the same with consumption charged in full.
 `floor_is_documented_minimum` records whether `e_floor` is a measured or
 certified floor or a resolution used as a scale. `failure_cost` is
@@ -756,11 +756,11 @@ selects the version-1 reward of section 8 (`precision_floor` and
   under a constant rollout key (section 5).
 - **The shared floor check cannot fail here.**
   `test_mpc_does_not_beat_a_measured_floor` in `tests/test_reward_contract.py`
-  compares the protocol's whole-episode MPC tracking cost, 4.03e3, with
-  `rho_floor_tracking`, 0.00396. Tracking is the mean over every step (the
+  compares the protocol's whole-episode MPC tracking cost, 3.2e3 (measured),
+  with `rho_floor_tracking`, 0.000497. Tracking is the mean over every step (the
   task has no burn-in), and the five switches cost up to (0.1 / 1e-4)^2 = 1e6
   per step while settling, so it sits far above a reference of at most 1.
   The task's own test, `test_floor_is_the_recorded_mpc_hold` in
   `tests/pc_gym/unstable_cstr/test_unstable_cstr_experts.py`, checks the
   floor and both references against the recorded MPC hold instead, and the
-  protocol's MPC hold cost (0.00649) against the reference.
+  protocol's MPC hold cost (6.9e-4) against the reference.
