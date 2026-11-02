@@ -2443,11 +2443,17 @@ happens to take. The size decides where it runs.</p>
 <p><code>records</code> is not a size. Those tests check that the recorded baselines still
 describe this tree, and they run in a job of their own, so a stale record fails
 that job alone and a failing test job always means a real bug.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pytest<span class="w">                   </span><span class="c1"># small, on every core</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pytest<span class="w"> </span>-m<span class="w"> </span>medium<span class="w"> </span>-n<span class="w"> </span><span class="m">2</span><span class="w">    </span><span class="c1"># medium; two workers keep two big compiles in memory</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pytest<span class="w"> </span>-m<span class="w"> </span>large<span class="w">          </span><span class="c1"># large</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>pytest<span class="w"> </span>-m<span class="w"> </span>records<span class="w">        </span><span class="c1"># records</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>pytest<span class="w"> </span>-m<span class="w"> </span><span class="s2">""</span><span class="w">             </span><span class="c1"># everything</span>
+<p><code>agent</code> is not a size either. Those tests need stable-baselines3 and torch, the
+opt-in <code>agent</code> group, and skip without it. The README's SAC example is one. CI's
+agent job installs the group and runs them, and fails if any of them skips:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>dev<span class="w"> </span>--group<span class="w"> </span>agent
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pytest<span class="w"> </span>-m<span class="w"> </span>agent
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pytest<span class="w">                   </span><span class="c1"># small, on every core</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pytest<span class="w"> </span>-m<span class="w"> </span>medium<span class="w"> </span>-n<span class="w"> </span><span class="m">2</span><span class="w">    </span><span class="c1"># medium; two workers keep two big compiles in memory</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pytest<span class="w"> </span>-m<span class="w"> </span>large<span class="w">          </span><span class="c1"># large</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>pytest<span class="w"> </span>-m<span class="w"> </span>records<span class="w">        </span><span class="c1"># records</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>pytest<span class="w"> </span>-m<span class="w"> </span><span class="s2">""</span><span class="w">             </span><span class="c1"># everything</span>
 </code></pre></div>
 <p>A later <code>-m</code> replaces the default one, and <code>-n0</code> runs serially, which <code>--pdb</code>
 needs.</p>
@@ -2476,8 +2482,8 @@ wall-clock floor and came close to its 30-minute timeout on CI's slower cores.</
 there, guarded by a fingerprint that refuses a record whose code has moved. See
 <a href="../baselines/">Baselines</a> for the design and the reasoning behind fingerprinting
 source rather than behaviour.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>baselines<span class="w">           </span><span class="c1"># re-measure everything, ~40 min</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>make<span class="w"> </span>baselines-plane<span class="w">     </span><span class="c1"># or just one environment</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>baselines<span class="w">           </span><span class="c1"># re-measure everything, ~40 min</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>make<span class="w"> </span>baselines-plane<span class="w">     </span><span class="c1"># or just one environment</span>
 </code></pre></div>
 <p>Run it when a test tells you a record is stale, and commit the result with the
 change that invalidated it.</p>
