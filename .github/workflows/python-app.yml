@@ -99,9 +99,10 @@ jobs:
     # tests marked agent. They skip without the group, so a skip here means the
     # group did not install, and fails the job.
     #
-    # Its own job, like docs: it runs alongside the interpreters, so it adds
-    # runner minutes but no wall-clock.
+    # Its own job: it runs alongside the interpreters, so it adds runner
+    # minutes but no wall-clock. Like them, it waits for the records job.
     name: agent
+    needs: records
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -119,7 +120,7 @@ jobs:
     - name: Run the agent tests
       run: |
         set -o pipefail
-        uv run pytest -q -m agent -rs | tee "$RUNNER_TEMP/agent.log"
+        uv run pytest -q -m "agent and not records" -rs | tee "$RUNNER_TEMP/agent.log"
         if grep -q " skipped" "$RUNNER_TEMP/agent.log"; then
           echo "::error::an agent test skipped, so the agent group is not installed"
           exit 1
