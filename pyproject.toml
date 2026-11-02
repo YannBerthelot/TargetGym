@@ -29,29 +29,22 @@ classifiers = [
 # window, so widening it means adding a column to that grid.
 # Upper bound tracks gymnax, not jax.
 #
-# gymnax 1.0.0 is its latest release and declares requires-python <3.14, so it
-# will not install on 3.14 at all. It also caps jax<0.7, which holds jaxlib at
-# 0.6.x, and that is the version with no cp314 wheel. Declaring <3.15 here let
-# uv resolve a 3.14 interpreter and then fail with "Distribution jaxlib==0.6.2
-# ... doesn't have a source distribution or wheel for the current platform",
-# which is a confusing way to say the Python is too new.
-#
-# jaxlib itself has shipped cp314 since 0.10.1 and is now at 0.11.1, so upgrading
-# jax is not the blocker and raising this bound on that basis would not work.
-# Every environment here is a gymnax environment, so the trigger to raise it is
-# gymnax supporting 3.14 and lifting its jax cap.
-requires-python = ">=3.11,<3.14"
+# Every environment here is a gymnax environment. gymnax 1.0.1 (2026-10-18) is
+# the first release that installs on 3.14, where it requires jax>=0.8.1 and
+# flax>=0.12.3; jaxlib has shipped cp314 wheels since 0.7.1. gymnax declares
+# <3.15, so the trigger to raise this bound again is gymnax and jaxlib
+# supporting 3.15.
+requires-python = ">=3.11,<3.15"
 
 dependencies = [
     # gymnax >= 1.0 is required, not merely preferred: the envs implement
     # ``is_terminated`` (0.0.9 dispatches to ``is_terminal`` instead) and their
     # ``step_env`` returns natural termination alone, leaving the time limit to
-    # gymnax's six-value step API.
-    "gymnax>=1.0.0",
-    # gymnax 1.0.0 caps gymnasium at <1.2, so a resolver picks 1.1.x here, and
-    # that is what the suite is tested against. The window stays open to <1.4
-    # because gymnax PR #117 raises its own cap there; when that ships, a
-    # resolver may pick a newer gymnasium and nothing in this project objects.
+    # gymnax's six-value step API. 1.0.1 is the floor because 1.0.0 does not
+    # install on Python 3.14, and uv's universal lock ignores that upper bound:
+    # with 1.0.0 allowed it locked 1.0.0 and jax 0.6.2, which has no cp314 wheel.
+    "gymnax>=1.0.1",
+    # gymnax 1.0.1 allows gymnasium <1.4, as this window does.
     #
     # This used to be a git dependency on gymnax main, on the reasoning that the
     # released cap "conflicts with newer gymnasium". Nothing here needs newer
@@ -212,8 +205,8 @@ select = ["F", "E4", "E9", "I"]
 # and jax's ``numpy/__init__.pyi`` uses PEP 695 type parameter lists, which are
 # a syntax error before 3.12. That broke the 3.13 and 3.14 CI jobs while 3.11
 # passed. Each matrix job should type-check against the version it runs on.
-# Most third-party scientific packages ship no stubs (casadi, chex, do_mpc,
-# gymnax, optax, tqdm, moviepy). Their absence is not a defect in this code.
+# Most third-party scientific packages ship no stubs (chex, gymnax, optax,
+# tqdm, moviepy). Their absence is not a defect in this code.
 ignore_missing_imports = true
 
 # What mypy is asked to guarantee, and what it is not.

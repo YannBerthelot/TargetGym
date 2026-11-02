@@ -100,8 +100,8 @@ def test_the_package_gate_installs_the_wheel_as_users_get_it():
     matrix = package["jobs"]["installed"]["strategy"]["matrix"]
     # The oldest and the newest Python of requires-python: if it changes, the
     # gate's interpreters change with it.
-    assert pyproject["requires-python"] == ">=3.11,<3.14"
-    assert matrix["python"] == ["3.11", "3.13"]
+    assert pyproject["requires-python"] == ">=3.11,<3.15"
+    assert matrix["python"] == ["3.11", "3.14"]
     extras = set(pyproject["optional-dependencies"]) - {"all"}
     assert {"core", "docs", *extras} <= set(matrix["check"])
 

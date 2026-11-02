@@ -91,7 +91,7 @@ jobs:
         if-no-files-found: error
 
   # The wheel in a fresh environment outside the checkout, resolved as a user's
-  # pip would, so the newest dependencies the ranges allow (on 3.13 that is
+  # pip would, so the newest dependencies the ranges allow (on 3.14 that is
   # JAX 0.11). "docs" installs [all] and runs the README's and the docs'
   # examples and the quickstart notebook, with the extraction tests/test_docs.py
   # uses; the others install one extra each and run its smoke check.
@@ -103,7 +103,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.11", "3.13"]
+        python: ["3.11", "3.14"]
         check: [docs, core, render]
     env:
       JAX_PLATFORMS: cpu

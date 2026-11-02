@@ -1,6 +1,6 @@
 # The declared dependency ranges, tested beyond uv.lock, which every other
 # job uses. "newest" resolves the latest versions the ranges allow, on the
-# newest supported Python (JAX 0.11 on 3.13); "lowest" puts every direct
+# newest supported Python (JAX 0.11 on 3.14); "lowest" puts every direct
 # dependency at its floor, on the oldest (JAX 0.6.2 on 3.11). A user's pip
 # can land anywhere between, so both ends have to work.
 #
@@ -44,7 +44,7 @@ jobs:
       matrix:
         include:
           - name: newest
-            python: "3.13"
+            python: "3.14"
             resolution: highest
             sync: uv sync --upgrade --group dev
           - name: lowest

@@ -40,12 +40,14 @@ closed-loop controller contracts, which run on merges to `main` rather than on
 every pull request. `@pytest.mark.records` is separate: those tests read the
 recorded baselines and run in their own job.
 
-CI runs the small tier against Python 3.11, 3.12 and 3.13 in parallel (3.13
-with the coverage gate), the medium tier against 3.11 and 3.12, plus a lint
+CI runs the small tier against Python 3.11 to 3.14 in parallel (3.13 with the
+coverage gate), the medium tier against 3.11 and 3.14, plus a lint
 job, a docs job (`make ci-docs`), the records job and, on merges to `main`, the
 large tier on one interpreter.
+`uv.lock` puts 3.11 to 3.13 on JAX 0.6.2, the floor, and 3.14 on the newest
+JAX that gymnax allows, so the columns test both ends of the JAX range.
 If you add a dependency, check it resolves across that whole window --
-`uv lock --check --python 3.14` is the quickest way to find out. Note that
+`uv lock --check` is the quickest way to find out. Note that
 `pygame` itself only ships wheels through 3.13, so on 3.14 the project pulls
 `pygame-ce`, the maintained fork of the same code under the same import name.
 
