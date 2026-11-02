@@ -92,6 +92,40 @@ jobs:
       # reported twenty-five warnings and still exited zero.
       run: uv run mkdocs build --strict
 
+  agent:
+    # The README's reinforcement-learning example trains SAC with
+    # stable-baselines3, which brings torch: the opt-in agent group, about
+    # 550 MB that every other job leaves out. This job installs it and runs the
+    # tests marked agent. They skip without the group, so a skip here means the
+    # group did not install, and fails the job.
+    #
+    # Its own job: it runs alongside the interpreters, so it adds runner
+    # minutes but no wall-clock. Like them, it waits for the records job.
+    name: agent
+    needs: records
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      UV_PYTHON: "3.13"
+      JAX_PLATFORMS: cpu
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: ${{ env.UV_VERSION }}
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+    - name: Install dependencies
+      run: uv sync --frozen --group dev --group agent
+    - name: Run the agent tests
+      run: |
+        set -o pipefail
+        uv run pytest -q -m "agent and not records" -rs | tee "$RUNNER_TEMP/agent.log"
+        if grep -q " skipped" "$RUNNER_TEMP/agent.log"; then
+          echo "::error::an agent test skipped, so the agent group is not installed"
+          exit 1
+        fi
+
   test:
     # Every interpreter in the project's requires-python window. The columns
     # run concurrently, so covering four of them costs runner minutes but not

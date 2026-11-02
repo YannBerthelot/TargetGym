@@ -43,6 +43,7 @@ def test_passes_gymnasium_env_checker():
     check_env(Airplane2D(), skip_render_check=True)
 
 
+@pytest.mark.agent
 def test_sb3_ppo_can_learn():
     """Test that environment works with SB3's PPO. SB3 and torch are the
     opt-in ``agent`` group (``uv sync --group agent``), so this skips without
