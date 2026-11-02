@@ -223,7 +223,7 @@ jobs:
         VERSION: ${{ inputs.version }}
       run: |
         cd "$RUNNER_TEMP"
-        uv venv --python 3.13 env
+        uv venv --python 3.14 env
         deadline=$((SECONDS + 1200))
         until uv pip install --python env/bin/python --no-cache "target-gym[all]==$VERSION" pytest pytest-xdist pytest-readme; do
           [ "$SECONDS" -lt "$deadline" ] || { echo "target-gym $VERSION is not installable from PyPI after 20 minutes"; exit 1; }

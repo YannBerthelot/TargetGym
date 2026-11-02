@@ -140,9 +140,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.14 is absent because gymnax does not support it; see the
-        # requires-python note in pyproject.toml.
-        python-version: ["3.11", "3.12", "3.13"]
+        # Every Python of requires-python. uv.lock puts 3.11 to 3.13 on JAX
+        # 0.6.2, the floor, and 3.14 on the newest JAX gymnax allows.
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     env:
       UV_PYTHON: ${{ matrix.python-version }}
 
@@ -200,11 +200,12 @@ jobs:
     # Medium tests start other processes, write videos, or compile an aircraft
     # planner or tuner, which peaks at 2.5 to 5 GB. Two workers keep two of
     # those inside the runner's 16 GB; four of them at once shut runners down
-    # on 2026-10-27. Two interpreters run them: after the small tier with
-    # coverage, they would put the 3.13 column past ten minutes whenever the
-    # compile cache misses (14.5 minutes on 2026-10-28).
+    # on 2026-10-27. The oldest and the newest Python run them, which are also
+    # the oldest and the newest JAX. After the small tier with coverage, they
+    # would put the 3.13 column past ten minutes whenever the compile cache
+    # misses (14.5 minutes on 2026-10-28).
     - name: Medium tests
-      if: matrix.python-version != '3.13'
+      if: matrix.python-version == '3.11' || matrix.python-version == '3.14'
       run: uv run pytest -q -m "medium and not records" -n 2
 
     # One column carries the coverage gate, over the small tier (93% on

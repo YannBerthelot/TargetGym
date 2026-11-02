@@ -5,8 +5,8 @@ happens to take. The size decides where it runs.
 
 | size | marker | what a test may use | where it runs | budget |
 | --- | --- | --- | --- | --- |
-| small | none | one process, memory, `tmp_path` | a plain `pytest`; CI on every push, Python 3.11 to 3.13 | the whole tier within 60 s on a laptop |
-| medium | `medium` | another process, video files, a compile that needs gigabytes | CI on every push, Python 3.11 and 3.12, after the small tier | small and medium within 10 min on CI |
+| small | none | one process, memory, `tmp_path` | a plain `pytest`; CI on every push, Python 3.11 to 3.14 | the whole tier within 60 s on a laptop |
+| medium | `medium` | another process, video files, a compile that needs gigabytes | CI on every push, Python 3.11 and 3.14, after the small tier | small and medium within 10 min on CI |
 | large | `large` | closed-loop rollouts at the scored length, many seeds | CI on merges to `main`, one interpreter | each test within 15 min |
 
 `records` is not a size. Those tests check that the recorded baselines still
