@@ -3,7 +3,7 @@ the 3D aircraft tasks (plane3d_heading, plane3d_circle, plane3d_racetrack, plane
 
 Each task keeps its oracle in its own package, so changing one re-records
 only the tasks of that package. The shared machinery (GradientMPC,
-CasadiMPC, SamplingMPC and the v2 objective helpers) stays in
+NewtonMPC, SamplingMPC and the v2 objective helpers) stays in
 ``target_gym.experts.mpc``, which is in every task's baseline fingerprint.
 """
 

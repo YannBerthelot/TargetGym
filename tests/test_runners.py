@@ -21,7 +21,7 @@ from target_gym import (
     FourTank,
     FourTankParams,
 )
-from target_gym.experts.mpc import CasadiMPC, GradientMPC, ShrinkingHorizonNLP
+from target_gym.experts.mpc import GradientMPC, NewtonMPC
 from target_gym.pc_gym.cstr.experts import make_cstr_mpc
 from target_gym.pc_gym.first_order.experts import make_first_order_mpc
 from target_gym.pc_gym.four_tank.experts import make_four_tank_mpc
@@ -293,9 +293,9 @@ def test_plane_env_make_pid_returns_controller():
 @pytest.mark.parametrize(
     "env_cls,params_cls,make_kwargs,expected_type",
     [
-        (CSTR, CSTRParams, {}, ShrinkingHorizonNLP),
-        (FirstOrderSystem, FirstOrderParams, {"horizon": 3}, CasadiMPC),
-        (FourTank, FourTankParams, {}, ShrinkingHorizonNLP),
+        (CSTR, CSTRParams, {}, NewtonMPC),
+        (FirstOrderSystem, FirstOrderParams, {"horizon": 3}, NewtonMPC),
+        (FourTank, FourTankParams, {}, NewtonMPC),
     ],
 )
 def test_env_make_mpc_returns_controller(

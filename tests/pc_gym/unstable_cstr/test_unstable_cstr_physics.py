@@ -35,7 +35,6 @@ from target_gym.pc_gym.unstable_cstr.env import (
     steady_temperature,
 )
 from target_gym.pc_gym.unstable_cstr.experts import (
-    MPC_PNR_MARGIN_K,
     pnr_line,
     point_of_no_return_batch,
     raw_from_coolant,
@@ -561,10 +560,7 @@ def test_pnr_line_is_conservative(params):
     over C_a 0.40 to 0.70 at a drift of -6, 0 and +6 K. The grid is 0.0025
     mol/L, twice as fine as the one the line was fitted on, and holds every
     target. The line was fitted at +6 K, where it touches the curve. The
-    smallest gap is 0.017 K, at C_a 0.5475 on this grid (derived). The MPC's
-    bound, the line less ``MPC_PNR_MARGIN_K``, still lies above T*(L) at
-    every target in the band (by 1.067 K at 0.45, derived), so it never cuts
-    a target off."""
+    smallest gap is 0.017 K, at C_a 0.5475 on this grid (derived)."""
     grid = np.round(np.arange(0.40, 0.70 + 1e-9, 0.0025), 4)
     assert set(TARGETS) <= set(grid.tolist())
     gaps = {}
@@ -577,10 +573,6 @@ def test_pnr_line_is_conservative(params):
         assert np.all(gaps[Ti_dev] >= 0.0), (Ti_dev, grid[worst], gaps[Ti_dev][worst])
     assert gaps[6.0].min() < 0.05
     assert gaps[0.0].min() > gaps[6.0].min() and gaps[-6.0].min() > gaps[0.0].min()
-
-    band = np.linspace(*params.target_CA_range, 2001)
-    headroom = pnr_line(band) - MPC_PNR_MARGIN_K - steady_temperature(band, params, np)
-    assert headroom.min() > 1.0  # 1.067 K, at 0.45
 
 
 # ---------------------------------------------------------------------------

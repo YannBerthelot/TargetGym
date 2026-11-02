@@ -195,8 +195,8 @@ def rollout_mpc_batch(spec, params, n_seeds: int):
     ``s`` is the episode :func:`rollout` runs on it.
 
     Only for ``GradientMPC``, whose ``_optimize(actions_init, state)`` is a
-    pure function and vmaps as it stands; the CasADi planners call IPOPT,
-    outside JAX, and are parallelised by process instead.
+    pure function and vmaps as it stands; the Newton and sampling planners
+    keep host state between solves and are parallelised by process instead.
 
     Returns ``(values, targets, rewards, trips)``: the first three with a
     leading seed axis, matching :func:`rollout`, and the trips per seed

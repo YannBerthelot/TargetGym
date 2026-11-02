@@ -117,8 +117,7 @@ holds that instead of a planner. Each task's controller lives in its package's
 
 | Implementation | Used by | When it applies |
 |---|---|---|
-| `CasadiMPC` | first_order, ph_neutralization, glass_furnace, reactor, hvac, unstable_cstr, compressor_surge | A nonlinear program over an explicit model, solved by IPOPT |
-| `ShrinkingHorizonNLP` | cstr, four_tank | A deterministic plant with an episode short enough to plan whole: one NLP over every remaining step, on the environment's own step |
+| `NewtonMPC` | cstr, four_tank, first_order, ph_neutralization, unstable_cstr, reactor, hvac, glass_furnace, compressor_surge | Iterative LQR on the environment's own step: Newton's method on the action sequence. On the CSTR and the four-tank, deterministic plants with episodes short enough to plan whole, the plan is the rest of the episode |
 | `GradientMPC` | distillation, boiler_drum, plane_energy, the four 3D aircraft tasks | Differentiates the JAX dynamics and descends the objective |
 | Two gradient planners with a handover | plane, plane_sine | Both actuators planned to capture the initial altitude, then the elevator only, with the throttle on the PID's airspeed loop |
 | `SamplingMPC` | cement_kiln | Cross-entropy sampling: gradients through the kiln's transport delay overflow |
@@ -148,9 +147,10 @@ on the mean path: certainty equivalence, not a robust formulation.
 **It does not always minimise the reward exactly.** See the next section.
 
 **It is slow**, from about 0.1 ms per step for the feedforward and feedback
-laws to about 1.3 s for the 3D aircraft. The CasADi planners call IPOPT, outside
-JAX, so they do not jit or vmap. Use it as a reference to measure against, not
-inside a training loop; the recorded returns save you running it at all.
+laws to about 1.3 s for the 3D aircraft. The Newton planner keeps its plan on
+the host between steps, so it runs one episode at a time. Use it as a
+reference to measure against, not inside a training loop; the recorded returns
+save you running it at all.
 
 ### Why the MPC does not minimise the reward
 
@@ -162,44 +162,38 @@ shape, and must give the optimiser a gradient.
   minimiser and gives a gradient that vanishes at the optimum. A trip is a
   boolean with no gradient, so they add a smooth barrier on the approach,
   weighted at the failure cost.
-- **The CasADi planners** minimise a quadratic in a per-plant error band
-  (`tracking_band`, `comfort_band` and similar). These bands are controller
-  constants, not reward parameters. The quadratic shares the reward's
-  minimiser but not its trade-offs against a running cost, so a badly sized
-  band can settle the plant off target to save fuel.
-- **The CSTR and four-tank NLPs** minimise the reward's own tracking term,
-  weighted toward the scored window, and reach the plant's optimum to float32
+- **The Newton planner** minimises the step's own reward in floor units.
+  Three plants need a planner's version of it. The pH plant solves its pH by
+  bisection, which has no derivative, so the planner's pH has the titration
+  curve's slope. The reactor's costs are linear in the error, so the planner
+  rounds the kink over one floor. The unstable CSTR and the compressor keep
+  a barrier short of a trip: the point-of-no-return line, and a 5% margin on
+  the surge line. On the CSTR and the four-tank it weighs the scored window
+  1000 times the approach and reaches the plant's optimum to float32
   rounding.
 
-### Solver limits, and how often they bit
+### Solver budget
 
-A real MPC has a sample period and applies the best iterate it holds when time
-runs out, so `CasadiMPC` caps IPOPT at 150 iterations (`IPOPT_MAX_ITER`), with a
-CPU-time backstop far above any healthy step. The iteration cap is the one
-meant to bind because it is deterministic, so a baseline recorded on one
-machine reproduces on another. `ShrinkingHorizonNLP` is capped at 500.
-
-A capped solve is applied; any other failure (infeasible, restoration failed)
-returns an iterate that means nothing, so the controller holds its previous
-action. The unstable CSTR's and the compressor's MPCs hand such a step to their
-PIDs instead, because holding the last action could trip either plant. Every
-record counts these, so a baseline cannot quietly stop being an upper bound:
+Every Newton solve runs a fixed number of iterations: more on an episode's
+first solve, which starts cold, than on the later ones, which start from the
+previous plan. A fixed count is deterministic, so a baseline recorded on one
+machine reproduces on another. A solve cannot fail: its line search keeps the
+plan it started from when no step improves on it. Where the factory gives a
+guide (the unstable CSTR's cascade, the compressor's pair), each solve starts
+from the better of the previous plan and the guide's rollout, so the plan is
+never worse than the expert's under the planner's model. Every record keeps
+the counts:
 
 | field | meaning |
 | --- | --- |
 | `solver_calls` | solves performed across all seeds |
-| `solver_failures` | solves that did not reach a converged status |
-| `solver_capped` | of those, the ones stopped by the iteration or time cap |
-| `solver_mean_iters` | mean IPOPT iterations per solve |
-
-Read `solver_failures` before quoting an MPC number;
-`scripts/record_baselines.py` prints the success rate as it records.
+| `solver_mean_iters` | mean iterations per solve |
 
 ### What the MPC does not guarantee
 
-- **No stability certificate.** No planner has a terminal set, and among the
-  CasADi planners only the unstable CSTR's and the compressor's weight the end
-  of their horizon, so there is no nominal stability guarantee in the Mayne
+- **No stability certificate.** No planner has a terminal set or a terminal
+  cost, apart from the CSTR's and the four-tank's, which plan to the
+  episode's end, so there is no nominal stability guarantee in the Mayne
   sense. The baselines are measured, not certified.
 - **Some aircraft horizons are short.** `scripts/audit_mpc_horizons.py` checks
   each horizon against the time a viable controller needs to close the error.

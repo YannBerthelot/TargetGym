@@ -205,9 +205,7 @@ point of no return at dTi +6 K over C_a 0.40 to 0.70, refit as
 rounded down to 0.1 K (derived, `--section pnr`). It lies under the exact
 curve at drifts of −6, 0 and +6 K. The smallest gap is 0.873 K at
 dTi 0, 1.611 K at −6 K and 0.018 K at +6 K, each near C_a 0.545
-(`test_pnr_line_is_conservative`). The MPC's soft bound, the line less
-`MPC_PNR_MARGIN_K` (1 K, ours), still sits 1.067 K above T* at 0.45, so it
-cuts no target off. The PID's setpoint ceiling at 0.45 is the line less
+(`test_pnr_line_is_conservative`). The PID's setpoint ceiling at 0.45 is the line less
 0.3 K, 354.600 K or T* + 1.767 K, and the line is the binding ceiling for
 targets up to 0.464 mol/L.
 
@@ -517,26 +515,28 @@ C_a within 0.01 mol/L of its target, that T stays above the ignition fold
 every step, and that at the eight steps of each episode closest to that line
 the exact point of no return is at least 0.25 K above T.
 
-**MPC** (`make_unstable_cstr_mpc`). A CasADi NMPC on radau collocation of
-degree 3, which keeps the unstable mode from blowing up a propagated rollout.
-The stage cost is the version-2 tracking term, rescaled by
-`MPC_ERROR_SCALE` (0.01 mol/L, ours), plus `MPC_MOVE_WEIGHT` (1e-3, ours) on
-the squared move. The terminal cost is the Riccati weight of the env's
-one-step linearisation at 0.45 mol/L (`terminal_weight`,
-`test_terminal_weight_is_positive_definite`). T is kept under
-`pnr_line(C_a)` less `MPC_PNR_MARGIN_K` (1 K, ours) by a soft bound that
-costs `MPC_PNR_PENALTY` (1e4, ours) per K per interval. The cascade PID is
-its fallback, its memory tracked to every action the MPC applies
-(`cascade_track`, `test_mpc_falls_back_to_the_pid`). Like every MPC in the
-suite it is an oracle ceiling. It reads the true state, the drift and the
-whole schedule, and it plans on the drift's conditional mean a^k dTi
-(`test_mpc_plans_the_drift_mean`, `test_mpc_preview_matches_the_env`). Its
-model is the env's velocity to 1e-12 relative
-(`test_mpc_model_is_the_env_velocity`). For model-review check 13,
-`test_mpc_predicts_one_step_like_the_plant` steps 120 states of a shipped-PID
-episode through one interval of that model and through `step_env`, and
-requires a mean signed C_a error under a tenth of `e_floor` and no error
-above `e_floor`.
+**MPC** (`make_unstable_cstr_mpc`). `NewtonMPC` (iterative LQR) on the env's
+own `step_env`, over `MPC_HORIZON` steps, re-solved every step. Its line
+search rolls the plan forward under the feedback gains of the Riccati sweep,
+and each solve starts from the previous plan replayed under its own gains,
+which is what keeps the unstable mode from running a single-shooting rollout
+away. The stage cost is the version-2 reward in floor units plus a barrier on
+T past `pnr_line(C_a)`, quadratic over its first `MPC_PNR_ROUNDING_K` (1 K,
+ours) and then `MPC_PNR_PENALTY` (9.891e6 per K, ours) in reward units, the
+tracking cost of a 0.3145 mol/L error. Each solve also rolls out the cascade PID from
+the true state and starts from the cheaper of the two plans, so the plan is
+never worse than the PID's under the planner's model. Like every MPC in the
+suite it is an oracle ceiling: it reads the true state, the drift and the
+whole schedule, and plans the drift's conditional mean a^k dTi, the env's own
+update with `Ti_sigma` zeroed (`plan_params`).
+
+The barrier is there for the noise. Planning on the mean drift, the planner
+without it crossed the conservative line ahead of a hot-going switch on a path
+that the mean drift makes recoverable, and a +3 K drift made it a runaway: one
+trip on the ten recorded seeds. With it none of seeds 0 to 29 trips, and the
+ten recorded seeds cost 3.9e6 per episode against 4.7e6 for the CasADi NMPC on
+collocation it replaced in November 2026 (horizon 32, a soft bound 1 K inside
+the line, an LQR terminal weight, the PID as fallback).
 
 **Horizon.** `MPC_HORIZON` is 32 steps (1.6 min, ours). Across the band that
 is 2.2 to 5.1 unstable time constants (1.6 min times lambda+ of 1.391 to
@@ -545,29 +545,10 @@ steps at dTi +6 K (section 2), so a plan that starts next to the point of no
 return runs past the peak of the excursion it is turning. 32 is the smallest
 whole number of steps at least 1.5 times 21. The horizon is shorter than the
 PID's longest 90 % closure of a switch, 48 steps or 2.40 min on 0.55 to 0.65
-mol/L (derived, `--section settle`), and the terminal weight prices what lies
-beyond it. `scripts/audit_mpc_horizons.py --envs unstable_cstr` returns ok.
-It finds the PID closing 63 % of the reset error (0.0059 mol/L) in 15 steps,
-a ratio of 32 / 15 = 2.13 (measured). That audit times only the reset error,
-so it never sees a 0.1 mol/L switch.
-
-**MPC gate** (`--mpc-gate --workers 8`, 110 episodes, float32 episodes and
-float64 margins, measured).
-
-| episodes | trips | fallback steps | smallest PNR margin (K) | steps above the soft bound (largest excess) | mean abs error, minutes 6 to 8.4 of a block (mol/L) | v2 cost per step, MPC / PID on the same starts |
-|---|---|---|---|---|---|---|
-| 100 random schedules, drift on (seeds 1000 to 1099) | 0 | 0 | 1.581 (p1 1.695, median 2.220) | 40 (0.064 K) | 6.57e-6 | 3883 / 5.766e4 |
-| 10 of the 0.55/0.45 alternation, dTi +6 K held (seeds 2000 to 2009) | 0 | 0 | 1.519 | 30 (0.000 K) | 1.82e-6 | 7433 / 8.326e4 |
-
-No solve was capped, and IPOPT took 13.2 and 13.5 iterations on average. The
-PID also ran every one of these starts without a trip. Solve time per step
-over 132000 steps was 28.3 ms at the median, 41.0 ms at p90, 50.9 ms at p99
-and 166 ms at most (wall clock on a shared machine, 8 workers). The gate
-also measures, on every step, how far a fallback's first action would move
-the coolant from the one last applied. The median is 0.086 K and the largest
-20 K, but after a step in minutes 6 to 8.4 of a block the largest is 0.469 K,
-inside `FALLBACK_STEP_BOUND_K` (0.5 K, ours), which
-`test_mpc_falls_back_to_the_pid` asserts.
+mol/L (derived, `--section settle`). `scripts/audit_mpc_horizons.py --envs
+unstable_cstr` returns ok. It finds the PID closing 63 % of the reset error
+(0.0059 mol/L) in 15 steps, a ratio of 32 / 15 = 2.13 (measured). That audit
+times only the reset error, so it never sees a 0.1 mol/L switch.
 
 **Recorded results.** Both controllers' returns over 10 seeds
 (`scripts/record_baselines.py`) are on the

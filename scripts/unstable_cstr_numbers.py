@@ -8,9 +8,6 @@ tables have their own flags:
     --v1               the version-1 reward and its exploit (section 8)
     --pid-validation   the cascade's 300-episode validation (section 7,
                        test_pid_holds_every_target runs 130 of them)
-    --mpc-gate         the MPC's 110-episode gate, 100 random schedules and
-                       10 alternating (section 7); --workers N runs its
-                       episodes in N processes
 
 Every number goes through the task's own code: the closed forms,
 ``compute_velocity``, ``compute_next_state``, ``step_env``,
@@ -26,14 +23,8 @@ through the step. That is the lag-free plant, stepped by the same
 """
 
 import argparse
-import concurrent.futures as cf
 import functools
 import time
-import warnings
-
-# Ahead of the imports below: importing target_gym pulls in do-mpc, which warns
-# about optional features this package does not use.
-warnings.filterwarnings("ignore")
 
 import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
@@ -43,8 +34,6 @@ from scipy.optimize import brentq, linprog  # noqa: E402
 from scipy.stats import spearmanr  # noqa: E402
 
 import target_gym.pc_gym.cstr.env as cstr_env  # noqa: E402
-from target_gym import registry  # noqa: E402
-from target_gym.experts.mpc import plan_params  # noqa: E402
 from target_gym.pc_gym.unstable_cstr.env import (  # noqa: E402
     N_BLOCKS,
     UnstableCSTRParams,
@@ -60,12 +49,10 @@ from target_gym.pc_gym.unstable_cstr.env import (  # noqa: E402
 from target_gym.pc_gym.unstable_cstr.env_jax import UnstableCSTR  # noqa: E402
 from target_gym.pc_gym.unstable_cstr.experts import (  # noqa: E402
     DEFAULT_GAINS,
-    FALLBACK_STEP_BOUND_K,
     GUARD_LEVELS,
     GUARD_MIN_DECAY,
     HELD_GAINS,
     MPC_HORIZON,
-    MPC_PNR_MARGIN_K,
     PNR_LINE,
     PNR_LINE_C_A,
     TUNED_GAINS,
@@ -74,7 +61,6 @@ from target_gym.pc_gym.unstable_cstr.experts import (  # noqa: E402
     cascade_init,
     cascade_step,
     closed_loop_rates,
-    coolant_from_raw,
     load_gains,
     pnr_line,
     point_of_no_return_batch,
@@ -798,11 +784,6 @@ def section_pnr():
         )
     band = np.linspace(*P.target_CA_range, 2001)
     T_b = steady_temperature(band, P, np)
-    headroom = pnr_line(band) - MPC_PNR_MARGIN_K - T_b
-    say(
-        f"  MPC bound pnr_line(L) - {MPC_PNR_MARGIN_K:g} K is {headroom.min():.3f} K "
-        f"above T*(L) at worst (L {band[np.argmin(headroom)]:.3f})"
-    )
     ceiling = setpoint_window(band, DEFAULT_GAINS, P)[1]
     binds = band[ceiling < T_b + DEFAULT_GAINS["sp_above"] - 1e-12]
     say(
@@ -1847,242 +1828,6 @@ def sensitivity(n_val=None, lags=LAGS, grid=GAIN_GRID, n_resets=20000):
         say(f"    lag {lag} s done in {time.time() - t0:.0f} s")
 
 
-#: Episodes in the gate's stress row: the 0.55/0.45 alternation with the drift
-#: held at +6 K (3 standard deviations), the hot-going switches at the hottest
-#: feed, where the MPC's soft bound sits closest to the targets.
-GATE_STRESS = 10
-#: Gate groups: rollout seeds from, and a label.
-GATE_GROUPS = {
-    "random": (1000, "random schedules, drift on"),
-    "alternating": (2000, "0.55/0.45 alternating, dTi +6 K held"),
-}
-
-
-def _gate_starts(group, seeds):
-    """Start states and rollout keys of gate episodes, as ``pid_validation``
-    builds them, and whether the drift is held at its start value."""
-    states, keys = reset_batch(seeds)
-    if group == "alternating":
-        return recentre(states, np.tile([0.55, 0.45], 3), Ti_dev=6.0), keys, True
-    return states, keys, False
-
-
-@functools.lru_cache(maxsize=None)
-def _jit_step():
-    return jax.jit(ENV.step_env)
-
-
-def _gate_episode(job):
-    """One MPC episode of the gate, for the pool.
-
-    The registry's factory on ``plan_params``, as the suite builds the MPC,
-    stepped on the env's own ``step_env`` with the seed's key throughout (as
-    ``runners.rollout`` does). Before each step it also asks the fallback PID,
-    without stepping it, for the action it would take over with, and records
-    that coolant's distance from the coolant last applied: the size of a
-    fallback's first move, on every step, whether or not a solve failed.
-    """
-    group, seed = job
-    spec = registry.get("unstable_cstr")
-    states, keys, hold = _gate_starts(group, [seed])
-    state = jax.tree_util.tree_map(lambda x: x[0], states)
-    key = keys[0]
-    drift = state.Ti_dev
-    mpc = spec.make_mpc(ENV, plan_params(spec, P))
-    mpc.reset()
-
-    counts = {"fallbacks": 0, "non_finite": 0}
-    fallback = mpc._fallback
-
-    def counted(guess, u, obs):
-        counts["fallbacks"] += 1
-        counts["non_finite"] += int(not np.all(np.isfinite(u)))
-        return fallback(guess, u, obs)
-
-    mpc._fallback = counted
-    step = _jit_step()
-    n = int(P.max_steps_in_episode)
-    rec = {f: [] for f in REC_FIELDS}
-    seconds = np.zeros(n)
-    transfer = np.full(n, np.nan)
-    v2 = 0.0
-    last = None
-    for t in range(n):
-        obs = ENV.get_obs(state, P)
-        pid = mpc._pid
-        if last is not None and pid._cs is not None:
-            u_pid = cascade_step(
-                pid.gains, pid._cs, np.asarray(obs, float), pid.params
-            )[0]
-            transfer[t] = coolant_from_raw(float(u_pid), P) - coolant_from_raw(last, P)
-        t0 = time.perf_counter()
-        u = mpc.step(obs, state)
-        seconds[t] = time.perf_counter() - t0
-        _, state, reward, _, info = step(key, state, jnp.asarray([u]), P)
-        if hold:
-            state = state.replace(Ti_dev=drift)
-        v2 += float(reward)
-        last = u
-        for f, v in zip(
-            REC_FIELDS,
-            (
-                state.C_a,
-                state.T,
-                state.T_j,
-                state.Ti_dev,
-                live_target(state, P) - state.C_a,
-                info["tripped"],
-                state.block_clock,
-                u,
-            ),
-        ):
-            rec[f].append(np.asarray(v))
-    return {
-        "group": group,
-        "seed": seed,
-        "rec": {f: np.asarray(v) for f, v in rec.items()},
-        "seconds": seconds,
-        "transfer": transfer,
-        "v2": v2,
-        "report": mpc.solver_report(),
-        "capped": mpc.solve_capped,
-        **counts,
-    }
-
-
-def mpc_gate(n_episodes=100, workers=1):
-    """The MPC's gate: zero trips over ``n_episodes`` random episodes and the
-    stress row. Also prints solve times, fallbacks (non-finite actions among
-    them), the smallest point-of-no-return margin, and the fallback's first
-    move against ``FALLBACK_STEP_BOUND_K``, the bound
-    test_mpc_falls_back_to_the_pid asserts."""
-    spec = registry.get("unstable_cstr")
-    probe = spec.make_mpc(ENV, plan_params(spec, P))
-    n = int(P.max_steps_in_episode)
-    title(
-        f"mpc-gate: the MPC on {n_episodes} random episodes and {GATE_STRESS} "
-        "alternating ones",
-        "float32 episodes, float64 PNR",
-    )
-    say(
-        f"  horizon {probe.horizon} steps ({probe.horizon * probe.mpc_dt:.2f} min); "
-        f"soft bound pnr_line(C_a) - {probe.pnr_margin_K:g} K at "
-        f"{probe.pnr_penalty:g} per K and interval; error scale "
-        f"{probe.error_scale:g} mol/L; move weight {probe.move_weight:g}"
-    )
-    say(f"  fallback PID: {_gains_str(probe._pid.gains)}")
-    jobs = [
-        (group, GATE_GROUPS[group][0] + i)
-        for group, count in (("random", n_episodes), ("alternating", GATE_STRESS))
-        for i in range(count)
-    ]
-    t0 = time.time()
-    results = []
-    if workers > 1:
-        with cf.ProcessPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(_gate_episode, job) for job in jobs]
-            for fut in cf.as_completed(futures):
-                results.append(fut.result())
-                if len(results) % 10 == 0:
-                    say(
-                        f"    {len(results)}/{len(jobs)} episodes, {time.time() - t0:.0f} s"
-                    )
-    else:
-        for job in jobs:
-            results.append(_gate_episode(job))
-            if len(results) % 10 == 0:
-                say(
-                    f"    {len(results)}/{len(jobs)} episodes, {time.time() - t0:.0f} s"
-                )
-    results.sort(key=lambda r: (r["group"] != "random", r["seed"]))
-
-    gains = load_gains()
-    all_trips = 0
-    for group, (_, label) in GATE_GROUPS.items():
-        rs = [r for r in results if r["group"] == group]
-        if not rs:
-            continue
-        seeds = np.array([r["seed"] for r in rs])
-        rec = {f: np.stack([r["rec"][f] for r in rs]) for f in REC_FIELDS}
-        exact, line = episode_margins(rec)
-        ok = ~rec["tripped"]
-        trips = rec["tripped"].sum(1)
-        all_trips += int(trips.sum())
-        over = np.where(
-            ok, rec["T"] - (pnr_line(rec["C_a"]) - probe.pnr_margin_K), -np.inf
-        )
-        say(
-            f"  {label} (seeds {seeds.min()} to {seeds.max()}, {len(rs)} episodes): "
-            f"trips {int(trips.sum())} in {int((trips > 0).sum())} episodes; "
-            f"fallback steps {sum(r['fallbacks'] for r in rs)} "
-            f"(non-finite actions {sum(r['non_finite'] for r in rs)}); capped solves "
-            f"{sum(r['capped'] for r in rs)}; mean IPOPT iterations "
-            f"{np.mean([r['report']['solver_mean_iters'] for r in rs]):.1f}"
-        )
-        worst = int(np.argmin(exact))
-        say(
-            f"    smallest exact PNR margin {exact.min():.3f} K (seed {seeds[worst]}; "
-            f"p1 {np.percentile(exact, 1):.3f}, median {np.median(exact):.3f}); "
-            f"smallest line margin {line.min():.3f} K; steps above the soft bound "
-            f"{int((over > 0).sum())} (largest excess {max(over.max(), 0.0):.3f} K)"
-        )
-        e = np.abs(rec["e"])
-        held = ok & in_hold(rec["block_clock"])
-        per_episode = np.array(
-            [row[m].mean() if m.any() else np.nan for row, m in zip(e, held)]
-        )
-        states, keys, hold = _gate_starts(group, seeds)
-        pid = run_episodes(states, keys, gains, hold_drift=hold)[0]
-        mpc_cost = -np.mean([r["v2"] for r in rs]) / n
-        pid_cost = -pid["v2"].mean() / n
-        say(
-            f"    |e| in the hold window (minutes 6 to 8.4 of each block): mean {e[held].mean():.2e}, "
-            f"per-episode means {np.nanmin(per_episode):.2e} to "
-            f"{np.nanmax(per_episode):.2e} mol/L; v2 cost per step {mpc_cost:.4g} "
-            f"against the shipped PID's {pid_cost:.4g} on the same starts "
-            f"(ratio {mpc_cost / pid_cost:.3f}; PID trips {int(pid['trips'].sum())})"
-        )
-
-    seconds = np.concatenate([r["seconds"] for r in results]) * 1e3
-    say(
-        f"  solve time per step (ms, {seconds.size} steps, wall clock on this "
-        f"machine under its current load): p50 {np.percentile(seconds, 50):.1f}, "
-        f"p90 {np.percentile(seconds, 90):.1f}, p99 {np.percentile(seconds, 99):.1f}, "
-        f"max {seconds.max():.0f}, mean {seconds.mean():.1f}; "
-        f"{seconds.sum() / 1e3 / len(results):.0f} s of solves per episode; "
-        f"run {time.time() - t0:.0f} s on {workers} worker(s)"
-    )
-    transfer = np.abs(np.concatenate([r["transfer"] for r in results]))
-    settled = np.concatenate(
-        [
-            np.concatenate(
-                [
-                    [False],
-                    in_hold(r["rec"]["block_clock"])[:-1],
-                ]
-            )
-            for r in results
-        ]
-    )
-    finite = np.isfinite(transfer)
-    say(
-        "  a fallback's first move, |PID coolant - coolant last applied| on every "
-        f"step: p50 {np.percentile(transfer[finite], 50):.3f} K, p99 "
-        f"{np.percentile(transfer[finite], 99):.3f} K, max {transfer[finite].max():.3f} "
-        "K; after a step in the hold window max "
-        f"{transfer[finite & settled].max():.3f} K (FALLBACK_STEP_BOUND_K, "
-        f"the bound test_mpc_falls_back_to_the_pid asserts, is "
-        f"{FALLBACK_STEP_BOUND_K:g} K)"
-    )
-    if all_trips == 0:
-        say(f"  gate: PASSES, zero trips in {len(results)} episodes")
-    else:
-        say(
-            f"  gate: FAILS, {all_trips} trips; the remedies to try, in order: "
-            "horizon 45, then 60, then a larger pnr_penalty"
-        )
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -2105,10 +1850,6 @@ def main() -> int:
         help="the cascade's 300-episode validation (heavy)",
     )
     ap.add_argument(
-        "--mpc-gate", action="store_true", help="the MPC's 110-episode gate (heavy)"
-    )
-    ap.add_argument("--workers", type=int, default=1, help="processes for --mpc-gate")
-    ap.add_argument(
         "--seeds",
         type=int,
         default=None,
@@ -2116,7 +1857,7 @@ def main() -> int:
     )
     args = ap.parse_args()
     t0 = time.time()
-    heavy = args.sensitivity or args.v1 or args.pid_validation or args.mpc_gate
+    heavy = args.sensitivity or args.v1 or args.pid_validation
     for name in args.section or ([] if heavy else list(FAST)):
         FAST[name]()
     if args.pid_validation:
@@ -2125,8 +1866,6 @@ def main() -> int:
         v1_table(args.seeds or 128)
     if args.sensitivity:
         sensitivity(args.seeds)
-    if args.mpc_gate:
-        mpc_gate(args.seeds or 100, args.workers)
     say("=" * 78)
     say(f"runtime {time.time() - t0:.1f} s")
     return 0

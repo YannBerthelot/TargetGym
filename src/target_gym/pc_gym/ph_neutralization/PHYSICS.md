@@ -145,21 +145,21 @@ nonlinearity be exact rather than approximated. Its step count was cut from 44
 to 20 on measurement, which roughly doubled throughput; see
 [docs/performance.md](../../../docs/performance.md).
 
-**The MPC objective is a quadratic in the error, not a copy of the reward.**
-This is worth stating because getting it wrong failed in *both* directions
-during development. Copying the reward without its clip makes the quadratic
-turn back upward past the band, so large errors score better and the
-controller gives up entirely. Copying it *with* the clip makes the objective
-flat out there, so IPOPT sees no gradient at all, optimises the only live term
-(reagent cost) and rails the valve shut — driving pH away from setpoint at
+**The MPC's pH has the titration curve's slope.** The oracle is `NewtonMPC`
+(iterative LQR) on the environment's own `step_env`, and its cost is the
+version-2 reward. The env finds pH by bisection, whose derivative is zero, so
+a planner differentiating it sees no slope anywhere; the planner's pH
+(`planner_pH`) has the env's value and the implicit-function slope of the
+charge balance. A flat objective failed the earlier oracles in the same way:
+copying the clipped version-1 reward gave IPOPT no gradient past the band, it
+optimised the only live term (reagent cost) and railed the valve shut, at
 ~3.9 pH mean error. What the objective must share with the reward is its
-**minimiser**, not its shape.
+**minimiser**, and it must have a slope.
 
 **The MPC reads the buffer flow.** The buffer flow is not in the
 observation, but the MPC is the oracle and reads the state, as it already did
-for the equally hidden invariants Wa and Wb. Its model takes q2 as a
-time-varying parameter, forecast from the current value by the env's own OU
-mean decay. Until the oracle audit (2026-10-01) it planned on the nominal
+for the equally hidden invariants Wa and Wb. It plans q2's mean path from the
+current value, the env's own OU update with the noise zeroed. Until the oracle audit (2026-10-01) it planned on the nominal
 flow and left receding-horizon feedback to absorb the drift, and that model
 error made almost all of its hold error. On the protocol seeds, reading q2
 cut the protocol cost from 3.06 to 0.096 and the mean hold error from 0.0146

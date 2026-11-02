@@ -272,42 +272,29 @@ gains score the same (88.8 to 96.9 %, peaks 4.4 to 7.1 K): the misses are
 the firing interruptions at each reversal, which a PI on the crown meets only
 after the fact.
 
-**The MPC (oracle audit, 2026-10-03).** The oracle is a CasADi model of the
-plant: two checker nodes per chamber against the plant's four, the flame solved
-algebraically, and the target schedule, the reversal, its firing dip and the
-fuel already in the pipeline fed over a 120-step (one hour) horizon, doubled
-from 30 minutes. The audit also changed three things in it.
+**The MPC.** Since November 2026 the oracle is `NewtonMPC` (iterative LQR)
+on the plant itself: the environment's own `step_env` with the full state,
+all four checker nodes per chamber, the fuel pipeline and the reversal cycle,
+over a 120-step (one hour) horizon, with the pull planned on its mean path
+(`plan_params`). It plans what the plant does, so it needs no disturbance
+estimate and no rule for which input reaches the plant first.
 
-* It applies the first input the plan can move. The first two intervals burn
-  the pipeline, so the plan's inputs there never reach its dynamics, and the
-  plant used to receive do-mpc's first input, which only the move penalty set:
-  a third of the way from the previous input to the one that mattered.
-* It plans on the known loads: the pull at its AR(1) conditional mean, read
-  from the state, and the pulsed batch charge at that pull. It used the
-  nominal pull and a continuous charge.
-* It corrects its model with a heat-rate disturbance on the crown, estimated
-  from the one-step prediction error (gain 0.02, clamped at 0.6 K a step, never
-  reset within an episode), where it used a setpoint bias that integrated the
-  tracking error. That bias pushed against the plan's anticipation of a trim,
-  wound up to -22 K while the fuel sat at its minimum on protocol seed 1, and
-  was dropped at every trim although it sat at -0.6 to -1.6 K within every
-  slot. The plant runs hotter than the reduced model on every protocol seed,
-  and the estimate settles at +0.14 to +0.19 K a step.
-
-On the protocol seeds 0-2 the cost per step went from 0.300 / 1.783 / 0.326 to
-0.168 / 0.845 / 0.167 (mean 0.803 to 0.394, `scripts/evaluate_baselines.py`),
-with zero trips and zero solver failures; the three changes at the old
-30-minute horizon gave 0.178 / 1.055 / 0.171 (mean 0.468), and the hour
-mostly helps seed 1, where it starts pre-cooling earlier. What is left is
+It replaced a CasADi model of the plant (oracle audit, 2026-10-03): two
+checker nodes per chamber against the plant's four and the flame solved
+algebraically. That reduced model ran 0.14 to 0.19 K a step colder than the
+plant, so it corrected itself with a crown heat-rate estimate from the
+one-step prediction error, and it had to apply the first input its plan could
+move, since the first two intervals burn the pipeline. On the protocol seeds
+0-2 it scored 0.168 / 0.845 / 0.167 per step, against 0.300 / 1.783 / 0.326
+for the controller before it, and over the ten baseline seeds it cost 2638 s
+to record, with IPOPT stopped at its iteration cap 4 times. What is left is
 mostly authority: on seed 1 a -5.5 K trim meets a low pull, and the fuel
 spends much of the window at its minimum with the crown still above target.
-A solve takes 1.7 to 1.9 times as long as at 30 minutes. Over the ten
-baseline seeds the episode cost falls 37-53% on every seed (0.494 to 0.274 per
-step), with none of 16 000 solves failed or capped. The long-run hold is
-0.061 / 0.077 / 0.088 K per seed, against 0.192 / 0.175 / 0.228 K before, so
-`rho_floor` follows it: `rho_floor = rho_floor_tracking = (0.0614 / 1)^2`,
-from `(0.175 / 1)^2` (see the reward table below; `e_floor` stays the 1 K
-thermocouple resolution).
+
+The long-run hold that oracle measured, 0.061 / 0.077 / 0.088 K per seed,
+against 0.192 / 0.175 / 0.228 K before it, set `rho_floor`:
+`rho_floor = rho_floor_tracking = (0.0614 / 1)^2`, from `(0.175 / 1)^2` (see
+the reward table below; `e_floor` stays the 1 K thermocouple resolution).
 
 ---
 

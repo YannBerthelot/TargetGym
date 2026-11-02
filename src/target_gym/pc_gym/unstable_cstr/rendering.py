@@ -19,6 +19,8 @@ HISTORY_KEYS = ("t", "C_a", "target", "T", "T_j", "error")
 _T_COLD, _T_HOT = 320.0, 365.0
 # Gauge spans: C_a from the lowest untripped concentration to the feed, T from
 # the extinguished branch to just past the trip.
+#: How close to the point-of-no-return line T turns the status to WATCH, K.
+_PNR_WATCH_K = 1.0
 _CA_LO, _CA_HI = 0.25, 1.0
 _T_LO, _T_HI = 310.0, 370.0
 
@@ -122,7 +124,7 @@ def _draw_reactor(ax, state, params, pnr):
 def render_unstable_cstr(state, params, step, history):
     # The point-of-no-return line lives with the controllers, outside the
     # version stamp; imported here so the physics never depends on it.
-    from target_gym.pc_gym.unstable_cstr.experts import MPC_PNR_MARGIN_K, pnr_line
+    from target_gym.pc_gym.unstable_cstr.experts import pnr_line
 
     target = float(live_target(state, params))
     C_a = float(state.C_a)
@@ -138,11 +140,11 @@ def render_unstable_cstr(state, params, step, history):
     history["error"].append(err)
 
     pnr = float(pnr_line(C_a))
-    # WATCH from the MPC's soft bound on T, ALARM at the line itself.
+    # WATCH within _PNR_WATCH_K of the line, ALARM at the line itself.
     status = (
         rk.ALARM
         if T >= pnr or err >= 0.04
-        else (rk.WATCH if err >= 0.01 or T >= pnr - MPC_PNR_MARGIN_K else rk.NOMINAL)
+        else (rk.WATCH if err >= 0.01 or T >= pnr - _PNR_WATCH_K else rk.NOMINAL)
     )
 
     ca_span = _CA_HI - _CA_LO

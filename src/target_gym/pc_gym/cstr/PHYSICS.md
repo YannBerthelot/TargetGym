@@ -141,16 +141,17 @@ from the sampled setpoint. That is inherited from PC-gym and is why the shared
 conformance suite skips its PRNG-hygiene checks.
 
 **The oracle plans the rest of the episode.** Determinism and a 150-step
-episode make the plant's optimum computable, so the MPC slot holds it: an NLP
-over every remaining step, solved by IPOPT on `cstr_step_map`, the
-environment's own RK4 step written in CasADi (a test holds it equal to
-`step_env`), and re-solved from the true state every step. Its cost is the
+episode make the plant's optimum computable, so the MPC slot holds it:
+`NewtonMPC` (iterative LQR) over every remaining step of the environment's own
+`step_env`, re-solved from the true state every step. Its cost is the
 concentration's tracking term in floor units, with the steps of the
-protocol's 12-step burn-in weighted 1e-3. On the protocol seeds it scores 9.4e-9 per
-step with zero trips, and holds the target to float32 resolution once
-settled. It replaced, in the oracle audit (2026-10), PC-gym's 5-step do-mpc
-controller, whose move penalty, written against a cost in raw mol/L, was 1e4
-in floor units and alone made its 0.317 per step. `e_floor` is the analyser's
+protocol's 12-step burn-in weighted 1e-3. On the protocol seeds it scores
+about 1.5e-8 per step with zero trips, and holds the target to float32
+resolution once settled. It gives, to the unit, the returns of the IPOPT
+shrinking-horizon NLP it replaced in November 2026, which had in turn
+replaced, in the oracle audit (2026-10), PC-gym's 5-step do-mpc controller,
+whose move penalty, written against a cost in raw mol/L, was 1e4 in floor
+units and alone made its 0.317 per step. `e_floor` is the analyser's
 resolution and `rho_floor` is 0, both documented minima, so neither moved.
 
 ---

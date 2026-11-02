@@ -314,23 +314,16 @@ what is broken and recorded rather than hidden.
       plant given a slow task, so bandwidth is probably not what binds, and its
       PID is nowhere near the ceiling. Measure before changing anything.
 
-* [ ] **Stop the controller models drifting from the plants.** Seven
-      environments give their MPC a separate symbolic re-implementation in
-      do-mpc rather than differentiating ``step_env``. That is the right call
-      where a faithful symbolic model exists -- it buys a properly constrained
-      NLP instead of projected gradient descent, native DAE support for the
-      furnace's algebraic flame, and convergence in 15-20 sparse iterations
-      instead of 50 differentiated rollouts. What it costs is a second copy of
-      the plant, and the glass furnace's has now diverged from its environment
-      three separate times: an error band inherited from a deleted reward, a
-      regenerator coarsened without the observation changing, and batch charging
-      the controller did not know was pulsed (until the oracle audit, 2026-10,
-      fed it the charge; the plant still runs about 0.15 K a step hotter than
-      the controller's model, which the oracle now estimates online). Nothing
-      detects any of that. The fix is a conformance check per environment: step
-      both models from the same state under the same input and assert the
-      one-step predictions agree to a stated tolerance, so a divergence is a
-      test failure rather than a slow loss of baseline quality.
+* [x] **Stop the controller models drifting from the plants.** Done in
+      November 2026 by removing the second copy: the nine CasADi planners,
+      seven on hand-written do-mpc models, were replaced by `NewtonMPC`, a
+      box-constrained iterative LQR on ``step_env`` itself. It keeps what
+      the symbolic models bought, Newton convergence and properly bounded
+      actions, without a model that can diverge from the plant. The glass
+      furnace's had diverged three separate times (an error band inherited
+      from a deleted reward, a regenerator coarsened without the observation
+      changing, batch charging the controller did not know was pulsed), and
+      it ran about 0.15 K a step colder than the plant to the end.
 
 * [x] **A check for code that has drifted from its own documentation.**
       These contracts are what a reader consults *instead of* the code, so a
@@ -488,13 +481,11 @@ what is broken and recorded rather than hidden.
         and a mean, on top of the vmap over action samples it already does.
         Then a decision about whether to average the objective or use a risk
         measure.
-      - [ ] **True-model planners for pH, glass furnace and reactor.** The real
-        cost, and the finding that most changes the plan: on three of the four
-        priority environments the shipped MPC is a hand-written CasADi model,
-        not the simulator, so "it cannot be model error" does not hold today.
-        `SamplingMPC` needs only an objective, and it needs no gradients, which
-        matters because pH's bisection solve and the furnace's implicit gas
-        solve are both gradient risks and the kiln's adjoint already overflows.
+      - [x] **True-model planners for pH, glass furnace and reactor.** Done in
+        November 2026: all three plan with `NewtonMPC` on ``step_env``. pH's
+        bisection was the expected gradient risk; the planner's pH carries
+        the titration curve's implicit-function slope instead. The furnace's
+        implicit gas solve differentiated as it stands.
       - [x] **Decide what the deterministic arm actually is.** Decided and
         measured: it plans on the **mean**. `experts.mpc.plan_params` zeroes the
         parameters named in `EnvSpec.noise_fields` for the planner's copy of

@@ -1,9 +1,11 @@
-"""The pH oracle reads the buffer flow and forecasts it.
+"""The pH oracle reads the buffer flow and plans its mean path.
 
-Its model takes q2 as a time-varying parameter: the env's OU mean decay from
-the current value. Planning on the nominal flow instead made almost all of its
-hold error (0.0146 pH against 0.0022 on the protocol seeds), so the closed-loop
-check below (in the slow job) would catch a return to it.
+It rolls the env's own step with the buffer's noise zeroed, so it plans q2's
+OU mean decay from the current value. Planning on the nominal flow instead
+made almost all of the old oracle's hold error (0.0146 pH against 0.0022 on
+the protocol seeds), so the closed-loop check below (in the slow job) would
+catch a return to it. The env finds pH by bisection, whose derivative is
+zero, so the planner's pH carries the titration curve's slope instead.
 """
 
 import jax
@@ -12,27 +14,6 @@ import pytest
 
 from target_gym import registry
 from target_gym.experts.mpc import plan_params
-from target_gym.pc_gym.ph_neutralization.experts import q2_forecast
-
-pytest.importorskip("casadi")
-
-
-def test_the_forecast_is_the_noise_free_q2_path():
-    """Control interval k is integrated with q2 after k + 1 env updates, so
-    with the noise off the forecast is exactly the path the plant takes."""
-    spec = registry.get("ph_neutralization")
-    env = spec.make_env()
-    params = spec.make_test_params().replace(q2_noise_std=0.0)
-    key = jax.random.PRNGKey(0)
-    _, state = env.reset_env(key, params)
-    state = state.replace(q2=1.6)  # well off nominal
-    forecast = q2_forecast(float(state.q2), params, horizon=20)
-    step = jax.jit(env.step_env)
-    path = []
-    for _ in range(21):
-        _, state, *_ = step(key, state, np.zeros(1), params)
-        path.append(float(state.q2))
-    np.testing.assert_allclose(forecast, path, rtol=1e-5)
 
 
 def test_the_oracle_holds_well_below_the_nominal_model():
@@ -53,4 +34,45 @@ def test_the_oracle_holds_well_below_the_nominal_model():
         if t >= 108:  # the protocol's burn-in on this plant
             errors.append(abs(float(state.target_pH) - float(state.pH)))
     assert np.mean(errors) < 0.006
-    assert oracle.solver_report()["solver_failures"] == 0
+
+
+def _root(Wa, Wb, p):
+    """The charge balance's root in float64 by Brent's method, from the
+    equation in env.py's docstring (not from its bisection):
+    Wa + 10^(pH-14) - 10^-pH + Wb (1 + 2 10^(pH-pK2)) / (1 + 10^(pK1-pH)
+    + 10^(pH-pK2)) = 0."""
+    from scipy.optimize import brentq
+
+    def balance(pH):
+        carbonate = (1 + 2 * 10 ** (pH - p.pK2)) / (
+            1 + 10 ** (p.pK1 - pH) + 10 ** (pH - p.pK2)
+        )
+        return Wa + 10 ** (pH - 14) - 10**-pH + Wb * carbonate
+
+    return brentq(balance, 0.0, 14.0, xtol=1e-14)
+
+
+@pytest.mark.parametrize("q3", [12.0, 15.6, 18.0])
+def test_the_planners_pH_has_the_titration_curves_slope(q3):
+    """The env solves pH by bisection, whose derivative is zero; the
+    planner's pH has the env's value and the curve's slope. Both against the
+    float64 root of the documented charge balance and its central
+    differences. 1e-4 pH is the bisection's resolution; 1e-3 relative on the
+    slope allows for float32 against float64."""
+    import jax.numpy as jnp
+
+    from target_gym.pc_gym.ph_neutralization.env import steady_state_invariants
+    from target_gym.pc_gym.ph_neutralization.experts import planner_pH
+
+    p = registry.get("ph_neutralization").make_test_params()
+    Wa, Wb = (float(v) for v in steady_state_invariants(q3, p.q2_nominal, p))
+    value = float(planner_pH(jnp.float32(Wa), jnp.float32(Wb), p))
+    assert value == pytest.approx(_root(Wa, Wb, p), abs=1e-4)
+
+    grad = jax.grad(planner_pH, argnums=(0, 1))(jnp.float32(Wa), jnp.float32(Wb), p)
+    h = 1e-9
+    want = (
+        (_root(Wa + h, Wb, p) - _root(Wa - h, Wb, p)) / (2 * h),
+        (_root(Wa, Wb + h, p) - _root(Wa, Wb - h, p)) / (2 * h),
+    )
+    np.testing.assert_allclose([float(g) for g in grad], want, rtol=1e-3)

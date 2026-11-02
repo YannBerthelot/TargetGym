@@ -104,7 +104,7 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.11", "3.13"]
-        check: [docs, core, mpc, render]
+        check: [docs, core, render]
     env:
       JAX_PLATFORMS: cpu
       SDL_VIDEODRIVER: dummy

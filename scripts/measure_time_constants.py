@@ -22,11 +22,6 @@ Plants whose output integrates the input (a tank level, a drum level) have no
 steady state to settle to, and are reported as integrating rather than fitted.
 """
 
-import warnings
-
-# Ahead of the imports below: importing target_gym pulls in do-mpc, which warns
-# about optional features this package does not use.
-warnings.filterwarnings("ignore")
 
 import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402

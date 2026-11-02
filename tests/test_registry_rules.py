@@ -410,14 +410,11 @@ def test_every_oracle_lives_in_its_own_package():
     assert not problems, "\n".join(problems)
 
 
-# Plant noise not declared yet. Each of these oracles is a CasADi planner on
-# its own model, which never rolls the simulator and so cannot see the noise.
-# Declaring it moves the task's baseline fingerprint, so each is declared when
-# that task is next re-recorded. This list only shrinks.
-_NOISE_NOT_YET_DECLARED = {
-    "reactor": {"demand_sigma"},
-    "hvac": {"T_out_noise_std"},
-}
+# Plant noise not declared yet. Declaring it moves the task's baseline
+# fingerprint, so each was declared when its task was next re-recorded; the
+# reactor and the building were the last, with their oracles' move to JAX.
+# This list only shrinks.
+_NOISE_NOT_YET_DECLARED: dict[str, set[str]] = {}
 
 
 def test_plant_noise_is_declared():

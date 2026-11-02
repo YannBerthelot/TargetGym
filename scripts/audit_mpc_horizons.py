@@ -27,10 +27,8 @@ that ends in a crash is not a horizon that reaches the target. So a candidate
 only counts here if its episode survives and the error *stays* closed rather
 than grazing the threshold once.
 
-The fix for a myopic MPC need not be more decision variables: the CasADi
-controllers accept ``mpc_dt`` independently of the environment's ``delta_t``,
-so a coarser prediction step buys more covered time at the same optimisation
-cost. The criterion is in seconds, not steps.
+The criterion is in seconds, not steps: a horizon covers ``horizon *
+delta_t`` of the plant's time.
 
     python scripts/audit_mpc_horizons.py                  # every core MPC
     python scripts/audit_mpc_horizons.py --envs cstr hvac  # these tasks, any tier

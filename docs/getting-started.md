@@ -14,10 +14,8 @@ uv add target-gym
     at the top switches between releases and `dev`, which follows `main` and
     installs with `pip install "git+https://github.com/YannBerthelot/TargetGym"`.
 
-Python 3.11 through 3.13. The full-state MPC oracles on nine tasks plan with
-CasADi, which is optional: `pip install 'target-gym[mpc]'`. Videos and the
-aircraft dashboards need `pip install 'target-gym[render]'`, and
-`target-gym[all]` brings both. For development, see [CONTRIBUTING](https://github.com/YannBerthelot/TargetGym/blob/main/CONTRIBUTING.md).
+Python 3.11 through 3.13. Videos and the aircraft dashboards need
+`pip install 'target-gym[render]'`. For development, see [CONTRIBUTING](https://github.com/YannBerthelot/TargetGym/blob/main/CONTRIBUTING.md).
 
 ## An episode, directly
 
