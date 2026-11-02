@@ -12,6 +12,9 @@
 #   tag      vX.Y.Z on the checked commit; tags come only from this workflow
 #   publish  those exact files to PyPI by trusted publishing, from the pypi
 #            environment, whose required reviewer approves the upload
+#   github-release
+#            the GitHub Release for the tag: its CHANGELOG entry as notes and
+#            those same files attached, marked Latest when released from main
 #   docs     the tag's documentation deployed as the site's X.Y, and made the
 #            default ("latest") when released from main (docs-deploy.yml)
 #   verify   target-gym==X.Y.Z installed back from PyPI and its documented
@@ -148,6 +151,33 @@ jobs:
       with:
         version: ${{ env.UV_VERSION }}
     - run: uv publish --trusted-publishing always
+
+  # The repository's Releases page shows what PyPI has: the tag's release, with
+  # its CHANGELOG entry as notes and the files PyPI received. Only a release
+  # from main is marked Latest, as only it becomes the docs' "latest".
+  github-release:
+    needs: publish
+    if: always() && needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: v${{ inputs.version }}
+    - uses: actions/download-artifact@v4
+      with:
+        name: dist
+        path: dist
+    - env:
+        GH_TOKEN: ${{ github.token }}
+        VERSION: ${{ inputs.version }}
+        LATEST: ${{ github.ref == 'refs/heads/main' }}
+      run: |
+        python3 scripts/release_check.py --notes "$VERSION" > "$RUNNER_TEMP/notes.md"
+        gh release create "v$VERSION" dist/* --verify-tag --title "TargetGym $VERSION" \
+          --notes-file "$RUNNER_TEMP/notes.md" --latest="$LATEST"
 
   # The tag pushed with the default token starts no workflow, so the site's X.Y
   # is deployed from here, once the release is on PyPI. Only a release from

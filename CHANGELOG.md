@@ -9,7 +9,12 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
-## [0.7.0]
+### Added
+
+- Each release now has a GitHub Release, with its changelog entry as notes and
+  the wheel and sdist PyPI received.
+
+## [0.7.0] - 2026-11-02
 
 Grouped by what it changes for a user rather than by commit.
 
@@ -820,8 +825,6 @@ A minor release, because these changes break code written for 0.6.1:
 
 - No published RL baseline results yet.
 
-[Unreleased]: https://github.com/YannBerthelot/TargetGym/compare/0.5.0...HEAD
-
 ## [0.6.2] - 2026-11-01
 
 A patch to 0.6.1, released from the `release/0.6` branch. It changes nothing
@@ -1195,4 +1198,4 @@ rather than by commit.
   `jax.nn.sigmoid`, the same function evaluated stably, all seven tuners pass.
 - No published RL baseline results yet.
 
-[Unreleased]: https://github.com/YannBerthelot/TargetGym/compare/0.5.0...HEAD
+[Unreleased]: https://github.com/YannBerthelot/TargetGym/compare/v0.7.0...HEAD

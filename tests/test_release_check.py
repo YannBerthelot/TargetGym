@@ -14,6 +14,11 @@ a release ``X.Y.Z`` goes ahead only when
 ``release_check.problems`` returns what blocks the release, empty when
 nothing does. Each case below breaks one rule, so it must report exactly one
 problem.
+
+Once on PyPI, the release gets a GitHub Release whose notes are its CHANGELOG
+entry (the owner chose this on 2026-11-02). ``release_check.notes`` returns
+that entry: the text under its heading, without the heading, up to the next
+entry or the link definitions that close a Keep a Changelog file.
 """
 
 import importlib.util
@@ -115,3 +120,53 @@ def test_a_release_branch_releases_only_its_own_minor():
 @pytest.mark.parametrize("branch", ["feature/gate", "release/0.6.x", "releases/0.7"])
 def test_any_other_branch_is_refused(branch):
     assert len(_problems(branch=branch)) == 1
+
+
+NOTES_CHANGELOG = """# Changelog
+
+## [Unreleased]
+
+## [0.7.0] - 2026-11-02
+
+Grouped by what it changes for a user.
+
+### Changed
+
+- Something.
+
+## [0.6.2] - 2026-11-01
+
+### Fixed
+
+- six is declared.
+
+[Unreleased]: https://github.com/YannBerthelot/TargetGym/compare/v0.7.0...HEAD
+"""
+
+
+def test_release_notes_are_the_entry_under_its_heading():
+    assert release_check.notes("0.7.0", NOTES_CHANGELOG) == (
+        "Grouped by what it changes for a user.\n\n### Changed\n\n- Something.\n"
+    )
+
+
+def test_the_last_entry_ends_before_the_link_definitions():
+    assert release_check.notes("0.6.2", NOTES_CHANGELOG) == (
+        "### Fixed\n\n- six is declared.\n"
+    )
+
+
+@pytest.mark.parametrize("heading", ["## 0.7.0", "## [0.7.0]"])
+def test_release_notes_read_every_heading_form(heading):
+    changelog = f"# Changelog\n\n{heading}\n\n- Something.\n"
+    assert release_check.notes("0.7.0", changelog) == "- Something.\n"
+
+
+@pytest.mark.parametrize(
+    "version, changelog",
+    [("0.8.0", NOTES_CHANGELOG), ("0.7.0", "# Changelog\n\n## [0.7.00]\n\n- No.\n")],
+    ids=["absent", "longer-version"],
+)
+def test_a_version_without_an_entry_has_no_notes(version, changelog):
+    with pytest.raises(ValueError):
+        release_check.notes(version, changelog)
