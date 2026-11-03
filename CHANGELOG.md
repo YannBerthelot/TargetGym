@@ -39,7 +39,7 @@ The next release is 0.8.0, because these changes break code written for
     `horizon` and `max_iter` only.
 - **Recorded results changed.** The eight oracles on `NewtonMPC` plan on the
   plant itself, so their returns moved; over the ten seeds each matched or
-  beat its 0.7.0 record (measured locally). The compressor's keeps its NLP
+  beat its 0.7.0 record. The compressor's keeps its NLP
   and matches its 0.7.0 records. The reactor and the HVAC now
   declare their noise (`demand_sigma`, `T_out_noise_std`), which their
   planners zero.
@@ -54,16 +54,16 @@ The next release is 0.8.0, because these changes break code written for
   filter line search with second-order corrections, the inertia correction,
   IPOPT's scaling, the monotone barrier for a cold start and the adaptive one
   for a warm start, and a Riccati solve of each Newton step. Over the ten
-  recorded seeds it reproduces the 0.7.0 records (measured locally, return
-  per episode):
+  recorded seeds it reproduces the 0.7.0 records (return per episode, both
+  rows from the records):
 
   | seed | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
   |---|---|---|---|---|---|---|---|---|---|---|
   | CasADi, 0.7.0 | -358789.6 | -11401.9 | -2561.1 | -113283.7 | -428861.7 | -53658.0 | -50346.9 | -118980.9 | -50751.5 | -38266.4 |
-  | JAX | -358789.6 | -11401.5 | -2535.2 | -113285.0 | -428863.9 | -53657.5 | -50356.8 | -118981.2 | -50752.3 | -38266.6 |
+  | JAX | -358813.0 | -11405.2 | -2556.0 | -113286.2 | -428863.3 | -53657.2 | -50356.8 | -118981.8 | -50749.8 | -38266.6 |
 
-  with no trip, no solve handed to the PID and 5.8 iterations a solve, as
-  against IPOPT's 6.8.
+  with no trip, one solve in 12,000 handed to the PID and 5.8 iterations a
+  solve, as against IPOPT's 6.8.
 
 ### Added
 

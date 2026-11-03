@@ -790,9 +790,9 @@ line search fails, the solve first falls back to the monotone barrier, then
 up to three times re-simulates the states from the planned commands, which
 meets the dynamics exactly, and only then fails. The port reproduces the
 CasADi build: over the ten recorded seeds its returns are within 0.03 % of
-the CasADi records on nine and 1 % better on the tenth, with no fallback and
-6 iterations a solve against IPOPT's 6.8 (measured; the table is in the
-0.8.0 change log). `test_experts_ipm.py` holds the method to a closed-form
+the CasADi records on nine and 0.2 % better on the tenth, with one solve in
+12,000 handed to the pair and 5.8 iterations a solve against IPOPT's 6.8
+(measured; the table is in the 0.8.0 change log). `test_experts_ipm.py` holds the method to a closed-form
 projection and to Hock and Schittkowski's problem 71, with both barriers,
 and the Riccati solve to a dense one.
 
