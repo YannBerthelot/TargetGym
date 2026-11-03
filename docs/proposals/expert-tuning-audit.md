@@ -18,7 +18,9 @@ Verdicts per parameter:
 - **UNCLEAR**: set by hand with no stated source.
 
 The MPC oracles are out of scope: they are the best known controller, not
-the expert, so tuning them for performance is their purpose.
+the expert, so tuning them for performance is their purpose. (Superseded on
+2026-11-03: the oracles now follow a rule of their own, in
+[oracle-audit.md](oracle-audit.md), and land before the expert work.)
 
 ## Summary
 
