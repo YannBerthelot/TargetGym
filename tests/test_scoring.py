@@ -247,3 +247,32 @@ def test_score_policy_runs_the_expert_on_the_same_seeds():
     assert math.isnan(m["score"])
     assert m["transient_ratio"] == pytest.approx(1.0)
     assert m["settling_ratio"] == pytest.approx(1.0)
+
+
+def test_score_policy_takes_the_policy_itself_and_resets_it_each_seed():
+    """The scored expert passed as one object is the expert again on every
+    seed, which holds only if its memory is cleared between episodes: the
+    cstr PID's integral is far from zero at an episode's end."""
+    m = scoring.score_policy("cstr", REGISTRY["cstr"].make_pid(), seeds=2)
+    assert m["ratio"] == pytest.approx(1.0)
+
+
+def test_score_policy_takes_the_expert_itself_with_fresh_memory_each_seed():
+    """One expert object across seeds scores as a new one per seed does."""
+    import target_gym as tg
+
+    reused = scoring.score_policy("cstr", tg.make_expert("cstr"), seeds=2)
+    with pytest.warns(DeprecationWarning):
+        fresh = scoring.score_policy("cstr", lambda: tg.make_expert("cstr"), seeds=2)
+    assert reused["ratio"] == fresh["ratio"]
+    assert reused["win_rate"] == fresh["win_rate"]
+
+
+def test_score_policy_still_takes_a_factory_with_a_warning():
+    def policy(obs):
+        return np.zeros(1)
+
+    with pytest.warns(DeprecationWarning, match="the policy itself"):
+        old = scoring.score_policy("first_order", lambda: policy, seeds=1)
+    new = scoring.score_policy("first_order", policy, seeds=1)
+    assert new["ratio"] == old["ratio"]

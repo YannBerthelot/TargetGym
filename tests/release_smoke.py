@@ -56,22 +56,22 @@ def _expert_episode(name):
     from target_gym.benchmark import episode_keys
 
     env, params = tg.make(name)
-    ctrl = tg.make_expert(name)
+    expert = tg.make_expert(name)
     space = env.action_space(params)
     reset_keys, step_keys = episode_keys(
         jax.random.PRNGKey(0), 1, int(params.max_steps_in_episode)
     )
 
     def step(carry, step_key):
-        obs, env_state, pid_state = carry
-        action, pid_state = ctrl.act(pid_state, obs)
+        obs, env_state, memory = carry
+        action, memory = expert.step(memory, obs)
         obs, env_state, reward, _, _ = env.step_env(step_key, env_state, action, params)
-        return (obs, env_state, pid_state), (action, reward)
+        return (obs, env_state, memory), (action, reward)
 
     @jax.jit
     def episode():
         obs, env_state = env.reset_env(reset_keys[0], params)
-        return jax.lax.scan(step, (obs, env_state, ctrl.init_state), step_keys[:, 0])
+        return jax.lax.scan(step, (obs, env_state, expert.reset()), step_keys[:, 0])
 
     _, (actions, rewards) = episode()
     actions, rewards = np.asarray(actions), np.asarray(rewards)
@@ -131,9 +131,8 @@ def check_render():
     with tempfile.TemporaryDirectory() as folder:
         for name in ("plane", "cstr"):
             env, params = tg.make(name, max_steps_in_episode=10)
-            pid = tg.make_expert(name).host()
             path = env.save_video(
-                lambda obs: pid(np.asarray(obs)),
+                tg.make_expert(name),
                 seed=0,
                 folder=folder,
                 episode_index=0,

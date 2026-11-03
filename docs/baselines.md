@@ -25,24 +25,22 @@ that shows up in a return.
 
 ## Calling a baseline like an agent
 
-The expert is a callable on the observation, so the loop that evaluates a
-learned policy runs it unchanged:
+The expert steps like the environment, so it runs in the same loop:
 
 ```python
 import jax
-import numpy as np
 import target_gym as tg
 
 env, params = tg.make("cstr")
-policy = tg.make_expert("cstr").host()      # or your agent
-policy.reset()
+expert = tg.make_expert("cstr")
+memory = expert.reset()
 
 key, reset_key = jax.random.split(jax.random.PRNGKey(0))
 obs, state = env.reset_env(reset_key, params)
 total = 0.0
 for _ in range(int(params.max_steps_in_episode)):
     key, step_key = jax.random.split(key)   # a fresh key every step
-    action = policy(np.asarray(obs))
+    action, memory = expert.step(memory, obs)
     obs, state, reward, terminated, _ = env.step_env(step_key, state, action, params)
     total += float(reward)
     if bool(terminated):

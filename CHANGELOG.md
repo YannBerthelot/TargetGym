@@ -46,6 +46,19 @@ The next release is 0.8.0, because these changes break code written for
 - **`unstable_cstr` is version 3.** Its floor `rho_floor_tracking` is
   re-derived from the new oracle's hold, which is tighter than the old
   floor.
+- **The expert has one form, used like the environment.**
+  `memory = expert.reset()` at each episode start, then
+  `action, memory = expert.step(memory, obs)`, in a Python loop or under
+  `jit`, `vmap` and `lax.scan`; for a batch, `expert.reset(n)` and
+  `jax.vmap(expert.step)`. `make_expert(name).host()`, `.batched()`, `.act()`
+  and `.init_state` still work and warn, and go in a later minor release. A
+  loop that called `pid = tg.make_expert(name).host()` and `pid(obs)` now
+  carries the memory as it carries `state`. `make_expert` returns an
+  `Expert` rather than the `Controller` it wraps.
+- **`score_policy` takes the policy itself:** `score_policy(name, policy)`,
+  with `policy(obs) -> action`. A policy with a `reset()` method is reset
+  before each episode. The 0.7.0 factory, `score_policy(name, make_policy)`,
+  still works and warns.
 
 ### Changed
 
@@ -67,6 +80,8 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Added
 
+- `score_policy`, `run_suite` and `env.save_video` take the expert as it is,
+  as in `tg.score_policy("cstr", tg.make_expert("cstr"))`.
 - Python 3.14. gymnax's floor is now 1.0.1, its first release that installs
   on 3.14, where it needs JAX 0.8.1 or later.
 

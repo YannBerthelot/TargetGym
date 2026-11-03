@@ -46,6 +46,7 @@ import numpy as np  # noqa: E402
 from jax import lax  # noqa: E402
 
 import target_gym as tg  # noqa: E402
+from target_gym import registry  # noqa: E402
 from target_gym.eval import scored_burn_in  # noqa: E402
 from target_gym.formation.env import slot_errors  # noqa: E402
 from target_gym.patrol.env import slot_error, wrap_angle  # noqa: E402
@@ -64,7 +65,7 @@ def rollout(name, params, seeds):
     folded from the seed's, as the values were tuned."""
     if name not in _ROLLOUTS:
         env, p = tg.make(name)
-        ctrl = tg.make_expert(name)
+        ctrl = registry.get(name).make_pid_controller()  # gains as an argument
 
         def measure(state):
             if name != "formation":

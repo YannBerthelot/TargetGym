@@ -21,7 +21,7 @@ import target_gym as tg
 env, params = tg.make("glass_furnace")
 
 env.save_video(
-    tg.make_expert("glass_furnace").host(),   # any callable taking the observation
+    tg.make_expert("glass_furnace"),   # or any policy(obs) -> action
     seed=0,
     params=params,
     folder="videos/glass_furnace",

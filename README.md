@@ -68,19 +68,19 @@ Also available as a [Colab notebook](https://colab.research.google.com/github/Ya
 
 ```python
 import jax
-import numpy as np
 import target_gym as tg
 
 env, params = tg.make("plane")          # the scored configuration
-pid = tg.make_expert("plane").host()    # the shipped expert; keeps its own memory
+expert = tg.make_expert("plane")        # the shipped expert
 
 key, reset_key = jax.random.split(jax.random.PRNGKey(0))
 obs, state = env.reset(reset_key, params)
+memory = expert.reset()                 # carried like the env's state
 
 total = 0.0
 for _ in range(params.max_steps_in_episode):
     key, step_key = jax.random.split(key)   # a fresh key every step
-    action = pid(np.asarray(obs))
+    action, memory = expert.step(memory, obs)
     obs, state, reward, terminated, truncated, _ = env.step(step_key, state, action, params)
     total += float(reward)
     if terminated or truncated:
@@ -95,16 +95,10 @@ the [gymnax](https://github.com/RobertTLange/gymnax) API. Keyword arguments
 change single fields, as in `tg.make("plane", max_steps_in_episode=500)`, and
 `tg.list_envs()` gives the 24 names.
 
-| To get | Call |
-|---|---|
-| The expert for a Python loop (it keeps its own memory) | `tg.make_expert(name).host()` |
-| The expert under `jit` or `vmap` (you carry its memory) | `tg.make_expert(name).batched()` |
-| The full-state MPC oracle | `tg.make_oracle(name)` |
-| A Gymnasium environment | `tg.make_gymnasium(name)` |
-| A score against the expert | `tg.score_policy(name, make_policy)` |
-
-[Using the PIDs](docs/using-the-pids.md) shows how to run, evaluate against and
-train on the experts.
+The expert's memory is its PID's integral and last error. You carry it as
+you carry `state`, so the same `expert.step` also runs under `jit`, `vmap`
+and `lax.scan`. [Using the PIDs](docs/using-the-pids.md) shows batches,
+evaluation and training on the experts.
 
 <details>
 <summary>Non-JAX libraries, e.g. stable-baselines3</summary>
@@ -138,12 +132,8 @@ scored configuration:
 ```python
 import target_gym as tg
 
-
-def make_policy():                        # a fresh policy for each episode
-    return tg.make_expert("four_tank").host()   # stand-in: put yours here
-
-
-m = tg.score_policy("four_tank", make_policy, seeds=3)   # 10 for a result
+policy = tg.make_expert("four_tank")     # stand-in: any policy(obs) -> action
+m = tg.score_policy("four_tank", policy, seeds=3)   # 10 for a result
 print(m["ratio"], m["win_rate"], m["score"], m["headroom"])
 ```
 

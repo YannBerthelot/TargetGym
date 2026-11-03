@@ -4,8 +4,8 @@ Every task's controllers live in its own package's ``experts`` module and are
 reached by registry name, which is stable where the per-task factories are
 not:
 
-    expert = target_gym.make_expert("cstr")  # pure form: you carry its memory
-    pid = expert.host()                      # host form: keeps its own memory
+    expert = target_gym.make_expert("cstr")  # memory = expert.reset()
+                                             # action, memory = expert.step(memory, obs)
     oracle = target_gym.make_oracle("cstr")  # full-state MPC, scored params
 """
 
