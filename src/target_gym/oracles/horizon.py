@@ -61,8 +61,12 @@ def cooper_horizons(fit: dict, T: float) -> tuple[int, int, int]:
 
 
 def task_horizon(fits: dict, dt: float):
-    """H2 and H5 over a task's fits, ``{key: fit}`` with a key per pair and
-    seed: ``(T_c in steps, {key: (N, M, P)}, the key with the largest P)``."""
+    """H2 and H5 over a task's valid fits, ``{key: fit}`` with a key per pair
+    and seed: ``(T_c in steps, {key: (N, M, P)}, the key with the largest P)``.
+    With no valid fit (H20) T_c is one step and no key sets P: the planner
+    plans to the episode end."""
+    if not fits:
+        return 1, {}, None
     tc = sample_steps([sample_time(f) for f in fits.values()], dt)
     rows = {key: cooper_horizons(f, tc * dt) for key, f in fits.items()}
     return tc, rows, max(rows, key=lambda key: rows[key][2])

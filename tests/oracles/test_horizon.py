@@ -81,3 +81,8 @@ def test_no_horizon_past_the_episode_and_a_partial_last_sample_counts():
         horizon_at(62, n_ep=150, k=150)
     assert episode_samples(150, 4) == 38  # 37 whole samples and 2 steps
     assert episode_samples(150, 3) == 50
+
+
+def test_a_task_with_no_valid_pair_samples_every_step_and_names_no_pair():
+    # H20: no fit for T_c, so one task step; the caller plans to the end.
+    assert task_horizon({}, dt=0.5) == (1, {}, None)

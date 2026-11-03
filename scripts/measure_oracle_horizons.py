@@ -1,49 +1,47 @@
 """Measure each oracle's planning horizon by Cooper's DMC recipe.
 
 Run with ``uv run python scripts/measure_oracle_horizons.py [--envs ...]``.
-It runs docs/proposals/oracle-horizon-protocol.md on the 14 process and
-industrial tasks and writes one file per task,
-``src/target_gym/data/oracle_horizons/<task>.json`` (H13). The 10 aircraft
-tasks are skipped: their tests fly through ArduPlane 4.0.9's default loops
-(decision D6), which PR D builds.
+It runs docs/proposals/oracle-horizon-protocol.md, with Amendment 1, on the
+14 process and industrial tasks and writes one file per task,
+``src/target_gym/data/oracle_horizons/<task>.json`` (H13, H19). The 10
+aircraft tasks are skipped: their tests fly through ArduPlane 4.0.9's default
+loops (decision D6), which PR D builds.
 
-The test (``target_gym.identification.bump_test``), per training seed 100-109:
+Per training seed 100-109 (``target_gym.identification``):
 
-1. the shipped expert runs one episode from the seed's reset, so the plant
-   sits at the operating point it holds (ours: one episode is longer than
-   every task's fixed settle);
-2. every MV goes to manual at the mean of the expert's last 20 commands, as
-   the expert protocols' open-loop tests do (the glass furnace: its last
-   reversal cycle, as its expert test);
-3. each MV is stepped alone by its C2 step, away from the nearer limit, and
-   every CV of H6 is read against the unstepped run for one more episode
-   (H8, H9), up to the first trip of either run.
+1. the shipped expert runs one episode from the seed's reset; the moves then
+   hold the mean of its last 20 commands (the glass furnace: its last
+   reversal cycle), the steady operation of amended H8;
+2. each MV is stepped alone by its C2 step, away from the nearer limit, and
+   every CV of H6 is read against the unstepped run for one episode, up to
+   the first trip of either run (H8, H9);
+3. both structures are fitted and judged (H14), failed tests are retested
+   (H15, H18), and each pair-seed ends valid, insignificant or invalid under
+   its CV's class (H16, H17, H19).
 
-Each response is classed (H10) and fitted (H11); ``target_gym.oracles.horizon``
-turns the fits into T_c, N, M and P (H2 to H5). unstable_cstr is measured on
-its stabilised plant (section 4.4): the cascade's outer loop in manual, the
-inner PD closed, its setpoint stepped 0.5 K down as in the expert test.
+Only valid fits enter T_c and P (``target_gym.oracles.horizon``); a task with
+none plans to the episode end, unidentified (H20). unstable_cstr is measured
+on its stabilised plant (section 4.4): the cascade's outer loop in manual,
+the inner PD closed, its setpoint stepped 0.5 K down as in the expert test.
 """
 
 from __future__ import annotations
 
 import argparse
+import math
 
 import jax.numpy as jnp
 import numpy as np
 
 from target_gym import records
-from target_gym.identification import TRAIN_SEEDS, bump_test, identify
+from target_gym.identification import TRAIN_SEEDS, Plant, evidence, identify
 from target_gym.oracles.horizon import episode_samples, sample_time, task_horizon
 from target_gym.registry import REGISTRY
 
 
-def _s(field):
-    return lambda obs, state, p: getattr(state, field)
-
-
-def _o(index):
-    return lambda obs, state, p: obs[index]
+def _s(field, lo=None, hi=None):
+    """A CV read from the state, with its trip limits as params fields."""
+    return (lambda obs, state, p: getattr(state, field)), lo, hi
 
 
 def _kiln_lime(obs, state, p):
@@ -52,51 +50,96 @@ def _kiln_lime(obs, state, p):
     return discharge_lime(state)
 
 
+def _omega(factor):
+    from target_gym.energy.wind_turbine.env import omega_rated
+
+    return lambda p: getattr(p, factor) * omega_rated(p)
+
+
+_H = {f"h{i}": _s(f"h{i}", "h_min", "h_max") for i in range(1, 5)}
+_GLASS = {c: _s(c, "T_glass_min", "T_glass_max") for c in ("T_melt", "T_work")}
+
 # Per task: the MVs with their C2 steps in raw units (existing steps stay, a
-# new one is 0.1, 5 % of [-1, 1]), and the CVs of H6: the tracked outputs,
-# then every variable check_is_terminal trips on.
+# new one is 0.1, 5 % of [-1, 1]); the CVs of H6 (tracked outputs, then every
+# variable check_is_terminal trips on) with their trip limits; and, on the
+# multi-input tasks, the MV the shipped expert holds each CV with (H18).
 TASKS = {
-    "first_order": ({"u": 0.1}, {"x": _s("x")}),
-    "cstr": ({"coolant": 0.1}, {"C_a": _s("C_a")}),
-    "four_tank": (
-        {"pump1": 0.1, "pump2": 0.1},
-        {f"h{i}": _s(f"h{i}") for i in range(1, 5)},
-    ),
+    "first_order": ({"u": 0.1}, {"x": _s("x", "x_min", "x_max")}, {}),
+    "cstr": ({"coolant": 0.1}, {"C_a": _s("C_a")}, {}),
+    "four_tank": ({"pump1": 0.1, "pump2": 0.1}, _H, {"h1": "pump1", "h2": "pump2"}),
     # +0.1 mL/s on the 10 to 22 mL/s base flow.
-    "ph_neutralization": ({"base": 2 * 0.1 / 12.0}, {"pH": _s("pH")}),
+    "ph_neutralization": ({"base": 2 * 0.1 / 12.0}, {"pH": _s("pH")}, {}),
     "distillation": (
         {"L": 0.1, "V": 0.1},
-        {"yD": lambda o, s, p: s.x[-1], "xB": lambda o, s, p: s.x[0]},
+        {
+            "yD": ((lambda o, s, p: s.x[-1]), "yD_floor", None),
+            "xB": ((lambda o, s, p: s.x[0]), None, "xB_ceiling"),
+        },
+        {"yD": "L", "xB": "V"},
     ),
     "glass_furnace": (
         {"fuel": 0.05},
-        {"T_crown": _s("T_crown"), "T_melt": _s("T_melt"), "T_work": _s("T_work")},
+        {"T_crown": _s("T_crown", "T_crown_min", "T_crown_max"), **_GLASS},
+        {},
     ),
     "reactor": (
         {"rod": 0.1},
-        {"n": _s("n"), "T_fuel": _s("T_fuel"), "T_coolant": _s("T_coolant")},
+        {
+            "n": _s("n", "n_min", "n_max"),
+            "T_fuel": _s("T_fuel", "T_fuel_min", "T_fuel_max"),
+            "T_coolant": _s("T_coolant", "T_coolant_min", "T_coolant_max"),
+        },
+        {},
     ),
-    "hvac": ({"heating": 0.1}, {"T_air": _s("T_air")}),
+    "hvac": ({"heating": 0.1}, {"T_air": _s("T_air", "T_air_min", "T_air_max")}, {}),
     "cement_kiln": (
         {"fuel": 0.1, "speed": 0.1},
-        {"lime": _kiln_lime, "T_bz": lambda o, s, p: jnp.max(s.T_solid)},
+        {
+            "lime": (_kiln_lime, None, "lime_max"),
+            "T_bz": ((lambda o, s, p: jnp.max(s.T_solid)), "T_bz_min", "T_bz_max"),
+        },
+        {"lime": "fuel", "T_bz": "fuel"},
     ),
     # Firing +0.02 raw; feedwater +2.0 kg/s on 0 to 200 kg/s.
     "boiler_drum": (
         {"fuel": 0.02, "feedwater": 2 * 2.0 / 200.0},
-        {"level": _s("level"), "pressure": _s("pressure")},
+        {
+            "level": ((lambda o, s, p: s.level), lambda p: -p.level_trip, "level_trip"),
+            "pressure": _s("pressure", "pressure_min", "pressure_max"),
+        },
+        {"level": "feedwater", "pressure": "fuel"},
     ),
-    "wind_turbine": ({"pitch": 0.1, "torque": 0.1}, {"P": _o(3), "omega": _s("omega")}),
+    "wind_turbine": (
+        {"pitch": 0.1, "torque": 0.1},
+        {
+            "P": ((lambda o, s, p: o[3]), None, None),
+            "omega": _s(
+                "omega", _omega("underspeed_factor"), _omega("overspeed_factor")
+            ),
+        },
+        {"P": "torque", "omega": "pitch"},
+    ),
     "battery": (
         {"power": 0.1},
-        {"P": _o(3), "soc": _s("soc"), "V_cell": _o(1), "T_cell": _s("T_cell")},
+        {
+            "P": ((lambda o, s, p: o[3]), None, None),
+            "soc": _s("soc", "soc_min", "soc_max"),
+            "V_cell": ((lambda o, s, p: o[1]), "V_cell_min", "V_cell_max"),
+            "T_cell": _s("T_cell", None, "T_max"),
+        },
+        {},
     ),
     # Speed +1.75 % of rated on 70 to 105 %; recycle +0.05 on 0 to 1.
     "compressor_surge": (
         {"speed": 2 * 0.0175 / 0.35, "recycle": 2 * 0.05 / 1.0},
-        {"dp": _s("dp"), "phi_min": _s("phi_min")},
+        {"dp": _s("dp"), "phi_min": _s("phi_min", lambda p: 2 * p.W, None)},
+        {"dp": "speed", "phi_min": "recycle"},
     ),
-    "unstable_cstr": ({"T_sp": -0.5}, {"C_a": _s("C_a"), "T": _s("T")}),
+    "unstable_cstr": (
+        {"T_sp": -0.5},
+        {"C_a": _s("C_a", lambda p: 0.0, None), "T": _s("T", "T_valid_min", "T_trip")},
+        {},
+    ),
 }
 
 
@@ -105,66 +148,119 @@ def _stabilised(p):
     held at the mean of the cascade's last 20 outputs and stepped as given."""
     from target_gym.pc_gym.unstable_cstr import experts as X
 
-    g = X.load_gains()
+    g, dt = X.load_gains(), float(p.delta_t)
 
-    def pd(state, T_prev, T_sp):
-        T_c = (
-            g["Tc_bias"]
-            + g["Kp_T"] * (T_sp[0] - state.T)
-            - g["Kd_T"] * (state.T - T_prev) / p.delta_t
-        )
-        T_c = jnp.clip(T_c, p.T_c_min, p.T_c_max)
-        return jnp.reshape(X.raw_from_coolant(T_c, p), (1,)), state.T
+    def actuate(u, y, T_prev):
+        T = y[1]  # the CV "T"
+        T_prev = T if T_prev is None else T_prev
+        T_c = g["Tc_bias"] + g["Kp_T"] * (u[0] - T) - g["Kd_T"] * (T - T_prev) / dt
+        return [float(X.raw_from_coolant(np.clip(T_c, p.T_c_min, p.T_c_max), p))], T
 
     return {
-        "policy": pd,
-        "memory": lambda state: state.T,
-        "start": lambda acts, mems: np.asarray(mems.T_sp_prev)[:, -20:, None].mean(1),
+        "actuate": actuate,
+        "start": lambda acts, mems: np.asarray(mems.T_sp_prev)[:, -20:].mean(1),
+        "mv_range": (-math.inf, math.inf),
         "direction": lambda u, size: size,
     }
 
 
+def _clean(x, dt):
+    """JSON-safe, to 6 significant digits (every decision is taken before):
+    non-finite numbers as strings; a delay or lag at its lower bound written
+    "< dt" (10.3)."""
+    if isinstance(x, dict):
+        low = {"theta", "tau", "tau2"}
+        return {
+            k: (
+                "< dt"
+                if k in low and isinstance(v, float) and v <= 1e-6 * dt
+                else _clean(v, dt)
+            )
+            for k, v in x.items()
+        }
+    if isinstance(x, (list, tuple)):
+        return [_clean(v, dt) for v in x]
+    if isinstance(x, (float, np.floating)):
+        return float(f"{x:.6g}") if math.isfinite(x) else str(float(x))
+    return x
+
+
+def _test_record(run, a, mvs, cvs):
+    loops = [
+        {"cv": cvs[lp.cv], "mv": mvs[lp.mv], "kc": lp.kc, "n_pre": lp.n_pre}
+        for lp in run.loops
+    ]
+    trips = {
+        k: {"index": i, "cv": cvs[c] if c is not None else None}
+        for k, (i, c) in run.trips.items()
+    }
+    head = {"step": run.step, "window": run.window, "loops": loops, "trips": trips}
+    keep = ("samples", "sigma", "snr", "V1")
+    return {**head, **{k: a[k] for k in keep}, **a["fits"]}
+
+
 def measure(name: str) -> dict:
     spec = REGISTRY[name]
-    n_ep = int(spec.make_test_params().max_steps_in_episode)
-    p = spec.make_test_params(max_steps_in_episode=2 * n_ep + 1)
-    steps, cvs = TASKS[name]
-    mvs, dt = list(steps), float(p.delta_t)
+    p = spec.make_test_params()
+    steps, cv_defs, expert = TASKS[name]
+    mvs, cvs = list(steps), list(cv_defs)
+
+    def limit(b):
+        return None if b is None else float(b(p) if callable(b) else getattr(p, b))
+
     extra = _stabilised(p) if name == "unstable_cstr" else {}
     if name == "glass_furnace":
-        extra["window"] = int(round(float(p.reversal_period) / dt))
-    responses = bump_test(
-        spec, p, cvs, list(steps.values()), n_settle=n_ep, n_window=n_ep, **extra
+        extra["window"] = int(round(float(p.reversal_period) / float(p.delta_t)))
+    plant = Plant(
+        spec,
+        p,
+        [f for f, _, _ in cv_defs.values()],
+        [(limit(lo), limit(hi)) for _, lo, hi in cv_defs.values()],
+        expert_mv={cvs.index(c): mvs.index(m) for c, m in expert.items()},
+        **extra,
     )
-    fits = {
-        (mvs[j], cv, seed): identify(r)
-        for (j, cv), rs in responses.items()
-        for seed, r in zip(TRAIN_SEEDS, rs)
-    }
-    fitted = {key: f for key, f in fits.items() if "model" in f}
-    tc, rows, top = task_horizon(fitted, dt)
-    fastest = min(fitted, key=lambda key: sample_time(fitted[key]))
-    n_samples = episode_samples(n_ep, tc)
-    N, M, P = rows[top]
-    classes = {}
-    for (mv, cv, seed), f in fits.items():
-        classes.setdefault(cv, []).append(f["class"])
+    pairs, classes = identify(plant, list(steps.values()))
+    dt, n_ep = plant.dt, plant.n_ep
+    key = {(j, i, s): (mvs[j], cvs[i], TRAIN_SEEDS[s]) for j, i, s in pairs}
+    valid = {key[k]: r["fit"] for k, r in pairs.items() if r["label"] == "valid"}
+    tc, rows, top = task_horizon(valid, dt)
+    N, M, P = rows[top] if top else (None, None, episode_samples(n_ep, 1))
+    labels = [r["label"] for r in pairs.values()]
     at = ("mv", "cv", "seed")
-    return {
-        "protocol": "docs/proposals/oracle-horizon-protocol.md",
+    zero = sorted(
+        f"{m} -> {c}"
+        for m in mvs
+        for c in cvs
+        if all(
+            r["label"] == "insignificant"
+            for k, r in pairs.items()
+            if key[k][:2] == (m, c)
+        )
+    )
+    row = {
+        "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendment 1",
         "dt": dt,
         "episode_steps": n_ep,
-        "episode_samples": n_samples,
+        "episode_samples": episode_samples(n_ep, tc),
+        "unidentified": top is None,
         "T_c_steps": tc,
         "T_c_seconds": tc * dt,
-        "T_c_set_by": dict(zip(at, fastest)),
+        "T_c_set_by": (
+            dict(zip(at, min(valid, key=lambda k: sample_time(valid[k]))))
+            if valid
+            else None
+        ),
         "N": N,
         "M": M,
         "P": P,
         "P_steps": P * tc,
-        "P_set_by": dict(zip(at, top)),
-        "plans_to_episode_end": P >= n_samples,
-        "classes": {cv: _verdict(c) for cv, c in classes.items()},
+        "P_set_by": dict(zip(at, top)) if top else None,
+        "plans_to_episode_end": P >= episode_samples(n_ep, tc),
+        "counts": {k: labels.count(k) for k in ("valid", "invalid", "insignificant")},
+        "retests": sum(len(r["tests"]) - 1 for (j, i, s), r in pairs.items() if i == 0),
+        "zero_models": zero,
+        "cvs_without_valid_pair": [c for c in cvs if not any(k[1] == c for k in valid)],
+        "classes": {cvs[i]: c for i, c in classes.items()},
         "test": {
             "seeds": list(TRAIN_SEEDS),
             "settle_steps": n_ep,
@@ -172,23 +268,21 @@ def measure(name: str) -> dict:
             "steps": steps,
             "hold_window": extra.get("window", 20),
         },
-        "fits": [
+        "pairs": [
             {
-                **dict(zip(at, key)),
-                **f,
-                **dict(zip(("N", "M", "P"), rows.get(key, (None,) * 3))),
+                **dict(zip(at, key[k])),
+                "label": r["label"],
+                "failed": r.get("failed", []),
+                "kept": r["kept"],
+                "evidence": evidence(r["tests"][r["kept"]][1]),
+                "fit": r.get("fit"),
+                **dict(zip(("N", "M", "P"), rows.get(key[k], (None,) * 3))),
+                "tests": [_test_record(run, a, mvs, cvs) for run, a in r["tests"]],
             }
-            for key, f in fits.items()
+            for k, r in pairs.items()
         ],
     }
-
-
-def _verdict(found: list[str]) -> str:
-    """A CV's class: the one H10 gives every response, else the split."""
-    kinds = sorted(set(found))
-    if len(kinds) == 1:
-        return kinds[0]
-    return ", ".join(f"{found.count(k)} {k}" for k in kinds)
+    return _clean(row, dt)
 
 
 def main() -> None:
@@ -203,12 +297,12 @@ def main() -> None:
     for name in (n for n in args.envs if n in TASKS):
         row = measure(name)
         records.write("oracle_horizons", name, records.stamped(row))
-        by, end = row["P_set_by"], row["plans_to_episode_end"]
+        end = ", to the end" if row["plans_to_episode_end"] else ""
         print(
-            f"{name:18s} T_c {row['T_c_steps']} steps, N {row['N']}, M {row['M']}, "
-            f"P {row['P']} ({row['P_steps']} of {row['episode_steps']} steps"
-            f"{', to the end' if end else ''}), set by {by['mv']} -> {by['cv']} "
-            f"on seed {by['seed']}; classes {row['classes']}"
+            f"{name:18s} T_c {row['T_c_steps']}, P {row['P']} ({row['P_steps']} of "
+            f"{row['episode_steps']} steps{end}){', UNIDENTIFIED' if row['unidentified'] else ''}; "
+            f"{row['counts']}, retests {row['retests']}, set by {row['P_set_by']}; "
+            f"classes {({c: v['class'] for c, v in row['classes'].items()})}"
         )
 
 

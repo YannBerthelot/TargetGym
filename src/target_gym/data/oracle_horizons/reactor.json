@@ -1,514 +1,1789 @@
 {
-  "M": 46,
-  "N": 229,
-  "P": 275,
-  "P_set_by": {
-    "cv": "n",
-    "mv": "rod",
-    "seed": 107
-  },
-  "P_steps": 1100,
-  "T_c_seconds": 4.0,
-  "T_c_set_by": {
-    "cv": "n",
-    "mv": "rod",
-    "seed": 108
-  },
-  "T_c_steps": 4,
+  "M": null,
+  "N": null,
+  "P": 864,
+  "P_set_by": null,
+  "P_steps": 864,
+  "T_c_seconds": 1.0,
+  "T_c_set_by": null,
+  "T_c_steps": 1,
   "classes": {
-    "T_coolant": "self-regulating",
-    "T_fuel": "self-regulating",
-    "n": "self-regulating"
+    "T_coolant": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "T_fuel": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "n": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    }
+  },
+  "counts": {
+    "insignificant": 0,
+    "invalid": 30,
+    "valid": 0
   },
   "cpu": "Apple M4 Pro",
+  "cvs_without_valid_pair": [
+    "n",
+    "T_fuel",
+    "T_coolant"
+  ],
   "dt": 1.0,
-  "episode_samples": 216,
+  "episode_samples": 864,
   "episode_steps": 864,
-  "fits": [
+  "generated": "2026-11-03T20:45:55+00:00",
+  "pairs": [
     {
-      "M": 16,
-      "N": 76,
-      "P": 92,
-      "class": "self-regulating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "n",
-      "du": -0.1,
-      "k": 0.6878688005539534,
-      "model": "fopdt",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 0.009775849129753619,
-      "samples": 864,
       "seed": 100,
-      "tau": 60.7579844646566,
-      "theta": 2.1642784737073572e-62
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 7.21656,
+            "k": 0.687869,
+            "k_3sigma": 0.0117895,
+            "model": "fopdt",
+            "sse": 0.08257,
+            "tau": 60.7578,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -121.494,
+            "k": 0.00123246,
+            "k_3sigma": 9.56627e-05,
+            "model": "integrating_lag",
+            "sse": 0.47055,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.000405207,
+          "snr": 33.8604,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
     },
     {
-      "M": 27,
-      "N": 133,
-      "P": 160,
-      "class": "self-regulating",
-      "cv": "n",
-      "du": -0.1,
-      "k": 0.7662362211483935,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 0.010701113670346471,
-      "samples": 864,
-      "seed": 101,
-      "tau": 105.92341182837674,
-      "theta": 9.459282972921042e-42
-    },
-    {
-      "M": 24,
-      "N": 116,
-      "P": 140,
-      "class": "self-regulating",
-      "cv": "n",
-      "du": -0.1,
-      "k": 0.7449924883775777,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 0.010300668900246552,
-      "samples": 864,
-      "seed": 102,
-      "tau": 92.49304453812358,
-      "theta": 6.055253026507989e-46
-    },
-    {
-      "M": 39,
-      "N": 192,
-      "P": 231,
-      "class": "self-regulating",
-      "cv": "n",
-      "du": 0.1,
-      "k": 0.8364775729682308,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 0.011832268882470002,
-      "samples": 864,
-      "seed": 103,
-      "tau": 153.02059425948974,
-      "theta": 3.809541215642622e-37
-    },
-    {
-      "M": 41,
-      "N": 204,
-      "P": 245,
-      "class": "self-regulating",
-      "cv": "n",
-      "du": -0.1,
-      "k": 0.8746284489358255,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 0.011744645548176051,
-      "samples": 864,
-      "seed": 104,
-      "tau": 162.50929941529935,
-      "theta": 3.843663517285599e-34
-    },
-    {
-      "M": 13,
-      "N": 64,
-      "P": 77,
-      "class": "self-regulating",
-      "cv": "n",
-      "du": 0.1,
-      "k": 0.6717896262458987,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 0.009549130140722471,
-      "samples": 864,
-      "seed": 105,
-      "tau": 50.557070847474414,
-      "theta": 1.930595820063231e-70
-    },
-    {
-      "M": 28,
-      "N": 137,
-      "P": 165,
-      "class": "self-regulating",
-      "cv": "n",
-      "du": -0.1,
-      "k": 0.7652700572043318,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 0.01082913701932739,
-      "samples": 864,
-      "seed": 106,
-      "tau": 109.489179821308,
-      "theta": 2.3578178485090717e-42
-    },
-    {
-      "M": 46,
-      "N": 229,
-      "P": 275,
-      "class": "self-regulating",
-      "cv": "n",
-      "du": -0.1,
-      "k": 0.9099111253222972,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 0.01215683453236366,
-      "samples": 864,
-      "seed": 107,
-      "tau": 182.93221270817043,
-      "theta": 3.301949810889666e-33
-    },
-    {
-      "M": 12,
-      "N": 57,
-      "P": 69,
-      "class": "self-regulating",
-      "cv": "n",
-      "du": 0.1,
-      "k": 0.6648194147583144,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 0.009407198712082537,
-      "samples": 864,
-      "seed": 108,
-      "tau": 45.04760217012066,
-      "theta": 1.7828617603401628e-75
-    },
-    {
-      "M": 29,
-      "N": 142,
-      "P": 171,
-      "class": "self-regulating",
-      "cv": "n",
-      "du": -0.1,
-      "k": 0.777283741777972,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 0.010823924347958083,
-      "samples": 864,
-      "seed": 109,
-      "tau": 113.38010426402829,
-      "theta": 5.487691066071957e-41
-    },
-    {
-      "M": 16,
-      "N": 77,
-      "P": 93,
-      "class": "self-regulating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "T_fuel",
-      "du": -0.1,
-      "k": 335.5578489652735,
-      "model": "fopdt",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 4.762586336980294,
-      "samples": 864,
       "seed": 100,
-      "tau": 60.99767537875643,
-      "theta": 1.1849754536155033e-62
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 7.4175,
+            "k": 335.558,
+            "k_3sigma": 5.74804,
+            "model": "fopdt",
+            "sse": 19597.4,
+            "tau": 60.9976,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -121.155,
+            "k": 0.601104,
+            "k_3sigma": 0.0466345,
+            "model": "integrating_lag",
+            "sse": 111824.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.197807,
+          "snr": 33.8325,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
     },
     {
-      "M": 27,
-      "N": 133,
-      "P": 160,
-      "class": "self-regulating",
-      "cv": "T_fuel",
-      "du": -0.1,
-      "k": 373.76412999963793,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 5.214017104996824,
-      "samples": 864,
-      "seed": 101,
-      "tau": 106.11751185283357,
-      "theta": 2.2797569369969113e-42
-    },
-    {
-      "M": 24,
-      "N": 116,
-      "P": 140,
-      "class": "self-regulating",
-      "cv": "T_fuel",
-      "du": -0.1,
-      "k": 363.4146742610778,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 5.019342259584404,
-      "samples": 864,
-      "seed": 102,
-      "tau": 92.70719329553283,
-      "theta": 1.5065397091545683e-46
-    },
-    {
-      "M": 39,
-      "N": 192,
-      "P": 231,
-      "class": "self-regulating",
-      "cv": "T_fuel",
-      "du": 0.1,
-      "k": 407.97414852037195,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 5.745555722500441,
-      "samples": 864,
-      "seed": 103,
-      "tau": 153.15105460558848,
-      "theta": 4.515621841779609e-37
-    },
-    {
-      "M": 41,
-      "N": 204,
-      "P": 245,
-      "class": "self-regulating",
-      "cv": "T_fuel",
-      "du": -0.1,
-      "k": 426.60548858784466,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 5.717909803250927,
-      "samples": 864,
-      "seed": 104,
-      "tau": 162.68423128407542,
-      "theta": 1.633602733184483e-34
-    },
-    {
-      "M": 13,
-      "N": 64,
-      "P": 77,
-      "class": "self-regulating",
-      "cv": "T_fuel",
-      "du": 0.1,
-      "k": 327.7321065700508,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 4.647922436163932,
-      "samples": 864,
-      "seed": 105,
-      "tau": 50.8511164345316,
-      "theta": 1.2078470487904142e-70
-    },
-    {
-      "M": 28,
-      "N": 138,
-      "P": 166,
-      "class": "self-regulating",
-      "cv": "T_fuel",
-      "du": -0.1,
-      "k": 373.2855203616723,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 5.27183911054026,
-      "samples": 864,
-      "seed": 106,
-      "tau": 109.67428200770678,
-      "theta": 2.4858734693930132e-42
-    },
-    {
-      "M": 46,
-      "N": 229,
-      "P": 275,
-      "class": "self-regulating",
-      "cv": "T_fuel",
-      "du": -0.1,
-      "k": 443.7900797905818,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 5.918369670776832,
-      "samples": 864,
-      "seed": 107,
-      "tau": 183.08210965696347,
-      "theta": 8.02263078087432e-34
-    },
-    {
-      "M": 12,
-      "N": 57,
-      "P": 69,
-      "class": "self-regulating",
-      "cv": "T_fuel",
-      "du": 0.1,
-      "k": 324.3440329138883,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 4.579506539970615,
-      "samples": 864,
-      "seed": 108,
-      "tau": 45.3770935310204,
-      "theta": 1.2862590275887932e-75
-    },
-    {
-      "M": 29,
-      "N": 142,
-      "P": 171,
-      "class": "self-regulating",
-      "cv": "T_fuel",
-      "du": -0.1,
-      "k": 379.15121513069283,
-      "model": "fopdt",
-      "mv": "rod",
-      "rms": 5.2690007961539305,
-      "samples": 864,
-      "seed": 109,
-      "tau": 113.57565883208481,
-      "theta": 2.254995659139732e-41
-    },
-    {
-      "M": 16,
-      "N": 77,
-      "P": 93,
-      "class": "self-regulating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "T_coolant",
-      "du": -0.1,
-      "k": 22.925785787347124,
-      "model": "fopdt",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 0.3253226181949186,
-      "samples": 864,
       "seed": 100,
-      "tau": 61.02690443907625,
-      "theta": 1.7790592692726463e-62
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 7.44661,
+            "k": 22.9258,
+            "k_3sigma": 0.392677,
+            "model": "fopdt",
+            "sse": 91.4416,
+            "tau": 61.028,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -121.109,
+            "k": 0.0410673,
+            "k_3sigma": 0.00318585,
+            "model": "integrating_lag",
+            "sse": 521.879,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.0135153,
+          "snr": 33.8293,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
     },
     {
-      "M": 27,
-      "N": 133,
-      "P": 160,
-      "class": "self-regulating",
-      "cv": "T_coolant",
-      "du": -0.1,
-      "k": 25.536305993469185,
-      "model": "fopdt",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "n",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 0.3561697968341779,
-      "samples": 864,
       "seed": 101,
-      "tau": 106.15352679222296,
-      "theta": 1.3189932225100727e-42
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 16.5161,
+            "k": 0.766237,
+            "k_3sigma": 0.0152875,
+            "model": "fopdt",
+            "sse": 0.09894,
+            "tau": 105.922,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -81.9403,
+            "k": 0.00132346,
+            "k_3sigma": 9.55987e-05,
+            "model": "integrating_lag",
+            "sse": 0.469921,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.000571774,
+          "snr": 26.2406,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
     },
     {
-      "M": 24,
-      "N": 116,
-      "P": 140,
-      "class": "self-regulating",
-      "cv": "T_coolant",
-      "du": -0.1,
-      "k": 24.82895689038029,
-      "model": "fopdt",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_fuel",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 0.3428782322395884,
-      "samples": 864,
+      "seed": 101,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 16.6713,
+            "k": 373.765,
+            "k_3sigma": 7.455,
+            "model": "fopdt",
+            "sse": 23488.7,
+            "tau": 106.117,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -81.6799,
+            "k": 0.645464,
+            "k_3sigma": 0.0465996,
+            "model": "integrating_lag",
+            "sse": 111656.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.279049,
+          "snr": 26.2251,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_coolant",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
+      "seed": 101,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 16.6953,
+            "k": 25.5364,
+            "k_3sigma": 0.509336,
+            "model": "fopdt",
+            "sse": 109.605,
+            "tau": 106.154,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -81.6366,
+            "k": 0.0440979,
+            "k_3sigma": 0.00318339,
+            "model": "integrating_lag",
+            "sse": 521.075,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.0190652,
+          "snr": 26.2242,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "n",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
       "seed": 102,
-      "tau": 92.72949840584201,
-      "theta": 4.199740926519758e-47
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 14.4385,
+            "k": 0.744995,
+            "k_3sigma": 0.013918,
+            "model": "fopdt",
+            "sse": 0.0916746,
+            "tau": 92.4945,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -95.773,
+            "k": 0.00130004,
+            "k_3sigma": 9.66138e-05,
+            "model": "integrating_lag",
+            "sse": 0.479952,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.000320092,
+          "snr": 45.3563,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
     },
     {
-      "M": 39,
-      "N": 192,
-      "P": 231,
-      "class": "self-regulating",
-      "cv": "T_coolant",
-      "du": 0.1,
-      "k": 27.872974427230332,
-      "model": "fopdt",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_fuel",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 0.39229332321863786,
-      "samples": 864,
+      "seed": 102,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 14.5991,
+            "k": 363.416,
+            "k_3sigma": 6.7878,
+            "model": "fopdt",
+            "sse": 21767.6,
+            "tau": 92.7089,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -95.4776,
+            "k": 0.634061,
+            "k_3sigma": 0.0470954,
+            "model": "integrating_lag",
+            "sse": 114046.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.156941,
+          "snr": 45.1229,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_coolant",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
+      "seed": 102,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 14.6199,
+            "k": 24.829,
+            "k_3sigma": 0.463724,
+            "model": "fopdt",
+            "sse": 101.577,
+            "tau": 92.7311,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -95.4429,
+            "k": 0.0433191,
+            "k_3sigma": 0.00321737,
+            "model": "integrating_lag",
+            "sse": 532.257,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.0107373,
+          "snr": 45.0601,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "n",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
       "seed": 103,
-      "tau": 153.17804443665858,
-      "theta": 6.8713866919710945e-37
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 22.8048,
+            "k": 0.836478,
+            "k_3sigma": 0.0212684,
+            "model": "fopdt",
+            "sse": 0.120962,
+            "tau": 153.021,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -45.2695,
+            "k": 0.00138698,
+            "k_3sigma": 9.12745e-05,
+            "model": "integrating_lag",
+            "sse": 0.42837,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.00013752,
+          "snr": 120.327,
+          "step": 0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
     },
     {
-      "M": 41,
-      "N": 204,
-      "P": 245,
-      "class": "self-regulating",
-      "cv": "T_coolant",
-      "du": -0.1,
-      "k": 29.146194465471808,
-      "model": "fopdt",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_fuel",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 0.3905528184176327,
-      "samples": 864,
+      "seed": 103,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 23.2837,
+            "k": 407.974,
+            "k_3sigma": 10.3348,
+            "model": "fopdt",
+            "sse": 28521.9,
+            "tau": 153.151,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -44.7858,
+            "k": 0.676379,
+            "k_3sigma": 0.0444495,
+            "model": "integrating_lag",
+            "sse": 101591.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.0709583,
+          "snr": 113.728,
+          "step": 0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_coolant",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
+      "seed": 103,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 23.3572,
+            "k": 27.873,
+            "k_3sigma": 0.705736,
+            "model": "fopdt",
+            "sse": 132.964,
+            "tau": 153.178,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -44.7035,
+            "k": 0.0462093,
+            "k_3sigma": 0.0030361,
+            "model": "integrating_lag",
+            "sse": 473.969,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.00495519,
+          "snr": 111.265,
+          "step": 0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "n",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 1,
+      "label": "invalid",
+      "mv": "rod",
       "seed": 104,
-      "tau": 162.7140173571224,
-      "theta": 1.2010526475734753e-34
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 27.4384,
+            "k": 0.874627,
+            "k_3sigma": 0.0222228,
+            "model": "fopdt",
+            "sse": 0.119177,
+            "tau": 162.508,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -39.9016,
+            "k": 0.00143531,
+            "k_3sigma": 9.2822e-05,
+            "model": "integrating_lag",
+            "sse": 0.443019,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.00245122,
+          "snr": 6.90301,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 28.5672,
+            "k": 0.890507,
+            "k_3sigma": 0.0236353,
+            "model": "fopdt",
+            "sse": 0.490483,
+            "tau": 171.086,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -34.8116,
+            "k": 0.0014493,
+            "k_3sigma": 9.2162e-05,
+            "model": "integrating_lag",
+            "sse": 1.74696,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.00245122,
+          "snr": 14.053,
+          "step": -0.2,
+          "trips": {},
+          "window": 864
+        }
+      ]
     },
     {
-      "M": 13,
-      "N": 64,
-      "P": 77,
-      "class": "self-regulating",
-      "cv": "T_coolant",
-      "du": 0.1,
-      "k": 22.391917122240773,
-      "model": "fopdt",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_fuel",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 1,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 0.3174597142014676,
-      "samples": 864,
+      "seed": 104,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 27.6325,
+            "k": 426.605,
+            "k_3sigma": 10.8296,
+            "model": "fopdt",
+            "sse": 28247.9,
+            "tau": 162.683,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -39.6564,
+            "k": 0.699962,
+            "k_3sigma": 0.0452326,
+            "model": "integrating_lag",
+            "sse": 105201.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 1.19599,
+          "snr": 6.90019,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 28.8271,
+            "k": 434.343,
+            "k_3sigma": 11.5092,
+            "model": "fopdt",
+            "sse": 116085.0,
+            "tau": 171.255,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -34.5156,
+            "k": 0.706769,
+            "k_3sigma": 0.0449011,
+            "model": "integrating_lag",
+            "sse": 414662.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 1.19599,
+          "snr": 14.0468,
+          "step": -0.2,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_coolant",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 1,
+      "label": "invalid",
+      "mv": "rod",
+      "seed": 104,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 27.6605,
+            "k": 29.1462,
+            "k_3sigma": 0.739822,
+            "model": "fopdt",
+            "sse": 131.787,
+            "tau": 162.713,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -39.618,
+            "k": 0.0478208,
+            "k_3sigma": 0.00308989,
+            "model": "integrating_lag",
+            "sse": 490.912,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.0817179,
+          "snr": 6.89962,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 28.8659,
+            "k": 29.6746,
+            "k_3sigma": 0.786139,
+            "model": "fopdt",
+            "sse": 541.449,
+            "tau": 171.281,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -34.4701,
+            "k": 0.0482857,
+            "k_3sigma": 0.00306716,
+            "model": "integrating_lag",
+            "sse": 1934.88,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.0817179,
+          "snr": 14.0455,
+          "step": -0.2,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "n",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
       "seed": 105,
-      "tau": 50.915870767874445,
-      "theta": 1.1579435269695298e-70
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 5.60983,
+            "k": 0.67179,
+            "k_3sigma": 0.0111555,
+            "model": "fopdt",
+            "sse": 0.0787846,
+            "tau": 50.5571,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -129.991,
+            "k": 0.00121329,
+            "k_3sigma": 9.53771e-05,
+            "model": "integrating_lag",
+            "sse": 0.467745,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 3.83638e-05,
+          "snr": 351.337,
+          "step": 0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
     },
     {
-      "M": 28,
-      "N": 138,
-      "P": 166,
-      "class": "self-regulating",
-      "cv": "T_coolant",
-      "du": -0.1,
-      "k": 25.50284695298618,
-      "model": "fopdt",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_fuel",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 0.3600907888509755,
-      "samples": 864,
+      "seed": 105,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 5.94269,
+            "k": 327.732,
+            "k_3sigma": 5.43462,
+            "model": "fopdt",
+            "sse": 18665.1,
+            "tau": 50.8511,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -129.502,
+            "k": 0.591757,
+            "k_3sigma": 0.0464889,
+            "model": "integrating_lag",
+            "sse": 111127.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.019854,
+          "snr": 331.132,
+          "step": 0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_coolant",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
+      "seed": 105,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 5.99623,
+            "k": 22.3919,
+            "k_3sigma": 0.371265,
+            "model": "fopdt",
+            "sse": 87.0745,
+            "tau": 50.9159,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -129.406,
+            "k": 0.0404291,
+            "k_3sigma": 0.00317575,
+            "model": "integrating_lag",
+            "sse": 518.573,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.00136957,
+          "snr": 327.963,
+          "step": 0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "n",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
       "seed": 106,
-      "tau": 109.6862356220871,
-      "theta": 7.358013299061724e-42
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 16.439,
+            "k": 0.765268,
+            "k_3sigma": 0.0157134,
+            "model": "fopdt",
+            "sse": 0.101321,
+            "tau": 109.488,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -77.5818,
+            "k": 0.00131872,
+            "k_3sigma": 9.43376e-05,
+            "model": "integrating_lag",
+            "sse": 0.457603,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.000922847,
+          "snr": 16.3378,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
     },
     {
-      "M": 46,
-      "N": 229,
-      "P": 275,
-      "class": "self-regulating",
-      "cv": "T_coolant",
-      "du": -0.1,
-      "k": 30.320091095547504,
-      "model": "fopdt",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_fuel",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 0.40424047022460646,
-      "samples": 864,
+      "seed": 106,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 16.6914,
+            "k": 373.285,
+            "k_3sigma": 7.65585,
+            "model": "fopdt",
+            "sse": 24012.4,
+            "tau": 109.673,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -77.2437,
+            "k": 0.643141,
+            "k_3sigma": 0.0459769,
+            "model": "integrating_lag",
+            "sse": 108692.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.449319,
+          "snr": 16.3665,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_coolant",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
+      "seed": 106,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 16.7226,
+            "k": 25.5028,
+            "k_3sigma": 0.522958,
+            "model": "fopdt",
+            "sse": 112.03,
+            "tau": 109.685,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -77.2001,
+            "k": 0.043939,
+            "k_3sigma": 0.00314083,
+            "model": "integrating_lag",
+            "sse": 507.236,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.0307037,
+          "snr": 16.3632,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "n",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 1,
+      "label": "invalid",
+      "mv": "rod",
       "seed": 107,
-      "tau": 183.1098474642118,
-      "theta": 3.489094031499292e-33
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 29.664,
+            "k": 0.909909,
+            "k_3sigma": 0.0257792,
+            "model": "fopdt",
+            "sse": 0.127689,
+            "tau": 182.932,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -28.508,
+            "k": 0.00146368,
+            "k_3sigma": 9.10479e-05,
+            "model": "integrating_lag",
+            "sse": 0.426246,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.00185166,
+          "snr": 9.51075,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 30.8879,
+            "k": 0.930702,
+            "k_3sigma": 0.0278562,
+            "model": "fopdt",
+            "sse": 0.528023,
+            "tau": 193.624,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -23.1974,
+            "k": 0.00148098,
+            "k_3sigma": 9.032e-05,
+            "model": "integrating_lag",
+            "sse": 1.67783,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.00185166,
+          "snr": 19.4369,
+          "step": -0.2,
+          "trips": {},
+          "window": 864
+        }
+      ]
     },
     {
-      "M": 12,
-      "N": 57,
-      "P": 69,
-      "class": "self-regulating",
-      "cv": "T_coolant",
-      "du": 0.1,
-      "k": 22.159904329998383,
-      "model": "fopdt",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_fuel",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 1,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 0.3127819649490297,
-      "samples": 864,
+      "seed": 107,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 29.8435,
+            "k": 443.789,
+            "k_3sigma": 12.5609,
+            "model": "fopdt",
+            "sse": 30263.5,
+            "tau": 183.082,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -28.2997,
+            "k": 0.713769,
+            "k_3sigma": 0.0443668,
+            "model": "integrating_lag",
+            "sse": 101213.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.903711,
+          "snr": 9.50363,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 31.1297,
+            "k": 453.919,
+            "k_3sigma": 13.5623,
+            "model": "fopdt",
+            "sse": 124962.0,
+            "tau": 193.765,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -22.9422,
+            "k": 0.722193,
+            "k_3sigma": 0.0440016,
+            "model": "integrating_lag",
+            "sse": 398213.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.903711,
+          "snr": 19.4216,
+          "step": -0.2,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_coolant",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 1,
+      "label": "invalid",
+      "mv": "rod",
+      "seed": 107,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 29.8702,
+            "k": 30.32,
+            "k_3sigma": 0.858078,
+            "model": "fopdt",
+            "sse": 141.187,
+            "tau": 183.11,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -28.2664,
+            "k": 0.0487639,
+            "k_3sigma": 0.00303073,
+            "model": "integrating_lag",
+            "sse": 472.296,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.0617421,
+          "snr": 9.50343,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 31.1656,
+            "k": 31.0116,
+            "k_3sigma": 0.926331,
+            "model": "fopdt",
+            "sse": 582.836,
+            "tau": 193.784,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -22.9041,
+            "k": 0.049339,
+            "k_3sigma": 0.00300569,
+            "model": "integrating_lag",
+            "sse": 1858.1,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.0617421,
+          "snr": 19.4211,
+          "step": -0.2,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "n",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
       "seed": 108,
-      "tau": 45.4153299663705,
-      "theta": 1.2360515650494599e-75
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 4.92399,
+            "k": 0.664821,
+            "k_3sigma": 0.0108112,
+            "model": "fopdt",
+            "sse": 0.0764605,
+            "tau": 45.0485,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -135.505,
+            "k": 0.00120548,
+            "k_3sigma": 9.55187e-05,
+            "model": "integrating_lag",
+            "sse": 0.469134,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.00012289,
+          "snr": 108.491,
+          "step": 0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
     },
     {
-      "M": 29,
-      "N": 142,
-      "P": 171,
-      "class": "self-regulating",
-      "cv": "T_coolant",
-      "du": -0.1,
-      "k": 25.90369202237374,
-      "model": "fopdt",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_fuel",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
       "mv": "rod",
-      "rms": 0.35988818116947524,
-      "samples": 864,
+      "seed": 108,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 5.24433,
+            "k": 324.345,
+            "k_3sigma": 5.26807,
+            "model": "fopdt",
+            "sse": 18119.8,
+            "tau": 45.378,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -135.015,
+            "k": 0.587956,
+            "k_3sigma": 0.0465595,
+            "model": "integrating_lag",
+            "sse": 111464.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.0600529,
+          "snr": 108.291,
+          "step": 0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_coolant",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
+      "seed": 108,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 5.29211,
+            "k": 22.1599,
+            "k_3sigma": 0.359851,
+            "model": "fopdt",
+            "sse": 84.5278,
+            "tau": 45.416,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -134.945,
+            "k": 0.0401692,
+            "k_3sigma": 0.00318067,
+            "model": "integrating_lag",
+            "sse": 520.185,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.00410429,
+          "snr": 108.254,
+          "step": 0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "n",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
       "seed": 109,
-      "tau": 113.58748635619268,
-      "theta": 4.835065364209687e-41
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 18.0736,
+            "k": 0.777284,
+            "k_3sigma": 0.0159813,
+            "model": "fopdt",
+            "sse": 0.101224,
+            "tau": 113.38,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -75.399,
+            "k": 0.00133416,
+            "k_3sigma": 9.49913e-05,
+            "model": "integrating_lag",
+            "sse": 0.463969,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.00115641,
+          "snr": 13.1402,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_fuel",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
+      "seed": 109,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 18.3316,
+            "k": 379.151,
+            "k_3sigma": 7.78647,
+            "model": "fopdt",
+            "sse": 23986.7,
+            "tau": 113.576,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -75.045,
+            "k": 0.650678,
+            "k_3sigma": 0.0462935,
+            "model": "integrating_lag",
+            "sse": 110195.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.564791,
+          "snr": 13.1227,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "T_coolant",
+      "evidence": null,
+      "failed": [
+        "no class"
+      ],
+      "fit": null,
+      "kept": 0,
+      "label": "invalid",
+      "mv": "rod",
+      "seed": 109,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 18.3646,
+            "k": 25.9037,
+            "k_3sigma": 0.531866,
+            "model": "fopdt",
+            "sse": 111.905,
+            "tau": 113.587,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -75.0012,
+            "k": 0.0444541,
+            "k_3sigma": 0.00316248,
+            "model": "integrating_lag",
+            "sse": 514.25,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 864,
+          "sigma": 0.0386031,
+          "snr": 13.1173,
+          "step": -0.1,
+          "trips": {},
+          "window": 864
+        }
+      ]
     }
   ],
-  "generated": "2026-11-03T19:56:00+00:00",
   "plans_to_episode_end": true,
-  "protocol": "docs/proposals/oracle-horizon-protocol.md",
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendment 1",
+  "retests": 2,
   "test": {
     "hold_window": 20,
     "seeds": [
@@ -528,5 +1803,7 @@
       "rod": 0.1
     },
     "window_steps": 864
-  }
+  },
+  "unidentified": true,
+  "zero_models": []
 }

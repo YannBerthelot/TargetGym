@@ -1,673 +1,5248 @@
 {
-  "M": 318,
-  "N": 1590,
-  "P": 1908,
+  "M": 124,
+  "N": 540,
+  "P": 664,
   "P_set_by": {
-    "cv": "xB",
-    "mv": "V",
-    "seed": 103
+    "cv": "yD",
+    "mv": "L",
+    "seed": 108
   },
-  "P_steps": 1908,
+  "P_steps": 664,
   "T_c_seconds": 1.0,
   "T_c_set_by": {
     "cv": "xB",
-    "mv": "L",
-    "seed": 109
+    "mv": "V",
+    "seed": 100
   },
   "T_c_steps": 1,
   "classes": {
-    "xB": "12 integrating, 8 self-regulating",
-    "yD": "12 integrating, 8 self-regulating"
+    "xB": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 4,
+        "integrating_lag": 6
+      }
+    },
+    "yD": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 5
+      }
+    }
+  },
+  "counts": {
+    "insignificant": 3,
+    "invalid": 29,
+    "valid": 8
   },
   "cpu": "Apple M4 Pro",
+  "cvs_without_valid_pair": [],
   "dt": 1.0,
   "episode_samples": 200,
   "episode_steps": 200,
-  "fits": [
+  "generated": "2026-11-03T20:45:28+00:00",
+  "pairs": [
     {
-      "M": 6,
-      "N": 27,
-      "P": 33,
-      "class": "integrating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "yD",
-      "du": -0.1,
-      "k": 0.001708092724642219,
-      "model": "integrating_lag",
+      "evidence": null,
+      "failed": [
+        "short"
+      ],
+      "fit": null,
+      "kept": 2,
+      "label": "invalid",
       "mv": "L",
-      "rms": 0.0034194371175270233,
-      "samples": 200,
       "seed": 100,
-      "tau2": 2.390256595776403,
-      "theta": 9.426661349604305e-05
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 76.1985,
+            "k": 0.325367,
+            "k_3sigma": 0.0322106,
+            "model": "fopdt",
+            "sse": 0.00123259,
+            "tau": 68.6177,
+            "theta": 37.5755
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 67.2158,
+            "k": 0.00170809,
+            "k_3sigma": 0.000135082,
+            "model": "integrating_lag",
+            "sse": 0.00233852,
+            "tau2": 2.39011,
+            "theta": 9.35863e-05
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.000204589,
+          "snr": 24.569,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 87.8274,
+            "k": 8537.86,
+            "k_3sigma": 412.419,
+            "model": "fopdt",
+            "sse": 0.00147804,
+            "tau": 1281160.0,
+            "theta": 29.596
+          },
+          "integrating_lag": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 93.1344,
+            "k": 0.0118006,
+            "k_3sigma": 0.00492353,
+            "model": "integrating_lag",
+            "sse": 0.000470192,
+            "tau2": 71.7069,
+            "theta": 6.05846
+          },
+          "loops": [],
+          "samples": 102,
+          "sigma": 5.9522e-05,
+          "snr": 264.545,
+          "step": -0.2,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 102
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": 1.99805,
+              "mv": "L",
+              "n_pre": 671
+            }
+          ],
+          "samples": 0,
+          "sigma": 0.0,
+          "snr": 0.0,
+          "step": -0.2,
+          "trips": {
+            "base": {
+              "cv": "xB",
+              "index": 0
+            },
+            "step": {
+              "cv": "xB",
+              "index": 0
+            }
+          },
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 125,
-      "N": 625,
-      "P": 750,
-      "class": "integrating",
-      "cv": "yD",
-      "du": -0.1,
-      "k": 0.009317487902209957,
-      "model": "integrating_lag",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "xB",
+      "evidence": null,
+      "failed": [
+        "short"
+      ],
+      "fit": null,
+      "kept": 2,
+      "label": "invalid",
       "mv": "L",
-      "rms": 0.0023639313758335983,
-      "samples": 160,
+      "seed": 100,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 65.0772,
+            "k": 2598.68,
+            "k_3sigma": 195.796,
+            "model": "fopdt",
+            "sse": 0.00192986,
+            "tau": 1704110.0,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 65.0779,
+            "k": 0.00152488,
+            "k_3sigma": 0.000114999,
+            "model": "integrating_lag",
+            "sse": 0.00192978,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00395014,
+          "snr": 1.65771,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 95.881,
+            "k": 0.0735513,
+            "k_3sigma": 0.000477159,
+            "model": "fopdt",
+            "sse": 2.21825e-06,
+            "tau": 22.3019,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 2.90151,
+            "k": 0.000980651,
+            "k_3sigma": 0.000177995,
+            "model": "integrating_lag",
+            "sse": 0.00123267,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 102,
+          "sigma": 0.000256082,
+          "snr": 9.92191,
+          "step": -0.2,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 102
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": 1.99805,
+              "mv": "L",
+              "n_pre": 671
+            }
+          ],
+          "samples": 0,
+          "sigma": 0.0,
+          "snr": 0.0,
+          "step": -0.2,
+          "trips": {
+            "base": {
+              "cv": "xB",
+              "index": 0
+            },
+            "step": {
+              "cv": "xB",
+              "index": 0
+            }
+          },
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": "integrating_lag",
+      "failed": [
+        "V1"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 84.4442,
+        "k": 0.00342764,
+        "k_3sigma": 7.17095e-05,
+        "model": "integrating_lag",
+        "sse": 0.000855059,
+        "tau2": 5.93191,
+        "theta": 5.42731
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "L",
       "seed": 101,
-      "tau2": 78.011890344034,
-      "theta": 3.0055270645804533e-15
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 83.6051,
+            "k": 20710.8,
+            "k_3sigma": 986.846,
+            "model": "fopdt",
+            "sse": 0.00280981,
+            "tau": 3404310.0,
+            "theta": 28.477
+          },
+          "integrating_lag": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 90.7517,
+            "k": 0.00931749,
+            "k_3sigma": 0.00226507,
+            "model": "integrating_lag",
+            "sse": 0.000894107,
+            "tau2": 78.0119,
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 160,
+          "sigma": 0.00103067,
+          "snr": 13.9705,
+          "step": -0.1,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 160
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 88.8342,
+            "k": 129.103,
+            "k_3sigma": 2952.35,
+            "model": "fopdt",
+            "sse": 0.000249521,
+            "tau": 40150.6,
+            "theta": 16.5667
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 89.9994,
+            "k": 0.00326149,
+            "k_3sigma": 6.25913e-05,
+            "model": "integrating_lag",
+            "sse": 0.000200159,
+            "tau2": 17.0635,
+            "theta": 1.2297
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": 2.71668,
+              "mv": "L",
+              "n_pre": 625
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000879542,
+          "snr": 5.92014,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 88.148,
+            "k": 1.80155,
+            "k_3sigma": 0.350314,
+            "model": "fopdt",
+            "sse": 0.000496358,
+            "tau": 426.062,
+            "theta": 18.2785
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 84.4442,
+            "k": 0.00342764,
+            "k_3sigma": 7.17095e-05,
+            "model": "integrating_lag",
+            "sse": 0.000855059,
+            "tau2": 5.93191,
+            "theta": 5.42731
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": 2.71668,
+              "mv": "L",
+              "n_pre": 625
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000879542,
+          "snr": 7.8808,
+          "step": -0.137315,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 12,
-      "N": 46,
-      "P": 58,
-      "class": "self-regulating",
-      "cv": "yD",
-      "du": 0.1,
-      "k": 0.06429759026667485,
-      "model": "fopdt",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "xB",
+      "evidence": "fopdt",
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": -65.6328,
+        "k": 0.000459863,
+        "k_3sigma": 8.22485e-05,
+        "model": "integrating_lag",
+        "sse": 0.00155801,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
       "mv": "L",
-      "rms": 0.0012090082262216325,
-      "samples": 121,
+      "seed": 101,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 52.3306,
+            "k": 0.0533,
+            "k_3sigma": 0.00263364,
+            "model": "fopdt",
+            "sse": 8.13735e-05,
+            "tau": 22.795,
+            "theta": 3.29056
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -30.0169,
+            "k": 0.00046439,
+            "k_3sigma": 0.000100831,
+            "model": "integrating_lag",
+            "sse": 0.000605346,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 160,
+          "sigma": 0.000872733,
+          "snr": 1.19263,
+          "step": -0.1,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 160
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 86.4606,
+            "k": 0.0934096,
+            "k_3sigma": 0.00108844,
+            "model": "fopdt",
+            "sse": 8.05727e-06,
+            "tau": 35.9619,
+            "theta": 3.66674e-05
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -61.8028,
+            "k": 0.000536116,
+            "k_3sigma": 9.1242e-05,
+            "model": "integrating_lag",
+            "sse": 0.00115069,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": 2.71668,
+              "mv": "L",
+              "n_pre": 625
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000490261,
+          "snr": 2.13251,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 84.0264,
+            "k": 0.0806558,
+            "k_3sigma": 0.00109825,
+            "model": "fopdt",
+            "sse": 1.44904e-05,
+            "tau": 33.9648,
+            "theta": 1.12126e-06
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -65.6328,
+            "k": 0.000459863,
+            "k_3sigma": 8.22485e-05,
+            "model": "integrating_lag",
+            "sse": 0.00155801,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": 2.71668,
+              "mv": "L",
+              "n_pre": 625
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000490261,
+          "snr": 2.48658,
+          "step": -0.137315,
+          "trips": {},
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": -81.3784,
+        "k": 0.000305117,
+        "k_3sigma": 5.14035e-05,
+        "model": "integrating_lag",
+        "sse": 0.00019973,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 1,
+      "label": "invalid",
+      "mv": "L",
       "seed": 102,
-      "tau": 8.408236880488293,
-      "theta": 3.6208082929947643
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 34.5764,
+            "k": 0.0642976,
+            "k_3sigma": 0.00399959,
+            "model": "fopdt",
+            "sse": 0.000176866,
+            "tau": 8.40824,
+            "theta": 3.62081
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -77.7767,
+            "k": 0.000734208,
+            "k_3sigma": 0.000259759,
+            "model": "integrating_lag",
+            "sse": 0.00130594,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 121,
+          "sigma": 0.000565013,
+          "snr": 2.36462,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 121
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 79.0401,
+            "k": 0.0506244,
+            "k_3sigma": 0.000729068,
+            "model": "fopdt",
+            "sse": 2.66718e-06,
+            "tau": 33.9419,
+            "theta": 2.13172
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -81.3784,
+            "k": 0.000305117,
+            "k_3sigma": 5.14035e-05,
+            "model": "integrating_lag",
+            "sse": 0.00019973,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": 2.3202,
+              "mv": "L",
+              "n_pre": 552
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000406755,
+          "snr": 1.12894,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 50,
-      "N": 248,
-      "P": 298,
-      "class": "integrating",
-      "cv": "yD",
-      "du": -0.1,
-      "k": 0.011740074228381114,
-      "model": "integrating_lag",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "xB",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 36.2113,
+        "k": 0.00399919,
+        "k_3sigma": 0.00024741,
+        "model": "integrating_lag",
+        "sse": 0.00462691,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 1,
+      "label": "invalid",
       "mv": "L",
-      "rms": 0.000573292144487712,
-      "samples": 94,
+      "seed": 102,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 87.3345,
+            "k": 12398.1,
+            "k_3sigma": 573.466,
+            "model": "fopdt",
+            "sse": 0.00136919,
+            "tau": 1291980.0,
+            "theta": 35.5245
+          },
+          "integrating_lag": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 90.4913,
+            "k": 0.0123508,
+            "k_3sigma": 0.00298103,
+            "model": "integrating_lag",
+            "sse": 0.00077172,
+            "tau2": 42.6181,
+            "theta": 13.0872
+          },
+          "loops": [],
+          "samples": 121,
+          "sigma": 0.00125325,
+          "snr": 10.4741,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 121
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 76.9709,
+            "k": 0.922387,
+            "k_3sigma": 0.0523243,
+            "model": "fopdt",
+            "sse": 0.000603053,
+            "tau": 128.444,
+            "theta": 3.0322
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 36.2113,
+            "k": 0.00399919,
+            "k_3sigma": 0.00024741,
+            "model": "integrating_lag",
+            "sse": 0.00462691,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": 2.3202,
+              "mv": "L",
+              "n_pre": 552
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.00364368,
+          "snr": 1.43026,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 27.7173,
+        "k": 0.0006902,
+        "k_3sigma": 8.22592e-05,
+        "model": "integrating_lag",
+        "sse": 0.00134189,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 1,
+      "label": "invalid",
+      "mv": "L",
       "seed": 103,
-      "tau2": 30.266969338493464,
-      "theta": 4.1063675448196435e-12
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 70.9603,
+            "k": 0.125112,
+            "k_3sigma": 0.00772052,
+            "model": "fopdt",
+            "sse": 0.000212692,
+            "tau": 62.0842,
+            "theta": 4.68655
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 33.1838,
+            "k": 0.000771248,
+            "k_3sigma": 8.78422e-05,
+            "model": "integrating_lag",
+            "sse": 0.00112598,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00158559,
+          "snr": 1.34226,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 70.7952,
+            "k": 0.10981,
+            "k_3sigma": 0.00614835,
+            "model": "fopdt",
+            "sse": 0.000219058,
+            "tau": 58.822,
+            "theta": 3.3591
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 27.7173,
+            "k": 0.0006902,
+            "k_3sigma": 8.22592e-05,
+            "model": "integrating_lag",
+            "sse": 0.00134189,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00158559,
+          "snr": 1.39086,
+          "step": 0.116577,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 45,
-      "N": 189,
-      "P": 234,
-      "class": "self-regulating",
-      "cv": "yD",
-      "du": 0.1,
-      "k": 0.21361852264795403,
-      "model": "fopdt",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "xB",
+      "evidence": "integrating_lag",
+      "failed": [
+        "V1"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 88.0146,
+        "k": 0.00359329,
+        "k_3sigma": 8.82452e-05,
+        "model": "integrating_lag",
+        "sse": 0.00154429,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 1,
+      "label": "invalid",
       "mv": "L",
-      "rms": 0.002098914589540331,
-      "samples": 200,
+      "seed": 103,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 86.9584,
+            "k": 3433.46,
+            "k_3sigma": 94.3177,
+            "model": "fopdt",
+            "sse": 0.00124676,
+            "tau": 1019920.0,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 86.9587,
+            "k": 0.00336616,
+            "k_3sigma": 9.24315e-05,
+            "model": "integrating_lag",
+            "sse": 0.0012467,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00152934,
+          "snr": 7.51351,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 89.1342,
+            "k": 3.02829,
+            "k_3sigma": 1.81862,
+            "model": "fopdt",
+            "sse": 0.00126926,
+            "tau": 765.48,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 88.0146,
+            "k": 0.00359329,
+            "k_3sigma": 8.82452e-05,
+            "model": "integrating_lag",
+            "sse": 0.00154429,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00152934,
+          "snr": 8.88877,
+          "step": 0.116577,
+          "trips": {},
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 35.3456,
+        "k": 0.00139626,
+        "k_3sigma": 0.000166163,
+        "model": "integrating_lag",
+        "sse": 0.0035068,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "L",
       "seed": 104,
-      "tau": 35.868862014006055,
-      "theta": 9.636006663378016
-    },
-    {
-      "M": 81,
-      "N": 285,
-      "P": 366,
-      "class": "self-regulating",
-      "cv": "yD",
-      "du": -0.1,
-      "k": 0.25480361611350594,
-      "model": "fopdt",
-      "mv": "L",
-      "rms": 0.001643469473002712,
-      "samples": 200,
-      "seed": 105,
-      "tau": 50.92952715273672,
-      "theta": 30.644405209336664
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 67.1352,
+            "k": 0.213619,
+            "k_3sigma": 0.00848495,
+            "model": "fopdt",
+            "sse": 0.000881088,
+            "tau": 35.8689,
+            "theta": 9.63601
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 6.81754,
+            "k": 0.00145019,
+            "k_3sigma": 0.000220319,
+            "model": "integrating_lag",
+            "sse": 0.00708315,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00337322,
+          "snr": 1.157,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 51.6916,
+            "k": 0.428231,
+            "k_3sigma": 0.0815759,
+            "model": "fopdt",
+            "sse": 0.0110068,
+            "tau": 263.376,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 43.9016,
+            "k": 0.00098288,
+            "k_3sigma": 6.66429e-05,
+            "model": "integrating_lag",
+            "sse": 0.0148428,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 400,
+          "sigma": 0.00464632,
+          "snr": 1.54773,
+          "step": 0.119188,
+          "trips": {},
+          "window": 400
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 81.8126,
+            "k": 0.176075,
+            "k_3sigma": 0.00755717,
+            "model": "fopdt",
+            "sse": 0.000277496,
+            "tau": 50.0265,
+            "theta": 1.94164
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 35.3456,
+            "k": 0.00139626,
+            "k_3sigma": 0.000166163,
+            "model": "integrating_lag",
+            "sse": 0.0035068,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 155,
+          "sigma": 0.00205012,
+          "snr": 2.13071,
+          "step": 0.155676,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 155
+            }
+          },
+          "window": 400
+        }
+      ]
     },
     {
       "M": 25,
-      "N": 115,
-      "P": 140,
-      "class": "self-regulating",
-      "cv": "yD",
-      "du": 0.1,
-      "k": 0.0823487462062077,
-      "model": "fopdt",
+      "N": 125,
+      "P": 150,
+      "cv": "xB",
+      "evidence": "integrating_lag",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 94.688,
+        "k": 0.00417374,
+        "k_3sigma": 9.61044e-05,
+        "model": "integrating_lag",
+        "sse": 0.000330513,
+        "tau2": 14.7359,
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "valid",
       "mv": "L",
-      "rms": 0.000605050473187265,
-      "samples": 200,
+      "seed": 104,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 83.4133,
+            "k": 16322.3,
+            "k_3sigma": 658.519,
+            "model": "fopdt",
+            "sse": 0.00166958,
+            "tau": 5212560.0,
+            "theta": 21.0111
+          },
+          "integrating_lag": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 86.9253,
+            "k": 0.00366735,
+            "k_3sigma": 0.000364201,
+            "model": "integrating_lag",
+            "sse": 0.00103741,
+            "tau2": 40.7758,
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.000916239,
+          "snr": 10.0961,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 48.5114,
+            "k": 0.442191,
+            "k_3sigma": 0.017591,
+            "model": "fopdt",
+            "sse": 0.0379221,
+            "tau": 40.2192,
+            "theta": 44.5475
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -3.61544,
+            "k": 0.00152294,
+            "k_3sigma": 0.000214366,
+            "model": "integrating_lag",
+            "sse": 0.153575,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 400,
+          "sigma": 0.000800419,
+          "snr": 14.8256,
+          "step": 0.119188,
+          "trips": {},
+          "window": 400
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 93.095,
+            "k": 23175.2,
+            "k_3sigma": 426.041,
+            "model": "fopdt",
+            "sse": 0.000558467,
+            "tau": 5754080.0,
+            "theta": 11.2407
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 94.688,
+            "k": 0.00417374,
+            "k_3sigma": 9.61044e-05,
+            "model": "integrating_lag",
+            "sse": 0.000330513,
+            "tau2": 14.7359,
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 155,
+          "sigma": 0.000688285,
+          "snr": 22.2593,
+          "step": 0.155676,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 155
+            }
+          },
+          "window": 400
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 16.8187,
+        "k": 0.00163652,
+        "k_3sigma": 0.00015701,
+        "model": "integrating_lag",
+        "sse": 0.152939,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "L",
+      "seed": 105,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 80.7751,
+            "k": 0.254804,
+            "k_3sigma": 0.012175,
+            "model": "fopdt",
+            "sse": 0.000540198,
+            "tau": 50.9295,
+            "theta": 30.6444
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 60.6764,
+            "k": 0.00151042,
+            "k_3sigma": 0.000124453,
+            "model": "integrating_lag",
+            "sse": 0.00226012,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.0001691,
+          "snr": 24.0222,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 76.0927,
+            "k": 0.344549,
+            "k_3sigma": 0.00915777,
+            "model": "fopdt",
+            "sse": 0.00300443,
+            "tau": 91.6411,
+            "theta": 19.8193
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 38.2344,
+            "k": 0.00113971,
+            "k_3sigma": 8.36297e-05,
+            "model": "integrating_lag",
+            "sse": 0.0200537,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 400,
+          "sigma": 0.00042989,
+          "snr": 16.4069,
+          "step": -0.110399,
+          "trips": {},
+          "window": 400
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 78.9033,
+            "k": 0.454566,
+            "k_3sigma": 0.00640466,
+            "model": "fopdt",
+            "sse": 0.00983774,
+            "tau": 39.2822,
+            "theta": 37.7772
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 16.8187,
+            "k": 0.00163652,
+            "k_3sigma": 0.00015701,
+            "model": "integrating_lag",
+            "sse": 0.152939,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 400,
+          "sigma": 0.00042989,
+          "snr": 32.209,
+          "step": -0.16239,
+          "trips": {},
+          "window": 400
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "xB",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 55.691,
+        "k": 0.000892613,
+        "k_3sigma": 5.71513e-05,
+        "model": "integrating_lag",
+        "sse": 0.0202636,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "L",
+      "seed": 105,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 71.4701,
+            "k": 7570.99,
+            "k_3sigma": 542.204,
+            "model": "fopdt",
+            "sse": 0.00187653,
+            "tau": 3880040.0,
+            "theta": 26.0927
+          },
+          "integrating_lag": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 78.3322,
+            "k": 0.00354036,
+            "k_3sigma": 0.0020552,
+            "model": "integrating_lag",
+            "sse": 0.00108239,
+            "tau2": 111.847,
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00404254,
+          "snr": 1.50259,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 72.4622,
+            "k": 0.43361,
+            "k_3sigma": 0.0194535,
+            "model": "fopdt",
+            "sse": 0.00799433,
+            "tau": 91.4563,
+            "theta": 72.8646
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 57.0334,
+            "k": 0.00129331,
+            "k_3sigma": 8.23864e-05,
+            "model": "integrating_lag",
+            "sse": 0.0194619,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 400,
+          "sigma": 0.00662791,
+          "snr": 1.224,
+          "step": -0.110399,
+          "trips": {},
+          "window": 400
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 70.2701,
+            "k": 0.303153,
+            "k_3sigma": 0.0158064,
+            "model": "fopdt",
+            "sse": 0.00912266,
+            "tau": 102.729,
+            "theta": 63.8417
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 55.691,
+            "k": 0.000892613,
+            "k_3sigma": 5.71513e-05,
+            "model": "integrating_lag",
+            "sse": 0.0202636,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 400,
+          "sigma": 0.00662791,
+          "snr": 1.23899,
+          "step": -0.16239,
+          "trips": {},
+          "window": 400
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 59.1838,
+        "k": 0.000673459,
+        "k_3sigma": 4.12064e-05,
+        "model": "integrating_lag",
+        "sse": 0.000956866,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "L",
       "seed": 106,
-      "tau": 22.534826340175034,
-      "theta": 2.8373352680556367
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 69.2766,
+            "k": 0.0823487,
+            "k_3sigma": 0.00175894,
+            "model": "fopdt",
+            "sse": 7.32172e-05,
+            "tau": 22.5348,
+            "theta": 2.83734
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -56.3077,
+            "k": 0.000588043,
+            "k_3sigma": 0.000113961,
+            "model": "integrating_lag",
+            "sse": 0.00189512,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.000587668,
+          "snr": 2.54531,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 64.5117,
+            "k": 0.0810266,
+            "k_3sigma": 0.00185648,
+            "model": "fopdt",
+            "sse": 9.81149e-05,
+            "tau": 21.227,
+            "theta": 3.32603
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -67.0563,
+            "k": 0.000548883,
+            "k_3sigma": 0.000109624,
+            "model": "integrating_lag",
+            "sse": 0.00217416,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 211,
+          "sigma": 0.000617582,
+          "snr": 2.42203,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 211
+            }
+          },
+          "window": 400
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 59.1833,
+            "k": 5012.56,
+            "k_3sigma": 306.844,
+            "model": "fopdt",
+            "sse": 0.000956888,
+            "tau": 7442850.0,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 59.1838,
+            "k": 0.000673459,
+            "k_3sigma": 4.12064e-05,
+            "model": "integrating_lag",
+            "sse": 0.000956866,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": 2.85068,
+              "mv": "L",
+              "n_pre": 236
+            }
+          ],
+          "samples": 400,
+          "sigma": 0.00199286,
+          "snr": 1.28259,
+          "step": 0.1,
+          "trips": {},
+          "window": 400
+        }
+      ]
     },
     {
-      "M": 2,
-      "N": 8,
-      "P": 10,
-      "class": "integrating",
-      "cv": "yD",
-      "du": 0.1,
-      "k": 0.0006078820429036838,
-      "model": "integrating_lag",
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "xB",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": -125.797,
+        "k": 0.00158872,
+        "k_3sigma": 0.000249813,
+        "model": "integrating_lag",
+        "sse": 0.0351685,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
       "mv": "L",
-      "rms": 0.002311427213844193,
-      "samples": 200,
+      "seed": 106,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 89.2524,
+            "k": 1.02564,
+            "k_3sigma": 0.086039,
+            "model": "fopdt",
+            "sse": 0.00129881,
+            "tau": 137.954,
+            "theta": 13.7582
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 79.4511,
+            "k": 0.00425065,
+            "k_3sigma": 0.000180381,
+            "model": "integrating_lag",
+            "sse": 0.00474791,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.000959374,
+          "snr": 12.5995,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 89.6022,
+            "k": 0.997313,
+            "k_3sigma": 0.0680592,
+            "model": "fopdt",
+            "sse": 0.00133084,
+            "tau": 131.254,
+            "theta": 14.4017
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 77.6705,
+            "k": 0.00416319,
+            "k_3sigma": 0.000184189,
+            "model": "integrating_lag",
+            "sse": 0.0061377,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 211,
+          "sigma": 0.00110588,
+          "snr": 11.7331,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 211
+            }
+          },
+          "window": 400
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 0.381957,
+            "k": 0.469473,
+            "k_3sigma": 0.0199264,
+            "model": "fopdt",
+            "sse": 0.00684531,
+            "tau": 49.8683,
+            "theta": 9.32677
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -125.797,
+            "k": 0.00158872,
+            "k_3sigma": 0.000249813,
+            "model": "integrating_lag",
+            "sse": 0.0351685,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": 2.85068,
+              "mv": "L",
+              "n_pre": 236
+            }
+          ],
+          "samples": 400,
+          "sigma": 0.00147833,
+          "snr": 2.69072,
+          "step": 0.1,
+          "trips": {},
+          "window": 400
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 17.741,
+        "k": 0.00313681,
+        "k_3sigma": 0.000325553,
+        "model": "integrating_lag",
+        "sse": 0.0437552,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "L",
       "seed": 107,
-      "tau2": 1.0000866182480876e-09,
-      "theta": 4.567312426588845e-16
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 29.8029,
+            "k": 8.5521,
+            "k_3sigma": 649.007,
+            "model": "fopdt",
+            "sse": 0.00106854,
+            "tau": 13993.4,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 29.803,
+            "k": 0.000607882,
+            "k_3sigma": 8.55725e-05,
+            "model": "integrating_lag",
+            "sse": 0.00106854,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00304149,
+          "snr": 0.954593,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 84.2219,
+            "k": 0.0490402,
+            "k_3sigma": 0.00150203,
+            "model": "fopdt",
+            "sse": 7.97388e-06,
+            "tau": 13.7004,
+            "theta": 1.53158
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 4.45848,
+            "k": 0.000965016,
+            "k_3sigma": 0.000229628,
+            "model": "integrating_lag",
+            "sse": 0.000292379,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 69,
+          "sigma": 0.000347431,
+          "snr": 3.93014,
+          "step": 0.166211,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 69
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 80.0396,
+            "k": 0.506822,
+            "k_3sigma": 0.0152356,
+            "model": "fopdt",
+            "sse": 0.00257632,
+            "tau": 61.4864,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 17.741,
+            "k": 0.00313681,
+            "k_3sigma": 0.000325553,
+            "model": "integrating_lag",
+            "sse": 0.0437552,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": 1.26137,
+              "mv": "L",
+              "n_pre": 594
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.00385553,
+          "snr": 3.63327,
+          "step": 0.166211,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 2,
-      "N": 8,
-      "P": 10,
-      "class": "integrating",
-      "cv": "yD",
-      "du": 0.1,
-      "k": 0.0008480808029202736,
-      "model": "integrating_lag",
-      "mv": "L",
-      "rms": 0.000925652119166975,
-      "samples": 200,
-      "seed": 108,
-      "tau2": 1.0000000003075684e-09,
-      "theta": 3.0972088779140923e-19
-    },
-    {
-      "M": 2,
-      "N": 8,
-      "P": 10,
-      "class": "integrating",
-      "cv": "yD",
-      "du": 0.1,
-      "k": 0.0010369869228449601,
-      "model": "integrating_lag",
-      "mv": "L",
-      "rms": 0.0021729876755880854,
-      "samples": 200,
-      "seed": 109,
-      "tau2": 1.0000000043416531e-09,
-      "theta": 6.287709931810043e-19
-    },
-    {
-      "M": 2,
-      "N": 8,
-      "P": 10,
-      "class": "integrating",
+      "M": 30,
+      "N": 150,
+      "P": 180,
       "cv": "xB",
-      "du": -0.1,
-      "k": 0.001524855559487875,
-      "model": "integrating_lag",
+      "evidence": "integrating_lag",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 81.2494,
+        "k": 0.000982293,
+        "k_3sigma": 6.16687e-05,
+        "model": "integrating_lag",
+        "sse": 0.00048122,
+        "tau2": 17.9279,
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "valid",
       "mv": "L",
-      "rms": 0.0031062279646971894,
-      "samples": 200,
-      "seed": 100,
-      "tau2": 1.000000009596206e-09,
-      "theta": 4.9022189140139795e-20
-    },
-    {
-      "M": 2,
-      "N": 8,
-      "P": 10,
-      "class": "integrating",
-      "cv": "xB",
-      "du": -0.1,
-      "k": 0.000464390106572239,
-      "model": "integrating_lag",
-      "mv": "L",
-      "rms": 0.0019451000974620258,
-      "samples": 160,
-      "seed": 101,
-      "tau2": 1.0000002417958617e-09,
-      "theta": 3.137560971242325e-17
+      "seed": 107,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 51.7984,
+            "k": 0.491544,
+            "k_3sigma": 0.0305895,
+            "model": "fopdt",
+            "sse": 0.0189415,
+            "tau": 17.1551,
+            "theta": 39.7538
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 12.7866,
+            "k": 0.00324639,
+            "k_3sigma": 0.00065188,
+            "model": "integrating_lag",
+            "sse": 0.0620094,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00305897,
+          "snr": 3.49236,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 82.7265,
+            "k": 12966.9,
+            "k_3sigma": 1076.27,
+            "model": "fopdt",
+            "sse": 0.00131913,
+            "tau": 1360970.0,
+            "theta": 19.497
+          },
+          "integrating_lag": {
+            "V2": false,
+            "V3": false,
+            "V4": true,
+            "fit": 92.7955,
+            "k": 0.021116,
+            "k_3sigma": 0.0164197,
+            "model": "integrating_lag",
+            "sse": 0.000229473,
+            "tau2": 69.0,
+            "theta": 2.54443
+          },
+          "loops": [],
+          "samples": 69,
+          "sigma": 0.000486522,
+          "snr": 29.22,
+          "step": 0.166211,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 69
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 80.5896,
+            "k": 4577.64,
+            "k_3sigma": 187.65,
+            "model": "fopdt",
+            "sse": 0.000515685,
+            "tau": 4827440.0,
+            "theta": 13.3986
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 81.2494,
+            "k": 0.000982293,
+            "k_3sigma": 6.16687e-05,
+            "model": "integrating_lag",
+            "sse": 0.00048122,
+            "tau2": 17.9279,
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": 1.26137,
+              "mv": "L",
+              "n_pre": 594
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000139357,
+          "snr": 30.5346,
+          "step": 0.166211,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
       "M": 124,
-      "N": 565,
-      "P": 689,
-      "class": "integrating",
-      "cv": "xB",
-      "du": 0.1,
-      "k": 0.01235082649489532,
-      "model": "integrating_lag",
+      "N": 540,
+      "P": 664,
+      "cv": "yD",
+      "evidence": "integrating_lag",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 93.9032,
+        "k": 0.00538193,
+        "k_3sigma": 0.000173034,
+        "model": "integrating_lag",
+        "sse": 0.000535235,
+        "tau2": 22.7207,
+        "theta": 20.9712
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "L",
-      "rms": 0.002525439992795161,
-      "samples": 121,
-      "seed": 102,
-      "tau2": 42.61807743953885,
-      "theta": 13.087190659554851
-    },
-    {
-      "M": 11,
-      "N": 52,
-      "P": 63,
-      "class": "self-regulating",
-      "cv": "xB",
-      "du": -0.1,
-      "k": 0.01713456908371625,
-      "model": "fopdt",
-      "mv": "L",
-      "rms": 0.00011823837688664142,
-      "samples": 94,
-      "seed": 103,
-      "tau": 10.256171018776156,
-      "theta": 0.6779560003530213
-    },
-    {
-      "M": 67,
-      "N": 331,
-      "P": 398,
-      "class": "integrating",
-      "cv": "xB",
-      "du": 0.1,
-      "k": 0.003667353630712556,
-      "model": "integrating_lag",
-      "mv": "L",
-      "rms": 0.002277508117049154,
-      "samples": 200,
-      "seed": 104,
-      "tau2": 40.77577171067101,
-      "theta": 4.212396510431666e-18
-    },
-    {
-      "M": 179,
-      "N": 893,
-      "P": 1072,
-      "class": "integrating",
-      "cv": "xB",
-      "du": -0.1,
-      "k": 0.003540358852837294,
-      "model": "integrating_lag",
-      "mv": "L",
-      "rms": 0.002326362357089496,
-      "samples": 200,
-      "seed": 105,
-      "tau2": 111.84726864904505,
-      "theta": 1.6824507701715404e-17
-    },
-    {
-      "M": 151,
-      "N": 703,
-      "P": 854,
-      "class": "self-regulating",
-      "cv": "xB",
-      "du": 0.1,
-      "k": 1.0256424706730363,
-      "model": "fopdt",
-      "mv": "L",
-      "rms": 0.00254834714793893,
-      "samples": 200,
-      "seed": 106,
-      "tau": 137.95433853199035,
-      "theta": 13.75821429255208
-    },
-    {
-      "M": 2,
-      "N": 8,
-      "P": 10,
-      "class": "integrating",
-      "cv": "xB",
-      "du": 0.1,
-      "k": 0.0032463872044001273,
-      "model": "integrating_lag",
-      "mv": "L",
-      "rms": 0.017608151285928603,
-      "samples": 200,
-      "seed": 107,
-      "tau2": 1.0000000124705007e-09,
-      "theta": 2.1074612123427507e-18
-    },
-    {
-      "M": 104,
-      "N": 488,
-      "P": 592,
-      "class": "self-regulating",
-      "cv": "xB",
-      "du": 0.1,
-      "k": 0.5428934799397103,
-      "model": "fopdt",
-      "mv": "L",
-      "rms": 0.0022117753839440927,
-      "samples": 200,
       "seed": 108,
-      "tau": 95.97398463348803,
-      "theta": 8.258208210754677
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 92.9355,
+            "k": 295.108,
+            "k_3sigma": 15073.6,
+            "model": "fopdt",
+            "sse": 0.000718631,
+            "tau": 56374.4,
+            "theta": 40.2783
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 93.9032,
+            "k": 0.00538193,
+            "k_3sigma": 0.000173034,
+            "model": "integrating_lag",
+            "sse": 0.000535235,
+            "tau2": 22.7207,
+            "theta": 20.9712
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.000264101,
+          "snr": 50.4215,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 2,
-      "N": 8,
-      "P": 10,
-      "class": "integrating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "xB",
-      "du": 0.1,
-      "k": 0.003071359170715989,
-      "model": "integrating_lag",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": -125.153,
+        "k": 0.000634225,
+        "k_3sigma": 0.000175238,
+        "model": "integrating_lag",
+        "sse": 0.00448104,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 0,
+      "label": "invalid",
       "mv": "L",
-      "rms": 0.010402123662967585,
-      "samples": 200,
-      "seed": 109,
-      "tau2": 1.0000000001898033e-09,
-      "theta": 3.217541539652695e-20
-    },
-    {
-      "M": 21,
-      "N": 98,
-      "P": 119,
-      "class": "self-regulating",
-      "cv": "yD",
-      "du": -0.1,
-      "k": -0.022165952950369317,
-      "model": "fopdt",
-      "mv": "V",
-      "rms": 7.723207425110152e-05,
-      "samples": 144,
-      "seed": 100,
-      "tau": 19.275183588021253,
-      "theta": 1.309560701069269
-    },
-    {
-      "M": 2,
-      "N": 8,
-      "P": 10,
-      "class": "integrating",
-      "cv": "yD",
-      "du": -0.1,
-      "k": -0.000684716415143603,
-      "model": "integrating_lag",
-      "mv": "V",
-      "rms": 0.0019586464397876075,
-      "samples": 200,
-      "seed": 101,
-      "tau2": 1.0000392564917457e-09,
-      "theta": 2.0571656861400906e-14
-    },
-    {
-      "M": 49,
-      "N": 213,
-      "P": 262,
-      "class": "self-regulating",
-      "cv": "yD",
-      "du": 0.1,
-      "k": -0.30873752197010695,
-      "model": "fopdt",
-      "mv": "V",
-      "rms": 0.0009327948104897113,
-      "samples": 200,
-      "seed": 102,
-      "tau": 40.88108379313185,
-      "theta": 8.675316488113078
-    },
-    {
-      "M": 2,
-      "N": 8,
-      "P": 10,
-      "class": "integrating",
-      "cv": "yD",
-      "du": -0.1,
-      "k": -0.001575665157899839,
-      "model": "integrating_lag",
-      "mv": "V",
-      "rms": 0.0045012515058168185,
-      "samples": 200,
-      "seed": 103,
-      "tau2": 1.0000000419187369e-09,
-      "theta": 6.404639969943037e-18
-    },
-    {
-      "M": 36,
-      "N": 176,
-      "P": 212,
-      "class": "integrating",
-      "cv": "yD",
-      "du": 0.1,
-      "k": -0.00950234577340964,
-      "model": "integrating_lag",
-      "mv": "V",
-      "rms": 0.0011009432762527321,
-      "samples": 98,
-      "seed": 104,
-      "tau2": 21.2524118185536,
-      "theta": 7.971516380411973e-17
-    },
-    {
-      "M": 19,
-      "N": 84,
-      "P": 103,
-      "class": "self-regulating",
-      "cv": "yD",
-      "du": -0.1,
-      "k": -0.02183813890385161,
-      "model": "fopdt",
-      "mv": "V",
-      "rms": 0.00015341447214149256,
-      "samples": 126,
-      "seed": 105,
-      "tau": 16.305601368013413,
-      "theta": 2.3186757334319568
-    },
-    {
-      "M": 94,
-      "N": 381,
-      "P": 475,
-      "class": "self-regulating",
-      "cv": "yD",
-      "du": 0.1,
-      "k": -0.5908591999414317,
-      "model": "fopdt",
-      "mv": "V",
-      "rms": 0.002309986040078944,
-      "samples": 200,
-      "seed": 106,
-      "tau": 71.72262722473752,
-      "theta": 22.934959726829934
-    },
-    {
-      "M": 266,
-      "N": 1329,
-      "P": 1595,
-      "class": "integrating",
-      "cv": "yD",
-      "du": 0.1,
-      "k": -0.012549407044909413,
-      "model": "integrating_lag",
-      "mv": "V",
-      "rms": 0.004593091845748182,
-      "samples": 167,
-      "seed": 107,
-      "tau2": 166.99999999999525,
-      "theta": 3.3400781311531742e-15
-    },
-    {
-      "M": 67,
-      "N": 285,
-      "P": 352,
-      "class": "integrating",
-      "cv": "yD",
-      "du": 0.1,
-      "k": -0.006142082841433091,
-      "model": "integrating_lag",
-      "mv": "V",
-      "rms": 0.004452786961433801,
-      "samples": 165,
       "seed": 108,
-      "tau2": 8.238732876240848,
-      "theta": 12.638509890120588
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 37.0564,
+            "k": 0.0903654,
+            "k_3sigma": 0.00315459,
+            "model": "fopdt",
+            "sse": 0.00035021,
+            "tau": 8.79673,
+            "theta": 4.37543
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -125.153,
+            "k": 0.000634225,
+            "k_3sigma": 0.000175238,
+            "model": "integrating_lag",
+            "sse": 0.00448104,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00115206,
+          "snr": 1.6706,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 16,
-      "N": 80,
-      "P": 96,
-      "class": "integrating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "yD",
-      "du": 0.1,
-      "k": -0.0047310228473689915,
-      "model": "integrating_lag",
-      "mv": "V",
-      "rms": 0.0016640764156711323,
-      "samples": 172,
+      "evidence": "integrating_lag",
+      "failed": [
+        "V1"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.136,
+        "k": 0.00446874,
+        "k_3sigma": 0.000232682,
+        "model": "integrating_lag",
+        "others": [
+          {
+            "k": -0.00468443,
+            "tau2": "< dt",
+            "theta": "< dt"
+          }
+        ],
+        "sse": 6.53315e-08,
+        "tau2": 0.727603,
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "L",
       "seed": 109,
-      "tau2": 9.053964727515362,
-      "theta": 3.6909460676606137e-19
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 64.3242,
+            "k": 0.224657,
+            "k_3sigma": 0.0433152,
+            "model": "fopdt",
+            "sse": 0.000564368,
+            "tau": 130.278,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 53.8508,
+            "k": 0.00103699,
+            "k_3sigma": 8.04473e-05,
+            "model": "integrating_lag",
+            "sse": 0.000944375,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00186053,
+          "snr": 2.03506,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 96.0301,
+            "k": 0.0855178,
+            "k_3sigma": 0.00116894,
+            "model": "fopdt",
+            "sse": 1.65904e-06,
+            "tau": 28.152,
+            "theta": 0.176676
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 38.8596,
+            "k": 0.00127721,
+            "k_3sigma": 0.000192523,
+            "model": "integrating_lag",
+            "sse": 0.000393516,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 81,
+          "sigma": 0.00028271,
+          "snr": 7.77482,
+          "step": 0.16633,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 81
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 97.1167,
+            "k": 0.926151,
+            "k_3sigma": 0.90136,
+            "model": "fopdt",
+            "others": [
+              {
+                "k": -0.9451,
+                "tau": 222.322,
+                "theta": "< dt"
+              }
+            ],
+            "sse": 6.62131e-08,
+            "tau": 222.604,
+            "theta": 0.572244
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 97.136,
+            "k": 0.00446874,
+            "k_3sigma": 0.000232682,
+            "model": "integrating_lag",
+            "others": [
+              {
+                "k": -0.00468443,
+                "tau2": "< dt",
+                "theta": "< dt"
+              }
+            ],
+            "sse": 6.53315e-08,
+            "tau2": 0.727603,
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -73.9343,
+              "mv": "V",
+              "n_pre": 16
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.00011993,
+          "snr": 5.83073,
+          "step": 0.16633,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 130,
-      "N": 603,
-      "P": 733,
-      "class": "self-regulating",
+      "M": 14,
+      "N": 68,
+      "P": 82,
       "cv": "xB",
-      "du": -0.1,
-      "k": -1.2170692464458577,
-      "model": "fopdt",
+      "evidence": "integrating_lag",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.4179,
+        "k": 0.00671806,
+        "k_3sigma": 0.000183109,
+        "model": "integrating_lag",
+        "sse": 0.000104149,
+        "tau2": 7.57059,
+        "theta": "< dt"
+      },
+      "kept": 1,
+      "label": "valid",
+      "mv": "L",
+      "seed": 109,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 71.6174,
+            "k": 0.470013,
+            "k_3sigma": 0.0208908,
+            "model": "fopdt",
+            "sse": 0.00374814,
+            "tau": 39.9285,
+            "theta": 18.6196
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 31.8004,
+            "k": 0.00307136,
+            "k_3sigma": 0.000385103,
+            "model": "integrating_lag",
+            "sse": 0.0216408,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.000980972,
+          "snr": 8.46839,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 93.5788,
+            "k": 12766.7,
+            "k_3sigma": 300.82,
+            "model": "fopdt",
+            "sse": 0.000204533,
+            "tau": 1969500.0,
+            "theta": 5.7346
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 95.4179,
+            "k": 0.00671806,
+            "k_3sigma": 0.000183109,
+            "model": "integrating_lag",
+            "sse": 0.000104149,
+            "tau2": 7.57059,
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 81,
+          "sigma": 0.000477442,
+          "snr": 29.1809,
+          "step": 0.16633,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 81
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 92.6893,
+            "k": 0.00888041,
+            "k_3sigma": 0.00193717,
+            "model": "fopdt",
+            "others": [
+              {
+                "k": 0.00417595,
+                "tau": 7.79921,
+                "theta": "< dt"
+              }
+            ],
+            "sse": 2.45177e-08,
+            "tau": 1.22603,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 30.028,
+            "k": 0.00179477,
+            "k_3sigma": 0.000595522,
+            "model": "integrating_lag",
+            "others": [
+              {
+                "k": -0.00189481,
+                "tau2": 0.0537751,
+                "theta": 1.9565
+              }
+            ],
+            "sse": 2.24601e-06,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -73.9343,
+              "mv": "V",
+              "n_pre": 16
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000225313,
+          "snr": 1.5947,
+          "step": 0.16633,
+          "trips": {},
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": -180.44,
+        "k": -0.000105733,
+        "k_3sigma": 1.63911e-05,
+        "model": "integrating_lag",
+        "sse": 1.23915e-05,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 1,
+      "label": "invalid",
       "mv": "V",
-      "rms": 0.001973597712202705,
-      "samples": 144,
       "seed": 100,
-      "tau": 118.28576645961552,
-      "theta": 11.685191452798447
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 84.9879,
+            "k": -0.0221656,
+            "k_3sigma": 0.000286808,
+            "model": "fopdt",
+            "sse": 8.59004e-07,
+            "tau": 19.2749,
+            "theta": 1.30924
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -41.3839,
+            "k": -0.000219881,
+            "k_3sigma": 4.42104e-05,
+            "model": "integrating_lag",
+            "sse": 7.61922e-05,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 144,
+          "sigma": 6.11318e-05,
+          "snr": 6.30561,
+          "step": -0.1,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 144
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 67.3483,
+            "k": -0.0162663,
+            "k_3sigma": 0.000207365,
+            "model": "fopdt",
+            "sse": 1.67979e-07,
+            "tau": 25.5017,
+            "theta": 1.75125e-06
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -180.44,
+            "k": -0.000105733,
+            "k_3sigma": 1.63911e-05,
+            "model": "integrating_lag",
+            "sse": 1.23915e-05,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -2.63008,
+              "mv": "V",
+              "n_pre": 193
+            }
+          ],
+          "samples": 200,
+          "sigma": 7.91867e-05,
+          "snr": 1.54594,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
       "M": 2,
       "N": 8,
       "P": 10,
-      "class": "integrating",
       "cv": "xB",
-      "du": -0.1,
-      "k": -0.0028142353429917145,
-      "model": "integrating_lag",
+      "evidence": "integrating_lag",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 84.8858,
+        "k": -0.00618657,
+        "k_3sigma": 0.000236614,
+        "model": "integrating_lag",
+        "sse": 0.00218244,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "V",
-      "rms": 0.011809940371719311,
-      "samples": 200,
+      "seed": 100,
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 92.3377,
+            "k": -1.21707,
+            "k_3sigma": 0.113559,
+            "model": "fopdt",
+            "sse": 0.000560913,
+            "tau": 118.285,
+            "theta": 11.6853
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 84.8858,
+            "k": -0.00618657,
+            "k_3sigma": 0.000236614,
+            "model": "integrating_lag",
+            "sse": 0.00218244,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 144,
+          "sigma": 0.00040106,
+          "snr": 33.2466,
+          "step": -0.1,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 144
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 81.249,
+            "k": -0.824546,
+            "k_3sigma": 0.0126764,
+            "model": "fopdt",
+            "sse": 0.000235315,
+            "tau": 54.3127,
+            "theta": 6.14509
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -29.7588,
+            "k": -0.00483696,
+            "k_3sigma": 0.000494289,
+            "model": "integrating_lag",
+            "sse": 0.0112686,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -2.63008,
+              "mv": "V",
+              "n_pre": 193
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.00262736,
+          "snr": 1.71367,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": -24.3482,
+        "k": -0.000267165,
+        "k_3sigma": 2.69921e-05,
+        "model": "integrating_lag",
+        "sse": 0.000247839,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "V",
       "seed": 101,
-      "tau2": 1.000000006323807e-09,
-      "theta": 9.15617112323403e-19
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 53.4059,
+            "k": -1479.7,
+            "k_3sigma": 156.745,
+            "model": "fopdt",
+            "sse": 0.00076728,
+            "tau": 2160980.0,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 53.4065,
+            "k": -0.000684716,
+            "k_3sigma": 7.25121e-05,
+            "model": "integrating_lag",
+            "sse": 0.000767259,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00270336,
+          "snr": 1.22003,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 93.9285,
+            "k": -0.0362311,
+            "k_3sigma": 0.000564284,
+            "model": "fopdt",
+            "sse": 8.71989e-07,
+            "tau": 16.1529,
+            "theta": 1.17976
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 22.4629,
+            "k": -0.000729756,
+            "k_3sigma": 0.000150189,
+            "model": "integrating_lag",
+            "sse": 0.000142213,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 65,
+          "sigma": 8.7766e-05,
+          "snr": 13.2168,
+          "step": -0.2,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 65
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 65.4432,
+            "k": -0.0451488,
+            "k_3sigma": 0.0013938,
+            "model": "fopdt",
+            "sse": 1.91407e-05,
+            "tau": 61.9354,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -24.3482,
+            "k": -0.000267165,
+            "k_3sigma": 2.69921e-05,
+            "model": "integrating_lag",
+            "sse": 0.000247839,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -1.57462,
+              "mv": "V",
+              "n_pre": 522
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000245374,
+          "snr": 3.56905,
+          "step": -0.2,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 69,
-      "N": 342,
-      "P": 411,
-      "class": "integrating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "xB",
-      "du": 0.1,
-      "k": -0.0020754650356498055,
-      "model": "integrating_lag",
+      "evidence": null,
+      "failed": [
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 14.7157,
+        "k": -0.00376027,
+        "k_3sigma": 0.000369231,
+        "model": "integrating_lag",
+        "sse": 0.0463762,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
       "mv": "V",
-      "rms": 0.0008141166644112365,
-      "samples": 200,
+      "seed": 101,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 62.9097,
+            "k": -0.425998,
+            "k_3sigma": 0.0216304,
+            "model": "fopdt",
+            "sse": 0.00715926,
+            "tau": 24.175,
+            "theta": 35.6108
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 26.7868,
+            "k": -0.00281424,
+            "k_3sigma": 0.000437222,
+            "model": "integrating_lag",
+            "sse": 0.0278949,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00114341,
+          "snr": 7.39406,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 86.349,
+            "k": -6549.9,
+            "k_3sigma": 434.84,
+            "model": "fopdt",
+            "sse": 0.000940921,
+            "tau": 736718.0,
+            "theta": 16.3548
+          },
+          "integrating_lag": {
+            "V2": false,
+            "V3": false,
+            "V4": true,
+            "fit": 96.1427,
+            "k": -0.0192447,
+            "k_3sigma": 0.00773914,
+            "model": "integrating_lag",
+            "sse": 7.51257e-05,
+            "tau2": 65.0,
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 65,
+          "sigma": 8.61016e-05,
+          "snr": 176.863,
+          "step": -0.2,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 65
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 83.5807,
+            "k": -0.644865,
+            "k_3sigma": 0.0131419,
+            "model": "fopdt",
+            "sse": 0.00171896,
+            "tau": 58.1882,
+            "theta": 10.4018
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 14.7157,
+            "k": -0.00376027,
+            "k_3sigma": 0.000369231,
+            "model": "integrating_lag",
+            "sse": 0.0463762,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -1.57462,
+              "mv": "V",
+              "n_pre": 522
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000540226,
+          "snr": 21.2886,
+          "step": -0.2,
+          "trips": {},
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 5.69936,
+        "k": -0.00129508,
+        "k_3sigma": 0.000139974,
+        "model": "integrating_lag",
+        "sse": 0.133782,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "V",
       "seed": 102,
-      "tau2": 42.241935334105555,
-      "theta": 4.2636553751318135e-16
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 89.4639,
+            "k": -0.308738,
+            "k_3sigma": 0.00424559,
+            "model": "fopdt",
+            "sse": 0.000174021,
+            "tau": 40.8811,
+            "theta": 8.67532
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 26.1119,
+            "k": -0.00208433,
+            "k_3sigma": 0.000242178,
+            "model": "integrating_lag",
+            "sse": 0.00855834,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00113699,
+          "snr": 4.62086,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 87.0239,
+            "k": -0.529772,
+            "k_3sigma": 0.039902,
+            "model": "fopdt",
+            "sse": 0.00174293,
+            "tau": 39.4114,
+            "theta": 13.6736
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 72.6427,
+            "k": -0.00539552,
+            "k_3sigma": 0.000446225,
+            "model": "integrating_lag",
+            "sse": 0.00774707,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 102,
+          "sigma": 0.00060714,
+          "snr": 25.1085,
+          "step": 0.2,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 102
+            }
+          },
+          "window": 400
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 61.2045,
+            "k": -0.369357,
+            "k_3sigma": 0.00978532,
+            "model": "fopdt",
+            "sse": 0.0226429,
+            "tau": 25.1585,
+            "theta": 57.6314
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 5.69936,
+            "k": -0.00129508,
+            "k_3sigma": 0.000139974,
+            "model": "integrating_lag",
+            "sse": 0.133782,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": -1.3146,
+              "mv": "V",
+              "n_pre": 225
+            }
+          ],
+          "samples": 400,
+          "sigma": 0.000738387,
+          "snr": 16.1452,
+          "step": 0.2,
+          "trips": {},
+          "window": 400
+        }
+      ]
     },
     {
-      "M": 318,
-      "N": 1590,
-      "P": 1908,
-      "class": "integrating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "xB",
-      "du": -0.1,
-      "k": -0.005918117664744461,
-      "model": "integrating_lag",
+      "evidence": null,
+      "failed": [],
+      "fit": null,
+      "kept": 2,
+      "label": "insignificant",
       "mv": "V",
-      "rms": 0.0023828364164494077,
-      "samples": 200,
+      "seed": 102,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 87.2054,
+            "k": -3835.06,
+            "k_3sigma": 120.501,
+            "model": "fopdt",
+            "sse": 0.000317766,
+            "tau": 2095480.0,
+            "theta": 26.1538
+          },
+          "integrating_lag": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 91.7363,
+            "k": -0.00207547,
+            "k_3sigma": 0.000136982,
+            "model": "integrating_lag",
+            "sse": 0.000132557,
+            "tau2": 42.2419,
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00186636,
+          "snr": 2.9871,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 75.7023,
+            "k": -0.242993,
+            "k_3sigma": 0.331336,
+            "model": "fopdt",
+            "sse": 7.65926e-05,
+            "tau": 313.16,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 74.8476,
+            "k": -0.000688531,
+            "k_3sigma": 4.59295e-05,
+            "model": "integrating_lag",
+            "sse": 8.20756e-05,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 102,
+          "sigma": 0.00102607,
+          "snr": 2.3734,
+          "step": 0.2,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 102
+            }
+          },
+          "window": 400
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 24.4948,
+            "k": -0.386799,
+            "k_3sigma": 0.0388786,
+            "model": "fopdt",
+            "sse": 0.0573302,
+            "tau": 128.726,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -0.570973,
+            "k": -0.00116377,
+            "k_3sigma": 0.000122049,
+            "model": "integrating_lag",
+            "sse": 0.101713,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": -1.3146,
+              "mv": "V",
+              "n_pre": 225
+            }
+          ],
+          "samples": 400,
+          "sigma": 0.0126419,
+          "snr": 0.919519,
+          "step": 0.2,
+          "trips": {},
+          "window": 400
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "short"
+      ],
+      "fit": null,
+      "kept": 2,
+      "label": "invalid",
+      "mv": "V",
       "seed": 103,
-      "tau2": 199.99999999999997,
-      "theta": 5.87141991712831e-11
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 75.8289,
+            "k": -0.69287,
+            "k_3sigma": 0.0341537,
+            "model": "fopdt",
+            "sse": 0.00803559,
+            "tau": 34.6189,
+            "theta": 46.5528
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 56.0793,
+            "k": -0.00420537,
+            "k_3sigma": 0.000426403,
+            "model": "integrating_lag",
+            "sse": 0.0265315,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00158559,
+          "snr": 7.69989,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 86.3976,
+            "k": -11073.4,
+            "k_3sigma": 587.43,
+            "model": "fopdt",
+            "sse": 0.00136166,
+            "tau": 1276220.0,
+            "theta": 29.1692
+          },
+          "integrating_lag": {
+            "V2": false,
+            "V3": false,
+            "V4": true,
+            "fit": 95.1354,
+            "k": -0.0190059,
+            "k_3sigma": 0.00800006,
+            "model": "integrating_lag",
+            "sse": 0.000174157,
+            "tau2": 105.0,
+            "theta": 2.95098
+          },
+          "loops": [],
+          "samples": 105,
+          "sigma": 0.000342949,
+          "snr": 40.8155,
+          "step": 0.124511,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 105
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": -0.94038,
+              "mv": "V",
+              "n_pre": 885
+            }
+          ],
+          "samples": 0,
+          "sigma": 0.0,
+          "snr": 0.0,
+          "step": 0.124511,
+          "trips": {
+            "base": {
+              "cv": "xB",
+              "index": 0
+            },
+            "step": {
+              "cv": "xB",
+              "index": 0
+            }
+          },
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 11,
-      "N": 49,
-      "P": 60,
-      "class": "self-regulating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "xB",
-      "du": 0.1,
-      "k": -0.04021928343072661,
-      "model": "fopdt",
+      "evidence": null,
+      "failed": [
+        "short"
+      ],
+      "fit": null,
+      "kept": 2,
+      "label": "invalid",
       "mv": "V",
-      "rms": 0.0002527894016158948,
-      "samples": 98,
+      "seed": 103,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 36.6906,
+            "k": -0.0609222,
+            "k_3sigma": 0.00181036,
+            "model": "fopdt",
+            "sse": 0.00011732,
+            "tau": 8.85615,
+            "theta": 1.45298
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -140.399,
+            "k": -0.000444999,
+            "k_3sigma": 0.000107669,
+            "model": "integrating_lag",
+            "sse": 0.00169162,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00152934,
+          "snr": 0.788761,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 58.8433,
+            "k": -0.0585574,
+            "k_3sigma": 0.00198884,
+            "model": "fopdt",
+            "sse": 4.57602e-05,
+            "tau": 9.53445,
+            "theta": 1.08342
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -90.7813,
+            "k": -0.000796848,
+            "k_3sigma": 0.000240868,
+            "model": "integrating_lag",
+            "sse": 0.000983283,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 105,
+          "sigma": 0.000286411,
+          "snr": 4.65245,
+          "step": 0.124511,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 105
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": -0.94038,
+              "mv": "V",
+              "n_pre": 885
+            }
+          ],
+          "samples": 0,
+          "sigma": 0.0,
+          "snr": 0.0,
+          "step": 0.124511,
+          "trips": {
+            "base": {
+              "cv": "xB",
+              "index": 0
+            },
+            "step": {
+              "cv": "xB",
+              "index": 0
+            }
+          },
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 8.61693,
+        "k": -0.00296175,
+        "k_3sigma": 0.000169641,
+        "model": "integrating_lag",
+        "sse": 0.000794947,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "V",
       "seed": 104,
-      "tau": 9.503492073111698,
-      "theta": 1.281058524142582
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 91.9116,
+            "k": -3933.21,
+            "k_3sigma": 115.067,
+            "model": "fopdt",
+            "sse": 0.00032763,
+            "tau": 459016.0,
+            "theta": 14.5138
+          },
+          "integrating_lag": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 95.1298,
+            "k": -0.00950235,
+            "k_3sigma": 0.000561563,
+            "model": "integrating_lag",
+            "sse": 0.000118783,
+            "tau2": 21.2524,
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 98,
+          "sigma": 0.000765292,
+          "snr": 15.0358,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 98
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 63.2577,
+            "k": -0.744482,
+            "k_3sigma": 0.0448111,
+            "model": "fopdt",
+            "sse": 0.000123118,
+            "tau": 138.087,
+            "theta": 8.48009
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 8.8969,
+            "k": -0.00295472,
+            "k_3sigma": 0.000168938,
+            "model": "integrating_lag",
+            "sse": 0.000756929,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": -9.4585,
+              "mv": "V",
+              "n_pre": 176
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.00170998,
+          "snr": 0.998865,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 63.2434,
+            "k": -0.745065,
+            "k_3sigma": 0.044666,
+            "model": "fopdt",
+            "sse": 0.000128611,
+            "tau": 137.659,
+            "theta": 8.47705
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 8.61693,
+            "k": -0.00296175,
+            "k_3sigma": 0.000169641,
+            "model": "integrating_lag",
+            "sse": 0.000794947,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": -9.4585,
+              "mv": "V",
+              "n_pre": 176
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.00170998,
+          "snr": 1.02093,
+          "step": 0.102255,
+          "trips": {},
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "xB",
+      "evidence": null,
+      "failed": [],
+      "fit": null,
+      "kept": 2,
+      "label": "insignificant",
+      "mv": "V",
+      "seed": 104,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 71.2836,
+            "k": -0.0402193,
+            "k_3sigma": 0.00100293,
+            "model": "fopdt",
+            "sse": 6.26244e-06,
+            "tau": 9.50349,
+            "theta": 1.28106
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -78.6771,
+            "k": -0.000589194,
+            "k_3sigma": 0.000171137,
+            "model": "integrating_lag",
+            "sse": 0.000242449,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 98,
+          "sigma": 0.000119861,
+          "snr": 5.98732,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 98
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 55.3925,
+            "k": -0.113971,
+            "k_3sigma": 0.00365743,
+            "model": "fopdt",
+            "sse": 8.91355e-06,
+            "tau": 56.0159,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -70.9106,
+            "k": -0.00063411,
+            "k_3sigma": 7.02403e-05,
+            "model": "integrating_lag",
+            "sse": 0.00013085,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": -9.4585,
+              "mv": "V",
+              "n_pre": 176
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000570619,
+          "snr": 0.85076,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 55.4228,
+            "k": -0.113362,
+            "k_3sigma": 0.0036331,
+            "model": "fopdt",
+            "sse": 9.19684e-06,
+            "tau": 55.8452,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -71.035,
+            "k": -0.000631154,
+            "k_3sigma": 7.00087e-05,
+            "model": "integrating_lag",
+            "sse": 0.000135389,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": -9.4585,
+              "mv": "V",
+              "n_pre": 176
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000570619,
+          "snr": 0.865239,
+          "step": 0.102255,
+          "trips": {},
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": -68.0399,
+        "k": -0.000278518,
+        "k_3sigma": 1.70727e-05,
+        "model": "integrating_lag",
+        "sse": 7.41035e-06,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "V",
+      "seed": 105,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 71.7513,
+            "k": -0.0218381,
+            "k_3sigma": 0.000604849,
+            "model": "fopdt",
+            "sse": 2.96554e-06,
+            "tau": 16.3056,
+            "theta": 2.31868
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -38.8534,
+            "k": -0.000245591,
+            "k_3sigma": 5.60824e-05,
+            "model": "integrating_lag",
+            "sse": 7.16502e-05,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 126,
+          "sigma": 0.000110672,
+          "snr": 3.51256,
+          "step": -0.1,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 126
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 63.501,
+            "k": -0.0694855,
+            "k_3sigma": 0.0022007,
+            "model": "fopdt",
+            "sse": 2.85106e-07,
+            "tau": 127.387,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -53.7324,
+            "k": -0.000293248,
+            "k_3sigma": 1.72285e-05,
+            "model": "integrating_lag",
+            "sse": 5.05795e-06,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -13.2756,
+              "mv": "V",
+              "n_pre": 157
+            }
+          ],
+          "samples": 200,
+          "sigma": 6.33816e-05,
+          "snr": 2.15103,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 60.0979,
+            "k": -0.0642336,
+            "k_3sigma": 0.00199239,
+            "model": "fopdt",
+            "sse": 4.17836e-07,
+            "tau": 120.133,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -68.0399,
+            "k": -0.000278518,
+            "k_3sigma": 1.70727e-05,
+            "model": "integrating_lag",
+            "sse": 7.41035e-06,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -13.2756,
+              "mv": "V",
+              "n_pre": 157
+            }
+          ],
+          "samples": 200,
+          "sigma": 6.33816e-05,
+          "snr": 2.4772,
+          "step": -0.125015,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
       "M": 32,
       "N": 157,
       "P": 189,
-      "class": "integrating",
       "cv": "xB",
-      "du": -0.1,
-      "k": -0.007624910202718319,
-      "model": "integrating_lag",
+      "evidence": "integrating_lag",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.497,
+        "k": -0.00762491,
+        "k_3sigma": 0.000133549,
+        "model": "integrating_lag",
+        "sse": 4.95331e-05,
+        "tau2": 18.758,
+        "theta": "< dt"
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "V",
-      "rms": 0.0006269924959169006,
-      "samples": 126,
       "seed": 105,
-      "tau2": 18.75798846988853,
-      "theta": 5.381423399800261e-16
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 94.0041,
+            "k": -18299.8,
+            "k_3sigma": 339.025,
+            "model": "fopdt",
+            "sse": 0.00028424,
+            "tau": 2543300.0,
+            "theta": 14.0644
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 97.497,
+            "k": -0.00762491,
+            "k_3sigma": 0.000133549,
+            "model": "integrating_lag",
+            "sse": 4.95331e-05,
+            "tau2": 18.758,
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 126,
+          "sigma": 0.000871445,
+          "snr": 15.5936,
+          "step": -0.1,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 126
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 82.7679,
+            "k": -0.676803,
+            "k_3sigma": 0.0135886,
+            "model": "fopdt",
+            "sse": 7.91904e-06,
+            "tau": 139.86,
+            "theta": 0.801263
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -20.9286,
+            "k": -0.00271794,
+            "k_3sigma": 0.000151282,
+            "model": "integrating_lag",
+            "sse": 0.000389989,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -13.2756,
+              "mv": "V",
+              "n_pre": 157
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.00036604,
+          "snr": 3.18125,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 82.7832,
+            "k": -0.682978,
+            "k_3sigma": 0.013051,
+            "model": "fopdt",
+            "sse": 1.20835e-05,
+            "tau": 134.673,
+            "theta": 1.08403
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -25.345,
+            "k": -0.0027931,
+            "k_3sigma": 0.000158721,
+            "model": "integrating_lag",
+            "sse": 0.000640475,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -13.2756,
+              "mv": "V",
+              "n_pre": 157
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.00036604,
+          "snr": 3.9781,
+          "step": -0.125015,
+          "trips": {},
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 57,
-      "N": 284,
-      "P": 341,
-      "class": "self-regulating",
-      "cv": "xB",
-      "du": 0.1,
-      "k": -0.13592506697531634,
-      "model": "fopdt",
+      "M": 35,
+      "N": 168,
+      "P": 203,
+      "cv": "yD",
+      "evidence": "integrating_lag",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 92.6535,
+        "k": -0.00680765,
+        "k_3sigma": 0.000428486,
+        "model": "integrating_lag",
+        "sse": 0.000444727,
+        "tau2": 16.2126,
+        "theta": 1.94875
+      },
+      "kept": 2,
+      "label": "valid",
       "mv": "V",
-      "rms": 0.0009910901850361264,
-      "samples": 200,
       "seed": 106,
-      "tau": 56.646484161678174,
-      "theta": 2.143309442094757e-31
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 87.1099,
+            "k": -0.590859,
+            "k_3sigma": 0.026629,
+            "model": "fopdt",
+            "sse": 0.00106721,
+            "tau": 71.7226,
+            "theta": 22.935
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 68.7936,
+            "k": -0.00323033,
+            "k_3sigma": 0.000207039,
+            "model": "integrating_lag",
+            "sse": 0.00625497,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.000587668,
+          "snr": 14.8635,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 75.1372,
+            "k": -0.529999,
+            "k_3sigma": 0.00745788,
+            "model": "fopdt",
+            "sse": 0.0122775,
+            "tau": 30.3832,
+            "theta": 31.853
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -13.5819,
+            "k": -0.00191693,
+            "k_3sigma": 0.000232082,
+            "model": "integrating_lag",
+            "sse": 0.256228,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 400,
+          "sigma": 0.000824766,
+          "snr": 16.4095,
+          "step": 0.1422,
+          "trips": {},
+          "window": 400
+        },
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 91.0123,
+            "k": -4826.39,
+            "k_3sigma": 152.23,
+            "model": "fopdt",
+            "sse": 0.000665635,
+            "tau": 749304.0,
+            "theta": 14.4901
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 92.6535,
+            "k": -0.00680765,
+            "k_3sigma": 0.000428486,
+            "model": "integrating_lag",
+            "sse": 0.000444727,
+            "tau2": 16.2126,
+            "theta": 1.94875
+          },
+          "loops": [],
+          "samples": 103,
+          "sigma": 0.000125526,
+          "snr": 112.657,
+          "step": 0.157187,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 103
+            }
+          },
+          "window": 400
+        }
+      ]
     },
     {
-      "M": 2,
-      "N": 8,
-      "P": 10,
-      "class": "integrating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "xB",
-      "du": 0.1,
-      "k": -0.0008277635707539657,
-      "model": "integrating_lag",
+      "evidence": "fopdt",
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": -21.7596,
+        "k": -0.000983304,
+        "k_3sigma": 0.000201566,
+        "model": "integrating_lag",
+        "sse": 0.00101558,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
       "mv": "V",
-      "rms": 0.0031824537446938426,
-      "samples": 167,
+      "seed": 106,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 69.0423,
+            "k": -0.135925,
+            "k_3sigma": 0.00625372,
+            "model": "fopdt",
+            "sse": 0.000196452,
+            "tau": 56.6465,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 21.46,
+            "k": -0.00088157,
+            "k_3sigma": 9.3087e-05,
+            "model": "integrating_lag",
+            "sse": 0.00126445,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.000959374,
+          "snr": 2.63943,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 66.8843,
+            "k": -0.250953,
+            "k_3sigma": 0.0302029,
+            "model": "fopdt",
+            "sse": 0.00249001,
+            "tau": 253.214,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 52.0161,
+            "k": -0.000587386,
+            "k_3sigma": 3.31505e-05,
+            "model": "integrating_lag",
+            "sse": 0.00522786,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 400,
+          "sigma": 0.00254176,
+          "snr": 1.81388,
+          "step": 0.1422,
+          "trips": {},
+          "window": 400
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 95.1905,
+            "k": -0.0718486,
+            "k_3sigma": 0.000404918,
+            "model": "fopdt",
+            "sse": 1.58454e-06,
+            "tau": 17.6196,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -21.7596,
+            "k": -0.000983304,
+            "k_3sigma": 0.000201566,
+            "model": "integrating_lag",
+            "sse": 0.00101558,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 103,
+          "sigma": 0.000199429,
+          "snr": 9.6839,
+          "step": 0.157187,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 103
+            }
+          },
+          "window": 400
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 49.3573,
+        "k": -0.0065587,
+        "k_3sigma": 0.000558035,
+        "model": "integrating_lag",
+        "sse": 0.0074353,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 1,
+      "label": "invalid",
+      "mv": "V",
       "seed": 107,
-      "tau2": 1.000006214281281e-09,
-      "theta": 4.959359322734287e-15
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 71.6862,
+            "k": -11599.6,
+            "k_3sigma": 940.802,
+            "model": "fopdt",
+            "sse": 0.00658131,
+            "tau": 2392710.0,
+            "theta": 26.5652
+          },
+          "integrating_lag": {
+            "V2": false,
+            "V3": false,
+            "V4": false,
+            "fit": 79.284,
+            "k": -0.0125494,
+            "k_3sigma": 0.0160733,
+            "model": "integrating_lag",
+            "sse": 0.00352311,
+            "tau2": 167.0,
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 167,
+          "sigma": 0.00147641,
+          "snr": 9.63441,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 167
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 84.0145,
+            "k": -0.858499,
+            "k_3sigma": 0.0388632,
+            "model": "fopdt",
+            "sse": 0.000740824,
+            "tau": 55.9852,
+            "theta": 10.3252
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 49.3573,
+            "k": -0.0065587,
+            "k_3sigma": 0.000558035,
+            "model": "integrating_lag",
+            "sse": 0.0074353,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": -0.948631,
+              "mv": "V",
+              "n_pre": 1329
+            }
+          ],
+          "samples": 136,
+          "sigma": 0.00193551,
+          "snr": 4.10274,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 136
+            }
+          },
+          "window": 200
+        }
+      ]
     },
     {
-      "M": 11,
-      "N": 43,
-      "P": 54,
-      "class": "self-regulating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "xB",
-      "du": 0.1,
-      "k": -0.054317779943770815,
-      "model": "fopdt",
+      "evidence": "fopdt",
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": -144.107,
+        "k": -0.000193431,
+        "k_3sigma": 4.71585e-05,
+        "model": "integrating_lag",
+        "sse": 5.31003e-05,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 1,
+      "label": "invalid",
       "mv": "V",
-      "rms": 0.0008304307988867914,
-      "samples": 165,
+      "seed": 107,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 49.4708,
+            "k": -0.103804,
+            "k_3sigma": 0.00823355,
+            "model": "fopdt",
+            "sse": 0.00046979,
+            "tau": 33.8211,
+            "theta": 6.39827
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 4.12383,
+            "k": -0.000827764,
+            "k_3sigma": 0.000154648,
+            "model": "integrating_lag",
+            "sse": 0.00169138,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 167,
+          "sigma": 0.00232961,
+          "snr": 0.885812,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 167
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 87.686,
+            "k": -0.0200578,
+            "k_3sigma": 0.000145856,
+            "model": "fopdt",
+            "sse": 1.35125e-07,
+            "tau": 13.1971,
+            "theta": 0.270467
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -144.107,
+            "k": -0.000193431,
+            "k_3sigma": 4.71585e-05,
+            "model": "integrating_lag",
+            "sse": 5.31003e-05,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": -0.948631,
+              "mv": "V",
+              "n_pre": 1329
+            }
+          ],
+          "samples": 136,
+          "sigma": 0.000135491,
+          "snr": 1.98261,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 136
+            }
+          },
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "yD",
+      "evidence": null,
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": -59.3543,
+        "k": -0.000129556,
+        "k_3sigma": 2.40825e-05,
+        "model": "integrating_lag",
+        "sse": 0.000364609,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "V",
       "seed": 108,
-      "tau": 8.187388915505233,
-      "theta": 2.6294014570886275
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 84.6886,
+            "k": -0.0596414,
+            "k_3sigma": 0.0033018,
+            "model": "fopdt",
+            "sse": 9.09277e-06,
+            "tau": 98.7445,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 54.9712,
+            "k": -0.000316167,
+            "k_3sigma": 2.32148e-05,
+            "model": "integrating_lag",
+            "sse": 7.86411e-05,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.000264101,
+          "snr": 3.59428,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 81.5175,
+            "k": -0.0493288,
+            "k_3sigma": 0.00152226,
+            "model": "fopdt",
+            "sse": 2.39187e-05,
+            "tau": 92.5983,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 32.7198,
+            "k": -0.000219306,
+            "k_3sigma": 1.8417e-05,
+            "model": "integrating_lag",
+            "sse": 0.000316949,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 277,
+          "sigma": 0.000397971,
+          "snr": 2.64738,
+          "step": -0.131642,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 277
+            }
+          },
+          "window": 400
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 41.4407,
+            "k": -0.0483633,
+            "k_3sigma": 0.00217513,
+            "model": "fopdt",
+            "sse": 4.9237e-05,
+            "tau": 49.9559,
+            "theta": 1.46466
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -59.3543,
+            "k": -0.000129556,
+            "k_3sigma": 2.40825e-05,
+            "model": "integrating_lag",
+            "sse": 0.000364609,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -5.7371,
+              "mv": "V",
+              "n_pre": 87
+            }
+          ],
+          "samples": 400,
+          "sigma": 0.000310152,
+          "snr": 1.12418,
+          "step": -0.131642,
+          "trips": {},
+          "window": 400
+        }
+      ]
     },
     {
-      "M": 19,
-      "N": 94,
-      "P": 113,
-      "class": "self-regulating",
+      "M": null,
+      "N": null,
+      "P": null,
       "cv": "xB",
-      "du": 0.1,
-      "k": -0.0983942206716623,
-      "model": "fopdt",
+      "evidence": null,
+      "failed": [],
+      "fit": null,
+      "kept": 2,
+      "label": "insignificant",
       "mv": "V",
-      "rms": 0.0008292040301314018,
-      "samples": 172,
+      "seed": 108,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 84.7939,
+            "k": -0.590806,
+            "k_3sigma": 0.0193658,
+            "model": "fopdt",
+            "sse": 0.00122164,
+            "tau": 63.9902,
+            "theta": 4.79927
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 41.7225,
+            "k": -0.00361998,
+            "k_3sigma": 0.000350666,
+            "model": "integrating_lag",
+            "sse": 0.0179436,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 200,
+          "sigma": 0.00115206,
+          "snr": 8.2886,
+          "step": -0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 83.1721,
+            "k": -0.611399,
+            "k_3sigma": 0.0103689,
+            "model": "fopdt",
+            "sse": 0.00366658,
+            "tau": 57.2861,
+            "theta": 4.97505
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 14.3659,
+            "k": -0.00301734,
+            "k_3sigma": 0.000318766,
+            "model": "integrating_lag",
+            "sse": 0.09495,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 277,
+          "sigma": 0.00155585,
+          "snr": 9.58191,
+          "step": -0.131642,
+          "trips": {
+            "step": {
+              "cv": "xB",
+              "index": 277
+            }
+          },
+          "window": 400
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 62.4869,
+            "k": -0.877196,
+            "k_3sigma": 0.0188439,
+            "model": "fopdt",
+            "sse": 0.000629456,
+            "tau": 171.522,
+            "theta": 1.38732
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -53.0327,
+            "k": -0.002218,
+            "k_3sigma": 0.000129084,
+            "model": "integrating_lag",
+            "sse": 0.0104753,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "xB",
+              "kc": -5.7371,
+              "mv": "V",
+              "n_pre": 87
+            }
+          ],
+          "samples": 400,
+          "sigma": 0.00402215,
+          "snr": 0.840613,
+          "step": -0.131642,
+          "trips": {},
+          "window": 400
+        }
+      ]
+    },
+    {
+      "M": 16,
+      "N": 80,
+      "P": 96,
+      "cv": "yD",
+      "evidence": "integrating_lag",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 92.8219,
+        "k": -0.00473102,
+        "k_3sigma": 0.000106828,
+        "model": "integrating_lag",
+        "sse": 0.000476294,
+        "tau2": 9.05396,
+        "theta": "< dt"
+      },
+      "kept": 0,
+      "label": "valid",
+      "mv": "V",
       "seed": 109,
-      "tau": 18.78435504992514,
-      "theta": 0.4873314157452654
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 92.9848,
+            "k": -4.15776,
+            "k_3sigma": 2.56076,
+            "model": "fopdt",
+            "sse": 0.000454925,
+            "tau": 798.138,
+            "theta": 11.4083
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 92.8219,
+            "k": -0.00473102,
+            "k_3sigma": 0.000106828,
+            "model": "integrating_lag",
+            "sse": 0.000476294,
+            "tau2": 9.05396,
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 172,
+          "sigma": 0.00071835,
+          "snr": 17.6602,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 172
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 48.5941,
+            "k": -0.0024311,
+            "k_3sigma": 0.000557227,
+            "model": "fopdt",
+            "others": [
+              {
+                "k": -0.00129031,
+                "tau": 2.48258,
+                "theta": "< dt"
+              }
+            ],
+            "sse": 1.57806e-08,
+            "tau": 0.0975365,
+            "theta": 0.768418
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -101.819,
+            "k": -0.000437016,
+            "k_3sigma": 0.000141086,
+            "model": "integrating_lag",
+            "others": [
+              {
+                "k": 0.000458952,
+                "tau2": 0.0327846,
+                "theta": 3.94292
+              }
+            ],
+            "sse": 2.43232e-07,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": 259.06,
+              "mv": "L",
+              "n_pre": 14
+            }
+          ],
+          "samples": 200,
+          "sigma": 6.13848e-05,
+          "snr": 1.01745,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 49.6587,
+            "k": -0.00247913,
+            "k_3sigma": 0.000797431,
+            "model": "fopdt",
+            "others": [
+              {
+                "k": -0.00125345,
+                "tau": 2.79072,
+                "theta": "< dt"
+              }
+            ],
+            "sse": 5.62268e-08,
+            "tau": 0.131922,
+            "theta": 0.697291
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -96.4331,
+            "k": -0.000455949,
+            "k_3sigma": 0.000141893,
+            "model": "integrating_lag",
+            "others": [
+              {
+                "k": 0.000476416,
+                "tau2": 0.0117381,
+                "theta": 3.67934
+              }
+            ],
+            "sse": 8.56099e-07,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": 259.06,
+              "mv": "L",
+              "n_pre": 14
+            }
+          ],
+          "samples": 200,
+          "sigma": 6.13848e-05,
+          "snr": 1.95527,
+          "step": 0.191449,
+          "trips": {},
+          "window": 200
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "xB",
+      "evidence": "fopdt",
+      "failed": [
+        "V1",
+        "V4"
+      ],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": false,
+        "fit": 69.5311,
+        "k": 0.00237369,
+        "k_3sigma": 0.00377682,
+        "model": "integrating_lag",
+        "others": [
+          {
+            "k": -0.00242241,
+            "tau2": "< dt",
+            "theta": "< dt"
+          }
+        ],
+        "sse": 1.12787e-05,
+        "tau2": 16.888,
+        "theta": 1.6356
+      },
+      "kept": 2,
+      "label": "invalid",
+      "mv": "V",
+      "seed": 109,
+      "tests": [
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 62.1991,
+            "k": -0.0983942,
+            "k_3sigma": 0.00254803,
+            "model": "fopdt",
+            "sse": 0.000118264,
+            "tau": 18.7844,
+            "theta": 0.487334
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -75.3938,
+            "k": -0.000819764,
+            "k_3sigma": 0.000178822,
+            "model": "integrating_lag",
+            "sse": 0.0025461,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 172,
+          "sigma": 0.000700898,
+          "snr": 2.68073,
+          "step": 0.1,
+          "trips": {
+            "step": {
+              "cv": "yD",
+              "index": 172
+            }
+          },
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 86.0481,
+            "k": -0.420231,
+            "k_3sigma": 0.0517541,
+            "model": "fopdt",
+            "others": [
+              {
+                "k": 0.407681,
+                "tau": 15.9506,
+                "theta": "< dt"
+              }
+            ],
+            "sse": 8.97745e-07,
+            "tau": 19.8279,
+            "theta": 0.782316
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 73.1485,
+            "k": 0.047501,
+            "k_3sigma": 0.0104931,
+            "model": "integrating_lag",
+            "others": [
+              {
+                "k": -0.0491857,
+                "tau2": 34.6951,
+                "theta": "< dt"
+              }
+            ],
+            "sse": 3.32523e-06,
+            "tau2": 38.636,
+            "theta": 3.22684
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": 259.06,
+              "mv": "L",
+              "n_pre": 14
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000426562,
+          "snr": 1.25858,
+          "step": 0.1,
+          "trips": {},
+          "window": 200
+        },
+        {
+          "V1": false,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 82.3392,
+            "k": -0.36424,
+            "k_3sigma": 0.054881,
+            "model": "fopdt",
+            "others": [
+              {
+                "k": 0.350924,
+                "tau": 14.7542,
+                "theta": 0.000157974
+              }
+            ],
+            "sse": 3.78937e-06,
+            "tau": 18.512,
+            "theta": 0.745993
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 69.5311,
+            "k": 0.00237369,
+            "k_3sigma": 0.00377682,
+            "model": "integrating_lag",
+            "others": [
+              {
+                "k": -0.00242241,
+                "tau2": "< dt",
+                "theta": "< dt"
+              }
+            ],
+            "sse": 1.12787e-05,
+            "tau2": 16.888,
+            "theta": 1.6356
+          },
+          "loops": [
+            {
+              "cv": "yD",
+              "kc": 259.06,
+              "mv": "L",
+              "n_pre": 14
+            }
+          ],
+          "samples": 200,
+          "sigma": 0.000426562,
+          "snr": 2.16031,
+          "step": 0.191449,
+          "trips": {},
+          "window": 200
+        }
+      ]
     }
   ],
-  "generated": "2026-11-03T19:55:57+00:00",
   "plans_to_episode_end": true,
-  "protocol": "docs/proposals/oracle-horizon-protocol.md",
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendment 1",
+  "retests": 34,
   "test": {
     "hold_window": 20,
     "seeds": [
@@ -688,5 +5263,7 @@
       "V": 0.1
     },
     "window_steps": 200
-  }
+  },
+  "unidentified": false,
+  "zero_models": []
 }

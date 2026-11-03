@@ -16,177 +16,630 @@
   },
   "T_c_steps": 1,
   "classes": {
-    "x": "self-regulating"
+    "x": {
+      "class": "fopdt",
+      "votes": {
+        "fopdt": 10,
+        "integrating_lag": 0
+      }
+    }
+  },
+  "counts": {
+    "insignificant": 0,
+    "invalid": 0,
+    "valid": 10
   },
   "cpu": "Apple M4 Pro",
+  "cvs_without_valid_pair": [],
   "dt": 0.05,
   "episode_samples": 150,
   "episode_steps": 150,
-  "fits": [
+  "generated": "2026-11-03T20:45:16+00:00",
+  "pairs": [
     {
       "M": 10,
       "N": 50,
       "P": 60,
-      "class": "self-regulating",
       "cv": "x",
-      "du": -0.1,
-      "k": 2.0000041949821936,
-      "model": "fopdt",
+      "evidence": "fopdt",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.9996,
+        "k": 2.0,
+        "k_3sigma": 4.15816e-07,
+        "model": "fopdt",
+        "sse": 3.10556e-12,
+        "tau": 0.499999,
+        "theta": 1.55078e-07
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "u",
-      "rms": 1.4388801685893638e-07,
-      "samples": 150,
       "seed": 100,
-      "tau": 0.49999917794515303,
-      "theta": 1.550781113539966e-07
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 99.9996,
+            "k": 2.0,
+            "k_3sigma": 4.15816e-07,
+            "model": "fopdt",
+            "sse": 3.10556e-12,
+            "tau": 0.499999,
+            "theta": 1.55078e-07
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -150.751,
+            "k": 0.395155,
+            "k_3sigma": 0.0925839,
+            "model": "integrating_lag",
+            "sse": 0.984372,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 150,
+          "sigma": 4.45638e-16,
+          "snr": 74799000000000.0,
+          "step": -0.1,
+          "trips": {},
+          "window": 150
+        }
+      ]
     },
     {
       "M": 11,
       "N": 51,
       "P": 62,
-      "class": "self-regulating",
       "cv": "x",
-      "du": -0.1,
-      "k": 2.0000038602371957,
-      "model": "fopdt",
+      "evidence": "fopdt",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.9998,
+        "k": 2.0,
+        "k_3sigma": 1.7419e-07,
+        "model": "fopdt",
+        "sse": 5.44982e-13,
+        "tau": 0.5,
+        "theta": "< dt"
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "u",
-      "rms": 6.027613219828695e-08,
-      "samples": 150,
       "seed": 101,
-      "tau": 0.5000004472756935,
-      "theta": 8.81939907496408e-11
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 99.9998,
+            "k": 2.0,
+            "k_3sigma": 1.7419e-07,
+            "model": "fopdt",
+            "sse": 5.44982e-13,
+            "tau": 0.5,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -150.75,
+            "k": 0.395155,
+            "k_3sigma": 0.0925838,
+            "model": "integrating_lag",
+            "sse": 0.98437,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 150,
+          "sigma": 2.03663e-16,
+          "snr": 163669000000000.0,
+          "step": -0.1,
+          "trips": {},
+          "window": 150
+        }
+      ]
     },
     {
       "M": 10,
       "N": 50,
       "P": 60,
-      "class": "self-regulating",
       "cv": "x",
-      "du": -0.1,
-      "k": 2.000001435523532,
-      "model": "fopdt",
+      "evidence": "fopdt",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.9998,
+        "k": 2.0,
+        "k_3sigma": 1.63522e-07,
+        "model": "fopdt",
+        "sse": 4.80275e-13,
+        "tau": 0.5,
+        "theta": "< dt"
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "u",
-      "rms": 5.6584759826129054e-08,
-      "samples": 150,
       "seed": 102,
-      "tau": 0.49999997171524163,
-      "theta": 1.959312932660073e-08
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 99.9998,
+            "k": 2.0,
+            "k_3sigma": 1.63522e-07,
+            "model": "fopdt",
+            "sse": 4.80275e-13,
+            "tau": 0.5,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -150.75,
+            "k": 0.395154,
+            "k_3sigma": 0.0925837,
+            "model": "integrating_lag",
+            "sse": 0.984368,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 150,
+          "sigma": 1.48076e-16,
+          "snr": 225109000000000.0,
+          "step": -0.1,
+          "trips": {},
+          "window": 150
+        }
+      ]
     },
     {
       "M": 10,
       "N": 50,
       "P": 60,
-      "class": "self-regulating",
       "cv": "x",
-      "du": -0.1,
-      "k": 2.0000054285109368,
-      "model": "fopdt",
+      "evidence": "fopdt",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.9996,
+        "k": 2.00001,
+        "k_3sigma": 4.19766e-07,
+        "model": "fopdt",
+        "sse": 3.16484e-12,
+        "tau": 0.5,
+        "theta": 1.24337e-07
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "u",
-      "rms": 1.4525477700433329e-07,
-      "samples": 150,
       "seed": 103,
-      "tau": 0.49999972544779264,
-      "theta": 1.243372051714361e-07
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 99.9996,
+            "k": 2.00001,
+            "k_3sigma": 4.19766e-07,
+            "model": "fopdt",
+            "sse": 3.16484e-12,
+            "tau": 0.5,
+            "theta": 1.24337e-07
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -150.751,
+            "k": 0.395155,
+            "k_3sigma": 0.0925839,
+            "model": "integrating_lag",
+            "sse": 0.984372,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 150,
+          "sigma": 1.1022e-16,
+          "snr": 302425000000000.0,
+          "step": -0.1,
+          "trips": {},
+          "window": 150
+        }
+      ]
     },
     {
       "M": 11,
       "N": 51,
       "P": 62,
-      "class": "self-regulating",
       "cv": "x",
-      "du": -0.1,
-      "k": 2.0000004218021648,
-      "model": "fopdt",
+      "evidence": "fopdt",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.9999,
+        "k": 2.0,
+        "k_3sigma": 6.93202e-08,
+        "model": "fopdt",
+        "sse": 8.63093e-14,
+        "tau": 0.5,
+        "theta": 1.19676e-07
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "u",
-      "rms": 2.3987396856749612e-08,
-      "samples": 150,
       "seed": 104,
-      "tau": 0.5000003247762207,
-      "theta": 1.196756723099663e-07
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 99.9999,
+            "k": 2.0,
+            "k_3sigma": 6.93202e-08,
+            "model": "fopdt",
+            "sse": 8.63093e-14,
+            "tau": 0.5,
+            "theta": 1.19676e-07
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -150.75,
+            "k": 0.395154,
+            "k_3sigma": 0.0925836,
+            "model": "integrating_lag",
+            "sse": 0.984366,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 150,
+          "sigma": 8.20063e-17,
+          "snr": 406472000000000.0,
+          "step": -0.1,
+          "trips": {},
+          "window": 150
+        }
+      ]
     },
     {
       "M": 10,
       "N": 50,
       "P": 60,
-      "class": "self-regulating",
       "cv": "x",
-      "du": -0.1,
-      "k": 2.0000041949821936,
-      "model": "fopdt",
+      "evidence": "fopdt",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.9996,
+        "k": 2.0,
+        "k_3sigma": 4.15816e-07,
+        "model": "fopdt",
+        "sse": 3.10556e-12,
+        "tau": 0.499999,
+        "theta": 1.55078e-07
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "u",
-      "rms": 1.4388801685893638e-07,
-      "samples": 150,
       "seed": 105,
-      "tau": 0.49999917794515303,
-      "theta": 1.550781113539966e-07
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 99.9996,
+            "k": 2.0,
+            "k_3sigma": 4.15816e-07,
+            "model": "fopdt",
+            "sse": 3.10556e-12,
+            "tau": 0.499999,
+            "theta": 1.55078e-07
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -150.751,
+            "k": 0.395155,
+            "k_3sigma": 0.0925839,
+            "model": "integrating_lag",
+            "sse": 0.984372,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 150,
+          "sigma": 1.1022e-16,
+          "snr": 302425000000000.0,
+          "step": -0.1,
+          "trips": {},
+          "window": 150
+        }
+      ]
     },
     {
       "M": 11,
       "N": 51,
       "P": 62,
-      "class": "self-regulating",
       "cv": "x",
-      "du": -0.1,
-      "k": 2.0000002496195832,
-      "model": "fopdt",
+      "evidence": "fopdt",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.9998,
+        "k": 2.0,
+        "k_3sigma": 1.63953e-07,
+        "model": "fopdt",
+        "sse": 4.82812e-13,
+        "tau": 0.5,
+        "theta": 1.01913e-07
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "u",
-      "rms": 5.673400260417443e-08,
-      "samples": 150,
       "seed": 106,
-      "tau": 0.5000001092589887,
-      "theta": 1.0191266970466903e-07
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 99.9998,
+            "k": 2.0,
+            "k_3sigma": 1.63953e-07,
+            "model": "fopdt",
+            "sse": 4.82812e-13,
+            "tau": 0.5,
+            "theta": 1.01913e-07
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -150.75,
+            "k": 0.395154,
+            "k_3sigma": 0.0925837,
+            "model": "integrating_lag",
+            "sse": 0.984366,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 150,
+          "sigma": 1.13453e-16,
+          "snr": 293807000000000.0,
+          "step": -0.1,
+          "trips": {},
+          "window": 150
+        }
+      ]
     },
     {
       "M": 10,
       "N": 50,
       "P": 60,
-      "class": "self-regulating",
       "cv": "x",
-      "du": -0.1,
-      "k": 2.000001435523532,
-      "model": "fopdt",
+      "evidence": "fopdt",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.9998,
+        "k": 2.0,
+        "k_3sigma": 1.63522e-07,
+        "model": "fopdt",
+        "sse": 4.80275e-13,
+        "tau": 0.5,
+        "theta": "< dt"
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "u",
-      "rms": 5.6584759826129054e-08,
-      "samples": 150,
       "seed": 107,
-      "tau": 0.49999997171524163,
-      "theta": 1.959312932660073e-08
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 99.9998,
+            "k": 2.0,
+            "k_3sigma": 1.63522e-07,
+            "model": "fopdt",
+            "sse": 4.80275e-13,
+            "tau": 0.5,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -150.75,
+            "k": 0.395154,
+            "k_3sigma": 0.0925837,
+            "model": "integrating_lag",
+            "sse": 0.984368,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 150,
+          "sigma": 1.85947e-16,
+          "snr": 179263000000000.0,
+          "step": -0.1,
+          "trips": {},
+          "window": 150
+        }
+      ]
     },
     {
       "M": 10,
       "N": 50,
       "P": 60,
-      "class": "self-regulating",
       "cv": "x",
-      "du": -0.1,
-      "k": 2.0000041949821936,
-      "model": "fopdt",
+      "evidence": "fopdt",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.9996,
+        "k": 2.0,
+        "k_3sigma": 4.15816e-07,
+        "model": "fopdt",
+        "sse": 3.10556e-12,
+        "tau": 0.499999,
+        "theta": 1.55078e-07
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "u",
-      "rms": 1.4388801685893638e-07,
-      "samples": 150,
       "seed": 108,
-      "tau": 0.49999917794515303,
-      "theta": 1.550781113539966e-07
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 99.9996,
+            "k": 2.0,
+            "k_3sigma": 4.15816e-07,
+            "model": "fopdt",
+            "sse": 3.10556e-12,
+            "tau": 0.499999,
+            "theta": 1.55078e-07
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -150.751,
+            "k": 0.395155,
+            "k_3sigma": 0.0925839,
+            "model": "integrating_lag",
+            "sse": 0.984372,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 150,
+          "sigma": 2.26906e-16,
+          "snr": 146904000000000.0,
+          "step": -0.1,
+          "trips": {},
+          "window": 150
+        }
+      ]
     },
     {
       "M": 10,
       "N": 50,
       "P": 60,
-      "class": "self-regulating",
       "cv": "x",
-      "du": -0.1,
-      "k": 2.000001435523532,
-      "model": "fopdt",
+      "evidence": "fopdt",
+      "failed": [],
+      "fit": {
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.9998,
+        "k": 2.0,
+        "k_3sigma": 1.63522e-07,
+        "model": "fopdt",
+        "sse": 4.80275e-13,
+        "tau": 0.5,
+        "theta": "< dt"
+      },
+      "kept": 0,
+      "label": "valid",
       "mv": "u",
-      "rms": 5.6584759826129054e-08,
-      "samples": 150,
       "seed": 109,
-      "tau": 0.49999997171524163,
-      "theta": 1.959312932660073e-08
+      "tests": [
+        {
+          "V1": true,
+          "fopdt": {
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 99.9998,
+            "k": 2.0,
+            "k_3sigma": 1.63522e-07,
+            "model": "fopdt",
+            "sse": 4.80275e-13,
+            "tau": 0.5,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": -150.75,
+            "k": 0.395154,
+            "k_3sigma": 0.0925837,
+            "model": "integrating_lag",
+            "sse": 0.984368,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 150,
+          "sigma": 5.511e-17,
+          "snr": 604850000000000.0,
+          "step": -0.1,
+          "trips": {},
+          "window": 150
+        }
+      ]
     }
   ],
-  "generated": "2026-11-03T19:55:54+00:00",
   "plans_to_episode_end": false,
-  "protocol": "docs/proposals/oracle-horizon-protocol.md",
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendment 1",
+  "retests": 0,
   "test": {
     "hold_window": 20,
     "seeds": [
@@ -206,5 +659,7 @@
       "u": 0.1
     },
     "window_steps": 150
-  }
+  },
+  "unidentified": false,
+  "zero_models": []
 }
