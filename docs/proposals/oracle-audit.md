@@ -37,6 +37,9 @@ what follows is the trace of that earlier stance.
   (exact rewrites first, then softplus at a resolution-based width) and
   [oracle-formation-protocol.md](oracle-formation-protocol.md) (cooperative
   per-seat sub-problems), both accepted the same day.
+- **Solver:** [oracle-solver.md](oracle-solver.md), the IPOPT port with
+  exact Hessians computed forward-over-forward, accepted the same day after
+  a probe of compile cost, memory and convergence.
 - **Everything else is accepted as recommended:**
   - (1) the objective is the episode reward;
   - (4) plant kinks are smoothed under one width rule fixed in advance;
