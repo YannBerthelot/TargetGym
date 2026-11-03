@@ -7,6 +7,7 @@ file per task (``env_versions`` one per version, ``<task>-vN.json``)::
     data/protocol_results/<task>.json    scripts/evaluate_baselines.py
     data/hold_measurements/<task>.json   scripts/measure_hold.py
     data/env_versions/<task>-vN.json     scripts/stamp_env_versions.py
+    data/oracle_horizons/<task>.json     scripts/measure_oracle_horizons.py
 
 They used to be one file per kind, which every recording PR rewrote, so each
 merge broke every other open one. One file per task means re-recording a task
@@ -45,7 +46,13 @@ __all__ = [
 #: Inside the package, so it resolves from a checkout and an installed wheel.
 DATA = pathlib.Path(__file__).resolve().parent / "data"
 
-KINDS = ("baseline_returns", "protocol_results", "hold_measurements", "env_versions")
+KINDS = (
+    "baseline_returns",
+    "protocol_results",
+    "hold_measurements",
+    "env_versions",
+    "oracle_horizons",
+)
 
 #: What only describes a recording run, left out when two are compared.
 METADATA = frozenset({"seconds", "generated", "cpu"})
