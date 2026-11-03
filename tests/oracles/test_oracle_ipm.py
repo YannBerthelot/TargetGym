@@ -18,7 +18,17 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym.oracles.ipm import NLP, interior_point, stage_kkt_solve
+from target_gym.oracles.ipm import (
+    NLP,
+    StageHessian,
+    StageJacobian,
+    StageRows,
+    interior_point,
+    stage_barrier,
+    stage_kkt_solve,
+    stage_multipliers,
+    stage_shift,
+)
 
 try:
     from jax import enable_x64
@@ -94,32 +104,61 @@ def test_solves_hock_schittkowski_71(adaptive):
         assert 0.0 <= float(r.error) <= 1e-8
 
 
-def _stage_system(seed, ne, S=4, nx=3, nu=2):
-    """A random, well-posed Newton system in ``stage_kkt_solve``'s layout:
-    K symmetric on the allowed pattern (x_k, u_k and the ne slacks e_k
-    together; u_k with u_{k-1}) and shifted to be positive definite; J's row
-    block k on x_{k+1} (an invertible E_k), x_k and u_k."""
+def _blocks(seed, ne, S=4, nx=3, nu=2, m=5):
+    """Random stage blocks, well posed, and the same matrices written dense
+    from the layout z = (x_1..x_S, u_0..u_{S-1}, e_0..e_{S-1}): K's block k
+    on (x_k, u_k, e_k), symmetric, coupling u_{k-1} with (u_k, e_k), shifted
+    to be positive definite; J's row block k on x_{k+1} (an invertible E_k),
+    x_k and u_k; G's row block k on x_k, u_k and e_k. Stage 0 has no x_0."""
     rng = np.random.default_rng(seed)
+    nl = nx + nu + ne
     xi = np.arange(nx * S).reshape(S, nx)
     ui = nx * S + np.arange(nu * S).reshape(S, nu)
     ei = (nx + nu) * S + np.arange(ne * S).reshape(S, ne)
-    n, m = (nx + nu + ne) * S, nx * S
-    allowed = np.zeros((n, n), bool)
+    n = nl * S
+    D = rng.normal(size=(S, nl, nl))
+    D = D + np.swapaxes(D, 1, 2)
+    D[0, :nx], D[0, :, :nx] = 0.0, 0.0
+    P = rng.normal(size=(S, nu, nu + ne))
+    P[0] = 0.0
+    end = rng.normal(size=(nx, nx))
+    end = end + end.T
+    K = np.zeros((n, n))
     for k in range(S):
         own = np.concatenate([xi[k - 1] if k else [], ui[k], ei[k]]).astype(int)
-        allowed[np.ix_(own, own)] = True
+        K[np.ix_(own, own)] += D[k][-len(own) :, -len(own) :]
         if k:
-            allowed[np.ix_(ui[k - 1], ui[k])] = allowed[np.ix_(ui[k], ui[k - 1])] = True
-    R = rng.normal(size=(n, n)) * allowed
-    K = R + R.T + (abs(np.linalg.eigvalsh(R + R.T).min()) + 1.0) * np.eye(n)
-    J = np.zeros((m, n))
+            v = np.concatenate([ui[k], ei[k]])
+            K[np.ix_(ui[k - 1], v)] += P[k]
+            K[np.ix_(v, ui[k - 1])] += P[k].T
+    K[np.ix_(xi[-1], xi[-1])] += end
+    shift = abs(np.linalg.eigvalsh(K).min()) + 1.0
+    K += shift * np.eye(n)
+    D, end = D + shift * np.eye(nl), end + shift * np.eye(nx)
+    E = np.eye(nx) + 0.3 * rng.normal(size=(S, nx, nx))
+    A, B = rng.normal(size=(S, nx, nx)), rng.normal(size=(S, nx, nu))
+    A[0] = 0.0
+    J = np.zeros((nx * S, n))
+    Gb = rng.normal(size=(S, m, nl))
+    Gb[0, :, :nx] = 0.0
+    G = np.zeros((m * S, n))
     for k in range(S):
         rows = slice(nx * k, nx * (k + 1))
-        J[rows, xi[k]] = np.eye(nx) + 0.3 * rng.normal(size=(nx, nx))
+        J[rows, xi[k]], J[rows, ui[k]] = E[k], B[k]
+        cols = np.concatenate([ui[k], ei[k]])
+        G[m * k : m * (k + 1), cols] = Gb[k, :, nx:]
         if k:
-            J[rows, xi[k - 1]] = rng.normal(size=(nx, nx))
-        J[rows, ui[k]] = rng.normal(size=(nx, nu))
-    return K, J, rng.normal(size=n), rng.normal(size=m), ui
+            J[rows, xi[k - 1]] = A[k]
+            G[m * k : m * (k + 1), xi[k - 1]] = Gb[k, :, :nx]
+    blocks = (
+        StageHessian(*map(jnp.asarray, (D, P, end))),
+        StageJacobian(*map(jnp.asarray, (E, A, B)), ne),
+        StageRows(
+            *map(jnp.asarray, (Gb[..., :nx], Gb[..., nx : nx + nu], Gb[..., nx + nu :]))
+        ),
+    )
+    vecs = rng.normal(size=n), rng.normal(size=nx * S), rng.normal(size=m * S)
+    return blocks, (K, J, G), vecs, ui
 
 
 def _inertia_ok(K, J):
@@ -130,29 +169,51 @@ def _inertia_ok(K, J):
     return int(np.sum(np.linalg.eigvalsh(M) < 0)) == m
 
 
-def _riccati(K, J, rz, rc, ne):
-    with enable_x64():
-        return stage_kkt_solve(*map(jnp.asarray, (K, J, rz, rc)), 4, 3, 2, ne)
+# float64 on systems of condition about 1e3: rounding is near 1e-13.
+TIGHT = dict(rtol=1e-9, atol=1e-10)
 
 
 @pytest.mark.parametrize("ne", [0, 1, 3])
 @pytest.mark.parametrize("seed", [0, 1])
 def test_stage_kkt_solve_is_the_dense_solve(seed, ne):
-    K, J, rz, rc, _ = _stage_system(seed, ne)
+    with enable_x64():
+        (Kb, Jb, _), (K, J, _), (rz, rc, _), _ = _blocks(seed, ne)
+        dz, dlam, ok = stage_kkt_solve(Kb, Jb, jnp.asarray(rz), jnp.asarray(rc))
     n, m = K.shape[0], J.shape[0]
     M = np.block([[K, -J.T], [J, np.zeros((m, m))]])
     expected = np.linalg.solve(M, np.concatenate([rz, rc]))
-    dz, dlam, ok = _riccati(K, J, rz, rc, ne)
-    # float64 on systems of condition about 1e3: rounding is near 1e-13.
-    np.testing.assert_allclose(dz, expected[:n], rtol=1e-9, atol=1e-10)
-    np.testing.assert_allclose(dlam, expected[n:], rtol=1e-9, atol=1e-10)
+    np.testing.assert_allclose(dz, expected[:n], **TIGHT)
+    np.testing.assert_allclose(dlam, expected[n:], **TIGHT)
     assert bool(ok) and _inertia_ok(K, J)
+
+
+@pytest.mark.parametrize("ne", [0, 3])
+def test_blockwise_products_are_the_dense_products(ne):
+    """Every product the iteration takes: G z, G'w, J'lam, K = H + G'diag(s)G
+    and K + delta I (checked through the solve, which reads K only), and the
+    least-squares multipliers (J J')^-1 J r."""
+    with enable_x64():
+        (Hb, Jb, Gb), (H, J, G), (z, lam, w), _ = _blocks(2, ne)
+        sig, r = np.linspace(0.5, 2.0, len(w)), np.cos(np.arange(len(z)))
+        Kb = stage_shift(stage_barrier(Hb, Gb, jnp.asarray(sig)), 0.7)
+        dz = stage_kkt_solve(Kb, Jb, jnp.asarray(z), jnp.asarray(lam))[0]
+        out = [Gb @ jnp.asarray(z), Gb.T @ jnp.asarray(w), Jb.T @ jnp.asarray(lam)]
+        mult = stage_multipliers(Jb, jnp.asarray(r))
+    K = H + G.T @ (sig[:, None] * G) + 0.7 * np.eye(len(z))
+    m = J.shape[0]
+    M = np.block([[K, -J.T], [J, np.zeros((m, m))]])
+    expected = np.linalg.solve(M, np.concatenate([z, lam]))[: len(z)]
+    for got, want in zip(out + [dz], [G @ z, G.T @ w, J.T @ lam, expected]):
+        np.testing.assert_allclose(got, want, **TIGHT)
+    np.testing.assert_allclose(mult, np.linalg.solve(J @ J.T, J @ r), **TIGHT)
 
 
 def test_stage_kkt_solve_reports_the_wrong_inertia():
     """Negative curvature on one stage's move, larger than anything the
     dynamics can couple in, makes the reduced Hessian indefinite."""
-    K, J, rz, rc, ui = _stage_system(3, ne=3)
-    K[ui[2][0], ui[2][0]] = -1e3
-    assert not _inertia_ok(K, J)
-    assert not bool(_riccati(K, J, rz, rc, 3)[2])
+    with enable_x64():
+        (Kb, Jb, _), (K, J, _), (rz, rc, _), ui = _blocks(3, ne=3)
+        K[ui[2][0], ui[2][0]] = -1e3
+        Kb = Kb._replace(D=Kb.D.at[2, 3, 3].set(-1e3))  # u_2's first entry, nx = 3
+        assert not _inertia_ok(K, J)
+        assert not bool(stage_kkt_solve(Kb, Jb, jnp.asarray(rz), jnp.asarray(rc))[2])

@@ -30,7 +30,17 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from target_gym.oracles.ipm import NLP, interior_point, stage_kkt_solve
+from target_gym.oracles.ipm import (
+    NLP,
+    StageHessian,
+    StageJacobian,
+    StageRows,
+    interior_point,
+    stage_barrier,
+    stage_kkt_solve,
+    stage_multipliers,
+    stage_shift,
+)
 
 #: IPOPT's iteration cap per solve, as the compressor's (G4: kept, capped
 #: solves recorded); IPOPT's default tolerance (read: ``tol``).
@@ -271,8 +281,13 @@ class Shooting:
         def c_fn(z):
             return (self.unpack(z)[0] - jax.vmap(stage)(V_of(z), ks)[0]).ravel()
 
+        ne, nloc = self.ne, loc.shape[1]
+        own = np.concatenate([np.arange(nx), nxa + np.arange(nu)])  # in v_k
+        eye = jnp.broadcast_to(jnp.eye(nxa), (N, nxa, nxa))
+
         def derivs(z, lam, hess=True):
-            """(grad f, H, J, c) in the task's units, H the Lagrangian's."""
+            """(grad f, H, J, c) in the task's units and stage blocks, H the
+            Lagrangian's."""
             es, V = self.unpack(z)[2], V_of(z)
             if hess:
 
@@ -285,19 +300,18 @@ class Shooting:
                 dF, dl = jax.vmap(jax.jacfwd(stage))(V, ks)
             gf = jnp.zeros(n + 1).at[dyn].add(wk[:, None] * dl)[:n]
             gf = gf.at[ei].add(jax.vmap(jax.grad(self._e_cost))(es))
-            r = np.arange(N * nxa).reshape(N, nxa)
-            J = jnp.zeros((N * nxa, n + 1)).at[r, self.xi].set(1.0)
-            J = J.at[r[:, :, None], dyn[:, None, :]].add(-dF)[:, :n]
+            A = jnp.zeros((N, nxa, nxa)).at[:, :, :nx].set(-dF[:, :, :nx])
+            J = StageJacobian(eye, A, -dF[:, :, nx:], ne)
             c = (self.unpack(z)[0] - F).ravel()
             if not hess:
                 return gf, None, J, c
-            H = (
-                jnp.zeros((n + 1, n + 1))
-                .at[dyn[:, :, None], dyn[:, None, :]]
-                .add(Hk)[:n, :n]
+            Dk = jnp.zeros((N, nloc, nloc)).at[:, own[:, None], own[None, :]].set(Hk)
+            e = nxa + nu + np.arange(ne)
+            Dk = Dk.at[:, e[:, None], e[None, :]].set(
+                jax.vmap(jax.hessian(self._e_cost))(es)
             )
-            He = jax.vmap(jax.hessian(self._e_cost))(es)
-            return gf, H.at[ei[:, :, None], ei[:, None, :]].add(He), J, c
+            H = StageHessian(Dk, jnp.zeros((N, nu, nu + ne)), jnp.zeros((nxa, nxa)))
+            return gf, H, J, c
 
         # IPOPT-style scaling. Variables by typical magnitudes: the measured
         # state, the start's outputs, the move range, and each limit slack in
@@ -314,32 +328,20 @@ class Shooting:
         )
         de = jnp.concatenate([jnp.ones(b * self.nh), 1.0 / jnp.asarray(self.price)])
         D = jnp.concatenate([jnp.tile(dx, N), jnp.tile(du, N), jnp.tile(de, N)])
-        Rs = D[: N * nxa]
-        zeros = [jnp.zeros((N, nxa)), jnp.zeros((N, nu)), jnp.zeros((N, self.ne))]
+        Rs, Dl = D[: N * nxa], jnp.concatenate([D, jnp.ones(1)])[loc]  # (N, nloc)
+        Rk = Rs.reshape(N, nxa)
+        zeros = [jnp.zeros((N, nxa)), jnp.zeros((N, nu)), jnp.zeros((N, ne))]
         Gk = jax.vmap(jax.jacfwd(self._rows, argnums=(0, 1, 2)))(*zeros, act)
         Gk = jnp.concatenate(Gk, axis=-1)  # (N, rows, nloc)
-        Gh = Gk * jnp.concatenate([D, jnp.ones(1)])[loc][:, None, :]
+        Gh = Gk * Dl[:, None, :]
         big = jnp.max(jnp.abs(Gh), axis=-1)
         rs = jnp.where(
             jnp.sum(Gk != 0, -1) == 1, 1.0 / big, jnp.minimum(1.0, MAX_GRADIENT / big)
         )
         Gh, mrow = Gh * rs[:, :, None], Gk.shape[1]
-        rr = np.arange(N * mrow).reshape(N, mrow)
-        G = (
-            jnp.zeros((N * mrow, n + 1))
-            .at[rr[:, :, None], loc[:, None, :]]
-            .add(Gh)[:, :n]
-        )
+        G = StageRows(Gh[..., :nxa], Gh[..., nxa : nxa + nu], Gh[..., nxa + nu :])
         rs, g0k = rs.ravel(), (jax.vmap(self._rows)(*zeros, act) * rs).ravel()
         g0 = g0k + BOUND_RELAX * jnp.maximum(1.0, jnp.abs(g0k))
-
-        def curvature(sig):
-            blk = jnp.einsum("kri,kr,krj->kij", Gh, sig.reshape(N, mrow), Gh)
-            return (
-                jnp.zeros((n + 1, n + 1))
-                .at[loc[:, :, None], loc[:, None, :]]
-                .add(blk)[:n, :n]
-            )
 
         a, p = ui[-1], ui[-2]  # the stage past the horizon holds the last move
         osc = jnp.minimum(
@@ -350,11 +352,18 @@ class Shooting:
             gf, H, J, c = derivs(D * zh, lam / (osc * Rs), hess)
             d = 2.0 * (zh[a] - zh[p])
             gf = (osc * D * gf).at[a].add(d).at[p].add(-d)
+            J = StageJacobian(
+                J.E / Rk[:, :, None] * Rk[:, None, :],
+                J.A / Rk[:, :, None] * Dl[:, None, :nxa],
+                J.B / Rk[:, :, None] * Dl[:, None, nxa : nxa + nu], ne,
+            )  # fmt: skip
             if hess:
-                H = osc * D[:, None] * H * D[None, :]
-                for i, j, v in ((a, a, 2.0), (p, p, 2.0), (a, p, -2.0), (p, a, -2.0)):
-                    H = H.at[i, j].add(v)
-            return gf, H, J / Rs[:, None] * D[None, :], c / Rs
+                u = nxa + np.arange(nu)
+                Dk = osc * Dl[:, :, None] * H.D * Dl[:, None, :]
+                Dk = Dk.at[-2:, u, u].add(2.0)
+                P = H.P.at[-1, np.arange(nu), np.arange(nu)].add(-2.0)
+                H = StageHessian(Dk, P, osc * H.end)
+            return gf, H, J, c / Rs
 
         def restore(zh):
             _, us, es = self.unpack(D * zh)
@@ -363,15 +372,14 @@ class Shooting:
         nlp = NLP(
             f=lambda zh: osc * f(D * zh) + jnp.sum((zh[a] - zh[p]) ** 2),
             c=lambda zh: c_fn(D * zh) / Rs, derivs=scaled, G=G, g0=g0, restore=restore,
-            kkt=lambda K, J, rz, rc: stage_kkt_solve(K, J, rz, rc, N, nxa, nu, self.ne),
-            curvature=curvature,
+            kkt=stage_kkt_solve, barrier=stage_barrier, shift=stage_shift,
         )  # fmt: skip
         zh = z0 / D
         if cold:
             zh = zh.at[ei].add(COLD_PUSH)
             w = jnp.ones(N * mrow)
             gf, _, J, _ = scaled(zh, jnp.zeros(N * nxa), False)
-            lam = jnp.linalg.solve(J @ J.T, J @ (gf - G.T @ w))
+            lam = stage_multipliers(J, gf - G.T @ w)
             lam = jnp.where(jnp.max(jnp.abs(lam)) > 1e3, 0.0, lam)  # IPOPT's cap
             w0 = jnp.zeros(N * mrow)
         else:

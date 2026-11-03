@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import os
 import resource
 import sys
 import time
@@ -144,9 +145,10 @@ def main(warm: int, limits: bool) -> dict:
             t = time.perf_counter()
             plan = fn(*args)
             jax.block_until_ready(plan.z)
-            c = plan.certificate
+            c, dt = plan.certificate, time.perf_counter() - t
             rows.append({
-                "s": round(time.perf_counter() - t, 2), "iterations": int(c.iterations),
+                "s": round(dt, 2), "iterations": int(c.iterations),
+                "s_per_iteration": round(dt / max(int(c.iterations), 1), 3),
                 "error": float(c.error), "capped": bool(c.capped),
                 "failed": bool(c.failed), "violation": float(c.violation),
                 "shift": float(c.shift),
@@ -161,6 +163,7 @@ def main(warm: int, limits: bool) -> dict:
             int(params.max_steps_in_episode) / T_C * np.mean(warm_s)
         )
         out["peak_rss_gb"] = _rss_gb()
+        out["load_average"] = [round(v, 1) for v in os.getloadavg()]
     return out
 
 

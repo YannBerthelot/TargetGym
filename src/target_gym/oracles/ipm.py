@@ -1,10 +1,13 @@
 """The shared oracle solver: IPOPT's interior-point method in JAX.
 
 A copy of the compressor's port (``compressor_surge.experts_ipm``), which
-stays untouched until that oracle moves here. Three things differ, none of
-them in the algorithm: ``stage_kkt_solve`` carries ``ne`` slacks per stage
-rather than one, ``NLP.curvature`` lets a caller assemble the barrier term
-G' diag(w / s) G block by block rather than as a dense product, and
+stays untouched until that oracle moves here. The algorithm is the same; what
+differs is how its matrices are held. H, J and G may be dense arrays or, for
+a multiple-shooting NLP, stage blocks (``StageHessian``, ``StageJacobian``,
+``StageRows``), so no n x n matrix is ever formed: every product the
+iteration takes (``G @ z``, ``G.T @ w``, ``J.T @ lam``) works on either, and
+``NLP.barrier`` and ``NLP.shift`` form K and K + delta I. ``stage_kkt_solve``
+reads the blocks and carries ``ne`` slacks per stage rather than one, and
 ``Result.shift`` reports the largest inertia shift a solve needed
 (docs/proposals/oracle-solver.md, sections 2, 6 and 7).
 
@@ -89,8 +92,9 @@ class NLP(NamedTuple):
     ``derivs(z, lam)`` returns (grad f, H, J, c) with H the Hessian of
     f - lam'c; ``kkt(K, J, rz, rc)`` returns (dz, dlam, ok), ``ok`` false
     when the reduced Hessian is not positive definite; ``restore(z)``, if
-    given, returns a point with c = 0; ``curvature(sig)``, if given, returns
-    G' diag(sig) G.
+    given, returns a point with c = 0. ``barrier(H, G, sig)`` returns
+    K = H + G' diag(sig) G and ``shift(K, delta)`` K + delta I: dense by
+    default, ``stage_barrier`` and ``stage_shift`` for stage blocks.
     """
 
     f: Callable
@@ -100,7 +104,8 @@ class NLP(NamedTuple):
     g0: jnp.ndarray
     kkt: Callable
     restore: Callable | None = None
-    curvature: Callable | None = None
+    barrier: Callable = lambda H, G, sig: H + G.T @ (sig[:, None] * G)  # noqa: E731
+    shift: Callable = lambda K, delta: K + delta * jnp.eye(K.shape[0])  # noqa: E731
 
 
 class Result(NamedTuple):
@@ -138,7 +143,7 @@ def interior_point(
     max_restore: int = 3,
 ) -> Result:
     """Solve ``nlp`` from (z, s, lam, w), s and w strictly positive."""
-    f, c_fn, derivs, G, g0, kkt, restore, curvature = nlp
+    f, c_fn, derivs, G, g0, kkt, restore, barrier, shift = nlp
     n, me, mi = z.shape[0], lam.shape[0], s.shape[0]
     mu_floor = tol / (KAPPA_EPS + 1.0)
 
@@ -181,14 +186,13 @@ def interior_point(
         mu_mono, _ = jax.lax.while_loop(mu_cond, mu_next, (mu, 0))
 
         sig = w / s
-        K = H + (G.T @ (sig[:, None] * G) if curvature is None else curvature(sig))
-        eye = jnp.eye(n)
+        K = barrier(H, G, sig)
         mu_avg = s @ w / mi
 
         def direction(delta, cvec, target):
             comp = w - target / s
             rz = -rd - G.T @ (sig * ri + comp)
-            dz, dl, ok = kkt(K + delta * eye, J, rz, -cvec)
+            dz, dl, ok = kkt(shift(K, delta), J, rz, -cvec)
             ds = G @ dz + ri
             return dz, dl, ds, -sig * ds - comp, ok & jnp.all(jnp.isfinite(dz))
 
@@ -381,7 +385,7 @@ def interior_point(
         good = (accepted | recovered) & finite
 
         def pick(u, v):
-            return jnp.where(good, u, v)
+            return jax.tree_util.tree_map(lambda a, b: jnp.where(good, a, b), u, v)
 
         n_acc = jnp.where(err1 <= acceptable_tol, n_acc + 1, 0)
         return (
@@ -408,72 +412,176 @@ def interior_point(
     return Result(z, s, lam, w, k, rest[8], rest[-1])
 
 
-def stage_kkt_solve(K, J, rz, rc, n_stages: int, nx: int, nu: int, ne: int = 1):
+def _parts(z, N, nx, nu):
+    """(x_1..x_N, u_0..u_{N-1}, e_0..e_{N-1}) of a vector in stage layout."""
+    a, b = N * nx, N * (nx + nu)
+    return z[:a].reshape(N, nx), z[a:b].reshape(N, nu), z[b:].reshape(N, -1)
+
+
+def _starts(xs):
+    """x_k for each stage k, x_0 (measured, no variable) as zeros."""
+    return jnp.concatenate([jnp.zeros_like(xs[:1]), xs[:-1]])
+
+
+def _from_starts(gx):
+    """The adjoint of ``_starts``: stage k's x_k entries onto x_1..x_N."""
+    return jnp.concatenate([gx[1:], jnp.zeros_like(gx[:1])])
+
+
+class _Adjoint(NamedTuple):
+    matvec: Callable
+
+    def __matmul__(self, v):
+        return self.matvec(v)
+
+
+class StageRows(NamedTuple):
+    """G in stage blocks: stage k's rows read only x_k (``Gx``, stage 0's
+    unused), u_k (``Gu``) and e_k (``Ge``), each (N, rows, width)."""
+
+    Gx: jnp.ndarray
+    Gu: jnp.ndarray
+    Ge: jnp.ndarray
+
+    def __matmul__(self, z):
+        N, nx = self.Gx.shape[0], self.Gx.shape[2]
+        xs, us, es = _parts(z, N, nx, self.Gu.shape[2])
+        out = jnp.einsum("kri,ki->kr", self.Gx, _starts(xs))
+        out = out + jnp.einsum("kri,ki->kr", self.Gu, us)
+        return (out + jnp.einsum("kri,ki->kr", self.Ge, es)).ravel()
+
+    @property
+    def T(self):
+        def matvec(w):
+            W = w.reshape(self.Gx.shape[:2])
+            gx, gu, ge = (jnp.einsum("kri,kr->ki", g, W) for g in self)
+            return jnp.concatenate([_from_starts(gx).ravel(), gu.ravel(), ge.ravel()])
+
+        return _Adjoint(matvec)
+
+
+@jax.tree_util.register_pytree_node_class
+class StageJacobian:
+    """J of the shooting rows in stage blocks: row block k is E_k dx_{k+1} +
+    A_k dx_k + B_k du_k (A_0 unused); no row reads the ``ne`` slacks."""
+
+    def __init__(self, E, A, B, ne: int):
+        self.E, self.A, self.B, self.ne = E, A, B, ne
+
+    def tree_flatten(self):
+        return (self.E, self.A, self.B), self.ne
+
+    @classmethod
+    def tree_unflatten(cls, ne, children):
+        return cls(*children, ne)
+
+    @property
+    def T(self):
+        def matvec(lam):
+            L = lam.reshape(self.E.shape[:2])
+            gx = jnp.einsum("kij,ki->kj", self.E, L)
+            gx = gx + _from_starts(jnp.einsum("kij,ki->kj", self.A, L))
+            gu = jnp.einsum("kij,ki->kj", self.B, L)
+            e = jnp.zeros(L.shape[0] * self.ne, L.dtype)
+            return jnp.concatenate([gx.ravel(), gu.ravel(), e])
+
+        return _Adjoint(matvec)
+
+
+class StageHessian(NamedTuple):
+    """A symmetric matrix in stage blocks: ``D[k]`` on v_k = (x_k, u_k, e_k)
+    (stage 0's x_0 part unused), ``P[k]`` coupling u_{k-1} with (u_k, e_k),
+    ``end`` on x_N. The pattern ``stage_kkt_solve`` takes."""
+
+    D: jnp.ndarray
+    P: jnp.ndarray
+    end: jnp.ndarray
+
+
+def stage_barrier(H: StageHessian, G: StageRows, sig) -> StageHessian:
+    """H + G' diag(sig) G, stage by stage."""
+    Gk = jnp.concatenate(list(G), axis=-1)
+    sk = sig.reshape(Gk.shape[:2])
+    return H._replace(D=H.D + jnp.einsum("kri,kr,krj->kij", Gk, sk, Gk))
+
+
+def stage_shift(K: StageHessian, delta) -> StageHessian:
+    """K + delta I."""
+    return K._replace(
+        D=K.D + delta * jnp.eye(K.D.shape[-1]), end=K.end + delta * jnp.eye(len(K.end))
+    )
+
+
+def stage_multipliers(J: StageJacobian, r):
+    """The least-squares multipliers (J J')^-1 J r, as IPOPT computes them:
+    the Newton system with K = I, by the Riccati recursion."""
+    N, nx = J.E.shape[:2]
+    nu, ne = J.B.shape[2], J.ne
+    eye = StageHessian(
+        jnp.broadcast_to(jnp.eye(nx + nu + ne), (N, nx + nu + ne, nx + nu + ne)),
+        jnp.zeros((N, nu, nu + ne)),
+        jnp.eye(nx),
+    )
+    return stage_kkt_solve(eye, J, -r, jnp.zeros(N * nx, r.dtype))[1]
+
+
+def stage_kkt_solve(K: StageHessian, J: StageJacobian, rz, rc):
     """The Newton system of a multiple-shooting NLP, by a Riccati recursion.
 
     Solves [K -J'; J 0] [dz; dlam] = [rz; rc] for the layout
     z = (x_1..x_S, u_0..u_{S-1}, e_0..e_{S-1}): states (nx each; x_0 is
     measured, not a variable), inputs (nu each) and ``ne`` slacks per stage
-    (none to several). K may couple only x_k, u_k and e_k with each other
-    and u_k with u_{k-1}; row block k of J is E_k dx_{k+1} + A_k dx_k +
-    B_k du_k with E_k invertible. That is the equality-constrained LQ problem
-    min 1/2 dz'K dz - rz'dz s.t. J dz = rc in the augmented state
+    (none to several). K, in stage blocks, couples only x_k, u_k and e_k with
+    each other and u_k with u_{k-1}; row block k of J is E_k dx_{k+1} +
+    A_k dx_k + B_k du_k with E_k invertible. That is the equality-constrained
+    LQ problem min 1/2 dz'K dz - rz'dz s.t. J dz = rc in the augmented state
     y_k = (dx_k, du_{k-1}) and control v_k = (du_k, de_k).
 
     Returns (dz, dlam, ok), ``ok`` false unless every stage's reduced
     Hessian Q_vv is positive definite, which is the inertia the step needs.
     """
-    S, ny, nv = n_stages, nx + nu, nu + ne
+    S, nx, nu = K.D.shape[0], K.end.shape[0], K.P.shape[1]
+    ne = K.P.shape[2] - nu
+    ny, nv = nx + nu, nu + ne
     xi = jnp.arange(nx * S).reshape(S, nx)  # x_1..x_S; x_k at row k - 1
     ui = nx * S + jnp.arange(nu * S).reshape(S, nu)
     ei = (nx + nu) * S + jnp.arange(ne * S).reshape(S, ne)
     xk = jnp.concatenate([xi[:1], xi[:-1]])  # x_k; stage 0's is masked out
-    first = jnp.arange(S) > 0
     vk = jnp.concatenate([ui, ei], axis=1)
-    up = jnp.concatenate([ui[:1], ui[:-1]])  # u_{k-1}; stage 0's masked out
-
-    def block(rows, cols):
-        return K[rows[:, :, None], cols[:, None, :]]
-
-    mask = first[:, None].astype(K.dtype)
-    Hxx = block(xk, xk) * mask[:, :, None] * mask[:, None, :]
-    Hxv = block(xk, vk) * mask[:, :, None]
-    Hvv = block(vk, vk)
-    Hpv = block(up, vk) * mask[:, :, None]
+    mask = (jnp.arange(S) > 0)[:, None].astype(K.D.dtype)
+    Hxx = K.D[:, :nx, :nx] * mask[:, :, None] * mask[:, None, :]
+    Hxv = K.D[:, :nx, nx:] * mask[:, :, None]
+    Hvv = K.D[:, nx:, nx:]
+    Hpv = K.P * mask[:, :, None]
     gx = -rz[xk] * mask
     gv = -rz[vk]
-    rows = jnp.arange(nx * S).reshape(S, nx)
-    E = J[rows[:, :, None], xi[:, None, :]]
+    E = J.E
     Ei = jnp.linalg.inv(E)
-    A = -Ei @ (J[rows[:, :, None], xk[:, None, :]] * mask[:, None, :])
-    B = -Ei @ J[rows[:, :, None], ui[:, None, :]]
+    A = -Ei @ (J.A * mask[:, None, :])
+    B = -Ei @ J.B
     b = (Ei @ rc.reshape(S, nx)[:, :, None])[:, :, 0]
-    P_end = (
-        jnp.zeros((ny, ny), K.dtype)
-        .at[:nx, :nx]
-        .set(K[xi[-1][:, None], xi[-1][None, :]])
-    )
-    p_end = jnp.zeros(ny, K.dtype).at[:nx].set(-rz[xi[-1]])
+    P_end = jnp.zeros((ny, ny), K.D.dtype).at[:nx, :nx].set(K.end)
+    p_end = jnp.zeros(ny, K.D.dtype).at[:nx].set(-rz[xi[-1]])
 
     def backward(carry, k):
         P, p, ok = carry
-        Ab = jnp.zeros((ny, ny), K.dtype).at[:nx, :nx].set(A[k])
+        Ab = jnp.zeros((ny, ny), K.D.dtype).at[:nx, :nx].set(A[k])
         Bb = (
-            jnp.zeros((ny, nv), K.dtype)
+            jnp.zeros((ny, nv), K.D.dtype)
             .at[:nx, :nu]
             .set(B[k])
             .at[nx:, :nu]
             .set(jnp.eye(nu))
         )
-        bb = jnp.zeros(ny, K.dtype).at[:nx].set(b[k])
-        Myy = jnp.zeros((ny, ny), K.dtype).at[:nx, :nx].set(Hxx[k])
-        Myv = jnp.zeros((ny, nv), K.dtype).at[:nx].set(Hxv[k]).at[nx:].set(Hpv[k])
+        bb = jnp.zeros(ny, K.D.dtype).at[:nx].set(b[k])
+        Myy = jnp.zeros((ny, ny), K.D.dtype).at[:nx, :nx].set(Hxx[k])
+        Myv = jnp.zeros((ny, nv), K.D.dtype).at[:nx].set(Hxv[k]).at[nx:].set(Hpv[k])
         Qyy = Myy + Ab.T @ P @ Ab
         Qyv = Myv + Ab.T @ P @ Bb
         Qvv = Hvv[k] + Bb.T @ P @ Bb
         Qvv = 0.5 * (Qvv + Qvv.T)
         g = P @ bb + p
-        qy = jnp.zeros(ny, K.dtype).at[:nx].set(gx[k]) + Ab.T @ g
+        qy = jnp.zeros(ny, K.D.dtype).at[:nx].set(gx[k]) + Ab.T @ g
         qv = gv[k] + Bb.T @ g
         L = jnp.linalg.cholesky(Qvv)
         ok = ok & jnp.all(jnp.isfinite(L))
@@ -498,8 +606,8 @@ def stage_kkt_solve(K, J, rz, rc, n_stages: int, nx: int, nu: int, ne: int = 1):
         dlam = jnp.linalg.solve(E[k].T, (P_next[k] @ y1 + p_next[k])[:nx])
         return y1, (v, dx, dlam)
 
-    _, (V, DX, DL) = jax.lax.scan(forward, jnp.zeros(ny, K.dtype), jnp.arange(S))
-    dz = jnp.zeros(K.shape[0], K.dtype)
+    _, (V, DX, DL) = jax.lax.scan(forward, jnp.zeros(ny, K.D.dtype), jnp.arange(S))
+    dz = jnp.zeros(rz.shape[0], K.D.dtype)
     dz = dz.at[xi.ravel()].set(DX.ravel()).at[ui.ravel()].set(V[:, :nu].ravel())
     dz = dz.at[ei.ravel()].set(V[:, nu:].ravel())
     return dz, DL.ravel(), ok
