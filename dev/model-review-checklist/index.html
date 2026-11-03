@@ -3142,25 +3142,17 @@ steady-state offset cannot be found by a measurement that never reaches steady
 state. It sat at "1.3% behind, passing" until the episode-length audit
 lengthened that episode to 1600 steps.</p>
 <p><strong>What it applies to.</strong> Every environment whose MPC plans against a model of
-its own, which here is all nine CasADi ones. The seven original ones plan
-against reduced models, and none of them had this comparison before. The unstable CSTR's CasADi model restates the env's
-equations without reducing them, because CasADi cannot trace the env's <code>jnp</code>
-code. Two tests in <code>tests/pc_gym/unstable_cstr/test_unstable_cstr_experts.py</code>
-hold that copy to the plant. <code>test_mpc_model_is_the_env_velocity</code> compares its
-right-hand side with the env's <code>compute_velocity</code> at 1000 random points, and
-<code>test_mpc_predicts_one_step_like_the_plant</code> runs this check on 120 states of a
-PID episode with the feed drift on. One control interval of the model lands
-within <code>e_floor</code> of <code>step_env</code> in C_a, and the mean signed error stays under a
-tenth of <code>e_floor</code>. The compressor's NMPC restates the env's discrete step in
-CasADi for the same reason, ten substeps of rate limits and RK4, with the
-rate-limit clips rounded so that IPOPT sees a smooth problem. Two tests in
-<code>tests/compressor_surge/test_compressor_surge_experts.py</code> hold it to the plant.
-<code>test_mpc_model_is_the_env_step</code> compares the step with the clips exact against
-<code>compute_next_state</code> at 1000 random states, and
-<code>test_mpc_predicts_one_step_like_the_plant</code> runs this check with the shipped
-rounding on 120 states, most of them from a PID episode. One step of the model
-lands within 0.05 <code>e_floor</code> of the env's float32 step in header pressure and
-within 1e-4 in the trip variable <code>phi_min</code>.</p>
+its own. Since November 2026 only the compressor's does: of the nine CasADi
+planners this check was written for, seven on reduced models and two (the
+unstable CSTR's and the compressor's) on restatements of the env's equations
+held to the plant by tests, eight were replaced by <code>NewtonMPC</code>, which plans on
+<code>step_env</code> itself. The compressor's NLP stayed, on the env's own force
+functions, with its step held to <code>compute_next_state</code> by
+<code>test_mpc_model_is_the_env_step</code> and <code>test_mpc_predicts_one_step_like_the_plant</code>.
+The gradient and sampling planners always plan on <code>step_env</code>. Where a planner's stage computes
+its cost apart from <code>step_env</code> (the reactor's, to round a kink), it still
+steps the env's own <code>compute_next_state</code>, and a new planner that restates any
+physics should get this check before it ships.</p>
 <hr />
 <h2 id="open-items-this-produced">Open items this produced<a class="headerlink" href="#open-items-this-produced" title="Permanent link">&para;</a></h2>
 <ul>

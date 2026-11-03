@@ -2049,10 +2049,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#solver-limits-and-how-often-they-bit" class="md-nav__link">
+  <a href="#solver-budget" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Solver limits, and how often they bit
+        Solver budget
       
     </span>
   </a>
@@ -2463,10 +2463,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#solver-limits-and-how-often-they-bit" class="md-nav__link">
+  <a href="#solver-budget" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Solver limits, and how often they bit
+        Solver budget
       
     </span>
   </a>
@@ -2631,14 +2631,14 @@ holds that instead of a planner. Each task's controller lives in its package's
 </thead>
 <tbody>
 <tr>
-<td><code>CasadiMPC</code></td>
-<td>first_order, ph_neutralization, glass_furnace, reactor, hvac, unstable_cstr, compressor_surge</td>
-<td>A nonlinear program over an explicit model, solved by IPOPT</td>
+<td><code>NewtonMPC</code></td>
+<td>cstr, four_tank, first_order, ph_neutralization, unstable_cstr, reactor, hvac, glass_furnace</td>
+<td>Iterative LQR on the environment's own step: Newton's method on the action sequence. On the CSTR and the four-tank, deterministic plants with episodes short enough to plan whole, the plan is the rest of the episode</td>
 </tr>
 <tr>
-<td><code>ShrinkingHorizonNLP</code></td>
-<td>cstr, four_tank</td>
-<td>A deterministic plant with an episode short enough to plan whole: one NLP over every remaining step, on the environment's own step</td>
+<td>IPOPT's interior-point method, in JAX</td>
+<td>compressor_surge</td>
+<td>A constrained NLP on the environment's step: multiple shooting, with the surge margin a soft constraint priced at a trip. It holds the plant on that margin; the Newton planner, with a barrier there instead, cost 1.6 times as much on five seeds (measured)</td>
 </tr>
 <tr>
 <td><code>GradientMPC</code></td>
@@ -2689,9 +2689,10 @@ spec declares in <code>noise_fields</code> for their own copy of the params, so 
 on the mean path: certainty equivalence, not a robust formulation.</p>
 <p><strong>It does not always minimise the reward exactly.</strong> See the next section.</p>
 <p><strong>It is slow</strong>, from about 0.1 ms per step for the feedforward and feedback
-laws to about 1.3 s for the 3D aircraft. The CasADi planners call IPOPT, outside
-JAX, so they do not jit or vmap. Use it as a reference to measure against, not
-inside a training loop; the recorded returns save you running it at all.</p>
+laws to about 1.3 s for the 3D aircraft. The Newton planner keeps its plan on
+the host between steps, so it runs one episode at a time. Use it as a
+reference to measure against, not inside a training loop; the recorded returns
+save you running it at all.</p>
 <h3 id="why-the-mpc-does-not-minimise-the-reward">Why the MPC does not minimise the reward<a class="headerlink" href="#why-the-mpc-does-not-minimise-the-reward" title="Permanent link">&para;</a></h3>
 <p>An MPC objective must share the reward's <strong>minimiser</strong>, not necessarily its
 shape, and must give the optimiser a gradient.</p>
@@ -2701,26 +2702,27 @@ shape, and must give the optimiser a gradient.</p>
   minimiser and gives a gradient that vanishes at the optimum. A trip is a
   boolean with no gradient, so they add a smooth barrier on the approach,
   weighted at the failure cost.</li>
-<li><strong>The CasADi planners</strong> minimise a quadratic in a per-plant error band
-  (<code>tracking_band</code>, <code>comfort_band</code> and similar). These bands are controller
-  constants, not reward parameters. The quadratic shares the reward's
-  minimiser but not its trade-offs against a running cost, so a badly sized
-  band can settle the plant off target to save fuel.</li>
-<li><strong>The CSTR and four-tank NLPs</strong> minimise the reward's own tracking term,
-  weighted toward the scored window, and reach the plant's optimum to float32
+<li><strong>The Newton planner</strong> minimises the step's own reward in floor units.
+  Three plants need a planner's version of it. The pH plant solves its pH by
+  bisection, which has no derivative, so the planner's pH has the titration
+  curve's slope. The reactor's costs are linear in the error, so the planner
+  rounds the kink over one floor. The unstable CSTR keeps a barrier short of
+  a trip, at the point-of-no-return line. On the CSTR and the four-tank it weighs the scored window
+  1000 times the approach and reaches the plant's optimum to float32
   rounding.</li>
 </ul>
-<h3 id="solver-limits-and-how-often-they-bit">Solver limits, and how often they bit<a class="headerlink" href="#solver-limits-and-how-often-they-bit" title="Permanent link">&para;</a></h3>
-<p>A real MPC has a sample period and applies the best iterate it holds when time
-runs out, so <code>CasadiMPC</code> caps IPOPT at 150 iterations (<code>IPOPT_MAX_ITER</code>), with a
-CPU-time backstop far above any healthy step. The iteration cap is the one
-meant to bind because it is deterministic, so a baseline recorded on one
-machine reproduces on another. <code>ShrinkingHorizonNLP</code> is capped at 500.</p>
-<p>A capped solve is applied; any other failure (infeasible, restoration failed)
-returns an iterate that means nothing, so the controller holds its previous
-action. The unstable CSTR's and the compressor's MPCs hand such a step to their
-PIDs instead, because holding the last action could trip either plant. Every
-record counts these, so a baseline cannot quietly stop being an upper bound:</p>
+<h3 id="solver-budget">Solver budget<a class="headerlink" href="#solver-budget" title="Permanent link">&para;</a></h3>
+<p>Every Newton solve runs a fixed number of iterations: more on an episode's
+first solve, which starts cold, than on the later ones, which start from the
+previous plan. A fixed count is deterministic, so a baseline recorded on one
+machine reproduces on another. A solve cannot fail: its line search keeps the
+plan it started from when no step improves on it. Where the factory gives a
+guide (the unstable CSTR's cascade), each solve starts from the better of
+the previous plan and the guide's rollout, so the plan is never worse than
+the expert's under the planner's model.</p>
+<p>The compressor's interior-point solves run to IPOPT's tolerance, capped at
+150 iterations, and are deterministic too. A solve whose line search fails
+hands that step to the compressor's PID pair. Every record keeps the counts:</p>
 <table>
 <thead>
 <tr>
@@ -2734,26 +2736,24 @@ record counts these, so a baseline cannot quietly stop being an upper bound:</p>
 <td>solves performed across all seeds</td>
 </tr>
 <tr>
+<td><code>solver_mean_iters</code></td>
+<td>mean iterations per solve</td>
+</tr>
+<tr>
 <td><code>solver_failures</code></td>
-<td>solves that did not reach a converged status</td>
+<td>solves handed to the PID (the compressor only)</td>
 </tr>
 <tr>
 <td><code>solver_capped</code></td>
-<td>of those, the ones stopped by the iteration or time cap</td>
-</tr>
-<tr>
-<td><code>solver_mean_iters</code></td>
-<td>mean IPOPT iterations per solve</td>
+<td>solves stopped by the iteration cap and applied (the compressor only)</td>
 </tr>
 </tbody>
 </table>
-<p>Read <code>solver_failures</code> before quoting an MPC number;
-<code>scripts/record_baselines.py</code> prints the success rate as it records.</p>
 <h3 id="what-the-mpc-does-not-guarantee">What the MPC does not guarantee<a class="headerlink" href="#what-the-mpc-does-not-guarantee" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>No stability certificate.</strong> No planner has a terminal set, and among the
-  CasADi planners only the unstable CSTR's and the compressor's weight the end
-  of their horizon, so there is no nominal stability guarantee in the Mayne
+<li><strong>No stability certificate.</strong> No planner has a terminal set or a terminal
+  cost, apart from the CSTR's and the four-tank's, which plan to the
+  episode's end, so there is no nominal stability guarantee in the Mayne
   sense. The baselines are measured, not certified.</li>
 <li><strong>Some aircraft horizons are short.</strong> <code>scripts/audit_mpc_horizons.py</code> checks
   each horizon against the time a viable controller needs to close the error.

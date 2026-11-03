@@ -2641,10 +2641,13 @@ uncertainty</em> from <em>what is left for learning</em>, by inserting stronger
 model-based baselines between deterministic MPC and RL.</p>
 <p>Investigation only. Nothing in this report has been implemented, and no
 environment, baseline or test was modified to produce it. It describes the
-planners as they were then: the oracle audit (2026-10) has since changed some
-of them, for example the pH planner now forecasts the buffer flow from the
-state instead of assuming its nominal value, and the glass furnace's plans on
-the pull rate's conditional mean, read from the state.</p>
+planners as they were then. The oracle audit (2026-10) changed some of them,
+and in November 2026 every CasADi planner but the compressor's was replaced by
+<code>NewtonMPC</code>, which plans on <code>env.step_env</code> itself (the compressor's NLP is now
+solved by IPOPT's algorithm in JAX): on all four priority environments the MPC now
+has the true model, with the declared noise zeroed (<code>plan_params</code>), so the
+build cost section 1 names is paid. The reactor's demand and the building's
+weather noise are declared too.</p>
 <h2 id="1-verdict">1. Verdict<a class="headerlink" href="#1-verdict" title="Permanent link">&para;</a></h2>
 <p><strong>The study is feasible, and the largest obstacle is not the one anticipated.</strong></p>
 <p>The premise that had to hold is that the plants are stochastic. They are. All
