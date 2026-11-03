@@ -109,7 +109,7 @@ shrinks over its last P steps.
 | H10 | Class | integrating if, over the window, the mean slope of the last quarter is at least half that of the first quarter; else self-regulating | ours: the criterion `scripts/measure_time_constants.py` already uses |
 | H11 | Fits | FOPDT by the expert protocols' `fit_fopdt`; integrating by `fit_integrating_lag` (k', theta, tau2). No fit is dropped, whatever its residual | ours, as the expert protocols |
 | H12 | Episode end | H_k = min(P, N_ep - k) | read: RMD p. 22 and p. 574. Derived: the objective is the episode reward, so nothing after N_ep counts |
-| H13 | Record | per task: P, the pair and seed that set it, every fit, the class per CV | ours |
+| H13 | Record | per task, two files. A compact summary in the package, `data/oracle_horizons/<task>.json`: T_c, N, M, P, the pair and seed that set each, compliance, the class per CV and the label counts. The full evidence, every test, retest and fit, in `evidence/oracle_horizons/<task>.json` at the repository root: kept in git, not shipped in the wheel (review of #133: the evidence was nine times the package data) | ours |
 
 ## 4. Per class
 
@@ -614,7 +614,7 @@ excitation it gives (derived).
 - **insignificant:** H16. A zero model when all ten seeds are;
 - **invalid:** fails H14 after its retests. Excluded from H2 to H5.
 
-The record (H13) adds, per pair-seed: each test run (step, window, loops,
+The evidence file (H13) adds, per pair-seed: each test run (step, window, loops,
 trip run and CV), sigma, SNR, both fits with their V1 to V4 values, the
 evidence, the label and the failed check. Per CV: the class and its vote. Per
 task: the counts of valid, insignificant and invalid pairs, and the CVs left

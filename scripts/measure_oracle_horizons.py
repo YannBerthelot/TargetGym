@@ -3,7 +3,10 @@
 Run with ``uv run python scripts/measure_oracle_horizons.py [--envs ...]``.
 It runs docs/proposals/oracle-horizon-protocol.md, with Amendments 1 and 2, on the
 14 process and industrial tasks and writes one file per task,
-``src/target_gym/data/oracle_horizons/<task>.json`` (H13, H19). The 10
+``src/target_gym/data/oracle_horizons/<task>.json``, a compact summary that
+ships in the wheel, and ``evidence/oracle_horizons/<task>.json`` at the
+repository root, every test, retest and fit, in git but not in the wheel
+(H13, H19). The 10
 aircraft tasks are skipped: their tests fly through ArduPlane 4.0.9's default
 loops (decision D6), which PR D builds.
 
@@ -29,7 +32,9 @@ the inner PD closed, its setpoint stepped 0.5 K down as in the expert test.
 from __future__ import annotations
 
 import argparse
+import json
 import math
+import pathlib
 
 import jax.numpy as jnp
 import numpy as np
@@ -38,6 +43,23 @@ from target_gym import records
 from target_gym.identification import TRAIN_SEEDS, Plant, evidence, identify
 from target_gym.oracles.horizon import episode_samples, sample_time, task_horizon
 from target_gym.registry import REGISTRY
+
+EVIDENCE = pathlib.Path(__file__).resolve().parent.parent / "evidence"
+#: What the package keeps of a task's horizon (H13); the rest is evidence.
+SUMMARY = ("protocol", "compliant", "T_c_steps", "N", "M", "P", "T_c_set_by")
+SUMMARY += ("P_set_by", "counts", "cpu", "generated")
+
+
+def write(name: str, row: dict) -> None:
+    """The compact summary in the package and the full evidence beside the
+    repository's sources (H13)."""
+    evidence = EVIDENCE / "oracle_horizons" / f"{name}.json"
+    summary = {k: row[k] for k in SUMMARY if k in row}
+    summary["classes"] = {c: v["class"] for c, v in row["classes"].items()}
+    summary["evidence"] = evidence.relative_to(EVIDENCE.parent).as_posix()
+    records.write("oracle_horizons", name, summary, compact=True)
+    evidence.parent.mkdir(parents=True, exist_ok=True)
+    evidence.write_text(json.dumps(row, indent=2, sort_keys=True) + "\n")
 
 
 def _s(field, lo=None, hi=None):
@@ -305,7 +327,7 @@ def main() -> None:
     )
     for name in (n for n in args.envs if n in TASKS):
         row = measure(name)
-        records.write("oracle_horizons", name, records.stamped(row))
+        write(name, row := records.stamped(row))
         if row["compliant"]:
             end = ", to the end" if row["plans_to_episode_end"] else ""
             what = (

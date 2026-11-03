@@ -7,7 +7,8 @@ file per task (``env_versions`` one per version, ``<task>-vN.json``)::
     data/protocol_results/<task>.json    scripts/evaluate_baselines.py
     data/hold_measurements/<task>.json   scripts/measure_hold.py
     data/env_versions/<task>-vN.json     scripts/stamp_env_versions.py
-    data/oracle_horizons/<task>.json     scripts/measure_oracle_horizons.py
+    data/oracle_horizons/<task>.json     scripts/measure_oracle_horizons.py (summary;
+                                         the evidence is in evidence/oracle_horizons/)
 
 They used to be one file per kind, which every recording PR rewrote, so each
 merge broke every other open one. One file per task means re-recording a task
@@ -115,11 +116,16 @@ def load_row(kind: str, stem: str) -> dict:
     return json.loads(p.read_text()) if p.exists() else {}
 
 
-def write(kind: str, stem: str, row: dict) -> pathlib.Path:
-    """Write ``stem``'s row of ``kind`` and nothing else."""
+def write(kind: str, stem: str, row: dict, compact: bool = False) -> pathlib.Path:
+    """Write ``stem``'s row of ``kind`` and nothing else; ``compact`` on one
+    line, for rows that ship in the wheel and must stay small."""
     p = path(kind, stem)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(row, indent=2, sort_keys=True) + "\n")
+    if compact:
+        text = json.dumps(row, sort_keys=True, separators=(",", ":"))
+    else:
+        text = json.dumps(row, indent=2, sort_keys=True)
+    p.write_text(text + "\n")
     return p
 
 
