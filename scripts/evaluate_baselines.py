@@ -20,8 +20,8 @@ parameter values, the fixed settle and the burn-in the protocol scores from,
 the hold row's capped at half the episode), so a test can read the MPC's
 recorded cost instead of re-running the MPC, and refuse the row once the code
 it describes has moved. ``tests/test_reward_contract.py`` does that for the
-floor check. ``--pid-only`` and ``--mpc-only`` score one part and keep the
-other's as recorded.
+floor check. ``--part expert`` and ``--part oracle`` score one part and keep
+the other's as recorded.
 """
 
 from __future__ import annotations
@@ -112,15 +112,17 @@ def main() -> int:
     ap.add_argument(
         "--table", action="store_true", help="print the room map from the file"
     )
-    only = ap.add_mutually_exclusive_group()
-    only.add_argument("--pid-only", action="store_true", help="the expert part only")
-    only.add_argument("--mpc-only", action="store_true", help="the oracle part only")
+    ap.add_argument(
+        "--part",
+        choices=("expert", "oracle"),
+        help="score this part only, keeping the other's as recorded",
+    )
     args = ap.parse_args()
     rows = records.load("protocol_results")
     if args.table:
         print(table(rows))
         return 0
-    kinds = ("pid",) if args.pid_only else ("mpc",) if args.mpc_only else ("pid", "mpc")
+    kinds = {"expert": ("pid",), "oracle": ("mpc",), None: ("pid", "mpc")}[args.part]
     names = args.envs or [n for n, s in REGISTRY.items() if s.has_pid]
     for name in names:
         spec = REGISTRY[name]
@@ -148,11 +150,11 @@ def main() -> int:
                 f"fail={m['failure_rate']:.2f} [{m['seconds']}s]",
                 flush=True,
             )
-        rows[name] = records.stamped(row)
-        if len(kinds) == 1:
-            part = "expert" if kinds == ("pid",) else "oracle"
-            rows[name] = records.with_part(rows.get(name, {}), rows[name], part)
-        records.write("protocol_results", name, rows[name])
+        fresh = records.stamped(row)
+        if args.part:
+            fresh = records.with_part(rows.get(name, {}), fresh, args.part)
+        rows[name] = fresh
+        records.write("protocol_results", name, fresh)
     print(table(rows))
     return 0
 

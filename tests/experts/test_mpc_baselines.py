@@ -232,14 +232,13 @@ def test_recorded_baseline_still_describes_this_tree(name):
         for part, current in fingerprints(spec).items()
         if recorded[name].get(f"{part}_fingerprint") != current
     }
-    flags = {"expert": "--pid-only", "oracle": "--mpc-only"}
     assert not stale, (
         f"{name}: the recorded baseline's {' and '.join(stale)} part was taken "
         f"against different code (recorded, current: {stale}). Its physics, "
         f"controllers, gains or parameters have changed since, so those numbers "
         f"no longer say anything about this tree. Re-measure with `uv run "
         f"python scripts/record_baselines.py --envs {name}"
-        f"{' ' + flags[next(iter(stale))] if len(stale) == 1 else ''}` and "
+        f"{f' --part {next(iter(stale))}' if len(stale) == 1 else ''}` and "
         f"commit the result with the change that invalidated it."
     )
 

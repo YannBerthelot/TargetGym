@@ -116,12 +116,11 @@ jobs:
         PARTS: ${{ matrix.job.parts }}
       run: |
         case "$PARTS" in
-          expert) only=--pid-only ;;
-          oracle) only=--mpc-only ;;
-          *) only= ;;
+          expert|oracle) part="--part $PARTS" ;;
+          *) part= ;;
         esac
-        uv run python scripts/record_baselines.py --envs "$ENV_NAME" $only
-        uv run python scripts/evaluate_baselines.py --envs "$ENV_NAME" $only
+        uv run python scripts/record_baselines.py --envs "$ENV_NAME" $part
+        uv run python scripts/evaluate_baselines.py --envs "$ENV_NAME" $part
         uv run python scripts/stale_records.py extract "$ENV_NAME" rows
     - uses: actions/upload-artifact@v4
       with:

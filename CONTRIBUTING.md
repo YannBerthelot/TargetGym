@@ -214,17 +214,23 @@ rebuilding an oracle only the MPCs.
 The easy way is to let CI do it. Add the `re-record` label to your pull
 request: one job per stale environment records its stale parts on GitHub's
 runners and commits the rows, the table and the pages to your branch, and the
-checks run again on that commit. To record by hand instead:
+checks run again on that commit. To check locally that a change left every
+PID's returns alone, which takes under a minute and writes nothing:
+
+```bash
+uv run python scripts/record_baselines.py --pid-only
+```
+
+To record by hand instead:
 
 ```bash
 uv run python scripts/record_baselines.py                  # everything
 uv run python scripts/record_baselines.py --envs plane cstr # just these
-uv run python scripts/record_baselines.py --pid-only       # the expert part
-uv run python scripts/record_baselines.py --mpc-only       # the oracle part
+uv run python scripts/record_baselines.py --part expert    # the PIDs' part only
+uv run python scripts/record_baselines.py --part oracle    # the MPCs' part only
 ```
 
-`--pid-only` takes under a minute and prints, for each task, whether its PID
-returns moved; `git diff` the records to undo a run you only meant as a check.
+`--part` records that part's rows and keeps the other part's as recorded.
 
 Each task's records are files of their own, `src/target_gym/data/<kind>/<task>.json`
 (`target_gym.records`), so re-recording a task changes that task's files and
@@ -263,7 +269,7 @@ the same way. They are what the floor check in `tests/test_reward_contract.py`
 compares each measured floor against, and their parts carry the same
 fingerprints, so the same change that makes a baseline part stale makes its
 row's part stale too. Re-run the protocol for the environments the test names,
-with `--pid-only` or `--mpc-only` for one part:
+with `--part expert` or `--part oracle` for one part:
 
 ```bash
 uv run python scripts/evaluate_baselines.py --envs plane cstr

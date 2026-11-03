@@ -247,7 +247,7 @@ def _recorded_protocol_row(spec, parts=("expert", "oracle")) -> dict:
     )
     for part, current in fingerprints(spec).items():
         recorded = row.get(f"{part}_fingerprint")
-        flag = {"expert": "--pid-only", "oracle": "--mpc-only"}[part]
+        flag = f"--part {part}"
         assert part not in parts or recorded == current, (
             f"{spec.name}: the protocol row's {part} part was taken against "
             f"different code (recorded {recorded}, current {current}). Re-run "

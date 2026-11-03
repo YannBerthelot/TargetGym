@@ -24,10 +24,11 @@ Usage
 -----
     uv run python scripts/record_baselines.py              # everything
     uv run python scripts/record_baselines.py --envs plane cstr
-    uv run python scripts/record_baselines.py --pid-only   # the expert part only
-    uv run python scripts/record_baselines.py --mpc-only   # the oracle part only
+    uv run python scripts/record_baselines.py --pid-only   # check, write nothing
+    uv run python scripts/record_baselines.py --part expert   # the PIDs' part only
+    uv run python scripts/record_baselines.py --part oracle   # the MPCs' part only
 
-A part-only run keeps the other part's returns and fingerprint as recorded.
+``--part`` keeps the other part's returns and fingerprint as recorded.
 
 Run it whenever the test suite tells you a record is stale, and commit the
 result alongside the change that invalidated it. Or let CI do it: the
@@ -458,16 +459,19 @@ def _run_jobs(jobs, workers, inflight, durations, pid_out, mpc_out, batch_out, e
     )
 
 
-def _record_pids(names: list[str]) -> int:
-    """Re-record the PIDs' part alone and report any return that moved.
+def _run_pids(names: list[str], write: bool) -> int:
+    """Re-run only the PIDs and report any return that moved; with ``write``,
+    record their part (``--part expert``), and otherwise write nothing
+    (``--pid-only``).
 
     Minutes against the full re-record's hour or more, because nearly all of
-    that is MPC, and the MPC's part keeps its own fingerprint, so this
-    refreshes a row an expert change left stale. Rows recorded on CI's Linux
-    runners can differ from a Mac's in the last bits, so a return counts as
-    moved beyond ``records.same``'s tolerance, and any difference at all is
-    printed: a refactor that must be bit-identical is better compared against
-    a run of its base commit on the same machine.
+    that is MPC, and the MPC's part keeps its own fingerprint, so the written
+    form refreshes a row an expert change left stale. The check is the quick
+    local one for a change meant to leave the PIDs alone. Rows recorded on
+    CI's Linux runners can differ from a Mac's in the last bits, so a return
+    counts as moved beyond ``records.same``'s tolerance, and any difference at
+    all is printed: a refactor that must be bit-identical is better compared
+    against a run of its base commit on the same machine.
     """
     rows = records.load("baseline_returns")
     # The recorder keeps no baseline row for a plant without an MPC.
@@ -478,7 +482,8 @@ def _record_pids(names: list[str]) -> int:
     moved = 0
     for name in names:
         new = [round(got[(name, seed, None)], 6) for seed in range(SEEDS)]  # as _row
-        records.write("baseline_returns", name, _row(name, new))
+        if write:
+            records.write("baseline_returns", name, _row(name, new))
         old = rows.get(name, {}).get("pid_returns")
         same = old is not None and records.same(old, new)
         moved += not same
@@ -488,31 +493,32 @@ def _record_pids(names: list[str]) -> int:
             else f" (max |d| {np.max(np.abs(np.subtract(old, new))):.3g})"
         )
         print(f"  {name:20s} PID {'unchanged' if same else 'MOVED'}{gap}", flush=True)
-    return 1 if moved else 0
+    # A recording expects returns to move; only the check fails on them.
+    return 1 if moved and not write else 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--envs", nargs="*", default=None, help="default: all with an MPC")
     only = ap.add_mutually_exclusive_group()
     only.add_argument(
         "--pid-only",
         action="store_true",
-        help="re-record the PIDs' part only, and report returns that moved",
+        help="re-run the PIDs only and report returns that moved; writes nothing",
     )
     only.add_argument(
-        "--mpc-only",
-        action="store_true",
-        help="re-record the MPCs' part only, keeping the PIDs' as recorded",
+        "--part",
+        choices=("expert", "oracle"),
+        help="record this part only, keeping the other's as recorded",
     )
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     names = args.envs or [
         n for n, s in REGISTRY.items() if s.has_pid and s.make_mpc is not None
     ]
-    if args.pid_only:
-        return _record_pids(names)
-    with_pid = not args.mpc_only
+    if args.pid_only or args.part == "expert":
+        return _run_pids(names, write=args.part == "expert")
+    with_pid = args.part is None
     batched, per_seed = _split_by_planner(names)
     live = batched + per_seed
 

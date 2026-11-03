@@ -9,7 +9,9 @@ environment and uses this to plan and to collect::
 
 A row has two parts, the expert's and the oracle's, each with its own
 fingerprint (``target_gym.provenance``), so ``list`` names the stale parts of
-each environment and its job re-records those alone.
+each environment and its job re-records those alone (``--part expert`` or
+``--part oracle`` to record_baselines.py and evaluate_baselines.py, neither
+when both are stale).
 
 ``merge`` writes only the tasks whose rows moved beyond the tolerance
 (``target_gym.records.same``), and only their files, so a weekly run that
