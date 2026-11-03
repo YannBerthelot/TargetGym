@@ -22,7 +22,6 @@ Plants whose output integrates the input (a tank level, a drum level) have no
 steady state to settle to, and are reported as integrating rather than fitted.
 """
 
-
 import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
 import numpy as np  # noqa: E402

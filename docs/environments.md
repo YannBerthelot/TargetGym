@@ -65,7 +65,7 @@ To pick one by what you want to test, see
 | `four_tank` | `four_tank-v3` | (6,) | (2,) | h1 (m), h2 (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
 | `ph_neutralization` | `ph_neutralization-v2` | (3,) | (1,) | pH | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
 | `distillation` | `distillation-v3` | (7,) | (2,) | yD (mole fraction), xB (mole fraction) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
-| `unstable_cstr` | `unstable_cstr-v2` | (4,) | (1,) | C_a (mol/L) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
+| `unstable_cstr` | `unstable_cstr-v3` | (4,) | (1,) | C_a (mol/L) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Industrial / Energy
 
