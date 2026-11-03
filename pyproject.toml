@@ -78,14 +78,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The nine CasADi oracles (full-state MPCs) and baseline recording. Their
-# imports are guarded, and ``target_gym.make_oracle`` names this extra when
-# they are missing. do-mpc 5.1.1 breaks against casadi 3.8 with
-# "module 'casadi.tools' has no attribute 'SX'", hence the upper bound.
-mpc = [
-    "casadi>=3.7.2,<3.8",
-    "do-mpc>=5.1.1,<6",
-]
 # Videos (moviepy) and the aircraft dashboards (pygame). Both are imported
 # only when a frame is drawn or a video written, and ``render_kit.render_extra``
 # names this extra when they are missing.
@@ -100,7 +92,7 @@ render = [
     "pygame>=2.6.1; python_version < '3.14'",
     "pygame-ce>=2.5.8; python_version >= '3.14'",
 ]
-all = ["target-gym[mpc,render]"]
+all = ["target-gym[render]"]
 
 [project.urls]
 # PyPI renders these as a labelled sidebar and recognises these key names, so
@@ -143,8 +135,7 @@ agent = [
 dev = [
     { include-group = "test" },
     { include-group = "lint" },
-    # The oracles' tests, baseline recording and the rendering tests need the
-    # optional extras.
+    # The rendering tests need the optional extra.
     "target-gym[all]",
     "pre-commit>=3.5.0",
     # scripts/record_baselines.py sizes its worker pool against available
@@ -214,8 +205,8 @@ select = ["F", "E4", "E9", "I"]
 # and jax's ``numpy/__init__.pyi`` uses PEP 695 type parameter lists, which are
 # a syntax error before 3.12. That broke the 3.13 and 3.14 CI jobs while 3.11
 # passed. Each matrix job should type-check against the version it runs on.
-# Most third-party scientific packages ship no stubs (casadi, chex, do_mpc,
-# gymnax, optax, tqdm, moviepy). Their absence is not a defect in this code.
+# Most third-party scientific packages ship no stubs (chex, gymnax, optax,
+# tqdm, moviepy). Their absence is not a defect in this code.
 ignore_missing_imports = true
 
 # What mypy is asked to guarantee, and what it is not.

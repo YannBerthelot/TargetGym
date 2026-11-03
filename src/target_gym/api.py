@@ -61,8 +61,6 @@ def make_oracle(name: str, params=None):
     model could do rather than competing with a policy. ``params`` defaults to
     the scored configuration; the planner's copy has its process noise zeroed,
     so it plans on the mean disturbance. Returned reset, ready for an episode.
-
-    Nine tasks plan with CasADi: install ``target-gym[mpc]`` for those.
     """
     from target_gym.experts import mpc
 
@@ -70,17 +68,7 @@ def make_oracle(name: str, params=None):
     if not spec.has_mpc:
         raise NotImplementedError(spec.baselines_note or f"{name} ships no oracle")
     params = spec.make_test_params() if params is None else params
-    try:
-        oracle = spec.make_mpc(spec.make_env(), mpc.plan_params(spec, params))
-    except (ImportError, NameError) as err:
-        # Without CasADi some planners fail on the missing module name before
-        # reaching their own import check; either way the cure is the extra.
-        if mpc._CASADI_AVAILABLE:
-            raise
-        raise ImportError(
-            f"the {name} oracle needs CasADi and do-mpc: "
-            "pip install 'target-gym[mpc]'"
-        ) from err
+    oracle = spec.make_mpc(spec.make_env(), mpc.plan_params(spec, params))
     oracle.reset()
     return oracle
 

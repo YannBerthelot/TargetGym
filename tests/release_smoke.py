@@ -5,7 +5,6 @@ built wheel in a fresh environment outside the checkout and runs this with
 that environment's Python, once per install:
 
     python tests/release_smoke.py core     # target-gym alone
-    python tests/release_smoke.py mpc      # target-gym[mpc]
     python tests/release_smoke.py render   # target-gym[render]
 
 It is a script, not a pytest module, so the suite never collects it.
@@ -19,10 +18,7 @@ core
     action bounds and returns, on seed 0, the PID return recorded for it,
     which also shows the wheel carries the per-task record files.
     ``make_gymnasium`` and ``FormationMARL`` step. ``make_oracle`` builds
-    every oracle that needs no CasADi, and the nine that do raise an
-    ImportError naming ``target-gym[mpc]``.
-mpc
-    With the extra, every oracle builds and plans a finite action.
+    every oracle, and each plans a finite action.
 render
     With the extra, an aircraft and a process plant each write a video.
 """
@@ -45,7 +41,7 @@ import numpy as np  # noqa: E402
 
 import target_gym as tg  # noqa: E402
 
-EXTRA_MODULES = ("casadi", "do_mpc", "pygame", "moviepy")
+EXTRA_MODULES = ("pygame", "moviepy")
 
 # The recorded PID returns were taken by the host controller on GitHub's Linux
 # runners. The jitted expert matches the host one to float32 rounding, and the
@@ -53,9 +49,6 @@ EXTRA_MODULES = ("casadi", "do_mpc", "pygame", "moviepy")
 # (plane3d_racetrack, 12.661 to 12.676, on 2026-10-29), so 1% separates that
 # drift from a wheel whose physics, gains or records differ from the tree's.
 RETURN_RTOL = 1e-2
-
-# make_oracle's docstring: "Nine tasks plan with CasADi".
-CASADI_ORACLES = 9
 
 
 def _expert_episode(name):
@@ -121,33 +114,12 @@ def check_core():
     obs, state, rewards, dones, _ = marl.step(key, state, actions, marl_params)
     assert set(rewards) == set(marl.agents) and "__all__" in dones
 
-    built, needs_extra = _oracles(expect_casadi=False)
-    assert len(needs_extra) == CASADI_ORACLES, needs_extra
-    assert built, "no oracle builds without CasADi"
-    print(f"oracles: {len(built)} build, {len(needs_extra)} name the [mpc] extra")
-
-
-def _oracles(expect_casadi):
     from target_gym.registry import REGISTRY
 
-    built, needs_extra = [], []
-    for name in tg.list_envs():
+    for name in names:
         if not REGISTRY[name].has_mpc:
             continue
-        try:
-            oracle = tg.make_oracle(name)
-        except ImportError as err:
-            assert not expect_casadi, f"{name}: {err}"
-            assert "target-gym[mpc]" in str(err), f"{name}: {err}"
-            needs_extra.append(name)
-            continue
-        built.append((name, oracle))
-    return built, needs_extra
-
-
-def check_mpc():
-    built, _ = _oracles(expect_casadi=True)
-    for name, oracle in built:
+        oracle = tg.make_oracle(name)
         env, params = tg.make(name)
         obs, state = env.reset(jax.random.PRNGKey(0), params)
         action = np.asarray(oracle.step(obs, state))
@@ -173,7 +145,7 @@ def check_render():
             print(f"{name}: wrote {size} bytes")
 
 
-CHECKS = {"core": check_core, "mpc": check_mpc, "render": check_render}
+CHECKS = {"core": check_core, "render": check_render}
 
 if __name__ == "__main__":
     CHECKS[sys.argv[1]]()

@@ -1,5 +1,7 @@
 {
-  "fingerprint": "41dae4d3fec61202",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "fingerprint": "3aef249260363e0b",
+  "generated": "2026-11-03T03:22:16+00:00",
   "mpc_returns": [
     -928423.957456,
     -15525.42849,
@@ -25,7 +27,7 @@
     -6857.876132,
     -29164.014944
   ],
-  "seconds": 970.8,
+  "seconds": 1458.7,
   "seeds": 10,
   "steps": 300
 }

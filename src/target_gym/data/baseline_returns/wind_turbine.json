@@ -1,5 +1,7 @@
 {
-  "fingerprint": "382e18d3202b60d1",
+  "cpu": "AMD EPYC 9V45 96-Core Processor",
+  "fingerprint": "a92cc37edda79335",
+  "generated": "2026-11-03T02:57:24+00:00",
   "mpc_returns": [
     -0.00563,
     -0.005998,
@@ -25,7 +27,7 @@
     -0.046154,
     -0.069672
   ],
-  "seconds": 21.3,
+  "seconds": 12.1,
   "seeds": 10,
   "steps": 400
 }

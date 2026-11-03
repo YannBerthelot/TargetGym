@@ -6,10 +6,13 @@ model-based baselines between deterministic MPC and RL.
 
 Investigation only. Nothing in this report has been implemented, and no
 environment, baseline or test was modified to produce it. It describes the
-planners as they were then: the oracle audit (2026-10) has since changed some
-of them, for example the pH planner now forecasts the buffer flow from the
-state instead of assuming its nominal value, and the glass furnace's plans on
-the pull rate's conditional mean, read from the state.
+planners as they were then. The oracle audit (2026-10) changed some of them,
+and in November 2026 every CasADi planner but the compressor's was replaced by
+`NewtonMPC`, which plans on `env.step_env` itself (the compressor's NLP is now
+solved by IPOPT's algorithm in JAX): on all four priority environments the MPC now
+has the true model, with the declared noise zeroed (`plan_params`), so the
+build cost section 1 names is paid. The reactor's demand and the building's
+weather noise are declared too.
 
 ## 1. Verdict
 

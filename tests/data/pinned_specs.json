@@ -681,7 +681,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "demand_sigma"
+    ]
   },
   {
     "name": "hvac",
@@ -718,7 +720,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "T_out_noise_std"
+    ]
   },
   {
     "name": "cement_kiln",

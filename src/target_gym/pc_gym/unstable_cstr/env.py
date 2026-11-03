@@ -123,11 +123,12 @@ class UnstableCSTRParams(EnvParams):
     #: provisional 1 h restart (240 steps of 15 s) at 3 s steps.
     restart_steps: int = round(_CSTR.restart_steps * _CSTR.delta_t / _DT)
     #: The oracle's best hold, (e_hold_min / e_floor) ** 2. The MPC holds C_a to
-    #: 6.29e-6 mol/L (measured, the lowest per-seed hold scripts/measure_hold.py
-    #: recorded), under the analyser resolution, so e_floor stays at the
-    #: resolution and the reference is that finer hold in floor-widths, squared.
-    rho_floor_tracking: float = (6.29e-6 / 1e-4) ** 2
-    rho_floor: float = (6.29e-6 / 1e-4) ** 2  # no running cost: rho_floor_tracking
+    #: 2.23e-6 mol/L (measured, the lowest per-seed hold scripts/measure_hold.py
+    #: recorded; 6.29e-6 for the CasADi oracle before v3), under the analyser
+    #: resolution, so e_floor stays at the resolution and the reference is that
+    #: finer hold in floor-widths, squared.
+    rho_floor_tracking: float = (2.23e-6 / 1e-4) ** 2
+    rho_floor: float = (2.23e-6 / 1e-4) ** 2  # no running cost: rho_floor_tracking
     #: False: the plant is disturbed (docs/reward-shaping.md).
     floor_is_documented_minimum: bool = False
 

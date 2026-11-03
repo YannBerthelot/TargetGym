@@ -66,7 +66,8 @@ def _cheap_mpc(spec, env, params):
     """
     # The registry wraps every factory as ``make(env, params, **kwargs)``, so the
     # signature says nothing about which knobs the underlying builder accepts --
-    # the gradient controllers take all three, the CasADi ones only ``horizon``.
+    # the gradient controllers take all three, the Newton ones ``horizon`` and
+    # ``n_iter``, the compressor's ``horizon`` and ``max_iter``.
     # Try the most reduced form first and fall back until one is accepted.
     for kwargs in (
         {"horizon": 5, "n_iter": 2, "n_tail": 0},

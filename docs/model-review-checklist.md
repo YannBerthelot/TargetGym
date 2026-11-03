@@ -486,25 +486,17 @@ state. It sat at "1.3% behind, passing" until the episode-length audit
 lengthened that episode to 1600 steps.
 
 **What it applies to.** Every environment whose MPC plans against a model of
-its own, which here is all nine CasADi ones. The seven original ones plan
-against reduced models, and none of them had this comparison before. The unstable CSTR's CasADi model restates the env's
-equations without reducing them, because CasADi cannot trace the env's `jnp`
-code. Two tests in `tests/pc_gym/unstable_cstr/test_unstable_cstr_experts.py`
-hold that copy to the plant. `test_mpc_model_is_the_env_velocity` compares its
-right-hand side with the env's `compute_velocity` at 1000 random points, and
-`test_mpc_predicts_one_step_like_the_plant` runs this check on 120 states of a
-PID episode with the feed drift on. One control interval of the model lands
-within `e_floor` of `step_env` in C_a, and the mean signed error stays under a
-tenth of `e_floor`. The compressor's NMPC restates the env's discrete step in
-CasADi for the same reason, ten substeps of rate limits and RK4, with the
-rate-limit clips rounded so that IPOPT sees a smooth problem. Two tests in
-`tests/compressor_surge/test_compressor_surge_experts.py` hold it to the plant.
-`test_mpc_model_is_the_env_step` compares the step with the clips exact against
-`compute_next_state` at 1000 random states, and
-`test_mpc_predicts_one_step_like_the_plant` runs this check with the shipped
-rounding on 120 states, most of them from a PID episode. One step of the model
-lands within 0.05 `e_floor` of the env's float32 step in header pressure and
-within 1e-4 in the trip variable `phi_min`.
+its own. Since November 2026 only the compressor's does: of the nine CasADi
+planners this check was written for, seven on reduced models and two (the
+unstable CSTR's and the compressor's) on restatements of the env's equations
+held to the plant by tests, eight were replaced by `NewtonMPC`, which plans on
+`step_env` itself. The compressor's NLP stayed, on the env's own force
+functions, with its step held to `compute_next_state` by
+`test_mpc_model_is_the_env_step` and `test_mpc_predicts_one_step_like_the_plant`.
+The gradient and sampling planners always plan on `step_env`. Where a planner's stage computes
+its cost apart from `step_env` (the reactor's, to round a kink), it still
+steps the env's own `compute_next_state`, and a new planner that restates any
+physics should get this check before it ships.
 
 ---
 

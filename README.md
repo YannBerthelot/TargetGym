@@ -60,9 +60,7 @@ install `main`:
 pip install "git+https://github.com/YannBerthelot/TargetGym"
 ```
 
-The full-state MPC oracles on nine tasks plan with CasADi; add it with
-`pip install 'target-gym[mpc]'`. Videos and the aircraft dashboards need
-`pip install 'target-gym[render]'`, and `target-gym[all]` brings both.
+Videos and the aircraft dashboards need `pip install 'target-gym[render]'`.
 
 ## Quickstart
 
@@ -252,8 +250,10 @@ Controller structure is chosen per plant:
   is the pairing industrial anti-surge systems use, and the recycle valve gets
   a loop of its own because the margin it protects is not a tracked output.
 
-The MPC slot holds the best controller each task allows: CasADi/IPOPT where a
-symbolic model exists, gradient-based planning through the JAX dynamics elsewhere,
+The MPC slot holds the best controller each task allows: on nine process and
+industrial plants a second-order planner (iterative LQR) through the JAX
+dynamics, on the aircraft, the distillation column and the boiler drum
+gradient-based planning through them,
 cross-entropy sampling for the cement kiln, on the battery a feedforward of the
 scheduled dispatch level, which is the best causal action there, on the wind
 turbine a feedback law (generator torque solved so that the next step's power

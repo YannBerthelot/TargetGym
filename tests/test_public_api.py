@@ -103,14 +103,13 @@ import json, sys
 
 class NotInstalled:
     def find_spec(self, name, path=None, target=None):
-        if name.split(".")[0] in ("pygame", "moviepy", "casadi", "do_mpc"):
+        if name.split(".")[0] in ("pygame", "moviepy"):
             raise ImportError(f"No module named {name!r}")
 
 sys.meta_path.insert(0, NotInstalled())
 import jax
 import target_gym as tg
 from target_gym import registry
-from target_gym.experts.mpc import casadi_step_map
 
 built = [tg.make(name)[0] for name in tg.list_envs()]
 env, params = tg.make("plane")
@@ -118,7 +117,6 @@ _, state = env.reset(jax.random.PRNGKey(0), params)
 errors = {}
 for what, call in {
     "render": lambda: env.render(None, state, params, [], None),
-    "step_map": lambda: casadi_step_map(lambda x, u: x, 1, 1, 1.0, "rk4_1"),
 }.items():
     try:
         call()
@@ -140,13 +138,9 @@ print(json.dumps({"built": len(built), "errors": errors,
 
 @pytest.mark.medium
 def test_a_core_install_builds_every_task_and_names_the_missing_extra():
-    """pygame and moviepy are the ``[render]`` extra and CasADi the ``[mpc]``
-    one. Without them every task still builds, and drawing a frame or
-    building a CasADi step map raises an ImportError naming the extra.
-
-    ``make_oracle`` documents that nine tasks plan with CasADi: without it
-    those nine raise an ImportError naming the extra, and every other oracle
-    still builds."""
+    """pygame and moviepy are the ``[render]`` extra. Without them every task
+    still builds, drawing a frame raises an ImportError naming the extra, and
+    every oracle builds: none needs an extra."""
     out = subprocess.run(
         [sys.executable, "-c", _WITHOUT_EXTRAS],
         capture_output=True,
@@ -157,9 +151,5 @@ def test_a_core_install_builds_every_task_and_names_the_missing_extra():
 
     assert result["built"] == len(REGISTRY)
     assert "target-gym[render]" in result["errors"].get("render", "")
-    assert "target-gym[mpc]" in result["errors"].get("step_map", "")
-    with_oracle = sum(spec.has_mpc for spec in REGISTRY.values())
-    assert len(result["oracle_errors"]) == 9
-    assert result["oracles"] == with_oracle - 9
-    for name, message in result["oracle_errors"].items():
-        assert "target-gym[mpc]" in message, name
+    assert result["oracle_errors"] == {}
+    assert result["oracles"] == sum(spec.has_mpc for spec in REGISTRY.values())

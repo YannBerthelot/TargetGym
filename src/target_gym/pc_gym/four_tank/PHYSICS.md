@@ -127,17 +127,19 @@ difficulty is structural, not informational.
 below.
 
 **The oracle plans the rest of the episode.** The plant is deterministic, so
-the MPC slot holds its optimum: an NLP over every remaining step, solved by
-IPOPT on `four_tank_step_map`, the environment's own RK4 step written in
-CasADi (a test holds it equal to `step_env`), re-solved from the true state
-every 25 steps, with every planned level held 5 mm inside the trip limits.
-Its cost is both lower tanks' tracking terms in floor units, and the steps
-of the protocol's 270-step burn-in weigh 1e-3. That weighting is the point.
+the MPC slot holds its optimum: `NewtonMPC` (iterative LQR) over every
+remaining step of the environment's own `step_env`, re-solved from the true
+state every 25 steps. A level at a trip limit is charged the trip in the
+planner's own rollout, which no plan comes near. Its cost is both lower
+tanks' tracking terms in floor units, and the steps of the protocol's
+270-step burn-in weigh 1e-3. That weighting is the point.
 With the pumps sending 80 % of their flow across (`gamma1 + gamma2` = 0.4)
 the response is non-minimum-phase, and even the exact optimum of a cost that
 charges every step alike leaves 0.0098 per step in the scored window; the
 do-mpc controller it replaced in the oracle audit (2026-10), 10 steps of
-20 s with such a cost, left 0.0074. This one scores 3.1e-8 with zero trips.
+20 s with such a cost, left 0.0074. This one scores about 3e-8 with zero
+trips, the returns of the IPOPT shrinking-horizon NLP it replaced in
+November 2026.
 `e_floor` is the transmitter's resolution and `rho_floor` is 0, both
 documented minima, so neither moved.
 
@@ -158,8 +160,8 @@ which under a log is only the denominator and no longer flattens anything.
 `tracking_band = 0.05` is left over from the narrowing that was tried first.
 The clipped reward it was added for was its only reader, and nothing has read
 it since the reward became log-scaled. No MPC objective ever normalised by it:
-the do-mpc oracle tracked in raw metres, and the shrinking-horizon NLP that
-replaced it in the oracle audit (2026-10) tracks in floor units (`e_floor`).
+the do-mpc oracle tracked in raw metres, and the planners that replaced it
+from the oracle audit (2026-10) on track in floor units (`e_floor`).
 It is named here as a warning about a band the reward ignores. The glass
 furnace's since-removed `tracking_scale` was one: the reward had stopped using
 it while that controller went on steering by it, which cost that environment

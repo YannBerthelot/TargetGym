@@ -15,7 +15,7 @@ Every task by its registry name, from the package root:
 |---|---|
 | `make(name, **overrides)` | `(env, params)`: the environment and its scored configuration, with `overrides` replacing single fields |
 | `make_expert(name)` | The shipped expert as a pure controller. `.host()` keeps its own memory; `.batched()` is for `jit` and `vmap`, and the caller carries the memory; `.act(state, obs)` is one traced step |
-| `make_oracle(name, params=None)` | The full-state MPC, reset and planning on the mean disturbance. Nine tasks need `target-gym[mpc]` |
+| `make_oracle(name, params=None)` | The full-state MPC, reset and planning on the mean disturbance |
 | `make_gymnasium(name, render_mode=None, **overrides)` | A Gymnasium environment on the scored configuration |
 | `list_envs(group=None)` | Registry names, of every task or of one group |
 | `score_policy(name, make_policy, seeds=10, params=None)` | The policy against the expert and the ceiling (`target_gym.scoring`) |

@@ -245,7 +245,7 @@ class EnvSpec:
 # Lazy factories
 #
 # Importing the environments eagerly would make ``import target_gym.registry``
-# pull in matplotlib, pygame, casadi and do-mpc.  Each factory therefore
+# pull in matplotlib and pygame.  Each factory therefore
 # imports inside the call, so the registry itself stays cheap to import.
 # ---------------------------------------------------------------------------
 
@@ -722,8 +722,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # disturbance to move the operating point.
         tuned_gains_key="ph_neutralization",
         disturbance_fields=("q2",),
-        # The buffer flow's OU innovation. The CasADi oracle never rolls the
-        # simulator, so it could not see it anyway; declared so no planner can.
+        # The buffer flow's OU innovation, zeroed for the oracle, which rolls
+        # the simulator and would otherwise plan on one seed's draws.
         noise_fields=("q2_noise_std",),
     ),
     EnvSpec(
@@ -768,10 +768,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         tuned_gains_key="glass_furnace",
         disturbance_fields=("m_pull_disturbance",),
-        # The pull disturbance's AR(1) innovation. The CasADi oracle never rolls
-        # the simulator and plans on the pull's conditional mean, read from
-        # the state, so it could not see the innovation anyway; declared so no
-        # planner can.
+        # The pull disturbance's AR(1) innovation, zeroed for the oracle, which
+        # rolls the simulator and so plans the pull's conditional mean from
+        # the state.
         noise_fields=("m_pull_noise_std",),
     ),
     EnvSpec(
@@ -785,6 +784,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.experts"),
         tuned_gains_key="reactor",
         version=3,
+        noise_fields=("demand_sigma",),
     ),
     EnvSpec(
         name="hvac",
@@ -798,6 +798,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # here.
         tuned_gains_key="hvac",
         disturbance_fields=("weather_dev",),
+        noise_fields=("T_out_noise_std",),
     ),
     EnvSpec(
         name="cement_kiln",
@@ -887,6 +888,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_unstable_cstr_mpc", module="target_gym.pc_gym.unstable_cstr.experts"
         ),
+        # v3: the oracle's best hold, rho_floor_tracking and rho_floor, re-measured
+        # for the JAX oracle (2.23e-6 mol/L against the CasADi one's 6.29e-6).
+        version=3,
         # 1200 steps = 60 min at 3 s: six 10-minute blocks, with no
         # effectiveness_overrides.
         tuned_gains_key="unstable_cstr",

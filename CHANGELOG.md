@@ -9,6 +9,62 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### Upgrading from 0.7.0
+
+The next release is 0.8.0, because these changes break code written for
+0.7.0:
+
+- **CasADi, do-mpc and the `[mpc]` extra are gone.** Every oracle now runs on
+  JAX, so `pip install target-gym` runs all of them and `make_oracle` no
+  longer raises `ImportError`. `[all]` now installs `[render]` only; pip warns
+  about, and ignores, an `[mpc]` left in an install command.
+- **Removed names, and what replaces them:**
+  - `target_gym.experts.CasadiMPC`, `ShrinkingHorizonNLP` and
+    `casadi_step_map`, with `IPOPT_MAX_ITER`, `IPOPT_MAX_CPU_TIME`,
+    `NLP_TOL`, `NLP_ACCEPTABLE_TOL` and `NLP_MAX_ITER`: `NewtonMPC`, a
+    box-constrained iterative LQR on the environment's own `step_env`, with
+    `window_weights` for a shrinking horizon. Build an oracle with
+    `target_gym.make_oracle(name)`.
+  - The per-task CasADi classes `FirstOrderCasadiMPC`, `PHCasadiMPC`,
+    `UnstableCSTRCasadiMPC`, `ReactorCasadiMPC`, `HVACCasadiMPC` and
+    `GlassFurnaceCasadiMPC`, the step maps `cstr_step_map` and
+    `four_tank_step_map`, the pH plant's `q2_forecast`, and the unstable
+    CSTR's `MPC_TVP`, `MPC_ERROR_SCALE`, `MPC_MOVE_WEIGHT`,
+    `MPC_PNR_MARGIN_K`, `FALLBACK_STEP_BOUND_K`, `one_step_linearisation`
+    and `terminal_weight`: the planners' stages (`ph_stage`, `reactor_stage`,
+    `unstable_cstr_stage`) and each task's `make_*_mpc` factory.
+  - The compressor's `stage_openings`, `MPC_STATES`, `MPC_IPOPT_WARM_START`
+    and `MPC_SOLVE_BUDGET_S`: `preview`, `mpc_step` and the solver constants
+    in `compressor_surge.experts`. `make_compressor_surge_mpc` now takes
+    `horizon` and `max_iter` only.
+- **Recorded results changed.** The eight oracles on `NewtonMPC` plan on the
+  plant itself, so their returns moved; over the ten seeds each matched or
+  beat its 0.7.0 record. The compressor's keeps its NLP
+  and matches its 0.7.0 records. The reactor and the HVAC now
+  declare their noise (`demand_sigma`, `T_out_noise_std`), which their
+  planners zero.
+- **`unstable_cstr` is version 3.** Its floor `rho_floor_tracking` is
+  re-derived from the new oracle's hold, which is tighter than the old
+  floor.
+
+### Changed
+
+- The compressor's oracle solves the NLP of its CasADi build, term for term,
+  with IPOPT's algorithm written in JAX (`compressor_surge.experts_ipm`): the
+  filter line search with second-order corrections, the inertia correction,
+  IPOPT's scaling, the monotone barrier for a cold start and the adaptive one
+  for a warm start, and a Riccati solve of each Newton step. Over the ten
+  recorded seeds it reproduces the 0.7.0 records (return per episode, both
+  rows from the records):
+
+  | seed | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | CasADi, 0.7.0 | -358789.6 | -11401.9 | -2561.1 | -113283.7 | -428861.7 | -53658.0 | -50346.9 | -118980.9 | -50751.5 | -38266.4 |
+  | JAX | -358813.0 | -11405.2 | -2556.0 | -113286.2 | -428863.3 | -53657.2 | -50356.8 | -118981.8 | -50749.8 | -38266.6 |
+
+  with no trip, one solve in 12,000 handed to the PID and 5.8 iterations a
+  solve, as against IPOPT's 6.8.
+
 ### Added
 
 - Python 3.14. gymnax's floor is now 1.0.1, its first release that installs

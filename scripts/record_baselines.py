@@ -182,7 +182,7 @@ def _pid_one_seed(args):
 
 
 def _mpc_one_seed(args):
-    """One CasADi MPC episode, for the pool. Rebuilds everything per worker."""
+    """One MPC episode, for the pool. Rebuilds everything per worker."""
     name, seed, live = args
     t0 = time.time()
     with _running(live, f"{name} MPC seed {seed}"):
@@ -271,9 +271,9 @@ def _split_by_planner(names: list[str]) -> tuple[list[str], list[str]]:
 
     Two things decide this. ``GradientMPC`` is JAX throughout and its
     ``_optimize`` is a pure function of ``(actions_init, state)``, so its ten
-    seeds *can* batch into one call; the CasADi and sampling planners cannot,
-    because IPOPT is a solver outside JAX, and they always get one process per
-    seed. IPOPT is single-threaded, so that parallelises cleanly.
+    seeds *can* batch into one call; the Newton and sampling planners keep
+    host state between solves (the plan, the episode clock), so they always
+    get one process per seed, which parallelises cleanly.
 
     Whether the ones that can batch actually do is a property of the machine,
     not of the environment -- see :func:`_batch_seeds`. On a GPU they batch; on

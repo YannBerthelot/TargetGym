@@ -1,12 +1,8 @@
 """Every derived number in compressor_surge's PHYSICS.md, from the env's own code.
 
 Run with ``uv run python scripts/compressor_surge_numbers.py [--section NAME ...]``.
-With no flags it prints the fast sections, in under a minute.
-``--section mpc-width`` runs only when named: it builds the NMPC at three
-clip smoothings, solves the first 12 steps of four episodes (seeds 1000 to
-1003) with each, and solves each episode's first step from the cold guess
-with both of the NMPC's IPOPT instances, under two minutes on one core
-(PHYSICS.md section 7). The heavy tables have their own flags:
+With no flags it prints the fast sections, in under a minute. The heavy
+tables have their own flags:
 
     --hardness         the hardness table (PHYSICS.md section 5)
     --sensitivity      the sensitivity table and the restart break-evens
@@ -16,14 +12,6 @@ with both of the NMPC's IPOPT instances, under two minutes on one core
     --pid-validation   the pair's 4096-episode validation (section 7;
                        test_the_pair_holds_the_validation_seeds runs 1024 of
                        them)
-    --mpc-gate         the NMPC's acceptance run (section 7): the
-                       surge-margin budget, then each candidate margin on 128
-                       episodes and the stress battery, against the pair and
-                       G10, with solve times. Each candidate runs 128
-                       episodes of 1200 NMPC steps and 16 battery runs of 410;
-                       --workers N runs them in N processes, --mpc-horizon
-                       and --mpc-margins change what it runs, and --gate-out
-                       names where the per-step arrays go.
 
 ``--seeds N`` sets the episodes per row of a heavy table. Heavy tables use
 seeds from 1000 up, apart from the recording seeds 0 to 9 and the tuner's 0
@@ -34,9 +22,7 @@ Every number goes through the task's own code: the closed forms,
 ``equilibrium_phi``, the action map and its inverse (``commands_from_raw``,
 ``raw_from_commands``) and ``pair_step(xp=jnp)`` under ``vmap`` and
 ``scan``. No dynamics are restated here, so the numbers describe the env as
-it ships; ``--section mpc-width`` and ``--mpc-gate`` run the NMPC's own
-CasADi step from ``experts.py``, which test_mpc_model_is_the_env_step and
-test_mpc_predicts_one_step_like_the_plant hold to the env. Closed forms,
+it ships. Closed forms,
 roots and Jacobians are computed in float64
 (``enable_x64``), and so are single trajectories unless
 their line says float32, as the integrator's rk4_10 against rk4_40
@@ -55,20 +41,13 @@ anti-surge logic at its own line, gains and override.
 """
 
 import argparse
-import concurrent.futures as cf
 import contextlib
 import functools
 import math
 import os
 import subprocess
 import sys
-import tempfile
 import time
-import warnings
-
-# Ahead of the imports below: importing target_gym pulls in do-mpc, which warns
-# about optional features this package does not use.
-warnings.filterwarnings("ignore")
 
 import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
@@ -76,7 +55,6 @@ import numpy as np  # noqa: E402
 from scipy.optimize import brentq  # noqa: E402
 from scipy.stats import beta, chi2, spearmanr  # noqa: E402
 
-import target_gym.compressor_surge.experts as experts  # noqa: E402
 from target_gym import reward as R  # noqa: E402
 from target_gym.compressor_surge.env import (  # noqa: E402
     KPA,
@@ -115,29 +93,16 @@ from target_gym.compressor_surge.experts import (  # noqa: E402
     GUARD_MIN_MARGIN,
     GUARD_POINTS,
     GUARD_TRAVEL_STEPS,
-    MPC_CLIP_SMOOTHING,
-    MPC_ENERGY_WEIGHT,
-    MPC_ERROR_SCALE_KPA,
-    MPC_HORIZON,
-    MPC_MOVE_WEIGHT,
-    MPC_POWER_REF,
-    MPC_SOLVE_BUDGET_S,
-    MPC_STATES,
-    MPC_SURGE_MARGIN,
-    MPC_TERMINAL_WEIGHT,
     _state_at,
     battery_report,
     closed_loop_decay,
     commands_from_raw,
     load_gains,
-    make_compressor_surge_mpc,
     pair_init,
     pair_step,
     raw_from_commands,
     settled_point,
-    stage_openings,
 )
-from target_gym.experts.mpc import IPOPT_MAX_ITER  # noqa: E402
 
 try:
     from jax import enable_x64
@@ -1817,679 +1782,6 @@ def v1_table(n=128, n_rare=5120):
         )
 
 
-# ---------------------------------------------------------------------------
-# The NMPC's acceptance run (--mpc-gate)
-# ---------------------------------------------------------------------------
-
-#: The params ``--mpc-gate`` builds the NMPC with: ``plan_params(spec, P)``,
-#: since the spec's ``noise_fields`` is ``("demand_sigma",)``.
-PLANNED = P.replace(demand_sigma=0.0)
-#: One innovation of the deviation, in opening (derived): sigma sqrt(1 - a^2)
-#: with a = exp(-theta dt).
-INNOVATION_SD = P.demand_sigma * math.sqrt(
-    1.0 - math.exp(-2.0 * P.demand_theta * P.delta_t)
-)
-#: The innovation the budget's part 1 applies, in innovation sd (ours).
-BUDGET_INNOVATION_SD = 5.0
-#: Part 2 of the budget, the model gap on the step's phi_min, as a margin:
-#: test_mpc_predicts_one_step_like_the_plant's bound of 1e-4 on Phi over 2W.
-MODEL_GAP_MARGIN = 1e-4 / TWO_W
-#: The surge margins ``--mpc-gate`` may ship (ours).
-GATE_MARGINS = (0.02, 0.03, 0.05)
-#: Every how many steps part 1 re-solves at a perturbed deviation (ours).
-BUDGET_SAMPLE_EVERY = 10
-#: Episodes of the budget pass, seeds from HEAVY_SEED0 (ours).
-BUDGET_EPISODES = 16
-#: Ten innovations of -1 sd, one after each of the ten steps that end on
-#: schedule clocks 600 to 609, the first ten of the battery's demand ramp.
-BATTERY_INNOVATIONS = 10
-
-_GATE_MPCS: dict = {}
-
-
-def _gate_mpc(margin, horizon):
-    """The NMPC at ``margin`` and ``horizon``, built once per process."""
-    if (margin, horizon) not in _GATE_MPCS:
-        _GATE_MPCS[(margin, horizon)] = make_compressor_surge_mpc(
-            ENV, PLANNED, horizon=horizon, surge_margin=margin
-        )
-    return _GATE_MPCS[(margin, horizon)]
-
-
-@functools.lru_cache(maxsize=None)
-def _gate_steps():
-    """The env's ``step_env`` and ``compute_next_state``, jitted once per
-    process. The second gives a step's proposal, whose ``phi_min`` is the
-    step's margin even on a step that trips."""
-    return (
-        jax.jit(ENV.step_env),
-        jax.jit(lambda u, s, p: compute_next_state(u, s, p, jax.random.PRNGKey(0))[0]),
-    )
-
-
-def _counters(mpc):
-    """The NMPC's running counters: solves, IPOPT iterations, failed solves
-    as the base counts them (capped ones included), capped solves, steps
-    with the surge slack active, steps handed to the pair and capped solves
-    applied."""
-    return np.array(
-        [
-            mpc.solve_calls,
-            mpc.solve_iters,
-            mpc.solve_failures,
-            mpc.solve_capped,
-            mpc.slack_steps,
-            mpc.fallback_steps,
-            mpc.capped_steps,
-        ]
-    )
-
-
-def _snapshot(mpc):
-    """Everything a what-if solve changes, so it can be undone."""
-    m = mpc._mpc
-    keep = (
-        "_last_clock",
-        "_initialized",
-        "_last_u",
-        "solve_calls",
-        "solve_iters",
-        "solve_failures",
-        "solve_capped",
-        "last_return_status",
-        "slack_steps",
-        "fallback_steps",
-        "capped_steps",
-        "last_planned_margin",
-        "last_slack",
-        "_needs_cold",
-    )
-    return {
-        "guess": mpc._save_guess(),
-        "u0": np.array(m.u0.cat, float).ravel(),
-        "pair": mpc._pid._ps,
-        "attrs": {k: getattr(mpc, k) for k in keep},
-    }
-
-
-def _restore(mpc, snap):
-    m = mpc._mpc
-    import casadi
-
-    # As in CompressorSurgeMPC._fallback: do-mpc needs a DM here, or the next
-    # cold step fails in set_initial_guess.
-    m.opt_x_num.master = casadi.DM(snap["guess"]["opt_x"])
-    for attr, key in (("lam_g_num", "lam_g"), ("lam_x_num", "lam_x")):
-        if key in snap["guess"]:
-            setattr(m, attr, snap["guess"][key])
-    m.u0 = snap["u0"]
-    mpc._pid._ps = snap["pair"]
-    for k, v in snap["attrs"].items():
-        setattr(mpc, k, v)
-
-
-def _innovation_margin(mpc, state, proposal):
-    """Part 1 of the budget at ``state``: the margin of the step the NMPC
-    takes after re-solving with the deviation moved by -5 innovation sd, from
-    the warm start the unperturbed solve uses. Undone afterwards."""
-    snap = _snapshot(mpc)
-    perturbed = state.replace(
-        demand_dev=state.demand_dev - BUDGET_INNOVATION_SD * INNOVATION_SD
-    )
-    u = mpc.step(ENV.get_obs(perturbed, P), perturbed)
-    margin = float(proposal(jnp.asarray(u), perturbed, P).phi_min) / TWO_W - 1.0
-    _restore(mpc, snap)
-    return margin
-
-
-GATE_REC = (
-    "e",
-    "power",
-    "margin",
-    "planned",
-    "tripped",
-    "seconds",
-    "fallback",
-    "capped",
-    "slack",
-)
-
-
-def _gate_episode(job):
-    """One NMPC episode of ``--mpc-gate``, for the pool: ``(margin, horizon, seed,
-    sample_every)``. The seed's key resets the env and drives every step, as
-    ``run`` does for the heuristics, so the rows compare on the same draws.
-
-    Per step it records the header-pressure error (kPa) and recycle power of
-    the scored state, the step's margin phi_min / 2W - 1 (from the proposal,
-    so a tripped step has one too), the NMPC's planned first-step margin, the
-    trip flag, the wall-clock time of ``mpc.step``, whether the step fell back
-    to the pair, whether it applied a solve an IPOPT cap stopped, and whether
-    the plan used the surge slack. With
-    ``sample_every``, every that-many steps it also measures part 1 of the
-    budget: the realised margin less the margin after a seen innovation of
-    -5 sd and the NMPC's re-solve."""
-    margin, horizon, seed, sample_every = job
-    mpc = _gate_mpc(margin, horizon)
-    mpc.reset()
-    step, proposal = _gate_steps()
-    key = jax.random.PRNGKey(seed)
-    obs, state = ENV.reset_env(key, P)
-    n = int(P.max_steps_in_episode)
-    rec = {name: np.zeros(n) for name in GATE_REC}
-    losses = []
-    start = _counters(mpc)
-    for t in range(n):
-        what_if = None
-        if sample_every and t % sample_every == sample_every - 1:
-            what_if = _innovation_margin(mpc, state, proposal)
-        before = _counters(mpc)
-        t0 = time.perf_counter()
-        u = mpc.step(obs, state)
-        rec["seconds"][t] = time.perf_counter() - t0
-        after = _counters(mpc)
-        rec["fallback"][t] = after[5] > before[5]
-        rec["capped"][t] = after[6] > before[6]
-        rec["slack"][t] = after[4] > before[4]
-        rec["planned"][t] = mpc.last_planned_margin
-        rec["margin"][t] = (
-            float(proposal(jnp.asarray(u), state, P).phi_min) / TWO_W - 1.0
-        )
-        if what_if is not None:
-            losses.append(rec["margin"][t] - what_if)
-        obs, new, _, _, info = step(key, state, jnp.asarray(u), P)
-        scored = info["last_state"] if not bool(info["tripped"]) else None
-        rec["tripped"][t] = bool(info["tripped"])
-        if scored is not None:
-            rec["e"][t] = float(live_target(scored, P) - scored.dp) / KPA
-            rec["power"][t] = float(recycle_power(scored, P))
-        state = new
-    return {
-        "margin_plan": margin,
-        "seed": seed,
-        "rec": rec,
-        "losses": np.array(losses),
-        "counters": _counters(mpc) - start,
-    }
-
-
-def _gate_battery(job):
-    """One run of the NMPC's stress battery: ``(margin, horizon, scenario,
-    mode)``. From the scenario's settled point (``settled_point`` with the
-    pair's gains) at clock ``BATTERY_START_CLOCK``, 410 steps of the env's
-    step with ``demand_sigma`` 0, as the guard's battery runs, and no restart.
-    ``mode`` "dev": the deviation starts at -4 stationary sd and decays by the
-    env's own update. ``mode`` "innov": the deviation starts at 0, and after
-    each of the ten steps that end on clocks 600 to 609 it moves by -1
-    innovation sd, written between steps where the env's update puts it."""
-    margin, horizon, scenario, mode = job
-    mpc = _gate_mpc(margin, horizon)
-    mpc.reset()
-    _, proposal = _gate_steps()
-    quiet = P.replace(demand_sigma=0.0)
-    p0, p1, u0, u1 = BATTERY[scenario]
-    z0 = settled_point(p0, u0, load_gains(), P)
-    state = _state_at(
-        jnp.asarray(z0, jnp.float32),
-        jnp.asarray([p0, p0, p1, p1], jnp.float32),
-        jnp.asarray([u0] * 3 + [u1] * 3, jnp.float32),
-        BATTERY_START_CLOCK,
-        quiet,
-    )
-    if mode == "dev":
-        state = state.replace(demand_dev=jnp.float32(-4.0 * P.demand_sigma))
-    start = _counters(mpc)
-    margins, tripped = np.zeros(BATTERY_STEPS), np.zeros(BATTERY_STEPS, bool)
-    for t in range(BATTERY_STEPS):
-        u = mpc.step(ENV.get_obs(state, quiet), state)
-        state = proposal(jnp.asarray(u), state, quiet)
-        margins[t] = float(state.phi_min) / TWO_W - 1.0
-        tripped[t] = float(state.phi_min) < TWO_W
-        if (
-            mode == "innov"
-            and BATTERY_LEAD - 1 <= t < BATTERY_LEAD - 1 + BATTERY_INNOVATIONS
-        ):
-            state = state.replace(
-                demand_dev=state.demand_dev - jnp.float32(INNOVATION_SD)
-            )
-    return {
-        "margin_plan": margin,
-        "scenario": scenario,
-        "mode": mode,
-        "margins": margins,
-        "tripped": tripped,
-        "counters": _counters(mpc) - start,
-    }
-
-
-def _pool_map(fn, jobs, workers, label):
-    """``fn`` over ``jobs`` on ``workers`` processes, with progress lines."""
-    t0 = time.time()
-    out = []
-    if workers > 1:
-        # The workers inherit this, so IPOPT's linear algebra does not spawn
-        # threads on top of the processes.
-        os.environ.setdefault("OMP_NUM_THREADS", "1")
-        with cf.ProcessPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(fn, job) for job in jobs]
-            for fut in cf.as_completed(futures):
-                out.append(fut.result())
-                if len(out) % 8 == 0 or len(out) == len(jobs):
-                    say(
-                        f"    {label}: {len(out)}/{len(jobs)}, {time.time() - t0:.0f} s"
-                    )
-    else:
-        for job in jobs:
-            out.append(fn(job))
-            if len(out) % 8 == 0 or len(out) == len(jobs):
-                say(f"    {label}: {len(out)}/{len(jobs)}, {time.time() - t0:.0f} s")
-    return out
-
-
-def _nmpc_summary(results, params=P):
-    """The heuristics' ``run`` summary fields for NMPC episodes, from the
-    recorded arrays, so ``costs`` prices both the same way."""
-    ok = np.stack([1.0 - r["rec"]["tripped"] for r in results])
-    e = np.stack([r["rec"]["e"] for r in results])
-    power = np.stack([r["rec"]["power"] for r in results])
-    running = np.asarray(
-        R.running_cost(power, params.c_hold, params.running_weight, np)
-    )
-    margin = np.stack([r["rec"]["margin"] for r in results])
-    return {
-        "sq_e": (ok * e**2).sum(1),
-        "run": (ok * running).sum(1),
-        "trips": np.stack([r["rec"]["tripped"] for r in results]).sum(1),
-        "min_margin": np.where(ok > 0, margin, np.inf).min(1),
-        "power": (ok * power).sum(1),
-        "ok": ok.sum(1),
-    }
-
-
-def mpc_gate(n=128, workers=1, horizon=None, margins=None, out_dir=None):
-    """The NMPC's acceptance run (PHYSICS.md section 7): the surge-margin
-    budget, then each candidate margin at or above its floor on ``n``
-    episodes and the stress battery, against the pair and G10 on the same
-    seeds, with solve times. Prints the verdicts of the acceptance rules and
-    saves every per-step array."""
-    horizon = MPC_HORIZON if horizon is None else horizon
-    out_dir = os.path.abspath(
-        out_dir or os.path.join(tempfile.gettempdir(), "compressor_surge_mpc_gate")
-    )
-    os.makedirs(out_dir, exist_ok=True)
-    budget_seeds = np.arange(HEAVY_SEED0, HEAVY_SEED0 + BUDGET_EPISODES)
-    seeds = np.arange(HEAVY_SEED0, HEAVY_SEED0 + n)
-    title(
-        f"mpc-gate: the NMPC at horizon {horizon} ({horizon * P.delta_t:.1f} s); "
-        f"budget on seeds {budget_seeds[0]} to {budget_seeds[-1]}, candidates on "
-        f"{n} episodes, seeds {seeds[0]} to {seeds[-1]}, and the 16-run stress battery",
-        "float32 env, float64 NLP",
-    )
-    say(f"  outputs: {out_dir}")
-    say(
-        f"  objective constants: error scale {MPC_ERROR_SCALE_KPA} kPa, energy weight "
-        f"{MPC_ENERGY_WEIGHT:.4g} above {MPC_POWER_REF / 1e3:.1f} kW, terminal weight "
-        f"{MPC_TERMINAL_WEIGHT:g}, move weight {MPC_MOVE_WEIGHT:g}; the fallback pair's gains "
-        + ", ".join(f"{k} {v:g}" for k, v in load_gains().items())
-    )
-
-    # Part 1 and part 3 of the budget, at the shipped margin.
-    say(
-        f"  budget: part 1 re-solves every {BUDGET_SAMPLE_EVERY}th step with the "
-        f"deviation moved by -{BUDGET_INNOVATION_SD:g} innovation sd "
-        f"({BUDGET_INNOVATION_SD * INNOVATION_SD:.4f} of opening), at the shipped margin "
-        f"{MPC_SURGE_MARGIN}"
-    )
-    budget = _pool_map(
-        _gate_episode,
-        [
-            (MPC_SURGE_MARGIN, horizon, int(s), BUDGET_SAMPLE_EVERY)
-            for s in budget_seeds
-        ],
-        workers,
-        "budget episodes",
-    )
-    losses = np.concatenate([r["losses"] for r in budget])
-    worst = float(losses.max())
-    floor_raw = 2.0 * (worst + MODEL_GAP_MARGIN)
-    floor = next((m for m in GATE_MARGINS if m >= floor_raw), None)
-    say(
-        f"  part 1, seen-innovation loss over {losses.size} samples: max {worst * 100:.3f} "
-        f"points, 99 % {np.percentile(losses, 99) * 100:.3f}, median "
-        f"{np.median(losses) * 100:.3f}; part 2, model gap {MODEL_GAP_MARGIN * 100:.3f} "
-        f"points (the bound of test_mpc_predicts_one_step_like_the_plant); floor "
-        f"2 x (part 1 + part 2) = {floor_raw * 100:.3f} points"
-        f" -> {'none of ' + str(GATE_MARGINS) if floor is None else floor}"
-    )
-    np.savez(os.path.join(out_dir, "budget.npz"), losses=losses)
-    if floor is None:
-        say("  FAILS: the budget's floor is above every candidate margin")
-        return 1
-    candidates = [m for m in (margins or GATE_MARGINS) if m >= floor]
-
-    pair = run(policy("pair"), seeds)[0]
-    g10 = run(policy("guarded", line=0.10), seeds)[0]
-    pair_cost, g10_cost = costs(pair).mean(), costs(g10).mean()
-    say(
-        f"  on the same seeds: the pair {pair_cost:.4g} per episode ({int(pair['trips'].sum())} "
-        f"trips, smallest margin {pair['min_margin'].min():.4f}); G10 {g10_cost:.4g} "
-        f"({int(g10['trips'].sum())} trips, smallest margin {g10['min_margin'].min():.4f})"
-    )
-
-    verdicts = {}
-    all_seconds = []
-    for margin in candidates:
-        results = sorted(
-            _pool_map(
-                _gate_episode,
-                [(margin, horizon, int(s), 0) for s in seeds],
-                workers,
-                f"margin {margin} episodes",
-            ),
-            key=lambda r: r["seed"],
-        )
-        battery = _pool_map(
-            _gate_battery,
-            [
-                (margin, horizon, i, mode)
-                for i in range(len(BATTERY))
-                for mode in ("dev", "innov")
-            ],
-            workers,
-            f"margin {margin} battery",
-        )
-        summ = _nmpc_summary(results)
-        cost = costs(summ)
-        rec = {name: np.stack([r["rec"][name] for r in results]) for name in GATE_REC}
-        np.savez(
-            os.path.join(out_dir, f"episodes_margin_{margin}.npz"),
-            seeds=seeds,
-            **rec,
-        )
-        np.savez(
-            os.path.join(out_dir, f"battery_margin_{margin}.npz"),
-            margins=np.stack([b["margins"] for b in battery]),
-            tripped=np.stack([b["tripped"] for b in battery]),
-            scenario=np.array([b["scenario"] for b in battery]),
-            mode=np.array([b["mode"] for b in battery]),
-        )
-        counters = np.sum([r["counters"] for r in results], axis=0)
-        mm = summ["min_margin"]
-        q = np.quantile(mm, [0.0, 0.01, 0.05, 0.5])
-        shortfall = rec["planned"] - rec["margin"]
-        shortfall = shortfall[np.isfinite(shortfall) & (rec["tripped"] == 0)]
-        k = int((summ["trips"] > 0).sum())
-        seconds = rec["seconds"].ravel()
-        all_seconds.append(seconds)
-        b_margin = min(b["margins"][BATTERY_LEAD:].min() for b in battery)
-        b_trips = sum(int(b["tripped"].any()) for b in battery)
-        b_counters = np.sum([b["counters"] for b in battery], axis=0)
-        checks = {
-            "no trip": k == 0,
-            "smallest margin >= half the plan": q[0] >= 0.5 * margin,
-            "residual shortfall < a quarter of the plan": shortfall.max()
-            < 0.25 * margin,
-            "battery: no trip": b_trips == 0,
-            "battery: margin >= half the plan": b_margin >= 0.5 * margin,
-            "battery: slack never active": b_counters[4] == 0,
-            "cost below G10": cost.mean() < g10_cost,
-        }
-        verdicts[margin] = (all(checks.values()), cost.mean(), checks)
-        say(f"  margin {margin}:")
-        say(
-            f"    episodes: trips {int(summ['trips'].sum())}, in {k} of {n} episodes "
-            f"(one-sided 95 % bound {one_sided_bound(k, n):.1e} per episode); smallest "
-            f"margin per episode: min {q[0]:.4f}, 1 % {q[1]:.4f}, 5 % {q[2]:.4f}, "
-            f"median {q[3]:.4f}"
-        )
-        say(
-            f"    prediction residual, realised less planned first-step margin: min "
-            f"{-shortfall.max() * 100:.4f} points, max {-shortfall.min() * 100:.4f}; "
-            f"fallbacks to the pair {int(counters[5])}; capped solves applied "
-            f"{int(counters[6])}; steps with the surge slack active {int(counters[4])}; "
-            f"mean IPOPT iterations {counters[1] / max(counters[0], 1):.1f}"
-        )
-        say(
-            f"    cost {cost.mean():.4g} per episode at e_floor {P.e_floor} kPa and c_hold "
-            f"{P.c_hold / 1e3:.1f} kW ({cost.mean() / pair_cost:.3f} x the pair, "
-            f"{cost.mean() / g10_cost:.3f} x G10); energy {summ['run'].sum() / max(cost.sum(), 1e-30) * 100:.2f} "
-            f"% of it; mean recycle power {(summ['power'] / summ['ok']).mean() / 1e3:.1f} kW; "
-            f"mean |e| {np.abs(rec['e'][rec['tripped'] == 0]).mean():.4f} kPa"
-        )
-        say(
-            f"    stress battery (16 runs): trips {b_trips}, smallest margin after the move "
-            f"{b_margin:.4f}, slack-active steps {int(b_counters[4])}, fallbacks to the "
-            f"pair {int(b_counters[5])}, capped solves applied {int(b_counters[6])}"
-        )
-        say(
-            f"    solve time per step (ms): p50 {np.percentile(seconds, 50) * 1e3:.0f}, p90 "
-            f"{np.percentile(seconds, 90) * 1e3:.0f}, p99 {np.percentile(seconds, 99) * 1e3:.0f}, "
-            f"max {seconds.max() * 1e3:.0f} (budget p50 {MPC_SOLVE_BUDGET_S[0] * 1e3:.0f}, p99 "
-            f"{MPC_SOLVE_BUDGET_S[1] * 1e3:.0f}; load average {os.getloadavg()[0]:.1f})"
-        )
-        say(
-            "    "
-            + "; ".join(
-                f"{name}: {'yes' if ok else 'NO'}" for name, ok in checks.items()
-            )
-        )
-
-    seconds = np.concatenate(all_seconds)
-    within = (
-        np.percentile(seconds, 50) <= MPC_SOLVE_BUDGET_S[0]
-        and np.percentile(seconds, 99) <= MPC_SOLVE_BUDGET_S[1]
-    )
-    passing = [m for m, (ok, _, _) in verdicts.items() if ok]
-    if not passing:
-        say(
-            "  no candidate passes. If the battery used the slack, tighten the later "
-            "stages first; if none beats G10, re-run with --mpc-horizon 80 once, then take "
-            "it to the owner as mpc_degraded"
-        )
-        return 1
-    cheapest = min(passing, key=lambda m: verdicts[m][1])
-    wider = [
-        m
-        for m in passing
-        if m > cheapest and verdicts[m][1] <= 1.01 * verdicts[cheapest][1]
-    ]
-    ship = max(wider) if wider else cheapest
-    say(
-        f"  ship surge_margin {ship} (passing: {passing}; the cheapest is {cheapest}, and a "
-        f"wider one within 1 % of its cost is preferred); solve times "
-        f"{'within' if within else 'OVER'} budget"
-        + ("" if within else ": horizon 40, then move blocking (PHYSICS.md section 7)")
-    )
-    return 0
-
-
-# ---------------------------------------------------------------------------
-# The NMPC's clip smoothing and cold start (--section mpc-width, on request)
-# ---------------------------------------------------------------------------
-
-#: The clip smoothings ``--section mpc-width`` compares, as fractions of one
-#: substep's actuator travel: the exact clip, 0.01 and the shipped width.
-MPC_WIDTHS = (0.0, 0.01, MPC_CLIP_SMOOTHING)
-#: Episodes the section runs, seeds from ``HEAVY_SEED0`` (ours).
-MPC_WIDTH_EPISODES = 4
-#: Steps of each episode it solves at each width (ours).
-MPC_WIDTH_STEPS = 12
-#: Commands per actuator in the grid over one step's reach (ours).
-MPC_WIDTH_GRID = 41
-
-
-@contextlib.contextmanager
-def _clip_smoothing(width):
-    """``experts.MPC_CLIP_SMOOTHING`` set to ``width`` for an NMPC built
-    inside, and restored after. ``CompressorSurgeMPC._build_mpc`` reads it
-    when it writes the NLP and the model's step function."""
-    shipped = experts.MPC_CLIP_SMOOTHING
-    experts.MPC_CLIP_SMOOTHING = width
-    try:
-        yield
-    finally:
-        experts.MPC_CLIP_SMOOTHING = shipped
-
-
-def _reach_grid(state, n=MPC_WIDTH_GRID, params=P):
-    """An ``n`` x ``n`` grid of commands [N_cmd, x_cmd] spanning one step's
-    travel of both actuators from ``state``, inside the command bounds, as
-    the NLP's reach constraint allows. Shape (2, n * n)."""
-    dt = params.delta_t
-    N_ramp, x = float(state.N_ramp), float(state.x)
-    N_cmd = np.linspace(
-        max(params.N_min, N_ramp - params.drive_rate * dt),
-        min(params.N_max, N_ramp + params.drive_rate * dt),
-        n,
-    )
-    x_cmd = np.linspace(
-        max(0.0, x - params.valve_close_rate * dt),
-        min(1.0, x + params.valve_open_rate * dt),
-        n,
-    )
-    NN, XX = np.meshgrid(N_cmd, x_cmd, indexing="ij")
-    return np.stack([NN.ravel(), XX.ravel()])
-
-
-def _width_episode(mpc, seed, step):
-    """The first ``MPC_WIDTH_STEPS`` steps of ``seed``'s episode under
-    ``mpc`` on the float32 env, as ``--mpc-gate`` runs them. Returns the
-    IPOPT iterations and solve seconds per step, the solves the iteration
-    cap stopped, the fallbacks, the trips and the states solved from."""
-    mpc.reset()
-    key = jax.random.PRNGKey(seed)
-    obs, state = ENV.reset_env(key, P)
-    iters, seconds, states = [], [], []
-    capped = fallbacks = trips = 0
-    for _ in range(MPC_WIDTH_STEPS):
-        states.append(state)
-        before = _counters(mpc)
-        t0 = time.perf_counter()
-        u = mpc.step(obs, state)
-        seconds.append(time.perf_counter() - t0)
-        d = _counters(mpc) - before
-        iters.append(int(d[1]))
-        capped += int(d[3])
-        fallbacks += int(d[5])
-        obs, state, _, _, info = step(key, state, jnp.asarray(u), P)
-        trips += int(bool(info["tripped"]))
-    return iters, seconds, capped, fallbacks, trips, states
-
-
-def section_mpc_width():
-    """The NMPC's clip smoothing and cold start (PHYSICS.md section 7).
-
-    1. At each width of ``MPC_WIDTHS`` the NMPC is built once and runs the
-       first ``MPC_WIDTH_STEPS`` steps of ``MPC_WIDTH_EPISODES`` episodes
-       (seeds from ``HEAVY_SEED0``) on the float32 env: per episode the
-       solves the iteration cap stopped, and per width the mean IPOPT
-       iterations, the median solve time, the fallbacks and the trips.
-    2. The one-step gap of each rounding against the exact clip: the model's
-       next header pressure and its ten substep Phis, over a grid of commands
-       spanning the reach of both actuators, at every state the shipped
-       width solved from in part 1. Float64 (CasADi).
-    3. The cold start: each episode's first step, from the guess a cold start
-       builds, solved by the IPOPT instance for warm starts (warm-start
-       options, adaptive barrier) and by the one for cold starts (IPOPT's
-       defaults).
-
-    The cold guess is built from the state and the preview alone
-    (``CompressorSurgeMPC._initialise``), so a first step's iteration count
-    does not depend on what the controller solved before.
-
-    Builds the NMPC three times; the latest run took 51.2 s."""
-    seeds = np.arange(HEAVY_SEED0, HEAVY_SEED0 + MPC_WIDTH_EPISODES)
-    title(
-        f"mpc-width: the NMPC's clip smoothing on the first {MPC_WIDTH_STEPS} steps "
-        f"of seeds {seeds[0]} to {seeds[-1]}, its one-step gap, the cold start",
-        "float32 env, float64 NLP",
-    )
-    step, _ = _gate_steps()
-    shipped, visited = None, []
-    for width in MPC_WIDTHS:
-        with _clip_smoothing(width):
-            t0 = time.perf_counter()
-            mpc = make_compressor_surge_mpc(ENV, PLANNED)
-            build = time.perf_counter() - t0
-            if width not in mpc._rhs_cache:
-                raise RuntimeError(
-                    f"the NMPC was not built at clip smoothing {width}: "
-                    "experts.MPC_CLIP_SMOOTHING is no longer what _build_mpc reads"
-                )
-            runs = [_width_episode(mpc, int(seed), step) for seed in seeds]
-        iters = np.concatenate([r[0] for r in runs])
-        seconds = np.concatenate([r[1] for r in runs])
-        capped = [r[2] for r in runs]
-        first = sum(int(r[0][0] >= IPOPT_MAX_ITER) for r in runs)
-        later = np.array([r[0][1:] for r in runs], float).mean()
-        say(
-            f"  width {width:g}: steps stopped by the {IPOPT_MAX_ITER}-iteration cap, "
-            f"per episode, {' '.join(str(c) for c in capped)} ({sum(capped)} of "
-            f"{iters.size}, of which first steps {first}); mean IPOPT iterations "
-            f"{iters.mean():.1f}, {later:.1f} after the first step; median solve {np.median(seconds) * 1e3:.0f} ms; fallbacks "
-            f"{sum(r[3] for r in runs)}; trips {sum(r[4] for r in runs)}; build "
-            f"{build:.0f} s"
-        )
-        if width == MPC_CLIP_SMOOTHING:
-            shipped = mpc
-            visited = [s for r in runs for s in r[5]]
-
-    exact = shipped.rhs_function(0.0)
-    for width in MPC_WIDTHS[1:]:
-        rounded = shipped.rhs_function(width)
-        dp_gap = phi_gap = 0.0
-        for s in visited:
-            u = _reach_grid(s)
-            n = u.shape[1]
-            x = np.array([float(getattr(s, name)) for name in MPC_STATES])
-            opening = stage_openings(
-                s.demand_levels, int(s.block_clock), float(s.demand_dev), P
-            )
-            args = (
-                np.repeat(x[:, None], n, axis=1),
-                u,
-                np.repeat(opening[:, None], n, axis=1),
-            )
-            a_next, a_phi = (np.asarray(v) for v in exact.map(n)(*args))
-            b_next, b_phi = (np.asarray(v) for v in rounded.map(n)(*args))
-            dp_gap = max(dp_gap, float(np.abs(b_next[1] - a_next[1]).max()))
-            phi_gap = max(phi_gap, float(np.abs(b_phi - a_phi).max()))
-        say(
-            f"  one-step gap of width {width:g} against the exact clip, over a "
-            f"{MPC_WIDTH_GRID} x {MPC_WIDTH_GRID} grid of commands spanning both "
-            f"actuators' reach at each of the {len(visited)} states above: next "
-            f"header pressure at most {dp_gap:.3g} Pa, a substep's Phi at most "
-            f"{phi_gap:.2g}"
-        )
-
-    for label, options in (
-        ("warm", "warm-start options, adaptive barrier"),
-        ("cold", "IPOPT's defaults"),
-    ):
-        results = []
-        for seed in seeds:
-            _, s0 = ENV.reset_env(jax.random.PRNGKey(int(seed)), P)
-            shipped.reset()
-            shipped._update_setpoint(s0)
-            x0 = shipped._extract_x0(s0)
-            shipped._initialise(x0)
-            m = shipped._mpc
-            m.S = shipped._solvers[label]
-            m.data.init_storage()
-            m.make_step(x0)
-            stats = m.solver_stats
-            results.append(f"{int(stats['iter_count'])} ({stats['return_status']})")
-        say(
-            f"  cold start, each episode's first step from the cold guess, solved by "
-            f"the {label}-start instance ({options}): iterations per episode "
-            + ", ".join(results)
-        )
-
-
-#: Sections that run only when named with --section: they build the NMPC.
-ON_REQUEST = {"mpc-width": section_mpc_width}
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -2497,9 +1789,8 @@ def main() -> int:
     ap.add_argument(
         "--section",
         action="append",
-        choices=list(FAST) + list(ON_REQUEST),
-        help="section(s) to print; default every fast one (mpc-width runs only "
-        "when named)",
+        choices=list(FAST),
+        help="section(s) to print; default every fast one",
     )
     ap.add_argument(
         "--hardness", action="store_true", help="the hardness table (heavy)"
@@ -2514,29 +1805,6 @@ def main() -> int:
         "--pid-validation", action="store_true", help="the pair's validation (heavy)"
     )
     ap.add_argument(
-        "--mpc-gate", action="store_true", help="the NMPC's acceptance run (heavy)"
-    )
-    ap.add_argument("--workers", type=int, default=1, help="processes for --mpc-gate")
-    ap.add_argument(
-        "--mpc-horizon",
-        type=int,
-        default=None,
-        help="the NMPC's horizon in --mpc-gate (default the shipped one)",
-    )
-    ap.add_argument(
-        "--mpc-margins",
-        type=float,
-        nargs="+",
-        default=None,
-        help="candidate surge margins for --mpc-gate (default 0.02 0.03 0.05)",
-    )
-    ap.add_argument(
-        "--gate-out",
-        default=None,
-        help="directory for --mpc-gate's saved arrays (default a folder in the "
-        "system's temporary directory; the absolute path is printed)",
-    )
-    ap.add_argument(
         "--seeds", type=int, default=None, help="episodes per row of a heavy table"
     )
     ap.add_argument(
@@ -2544,16 +1812,9 @@ def main() -> int:
     )
     args = ap.parse_args()
     t0 = time.time()
-    heavy = (
-        args.hardness
-        or args.sensitivity
-        or args.v1
-        or args.pid_validation
-        or args.mpc_gate
-    )
-    status = 0
+    heavy = args.hardness or args.sensitivity or args.v1 or args.pid_validation
     for name in args.section or ([] if heavy else list(FAST)):
-        {**FAST, **ON_REQUEST}[name]()
+        FAST[name]()
     if args.pid_validation:
         pid_validation(args.seeds or 4096)
     if args.hardness:
@@ -2562,17 +1823,9 @@ def main() -> int:
         sensitivity(args.seeds or 256)
     if args.v1:
         v1_table(args.seeds or 128, args.rare_seeds)
-    if args.mpc_gate:
-        status = mpc_gate(
-            args.seeds or 128,
-            args.workers,
-            args.mpc_horizon,
-            args.mpc_margins,
-            args.gate_out,
-        )
     say("=" * 78)
     say(f"runtime {time.time() - t0:.1f} s")
-    return status
+    return 0
 
 
 if __name__ == "__main__":

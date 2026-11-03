@@ -1,6 +1,8 @@
 {
   "ceiling": 6.944444444444445e-06,
-  "fingerprint": "382e18d3202b60d1",
+  "cpu": "AMD EPYC 9V45 96-Core Processor",
+  "fingerprint": "a92cc37edda79335",
+  "generated": "2026-11-03T02:57:32+00:00",
   "mpc": {
     "failure": 0.0,
     "failure_rate": 0.0,
@@ -17,7 +19,7 @@
     "reach_cost_ci": 9.657264834823539e-07,
     "reach_fraction": 0.0,
     "running": 8.125300247267357e-07,
-    "seconds": 4.6,
+    "seconds": 2.7,
     "settling_time": 398.0,
     "settling_time_ci": 3.92,
     "time_in_band": 0.5850000000000001,
@@ -42,7 +44,7 @@
     "reach_cost_ci": 0.00014293496062315974,
     "reach_fraction": 0.12083333333333333,
     "running": 5.885471428411411e-06,
-    "seconds": 3.0,
+    "seconds": 1.7,
     "settling_time": 400.0,
     "settling_time_ci": 0.0,
     "time_in_band": 0.10166666666666667,

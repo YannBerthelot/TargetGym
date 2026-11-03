@@ -5,17 +5,13 @@ cascade PID's gains and where they are read from, the stability guard its
 factory applies, the held setpoint limits, the anti-windup, the agreement
 between the functional core that scripts/unstable_cstr_numbers.py
 --pid-validation runs and the stateful controller the suite runs, and the
-PID's hold on scheduled episodes. Then the CasADi MPC: its model against the
-env's, its fallback to the PID, what it plans on, its preview of the
-schedule, its terminal weight, the factory's keywords, and the floor its
-recorded hold sets.
+PID's hold on scheduled episodes. Then the floor the MPC's recorded hold
+sets.
 """
 
-import copy
 import functools
 import json
 
-import casadi
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -29,8 +25,6 @@ from target_gym.pc_gym.unstable_cstr.env import (
     N_BLOCKS,
     UnstableCSTRParams,
     UnstableCSTRState,
-    compute_next_state,
-    compute_velocity,
     get_obs,
     live_target,
     steady_coolant,
@@ -39,37 +33,25 @@ from target_gym.pc_gym.unstable_cstr.env import (
 from target_gym.pc_gym.unstable_cstr.env_jax import UnstableCSTR
 from target_gym.pc_gym.unstable_cstr.experts import (
     DEFAULT_GAINS,
-    FALLBACK_STEP_BOUND_K,
     GUARD_LEVELS,
     GUARD_MIN_DECAY,
     HELD_GAINS,
-    MPC_ERROR_SCALE,
-    MPC_HORIZON,
-    MPC_MOVE_WEIGHT,
-    MPC_TVP,
     TUNED_GAINS,
     CascadeState,
     UnstableCascadeGains,
-    UnstableCSTRCasadiMPC,
     UnstableCSTRCascadePID,
     cascade_init,
     cascade_step,
     check_cascade_gains,
     closed_loop_rates,
-    coolant_from_raw,
     load_gains,
-    make_unstable_cstr_mpc,
     make_unstable_cstr_pid,
-    one_step_linearisation,
     pnr_line,
     point_of_no_return_batch,
-    raw_from_coolant,
     setpoint_clip_margins,
     setpoint_window,
-    terminal_weight,
     unstable_cstr_pid_step,
 )
-from target_gym.utils import convert_raw_action_to_range
 
 try:
     from jax import enable_x64
@@ -119,12 +101,6 @@ def step(env):
 def planned(params):
     """The params the suite builds the MPC with (``plan_params``)."""
     return plan_params(registry.get("unstable_cstr"), params)
-
-
-@pytest.fixture(scope="module")
-def mpc(env, planned):
-    """The MPC at its shipped horizon. Tests that step it build their own."""
-    return make_unstable_cstr_mpc(env, planned)
 
 
 def _obs(C_a, T, level, T_j=300.0):
@@ -554,280 +530,8 @@ def test_guard_levels_span_the_band(params):
 
 
 # ---------------------------------------------------------------------------
-# The CasADi MPC and the floor its hold sets
+# The floor the MPC's hold sets
 # ---------------------------------------------------------------------------
-
-
-def _pid_states(env, params, step, key, n):
-    """``n`` steps of the shipped cascade on the env from ``reset_env(key)``.
-    Returns the states it acted on and its raw actions."""
-    pid = UnstableCSTRCascadePID(load_gains(), params)
-    _, state = env.reset_env(key, params)
-    states, actions = [], []
-    for _ in range(n):
-        action = pid(env.get_obs(state, params))
-        states.append(state)
-        actions.append(float(action[0]))
-        state = step(key, state, jnp.asarray(action), params)[1]
-    return states, np.array(actions)
-
-
-def test_mpc_model_is_the_env_velocity(mpc):
-    """The MPC's model is the one piece of physics written twice: the
-    env's velocity is ``jnp`` code, which CasADi cannot trace. At 1000 random
-    points, over and beyond the reachable set, its right-hand side equals the
-    env's ``compute_velocity`` to 1e-12 relative, in float64."""
-    p = mpc.params
-    rng = np.random.default_rng(0)
-    n = 1000
-    x = np.stack(
-        [
-            rng.uniform(0.0, 1.0, n),
-            rng.uniform(280.0, 400.0, n),
-            rng.uniform(285.0, 315.0, n),
-        ]
-    )
-    u = rng.uniform(-1.0, 1.0, n)
-    d = rng.uniform(-8.0, 8.0, n)
-    ours = np.asarray(mpc.rhs_function.map(n)(x, u[None, :], d[None, :]))
-    with enable_x64():
-        T_c = convert_raw_action_to_range(jnp.asarray(u), p.T_c_min, p.T_c_max)
-        theirs = jax.vmap(lambda y, a, dd: compute_velocity(y, a, dd, p)[0])(
-            jnp.asarray(x.T), T_c, jnp.asarray(d)
-        )
-    np.testing.assert_allclose(ours, np.asarray(theirs).T, rtol=1e-12, atol=0.0)
-
-
-def test_mpc_predicts_one_step_like_the_plant(env, params, planned, step, mpc):
-    """Model-review check 13. On 120 states of a shipped-PID episode
-    with the drift on, one control interval of the MPC's model, integrated to
-    1e-12 with the drift held as the env holds it over a step, lands where
-    ``step_env`` under the planner's params does: the mean signed C_a error is
-    under a tenth of ``e_floor`` and none exceeds ``e_floor``. A one-signed
-    error would settle the MPC off its target."""
-    states, actions = _pid_states(env, params, step, jax.random.PRNGKey(7), 1200)
-    x = casadi.SX.sym("x", 3)
-    u = casadi.SX.sym("u_raw")
-    d = casadi.SX.sym("Ti_dev")
-    interval = casadi.integrator(
-        "interval",
-        "cvodes",
-        {"x": x, "p": casadi.vertcat(u, d), "ode": mpc.rhs_function(x, u, d)},
-        0.0,
-        mpc.mpc_dt,
-        {"abstol": 1e-12, "reltol": 1e-12},
-    )
-    key = jax.random.PRNGKey(0)
-    errors = []
-    for state, action in list(zip(states, actions))[::10]:
-        x0 = [float(state.C_a), float(state.T), float(state.T_j)]
-        model = interval(x0=x0, p=[action, float(state.Ti_dev)])["xf"]
-        plant = step(key, state, jnp.asarray([action]), planned)[1]
-        errors.append(float(model[0]) - float(plant.C_a))
-    errors = np.array(errors)
-    assert errors.size == 120
-    assert abs(errors.mean()) <= 0.1 * planned.e_floor, errors.mean()
-    assert np.abs(errors).max() <= planned.e_floor, np.abs(errors).max()
-
-
-def test_mpc_falls_back_to_the_pid(env, params, planned, step, monkeypatch):
-    """A step whose solve fails is handed to the cascade PID: the action
-    is the one the PID gives for that observation, the warm start is the one
-    from before the failed solve, the failure is counted, and the next solve
-    is clean. A solve that reports success with a NaN action is treated the
-    same. Because the PID's memory tracks every action the MPC applies, its
-    first action after 20 MPC steps starts within ``FALLBACK_STEP_BOUND_K``
-    (0.5 K) of the coolant last applied, where a PID started cold jumps by
-    more than 1 K. Measured, the step is 0.10 K here and the cold start's
-    3.9 K. Gains the guard refuses stop the factory."""
-    mpc = make_unstable_cstr_mpc(env, planned)
-    key = jax.random.PRNGKey(2)
-    _, state = env.reset_env(key, params)
-    # At rest on the hot end with a 6 K hot feed, the equilibrium coolant is
-    # 296.3 K, 3.7 K below the PID's 300 K bias, so a cold start would show.
-    level = params.target_CA_range[0]
-    state = state.replace(
-        C_a=jnp.float32(level),
-        T=jnp.float32(steady_temperature(level, params, np)),
-        T_j=jnp.float32(steady_coolant(level, 6.0, params, np)),
-        Ti_dev=jnp.float32(6.0),
-        target_levels=jnp.full(state.target_levels.shape, level, jnp.float32),
-    )
-    for _ in range(20):
-        action = mpc.step(env.get_obs(state, params), state)
-        state = step(key, state, jnp.asarray([action]), params)[1]
-    assert mpc.solve_failures == 0
-    last_coolant = coolant_from_raw(action, planned)
-
-    solve = mpc._mpc.make_step
-
-    def failed_solve(x0):
-        u = solve(x0)
-        m = mpc._mpc
-        m.opt_x_num.master = np.full(np.asarray(m.opt_x_num.master).shape, np.nan)
-        m.u0 = np.array([np.nan])
-        m.solver_stats = {
-            **m.solver_stats,
-            "success": False,
-            "return_status": "Restoration_Failed",
-        }
-        return u
-
-    def non_finite_solve(x0):
-        u = solve(x0)
-        mpc._mpc.u0 = np.array([np.nan])
-        return np.full_like(u, np.nan)
-
-    for n, fault, status in (
-        (1, failed_solve, "Restoration_Failed"),
-        (2, non_finite_solve, "non-finite action"),
-    ):
-        monkeypatch.setattr(mpc._mpc, "make_step", fault)
-        obs = env.get_obs(state, params)
-        warm = np.array(mpc._mpc.opt_x_num.master)
-        expected = float(np.clip(copy.deepcopy(mpc._pid).step(obs)[0], -1.0, 1.0))
-        cold = float(UnstableCSTRCascadePID(load_gains(), planned).step(obs)[0])
-        action = mpc.step(obs, state)
-        assert np.isfinite(action)
-        assert action == expected
-        np.testing.assert_array_equal(np.array(mpc._mpc.opt_x_num.master), warm)
-        assert mpc.solve_failures == n
-        assert mpc.last_return_status == status
-        # The next solve's move penalty reads the action applied.
-        assert float(mpc._mpc.u0.cat) == action
-        if n == 1:
-            first_step = abs(coolant_from_raw(action, planned) - last_coolant)
-            assert first_step <= FALLBACK_STEP_BOUND_K
-            assert abs(coolant_from_raw(cold, planned) - last_coolant) > 1.0
-        state = step(key, state, jnp.asarray([action]), params)[1]
-
-        monkeypatch.undo()
-        action = mpc.step(env.get_obs(state, params), state)
-        assert np.isfinite(action)
-        assert mpc.solve_failures == n
-        state = step(key, state, jnp.asarray([action]), params)[1]
-
-    monkeypatch.setattr(
-        pid_mod,
-        "_gains_cache",
-        {**pid_mod.load_gains(), "unstable_cstr": MARGINAL_6S},
-    )
-    with pytest.raises(UnstableCascadeGains):
-        make_unstable_cstr_mpc(env, planned, horizon=5)
-
-
-def test_mpc_plans_the_drift_mean(env, params, planned, mpc):
-    """The suite builds the MPC on ``plan_params``, which zeroes the
-    drift's noise and nothing else. The NLP never reads ``Ti_sigma``, so the
-    first action is the same under either params: a regression guard for
-    ``scripts/audit_mpc_horizons.py``, which skips ``plan_params`` and must
-    still audit the shipped controller. The drift path the MPC plans on is the
-    conditional mean a^k Ti_dev, the env's own update with the noise zeroed."""
-    assert registry.get("unstable_cstr").noise_fields == ("Ti_sigma",)
-    assert planned.Ti_sigma == 0.0
-    assert planned == params.replace(Ti_sigma=0.0)
-
-    _, state = env.reset_env(jax.random.PRNGKey(4), params)
-    state = state.replace(Ti_dev=jnp.float32(4.0))
-    obs = env.get_obs(state, params)
-    first = [
-        make_unstable_cstr_mpc(env, p, horizon=5).step(obs, state)
-        for p in (params, planned)
-    ]
-    assert first[0] == first[1]
-
-    drift = mpc.preview(state)["Ti_dev"]
-    a = np.exp(-planned.delta_t / planned.Ti_tau)
-    np.testing.assert_allclose(
-        drift, 4.0 * a ** np.arange(MPC_HORIZON + 1), rtol=1e-12, atol=0.0
-    )
-    path, s = [], state
-    for _ in range(MPC_HORIZON + 1):
-        path.append(float(s.Ti_dev))
-        s = compute_next_state(0.0, s, planned, jax.random.PRNGKey(0))[0]
-    np.testing.assert_allclose(drift, path, rtol=1e-5)
-
-
-def test_mpc_preview_matches_the_env(env, params, planned, mpc):
-    """Stage k of the NLP is the state k steps ahead, and its target is
-    the level the env scores that state against: inside a block, across a
-    block boundary, and past the sixth block, where the last level holds.
-    What the NLP receives through its tvp function is that preview."""
-    _, state = env.reset_env(jax.random.PRNGKey(6), params)
-    levels = np.asarray(state.target_levels, float)
-    key = jax.random.PRNGKey(0)
-    # (block clock, block of the first stage, block of the last stage). The
-    # last case's stages run past the end of the sixth block.
-    for clock, first, last in (
-        (0, 0, 0),
-        (params.block_steps - 10, 0, 1),
-        (params.max_steps_in_episode - 15, 5, 5),
-    ):
-        s = start = state.replace(block_clock=jnp.int32(clock))
-        expected = []
-        for _ in range(mpc.horizon + 1):
-            expected.append(float(live_target(s, planned)))
-            s = compute_next_state(0.0, s, planned, key)[0]
-        preview = mpc.preview(start)
-        np.testing.assert_array_equal(preview["target"], expected)
-        assert (expected[0], expected[-1]) == (levels[first], levels[last])
-
-        mpc._update_setpoint(start)
-        received = mpc._mpc.tvp_fun(0.0)
-        for name in MPC_TVP:
-            np.testing.assert_array_equal(
-                [float(received["_tvp", k, name]) for k in range(mpc.horizon + 1)],
-                preview[name],
-            )
-
-
-def test_terminal_weight_is_positive_definite(env, params, mpc):
-    """The terminal weight solves the Riccati equation of the env's own
-    one-step linearisation at C_a 0.45, where the open loop is unstable. It
-    is finite and positive definite, and the LQR it implies is stable. The
-    equilibrium the terminal cost is centred on is one of the MPC's model at
-    the last stage's drift."""
-    p = mpc.params
-    A, B = one_step_linearisation(p)
-    assert np.abs(np.linalg.eigvals(A)).max() > 1.0
-
-    P = terminal_weight(p)
-    assert np.all(np.isfinite(P))
-    np.testing.assert_allclose(P, P.T, rtol=1e-9, atol=0.0)
-    assert np.linalg.eigvalsh(P).min() > 0.0
-    R = np.array([[MPC_MOVE_WEIGHT]])
-    K = np.linalg.solve(R + B.T @ P @ B, B.T @ P @ A)
-    assert np.abs(np.linalg.eigvals(A - B @ K)).max() < 1.0
-    Q = np.diag([1.0 / MPC_ERROR_SCALE**2, 1e-6, 1e-6])
-    residual = A.T @ P @ A - A.T @ P @ B @ K + Q - P
-    assert np.abs(residual).max() <= 1e-8 * np.abs(P).max()
-
-    _, state = env.reset_env(jax.random.PRNGKey(8), params)
-    state = state.replace(Ti_dev=jnp.float32(-4.0))
-    preview = mpc.preview(state)
-    x_eq = [preview[name][-1] for name in ("C_a_eq", "T_eq", "T_j_eq")]
-    u_eq = raw_from_coolant(x_eq[2], p)
-    rhs = np.asarray(mpc.rhs_function(x_eq, u_eq, preview["Ti_dev"][-1])).ravel()
-    np.testing.assert_allclose(rhs, 0.0, atol=1e-9)
-    assert x_eq[0] == preview["target"][-1]
-
-
-def test_mpc_factory_takes_the_cheap_horizon(env, planned, mpc):
-    """``tests/experts/test_mpc_baselines._cheap_mpc`` tries the gradient
-    planners' ``n_iter`` first and needs a ``TypeError`` to fall through to
-    ``horizon=5`` alone, through the registry's factory."""
-    assert isinstance(mpc, UnstableCSTRCasadiMPC)
-    assert mpc.horizon == MPC_HORIZON
-    assert mpc.mpc_dt == planned.delta_t
-    spec = registry.get("unstable_cstr")
-    for kwargs in (
-        {"horizon": 5, "n_iter": 2, "n_tail": 0},
-        {"horizon": 5, "n_iter": 2},
-    ):
-        with pytest.raises(TypeError):
-            spec.make_mpc(env, planned, **kwargs)
-    assert spec.make_mpc(env, planned, horizon=5).horizon == 5
-    assert isinstance(env.make_mpc(planned, horizon=5), UnstableCSTRCasadiMPC)
 
 
 def test_floor_is_the_recorded_mpc_hold():

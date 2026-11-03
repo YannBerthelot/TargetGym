@@ -19,12 +19,9 @@ the hottest feed drift, which the PID's setpoint ceiling and the MPC's soft
 bound read. ``raw_from_coolant`` and ``coolant_from_raw`` convert between the
 raw action and the coolant command in K.
 
-The MPC is a CasADi/IPOPT NMPC on orthogonal collocation, which keeps the
-unstable mode from blowing up a propagated rollout. It reads the true state,
-the drift and the whole schedule, keeps T under the point-of-no-return line
-less ``MPC_PNR_MARGIN_K`` through a soft constraint, and hands any step whose
-solve fails to the cascade PID, whose memory it keeps tracked to the actions
-it applies.
+The MPC is ``NewtonMPC`` on the env's own step, guided by the cascade PID.
+It reads the true state, the drift and the whole schedule, and plans on the
+drift's mean path.
 """
 
 import functools
@@ -35,10 +32,9 @@ import jax.numpy as jnp
 import numpy as np
 from flax import struct
 from jax.tree_util import Partial as partial
-from scipy.linalg import solve_discrete_are
 
 from target_gym.experts import pid as _pid_mod
-from target_gym.experts.mpc import CasadiMPC
+from target_gym.experts.mpc import NewtonMPC
 from target_gym.pc_gym.unstable_cstr.env import (
     N_BLOCKS,
     UnstableCSTRParams,
@@ -84,7 +80,7 @@ def pnr_line(C_a):
     It lies at or below the exact point of no return (jacket at the steady
     coolant) across C_a 0.40 to 0.70 at every drift within 3 standard
     deviations (scripts/unstable_cstr_numbers.py --section pnr prints the gaps).
-    Plain arithmetic, so the MPC reads it on CasADi symbols too.
+    Plain arithmetic, so it takes NumPy and JAX arrays alike.
     """
     return PNR_LINE[0] + PNR_LINE[1] * (C_a - PNR_LINE_C_A)
 
@@ -101,9 +97,9 @@ def raw_from_coolant(T_c, params: UnstableCSTRParams):
 def coolant_from_raw(u_raw, params: UnstableCSTRParams):
     """The coolant command (K) of raw action ``u_raw`` in [-1, 1].
 
-    The linear map of ``convert_raw_action_to_range`` without its clip, so it
-    also takes CasADi symbols. Clip ``u_raw`` first where it may leave
-    [-1, 1], as ``compute_next_state`` does.
+    The linear map of ``convert_raw_action_to_range`` without its clip. Clip
+    ``u_raw`` first where it may leave [-1, 1], as ``compute_next_state``
+    does.
     """
     return params.T_c_min + 0.5 * (u_raw + 1.0) * (params.T_c_max - params.T_c_min)
 
@@ -594,7 +590,7 @@ def check_cascade_gains(gains, params: UnstableCSTRParams | None = None) -> None
 
 
 # ---------------------------------------------------------------------------
-# CasADi NMPC
+# The oracle
 # ---------------------------------------------------------------------------
 
 #: The MPC's horizon, in steps of ``delta_t`` (ours), 1.6 min. From 0.01 K
@@ -603,346 +599,41 @@ def check_cascade_gains(gains, params: UnstableCSTRParams | None = None) -> None
 #: --section pnr). 32 steps is 1.52 times that, so a plan that recovers from
 #: near the edge runs past the peak.
 MPC_HORIZON = 32
-#: How far below the point-of-no-return line the MPC's soft bound on T sits
-#: (K, ours).
-MPC_PNR_MARGIN_K = 1.0
-#: The C_a error that costs 1 per stage (mol/L, ours). It only conditions the
-#: NLP: the stage cost is the v2 tracking term times (e_floor / error_scale)^2.
-MPC_ERROR_SCALE = 0.01
-#: Weight on the squared move of the raw action between stages (ours).
-MPC_MOVE_WEIGHT = 1e-3
-#: Cost per K of excess over the soft bound, per control interval (ours).
-MPC_PNR_PENALTY = 1e4
-#: The largest move, in K of coolant, that the fallback PID's first action may
-#: make from the coolant last applied (ours, provisional).
-#: test_mpc_falls_back_to_the_pid asserts it, and
-#: scripts/unstable_cstr_numbers.py --mpc-gate measures that move on every
-#: step of its episodes and prints it against this bound.
-FALLBACK_STEP_BOUND_K = 0.5
-#: The time-varying parameters of each stage: the target, the feed drift, and
-#: the equilibrium on that target at that drift, which the terminal cost reads.
-MPC_TVP = ("target", "Ti_dev", "C_a_eq", "T_eq", "T_j_eq")
+#: The MPC's barrier on T past ``pnr_line(C_a)``: quadratic over its first
+#: ``MPC_PNR_ROUNDING_K`` (K, ours), then ``MPC_PNR_PENALTY`` per K in reward
+#: units (ours), the tracking cost of a 0.3145 mol/L error. The planner meets
+#: the drift's mean where the plant meets a noisy one; without the barrier it
+#: plans recoverable paths past the line that a +3 K drift makes a runaway
+#: (one trip on the ten recorded seeds), and with it none trips on thirty.
+MPC_PNR_ROUNDING_K = 1.0
+MPC_PNR_PENALTY = 9.891e6
 
 
-def _casadi_rhs(params: UnstableCSTRParams, C_a, T, T_j, u_raw, Ti_dev, exp):
-    """dC_a/dt, dT/dt and dT_j/dt for the MPC's model.
+def unstable_cstr_stage(env, state, action, params):
+    """``NewtonMPC``'s stage: the env's step and reward in floor units, and
+    the barrier on T past the point-of-no-return line."""
+    _, new, reward, _, _ = env.step_env(jax.random.PRNGKey(0), state, action, params)
+    past = jnp.maximum(new.T - pnr_line(new.C_a), 0.0)
+    d = MPC_PNR_ROUNDING_K
+    barrier = jnp.where(past < d, past * past / (2.0 * d), past - d / 2.0)
+    return new, (MPC_PNR_PENALTY * barrier - reward) / params.rho_floor_tracking
 
-    The env's ``compute_velocity`` runs on ``jnp`` and CasADi cannot trace it,
-    so this is the one place the balances are written a second time, term for
-    term in the env's order: cstr's two balances with the jacket temperature
-    as the coolant and the drifted feed ``Ti + Ti_dev``, and the jacket lag
-    driven by the raw command. test_mpc_model_is_the_env_velocity and
-    test_mpc_predicts_one_step_like_the_plant hold it to the env.
+
+def make_unstable_cstr_mpc(env, params, horizon: int = MPC_HORIZON, n_iter=10):
+    """Registry factory: ``NewtonMPC`` on the env's own step,
+    ``unstable_cstr_stage``, guided by the cascade PID.
+
+    Each solve starts from the better of the previous plan, replayed with its
+    feedback, and the cascade's rollout from the true state, so the plan is
+    never worse than the expert's under the planner's model. The cascade is
+    built from the stored gains and held to the PID factory's stability
+    guard, so gains the guard refuses stop this factory too.
     """
-    p = params
-    T_c = coolant_from_raw(u_raw, p)
-    rA = p.k0 * exp(-p.EA_over_R / T) * C_a
-    return [
-        p.q / p.V * (p.Caf - C_a) - rA,
-        p.q / p.V * ((p.Ti + Ti_dev) - T)
-        + ((-p.deltaHr) * rA) * (1 / (p.rho * p.C))
-        + p.UA * (T_j - T) * (1 / (p.rho * p.C * p.V)),
-        (T_c - T_j) / p.tau_j,
-    ]
-
-
-def one_step_linearisation(
-    params: UnstableCSTRParams, level: float = PNR_LINE_C_A, Ti_dev: float = 0.0
-):
-    """``(A, B)``: the Jacobians of one env step with respect to (C_a, T, T_j)
-    and the raw action, at the equilibrium on target ``level`` and drift
-    ``Ti_dev``.
-
-    From ``jax.jacfwd`` through the env's own ``compute_next_state`` in
-    float64, with the drift held, so no dynamics are restated.
-    """
-    params = params.replace(Ti_sigma=0.0)
-    T_star = float(steady_temperature(level, params, np))
-    T_c = float(steady_coolant(level, Ti_dev, params, np))
-    with enable_x64():
-
-        def step(x, u_raw):
-            state = UnstableCSTRState(
-                time=0,
-                C_a=x[0],
-                T=x[1],
-                T_j=x[2],
-                Ti_dev=Ti_dev,
-                target_levels=jnp.full(N_BLOCKS, level),
-                block_clock=0,
-            )
-            new = compute_next_state(u_raw, state, params, jax.random.PRNGKey(0))[0]
-            return jnp.stack([new.C_a, new.T, new.T_j])
-
-        x = jnp.array([level, T_star, T_c], jnp.float64)
-        u = jnp.float64(raw_from_coolant(T_c, params))
-        A, B = jax.jacfwd(step, argnums=(0, 1))(x, u)
-    return np.asarray(A), np.asarray(B).reshape(3, 1)
-
-
-def terminal_weight(
-    params: UnstableCSTRParams,
-    error_scale: float = MPC_ERROR_SCALE,
-    move_weight: float = MPC_MOVE_WEIGHT,
-    level: float = PNR_LINE_C_A,
-) -> np.ndarray:
-    """The MPC's terminal weight P, a 3 x 3 matrix on (C_a, T, T_j).
-
-    The solution of the discrete algebraic Riccati equation for the env's
-    one-step linearisation at C_a ``level`` (0.45 by default, the target whose
-    unstable mode is fastest, the lag included), with the stage weights
-    Q = diag(1 / error_scale^2, 1e-6, 1e-6) and R = move_weight: the cost of
-    the rest of the episode under the LQR there, so the horizon's end does not
-    look free to an unstable plant.
-    """
-    A, B = one_step_linearisation(params, level)
-    Q = np.diag([1.0 / error_scale**2, 1e-6, 1e-6])
-    return solve_discrete_are(A, B, Q, np.array([[move_weight]]))
-
-
-class UnstableCSTRCasadiMPC(CasadiMPC):
-    """CasADi/IPOPT NMPC for the unstable CSTR, falling back to the cascade PID.
-
-    States : [C_a, T, T_j]   Input: u_raw in [-1, 1] -> T_c in [T_c_min, T_c_max]
-    Stage k: tvp ``MPC_TVP``, the level the env scores the state k steps ahead
-             against, the drift's mean path, and the equilibrium they define
-
-    Collocation (radau, degree 3) makes the model a set of constraints, so the
-    unstable mode cannot blow up a propagated rollout, which is what defeats a
-    single-shooting planner here. The stage cost is the v2 tracking term,
-    rescaled; the terminal cost is ``terminal_weight`` around the equilibrium
-    on the last stage's target; T stays under ``pnr_line(C_a) -
-    pnr_margin_K`` through a soft constraint checked at every collocation
-    point, so a state that starts past it still has a solution.
-
-    Like every MPC in the suite it is an oracle ceiling. It reads the true
-    C_a, T, T_j and feed drift, and the whole schedule with its clock. The
-    drift path is the drift's conditional mean, a^k Ti_dev, which is the env's
-    own update with ``Ti_sigma`` zeroed (``plan_params``).
-
-    A step whose solve fails, or reports success with a non-finite action, is
-    counted in ``solve_failures`` and handed to the cascade PID. The PID's
-    memory is tracked to every action the MPC applies (``cascade_track``), so
-    its first action starts from the coolant last applied. Holding the last
-    action, as ``CasadiMPC`` does, can trip this plant.
-    """
-
-    SCALING = {"_x": {"C_a": 0.5, "T": 350.0, "T_j": 300.0}}
-
-    def __init__(
-        self,
+    return NewtonMPC(
         env,
-        params: UnstableCSTRParams,
-        horizon: int = MPC_HORIZON,
-        mpc_dt: float | None = None,
-        pnr_margin_K: float = MPC_PNR_MARGIN_K,
-        error_scale: float = MPC_ERROR_SCALE,
-        move_weight: float = MPC_MOVE_WEIGHT,
-        pnr_penalty: float = MPC_PNR_PENALTY,
-        fallback: UnstableCSTRCascadePID | None = None,
-    ):
-        # Everything _build_mpc reads, before CasadiMPC.__init__ calls it.
-        self.pnr_margin_K = float(pnr_margin_K)
-        self.error_scale = float(error_scale)
-        self.move_weight = float(move_weight)
-        self.pnr_penalty = float(pnr_penalty)
-        self._pid = (
-            UnstableCSTRCascadePID(load_gains(), params)
-            if fallback is None
-            else fallback
-        )
-        self._preview: dict = {}
-        self._last_clock: int | None = None
-        super().__init__(env, params, horizon=horizon, mpc_dt=mpc_dt)
-
-    def _build_mpc(self):
-        import casadi
-        import do_mpc
-
-        p = self.params
-        model = do_mpc.model.Model("continuous")
-        C_a = model.set_variable("_x", "C_a")
-        T = model.set_variable("_x", "T")
-        T_j = model.set_variable("_x", "T_j")
-        u_raw = model.set_variable("_u", "u_raw")
-        tvp = {name: model.set_variable("_tvp", name) for name in MPC_TVP}
-        rhs = _casadi_rhs(p, C_a, T, T_j, u_raw, tvp["Ti_dev"], casadi.exp)
-        for name, expr in zip(("C_a", "T", "T_j"), rhs):
-            model.set_rhs(name, expr)
-        model.setup()
-
-        mpc = do_mpc.controller.MPC(model)
-        mpc.set_param(
-            n_horizon=self.horizon,
-            t_step=self.mpc_dt,
-            n_robust=0,
-            store_full_solution=False,
-            state_discretization="collocation",
-            collocation_type="radau",
-            collocation_deg=3,
-            collocation_ni=1,
-            # The bound is checked at every collocation point, the interval
-            # ends included. The measured state is given, so it is left out.
-            nl_cons_check_colloc_points=True,
-        )
-
-        stage = ((tvp["target"] - C_a) / self.error_scale) ** 2
-        P = terminal_weight(
-            p.replace(delta_t=self.mpc_dt), self.error_scale, self.move_weight
-        )
-        dx = casadi.vertcat(C_a - tvp["C_a_eq"], T - tvp["T_eq"], T_j - tvp["T_j_eq"])
-        mpc.set_objective(lterm=stage, mterm=casadi.bilin(casadi.DM(P), dx, dx))
-        mpc.set_rterm(u_raw=self.move_weight)
-        mpc.bounds["lower", "_u", "u_raw"] = -1.0
-        mpc.bounds["upper", "_u", "u_raw"] = 1.0
-
-        mpc.set_nl_cons(
-            "pnr",
-            T - (pnr_line(C_a) - self.pnr_margin_K),
-            ub=0.0,
-            soft_constraint=True,
-            penalty_term_cons=self.pnr_penalty,
-        )
-
-        self._preview = {name: np.zeros(self.horizon + 1) for name in MPC_TVP}
-        tvp_tpl = mpc.get_tvp_template()
-
-        def tvp_fun(_t):
-            for name, values in self._preview.items():
-                for k, value in enumerate(values):
-                    tvp_tpl["_tvp", k, name] = float(value)
-            return tvp_tpl
-
-        mpc.set_tvp_fun(tvp_fun)
-        self._apply_scaling(mpc)
-        mpc.set_param(nlpsol_opts=self._quiet_ipopt())
-        mpc.setup()
-
-        # The model's right-hand side as a function, for the tests.
-        x = casadi.SX.sym("x", 3)
-        u = casadi.SX.sym("u_raw")
-        d = casadi.SX.sym("Ti_dev")
-        self.rhs_function = casadi.Function(
-            "rhs",
-            [x, u, d],
-            [casadi.vertcat(*_casadi_rhs(p, x[0], x[1], x[2], u, d, casadi.exp))],
-            ["x", "u_raw", "Ti_dev"],
-            ["rhs"],
-        )
-        return mpc
-
-    def preview(self, state) -> dict:
-        """The NLP's time-varying parameters at ``state``: for each name in
-        ``MPC_TVP``, an array over the stages k = 0..horizon.
-
-        Stage k is the state k control intervals ahead. Its target is the
-        level the env scores that state against,
-        ``target_levels[min((block_clock + k) // block_steps, 5)]`` at
-        ``mpc_dt = delta_t``, and its drift is a^k Ti_dev with
-        a = exp(-mpc_dt / Ti_tau), held over the interval as the env holds it
-        over a step.
-        """
-        p = self.params
-        k = np.arange(self.horizon + 1)
-        ahead = np.floor(k * (self.mpc_dt / p.delta_t) + 1e-9).astype(int)
-        block = np.minimum(
-            (int(state.block_clock) + ahead) // p.block_steps, N_BLOCKS - 1
-        )
-        target = np.asarray(state.target_levels, float)[block]
-        drift = float(state.Ti_dev) * np.exp(-self.mpc_dt / p.Ti_tau) ** k
-        return {
-            "target": target,
-            "Ti_dev": drift,
-            "C_a_eq": target,
-            "T_eq": steady_temperature(target, p, np),
-            "T_j_eq": steady_coolant(target, drift, p, np),
-        }
-
-    def _update_setpoint(self, state):
-        self._preview = self.preview(state)
-
-    def _extract_x0(self, state):
-        return np.array([float(state.C_a), float(state.T), float(state.T_j)])
-
-    def _initialise(self, x0) -> None:
-        """Cold start: every stage at the measured state, every move at the
-        command that holds the jacket where it is."""
-        m = self._mpc
-        m.x0 = x0
-        m.u0 = np.array([np.clip(raw_from_coolant(x0[2], self.params), -1.0, 1.0)])
-        m.set_initial_guess()
-        self._initialized = True
-
-    def step(self, obs, state):
-        """The raw action for ``state``; ``obs`` is what the fallback PID reads.
-
-        A full override of ``CasadiMPC.step``, as the reactor's and the pH
-        plant's are: the base clips after its fallback test, and ``np.clip``
-        passes a NaN through, so a solve that reports success with a
-        non-finite action would reach the plant. Here that counts as a failed
-        solve. A trip restarts the schedule, and a falling block clock starts
-        the warm start afresh from the new state.
-        """
-        self._update_setpoint(state)
-        x0 = self._extract_x0(state)
-        clock = int(state.block_clock)
-        if not self._initialized or (
-            self._last_clock is not None and clock < self._last_clock
-        ):
-            self._initialise(x0)
-        self._last_clock = clock
-        guess = self._save_guess()
-        failures = self.solve_failures
-        u = np.array(self._mpc.make_step(x0), dtype=float).flatten()
-        finite = bool(np.all(np.isfinite(u)))
-        ok = self._record_solve() and finite
-        if not finite:
-            # Counted once: _record_solve has already counted a solve that
-            # reported failure.
-            if self.solve_failures == failures:
-                self.solve_failures += 1
-            self.last_return_status = "non-finite action"
-        if ok:
-            self._pid.track(obs, np.clip(u, -1.0, 1.0))
-        else:
-            u = self._fallback(guess, u, obs)
-        self._last_u = u
-        return float(np.clip(u, -1.0, 1.0)[0])
-
-    def _fallback(self, guess, u, obs):
-        """Restore the last good warm start and hand this step to the cascade
-        PID, stepped on ``obs``.
-
-        The restore is ``CasadiMPC._fallback``'s; the action it would hold is
-        not used. do-mpc keeps the failed iterate's first move as the previous
-        move, which the next solve's move penalty reads, so it is replaced by
-        the action applied.
-        """
-        super()._fallback(guess, u)
-        u = np.asarray(self._pid.step(obs), dtype=float)
-        self._mpc.u0 = u
-        return u
-
-    def reset(self):
-        """Clear the warm start, do-mpc's stored history and the PID's memory."""
-        super().reset()
-        self._mpc.reset_history()
-        self._pid.reset()
-        self._last_clock = None
-
-
-def make_unstable_cstr_mpc(env, params, **kwargs) -> UnstableCSTRCasadiMPC:
-    """Registry factory: the CasADi/IPOPT NMPC, falling back to the cascade PID.
-
-    The fallback is built from the stored gains and held to the PID factory's
-    stability guard, so gains the guard refuses stop this factory too.
-    ``kwargs`` go to ``UnstableCSTRCasadiMPC`` (``horizon``, ``mpc_dt``,
-    ``pnr_margin_K``, ``error_scale``, ``move_weight``, ``pnr_penalty``); any
-    other name raises ``TypeError``, which ``test_mpc_baselines._cheap_mpc``
-    relies on.
-    """
-    gains = load_gains()
-    check_cascade_gains(gains)
-    return UnstableCSTRCasadiMPC(
-        env, params, fallback=UnstableCSTRCascadePID(gains, params), **kwargs
+        params,
+        horizon=horizon,
+        n_iter=n_iter,
+        guide=make_unstable_cstr_pid_controller(),
+        stage_fn=unstable_cstr_stage,
     )
