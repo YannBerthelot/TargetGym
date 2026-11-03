@@ -10,7 +10,7 @@ planner's rollout, and the planner optimises the elevator alone with a step
 decaying from 0.05 to 0.002 over 100 iterations. ``plane_energy`` keeps the
 shipped planner, and its altitude floor was reset from an earlier oracle's
 4.55 m hold to 1.20 m (``plane_energy-v3``). The settings live in the
-package's ``experts.py``, which is in the three tasks' baseline fingerprint,
+package's ``oracle.py``, which is in the three tasks' oracle fingerprint,
 and each task's oracle reads its PID gains from a key that fingerprint
 collects. The planner's objective is the reward over a fixed scale per task,
 so the best hold its own runs set does not change it.
@@ -28,7 +28,7 @@ from target_gym import records, registry
 from target_gym.experts import pid as pid_mod
 from target_gym.experts.mpc import plan_params
 from target_gym.plane.env import PlaneParams
-from target_gym.plane.experts import (
+from target_gym.plane.oracle import (
     PlaneHandoverMPC,
     PlaneMPC,
     _bumpless_integral,
@@ -143,13 +143,13 @@ def test_explicit_settings_override_the_table():
 
 @pytest.mark.parametrize("name", TASKS)
 def test_each_oracle_reads_gains_its_fingerprint_collects(name):
-    """``baseline_fingerprint`` hashes the gain keys that start with the task's
-    name, so the oracle reads one of those. The copies equal
+    """``oracle_fingerprint`` hashes the gain keys the spec declares in
+    ``oracle_gains_keys``, so the oracle reads one of those. The copies equal
     ``plane_cascaded``, which the plane oracle reads, so a retune of it has to
     update them too, and that stales these tasks' records as it should."""
     spec = registry.get(name)
     key = task_settings(spec.make_test_params())["gains_key"]
-    assert key.startswith(spec.name)
+    assert key in spec.oracle_gains_keys
     on_disk = json.loads(pid_mod._GAINS_FILE.read_text())
     assert _numeric(on_disk[key]) == _numeric(on_disk["plane_cascaded"])
     oracle = _oracle(name)

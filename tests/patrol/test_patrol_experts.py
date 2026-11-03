@@ -24,7 +24,7 @@ from target_gym.patrol.env import (
     slot_error,
     wrap_angle,
 )
-from target_gym.patrol.experts import (
+from target_gym.patrol.oracle import (
     TWIN_GAINS,
     PatrolTwinOracle,
     twin_law_init,

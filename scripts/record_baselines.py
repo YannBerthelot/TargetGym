@@ -14,23 +14,27 @@ which most merges do not touch. So the measurement is taken here, by hand, and
 committed to ``src/target_gym/data/baseline_returns/<task>.json``; CI reads the recorded numbers and
 checks the contract against them.
 
-That is only safe if a stale record cannot pass silently. Each record carries a
-fingerprint of the environment's modules, the shared controller and integration
-code, the tuned gains and the parameter values, so a record that no longer
-describes the tree is refused rather than believed. See
-``target_gym.provenance``.
+That is only safe if a stale record cannot pass silently. Each record's two
+parts, the PID's returns and the MPC's, carry a fingerprint each, of the
+environment's modules, that part's controller code and gains, and the
+parameter values, so a record that no longer describes the tree is refused
+rather than believed. See ``target_gym.provenance``.
 
 Usage
 -----
     uv run python scripts/record_baselines.py              # everything
     uv run python scripts/record_baselines.py --envs plane cstr
     uv run python scripts/record_baselines.py --pid-only   # check, write nothing
+    uv run python scripts/record_baselines.py --part expert   # the PIDs' part only
+    uv run python scripts/record_baselines.py --part oracle   # the MPCs' part only
+
+``--part`` keeps the other part's returns and fingerprint as recorded.
 
 Run it whenever the test suite tells you a record is stale, and commit the
 result alongside the change that invalidated it. Or let CI do it: the
 ``re-record`` label on a pull request runs this and ``evaluate_baselines.py``
-for every stale environment, one job each, and commits the rows to the branch
-(``.github/workflows/record-baselines.yml``).
+for every stale part of every environment, one job per environment, and
+commits the rows to the branch (``.github/workflows/record-baselines.yml``).
 """
 
 from __future__ import annotations
@@ -51,7 +55,7 @@ import jax
 import numpy as np
 
 from target_gym import records
-from target_gym.provenance import baseline_fingerprint
+from target_gym.provenance import expert_fingerprint, oracle_fingerprint
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import (
     mpc_policy,
@@ -319,23 +323,31 @@ def _split_by_planner(names: list[str]) -> tuple[list[str], list[str]]:
     return batched, per_seed
 
 
-def _row(name, pid, mpc, trips, reports, seconds) -> dict:
+def _row(name, pid, mpc=None, trips=0, reports=(), seconds=0.0) -> dict:
+    """``name``'s row with the parts recorded here: the PID's returns
+    ``pid``, the MPC's ``mpc``, or both. A part passed as ``None`` keeps its
+    recorded rows (``records.with_part``)."""
     spec = REGISTRY[name]
-    row = {
-        "fingerprint": baseline_fingerprint(spec),
-        "steps": int(spec.make_test_params().max_steps_in_episode),
-        "seeds": SEEDS,
-        "pid_returns": [round(v, 6) for v in pid],
-        "mpc_returns": [round(v, 6) for v in mpc],
-        "mpc_trips": int(trips),
-        "seconds": round(seconds, 1),
-    }
-    row.update(_merge_reports(reports))
-    return records.stamped(row)
+    row = {"steps": int(spec.make_test_params().max_steps_in_episode), "seeds": SEEDS}
+    if pid is not None:
+        row["expert_fingerprint"] = expert_fingerprint(spec)
+        row["pid_returns"] = [round(v, 6) for v in pid]
+    if mpc is not None:
+        row["oracle_fingerprint"] = oracle_fingerprint(spec)
+        row["mpc_returns"] = [round(v, 6) for v in mpc]
+        row["mpc_trips"] = int(trips)
+        row["seconds"] = round(seconds, 1)
+        row.update(_merge_reports(list(reports)))
+    row = records.stamped(row)
+    if pid is None or mpc is None:
+        part = "expert" if mpc is None else "oracle"
+        return records.with_part(records.load_row("baseline_returns", name), row, part)
+    return row
 
 
 def _report(name: str, row: dict) -> None:
-    p, m = np.mean(row["pid_returns"]), np.mean(row["mpc_returns"])
+    p = np.mean(row.get("pid_returns", [np.nan]))
+    m = np.mean(row.get("mpc_returns", [np.nan]))
     verdict = "MPC leads" if m >= p else f"PID leads by {p - m:.1f}"
     health = ""
     if row.get("solver_calls"):
@@ -345,7 +357,7 @@ def _report(name: str, row: dict) -> None:
             health += f" ({row['solver_capped']} capped)"
     print(
         f"  {name:20s} PID {p:9.2f}  MPC {m:9.2f}  {verdict:22s} "
-        f"trips {row['mpc_trips']}  {row['seconds']:6.0f}s{health}",
+        f"trips {row.get('mpc_trips')}  {row.get('seconds', 0):6.0f}s{health}",
         flush=True,
     )
 
@@ -447,25 +459,31 @@ def _run_jobs(jobs, workers, inflight, durations, pid_out, mpc_out, batch_out, e
     )
 
 
-def _check_pids(names: list[str]) -> int:
-    """Re-run only the PIDs and report any return that moved; write nothing.
+def _run_pids(names: list[str], write: bool) -> int:
+    """Re-run only the PIDs and report any return that moved; with ``write``,
+    record their part (``--part expert``), and otherwise write nothing
+    (``--pid-only``).
 
-    The quick local check for a change meant to leave the PIDs alone: minutes
-    against the full re-record's hour or more, because nearly all of that is
-    MPC. It cannot refresh a record, since a row's fingerprint covers its MPC
-    too. Rows recorded on CI's Linux runners can differ from a Mac's in the
-    last bits, so a return counts as moved beyond ``records.same``'s
-    tolerance, and any difference at all is printed: a refactor that must be
-    bit-identical is better compared against a run of its base commit on the
-    same machine.
+    Minutes against the full re-record's hour or more, because nearly all of
+    that is MPC, and the MPC's part keeps its own fingerprint, so the written
+    form refreshes a row an expert change left stale. The check is the quick
+    local one for a change meant to leave the PIDs alone. Rows recorded on
+    CI's Linux runners can differ from a Mac's in the last bits, so a return
+    counts as moved beyond ``records.same``'s tolerance, and any difference at
+    all is printed: a refactor that must be bit-identical is better compared
+    against a run of its base commit on the same machine.
     """
     rows = records.load("baseline_returns")
+    # The recorder keeps no baseline row for a plant without an MPC.
+    names = [n for n in names if REGISTRY[n].make_mpc is not None]
     jobs = [(name, seed, None) for name in names for seed in range(SEEDS)]
     with _pool(min(os.cpu_count() or 2, 8)) as pool:
         got = dict(zip(jobs, (value for value, _ in pool.map(_pid_one_seed, jobs))))
     moved = 0
     for name in names:
         new = [round(got[(name, seed, None)], 6) for seed in range(SEEDS)]  # as _row
+        if write:
+            records.write("baseline_returns", name, _row(name, new))
         old = rows.get(name, {}).get("pid_returns")
         same = old is not None and records.same(old, new)
         moved += not same
@@ -475,24 +493,32 @@ def _check_pids(names: list[str]) -> int:
             else f" (max |d| {np.max(np.abs(np.subtract(old, new))):.3g})"
         )
         print(f"  {name:20s} PID {'unchanged' if same else 'MOVED'}{gap}", flush=True)
-    return 1 if moved else 0
+    # A recording expects returns to move; only the check fails on them.
+    return 1 if moved and not write else 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--envs", nargs="*", default=None, help="default: all with an MPC")
-    ap.add_argument(
+    only = ap.add_mutually_exclusive_group()
+    only.add_argument(
         "--pid-only",
         action="store_true",
         help="re-run the PIDs only and report returns that moved; writes nothing",
     )
-    args = ap.parse_args()
+    only.add_argument(
+        "--part",
+        choices=("expert", "oracle"),
+        help="record this part only, keeping the other's as recorded",
+    )
+    args = ap.parse_args(argv)
 
     names = args.envs or [
         n for n, s in REGISTRY.items() if s.has_pid and s.make_mpc is not None
     ]
-    if args.pid_only:
-        return _check_pids(names)
+    if args.pid_only or args.part == "expert":
+        return _run_pids(names, write=args.part == "expert")
+    with_pid = args.part is None
     batched, per_seed = _split_by_planner(names)
     live = batched + per_seed
 
@@ -506,7 +532,8 @@ def main() -> int:
     # full twenty-environment re-record on finishing.
     rows: dict[str, dict] = {}
     started = {n: time.time() for n in live}
-    pid_out: dict[str, list] = {n: [None] * SEEDS for n in live}
+    # Without the PIDs, nothing to wait for and their part is kept as recorded.
+    pid_out: dict[str, list] = {n: [None] * SEEDS * with_pid for n in live}
     mpc_out: dict[str, list] = {n: [None] * SEEDS for n in per_seed}
     batch_out: dict[str, tuple] = {}
 
@@ -535,9 +562,8 @@ def main() -> int:
                 return
             mpc, ended = batch_out[name]
             reports = []
-        rows[name] = _row(
-            name, pid_out[name], mpc, ended, reports, time.time() - started[name]
-        )
+        pid = pid_out[name] if with_pid else None
+        rows[name] = _row(name, pid, mpc, ended, reports, time.time() - started[name])
         _write(rows)
         _report(name, rows[name])
 
@@ -612,10 +638,10 @@ def main() -> int:
     for name in _by_cost(batched):
         jobs.append(("batch", name, -1))
     for name in batched:
-        jobs += [("pid", name, seed) for seed in range(SEEDS)]
+        jobs += [("pid", name, seed) for seed in range(SEEDS * with_pid)]
     for name in _by_cost(per_seed):
         jobs += [("mpc", name, seed) for seed in range(SEEDS)]
-        jobs += [("pid", name, seed) for seed in range(SEEDS)]
+        jobs += [("pid", name, seed) for seed in range(SEEDS * with_pid)]
 
     watcher = threading.Thread(
         target=_monitor,

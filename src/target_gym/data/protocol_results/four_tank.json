@@ -1,7 +1,7 @@
 {
   "ceiling": 2.0,
   "cpu": "AMD EPYC 9V45 96-Core Processor",
-  "fingerprint": "ba577a967039f06e",
+  "expert_fingerprint": "3bfbf3220d60d1fb",
   "generated": "2026-11-03T02:59:54+00:00",
   "mpc": {
     "failure": 0.0,
@@ -26,6 +26,7 @@
     "transient_cost_ci": 495375.391403194,
     "unsettled_fraction": 0.0
   },
+  "oracle_fingerprint": "3de453b53788eeaf",
   "pid": {
     "failure": 0.0,
     "failure_rate": 0.0,

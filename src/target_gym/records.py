@@ -29,7 +29,18 @@ import pathlib
 import platform
 import subprocess
 
-__all__ = ["DATA", "KINDS", "load", "load_row", "path", "same", "stamped", "write"]
+__all__ = [
+    "DATA",
+    "KINDS",
+    "PARTS",
+    "load",
+    "load_row",
+    "path",
+    "same",
+    "stamped",
+    "with_part",
+    "write",
+]
 
 #: Inside the package, so it resolves from a checkout and an installed wheel.
 DATA = pathlib.Path(__file__).resolve().parent / "data"
@@ -47,6 +58,35 @@ REL_TOL = 1e-2
 #: Absolute floor: costs this small are float noise around an exact zero
 #: (first_order's expert holds at 3e-12).
 ABS_TOL = 1e-12
+
+#: The keys of a ``baseline_returns`` or ``protocol_results`` row each part
+#: owns, its fingerprint first (``provenance.expert_fingerprint`` and
+#: ``oracle_fingerprint``). Every other key (the episode length, the seed
+#: count, the settle) is shared. ``seconds`` is the oracle's: it is what a
+#: recording costs, and the recorder orders its work by it.
+PARTS = {
+    "expert": frozenset({"expert_fingerprint", "pid_returns", "pid"}),
+    "oracle": frozenset(
+        {
+            "oracle_fingerprint",
+            "mpc_returns",
+            "mpc_trips",
+            "mpc",
+            "seconds",
+            "solver_calls",
+            "solver_failures",
+            "solver_capped",
+            "solver_mean_iters",
+        }
+    ),
+}
+
+
+def with_part(row: dict, fresh: dict, part: str) -> dict:
+    """``row`` re-recorded for ``part`` alone: ``fresh``, with the other
+    part's keys as ``row`` has them."""
+    (other,) = (keys for name, keys in PARTS.items() if name != part)
+    return {**fresh, **{k: v for k, v in row.items() if k in other}}
 
 
 def path(kind: str, stem: str) -> pathlib.Path:

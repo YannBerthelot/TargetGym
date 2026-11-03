@@ -1,6 +1,6 @@
 {
   "cpu": "AMD EPYC 7763 64-Core Processor",
-  "fingerprint": "9b085160bcec8645",
+  "expert_fingerprint": "3b3b5b9cdce9a80d",
   "generated": "2026-11-03T03:31:40+00:00",
   "mpc_returns": [
     -625004.428234,
@@ -15,6 +15,7 @@
     -12942.533346
   ],
   "mpc_trips": 0,
+  "oracle_fingerprint": "d7dc93ece36b0bf1",
   "pid_returns": [
     -8085072.635111,
     -5534.997087,

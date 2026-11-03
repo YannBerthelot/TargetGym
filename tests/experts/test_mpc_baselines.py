@@ -19,7 +19,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym.provenance import baseline_fingerprint, load_recorded_baselines
+from target_gym.provenance import fingerprints, load_recorded_baselines
 from target_gym.registry import REGISTRY, specs_in_group
 
 MPC_ENVS = [name for name, spec in REGISTRY.items() if spec.has_mpc]
@@ -207,11 +207,12 @@ PID_SHORTFALL_TOLERANCE = 0.10
 def test_recorded_baseline_still_describes_this_tree(name):
     """A recorded measurement must not be believed after the code moved.
 
-    This is the whole safety of recording rather than re-measuring. The record
-    carries a fingerprint of the environment's modules, the shared controller and
-    integration code, the tuned gains and the parameter values it was taken at;
-    if any of those moved, the numbers below describe code that no longer exists
-    and the right answer is to refuse them, not to average them.
+    This is the whole safety of recording rather than re-measuring. Each part
+    of the record, the PID's returns and the MPC's, carries a fingerprint of
+    the environment's modules, that part's controller code and gains, and the
+    parameter values it was taken at; if any of those moved, that part's
+    numbers describe code that no longer exists and the right answer is to
+    refuse them, not to average them.
 
     Comments and docstrings are excluded from the fingerprint, so editing prose
     does not send anyone off to spend forty minutes of CPU.
@@ -224,16 +225,21 @@ def test_recorded_baseline_still_describes_this_tree(name):
     assert name in recorded, (
         f"{name}: no recorded baseline. Run "
         f"`uv run python scripts/record_baselines.py --envs {name}` and commit "
-        f"src/target_gym/data/baseline_returns.json."
+        f"src/target_gym/data/baseline_returns/{name}.json."
     )
-    current = baseline_fingerprint(spec)
-    assert recorded[name]["fingerprint"] == current, (
-        f"{name}: the recorded baseline was taken against different code "
-        f"(recorded {recorded[name]['fingerprint']}, current {current}). Its "
-        f"physics, controllers, gains or parameters have changed since, so its "
-        f"numbers no longer say anything about this tree. Re-measure with "
-        f"`uv run python scripts/record_baselines.py --envs {name}` and commit "
-        f"the result with the change that invalidated it."
+    stale = {
+        part: (recorded[name].get(f"{part}_fingerprint"), current)
+        for part, current in fingerprints(spec).items()
+        if recorded[name].get(f"{part}_fingerprint") != current
+    }
+    assert not stale, (
+        f"{name}: the recorded baseline's {' and '.join(stale)} part was taken "
+        f"against different code (recorded, current: {stale}). Its physics, "
+        f"controllers, gains or parameters have changed since, so those numbers "
+        f"no longer say anything about this tree. Re-measure with `uv run "
+        f"python scripts/record_baselines.py --envs {name}"
+        f"{f' --part {next(iter(stale))}' if len(stale) == 1 else ''}` and "
+        f"commit the result with the change that invalidated it."
     )
 
 

@@ -5,7 +5,7 @@ closer than about that step to the optimum, which left steady altitude and
 path offsets. Since the oracle audit (2026-10) the step decays from 0.05 to
 0.002 over each solve, with 200 iterations on all four tasks (the racetrack
 had 50 until it was measured at 200). The settings live in the package's
-``experts.py``, which is in the four tasks' baseline fingerprint, so these
+``oracle.py``, which is in the four tasks' oracle fingerprint, so these
 tests pin the registry's oracles to them. The floors were reset to the
 instrument resolutions with it (the -v3 tasks), and the oracle's best hold
 follows its recorded holds.
@@ -17,7 +17,7 @@ import pytest
 
 from target_gym import records, registry
 from target_gym.experts.mpc import plan_params
-from target_gym.plane3d.experts import make_plane3d_mpc, task_settings
+from target_gym.plane3d.oracle import make_plane3d_mpc, task_settings
 
 TASKS = ["plane3d_heading", "plane3d_circle", "plane3d_racetrack", "plane3d_figure8"]
 N_ITER = {

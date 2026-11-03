@@ -330,7 +330,7 @@ one cap (the `-v4` fix), drifting kilometres.
 
 ### The oracle
 
-The MPC slot holds a gradient MPC (`make_plane3d_mpc` in `experts.py`): it
+The MPC slot holds a gradient MPC (`make_plane3d_mpc` in `oracle.py`): it
 differentiates `step_env` over a 30-step horizon and descends the reward, on
 params with the turbulence zeroed, so it plans on the mean wind. Its
 normalised step is also its resolution: it cannot place an action closer than

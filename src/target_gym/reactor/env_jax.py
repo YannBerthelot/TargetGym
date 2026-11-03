@@ -121,12 +121,13 @@ class Reactor(
             next_terminated = terminated | term
             return (next_state, next_reward, next_terms, next_terminated), None
 
-        zero_terms = {
-            k: jnp.float32(0.0) for k in compute_reward_terms(state, params, xp=jnp)
-        }
+        # The accumulators take the state's precision: float32 as scored, and
+        # float64 under ``enable_x64`` for a planner that rolls the plant so.
+        zero = jnp.zeros((), jnp.result_type(state.n))
+        zero_terms = {k: zero for k in compute_reward_terms(state, params, xp=jnp)}
         (new_state, reward, terms, terminated), _ = jax.lax.scan(
             sub_step,
-            (state, jnp.float32(0.0), zero_terms, jnp.bool_(False)),
+            (state, zero, zero_terms, jnp.bool_(False)),
             xs=None,
             length=CONTROL_PERIOD,
         )
@@ -226,19 +227,21 @@ class Reactor(
         )
         initial_I_hat, initial_Xe_hat = steady_state_xenon(n_recent, params)
 
+        # The draw's precision: float32 as scored, float64 under enable_x64.
+        dtype = initial_n.dtype
         state = ReactorState(
             time=0,
             physics_time=0,
             n=initial_n,
             C=initial_C,
-            T_fuel=jnp.asarray(params.initial_T_fuel, dtype=jnp.float32),
-            T_coolant=jnp.asarray(params.initial_T_coolant, dtype=jnp.float32),
-            I_hat=jnp.asarray(initial_I_hat, dtype=jnp.float32),
-            Xe_hat=jnp.asarray(initial_Xe_hat, dtype=jnp.float32),
+            T_fuel=jnp.asarray(params.initial_T_fuel, dtype=dtype),
+            T_coolant=jnp.asarray(params.initial_T_coolant, dtype=dtype),
+            I_hat=jnp.asarray(initial_I_hat, dtype=dtype),
+            Xe_hat=jnp.asarray(initial_Xe_hat, dtype=dtype),
             target_n=initial_target,
             demand_key=demand_key,
-            rho_ext=jnp.zeros((), dtype=jnp.float32),
-            rho_ext_cmd=jnp.asarray(0.0, dtype=jnp.float32),
+            rho_ext=jnp.zeros((), dtype=dtype),
+            rho_ext_cmd=jnp.asarray(0.0, dtype=dtype),
         )
 
         obs = self.get_obs(state)

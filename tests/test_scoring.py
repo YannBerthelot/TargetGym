@@ -225,11 +225,26 @@ def test_the_building_settles_within_its_ceiling():
     assert scoring.settle_band("hvac", params) == scoring.ceiling("hvac", params)
 
 
-def test_every_environment_has_a_settle_no_shorter_than_its_measured_ones():
-    rows = records.load("hold_measurements")
+def test_every_environment_is_scored_with_the_settle_its_rows_were():
+    """S is a per-task constant, frozen at the slower of the shipped
+    controllers' measured settles as they stood on 2026-11-03, so every
+    recorded protocol row was scored with it (CONTRIBUTING.md, "Frozen
+    scoring constants")."""
+    rows = records.load("protocol_results")
     for name in REGISTRY:
-        measured = [rows[name][k]["settle"] for k in ("pid", "mpc") if k in rows[name]]
-        assert scoring.fixed_settle(name) >= max(measured, default=0), name
+        assert scoring.fixed_settle(name) == rows[name]["settle"], name
+
+
+def test_a_re_measured_hold_does_not_move_the_settle(tmp_path, monkeypatch):
+    """The hold rows are measurements, reported only: re-measuring a
+    controller's settle leaves S where it was."""
+    before = {name: scoring.fixed_settle(name) for name in REGISTRY}
+    rows = records.load("hold_measurements")
+    monkeypatch.setattr(records, "DATA", tmp_path)
+    for name, row in rows.items():
+        slower = {**row["pid"], "settle": 2.0 * before[name] + 10.0}
+        records.write("hold_measurements", name, {**row, "pid": slower})
+    assert {name: scoring.fixed_settle(name) for name in REGISTRY} == before
 
 
 def test_score_policy_runs_the_expert_on_the_same_seeds():

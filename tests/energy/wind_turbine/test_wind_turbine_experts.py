@@ -16,7 +16,7 @@ import pytest
 
 from target_gym import registry
 from target_gym.energy.wind_turbine.env import electrical_power, omega_rated
-from target_gym.energy.wind_turbine.experts import (
+from target_gym.energy.wind_turbine.oracle import (
     WindTurbineNewtonPI,
     make_wind_turbine_gradient_mpc,
 )

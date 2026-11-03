@@ -6,6 +6,11 @@
 # one to two hours; here it is one job per environment, all at once, on free
 # runners (the repository is public).
 #
+# A row has two parts, the PID's and the MPC's, each with its own fingerprint
+# (src/target_gym/provenance.py), and a job records only its environment's
+# stale parts: an expert retune re-records PIDs in minutes, and leaves the
+# MPCs' rows, the hours of the bill, as they were.
+#
 # Three triggers:
 #   - the `re-record` label on a pull request records every environment whose
 #     row is stale on that branch and commits the rows to it, so the PR's
@@ -73,9 +78,11 @@ jobs:
       env:
         NAMED: ${{ inputs.envs }}
         EVENT: ${{ github.event_name }}
+      # A JSON list of jobs, {"env": name, "parts": "expert oracle"}: the
+      # named environments in full, or the stale parts of each.
       run: |
         if [ -n "$NAMED" ]; then
-          envs=$(python3 -c 'import json, sys; print(json.dumps(sys.argv[1:]))' $NAMED)
+          envs=$(python3 -c 'import json, sys; print(json.dumps([{"env": e, "parts": "expert oracle"} for e in sys.argv[1:]]))' $NAMED)
         elif [ "$EVENT" = schedule ]; then
           envs=$(uv run python scripts/stale_records.py list --all)
         else
@@ -94,7 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: ${{ fromJSON(needs.plan.outputs.envs) }}
+        job: ${{ fromJSON(needs.plan.outputs.envs) }}
     steps:
     - uses: actions/checkout@v4
     - uses: astral-sh/setup-uv@v5
@@ -103,16 +110,21 @@ jobs:
         enable-cache: true
         cache-dependency-glob: "uv.lock"
     - run: uv sync --frozen
-    - name: Record and score
+    - name: Record and score the stale parts
       env:
-        ENV_NAME: ${{ matrix.env }}
+        ENV_NAME: ${{ matrix.job.env }}
+        PARTS: ${{ matrix.job.parts }}
       run: |
-        uv run python scripts/record_baselines.py --envs "$ENV_NAME"
-        uv run python scripts/evaluate_baselines.py --envs "$ENV_NAME"
+        case "$PARTS" in
+          expert|oracle) part="--part $PARTS" ;;
+          *) part= ;;
+        esac
+        uv run python scripts/record_baselines.py --envs "$ENV_NAME" $part
+        uv run python scripts/evaluate_baselines.py --envs "$ENV_NAME" $part
         uv run python scripts/stale_records.py extract "$ENV_NAME" rows
     - uses: actions/upload-artifact@v4
       with:
-        name: rows-${{ matrix.env }}
+        name: rows-${{ matrix.job.env }}
         path: rows/
         retention-days: 7
 

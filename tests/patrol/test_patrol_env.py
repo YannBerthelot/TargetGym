@@ -231,3 +231,28 @@ class TestExpert:
     def test_expert_never_collides(self):
         min_sep = min(self._settled_error(0.002, s)[1] for s in range(3))
         assert min_sep > PatrolParams().min_separation
+
+
+def test_retuning_the_heading_expert_leaves_the_scripted_lead_alone(monkeypatch):
+    """The lead is part of the plant: it flies the 3D heading gains as tuned
+    on 2026-11-03, held as task constants, so a retune of the 3D heading
+    expert (pid_gains.json's ``plane3d_heading``) does not change it."""
+    from target_gym.experts import pid
+
+    def lead_after_two_steps():
+        env = PlanePatrol()
+        params = env.default_params
+        _, state = env.reset_env(jax.random.PRNGKey(0), params)
+        for t in range(2):
+            _, state, *_ = env.step_env(
+                jax.random.PRNGKey(t), state, jnp.zeros(3), params
+            )
+        return state.lead
+
+    before = lead_after_two_steps()
+    gains = pid.load_gains()
+    retuned = {**gains, "plane3d_heading": {**gains["plane3d_heading"], "power": 0.9}}
+    monkeypatch.setattr(pid, "load_gains", lambda: retuned)
+    after = lead_after_two_steps()
+    for a, b in zip(jax.tree.leaves(before), jax.tree.leaves(after)):
+        np.testing.assert_array_equal(a, b)

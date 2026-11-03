@@ -26,7 +26,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-import target_gym.compressor_surge.experts as experts_mod
+import target_gym.compressor_surge.oracle as oracle_mod
 import target_gym.experts.pid as pid_mod
 from target_gym import records
 from target_gym.compressor_surge.env import (
@@ -53,10 +53,6 @@ from target_gym.compressor_surge.experts import (
     GUARD_POINTS,
     GUARD_TRAVEL_STEPS,
     HELD_GAINS,
-    MPC_HORIZON,
-    MPC_SLACK_ACTIVE,
-    MPC_SUBSTEPS,
-    MPC_TERMINAL_WEIGHT,
     SURGE_CONTROL_LINE,
     TUNED_GAINS,
     CompressorSurgePair,
@@ -68,16 +64,22 @@ from target_gym.compressor_surge.experts import (
     closed_loop_decay,
     commands_from_raw,
     load_gains,
-    make_compressor_surge_mpc,
     make_compressor_surge_pid,
-    mpc_step,
     pair_init,
     pair_step,
-    preview,
     raw_from_commands,
     settled_point,
-    soft_min,
     surge_margin_from_obs,
+)
+from target_gym.compressor_surge.oracle import (
+    MPC_HORIZON,
+    MPC_SLACK_ACTIVE,
+    MPC_SUBSTEPS,
+    MPC_TERMINAL_WEIGHT,
+    make_compressor_surge_mpc,
+    mpc_step,
+    preview,
+    soft_min,
 )
 
 try:
@@ -170,7 +172,7 @@ def test_gains_are_read_under_the_task_key(monkeypatch, params):
     """The factory reads ``pid._gains_cache["compressor_surge"]`` at call
     time (the tuner patches it), skips the ``note``, and nothing else in
     ``pid_gains.json`` starts with the task's name, since
-    ``baseline_fingerprint`` collects gains by that prefix."""
+    ``expert_fingerprint`` collects gains by that prefix."""
     stored = pid_mod.load_gains()
     # 1 kPa under the setpoint on the control line at 90 % speed: the speed
     # loop acts through kp_speed.
@@ -761,8 +763,8 @@ class _Solves:
     on request, reports the next solve failed or capped."""
 
     def __init__(self, monkeypatch):
-        self.real, self.calls, self.next = experts_mod._plan, [], None
-        monkeypatch.setattr(experts_mod, "_plan", self)
+        self.real, self.calls, self.next = oracle_mod._plan, [], None
+        monkeypatch.setattr(oracle_mod, "_plan", self)
 
     def __call__(self, state, u_prev, z0, lam0, w0, tol, **kw):
         self.calls.append(

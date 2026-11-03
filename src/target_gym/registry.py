@@ -116,13 +116,17 @@ class EnvSpec:
         ``src/target_gym/data/pid_gains.json``.  ``None`` means the controller
         reads no single entry there: its gains are stored per sub-loop, or kept
         in its package's ``experts.py`` (the 3D aircraft's guidance laws).
-        ``provenance.baseline_fingerprint`` hashes this key's entry.
+        ``provenance.expert_fingerprint`` hashes this key's entry.
     gains_keys:
-        Other keys of ``pid_gains.json`` this task's baseline and protocol
-        records depend on, beyond those starting with its name and
-        ``tuned_gains_key``; without them a retune of that key would leave the
-        records looking fresh (``plane_sine`` declares ``plane_cascaded``).
-        Feeds the baseline fingerprint only, not the version stamp.
+        Other keys of ``pid_gains.json`` this task's expert rows depend on,
+        beyond those starting with its name and ``tuned_gains_key``; without
+        them a retune of that key would leave the records looking fresh.
+        Feeds the expert fingerprint only, not the version stamp.
+    oracle_reads, oracle_gains_keys:
+        The expert code (files relative to ``src/target_gym``) and the
+        ``pid_gains.json`` keys the task's oracle still reads, hashed into its
+        oracle fingerprint, so an expert retune stales those oracle rows too.
+        Empty once an oracle stands on its own.
     baselines_note:
         Set when ``make_pid``/``make_mpc`` are ``None``: a short explanation
         of why, surfaced by the baseline-coverage test so a missing expert is
@@ -180,9 +184,11 @@ class EnvSpec:
     # ``src/target_gym/data/baseline_returns_v1.json``.
     version: int = 2
     tuned_gains_key: str | None = None
-    #: Further ``pid_gains.json`` keys the task reads, hashed into its
-    #: baseline fingerprint (``provenance.gains_entries``).
+    #: Further ``pid_gains.json`` keys the task's expert reads, hashed into its
+    #: expert fingerprint (``provenance.gains_entries``).
     gains_keys: tuple[str, ...] = ()
+    oracle_reads: tuple[str, ...] = ()
+    oracle_gains_keys: tuple[str, ...] = ()
     baselines_note: str | None = None
     expert_degraded: str | None = None
     mpc_degraded: str | None = None
@@ -437,7 +443,7 @@ class _LazyParams:
 def _pid(factory_name: str, module: str) -> Callable[[], Any]:
     # Every task's PID lives in its own package's ``experts`` module, as a
     # factory returning a pure ``Controller``: experts/pid.py holds only the
-    # shared core and is in every task's baseline fingerprint, so a controller
+    # shared core and is in every task's expert fingerprint, so a controller
     # kept there would stale all of them. ``make()`` is the host form the
     # baselines are scored with; ``make.controller()`` the traceable one.
     def controller():
@@ -455,9 +461,10 @@ def _pid(factory_name: str, module: str) -> Callable[[], Any]:
 
 
 def _mpc(factory_name: str, module: str) -> Callable[[Any, Any], Any]:
-    # Every task's oracle lives in its own package's ``experts`` module, so
-    # changing one re-records only that package's tasks. experts/mpc.py holds
-    # the shared machinery and is in every task's baseline fingerprint.
+    # Every task's oracle lives in its own package's ``oracle`` module, so
+    # changing one re-records only the oracle rows of that package's tasks.
+    # experts/mpc.py holds the shared machinery and is in every task's
+    # oracle fingerprint.
     def make(env, params, **kwargs):
         from importlib import import_module
 
@@ -478,8 +485,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         env_factory=_plane,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
-        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.experts"),
+        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.oracle"),
         tuned_gains_key="plane",
+        oracle_reads=("experts/pid.py",),
+        oracle_gains_keys=("plane_cascaded",),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -493,10 +502,12 @@ _SPECS: tuple[EnvSpec, ...] = (
         env_factory=_plane_energy,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
-        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.experts"),
+        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.oracle"),
         # Gains are the altitude-hold task's, deliberately not re-tuned here,
         # so the PID stays an honest reference for whether the trade pays.
         tuned_gains_key="plane",
+        oracle_reads=("experts/pid.py",),
+        oracle_gains_keys=("plane_energy_cascaded",),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -508,8 +519,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         env_factory=_plane_sine,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
-        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.experts"),
+        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.oracle"),
         tuned_gains_key="plane",
+        oracle_reads=("experts/pid.py",),
+        oracle_gains_keys=("plane_sine_cascaded",),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -522,7 +535,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_plane3d_heading_pid_controller", module="target_gym.plane3d.experts"
         ),
-        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
+        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
         tuned_gains_key="plane3d_heading",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
@@ -541,7 +554,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_plane3d_circle_pid_controller", module="target_gym.plane3d.experts"
         ),
-        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
+        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -559,7 +572,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_plane3d_racetrack_pid_controller", module="target_gym.plane3d.experts"
         ),
-        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
+        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -577,7 +590,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_plane3d_figure8_pid_controller", module="target_gym.plane3d.experts"
         ),
-        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.experts"),
+        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -594,15 +607,16 @@ _SPECS: tuple[EnvSpec, ...] = (
         env_factory=_patrol,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
         make_pid=_pid("make_patrol_pid_controller", module="target_gym.patrol.experts"),
-        make_mpc=_mpc("make_patrol_mpc", module="target_gym.patrol.experts"),
-        # The oracle and the lead fly the 3D heading autopilot. The expert's
-        # gains are in its experts.py, as the 3D aircraft's are.
-        gains_keys=("plane3d_heading",),
+        make_mpc=_mpc("make_patrol_mpc", module="target_gym.patrol.oracle"),
+        # The oracle's twin law flies the 3D heading PID, on the lead's gains
+        # (task constants, patrol/env_jax.py). The expert's gains are in its
+        # experts.py, as the 3D aircraft's are.
+        oracle_reads=("experts/pid.py",),
         noise_fields=("turbulence_sigma",),
         # The 3D aircraft it flies, and the heading PID its lead flies on
         # (physics here, so declared for the version stamp too); the
         # autopilot and TECS its expert flies under the formation hold (experts
-        # files, so in the baseline fingerprint only).
+        # files, so in the expert fingerprint only).
         fingerprint_sources=(
             "plane/dynamics.py",
             "plane3d/dynamics.py",
@@ -623,9 +637,9 @@ _SPECS: tuple[EnvSpec, ...] = (
             module="target_gym.patrol.experts",
         ),
         make_mpc=_mpc(
-            "make_patrol_bearing_only_mpc", module="target_gym.patrol.experts"
+            "make_patrol_bearing_only_mpc", module="target_gym.patrol.oracle"
         ),
-        gains_keys=("plane3d_heading",),
+        oracle_reads=("experts/pid.py",),
         baselines_note=(
             "The PID is a lead-state estimator feeding the same formation "
             "hold the full-observation variant uses. Range with azimuth and "
@@ -663,7 +677,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_cstr_pid_controller", module="target_gym.pc_gym.cstr.experts"
         ),
-        make_mpc=_mpc("make_cstr_mpc", module="target_gym.pc_gym.cstr.experts"),
+        make_mpc=_mpc("make_cstr_mpc", module="target_gym.pc_gym.cstr.oracle"),
         # 150 steps, over twice the 67 steps the SIMC cascade takes to come
         # within twice the level it holds. At 100 the scored hold was the last
         # third.
@@ -680,7 +694,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             module="target_gym.pc_gym.first_order.experts",
         ),
         make_mpc=_mpc(
-            "make_first_order_mpc", module="target_gym.pc_gym.first_order.experts"
+            "make_first_order_mpc", module="target_gym.pc_gym.first_order.oracle"
         ),
         # 150 steps, twice the 63 steps the SIMC PI takes to come within twice
         # the level it holds. At 100 the scored hold was the last 37 steps.
@@ -697,7 +711,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             module="target_gym.pc_gym.four_tank.experts",
         ),
         make_mpc=_mpc(
-            "make_four_tank_mpc", module="target_gym.pc_gym.four_tank.experts"
+            "make_four_tank_mpc", module="target_gym.pc_gym.four_tank.oracle"
         ),
         # 1200 steps, twice the 570 s the decoupled SIMC expert takes to bring
         # both levels within the 1 mm transmitter resolution: the plant is
@@ -716,7 +730,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             module="target_gym.pc_gym.ph_neutralization.experts",
         ),
         make_mpc=_mpc(
-            "make_ph_mpc", module="target_gym.pc_gym.ph_neutralization.experts"
+            "make_ph_mpc", module="target_gym.pc_gym.ph_neutralization.oracle"
         ),
         # 300 steps = 25 min ~ 17 residence times, enough for the buffer
         # disturbance to move the operating point.
@@ -738,7 +752,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             module="target_gym.pc_gym.distillation.experts",
         ),
         make_mpc=_mpc(
-            "make_distillation_mpc", module="target_gym.pc_gym.distillation.experts"
+            "make_distillation_mpc", module="target_gym.pc_gym.distillation.oracle"
         ),
         # 200 min ~ one dominant time constant. The column is the slowest
         # environment per step (41 states, 16 substeps for stability), so the
@@ -764,7 +778,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         # 13.3 h at dt=30 s, 12.1 tau
         make_mpc=_mpc(
-            "make_glass_furnace_mpc", module="target_gym.glass_furnace.experts"
+            "make_glass_furnace_mpc", module="target_gym.glass_furnace.oracle"
         ),
         tuned_gains_key="glass_furnace",
         disturbance_fields=("m_pull_disturbance",),
@@ -781,7 +795,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_reactor_pid_controller", module="target_gym.reactor.experts"
         ),
-        make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.experts"),
+        make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.oracle"),
         tuned_gains_key="reactor",
         version=3,
         noise_fields=("demand_sigma",),
@@ -792,7 +806,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         env_factory=_hvac,
         params_cls=_LazyParams("target_gym.hvac.env", "HVACParams"),
         make_pid=_pid("make_hvac_pid_controller", module="target_gym.hvac.experts"),
-        make_mpc=_mpc("make_hvac_mpc", module="target_gym.hvac.experts"),
+        make_mpc=_mpc("make_hvac_mpc", module="target_gym.hvac.oracle"),
         # 720 steps at dt = 900 s is 7.5 days, so fifteen setback recoveries
         # and as many solar cycles, which is what distinguishes controllers
         # here.
@@ -809,7 +823,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_cement_kiln_pid_controller", module="target_gym.cement_kiln.experts"
         ),
-        make_mpc=_mpc("make_cement_kiln_mpc", module="target_gym.cement_kiln.experts"),
+        make_mpc=_mpc("make_cement_kiln_mpc", module="target_gym.cement_kiln.oracle"),
         # 700 steps = 5.8 hours at dt = 30 s, about fourteen transport delays,
         # so a controller lives with the consequences of its own fuel changes
         # many times over.
@@ -827,7 +841,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_boiler_drum_pid_controller", module="target_gym.boiler_drum.experts"
         ),
-        make_mpc=_mpc("make_boiler_drum_mpc", module="target_gym.boiler_drum.experts"),
+        make_mpc=_mpc("make_boiler_drum_mpc", module="target_gym.boiler_drum.oracle"),
         # 400 steps = 800 s at dt = 2 s, about 20 times the ~35 s swell peak,
         # so a controller has to survive many inverse-response transients.
         tuned_gains_key="boiler_drum",
@@ -848,10 +862,12 @@ _SPECS: tuple[EnvSpec, ...] = (
             module="target_gym.energy.wind_turbine.experts",
         ),
         make_mpc=_mpc(
-            "make_wind_turbine_mpc", module="target_gym.energy.wind_turbine.experts"
+            "make_wind_turbine_mpc", module="target_gym.energy.wind_turbine.oracle"
         ),
         # 400 steps = 100 s ~ 7 rotor time constants.
         tuned_gains_key="wind_turbine",
+        oracle_reads=("energy/wind_turbine/experts.py", "experts/pid.py"),
+        oracle_gains_keys=("wind_turbine",),
         noise_fields=("turbulence_std",),
         disturbance_fields=("v_wind",),
     ),
@@ -863,7 +879,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_battery_pid_controller", module="target_gym.energy.battery.experts"
         ),
-        make_mpc=_mpc("make_battery_mpc", module="target_gym.energy.battery.experts"),
+        make_mpc=_mpc("make_battery_mpc", module="target_gym.energy.battery.oracle"),
         # 360 steps = 30 min, a real fraction of the ~96 min it takes to
         # traverse the usable state-of-charge range at full power.
         tuned_gains_key="battery",
@@ -886,7 +902,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             module="target_gym.pc_gym.unstable_cstr.experts",
         ),
         make_mpc=_mpc(
-            "make_unstable_cstr_mpc", module="target_gym.pc_gym.unstable_cstr.experts"
+            "make_unstable_cstr_mpc", module="target_gym.pc_gym.unstable_cstr.oracle"
         ),
         # v3: the oracle's best hold, rho_floor_tracking and rho_floor, re-measured
         # for the JAX oracle (2.23e-6 mol/L against the CasADi one's 6.29e-6).
@@ -894,6 +910,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 1200 steps = 60 min at 3 s: six 10-minute blocks, with no
         # effectiveness_overrides.
         tuned_gains_key="unstable_cstr",
+        oracle_reads=("pc_gym/unstable_cstr/experts.py", "experts/pid.py"),
+        oracle_gains_keys=("unstable_cstr",),
         disturbance_fields=("Ti_dev",),
         noise_fields=("Ti_sigma",),
         # The balances and the ten parameter values are imported from cstr, so an
@@ -912,11 +930,13 @@ _SPECS: tuple[EnvSpec, ...] = (
             module="target_gym.compressor_surge.experts",
         ),
         make_mpc=_mpc(
-            "make_compressor_surge_mpc", module="target_gym.compressor_surge.experts"
+            "make_compressor_surge_mpc", module="target_gym.compressor_surge.oracle"
         ),
         # 1200 steps = 120 s at 0.1 s: four 30-second setpoint blocks and six
         # 20-second demand blocks, with no effectiveness_overrides.
         tuned_gains_key="compressor_surge",
+        oracle_reads=("compressor_surge/experts.py", "experts/pid.py"),
+        oracle_gains_keys=("compressor_surge",),
         # The OU deviation of the consumers' opening, zero-mean;
         # demand_sigma is its stationary sd.
         disturbance_fields=("demand_dev",),
@@ -932,10 +952,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_formation_pid_controller", module="target_gym.formation.experts"
         ),
-        make_mpc=_mpc("make_formation_mpc", module="target_gym.formation.experts"),
+        make_mpc=_mpc("make_formation_mpc", module="target_gym.formation.oracle"),
         # The oracle's lead autopilot reads plane3d_heading's gains. The
         # expert's are in the experts.py files, as the 3D aircraft's are.
-        gains_keys=("plane3d_heading",),
+        oracle_reads=("experts/pid.py",),
+        oracle_gains_keys=("plane3d_heading",),
         baselines_note=(
             "The PID flies the lead seat as a formation lead: the 3D heading "
             "task's course hold and pitch on height, aimed at the heading the "
@@ -950,11 +971,12 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("turbulence_sigma",),
         # The aircraft and the patrol's geometry and observation, and the
         # controllers the PID team and the oracle reuse: the patrol's, the 3D
-        # autopilot and TECS (experts files, so in the baseline fingerprint
-        # only).
+        # autopilot and TECS (controller files, so in the expert or oracle
+        # fingerprint only).
         fingerprint_sources=(
             "patrol/env.py",
             "patrol/experts.py",
+            "patrol/oracle.py",
             "plane3d/env.py",
             "plane3d/dynamics.py",
             "plane/dynamics.py",

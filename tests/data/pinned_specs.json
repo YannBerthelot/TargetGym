@@ -20,7 +20,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.plane.experts",
+      "target_gym.plane.oracle",
       "make_plane_mpc"
     ],
     "scored_overrides": {
@@ -64,7 +64,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.plane.experts",
+      "target_gym.plane.oracle",
       "make_plane_mpc"
     ],
     "scored_overrides": {
@@ -117,7 +117,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.plane.experts",
+      "target_gym.plane.oracle",
       "make_plane_mpc"
     ],
     "scored_overrides": {
@@ -168,7 +168,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.plane3d.experts",
+      "target_gym.plane3d.oracle",
       "make_plane3d_mpc"
     ],
     "scored_overrides": {
@@ -217,7 +217,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.plane3d.experts",
+      "target_gym.plane3d.oracle",
       "make_plane3d_mpc"
     ],
     "scored_overrides": {
@@ -266,7 +266,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.plane3d.experts",
+      "target_gym.plane3d.oracle",
       "make_plane3d_mpc"
     ],
     "scored_overrides": {
@@ -315,7 +315,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.plane3d.experts",
+      "target_gym.plane3d.oracle",
       "make_plane3d_mpc"
     ],
     "scored_overrides": {
@@ -363,16 +363,14 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.patrol.experts",
+      "target_gym.patrol.oracle",
       "make_patrol_mpc"
     ],
     "scored_overrides": {
       "max_steps_in_episode": 200
     },
     "tuned_gains_key": null,
-    "gains_keys": [
-      "plane3d_heading"
-    ],
+    "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -404,16 +402,14 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.patrol.experts",
+      "target_gym.patrol.oracle",
       "make_patrol_bearing_only_mpc"
     ],
     "scored_overrides": {
       "max_steps_in_episode": 200
     },
     "tuned_gains_key": null,
-    "gains_keys": [
-      "plane3d_heading"
-    ],
+    "gains_keys": [],
     "baselines_note": "The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity from the follower's own and the change in the relative position, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.",
     "disturbance_fields": [],
     "disturbance_overrides": {},
@@ -445,7 +441,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.pc_gym.cstr.experts",
+      "target_gym.pc_gym.cstr.oracle",
       "make_cstr_mpc"
     ],
     "scored_overrides": {},
@@ -480,7 +476,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.pc_gym.first_order.experts",
+      "target_gym.pc_gym.first_order.oracle",
       "make_first_order_mpc"
     ],
     "scored_overrides": {},
@@ -515,7 +511,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.pc_gym.four_tank.experts",
+      "target_gym.pc_gym.four_tank.oracle",
       "make_four_tank_mpc"
     ],
     "scored_overrides": {},
@@ -550,7 +546,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.pc_gym.ph_neutralization.experts",
+      "target_gym.pc_gym.ph_neutralization.oracle",
       "make_ph_mpc"
     ],
     "scored_overrides": {},
@@ -589,7 +585,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.pc_gym.distillation.experts",
+      "target_gym.pc_gym.distillation.oracle",
       "make_distillation_mpc"
     ],
     "scored_overrides": {},
@@ -628,7 +624,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.glass_furnace.experts",
+      "target_gym.glass_furnace.oracle",
       "make_glass_furnace_mpc"
     ],
     "scored_overrides": {},
@@ -667,7 +663,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.reactor.experts",
+      "target_gym.reactor.oracle",
       "make_reactor_mpc"
     ],
     "scored_overrides": {
@@ -706,7 +702,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.hvac.experts",
+      "target_gym.hvac.oracle",
       "make_hvac_mpc"
     ],
     "scored_overrides": {},
@@ -745,7 +741,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.cement_kiln.experts",
+      "target_gym.cement_kiln.oracle",
       "make_cement_kiln_mpc"
     ],
     "scored_overrides": {},
@@ -784,7 +780,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.boiler_drum.experts",
+      "target_gym.boiler_drum.oracle",
       "make_boiler_drum_mpc"
     ],
     "scored_overrides": {},
@@ -823,7 +819,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.energy.wind_turbine.experts",
+      "target_gym.energy.wind_turbine.oracle",
       "make_wind_turbine_mpc"
     ],
     "scored_overrides": {},
@@ -862,7 +858,7 @@
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
-      "target_gym.energy.battery.experts",
+      "target_gym.energy.battery.oracle",
       "make_battery_mpc"
     ],
     "scored_overrides": {},

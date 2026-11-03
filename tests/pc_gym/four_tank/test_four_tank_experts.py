@@ -15,7 +15,7 @@ import pytest
 
 from target_gym import eval as E
 from target_gym.experts.mpc import plan_params, window_weights
-from target_gym.pc_gym.four_tank.experts import make_four_tank_mpc
+from target_gym.pc_gym.four_tank.oracle import make_four_tank_mpc
 from target_gym.registry import REGISTRY
 
 SPEC = REGISTRY["four_tank"]

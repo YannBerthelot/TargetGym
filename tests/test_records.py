@@ -167,3 +167,29 @@ def test_a_re_record_within_the_tolerance_commits_nothing(store, tmp_path, capsy
 
     assert _snapshot(store) == before
     assert capsys.readouterr().out.split() == []
+
+
+def test_re_recording_one_part_keeps_the_other_parts_rows():
+    """An expert re-record replaces the expert's rows and fingerprint and the
+    keys both parts share, and leaves the oracle's as recorded; the other way
+    round too (``records.PARTS``)."""
+    row = {
+        "expert_fingerprint": "e1",
+        "oracle_fingerprint": "o1",
+        "pid_returns": [1.0],
+        "mpc_returns": [2.0],
+        "mpc_trips": 0,
+        "seconds": 900.0,
+        "steps": 100,
+    }
+    fresh = {"expert_fingerprint": "e2", "pid_returns": [1.5], "steps": 120}
+    assert records.with_part(row, fresh, "expert") == {**row, **fresh}
+    # The part re-recorded is replaced whole: a solver count the new run
+    # does not report is not carried over from the old one.
+    fresh = {"oracle_fingerprint": "o2", "mpc": {"gain": 3.0}}
+    old = {"expert_fingerprint": "e1", "pid": {}, "mpc": {}, "solver_calls": 5}
+    assert records.with_part(old, fresh, "oracle") == {
+        "expert_fingerprint": "e1",
+        "pid": {},
+        **fresh,
+    }

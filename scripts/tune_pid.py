@@ -839,7 +839,7 @@ def _controller_defaults(gains_key):
     import dataclasses
 
     if gains_key == "plane_cascaded":
-        from target_gym.plane.experts import PlaneCascadedPIDParams
+        from target_gym.plane.oracle import PlaneCascadedPIDParams
 
         return {
             f.name: float(f.default)
@@ -983,8 +983,8 @@ def _tune_aircraft_search(
 GAINS_KEY = {"plane": "plane_cascaded"}
 
 # Copies of a tuned entry, written with it. The plane_sine and plane_energy
-# oracles read their own copy of plane_cascaded (plane/experts.py), a key
-# their baseline fingerprint collects, and tests/plane/test_plane_experts.py
+# oracles read their own copy of plane_cascaded (plane/oracle.py), a key
+# their oracle fingerprint collects, and tests/plane/test_plane_experts.py
 # holds each copy equal to it, so a retune that wrote plane_cascaded alone
 # left that test failing until the copies were edited by hand.
 GAINS_COPIES = {"plane_cascaded": ("plane_sine_cascaded", "plane_energy_cascaded")}

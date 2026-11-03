@@ -98,6 +98,8 @@ jobs:
         enable-cache: true
         cache-dependency-glob: "uv.lock"
     - run: uv sync --frozen --group dev
+    # Both parts of every row, the expert's and the oracle's, against their
+    # own fingerprints (tests marked records).
     - name: Check every recorded row describes this tree
       run: uv run pytest tests/ -q -n auto -m records
     - name: Run the large closed-loop tests

@@ -7,10 +7,10 @@ before any task was added) and their order, since a task's position in
 REGISTRY is its benchmark seed index. New tasks are appended after them.
 
 Every task builds its oracle (the MPC slot) from its own package's
-``experts.py``; ``experts/mpc.py`` holds only the shared machinery, and it is
-in every task's baseline fingerprint. Every task keeps its PID there too, as a
-pure ``Controller`` (``experts/pid.py`` holds only the shared core and is also
-in every baseline fingerprint). A task added after the 21 has a name that
+``oracle.py``; ``experts/mpc.py`` holds only the shared machinery, and it is
+in every task's oracle fingerprint. Every task keeps its PID in its package's
+``experts.py``, as a pure ``Controller`` (``experts/pid.py`` holds only the
+shared core and is in every expert fingerprint). A task added after the 21 has a name that
 cannot collide with another task's gains keys, ships as ``-v2`` with a ``compute_reward_v1`` of its own, has a
 hold row, and, if it ships a PID, has a row in ``TUNERS`` in
 scripts/tune_pid.py or names the tuning script of its gains in code. The
@@ -19,8 +19,8 @@ while none exists.
 
 For every task, the 21 included: any physics it imports from another
 package is declared in ``fingerprint_sources``, each gains key a spec declares
-in ``gains_keys`` exists, and the baseline fingerprint covers the task's
-``tuned_gains_key``, its declared keys and its burn-in.
+in ``gains_keys`` exists, and the expert fingerprint covers the task's
+``tuned_gains_key``, its declared keys and, with the oracle's, its burn-in.
 """
 
 from __future__ import annotations
@@ -169,7 +169,7 @@ def _package_dir(spec) -> pathlib.Path:
 
 
 def test_a_new_name_is_no_prefix_of_another():
-    """Gains keys are collected by name prefix (``baseline_fingerprint`` takes
+    """Gains keys are collected by name prefix (``expert_fingerprint`` takes
     every key that starts with the task's name), and runners.py and
     measure_hold.py treat names starting with "plane" or "patrol" as aircraft.
     So a new name must not start with, or be the start of, any other
@@ -209,8 +209,8 @@ def test_a_new_task_ships_as_v2_with_its_own_v1_reward():
 
 def test_controllers_stay_out_of_the_shared_files():
     """A new task's controllers live in its own experts.py. experts/pid.py and
-    experts/mpc.py are in every task's baseline fingerprint, so a controller
-    added there would stale the records of all 21 (the baseline test is what
+    experts/mpc.py are in every task's expert or oracle fingerprint, so a
+    controller added there would stale the records of all 21 (the record test is what
     enforces that; this names the cause)."""
     shared = [SRC / "experts" / f for f in ("pid.py", "mpc.py", "__init__.py")]
     texts = {path: path.read_text() for path in shared}
@@ -239,7 +239,7 @@ _SHARED_MODULES = {
     # the episode scores.
     "target_gym.video",
 }
-# And, in experts*.py only, the shared controller code.
+# And, in experts*.py and oracle*.py only, the shared controller code.
 _CONTROLLER_MODULES = {
     "target_gym.experts",
     "target_gym.experts.pid",
@@ -274,12 +274,12 @@ def _may_import(module: str, package: str, allowed: set[str]) -> bool:
 def test_imports_stay_inside_the_fingerprint():
     """Imported code must be fingerprinted, so a task's package imports
     only itself, the shared plumbing and the modules its spec declares in
-    ``fingerprint_sources``, and every task's experts*.py imports only its
+    ``fingerprint_sources``, and every task's experts*.py and oracle*.py import only its
     own package, the shared plumbing, its declared sources and the shared
     controller code. Relative imports are refused because the check reads
-    absolute names only. A file not named experts* imports its package's controllers
+    absolute names only. Any other file imports its package's controllers
     only inside a function, as the env_jax files of the 21 do: the version
-    stamp leaves experts* out, so physics that depended on them could change
+    stamp leaves the controllers out, so physics that depended on them could change
     with no version bump."""
     problems = []
     seen = set()
@@ -293,7 +293,7 @@ def test_imports_stay_inside_the_fingerprint():
             if path.name.startswith("rendering") or path in seen:
                 continue
             seen.add(path)
-            is_experts = path.name.startswith("experts")
+            is_experts = path.name.startswith(("experts", "oracle"))
             allowed = _SHARED_MODULES | declared
             if is_experts:
                 allowed |= _CONTROLLER_MODULES
@@ -331,7 +331,10 @@ def test_imports_stay_inside_the_fingerprint():
                 if (
                     not is_experts
                     and not in_function
-                    and any(n.startswith(f"{package}.experts") for n in reached)
+                    and any(
+                        n.startswith((f"{package}.experts", f"{package}.oracle"))
+                        for n in reached
+                    )
                 ):
                     problems.append(
                         f"{where}: imports its package's controllers outside a "
@@ -367,14 +370,14 @@ DECLARED_BY_THE_21 = {
 }
 
 
-def test_controllers_are_in_the_baseline_fingerprint_only():
-    """A package's experts.py is in the baseline fingerprint of its tasks and
-    out of their version stamp, since retuning a controller does not change
-    the environment. The stamp is otherwise the baseline's file list, and the
-    21 declare no extra sources but the 3D aircraft's and patrol's
-    (``DECLARED_BY_THE_21``), so their stamps read the same files as before
-    their oracles moved out of experts/mpc.py, plus patrol's imports
-    (test_env_versions holds the stamps themselves)."""
+def test_controllers_are_in_their_parts_fingerprint_only():
+    """A package's experts.py is in the expert fingerprint of its tasks, its
+    oracle.py in the oracle fingerprint, and both out of their version stamp,
+    since retuning a controller does not change the environment. The stamp is
+    otherwise the package's file list, and the 21 declare no extra sources but
+    the 3D aircraft's and patrol's (``DECLARED_BY_THE_21``), so their stamps
+    read the same files as before their oracles moved out of experts/mpc.py,
+    plus patrol's imports (test_env_versions holds the stamps themselves)."""
     problems = []
     for s in registry.all_specs():
         sources = provenance._env_sources(s)
@@ -382,24 +385,26 @@ def test_controllers_are_in_the_baseline_fingerprint_only():
         declared = DECLARED_BY_THE_21.get(s.name, ())
         if s.name in PINNED_21 and s.fingerprint_sources != declared:
             problems.append(f"{s.name}: declares {s.fingerprint_sources}")
-        if stamped != [p for p in sources if not p.name.startswith("experts")]:
-            problems.append(f"{s.name}: the version stamp drops more than experts*")
-        experts = _package_dir(s) / "experts.py"
-        if experts.exists() and experts not in sources:
-            problems.append(f"{s.name}: experts.py is not in its baseline fingerprint")
+        controllers = ("experts", "oracle")
+        if stamped != [p for p in sources if not p.name.startswith(controllers)]:
+            problems.append(f"{s.name}: the version stamp drops more than controllers")
+        for name, part in (("experts.py", "expert"), ("oracle.py", "oracle")):
+            path = _package_dir(s) / name
+            if path.exists() and path not in getattr(provenance, f"{part}_sources")(s):
+                problems.append(f"{s.name}: {name} is not in its {part} fingerprint")
     assert not problems, "\n".join(problems)
 
 
 def test_every_oracle_lives_in_its_own_package():
-    """Each task's MPC slot is built from its own package's experts.py, so an
-    oracle change re-records only the tasks of that package. experts/mpc.py
+    """Each task's MPC slot is built from its own package's oracle.py, so an
+    oracle change re-records only the oracle rows of that package. experts/mpc.py
     keeps the shared machinery and no task's factory."""
     problems = []
     for s in registry.all_specs():
         if s.make_mpc is None:
             continue
         _, module, factory = _factory(s.make_mpc)
-        if module != f"{_package(s)}.experts":
+        if module != f"{_package(s)}.oracle":
             problems.append(f"{s.name}: make_mpc builds {factory} from {module}")
     tree = ast.parse((SRC / "experts" / "mpc.py").read_text())
     problems += [
@@ -527,14 +532,15 @@ def test_allowlists_name_real_tasks():
 
 
 def test_declared_sources_enter_both_fingerprints():
-    """A declared source is hashed into both fingerprints, and a declared file
+    """A declared source is hashed into every fingerprint, and a declared file
     that does not exist is an error, not a silent skip."""
     base = registry.REGISTRY["first_order"]
     declared = dataclasses.replace(base, fingerprint_sources=("pc_gym/cstr/env.py",))
     assert provenance._ROOT / "pc_gym/cstr/env.py" in provenance._env_sources(declared)
     for fingerprint in (
         provenance.environment_fingerprint,
-        provenance.baseline_fingerprint,
+        provenance.expert_fingerprint,
+        provenance.oracle_fingerprint,
     ):
         assert fingerprint(declared) != fingerprint(base), fingerprint.__name__
         typo = dataclasses.replace(base, fingerprint_sources=("no/such/file.py",))
@@ -554,18 +560,19 @@ def test_declared_gains_keys_exist():
     missing = [
         f"{s.name}: {key}"
         for s in registry.all_specs()
-        for key in s.gains_keys
+        for key in (*s.gains_keys, *s.oracle_gains_keys)
         if key not in gains
     ]
     assert not missing, f"declared gains keys not in pid_gains.json: {missing}"
 
 
-def test_the_baseline_fingerprint_covers_the_gains_a_task_reads():
-    """The fingerprint hashes the entries whose key starts with the task's
-    name, its ``tuned_gains_key``'s and its declared ``gains_keys``. It once
-    took only the first, so patrol (whose oracle and lead read
+def test_the_expert_fingerprint_covers_the_gains_a_task_reads():
+    """The expert fingerprint hashes the entries whose key starts with the
+    task's name, its ``tuned_gains_key``'s and its declared ``gains_keys``. It
+    once took only the first, so patrol (whose oracle and lead then read
     ``plane3d_heading``) could be retuned under a record that still looked
-    fresh."""
+    fresh. The lead now flies task constants, and nothing of patrol reads
+    the key."""
     gains = _gains()
     problems = []
     for s in registry.all_specs():
@@ -578,15 +585,16 @@ def test_the_baseline_fingerprint_covers_the_gains_a_task_reads():
                 f"{s.name}: hashes {sorted(entries)}, reads {sorted(wanted)}"
             )
     assert not problems, "\n".join(problems)
-    assert "plane3d_heading" in registry.REGISTRY["patrol"].gains_keys
-    assert "plane3d_heading" in registry.REGISTRY["patrol_bearing_only"].gains_keys
+    for name in ("patrol", "patrol_bearing_only"):
+        spec = registry.REGISTRY[name]
+        assert "plane3d_heading" not in (*spec.gains_keys, *spec.oracle_gains_keys)
 
 
 @pytest.mark.parametrize(
     "name,key",
     [
         ("plane_sine", "plane_sine_cascaded"),
-        ("patrol", "plane3d_heading"),
+        ("formation", "plane3d_heading"),
         ("cstr", "cstr"),
     ],
 )
@@ -594,26 +602,32 @@ def test_retuning_a_key_a_task_reads_stales_its_record(
     tmp_path, monkeypatch, name, key
 ):
     """End to end: a changed entry under the task's tuned key or a declared
-    key moves its baseline fingerprint, and an unrelated entry does not."""
+    key moves its record's fingerprints, and an unrelated entry does not
+    (which part moves: tests/test_fingerprint_parts.py)."""
     spec = registry.REGISTRY[name]
-    before = provenance.baseline_fingerprint(spec)
+    before = provenance.fingerprints(spec)
     gains = _gains()
     path = tmp_path / "pid_gains.json"
     monkeypatch.setattr(provenance, "GAINS_PATH", path)
-    unrelated = next(k for k in gains if k not in provenance.gains_entries(spec, gains))
+    read = {*provenance.gains_entries(spec, gains), *spec.oracle_gains_keys}
+    unrelated = next(k for k in gains if k not in read)
     path.write_text(json.dumps({**gains, unrelated: {"retuned": 1.0}}))
-    assert provenance.baseline_fingerprint(spec) == before
+    assert provenance.fingerprints(spec) == before
     path.write_text(json.dumps({**gains, key: {**gains[key], "retuned": 1.0}}))
-    assert provenance.baseline_fingerprint(spec) != before
+    assert provenance.fingerprints(spec) != before
 
 
 def test_an_undeclared_gains_key_raises(monkeypatch):
-    spec = dataclasses.replace(registry.REGISTRY["patrol"], gains_keys=("no_such_key",))
+    base = registry.REGISTRY["patrol"]
+    spec = dataclasses.replace(base, gains_keys=("no_such_key",))
     with pytest.raises(KeyError, match="no_such_key"):
-        provenance.baseline_fingerprint(spec)
+        provenance.expert_fingerprint(spec)
+    spec = dataclasses.replace(base, oracle_gains_keys=("no_such_key",))
+    with pytest.raises(KeyError, match="no_such_key"):
+        provenance.oracle_fingerprint(spec)
 
 
-def test_the_baseline_fingerprint_covers_the_burn_in(tmp_path, monkeypatch):
+def test_the_record_fingerprints_cover_the_burn_in(tmp_path, monkeypatch):
     """The protocol scores from the hold row's burn-in capped at half the
     episode (``eval.scored_burn_in``), and the CSTR and four-tank oracles plan
     on that value, so a change to it stales the record. A change the cap
@@ -622,17 +636,18 @@ def test_the_baseline_fingerprint_covers_the_burn_in(tmp_path, monkeypatch):
     spec = registry.REGISTRY["cstr"]
     params = spec.make_test_params()
     half = int(params.max_steps_in_episode) // 2
-    before = provenance.baseline_fingerprint(spec)
+    before = provenance.fingerprints(spec)
     rows = records.load("hold_measurements")
     assert rows["cstr"]["burn_in"] < half  # so a bump is not absorbed
     monkeypatch.setattr(records, "DATA", tmp_path)
 
     def fingerprint_with(**changes):
         records.write("hold_measurements", "cstr", {**rows["cstr"], **changes})
-        return provenance.baseline_fingerprint(spec)
+        return provenance.fingerprints(spec)
 
     assert fingerprint_with(seeds=rows["cstr"]["seeds"] + 1) == before
-    assert fingerprint_with(burn_in=rows["cstr"]["burn_in"] + 1) != before
+    bumped = fingerprint_with(burn_in=rows["cstr"]["burn_in"] + 1)
+    assert all(bumped[part] != before[part] for part in provenance.PARTS)
     capped = fingerprint_with(burn_in=half)
     assert fingerprint_with(burn_in=half + 1) == capped
 

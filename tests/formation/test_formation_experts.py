@@ -20,12 +20,8 @@ from target_gym.experts.pid import make_plane3d_heading_pid, plane3d_heading_pid
 from target_gym.formation.env import slot_errors
 from target_gym.formation.experts import make_formation_pid_controller
 from target_gym.patrol.env import PatrolState
-from target_gym.patrol.experts import (
-    TWIN_GAINS,
-    make_patrol_pid_controller,
-    twin_law_init,
-    twin_law_step,
-)
+from target_gym.patrol.experts import make_patrol_pid_controller
+from target_gym.patrol.oracle import TWIN_GAINS, twin_law_init, twin_law_step
 
 #: Held over the scored second half on seed 1 (scripts/measure_hold.py): the
 #: lead 0.80 m off its altitude, the wingmen 0.23 and 0.27 m off their slots.

@@ -15,7 +15,7 @@ import pytest
 
 from target_gym import eval as E
 from target_gym.experts.mpc import plan_params, window_weights
-from target_gym.pc_gym.cstr.experts import make_cstr_mpc
+from target_gym.pc_gym.cstr.oracle import make_cstr_mpc
 from target_gym.registry import REGISTRY
 
 SPEC = REGISTRY["cstr"]

@@ -1,6 +1,6 @@
 {
   "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
-  "fingerprint": "22fe00292949123e",
+  "expert_fingerprint": "a38561fbb9b2de28",
   "generated": "2026-11-03T03:01:42+00:00",
   "mpc_returns": [
     -20104.591676,
@@ -15,6 +15,7 @@
     -2846.423867
   ],
   "mpc_trips": 0,
+  "oracle_fingerprint": "fa00e1fa3ff146eb",
   "pid_returns": [
     -25276.840781,
     -127116.7392,

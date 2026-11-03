@@ -1,7 +1,7 @@
 {
   "ceiling": 1.0,
   "cpu": "AMD EPYC 9V74 80-Core Processor",
-  "fingerprint": "ed1fde004d853bd8",
+  "expert_fingerprint": "0099fadf26058c55",
   "generated": "2026-11-03T03:00:16+00:00",
   "mpc": {
     "failure": 0.0,
@@ -26,6 +26,7 @@
     "transient_cost_ci": 86720.0839656597,
     "unsettled_fraction": 0.0
   },
+  "oracle_fingerprint": "191d3bf06dae6023",
   "pid": {
     "failure": 0.0,
     "failure_rate": 0.0,

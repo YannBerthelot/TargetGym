@@ -186,16 +186,18 @@ what is broken and recorded rather than hidden.
       hedged with caveats.
 
 * [ ] **Scope the baseline fingerprint to the code each environment reaches.**
-      `provenance.baseline_fingerprint` hashes the whole of `experts/pid.py` and
-      `experts/mpc.py`, so *adding* a controller for a new environment marks
-      every existing environment's record stale. Registering the racetrack hold
-      added 93 lines to `pid.py` and deleted none, and that alone invalidated
-      all twenty recorded baselines, though no existing controller's behaviour moved.
+      The record fingerprints hash the whole of `experts/pid.py` (the expert
+      part) and `experts/mpc.py` (the oracle part), so *adding* a controller
+      for a new environment marks every existing environment's part stale.
+      Registering the racetrack hold added 93 lines to `pid.py` and deleted
+      none, and that alone invalidated all twenty recorded baselines, though no
+      existing controller's behaviour moved.
       Partly done: each task's oracle now lives in its own package's
-      `experts.py`, so oracle work re-records only that package, and since
-      2026-10 every PID lives there too, as a pure `Controller`. Only the
-      shared cores, `experts/pid.py` and `experts/mpc.py`, still invalidate
-      everything.
+      `oracle.py` and its PID in its `experts.py`, as a pure `Controller`, and
+      since 2026-11 each part of a record has its own fingerprint
+      (`provenance.expert_fingerprint`, `provenance.oracle_fingerprint`), so an
+      expert change re-records only expert rows. Only the shared cores,
+      `experts/pid.py` and `experts/mpc.py`, still invalidate every task's part.
       Re-recording is cheap enough today (the aircraft variants dominate the
       cost and needed re-recording regardless), so this was paid rather than
       fixed, but it scales badly: it is a full re-measure per environment added.

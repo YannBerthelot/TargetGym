@@ -1,5 +1,5 @@
 {
-  "fingerprint": "f2e8060f5e3a059b",
-  "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine.",
-  "stamped": "2026-10-27T20:25:47+00:00"
+  "fingerprint": "5022a97753d85729",
+  "note": "Cleanup PR B, behaviour-preserving: the scored values moved unchanged from EnvSpec.test_params into env.default_params (identical by repr on all 24); step_env tails share base.finish_step; save_video and make_mpc come from mixins; dead code deleted (run_timesteps, __main__ demos, reward.proximity_cost); plotting and video split out of utils.py; patrol declares sources it always imported. PID returns bit-identical to main on the same machine. Then, behaviour-preserving (split fingerprints, 2026-11-03): the step's reward accumulators and the reset state take the state's dtype instead of a literal float32, so the plant runs in float64 under enable_x64; float32 as scored. Expert and oracle returns on seeds 0-1 bit-identical to main on the same machine.",
+  "stamped": "2026-11-03T16:51:27+00:00"
 }

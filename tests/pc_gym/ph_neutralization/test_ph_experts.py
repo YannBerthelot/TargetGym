@@ -62,7 +62,7 @@ def test_the_planners_pH_has_the_titration_curves_slope(q3):
     import jax.numpy as jnp
 
     from target_gym.pc_gym.ph_neutralization.env import steady_state_invariants
-    from target_gym.pc_gym.ph_neutralization.experts import planner_pH
+    from target_gym.pc_gym.ph_neutralization.oracle import planner_pH
 
     p = registry.get("ph_neutralization").make_test_params()
     Wa, Wb = (float(v) for v in steady_state_invariants(q3, p.q2_nominal, p))

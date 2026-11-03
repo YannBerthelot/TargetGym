@@ -1,7 +1,7 @@
 {
   "ceiling": 2.0,
   "cpu": "AMD EPYC 7763 64-Core Processor",
-  "fingerprint": "0fbe06cfe7d228ca",
+  "expert_fingerprint": "5351dc060b9200a2",
   "generated": "2026-11-03T05:37:22+00:00",
   "mpc": {
     "failure": 0.0,
@@ -26,6 +26,7 @@
     "transient_cost_ci": 562544.1242205496,
     "unsettled_fraction": 0.0
   },
+  "oracle_fingerprint": "8e12b0166bdba01e",
   "pid": {
     "failure": 0.0,
     "failure_rate": 0.0,
