@@ -2594,16 +2594,18 @@ whole improvement is in the cross-track gain.</p>
 </li>
 <li>
 <p>[ ] <strong>Scope the baseline fingerprint to the code each environment reaches.</strong>
-      <code>provenance.baseline_fingerprint</code> hashes the whole of <code>experts/pid.py</code> and
-      <code>experts/mpc.py</code>, so <em>adding</em> a controller for a new environment marks
-      every existing environment's record stale. Registering the racetrack hold
-      added 93 lines to <code>pid.py</code> and deleted none, and that alone invalidated
-      all twenty recorded baselines, though no existing controller's behaviour moved.
+      The record fingerprints hash the whole of <code>experts/pid.py</code> (the expert
+      part) and <code>experts/mpc.py</code> (the oracle part), so <em>adding</em> a controller
+      for a new environment marks every existing environment's part stale.
+      Registering the racetrack hold added 93 lines to <code>pid.py</code> and deleted
+      none, and that alone invalidated all twenty recorded baselines, though no
+      existing controller's behaviour moved.
       Partly done: each task's oracle now lives in its own package's
-      <code>experts.py</code>, so oracle work re-records only that package, and since
-      2026-10 every PID lives there too, as a pure <code>Controller</code>. Only the
-      shared cores, <code>experts/pid.py</code> and <code>experts/mpc.py</code>, still invalidate
-      everything.
+      <code>oracle.py</code> and its PID in its <code>experts.py</code>, as a pure <code>Controller</code>, and
+      since 2026-11 each part of a record has its own fingerprint
+      (<code>provenance.expert_fingerprint</code>, <code>provenance.oracle_fingerprint</code>), so an
+      expert change re-records only expert rows. Only the shared cores,
+      <code>experts/pid.py</code> and <code>experts/mpc.py</code>, still invalidate every task's part.
       Re-recording is cheap enough today (the aircraft variants dominate the
       cost and needed re-recording regardless), so this was paid rather than
       fixed, but it scales badly: it is a full re-measure per environment added.

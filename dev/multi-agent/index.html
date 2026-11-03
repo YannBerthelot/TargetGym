@@ -2591,14 +2591,12 @@ has 3(k + 1). Wingmen alternate sides, right first, and each pair sits one rank
 further back and out. Only the two-wingman formation is scored. For another
 size, build the controllers with the size:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">target_gym</span><span class="w"> </span><span class="kn">import</span> <span class="n">Formation</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">target_gym.formation.experts</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">make_formation_mpc</span><span class="p">,</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">make_formation_pid_controller</span><span class="p">,</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">)</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">env</span> <span class="o">=</span> <span class="n">Formation</span><span class="p">(</span><span class="n">num_wingmen</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">pid</span> <span class="o">=</span> <span class="n">make_formation_pid_controller</span><span class="p">(</span><span class="n">num_wingmen</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span><span class="o">.</span><span class="n">host</span><span class="p">()</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">oracle</span> <span class="o">=</span> <span class="n">make_formation_mpc</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">env</span><span class="o">.</span><span class="n">default_params</span><span class="p">)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">target_gym.formation.experts</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_formation_pid_controller</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">target_gym.formation.oracle</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_formation_mpc</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">env</span> <span class="o">=</span> <span class="n">Formation</span><span class="p">(</span><span class="n">num_wingmen</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">pid</span> <span class="o">=</span> <span class="n">make_formation_pid_controller</span><span class="p">(</span><span class="n">num_wingmen</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span><span class="o">.</span><span class="n">host</span><span class="p">()</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">oracle</span> <span class="o">=</span> <span class="n">make_formation_mpc</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">env</span><span class="o">.</span><span class="n">default_params</span><span class="p">)</span>
 </code></pre></div>
 
 
