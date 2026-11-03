@@ -33,6 +33,10 @@ what follows is the trace of that earlier stance.
 - **Horizon (2):** none of the three options. The owner asked for a clear
   protocol from practice: [oracle-horizon-protocol.md](oracle-horizon-protocol.md),
   Cooper's DMC recipe at Cooper's sample time, accepted the same day.
+- **Kinks and the formation:** [oracle-smoothing-protocol.md](oracle-smoothing-protocol.md)
+  (exact rewrites first, then softplus at a resolution-based width) and
+  [oracle-formation-protocol.md](oracle-formation-protocol.md) (cooperative
+  per-seat sub-problems), both accepted the same day.
 - **Everything else is accepted as recommended:**
   - (1) the objective is the episode reward;
   - (4) plant kinks are smoothed under one width rule fixed in advance;
