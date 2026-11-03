@@ -135,3 +135,19 @@ def test_a_published_release_gets_a_github_release_with_its_files():
     assert "release_check.py --notes" in _script(job)
     # Latest only for a release from main, as with the docs' alias.
     assert "refs/heads/main" in yaml.safe_dump(job)
+
+
+def test_a_rerun_publish_deploys_the_artifact_its_own_attempt_uploaded():
+    """Re-running the publish job uploads a second Pages artifact into the
+    same run, and deploy-pages refuses a run with two of one name ("Multiple
+    artifacts named github-pages", run 41657239439). Each attempt names its
+    own and deploys exactly that one."""
+    steps = _load("docs-deploy.yml")["jobs"]["publish"]["steps"]
+    upload = next(
+        s for s in steps if s.get("uses", "").startswith("actions/upload-pages")
+    )
+    deploy = next(
+        s for s in steps if s.get("uses", "").startswith("actions/deploy-pages")
+    )
+    assert "github.run_attempt" in upload["with"]["name"]
+    assert deploy["with"]["artifact_name"] == upload["with"]["name"]

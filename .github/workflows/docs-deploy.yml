@@ -164,8 +164,13 @@ jobs:
         path: tools
     - name: Redirect the pre-0.7.0 page URLs
       run: python3 tools/scripts/docs_redirects.py site
+    # One artifact name per attempt: re-running this job uploads into the same
+    # run, and deploy-pages refuses a run holding two artifacts of one name.
     - uses: actions/upload-pages-artifact@v3
       with:
         path: site
+        name: github-pages-${{ github.run_attempt }}
     - id: deployment
       uses: actions/deploy-pages@v4
+      with:
+        artifact_name: github-pages-${{ github.run_attempt }}
