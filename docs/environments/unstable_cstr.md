@@ -16,7 +16,7 @@ env, params = tg.make("unstable_cstr")
 | Observation space | `Box((4,))` |
 | Tracked variable(s) | C_a (mol/L) |
 | Episode length | 1200 steps of 3 s (60 min) |
-| Cite as | `unstable_cstr-v2` |
+| Cite as | `unstable_cstr-v3` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Action space
@@ -70,7 +70,7 @@ Recorded over 10 seeds of the 1200-step episode (see [Baseline results](../basel
 | controller | mean return | cost per step |
 |---|---|---|
 | PID | -7.312e+07 | 6.093e+04 |
-| MPC | -4.74e+06 | 3950 |
+| MPC | -3.925e+06 | 3271 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
@@ -112,6 +112,6 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `CA_error_max` | 0.55 | mol/L |
 | `failure_cost` | 6.05e+07 | reward |
 | `restart_steps` | 1200 | steps |
-| `rho_floor_tracking` | 0.00395641 | reward |
-| `rho_floor` | 0.00395641 | reward |
+| `rho_floor_tracking` | 0.00049729 | reward |
+| `rho_floor` | 0.00049729 | reward |
 

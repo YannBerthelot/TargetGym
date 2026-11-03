@@ -1,6 +1,8 @@
 {
   "ceiling": 0.6944444444444445,
-  "fingerprint": "02e4ca5f3e038d0d",
+  "cpu": "AMD EPYC 7763 64-Core Processor",
+  "fingerprint": "4bb346aae1c01191",
+  "generated": "2026-11-03T04:20:26+00:00",
   "mpc": {
     "failure": 0.0,
     "failure_rate": 0.0,
@@ -17,7 +19,7 @@
     "reach_cost_ci": 44091.548666904906,
     "reach_fraction": 0.043541666666666666,
     "running": 4.296393635799457,
-    "seconds": 1807.5,
+    "seconds": 1920.2,
     "settling_time": 165.5185185185185,
     "settling_time_ci": 22.398893873712918,
     "time_in_band": 0.5309352517985612,
@@ -42,7 +44,7 @@
     "reach_cost_ci": 948711.9320912743,
     "reach_fraction": 0.3025,
     "running": 0.004985999909723155,
-    "seconds": 14.0,
+    "seconds": 13.9,
     "settling_time": 176.4814814814815,
     "settling_time_ci": 23.87020450876093,
     "time_in_band": 0.3045563549160672,

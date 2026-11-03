@@ -1,6 +1,8 @@
 {
   "ceiling": 1.0,
-  "fingerprint": "80722ea49cf88bcb",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "fingerprint": "d875800eefe12b42",
+  "generated": "2026-11-03T03:24:17+00:00",
   "mpc": {
     "failure": 0.0,
     "failure_rate": 0.0,
@@ -17,7 +19,7 @@
     "reach_cost_ci": 552898.9944580795,
     "reach_fraction": 0.0380952380952381,
     "running": 0.15831250523548251,
-    "seconds": 756.5,
+    "seconds": 609.1,
     "settling_time": 264.0,
     "settling_time_ci": 17.567257422071705,
     "time_in_band": 0.8404761904761905,
@@ -42,7 +44,7 @@
     "reach_cost_ci": 3045979.038992096,
     "reach_fraction": 0.12857142857142856,
     "running": 0.0,
-    "seconds": 3.9,
+    "seconds": 2.7,
     "settling_time": 279.0,
     "settling_time_ci": 1.96,
     "time_in_band": 0.3642857142857143,

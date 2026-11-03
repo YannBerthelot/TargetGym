@@ -1,5 +1,7 @@
 {
-  "fingerprint": "6a11b5eb31180f29",
+  "cpu": "AMD EPYC 7763 64-Core Processor",
+  "fingerprint": "b946957a6583eabc",
+  "generated": "2026-11-03T03:12:25+00:00",
   "mpc_returns": [
     -18677.277294,
     -4247.633017,
@@ -25,7 +27,7 @@
     -78484.99447,
     -95048.195394
   ],
-  "seconds": 955.6,
+  "seconds": 958.4,
   "seeds": 10,
   "steps": 400
 }

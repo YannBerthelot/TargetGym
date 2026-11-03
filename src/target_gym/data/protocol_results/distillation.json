@@ -1,6 +1,8 @@
 {
   "ceiling": 2.0,
-  "fingerprint": "80d3d59aecbe6f0a",
+  "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+  "fingerprint": "22fe00292949123e",
+  "generated": "2026-11-03T03:04:35+00:00",
   "mpc": {
     "failure": 0.0,
     "failure_rate": 0.0,
@@ -17,7 +19,7 @@
     "reach_cost_ci": 56547.068200962865,
     "reach_fraction": 0.14333333333333334,
     "running": 0.0,
-    "seconds": 126.4,
+    "seconds": 167.4,
     "settling_time": 28.333333333333332,
     "settling_time_ci": 41.30493002589938,
     "time_in_band": 1.0,
@@ -42,7 +44,7 @@
     "reach_cost_ci": 74483.78193897165,
     "reach_fraction": 0.18166666666666667,
     "running": 0.0,
-    "seconds": 1.5,
+    "seconds": 2.0,
     "settling_time": 92.33333333333333,
     "settling_time_ci": 107.79604033131788,
     "time_in_band": 0.8833333333333333,
