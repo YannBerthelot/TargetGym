@@ -22,8 +22,14 @@ stage past the horizon carries the last planned stage's rows. It costs
 nothing, and its move is held to the last planned one by a cost that cannot
 move the optimum, since that move reaches nothing costed. Stage 0's rows
 would bind the measured state and are dropped.
+
+A solve may plan fewer stages than it was built for (``active``), as the
+horizon shrinks at the episode's end (H_k = min(P, N_ep - k)): the stages
+past it cost nothing, carry no rows and hold their moves to the last
+planned one in the same way, so one compiled problem serves every H_k.
 """
 
+import functools
 from typing import Callable, NamedTuple
 
 import jax
@@ -153,13 +159,14 @@ class Shooting:
         xk = np.concatenate([np.full((1, nxa), n), self.xi[:-1]])  # x_0: no variable
         self.dyn = np.concatenate([xk[:, :nx], self.ui], 1)  # what a stage reads
         self.loc = np.concatenate([xk, self.ui, self.ei], 1)  # what its rows read
-        self.active = (np.arange(N) > 0).astype(float)
-        self.weight = (np.arange(N) < n_stages).astype(float)
         self.htol = np.array([h.tol for h in m.hinges], float)
         self.absolute = np.array([h.absolute for h in m.hinges], bool)
         lim = np.array([(q.lo, q.hi, q.price) for q in m.limits], float).reshape(nl, 3)
         self.lim_lo, self.lim_hi, self.price = lim.T
         self.solve = jax.jit(self._solve)
+        #: A warm solve from ``previous`` as it stands, not shifted: the next
+        #: rung of a cold solve's width continuation (K7).
+        self.resolve = jax.jit(functools.partial(self._solve, shift=False))
 
     def unpack(self, z):
         N, a, b = self.N, self.N * self.nxa, self.N * (self.nxa + self.nu)
@@ -238,11 +245,15 @@ class Shooting:
             out = out + h.weight * jnp.sum(t[:, i] ** h.power)
         return out
 
-    def _solve(self, data, x0, u_hold, previous: Plan | None = None):
+    def _solve(self, data, x0, u_hold, previous=None, active=None, shift=True):
         N, nx, nxa, nu, n = self.N, self.nx, self.nxa, self.nu, self.n
         b, ui, ei, dyn, loc = self.model.block, self.ui, self.ei, self.dyn, self.loc
         cold = previous is None
-        ks, act, wk = jnp.arange(N), jnp.asarray(self.active), jnp.asarray(self.weight)
+        ks = jnp.arange(N)
+        active = self.S if active is None else active
+        wk = (ks < active).astype(x0.dtype)  # the costed stages
+        act = ((ks > 0) & (ks <= active)).astype(x0.dtype)  # rows on their outputs
+        pin = ((ks > 0) & (ks >= active)).astype(x0.dtype)  # moves reaching nothing
         x0a = jnp.concatenate([x0, jnp.zeros(nxa - nx, x0.dtype)])
 
         def stage(v, k):
@@ -272,7 +283,7 @@ class Shooting:
             z0 = feasible(jnp.tile(u_hold, (N, 1)), jnp.zeros((N, self.ne)))
             lam0 = jnp.zeros(N * nxa)
         else:
-            z0, lam0, w0 = self.shift(previous)
+            z0, lam0, w0 = self.shift(previous) if shift else previous[:3]
 
         def f(z):
             l = jax.vmap(stage)(V_of(z), ks)[1]
@@ -343,15 +354,19 @@ class Shooting:
         rs, g0k = rs.ravel(), (jax.vmap(self._rows)(*zeros, act) * rs).ravel()
         g0 = g0k + BOUND_RELAX * jnp.maximum(1.0, jnp.abs(g0k))
 
-        a, p = ui[-1], ui[-2]  # the stage past the horizon holds the last move
+        def held(zh):
+            """The moves past the plan, each held to the one before."""
+            dU = zh[ui[1:]] - zh[ui[:-1]]
+            return dU * pin[1:, None]
+
         osc = jnp.minimum(
             1.0, MAX_GRADIENT / jnp.max(jnp.abs(D * derivs(z0, None, False)[0]))
         )
 
         def scaled(zh, lam, hess=True):
             gf, H, J, c = derivs(D * zh, lam / (osc * Rs), hess)
-            d = 2.0 * (zh[a] - zh[p])
-            gf = (osc * D * gf).at[a].add(d).at[p].add(-d)
+            d = 2.0 * held(zh)
+            gf = (osc * D * gf).at[ui[1:]].add(d).at[ui[:-1]].add(-d)
             J = StageJacobian(
                 J.E / Rk[:, :, None] * Rk[:, None, :],
                 J.A / Rk[:, :, None] * Dl[:, None, :nxa],
@@ -360,8 +375,9 @@ class Shooting:
             if hess:
                 u = nxa + np.arange(nu)
                 Dk = osc * Dl[:, :, None] * H.D * Dl[:, None, :]
-                Dk = Dk.at[-2:, u, u].add(2.0)
-                P = H.P.at[-1, np.arange(nu), np.arange(nu)].add(-2.0)
+                both = 2.0 * (pin + jnp.concatenate([pin[1:], jnp.zeros(1)]))
+                Dk = Dk.at[:, u, u].add(both[:, None])
+                P = H.P.at[:, np.arange(nu), np.arange(nu)].add(-2.0 * pin[:, None])
                 H = StageHessian(Dk, P, osc * H.end)
             return gf, H, J, c / Rs
 
@@ -370,7 +386,7 @@ class Shooting:
             return feasible(us, es) / D
 
         nlp = NLP(
-            f=lambda zh: osc * f(D * zh) + jnp.sum((zh[a] - zh[p]) ** 2),
+            f=lambda zh: osc * f(D * zh) + jnp.sum(held(zh) ** 2),
             c=lambda zh: c_fn(D * zh) / Rs, derivs=scaled, G=G, g0=g0, restore=restore,
             kkt=stage_kkt_solve, barrier=stage_barrier, shift=stage_shift,
         )  # fmt: skip

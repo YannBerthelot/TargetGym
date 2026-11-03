@@ -115,8 +115,8 @@ holds that instead of a planner. Each task's controller lives in its package's
 
 | Implementation | Used by | When it applies |
 |---|---|---|
-| `NewtonMPC` | cstr, four_tank, first_order, ph_neutralization, unstable_cstr, reactor, hvac, glass_furnace | Iterative LQR on the environment's own step: Newton's method on the action sequence. On the CSTR and the four-tank, deterministic plants with episodes short enough to plan whole, the plan is the rest of the episode |
-| IPOPT's interior-point method, in JAX | compressor_surge | A constrained NLP on the environment's step: multiple shooting, with the surge margin a soft constraint priced at a trip. It holds the plant on that margin; the Newton planner, with a barrier there instead, cost 1.6 times as much on five seeds (measured) |
+| The shared solver (`target_gym.oracles`) | cstr, first_order, four_tank, unstable_cstr, compressor_surge | A problem definition, not a tuned controller (docs/proposals/oracle-audit.md): the episode reward on the noise-free plant, over the horizon the horizon protocol measured, solved once every Cooper sample time by IPOPT's algorithm in JAX with the trips as hard limits. Each solve's certificate is recorded |
+| `NewtonMPC` | ph_neutralization, reactor, hvac, glass_furnace | Iterative LQR on the environment's own step: Newton's method on the action sequence |
 | `GradientMPC` | distillation, boiler_drum, plane_energy, the four 3D aircraft tasks | Differentiates the JAX dynamics and descends the objective |
 | Two gradient planners with a handover | plane, plane_sine | Both actuators planned to capture the initial altitude, then the elevator only, with the throttle on the PID's airspeed loop |
 | `SamplingMPC` | cement_kiln | Cross-entropy sampling: gradients through the kiln's transport delay overflow |
@@ -125,7 +125,7 @@ holds that instead of a planner. Each task's controller lives in its package's
 | Feedback law | wind_turbine | Generator torque solved so the next step's power meets the target; pitch from the PID with its slew capped |
 
 The MPC has no learned parameters. It solves its problem online at every step
-(the four-tank every 25), and carries only a warm start and a few estimator or
+(the oracles on the shared solver once every Cooper sample time, four steps on the four-tank), and carries only a warm start and a few estimator or
 fallback states from step to step. **Call `reset()` between episodes**, or that
 memory leaks into the next one.
 

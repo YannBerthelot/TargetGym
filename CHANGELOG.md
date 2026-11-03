@@ -34,15 +34,34 @@ The next release is 0.8.0, because these changes break code written for
     and `terminal_weight`: the planners' stages (`ph_stage`, `reactor_stage`,
     `unstable_cstr_stage`) and each task's `make_*_mpc` factory.
   - The compressor's `stage_openings`, `MPC_STATES`, `MPC_IPOPT_WARM_START`
-    and `MPC_SOLVE_BUDGET_S`: `preview`, `mpc_step` and the solver constants
-    in `compressor_surge.experts`. `make_compressor_surge_mpc` now takes
-    `horizon` and `max_iter` only.
+    and `MPC_SOLVE_BUDGET_S`, and since its oracle moved to the shared solver
+    (below) also `CompressorSurgeMPC`, `preview`, `mpc_step`, `soft_min`,
+    `surge_penalty`, the `MPC_*` constants and `compressor_surge.experts_ipm`:
+    `target_gym.oracles` (the solver is `target_gym.oracles.ipm`).
 - **Recorded results changed.** The eight oracles on `NewtonMPC` plan on the
   plant itself, so their returns moved; over the ten seeds each matched or
   beat its 0.7.0 record. The compressor's keeps its NLP
   and matches its 0.7.0 records. The reactor and the HVAC now
   declare their noise (`demand_sigma`, `T_out_noise_std`), which their
   planners zero.
+- **Five oracles are rebuilt on the shared solver, so their oracle rows
+  changed.** cstr, first_order, four_tank, unstable_cstr and compressor_surge
+  now follow the oracle rule (docs/proposals/oracle-audit.md): they plan the
+  episode reward on the plant with its noise zeroed, over the horizon the
+  horizon protocol measured (`data/oracle_horizons/`), solving once every
+  T_c and holding the move; clips and reward kinks are rewritten exactly,
+  trips are hard limits, and the compressor's in-step rate limits are
+  smoothed at the widths in `data/oracle_widths/`. One solver
+  (`target_gym.oracles`) runs them to convergence, and each record's oracle
+  part sums its certificates (`solver_max_error`, `solver_max_violation`,
+  `solver_max_replay_gap`, `solver_max_output_gap`, `solver_replay_trips`,
+  `solver_guard_flags`). Their expert rows did not change.
+- **These five oracles read no expert code or gains.** The unstable CSTR's is
+  no longer guided by the cascade PID, and the compressor's no longer hands a
+  failed solve to the pair: a failed solve applies the last plan's next move.
+  Their `make_*_mpc(env, params)` take no keyword arguments, and the unstable
+  CSTR's `MPC_HORIZON`, `MPC_PNR_ROUNDING_K`, `MPC_PNR_PENALTY` and
+  `unstable_cstr_stage` are gone.
 - **`unstable_cstr` is version 3.** Its floor `rho_floor_tracking` is
   re-derived from the new oracle's hold, which is tighter than the old
   floor.
@@ -62,9 +81,9 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Changed
 
-- The compressor's oracle solves the NLP of its CasADi build, term for term,
-  with IPOPT's algorithm written in JAX (`compressor_surge.experts_ipm`): the
-  filter line search with second-order corrections, the inertia correction,
+- Before moving to the shared solver (above), the compressor's oracle solved
+  the NLP of its CasADi build, term for term, with IPOPT's algorithm written
+  in JAX, which became `target_gym.oracles.ipm`: the filter line search with second-order corrections, the inertia correction,
   IPOPT's scaling, the monotone barrier for a cold start and the adaptive one
   for a warm start, and a Riccati solve of each Newton step. Over the ten
   recorded seeds it reproduces the 0.7.0 records (return per episode, both

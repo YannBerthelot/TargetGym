@@ -672,218 +672,54 @@ ship. Its smallest margin, 0.0951, is under the battery's floor of 0.098,
 which ranks gains on eight moves from settled points, and above the override
 line, which the rule reads.
 
-### The NMPC
+### The oracle
 
-`CompressorSurgeMPC`, built by `make_compressor_surge_mpc`, is the reference
-controller and is meant as an oracle upper bound. Its NLP is the one the
-CasADi/IPOPT build of this controller solved through do-mpc until 0.7, term
-for term, and it is solved the way IPOPT solved it: by IPOPT's algorithm
-written in JAX (`experts_ipm.py`), in float64. Its model is this env's own
-discrete step, written again on the env's own force functions.
+The MPC slot, built by `make_compressor_surge_mpc`, is a problem definition,
+not a tuned controller (docs/proposals/oracle-audit.md): the shared solver's
+oracle (`target_gym.oracles`), brought under the rule by the smoothing
+protocol's decision S10. It reads no expert code and no gains, and never
+hands a step to the pair.
 
-**Model.** Six states, m_c, dp, N, N_ramp, x and phi_min. Each step follows
-the env's step, ten substeps, each moving the drive setpoint and the recycle
+**Execution.** Once every T_c, Cooper's sample time from the horizon
+protocol (one step, `data/oracle_horizons/compressor_surge.json`), it plans
+P = 26 moves of both commands from the true state, fewer near the episode's
+end, and applies the first. A cold start holds the drive setpoint and the
+valve where they are, a later solve starts from the last plan shifted one
+step, and a failed solve applies the last plan's next move.
+
+**Problem.** The plan maximises the episode reward over the horizon. The
+model is the env's step written again on the env's own functions
+(`compressor_step`): ten substeps, each moving the drive setpoint and the
 valve toward their commands at their rate limits and then taking one RK4
-step of the duct, plenum and speed equations, with the consumers' opening
-read at the RK4 stage times. phi_min is the soft minimum of Phi over the
-substeps, the variable the trip reads, carried as a state as the env carries
-it. The rate limits put an actuator at start + clip(d, -j a, j a) after j
-substeps, for a command d away and a travel of a per substep. The model
-writes that closed form, with the tenth substep at the command itself, which
-the reach constraint below makes exact, and rounds the other nine clips over
-0.1 of a substep's travel. With the exact clip,
-`test_mpc_model_is_the_env_step` asserts that the model's step equals
-`compute_next_state` to 1e-6 relative at 1000 random states, clocks and
-commands within reach, in float64. With the shipped rounding,
-`test_mpc_predicts_one_step_like_the_plant` asserts that one step from each
-of 120 states lands within 0.05 `e_floor` (1.375 Pa) of the env's float32
-step in header pressure and within 1e-4 in phi_min. The 120 are 118 states
-of a pair episode, one state knocked to 2 % from the surge line with the
-valve closing at full rate, and one at Phi 0.76 with both actuators opening
-at full rate.
+step, with the consumers' deviation on its noise-free mean path, a^k times
+its measured value. The rewrites, by the smoothing protocol's inventory:
 
-The rounding width is set by the solver. The rate limits make the env's next
-state a piecewise smooth function of the command, with a kink wherever the
-command is a whole number of substeps' travel away. With the CasADi build,
-over the first 12 steps of four episodes (seeds 1000 to 1003), IPOPT's
-150-iteration cap stopped 4
-of the 48 solves with the exact clip, 3 of them on an episode's first step,
-and none with the clip rounded over 0.01 or 0.1 of a substep's travel. A
-solve took 10.2 iterations on average at 0.1, against 18.5 at 0.01 and 29.4
-with the exact clip. Against the exact clip, the rounding at 0.1 moves the
-next header pressure by at most 0.555 Pa and a substep's Phi by at most
-6.7e-6, over a 41 x 41 grid of commands spanning the reach of both actuators
-at each of those 48 states; at 0.01 the gap is ten times smaller (measured
-by `scripts/compressor_surge_numbers.py --section mpc-width` at 0.7.0, which
-left with CasADi).
+- the commands' clips are replaced by bounds on the moves (T1);
+- the tracking term is written as (e / e_floor)^2, the reward itself since
+  e_tol is 0 and p is 2, and the running cost max(P_rc - c_hold, 0) / c_hold
+  through epigraph rows on every planned step, also exact (T2);
+- the trip, phi_min below 2W, is a hard limit on every planned step, elastic
+  at the trip cost per unit of Phi, with no margin (T3);
+- the characteristic's switch to its tangent past `phi_join` is left as it
+  is, and each plan's substep Phi is checked against it (T4, K9);
+- the two rate limits act inside the step, so no bound on the move can make
+  them exact. Each is smoothed by a softplus at its K5 width: the largest of
+  s/10, ..., s/1e8, with s the clipped interval's span, whose one-step effect
+  on the header pressure stays under half the transmitter's resolution at
+  the states the pair visits on training seeds 100 to 109
+  (`scripts/measure_oracle_widths.py`, `data/oracle_widths/compressor_surge.json`).
+  A cold solve reaches those widths by continuation from a tenth of each
+  span (K7).
 
-**Objective.** The weights are constants in `experts.py`, labelled ours and
-frozen; the NMPC reads neither `e_floor` nor `c_hold`, so
-`scripts/measure_hold.py` could set both from its hold without changing the
-controller it measured.
+The hand-set terms of the NMPC it replaces are gone: the error scale, the
+move and terminal weights, the frozen 49.6 kW power reference, the 5 %
+surge margin, the reach constraints and the 0.1 rounding of the clips.
 
-| term | value | label |
-|---|---|---|
-| tracking, per stage | ((p_ref - dp) / 1 kPa)^2 | ours: the 1 kPa scale only sets the units the solver sees |
-| energy, per stage | 7.56e-4 x smoothed max(P_rc - 49.6 kW, 0) / 49.6 kW | derived: 7.56e-4 = (0.0275 / 1)^2, so while `e_floor` sits at its 0.0275 kPa clamp the stage cost is v2's per-step cost times (e_floor / 1 kPa)^2, apart from the power reference and the smoothing, (y + sqrt(y^2 + 0.05^2)) / 2; the reference, `MPC_POWER_REF`, is the provisional `c_hold` the NMPC was accepted with (ours, frozen) |
-| terminal | 20 x the last planned state's tracking term | ours |
-| moves | 1e-3 x each command's squared move | ours |
-| horizon | 60 steps, 6 s | ours: a full 20 to 28 kPa move on the 15 % control line needs 14.7 % of rated speed, 4.9 s of drive travel (derived, `--section steady`) plus the 1 s lag, and closing the recycle from its reset opening takes 3.5 s |
-
-Against version 2's final weights the tracking term matches, since `e_floor`
-stays at its clamp, and the energy term charges each watt above its
-reference 62.27 / 49.6 = 1.26 times as much as version 2 does, from a
-reference 12.7 kW lower (derived from `MPC_POWER_REF` and the measured
-`c_hold`).
-
-**Constraints.**
-
-- *Surge.* Every planned step's phi_min is at least 2W (1 + 0.05), as a soft
-  constraint whose penalty per unit of slack in Phi is restart_steps x 2
-  (dp_error_max / 1 kPa)^2 = 7.70e6 (derived), a trip's cost in the
-  objective's units, which does not depend on `e_floor`. The 5 %
-  (`MPC_SURGE_MARGIN`) is TUNED by the acceptance run below. As do-mpc laid
-  the NLP out, constraints act on the state a stage starts from, so it
-  carries one stage past the horizon, whose step has no cost and no constraint; it lets
-  the last planned step's phi_min be constrained.
-- *One constraint per step.* The surge constraint is on phi_min, one smooth
-  constraint per step on the variable the trip reads. Constraining the ten
-  substep values of Phi one by one would write the step's expressions a
-  second time into the constraints, and in a steady stretch a step's ten
-  constraints would coincide.
-- *Rate reach.* Each command lies within one step's actuator travel of the
-  actuator. A command beyond it acts exactly like one at it, so no
-  authority is lost.
-
-**Information.** Like every MPC in the suite it is an oracle. It reads the
-true state, the deviation the coming step integrates with (so its first
-predicted step is exact), both schedules and the clock. Later stages plan
-with a^k times the deviation, its conditional mean, which is the env's own
-update with `demand_sigma` zeroed; the NLP never reads `demand_sigma`.
-
-**Solver.** IPOPT's interior-point method (Waechter and Biegler, Math.
-Program. 106, 2006) with IPOPT's default constants: a primal-dual barrier
-method with a filter line search and second-order corrections, inertia
-correction, and IPOPT's scaling of the objective and of the variables (the
-states by do-mpc's typical magnitudes). Each Newton step is solved by a
-Riccati recursion over the stages. As in the CasADi build there are two
-instances. A cold start (the first step, the first after a trip, and the one
-after a failed cold solve) gets IPOPT's defaults: the monotone barrier from
-0.1, least-squares multipliers and a push of 0.01 off the bounds. Every other
-step starts from the last plan and its multipliers moved one stage earlier,
-with no push off the bounds (1e-9) and IPOPT's adaptive barrier, which picks
-the barrier each iteration from a quality function and falls back to the
-monotone one when the iterates stop making progress. Without these options
-the bound push moves every surge slack off zero, where the trip-sized
-penalty makes the starting point expensive, and the warm start is lost. The
-cold guess is the model rolled out from the state with the actuators held,
-with those commands, zero surge slacks and no multipliers. Where that
-rollout plans some step's phi_min below the surge margin, the guess is
-instead the rollout under a fresh pair, with the pair's commands clipped to
-one step's reach. Either way it does not depend on the plan the controller
-held before (`test_mpc_cold_start_forgets_the_last_plan`). The cap is
-IPOPT's 150 iterations; the CasADi build's 60 s CPU cap has no counterpart.
-
-Two parts differ from IPOPT. Its golden-section search for the barrier is a
-scan of 41 values here, and its restoration phase is replaced: where the
-line search fails, the solve first falls back to the monotone barrier, then
-up to three times re-simulates the states from the planned commands, which
-meets the dynamics exactly, and only then fails. The port reproduces the
-CasADi build: over the ten recorded seeds its returns are within 0.03 % of
-the CasADi records on nine and 0.2 % better on the tenth, with one solve in
-12,000 handed to the pair and 5.8 iterations a solve against IPOPT's 6.8
-(measured; the table is in the 0.8.0 change log). `test_experts_ipm.py` holds the method to a closed-form
-projection and to Hock and Schittkowski's problem 71, with both barriers,
-and the Riccati solve to a dense one.
-
-**Cold start into surge.** The first acceptance run cold-started from the
-hold rollout alone. In the stress battery's demand drops, with the valve
-shut, that rollout runs below the surge line for most of the horizon, and
-IPOPT started there converged to plans that surge. The battery tripped in 12
-of its 16 runs at both candidate margins, with the slack active on 688 to
-692 steps and the smallest margin after the move at -1.45, while the 128
-episodes passed every check (measured with the CasADi build). With the pair's
-rollout as the guess in that case, the run below passes the battery with no
-trip and the slack never active, and its episodes give the same figures.
-`test_mpc_cold_start_avoids_a_surging_guess` starts the NMPC cold on the
-battery's first scenario with the deviation at -4 sd and asserts that the
-first plan uses no slack.
-
-**Fallback.** A failed solve (a line search that neither the monotone
-fallback nor a restoration rescues, or a non-finite iterate) hands the step
-to the pair, whose memory is tracked to
-every action applied. Its speed command then continues the last applied
-one. At the margins the NMPC plans at, below the pair's 7.5 % override
-line, its first valve command is full opening, held for 2 s. That jump is
-accepted as the safe response to a lost solve next to the surge line, and
-the NMPC takes over again at its next successful solve. Holding the last
-action instead could walk the plant into surge during a demand drop.
-`test_mpc_falls_back_to_the_pair` asserts that the fallback's action is
-exactly that of a pair tracked through the same steps. There, after 20 NMPC
-steps at 28 kPa and opening 0.35 with the last step's margin under the pair's
-7.5 % override line, it asserts that the fallback opens the valve fully and
-that its speed command stays within one step's drive travel of the last one
-applied.
-
-A solve that the iteration cap stopped is not a fallback. Its iterate is
-applied, as the CasADi build applied it, and it is counted apart
-(`solve_capped`, apart from `solve_failures`, the steps handed to the pair);
-`test_mpc_falls_back_to_the_pair` asserts both counts.
-
-**Solve time.** The CasADi build's budget was a median of at most 0.15 s and
-a 99th percentile of at most 1.5 s per step (ours); over it, the horizon
-would go to 40 steps and then moves would be blocked. On the acceptance run
-below the median was 69 and 80 ms and the 99th percentile 415 and 416 ms at
-the two candidate margins. The JAX build runs a 1200-step episode in about
-67 s on a laptop CPU, 56 ms a step with the env, after compiling for about
-7 s per instance (measured, two episodes at a time). Wherever
-recycle is forced and its power is above 49.6 kW, the energy term pushes the
-plan to close the valve toward the 5 % surge constraint.
-
-**Acceptance run** (with the CasADi build: `scripts/compressor_surge_numbers.py
---mpc-gate` at 0.7.0, horizon 60, float32 env and float64 NLP, measured). A budget first sizes the smallest margin worth trying. Part 1
-re-solves every 10th step of 16 episodes (seeds 1000 to 1015) with the
-deviation moved by -5 innovation sd (0.0198 of opening), from the same warm
-start, and takes the margin the step loses: over 1920 samples at most 1.019
-points, 0.322 at the 99th percentile and 0.046 at the median. Part 2 is the
-model gap, the 1e-4 bound on phi_min of
-`test_mpc_predicts_one_step_like_the_plant`, 0.020 points. The floor is
-twice their sum, 2.079 points, so of the candidates 0.02, 0.03 and 0.05
-(ours) the run tries 0.03 and 0.05. Part 3, the prediction residual, is
-measured on each candidate's episodes. Each candidate runs 128 episodes
-(seeds 1000 to 1127) and the stress battery: the guard's eight scenarios,
-each once with the deviation starting at -4 stationary sd and once with ten
--1 sd innovations written in at the start of the demand ramp.
-
-| | margin 0.03 | margin 0.05 |
-|---|---|---|
-| trips in 128 episodes | 0 (one-sided 95 % bound 0.023 per episode) | 0 (the same bound) |
-| smallest margin per episode: min, 1 %, 5 %, median | 0.0294, 0.0295, 0.0299, 0.0300 | 0.0493, 0.0496, 0.0498, 0.0500 |
-| realised less planned first-step margin (points) | -0.0011 to 0.0051 | -0.0009 to 0.0044 |
-| fallbacks to the pair, capped solves applied, steps with the slack active | 0, 6, 8 | 0, 2, 10 |
-| mean IPOPT iterations | 6.8 | 6.8 |
-| cost per episode, at the provisional `c_hold` | 1.373e5 (0.063 x the pair, 0.241 x G10) | 1.373e5 (the same ratios) |
-| energy share of the cost, mean recycle power | 0.39 %, 62.0 kW | 0.41 %, 64.0 kW |
-| mean absolute error | 0.0297 kPa | 0.0297 kPa |
-| battery: trips, smallest margin after the move, slack-active steps, fallbacks, capped solves | 0, 0.0300, 0, 0, 0 | 0, 0.0500, 0, 0, 0 |
-| solve time per step, p50 / p90 / p99 / max (ms) | 69 / 163 / 415 / 2103 | 80 / 163 / 416 / 2092 |
-
-On the same seeds the pair costs 2.179e6 per episode with no trip and a
-smallest margin of 0.0917, and G10 costs 5.702e5 with no trip and 0.0657.
-Both candidates pass every check the run applies: no trip, a smallest margin
-of at least half the plan, a prediction shortfall under a quarter of the
-plan, a battery with no trip, a margin of at least half the plan and the
-slack never active, and a cost below G10's. They cost the same, so the wider
-one, 0.05, ships as `MPC_SURGE_MARGIN` (the run takes the widest passing
-margin within 1 % of the cheapest's cost). The solve times are wall clock on
-a shared machine at load average 8.5 and 8.7.
-
-**Horizon audit.** `scripts/audit_mpc_horizons.py --envs compressor_surge`
-returns ok. The pair brings the reset error (5.50 kPa, the mean over seeds 0
-and 1) under 37 % of its start and keeps it there from step 45 on the faster
-seed, so the 60-step horizon is 1.33 times that (measured). That audit times
-only the approach from the reset, so it never sees a 20 to 28 kPa move,
-which the horizon row above sizes.
+**Solver and certificate.** IPOPT's algorithm solves it with exact Hessians
+to a scaled KKT error of 1e-8, or stops at 150 iterations. Every solve's
+certificate (KKT error, iterations, violation, and the plan replayed on
+`step_env` from the same start, which measures what the smoothing costs) is
+summed into the record.
 
 **Recorded results.** Both controllers' returns over 10 seeds
 (`scripts/record_baselines.py`) are on the
@@ -1050,7 +886,7 @@ is forced pay a running cost no controller can avoid, and recycle below
 | `dp_error_max` | 20.68 kPa (derived) | the 28 kPa top level against the 7.32 kPa lowest pressure an untripped plant holds (`--section params`, `test_restart_and_failure_cost_are_derived`); `test_the_error_envelope_is_certified` checks it against random bang-bang on both actuators over 512 episodes; the version-1 envelope and the base of `failure_cost` |
 | `failure_cost` | 1.131e6 (derived), twice (20.68 / 0.0275)^2 | twice the largest tracking cost an untripped state reaches (derived) |
 | `restart_steps` | 9000 (15 min, ours, provisional) | no source gives a restart time; a trip costs 9000 x 1.131e6 = 1.018e10 (derived, `--section params`, `test_restart_and_failure_cost_are_derived`) |
-| `c_hold` | 62 270 W (62.27 kW, measured) | the NMPC's mean recycle power over its hold, from `scripts/measure_hold.py --envs compressor_surge` (the pair's is 66.1 kW). It replaced a provisional 49.6 kW, which the NMPC's frozen power reference `MPC_POWER_REF` keeps |
+| `c_hold` | 62 270 W (62.27 kW, measured) | the NMPC's mean recycle power over its hold, from `scripts/measure_hold.py --envs compressor_surge` (the pair's is 66.1 kW). It replaced a provisional 49.6 kW; the oracle reads `c_hold` through the reward |
 | `running_weight` | 1 (ours, provisional) | one floor-width of tracking error is worth once the hold-phase recycle power |
 | `precision_floor` | 0.0275 kPa (derived) | the header-pressure transmitter's reference accuracy, 0.055 % of calibrated span (read: Yokogawa EJA530E gauge transmitter, GS 01C31F01-01EN, p.1, capsule A at spans of 20 kPa or more, https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf; Siemens SITRANS P320, catalog FI 01 09/2026, p.1/14, 1 bar cell at a turn-down of 5 or less, https://support.industry.siemens.com/cs/attachments/109765052/sitransp_p320_p420_fi01_en.pdf), times a 0 to 50 kPa calibrated span (ours). It covers linearity, hysteresis and repeatability together, and the Yokogawa sheet states it as a 3-sigma bound, so an error below it is one the instrument cannot tell from a smaller one. Neither sheet gives a finer measuring resolution; the one resolution found, the current output's quantisation (Endress+Hauser Cerabar PMP71B, TI01509P, p.24, https://bdih-download.endress.com/file/11181feb66c9cd03e4256402f1eff641/TI01509PEN_1025-00.pdf), is finer than the repeatability and is not used. The value scales with the span. Version 1's floor and the clamp on `e_floor`, so while the clamp binds it sets the version-2 scale |
 | `rho_floor_tracking` | 1.40e-5 (derived from the measured hold) | (lowest per-seed MPC hold / `e_floor`)^2 = (1.03e-4 / 0.0275)^2, from `scripts/measure_hold.py`; below 1 because the clamp binds |

@@ -21,7 +21,8 @@ from target_gym import (
     FourTank,
     FourTankParams,
 )
-from target_gym.experts.mpc import GradientMPC, NewtonMPC
+from target_gym.experts.mpc import GradientMPC
+from target_gym.oracles.controller import Oracle
 from target_gym.pc_gym.cstr.oracle import make_cstr_mpc
 from target_gym.pc_gym.first_order.oracle import make_first_order_mpc
 from target_gym.pc_gym.four_tank.oracle import make_four_tank_mpc
@@ -201,11 +202,13 @@ def test_four_tank_obs_indices_match_obs_array():
 # ---------------------------------------------------------------------------
 
 
+# The shared solver compiles for each, 5 to 30 s: medium.
+@pytest.mark.medium
 @pytest.mark.parametrize(
     "env_cls,params_cls,make_fn,make_kwargs,action_dim",
     [
         (CSTR, CSTRParams, make_cstr_mpc, {}, 1),
-        (FirstOrderSystem, FirstOrderParams, make_first_order_mpc, {"horizon": 3}, 1),
+        (FirstOrderSystem, FirstOrderParams, make_first_order_mpc, {}, 1),
         (FourTank, FourTankParams, make_four_tank_mpc, {}, 2),
     ],
 )
@@ -293,9 +296,9 @@ def test_plane_env_make_pid_returns_controller():
 @pytest.mark.parametrize(
     "env_cls,params_cls,make_kwargs,expected_type",
     [
-        (CSTR, CSTRParams, {}, NewtonMPC),
-        (FirstOrderSystem, FirstOrderParams, {"horizon": 3}, NewtonMPC),
-        (FourTank, FourTankParams, {}, NewtonMPC),
+        (CSTR, CSTRParams, {}, Oracle),
+        (FirstOrderSystem, FirstOrderParams, {}, Oracle),
+        (FourTank, FourTankParams, {}, Oracle),
     ],
 )
 def test_env_make_mpc_returns_controller(

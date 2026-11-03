@@ -53,10 +53,23 @@ KINDS = (
     "hold_measurements",
     "env_versions",
     "oracle_horizons",
+    "oracle_widths",
 )
 
+#: The worst of an oracle's per-solve certificates (``oracles.controller``):
+#: KKT error, row violation and replay gaps. They certify a recording, and
+#: their last digits move with the CPU, so two recordings are not compared
+#: on them.
+CERTIFICATE = frozenset(
+    {
+        "solver_max_error",
+        "solver_max_violation",
+        "solver_max_replay_gap",
+        "solver_max_output_gap",
+    }
+)
 #: What only describes a recording run, left out when two are compared.
-METADATA = frozenset({"seconds", "generated", "cpu"})
+METADATA = frozenset({"seconds", "generated", "cpu"}) | CERTIFICATE
 
 #: Relative tolerance between two recordings of one row. #97's CI re-record
 #: moved plane3d_racetrack's PID hold from 12.661 to 12.676 (1.1e-3) and its
@@ -85,6 +98,9 @@ PARTS = {
             "solver_failures",
             "solver_capped",
             "solver_mean_iters",
+            "solver_replay_trips",
+            "solver_guard_flags",
+            *CERTIFICATE,
         }
     ),
 }

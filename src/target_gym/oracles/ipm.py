@@ -1,8 +1,8 @@
 """The shared oracle solver: IPOPT's interior-point method in JAX.
 
-A copy of the compressor's port (``compressor_surge.experts_ipm``), which
-stays untouched until that oracle moves here. The algorithm is the same; what
-differs is how its matrices are held. H, J and G may be dense arrays or, for
+The compressor's port (``compressor_surge.experts_ipm`` until that oracle
+moved here). The algorithm is the same; what differs is how its matrices
+are held. H, J and G may be dense arrays or, for
 a multiple-shooting NLP, stage blocks (``StageHessian``, ``StageJacobian``,
 ``StageRows``), so no n x n matrix is ever formed: every product the
 iteration takes (``G @ z``, ``G.T @ w``, ``J.T @ lam``) works on either, and

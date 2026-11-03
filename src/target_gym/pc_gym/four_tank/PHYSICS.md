@@ -126,22 +126,28 @@ difficulty is structural, not informational.
 **Reward** — the floor-normalised cost described in *Reward (version 2)*
 below.
 
-**The oracle plans the rest of the episode.** The plant is deterministic, so
-the MPC slot holds its optimum: `NewtonMPC` (iterative LQR) over every
-remaining step of the environment's own `step_env`, re-solved from the true
-state every 25 steps. A level at a trip limit is charged the trip in the
-planner's own rollout, which no plan comes near. Its cost is both lower
-tanks' tracking terms in floor units, and the steps of the protocol's
-270-step burn-in weigh 1e-3. That weighting is the point.
-With the pumps sending 80 % of their flow across (`gamma1 + gamma2` = 0.4)
-the response is non-minimum-phase, and even the exact optimum of a cost that
-charges every step alike leaves 0.0098 per step in the scored window; the
-do-mpc controller it replaced in the oracle audit (2026-10), 10 steps of
-20 s with such a cost, left 0.0074. This one scores about 3e-8 with zero
-trips, the returns of the IPOPT shrinking-horizon NLP it replaced in
-November 2026.
-`e_floor` is the transmitter's resolution and `rho_floor` is 0, both
-documented minima, so neither moved.
+**The oracle.** The MPC slot is a problem definition, not a tuned
+controller (docs/proposals/oracle-audit.md): the shared solver's oracle
+(`target_gym.oracles`). Once every T_c, Cooper's sample time from the
+horizon protocol (4 steps, `data/oracle_horizons/four_tank.json`), it plans
+P = 252 moves of 4 steps each from the true state, fewer near the episode's
+end, and holds the first for those 4 steps. The plan maximises the episode
+reward over the horizon on the environment's own dynamics. The pumps' clips
+are replaced by bounds on the moves, and both tracking terms are written as
+(e / e_floor)^2, the reward itself since e_tol is 0 and p is 2. Every level
+on every planned step is held inside its trip band, h_min < h < h_max, as a
+hard limit, elastic at the trip cost per metre. The outflow's guarded square
+root, sqrt(max(h, 0)), is left as it is: the band keeps it off its edge, and
+each plan's levels are checked against 0. Nothing is smoothed. IPOPT's
+algorithm solves it with exact Hessians to a scaled KKT error of 1e-8, or
+stops at 150 iterations. A cold start holds the pumps the reset records
+(off), a later solve starts from the last plan shifted one sample, and a
+failed solve applies the last plan's next move. Every solve's certificate
+(KKT error, iterations, violation, and the plan replayed on `step_env`) is
+summed into the record. The oracle no longer weights the protocol's scored
+window: the objective is the whole episode's reward. `e_floor` is the
+transmitter's resolution and `rho_floor` is 0, both documented minima, so
+the oracle sets neither.
 
 ---
 

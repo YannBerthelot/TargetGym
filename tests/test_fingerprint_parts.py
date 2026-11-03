@@ -6,9 +6,11 @@ only expert rows, and rebuilding an oracle only oracle rows. Both cover the
 environment's own non-controller modules, the shared physics, the parameter
 values, the scored burn-in and the fixed settle. On top, the expert part
 covers experts/pid.py, the task's expert modules and its gains entries; the
-oracle part experts/mpc.py, the task's oracle modules (with the compressor's
-experts_ipm.py), its noise fields, and any expert code or gains the oracle
-still reads. No controller edit moves the environment's version stamp.
+oracle part experts/mpc.py, the task's oracle modules, its noise fields, and
+any expert code or gains the oracle still reads. An oracle on the shared
+solver (``oracle_data``, the build plan's PR C1) has the solver's modules in
+place of experts/mpc.py, and the values of its horizon and widths files. No
+controller edit moves the environment's version stamp.
 """
 
 from __future__ import annotations
@@ -41,11 +43,16 @@ def _moved(spec, change) -> set[str]:
     "name,rel,parts",
     [
         ("cstr", "pc_gym/cstr/oracle.py", {"oracle"}),
-        ("cstr", "experts/mpc.py", {"oracle"}),
+        # cstr's oracle is on the shared solver, hvac's not yet.
+        ("cstr", "experts/mpc.py", set()),
+        ("hvac", "experts/mpc.py", {"oracle"}),
+        ("cstr", "oracles/shooting.py", {"oracle"}),
+        ("hvac", "oracles/shooting.py", set()),
         ("cstr", "pc_gym/cstr/experts.py", {"expert"}),
         ("cstr", "experts/pid.py", {"expert"}),
         ("cstr", "pc_gym/cstr/env.py", {"expert", "oracle", "stamp"}),
-        ("compressor_surge", "compressor_surge/experts_ipm.py", {"oracle"}),
+        # Its oracle no longer falls back to the pair.
+        ("compressor_surge", "compressor_surge/experts.py", {"expert"}),
         # Oracles that still read expert code: their part moves with it.
         ("wind_turbine", "energy/wind_turbine/experts.py", {"expert", "oracle"}),
         ("formation", "patrol/oracle.py", {"oracle"}),
@@ -70,6 +77,7 @@ def test_an_edit_stales_only_the_parts_that_read_the_file(
     "name,key,parts",
     [
         ("cstr", "cstr", {"expert"}),
+        ("unstable_cstr", "unstable_cstr", {"expert"}),
         ("wind_turbine", "wind_turbine", {"expert", "oracle"}),
         # The formation oracle's lead flies the 3D heading gains; its expert
         # does not read them.
@@ -87,6 +95,28 @@ def test_a_retune_stales_only_the_parts_that_read_the_key(
     monkeypatch.setattr(provenance, "GAINS_PATH", path)
     retuned = {**gains, key: {**gains[key], "retuned": 1.0}}
     assert _moved(REGISTRY[name], lambda: path.write_text(json.dumps(retuned))) == parts
+
+
+@pytest.mark.parametrize(
+    "rel", ["oracle_horizons/cstr.json", "oracle_widths/cstr.json"]
+)
+def test_an_oracles_data_stales_its_part_by_value_only(monkeypatch, rel):
+    """A new value in the horizon or widths file moves the oracle part; a
+    new run stamp (when, on which CPU) moves nothing."""
+    target, read = SRC / "data" / rel, pathlib.Path.read_text
+    row = json.loads(read(target))
+
+    def write(change):
+        text = json.dumps({**row, **change})
+        monkeypatch.setattr(
+            pathlib.Path,
+            "read_text",
+            lambda path, *a, **k: text if path == target else read(path, *a, **k),
+        )
+
+    spec = REGISTRY["cstr"]
+    assert _moved(spec, lambda: write({"generated": "later", "cpu": "other"})) == set()
+    assert _moved(spec, lambda: write({"P": 1, "sites": {"new": 1}})) == {"oracle"}
 
 
 def _module_file(module: str) -> pathlib.Path | None:
@@ -113,9 +143,7 @@ def _imported_files(path: pathlib.Path) -> set[pathlib.Path]:
 
 
 def _expert_side(path: pathlib.Path) -> bool:
-    return path == SRC / "experts" / "pid.py" or (
-        path.name.startswith("experts") and path.name != "experts_ipm.py"
-    )
+    return path == SRC / "experts" / "pid.py" or path.name.startswith("experts")
 
 
 @pytest.mark.parametrize("name", [n for n, s in REGISTRY.items() if s.has_mpc])
