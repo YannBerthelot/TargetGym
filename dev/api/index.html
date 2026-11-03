@@ -2603,7 +2603,7 @@ change shape before they settle.</p>
 </tr>
 <tr>
 <td><code>make_expert(name)</code></td>
-<td>The shipped expert as a pure controller. <code>.host()</code> keeps its own memory; <code>.batched()</code> is for <code>jit</code> and <code>vmap</code>, and the caller carries the memory; <code>.act(state, obs)</code> is one traced step</td>
+<td>The shipped expert: <code>memory = expert.reset()</code>, then <code>action, memory = expert.step(memory, obs)</code>, in a Python loop or under <code>jit</code> and <code>vmap</code>; <code>expert.params</code> holds its gains</td>
 </tr>
 <tr>
 <td><code>make_oracle(name, params=None)</code></td>
@@ -2618,8 +2618,8 @@ change shape before they settle.</p>
 <td>Registry names, of every task or of one group</td>
 </tr>
 <tr>
-<td><code>score_policy(name, make_policy, seeds=10, params=None)</code></td>
-<td>The policy against the expert and the ceiling (<code>target_gym.scoring</code>)</td>
+<td><code>score_policy(name, policy, seeds=10, params=None)</code></td>
+<td><code>policy(obs) -&gt; action</code>, or the expert, against the expert and the ceiling (<code>target_gym.scoring</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -2754,12 +2754,16 @@ release.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>env.make_pid()</code></td>
-<td><code>make_expert(name).host()</code></td>
+<td><code>env.make_pid()</code>, <code>env.expert_policy</code></td>
+<td><code>make_expert(name)</code></td>
 </tr>
 <tr>
-<td><code>env.expert_policy</code></td>
-<td><code>make_expert(name).batched()</code></td>
+<td><code>make_expert(name).host()</code>, <code>.batched()</code>, <code>.act()</code>, <code>.init_state</code></td>
+<td><code>expert.reset()</code> and <code>expert.step(memory, obs)</code></td>
+</tr>
+<tr>
+<td><code>score_policy(name, make_policy)</code> with a factory</td>
+<td><code>score_policy(name, policy)</code></td>
 </tr>
 <tr>
 <td><code>env.make_mpc(params)</code></td>
