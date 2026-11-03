@@ -3,13 +3,21 @@
 The CI recorder (``.github/workflows/record-baselines.yml``) runs one job per
 environment and uses this to plan and to collect::
 
-    uv run python scripts/stale_records.py list [--all]     # JSON list to record
+    uv run python scripts/stale_records.py list [--all]     # JSON jobs to record
     uv run python scripts/stale_records.py extract ENV DIR  # copy ENV's rows to DIR
     uv run python scripts/stale_records.py merge DIR...     # fold rows back in
+
+A row has two parts, the expert's and the oracle's, each with its own
+fingerprint (``target_gym.provenance``), so ``list`` names the stale parts of
+each environment and its job re-records those alone.
 
 ``merge`` writes only the tasks whose rows moved beyond the tolerance
 (``target_gym.records.same``), and only their files, so a weekly run that
 reproduces every number, on whichever CPU the runner has, commits nothing.
+
+``migrate`` moved the rows recorded under the single ``fingerprint`` to the two
+parts' fingerprints without re-recording anything (2026-11-03), after
+checking that every such fingerprint matched the tree.
 """
 
 from __future__ import annotations
@@ -24,16 +32,27 @@ from target_gym import records
 KINDS = ("baseline_returns", "protocol_results")
 
 
-def stale(baselines: dict, protocol: dict, current: dict) -> list[str]:
-    """Environments whose row in either file is missing or has moved."""
+def stale(baselines: dict, protocol: dict, current: dict) -> list[tuple[str, str]]:
+    """``(environment, part)`` pairs whose fingerprint is missing or has moved
+    in either file. ``current`` is ``{environment: {part: fingerprint}}``; an
+    environment without an oracle has no baseline row."""
     return sorted(
-        name
-        for name, fp in current.items()
+        (name, part)
+        for name, parts in current.items()
+        for part, fp in parts.items()
         if any(
-            rows.get(name, {}).get("fingerprint") != fp
-            for rows in (baselines, protocol)
+            rows.get(name, {}).get(f"{part}_fingerprint") != fp
+            for rows in ((baselines, protocol) if "oracle" in parts else (protocol,))
         )
     )
+
+
+def jobs(pairs) -> list[dict]:
+    """One recording job per environment, naming its stale parts."""
+    parts: dict[str, list[str]] = {}
+    for name, part in sorted(pairs):
+        parts.setdefault(name, []).append(part)
+    return [{"env": n, "parts": " ".join(p)} for n, p in parts.items()]
 
 
 def merge(rows: dict, fragments: dict) -> tuple[dict, list[str]]:
@@ -53,29 +72,32 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument("env")
     ex.add_argument("dir", type=pathlib.Path)
     sub.add_parser("merge").add_argument("dirs", nargs="+", type=pathlib.Path)
+    sub.add_parser("migrate")
     args = ap.parse_args(argv)
 
-    if args.cmd == "list":
-        from target_gym.provenance import baseline_fingerprint
+    if args.cmd in ("list", "migrate"):
+        from target_gym.provenance import fingerprints
         from target_gym.registry import REGISTRY
 
-        specs = {n: s for n, s in REGISTRY.items() if s.has_pid}
-        current = {n: baseline_fingerprint(s) for n, s in specs.items()}
-        baselines = records.load("baseline_returns")
-        # The recorder keeps no baseline row for a plant without an MPC.
-        baselines.update(
-            {
-                n: {"fingerprint": current[n]}
-                for n, s in specs.items()
-                if s.make_mpc is None
-            }
-        )
-        names = (
-            sorted(current)
+        current = {n: fingerprints(s) for n, s in REGISTRY.items() if s.has_pid}
+    if args.cmd == "list":
+        pairs = (
+            [(n, part) for n, parts in current.items() for part in parts]
             if args.all
-            else stale(baselines, records.load("protocol_results"), current)
+            else stale(
+                records.load("baseline_returns"),
+                records.load("protocol_results"),
+                current,
+            )
         )
-        print(json.dumps(names))
+        print(json.dumps(jobs(pairs)))
+    elif args.cmd == "migrate":
+        for kind in KINDS:
+            for name, row in records.load(kind).items():
+                if "fingerprint" in row:
+                    row = {k: v for k, v in row.items() if k != "fingerprint"}
+                    new = {f"{p}_fingerprint": fp for p, fp in current[name].items()}
+                    records.write(kind, name, {**row, **new})
     elif args.cmd == "extract":
         for kind in KINDS:
             source = records.path(kind, args.env)

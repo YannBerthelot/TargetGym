@@ -1,6 +1,6 @@
 {
   "cpu": "AMD EPYC 9V45 96-Core Processor",
-  "fingerprint": "a92cc37edda79335",
+  "expert_fingerprint": "970ca78fa05c39ad",
   "generated": "2026-11-03T02:57:24+00:00",
   "mpc_returns": [
     -0.00563,
@@ -15,6 +15,7 @@
     -0.007141
   ],
   "mpc_trips": 0,
+  "oracle_fingerprint": "644b805e59c6bf08",
   "pid_returns": [
     -0.055277,
     -0.043844,

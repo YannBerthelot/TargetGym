@@ -1,7 +1,7 @@
 {
   "ceiling": 1.0,
   "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
-  "fingerprint": "0e289118032a0ada",
+  "expert_fingerprint": "b50a820075196d1a",
   "generated": "2026-11-03T03:48:10+00:00",
   "mpc": {
     "failure": 0.0,
@@ -28,6 +28,7 @@
     "transient_cost_ci": 35.82425297161553,
     "unsettled_fraction": 0.2
   },
+  "oracle_fingerprint": "330390923cb7c80b",
   "pid": {
     "failure": 0.0,
     "failure_rate": 0.0,

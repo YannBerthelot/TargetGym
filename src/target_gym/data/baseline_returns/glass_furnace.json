@@ -1,6 +1,6 @@
 {
   "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
-  "fingerprint": "0e289118032a0ada",
+  "expert_fingerprint": "b50a820075196d1a",
   "generated": "2026-11-03T03:31:07+00:00",
   "mpc_returns": [
     -599.76597,
@@ -15,6 +15,7 @@
     -464.339821
   ],
   "mpc_trips": 0,
+  "oracle_fingerprint": "330390923cb7c80b",
   "pid_returns": [
     -2182.798271,
     -1337.128127,

@@ -122,36 +122,37 @@ checks each one, and checks the tuner row only for a task that ships a PID.
 - **Append, never insert.** A task's position in `REGISTRY` is its benchmark
   seed index, and TargetFoundation derives seeds the same way, so the new
   `EnvSpec` goes at the end of `_SPECS`.
-- **Controllers in the task's own `experts.py`.** `experts/pid.py` and
-  `experts/mpc.py` are in every task's baseline fingerprint, so a controller
-  added there would make every other task's records stale. Point the spec at
-  the package's module with the `module` argument,
-  `make_pid=_pid("make_<name>_pid", module="target_gym.<package>.experts")`,
-  and the same for `_mpc`. (Every task's oracle already lives in its own
-  package, the 21 included; only their PIDs remain in `experts/pid.py`.) The version stamp leaves `experts*` files out, so
-  the package's other files import them only inside a function.
+- **Controllers in the task's own package.** The expert goes in its
+  `experts.py` and the oracle in its `oracle.py`. `experts/pid.py` and
+  `experts/mpc.py` are in every task's expert and oracle fingerprint, so a
+  controller added there would make every other task's records stale. Point
+  the spec at the package's modules with the `module` argument,
+  `make_pid=_pid("make_<name>_pid", module="target_gym.<package>.experts")`
+  and `make_mpc=_mpc("make_<name>_mpc", module="target_gym.<package>.oracle")`.
+  An oracle that reads expert code or gains declares them in `oracle_reads`
+  and `oracle_gains_keys`. The version stamp leaves `experts*` and
+  `oracle*` files out, so the package's other files import them only inside
+  a function.
 - **Declare imported physics.** Both fingerprints hash the task's own package.
   If its physics imports a module from another package, list that file in
   `fingerprint_sources`, relative to `src/target_gym` (`"pc_gym/cstr/env.py"`
   for `unstable_cstr`), so an edit there makes this task's records stale too.
   Apart from those files, the package imports only itself and the shared
-  plumbing (`base`, `utils`, `integration`, `reward`). Its `experts*.py` files
-  may also import the shared controller modules `target_gym.experts`,
+  plumbing (`base`, `utils`, `integration`, `reward`). Its `experts*.py` and
+  `oracle*.py` files may also import the shared controller modules `target_gym.experts`,
   `target_gym.experts.pid` and `target_gym.experts.mpc`. Its `rendering*.py`
   files are exempt and may import `target_gym.render_kit`, since no
   fingerprint covers rendering and a renderer cannot change a return.
-- **Declare the gains your controllers read.** The baseline fingerprint
+- **Declare the gains your controllers read.** The expert fingerprint
   hashes the `pid_gains.json` entries whose key starts with the task's name
-  and the entry named by `tuned_gains_key`. A controller that reads any other
-  key lists it in `gains_keys`, so a retune of that key makes this task's
-  baseline and protocol records stale (`plane_sine` and `plane_energy`
-  declare `plane_cascaded`, which their PID baseline reads). This one applies
-  to the 21 too, and `tests/test_registry_rules.py` checks that every
-  declared key exists. `gains_keys` feeds the baseline fingerprint only: the
-  version stamp hashes neither `pid_gains.json` nor `experts/pid.py`, so a
-  new task's physics should not read them. Freeze such gains inside the
-  package instead. Patrol's scripted lead, which flies the `plane3d_heading`
-  autopilot, is the known exception among the 21.
+  and the entry named by `tuned_gains_key`. An expert that reads any other
+  key lists it in `gains_keys`, and an oracle every key it reads in
+  `oracle_gains_keys`, so a retune of that key makes this task's records
+  stale. This one applies to the 21 too, and `tests/test_registry_rules.py`
+  checks that every declared key exists. The version stamp hashes
+  `pid_gains.json` not at all, so a new task's physics should not read it.
+  Freeze such gains inside the package instead, as patrol's scripted lead
+  holds the `plane3d_heading` gains it flies (`patrol/env_jax.py`).
 - **A name that is no prefix of another.** Gains keys are collected by name
   prefix, and names starting with `plane` or `patrol` are treated as aircraft.
   A new name must not start another registered name or start with one, and
@@ -205,22 +206,25 @@ not measured on every push: a full run takes hours, nearly all of it in the
 MPCs, and the answer only moves when the physics, the controllers or their
 gains do.
 
+Each record has two parts, the expert's rows (the PID's returns and protocol
+scores) and the oracle's (the MPC's), and each part has a fingerprint of its
+own, so retuning an expert re-records only the PIDs, in minutes, and
+rebuilding an oracle only the MPCs.
+
 The easy way is to let CI do it. Add the `re-record` label to your pull
-request: one job per stale environment records it on GitHub's runners and
-commits the rows, the table and the pages to your branch, and the checks run
-again on that commit. To check locally that a change left every PID's returns
-alone, which takes under a minute and writes nothing:
-
-```bash
-uv run python scripts/record_baselines.py --pid-only
-```
-
-To record by hand instead:
+request: one job per stale environment records its stale parts on GitHub's
+runners and commits the rows, the table and the pages to your branch, and the
+checks run again on that commit. To record by hand instead:
 
 ```bash
 uv run python scripts/record_baselines.py                  # everything
 uv run python scripts/record_baselines.py --envs plane cstr # just these
+uv run python scripts/record_baselines.py --pid-only       # the expert part
+uv run python scripts/record_baselines.py --mpc-only       # the oracle part
 ```
+
+`--pid-only` takes under a minute and prints, for each task, whether its PID
+returns moved; `git diff` the records to undo a run you only meant as a check.
 
 Each task's records are files of their own, `src/target_gym/data/<kind>/<task>.json`
 (`target_gym.records`), so re-recording a task changes that task's files and
@@ -238,13 +242,17 @@ uv run python scripts/generate_env_pages.py
 page and its charts are not committed: the docs build writes them from the
 records (`docs/hooks.py`), so they cannot go stale.
 
-Each record carries a fingerprint of what determined it: the environment's
-modules, the shared controller and integration code, the gains, the parameter
-values, and the burn-in the protocol scores from (the task's row in
-`hold_measurements.json`, capped at half the episode). The suite refuses to
-read one whose fingerprint no longer matches the tree. So if you change any of
-those, CI's `records` check fails and names the records that went stale;
-re-record them and commit the result with the change that invalidated it.
+Each part carries a fingerprint of what determined it. Both cover the
+environment's non-controller modules, the shared physics, the parameter
+values, the fixed settle and the burn-in the protocol scores from (the task's
+row in `hold_measurements/`, capped at half the episode). The expert's adds
+`experts/pid.py`, the task's `experts.py` and its gains; the oracle's adds
+`experts/mpc.py`, the task's `oracle.py`, its noise fields, and whatever
+expert code and gains the oracle still reads (`oracle_reads` and
+`oracle_gains_keys` on its `EnvSpec`). The suite refuses to read a part whose
+fingerprint no longer matches the tree. So if you change any of those, CI's
+`records` check fails and names the parts that went stale; re-record them and
+commit the result with the change that invalidated it.
 The record checks run only in that job, so a failing test job always means a
 real bug. To run them locally: `uv run pytest -m records`.
 `src/target_gym/provenance.py` explains why the fingerprint is taken over source
@@ -252,9 +260,10 @@ rather than over behaviour, and what that trade buys.
 
 The long-run protocol costs in `src/target_gym/data/protocol_results/` work
 the same way. They are what the floor check in `tests/test_reward_contract.py`
-compares each measured floor against, and they carry the same fingerprint, so
-the same change that makes a baseline stale makes its row stale too. Re-run the
-protocol for the environments the test names:
+compares each measured floor against, and their parts carry the same
+fingerprints, so the same change that makes a baseline part stale makes its
+row's part stale too. Re-run the protocol for the environments the test names,
+with `--pid-only` or `--mpc-only` for one part:
 
 ```bash
 uv run python scripts/evaluate_baselines.py --envs plane cstr
@@ -264,6 +273,20 @@ Two things to know before starting a run. It writes each environment's own
 file, so runs recording different environments cannot clobber each other, but
 two runs recording the same environment race, and the last one wins. And gains
 changes invalidate records, so tune first, record second.
+
+### Frozen scoring constants
+
+What a score is measured against does not move with the controllers. Each
+task's `e_floor`, `c_hold` and `rho_floor` are literals in its parameters,
+and its fixed settle S, the window every controller's hold is scored after, is
+a constant in `target_gym.eval.FIXED_SETTLE`, taken on 2026-11-03 from the
+slower of the shipped expert's and oracle's measured settles. None of them is
+re-derived when an expert is retuned or an oracle rebuilt: a new controller is
+scored against the same floors and in the same window as the one it replaces.
+`scripts/measure_hold.py` still measures each controller's settle and hold,
+and `hold_measurements/` reports them; they are no longer read for S. Changing
+one of these constants is a change to the task, made on its own and reviewed
+as one.
 
 ## Documentation
 

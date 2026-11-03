@@ -16,11 +16,12 @@ transition, slot geometry, reward and observation functions.
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.base import canonical_reset, finish_step
 from target_gym.expert_access import RegistryExperts
-from target_gym.experts.pid import make_plane3d_heading_pid
+from target_gym.experts.pid import Plane3DHeadingPIDParams, plane3d_pid_reset
 from target_gym.patrol.env import (
     N_LEAD_LEGS,
     PatrolParams,
@@ -36,6 +37,26 @@ from target_gym.patrol.env import (
 )
 from target_gym.patrol.rendering import _render
 from target_gym.video import SavesVideo
+
+#: The scripted lead's heading autopilot: the 3D heading task's PID on the
+#: gains ``pid_gains.json`` held for it on 2026-11-03 (``plane3d_heading``).
+#: The lead is part of the plant, so its gains are task constants: a retune of
+#: the 3D heading expert rewrites that entry and must not change this task.
+LEAD_AUTOPILOT = Plane3DHeadingPIDParams(
+    Kp_alt=0.00037733,
+    Ki_alt=9.45e-06,
+    Kd_alt=0.00478834,
+    Kp_hdg=4.65883,
+    Ki_hdg=0.228374,
+    Kd_hdg=1.886826,
+    Kp_bank=-3.235864,
+    power=0.6,
+    max_bank_rad=float(np.deg2rad(25.0)),
+    dt=1.0,
+    Kp_power=0.00029661,
+    Ki_power=4.33e-06,
+    Kd_power=0.00646023,
+)
 
 
 class _PlanePatrolBase(
@@ -57,7 +78,8 @@ class _PlanePatrolBase(
         self.positions_history_xz = []
         self.positions_history_xy = []
         # Static gains for the scripted lead's heading autopilot.
-        self._lead_pid_params, self._lead_pid_zero = make_plane3d_heading_pid()
+        self._lead_pid_params = LEAD_AUTOPILOT
+        self._lead_pid_zero = plane3d_pid_reset(LEAD_AUTOPILOT)
 
     @property
     def default_params(self) -> PatrolParams:

@@ -320,9 +320,10 @@ jobs:
     - name: Install dependencies
       run: uv sync --frozen --group dev
 
+    # Each row's expert and oracle parts against their own fingerprints.
     - name: Check every recorded row describes this tree
       run: uv run pytest tests/ -q -n auto --durations=5 -m records
 
     - name: Say how to fix a stale record
       if: failure()
-      run: echo "::error::A recorded baseline or protocol row is stale or missing. Add the re-record label to the pull request to record it on CI, or record it locally as CONTRIBUTING.md describes."
+      run: echo "::error::The expert or oracle part of a recorded baseline or protocol row is stale or missing. Add the re-record label to the pull request to record the stale parts on CI, or record them locally as CONTRIBUTING.md describes."

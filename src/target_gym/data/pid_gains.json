@@ -289,7 +289,7 @@
     "cruise_power": -0.22749999999999998,
     "Kp_speed": 0.05,
     "Ki_speed": 7.5e-05,
-    "note": "a copy of plane_cascaded, read by the plane_sine oracle (plane/experts.py): baseline_fingerprint collects the gain keys that start with the task's name, so plane_sine's covers this one and not plane_cascaded. tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
+    "note": "a copy of plane_cascaded, read by the plane_sine oracle (plane/oracle.py), whose oracle fingerprint covers it (oracle_gains_keys on its spec). tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
   },
   "plane_energy_cascaded": {
     "Kp_alt": 0.12,
@@ -305,7 +305,7 @@
     "cruise_power": -0.22749999999999998,
     "Kp_speed": 0.05,
     "Ki_speed": 7.5e-05,
-    "note": "a copy of plane_cascaded, read by the plane_energy oracle (plane/experts.py): baseline_fingerprint collects the gain keys that start with the task's name, so plane_energy's covers this one and not plane_cascaded. tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
+    "note": "a copy of plane_cascaded, read by the plane_energy oracle (plane/oracle.py), whose oracle fingerprint covers it (oracle_gains_keys on its spec). tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
   },
   "unstable_cstr": {
     "Kp_T": 8.491863,

@@ -1,6 +1,6 @@
 {
   "cpu": "AMD EPYC 9V74 80-Core Processor",
-  "fingerprint": "a9ee6457fbe98a9f",
+  "expert_fingerprint": "5ec1175440241084",
   "generated": "2026-11-03T02:56:47+00:00",
   "mpc_returns": [
     -32871.677444,
@@ -15,6 +15,7 @@
     -139088.110596
   ],
   "mpc_trips": 0,
+  "oracle_fingerprint": "c0f082d9a69c5a98",
   "pid_returns": [
     -32972.593917,
     -9658.632443,

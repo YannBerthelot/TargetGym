@@ -6,7 +6,7 @@ not the tail of its first move. The rule, agreed with the user on 2026-10-27:
 
 1. Every target cycle with scored hold steps lasts at least twice the task's
    fixed settle ``S`` (``eval.fixed_settle``: the slower of the expert's and
-   the oracle's measured settles). The scorer then drops the whole settle in
+   the oracle's measured settles, frozen on 2026-11-03). The scorer then drops the whole settle in
    every cycle instead of cutting it to half the cycle, and at least half of
    each cycle is hold.
 2. The expert's scored hold, on the tracking cost and floored at the ceiling

@@ -267,7 +267,7 @@ seeds and stays as the oracle's speed loop and hold.
 ### The reference controller
 
 The MPC slot holds a gradient MPC that rolls out the simulator itself
-(`make_plane_mpc` in `experts.py`): 20 s of horizon on the mean wind, started
+(`make_plane_mpc` in `oracle.py`): 20 s of horizon on the mean wind, started
 from and compared at every step against the cascaded PID's rollout. Since the
 oracle audit (2026-10) it differs by task. On `plane` and `plane_sine` two
 planners share the episode (`PlaneHandoverMPC`). The shipped planner, which
@@ -308,7 +308,7 @@ planner's). Under that floor (`plane_energy-v3`) it costs 511 per step on the
 protocol against the PID's 11 210, with zero trips.
 
 Each oracle reads the PID's gains from a key of `pid_gains.json` that its
-own baseline fingerprint collects: `plane_cascaded` on `plane`, and a copy
+own oracle fingerprint collects: `plane_cascaded` on `plane`, and a copy
 of it under the task's own name on the other two (`plane_sine_cascaded`,
 `plane_energy_cascaded`), which a test holds equal to it. The planner's
 objective is the reward over a fixed scale per task, not over

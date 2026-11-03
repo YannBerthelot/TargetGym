@@ -236,3 +236,27 @@ def test_demand_noise_is_fresh_every_sub_step():
     d1 = float(s1.target_n) - float(state.target_n)
     d2 = float(s2.target_n) - float(s1.target_n)
     assert d1 != d2
+
+
+def test_the_plant_runs_in_float64_under_x64():
+    """Under x64 the reset draws a float64 state and the step keeps it, so a
+    planner can roll the plant in double precision; the float32 plant is
+    unchanged (its recorded returns hold)."""
+    try:
+        from jax import enable_x64
+    except ImportError:  # JAX 0.6; 0.10 removed the experimental name
+        from jax.experimental import enable_x64
+
+    with enable_x64():
+        env = Reactor()
+        _, state = env.reset_env(jax.random.PRNGKey(0), env.default_params)
+        _, state, reward, _, _ = env.step_env(
+            jax.random.PRNGKey(1), state, jnp.array([0.1]), env.default_params
+        )
+        floats = {
+            leaf.dtype
+            for leaf in jax.tree.leaves(state)
+            if jnp.issubdtype(leaf.dtype, jnp.floating)
+        }
+    assert floats == {jnp.dtype("float64")}
+    assert reward.dtype == jnp.float64

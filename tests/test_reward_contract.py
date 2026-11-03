@@ -233,23 +233,28 @@ def test_reward_parameters_are_documented(spec):
     ), f"{spec.name}: PHYSICS.md does not say how the floor was obtained"
 
 
-def _recorded_protocol_row(spec) -> dict:
+def _recorded_protocol_row(spec, parts=("expert", "oracle")) -> dict:
     """The row ``scripts/evaluate_baselines.py`` recorded for ``spec``, refused
-    if its fingerprint no longer matches the tree (the same guard, and the same
-    fingerprint, as the recorded baselines)."""
-    from target_gym.provenance import baseline_fingerprint
+    if the fingerprint of any of ``parts`` it ships no longer matches the tree
+    (the same guard, and the same fingerprints, as the recorded baselines)."""
+    from target_gym.provenance import fingerprints
 
-    rerun = (
-        f"Re-run `uv run python scripts/evaluate_baselines.py --envs {spec.name}` "
-        f"and commit src/target_gym/data/protocol_results/{spec.name}.json."
-    )
     row = records.load("protocol_results").get(spec.name)
-    assert row is not None, f"{spec.name}: no recorded protocol row. {rerun}"
-    current = baseline_fingerprint(spec)
-    assert row.get("fingerprint") == current, (
-        f"{spec.name}: the protocol row was taken against different code "
-        f"(recorded {row.get('fingerprint')}, current {current}). {rerun}"
+    assert row is not None, (
+        f"{spec.name}: no recorded protocol row. Re-run `uv run python "
+        f"scripts/evaluate_baselines.py --envs {spec.name}` and commit "
+        f"src/target_gym/data/protocol_results/{spec.name}.json."
     )
+    for part, current in fingerprints(spec).items():
+        recorded = row.get(f"{part}_fingerprint")
+        flag = {"expert": "--pid-only", "oracle": "--mpc-only"}[part]
+        assert part not in parts or recorded == current, (
+            f"{spec.name}: the protocol row's {part} part was taken against "
+            f"different code (recorded {recorded}, current {current}). Re-run "
+            f"`uv run python scripts/evaluate_baselines.py --envs {spec.name} "
+            f"{flag}` and commit src/target_gym/data/protocol_results/"
+            f"{spec.name}.json."
+        )
     return row
 
 
@@ -297,7 +302,7 @@ def test_mpc_does_not_beat_a_measured_floor(spec):
     p = spec.make_test_params()
     if spec.make_mpc is None or getattr(p, "floor_is_documented_minimum", True):
         pytest.skip(f"{spec.name}: no measured floor to check against")
-    row = _recorded_protocol_row(spec)
+    row = _recorded_protocol_row(spec, parts=("oracle",))
     tracking = row["mpc"]["tracking"]
     slack = _sampling_slack(spec, row)
     assert tracking >= (1.0 - slack) * float(p.rho_floor_tracking), (
@@ -318,7 +323,7 @@ def test_the_recorded_mpc_cost_is_what_the_mpc_measures_now():
     from target_gym.eval import evaluate_controller
 
     spec = REGISTRY["ph_neutralization"]
-    row = _recorded_protocol_row(spec)
+    row = _recorded_protocol_row(spec, parts=("oracle",))
     m = evaluate_controller(spec.name, "mpc", seeds=int(row["seeds"]))
     assert m["tracking"] == pytest.approx(row["mpc"]["tracking"], rel=1e-3)
 

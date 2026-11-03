@@ -1,10 +1,10 @@
 """
 Shared machinery for the reference controllers (the MPC slot of each task).
 
-Each task's oracle lives in its own package's ``experts.py``, so changing one
-re-records only that package's tasks. This module holds what they share, and
-it is in every task's baseline fingerprint, so editing it re-records all of
-them.
+Each task's oracle lives in its own package's ``oracle.py``, so changing one
+re-records only that package's oracle rows. This module holds what they
+share, and it is in every task's oracle fingerprint, so editing it
+re-records all of them.
 
 GradientMPC  (JAX)
     Single-shooting gradient MPC: differentiates through a ``lax.scan``
@@ -631,9 +631,9 @@ def protocol_burn_in(name: str, params) -> int:
     ``eval.scored_burn_in``: the hold row's burn-in, capped at half the
     episode, which is what ``eval.evaluate_controller`` scores from. An
     oracle that weights the scored window reads it here so that it
-    optimises the window the protocol scores. The burn-in is in every task's
-    baseline fingerprint (``provenance.baseline_fingerprint``), so a record
-    taken under one burn-in is stale under another.
+    optimises the window the protocol scores. The burn-in is in both of
+    every task's record fingerprints (``provenance``), so a record taken
+    under one burn-in is stale under another.
     """
     from target_gym.eval import scored_burn_in
 

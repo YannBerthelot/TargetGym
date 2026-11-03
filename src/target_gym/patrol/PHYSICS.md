@@ -197,7 +197,7 @@ an RMS slot error of 3.4 to 5.2 m (median 4.0) and the bearing-only one 3.8
 to 5.7 m (median 4.4), with no trip. The pursuit-guidance PID it replaced
 (2026-10) held 44 to 68 m and 40 to 57 m.
 
-**The oracle** in the MPC slot is `PatrolTwinOracle` (`experts.py`), a
+**The oracle** in the MPC slot is `PatrolTwinOracle` (`oracle.py`), a
 feedback law with a short planner on top. The law flies the lead's own heading
 autopilot on the follower's state, aimed at the lead's commanded heading and
 altitude plus the slot offset, and adds small corrections on the slot error

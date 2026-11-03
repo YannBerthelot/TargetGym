@@ -143,7 +143,7 @@ def test_gains_are_read_under_the_task_key(monkeypatch):
     """The factory reads ``pid._gains_cache["unstable_cstr"]`` at call
     time (the tuner patches it), skips the ``note``, and nothing else in
     ``pid_gains.json`` starts with the task's name, since
-    ``baseline_fingerprint`` collects gains by that prefix."""
+    ``expert_fingerprint`` collects gains by that prefix."""
     stored = pid_mod.load_gains()
     # On target, 0.2 K above T*: the inner loop alone acts, through Kp_T.
     obs = _obs(0.5, 350.2, 0.5, 300.0)

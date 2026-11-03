@@ -1,10 +1,8 @@
-"""Controllers for the CSTR task: the expert's cascade and the oracle.
+"""The expert (the PID slot) for the CSTR task: a cascade.
 
-Each task keeps its oracle in its own package, so changing one re-records
-only the tasks of that package. The shared machinery (GradientMPC,
-NewtonMPC, SamplingMPC and the v2 objective helpers)
-stays in ``target_gym.experts.mpc``, which is in every task's baseline
-fingerprint.
+The oracle (the MPC slot) is in ``oracle.py``, so that the expert and
+the oracle each have a fingerprint of their own
+(``provenance.expert_fingerprint``, ``provenance.oracle_fingerprint``).
 
 The expert is the cascade reactor practice runs: concentration analysers are
 too slow to close on the coolant directly, so an outer PI on C_a sets the
@@ -14,46 +12,6 @@ tests (``scripts/tune_process_experts.py``, PHYSICS.md section 6).
 
 import jax.numpy as jnp
 from flax import struct
-
-from target_gym.experts.mpc import NewtonMPC, protocol_burn_in, window_weights
-
-# ---------------------------------------------------------------------------
-# CSTR
-# ---------------------------------------------------------------------------
-
-
-def make_cstr_mpc(
-    env,
-    params,
-    window_start: int | None = None,
-    resolve_every: int = 1,
-    pre_weight: float = 1e-3,
-    horizon: int | None = None,
-    n_iter: int = 20,
-):
-    """The CSTR's oracle: ``NewtonMPC`` over the rest of the episode.
-
-    It re-solves every step on the env's own step and reward, the
-    concentration's tracking cost in floor units. ``window_start`` is where
-    the protocol starts scoring, read by default from its burn-in
-    (``protocol_burn_in``: 12 steps of the registered 150), and the steps
-    before it weigh ``pre_weight`` (``window_weights``). The plant is
-    deterministic, so the closed loop reaches the plant's optimum to float32
-    rounding: the returns of the IPOPT shrinking-horizon NLP it replaced, to
-    the unit, at a quarter of its time.
-    """
-    if window_start is None:
-        window_start = protocol_burn_in("cstr", params)
-    steps = int(params.max_steps_in_episode)
-    horizon = steps if horizon is None else int(horizon)
-    return NewtonMPC(
-        env,
-        params,
-        horizon=horizon,
-        n_iter=n_iter,
-        weights=window_weights(steps, window_start, pre_weight, horizon),
-        resolve_every=resolve_every,
-    )
 
 
 @struct.dataclass

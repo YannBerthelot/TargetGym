@@ -13,13 +13,15 @@ Unlike the recorded baselines (``record_baselines.py``, one return per
 episode), this is the number the benchmark is about: what a controller pays
 per step once it is holding, and what a target change costs it.
 
-Each row carries the same fingerprint as a recorded baseline
-(``provenance.baseline_fingerprint``: the environment's modules, the shared
-controller code, the gains, the parameter values and the burn-in the protocol
-scores from, the hold row's capped at half the episode), so a test can read the
-MPC's recorded cost instead of re-running the MPC, and refuse the row once the
-code it describes has moved. ``tests/test_reward_contract.py`` does that for the
-floor check.
+Each row's two parts carry the same fingerprints as a recorded baseline's
+(``provenance.expert_fingerprint`` for ``pid``, ``oracle_fingerprint`` for
+``mpc``: the environment's modules, that part's controller code and gains, the
+parameter values, the fixed settle and the burn-in the protocol scores from,
+the hold row's capped at half the episode), so a test can read the MPC's
+recorded cost instead of re-running the MPC, and refuse the row once the code
+it describes has moved. ``tests/test_reward_contract.py`` does that for the
+floor check. ``--pid-only`` and ``--mpc-only`` score one part and keep the
+other's as recorded.
 """
 
 from __future__ import annotations
@@ -37,7 +39,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from target_gym import records  # noqa: E402
 from target_gym.eval import evaluate_controller, fixed_settle  # noqa: E402
-from target_gym.provenance import baseline_fingerprint  # noqa: E402
+from target_gym.provenance import fingerprints  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 from target_gym.scoring import ceiling, headroom, score  # noqa: E402
 
@@ -110,25 +112,30 @@ def main() -> int:
     ap.add_argument(
         "--table", action="store_true", help="print the room map from the file"
     )
+    only = ap.add_mutually_exclusive_group()
+    only.add_argument("--pid-only", action="store_true", help="the expert part only")
+    only.add_argument("--mpc-only", action="store_true", help="the oracle part only")
     args = ap.parse_args()
     rows = records.load("protocol_results")
     if args.table:
         print(table(rows))
         return 0
+    kinds = ("pid",) if args.pid_only else ("mpc",) if args.mpc_only else ("pid", "mpc")
     names = args.envs or [n for n, s in REGISTRY.items() if s.has_pid]
     for name in names:
         spec = REGISTRY[name]
         p = spec.make_test_params()
+        fp = fingerprints(spec)
         row = {
-            "fingerprint": baseline_fingerprint(spec),
             "rho_floor": float(getattr(p, "rho_floor", float("nan"))),
             "ceiling": ceiling(name, p),
             "settle": fixed_settle(name),
             "seeds": args.seeds,
         }
-        for kind in ("pid", "mpc"):
-            if kind == "mpc" and spec.make_mpc is None:
+        for kind, part in (("pid", "expert"), ("mpc", "oracle")):
+            if kind not in kinds or part not in fp:
                 continue
+            row[f"{part}_fingerprint"] = fp[part]
             t0 = time.time()
             m = evaluate_controller(name, kind, seeds=args.seeds)
             m = {k: (float(v) if v == v else None) for k, v in m.items()}
@@ -142,6 +149,9 @@ def main() -> int:
                 flush=True,
             )
         rows[name] = records.stamped(row)
+        if len(kinds) == 1:
+            part = "expert" if kinds == ("pid",) else "oracle"
+            rows[name] = records.with_part(rows.get(name, {}), rows[name], part)
         records.write("protocol_results", name, rows[name])
     print(table(rows))
     return 0

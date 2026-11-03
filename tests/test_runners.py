@@ -22,12 +22,12 @@ from target_gym import (
     FourTankParams,
 )
 from target_gym.experts.mpc import GradientMPC, NewtonMPC
-from target_gym.pc_gym.cstr.experts import make_cstr_mpc
-from target_gym.pc_gym.first_order.experts import make_first_order_mpc
-from target_gym.pc_gym.four_tank.experts import make_four_tank_mpc
+from target_gym.pc_gym.cstr.oracle import make_cstr_mpc
+from target_gym.pc_gym.first_order.oracle import make_first_order_mpc
+from target_gym.pc_gym.four_tank.oracle import make_four_tank_mpc
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
-from target_gym.plane.experts import PlaneHandoverMPC, make_plane_mpc
+from target_gym.plane.oracle import PlaneHandoverMPC, make_plane_mpc
 from target_gym.registry import REGISTRY
 from target_gym.runners import runners as R
 

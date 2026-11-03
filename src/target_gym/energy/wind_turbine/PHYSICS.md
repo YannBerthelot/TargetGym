@@ -170,7 +170,7 @@ seed) and a mean power error under 1 % of the target. Measured 0.25 to
 divides by the filtered speed, so the power lags the rotor's speed swings.
 
 **The oracle is a feedback law, not a planner.** Since the oracle audit
-(2026-10) the MPC slot holds `WindTurbineNewtonPI` (`experts.py`). Generator
+(2026-10) the MPC slot holds `WindTurbineNewtonPI` (`oracle.py`). Generator
 torque reaches its command within a step, so the power the next step is
 scored on is set by this step's torque command: four Newton steps through the
 plant's own model, with the turbulence at its mean, make the predicted power

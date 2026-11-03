@@ -1,18 +1,9 @@
-"""Reference controller (the MPC slot) for the first-order task.
+"""The expert (the PID slot) for the first-order task.
 
-Each task keeps its oracle in its own package, so changing one re-records
-only the tasks of that package. The shared machinery (GradientMPC,
-NewtonMPC, SamplingMPC and the v2 objective helpers) stays in
-``target_gym.experts.mpc``, which is in every task's baseline fingerprint.
+The oracle (the MPC slot) is in ``oracle.py``, so that the expert and
+the oracle each have a fingerprint of their own
+(``provenance.expert_fingerprint``, ``provenance.oracle_fingerprint``).
 """
-
-from target_gym.experts.mpc import NewtonMPC
-
-
-def make_first_order_mpc(env, params, horizon: int = 5, n_iter: int = 10):
-    """The oracle: ``NewtonMPC`` on the plant's own step and reward, over
-    PC-gym's five-step horizon (0.25 s)."""
-    return NewtonMPC(env, params, horizon=horizon, n_iter=n_iter)
 
 
 def make_first_order_pid_controller():

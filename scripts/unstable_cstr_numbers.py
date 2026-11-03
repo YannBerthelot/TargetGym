@@ -52,7 +52,6 @@ from target_gym.pc_gym.unstable_cstr.experts import (  # noqa: E402
     GUARD_LEVELS,
     GUARD_MIN_DECAY,
     HELD_GAINS,
-    MPC_HORIZON,
     PNR_LINE,
     PNR_LINE_C_A,
     TUNED_GAINS,
@@ -69,6 +68,7 @@ from target_gym.pc_gym.unstable_cstr.experts import (  # noqa: E402
     setpoint_window,
     trips_under_full_cooling,
 )
+from target_gym.pc_gym.unstable_cstr.oracle import MPC_HORIZON  # noqa: E402
 from target_gym.utils import convert_raw_action_to_range  # noqa: E402
 
 try:

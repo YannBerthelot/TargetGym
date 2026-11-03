@@ -1,7 +1,7 @@
 {
   "ceiling": 7.500000000000001e-05,
   "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
-  "fingerprint": "eaa41af1d6acdddc",
+  "expert_fingerprint": "75aa62a4ebe22692",
   "generated": "2026-11-03T03:04:07+00:00",
   "mpc": {
     "failure": 0.0,
@@ -28,6 +28,7 @@
     "transient_cost_ci": 0.20530720810831762,
     "unsettled_fraction": 0.3333333333333333
   },
+  "oracle_fingerprint": "eec4c9d157f618e6",
   "pid": {
     "failure": 0.0,
     "failure_rate": 0.0,

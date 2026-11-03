@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from target_gym import registry
-from target_gym.energy.battery.experts import ScheduleFeedforward
+from target_gym.energy.battery.oracle import ScheduleFeedforward
 from target_gym.experts.mpc import plan_params
 
 

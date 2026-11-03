@@ -25,14 +25,37 @@ def _load():
     return mod
 
 
-def test_stale_lists_moved_and_missing_rows_in_either_file():
+def test_stale_lists_each_moved_or_missing_part_in_either_file():
+    """A (task, part) pair is stale when that part's fingerprint is missing
+    or has moved in either file. A task without an oracle has only its expert
+    part, and no baseline row."""
     sr = _load()
-    current = {"a": "f1", "b": "f2", "c": "f3", "d": "f4"}
-    baselines = {"_meta": {}, "a": {"fingerprint": "f1"}, "b": {"fingerprint": "old"}}
-    protocol = {"a": {"fingerprint": "f1"}, "b": {"fingerprint": "f2"}, "c": {}}
-    # b moved in the baselines; c and d have no current baseline row; c's
-    # protocol row has no fingerprint and d has none at all.
-    assert sr.stale(baselines, protocol, current) == ["b", "c", "d"]
+    both = {"expert_fingerprint": "e1", "oracle_fingerprint": "o1"}
+    current = {
+        "a": {"expert": "e1", "oracle": "o1"},
+        "b": {"expert": "e1", "oracle": "o2"},
+        "c": {"expert": "e2", "oracle": "o1"},
+        "d": {"expert": "e1", "oracle": "o1"},
+        "e": {"expert": "e1"},
+    }
+    baselines = {"a": both, "b": both, "c": both, "d": {"expert_fingerprint": "e1"}}
+    protocol = {n: both for n in "abcde"}
+    # b's oracle and c's expert moved; d's baseline row has no oracle
+    # fingerprint; e has no oracle, so no baseline row is expected.
+    assert sr.stale(baselines, protocol, current) == [
+        ("b", "oracle"),
+        ("c", "expert"),
+        ("d", "oracle"),
+    ]
+
+
+def test_the_recorder_runs_one_job_per_task_on_its_stale_parts_only():
+    sr = _load()
+    pairs = [("b", "oracle"), ("c", "expert"), ("c", "oracle")]
+    assert sr.jobs(pairs) == [
+        {"env": "b", "parts": "oracle"},
+        {"env": "c", "parts": "expert oracle"},
+    ]
 
 
 def test_merge_reports_only_rows_that_changed_beyond_timing():

@@ -34,7 +34,6 @@ which uses the same anticipation rule on its squared errors).
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
@@ -443,14 +442,46 @@ def hold_settings(name: str) -> dict:
     return {"burn_in": int(row["burn_in"]) if row else 0}
 
 
+#: The fixed settle S of each task, in steps: the slower of the shipped
+#: expert's and oracle's measured settles (``scripts/measure_hold.py``),
+#: rounded up, as they stood on 2026-11-03. Frozen there, as ``e_floor``,
+#: ``c_hold`` and ``rho_floor`` are: a retuned expert or a rebuilt oracle
+#: does not move the window every controller is scored on
+#: (CONTRIBUTING.md, "Frozen scoring constants"). The hold rows keep
+#: reporting the measured settles.
+FIXED_SETTLE = {
+    "plane": 47,
+    "plane_energy": 85,
+    "plane_sine": 81,
+    "plane3d_heading": 136,
+    "plane3d_circle": 66,
+    "plane3d_racetrack": 42,
+    "plane3d_figure8": 17,
+    "patrol": 84,
+    "patrol_bearing_only": 84,
+    "cstr": 67,
+    "first_order": 63,
+    "four_tank": 581,
+    "ph_neutralization": 12,
+    "distillation": 46,
+    "glass_furnace": 18,
+    "reactor": 1,
+    "hvac": 4,
+    "cement_kiln": 8,
+    "boiler_drum": 8,
+    "wind_turbine": 0,
+    "battery": 6,
+    "unstable_cstr": 99,
+    "compressor_surge": 100,
+    "formation": 45,
+}
+
+
 def fixed_settle(name: str) -> int:
-    """The settle every controller is scored with on ``name``: the slower of
-    the shipped controllers' measured settles (``scripts/measure_hold.py``),
-    rounded up. Fixed per plant, so a hold is the same window whoever flies
-    it."""
-    row = records.load_row("hold_measurements", name)
-    measured = [row[k]["settle"] for k in ("pid", "mpc") if k in row]
-    return int(math.ceil(max(measured, default=0)))
+    """The settle every controller is scored with on ``name``
+    (``FIXED_SETTLE``). Fixed per plant, so a hold is the same window
+    whoever flies it."""
+    return FIXED_SETTLE[name]
 
 
 def scored_burn_in(name: str, params) -> int:

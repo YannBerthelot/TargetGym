@@ -140,7 +140,7 @@ No seed trips. The team it replaced (2026-10), the patrol's scripted lead
 autopilot and pursuit PID, held the lead's altitude 141 to 155 m off and the
 slots 35 to 56 m off.
 
-**The oracle** in the MPC slot is `FormationOracle` (`experts.py`), the
+**The oracle** in the MPC slot is `FormationOracle` (`oracle.py`), the
 patrol oracle's design applied to the whole formation. Each seat flies a law:
 the patrol's lead autopilot in the lead seat and the patrol's twin-autopilot
 law in each wingman seat, which flies the lead's own autopilot on the
