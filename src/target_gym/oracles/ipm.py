@@ -326,7 +326,9 @@ def interior_point(
         )
 
         def bt_cond(st):
-            return ~st[1] & (st[0] >= a_min)
+            # alpha_min is 0 when theta is (W&B eq. 23): stop at a step of 0
+            # too, where IPOPT's tiny-step test stops, or the loop never ends.
+            return ~st[1] & (st[0] >= a_min) & (st[0] > 0.0)
 
         def bt_next(st):
             a = 0.5 * st[0]
