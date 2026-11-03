@@ -10,6 +10,12 @@ every provenance fingerprint: how a task is looked up is not part of what it is.
 
 from __future__ import annotations
 
+import warnings
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+
 from target_gym import registry
 
 
@@ -33,24 +39,96 @@ def make(name: str, **overrides):
     return spec.make_env(), spec.make_test_params(**overrides)
 
 
-def make_expert(name: str):
-    """The shipped expert for ``name``, as a pure controller.
+class Expert:
+    """The shipped expert for one task, used like the environment.
 
-    Pick its form where you use it, so the two kinds of memory are never
-    confused:
+    ``memory = expert.reset()`` at each episode start, then
+    ``action, memory = expert.step(memory, obs)``: the memory is the PID's
+    integral and last error, carried by you as the environment's ``state``
+    is. The same ``step`` runs in a Python loop, under ``jit`` and
+    ``lax.scan``, and on a batch as ``jax.vmap(expert.step)`` from
+    ``expert.reset(n_envs)``. Under an auto-resetting ``env.step``, clear
+    the memory of finished episodes with
+    ``target_gym.experts.episodes.reset_where_done``.
 
-    - ``.host()`` keeps its own memory, for a Python loop on NumPy
-      observations: ``pid.reset()`` at each episode start, then
-      ``action = pid(obs)``. This is the form the baselines are scored with.
-    - ``.batched()`` is for ``jit``, ``vmap`` and GPU, and the caller carries
-      the memory: ``state = policy.init_state(n_envs)``, then
-      ``actions, state = policy(state, obs)``.
-    - ``.act(state, obs)`` is one traced step for a single environment,
-      starting from ``.init_state``.
-
-    The expert reads the observation only, as a deployed controller does.
+    It reads the observation only, as a deployed controller does.
+    ``expert.params`` holds its gains.
     """
-    return registry.get(name).make_pid_controller()
+
+    def __init__(self, controller):
+        self._controller = controller
+        self._step = jax.jit(controller.act)
+
+    @property
+    def params(self):
+        return self._controller.params
+
+    def reset(self, n_envs: int | None = None):
+        """Fresh memory for one episode, or ``n_envs`` copies stacked."""
+        fresh = jax.tree.map(jnp.asarray, self._controller.init_state)
+        if n_envs is None:
+            return fresh
+        return jax.tree.map(lambda x: jnp.broadcast_to(x, (n_envs,) + x.shape), fresh)
+
+    def step(self, memory, obs):
+        """``(action, memory)``: the expert's action on ``obs``, in the
+        environment's units and bounds, and its memory after it."""
+        return self._step(memory, obs)
+
+    # Deprecated in 0.8.0: one form replaces the three of 0.7.0.
+
+    def host(self):
+        _deprecated("make_expert(name).host()")
+        return self._controller.host()
+
+    def batched(self):
+        _deprecated("make_expert(name).batched()")
+        return self._controller.batched()
+
+    @property
+    def init_state(self):
+        _deprecated("make_expert(name).init_state")
+        return self._controller.init_state
+
+    def act(self, state, obs):
+        _deprecated("make_expert(name).act()")
+        return self._controller.act(state, obs)
+
+
+class _Carried:
+    """An :class:`Expert` as ``policy(obs) -> action``, holding its memory,
+    for the helpers that drive a policy in their own loop."""
+
+    def __init__(self, expert: Expert):
+        self.expert = expert
+        self.reset()
+
+    def reset(self):
+        self.memory = self.expert.reset()
+
+    def __call__(self, obs):
+        action, self.memory = self.expert.step(self.memory, obs)
+        return np.asarray(action)
+
+
+def as_policy(policy):
+    """``policy`` for a loop that calls ``policy(obs)``: an :class:`Expert`
+    gets fresh memory it carries itself, anything else is returned as is."""
+    return _Carried(policy) if isinstance(policy, Expert) else policy
+
+
+def _deprecated(old: str) -> None:
+    warnings.warn(
+        f"{old} is deprecated; use memory = expert.reset() and "
+        "action, memory = expert.step(memory, obs)",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+
+
+def make_expert(name: str) -> Expert:
+    """The shipped expert for ``name``: see :class:`Expert`."""
+    return Expert(registry.get(name).make_pid_controller())
 
 
 def make_oracle(name: str, params=None):

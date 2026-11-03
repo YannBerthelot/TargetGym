@@ -28,17 +28,19 @@ best known (``best_known``), for information.
 Score a policy of your own::
 
     from target_gym.scoring import score_policy
-    m = score_policy("cstr", make_policy, seeds=10)
+    m = score_policy("cstr", policy, seeds=10)
     m["ratio"], m["win_rate"], m["score"], m["headroom"]
 
-``make_policy()`` returns a fresh ``policy(obs)`` or ``policy(obs, state)`` for
-each episode. The expert is the environment's shipped ``"pid"`` slot, run on
+``policy(obs)`` returns an action; one with a ``reset()`` method is reset
+before each episode. The expert is the environment's shipped ``"pid"`` slot, run on
 the same seeds.
 """
 
 from __future__ import annotations
 
+import inspect
 import math
+import warnings
 
 import numpy as np
 
@@ -251,9 +253,50 @@ def best_known(row: dict) -> dict:
     return out
 
 
-def score_policy(name: str, make_policy, seeds: int = 10, params=None) -> dict:
-    """Run ``make_policy()`` and the expert on seeds ``0 .. seeds - 1`` of the
-    test configuration, ``compare`` them, and add the ``best_known`` moves."""
+def score_policy(name: str, policy, seeds: int = 10, params=None) -> dict:
+    """Run ``policy`` and the expert on seeds ``0 .. seeds - 1`` of the test
+    configuration, ``compare`` them, and add the ``best_known`` moves.
+
+    ``policy(obs) -> action``, or ``policy(obs, state)`` for a full-state
+    controller. One with a ``reset()`` method is reset before each episode.
+    ``target_gym.make_expert(name)`` works as it is. A factory taking no
+    arguments, the 0.7.0 form, still works and warns.
+    """
+    from target_gym.api import as_policy
+
+    policy = as_policy(policy)
+    if _takes_no_arguments(policy):
+        warnings.warn(
+            "score_policy(name, make_policy) is deprecated; pass the policy "
+            "itself, score_policy(name, policy)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _score(name, policy, seeds, params)
+    return _score(name, lambda: _fresh(policy), seeds, params)
+
+
+def _takes_no_arguments(f) -> bool:
+    try:
+        sig = inspect.signature(f)
+    except (TypeError, ValueError):
+        return False
+    return not any(
+        p.default is p.empty
+        and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)
+        for p in sig.parameters.values()
+    )
+
+
+def _fresh(policy):
+    if callable(getattr(policy, "reset", None)):
+        policy.reset()
+    return policy
+
+
+def _score(name: str, make_policy, seeds: int, params) -> dict:
+    """``score_policy`` on ``make_policy()``, called once per episode."""
+    from target_gym.api import as_policy
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
 
@@ -263,7 +306,9 @@ def score_policy(name: str, make_policy, seeds: int = 10, params=None) -> dict:
         E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=s)
         for s in range(seeds)
     ]
-    policy = [E.run_episode(spec, p, make_policy(), seed=s) for s in range(seeds)]
+    policy = [
+        E.run_episode(spec, p, as_policy(make_policy()), seed=s) for s in range(seeds)
+    ]
     m = compare(
         policy,
         expert,

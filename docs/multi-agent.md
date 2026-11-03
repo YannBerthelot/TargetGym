@@ -102,7 +102,7 @@ the episode, and `dones["__all__"]` is true in the multi-agent view.
 Two baselines ship, recorded on the [Baseline results](baseline-results.md)
 page.
 
-- **PID team** (`tg.make_expert("formation").host()`, or `.batched()` for JAX):
+- **PID team** (`tg.make_expert("formation")`):
   the lead seat flies the route as a formation lead does, on the 3D heading
   task's autopilot at a set power, and each wingman seat flies the patrol's
   formation hold. On held-out seeds the lead holds its altitude within 1.6 m

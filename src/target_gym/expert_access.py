@@ -5,8 +5,9 @@ are hashed into every provenance fingerprint, and how a controller is looked
 up is not part of what an environment is.
 
 ``make_pid`` and ``expert_policy`` are deprecated in favour of
-``target_gym.make_expert(name)``, which makes the caller pick the expert's
-form, and ``make_mpc`` in favour of ``target_gym.make_oracle(name)``.
+``target_gym.make_expert(name)``, used as ``expert.reset()`` and
+``expert.step(memory, obs)``, and ``make_mpc`` in favour of
+``target_gym.make_oracle(name)``.
 """
 
 import warnings
@@ -31,8 +32,8 @@ class RegistryExperts:
     registry_name: str
 
     def make_pid(self):
-        """Deprecated: ``target_gym.make_expert(name).host()``."""
-        _deprecated("make_pid()", "make_expert(name).host()")
+        """Deprecated: ``target_gym.make_expert(name)``."""
+        _deprecated("make_pid()", "make_expert(name)")
         from target_gym.registry import REGISTRY
 
         spec = REGISTRY[self.registry_name]
@@ -42,8 +43,8 @@ class RegistryExperts:
 
     @property
     def expert_policy(self):
-        """Deprecated: ``target_gym.make_expert(name).batched()``."""
-        _deprecated("expert_policy", "make_expert(name).batched()")
+        """Deprecated: ``target_gym.make_expert(name)``."""
+        _deprecated("expert_policy", "make_expert(name)")
         from target_gym.registry import REGISTRY
 
         return REGISTRY[self.registry_name].make_pid_controller().batched()

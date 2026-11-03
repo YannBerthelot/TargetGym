@@ -15,9 +15,7 @@ the expert stands in for your policy:
 import target_gym as tg
 from target_gym.suite import plot_profile, references, run_suite
 
-out = run_suite(
-    lambda name: tg.make_expert(name).host(), seeds=2, tasks=["first_order", "cstr"]
-)
+out = run_suite(tg.make_expert, seeds=2, tasks=["first_order", "cstr"])
 out["tasks"]["cstr"]["transient_ratio"]  # 1.0: the expert against itself
 fig = plot_profile({**references(), "mine": out["profile"]})
 fig.savefig("profile.png")

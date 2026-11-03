@@ -14,11 +14,11 @@ Every task by its registry name, from the package root:
 | Function | Returns |
 |---|---|
 | `make(name, **overrides)` | `(env, params)`: the environment and its scored configuration, with `overrides` replacing single fields |
-| `make_expert(name)` | The shipped expert as a pure controller. `.host()` keeps its own memory; `.batched()` is for `jit` and `vmap`, and the caller carries the memory; `.act(state, obs)` is one traced step |
+| `make_expert(name)` | The shipped expert: `memory = expert.reset()`, then `action, memory = expert.step(memory, obs)`, in a Python loop or under `jit` and `vmap`; `expert.params` holds its gains |
 | `make_oracle(name, params=None)` | The full-state MPC, reset and planning on the mean disturbance |
 | `make_gymnasium(name, render_mode=None, **overrides)` | A Gymnasium environment on the scored configuration |
 | `list_envs(group=None)` | Registry names, of every task or of one group |
-| `score_policy(name, make_policy, seeds=10, params=None)` | The policy against the expert and the ceiling (`target_gym.scoring`) |
+| `score_policy(name, policy, seeds=10, params=None)` | `policy(obs) -> action`, or the expert, against the expert and the ceiling (`target_gym.scoring`) |
 
 ```python
 import target_gym as tg
@@ -93,8 +93,9 @@ release.
 
 | Name | Use instead |
 |---|---|
-| `env.make_pid()` | `make_expert(name).host()` |
-| `env.expert_policy` | `make_expert(name).batched()` |
+| `env.make_pid()`, `env.expert_policy` | `make_expert(name)` |
+| `make_expert(name).host()`, `.batched()`, `.act()`, `.init_state` | `expert.reset()` and `expert.step(memory, obs)` |
+| `score_policy(name, make_policy)` with a factory | `score_policy(name, policy)` |
 | `env.make_mpc(params)` | `make_oracle(name, params)` |
 | `GymnasiumPlane`, `gym_wrapper_factory` | `make_gymnasium(name)` |
 

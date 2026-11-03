@@ -102,22 +102,22 @@ be wrapped in `jax.jit`.
 ## Experts and oracles
 
 Every task ships an expert, a copy of the controller practitioners deploy,
-which reads the observation only. Pick its form where you use it:
+which reads the observation only. You carry its memory as you carry the
+environment's state, in a Python loop or under `jit` and `vmap` alike:
 
 ```python
 import jax
-import numpy as np
 import target_gym as tg
 
 env, params = tg.make("boiler_drum")
 obs, state = env.reset(jax.random.PRNGKey(0), params)
 
-pid = tg.make_expert("boiler_drum").host()      # keeps its own memory
-action = pid(np.asarray(obs))                   # pid.reset() between episodes
+expert = tg.make_expert("boiler_drum")
+memory = expert.reset()                         # at each episode start
+action, memory = expert.step(memory, obs)
 
-policy = tg.make_expert("boiler_drum").batched()   # you carry its memory
-memory = policy.init_state(1)
-actions, memory = policy(memory, obs[None])
+batch = jax.numpy.stack([obs, obs])             # two environments
+actions, memories = jax.vmap(expert.step)(expert.reset(2), batch)
 ```
 
 `tg.make_oracle(name)` returns the full-state MPC, which reads the true state

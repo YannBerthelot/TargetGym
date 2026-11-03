@@ -14,8 +14,7 @@ how to run it, how to evaluate against it, and how to plug it into training.
 import target_gym as tg
 from target_gym.registry import REGISTRY
 
-ctrl = tg.make_expert("cstr")   # the pure controller
-pid = ctrl.host()               # the form the baselines are scored with
+expert = tg.make_expert("cstr")
 
 spec = REGISTRY["cstr"]
 print(spec.has_pid, spec.baselines_note or "no caveat")
@@ -29,40 +28,36 @@ them. [Baselines](baselines.md) describes how each one is structured and tuned.
 
 ## The interface
 
-A PID remembers its integral and its last error, so something has to hold that
-memory from one step to the next. Pick the form by where your loop runs:
+A PID remembers its integral and its last error. You carry that memory from
+one step to the next, as you carry the environment's `state`:
 
-| Your loop | Use | Each step | At each episode start |
-|---|---|---|---|
-| Python, NumPy, outside `jax.jit` | `pid = tg.make_expert(name).host()`, which keeps its own memory | `action = pid(obs)` | `pid.reset()` |
-| `jit`, `vmap`, `lax.scan`, GPU | `ctrl = tg.make_expert(name)`; you carry its memory | `action, pid_state = ctrl.act(pid_state, obs)` | `pid_state = ctrl.init_state` |
+| When | Call |
+|---|---|
+| At each episode start | `memory = expert.reset()` |
+| Each step | `action, memory = expert.step(memory, obs)` |
+| For `n` environments at once | `memory = expert.reset(n)`, then `actions, memory = jax.vmap(expert.step)(memory, obs)` |
 
-For many environments at once, `policy = tg.make_expert(name).batched()` is the
-second form already batched: start from `pid_state = policy.init_state(num_envs)`,
-then `actions, pid_state = policy(pid_state, obs_batch)`.
-
-!!! warning "Always pass the state to the batched expert"
-    `policy(obs)`, with one argument, starts from a fresh state on
-    every call. It never builds an integral, so it is not the tuned PID and
-    does not reproduce its scores.
-
-Both forms act alike and return the action in the environment's own units,
-already clipped to its bounds. They read the observation only, never the hidden
-state, which is what makes the PID a fair peer for a learned policy. (The MPC
-reads the true state, so it is an upper bound, not a peer.)
+The same `step` runs in a Python loop, under `jit` and inside `lax.scan`, on
+CPU or GPU. It returns the action in the environment's own units, already
+clipped to its bounds. It reads the observation only, never the hidden state,
+which is what makes the PID a fair peer for a learned policy. (The MPC reads
+the true state, so it is an upper bound, not a peer.)
 
 Two rules keep the memory right:
 
 - **Reset it at the start of every episode**, or the previous episode's
-  integral leaks in. In a jitted loop nothing does this for you; see
+  integral leaks in. Under an auto-resetting `env.step` inside a scan, see
   [Episode boundaries](#episode-boundaries).
-- **Call `pid(obs)` exactly once per environment step.** Each call advances its
-  memory, so an extra call, for logging or on replayed observations, counts as
-  a step that never happened. `ctrl.act` advances only the state you keep.
+- **Keep the memory `step` returns, once per environment step.** Stepping on
+  a replayed or logged observation is harmless as long as you discard the
+  memory it returns.
+
+`score_policy`, `run_suite` and `env.save_video` run a policy in their own
+loop and take the expert as it is.
 
 ## Running it in a loop
 
-The host object, as the baselines run it:
+With the keys the scored episodes use:
 
 ```python
 import jax
@@ -74,18 +69,18 @@ from target_gym.registry import REGISTRY
 spec = REGISTRY["cstr"]
 env = spec.make_env()
 params = spec.make_test_params()   # the configuration the baselines are scored on
-pid = tg.make_expert("cstr").host()
+expert = tg.make_expert("cstr")
 
 # Seed 0's keys as the scored episodes take them: one to reset, a fresh one
 # every step.
 T = int(params.max_steps_in_episode)
 reset_keys, step_keys = episode_keys(jax.random.PRNGKey(0), 1, T)
 obs, state = env.reset_env(reset_keys[0], params)
-pid.reset()
+memory = expert.reset()
 
 total = 0.0
 for t in range(T):
-    action = pid(np.asarray(obs))
+    action, memory = expert.step(memory, obs)
     obs, state, reward, terminated, _ = env.step_env(step_keys[t, 0], state, action, params)
     total += float(reward)
     if terminated:
@@ -146,16 +141,10 @@ room the task leaves (`headroom`, in decades). One call runs your policy and the
 expert on the same seeds:
 
 ```python
-from target_gym.registry import REGISTRY
-from target_gym.runners.runners import baseline_policy
-from target_gym.scoring import score_policy
+import target_gym as tg
 
-name = "cstr"
-spec = REGISTRY[name]
-params = spec.make_test_params()
-
-make_policy = lambda: baseline_policy(spec, "pid", params)   # swap in your own
-m = score_policy(name, make_policy, seeds=3)                 # 10 for a result
+policy = tg.make_expert("cstr")      # swap in your own: policy(obs) -> action
+m = tg.score_policy("cstr", policy, seeds=3)   # 10 for a result
 print(f"{m['ratio']:.3g}x cheaper than the expert on {m['win_rate']:.0%} of seeds")
 print(f"score {m['score']:.2f}, room {m['headroom']:.2f} decades")
 ```
@@ -184,18 +173,19 @@ low, high = np.asarray(space.low), np.asarray(space.high)
 alpha = 0.25 * (high - low) / 2      # the correction spans a quarter of the range
 
 
-def residual_policy(pid, correction):
+def residual_step(expert, correction):
     """``correction(obs)`` is your network's output, in [-1, 1]."""
 
-    def act(obs):
-        return np.clip(pid(obs) + alpha * correction(obs), low, high)
+    def step(memory, obs):
+        action, memory = expert.step(memory, obs)
+        return np.clip(action + alpha * correction(obs), low, high), memory
 
-    return act
+    return step
 
 
-pid = tg.make_expert("cstr").host()
-pid.reset()
-act = residual_policy(pid, lambda obs: np.zeros_like(low))   # untrained: the PID
+expert = tg.make_expert("cstr")
+step = residual_step(expert, lambda obs: np.zeros_like(low))   # untrained: the PID
+memory = expert.reset()
 ```
 
 The protocol sweeps the scale over 0.1, 0.25 and 1.0 and reports all three, so
@@ -205,7 +195,7 @@ Because the PID has memory, three things matter for a residual agent:
 
 - **Store the PID's action with each transition.** It depends on the PID's
   memory, not only on `obs`, so recomputing it from a replayed observation
-  gives a different action and disturbs the live controller.
+  gives a different action.
 - **Feed the PID's action to the network.** The integral is not in `obs`, so
   without it the agent cannot see what the base is about to do.
 - **Watch for windup at large scales.** The PID cannot see the correction. When
@@ -225,18 +215,18 @@ from target_gym.registry import REGISTRY
 
 spec = REGISTRY["cstr"]
 env, params = spec.make_env(), spec.make_test_params()
-pid = tg.make_expert("cstr").host()
+expert = tg.make_expert("cstr")
 
 transitions = []
 for seed in range(3):
     key, reset_key = jax.random.split(jax.random.PRNGKey(seed))
     obs, state = env.reset(reset_key, params)
-    pid.reset()
+    memory = expert.reset()
     for _ in range(params.max_steps_in_episode):
         key, step_key = jax.random.split(key)   # a fresh key every step
-        action = np.atleast_1d(pid(np.asarray(obs)))
+        action, memory = expert.step(memory, obs)
         next_obs, state, reward, terminated, truncated, _ = env.step(step_key, state, action, params)
-        transitions.append((np.asarray(obs), action, float(reward), np.asarray(next_obs)))
+        transitions.append((np.asarray(obs), np.asarray(action), float(reward), np.asarray(next_obs)))
         obs = next_obs
         if terminated or truncated:
             break
@@ -247,10 +237,10 @@ print(len(transitions), "transitions")
 ### Inside a jitted loop, on GPU
 
 A fully jitted learner (a `jax.lax.scan` over environment steps, as in
-PureJaxRL-style agents) uses the pure form from [The interface](#the-interface)
-and keeps `pid_state` in the scan's carry, which is where the integral lives.
-It matches the host object up to float32 rounding, close enough to reproduce
-the recorded returns, as the example checks.
+PureJaxRL-style agents) keeps the expert's memory in the scan's carry, which
+is where the integral lives. It matches the scored host PID up to float32
+rounding, close enough to reproduce the recorded returns, as the example
+checks.
 
 ```python
 import jax
@@ -262,7 +252,7 @@ from target_gym.registry import REGISTRY
 
 spec = REGISTRY["cstr"]
 env, params = spec.make_env(), spec.make_test_params()
-ctrl = tg.make_expert("cstr")
+expert = tg.make_expert("cstr")
 
 
 def episode_return(key):
@@ -271,12 +261,12 @@ def episode_return(key):
     obs, env_state = env.reset_env(reset_keys[0], params)
 
     def step(carry, step_key):
-        obs, env_state, pid_state = carry
-        action, pid_state = ctrl.act(pid_state, obs)
+        obs, env_state, memory = carry
+        action, memory = expert.step(memory, obs)
         obs, env_state, reward, _, _ = env.step_env(step_key, env_state, action, params)
-        return (obs, env_state, pid_state), reward
+        return (obs, env_state, memory), reward
 
-    carry = (obs, env_state, ctrl.init_state)
+    carry = (obs, env_state, expert.reset())
     _, rewards = jax.lax.scan(step, carry, step_keys[:, 0])
     return rewards.sum()
 
@@ -288,13 +278,13 @@ recorded = load_recorded_baselines()["cstr"]["pid_returns"]
 assert np.allclose(returns, recorded, rtol=1e-3)     # the host-scored numbers
 ```
 
-For a batch of environments, `tg.make_expert(name).batched()` does the same
-with one state per environment, as in the next example.
+For a batch of environments, `expert.reset(n)` and `jax.vmap(expert.step)` do
+the same with one memory per environment, as in the next example.
 
 #### Episode boundaries
 
-Nothing calls `pid.reset()` inside a scan. `env.step` restarts an environment
-when its episode ends, but the `pid_state` you carry keeps the old integral
+Nothing resets the memory inside a scan for you. `env.step` restarts an environment
+when its episode ends, but the memory you carry keeps the old integral
 unless you reset it too. `reset_where_done` does that, for one environment or a
 batch:
 
@@ -306,31 +296,32 @@ from target_gym.registry import REGISTRY
 
 spec = REGISTRY["cstr"]
 env, params = spec.make_env(), spec.make_test_params()
-policy, num_envs = tg.make_expert("cstr").batched(), 4
+expert, num_envs = tg.make_expert("cstr"), 4
 key, reset_key = jax.random.split(jax.random.PRNGKey(0))
 obs, env_state = jax.vmap(env.reset, in_axes=(0, None))(
     jax.random.split(reset_key, num_envs), params
 )
 step_all = jax.vmap(env.step, in_axes=(0, 0, 0, None))
+expert_all = jax.vmap(expert.step)
 
 
 def step(carry, step_key):
-    obs, env_state, pid_state = carry
-    actions, pid_state = policy(pid_state, obs)
+    obs, env_state, memory = carry
+    actions, memory = expert_all(memory, obs)
     keys = jax.random.split(step_key, num_envs)   # a fresh key every step
     obs, env_state, reward, terminated, truncated, _ = step_all(keys, env_state, actions, params)
     # env.step has already restarted the environments that finished; restart their PIDs too.
-    pid_state = reset_where_done(terminated | truncated, pid_state, policy.init_state(num_envs))
-    return (obs, env_state, pid_state), reward
+    memory = reset_where_done(terminated | truncated, memory, expert.reset())
+    return (obs, env_state, memory), reward
 
 
-carry = (obs, env_state, policy.init_state(num_envs))
+carry = (obs, env_state, expert.reset(num_envs))
 n_steps = 2 * int(params.max_steps_in_episode)   # two episodes per environment
 run = jax.jit(lambda c, k: jax.lax.scan(step, c, jax.random.split(k, n_steps)))
 _, rewards = run(carry, key)
 ```
 
-For a single environment, pass a scalar `done` and `ctrl.init_state`. Reset on
+For a single environment, pass a scalar `done`. Reset on
 `terminated | truncated` only: in a continuing environment a trip restarts the
 plant without raising either flag, and the PID keeps its memory through it, as
 the scored baselines do.

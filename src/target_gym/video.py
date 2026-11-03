@@ -33,7 +33,8 @@ def save_video(
 
     Arguments:
         env: the environment instance with methods `reset`, `step`, and `render`
-        select_action: callable(obs) -> action, or callable(obs, state) -> action.
+        select_action: callable(obs) -> action, callable(obs, state) -> action,
+            or ``target_gym.make_expert(name)``.
             Two-arg callables receive the full env state, which is needed by
             controllers (e.g. MPC) that depend on hidden fields like setpoint
             schedules or internal counters.
@@ -46,6 +47,9 @@ def save_video(
     Returns:
         Path to the saved video.
     """
+    from target_gym.api import as_policy
+
+    select_action = as_policy(select_action)
     # Detect whether the caller wants state threaded through.
     try:
         sig = inspect.signature(select_action)

@@ -35,15 +35,15 @@ Or try it in the browser: [Colab quickstart](https://colab.research.google.com/g
 
 ```python
 import jax
-import numpy as np
 import target_gym as tg
 
 env, params = tg.make("plane")          # the scored configuration
-pid = tg.make_expert("plane").host()    # the shipped expert; keeps its own memory
+expert = tg.make_expert("plane")        # the shipped expert
 obs, state = env.reset(jax.random.PRNGKey(0), params)
+memory = expert.reset()                 # carried like the env's state
 
 for t in range(200):
-    action = np.atleast_1d(pid(np.asarray(obs)))
+    action, memory = expert.step(memory, obs)
     obs, state, reward, terminated, truncated, info = env.step(
         jax.random.PRNGKey(t), state, action, params
     )

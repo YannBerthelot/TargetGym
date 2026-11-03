@@ -167,12 +167,13 @@ def run_suite(make_policy, seeds: int = 10, tasks=None) -> dict:
     ``scoring.score_policy``, and fold the results into a profile.
 
     ``make_policy(name)`` returns a fresh ``policy(obs)`` or
-    ``policy(obs, state)`` for task ``name``; it is called once per episode.
+    ``policy(obs, state)`` for task ``name``; it is called once per episode,
+    as ``scoring.score_policy`` resets a policy before each one.
     Returns ``{"tasks": {name: numbers}, "profile": profile(numbers)}``.
     """
     names = list(CAPABILITIES) if tasks is None else list(tasks)
     results = {
-        name: scoring.score_policy(name, lambda name=name: make_policy(name), seeds)
+        name: scoring._score(name, lambda name=name: make_policy(name), seeds, None)
         for name in names
     }
     return {"tasks": results, "profile": profile(results)}
