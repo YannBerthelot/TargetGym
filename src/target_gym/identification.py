@@ -10,7 +10,8 @@ H7 to H9 and, from Amendment 1, H14 to H19) identify a plant the same way:
   same noise, up to the first trip of either run (H9);
 - both structures, FOPDT and integrating with lag, are fitted to every
   response by output-error least squares on the recorded input (H11), and
-  judged by V1 to V4 (H14);
+  judged by V1 to V4 (H14), with the noise and the fit measure of
+  Amendment 2 (N1, N2);
 - ``identify``: failed tests are retested at most twice (H15, H18); each
   pair-seed ends valid, insignificant (H16) or invalid, under the class its CV
   takes by majority (H17, H19).
@@ -31,7 +32,7 @@ from scipy.optimize import least_squares
 from scipy.signal import fftconvolve
 
 __all__ = ["MODELS", "TRAIN_SEEDS", "Loop", "Plant", "Run", "class_of", "evidence"]
-__all__ += ["fit", "identify", "insignificant", "judge", "noise_sigma", "nrmse_fit"]
+__all__ += ["fit", "identify", "insignificant", "judge", "nrmse_fit"]
 
 #: The training seeds every protocol identifies on; 200-209 are held out.
 TRAIN_SEEDS = tuple(range(100, 110))
@@ -67,18 +68,11 @@ def _simulate(model, Q, dt, U):
 
 
 def nrmse_fit(y, yhat) -> float:
-    """The NRMSE fit in percent, 100 (1 - |y - yhat| / |y - mean y|) (MWC)."""
-    spread = np.linalg.norm(y - np.mean(y))
+    """The fit in percent, 100 (1 - |y - yhat| / |y - y_pre|), with y_pre = 0
+    the response's pre-step value (N2, ours: MWC's mean makes a pure gain
+    0 / 0)."""
+    spread = np.linalg.norm(y)
     return float(100 * (1 - np.linalg.norm(y - yhat) / spread)) if spread else -math.inf
-
-
-def noise_sigma(y) -> float:
-    """sigma of a CV in the unstepped run, about its least-squares straight
-    line (D9: a held MV leaves a drift on an integrating CV, not noise)."""
-    t = np.arange(len(y), dtype=float)
-    if len(y) < 3:
-        return 0.0
-    return float(np.std(y - np.polyval(np.polyfit(t, y, 1), t)))
 
 
 def _guesses(model, t, dy, ref):
@@ -97,7 +91,8 @@ def _guesses(model, t, dy, ref):
 def fit(model: str, dt: float, dy, U) -> dict:
     """Output-error least squares of ``model`` (one per column of ``U``, the
     recorded input deviations, the pair's own MV first) to the response
-    ``dy``, with V2 to V4 of H14 and the 3 sigma half-width of the gain."""
+    ``dy``, with V1 to V4 of H14 and the 3 sigma half-width of the gain.
+    sigma is the spread of the residual over the fit window (N1)."""
     dy = np.asarray(dy, float)
     U = np.asarray(U, float).reshape(len(dy), -1)
     t, n = dt * np.arange(1, len(dy) + 1), U.shape[1]
@@ -123,11 +118,16 @@ def fit(model: str, dt: float, dy, U) -> dict:
     at_bound = np.isclose(Q[:, 2], t[-1], rtol=1e-6) | (
         np.isclose(Q[:, 1], tau_hi, rtol=1e-6)
     )
-    score = nrmse_fit(dy, dy + best.fun)
+    score, sigma = nrmse_fit(dy, dy + best.fun), float(np.std(best.fun))
+    peak = float(np.max(np.abs(dy)))
+    snr = peak / (6 * sigma) if sigma > 0 else math.inf
     return {
         **{k: (v if isinstance(v, (str, list)) else float(v)) for k, v in out.items()},
         "sse": float(sse),
         "fit": score,
+        "sigma": sigma,
+        "snr": snr,
+        "V1": snr >= SNR_MIN,
         "k_3sigma": float(3 * math.sqrt(max(cov[0, 0], 0.0))),
         "V2": bool(np.all(5 * Q[:, 1] + Q[:, 2] <= t[-1])),
         "V3": not bool(np.any(at_bound)),
@@ -135,13 +135,11 @@ def fit(model: str, dt: float, dy, U) -> dict:
     }
 
 
-def judge(dy, base, U, dt: float) -> dict:
-    """One CV's response in one test: sigma, SNR and V1, and both fits."""
-    dy, sigma = np.asarray(dy, float), noise_sigma(np.asarray(base, float))
+def judge(dy, U, dt: float) -> dict:
+    """One CV's response in one test, with both fits."""
+    dy = np.asarray(dy, float)
     peak = float(np.max(np.abs(dy))) if len(dy) else 0.0
-    snr = peak / (6 * sigma) if sigma > 0 else (math.inf if peak > 0 else 0.0)
-    out = {"samples": len(dy), "sigma": sigma, "snr": snr, "V1": snr >= SNR_MIN}
-    out["zero"] = len(dy) >= 4 and peak == 0.0
+    out = {"samples": len(dy), "zero": len(dy) >= 4 and peak == 0.0}
     usable = len(dy) >= 4 and peak > 0
     out["fits"] = {m: fit(m, dt, dy, U) for m in MODELS} if usable else {}
     return out
@@ -151,8 +149,7 @@ def _fails(a, model) -> set:
     """The checks of H14 that ``model``'s fit of response ``a`` fails."""
     if model not in a["fits"]:
         return {"zero" if a["zero"] else "short"}
-    f = a["fits"][model]
-    return {v for v in ("V2", "V3", "V4") if not f[v]} | (set() if a["V1"] else {"V1"})
+    return {v for v in ("V1", "V2", "V3", "V4") if not a["fits"][model][v]}
 
 
 def passes(a, model=None) -> bool:
@@ -166,7 +163,7 @@ def insignificant(a) -> bool:
     if not a["fits"]:
         return a["zero"]
     f = min(a["fits"].values(), key=lambda f: f["sse"])
-    return a["snr"] < 1 or abs(f["k"]) <= f["k_3sigma"]
+    return f["snr"] < 1 or abs(f["k"]) <= f["k_3sigma"]
 
 
 def evidence(a):
@@ -235,10 +232,7 @@ class Run:
 def _trial(plant, s, j, step, window, loops):
     run = plant.test(s, j, step, window, loops)
     moving = [j] + [m for m in range(plant.n_mv) if m != j and np.any(run.U[:, m])]
-    A = [
-        judge(run.dy[:, i], run.base[:, i], run.U[:, moving], plant.dt)
-        for i in range(plant.n_cv)
-    ]
+    A = [judge(run.dy[:, i], run.U[:, moving], plant.dt) for i in range(plant.n_cv)]
     return run, A
 
 
@@ -248,6 +242,12 @@ def _closer(a):
     if not a["fits"]:
         return _fails(a, MODELS[0])
     return min((_fails(a, m) for m in MODELS), key=len)
+
+
+def _snr(a) -> float:
+    """A response's SNR on its closer fit, 0 when it has none."""
+    fits = a["fits"].values()
+    return min(fits, key=lambda f: f["sse"])["snr"] if fits else 0.0
 
 
 def _step_cap(plant, s, j, run, A, size):
@@ -264,7 +264,7 @@ def _step_cap(plant, s, j, run, A, size):
             continue
         f = min(A[i]["fits"].values(), key=lambda f: f["sse"])
         gain = abs(f["k"]) * (run.window * plant.dt if f["model"] != "fopdt" else 1.0)
-        room = min(abs(run.y0[i] - b) for b in bounds) - 3 * A[i]["sigma"]
+        room = min(abs(run.y0[i] - b) for b in bounds) - 3 * f["sigma"]
         cap = min(cap, max(room, 0.0) / gain) if gain else cap
     return cap
 
@@ -283,7 +283,7 @@ def _loops(plant, s, j, run, A, failing, trials):
         else:
             mv = max(
                 range(plant.n_mv),
-                key=lambda m: max(a[c]["snr"] for _, a in trials[m, s]),
+                key=lambda m: max(_snr(a[c]) for _, a in trials[m, s]),
             )
         a = A[c] if mv == j else trials[mv, s][-1][1][c]
         if mv in used or not a["fits"]:

@@ -1,14 +1,15 @@
 """Bump tests, fits, validity and retests (target_gym.identification).
 
 Contract: docs/proposals/oracle-horizon-protocol.md, H8 to H11 as amended and
-H14 to H19 (section 10), with D8 to D14:
+H14 to H19 (section 10), with D8 to D14 and Amendment 2 (section 11):
 
 - both structures are fitted by output-error least squares on the recorded
   input and recover the model a response was simulated from;
 - a fit is valid when the response clears 10 noise bands of 6 sigma (V1), the
   fit settles inside the window (V2), no parameter sits at an upper bound
-  (V3), and its NRMSE fit is at least 80 % (V4); sigma is the unstepped run's
-  spread about its straight line;
+  (V3), and its fit is at least 80 % (V4); sigma is the spread of the
+  residual between the response and the fitted model (N1), and the fit is
+  measured against the pre-step value, so a pure gain is well-posed (N2);
 - a failed test is retested at most twice: a doubled step for V1, a doubled
   window for V2 or V3, a P-only stabilised retest after a trip;
 - a pair-seed is valid, insignificant (SNR < 1, or its gain's 3 sigma
@@ -31,7 +32,6 @@ from target_gym.identification import (
     identify,
     insignificant,
     judge,
-    noise_sigma,
     nrmse_fit,
 )
 from target_gym.registry import REGISTRY
@@ -95,39 +95,67 @@ def test_fopdt_that_outlasts_the_window_fails_v2_and_a_long_lag_pins_v3():
     assert not long["V3"]
 
 
-def test_nrmse_fit_and_noise_about_a_line():
+def test_fit_is_measured_against_the_pre_step_value():
+    # |y - yhat| / |y - 0|: 1 / 2 on the alternating signal, 1 / 2 on the flat
+    # one, whose mean-referenced NRMSE would be 0 / 0.
     y = np.array([1.0, -1.0, 1.0, -1.0])
     assert nrmse_fit(y, y) == 100.0
-    assert nrmse_fit(y, 0.5 * y) == pytest.approx(50.0)  # |y - yhat| = 1, |y| = 2
-    drift = 3.0 + 0.5 * np.arange(400.0)
-    assert noise_sigma(drift) == pytest.approx(0.0, abs=1e-9)
-    assert noise_sigma(drift + 0.01 * (-1.0) ** np.arange(400)) == pytest.approx(
-        0.01, rel=1e-3
-    )
+    assert nrmse_fit(y, 0.5 * y) == pytest.approx(50.0)
+    assert nrmse_fit(np.ones(4), np.full(4, 0.5)) == pytest.approx(50.0)
+
+
+def test_a_pure_gain_is_a_valid_fopdt_with_no_lag():
+    # The output moves 2 x 0.1 at the first sample and stays: k 2, fit 100 %.
+    # Sampled at dt = 1 s, any tau under a tenth of a step reaches 1 - e^-10
+    # by the first sample, so the data only bound it (10.3: "< dt").
+    a = judge(np.full(50, 0.2), np.full((50, 1), 0.1), 1.0)
+    f = a["fits"]["fopdt"]
+    assert f["k"] == pytest.approx(2.0) and f["tau"] < 0.1 and f["fit"] > 99.9
+    assert evidence(a) == "fopdt" and f["V4"]
+
+
+ALT = 0.01 * (-1.0) ** np.arange(200)  # no first-order model can follow it
+
+
+def test_sigma_is_the_residual_noise_about_the_fitted_model():
+    t = np.arange(1, 201.0)
+    a = judge(fopdt(t, 1.0, 5.0, 0.0) + ALT, np.ones((200, 1)), 1.0)
+    assert a["fits"]["fopdt"]["sigma"] == pytest.approx(0.01, rel=1e-2)
+    clean = judge(fopdt(t, 1.0, 5.0, 0.0), np.ones((200, 1)), 1.0)
+    assert clean["fits"]["fopdt"]["sigma"] < 1e-6  # nothing but the model
 
 
 def test_v1_needs_ten_bands_of_six_sigma():
-    # sigma 0.01: a band is 0.06, ten bands 0.6.
+    # sigma 0.01: a band is 0.06, ten bands 0.6; the peaks are 0.51 and 0.71.
     t = np.arange(1, 201.0)
-    base = 0.01 * (-1.0) ** np.arange(200)
-    weak = judge(0.5 * fopdt(t, 1.0, 5.0, 0.0), base, np.ones((200, 1)), 1.0)
-    strong = judge(0.7 * fopdt(t, 1.0, 5.0, 0.0), base, np.ones((200, 1)), 1.0)
-    assert (weak["V1"], strong["V1"]) == (False, True)
+    weak = judge(0.5 * fopdt(t, 1.0, 5.0, 0.0) + ALT, np.ones((200, 1)), 1.0)
+    strong = judge(0.7 * fopdt(t, 1.0, 5.0, 0.0) + ALT, np.ones((200, 1)), 1.0)
+    assert (weak["fits"]["fopdt"]["V1"], strong["fits"]["fopdt"]["V1"]) == (False, True)
+
+
+def test_v4_needs_a_fit_of_80_percent():
+    # S = 1 - e^(-t/5) over 200 s has |S| = 13.9; the alternating a ALT / 0.01
+    # is what the fit leaves, |a alt| = 14.1 a, so the fit is about
+    # 100 (1 - 14.1 a / sqrt(193 + 200 a^2)): 84.9 % at a = 0.15, 75.3 % at 0.25.
+    t, u = np.arange(1, 201.0), np.ones((200, 1))
+    good = judge(fopdt(t, 1.0, 5.0, 0.0) + 15 * ALT, u, 1.0)["fits"]["fopdt"]
+    poor = judge(fopdt(t, 1.0, 5.0, 0.0) + 25 * ALT, u, 1.0)["fits"]["fopdt"]
+    assert (good["V4"], poor["V4"]) == (True, False)
 
 
 def test_insignificant_when_inside_one_band_or_identically_zero():
+    # Peak 0.03 + 0.01 against a band of 0.06: under one band.
     t = np.arange(1, 201.0)
-    base = 0.01 * (-1.0) ** np.arange(200)
-    assert insignificant(judge(np.zeros(200), base, np.ones((200, 1)), 1.0))
-    assert insignificant(judge(0.05 * fopdt(t, 1, 5, 0), base, np.ones((200, 1)), 1.0))
-    assert not insignificant(judge(fopdt(t, 1, 5, 0), base, np.ones((200, 1)), 1.0))
+    assert insignificant(judge(np.zeros(200), np.ones((200, 1)), 1.0))
+    assert insignificant(judge(0.03 * fopdt(t, 1, 5, 0) + ALT, np.ones((200, 1)), 1.0))
+    assert not insignificant(judge(fopdt(t, 1, 5, 0) + ALT, np.ones((200, 1)), 1.0))
 
 
 def test_evidence_names_the_structure_that_fits_and_the_cv_takes_the_majority():
     t = np.arange(1, 201.0)
-    base, u = np.zeros(200), np.ones((200, 1))
-    settled = judge(fopdt(t, 1.0, 10.0, 2.0), base, u, 1.0)
-    ramp = judge(ramp_lag(t, 0.1, 5.0, 2.0), base, u, 1.0)
+    u = np.ones((200, 1))
+    settled = judge(fopdt(t, 1.0, 10.0, 2.0), u, 1.0)
+    ramp = judge(ramp_lag(t, 0.1, 5.0, 2.0), u, 1.0)
     assert (evidence(settled), evidence(ramp)) == ("fopdt", "integrating_lag")
     assert class_of([settled, ramp, ramp])[0] == "integrating_lag"
     assert class_of([settled, settled, ramp])[0] == "fopdt"
@@ -135,8 +163,8 @@ def test_evidence_names_the_structure_that_fits_and_the_cv_takes_the_majority():
 
 class FakePlant:
     """One MV, one CV with a trip limit at 5, dt 1 s, N_ep 100 steps: the
-    response is k S(t) per unit step with seeded noise of ``sigma`` on the
-    unstepped run. ``trip_at`` cuts the stepped run when no loop holds it."""
+    response is k S(t) per unit step plus seeded noise of ``sigma``.
+    ``trip_at`` cuts the stepped run when no loop holds it."""
 
     dt, n_ep, n_cv, n_mv, n_seeds = 1.0, 100, 1, 1, 1
     limits, mv_range, expert_mv = [(None, 5.0)], (-1.0, 1.0), {}
@@ -153,14 +181,14 @@ class FakePlant:
         m = window if self.trip_at is None or loops else self.trip_at
         t = np.arange(1, m + 1.0)
         noise = self.sigma * np.random.default_rng(0).standard_normal(m)
-        dy = step * fopdt(t, self.k, self.tau, 0.0)
+        dy = step * fopdt(t, self.k, self.tau, 0.0) + noise
         trips = {} if m == window else {"step": (m, 0)}
         return Run(
             step,
             window,
             loops,
             dy[:, None],
-            noise[:, None],
+            np.zeros((m, 1)),
             np.full((m, 1), step),
             np.zeros(1),
             trips,
@@ -168,12 +196,24 @@ class FakePlant:
 
 
 def test_a_step_buried_in_noise_fails_v1_then_passes_once_doubled():
-    # Settled move 0.1 against sigma 0.0022: 7.6 bands, then 15.2 doubled.
+    # A settled move of 0.1 in noise of sigma 0.0022 (a band 0.013): about
+    # 8 bands, then about 16 once the step doubles.
     plant = FakePlant(sigma=0.0022)
     pairs, _ = identify(plant, [0.1])
     p = pairs[0, 0, 0]
     assert [c[0] for c in plant.calls] == [0.1, 0.2]
     assert (p["label"], p["kept"]) == ("valid", 1)
+
+
+def test_the_step_grows_only_to_the_room_below_a_trip_limit():
+    # SEB eq. 20-75 with the trip limit at 0.15 and the CV at 0: the doubled
+    # step 0.2 is cut to (0.15 - 3 sigma) / K, sigma and K (near 1) those of
+    # the failed test's fit.
+    plant = FakePlant(sigma=0.0022)
+    plant.limits = [(None, 0.15)]
+    pairs, _ = identify(plant, [0.1])
+    f = pairs[0, 0, 0]["tests"][0][1]["fits"]["fopdt"]
+    assert plant.calls[1][0] == pytest.approx((0.15 - 3 * f["sigma"]) / f["k"])
 
 
 def test_a_response_slower_than_the_window_gets_twice_the_window():
@@ -197,7 +237,7 @@ def test_a_trip_brings_a_p_only_setpoint_test_on_the_tripped_cv():
 
 
 def test_a_zero_response_is_insignificant_and_never_retested():
-    plant = FakePlant(k=0.0, sigma=0.01)
+    plant = FakePlant(k=0.0)
     pairs, classes = identify(plant, [0.1])
     assert len(plant.calls) == 1 and pairs[0, 0, 0]["label"] == "insignificant"
     assert classes[0]["class"] is None

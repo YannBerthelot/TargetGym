@@ -9,6 +9,12 @@ which had no source (`oracle-audit.md`, section 5, Horizon).
 > Bump tests start from steady operation, after one episode under the
 > expert with the moves held at its last 20 commands, which amends H8.
 
+> Amendment 2, 2026-11-03: D9's sigma counted plant disturbances that the
+> subtracted test (C1) already cancels, so good fits failed V1 (hvac 91 %,
+> unstable_cstr 96 %). The owner replaced it, added the pure-gain case, and
+> changed D13. All three rules are ours: no source covers a subtracted step
+> test. They are judged on measuring noise, not on the horizons they give.
+
 The owner's rule applies throughout. Every value comes from one fixed recipe,
 run once on bump tests from training seeds 100 to 109. No score, no held-out
 seed and no menu picks a value. Held-out seeds 200 to 209 are not used at all.
@@ -693,3 +699,33 @@ Recommended option first.
 | D12 | Class | Per CV, majority of seed evidence, pooled fit on a tie (DMCP; QB). Or process knowledge first: a CV whose equation is a pure balance (drum level, state of charge) is integrating, the data decide the rest (DHN). Or integrating whenever any seed's evidence says so (no source) |
 | D13 | Task with no valid pair | Plan to the episode end at T_c of one task step, labelled unidentified. Or hold the task out of the oracle re-record until a protocol change identifies it |
 | D14 | Weak pairs, 1 <= SNR < 10 at the cap | Invalid and reported (COOPER's minimum). Or valid when the gain sign matches an expectation matrix written from PHYSICS.md before the rerun (ZP's grade C) |
+
+## 11. Amendment 2, noise from the fit residual, pure gains, non-compliant tasks
+
+**Why.** The rerun under Amendment 1 (PR #133) left 8 of 14 tasks
+unidentified. D9 took sigma from the unstepped run, which carries the plant's
+own disturbances: the weather on hvac, the demand blocks on compressor_surge,
+the inlet drift on unstable_cstr, the turbulence on wind_turbine. The
+subtracted test (C1, H8) already cancels them, so good fits failed V1: hvac
+at a 91 % fit, unstable_cstr at 96 %. Battery's delivered power, a pure gain,
+had no transient, so its NRMSE fit was 0 / 0.
+
+**Owner decisions, 2026-11-03.** The three rules below replace D9, amend V4
+and replace D13 (and H20). All three are ours: no source covers a subtracted
+step test. They are judged on how they measure noise, not on the horizons
+they give.
+
+| # | rule | value | label |
+| --- | --- | --- | --- |
+| N1 | Noise (replaces D9) | sigma is the standard deviation of the residual between the subtracted response and the fitted model, over the fit window. Each structure's fit has its own sigma and SNR. V1's threshold is unchanged: 10 bands of plus or minus 3 sigma | ours |
+| N2 | Pure gain (amends V4) | The fit measure is taken against the response's pre-step value instead of its mean: fit = 100 (1 - norm(dy - yhat) / norm(dy)), since dy is zero before the step. A response with no transient is then well-posed: a pure gain fitted exactly scores 100 % | ours |
+| N3 | No valid pair (replaces D13 and H20) | The task keeps its current oracle and its horizon file labels it non-compliant. No protocol horizon (no T_c, N, M or P) is written for it, and C1 and C2 leave it as it is | ours |
+
+What follows from the rules (derived):
+
+- Wherever section 10 reads sigma, it is now the residual sigma of the fit in
+  question: V1, H16's SNR below 1 (on the closer fit), the 3 sigma margin of
+  the step cap (10.4), and H18's step 6.
+- The unstepped run is still recorded, for the subtraction only.
+- 10.11 item 1 and D9 are settled by N1; item 3's fit floor (D10, 80 %) is
+  unchanged but now measured by N2.

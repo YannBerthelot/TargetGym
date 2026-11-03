@@ -83,6 +83,6 @@ def test_no_horizon_past_the_episode_and_a_partial_last_sample_counts():
     assert episode_samples(150, 3) == 50
 
 
-def test_a_task_with_no_valid_pair_samples_every_step_and_names_no_pair():
-    # H20: no fit for T_c, so one task step; the caller plans to the end.
-    assert task_horizon({}, dt=0.5) == (1, {}, None)
+def test_a_task_with_no_valid_pair_gets_no_protocol_horizon():
+    # Amendment 2 (N3, replacing H20): no T_c, no P; the task keeps its oracle.
+    assert task_horizon({}, dt=0.5) == (None, {}, None)

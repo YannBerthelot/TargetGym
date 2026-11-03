@@ -1,7 +1,7 @@
 """Measure each oracle's planning horizon by Cooper's DMC recipe.
 
 Run with ``uv run python scripts/measure_oracle_horizons.py [--envs ...]``.
-It runs docs/proposals/oracle-horizon-protocol.md, with Amendment 1, on the
+It runs docs/proposals/oracle-horizon-protocol.md, with Amendments 1 and 2, on the
 14 process and industrial tasks and writes one file per task,
 ``src/target_gym/data/oracle_horizons/<task>.json`` (H13, H19). The 10
 aircraft tasks are skipped: their tests fly through ArduPlane 4.0.9's default
@@ -19,8 +19,9 @@ Per training seed 100-109 (``target_gym.identification``):
    (H15, H18), and each pair-seed ends valid, insignificant or invalid under
    its CV's class (H16, H17, H19).
 
-Only valid fits enter T_c and P (``target_gym.oracles.horizon``); a task with
-none plans to the episode end, unidentified (H20). unstable_cstr is measured
+Only valid fits enter T_c and P (``target_gym.oracles.horizon``). A task with
+none is non-compliant: no protocol horizon is written, and it keeps its
+current oracle (Amendment 2, N3). unstable_cstr is measured
 on its stabilised plant (section 4.4): the cascade's outer loop in manual,
 the inner PD closed, its setpoint stepped 0.5 K down as in the expert test.
 """
@@ -195,8 +196,7 @@ def _test_record(run, a, mvs, cvs):
         for k, (i, c) in run.trips.items()
     }
     head = {"step": run.step, "window": run.window, "loops": loops, "trips": trips}
-    keep = ("samples", "sigma", "snr", "V1")
-    return {**head, **{k: a[k] for k in keep}, **a["fits"]}
+    return {**head, "samples": a["samples"], **a["fits"]}
 
 
 def measure(name: str) -> dict:
@@ -224,9 +224,24 @@ def measure(name: str) -> dict:
     key = {(j, i, s): (mvs[j], cvs[i], TRAIN_SEEDS[s]) for j, i, s in pairs}
     valid = {key[k]: r["fit"] for k, r in pairs.items() if r["label"] == "valid"}
     tc, rows, top = task_horizon(valid, dt)
-    N, M, P = rows[top] if top else (None, None, episode_samples(n_ep, 1))
-    labels = [r["label"] for r in pairs.values()]
     at = ("mv", "cv", "seed")
+    horizon = {}
+    if top is not None:  # else non-compliant: no protocol horizon (N3)
+        (N, M, P), n_samples = rows[top], episode_samples(n_ep, tc)
+        fastest = min(valid, key=lambda k: sample_time(valid[k]))
+        horizon = {
+            "episode_samples": n_samples,
+            "T_c_steps": tc,
+            "T_c_seconds": tc * dt,
+            "T_c_set_by": dict(zip(at, fastest)),
+            "N": N,
+            "M": M,
+            "P": P,
+            "P_steps": P * tc,
+            "P_set_by": dict(zip(at, top)),
+            "plans_to_episode_end": P >= n_samples,
+        }
+    labels = [r["label"] for r in pairs.values()]
     zero = sorted(
         f"{m} -> {c}"
         for m in mvs
@@ -238,24 +253,17 @@ def measure(name: str) -> dict:
         )
     )
     row = {
-        "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendment 1",
+        "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 and 2",
         "dt": dt,
         "episode_steps": n_ep,
-        "episode_samples": episode_samples(n_ep, tc),
-        "unidentified": top is None,
-        "T_c_steps": tc,
-        "T_c_seconds": tc * dt,
-        "T_c_set_by": (
-            dict(zip(at, min(valid, key=lambda k: sample_time(valid[k]))))
-            if valid
-            else None
+        "compliant": bool(horizon),
+        "status": (
+            "compliant"
+            if horizon
+            else "non-compliant: no valid pair, so no protocol horizon; the task "
+            "keeps its current oracle, and C1 and C2 leave it as it is (N3)"
         ),
-        "N": N,
-        "M": M,
-        "P": P,
-        "P_steps": P * tc,
-        "P_set_by": dict(zip(at, top)) if top else None,
-        "plans_to_episode_end": P >= episode_samples(n_ep, tc),
+        **horizon,
         "counts": {k: labels.count(k) for k in ("valid", "invalid", "insignificant")},
         "retests": sum(len(r["tests"]) - 1 for (j, i, s), r in pairs.items() if i == 0),
         "zero_models": zero,
@@ -267,6 +275,7 @@ def measure(name: str) -> dict:
             "window_steps": n_ep,
             "steps": steps,
             "hold_window": extra.get("window", 20),
+            "noise": "residual of each fitted model over its fit window (N1)",
         },
         "pairs": [
             {
@@ -297,12 +306,18 @@ def main() -> None:
     for name in (n for n in args.envs if n in TASKS):
         row = measure(name)
         records.write("oracle_horizons", name, records.stamped(row))
-        end = ", to the end" if row["plans_to_episode_end"] else ""
+        if row["compliant"]:
+            end = ", to the end" if row["plans_to_episode_end"] else ""
+            what = (
+                f"T_c {row['T_c_steps']}, P {row['P']} ({row['P_steps']} of "
+                f"{row['episode_steps']} steps{end}), set by {row['P_set_by']}"
+            )
+        else:
+            what = "NON-COMPLIANT, keeps its current oracle"
+        classes = {c: v["class"] for c, v in row["classes"].items()}
         print(
-            f"{name:18s} T_c {row['T_c_steps']}, P {row['P']} ({row['P_steps']} of "
-            f"{row['episode_steps']} steps{end}){', UNIDENTIFIED' if row['unidentified'] else ''}; "
-            f"{row['counts']}, retests {row['retests']}, set by {row['P_set_by']}; "
-            f"classes {({c: v['class'] for c, v in row['classes'].items()})}"
+            f"{name:18s} {what}; {row['counts']}, retests {row['retests']}; "
+            f"classes {classes}"
         )
 
 
