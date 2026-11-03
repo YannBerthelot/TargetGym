@@ -34,7 +34,8 @@ def planner_pH(Wa, Wb, params):
     The env finds pH by bisection, whose derivative is zero: a planner
     differentiating the env's pH sees no slope anywhere. The value here is
     the env's; the derivative is the implicit function theorem's on the
-    charge balance, ``dpH = -(r_Wa dWa + r_Wb dWb) / r_pH``.
+    charge balance r(pH, Wa, Wb, params) = 0: dpH = -dr / r_pH, with dr the
+    residual's change at fixed pH along every input's tangent.
     """
     return solve_pH(Wa, Wb, params)
 
@@ -42,12 +43,9 @@ def planner_pH(Wa, Wb, params):
 @planner_pH.defjvp
 def _planner_pH_jvp(primals, tangents):
     Wa, Wb, params = primals
-    dWa, dWb, _ = tangents
     pH = planner_pH(Wa, Wb, params)
-    r_pH, r_Wa, r_Wb = jax.grad(titration_residual, argnums=(0, 1, 2))(
-        pH, Wa, Wb, params
-    )
-    return pH, -(r_Wa * dWa + r_Wb * dWb) / r_pH
+    _, dr = jax.jvp(lambda a, b, p: titration_residual(pH, a, b, p), primals, tangents)
+    return pH, -dr / jax.grad(titration_residual)(pH, Wa, Wb, params)
 
 
 def ph_stage(env, state, action, params):

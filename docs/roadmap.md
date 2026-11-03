@@ -315,9 +315,11 @@ what is broken and recorded rather than hidden.
       PID is nowhere near the ceiling. Measure before changing anything.
 
 * [x] **Stop the controller models drifting from the plants.** Done in
-      November 2026 by removing the second copy: the nine CasADi planners,
-      seven on hand-written do-mpc models, were replaced by `NewtonMPC`, a
-      box-constrained iterative LQR on ``step_env`` itself. It keeps what
+      November 2026 by removing the second copy: eight of the nine CasADi
+      planners, seven on hand-written do-mpc models, were replaced by
+      `NewtonMPC`, a box-constrained iterative LQR on ``step_env`` itself.
+      The compressor's, a restatement of its step held to the plant by
+      tests, kept its NLP, now solved by IPOPT's algorithm in JAX. It keeps what
       the symbolic models bought, Newton convergence and properly bounded
       actions, without a model that can diverge from the plant. The glass
       furnace's had diverged three separate times (an error band inherited

@@ -117,7 +117,8 @@ holds that instead of a planner. Each task's controller lives in its package's
 
 | Implementation | Used by | When it applies |
 |---|---|---|
-| `NewtonMPC` | cstr, four_tank, first_order, ph_neutralization, unstable_cstr, reactor, hvac, glass_furnace, compressor_surge | Iterative LQR on the environment's own step: Newton's method on the action sequence. On the CSTR and the four-tank, deterministic plants with episodes short enough to plan whole, the plan is the rest of the episode |
+| `NewtonMPC` | cstr, four_tank, first_order, ph_neutralization, unstable_cstr, reactor, hvac, glass_furnace | Iterative LQR on the environment's own step: Newton's method on the action sequence. On the CSTR and the four-tank, deterministic plants with episodes short enough to plan whole, the plan is the rest of the episode |
+| IPOPT's interior-point method, in JAX | compressor_surge | A constrained NLP on the environment's step: multiple shooting, with the surge margin a soft constraint priced at a trip. It holds the plant on that margin; the Newton planner, with a barrier there instead, cost 1.6 times as much on five seeds (measured) |
 | `GradientMPC` | distillation, boiler_drum, plane_energy, the four 3D aircraft tasks | Differentiates the JAX dynamics and descends the objective |
 | Two gradient planners with a handover | plane, plane_sine | Both actuators planned to capture the initial altitude, then the elevator only, with the throttle on the PID's airspeed loop |
 | `SamplingMPC` | cement_kiln | Cross-entropy sampling: gradients through the kiln's transport delay overflow |
@@ -166,9 +167,8 @@ shape, and must give the optimiser a gradient.
   Three plants need a planner's version of it. The pH plant solves its pH by
   bisection, which has no derivative, so the planner's pH has the titration
   curve's slope. The reactor's costs are linear in the error, so the planner
-  rounds the kink over one floor. The unstable CSTR and the compressor keep
-  a barrier short of a trip: the point-of-no-return line, and a 5% margin on
-  the surge line. On the CSTR and the four-tank it weighs the scored window
+  rounds the kink over one floor. The unstable CSTR keeps a barrier short of
+  a trip, at the point-of-no-return line. On the CSTR and the four-tank it weighs the scored window
   1000 times the approach and reaches the plant's optimum to float32
   rounding.
 
@@ -179,15 +179,20 @@ first solve, which starts cold, than on the later ones, which start from the
 previous plan. A fixed count is deterministic, so a baseline recorded on one
 machine reproduces on another. A solve cannot fail: its line search keeps the
 plan it started from when no step improves on it. Where the factory gives a
-guide (the unstable CSTR's cascade, the compressor's pair), each solve starts
-from the better of the previous plan and the guide's rollout, so the plan is
-never worse than the expert's under the planner's model. Every record keeps
-the counts:
+guide (the unstable CSTR's cascade), each solve starts from the better of
+the previous plan and the guide's rollout, so the plan is never worse than
+the expert's under the planner's model.
+
+The compressor's interior-point solves run to IPOPT's tolerance, capped at
+150 iterations, and are deterministic too. A solve whose line search fails
+hands that step to the compressor's PID pair. Every record keeps the counts:
 
 | field | meaning |
 | --- | --- |
 | `solver_calls` | solves performed across all seeds |
 | `solver_mean_iters` | mean iterations per solve |
+| `solver_failures` | solves handed to the PID (the compressor only) |
+| `solver_capped` | solves stopped by the iteration cap and applied (the compressor only) |
 
 ### What the MPC does not guarantee
 

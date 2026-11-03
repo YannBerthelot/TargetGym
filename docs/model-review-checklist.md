@@ -486,11 +486,14 @@ state. It sat at "1.3% behind, passing" until the episode-length audit
 lengthened that episode to 1600 steps.
 
 **What it applies to.** Every environment whose MPC plans against a model of
-its own. Since November 2026 none does: the nine CasADi planners this check
-was written for, seven on reduced models and two (the unstable CSTR's and the
-compressor's) on restatements of the env's equations held to the plant by
-tests, were replaced by `NewtonMPC`, which plans on `step_env` itself. The
-gradient and sampling planners always did. Where a planner's stage computes
+its own. Since November 2026 only the compressor's does: of the nine CasADi
+planners this check was written for, seven on reduced models and two (the
+unstable CSTR's and the compressor's) on restatements of the env's equations
+held to the plant by tests, eight were replaced by `NewtonMPC`, which plans on
+`step_env` itself. The compressor's NLP stayed, on the env's own force
+functions, with its step held to `compute_next_state` by
+`test_mpc_model_is_the_env_step` and `test_mpc_predicts_one_step_like_the_plant`.
+The gradient and sampling planners always plan on `step_env`. Where a planner's stage computes
 its cost apart from `step_env` (the reactor's, to round a kink), it still
 steps the env's own `compute_next_state`, and a new planner that restates any
 physics should get this check before it ships.

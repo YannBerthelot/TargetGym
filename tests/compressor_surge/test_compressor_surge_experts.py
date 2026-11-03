@@ -4,13 +4,19 @@ Enforces ``src/target_gym/compressor_surge/PHYSICS.md``, section 7: the
 pair's gains and where they are read from, the guard its factory applies, the
 override, the anti-windup of both loops, the reset, and the agreement between
 the functional core that scripts/compressor_surge_numbers.py runs and the
-stateful controller the suite runs. Last, the pair on the first 1024 seeds
-of its validation, and the floor that scripts/measure_hold.py records from
-the MPC's hold.
+stateful controller the suite runs. Then the NMPC: its model against the
+env's step, its one-step prediction against the plant, its preview of both
+schedules, its guess for cold solves, its fallback to the pair and its
+routing of cold solves. Last, the pair on the first 1024 seeds of its
+validation, and the floor that scripts/measure_hold.py records from the
+MPC's hold. The NMPC's solver has its own tests (test_experts_ipm.py).
 
-The env is built directly from its class.
+The env is built directly from its class, and the planner's params are the
+env's with ``demand_sigma`` zeroed, which is what ``plan_params`` gives for
+the registered spec, whose ``noise_fields`` is ``("demand_sigma",)``.
 """
 
+import copy
 import json
 import math
 import pathlib
@@ -20,18 +26,25 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+import target_gym.compressor_surge.experts as experts_mod
 import target_gym.experts.pid as pid_mod
 from target_gym import records
 from target_gym.compressor_surge.env import (
     KPA,
     CompressorSurgeParams,
+    CompressorSurgeState,
+    compute_next_state,
+    demand_opening,
     get_obs,
+    live_target,
+    suction_density,
     surge_flow_per_speed,
 )
 from target_gym.compressor_surge.env_jax import CompressorSurge
 from target_gym.compressor_surge.experts import (
     BATTERY,
     BATTERY_LEAD,
+    BATTERY_START_CLOCK,
     BATTERY_STEPS,
     DEFAULT_GAINS,
     GUARD_MAX_TRAVEL,
@@ -40,20 +53,30 @@ from target_gym.compressor_surge.experts import (
     GUARD_POINTS,
     GUARD_TRAVEL_STEPS,
     HELD_GAINS,
+    MPC_HORIZON,
+    MPC_SLACK_ACTIVE,
+    MPC_SUBSTEPS,
+    MPC_TERMINAL_WEIGHT,
     SURGE_CONTROL_LINE,
     TUNED_GAINS,
     CompressorSurgePair,
     PairState,
     UnsafePairGains,
+    _state_at,
     battery_report,
     check_pair_gains,
     closed_loop_decay,
     commands_from_raw,
     load_gains,
+    make_compressor_surge_mpc,
     make_compressor_surge_pid,
+    mpc_step,
     pair_init,
     pair_step,
+    preview,
+    raw_from_commands,
     settled_point,
+    soft_min,
     surge_margin_from_obs,
 )
 
@@ -92,6 +115,13 @@ def params():
 @pytest.fixture(scope="module")
 def step(env):
     return jax.jit(env.step_env)
+
+
+@pytest.fixture(scope="module")
+def planned(params):
+    """The params the suite builds the NMPC with: ``plan_params`` zeroes the
+    spec's ``noise_fields``, ``("demand_sigma",)``."""
+    return params.replace(demand_sigma=0.0)
 
 
 def _obs(params, dp_kpa, margin, N=1.0, x=0.3, setpoint_kpa=24.0, N_ramp=None):
@@ -425,6 +455,462 @@ def test_functional_core_matches_the_class(env, params, step):
     np.testing.assert_array_equal(obs_seq[:, 6], seen[:, 6])
     gap = np.abs(obs_seq[:, 0] - seen[:, 0])
     assert gap.max() <= 0.01, (gap.max(), int(gap.argmax()))
+
+
+# ---------------------------------------------------------------------------
+# The NMPC
+# ---------------------------------------------------------------------------
+
+#: Typical size of each model state (m_c, dp, N, N_ramp, x), for the absolute
+#: part of test_mpc_model_is_the_env_step's tolerance where a state passes
+#: through zero.
+STATE_SCALE = np.array([20.0, 3.0e4, 1.0, 1.0, 1.0])
+_MODEL_STATES = ("m_c", "dp", "N", "N_ramp", "x")
+
+
+def _values(state):
+    """The model's five physical states of an env state, as floats."""
+    return np.array([float(getattr(state, name)) for name in _MODEL_STATES])
+
+
+def _within_reach(command, state, params):
+    """``command`` ([N_cmd, x_cmd]) moved onto one step's actuator travel from
+    ``state``. The env's per-substep rate limits treat a command beyond that
+    travel exactly as one at it, and the NLP only plans commands within it."""
+    dt = params.delta_t
+    N_ramp, x = float(state.N_ramp), float(state.x)
+    return np.array(
+        [
+            np.clip(
+                command[0],
+                N_ramp - params.drive_rate * dt,
+                N_ramp + params.drive_rate * dt,
+            ),
+            np.clip(
+                command[1],
+                x - params.valve_close_rate * dt,
+                x + params.valve_open_rate * dt,
+            ),
+        ]
+    )
+
+
+def _pair_states(env, params, step, key, n):
+    """``n`` steps of the shipped pair on the env from ``reset_env(key)``.
+    Returns the states it acted on and its raw actions."""
+    pair = CompressorSurgePair(load_gains(), params)
+    obs, state = env.reset_env(key, params)
+    states, actions = [], []
+    for _ in range(n):
+        action = pair(obs)
+        states.append(state)
+        actions.append(action)
+        obs, state, _, _, _ = step(key, state, jnp.asarray(action), params)
+    return states, np.array(actions)
+
+
+def _step_opening(state, params):
+    """The consumers' opening at the RK4 stage times of the step from
+    ``state``: the first stage of the NMPC's preview."""
+    return preview(state, params, horizon=0)["opening"][0]
+
+
+def test_mpc_model_is_the_env_step(params):
+    """Model-review check 12. The NMPC's step is the one piece of physics
+    written twice: the env's rate limits move per substep, the model's in
+    closed form. With the exact clip, at 1000 random states, schedules and
+    clocks (ramps and the stretch past the episode's end included),
+    deviations of up to 3 sd and commands within one step's reach, the
+    model's next state and the env's soft minimum of its substep Phis equal
+    ``compute_next_state``'s to 1e-6 relative, in float64.
+    test_mpc_predicts_one_step_like_the_plant bounds the shipped smoothing's
+    own gap."""
+    p = params
+    rng = np.random.default_rng(0)
+    n = 1000
+    flow = float(suction_density(p)) * p.A_c * p.U_r
+    dt = p.delta_t
+    N = rng.uniform(0.72, 1.05, n)
+    m_c = flow * N * rng.uniform(0.45, 0.80, n)
+    dp = rng.uniform(5.0e3, 35.0e3, n)
+    N_ramp = rng.uniform(p.N_min, p.N_max, n)
+    x = rng.uniform(0.0, 1.0, n)
+    dev = rng.uniform(-0.06, 0.06, n)
+    clock = rng.integers(0, 1300, n)
+    levels = rng.uniform(0.35, 0.95, (n, 6))
+    N_cmd = np.clip(
+        N_ramp + rng.uniform(-1.0, 1.0, n) * p.drive_rate * dt, p.N_min, p.N_max
+    )
+    x_cmd = np.clip(
+        x + rng.uniform(-p.valve_close_rate * dt, p.valve_open_rate * dt, n), 0.0, 1.0
+    )
+    raw = raw_from_commands(N_cmd, x_cmd, p).T
+    with enable_x64():
+
+        def one(m_c, dp, N, N_ramp, x, dev, clock, levels, raw):
+            state = CompressorSurgeState(
+                time=jnp.int32(0),
+                m_c=m_c,
+                dp=dp,
+                N=N,
+                N_ramp=N_ramp,
+                x=x,
+                demand_dev=dev,
+                phi_min=jnp.zeros_like(m_c),
+                setpoint_levels=jnp.full(4, 24.0e3),
+                demand_levels=levels,
+                block_clock=clock,
+            )
+            command = jnp.stack(commands_from_raw(raw, p, jnp))
+            ours, phis = mpc_step(
+                p, jnp.stack([m_c, dp, N, N_ramp, x]), command,
+                _step_opening(state, p), smooth_width=0.0,
+            )  # fmt: skip
+            new = compute_next_state(raw, state, p, jax.random.PRNGKey(0))[0]
+            theirs = jnp.stack([new.m_c, new.dp, new.N, new.N_ramp, new.x, new.phi_min])
+            return ours, soft_min(phis, p.soft_min_temperature, jnp), theirs
+
+        ours, ours_min, theirs = (
+            np.asarray(a)
+            for a in jax.jit(jax.vmap(one))(
+                *(jnp.asarray(v, jnp.float64) for v in (m_c, dp, N, N_ramp, x, dev)),
+                jnp.asarray(clock, jnp.int32),
+                jnp.asarray(levels, jnp.float64),
+                jnp.asarray(raw, jnp.float64),
+            )
+        )
+    gap = np.abs(ours - theirs[:, :5])
+    assert np.all(gap <= 1e-6 * np.abs(theirs[:, :5]) + 1e-9 * STATE_SCALE), gap.max(0)
+    np.testing.assert_allclose(ours_min, theirs[:, 5], rtol=1e-6, atol=0.0)
+    # The draw covered the demand ramps and the stretch past the last block.
+    ramp = (clock % 200 < 50) & (clock >= 200) & (clock < 1200)
+    assert ramp.sum() > 100 and (clock >= 1200).sum() > 30
+
+
+def test_mpc_predicts_one_step_like_the_plant(env, params, planned, step):
+    """Model-review check 13. One step of the NMPC's model, with the
+    shipped smoothing of the substep rate limits and the deviation the step
+    integrates with, lands where the env's float32 step under the planner's
+    params does. On 118 states of a pair episode with the deviation on, and
+    two built from one of them, one knocked to 2 % from the surge line with
+    the valve closing at full rate and one pushed far down the right branch
+    (Phi 0.76) with both actuators opening at full rate: the header pressure
+    within 0.05 ``e_floor`` and the step's ``phi_min`` within 1e-4.
+
+    The env step is ``compute_next_state`` rather than ``step_env``, since a
+    built state may trip, and ``step_env`` would then return the restart."""
+    p = params
+    states, actions = _pair_states(env, p, step, jax.random.PRNGKey(7), 1200)
+    picked = list(zip(states, actions))[::10][:118]
+    base = picked[60][0]
+    flow = float(suction_density(p)) * p.A_c * p.U_r * float(base.N)
+    dt = p.delta_t
+    picked += [
+        (
+            base.replace(
+                m_c=jnp.float32(surge_flow_per_speed(p) * float(base.N) * 1.02)
+            ),
+            raw_from_commands(
+                float(base.N_ramp), float(base.x) - p.valve_close_rate * dt, p
+            ),
+        ),
+        (
+            base.replace(m_c=jnp.float32(flow * 0.76)),
+            raw_from_commands(
+                float(base.N_ramp) + p.drive_rate * dt,
+                float(base.x) + p.valve_open_rate * dt,
+                p,
+            ),
+        ),
+    ]
+    assert len(picked) == 120
+    plant = jax.jit(
+        lambda raw, s: compute_next_state(raw, s, planned, jax.random.PRNGKey(0))[0]
+    )
+    commands = [_within_reach(commands_from_raw(raw, p), s, p) for s, raw in picked]
+    landed = [
+        plant(jnp.asarray(raw_from_commands(*u, p), jnp.float32), s)
+        for (s, _), u in zip(picked, commands)
+    ]
+    with enable_x64():
+
+        @jax.jit
+        def model(x5, u, state):
+            nxt, phis = mpc_step(p, x5, u, _step_opening(state, p))
+            return nxt[1], soft_min(phis, p.soft_min_temperature, jnp)
+
+        dp_gap, phi_gap = [], []
+        for (state, _), u, new in zip(picked, commands, landed):
+            wide = jax.tree_util.tree_map(
+                lambda a: a.astype(jnp.float64) if a.dtype == jnp.float32 else a, state
+            )
+            dp, phi_min = model(jnp.asarray(_values(state)), jnp.asarray(u), wide)
+            dp_gap.append(float(dp) - float(new.dp))
+            phi_gap.append(float(phi_min) - float(new.phi_min))
+    dp_gap, phi_gap = np.abs(dp_gap), np.abs(phi_gap)
+    assert dp_gap.max() <= 0.05 * planned.e_floor * KPA, dp_gap.max()
+    assert phi_gap.max() <= 1e-4, phi_gap.max()
+
+
+def test_mpc_preview_matches_the_env(env, params, planned):
+    """Stage k of the NLP is the state k steps ahead. Its setpoint is the
+    level the env scores that state against, and its openings are what the
+    env's RK4 reads during the step from it: the demand at the step's stage
+    times, from the env's own clock and deviation k steps on. Checked inside
+    a block, across a demand ramp, across a setpoint step, and past the
+    episode's end, where the last levels hold; the deviation starts at 1.5 sd.
+    The stage weights put the terminal cost on the last planned state."""
+    _, state = env.reset_env(jax.random.PRNGKey(6), params)
+    state = state.replace(
+        demand_dev=jnp.float32(0.03),
+        setpoint_levels=jnp.array([21.0e3, 27.0e3, 23.0e3, 25.0e3], jnp.float32),
+        demand_levels=jnp.array([0.45, 0.85, 0.40, 0.70, 0.55, 0.90], jnp.float32),
+    )
+    setpoints = np.asarray(state.setpoint_levels, float)
+    levels = np.asarray(state.demand_levels, float)
+    H = MPC_HORIZON
+    h = params.delta_t / MPC_SUBSTEPS
+    offsets = 0.5 * h * np.arange(2 * MPC_SUBSTEPS + 1)
+    advance = jax.jit(
+        lambda s: compute_next_state(jnp.zeros(2), s, planned, jax.random.PRNGKey(0))[0]
+    )
+    # (block clock, setpoint block of the first and of the last planned
+    # state). From 190 the stages cross the whole ramp into the second
+    # demand block (clock 200 to 250), from 270 the setpoint step at 300, and
+    # from 1180 the end of the episode.
+    for clock, first, last in ((0, 0, 0), (190, 0, 0), (270, 0, 1), (1180, 3, 3)):
+        s = start = state.replace(block_clock=jnp.int32(clock))
+        p_ref, opening = [], []
+        for _ in range(H + 2):
+            p_ref.append(float(live_target(s, planned)))
+            tau = jnp.asarray(
+                float(s.block_clock) * params.delta_t + offsets, jnp.float32
+            )
+            opening.append(
+                np.asarray(demand_opening(s.demand_levels, tau, s.demand_dev, planned))
+            )
+            s = advance(s)
+        ahead = preview(start, planned)
+        np.testing.assert_array_equal(ahead["p_ref"], p_ref)
+        assert (p_ref[0], p_ref[H]) == (setpoints[first], setpoints[last])
+        np.testing.assert_allclose(ahead["opening"], opening, rtol=0.0, atol=1e-6)
+        if clock == 190:
+            # The ramp is in the preview: the openings move by most of the
+            # step between the two levels.
+            spread = np.ptp(np.asarray(ahead["opening"]))
+            assert spread > 0.9 * abs(levels[1] - levels[0]), spread
+
+    np.testing.assert_array_equal(
+        ahead["w_track"], [1.0] * H + [MPC_TERMINAL_WEIGHT, 0.0]
+    )
+    np.testing.assert_array_equal(ahead["w_energy"], [1.0] * H + [0.0, 0.0])
+
+
+@pytest.mark.medium
+def test_mpc_cold_start_avoids_a_surging_guess(env, params, planned):
+    """A cold start with the recycle shut and a demand drop inside the
+    horizon, the stress battery's first scenario with the demand deviation at
+    -4 stationary sd. Holding both actuators where they are runs that guess
+    into surge, and IPOPT started there converged to a plan that surges; with
+    that guess the stress battery tripped in 12 of its 16 runs at both
+    candidate margins (measured with the CasADi build). The cold start must
+    begin outside the surge region, so the first plan uses no surge slack:
+    none above ``MPC_SLACK_ACTIVE``, past stage 0, whose ``phi_min`` is
+    measured."""
+    p0, p1, u0, u1 = BATTERY[0]
+    quiet = params.replace(demand_sigma=0.0)
+    z0 = settled_point(p0, u0, load_gains(), params)
+    state = _state_at(
+        jnp.asarray(z0, jnp.float32),
+        jnp.asarray([p0, p0, p1, p1], jnp.float32),
+        jnp.asarray([u0] * 3 + [u1] * 3, jnp.float32),
+        BATTERY_START_CLOCK,
+        quiet,
+    )
+    state = state.replace(demand_dev=jnp.float32(-4.0 * params.demand_sigma))
+    mpc = make_compressor_surge_mpc(env, planned)
+    mpc.step(np.asarray(env.get_obs(state, quiet)), state)
+    assert mpc.solve_failures == 0
+    assert mpc.plan["slacks"][1:].max() < MPC_SLACK_ACTIVE
+
+
+def _settled_near_the_line(env, params):
+    """Settled 4 % from the surge line at 28 kPa with the consumers at 0.35:
+    recycle is forced there and its power is above ``MPC_POWER_REF``, so the
+    NMPC moves the plant to its plan margin, ``MPC_SURGE_MARGIN``, and holds
+    it there."""
+    _, state = env.reset_env(jax.random.PRNGKey(2), params)
+    z = settled_point(28.0e3, 0.35, {**load_gains(), "surge_line": 0.04}, params)
+    flow = float(suction_density(params)) * params.A_c * params.U_r
+    f32 = jnp.float32
+    return state.replace(
+        m_c=f32(z[0]),
+        dp=f32(z[1]),
+        N=f32(z[2]),
+        N_ramp=f32(z[3]),
+        x=f32(z[4]),
+        demand_dev=f32(0.0),
+        phi_min=f32(z[0] / (flow * z[2])),
+        setpoint_levels=jnp.full(4, 28.0e3, f32),
+        demand_levels=jnp.full(6, 0.35, f32),
+    )
+
+
+class _Solves:
+    """Wraps the NMPC's solve: records each call's routing and inputs and,
+    on request, reports the next solve failed or capped."""
+
+    def __init__(self, monkeypatch):
+        self.real, self.calls, self.next = experts_mod._plan, [], None
+        monkeypatch.setattr(experts_mod, "_plan", self)
+
+    def __call__(self, state, u_prev, z0, lam0, w0, tol, **kw):
+        self.calls.append(
+            {"cold": kw["cold"], "u_prev": np.asarray(u_prev), "z0": np.asarray(z0)}
+        )
+        result, u_prev = self.real(state, u_prev, z0, lam0, w0, tol, **kw)
+        fault, self.next = self.next, None
+        if fault == "failed":
+            result = result._replace(error=jnp.asarray(-1.0))
+        elif fault == "capped":
+            result = result._replace(
+                iterations=jnp.asarray(kw["max_iter"]), error=jnp.asarray(1e-3)
+            )
+        return result, u_prev
+
+
+@pytest.mark.medium
+def test_mpc_falls_back_to_the_pair(env, params, planned, step, monkeypatch):
+    """A step whose solve fails is handed to the pair: the action is
+    exactly the one a ``CompressorSurgePair`` tracked through the same steps
+    returns, the plan kept is the warm start the failed solve began from
+    (the last plan moved one stage earlier), the failure is counted, the
+    next solve is warm and its move penalty reads the commands applied, and
+    it is clean. A solve that the iteration cap stopped is applied and
+    counted in ``solve_capped``.
+
+    After 20 NMPC steps that end near the NMPC's plan margin (below the
+    pair's 7.5 % override line), the pair's first command opens the recycle
+    fully, the override's response and the jump PHYSICS.md accepts, while
+    its speed command continues the last applied one within one step's drive
+    travel. A short horizon keeps the solves cheap. Gains the guard refuses
+    stop the factory."""
+    gains = load_gains()
+    mpc = make_compressor_surge_mpc(env, planned, horizon=10)
+    shadow = CompressorSurgePair(gains, planned)
+    key = jax.random.PRNGKey(2)
+    state = _settled_near_the_line(env, params)
+    solves = _Solves(monkeypatch)
+    margins = []
+    for _ in range(20):
+        obs = env.get_obs(state, params)
+        action = mpc.step(obs, state)
+        shadow.track(obs, action)
+        state = step(key, state, jnp.asarray(action), params)[1]
+        margins.append(float(state.phi_min) / (2.0 * params.W) - 1.0)
+    assert mpc.solve_failures == 0
+    assert margins[-1] < gains["override_line"], margins
+    last = commands_from_raw(action, planned)
+
+    held = mpc.plan
+    solves.next = "failed"
+    obs = env.get_obs(state, params)
+    expected = copy.deepcopy(shadow).step(obs)
+    action = mpc.step(obs, state)
+    np.testing.assert_array_equal(action, expected)
+    assert mpc.solve_failures == 1 and mpc.solve_capped == 0
+    kept = mpc.plan
+    for name in ("states", "commands", "slacks"):
+        np.testing.assert_array_equal(kept[name][:-1], held[name][1:], err_msg=name)
+        np.testing.assert_array_equal(kept[name][-1], held[name][-1], err_msg=name)
+    assert surge_margin_from_obs(np.asarray(obs), params) < gains["override_line"]
+    N_cmd, x_cmd = commands_from_raw(action, planned)
+    assert x_cmd == 1.0
+    assert abs(N_cmd - last[0]) <= params.drive_rate * params.delta_t
+    shadow.step(obs)
+    state = step(key, state, jnp.asarray(action), params)[1]
+
+    obs = env.get_obs(state, params)
+    action = mpc.step(obs, state)
+    shadow.track(obs, action)
+    assert not solves.calls[-1]["cold"]
+    np.testing.assert_allclose(solves.calls[-1]["u_prev"], [N_cmd, x_cmd], rtol=1e-6)
+    assert np.all(np.isfinite(action)) and mpc.solve_failures == 1
+    state = step(key, state, jnp.asarray(action), params)[1]
+
+    # A solve that the iteration cap stopped is applied.
+    solves.next = "capped"
+    action = mpc.step(env.get_obs(state, params), state)
+    applied = mpc.plan["commands"][0]
+    np.testing.assert_allclose(
+        action, np.clip(raw_from_commands(*applied, planned), -1.0, 1.0), atol=1e-6
+    )
+    assert mpc.solve_failures == 1 and mpc.solve_capped == 1
+    monkeypatch.undo()
+
+    monkeypatch.setattr(
+        pid_mod,
+        "_gains_cache",
+        {
+            **pid_mod.load_gains(),
+            "compressor_surge": {**DEFAULT_GAINS, **REFUSED["anti-surge (3, 0.3)"]},
+        },
+    )
+    with pytest.raises(UnsafePairGains):
+        make_compressor_surge_mpc(env, planned, horizon=5)
+
+
+@pytest.mark.medium
+def test_mpc_retries_a_failed_cold_step_cold(env, params, planned, step, monkeypatch):
+    """A cold step (the first, or the first after a trip) goes to the solver
+    instance with IPOPT's defaults. When its solve fails, there is no plan to
+    warm-start from, so the next step goes cold again. After a clean cold
+    solve the steps are warm, and a failed warm step leaves the next one
+    warm, from its kept plan. ``reset()`` makes the next step cold. A short
+    horizon keeps the solves cheap; the routing does not depend on it."""
+    mpc = make_compressor_surge_mpc(env, planned, horizon=10)
+    key = jax.random.PRNGKey(4)
+    _, state = env.reset_env(key, params)
+    solves = _Solves(monkeypatch)
+    for failing in (True, True, False, False, True, False):
+        solves.next = "failed" if failing else None
+        obs = env.get_obs(state, params)
+        action = mpc.step(obs, state)
+        assert np.all(np.isfinite(action))
+        state = step(key, state, jnp.asarray(action), params)[1]
+    routes = ["cold" if c["cold"] else "warm" for c in solves.calls]
+    assert routes == ["cold", "cold", "cold", "warm", "warm", "warm"]
+    assert mpc.solve_failures == 3
+
+    mpc.reset()
+    mpc.step(env.get_obs(state, params), state)
+    assert solves.calls[-1]["cold"]
+
+
+@pytest.mark.medium
+def test_mpc_cold_start_forgets_the_last_plan(env, params, planned, step):
+    """A cold start builds its guess from the state and the preview alone,
+    with no multipliers. After five steps of an episode, ``reset()`` and a
+    step from the episode's first state give the plan and the iteration
+    count of the controller's first step. A short horizon keeps the solves
+    cheap."""
+    mpc = make_compressor_surge_mpc(env, planned, horizon=10)
+    key = jax.random.PRNGKey(4)
+    obs0, state0 = env.reset_env(key, params)
+    first = mpc.step(obs0, state0)
+    plan, iters = mpc.plan, mpc.solve_iters
+    obs, state = obs0, state0
+    action = first
+    for _ in range(5):
+        obs, state, _, _, _ = step(key, state, jnp.asarray(action), params)
+        action = mpc.step(obs, state)
+    mpc.reset()
+    before = mpc.solve_iters
+    again = mpc.step(obs0, state0)
+    np.testing.assert_array_equal(again, first)
+    for name in ("states", "commands", "slacks"):
+        np.testing.assert_array_equal(mpc.plan[name], plan[name], err_msg=name)
+    assert mpc.solve_iters - before == iters
 
 
 # ---------------------------------------------------------------------------
