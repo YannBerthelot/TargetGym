@@ -4,6 +4,17 @@ Specification of 2026-11-03, for owner review. Nothing here has been run or
 implemented. It replaces the audit's rule B, max(expert settle, 5 x tau_63),
 which had no source (`oracle-audit.md`, section 5, Horizon).
 
+> Amendment 1, 2026-11-03: after the first run (8 of 14 identifications
+> failed), the owner accepted H14 to H20 and every recommendation D8 to D14.
+> Bump tests start from steady operation, after one episode under the
+> expert with the moves held at its last 20 commands, which amends H8.
+
+> Amendment 2, 2026-11-03: D9's sigma counted plant disturbances that the
+> subtracted test (C1) already cancels, so good fits failed V1 (hvac 91 %,
+> unstable_cstr 96 %). The owner replaced it, added the pure-gain case, and
+> changed D13. All three rules are ours: no source covers a subtracted step
+> test. They are judged on measuring noise, not on the horizons they give.
+
 The owner's rule applies throughout. Every value comes from one fixed recipe,
 run once on bump tests from training seeds 100 to 109. No score, no held-out
 seed and no menu picks a value. Held-out seeds 200 to 209 are not used at all.
@@ -98,7 +109,7 @@ shrinks over its last P steps.
 | H10 | Class | integrating if, over the window, the mean slope of the last quarter is at least half that of the first quarter; else self-regulating | ours: the criterion `scripts/measure_time_constants.py` already uses |
 | H11 | Fits | FOPDT by the expert protocols' `fit_fopdt`; integrating by `fit_integrating_lag` (k', theta, tau2). No fit is dropped, whatever its residual | ours, as the expert protocols |
 | H12 | Episode end | H_k = min(P, N_ep - k) | read: RMD p. 22 and p. 574. Derived: the objective is the episode reward, so nothing after N_ep counts |
-| H13 | Record | per task: P, the pair and seed that set it, every fit, the class per CV | ours |
+| H13 | Record | per task, two files. A compact summary in the package, `data/oracle_horizons/<task>.json`: T_c, N, M, P, the pair and seed that set each, compliance, the class per CV and the label counts. The full evidence, every test, retest and fit, in `evidence/oracle_horizons/<task>.json` at the repository root: kept in git, not shipped in the wheel (review of #133: the evidence was nine times the package data) | ours |
 
 ## 4. Per class
 
@@ -381,3 +392,340 @@ Not read, and not relied on beyond what is stated:
 - **IJACSA restatement.** A 2019 paper (Vol. 10 No. 6, paper 46) restates the
   MIMO rule as P = N = max over pairs of (5 tau_ij / T + k_ij). It is consistent
   with AS but garbled in places, so it is not cited for any number.
+
+## 10. Amendment 1, identification validity and retests
+
+Specification of 2026-11-03, for owner review. Nothing here has been run or
+implemented. It amends H7 to H11 and adds H14 to H20, so that a bump test is
+judged before its fit can set a horizon, and repeated when it fails.
+
+**Why.** The protocol ran on training seeds 100 to 109 for the 14
+non-aircraft tasks (PR #133, `src/target_gym/data/oracle_horizons/`). Six
+tasks gave plausible horizons. Eight failed through the protocol's own rules:
+
+- H11 kept every fit. Integrating fits with their lag at the fitter's floor
+  (1e-9 s) and zero delay forced T_c to one task step on glass_furnace,
+  cement_kiln, boiler_drum, distillation, wind_turbine, battery and
+  ph_neutralization. The kiln's lime FOPDT fit has tau 1.1e8 s on a response
+  no bigger than the noise, which gave P = 22 million steps.
+- Integrating outputs were bumped open loop. Every boiler_drum response
+  tripped.
+- Classes were mixed across seeds or pairs on pH, distillation, glass crown,
+  kiln, boiler, wind and battery T_cell.
+- Trips cut the windows on boiler, wind, distillation, kiln and hvac.
+
+**Owner decisions, 2026-11-03.**
+
+- **H8 amended.** Bump tests start from steady operation: one episode under
+  the shipped expert, then the moves held at the mean of its last 20
+  commands (the glass furnace: its last reversal cycle). This replaces "from
+  each seed's reset state".
+- **Amend, then rerun all 14 tasks.**
+
+**The binding rule.** Every rule below is fixed before any rerun. It comes from
+published or practitioner practice where a source exists, and is labelled ours
+otherwise. No rule reads P, and none targets a horizon value. A fit is judged
+on its own quality only.
+
+### 10.1 Sources
+
+The ids of section 1 still hold. New pages and three new sources:
+
+| id | source | what it says | where |
+| --- | --- | --- | --- |
+| COOPER | as section 1 | Tests run at the design level of operation; the PV should move at least 10 times the noise band; if a disturbance affects the test, it is repeated. Five checks on test data: steady state before the test, first point at that state, the response "clearly dominates" the noise, quiet disturbances, the fit visually matches the data. The noise band is plus or minus 3 standard deviations of the PV with the controller output constant at steady state; the signal to noise ratio should exceed ten, "a minimum specification". Figure 6.4 draws the band as the full plus or minus 3 sigma width. Fits minimise the squared error of the model "forced by the manipulated variable data". Closed-loop tests step the setpoint, with the controller output moving the PV more than 10 noise bands. A non-self-regulating process does not reach a natural steady state. P-only gains: Kc = (0.2 / Kp)(tau / theta)^1.22 (ITAE, set point); for an integrating process Kc = 1 / (K* theta) (D.2) | p. 24 (3.1); p. 51 (6.1); p. 54 (6.4); p. 55 (Fig. 6.4); p. 56 (6.5); p. 59 (6.6); p. 17 (2.5); p. 43 eq. 5.4; C.1 p. 283; C.2 p. 284; D.2 p. 286 |
+| SEB | as section 1 | Pretest bumps estimate gains and settling times. "Too small a move" is obscured by normal fluctuations and noise; too large a move violates output constraints or leaves the linear range. The largest allowed input change is (Delta u_j)max = (Delta y_i)max / K_ij (eq. 20-75). The longest step lasts the longest settling time seen in the pretest. Periods of upsets or abnormal situations (valve saturation) are removed. Model accuracy is characterised by confidence intervals on the parameters (Ljung 1999) | section 20.7, pp. 434-435 |
+| QB | as section 1 | The pretest obtains the time to steady state of each CV. Each MV is stepped 8 to 15 times, with a CV signal to noise ratio "at least six". Some packages move several MVs at once. Operators may intervene to avoid critical situations; data from several test periods may be merged after cutting corrupted stretches. Parameters are fitted by least squares on the output error (eq. 24). Some products give model uncertainty bounds | p. 747; p. 748 |
+| DMCP | as section 1 | ISRAMP, the ramp indicator, is set per dependent variable (CV): not a ramp, a true ramp, or a pseudo-ramp | annex p. 223 |
+| ZP | Y. Zhu and R. Patwardhan, "Towards a low cost and high performance MPC: the role of system identification", CPC VIII / FOCAPO 2012 ([PDF](https://skoge.folk.ntnu.no/prost/proceedings/cpc8-focapo-2012/data/papers/059.pdf)) | Each identified transfer function gets a 3 sigma error bound and a grade, from the bound's size against the model at low and middle frequencies: A very good, B good, C marginal, D "poor, or, no model exists". C and D models are zeroed where no model is expected; where one is expected, the test is modified: larger amplitudes and a longer test reduce model errors. Industrial model matrices have many zeros. A model is used if graded A, B or C and its gain sign matches the expectation. Models that could not be identified leave empty columns, reported | section 3, PDF p. 3; Automatic Model Selection, PDF p. 6; PDF p. 4 |
+| DHN | M. L. Darby, M. Harmse and M. Nikolaou, "MPC: current practice and challenges", ADCHEM 2009 preprint ([PDF](https://skoge.folk.ntnu.no/prost/proceedings/adchem09/cd/abstract/239.pdf)) | Manual tests move one MV at a time, moving other inputs as needed to keep the process in its region. Amplitudes keep inputs and outputs in range; larger moves are preferred while the response stays linear; aim for a signal to noise ratio of at least 6 to 1. Whether a CV is integrating is often set by process knowledge (level to flow); slow stable variables, slower than the prediction horizon, often control better as integrators | Plant testing, PDF p. 6; Identification methods, PDF p. 7 |
+| MWC | MathWorks System Identification Toolbox, [`compare`](https://www.mathworks.com/help/ident/ref/compare.html) | The NRMSE fit, 100 (1 - norm(y - yhat) / norm(y - mean(y))) percent. No threshold is given | Output Arguments, `fit` |
+
+What the sources share. A step test is accepted when the response clearly
+dominates the noise, the test starts at steady state, it lasts the settling
+time, and the model visibly fits (COOPER, SEB, QB, DHN). When a test fails,
+practice repeats it with a larger move or a longer duration, inside the
+limits (SEB, ZP, DHN). Integrating CVs are tested in closed loop with a
+setpoint step (COOPER C.2, 6.6). Pairs with no meaningful effect get a zero
+model (ZP). The ramp class belongs to the CV (DMCP).
+
+### 10.2 Amended and new choices
+
+Notation. W is the test window in task steps, dy the response (stepped run
+minus unstepped run), sigma the CV's noise, B = 6 sigma the noise band
+(COOPER's plus or minus 3 sigma), and SNR = max |dy| / B. A pair-seed is one
+MV-CV pair on one training seed. A test is one MV stepped on one seed; it reads
+every CV.
+
+| # | choice | value | label and ground |
+| --- | --- | --- | --- |
+| H2, H5 | Which fits count | Only valid fits (H19) enter T_c's minimum, the dead time k and P's maximum | derived: a fit H14 rejects does not describe the plant |
+| H7 | Step | The H7 step, then escalated by H15 | as before, plus H15 |
+| H8 | Response | Stepped run minus unstepped run on the same noise, from steady operation (owner decision above) | read: COOPER p. 24, tests at the design level of operation; p. 51, steady state before the test |
+| H9 | Window | N_ep task steps after the step, cut at the first trip of either run; the record names the run and the CV that tripped. Lengthened by H15 | ours (as before); read: SEB p. 435 and QB p. 748, abnormal stretches are cut |
+| H10 | Class | Replaced by H17 | |
+| H11 | Fits | Replaced by H14 and H19. Both structures (FOPDT; integrating with lag) are fitted to every response, by output-error least squares on the recorded input | read: QB eq. 24 p. 748; COOPER p. 56, the model is driven by the recorded MV |
+| H13 | Record | Extended by H19 | ours |
+| H14 | Fit validity | All four checks of 10.3 pass | read: COOPER 6.1, 6.4; SEB p. 435; MWC. Ours: the fit floor (D10) |
+| H15 | Retests | At most two per test; remedies by failed check (10.4) | read: SEB p. 435; ZP; COOPER C.2, 6.6. Ours: the count and caps (D11) |
+| H16 | Insignificant pair | At the largest step reached, SNR < 1 or the gain's 3 sigma interval holds zero | read: SEB p. 435; ZP. Ours: the threshold 1 |
+| H17 | Class | Per CV, by majority of seed evidence from both structures (10.6) | read: COOPER p. 17; DMCP p. 223. Ours: the majority and the tie-break (D12) |
+| H18 | Stabilised retest | P-only loop on a CV that tripped; setpoint step when the loop holds the pair's own CV (10.7) | read: COOPER C.2, D.2, eq. 5.4, 6.6; QB p. 748; DHN |
+| H19 | Exclusion and report | A pair-seed is valid, insignificant or invalid. Only valid ones count; all are reported | read: ZP, empty model columns reported. Ours: the record |
+| H20 | No valid pair | T_c one task step, plan to the episode end, labelled unidentified | ours (D13) |
+
+### 10.3 H14, fit validity
+
+A fit is valid when it passes all four checks. COOPER's five questions map onto
+them as follows: questions 1 and 2 (steady start, first point) hold by
+construction, since H8 starts from steady operation and dy starts at zero.
+Question 4 (quiet disturbances) is what the common-noise difference gives: a
+disturbance shared by both runs cancels to first order (derived). What it
+leaves is judged by V4.
+
+| check | passes when | label and ground |
+| --- | --- | --- |
+| V1 signal | SNR >= 10 | read: COOPER 6.1 q3, 6.4, C.1, C.2 (10 noise bands, a minimum); QB and DHN give 6 (D8) |
+| V2 duration | The fit's own transient ends inside the window: 5 tau + theta <= W dt for a FOPDT; 5 tau2 + theta <= W dt for an integrating fit | read: SEB p. 435, the step lasts the settling time; QB p. 747, the pretest finds the time to steady state; H1 defines the settle. Derived: the same 99 % for the lag of an integrating fit |
+| V3 bounds | No parameter at an upper bound of the fitter (theta or tau2 at the window's end) | derived: an estimate at its bound is the bound, and the data say nothing beyond it |
+| V4 fit | NRMSE fit >= 80 % | read: COOPER 6.1 q5, the fit must visually match the data; MWC defines the measure. Ours: 80 % (D10) |
+
+Noise. sigma is the standard deviation of the CV in the unstepped run over the
+same window, about its least-squares straight line (read: COOPER 6.4, the
+band is measured with the controller output constant, which is the unstepped
+run; ours: removing the line, since a held MV leaves a drift on an
+integrating CV that is not noise). D9 offers the other reading.
+
+A delay or lag at its lower bound (zero, or the fitter's 1e-9 s floor) is not
+a failure. It means "below one task step", since the data are sampled at dt
+and cannot resolve less (derived; COOPER C.1 ties the sample rate to what a
+test can see). The record writes it as "< dt", and H2 to H4 use it as zero, as
+today.
+
+### 10.4 H15, retests
+
+A failed pair-seed is retested at most twice (ours, D11). A retest repeats
+the whole test (one MV, one seed), so it re-reads every CV. Each pair keeps the
+first test at which its fit passes H14 (ours). A retest applies the remedy of
+every check failed by a pair of that test that is not yet insignificant
+(H16). Remedies add up across retests.
+
+| failed | remedy | label and ground |
+| --- | --- | --- |
+| V1 | Double the step, within the cap below | read: ZP, "increase the amplitudes"; SEB p. 435, too small a move is obscured; DHN, larger moves preferred while linear |
+| V2 or V3, window not cut by a trip | Double the window, up to 4 N_ep | read: SEB p. 435, the step lasts the longest settling time; ZP, a longer test reduces model errors. Ours: 4 N_ep |
+| Any check, window cut by a trip | Stabilised retest (H18) | read: COOPER C.2 and 6.6; QB p. 748, operators intervene in critical situations; DHN, other inputs move to keep the process in range |
+| V4 only, V2 passed | No remedy. The fit is invalid | ours: more data does not cure a model that has the wrong shape |
+
+Step cap, the smallest of:
+
+1. the MV's range, stepping away from the nearer limit (C2);
+2. SEB eq. 20-75 over every CV with a trip limit: |Delta u| <= (Delta y)max /
+   |K|. (Delta y)max is the distance from the CV's value at the step to its
+   nearer trip limit, less 3 sigma. K is the gain of the failed fit; for an
+   integrating fit, K = |k'| W dt, its move over the window (read: SEB;
+   derived: the 3 sigma margin and the integrating K);
+3. four times the H7 step (ours; SEB and DHN warn that large moves leave the
+   linear range).
+
+If the task cannot run past its episode, the window stays at the longest the
+task allows, and the record says so.
+
+### 10.5 H16, insignificant pairs
+
+A pair-seed is insignificant when, at the largest step it reached (the cap, or
+two escalations), either:
+
+- its SNR is below 1, so the response stays within one noise band
+  (read: SEB p. 435, obscured by normal fluctuations; ZP's grade D, "no model
+  exists"; ours: the threshold 1); or
+- the 3 sigma interval of its gain (k, or k') contains zero, with the
+  interval from the least-squares Jacobian (read: SEB p. 435, confidence
+  intervals; ZP grades on the 3 sigma bound).
+
+A response that is identically zero is insignificant. A pair whose ten seeds
+are all insignificant is a zero model (ZP, "zero them"), and is reported as
+one. Neither rule reads tau, theta or P.
+
+### 10.6 H17, class decision
+
+Replaces H10. The class belongs to the CV, as DMCplus sets the ramp flag per
+dependent variable (DMCP p. 223).
+
+1. **Evidence per pair-seed**, from both fits of its last test:
+   - self-regulating: the FOPDT fit passes V2 to V4 (the response reaches a
+     new steady state; COOPER p. 17);
+   - integrating: the FOPDT fit fails V2 (no steady state in the window) and
+     the integrating fit passes V2 to V4;
+   - both pass: the lower squared error wins (derived: both have three
+     parameters, so the least-squares criterion of QB eq. 24 compares them
+     directly);
+   - neither: no evidence. The window was already lengthened by H15.
+2. **Class per CV:** the majority over its pair-seeds with evidence, across
+   all MVs and seeds (ours, D12). On a tie, the structure with the smaller
+   sum of (100 - fit) over those pair-seeds (derived: QB p. 748 merges test
+   periods into one fit).
+3. **Refit.** Every pair-seed of the CV is refitted with the CV's class and
+   judged by H14 again, with no further retest. Those that fail are invalid.
+
+A slow stable CV that does not settle within 4 N_ep, but whose response a
+ramp with lag fits, is classed integrating. That is DMCplus's pseudo-ramp
+case, reached from the data alone. DHN's criterion (slower than the
+prediction horizon) is not used, because it reads the horizon.
+
+### 10.7 H18, stabilised retest
+
+Used when a test failed H14 and a trip cut its window. Practice stabilises
+before it steps (COOPER C.2, 6.6).
+
+1. **Loops.** A P-only loop holds each CV that tripped in either run. Its MV
+   is the stepped MV when the tripped CV is the pair's own CV. Otherwise it is
+   the MV the shipped expert uses for that CV; if no expert loop holds it, the
+   MV whose earlier tests gave that CV the largest SNR (ours).
+2. **Gain.** COOPER D.2 for an integrating fit, Kc = 1 / (k' theta_P).
+   COOPER eq. 5.4 for a FOPDT fit, Kc = (0.2 / k)(tau / theta_P)^1.22.
+   theta_P is theta_e of H4 at T = dt, so it is never zero (derived). The
+   model is the failed test's better fit (higher V4) on that MV-CV pair. With
+   fewer than four samples before the trip there is no model, and the
+   pair-seed is invalid (ours).
+3. **Start.** Steady operation as H8. The loop closes bumplessly (setpoint at
+   the CV, bias at the held MV) and runs 5 sqrt(10) theta_P before the step,
+   in both runs (read: COOPER C.2, steady state before the test, and its
+   closed-loop settle; ours for a self-regulating CV).
+4. **Step.** If the loop's MV is the stepped MV, the setpoint steps by
+   Delta u / Kc, Delta u the step H15 sets, so the loop's first move equals
+   it (derived: COOPER C.2, the output move from the setpoint step drives the
+   test). Otherwise the stepped MV steps as in H8 while the loop holds.
+5. **Fit.** Output-error least squares on the CV's response, each model
+   driven by the recorded deviation of every MV that moved (COOPER p. 56;
+   QB p. 747-748). With one moving MV the fit is single-input. With two, the
+   loop MV's model is fitted alongside, six parameters in all.
+6. **Judged** by H14. sigma comes from this test's unstepped run.
+
+The loop only stabilises the test. The fit is the open-loop model of the
+recorded MV to the CV, so its parameters do not depend on Kc beyond the
+excitation it gives (derived).
+
+### 10.8 H19 and H20, exclusion, report and fallback
+
+**H19.** After H15 to H18, each pair-seed is one of:
+
+- **valid:** passes H14 under its CV's class. Only these enter H2 to H5;
+- **insignificant:** H16. A zero model when all ten seeds are;
+- **invalid:** fails H14 after its retests. Excluded from H2 to H5.
+
+The evidence file (H13) adds, per pair-seed: each test run (step, window, loops,
+trip run and CV), sigma, SNR, both fits with their V1 to V4 values, the
+evidence, the label and the failed check. Per CV: the class and its vote. Per
+task: the counts of valid, insignificant and invalid pairs, and the CVs left
+with no valid pair. A CV with no valid pair adds nothing to the horizon; the
+oracle still carries its limit, as every limit CV.
+
+**H20.** If a task has no valid pair at all, it is marked unidentified. The
+recipe has no fit for T_c, so T_c is one task step, and the planner plans to
+the episode end, H_k = N_ep - k (ours; RMD p. 574 for the shrinking
+horizon). D13 offers holding the task out instead.
+
+### 10.9 Order of the rerun
+
+1. Base test per MV and seed: amended H8, H7 step, window N_ep, both runs,
+   trips recorded.
+2. Per pair-seed: sigma, SNR, both fits, V1 to V4 for each.
+3. Retests (H15, H18), at most two per test.
+4. Insignificance (H16) at the end of the retests.
+5. Class per CV (H17); refit under the class; H14 again.
+6. Valid fits go to H2 to H5 and H12; H20 if none.
+7. Record (H19).
+
+Cost. The base test is unchanged. A test that fails twice adds runs of 2 N_ep
+and 4 N_ep at most, plus the closed-loop settle of H18, so at most about 7
+times the base cost for that test. Only failing tests pay it.
+
+### 10.10 What the first run's failures meet
+
+| failure | tasks | rules |
+| --- | --- | --- |
+| Integrating fits at the lag floor with zero delay | glass_furnace, cement_kiln, boiler_drum, distillation, wind_turbine, battery, ph_neutralization | H17 tests both structures per CV; V2 and V4 judge the fit. A floor fit that passes every check stays (V3) |
+| FOPDT tau 1.1e8 s on a response within the noise | cement_kiln (lime) | V1 and V2; H15 escalates; H16 if still within the band |
+| Integrating CVs bumped open loop, every response tripped | boiler_drum | H18, COOPER C.2's P-only setpoint step |
+| Mixed classes across seeds or pairs | ph_neutralization, distillation, glass crown, kiln, boiler, wind, battery T_cell | H17, one class per CV |
+| Windows cut by trips | boiler, wind, distillation, kiln, hvac | V2 on the cut window; H18 if invalid |
+
+### 10.11 Where the sources do not settle it
+
+1. **Noise in a simulator.** COOPER's band is the PV's noise with the output
+   constant. The common-noise difference is cleaner than any plant response,
+   so the band from the unstepped run is strict here. D9.
+2. **Signal to noise.** COOPER defines his band (plus or minus 3 sigma) and asks
+   for 10. QB and DHN ask for 6 without defining the noise, and QB's 6 comes
+   with 8 to 15 steps per MV. D8.
+3. **Fit floor and retry count.** No source gives a fit percentage (MWC gives
+   none) or a number of retries. ZP repeats until most expected models grade
+   A or B, with no cap. D10, D11.
+4. **Grade thresholds.** ZP's A to D cut-offs are in Zhu 1998 and Zhu 2001,
+   which I did not read. H16 uses only grade D's meaning.
+5. **Weak pairs.** COOPER rejects a test under 10 bands. ZP still uses a
+   C-grade model when its gain sign matches an expectation matrix. D14.
+6. **Slow stable CVs.** DHN models them as integrators when slower than the
+   horizon, and DMCplus has a pseudo-ramp type, but I found no definition of
+   it. H17 decides from the data, so the window cap (D11) decides when such a
+   CV is integrating or invalid.
+7. **A valid delay-free integrator** (battery state of charge: lag and delay
+   below one step) still sets T_c to one task step, by C.2's T <= 0.5 theta.
+   This amendment does not change H2 beyond keeping invalid fits out.
+8. **Not read:** Seborg et al. ch. 7, Zhu's 2001 book, Ljung (cited through
+   SEB and ZP), the 2012 journal version of DHN, and AspenTech step-test
+   guidance beyond the DMCP annex.
+
+### 10.12 Source check
+
+Each PDF was downloaded twice on 2026-11-03; the two copies had the same
+SHA-1, and every cited phrase was found in pdftotext output of the second
+copy. COOPER's Figure 6.4 was also read as a page image, which confirmed that
+the 0.25 degC band spans the full plus or minus 3 sigma. MWC was fetched
+twice with different questions. Confirmed: COOPER, SEB, QB, DMCP, ZP, DHN,
+MWC.
+
+### 10.13 Decisions for the owner
+
+Recommended option first.
+
+| # | decision | options |
+| --- | --- | --- |
+| D8 | V1 threshold | 10 noise bands, 60 sigma (COOPER, the recipe's own source). Or 6 bands (QB, DHN; their noise is undefined, and QB's 6 assumes 8 to 15 steps) |
+| D9 | Noise sigma | From the unstepped run, straight line removed (COOPER's band with the output constant). Or from the residual of the differenced response (the noise the fit sees; no source) |
+| D10 | V4 fit floor | 80 % NRMSE fit (ours). Or 90 % (ours, stricter). Or none: the fit is reported, not judged (COOPER's check is visual) |
+| D11 | Retests | Two per test, step up to 4 times, window up to 4 N_ep (ours). Or one retest (cheaper, more invalid pairs). Or three, up to 8 times and 8 N_ep (dearer) |
+| D12 | Class | Per CV, majority of seed evidence, pooled fit on a tie (DMCP; QB). Or process knowledge first: a CV whose equation is a pure balance (drum level, state of charge) is integrating, the data decide the rest (DHN). Or integrating whenever any seed's evidence says so (no source) |
+| D13 | Task with no valid pair | Plan to the episode end at T_c of one task step, labelled unidentified. Or hold the task out of the oracle re-record until a protocol change identifies it |
+| D14 | Weak pairs, 1 <= SNR < 10 at the cap | Invalid and reported (COOPER's minimum). Or valid when the gain sign matches an expectation matrix written from PHYSICS.md before the rerun (ZP's grade C) |
+
+## 11. Amendment 2, noise from the fit residual, pure gains, non-compliant tasks
+
+**Why.** The rerun under Amendment 1 (PR #133) left 8 of 14 tasks
+unidentified. D9 took sigma from the unstepped run, which carries the plant's
+own disturbances: the weather on hvac, the demand blocks on compressor_surge,
+the inlet drift on unstable_cstr, the turbulence on wind_turbine. The
+subtracted test (C1, H8) already cancels them, so good fits failed V1: hvac
+at a 91 % fit, unstable_cstr at 96 %. Battery's delivered power, a pure gain,
+had no transient, so its NRMSE fit was 0 / 0.
+
+**Owner decisions, 2026-11-03.** The three rules below replace D9, amend V4
+and replace D13 (and H20). All three are ours: no source covers a subtracted
+step test. They are judged on how they measure noise, not on the horizons
+they give.
+
+| # | rule | value | label |
+| --- | --- | --- | --- |
+| N1 | Noise (replaces D9) | sigma is the standard deviation of the residual between the subtracted response and the fitted model, over the fit window. Each structure's fit has its own sigma and SNR. V1's threshold is unchanged: 10 bands of plus or minus 3 sigma | ours |
+| N2 | Pure gain (amends V4) | The fit measure is taken against the response's pre-step value instead of its mean: fit = 100 (1 - norm(dy - yhat) / norm(dy)), since dy is zero before the step. A response with no transient is then well-posed: a pure gain fitted exactly scores 100 % | ours |
+| N3 | No valid pair (replaces D13 and H20) | The task keeps its current oracle and its horizon file labels it non-compliant. No protocol horizon (no T_c, N, M or P) is written for it, and C1 and C2 leave it as it is | ours |
+
+What follows from the rules (derived):
+
+- Wherever section 10 reads sigma, it is now the residual sigma of the fit in
+  question: V1, H16's SNR below 1 (on the closer fit), the 3 sigma margin of
+  the step cap (10.4), and H18's step 6.
+- The unstepped run is still recorded, for the subtraction only.
+- 10.11 item 1 and D9 are settled by N1; item 3's fit floor (D10, 80 %) is
+  unchanged but now measured by N2.
