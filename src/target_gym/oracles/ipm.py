@@ -35,14 +35,18 @@ What is IPOPT's, with its defaults: the monotone (Fiacco-McCormick) barrier,
 or the adaptive one (``adaptive=True``: the quality-function oracle in free
 mode, and the filter of (objective, violation) pairs that falls back to the
 monotone mode and back); the filter line search with second-order
-corrections; the inertia correction; the kappa_sigma reset of ``w``; the
-step of ``lam`` along the primal step; the error measure and its scaling;
-termination at ``tol``, or at ``acceptable_tol`` held ``acceptable_iter``
-iterations. What is not: IPOPT's golden-section search over the barrier
-centring is a scan of a log grid here, and its restoration phase is the
-caller's ``restore``, a point that meets c(z) = 0, taken at most
+corrections, its accept tests with 10 eps of slack, and its full step when
+the step is tiny; the inertia correction; the kappa_sigma reset of ``w``;
+the step of ``lam`` along the primal step; the error measure and its
+scaling; termination at ``tol``, or at ``acceptable_tol`` held
+``acceptable_iter`` iterations, or at once when the line search fails at an
+acceptable point. What is not: IPOPT's golden-section search over the
+barrier centring is a scan of a log grid here; its soft restoration and its
+stop after repeated tiny steps are not ported; and its restoration phase is
+the caller's ``restore``, a point that meets c(z) = 0, taken at most
 ``max_restore`` times per solve. Without ``restore`` a failed line search
-ends the solve as failed.
+ends the solve as failed. The line-search details are IPOPT 3.14's source
+(IpBacktrackingLineSearch.cpp, IpFilterLSAcceptor.cpp, IpUtils.cpp).
 
 Every quantity is in whatever units the caller scales the problem to; the
 caller applies IPOPT's scaling (``oracles.shooting``).
@@ -78,6 +82,13 @@ MONOTONE_INIT_FACTOR = 0.8  # adaptive_mu_monotone_init_factor
 FILTER_MARGIN_FACT = 1e-5  # filter_margin_fact
 FILTER_MAX_MARGIN = 1.0  # filter_max_margin
 FIRST_HESSIAN_SHIFT = 1e-4  # first_hessian_perturbation
+TINY_STEP_EPS = 10.0  # tiny_step_tol, in machine epsilons
+#: The violation above which a small step is not tiny (IPOPT's DetectTinyStep,
+#: a constant in its source).
+TINY_STEP_VIOLATION = 1e-4
+#: The slack of IPOPT's accept tests, in machine epsilons of the reference
+#: value (Compare_le).
+COMPARE_EPS = 10.0
 #: Points of the barrier-centring grid (ours), log-spaced over IPOPT's
 #: [sigma_min, sigma_max]; IPOPT searches the same range by golden section.
 N_SIGMA = 41
@@ -146,6 +157,8 @@ def interior_point(
     f, c_fn, derivs, G, g0, kkt, restore, barrier, shift = nlp
     n, me, mi = z.shape[0], lam.shape[0], s.shape[0]
     mu_floor = tol / (KAPPA_EPS + 1.0)
+    eps = jnp.finfo(z.dtype).eps
+    tiny_tol, cmp_eps = TINY_STEP_EPS * eps, COMPARE_EPS * eps
 
     def residuals(gf, J, c, z, s, lam, w):
         rd = gf - J.T @ lam - G.T @ w
@@ -279,11 +292,21 @@ def interior_point(
             in_filter = jnp.any(live & (th >= F[:, 0]) & (ph >= F[:, 1]))
             switching = (m < 0) & (a * (-m) ** S_PHI > DELTA * th0**S_THETA)
             ftype = switching & (th0 <= th_min)
-            armijo = ph <= ph0 + ETA_PHI * a * m
-            decrease = (th <= (1.0 - GAMMA_THETA) * th0) | (ph <= ph0 - GAMMA_PHI * th0)
+            ph_slack, th_slack = cmp_eps * jnp.abs(ph0), cmp_eps * jnp.abs(th0)
+            armijo = ph - ph0 - ETA_PHI * a * m <= ph_slack
+            decrease = (th - (1.0 - GAMMA_THETA) * th0 <= th_slack) | (
+                ph - ph0 + GAMMA_PHI * th0 <= ph_slack
+            )
             return finite & ~in_filter & jnp.where(ftype, armijo, decrease), ftype, th
 
         ok0, ft0, th_t = verdict(z + a_max * dz, s + a_max * ds, a_max)
+        # A step this small against the variables is roundoff: taken whole,
+        # with no line search, unless the point is far from feasible.
+        rel = jnp.maximum(
+            jnp.max(jnp.abs(dz) / (1.0 + jnp.abs(z))),
+            jnp.max(jnp.abs(ds) / (1.0 + jnp.abs(s))),
+        )
+        ok0 = ok0 | ((rel <= tiny_tol) & (th0 <= TINY_STEP_VIOLATION))
 
         # Second-order corrections, on a rejected full step that raised theta.
         def soc_cond(st):
@@ -326,9 +349,10 @@ def interior_point(
         )
 
         def bt_cond(st):
-            # alpha_min is 0 when theta is (W&B eq. 23): stop at a step of 0
-            # too, where IPOPT's tiny-step test stops, or the loop never ends.
-            return ~st[1] & (st[0] >= a_min) & (st[0] > 0.0)
+            # The next step tried must exceed alpha_min, as IPOPT's loop
+            # condition: alpha_min is 0 when theta is (W&B eq. 23), and the
+            # halving then stops when the step underflows to 0.
+            return ~st[1] & (0.5 * st[0] > a_min)
 
         def bt_next(st):
             a = 0.5 * st[0]
@@ -352,7 +376,10 @@ def interior_point(
         # A failed line search: in free mode IPOPT's fallback, the monotone
         # mode from this point; otherwise a restoration step.
         fallback = (~accepted & free) if adaptive else jnp.array(False)
-        resto = ~accepted & ~fallback
+        # IPOPT does not restore at a point already acceptable: the solve ends
+        # there (ACCEPTABLE_POINT_REACHED), by this port's acceptable test.
+        at_acc = ~accepted & ~fallback & (err <= acceptable_tol)
+        resto = ~accepted & ~fallback & ~at_acc
         if restore is not None:
             z_r = restore(z)
             s_r = jnp.maximum(G @ z_r + g0, mu)
@@ -362,7 +389,9 @@ def interior_point(
         s1 = jnp.where(accepted, s + a * Ds, jnp.where(resto, s_r, s))
         lam1 = jnp.where(accepted, lam + a * Dl, lam)
         w1 = jnp.where(accepted, w + a_z * Dw, w)
-        w1 = jnp.clip(w1, mu / (KAPPA_SIGMA * s1), KAPPA_SIGMA * mu / s1)
+        w1 = jnp.where(
+            at_acc, w, jnp.clip(w1, mu / (KAPPA_SIGMA * s1), KAPPA_SIGMA * mu / s1)
+        )
         n_rest = n_rest + resto
         if adaptive:
             mu = jnp.where(
@@ -384,12 +413,13 @@ def interior_point(
         finite = (
             jnp.isfinite(err1) & jnp.all(jnp.isfinite(z1)) & jnp.all(jnp.isfinite(lam1))
         )
-        good = (accepted | recovered) & finite
+        good = ((accepted | recovered) & finite) | at_acc
 
         def pick(u, v):
             return jax.tree_util.tree_map(lambda a, b: jnp.where(good, a, b), u, v)
 
         n_acc = jnp.where(err1 <= acceptable_tol, n_acc + 1, 0)
+        n_acc = jnp.where(at_acc, acceptable_iter, n_acc)
         return (
             jnp.where(good, k + 1, max_iter), pick(z1, z), pick(s1, s), pick(lam1, lam),
             pick(w1, w), mu, d_last, F, nF, pick(gf1, gf), pick(H1, H), pick(J1, J),

@@ -104,6 +104,104 @@ def test_solves_hock_schittkowski_71(adaptive):
         assert 0.0 <= float(r.error) <= 1e-8
 
 
+# Roundoff near an optimum, made deterministic. IPOPT 3.14's line search
+# (IpBacktrackingLineSearch.cpp, IpFilterLSAcceptor.cpp, IpUtils.cpp) has three
+# answers to it, each tested on min f(z) s.t. z1 - z2 = 0, z >= lower, whose
+# reported gradient or value the test perturbs: a restoration called at an
+# acceptable point ends the solve there (ACCEPTABLE_POINT_REACHED); its accept
+# tests allow 10 eps |reference| (Compare_le); and a step below 10 eps of the
+# variables is taken whole, the line search skipped (DetectTinyStep).
+EPS = float(np.finfo(np.float64).eps)
+
+
+def _perturbed(f, grad, lower, restore=None, residual=0.0):
+    """``residual`` stays in the row as the line search evaluates it (c), not
+    as the derivatives report it, as roundoff leaves in a shooting row: no
+    step, second-order correction included, can remove it."""
+
+    def derivs(z, lam):
+        return grad(z), jnp.eye(2), jnp.array([[1.0, -1.0]]), reported(z)
+
+    def reported(z):
+        return jnp.atleast_1d(z[0] - z[1])
+
+    def c(z):
+        return jnp.abs(reported(z)) + residual if residual else reported(z)
+
+    return NLP(
+        f=f, c=c, derivs=derivs, G=jnp.eye(2), g0=-lower * jnp.ones(2),
+        kkt=_dense_kkt, restore=restore,
+    )  # fmt: skip
+
+
+def _solve_from(nlp, z0, lower, mu0):
+    """From z0 on the constraint, barrier mu0, each w at its centre mu0 / s."""
+    s = z0 - lower
+    return interior_point(
+        nlp, z0, s, jnp.zeros(1), mu0 / s, mu0=mu0, max_iter=30
+    )  # fmt: skip
+
+
+def test_a_line_search_that_fails_at_an_acceptable_point_ends_the_solve_there():
+    """f = |z|^2 / 2 with its gradient reported 1e-7 high, from z = 0 with
+    the bound at -1, and a 1e-16 residual in the row, as cstr's warm solves
+    met: every step (-1e-7, -1e-7) raises the barrier objective phi from
+    exactly 0 (f = 0, log s = 0) and leaves the violation at 1e-16, so no
+    step length down to alpha_min (2.5e-12 here) passes, not even with the
+    accept tests' slack 10 eps |phi| = 0. The error is 1e-7, inside
+    acceptable_tol 1e-6, so IPOPT stops at z = 0, before the restoration
+    (which here would move the point by 1)."""
+    with enable_x64():
+        nlp = _perturbed(
+            lambda z: 0.5 * jnp.sum(z**2), lambda z: z + 1e-7, -1.0,
+            restore=lambda z: z + 1.0, residual=1e-16,
+        )  # fmt: skip
+        r = _solve_from(nlp, jnp.zeros(2), -1.0, 1e-9)
+        assert int(r.iterations) < 15
+        assert 1e-8 < float(r.error) <= 1e-6
+        np.testing.assert_array_equal(r.z, [0.0, 0.0])
+
+
+def test_the_accept_tests_allow_ten_eps_of_the_reference():
+    """f = 1 + |z - 1|^2 / 2, plus 4 eps on any point past the start, from
+    z = 1 - 2e-8: the Newton step to z = 1 lowers the smooth part by 4e-16
+    and raises f by 8.9e-16, a net rise of 2 ulp of f, inside the 10 eps
+    |phi| = 2.2e-15 that Compare_le allows. Taken, the solve converges to
+    tol; refused, no step passes and it ends at the start's error, 2e-8."""
+    with enable_x64():
+        start = 1.0 - 2e-8
+
+        def f(z):
+            return (
+                1.0
+                + 0.5 * jnp.sum((z - 1.0) ** 2)
+                + jnp.where(z[0] > start, 4.0 * EPS, 0.0)
+            )
+
+        nlp = _perturbed(f, lambda z: z - 1.0, -10.0)
+        r = _solve_from(nlp, jnp.full(2, start), -10.0, 1e-12)
+        assert 0.0 <= float(r.error) <= 1e-8
+        np.testing.assert_allclose(r.z, [1.0, 1.0], rtol=0, atol=1e-12)
+
+
+def test_a_step_below_ten_eps_of_the_variables_is_taken_whole():
+    """f = |z - 1e8|^2 / 2, plus 1 on any point past the start, from 7 ulp
+    (1.04e-7) below 1e8: the step is 1e-15 of the variables, under
+    tiny_step_tol = 10 eps, with no violation, so IPOPT takes it whole
+    although f rises by 1. Then the gradient is 0 and the solve converges."""
+    with enable_x64():
+        Z = 1e8
+        start = Z - 7.0 * np.spacing(Z)
+
+        def f(z):
+            return 0.5 * jnp.sum((z - Z) ** 2) + jnp.where(z[0] > start, 1.0, 0.0)
+
+        nlp = _perturbed(f, lambda z: z - Z, 0.0)
+        r = _solve_from(nlp, jnp.full(2, start), 0.0, 1e-12)
+        assert 0.0 <= float(r.error) <= 1e-8
+        np.testing.assert_array_equal(r.z, [Z, Z])
+
+
 def _blocks(seed, ne, S=4, nx=3, nu=2, m=5):
     """Random stage blocks, well posed, and the same matrices written dense
     from the layout z = (x_1..x_S, u_0..u_{S-1}, e_0..e_{S-1}): K's block k
