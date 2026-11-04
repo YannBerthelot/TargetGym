@@ -1,7 +1,7 @@
 {
   "cpu": "AMD EPYC 9V74 80-Core Processor",
   "expert_fingerprint": "0099fadf26058c55",
-  "generated": "2026-11-04T11:49:44+00:00",
+  "generated": "2026-11-04T20:45:31+00:00",
   "mpc_returns": [
     -3194826.810395,
     -4619275.235196,
@@ -11,11 +11,11 @@
     -3185249.088299,
     -3168549.229366,
     -3226282.602979,
-    -72609662061.02684,
+    -5914577.716055,
     -3205266.013505
   ],
-  "mpc_trips": 1,
-  "oracle_fingerprint": "cb0dcb5a0c9f569f",
+  "mpc_trips": 0,
+  "oracle_fingerprint": "2135733fe7e5e6dc",
   "pid_returns": [
     -71099682.433079,
     -74731638.598183,
@@ -28,17 +28,18 @@
     -71313016.125259,
     -73839938.396776
   ],
-  "seconds": 286.0,
+  "seconds": 278.4,
   "seeds": 10,
-  "solver_calls": 12000,
-  "solver_capped": 7,
-  "solver_failures": 10,
+  "solver_calls": 12008,
+  "solver_capped": 0,
+  "solver_failures": 0,
   "solver_guard_flags": 0,
-  "solver_max_error": 137794.25708609796,
-  "solver_max_output_gap": 6614.998203614321,
-  "solver_max_replay_gap": 0.998285018211571,
-  "solver_max_violation": 9.066943647109719e+23,
-  "solver_mean_iters": 6.0,
-  "solver_replay_trips": 23,
+  "solver_max_error": 1.5695908254420562e-07,
+  "solver_max_output_gap": 1.1556490847325351,
+  "solver_max_replay_gap": 0.04025270838302486,
+  "solver_max_violation": 9.999999999999904e-09,
+  "solver_mean_iters": 5.8,
+  "solver_replay_trips": 0,
+  "solver_retries": 8,
   "steps": 1200
 }
