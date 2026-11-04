@@ -53,6 +53,24 @@ Mark it `large` when the property only shows at the scored length: a closed
 loop that holds its target, a PID that beats the best constant action, a check
 over many seeds.
 
+## Where a test goes
+
+Each test should be able to fail because of a real bug, and anything true of all
+environments is checked in one place.
+
+- **`tests/test_env_conformance.py`** owns every contract that applies to all
+  environments: shapes, spaces, the clock, keys, finiteness, `jit` and `vmap`. A
+  new environment inherits it by registering. A task that does not meet a contract
+  yet goes in a `KNOWN_*` table with its reason, which makes the check a strict
+  xfail for that task, so fixing the gap fails until its entry goes.
+- **An environment's own folder** holds its physics and its bounds: published
+  values, emergent behaviour, its limits and how its actions map onto them.
+- **Tests that restate configuration go.** A test that compares a setting with the
+  same number typed again fails only when someone edits it on purpose.
+- **Guards against mistakes that cannot be undone stay,** even though they only
+  fail on an edit, as in `tests/test_release_workflow.py`. A published version or a
+  leaked token cannot be taken back.
+
 ## The expensive measurement is recorded, not reproduced
 
 Checking that each shipped MPC really is an upper bound on its PID meant rolling
