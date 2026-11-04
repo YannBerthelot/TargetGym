@@ -170,18 +170,6 @@ def test_steady_state_is_a_fixed_point(params):
     assert abs(float(v[1])) * tau < 1e-4 * abs(float(Wb))
 
 
-@pytest.mark.parametrize("method", ["rk2_2", "rk4_2", "rk4_4"])
-def test_state_advances_under_each_integrator(method, params):
-    env = PHNeutralization()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    new_state, _ = compute_next_state(
-        0.0, state, params, jax.random.PRNGKey(0), integration_method=method
-    )
-    assert new_state.time == state.time + 1
-    for leaf in jax.tree_util.tree_leaves(new_state):
-        assert np.all(np.isfinite(np.asarray(leaf)))
-
-
 # ---------------------------------------------------------------------------
 # 4. Task interface
 # ---------------------------------------------------------------------------
@@ -201,7 +189,6 @@ def test_observation_hides_the_invariants_and_the_buffer(params):
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     state = state.replace(Wa=1234.5, Wb=6789.0, q2=4321.0)
     obs = env.get_obs(state, params)
-    assert obs.shape == (3,)
     for hidden in (1234.5, 6789.0, 4321.0):
         assert not bool(jnp.any(jnp.isclose(obs, hidden)))
 

@@ -39,15 +39,6 @@ def state():
 # -----------------------------------------------------------------------
 
 
-def test_velocity_shape(params, state):
-    v, _ = compute_velocity(
-        jnp.array([state.h1, state.h2, state.h3, state.h4]),
-        action=jnp.array([5.0, 5.0]),
-        params=params,
-    )
-    assert v.shape == (4,)
-
-
 def test_gravity_draining_with_no_pumps(params, state):
     """With zero pump input, all non-empty tanks drain under gravity."""
     v, _ = compute_velocity(
@@ -136,13 +127,6 @@ def test_no_outflow_at_zero_level(params):
 # -----------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method", ["euler_1", "rk2_1", "rk4_1"])
-def test_next_state_advances_time(method, params, state):
-    action = jnp.array([0.5, 0.5])
-    new_state, _ = compute_next_state(action, state, params, integration_method=method)
-    assert new_state.time == state.time + 1
-
-
 def test_integration_methods_agree_for_small_dt(state):
     params = FourTankParams(delta_t=0.01)
     action = jnp.array([0.3, 0.3])
@@ -225,10 +209,6 @@ def test_reward_decreases_with_error(params):
         FourTankState(h1=0.15 - 0.030, h2=0.20 - 0.030, **common), params
     )
     assert r_close > r_far > 0.0
-
-
-def test_reward_is_finite(params, state):
-    assert jnp.isfinite(compute_reward(state, params))
 
 
 # ---------------------------------------------------------------------------

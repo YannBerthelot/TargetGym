@@ -13,7 +13,13 @@ deterministic monotone ramp, and 334 passing tests said nothing about it.
 
 Anything asserted here is a claim about *all* environments, so a new
 environment inherits the whole battery by adding one line to
-``target_gym.registry``.
+``target_gym.registry``. A test in an environment's own folder is for that
+plant's physics and bounds: a contract every plant shares goes here, once, and
+is not repeated there.
+
+A known gap goes in a ``KNOWN_*`` table with its reason, and ``_known_gap``
+turns the check into a strict xfail for that task, so fixing the gap fails
+until its entry goes.
 
 Grouped by concern:
     1. Reset contract
@@ -22,13 +28,20 @@ Grouped by concern:
     4. Numerical health over a full episode
     5. JAX transform compatibility (jit / vmap / scan)
     6. Baseline coverage
+
+The reward, the episode length, the failure cost and the target changes are
+also checked on every task, in ``test_reward_contract.py``,
+``test_episode_length.py``, ``test_failure_cost_bound.py`` and
+``test_target_changes.py``.
 """
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from gymnasium.utils.env_checker import check_env
 
+import target_gym as tg
 from target_gym import registry
 from target_gym import reward as R
 
@@ -52,6 +65,18 @@ def _leaves(state):
     return [np.asarray(x) for x in jax.tree_util.tree_leaves(state)]
 
 
+def _known_gap(request, gaps, spec):
+    """Expect this check to fail on a task listed in ``gaps``, strictly."""
+    if spec.name in gaps:
+        request.applymarker(pytest.mark.xfail(strict=True, reason=gaps[spec.name]))
+
+
+def _state_is_finite(state):
+    return all(
+        np.all(np.isfinite(leaf)) for leaf in _leaves(state) if leaf.dtype.kind == "f"
+    )
+
+
 # ---------------------------------------------------------------------------
 # 1. Reset contract
 # ---------------------------------------------------------------------------
@@ -60,8 +85,36 @@ def _leaves(state):
 def test_reset_returns_obs_matching_observation_space(spec):
     env, params = spec.make_env(), spec.make_test_params()
     obs, _ = env.reset_env(jax.random.PRNGKey(0), params)
-    assert obs.shape == env.observation_space(params).shape
+    space = env.observation_space(params)
+    assert obs.shape == space.shape == env.obs_shape
+    assert obs.dtype == space.dtype
     assert np.all(np.isfinite(np.asarray(obs)))
+
+
+def test_reset_obs_is_the_observation_of_the_reset_state(spec):
+    env, params = spec.make_env(), spec.make_test_params()
+    obs, state = env.reset_env(jax.random.PRNGKey(0), params)
+    assert jnp.allclose(obs, env.get_obs(state, params))
+
+
+def test_get_obs_without_params_reads_the_defaults_or_refuses(spec):
+    """An observation that depends on the episode's parameters may refuse to
+    guess them (the 2D aircraft does), but must not use something else."""
+    env = spec.make_env()
+    params = env.default_params
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    try:
+        bare = env.get_obs(state)
+    except ValueError:
+        return
+    assert jnp.allclose(bare, env.get_obs(state, params))
+
+
+def test_a_reset_state_is_neither_terminated_nor_truncated(spec):
+    env, params = spec.make_env(), spec.make_test_params()
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    assert not bool(env.is_terminated(state, params))
+    assert not bool(env.is_truncated(state, params))
 
 
 def test_env_declares_where_the_value_and_its_target_live(spec):
@@ -73,9 +126,6 @@ def test_env_declares_where_the_value_and_its_target_live(spec):
     ``obs_target_index``, and since the gain search scores candidates inside a
     ``try`` it reported every one of them as ``-inf`` and tuned nothing, while
     ``scripts/record_baselines.py`` could not have recorded the environment.
-
-    The equivalents in ``tests/test_runners.py`` name three classes by hand,
-    which is why a fourth got past them. This one sweeps the registry.
     """
     from target_gym.runners.runners import _as_tuple
 
@@ -101,6 +151,8 @@ def test_env_declares_where_the_value_and_its_target_live(spec):
             f"{obs.shape[-1]} elements."
         )
         assert np.isfinite(obs[i]), f"{spec.name}: observation {i} is not finite."
+    # tracked_names labels a generated figure's axes.
+    assert len(env.tracked_names) == len(value_idx), spec.name
 
 
 def test_reset_starts_the_clock_at_zero(spec):
@@ -143,9 +195,25 @@ def test_step_env_returns_five_values_with_natural_termination_only(spec):
     assert len(out) == 5
     obs, new_state, reward, terminated, info = out
     assert obs.shape == env.observation_space(params).shape
+    assert type(new_state) is type(state)
     assert jnp.asarray(terminated).dtype == jnp.bool_
     assert np.isfinite(float(reward))
     assert isinstance(info, dict)
+
+
+def test_step_obs_and_info_describe_the_state_it_returned(spec):
+    """``info["last_state"]`` is the only way to read a finished episode's
+    state, since gymnax's ``step`` resets it (``base.finish_step``)."""
+    env, params = spec.make_env(), spec.make_test_params()
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, params)
+    obs, new_state, _, _, info = env.step_env(
+        key, state, _zero_action(env, params), params
+    )
+    assert jnp.allclose(obs, env.get_obs(new_state, params))
+    assert type(info["last_state"]) is type(new_state)
+    for reported, returned in zip(_leaves(info["last_state"]), _leaves(new_state)):
+        np.testing.assert_array_equal(reported, returned)
 
 
 def test_gymnax_step_returns_six_values(spec):
@@ -161,7 +229,10 @@ def test_gymnax_step_returns_six_values(spec):
     assert "terminated" in info and "truncated" in info
 
 
-def test_time_advances_monotonically(spec):
+def test_each_step_advances_the_clock_by_exactly_one(spec):
+    """The clock counts agent decisions, whatever the plant does inside one:
+    the reactor's limit once counted physics sub-steps, and its baselines read
+    5x too low."""
     env, params = spec.make_env(), spec.make_test_params()
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
@@ -170,7 +241,7 @@ def test_time_advances_monotonically(spec):
     _step = jax.jit(env.step_env)
     for _ in range(5):
         _, state, _, terminated, _ = _step(key, state, action, params)
-        assert int(state.time) > previous
+        assert int(state.time) == previous + 1
         previous = int(state.time)
         if bool(terminated):
             break
@@ -209,6 +280,13 @@ def test_truncation_fires_at_the_step_limit(spec):
         assert not bool(env.is_truncated(before, params))
 
 
+def test_action_space_is_the_unit_box(spec):
+    env, params = spec.make_env(), spec.make_test_params()
+    space = env.action_space(params)
+    assert np.all(np.asarray(space.low) == -1.0)
+    assert np.all(np.asarray(space.high) == 1.0)
+
+
 def test_action_space_sample_is_accepted(spec):
     env, params = spec.make_env(), spec.make_test_params()
     key = jax.random.PRNGKey(0)
@@ -217,6 +295,106 @@ def test_action_space_sample_is_accepted(spec):
     _, new_state, reward, _, _ = env.step_env(key, state, action, params)
     assert np.isfinite(float(reward))
     assert all(np.all(np.isfinite(x)) for x in _leaves(new_state))
+
+
+# The aircraft scale the raw action with no clip, so a raw stick of 100 asks for
+# 23.6 rad of elevator. Fixing it edits the aircraft packages, which stales
+# their version stamps and records, so it is a change of its own.
+_UNCLIPPED = "the raw action is scaled without a clip (env_jax.py, step_env)"
+KNOWN_UNCLIPPED_ACTIONS = dict.fromkeys(
+    (
+        "plane",
+        "plane_energy",
+        "plane_sine",
+        "plane3d_heading",
+        "plane3d_circle",
+        "plane3d_racetrack",
+        "plane3d_figure8",
+        "patrol",
+        "patrol_bearing_only",
+        "formation",
+    ),
+    _UNCLIPPED,
+)
+
+
+def test_an_action_past_the_box_acts_as_its_bound(spec, request):
+    """Not every learner squashes: an unbounded Gaussian samples past the box,
+    and the plant must not read that as a command it could never receive."""
+    _known_gap(request, KNOWN_UNCLIPPED_ACTIONS, spec)
+    env, params = spec.make_env(), spec.make_test_params()
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, params)
+    bound = jnp.ones(env.action_space(params).shape)
+    for sign in (-1.0, 1.0):
+        obs_at, _, reward_at, _, _ = env.step_env(key, state, sign * bound, params)
+        obs_past, _, reward_past, _, _ = env.step_env(
+            key, state, 100.0 * sign * bound, params
+        )
+        assert jnp.allclose(obs_at, obs_past)
+        assert jnp.isclose(reward_at, reward_past)
+
+
+# gymnax's ``state_space`` is called by nothing in this library, which is how
+# these stayed broken: the 2D and 3D aircraft read an attribute that does not
+# exist, and patrol and formation return a one-dimensional placeholder.
+_RAISES = "state_space reads __class_params__, which no state class has"
+_PLACEHOLDER = "state_space returns a placeholder of one dimension"
+KNOWN_STATE_SPACE_GAPS = {
+    **dict.fromkeys(
+        (
+            "plane",
+            "plane_energy",
+            "plane_sine",
+            "plane3d_heading",
+            "plane3d_circle",
+            "plane3d_racetrack",
+            "plane3d_figure8",
+        ),
+        _RAISES,
+    ),
+    **dict.fromkeys(("patrol", "patrol_bearing_only", "formation"), _PLACEHOLDER),
+}
+
+
+def test_state_space_has_one_dimension_per_state_field(spec, request):
+    _known_gap(request, KNOWN_STATE_SPACE_GAPS, spec)
+    env, params = spec.make_env(), spec.make_test_params()
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    assert env.state_space(params).shape == len(state.__dataclass_fields__)
+
+
+def test_every_integrator_family_steps_the_plant(spec):
+    """Each family the constructor accepts gives a finite next state one tick
+    on; a plant may refuse one (the compressor is RK4 only) at construction."""
+    shipped, params = spec.make_env(), spec.make_test_params()
+    substeps = shipped.integration_method.rsplit("_", 1)[1]
+    key = jax.random.PRNGKey(0)
+    accepted = 0
+    for family in ("euler", "rk2", "rk4"):
+        try:
+            env = type(shipped)(integration_method=f"{family}_{substeps}")
+        except ValueError:
+            continue
+        accepted += 1
+        _, state = env.reset_env(key, params)
+        action = _zero_action(env, params)
+        _, new_state, reward, _, _ = env.step_env(key, state, action, params)
+        assert int(new_state.time) == int(state.time) + 1, family
+        assert np.isfinite(float(reward)), family
+        assert _state_is_finite(new_state), family
+        ticked = state.replace(time=new_state.time)
+        assert not all(
+            np.array_equal(old, new)
+            for old, new in zip(_leaves(ticked), _leaves(new_state))
+        ), f"{family} left the state where it was"
+    assert accepted, f"{spec.name}: no integrator family was accepted"
+
+
+def test_gymnasium_view_passes_its_api_checker(spec):
+    """Gymnasium's own API check, the contract SB3 and other non-JAX libraries
+    rely on. Rendering is checked by tests/test_wrapper.py."""
+    check_env(tg.make_gymnasium(spec.name), skip_render_check=True)
 
 
 # ---------------------------------------------------------------------------
@@ -337,23 +515,37 @@ def test_distinct_keys_give_distinct_stochastic_trajectories(spec):
 
 
 def test_full_episode_stays_finite(spec):
-    """No NaN or Inf anywhere in state, obs or reward over a whole episode."""
+    """No NaN or Inf anywhere in state, obs or reward over a whole episode, at
+    zero action or saturated at either limit. Saturation may trip the plant,
+    but a trip is a restart, not a number that stops being one."""
     env, params = spec.make_env(), spec.make_test_params()
-    key = jax.random.PRNGKey(0)
-    obs, state = env.reset_env(key, params)
-    action = _zero_action(env, params)
+    shape = env.action_space(params).shape
 
-    jitted = jax.jit(env.step_env)
-    for step in range(400):
-        key, sub = jax.random.split(key)
-        obs, state, reward, terminated, _ = jitted(sub, state, action, params)
-        assert np.all(np.isfinite(np.asarray(obs))), f"non-finite obs at step {step}"
-        assert np.isfinite(float(reward)), f"non-finite reward at step {step}"
-        for leaf in _leaves(state):
-            if leaf.dtype.kind == "f":
-                assert np.all(np.isfinite(leaf)), f"non-finite state at step {step}"
-        if bool(terminated) or int(state.time) >= params.max_steps_in_episode:
-            break
+    @jax.jit
+    def episode(action, key):
+        _, state = env.reset_env(key, params)
+
+        def step(carry, _):
+            state, key = carry
+            key, sub = jax.random.split(key)
+            obs, state, reward, _, _ = env.step_env(sub, state, action, params)
+            finite = [
+                jnp.all(jnp.isfinite(leaf))
+                for leaf in jax.tree_util.tree_leaves((obs, state, reward))
+                if jnp.issubdtype(leaf.dtype, jnp.floating)
+            ]
+            return (state, key), jnp.stack(finite).all()
+
+        return jax.lax.scan(
+            step, (state, key), None, length=int(params.max_steps_in_episode)
+        )[1]
+
+    for level in (-1.0, 0.0, 1.0):
+        finite = np.asarray(episode(jnp.full(shape, level), jax.random.PRNGKey(0)))
+        assert finite.all(), (
+            f"{spec.name}: non-finite at step {int(np.argmin(finite))} under a "
+            f"constant action of {level:+.0f}"
+        )
 
 
 def test_reward_is_finite_and_a_cost_over_an_episode(spec):
@@ -421,14 +613,17 @@ def test_env_is_vmappable_over_seeds(spec):
     keys = jax.random.split(jax.random.PRNGKey(0), n)
     obs, states = jax.vmap(lambda k: env.reset_env(k, params))(keys)
     assert obs.shape[0] == n
+    # One row per seed, and rows that differ, or the batch is one episode n times.
+    assert not jnp.allclose(obs, obs[0])
 
     action = jnp.broadcast_to(
         _zero_action(env, params), (n,) + env.action_space(params).shape
     )
-    obs2, _, rewards, terminated, _ = jax.vmap(
+    obs2, states2, rewards, terminated, _ = jax.vmap(
         lambda k, s, a: env.step_env(k, s, a, params)
     )(keys, states, action)
     assert obs2.shape[0] == n
+    assert all(leaf.shape[0] == n for leaf in _leaves((states, states2)))
     assert rewards.shape == (n,)
     assert np.all(np.isfinite(np.asarray(rewards)))
     assert jnp.asarray(terminated).shape == (n,)

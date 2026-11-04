@@ -7,21 +7,6 @@ from target_gym.plane.env import PlaneParams, PlaneState, compute_reward
 from target_gym.plane.env_jax import Airplane2D as JaxEnv
 
 
-def test_init():
-    """Constructing the environment must give a usable spec, not just not raise."""
-    env = JaxEnv()
-    params = env.default_params
-    assert env.action_space(params).shape == (2,)
-    assert env.observation_space(params).shape == env.obs_shape
-
-
-def test_reset():
-    env = JaxEnv()
-    key = jax.random.PRNGKey(seed=42)
-    obs, env_state = env.reset(key)
-    assert obs.shape == env.obs_shape
-
-
 def test_compute_reward():
     env = JaxEnv()
     key = jax.random.PRNGKey(seed=42)
@@ -30,17 +15,6 @@ def test_compute_reward():
     reward = compute_reward(state=env_state, params=env_params)
     assert isinstance(reward, (jnp.ndarray, np.ndarray))
     assert 1 >= reward >= 0
-
-
-def test_sample_action():
-    env = JaxEnv()
-    key = jax.random.PRNGKey(seed=42)
-    obs, env_state = env.reset(key)
-    env_params = PlaneParams(reward_version=1)
-    action = env.action_space(env_params).sample(key)
-    assert -1 <= action[0] <= 1
-    assert -1 <= action[1] <= 1
-    assert action.shape == (2,)
 
 
 def test_step():

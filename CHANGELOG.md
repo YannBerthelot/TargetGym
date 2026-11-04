@@ -88,6 +88,13 @@ The next release is 0.8.0, because these changes break code written for
 - Each release now has a GitHub Release, with its changelog entry as notes and
   the wheel and sdist PyPI received.
 
+### Fixed
+
+- **`gymnasium.utils.env_checker.check_env` passes on every task.** It failed on
+  the ten tasks with an array in their state, because `info["last_state"]` was
+  a state dataclass and Gymnasium compares info values with `==`. Through
+  `make_gymnasium`, `info["last_state"]` is now a plain dict of NumPy arrays.
+
 ## [0.7.0] - 2026-11-02
 
 Grouped by what it changes for a user rather than by commit.

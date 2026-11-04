@@ -28,11 +28,6 @@ def state(params):
 # -----------------------------------------------------------------------
 
 
-def test_velocity_shape(params):
-    v, _ = compute_velocity(jnp.array([0.5]), action=1.0, params=params)
-    assert v.shape == (1,)
-
-
 def test_velocity_positive_when_driven_from_zero(params):
     """With u > 0 and x = 0, the state should be driven upward (dxdt > 0)."""
     v, _ = compute_velocity(jnp.array([0.0]), action=1.0, params=params)
@@ -84,13 +79,6 @@ def test_larger_gain_increases_velocity(params):
 # -----------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method", ["euler_1", "rk2_1", "rk4_1"])
-def test_next_state_advances_time(method, params, state):
-    new_state, _ = compute_next_state(0.5, state, params, integration_method=method)
-    assert new_state.time == state.time + 1
-    assert not jnp.allclose(new_state.x, state.x)
-
-
 def test_integration_methods_agree_for_small_dt(state):
     params = FirstOrderParams(delta_t=1e-4)
     action = 0.3
@@ -137,13 +125,6 @@ def test_terminal_when_out_of_bounds(params, state):
     assert term
 
 
-def test_truncated_at_max_steps(params, state):
-    _, truncated = check_is_terminal(
-        state.replace(time=params.max_steps_in_episode), params
-    )
-    assert truncated
-
-
 def test_reward_is_1_at_target(params):
     state = FirstOrderState(time=0, x=1.0, target_x=1.0, u=0.0)
     reward = compute_reward(state, params)
@@ -158,7 +139,3 @@ def test_reward_decreases_with_error(params):
         FirstOrderState(time=0, x=0.5, target_x=1.0, u=0.0), params
     )
     assert r_small > r_large
-
-
-def test_reward_is_finite(params, state):
-    assert jnp.isfinite(compute_reward(state, params))

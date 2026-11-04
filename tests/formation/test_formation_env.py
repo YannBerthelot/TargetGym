@@ -59,12 +59,6 @@ def _wingman(state, i):
 
 
 class TestConstruction:
-    def test_default_is_a_lead_and_two_wingmen(self):
-        env = Formation()
-        assert env.num_wingmen == 2
-        assert env.obs_shape == (74,)
-        assert env.action_space().shape == (9,)
-
     @pytest.mark.parametrize("k", range(1, MAX_WINGMEN + 1))
     def test_layout_scales_with_the_wingmen(self, k):
         env = Formation(num_wingmen=k)

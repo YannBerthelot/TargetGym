@@ -55,15 +55,6 @@ def test_beta_i_matches_beta_tot():
     assert LAMBDA_I.shape == (N_GROUPS,)
 
 
-def test_compute_velocity_shape():
-    params = ReactorParams()
-    state = _default_state(params)
-    position = _position_from_state(state)
-    v, _ = compute_velocity(position, action=0.0, params=params)
-    # 1 (n) + 6 (precursors) + 2 (T_fuel, T_coolant) + 2 (I_hat, Xe_hat)
-    assert v.shape == (11,)
-
-
 def test_steady_state_neutron_balance_at_zero_reactivity():
     """
     At rho_ext=0 and zero thermal feedback (T at reference), dn/dt should be
@@ -143,27 +134,22 @@ def test_power_increases_fuel_temperature():
 
 
 @pytest.mark.parametrize("method", ["euler_50", "rk2_50", "rk4_50"])
-def test_compute_next_state_progression(method):
-    """State evolves and time increments."""
+def test_a_physics_sub_step_moves_the_physics_clock_alone(method):
     params = ReactorParams()
     state = _default_state(params)
 
-    new_state, metrics = compute_next_state(
+    new_state, _ = compute_next_state(
         rho_raw=0.3,
         state=state,
         params=params,
         integration_method=method,
     )
-    assert isinstance(new_state, ReactorState)
     # One physics sub-step: the physics clock moves, the env-step clock does
     # not (``Reactor.step_env`` advances it once per control period).
     assert new_state.physics_time == state.physics_time + 1
     assert new_state.time == state.time
     # rho_ext is the converted action, clamped to [rho_ext_min, rho_ext_max]
     assert params.rho_ext_min <= float(new_state.rho_ext) <= params.rho_ext_max
-    # Precursors have the right shape
-    assert new_state.C.shape == (N_GROUPS,)
-    assert metrics is None
 
 
 def test_action_rate_limiting():
@@ -229,14 +215,6 @@ def test_terminal_on_fuel_melting():
     state = _default_state(params).replace(time=10, T_fuel=params.T_fuel_max + 50.0)
     terminated, _ = check_is_terminal(state, params)
     assert bool(terminated) is True
-
-
-def test_truncation_on_max_steps():
-    """Reaching max_steps_in_episode sets truncated."""
-    params = ReactorParams(max_steps_in_episode=50)
-    state = _default_state(params).replace(time=50)
-    _, truncated = check_is_terminal(state, params)
-    assert bool(truncated) is True
 
 
 def test_steady_state_precursors_formula():
