@@ -538,8 +538,8 @@ with exact Hessians to a scaled KKT error of 1e-8, or stops at 150
 iterations. A cold start puts every planned state at the measured one and
 holds the jacket where the reset put it (simulating that held jacket ahead
 would run the open-loop unstable reactor away), a later
-solve starts from the last plan shifted one step, and a failed solve
-applies the last plan's next move. Every solve's certificate (KKT error,
+solve starts from the last plan shifted one step, and a warm solve that fails or hits the cap is solved again cold,
+and one that still fails applies the last plan's next move. Every solve's certificate (KKT error,
 iterations, violation, and the plan replayed on `step_env`) is summed into
 the record.
 

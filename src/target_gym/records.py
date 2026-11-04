@@ -95,6 +95,7 @@ PARTS = {
             "mpc",
             "seconds",
             "solver_calls",
+            "solver_retries",
             "solver_failures",
             "solver_capped",
             "solver_mean_iters",

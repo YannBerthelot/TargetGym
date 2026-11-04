@@ -686,7 +686,8 @@ P = 26 moves of both commands from the true state, fewer near the episode's
 end, and applies the first. A cold start puts every planned state at the
 measured one and holds the drive setpoint and the valve where they are, a
 later solve starts from the last plan shifted one
-step, and a failed solve applies the last plan's next move.
+step, and a warm solve that fails or hits the cap is solved again cold,
+and one that still fails applies the last plan's next move.
 
 **Problem.** The plan maximises the episode reward over the horizon. The
 model is the env's step written again on the env's own functions

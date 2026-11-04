@@ -156,6 +156,26 @@ def test_a_failed_solve_applies_the_previous_plans_next_move():
     assert applied == float(np.clip(planned[1], -1.0, 1.0))
 
 
+@pytest.mark.medium
+def test_a_warm_solve_that_fails_is_solved_again_cold():
+    """A warm start can jam where a cold solve succeeds (G11, solver spec), so
+    the oracle retries cold before it gives up on the solve. A broken step
+    leaves a plan with no finite value, the next warm solve from it fails,
+    and the move is then a fresh oracle's at that state. The superseded solve
+    counts as a retry, not as a failure."""
+    env, params, oracle = _oracle("first_order")
+    _, state = env.reset_env(jax.random.PRNGKey(100), params)
+    broken = state.replace(x=jnp.nan)
+    oracle.step(None, broken)
+    good = state.replace(time=state.time + 1)
+    applied = oracle.step(None, good)
+    fresh = _oracle("first_order")[2].step(None, good)
+    assert applied == pytest.approx(fresh, abs=1e-9)
+    report = oracle.solver_report()
+    assert report["solver_retries"] == 1
+    assert report["solver_failures"] == 1  # the broken step's own cold solve
+
+
 def _imports(path: pathlib.Path) -> set[pathlib.Path]:
     found = set()
     for node in ast.walk(ast.parse(path.read_text())):

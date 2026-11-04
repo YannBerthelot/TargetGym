@@ -444,3 +444,28 @@ outputs, so C2 and D may need it.
 captured solves (1e-6 cleared 7, 1e-8 cleared 5). It uses task constants only,
 and no return was used in choosing it, but it is not strictly pre-hoc.
 Compressor, training seeds 100 to 102: capped 49, 26, 51 down to 0, 0, 0.
+
+## 16. Amendment 3, 2026-11-05: G11, a cold retry
+
+The records gate failed on the first re-record: unstable_cstr tripped once on
+the ten test seeds and lost that seed to its expert, with 10 failed and 7
+capped solves. It is an exothermic reactor, open-loop unstable, and the
+failures sat at one event: the step of the target at step 600, where the plan
+heats the jacket and then brakes at full cooling. The plan's active set has
+to change there, and warm starts begin with their slacks 1e-9 off their
+bounds, so the steps collapsed to 1e-3 and below and the iterates jammed. At
+six captured states the warm solve ended at a cost of about 3e13 and the cold
+solve, from the same state, converged in about 30 iterations to about 3e6.
+
+**G11.** A warm solve that fails or hits the cap is solved again cold (G8's
+start, with K7's rungs). If that solve fails too, the shifted plan applies, as
+the owner decided (oracle-audit.md, decision 5). A superseded solve is counted
+in `solver_retries`, not in the failed or capped counts. Main's compressor
+oracle retried in the same way before it handed a step to its expert.
+
+Measured, ten test seeds and ten training seeds: unstable_cstr 20 of 20 wins,
+no trip, no failed or capped solve, 7 retries in 24,000 solves. The plan's
+heat-then-brake around the target's step stays aggressive by design: it is the
+noise-free optimum. T reached 357 K against a 365 K trip with the jacket at
+its minimum on seed 8, and this CPU did not trip where CI's did. The gate on
+the recorded seeds remains the check on that margin.

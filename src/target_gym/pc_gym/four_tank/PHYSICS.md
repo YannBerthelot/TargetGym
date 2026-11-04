@@ -142,8 +142,8 @@ each plan's levels are checked against 0. Nothing is smoothed. IPOPT's
 algorithm solves it with exact Hessians to a scaled KKT error of 1e-8, or
 stops at 150 iterations. A cold start puts every planned level at the
 measured one and holds the pumps the reset records (off; simulating them
-held off would drain the tanks to the square root's edge), a later solve starts from the last plan shifted one sample, and a
-failed solve applies the last plan's next move. Every solve's certificate
+held off would drain the tanks to the square root's edge), a later solve starts from the last plan shifted one sample, and a warm solve that fails or hits the cap is solved again cold,
+and one that still fails applies the last plan's next move. Every solve's certificate
 (KKT error, iterations, violation, and the plan replayed on `step_env`) is
 summed into the record. The oracle no longer weights the protocol's scored
 window: the objective is the whole episode's reward. `e_floor` is the

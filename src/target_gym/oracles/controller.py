@@ -9,9 +9,10 @@ A task states its planner problem as a ``TaskModel`` in its own ``oracle.py``;
 - execution: one solve every T_c, its first move held over the T_c, on the
   noise-free params the caller passes (``plan_params``); a cold start puts
   every planned state at the measured one and holds the reset actuators
-  (oracle-solver.md, G8), a warm start shifts the last plan, and a failed solve
-  applies what it started from, so the previous plan's next move (owner
-  decision, oracle-audit.md: never the expert);
+  (oracle-solver.md, G8), a warm start shifts the last plan, a warm solve
+  that fails or hits the cap is solved again cold (G11), and a solve that
+  still fails applies what it started from, so the previous plan's next move
+  (owner decision, oracle-audit.md: never the expert);
 - smoothing: the K5 widths in ``data/oracle_widths/``, with K7's
   continuation on cold solves (oracle-smoothing-protocol.md);
 - certificate: per solve, the solver's (KKT error, iterations, capped,
@@ -184,20 +185,33 @@ class Oracle:
             x0, task = self.model.state_x(st), self.model.data(st)
             d = {"task": task, "end": active * self.tc}
             hold = self.model.hold(st)
-            plans = []
-            for i, widths in enumerate(self._rungs() if cold else [self.widths]):
-                d["widths"] = jnp.asarray(widths)
-                t0 = time.perf_counter()
-                if i == 0:
-                    args = () if cold else (self._plan,)
-                    plan = self.shooting.solve(d, x0, hold, *args, active=active)
-                else:
-                    plan = self.shooting.resolve(d, x0, hold, plans[-1], active=active)
-                jax.block_until_ready(plan.z)
-                plans.append(plan)
-                self._record(plan, time.perf_counter() - t0, d, st, x0, active)
-        self._plan = plans[-1]
+            plan = self._attempt(d, st, x0, hold, active, cold)
+            c = plan.certificate
+            if not cold and (bool(c.failed) or bool(c.capped)):
+                # G11: a warm start jams when the active set must change, its
+                # slacks a hair off their bounds, where a cold solve succeeds.
+                self.certificates[-1]["retried"] = True
+                again = self._attempt(d, st, x0, hold, active, True)
+                if not bool(again.certificate.failed):
+                    plan = again
+        self._plan = plan
         self._move = np.asarray(self.shooting.moves(self._plan)[0])
+
+    def _attempt(self, d, st, x0, hold, active: int, cold: bool):
+        """One solve, through K7's rungs when cold; its last plan."""
+        plans = []
+        for i, widths in enumerate(self._rungs() if cold else [self.widths]):
+            d["widths"] = jnp.asarray(widths)
+            t0 = time.perf_counter()
+            if i == 0:
+                args = () if cold else (self._plan,)
+                plan = self.shooting.solve(d, x0, hold, *args, active=active)
+            else:
+                plan = self.shooting.resolve(d, x0, hold, plans[-1], active=active)
+            jax.block_until_ready(plan.z)
+            plans.append(plan)
+            self._record(plan, time.perf_counter() - t0, d, st, x0, active)
+        return plans[-1]
 
     def _record(self, plan, seconds, d, st, x0, active):
         c = plan.certificate
@@ -209,7 +223,7 @@ class Oracle:
             "seconds": seconds, "iterations": int(c.iterations),
             "error": float(c.error), "capped": bool(c.capped),
             "failed": bool(c.failed), "violation": float(c.violation),
-            "shift": float(c.shift), **replay,
+            "shift": float(c.shift), "retried": False, **replay,
         })  # fmt: skip
 
     def _replay(self, d, st, x0, moves, active):
@@ -249,22 +263,25 @@ class Oracle:
         }
 
     def solver_report(self) -> dict:
-        """The certificates summed for the record: the solves, failed and
-        capped ones, their mean iterations, and the worst KKT error, row
-        violation and replay gaps over the finite values (a failed solve's
-        start may hold none: -1 then); the solves whose replay tripped or
-        whose plan crossed a dropped guard (K9's flag)."""
-        c = self.certificates
-        calls = max(len(c), 1)
+        """The certificates summed for the record: the solves, those a cold
+        retry superseded (G11), and over the rest the failed and capped ones,
+        the worst KKT error, row violation and replay gaps over the finite
+        values (a failed solve's start may hold none: -1 then), and the
+        solves whose replay tripped or whose plan crossed a dropped guard
+        (K9's flag). Mean iterations are over every solve."""
+        every = self.certificates
+        c = [x for x in every if not x["retried"]]
+        calls = max(len(every), 1)
 
         def worst(key, solves=c):
             return max((v for x in solves if np.isfinite(v := x[key])), default=-1.0)
 
         return {
-            "solver_calls": len(c),
+            "solver_calls": len(every),
+            "solver_retries": len(every) - len(c),
             "solver_failures": sum(x["failed"] for x in c),
             "solver_capped": sum(x["capped"] for x in c),
-            "solver_mean_iters": round(sum(x["iterations"] for x in c) / calls, 1),
+            "solver_mean_iters": round(sum(x["iterations"] for x in every) / calls, 1),
             "solver_max_error": worst("error", [x for x in c if not x["failed"]]),
             "solver_max_violation": worst("violation"),
             "solver_max_replay_gap": worst("replay_gap"),

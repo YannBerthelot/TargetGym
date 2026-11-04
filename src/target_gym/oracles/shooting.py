@@ -160,7 +160,8 @@ class Shooting:
     hold the actuators where they are, never from an expert (G8: multiple
     shooting needs no simulated start, which an unstable plant or a pump
     held off would run away from); warm, from ``previous`` and its
-    multipliers shifted one stage. A failed solve returns the plan it
+    multipliers shifted one stage (the caller retries a warm solve cold if
+    it fails or hits the cap, G11). A failed solve returns the plan it
     started from, so its next move is the previous plan's next one. Jitted;
     run it under x64 for its tolerance.
     """

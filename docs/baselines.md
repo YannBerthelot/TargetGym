@@ -190,7 +190,8 @@ hands that step to the compressor's PID pair. Every record keeps the counts:
 | `solver_calls` | solves performed across all seeds |
 | `solver_mean_iters` | mean iterations per solve |
 | `solver_failures` | solves handed to the PID (the compressor only) |
-| `solver_capped` | solves stopped by the iteration cap and applied (the compressor only) |
+| `solver_retries` | warm solves that failed or hit the cap and were solved again cold, not counted below |
+| `solver_capped` | solves stopped by the iteration cap and applied |
 
 ### What the MPC does not guarantee
 
