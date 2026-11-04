@@ -22,6 +22,17 @@ uv sync --group dev --group agent
 pytest -m agent
 ```
 
+`learning` is not a size either. Those tests train a short PPO on one task per
+group and check that it ends up better than the best constant action on seeds it
+never saw, which is the bar the PID meets. PPO comes from Ajax, the opt-in
+`learning` group. Ajax needs JAX 0.10 or later, so the tests run on Python 3.14
+and skip elsewhere. CI's learning job fails if any of them skips:
+
+```bash
+uv sync --python 3.14 --group dev --group learning
+pytest -m learning
+```
+
 ```bash
 pytest                   # small, on every core
 pytest -m medium -n 2    # medium; two workers keep two big compiles in memory

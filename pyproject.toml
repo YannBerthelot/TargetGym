@@ -132,6 +132,13 @@ agent = [
     # below routes Linux to the CPU wheel.
     "torch>=2.0",
 ]
+# Opt-in (``uv sync --group learning`` on Python 3.14): the learning tests'
+# PPO, from the JAX library this project is compared with. ajax-rl needs JAX
+# 0.10 or later, and uv.lock puts only 3.14 there, so the marker keeps the
+# other interpreters on the floor they test.
+learning = [
+    "ajax-rl>=0.5; python_version >= '3.14'",
+]
 dev = [
     { include-group = "test" },
     { include-group = "lint" },
@@ -270,4 +277,5 @@ markers = [
     "large: closed-loop or multi-seed behaviour that only shows at the scored length; runs on merges to main",
     "records: reads the rows the re-record label writes; CI runs these in the records job",
     "agent: needs the opt-in agent group (stable-baselines3, torch) and skips without it; CI runs these in the agent job",
+    "learning: needs the opt-in learning group (ajax-rl, on Python 3.14) and skips without it; CI runs these in the learning job",
 ]
