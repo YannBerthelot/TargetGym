@@ -2148,6 +2148,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#where-a-test-goes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where a test goes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-expensive-measurement-is-recorded-not-reproduced" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2346,6 +2357,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#where-a-test-goes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where a test goes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-expensive-measurement-is-recorded-not-reproduced" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2449,11 +2471,19 @@ agent job installs the group and runs them, and fails if any of them skips:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>dev<span class="w"> </span>--group<span class="w"> </span>agent
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pytest<span class="w"> </span>-m<span class="w"> </span>agent
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pytest<span class="w">                   </span><span class="c1"># small, on every core</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pytest<span class="w"> </span>-m<span class="w"> </span>medium<span class="w"> </span>-n<span class="w"> </span><span class="m">2</span><span class="w">    </span><span class="c1"># medium; two workers keep two big compiles in memory</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pytest<span class="w"> </span>-m<span class="w"> </span>large<span class="w">          </span><span class="c1"># large</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>pytest<span class="w"> </span>-m<span class="w"> </span>records<span class="w">        </span><span class="c1"># records</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>pytest<span class="w"> </span>-m<span class="w"> </span><span class="s2">""</span><span class="w">             </span><span class="c1"># everything</span>
+<p><code>learning</code> is not a size either. Those tests train a short PPO on one task per
+group and check that it ends up better than the best constant action on seeds it
+never saw, which is the bar the PID meets. PPO comes from Ajax, the opt-in
+<code>learning</code> group. Ajax needs JAX 0.10 or later, so the tests run on Python 3.14
+and skip elsewhere. CI's learning job fails if any of them skips:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--python<span class="w"> </span><span class="m">3</span>.14<span class="w"> </span>--group<span class="w"> </span>dev<span class="w"> </span>--group<span class="w"> </span>learning
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pytest<span class="w"> </span>-m<span class="w"> </span>learning
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pytest<span class="w">                   </span><span class="c1"># small, on every core</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pytest<span class="w"> </span>-m<span class="w"> </span>medium<span class="w"> </span>-n<span class="w"> </span><span class="m">2</span><span class="w">    </span><span class="c1"># medium; two workers keep two big compiles in memory</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pytest<span class="w"> </span>-m<span class="w"> </span>large<span class="w">          </span><span class="c1"># large</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>pytest<span class="w"> </span>-m<span class="w"> </span>records<span class="w">        </span><span class="c1"># records</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>pytest<span class="w"> </span>-m<span class="w"> </span><span class="s2">""</span><span class="w">             </span><span class="c1"># everything</span>
 </code></pre></div>
 <p>A later <code>-m</code> replaces the default one, and <code>-n0</code> runs serially, which <code>--pdb</code>
 needs.</p>
@@ -2472,6 +2502,23 @@ minutes on a cold cache; four at once shut CI runners down on 2026-10-27.</p>
 <p>Mark it <code>large</code> when the property only shows at the scored length: a closed
 loop that holds its target, a PID that beats the best constant action, a check
 over many seeds.</p>
+<h2 id="where-a-test-goes">Where a test goes<a class="headerlink" href="#where-a-test-goes" title="Permanent link">&para;</a></h2>
+<p>Each test should be able to fail because of a real bug, and anything true of all
+environments is checked in one place.</p>
+<ul>
+<li><strong><code>tests/test_env_conformance.py</code></strong> owns every contract that applies to all
+  environments: shapes, spaces, the clock, keys, finiteness, <code>jit</code> and <code>vmap</code>. A
+  new environment inherits it by registering. A task that does not meet a contract
+  yet goes in a <code>KNOWN_*</code> table with its reason, which makes the check a strict
+  xfail for that task, so fixing the gap fails until its entry goes.</li>
+<li><strong>An environment's own folder</strong> holds its physics and its bounds: published
+  values, emergent behaviour, its limits and how its actions map onto them.</li>
+<li><strong>Tests that restate configuration go.</strong> A test that compares a setting with the
+  same number typed again fails only when someone edits it on purpose.</li>
+<li><strong>Guards against mistakes that cannot be undone stay,</strong> even though they only
+  fail on an edit, as in <code>tests/test_release_workflow.py</code>. A published version or a
+  leaked token cannot be taken back.</li>
+</ul>
 <h2 id="the-expensive-measurement-is-recorded-not-reproduced">The expensive measurement is recorded, not reproduced<a class="headerlink" href="#the-expensive-measurement-is-recorded-not-reproduced" title="Permanent link">&para;</a></h2>
 <p>Checking that each shipped MPC really is an upper bound on its PID meant rolling
 sixteen controllers out on five seeds: about forty minutes of CPU, and
@@ -2482,8 +2529,8 @@ wall-clock floor and came close to its 30-minute timeout on CI's slower cores.</
 there, guarded by a fingerprint that refuses a record whose code has moved. See
 <a href="../baselines/">Baselines</a> for the design and the reasoning behind fingerprinting
 source rather than behaviour.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>baselines<span class="w">           </span><span class="c1"># re-measure everything, ~40 min</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>make<span class="w"> </span>baselines-plane<span class="w">     </span><span class="c1"># or just one environment</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>baselines<span class="w">           </span><span class="c1"># re-measure everything, ~40 min</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>make<span class="w"> </span>baselines-plane<span class="w">     </span><span class="c1"># or just one environment</span>
 </code></pre></div>
 <p>Run it when a test tells you a record is stale, and commit the result with the
 change that invalidated it.</p>
