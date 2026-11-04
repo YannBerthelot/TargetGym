@@ -17,10 +17,6 @@ environment inherits the whole battery by adding one line to
 plant's physics and bounds: a contract every plant shares goes here, once, and
 is not repeated there.
 
-A known gap goes in a ``KNOWN_*`` table with its reason, and ``_known_gap``
-turns the check into a strict xfail for that task, so fixing the gap fails
-until its entry goes.
-
 Grouped by concern:
     1. Reset contract
     2. Step contract (incl. the gymnax >= 1.0 six-value API)
@@ -63,12 +59,6 @@ def _zero_action(env, params):
 def _leaves(state):
     """Flatten a state pytree to finite-checkable arrays."""
     return [np.asarray(x) for x in jax.tree_util.tree_leaves(state)]
-
-
-def _known_gap(request, gaps, spec):
-    """Expect this check to fail on a task listed in ``gaps``, strictly."""
-    if spec.name in gaps:
-        request.applymarker(pytest.mark.xfail(strict=True, reason=gaps[spec.name]))
 
 
 def _state_is_finite(state):
@@ -297,31 +287,10 @@ def test_action_space_sample_is_accepted(spec):
     assert all(np.all(np.isfinite(x)) for x in _leaves(new_state))
 
 
-# The aircraft scale the raw action with no clip, so a raw stick of 100 asks for
-# 23.6 rad of elevator. Fixing it edits the aircraft packages, which stales
-# their version stamps and records, so it is a change of its own.
-_UNCLIPPED = "the raw action is scaled without a clip (env_jax.py, step_env)"
-KNOWN_UNCLIPPED_ACTIONS = dict.fromkeys(
-    (
-        "plane",
-        "plane_energy",
-        "plane_sine",
-        "plane3d_heading",
-        "plane3d_circle",
-        "plane3d_racetrack",
-        "plane3d_figure8",
-        "patrol",
-        "patrol_bearing_only",
-        "formation",
-    ),
-    _UNCLIPPED,
-)
-
-
-def test_an_action_past_the_box_acts_as_its_bound(spec, request):
+def test_an_action_past_the_box_acts_as_its_bound(spec):
     """Not every learner squashes: an unbounded Gaussian samples past the box,
-    and the plant must not read that as a command it could never receive."""
-    _known_gap(request, KNOWN_UNCLIPPED_ACTIONS, spec)
+    and the plant must not read that as a command it could never receive. The
+    aircraft once did: a raw stick of 100 asked for 23.6 rad of elevator."""
     env, params = spec.make_env(), spec.make_test_params()
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
@@ -335,30 +304,9 @@ def test_an_action_past_the_box_acts_as_its_bound(spec, request):
         assert jnp.isclose(reward_at, reward_past)
 
 
-# gymnax's ``state_space`` is called by nothing in this library, which is how
-# these stayed broken: the 2D and 3D aircraft read an attribute that does not
-# exist, and patrol and formation return a one-dimensional placeholder.
-_RAISES = "state_space reads __class_params__, which no state class has"
-_PLACEHOLDER = "state_space returns a placeholder of one dimension"
-KNOWN_STATE_SPACE_GAPS = {
-    **dict.fromkeys(
-        (
-            "plane",
-            "plane_energy",
-            "plane_sine",
-            "plane3d_heading",
-            "plane3d_circle",
-            "plane3d_racetrack",
-            "plane3d_figure8",
-        ),
-        _RAISES,
-    ),
-    **dict.fromkeys(("patrol", "patrol_bearing_only", "formation"), _PLACEHOLDER),
-}
-
-
-def test_state_space_has_one_dimension_per_state_field(spec, request):
-    _known_gap(request, KNOWN_STATE_SPACE_GAPS, spec)
+# gymnax's ``state_space`` is called by nothing in this library, so only this
+# check keeps it honest. Ten aircraft tasks once raised or returned a placeholder.
+def test_state_space_has_one_dimension_per_state_field(spec):
     env, params = spec.make_env(), spec.make_test_params()
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     assert env.state_space(params).shape == len(state.__dataclass_fields__)

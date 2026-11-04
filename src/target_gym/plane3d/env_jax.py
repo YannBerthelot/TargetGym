@@ -95,7 +95,9 @@ class _Airplane3DBase(
         if params is None:
             params = self.default_params
 
-        power, stick, aileron = action
+        # Not every learner squashes, so a raw action past the box acts as the
+        # bound rather than as a command the plant could never receive.
+        power, stick, aileron = jnp.clip(jnp.asarray(action), -1.0, 1.0)
         power = (power + 1) / 2  # [-1, 1] -> [0, 1]
         stick = jnp.deg2rad(stick * 15)  # [-1, 1] -> +/-15 deg
         aileron = jnp.deg2rad(aileron * 25)  # [-1, 1] -> +/-25 deg
@@ -206,7 +208,7 @@ class _Airplane3DBase(
     def state_space(self, params: PlaneParams3D) -> spaces.Box:
         inf = jnp.finfo(jnp.float32).max
         return spaces.Box(
-            -inf, inf, len(PlaneState3D.__class_params__), dtype=jnp.float32
+            -inf, inf, len(PlaneState3D.__dataclass_fields__), dtype=jnp.float32
         )
 
 

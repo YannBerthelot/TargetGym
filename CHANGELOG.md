@@ -14,6 +14,12 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
+- **The aircraft tasks clip their actions.** On `plane`, `plane3d`, `patrol` and
+  `formation` a raw action past `[-1, 1]` now acts as its bound, as it already
+  did on every other task; a raw stick of 100 used to ask for 23.6 rad of
+  elevator. Every action inside the box behaves as before, so these tasks keep
+  their versions and recorded numbers. A policy that sent actions outside the
+  box to one of them will not reproduce under the same version.
 - **CasADi, do-mpc and the `[mpc]` extra are gone.** Every oracle now runs on
   JAX, so `pip install target-gym` runs all of them and `make_oracle` no
   longer raises `ImportError`. `[all]` now installs `[render]` only; pip warns
@@ -96,6 +102,9 @@ The next release is 0.8.0, because these changes break code written for
   `make_gymnasium`, `info["last_state"]` is now a plain dict of NumPy arrays.
 - **`GymnasiumEnv` accepts scalar action bounds**, which gymnax allows. It raised
   a `ValueError` on `spaces.Box(-1.0, 1.0, (n,))`.
+- **`env.state_space()` works on every task.** It raised an `AttributeError` on
+  the 2D and 3D aircraft and returned a one-dimensional placeholder on patrol and
+  formation.
 
 ## [0.7.0] - 2026-11-02
 

@@ -242,7 +242,9 @@ class _PlanePatrolBase(
 
     def state_space(self, params: PatrolParams) -> spaces.Box:
         inf = jnp.finfo(jnp.float32).max
-        return spaces.Box(-inf, inf, (1,), dtype=jnp.float32)
+        return spaces.Box(
+            -inf, inf, len(PatrolState.__dataclass_fields__), dtype=jnp.float32
+        )
 
 
 class PlanePatrol(_PlanePatrolBase):
