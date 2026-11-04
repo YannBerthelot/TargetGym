@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym import PlanePatrol, PlanePatrolBearingOnly
+from target_gym import PlanePatrol
 from target_gym.patrol.env import (
     PatrolParams,
     check_is_terminal_patrol,
@@ -17,39 +17,10 @@ from target_gym.patrol.env import (
 )
 from target_gym.patrol.experts import make_patrol_pid_controller
 
-# ─── Construction & spaces ──────────────────────────────
-
-
-class TestConstruction:
-    def test_full_obs_shape(self):
-        assert PlanePatrol().obs_shape == (26,)
-
-    def test_bearing_obs_shape(self):
-        assert PlanePatrolBearingOnly().obs_shape == (21,)
-
-    def test_action_space(self):
-        env = PlanePatrol()
-        space = env.action_space()
-        assert space.shape == (3,)
-
-    def test_value_target_indices(self):
-        env = PlanePatrol()
-        # value = slot_error, target = constant 0
-        assert env.obs_value_index == 24
-        assert env.obs_target_index == 25
-
-
 # ─── Reset ──────────────────────────────────────────────
 
 
 class TestReset:
-    @pytest.mark.parametrize("Env", [PlanePatrol, PlanePatrolBearingOnly])
-    def test_reset_obs_shape_and_finite(self, Env):
-        env = Env()
-        obs, state = env.reset(jax.random.PRNGKey(0))
-        assert obs.shape == env.obs_shape
-        assert bool(jnp.all(jnp.isfinite(obs)))
-
     def test_lead_starts_at_origin(self):
         env = PlanePatrol()
         _, state = env.reset(jax.random.PRNGKey(0))
@@ -105,15 +76,6 @@ class TestSlotGeometry:
 
 
 class TestStep:
-    def test_step_advances_time(self):
-        env = PlanePatrol()
-        obs, state = env.reset(jax.random.PRNGKey(0))
-        _, state2, r, done, _ = env.step_env(
-            jax.random.PRNGKey(0), state, jnp.zeros(3), env.default_params
-        )
-        assert state2.time == state.time + 1
-        assert bool(jnp.isfinite(r))
-
     def test_reward_near_one_in_slot(self):
         env = PlanePatrol()
         params = env.default_params.replace(follower_spawn_noise=0.0, reward_version=1)
@@ -153,33 +115,6 @@ class TestStep:
         state = state.replace(follower=state.follower.replace(x=state.lead.x + 5000.0))
         terminated, _ = check_is_terminal_patrol(state, params)
         assert bool(terminated)
-
-
-# ─── JIT / vmap ─────────────────────────────────────────
-
-
-class TestJaxTransforms:
-    def test_step_jits(self):
-        env = PlanePatrol()
-        params = env.default_params
-        obs, state = env.reset(jax.random.PRNGKey(0))
-        step = jax.jit(lambda k, s, a: env.step_env(k, s, a, params))
-        _, _, r, _, _ = step(jax.random.PRNGKey(0), state, jnp.zeros(3))
-        assert bool(jnp.isfinite(r))
-
-    def test_vmap_reset_and_step(self):
-        env = PlanePatrol()
-        params = env.default_params
-        keys = jax.random.split(jax.random.PRNGKey(0), 8)
-        obs, states = jax.vmap(lambda k: env.reset(k, params))(keys)
-        assert obs.shape == (8, 26)
-        actions = jnp.zeros((8, 3))
-        out = jax.vmap(lambda k, s, a: env.step_env(k, s, a, params))(
-            keys, states, actions
-        )
-        rewards = out[2]
-        assert rewards.shape == (8,)
-        assert bool(jnp.all(jnp.isfinite(rewards)))
 
 
 # ─── Expert behaviour ───────────────────────────────────

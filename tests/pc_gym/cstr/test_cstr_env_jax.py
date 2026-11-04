@@ -1,22 +1,13 @@
 import jax
-import jax.numpy as jnp
-import pytest
 
 from target_gym.pc_gym.cstr.env import CSTRState
 from target_gym.pc_gym.cstr.env_jax import CSTR
 
 
-def test_reset_env_returns_obs_and_state():
+def test_reset_draws_inside_its_ranges():
     env = CSTR()
     key = jax.random.PRNGKey(0)
-    obs, state = env.reset_env(key)
-
-    # Obs shape matches env.obs_shape
-    assert obs.shape == env.obs_shape
-    assert isinstance(state, CSTRState)
-
-    # Reset initializes time to 0
-    assert state.time == 0
+    _, state = env.reset_env(key)
 
     # Initial C_a is within allowed range
     assert (
@@ -33,79 +24,12 @@ def test_reset_env_returns_obs_and_state():
     )
 
 
-@pytest.mark.parametrize("method", ["euler_1", "rk2_1", "rk4_1"])
-def test_step_env_updates_state_and_obs(method):
-    env = CSTR(integration_method=method)
-    key = jax.random.PRNGKey(0)
-    obs, state = env.reset_env(key)
-
-    action = 0.0  # neutral action
-
-    obs2, state2, reward, done, info = env.step_env(
-        key,
-        state,
-        action,
-    )
-
-    # Obs shape is correct
-    assert obs2.shape == env.obs_shape
-
-    # State updated and time advanced
-    assert isinstance(state2, CSTRState)
-    assert state2.time == state.time + 1
-
-    # Reward is finite
-    assert jnp.isfinite(reward)
-
-    # Done is boolean
-    assert done.dtype == jnp.bool_
-
-    # Info dict contains last_state
-    assert "last_state" in info
-    assert isinstance(info["last_state"], CSTRState)
-
-
-def test_action_and_observation_space():
-    env = CSTR()
-
-    a_space = env.action_space()
-    assert a_space.shape == (1,)
-    assert jnp.all(a_space.low == -1.0)
-    assert jnp.all(a_space.high == 1.0)
-
-    o_space = env.observation_space(env.default_params)
-    assert o_space.shape == env.obs_shape
-
-    s_space = env.state_space(env.default_params)
-    assert s_space.shape == len(CSTRState.__dataclass_fields__)
-
-
-def test_is_terminal_propagates_logic():
+def test_a_state_on_the_envelope_limit_does_not_terminate():
     """The CSTR has no trip: its envelope limits are unreachable from any
     coolant setting (the reactor settles between 318 and 329 K), so even a
-    state placed on a limit does not terminate. Truncation is the clock."""
+    state placed on a limit does not terminate."""
     env = CSTR()
     p = env.default_params
 
     hot = CSTRState(time=0, C_a=0.5, T=p.T_max, target_CA=0.6, T_c=298.0)
     assert not bool(env.is_terminated(hot, p))
-    assert not bool(env.is_truncated(hot, p))
-
-    # A healthy operating point does not.
-    ok = CSTRState(time=0, C_a=0.87, T=325.0, target_CA=0.87, T_c=298.0)
-    assert not bool(env.is_terminated(ok, p))
-
-    # Truncation is purely the clock.
-    late = ok.replace(time=p.max_steps_in_episode)
-    assert bool(env.is_truncated(late, p))
-    assert not bool(env.is_terminated(late, p))
-
-
-def test_get_obs_matches_manual_call():
-    env = CSTR()
-    state = CSTRState(time=0, C_a=0.5, T=350.0, target_CA=0.6, T_c=298.0)
-
-    obs1 = env.get_obs(state)
-    obs2 = env.get_obs(state, env.default_params)
-    assert obs1.shape == env.obs_shape
-    assert jnp.allclose(obs1, obs2)

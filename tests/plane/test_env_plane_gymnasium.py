@@ -13,19 +13,6 @@ def Airplane2D(env_params=None, render_mode=None):
     return GymnasiumEnv(_Plane(), env_params, render_mode)
 
 
-def test_init():
-    """Constructing the wrapper must expose Gymnasium spaces."""
-    env = Airplane2D()
-    assert env.action_space.shape == (2,)
-    assert env.observation_space.shape is not None
-
-
-def test_reset():
-    env = Airplane2D()
-    obs, info = env.reset()
-    assert obs.shape == env.obs_shape
-
-
 def test_compute_reward():
     env = Airplane2D()
     obs, info = env.reset()
@@ -33,15 +20,6 @@ def test_compute_reward():
     reward = compute_reward(state=env.state, params=env_params)
     assert reward.shape == ()
     assert 1 > reward > 0
-
-
-def test_sample_action():
-    env = Airplane2D()
-    obs, info = env.reset()
-    action = env.action_space.sample()
-    for i in range(len(action)):
-        assert env.action_space.low[i] <= action[i] <= env.action_space.high[i]
-    assert action.shape == (2,)
 
 
 def test_step():

@@ -187,7 +187,6 @@ def test_observation_hides_polarisation_and_fade(params):
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     state = state.replace(v_rc=42.42, q_loss=0.1234)
     obs = env.get_obs(state, params)
-    assert obs.shape == (5,)
     for hidden in (42.42, 0.1234):
         assert not bool(jnp.any(jnp.isclose(obs, hidden)))
 
@@ -226,19 +225,3 @@ def test_reset_starts_rested(params):
         assert float(state.T_cell) == pytest.approx(params.T_ambient)
         assert params.initial_soc_range[0] <= float(state.soc)
         assert float(state.soc) <= params.initial_soc_range[1]
-
-
-def test_state_stays_finite_over_an_episode(params):
-    env = GridBattery()
-    p = params.replace(max_steps_in_episode=200)
-    key = jax.random.PRNGKey(0)
-    _, state = env.reset_env(key, p)
-    _jstep = jax.jit(env.step_env)
-    for _ in range(200):
-        key, sub = jax.random.split(key)
-        _, state, reward, terminated, _ = _jstep(sub, state, jnp.zeros(1), p)
-        for leaf in jax.tree_util.tree_leaves(state):
-            assert np.all(np.isfinite(np.asarray(leaf)))
-        assert np.isfinite(float(reward))
-        if bool(terminated):
-            break

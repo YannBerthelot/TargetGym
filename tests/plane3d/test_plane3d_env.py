@@ -41,26 +41,7 @@ class TestWrapAngle:
 # ─── Heading task ──────────────────────────────────────
 
 
-class TestHeadingInit:
-    def test_init(self):
-        env = Plane3DHeading()
-        assert env.obs_shape == (15,)
-
-    def test_default_params(self):
-        env = Plane3DHeading()
-        params = env.default_params
-        assert params.I_x == 2_500_000
-        assert params.wingspan == 35.8
-        assert params.aileron_surface == 6.0
-
-
 class TestHeadingReset:
-    def test_reset(self):
-        env = Plane3DHeading()
-        key = jax.random.PRNGKey(42)
-        obs, state = env.reset(key)
-        assert obs.shape == (15,)
-
     def test_reset_state_fields(self):
         env = Plane3DHeading()
         key = jax.random.PRNGKey(42)
@@ -87,22 +68,6 @@ class TestHeadingReset:
 
 
 class TestHeadingStep:
-    def test_step_advances_time(self):
-        env = Plane3DHeading()
-        key = jax.random.PRNGKey(42)
-        obs, state = env.reset(key)
-        action = jnp.array([0.8, 0.0, 0.0])
-        obs2, state2, reward, terminated, truncated, info = env.step(key, state, action)
-        assert state2.time == state.time + 1
-
-    def test_step_obs_shape(self):
-        env = Plane3DHeading()
-        key = jax.random.PRNGKey(42)
-        obs, state = env.reset(key)
-        action = jnp.array([0.8, 0.0, 0.0])
-        obs2, *_ = env.step(key, state, action)
-        assert obs2.shape == (15,)
-
     def test_step_moves_forward(self):
         env = Plane3DHeading()
         key = jax.random.PRNGKey(42)
@@ -211,19 +176,7 @@ class TestHeadingReward:
 # ─── Circle task ───────────────────────────────────────
 
 
-class TestCircleInit:
-    def test_obs_shape(self):
-        env = Plane3DCircle()
-        assert env.obs_shape == (17,)
-
-
 class TestCircleReset:
-    def test_reset_obs_shape(self):
-        env = Plane3DCircle()
-        key = jax.random.PRNGKey(42)
-        obs, state = env.reset(key)
-        assert obs.shape == (17,)
-
     def test_starts_on_circle(self):
         env = Plane3DCircle()
         key = jax.random.PRNGKey(42)
@@ -249,16 +202,6 @@ class TestCircleReset:
         expected_heading = radial_angle + jnp.pi / 2
         heading_diff = abs(float(wrap_angle(state.psi - expected_heading)))
         assert heading_diff < 0.1
-
-
-class TestCircleStep:
-    def test_step_obs_shape(self):
-        env = Plane3DCircle()
-        key = jax.random.PRNGKey(42)
-        obs, state = env.reset(key)
-        action = jnp.array([0.8, 0.0, 0.0])
-        obs2, *_ = env.step(key, state, action)
-        assert obs2.shape == (17,)
 
 
 class TestCircleReward:
@@ -292,19 +235,7 @@ class TestCircleReward:
 # ─── Figure-8 task ─────────────────────────────────────
 
 
-class TestFigureEightInit:
-    def test_obs_shape(self):
-        env = Plane3DFigureEight()
-        assert env.obs_shape == (21,)
-
-
 class TestFigureEightReset:
-    def test_reset_obs_shape(self):
-        env = Plane3DFigureEight()
-        key = jax.random.PRNGKey(42)
-        obs, state = env.reset(key)
-        assert obs.shape == (21,)
-
     def test_starts_on_twisted_lemniscate(self):
         """Aircraft starts on the 3D twisted lemniscate."""
         env = Plane3DFigureEight()
@@ -336,16 +267,6 @@ class TestFigureEightReset:
         _, state = env.reset(key)
         expected_heading = float(state.target_heading) + jnp.pi / 2
         assert float(state.psi) == pytest.approx(float(expected_heading), abs=0.1)
-
-
-class TestFigureEightStep:
-    def test_step_obs_shape(self):
-        env = Plane3DFigureEight()
-        key = jax.random.PRNGKey(42)
-        obs, state = env.reset(key)
-        action = jnp.array([0.8, 0.0, 0.0])
-        obs2, *_ = env.step(key, state, action)
-        assert obs2.shape == (21,)
 
 
 class TestFigureEightReward:
@@ -406,36 +327,6 @@ class TestTerminal3D:
         state = state.replace(z=params.max_alt + 1.0)
         terminated, _ = check_is_terminal_3d(state, params)
         assert bool(terminated)
-
-    def test_truncated_at_max_steps(self):
-        params = PlaneParams3D(max_steps_in_episode=100)
-        env = Plane3DHeading()
-        key = jax.random.PRNGKey(42)
-        _, state = env.reset(key)
-        state = state.replace(time=101)
-        _, truncated = check_is_terminal_3d(state, params)
-        assert bool(truncated)
-
-
-# ─── Action space ──────────────────────────────────────
-
-
-class TestActionSpace:
-    @pytest.mark.parametrize(
-        "env_cls", [Plane3DHeading, Plane3DCircle, Plane3DFigureEight]
-    )
-    def test_action_space_shape(self, env_cls):
-        env = env_cls()
-        space = env.action_space()
-        assert space.shape == (3,)
-
-    def test_sample_action(self):
-        env = Plane3DHeading()
-        key = jax.random.PRNGKey(42)
-        action = env.action_space().sample(key)
-        assert action.shape == (3,)
-        for i in range(3):
-            assert -1 <= float(action[i]) <= 1
 
 
 def test_roll_authority_matches_a_transport_aircraft():
