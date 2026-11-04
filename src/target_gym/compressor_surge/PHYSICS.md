@@ -683,8 +683,9 @@ hands a step to the pair.
 **Execution.** Once every T_c, Cooper's sample time from the horizon
 protocol (one step, `data/oracle_horizons/compressor_surge.json`), it plans
 P = 26 moves of both commands from the true state, fewer near the episode's
-end, and applies the first. A cold start holds the drive setpoint and the
-valve where they are, a later solve starts from the last plan shifted one
+end, and applies the first. A cold start puts every planned state at the
+measured one and holds the drive setpoint and the valve where they are, a
+later solve starts from the last plan shifted one
 step, and a failed solve applies the last plan's next move.
 
 **Problem.** The plan maximises the episode reward over the horizon. The

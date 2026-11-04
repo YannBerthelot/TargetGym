@@ -25,8 +25,9 @@ would bind the measured state and are dropped.
 
 A solve may plan fewer stages than it was built for (``active``), as the
 horizon shrinks at the episode's end (H_k = min(P, N_ep - k)): the stages
-past it cost nothing, carry no rows and hold their moves to the last
-planned one in the same way, so one compiled problem serves every H_k.
+past it cost nothing, carry no rows, hold their moves to the last planned
+one in the same way and hold their state, since no plant runs past the
+episode (G9), so one compiled problem serves every H_k.
 """
 
 import functools
@@ -137,8 +138,10 @@ class Shooting:
     """The NLP of ``model`` over ``n_stages`` held moves, for ``nx`` states.
 
     ``solve(data, x0, u_hold, previous=None)`` plans from the measured state
-    x0. Cold, it starts from the moves ``u_hold`` that hold the actuators
-    where they are, never from an expert; warm, from ``previous`` and its
+    x0. Cold, it starts with every state at x0 and the moves ``u_hold`` that
+    hold the actuators where they are, never from an expert (G8: multiple
+    shooting needs no simulated start, which an unstable plant or a pump
+    held off would run away from); warm, from ``previous`` and its
     multipliers shifted one stage. A failed solve returns the plan it
     started from, so its next move is the previous plan's next one. Jitted;
     run it under x64 for its tolerance.
@@ -257,7 +260,8 @@ class Shooting:
         x0a = jnp.concatenate([x0, jnp.zeros(nxa - nx, x0.dtype)])
 
         def stage(v, k):
-            return self._stage(data, x0, v, k)
+            nxt, cost = self._stage(data, x0, v, k)
+            return jnp.where(k >= active, nxt.at[:nx].set(v[:nx]), nxt), cost
 
         def V_of(z):
             xs, us, _ = self.unpack(z)
@@ -265,22 +269,28 @@ class Shooting:
                 [jnp.concatenate([x0a[None], xs[:-1]])[:, :nx], us], 1
             )
 
-        def feasible(us, es):
-            """The states re-simulated from the moves (the restoration), each
-            slack raised to what its rows need."""
-
-            def advance(x, k):
-                nxt = stage(jnp.concatenate([x, us[k]]), k)[0]
-                return nxt[:nx], nxt
-
-            xs = jax.lax.scan(advance, x0, ks)[1]
+        def slacked(xs, us, es):
+            """z of the states, moves and slacks, each slack raised to what
+            its rows need."""
             need = jax.vmap(self._need)(jnp.concatenate([x0a[None], xs[:-1]]), act)
             return jnp.concatenate(
                 [xs.ravel(), us.ravel(), jnp.maximum(es, need).ravel()]
             )
 
+        def feasible(us, es):
+            """The states re-simulated from the moves (the restoration)."""
+
+            def advance(x, k):
+                nxt = stage(jnp.concatenate([x, us[k]]), k)[0]
+                return nxt[:nx], nxt
+
+            return slacked(jax.lax.scan(advance, x0, ks)[1], us, es)
+
         if cold:
-            z0 = feasible(jnp.tile(u_hold, (N, 1)), jnp.zeros((N, self.ne)))
+            # Every state at x0, each with the outputs of one stage from it.
+            held = jnp.concatenate([x0, u_hold])
+            xs = jax.vmap(lambda k: stage(held, k)[0])(ks).at[:, :nx].set(x0)
+            z0 = slacked(xs, jnp.tile(u_hold, (N, 1)), jnp.zeros((N, self.ne)))
             lam0 = jnp.zeros(N * nxa)
         else:
             z0, lam0, w0 = self.shift(previous) if shift else previous[:3]

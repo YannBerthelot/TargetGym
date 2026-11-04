@@ -98,7 +98,8 @@ move, and the tracking term is written as (e / e_floor)^2, the reward itself
 since e_tol is 0 and p is 2. The `|x| < 3` band is a hard limit on every
 planned state, elastic at the trip cost per unit, and never binds. IPOPT's
 algorithm solves it with exact Hessians to a scaled KKT error of 1e-8, or
-stops at 150 iterations. A cold start holds the input the reset records, a
+stops at 150 iterations. A cold start puts every planned state at the
+measured one and holds the input the reset records, a
 later solve starts from the last plan shifted one step, and a failed solve
 applies the last plan's next move. Every solve's certificate (KKT error,
 iterations, violation, and the plan replayed on `step_env`) is summed into

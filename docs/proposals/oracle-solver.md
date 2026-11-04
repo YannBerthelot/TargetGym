@@ -364,3 +364,46 @@ Recommended option first.
 | G5 | Epigraph rows on visited states | one algebraic variable per kinked term per visited state, with `stage_kkt_solve` extended to carry them. Or epigraph at stage boundaries only (fewer variables, not exact for b > 1) |
 | G6 | If B is chosen: where to split | at the reward's convex terms (MBD21). Or at the whole state, as the probe did (not a GGN where -reward is nonconvex) |
 | G7 | Budget check | set a per-episode compute budget, then rerun glass_furnace under Form A with its kink rewritten (smoothing T2) before G1 is final. Or decide G1 now on plane3d_circle alone |
+
+## 14. Amendment 1, 2026-11-04: what C1's validation found
+
+C1 ran the five process oracles on the solver above for training seeds 100
+and 101 and found three faults, none in the rules. The owner accepted the
+three fixes on 2026-11-04. Each was checked first on a copy of the code,
+then rebuilt test first.
+
+**The port left out three parts of IPOPT's line search** (read: IPOPT 3.14
+source, IpBacktrackingLineSearch.cpp, IpFilterLSAcceptor.cpp, IpUtils.cpp):
+
+- when the line search fails at a point that meets the acceptable tolerance,
+  IPOPT stops there ("Solved To Acceptable Level") instead of restoring;
+- its accept tests allow 10 eps of the reference value (Compare_le);
+- a step below 10 eps of the variables, with the violation at most 1e-4, is
+  taken whole (DetectTinyStep).
+
+Its backtracking also runs only while the step exceeds alpha_min. The port
+compared with >=, and since alpha_min is 0 when the violation is, four_tank's
+solve looped forever at a step of 0. Without the first part, cstr's warm
+solves at a held target ended failed after four restorations: 18 and 49 of
+150. With it, none failed. The other two parts changed nothing measurable
+there and are kept because they are IPOPT's. IPOPT's soft restoration and
+its stop after repeated tiny steps are still not ported.
+
+**G8, cold start.** A cold solve started from the held moves simulated
+forward: four_tank's reset has both pumps off, the simulation drained the
+tanks, and the solve never recovered (seed 101: no solve converged, 47
+trips). Multiple shooting keeps every state a variable so that no such
+simulation is needed. It can start from a dynamically infeasible guess,
+which single shooting cannot (Vanroye et al., FATROP, arXiv 2303.16746).
+Every state now starts at the measured one, with the moves still held.
+four_tank then had no failure and no trip.
+
+**G9, the stages past the episode.** As the horizon shrinks at the episode's
+end, the stages past it still ran the plant. On the open-loop unstable CSTR
+their states reached 1e41, and the last 8 solves of seed 100 failed. Those
+stages now hold their state, since no plant runs past the episode. The
+shrinking horizon (H_k) is unchanged.
+
+The compressor's solves still hit the cap at about the same rate, and none
+of the three changes it. Its rate-limit widths are K6-flagged (the smoothed
+corner is crossed within one integrator substep), and it is diagnosed next.

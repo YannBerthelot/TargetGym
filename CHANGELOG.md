@@ -49,7 +49,8 @@ The next release is 0.8.0, because these changes break code written for
   now follow the oracle rule (docs/proposals/oracle-audit.md): they plan the
   episode reward on the plant with its noise zeroed, over the horizon the
   horizon protocol measured (`data/oracle_horizons/`), solving once every
-  T_c and holding the move; clips and reward kinks are rewritten exactly,
+  T_c and holding the move, a cold solve from every planned state at the
+  measured one; clips and reward kinks are rewritten exactly,
   trips are hard limits, and the compressor's in-step rate limits are
   smoothed at the widths in `data/oracle_widths/`. One solver
   (`target_gym.oracles`) runs them to convergence, and each record's oracle

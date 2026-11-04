@@ -533,7 +533,9 @@ equilibrium under its last move (the horizon protocol's terminal line-out,
 D4): the change of each state over one more step is held at zero, elastic
 at the trip cost per unit. Nothing is smoothed. IPOPT's algorithm solves it
 with exact Hessians to a scaled KKT error of 1e-8, or stops at 150
-iterations. A cold start holds the jacket where the reset put it, a later
+iterations. A cold start puts every planned state at the measured one and
+holds the jacket where the reset put it (simulating that held jacket ahead
+would run the open-loop unstable reactor away), a later
 solve starts from the last plan shifted one step, and a failed solve
 applies the last plan's next move. Every solve's certificate (KKT error,
 iterations, violation, and the plan replayed on `step_env`) is summed into

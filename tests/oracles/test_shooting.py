@@ -187,3 +187,43 @@ def test_a_failed_solve_keeps_the_previous_plan_shifted():
     np.testing.assert_array_equal(failed.z, shifted)
     # The move applied next is the one the previous plan had planned next.
     assert float(planner.moves(failed)[0, 0]) == float(planner.moves(first)[1, 0])
+
+
+def _runaway(data, x, u, t):
+    """x+ = 100 x + u, open-loop unstable, tracking ``data`` + 0.1 data t:
+    0 when data = 0, the ramp 0.1 (t + 1) when data = 1."""
+    x1 = 100.0 * x + u
+    return x1, jnp.sum((x1 - 0.1 * data * (t + 1)) ** 2), jnp.zeros(0)
+
+
+@pytest.mark.medium
+def test_a_cold_solve_plans_an_unstable_plant_whose_held_move_overflows():
+    """From x0 = 1 the move held at 0 takes x to 1e320, past float64, within
+    160 stages, so a cold start cannot rest on that rollout (oracle-solver.md,
+    G8). By hand: the first move -100 brings x to 0, where 0 holds it at no
+    cost."""
+    model = StageModel(step=_runaway, block=1, lo=(-200.0,), hi=(200.0,))
+    with enable_x64():
+        planner = Shooting(model, n_stages=160, nx=1)
+        plan = planner.solve(0.0, jnp.ones(1), jnp.zeros(1))
+    assert not bool(plan.certificate.failed)
+    np.testing.assert_allclose(planner.moves(plan)[0], [-100.0], atol=1e-6)
+    np.testing.assert_allclose(planner.states(plan), 0.0, atol=1e-6)
+
+
+@pytest.mark.medium
+def test_stages_past_the_active_horizon_do_not_run_the_plant_away():
+    """Five live stages of 160, as at an episode's end (H_k = N_ep - k): the
+    live moves track the ramp 0.1 k, by hand u_k = 0.1 (k + 1) - 100 (0.1 k),
+    and the plan stays finite past them, where the plant held at the last
+    move would grow a hundredfold a stage (G9)."""
+    model = StageModel(step=_runaway, block=1, lo=(-1e3,), hi=(1e3,))
+    with enable_x64():
+        planner = Shooting(model, n_stages=160, nx=1)
+        plan = planner.solve(1.0, jnp.zeros(1), jnp.zeros(1), active=5)
+    assert not bool(plan.certificate.failed)
+    k = np.arange(5)
+    np.testing.assert_allclose(
+        planner.moves(plan)[:5, 0], 0.1 * (k + 1) - 10.0 * k, atol=1e-6
+    )
+    assert np.all(np.isfinite(planner.states(plan)))

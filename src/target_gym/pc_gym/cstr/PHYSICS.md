@@ -153,8 +153,9 @@ on the move, and the tracking term is written as (e / e_floor)^2, which is
 the reward itself since e_tol is 0 and p is 2. The trip test is constant,
 so no limit enters, and nothing is smoothed. IPOPT's algorithm solves it
 with exact Hessians to a scaled KKT error of 1e-8, or stops at 150
-iterations. A cold start holds the coolant the reset records, which clips
-to full cooling since the reset carries none, and each later solve starts
+iterations. A cold start puts every planned state at the measured one and
+holds the coolant the reset records, which clips to full cooling since the
+reset carries none, and each later solve starts
 from the last plan shifted one step. A failed solve applies the last plan's
 next move. Every solve's certificate (KKT error, iterations, violation, and
 the plan replayed on `step_env`) is summed into the record. `e_floor` is the

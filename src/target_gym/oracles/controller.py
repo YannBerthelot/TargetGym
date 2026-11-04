@@ -7,8 +7,9 @@ A task states its planner problem as a ``TaskModel`` in its own ``oracle.py``;
   and P), shrinking as H_k = min(P, N_ep - k) at sample k
   (oracle-horizon-protocol.md, H12);
 - execution: one solve every T_c, its first move held over the T_c, on the
-  noise-free params the caller passes (``plan_params``); a cold start holds
-  the reset actuators, a warm start shifts the last plan, and a failed solve
+  noise-free params the caller passes (``plan_params``); a cold start puts
+  every planned state at the measured one and holds the reset actuators
+  (oracle-solver.md, G8), a warm start shifts the last plan, and a failed solve
   applies what it started from, so the previous plan's next move (owner
   decision, oracle-audit.md: never the expert);
 - smoothing: the K5 widths in ``data/oracle_widths/``, with K7's
