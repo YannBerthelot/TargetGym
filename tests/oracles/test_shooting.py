@@ -227,3 +227,75 @@ def test_stages_past_the_active_horizon_do_not_run_the_plant_away():
         planner.moves(plan)[:5, 0], 0.1 * (k + 1) - 10.0 * k, atol=1e-6
     )
     assert np.all(np.isfinite(planner.states(plan)))
+
+
+def _actuator(data, x, u, t):
+    """A valve that reaches any command within its travel, tracking 1.05."""
+    return u, jnp.sum((u - 1.05) ** 2), jnp.zeros(0)
+
+
+def _reach(x, u):
+    """One step's travel, |u - x| <= 0.1, as rows >= 0."""
+    return jnp.concatenate([0.1 - (u - x), 0.1 + (u - x)])
+
+
+@pytest.mark.medium
+def test_move_rows_bound_each_move_from_its_stages_state():
+    """The valve from 0.5 to 1.05 at most 0.1 a step: every command within
+    one step's travel of the valve, stage 0's from the measured 0.5. By hand
+    the plan ramps at full travel, 0.6, 0.7, ..., 1.0, then reaches 1.05 and
+    holds it; without the rows it would command 1.05 at once. (The target
+    is off the ramp's grid so that no row binds with a zero multiplier.)"""
+    model = StageModel(step=_actuator, block=1, lo=(-2.0,), hi=(2.0,), move_rows=_reach)
+    with enable_x64():
+        planner = Shooting(model, n_stages=8, nx=1)
+        plan = planner.solve(0.0, jnp.full(1, 0.5), jnp.full(1, 0.5))
+    assert not bool(plan.certificate.failed)
+    np.testing.assert_allclose(
+        planner.moves(plan)[:8, 0],
+        [0.6, 0.7, 0.8, 0.9, 1.0, 1.05, 1.05, 1.05],
+        atol=1e-6,
+    )
+
+
+@pytest.mark.medium
+def test_a_limit_holds_its_back_off_inside_the_bound():
+    """The limited walk above with a back-off of 0.25: every visited state at
+    most 2 - 0.25 = 1.75. By hand: stage 0 moves 0.875 (visits 0.875, 1.75),
+    the rest 0; cost 1.625 + 0.75 + 6 x 0.75 = 6.875."""
+    model = StageModel(
+        step=_walk_limited, block=2, lo=(-1.0,), hi=(1.0,),
+        hinges=(Hinge(absolute=True),),
+        limits=(Limit(hi=2.0, price=100.0, backoff=0.25),),
+    )  # fmt: skip
+    with enable_x64():
+        planner = Shooting(model, n_stages=4, nx=1)
+        plan = planner.solve(None, jnp.zeros(1), jnp.zeros(1))
+    assert not bool(plan.certificate.failed)
+    np.testing.assert_allclose(
+        np.asarray(planner.moves(plan))[:4, 0], [0.875, 0.0, 0.0, 0.0], atol=1e-6
+    )
+    np.testing.assert_allclose(float(plan.cost), 6.875, atol=1e-6)
+
+
+@pytest.mark.medium
+def test_a_limit_with_no_inside_is_not_backed_off():
+    """lo = hi = 2, an equality kept elastic as a terminal line-out is: a
+    bound with no inside has nowhere to back off to, so a back-off of 0.25
+    leaves the plan and its cost as they are without one. (Backed off, the
+    bounds would cross and force a slack of 0.25 a stage at 100 a unit.)"""
+
+    def plan(backoff):
+        model = StageModel(
+            step=_walk_limited, block=2, lo=(-1.0,), hi=(1.0,),
+            hinges=(Hinge(absolute=True),),
+            limits=(Limit(lo=2.0, hi=2.0, price=100.0, backoff=backoff),),
+        )  # fmt: skip
+        with enable_x64():
+            return Shooting(model, n_stages=4, nx=1).solve(
+                None, jnp.zeros(1), jnp.zeros(1)
+            )
+
+    plain, backed = plan(0.0), plan(0.25)
+    assert not bool(plain.certificate.failed) and not bool(backed.certificate.failed)
+    np.testing.assert_allclose(float(backed.cost), float(plain.cost), atol=1e-6)

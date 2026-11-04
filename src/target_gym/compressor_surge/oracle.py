@@ -7,16 +7,20 @@ section 5.4, and decision S10), run by
 ``target_gym.oracles.controller.Oracle``:
 
 - model: the env's step restated (``compressor_step``) with its own
-  functions: the commands' clips removed and the moves bounded (T1), the
-  drive and valve rate limits of each substep smoothed by softplus at their
-  K5 widths (T5, ``data/oracle_widths/compressor_surge.json``), the
-  consumers' deviation on its noise-free mean path, a^t times its measured
-  value;
+  functions: the commands' clips removed and the moves bounded (T1); each
+  command within the travel its actuator covers over the hold (T1r): past
+  it the drive or valve runs at full rate every substep, as at it, so the
+  bound loses nothing and keeps the plan off the full-rate plateau, where a
+  command changes nothing and IPOPT stalled; the corner left inside the
+  reach smoothed by softplus at the K5 widths (T5,
+  ``data/oracle_widths/compressor_surge.json``); the consumers' deviation
+  on its noise-free mean path, a^t times its measured value;
 - objective: the header pressure's tracking term as (e / e_floor)^2, exact
   since e_tol = 0 and p = 2, and the running cost max(q - c_hold, 0) through
   epigraph rows on every visited state (T2);
 - limit: the env's trip variable, the soft minimum of Phi over the step, at
-  least 2W on every visited state, elastic at the trip cost per unit (T3);
+  least 2W on every visited state, elastic at the trip cost per unit (T3),
+  backed off by the planner's error on it (K11, in the widths file);
 - dropped guard: the characteristic's switch to its tangent past
   ``phi_join`` (T4, K9); every plan's substep Phi is checked against it.
 
@@ -41,6 +45,33 @@ from target_gym.oracles.shooting import Hinge, Limit
 from target_gym.reward import trip_cost
 
 
+def commands(p, u):
+    """The drive setpoint and valve opening the raw move ``u`` commands,
+    unclipped (T1: the move is bounded instead)."""
+    return p.N_min + 0.5 * (u[0] + 1.0) * (p.N_max - p.N_min), 0.5 * (u[1] + 1.0)
+
+
+def reach(p, x, u, steps):
+    """T1r, rows >= 0: each command within the travel its actuator covers
+    over ``steps`` held steps from where it stands (env.py:511, :514)."""
+    N_cmd, x_cmd = commands(p, u)
+    hold = steps * p.delta_t
+    dN, dx = N_cmd - x[3], x_cmd - x[4]
+    return jnp.stack([
+        hold * p.drive_rate - dN, hold * p.drive_rate + dN,
+        hold * p.valve_open_rate - dx, hold * p.valve_close_rate + dx,
+    ])  # fmt: skip
+
+
+def reach_scale(p, steps):
+    """Half the span of each raw move's reach over ``steps`` held steps."""
+    hold = steps * p.delta_t
+    return (
+        float(2.0 * hold * p.drive_rate / (p.N_max - p.N_min)),
+        float(hold * (p.valve_open_rate + p.valve_close_rate)),
+    )
+
+
 def compressor_step(env, p, x, u, t, task, widths, deltas=None):
     """One env step from ``x`` = (m_c, dp, N, N_ramp, x) under the raw move
     ``u``: ``(x_next, phi_min, the substep Phis, the rate limits' arguments)``.
@@ -49,8 +80,7 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
     setpoints, demand, clock, drift = task
     n = _substeps(env.integration_method)
     h, rho = p.delta_t / n, suction_density(p)
-    N_cmd = p.N_min + 0.5 * (u[0] + 1.0) * (p.N_max - p.N_min)  # T1
-    x_cmd = 0.5 * (u[1] + 1.0)
+    N_cmd, x_cmd = commands(p, u)
     dev = drift * jnp.exp(-p.demand_theta * p.delta_t) ** t
     deltas = jnp.zeros((2, n)) if deltas is None else deltas
 
@@ -105,6 +135,8 @@ def compressor_model(env, p) -> TaskModel:
         resolution=(float(p.precision_floor),),
         hinges=(Hinge(weight=1.0),),
         limits=(Limit(lo=2.0 * p.W, price=float(trip_cost(p))),),
+        move_rows=lambda x, u, steps: reach(p, x, u, steps),
+        move_scale=lambda steps: reach_scale(p, steps),
     )  # fmt: skip
 
 

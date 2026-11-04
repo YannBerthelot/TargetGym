@@ -57,6 +57,9 @@ MAX_ITER, TOL = 150, 1e-8
 COLD_MU, COLD_PUSH, WARM_MU, WARM_PUSH = 0.1, 1e-2, 1e-4, 1e-9
 #: IPOPT's ``bound_relax_factor`` and ``nlp_scaling_max_gradient`` (read).
 BOUND_RELAX, MAX_GRADIENT = 1e-8, 100.0
+#: What a converged plan may still pass a limit by, per unit of max(1, |bound|):
+#: IPOPT's bound relaxation and its tolerance, backed off every limit.
+SOLVER_SLACK = BOUND_RELAX + TOL
 
 
 class Hinge(NamedTuple):
@@ -70,11 +73,16 @@ class Hinge(NamedTuple):
 
 
 class Limit(NamedTuple):
-    """A hard limit (T3) ``lo <= q <= hi``, elastic at ``price`` per unit."""
+    """A hard limit (T3) ``lo <= q <= hi``, elastic at ``price`` per unit,
+    planned ``backoff`` inside each bound: the planner's worst one-step error
+    on q, from smoothing and noise (the smoothing protocol's K11). The builder
+    backs it off by IPOPT's bound relaxation and tolerance as well, never past
+    the middle, so a limit with no inside (lo = hi) is held as it is."""
 
     lo: float = -np.inf
     hi: float = np.inf
     price: float = 1.0
+    backoff: float = 0.0
 
 
 class StageModel(NamedTuple):
@@ -83,7 +91,11 @@ class StageModel(NamedTuple):
     ``(x_next, cost, y)``: the cost and outputs of the state reached, ``y``
     one argument r per hinge then one quantity q per limit. ``data`` is the
     solve's exogenous data, any pytree. ``lo`` and ``hi`` bound the move
-    (T1: the model never clips it)."""
+    (T1: the model never clips it). ``move_rows(x, u)``, rows >= 0 affine in
+    a stage's start x and its move u, bound each move from its state: an
+    actuator's reach over the hold (T1r), stage 0's from the measured state;
+    ``move_scale`` is then each move's typical size, its reach, for the
+    variable scaling (default: its range)."""
 
     step: Callable
     block: int
@@ -91,6 +103,8 @@ class StageModel(NamedTuple):
     hi: tuple
     hinges: tuple = ()
     limits: tuple = ()
+    move_rows: Callable | None = None
+    move_scale: tuple | None = None
 
 
 class Certificate(NamedTuple):
@@ -164,8 +178,18 @@ class Shooting:
         self.loc = np.concatenate([xk, self.ui, self.ei], 1)  # what its rows read
         self.htol = np.array([h.tol for h in m.hinges], float)
         self.absolute = np.array([h.absolute for h in m.hinges], bool)
-        lim = np.array([(q.lo, q.hi, q.price) for q in m.limits], float).reshape(nl, 3)
-        self.lim_lo, self.lim_hi, self.price = lim.T
+        lim = np.array(
+            [(q.lo, q.hi, q.price, q.backoff) for q in m.limits], float
+        ).reshape(nl, 4)
+        lo, hi, self.price, back = lim.T
+        with np.errstate(invalid="ignore"):  # inf bounds stay inf
+            in_lo = back + SOLVER_SLACK * np.maximum(1.0, np.abs(lo))
+            in_hi = back + SOLVER_SLACK * np.maximum(1.0, np.abs(hi))
+            # Never past the middle: a limit with no inside (lo = hi, an
+            # elastic equality such as a line-out) is held as it is.
+            half = np.where(np.isfinite(hi - lo), 0.5 * (hi - lo), np.inf)
+            self.lim_lo = lo + np.minimum(in_lo, half)
+            self.lim_hi = hi - np.minimum(in_hi, half)
         self.solve = jax.jit(self._solve)
         #: A warm solve from ``previous`` as it stands, not shifted: the next
         #: rung of a cold solve's width continuation (K7).
@@ -219,7 +243,9 @@ class Shooting:
         0 on stage 0, whose rows then only bound its slacks."""
         R, Q, t, el = self._split(xa, e)
         lo, hi = (np.flatnonzero(np.isfinite(v)) for v in (self.lim_lo, self.lim_hi))
-        return jnp.concatenate([
+        moves = self.model.move_rows
+        reach = [] if moves is None else [jnp.atleast_1d(moves(xa[: self.nx], u))]
+        return jnp.concatenate(reach + [
             u - jnp.asarray(self.model.lo), jnp.asarray(self.model.hi) - u,
             (t - a * (R - self.htol)).ravel(), t.ravel(),
             (t + a * (R + self.htol))[:, self.absolute].ravel(),
@@ -347,6 +373,8 @@ class Shooting:
         du = jnp.maximum(
             jnp.abs(jnp.asarray(self.model.lo)), jnp.abs(jnp.asarray(self.model.hi))
         )
+        if self.model.move_scale is not None:
+            du = jnp.asarray(self.model.move_scale, du.dtype)
         de = jnp.concatenate([jnp.ones(b * self.nh), 1.0 / jnp.asarray(self.price)])
         D = jnp.concatenate([jnp.tile(dx, N), jnp.tile(du, N), jnp.tile(de, N)])
         Rs, Dl = D[: N * nxa], jnp.concatenate([D, jnp.ones(1)])[loc]  # (N, nloc)
@@ -360,8 +388,14 @@ class Shooting:
             jnp.sum(Gk != 0, -1) == 1, 1.0 / big, jnp.minimum(1.0, MAX_GRADIENT / big)
         )
         Gh, mrow = Gh * rs[:, :, None], Gk.shape[1]
+        # Stage 0's rows read the measured state, a constant: into g0.
+        Gh = Gh.at[0, :, :nxa].set(0.0)
         G = StageRows(Gh[..., :nxa], Gh[..., nxa : nxa + nu], Gh[..., nxa + nu :])
-        rs, g0k = rs.ravel(), (jax.vmap(self._rows)(*zeros, act) * rs).ravel()
+        starts = zeros[0].at[0].set(x0a)
+        rs, g0k = (
+            rs.ravel(),
+            (jax.vmap(self._rows)(starts, *zeros[1:], act) * rs).ravel(),
+        )
         g0 = g0k + BOUND_RELAX * jnp.maximum(1.0, jnp.abs(g0k))
 
         def held(zh):

@@ -700,11 +700,21 @@ its measured value. The rewrites, by the smoothing protocol's inventory:
   e_tol is 0 and p is 2, and the running cost max(P_rc - c_hold, 0) / c_hold
   through epigraph rows on every planned step, also exact (T2);
 - the trip, phi_min below 2W, is a hard limit on every planned step, elastic
-  at the trip cost per unit of Phi, with no margin (T3);
+  at the trip cost per unit of Phi (T3), planned 0.0040 inside the line
+  (K11): the smoothing's gap bound on phi_min, 6.7e-5, and the 1 % quantile of
+  one innovation of the demand deviation, 0.0039, at the pair's states, plus
+  the solver's tolerance. Planned on the line, the plant tripped, even
+  without noise;
 - the characteristic's switch to its tangent past `phi_join` is left as it
   is, and each plan's substep Phi is checked against it (T4, K9);
-- the two rate limits act inside the step, so no bound on the move can make
-  them exact. Each is smoothed by a softplus at its K5 width: the largest of
+- each command lies within the travel its actuator covers over the step,
+  from where it stands (T1r, the smoothing protocol's Amendment 1): past it
+  the drive or valve runs at full rate in every substep, as at it, so the
+  bound is exact. Without it a command past the reach changed nothing in
+  the model, IPOPT certified plans that did nothing, and the oracle lost to
+  the pair 20 to 60 times over;
+- the corner left inside the reach, where an actuator arrives mid-step, is
+  smoothed by a softplus at its K5 width: the largest of
   s/10, ..., s/1e8, with s the clipped interval's span, whose one-step effect
   on the header pressure stays under half the transmitter's resolution at
   the states the pair visits on training seeds 100 to 109
@@ -714,7 +724,8 @@ its measured value. The rewrites, by the smoothing protocol's inventory:
 
 The hand-set terms of the NMPC it replaces are gone: the error scale, the
 move and terminal weights, the frozen 49.6 kW power reference, the 5 %
-surge margin, the reach constraints and the 0.1 rounding of the clips.
+surge margin and the 0.1 rounding of the clips. Its reach constraints
+return as T1r.
 
 **Solver and certificate.** IPOPT's algorithm solves it with exact Hessians
 to a scaled KKT error of 1e-8, or stops at 150 iterations. Every solve's

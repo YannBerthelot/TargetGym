@@ -12,7 +12,9 @@ and the owner decisions in oracle-audit.md:
 - T3: every planned state keeps inside a hard limit the objective pushes
   against, when the trip cost exceeds what a violation could gain;
 - a failed solve applies the previous plan's next move;
-- no oracle reads expert code (its imports, followed).
+- no oracle reads expert code (its imports, followed);
+- T1r (Amendment 1): a command past an actuator's travel over the step moves
+  it as a command at that travel does, so bounding moves there is exact.
 """
 
 import ast
@@ -194,3 +196,38 @@ def test_the_oracle_reads_no_expert_code(name):
     expert = sorted(str(p.relative_to(SRC)) for p in seen if p.parent.name == "experts" or p.name.startswith("experts"))  # fmt: skip
     assert expert == []
     assert spec.oracle_reads == () and spec.oracle_gains_keys == ()
+
+
+@pytest.mark.parametrize("actuator, sign", [(0, 1.0), (0, -1.0), (1, 1.0), (1, -1.0)])
+def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
+    actuator, sign
+):
+    """The drive (0) or the valve (1), up or down, from the reset: over one
+    step the env moves it by at most its rate times the step, so a command
+    at the opposite end of its range lands on the same next state as one at
+    the reach. Float32 env: equal to 1e-6 relative."""
+    spec = REGISTRY["compressor_surge"]
+    env, p = spec.make_env(), spec.make_test_params()
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, p)
+    lo, hi, pos, up, down = (
+        (p.N_min, p.N_max, float(state.N_ramp), p.drive_rate, p.drive_rate)
+        if actuator == 0
+        else (0.0, 1.0, float(state.x), p.valve_open_rate, p.valve_close_rate)
+    )
+    at = pos + sign * p.delta_t * (up if sign > 0 else down)
+
+    def raw(command):
+        hold = [float(state.N_ramp), float(state.x)]
+        hold[actuator] = command
+        ranges = [(p.N_min, p.N_max), (0.0, 1.0)]
+        return jnp.asarray(
+            [2.0 * (c - a) / (b - a) - 1.0 for c, (a, b) in zip(hold, ranges)]
+        )
+
+    reached = env.step_env(key, state, raw(at), p)[1]
+    past = env.step_env(key, state, raw(hi if sign > 0 else lo), p)[1]
+    for field in ("N_ramp", "x", "N", "dp", "m_c", "phi_min"):
+        np.testing.assert_allclose(
+            getattr(past, field), getattr(reached, field), rtol=1e-6, err_msg=field
+        )

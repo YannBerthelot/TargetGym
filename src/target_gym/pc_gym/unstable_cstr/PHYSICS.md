@@ -528,7 +528,9 @@ dynamics, with the feed drift on its noise-free mean path, a^k dTi
 the tracking term against the schedule's live level is written as
 (e / e_floor)^2, the reward itself since e_tol is 0 and p is 2. The trip,
 T_valid_min < T < T_trip and C_a >= 0, is a hard limit on every planned
-step, elastic at the trip cost per unit. The plan's last state must be an
+step, elastic at the trip cost per unit, planned inside its bounds by one
+innovation of the feed drift at its 1 % quantile (K11: 0.055 K on T,
+`data/oracle_widths/unstable_cstr.json`). The plan's last state must be an
 equilibrium under its last move (the horizon protocol's terminal line-out,
 D4): the change of each state over one more step is held at zero, elastic
 at the trip cost per unit. Nothing is smoothed. IPOPT's algorithm solves it

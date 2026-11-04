@@ -51,8 +51,11 @@ The next release is 0.8.0, because these changes break code written for
   horizon protocol measured (`data/oracle_horizons/`), solving once every
   T_c and holding the move, a cold solve from every planned state at the
   measured one; clips and reward kinks are rewritten exactly,
-  trips are hard limits, and the compressor's in-step rate limits are
-  smoothed at the widths in `data/oracle_widths/`. One solver
+  trips are hard limits planned inside the line by the planner's error on
+  them, and the compressor's commands stay within their actuators' reach
+  over the step, with the corner inside it smoothed at the widths in
+  `data/oracle_widths/`. Each beats its expert on every recorded seed, a
+  records check. One solver
   (`target_gym.oracles`) runs them to convergence, and each record's oracle
   part sums its certificates (`solver_max_error`, `solver_max_violation`,
   `solver_max_replay_gap`, `solver_max_output_gap`, `solver_replay_trips`,

@@ -46,7 +46,10 @@ class TaskModel(NamedTuple):
     quantities (``StageModel``), the tracked outputs, and the arguments of the
     dropped guards (T4), each at its edge at 0 and inside above it. ``d``
     holds ``task`` (``data`` of the solve's start), ``widths`` (the T5
-    sites') and ``end`` (the steps the plan covers)."""
+    sites') and ``end`` (the steps the plan covers). ``move_rows(x, u,
+    steps)``: rows >= 0 bounding each move from its stage's state over a
+    hold of ``steps`` task steps (T1r, ``StageModel``), and
+    ``move_scale(steps)`` each move's reach over that hold."""
 
     nx: int
     nu: int
@@ -58,6 +61,8 @@ class TaskModel(NamedTuple):
     resolution: tuple  # q_y of each tracked output
     hinges: tuple = ()
     limits: tuple = ()
+    move_rows: Callable | None = None
+    move_scale: Callable | None = None
 
 
 def float64(tree):
@@ -112,16 +117,25 @@ class Oracle:
         horizon = records.load_row("oracle_horizons", name)
         self.tc, self.P = int(horizon["T_c_steps"]), int(horizon["P"])
         self.n_ep = episode_samples(int(params.max_steps_in_episode), self.tc)
-        sites = records.load_row("oracle_widths", name)["sites"].values()
+        smoothing = records.load_row("oracle_widths", name)
+        sites = smoothing["sites"].values()
         self.widths = np.array([s["width"] for s in sites], float)
         self.scales = np.array([s["scale"] for s in sites], float)
         with enable_x64():
             self.params = float64(params)
             self.model = model = build(env, self.params)
+            # K11: each limit backed off by the planner's error on it (none
+            # recorded where nothing is smoothed: the model is exact there).
+            back = smoothing.get("limit_backoffs") or [0.0] * len(model.limits)
+            rows = model.move_rows
             stage = StageModel(
                 step=lambda d, x, u, t: model.step(d, x, u, t)[:3], block=self.tc,
-                lo=(-1.0,) * model.nu, hi=(1.0,) * model.nu,
-                hinges=model.hinges, limits=model.limits,
+                lo=(-1.0,) * model.nu, hi=(1.0,) * model.nu, hinges=model.hinges,
+                limits=tuple(
+                    q._replace(backoff=float(b)) for q, b in zip(model.limits, back)
+                ),
+                move_rows=None if rows is None else lambda x, u: rows(x, u, self.tc),
+                move_scale=None if rows is None else model.move_scale(self.tc),
             )  # fmt: skip
             self.shooting = Shooting(stage, self.P, model.nx)
         self._certify = jax.jit(self._replay)
