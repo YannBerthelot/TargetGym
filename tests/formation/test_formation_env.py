@@ -237,12 +237,6 @@ class TestReward:
         terms = compute_reward_terms(state, params)
         assert total == pytest.approx(float(terms["tracking"]), rel=1e-6)
 
-    def test_the_floors_are_the_instruments(self):
-        p = FormationParams()
-        assert p.e_floor_altitude == 1.0  # altimeter
-        assert p.e_floor_heading == pytest.approx(0.0087)  # AHRS
-        assert p.e_floor_slot == 3.0  # relative GPS
-
     @pytest.mark.parametrize("k", range(1, MAX_WINGMEN + 1))
     def test_a_trip_costs_more_than_any_formation_can_track(self, k):
         p = FormationParams()

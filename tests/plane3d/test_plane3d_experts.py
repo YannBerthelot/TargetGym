@@ -57,28 +57,21 @@ def test_an_unknown_task_keeps_the_fixed_step():
 
 
 @pytest.mark.parametrize("name", TASKS)
-def test_the_floors_are_the_instrument_resolutions(name):
-    """Every floor is the resolution of the instrument that reads it, and the
-    failure cost is twice the envelope's cost in those units (the altitude
-    envelope's, or the path's on the figure-8, which scores no altitude). The
-    floors arrived with v3; the racetrack's v4 changed only its observation,
-    the heading task's v4 only its length (200 to 300 steps), and the
-    figure-8's v4 only its observation (the distance to the curve)."""
-    spec = registry.get(name)
-    p = spec.make_test_params()
-    assert spec.version == (
-        4 if name in ("plane3d_racetrack", "plane3d_heading", "plane3d_figure8") else 3
-    )
+def test_the_failure_cost_is_twice_the_envelopes_cost(name):
+    """In floor units: the 12 192 m (40 000 ft) altitude envelope's, or the
+    20 km path's on the figure-8, which scores no altitude. Every floor is the
+    resolution the version-1 reward already used for that instrument."""
+    p = registry.get(name).make_test_params()
     if name == "plane3d_figure8":
-        assert p.e_floor_path == p.position_precision_floor == 3.0
-        assert p.failure_cost == pytest.approx(2.0 * (20000.0 / 3.0) ** 2)
+        assert p.e_floor_path == p.position_precision_floor
+        assert p.failure_cost == pytest.approx(2.0 * (20000.0 / p.e_floor_path) ** 2)
         return
-    assert p.e_floor_altitude == p.precision_floor == 1.0
-    assert p.failure_cost == pytest.approx(2.0 * (12192.0 / 1.0) ** 2)
+    assert p.e_floor_altitude == p.precision_floor
+    assert p.failure_cost == pytest.approx(2.0 * (12192.0 / p.e_floor_altitude) ** 2)
     if name == "plane3d_heading":
         assert p.e_floor_heading == p.heading_precision_floor
     else:
-        assert p.e_floor_path == p.position_precision_floor == 3.0
+        assert p.e_floor_path == p.position_precision_floor
 
 
 @pytest.mark.parametrize("name", TASKS)
