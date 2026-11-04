@@ -95,10 +95,6 @@ def test_is_terminal():
     assert env.is_terminated(terminal_state, env_params)
 
 
-def test_render():
-    pass
-
-
 # def test_environments_compatible():
 #     """Test that both environments produce similar results"""
 #     jax_env = JaxEnv()
