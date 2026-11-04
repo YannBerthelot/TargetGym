@@ -47,8 +47,8 @@ class GymnasiumEnv(gym.Env):
         if hasattr(self.jax_env, "action_space"):
             action_space = self.jax_env.action_space()
             self.action_space = spaces.Box(
-                low=np.array(action_space.low),
-                high=np.array(action_space.high),
+                low=np.broadcast_to(action_space.low, action_space.shape),
+                high=np.broadcast_to(action_space.high, action_space.shape),
                 shape=action_space.shape,
                 dtype=np.float32,
             )
