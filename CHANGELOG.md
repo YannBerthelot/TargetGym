@@ -48,7 +48,8 @@ The next release is 0.8.0, because these changes break code written for
   changed.** cstr, first_order, four_tank, unstable_cstr and compressor_surge
   now follow the oracle rule (docs/proposals/oracle-audit.md): they plan the
   episode reward on the plant with its noise zeroed, over the horizon the
-  horizon protocol measured (`data/oracle_horizons/`), solving once every
+  horizon protocol measured (`data/oracle_horizons/`), with a rate-limited
+  actuator's ramp added on the compressor, solving once every
   T_c and holding the move, a cold solve from every planned state at the
   measured one; clips and reward kinks are rewritten exactly,
   trips are hard limits planned inside the line by the planner's error on
@@ -63,7 +64,8 @@ The next release is 0.8.0, because these changes break code written for
   `solver_guard_flags`). Their expert rows did not change.
 - **These five oracles read no expert code or gains.** The unstable CSTR's is
   no longer guided by the cascade PID, and the compressor's no longer hands a
-  failed solve to the pair: a failed solve applies the last plan's next move.
+  failed solve to the pair: a warm solve that fails or hits the cap is solved
+  again cold, and one that still fails applies the last plan's next move.
   Their `make_*_mpc(env, params)` take no keyword arguments, and the unstable
   CSTR's `MPC_HORIZON`, `MPC_PNR_ROUNDING_K`, `MPC_PNR_PENALTY` and
   `unstable_cstr_stage` are gone.

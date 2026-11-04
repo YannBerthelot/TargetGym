@@ -15,7 +15,7 @@ import math
 
 __all__ = ["cooper_horizons", "dead_time_samples", "effective_dead_time"]
 __all__ += ["episode_samples", "horizon_at", "sample_steps", "sample_time"]
-__all__ += ["task_horizon"]
+__all__ += ["ramp_samples", "task_horizon", "task_ramp"]
 
 
 def _int(x: float) -> int:
@@ -70,6 +70,29 @@ def task_horizon(fits: dict, dt: float):
     tc = sample_steps([sample_time(f) for f in fits.values()], dt)
     rows = {key: cooper_horizons(f, tc * dt) for key, f in fits.items()}
     return tc, rows, max(rows, key=lambda key: rows[key][2])
+
+
+def ramp_samples(span: float, gain: float, rate: float, T: float) -> int:
+    """H21 for one fit: the samples of ``T`` a move limited to ``rate`` takes
+    to carry its CV across ``span``, span / (|gain| rate), rounded up."""
+    return math.ceil(span / (abs(gain) * rate) / T - 1e-9)
+
+
+def task_ramp(fits: dict, cv: str, span: float, rates: dict, T: float):
+    """H21 for a task, as H5 takes the largest: over its fits ``{(mv, cv,
+    seed): fit}`` of tracked ``cv`` and the rate-limited MVs in ``rates``, the
+    longest ramp and the key that sets it, ``(0, None)`` with none. A bump
+    test is too small to reach a rate limit, so a large move's ramp is added
+    to the horizon Cooper's recipe gives."""
+    rows = {
+        key: ramp_samples(span, fit["k"], rates[key[0]], T)
+        for key, fit in fits.items()
+        if key[1] == cv and key[0] in rates
+    }
+    if not rows:
+        return 0, None
+    top = max(rows, key=rows.get)
+    return rows[top], top
 
 
 def episode_samples(n_steps: int, tc_steps: int) -> int:

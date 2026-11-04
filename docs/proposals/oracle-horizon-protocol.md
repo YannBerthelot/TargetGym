@@ -4,6 +4,8 @@ Specification of 2026-11-03, for owner review. Nothing here has been run or
 implemented. It replaces the audit's rule B, max(expert settle, 5 x tau_63),
 which had no source (`oracle-audit.md`, section 5, Horizon).
 
+> Amendment 3, 2026-11-05 (section 12): a rate limit's ramp joins P (H21).
+>
 > Amendment 1, 2026-11-03: after the first run (8 of 14 identifications
 > failed), the owner accepted H14 to H20 and every recommendation D8 to D14.
 > Bump tests start from steady operation, after one episode under the
@@ -729,3 +731,44 @@ What follows from the rules (derived):
 - The unstepped run is still recorded, for the subtraction only.
 - 10.11 item 1 and D9 are settled by N1; item 3's fit floor (D10, 80 %) is
   unchanged but now measured by N2.
+
+## 12. Amendment 3, a rate limit's ramp
+
+**Why.** With the rebuilt oracle converging, the compressor beat its expert on
+every seed but sat 15 % below main's oracle on the mean, and up to 80 % below
+it on a seed. Nearly all of that was one event per seed: the large upward step
+of the setpoint, about 6 kPa, where main's oracle starts the slow drive
+seconds ahead and P = 26 (2.6 s) sees the step too late. Run at P = 60, main's
+horizon, the rebuilt oracle landed within 0.1 % of main's on seeds 0, 7 and 9,
+so the horizon was the whole of the gap. That run was a diagnosis; 60 was not
+adopted.
+
+The protocol's gap: Cooper's N is the time for a move's effect to finish, and
+it is fitted to bump tests, which are too small to reach a rate limit. A large
+move on a rate-limited MV is not a step. It is a ramp of move / rate, and only
+then the plant's settling. Here the pair that shows it, speed to header
+pressure, failed V1 on all ten seeds (SNR about 7 of the 10 required, with a
+fit of 97 %), so P came from a faster pair.
+
+**H21 (owner decision, 2026-11-05).** For a task with a target range and
+rate-limited MVs:
+
+    P = N + M + ramp
+    ramp = the largest, over the fits of the tracked CV and those MVs, of
+           span / (|K| rate), rounded up to whole samples of T_c
+
+span is the CV's target range and rate the MV's slower direction, in the
+units of its fitted gain K. Taking the largest follows H5. T_c, N and M do not
+change. A gain needs a settled fit, not a quiet one, so a fit that failed V1
+alone counts here, as an exception to H16 for H21 only; it still does not set
+T_c, N or M.
+
+Compressor: 8000 Pa / (7206 Pa per unit x 0.171 units/s) = 6.5 s, or 65
+samples, so P = 26 + 65 = 91 (9.1 s). The reactor's rod and the wind pitch take
+the same rule when their rebuilds reach them.
+
+**Provenance.** H21 was written after the failure, and after P = 60 had been
+seen to close the gap. It derives from Cooper's definition of N, and it uses
+only the task's range, its rate limit and a fitted gain. No return enters it,
+and 91 is not the value that was tried. It is ours: no source read covers
+horizons for rate-limited MVs.
