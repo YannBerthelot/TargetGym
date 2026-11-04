@@ -722,6 +722,12 @@ its measured value. The rewrites, by the smoothing protocol's inventory:
   A cold solve reaches those widths by continuation from a tenth of each
   span (K7).
 
+Two moves track one output, and while recycle power is under `c_hold` the
+reward does not say how to split the work, so the solve adds a tie-break on
+each move's change, sized to cost at most 0.25 reward units over an episode
+(G10 in docs/proposals/oracle-solver.md). It picks one plan among equal ones
+and stays out of the plan's cost and the record.
+
 The hand-set terms of the NMPC it replaces are gone: the error scale, the
 move and terminal weights, the frozen 49.6 kW power reference, the 5 %
 surge margin and the 0.1 rounding of the clips. Its reach constraints

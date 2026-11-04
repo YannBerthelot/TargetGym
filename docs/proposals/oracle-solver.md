@@ -407,3 +407,40 @@ shrinking horizon (H_k) is unchanged.
 The compressor's solves still hit the cap at about the same rate, and none
 of the three changes it. Its rate-limit widths are K6-flagged (the smoothed
 corner is crossed within one integrator substep), and it is diagnosed next.
+
+## 15. Amendment 2, 2026-11-04: G10, a tie-break on moves
+
+With T1r and K11 in place, 2 to 4 % of the compressor's solves still hit the
+cap. The cause is not the surge line: the capped solves sat 0.07 to 0.13 above
+it. Two moves track one output, and while recycle power is under `c_hold`
+nothing prices how the work is split between them, so the optimum is not
+unique: 26 of the 52 eigenvalues of the move Hessian are zero at a plan. With
+the barrier at its floor, Newton wandered along that valley, its error
+bouncing between 2e-7 and 5e-5 until the cap. Corners 10 times wider also
+cleared 8 of 8 captured solves, by adding curvature, at the cost of K5's
+accuracy and a tenfold K11 back-off. They were not taken.
+
+**G10.** The objective adds tie x sum over planned stages of |du|^2, du a
+move's change from the one before, in units of its scale (its reach under T1r,
+else its range), u_hold before the first. This is input move suppression, one
+of the two strategies industrial MPC uses against ill-conditioning. It raises
+the matrix's diagonal, lowers the condition number and "tends to minimize the
+norm of the MV moves" (QB, section 3.4.3, p. 752; QB's "fat plant", more MVs
+than CVs, is this case). Here it is sized to pick one plan among equal ones
+and nothing else: tie = 0.25 / (moves x solves in the episode), so that every
+move of every solve at full size costs 0.25 reward units over the episode.
+That is what an error of half the resolution costs in one step, (q / 2)^2 /
+e_floor^2, with e_floor clamped at the resolution q, as on all five tasks so
+far. The term enters the solve only: the plan's cost and the record's reward
+do not contain it.
+
+It applies to every task on the shared builder, with no per-task condition.
+A task whose reward already fixes its moves has no flat direction to pick
+along, and the term cannot cost it more than the budget above. The aircraft,
+kiln, boiler, wind turbine and formation have more moves than tracked
+outputs, so C2 and D may need it.
+
+**Provenance.** The value was derived after 1e-4 had been seen to clear 8 of 8
+captured solves (1e-6 cleared 7, 1e-8 cleared 5). It uses task constants only,
+and no return was used in choosing it, but it is not strictly pre-hoc.
+Compressor, training seeds 100 to 102: capped 49, 26, 51 down to 0, 0, 0.

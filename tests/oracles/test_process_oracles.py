@@ -14,7 +14,10 @@ and the owner decisions in oracle-audit.md:
 - a failed solve applies the previous plan's next move;
 - no oracle reads expert code (its imports, followed);
 - T1r (Amendment 1): a command past an actuator's travel over the step moves
-  it as a command at that travel does, so bounding moves there is exact.
+  it as a command at that travel does, so bounding moves there is exact;
+- G10 (solver spec): the tie-break's worst case over an episode, every move
+  of every solve at full size, is the 0.25 reward units half a resolution
+  costs in one step.
 """
 
 import ast
@@ -231,3 +234,9 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
         np.testing.assert_allclose(
             getattr(past, field), getattr(reached, field), rtol=1e-6, err_msg=field
         )
+
+
+@pytest.mark.parametrize("name", FIVE)
+def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name):
+    _, _, mpc = _oracle(name)
+    assert mpc.shooting.model.tie * mpc.model.nu * mpc.n_ep == pytest.approx(0.25)

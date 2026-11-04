@@ -54,8 +54,9 @@ The next release is 0.8.0, because these changes break code written for
   trips are hard limits planned inside the line by the planner's error on
   them, and the compressor's commands stay within their actuators' reach
   over the step, with the corner inside it smoothed at the widths in
-  `data/oracle_widths/`. Each beats its expert on every recorded seed, a
-  records check. One solver
+  `data/oracle_widths/`. A tie-break too small to resolve picks one plan where
+  the reward leaves moves undetermined. Each oracle beats its expert on every
+  recorded seed, a records check. One solver
   (`target_gym.oracles`) runs them to convergence, and each record's oracle
   part sums its certificates (`solver_max_error`, `solver_max_violation`,
   `solver_max_replay_gap`, `solver_max_output_gap`, `solver_replay_trips`,

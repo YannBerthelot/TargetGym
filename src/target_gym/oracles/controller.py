@@ -38,6 +38,12 @@ except ImportError:  # JAX 0.6; 0.10 removed the experimental name
     from jax.experimental import enable_x64
 
 
+#: G10: the tie-break's worst case over an episode, every move of every solve
+#: at full size, in reward units: what an error of half the resolution costs
+#: in one step, (q / 2)^2 / e_floor^2 with e_floor clamped at the resolution q.
+TIE_BUDGET = 0.25
+
+
 class TaskModel(NamedTuple):
     """A task's planner problem. ``step(d, x, u, t)`` is one task step of the
     planner's model from ``x`` under the raw move ``u``, ``t`` steps into the
@@ -136,6 +142,7 @@ class Oracle:
                 ),
                 move_rows=None if rows is None else lambda x, u: rows(x, u, self.tc),
                 move_scale=None if rows is None else model.move_scale(self.tc),
+                tie=TIE_BUDGET / (model.nu * self.n_ep),
             )  # fmt: skip
             self.shooting = Shooting(stage, self.P, model.nx)
         self._certify = jax.jit(self._replay)

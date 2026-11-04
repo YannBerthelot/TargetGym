@@ -95,7 +95,10 @@ class StageModel(NamedTuple):
     a stage's start x and its move u, bound each move from its state: an
     actuator's reach over the hold (T1r), stage 0's from the measured state;
     ``move_scale`` is then each move's typical size, its reach, for the
-    variable scaling (default: its range)."""
+    variable scaling (default: its range). ``tie`` prices each planned move's
+    squared change from the one before, in that scale, u_hold before the
+    first: input move suppression at a size that only picks one plan among
+    equal ones, where the reward leaves moves undetermined (G10)."""
 
     step: Callable
     block: int
@@ -105,6 +108,7 @@ class StageModel(NamedTuple):
     limits: tuple = ()
     move_rows: Callable | None = None
     move_scale: tuple | None = None
+    tie: float = 0.0
 
 
 class Certificate(NamedTuple):
@@ -398,19 +402,21 @@ class Shooting:
         )
         g0 = g0k + BOUND_RELAX * jnp.maximum(1.0, jnp.abs(g0k))
 
-        def held(zh):
-            """The moves past the plan, each held to the one before."""
-            dU = zh[ui[1:]] - zh[ui[:-1]]
-            return dU * pin[1:, None]
-
         osc = jnp.minimum(
             1.0, MAX_GRADIENT / jnp.max(jnp.abs(D * derivs(z0, None, False)[0]))
         )
+        # Each move's weight on its change from the one before: the pin past
+        # the plan, and the tie-break on it, in the scaled objective's units.
+        weight = pin + osc * self.model.tie * wk
+
+        def change(zh):
+            """Each scaled move less the one before, u_hold before the first."""
+            return jnp.diff(zh[ui], axis=0, prepend=(u_hold / du)[None])
 
         def scaled(zh, lam, hess=True):
             gf, H, J, c = derivs(D * zh, lam / (osc * Rs), hess)
-            d = 2.0 * held(zh)
-            gf = (osc * D * gf).at[ui[1:]].add(d).at[ui[:-1]].add(-d)
+            d = 2.0 * weight[:, None] * change(zh)
+            gf = (osc * D * gf).at[ui].add(d).at[ui[:-1]].add(-d[1:])
             J = StageJacobian(
                 J.E / Rk[:, :, None] * Rk[:, None, :],
                 J.A / Rk[:, :, None] * Dl[:, None, :nxa],
@@ -419,9 +425,10 @@ class Shooting:
             if hess:
                 u = nxa + np.arange(nu)
                 Dk = osc * Dl[:, :, None] * H.D * Dl[:, None, :]
-                both = 2.0 * (pin + jnp.concatenate([pin[1:], jnp.zeros(1)]))
+                both = 2.0 * (weight + jnp.concatenate([weight[1:], jnp.zeros(1)]))
                 Dk = Dk.at[:, u, u].add(both[:, None])
-                P = H.P.at[:, np.arange(nu), np.arange(nu)].add(-2.0 * pin[:, None])
+                off = -2.0 * weight.at[0].set(0.0)  # no move before stage 0's
+                P = H.P.at[:, np.arange(nu), np.arange(nu)].add(off[:, None])
                 H = StageHessian(Dk, P, osc * H.end)
             return gf, H, J, c / Rs
 
@@ -430,7 +437,7 @@ class Shooting:
             return feasible(us, es) / D
 
         nlp = NLP(
-            f=lambda zh: osc * f(D * zh) + jnp.sum(held(zh) ** 2),
+            f=lambda zh: osc * f(D * zh) + jnp.sum(weight[:, None] * change(zh) ** 2),
             c=lambda zh: c_fn(D * zh) / Rs, derivs=scaled, G=G, g0=g0, restore=restore,
             kkt=stage_kkt_solve, barrier=stage_barrier, shift=stage_shift,
         )  # fmt: skip

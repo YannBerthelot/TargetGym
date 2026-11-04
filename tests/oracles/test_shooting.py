@@ -299,3 +299,25 @@ def test_a_limit_with_no_inside_is_not_backed_off():
     plain, backed = plan(0.0), plan(0.25)
     assert not bool(plain.certificate.failed) and not bool(backed.certificate.failed)
     np.testing.assert_allclose(float(backed.cost), float(plain.cost), atol=1e-6)
+
+
+def _split(data, x, u, t):
+    """Two moves, one output, as a fat plant: x+ = u_1 + u_2, tracking 1.
+    Every split with u_1 + u_2 = 1 tracks exactly, so the optimum is a line."""
+    x1 = (u[0] + u[1])[None]
+    return x1, jnp.sum((x1 - 1.0) ** 2), jnp.zeros(0)
+
+
+@pytest.mark.medium
+def test_a_tie_break_picks_the_least_travel_among_equal_plans():
+    """Warm from a plan at (2, -1), which tracks exactly, with the actuators
+    measured at (1, -1). The plan is the point of the line nearest the
+    actuators: minimise (a - 1)^2 + (b + 1)^2 s.t. a + b = 1, by hand
+    (1.5, -0.5). Without a tie-break nothing picks a point of the line."""
+    model = StageModel(step=_split, block=1, lo=(-3.0,) * 2, hi=(3.0,) * 2, tie=1e-4)
+    with enable_x64():
+        planner = Shooting(model, n_stages=4, nx=1)
+        start = planner.solve(0.0, jnp.ones(1), jnp.array([2.0, -1.0]))
+        plan = planner.solve(0.0, jnp.ones(1), jnp.array([1.0, -1.0]), start)
+    assert not bool(plan.certificate.failed) and not bool(plan.certificate.capped)
+    np.testing.assert_allclose(planner.moves(plan)[0], [1.5, -0.5], atol=1e-3)
