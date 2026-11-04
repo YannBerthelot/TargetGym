@@ -1,8 +1,11 @@
 import os
 
+import jax.numpy as jnp
 import numpy as np
 import pytest
+from gymnax.environments import spaces
 
+from target_gym.pc_gym.four_tank.env_jax import FourTank
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
 from target_gym.wrapper import GymnasiumEnv
@@ -102,3 +105,17 @@ def test_wrapper_draws_a_fresh_key_per_reset_and_step():
     a, _ = env.reset()
     b, _ = env.reset()
     assert not np.array_equal(a, b)
+
+
+def test_wrapper_accepts_the_scalar_action_bounds_gymnax_allows():
+    """``spaces.Box(-1.0, 1.0, (2,))`` is a legal gymnax space, and the first
+    thing a new environment is likely to write. No registered task uses it, so
+    conformance cannot see this."""
+
+    class ScalarBounds(FourTank):
+        def action_space(self, params=None):
+            return spaces.Box(-1.0, 1.0, (2,), dtype=jnp.float32)
+
+    space = GymnasiumEnv(ScalarBounds()).action_space
+    np.testing.assert_array_equal(space.low, [-1.0, -1.0])
+    np.testing.assert_array_equal(space.high, [1.0, 1.0])
