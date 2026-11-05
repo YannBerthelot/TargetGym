@@ -2629,14 +2629,14 @@ holds that instead of a planner. Each task's controller lives in its package's
 </thead>
 <tbody>
 <tr>
-<td><code>NewtonMPC</code></td>
-<td>cstr, four_tank, first_order, ph_neutralization, unstable_cstr, reactor, hvac, glass_furnace</td>
-<td>Iterative LQR on the environment's own step: Newton's method on the action sequence. On the CSTR and the four-tank, deterministic plants with episodes short enough to plan whole, the plan is the rest of the episode</td>
+<td>The shared solver (<code>target_gym.oracles</code>)</td>
+<td>cstr, first_order, four_tank, unstable_cstr, compressor_surge</td>
+<td>A problem definition, not a tuned controller (docs/proposals/oracle-audit.md): the episode reward on the noise-free plant, over the horizon the horizon protocol measured, solved once every Cooper sample time by IPOPT's algorithm in JAX with the trips as hard limits. Each solve's certificate is recorded</td>
 </tr>
 <tr>
-<td>IPOPT's interior-point method, in JAX</td>
-<td>compressor_surge</td>
-<td>A constrained NLP on the environment's step: multiple shooting, with the surge margin a soft constraint priced at a trip. It holds the plant on that margin; the Newton planner, with a barrier there instead, cost 1.6 times as much on five seeds (measured)</td>
+<td><code>NewtonMPC</code></td>
+<td>ph_neutralization, reactor, hvac, glass_furnace</td>
+<td>Iterative LQR on the environment's own step: Newton's method on the action sequence</td>
 </tr>
 <tr>
 <td><code>GradientMPC</code></td>
@@ -2671,7 +2671,7 @@ holds that instead of a planner. Each task's controller lives in its package's
 </tbody>
 </table>
 <p>The MPC has no learned parameters. It solves its problem online at every step
-(the four-tank every 25), and carries only a warm start and a few estimator or
+(the oracles on the shared solver once every Cooper sample time, four steps on the four-tank), and carries only a warm start and a few estimator or
 fallback states from step to step. <strong>Call <code>reset()</code> between episodes</strong>, or that
 memory leaks into the next one.</p>
 <h3 id="four-things-to-know-before-quoting-an-mpc-number">Four things to know before quoting an MPC number<a class="headerlink" href="#four-things-to-know-before-quoting-an-mpc-number" title="Permanent link">&para;</a></h3>
@@ -2742,8 +2742,12 @@ hands that step to the compressor's PID pair. Every record keeps the counts:</p>
 <td>solves handed to the PID (the compressor only)</td>
 </tr>
 <tr>
+<td><code>solver_retries</code></td>
+<td>warm solves that failed or hit the cap and were solved again cold, not counted below</td>
+</tr>
+<tr>
 <td><code>solver_capped</code></td>
-<td>solves stopped by the iteration cap and applied (the compressor only)</td>
+<td>solves stopped by the iteration cap and applied</td>
 </tr>
 </tbody>
 </table>
