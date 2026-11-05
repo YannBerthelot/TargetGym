@@ -12,9 +12,15 @@ determines it, and a record whose fingerprint no longer matches the tree is
 refused rather than believed.
 
 The fingerprint here is :func:`~target_gym.provenance.environment_fingerprint`,
-which is narrower than the baselines' one: an agent never runs a PID, so
-re-tuning a controller must not throw away a training run, while a change to the
-reward or the integrator must.
+which is narrower than the baselines' one: a tabula-rasa agent never runs a PID,
+so re-tuning a controller must not throw away its training run, while a change
+to the reward or the integrator must.
+
+An expert-based agent does run the PID, in training or at deployment, so what it
+learned depends on the gains. ``record_result(..., expert_based=True)`` stamps
+:func:`~target_gym.provenance.expert_fingerprint` beside the environment's, and
+a retune then marks that record stale. Records without the field, including any
+written before it existed, are judged on the environment alone.
 
 Writing results
 ---------------
@@ -48,7 +54,11 @@ import datetime as _dt
 import json
 from typing import Any, Iterable
 
-from target_gym.provenance import _ROOT, environment_fingerprint
+from target_gym.provenance import (
+    _ROOT,
+    environment_fingerprint,
+    expert_fingerprint,
+)
 
 RL_RESULTS_PATH = _ROOT / "data" / "rl_results.json"
 
@@ -90,6 +100,7 @@ def record_result(
     library_version: str | None = None,
     tag: str | None = None,
     notes: str | None = None,
+    expert_based: bool = False,
 ) -> dict:
     """Stamp a measured result with its provenance and store it.
 
@@ -97,6 +108,10 @@ def record_result(
     way the shipped baselines are, so the numbers sit in the same column as the
     PID's and the MPC's. Anything else -- a training curve, a normalised score --
     is not comparable to them and does not belong here.
+
+    ``expert_based`` says the agent ran the expert, in training or at
+    deployment, and stamps ``expert_fingerprint`` so a retune marks the record
+    stale. A driver must set it: left at False, the retune goes unnoticed.
     """
     from target_gym.registry import REGISTRY
 
@@ -117,6 +132,9 @@ def record_result(
         "library": library,
         "library_version": library_version,
         "env_fingerprint": environment_fingerprint(REGISTRY[env]),
+        "expert_fingerprint": (
+            expert_fingerprint(REGISTRY[env]) if expert_based else None
+        ),
         "n_seeds": len(values),
         "returns": [round(v, 6) for v in values],
         "episode_steps": int(episode_steps),
@@ -142,10 +160,12 @@ def record_result(
 
 
 def is_current(record: dict) -> bool:
-    """Whether a record still describes the environment as it stands now."""
+    """Whether a record still describes the environment as it stands now and,
+    if its agent ran the expert, that expert."""
     from target_gym.registry import REGISTRY
 
     spec = REGISTRY.get(record["env"])
-    if spec is None:
+    if spec is None or record["env_fingerprint"] != environment_fingerprint(spec):
         return False
-    return record["env_fingerprint"] == environment_fingerprint(spec)
+    expert = record.get("expert_fingerprint")
+    return expert is None or expert == expert_fingerprint(spec)

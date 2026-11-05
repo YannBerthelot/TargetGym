@@ -3,9 +3,11 @@
 Three numbers answer three questions (docs/rl-protocol.md, section 4). With
 ``b`` the expert's cost per step, ``x`` the policy's and ``c`` the ceiling's:
 
-- ``ratio``: ``b / x`` over the whole scored episode, per seed, with
-  ``win_rate``, the share of seeds where the policy costs less. Above 1 is
-  better than the expert.
+- ``ratio``: ``b / x`` from the task's burn-in to the end of the episode, per
+  seed, with ``win_rate``, the share of seeds where the policy costs less.
+  Above 1 is better than the expert. The burn-in is ``eval.scored_burn_in``, up
+  to half the episode, and the steps before it are not counted: neither the
+  first reach nor a trip in that stretch shows here.
 - ``score``: ``log(b / x) / log(b / c)`` on the tracking cost while holding: 0
   at the expert, 1 at the ceiling (and capped there), negative below the
   expert. Being a ratio of logarithms it has no units and does not depend on
@@ -34,6 +36,10 @@ Score a policy of your own::
 ``policy(obs)`` returns an action; one with a ``reset()`` method is reset
 before each episode. The expert is the environment's shipped ``"pid"`` slot, run on
 the same seeds.
+
+``seed_scores`` is a different number for a different job: one score per
+training seed, on the whole episode with no burn-in, from costs measured
+elsewhere, for a statistical test across trained agents.
 """
 
 from __future__ import annotations
@@ -49,7 +55,11 @@ from target_gym import records
 from target_gym.eval import fixed_settle
 
 __all__ = ["TRACKED_TERMS", "ceiling", "compare", "fixed_settle", "headroom"]
-__all__ += ["best_known", "recorded", "score", "score_policy", "settle_band"]
+__all__ += ["best_known", "recorded", "score", "score_policy", "seed_scores"]
+__all__ += ["settle_band"]
+
+#: How far one episode can move a seed's score, either way (``seed_scores``).
+_CLIP_DECADES = 3.0
 
 _ALTITUDE = ("precision_floor", "e_floor_altitude", 1)
 _HEADING = ("heading_precision_floor", "e_floor_heading", 1)
@@ -228,6 +238,67 @@ def compare(
             E.gain(policy, burn_in, "running")[0],
             E.gain(expert, burn_in, "running")[0],
         )
+    return out
+
+
+def seed_scores(
+    *,
+    expert_cost_per_step,
+    policy_cost_per_step,
+    ceiling_per_step: float,
+    trips=None,
+) -> dict:
+    """One score per training seed, on the whole episode.
+
+    With ``b_e`` and ``x_e`` the expert's and the policy's cost on episode
+    ``e`` and ``c`` the ceiling, a seed scores the mean over its episodes of
+    ``clip(log10(max(b_e, c) / max(x_e, c)), -3, +3)``. Above 0 beats the
+    expert. 1 is ten times cheaper.
+
+    All three costs are **per step**, in the task's reward units:
+
+    - ``expert_cost_per_step``, ``policy_cost_per_step``: shape ``(seeds,
+      episodes)``, the mean of ``-reward`` over every step of the episode, no
+      burn-in, which is ``target_gym.eval.gain([episode], 0)[0]``. Never an
+      episode's summed cost: the ceiling is per step, so the floor would sit
+      an episode length too low. Both sides must come from the same episodes
+      in the same order, since the clip and the floor make the pairing matter.
+      An infinite policy cost scores -3, so a driver can pass a diverged
+      policy as ``inf``.
+    - ``ceiling_per_step``: ``ceiling(name, params)``.
+
+    The floor is on both sides, so two costs within the resolution tie at 0
+    and swapping the sides negates the score. The clip is there because one
+    trip can cost more decades than a good policy gains on a whole episode,
+    so it hides how many trips there were. ``trips``, the number of trips in
+    each episode (``(seeds, episodes)``, or flags for "at least one"), adds
+    ``trip_rate`` to the result: the mean per episode, read from the counts
+    and untouched by the clip.
+
+    Returns ``{"score": ..., "trip_rate": ...}``, each of shape ``(seeds,)``,
+    the second only with ``trips``. A negative or NaN cost raises
+    ``ValueError`` rather than being clamped: reward terms are non-negative,
+    so one means a broken measurement, and a NaN would pass silently into
+    whatever test reads the score.
+    """
+    b = np.asarray(expert_cost_per_step, dtype=float)
+    x = np.asarray(policy_cost_per_step, dtype=float)
+    if b.ndim != 2 or b.shape != x.shape or b.size == 0:
+        raise ValueError(
+            f"need paired (seeds, episodes) costs, got {b.shape} and {x.shape}"
+        )
+    if not ceiling_per_step > 0:
+        raise ValueError(f"the ceiling must be positive, got {ceiling_per_step}")
+    if not (np.isfinite(b).all() and (b >= 0).all() and (x >= 0).all()):
+        raise ValueError("costs must be non-negative, and the expert's finite")
+    floored = np.log10(np.maximum(b, ceiling_per_step))
+    decades = floored - np.log10(np.maximum(x, ceiling_per_step))
+    out = {"score": np.clip(decades, -_CLIP_DECADES, _CLIP_DECADES).mean(axis=1)}
+    if trips is not None:
+        counts = np.asarray(trips, dtype=float)
+        if counts.shape != b.shape or not (counts >= 0).all():
+            raise ValueError(f"need trips per episode in shape {b.shape}")
+        out["trip_rate"] = counts.mean(axis=1)
     return out
 
 
