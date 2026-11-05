@@ -25,7 +25,7 @@ def test_reset_initial_values_in_range(env, key):
 
 def test_obs_contains_x_and_target(env, key):
     _, state = env.reset_env(key)
-    obs = env.get_obs(state)
+    obs = env.get_obs(state, env.default_params.replace(sensor_noise_scale=0.0))
     assert jnp.allclose(obs[0], state.x)
     assert jnp.allclose(obs[1], state.target_x)
 

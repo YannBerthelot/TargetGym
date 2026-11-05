@@ -30,7 +30,7 @@ from jax.tree_util import Partial as partial
 
 import target_gym.pc_gym.cstr.env as cstr_env
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -185,6 +185,8 @@ class UnstableCSTRState(EnvState):
     #: a trip's fresh draw restarts the schedule while ``time`` runs on.
     block_clock: int
 
+    actuator_held: jax.Array = actuator_field(1)
+
 
 def steady_temperature(level, params: UnstableCSTRParams, xp=jnp):
     """T*(L), the reactor temperature at which ``C_a = L`` is steady.
@@ -336,9 +338,16 @@ def check_is_terminal(state: UnstableCSTRState, params: UnstableCSTRParams, xp=j
     return terminated, truncated
 
 
-def compute_reward_terms(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
-    terminated, _ = check_is_terminal(state, params, xp)
+def compute_reward_terms(
+    state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, params, xp)
     terms = {
         "tracking": R.tracking_cost(
             live_target(state, params, xp) - state.C_a,
@@ -348,7 +357,7 @@ def compute_reward_terms(state: UnstableCSTRState, params: UnstableCSTRParams, x
             xp,
         ),
     }
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):

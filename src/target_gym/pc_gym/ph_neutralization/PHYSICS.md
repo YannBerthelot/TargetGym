@@ -46,7 +46,7 @@ Deliberately **not** modelled:
 |---|---|
 | Temperature dependence of pK1/pK2 | Isothermal operation, as in the benchmark. |
 | Mixing dynamics / imperfect stirring | Perfect mixing is the standard assumption; a real tank adds a transport lag. |
-| Electrode dynamics and drift | The pH probe is treated as instantaneous and exact. Real probes lag seconds and drift. |
+| Electrode dynamics and drift | The pH probe is instantaneous, with noise (section Readings). Real probes lag seconds and drift. |
 | Acid/base concentration variation | Feed concentrations are fixed; only flows vary. |
 
 **Regime of validity.** Near-neutral operation (pH 4–10) with the carbonate
@@ -172,8 +172,9 @@ table above predates the version-2 reward and this change.)
 
 ## 6. Known deviations
 
-**⚠️ D1 — ideal pH measurement.** The probe is instantaneous and noise-free.
-Real electrodes have a seconds-scale lag, drift, and fouling — all of which
+**⚠️ D1 — instantaneous pH measurement.** The probe is instantaneous, with the
+noise of section Readings. Real electrodes have a seconds-scale lag, drift, and
+fouling — all of which
 matter for pH control specifically, since the measurement is the whole game.
 
 **⚠️ D2 — single buffer species.** Carbonate only. Real effluents carry several
@@ -244,7 +245,7 @@ which is what the recorded baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 0.01 pH (the MPC holds 0.0013) | the lowest per-seed long-run mean \|error\| the shipped MPC held under the shipped buffer-flow disturbance (`scripts/measure_hold.py`, 900 hold steps after a 108-step burn-in; seeds 0.0021 / 0.0031 / 0.0013, PID 0.016-0.054). The MPC reads the buffer flow from the state since the oracle audit (2026-10-01); planning on the nominal flow, it held 0.0080. A per-seed minimum so no run of the reference sits below it; an upper bound on the achievable floor Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
+| `e_floor` | 0.01 pH (the MPC holds 0.0013) | the lowest per-seed long-run mean \|error\| the shipped MPC held under the shipped buffer-flow disturbance (`scripts/measure_hold.py`, 900 hold steps after a 108-step burn-in; seeds 0.0021 / 0.0031 / 0.0013, PID 0.016-0.054). The MPC reads the buffer flow from the state since the oracle audit (2026-10-01); planning on the nominal flow, it held 0.0080. A per-seed minimum so no run of the reference sits below it; an upper bound on the achievable floor Below the instrument resolution the plant's own table cites, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
 | `e_tol` | 0 | **provisional.** The discharge permit band (typically pH 6-9 on an outfall) is a regulatory number the plant would supply. |
 | `tracking_exponent` | 2 | quadratic |
 | `c_hold` | 16.24 mL/s | reagent flow while holding, PID and MPC alike (`scripts/measure_hold.py`) |
@@ -269,3 +270,29 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports pH through its electrode, and the operator's own base
+flow and the setpoint exactly (`docs/proposals/measurement-noise.md`).
+`sensor_noise_scale = 0` gives the noise-free task, rounding included.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `pH` | 0.01 pH | 0.01 pH | Glass electrode with industrial pH transmitter | Provisional | [McMillan](https://www.controlglobal.com/articles/2013/mcmillan-ph-response-accuracy-reliability) |
+
+**This figure is weak, and it is the tracked quantity.** No noise source was
+found. McMillan gives 0.02 pH only as an accuracy target that needs best
+practice, with no coverage factor, so 0.01 as 2 sigma is ours. A transmitter's
+±0.01 pH on simulated input, with no electrode, would be a lower bound. The
+0.01 step is this project's `precision_floor`, which cites nothing.
+
+The expert reads these readings, and so does every tuner. The oracle plans and
+acts on the true state, so it stays a full-state bound. `reward`, trips and the
+score read the true state. `info["measured_reward"]` is the same cost on the
+readings, with any trip taken from the true state, and a learner can train on
+it.
+
+A plant resting exactly on target pays about 1.08 per step in measured reward.
+The proposal's floor of 1 is the scatter alone, `(0.01 / 0.01)^2`. Rounding to
+0.01 pH adds `step^2 / 12` to the variance, 1/12 of the floor.

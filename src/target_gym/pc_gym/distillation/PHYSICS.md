@@ -187,8 +187,9 @@ flow dynamic (and the K2 vapour effect). Without it a reflux change reaches
 every tray instantly, so the column responds faster to L than a real one and
 the L→composition path is missing a lag of order a minute per tray.
 
-**⚠️ D2 — ideal composition measurement.** Product analysers are instantaneous
-and exact. Real ones have dead time of minutes, which on a plant this
+**⚠️ D2 — no analyser dead time.** Product analysers report the current
+composition, with the noise of a real one held through its cycle (section
+Readings). Real ones also report a sample minutes old, which on a plant this
 ill-conditioned materially changes achievable performance.
 
 **⚠️ D3 — constant molar flows.** Standard for this benchmark, but it means
@@ -265,7 +266,7 @@ which is what the recorded baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_top`, `e_floor_bottom` | 1e-4, 1e-4 mole fraction (the MPC holds 7.6e-7 / 5.2e-7) | the lowest per-seed long-run mean \|error\| the shipped MPC held on each product under the shipped feed-composition disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in, 3 seeds; PID down to 5.7e-5 and 1.3e-4; before the oracle audit it held 1.35e-5 / 3.3e-5). Per-seed minima; upper bounds Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
+| `e_floor_top`, `e_floor_bottom` | 1e-4, 1e-4 mole fraction (the MPC holds 7.6e-7 / 5.2e-7) | the lowest per-seed long-run mean \|error\| the shipped MPC held on each product under the shipped feed-composition disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in, 3 seeds; PID down to 5.7e-5 and 1.3e-4; before the oracle audit it held 1.35e-5 / 3.3e-5). Per-seed minima; upper bounds Below the instrument resolution the plant's own table cites, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
 | `e_tol` | 0 | **provisional.** The purity specifications a column is run against come from the sales contract. |
 | `tracking_exponent` | 2 | quadratic |
 | `c_hold` | 3.282 kmol/min | boilup while holding, PID (MPC 3.292) (`scripts/measure_hold.py`) |
@@ -290,3 +291,47 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports the two products and the tray temperature through their
+instruments, and the setpoints and the column's own reflux and boilup exactly
+(`docs/proposals/measurement-noise.md`). `sensor_noise_scale = 0` gives the
+noise-free task. The 38 stages with no instrument stay exact, and `get_obs` does
+not show them.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `x[-1]`, `yD` | 4e-4 mole fraction, held 5 min | none | Process gas chromatograph | Confirmed | [GC8000](https://www.yokogawa.com/be-nl/solutions/products-and-services/measurement/analyzers/gas-analyzers/process-gas-chromatographs/process-gas-chromatograph-gc8000/) |
+| `x[0]`, `xB` | 4e-4 mole fraction, held 5 min | none | Process gas chromatograph | Confirmed | [GC8000](https://www.yokogawa.com/be-nl/solutions/products-and-services/measurement/analyzers/gas-analyzers/process-gas-chromatographs/process-gas-chromatograph-gc8000/) |
+| `x[14]`, carries `T_15` | 3e-3 mole fraction, 0.04 K on `T_15` | none | Pt100 RTD tray sensor with HART head transmitter | Confirmed | [iTEMP TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
+
+**The analyser's cycle is 5 minutes, and it is ours.** The GC8000 page gives a
+maximum analysis period of six hours and no typical cycle. The proposal's 5 to
+10 minutes comes from the research behind it, and the refuter could not find it
+on that page. 5 minutes is the fast end of that range, and it sits inside the 3
+to 6 minutes between samples that a distillation analyser patent claims, with a
+4-minute analysis in its example
+([US 5464504](https://patents.google.com/patent/US5464504)). Each analyser
+holds its noise for those five 1-minute steps, and the value stays current
+(`docs/proposals/measurement-noise.md`, Decided, 5), so D2 still stands.
+
+`interval` is in the units of `delta_t`, so it is 5.0 here and not 300.
+
+The 4e-4 follows a range we chose. The page states ±2 % of full scale at 2 sigma
+for liquids, under conditions it does not fix, and the 0.04 full scale is twice
+our worst target impurity. A vapour sample would give 2e-4.
+
+The tray figure assumes a Pt100 RTD, 0.04 K divided by the curve's 13.5 K per
+mole fraction. Section 5 and `env.py` speak of thermocouples on the trays; a
+type J or K would scatter about three times more.
+
+The expert reads these readings, and so does every tuner. The oracle plans and
+acts on the true state, so it stays a full-state bound. `reward`, trips and the
+score read the true state. `info["measured_reward"]` is the same cost on the
+readings, with any trip taken from the true state, and a learner can train on
+it.
+
+A plant resting exactly on target pays 32 per step in measured reward,
+`2 (4e-4 / 1e-4)^2`. `e_floor_top`, `e_floor_bottom` and `precision_floor` stay
+at 1e-4, so the ceiling sits below anything this analyser could verify.

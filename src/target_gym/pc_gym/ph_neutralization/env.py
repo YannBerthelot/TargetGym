@@ -49,7 +49,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -216,6 +216,8 @@ class PHState(EnvState):
     q3: float  # commanded base flow
     target_pH: float
 
+    actuator_held: jax.Array = actuator_field(1)
+
 
 def titration_residual(pH, Wa, Wb, params: PHParams):
     """Charge balance. Its root in ``pH`` is the equilibrium pH.
@@ -338,9 +340,14 @@ def check_is_terminal(state: PHState, params: PHParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward_terms(state: PHState, params: PHParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
-    terminated, _ = check_is_terminal(state, params, xp)
+def compute_reward_terms(state: PHState, params: PHParams, xp=jnp, tripped=None):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, params, xp)
     terms = {
         "tracking": R.tracking_cost(
             state.target_pH - state.pH,
@@ -351,7 +358,7 @@ def compute_reward_terms(state: PHState, params: PHParams, xp=jnp):
         ),
         "running": R.running_cost(state.q3, params.c_hold, params.running_weight, xp),
     }
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: PHState, params: PHParams, xp=jnp):

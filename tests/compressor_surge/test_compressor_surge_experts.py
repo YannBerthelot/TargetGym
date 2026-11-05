@@ -392,6 +392,8 @@ def test_functional_core_matches_the_class(env, params, step):
     setpoints with no trip or restart, and their header pressures stay within
     0.01 kPa of each other at every step. That holds because no limit cycle
     amplifies their rounding differences (``GUARD_MAX_TRAVEL``)."""
+    # The closed loop tests rounding, which a noisy run would amplify.
+    params = params.replace(sensor_noise_scale=0.0)
     key = jax.random.PRNGKey(0)
     gains = DEFAULT_GAINS
     seen, actions = _run_class(

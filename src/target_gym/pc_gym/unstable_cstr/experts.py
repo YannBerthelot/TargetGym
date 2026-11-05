@@ -188,7 +188,7 @@ def point_of_no_return_batch(C_a, T_j, Ti_dev, params: UnstableCSTRParams):
 #: never move.
 DEFAULT_GAINS: dict = {
     "Kp_T": 7.0,  # K of coolant per K of T error; inner proportional
-    "Kd_T": 0.4,  # K of coolant per K/min; inner derivative, first difference
+    "Kd_T": 0.4,  # K of coolant per K/min; inner derivative, filtered
     "Kc_Ca": 100.0,  # K of setpoint per mol/L; outer proportional
     "Ti_Ca": 0.5,  # min; outer integral time
     "sp_rate": 3.0,  # K/min; setpoint rate limit, 0.15 K per step
@@ -209,7 +209,8 @@ class CascadeState(NamedTuple):
 
     #: Integral of the C_a error (mol/L min).
     integral: float
-    #: Reactor temperature at the previous step (K), for the derivative.
+    #: Filtered reactor temperature (K), the derivative's memory
+    #: (``pid.filtered_derivative``).
     T_prev: float
     #: Temperature setpoint at the previous step (K), for the rate limit.
     T_sp_prev: float
@@ -266,12 +267,11 @@ def cascade_step(gains, cs: CascadeState, obs, params: UnstableCSTRParams, xp=np
     ramp = gains["sp_rate"] * dt
     T_sp = xp.clip(xp.clip(T_sp_raw, lo, hi), cs.T_sp_prev - ramp, cs.T_sp_prev + ramp)
 
-    # Inner PD on T, the derivative on the measurement.
-    T_c_raw = (
-        gains["Tc_bias"]
-        + gains["Kp_T"] * (T_sp - T)
-        - gains["Kd_T"] * (T - cs.T_prev) / dt
+    # Inner PD on T, the derivative on the filtered measurement.
+    rate, T_filtered = _pid_mod.filtered_derivative(
+        T, cs.T_prev, gains["Kp_T"], gains["Kd_T"], dt
     )
+    T_c_raw = gains["Tc_bias"] + gains["Kp_T"] * (T_sp - T) - gains["Kd_T"] * rate
     T_c = xp.clip(T_c_raw, params.T_c_min, params.T_c_max)
 
     # Conditional integration: the integral moves only while neither the
@@ -279,7 +279,7 @@ def cascade_step(gains, cs: CascadeState, obs, params: UnstableCSTRParams, xp=np
     free = (T_c == T_c_raw) & (T_sp == T_sp_raw)
     new = CascadeState(
         integral=cs.integral + xp.where(free, e * dt, 0.0),
-        T_prev=T,
+        T_prev=T_filtered,
         T_sp_prev=T_sp,
     )
     return raw_from_coolant(T_c, params), new
@@ -299,13 +299,16 @@ def cascade_track(
     C_a, T, level = obs[0], obs[1], obs[3]
     T_c = coolant_from_raw(xp.clip(u_raw, -1.0, 1.0), params)
     lo, hi = setpoint_window(level, gains, params, xp)
-    derivative = gains["Kd_T"] * (T - cs.T_prev) / params.delta_t
+    rate, T_filtered = _pid_mod.filtered_derivative(
+        T, cs.T_prev, gains["Kp_T"], gains["Kd_T"], params.delta_t
+    )
+    derivative = gains["Kd_T"] * rate
     T_sp = xp.clip(T + (T_c - gains["Tc_bias"] + derivative) / gains["Kp_T"], lo, hi)
     T_ff = steady_temperature(level, params, xp)
     integral = (
         (T_ff - gains["Kc_Ca"] * (level - C_a) - T_sp) * gains["Ti_Ca"] / gains["Kc_Ca"]
     )
-    return CascadeState(integral=integral, T_prev=T, T_sp_prev=T_sp)
+    return CascadeState(integral=integral, T_prev=T_filtered, T_sp_prev=T_sp)
 
 
 class UnstableCSTRCascadePID:

@@ -226,7 +226,8 @@ def test_the_thermocouple_reads_stage_15_on_the_boiling_point_curve(
     env = DistillationColumn()
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     state = state.replace(x=state.x.at[14].set(x15))
-    assert float(env.get_obs(state, params)[6]) == pytest.approx(kelvin, abs=1e-4)
+    quiet = params.replace(sensor_noise_scale=0.0)
+    assert float(env.get_obs(state, quiet)[6]) == pytest.approx(kelvin, abs=1e-4)
 
 
 def test_reward_requires_both_specifications(params):

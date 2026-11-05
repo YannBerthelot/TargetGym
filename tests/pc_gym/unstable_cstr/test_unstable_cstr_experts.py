@@ -25,6 +25,7 @@ from target_gym.pc_gym.unstable_cstr.env import (
     N_BLOCKS,
     UnstableCSTRParams,
     UnstableCSTRState,
+    compute_next_state,
     get_obs,
     live_target,
     steady_coolant,
@@ -42,12 +43,15 @@ from target_gym.pc_gym.unstable_cstr.experts import (
     UnstableCSTRCascadePID,
     cascade_init,
     cascade_step,
+    cascade_track,
     check_cascade_gains,
     closed_loop_rates,
+    coolant_from_raw,
     load_gains,
     make_unstable_cstr_pid,
     pnr_line,
     point_of_no_return_batch,
+    raw_from_coolant,
     setpoint_clip_margins,
     setpoint_window,
     unstable_cstr_pid_step,
@@ -60,13 +64,13 @@ except ImportError:  # JAX 0.6; 0.10 removed the experimental name
 
 #: The inner-loop moves of the tuner's unguarded search from DEFAULT_GAINS at
 #: the shipped 6 s lag, Kp_T x 2 and Kd_T x 0.7, on DEFAULT_GAINS' outer loop.
-#: The loop grows at +1.07 /min at 0.45 (derived, closed_loop_rates). The whole
+#: The loop grows at +1.15 /min at 0.45 (derived, closed_loop_rates). The whole
 #: search, the "plain (no guard)" row of scripts/unstable_cstr_numbers.py
 #: --sensitivity, also moves the outer loop and ends at Kp_T 14, Kd_T 0.28,
 #: Kc_Ca 70, Ti_Ca 0.35 (measured), a loop that grows at +0.44 /min at 0.45
 #: (derived).
 PLAIN_6S = {**DEFAULT_GAINS, "Kp_T": 7.0 * 2.0, "Kd_T": 0.4 * 0.7}
-#: Kp_T x 1.4 and Kd_T x 0.7 on DEFAULT_GAINS. The loop decays at 0.11 /min
+#: Kp_T x 1.4 and Kd_T x 0.7 on DEFAULT_GAINS. The loop decays at 0.03 /min
 #: at 0.45 (derived, closed_loop_rates), slower than GUARD_MIN_DECAY.
 MARGINAL_6S = {**DEFAULT_GAINS, "Kp_T": 7.0 * 1.4, "Kd_T": 0.4 * 0.7}
 #: Reactor temperature at the ignition fold (K), asserted by
@@ -186,11 +190,11 @@ def test_guard_refuses_unstable_and_marginal_gains(monkeypatch):
     one drift is enough, since the drift enters the balances additively and
     the rates at -6, 0 and +6 K, each linearised at its own equilibrium,
     agree."""
-    assert closed_loop_rates(PLAIN_6S)[0] == pytest.approx(1.07, abs=0.01)
-    assert closed_loop_rates(MARGINAL_6S)[0] == pytest.approx(-0.11, abs=0.01)
+    assert closed_loop_rates(PLAIN_6S)[0] == pytest.approx(1.146, abs=0.01)
+    assert closed_loop_rates(MARGINAL_6S)[0] == pytest.approx(-0.026, abs=0.01)
     np.testing.assert_allclose(
         closed_loop_rates(DEFAULT_GAINS),
-        [-1.73, -1.84, -1.98, -2.19, -2.76],
+        [-1.73, -1.84, -1.98, -2.19, -2.74],
         atol=0.01,
     )
     for gains in (PLAIN_6S, MARGINAL_6S, {**DEFAULT_GAINS, "sp_above": 0.5}):
@@ -209,6 +213,113 @@ def test_guard_refuses_unstable_and_marginal_gains(monkeypatch):
     )
     with pytest.raises(UnstableCascadeGains):
         make_unstable_cstr_pid()
+
+
+@pytest.mark.parametrize(
+    "gains",
+    [PLAIN_6S, MARGINAL_6S, DEFAULT_GAINS],
+    ids=["plain", "marginal", "default"],
+)
+def test_closed_loop_rates_match_a_matrix_written_by_hand(gains, params):
+    """The guard's rates against an independent reference: the plant's
+    Jacobian by central differences, and the controller's recurrences written
+    out from the proposal's filter, with no call into ``cascade_step``.
+
+    The memory is [integral I, filtered T M, setpoint S]. With a = dt / (T_f +
+    dt), T_f = Kd / Kp / 10 and the setpoint free, the error is -dC_a, so
+    S = Kc dC_a - (Kc / Ti) I, M moves a of the way to T, the rate is
+    a (T - M) / dt, and T_c = Kp (S - T) - Kd rate."""
+    params = params.replace(Ti_sigma=0.0)
+    dt, Kp, Kd = params.delta_t, gains["Kp_T"], gains["Kd_T"]
+    Kc, Ti = gains["Kc_Ca"], gains["Ti_Ca"]
+    a = dt / (Kd / Kp / 10.0 + dt)
+    level = GUARD_LEVELS[0]
+    T_c = float(steady_coolant(level, 0.0, params, np))
+    z0 = np.array(
+        [
+            level,
+            steady_temperature(level, params, np),
+            T_c,
+            raw_from_coolant(T_c, params),
+        ]
+    )
+
+    def plant(z):
+        state = UnstableCSTRState(
+            time=0,
+            C_a=z[0],
+            T=z[1],
+            T_j=z[2],
+            Ti_dev=0.0,
+            target_levels=jnp.full(N_BLOCKS, level),
+            block_clock=0,
+        )
+        new = compute_next_state(z[3], state, params, jax.random.PRNGKey(0))[0]
+        return np.array([new.C_a, new.T, new.T_j])
+
+    with enable_x64():
+        h = 1e-6 * np.eye(4)
+        J = np.stack(
+            [(plant(z0 + h[i]) - plant(z0 - h[i])) / 2e-6 for i in range(4)], axis=1
+        )
+    setpoint = np.array([Kc, 0.0, 0.0, -Kc / Ti, 0.0, 0.0])
+    rate = np.array([0.0, a, 0.0, 0.0, -a, 0.0]) / dt
+    coolant = Kp * (setpoint - np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0])) - Kd * rate
+    raw = 2.0 / (params.T_c_max - params.T_c_min) * coolant
+    closed = np.zeros((6, 6))
+    closed[:3, :3] = J[:, :3]
+    closed[:3] += np.outer(J[:, 3], raw)
+    closed[3] = [-dt, 0.0, 0.0, 1.0, 0.0, 0.0]
+    closed[4] = [0.0, a, 0.0, 0.0, 1.0 - a, 0.0]
+    closed[5] = setpoint
+    expected = np.log(np.abs(np.linalg.eigvals(closed)).max()) / dt
+    assert closed_loop_rates(gains, params, levels=(level,))[0] == pytest.approx(
+        expected, abs=1e-3
+    )
+
+
+def test_inner_derivative_is_filtered(params):
+    """Commercial controllers filter the derivative, commonly with a filter
+    time of one-tenth of the derivative time (proposal, The experts). At
+    Kp_T = Kd_T = 1 that is T_f = 0.1 min, so on backward differences at
+    dt = 0.05 min a step of delta in T moves the coolant by Kd delta / (T_f +
+    dt) = 6.67 delta, where a raw difference gives 20 delta, and on the next
+    step by T_f / (T_f + dt) = 2/3 of that."""
+    dt = params.delta_t
+    level, delta = 0.55, 0.03
+    T0 = float(steady_temperature(level, params, np))
+    filtered = {**DEFAULT_GAINS, "Kp_T": 1.0, "Kd_T": 1.0}
+    plain = {**filtered, "Kd_T": 0.0}
+    start = CascadeState(integral=0.0, T_prev=T0, T_sp_prev=T0)
+
+    def coolants(gains):
+        out, cs = [], start
+        for _ in range(2):
+            u_raw, cs = cascade_step(gains, cs, _obs(level, T0 + delta, level), params)
+            out.append(float(coolant_from_raw(u_raw, params)))
+        return np.array(out)
+
+    kick = delta / (0.1 + dt)
+    np.testing.assert_allclose(
+        coolants(filtered) - coolants(plain),
+        [-kick, -kick * 0.1 / (0.1 + dt)],
+        rtol=1e-9,
+    )
+
+
+def test_tracking_leaves_the_memory_the_step_would_have(params):
+    """Bumpless transfer: tracking the action a step chose, at that step's
+    observation, gives the derivative's memory and the setpoint the step left,
+    so a controller that takes over starts from the coolant last applied."""
+    gains = DEFAULT_GAINS
+    level = 0.55
+    T0 = float(steady_temperature(level, params, np))
+    start = CascadeState(integral=0.0, T_prev=T0 - 0.02, T_sp_prev=T0)
+    obs = _obs(level, T0 + 0.01, level)
+    u_raw, stepped = cascade_step(gains, start, obs, params)
+    tracked = cascade_track(gains, start, obs, u_raw, params)
+    assert float(tracked.T_prev) == pytest.approx(float(stepped.T_prev), abs=1e-9)
+    assert float(tracked.T_sp_prev) == pytest.approx(float(stepped.T_sp_prev), abs=1e-9)
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +456,8 @@ def test_functional_core_matches_the_stateful_pid(env, params, step):
     observations the controller saw, and within float32 rounding when it
     closes the loop on the env itself, as scripts/unstable_cstr_numbers.py
     --pid-validation and test_pid_holds_every_target run it."""
+    # The closed loop tests rounding, which a noisy run would amplify.
+    params = params.replace(sensor_noise_scale=0.0)
     key = jax.random.PRNGKey(0)
     gains = DEFAULT_GAINS
     seen, actions, _ = _run_class(
@@ -435,6 +548,7 @@ def _scheduled_starts(env, params, n_random=64, n_alternating=16):
     catches = UnstableCSTRState(
         time=jnp.zeros(i.size, jnp.int32),
         sensor_key=jnp.zeros((i.size, 2), jnp.uint32),
+        actuator_held=jnp.zeros((i.size, 1)),
         C_a=f32(C_a),
         T=f32(steady_temperature(C_a, params, np)),
         T_j=f32(catch_T_j),

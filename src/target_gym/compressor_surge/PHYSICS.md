@@ -135,7 +135,7 @@ Deliberately **not** modelled:
 | Recycle-line volume and cooler | The recycle returns to suction at once, at suction conditions. |
 | Drive torque and inertia | The speed follows a rate-limited setpoint through a first-order lag. |
 | Efficiency and power balance | The running quantity is the ideal compression power of recycled gas. |
-| Flow-element lag and measurement noise | Observations are exact and immediate. |
+| Flow-element lag | Observations are immediate, with noise (section Readings). |
 | Parallel machines, load sharing | One compressor. |
 
 **Regime of validity.** The trip at the peak keeps every continuing state on
@@ -986,3 +986,48 @@ lowest hold. `failure_cost` is unchanged by the measurement, since
   floor with the recorded MPC hold: `e_floor`, `c_hold`, `rho_floor_tracking`
   and `rho_floor` against the NMPC's hold in `hold_measurements.json`, and
   the protocol's MPC hold tracking, 0.0018, against that reference.
+
+## Readings
+
+The observation reports the plant through its instruments, and the live setpoint
+and the drive's own rate-limited reference `N_ramp` exactly
+(`docs/proposals/measurement-noise.md`). `sensor_noise_scale = 0` gives the
+noise-free task, rounding included.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `dp` | 9.17 Pa | none | Smart gauge pressure transmitter | Confirmed | [EJA530E](https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf) |
+| `m_c` | 0.021 kg/s | none | Annubar DP flow meter with fast DP transmitter | Provisional | [Rosemount 485](https://core.instrumart.com/assets/product-data-sheet-rosemount-dp-flow-meters-primary-elements-en-87598.pdf) |
+| `demand_dev`, carries `m_d` | 8.4e-4 opening | none | Delivered-flow DP meter | Provisional | [Rosemount 485](https://core.instrumart.com/assets/product-data-sheet-rosemount-dp-flow-meters-primary-elements-en-87598.pdf) |
+| `N` | 5.8e-5 of rated | 1e-4 of rated (1 rpm) | Speed probe with machinery tachometer module | Confirmed | [3500/50M](https://core.instrumart.com/assets/3500-50M-Datasheet.pdf) |
+| `x` | 1.5e-3 | none | Recycle valve travel feedback in digital positioner | Ceiling | [DVC6200](https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/documents/d103415x012.pdf) |
+
+The delivered flow has no state field: `m_d` is computed from `dp` and the
+opening. Noise on `dp` alone gives 0.03 % of flow, so the meter reads through
+`demand_dev`. 8.4e-4 is 0.14 % of flow at the nominal opening of 0.6, and the
+measured copy computes `m_d` from both, so that channel's scatter scales with
+the flow.
+
+Three figures are weak. `m_c` and `demand_dev` split the sheet's ±0.80 % of flow
+into ±0.75 % and a remainder of 0.28 %, taken as 2 sigma. That split is ours, the
+sheet calls the ±0.75 % the primary's best accuracy and not a bias, and turbulence
+in the DP signal, which is real short-term scatter, is left out. `x` is a ceiling:
+±0.3 % of output span is where the positioner puts the valve, not the scatter of
+its travel reading.
+
+`dp` is an upper bound: ±0.055 % of the 50 kPa span is a 3-sigma conformance figure
+covering linearity, hysteresis and repeatability. `N` is accuracy treated as a
+uniform count error, 1e-4 / √3, and this repository has no rated speed, so the
+1 rpm step assumes the source's 10,000 rpm.
+
+The expert reads these readings, and so does every tuner. The oracle plans and
+acts on the true state, so it stays a full-state bound. `reward`, trips and the
+score read the true state. `info["measured_reward"]` is the same cost on the
+readings, with any trip taken from the true state, and a learner can train on
+it.
+
+`phi_min` has no instrument, so the surge trip stays true. The surge margin the
+pair reads comes from `m_c` and `N`, so it carries their noise.
+
+A plant resting exactly on target pays 0.11 per step in measured tracking cost,
+`(9.17 Pa / 27.5 Pa)^2`.
