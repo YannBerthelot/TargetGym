@@ -133,9 +133,18 @@ The next release is 0.8.0, because these changes break code written for
   now, since it cannot meet the horizon protocol. The glass furnace's protocol
   gives one move per 15 minutes, too slow to answer a 25-minute reversal, so
   its oracle scores about 1.85 times worse than the old one, though it still
-  beats the expert about 2 to 1. The cement kiln's oracle fails about 2 % of
-  its solves on the env's stiff calcination, so it scores 1.5 to 2 times worse
-  than the old one, though it beats the expert 25 to 100 times over.
+  beats the expert about 2 to 1.
+- **`cement_kiln` steps calcination exactly, which changes the task.** The
+  30 s explicit step was far past what RK4 can follow, so a fraction's error
+  grew up to 231 times a step behind a clip at 1, the reaction's heat came from
+  RK4's stage rates (about 13 times the carbonate in a hot zone) and discharge
+  free lime ran up to 0.47 of `e_floor` off the model's own equations. Numbers
+  recorded on earlier versions do not carry over. `calcination_step` and
+  `advance` are the new step. `compute_velocity` remains the model's equations,
+  and an integrator run over it alone is no longer the env's step. Over the ten
+  test seeds the kiln's oracle goes from 234 failed solves of 7000 to none, its
+  mean return from -406 to -29, and it beats the expert on every seed, by at
+  least 65 times.
 - **`unstable_cstr` is version 3.** Its floor `rho_floor_tracking` is
   re-derived from the new oracle's hold, which is tighter than the old
   floor.
