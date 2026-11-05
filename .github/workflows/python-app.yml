@@ -187,10 +187,13 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python-version }}
       # On the integration branch only, until its one re-record. Every plant
-      # compiles from scratch there, which shut 4-worker runners down, and these
-      # two examples compare with records that are stale until then, so they
-      # would stop the medium tier and the cache. Drop this when that branch
-      # lands, with the timeout above and the job's `if`.
+      # compiles from scratch there, and the compiled programs fill a runner on
+      # the older JAX, whatever the worker count, so they are freed after each
+      # module and memory and disk are logged. These two examples compare with
+      # records that are stale until then, so they would stop the medium tier
+      # and the cache. Drop all of this when that branch lands, with the timeout
+      # above and the job's `if`.
+      FREE_COMPILED_PROGRAMS: ${{ github.base_ref == 'feat/sensor-noise' && '1' || '' }}
       INTEGRATION_ARGS: ${{ github.base_ref == 'feat/sensor-noise' && '-n 2 --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:2] --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:6]' || '' }}
 
     steps:
@@ -242,7 +245,9 @@ jobs:
     # left to the default, so a records test never runs here.
     - name: Small tests
       if: matrix.python-version != '3.13'
-      run: uv run pytest -q -m "not medium and not large and not records" $INTEGRATION_ARGS
+      run: |
+        if [ -n "$INTEGRATION_ARGS" ]; then ( while sleep 60; do echo "[watch] $(free -m | awk 'NR==2{print "used",$3,"avail",$7}') disk $(df -m . | awk 'NR==2{print $4}') cache $(du -sm .jax_cache | cut -f1)"; done ) & fi
+        uv run pytest -q -m "not medium and not large and not records" $INTEGRATION_ARGS
 
     # Medium tests start other processes, write videos, or compile an aircraft
     # planner or tuner, which peaks at 2.5 to 5 GB. Two workers keep two of
@@ -263,7 +268,9 @@ jobs:
       if: matrix.python-version == '3.13'
       env:
         COVERAGE_CORE: sysmon
-      run: uv run pytest -q -m "not medium and not large and not records" --cov=target_gym $INTEGRATION_ARGS
+      run: |
+        if [ -n "$INTEGRATION_ARGS" ]; then ( while sleep 60; do echo "[watch] $(free -m | awk 'NR==2{print "used",$3,"avail",$7}') disk $(df -m . | awk 'NR==2{print $4}') cache $(du -sm .jax_cache | cut -f1)"; done ) & fi
+        uv run pytest -q -m "not medium and not large and not records" --cov=target_gym $INTEGRATION_ARGS
 
   large-test:
     # Closed-loop contracts that still roll the plant out here: PID beats the

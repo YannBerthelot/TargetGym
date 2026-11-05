@@ -82,11 +82,11 @@ only `main`, so these have no required checks and no auto-merge, and are merged 
 hand. The large tier does not run on them, so each plant PR runs the null-policy
 gate locally.
 
-`records` stays red there until the re-record. Four exceptions in `python-app.yml`
+`records` stays red there until the re-record. These exceptions in `python-app.yml`
 apply to these pull requests only, and all come out when the branch lands: tests run
 past a failing `records`, the small tier uses 2 workers, its timeout is 60 minutes,
-and two examples in `docs/using-the-pids.md` that compare with stale records are
-deselected.
+compiled programs are freed after each module, memory and disk are logged, and two
+examples in `docs/using-the-pids.md` that compare with stale records are deselected.
 
 | PR | What | Target | Budget (code + tests) |
 |---|---|---|---|
