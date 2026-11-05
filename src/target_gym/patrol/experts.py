@@ -14,8 +14,10 @@ import jax.numpy as jnp
 from flax import struct
 
 from target_gym.experts.pid import (
+    DERIVATIVE_FILTER_RATIO,
     Controller,
     _wrap_angle,
+    filtered_derivative,
 )
 from target_gym.plane.experts_tecs import AIRLINER
 from target_gym.plane3d.experts import (
@@ -57,6 +59,8 @@ class FormationHoldParams(Plane3DGuidanceParams):
     ``y_band`` of the slot, and to at most ``int_max``. ``k_omega`` filters
     the lead's turn rate, ``k_ref`` the demands' rates the autopilot is fed
     forward, and ``k_eng`` closes the throttle on the engine's power state.
+    ``t_rate`` is the filter time on the bearing-only estimator's lead
+    velocity: differenced raw, 15 m of range noise is 21 m/s of lead speed.
     """
 
     # Tuned on training seeds 100-109, one set for every follower (both
@@ -72,6 +76,9 @@ class FormationHoldParams(Plane3DGuidanceParams):
     k_omega: float = 0.3  # per step [integrals and filter]
     k_ref: float = 0.3  # per step [engine and energy]
     k_eng: float = 1.0  # [engine and energy]
+    # Provisional: lowest mean RMS slot error of 15, 20, 30, 40 and 60 s on the
+    # noisy training seeds, ahead of the expert protocol on noisy plants.
+    t_rate: float = 20.0  # s
     # Set, not tuned: limits for a join from far out, beyond the 40 m spawn
     # noise. The closure reaches 20 m/s 500 m out, about 9% of cruise. A correction of 0.5 rad off the
     # slot's track, inside L1's 45 deg capture limit, binds 1.3 km out, short
@@ -86,8 +93,8 @@ class FormationHoldParams(Plane3DGuidanceParams):
 class FormationHoldState(Plane3DGuidanceState):
     """The autopilot's memory, the two integrals, the lead's last heading and
     filtered turn rate, the last demands and their filtered rates, and for
-    the bearing-only estimator the last relative position and own velocity
-    (``started`` is set from the second step on)."""
+    the bearing-only estimator the filtered relative position and the last own
+    velocity (``started`` is set from the second step on)."""
 
     started: float = 0.0
     int_back: float = 0.0
@@ -221,8 +228,8 @@ def patrol_bearing_only_hold_step(params, state, obs, xp=jnp):
     """The same hold behind an estimator of the lead from range and bearings.
 
     Range, azimuth and elevation fix where the lead is; its velocity is the
-    follower's own over the last step plus the change in that relative
-    position. Both aircraft fly in the same air, so the lead's heading is its
+    filtered rate of that position, taken with the follower's own motion over
+    the last step added back. Both aircraft fly in the same air, so the lead's heading is its
     track less the crab the follower itself flies at. The slot error follows
     from the relative position in that lead frame.
     """
@@ -234,11 +241,21 @@ def patrol_bearing_only_hold_step(params, state, obs, xp=jnp):
     dx = ahead * xp.cos(psi) + aside * xp.sin(psi)
     dy = ahead * xp.sin(psi) - aside * xp.cos(psi)
     dz = rng * xp.sin(el)
+    # The lead's velocity is the filtered rate of its position, which the
+    # follower knows relative to itself, so the filter's memory slides back
+    # with the follower. It starts as if the lead flew the follower's velocity.
     started = state.started > 0.0
     v_own = obs[0:2]
-    v_prev = xp.stack([state.vx_prev, state.vy_prev])
-    d_rate = xp.stack([dx - state.dx_prev, dy - state.dy_prev]) / params.dt
-    v_lead = xp.where(started, 0.5 * (v_own + v_prev) + d_rate, v_own)
+    v_prev = xp.where(started, xp.stack([state.vx_prev, state.vy_prev]), v_own)
+    v_mean, dt = 0.5 * (v_own + v_prev), params.dt
+    slide = xp.where(started, dt, params.t_rate + dt)
+    memory = xp.where(
+        started, xp.stack([state.dx_prev, state.dy_prev]), xp.stack([dx, dy])
+    )
+    Kd_rate = DERIVATIVE_FILTER_RATIO * params.t_rate
+    v_lead, filtered = filtered_derivative(
+        xp.stack([dx, dy]), memory - slide * v_mean, 1.0, Kd_rate, dt
+    )
     crab = _wrap_angle(xp.arctan2(obs[1], obs[0]) - psi, xp)
     psi_lead = xp.arctan2(v_lead[1], v_lead[0]) - crab
     fwd, right = _lead_axes(psi_lead, xp)
@@ -258,8 +275,8 @@ def patrol_bearing_only_hold_step(params, state, obs, xp=jnp):
         psi_lead,
         (slot_back, slot_right),
         obs[_BO_POWER],
-        dx_prev=dx,
-        dy_prev=dy,
+        dx_prev=filtered[0],
+        dy_prev=filtered[1],
         vx_prev=obs[0],
         vy_prev=obs[1],
     )

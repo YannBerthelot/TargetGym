@@ -75,7 +75,7 @@ class TestConstruction:
             Formation(num_wingmen=k)
 
     def test_tracked_values_are_the_lead_altitude_and_each_slot_error(self):
-        env, _, obs, state = _reset(follower_spawn_noise=0.0)
+        env, _, obs, state = _reset(follower_spawn_noise=0.0, sensor_noise_scale=0.0)
         assert len(env.tracked_names) == 3
         value = np.asarray(obs)[list(env.obs_value_index)]
         target = np.asarray(obs)[list(env.obs_target_index)]
@@ -181,7 +181,7 @@ def test_with_the_autopilot_in_the_lead_seat_each_wingman_flies_a_patrol(k):
     commanded this step: every wingman then sees patrol's observation and
     moves exactly as patrol's follower does, so a policy trained on patrol
     can fly a wingman seat unchanged."""
-    env, params, obs, state = _reset(k=k, turbulence_sigma=3.0)
+    env, params, obs, state = _reset(k=k, turbulence_sigma=3.0, sensor_noise_scale=0.0)
     patrol = PlanePatrol()
     pid_params, pid = make_plane3d_heading_pid()
     actions = jax.random.uniform(jax.random.PRNGKey(7), (k, 3), minval=-1, maxval=1)

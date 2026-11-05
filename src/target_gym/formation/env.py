@@ -28,7 +28,7 @@ import jax.numpy as jnp
 from flax import struct
 
 from target_gym import reward as R
-from target_gym.base import EnvState
+from target_gym.base import EnvState, actuator_field
 from target_gym.patrol.env import (
     PatrolParams,
     decode_action,
@@ -80,6 +80,8 @@ class FormationState(EnvState):
     gust_x: float = 0.0
     gust_y: float = 0.0
     gust_z: float = 0.0
+    # Sized for the scored two wingmen; ``reset_env`` sizes it for the rest.
+    actuator_held: jax.Array = actuator_field(9)
 
 
 @struct.dataclass
@@ -258,12 +260,19 @@ def aircraft_costs(state: FormationState, params: FormationParams, xp=jnp):
     return {"lead": lead_cost, "wingmen": wingmen}
 
 
-def compute_reward_terms(state: FormationState, params: FormationParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+def compute_reward_terms(
+    state: FormationState, params: FormationParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
     costs = aircraft_costs(state, params, xp)
-    terminated, _ = check_is_terminal(state, params, xp)
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, params, xp)
     terms = {"tracking": costs["lead"] + xp.sum(costs["wingmen"])}
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: FormationState, params: FormationParams, xp=jnp):

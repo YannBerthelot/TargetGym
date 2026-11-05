@@ -6,7 +6,51 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import EnvParams
 
+from target_gym.base import FieldReading
 from target_gym.utils import compute_norm_from_coordinates
+
+_FT = 0.3048  # m
+_KT = 1852.0 / 3600.0  # m/s
+_DEG = float(jnp.pi) / 180.0  # rad
+
+#: The instrument behind each state field of an aircraft, by the sections on
+#: readings in PHYSICS.md. ``gamma`` and ``psi`` have none: an IRS works them
+#: out from its velocities (``read_angles``).
+INSTRUMENTS = {
+    "x": dict(sigma=0.27),
+    "y": dict(sigma=0.27),
+    "z": dict(sigma=0.2, step=_FT),
+    "x_dot": dict(sigma=0.03, step=0.125 * _KT),
+    "y_dot": dict(sigma=0.03, step=0.125 * _KT),
+    "z_dot": dict(sigma=0.03, step=_FT / 60.0),
+    "theta": dict(sigma=0.0, step=0.010986 * _DEG),
+    "phi": dict(sigma=0.0, step=0.010986 * _DEG),
+    "theta_dot": dict(sigma=4.3e-6, step=0.015625 * _DEG),
+    "phi_dot": dict(sigma=4.3e-6, step=0.015625 * _DEG),
+    "power": dict(sigma=0.0, step=0.003),
+    "stick": dict(sigma=0.0, step=1.6e-3),
+    "aileron": dict(sigma=0.0, step=2.6e-3),
+}
+#: What a 2D aircraft reads, what a 3D one adds, and its GNSS fix.
+LONGITUDINAL = ("z", "x_dot", "z_dot", "theta", "theta_dot", "power", "stick")
+LATERAL = ("y_dot", "phi", "phi_dot", "aileron")
+POSITION = ("x", "y")
+
+
+def instruments(fields, prefix=""):
+    """One reading per name in ``fields``, on the state field ``prefix + name``
+    (``"lead."`` for an aircraft nested in the state)."""
+    return tuple(FieldReading(prefix + f, **INSTRUMENTS[f]) for f in fields)
+
+
+def read_angles(state, params, **angles):
+    """``state`` with ``angles`` as worked out from its measured velocities, so
+    they inherit that noise instead of taking their own. At
+    ``sensor_noise_scale = 0`` nothing is measured, so the stored values stay."""
+    quiet = params.sensor_noise_scale == 0
+    return state.replace(
+        **{k: jnp.where(quiet, getattr(state, k), v) for k, v in angles.items()}
+    )
 
 
 def advance_gust(

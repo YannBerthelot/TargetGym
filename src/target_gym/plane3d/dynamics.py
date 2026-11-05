@@ -21,6 +21,7 @@ from target_gym.plane.dynamics import (
     compute_Mach_from_velocity_and_speed_of_sound,
     compute_speed_of_sound_from_altitude,
     compute_weight,
+    read_angles,
 )
 from target_gym.utils import compute_norm_from_coordinates
 
@@ -54,6 +55,17 @@ def compute_gamma_3d(x_dot, y_dot, z_dot):
 def compute_psi(x_dot, y_dot):
     """Heading (ground track) from horizontal velocity components."""
     return jnp.arctan2(y_dot, x_dot)
+
+
+def read_angles_3d(state, params):
+    """``state`` with the flight-path angle and track an IRS works out from its
+    measured velocities (``plane.dynamics.read_angles``)."""
+    return read_angles(
+        state,
+        params,
+        gamma=compute_gamma_3d(state.x_dot, state.y_dot, state.z_dot),
+        psi=compute_psi(state.x_dot, state.y_dot),
+    )
 
 
 def compute_alpha_3d(theta, x_dot, y_dot, z_dot):
