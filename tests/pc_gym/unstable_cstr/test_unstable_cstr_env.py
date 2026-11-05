@@ -122,6 +122,7 @@ def _corners(params):
     f32 = functools.partial(jnp.asarray, dtype=jnp.float32)
     return UnstableCSTRState(
         time=jnp.zeros(len(rows), jnp.int32),
+        sensor_key=jnp.zeros((len(rows), 2), jnp.uint32),
         C_a=f32(rows[:, 0]),
         T=f32(rows[:, 1]),
         T_j=f32(rows[:, 2]),

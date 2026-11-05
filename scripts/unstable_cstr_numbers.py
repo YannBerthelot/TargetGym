@@ -139,6 +139,7 @@ def _states(C_a, T, T_j, Ti_dev, levels=None, dtype=None):
     f = functools.partial(jnp.asarray, dtype=dtype)
     return UnstableCSTRState(
         time=jnp.zeros(n, jnp.int32),
+        sensor_key=jnp.zeros((n, 2), jnp.uint32),
         C_a=f(C_a),
         T=f(T),
         T_j=f(T_j),

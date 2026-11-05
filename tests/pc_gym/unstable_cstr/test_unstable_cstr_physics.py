@@ -119,6 +119,7 @@ def _states64(C_a, T, T_j, Ti_dev):
     f64 = functools.partial(jnp.asarray, dtype=jnp.float64)
     return UnstableCSTRState(
         time=jnp.zeros(C_a.size, jnp.int32),
+        sensor_key=jnp.zeros((C_a.size, 2), jnp.uint32),
         C_a=f64(C_a),
         T=f64(T),
         T_j=f64(T_j),
