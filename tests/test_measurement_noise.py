@@ -175,12 +175,25 @@ def test_a_reading_is_a_pure_function_of_the_state(spec):
     obs, state, *_ = jax.jit(env.step_env)(key, state, low, params)
     # Compiled into the step, a derived channel rounds a float32 step or so
     # apart: 1e-3 m on the racetrack's 15 km coordinates, or 1 part in 1.6e7.
-    np.testing.assert_allclose(
-        obs, env.get_obs(state, params), rtol=1e-6, atol=2e-3
-    )
+    np.testing.assert_allclose(obs, env.get_obs(state, params), rtol=1e-6, atol=2e-3)
     np.testing.assert_array_equal(
         env.get_obs(state, params), env.get_obs(state, params)
     )
+
+
+@noisy_tasks
+def test_a_step_keeps_the_episodes_instruments(spec):
+    """The noise belongs to the episode key, so every step must carry it. A
+    ``compute_next_state`` that builds a new state from its fields drops the key
+    to its default, and from the second step every episode on every seed then
+    meets one noise path."""
+    env, params = spec.make_env(), spec.make_test_params()
+    key = jax.random.PRNGKey(6)
+    low, _ = _bounds(env, params)
+    _, state = env.reset_env(key, params)
+    assert np.any(np.asarray(state.sensor_key) != 0)
+    new = jax.jit(env.step_env)(key, state, low, params)[1]
+    np.testing.assert_array_equal(new.sensor_key, state.sensor_key)
 
 
 def test_different_episode_keys_give_different_noise():

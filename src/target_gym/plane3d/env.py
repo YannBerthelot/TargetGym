@@ -961,6 +961,8 @@ def compute_next_state_3d(
         aileron=aileron,
         fuel=fuel,
         time=state.time + 1,
+        sensor_key=state.sensor_key,
+        actuator_held=state.actuator_held,
         target_altitude=state.target_altitude,
         target_heading=state.target_heading,
         target_x=state.target_x,

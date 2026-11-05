@@ -657,6 +657,8 @@ def compute_next_state(
         stick=stick,
         fuel=fuel,
         time=state.time + 1,
+        sensor_key=state.sensor_key,
+        actuator_held=state.actuator_held,
         target_altitude=commanded_altitude(
             state.base_target_altitude, state.time + 1, params
         ),
