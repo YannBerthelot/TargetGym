@@ -16,7 +16,7 @@ env, params = tg.make("glass_furnace")
 | Observation space | `Box((5,))` |
 | Tracked variable(s) | crown temperature (K) |
 | Episode length | 1600 steps of 30 s (13.3 h) |
-| Cite as | `glass_furnace-v2` |
+| Cite as | `glass_furnace-v3` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
 
 ## Action space
@@ -56,7 +56,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 16 fields.
+`reset` samples the initial condition and the target; state has 18 fields.
 
 ## Episode end
 
@@ -83,6 +83,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 30 | s |
 | `max_steps_in_episode` | 1600 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `LHV` | 5e+07 | J/kg |
 | `AFR` | 17 | - |
 | `excess_air` | 0.1 | - |

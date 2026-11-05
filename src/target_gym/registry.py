@@ -504,6 +504,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        version=3,
     ),
     # Two moving-setpoint variants of the same aircraft: same plant, same
     # controllers, a different commanded altitude. Steps expose the transient
@@ -523,7 +524,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
-        version=4,
+        version=5,
     ),
     EnvSpec(
         name="plane_sine",
@@ -538,6 +539,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        version=3,
     ),
     EnvSpec(
         name="plane3d_heading",
@@ -556,7 +558,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=4,
+        version=5,
     ),
     EnvSpec(
         name="plane3d_circle",
@@ -574,7 +576,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=3,
+        version=4,
     ),
     EnvSpec(
         name="plane3d_racetrack",
@@ -592,7 +594,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=4,
+        version=5,
     ),
     EnvSpec(
         name="plane3d_figure8",
@@ -611,7 +613,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
         # v4: the distance to the curve observed as the tracked output.
-        version=4,
+        version=5,
     ),
     EnvSpec(
         name="patrol",
@@ -637,7 +639,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
-        version=3,
+        version=4,
     ),
     EnvSpec(
         name="patrol_bearing_only",
@@ -658,8 +660,9 @@ _SPECS: tuple[EnvSpec, ...] = (
             "elevation is a complete relative-position measurement, so the "
             "only unobservable quantity is the lead's heading, which the slot "
             "needs because it is expressed in the lead's frame; the estimator "
-            "takes the lead's velocity from the follower's own and the change "
-            "in the relative position, and its heading from that track less "
+            "takes the lead's velocity as the filtered rate of its position, "
+            "with the follower's own motion added back, and its heading from "
+            "that track less "
             "the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true "
             "state, so it is a full-state bound, not a bearing-only "
             "controller. On a task defined by what the observation withholds, "
@@ -678,7 +681,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
-        version=3,
+        version=4,
     ),
     # -- Process control ----------------------------------------------------
     EnvSpec(
@@ -695,7 +698,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # third.
         tuned_gains_key="cstr",
         oracle_data=_shared_oracle("cstr"),
-        version=3,
+        version=4,
     ),
     EnvSpec(
         name="first_order",
@@ -713,7 +716,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # the level it holds. At 100 the scored hold was the last 37 steps.
         tuned_gains_key="first_order",
         oracle_data=_shared_oracle("first_order"),
-        version=3,
+        version=4,
     ),
     EnvSpec(
         name="four_tank",
@@ -755,6 +758,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # The buffer flow's OU innovation, zeroed for the oracle, which rolls
         # the simulator and would otherwise plan on one seed's draws.
         noise_fields=("q2_noise_std",),
+        version=3,
     ),
     EnvSpec(
         name="distillation",
@@ -776,7 +780,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="distillation",
         # v3 observes the stage-15 temperature, the thermocouple the base
         # layer's temperature loop holds.
-        version=3,
+        version=4,
         disturbance_fields=("zF",),
         # The feed composition's OU innovation. Declared so the planner plans on the
         # mean (``plan_params``) rather than on one fixed noise path.
@@ -802,6 +806,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # rolls the simulator and so plans the pull's conditional mean from
         # the state.
         noise_fields=("m_pull_noise_std",),
+        version=3,
     ),
     EnvSpec(
         name="reactor",
@@ -813,7 +818,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.oracle"),
         tuned_gains_key="reactor",
-        version=3,
+        version=4,
         noise_fields=("demand_sigma",),
     ),
     EnvSpec(
@@ -829,11 +834,12 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="hvac",
         disturbance_fields=("weather_dev",),
         noise_fields=("T_out_noise_std",),
+        version=3,
     ),
     EnvSpec(
         name="cement_kiln",
         group="industrial",
-        version=3,
+        version=4,
         env_factory=_cement_kiln,
         params_cls=_LazyParams("target_gym.cement_kiln.env", "CementKilnParams"),
         make_pid=_pid(
@@ -865,6 +871,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # The steam demand's OU innovation. Declared so the planner plans on the
         # mean (``plan_params``) rather than on one fixed noise path.
         noise_fields=("q_steam_noise_std",),
+        version=3,
     ),
     EnvSpec(
         name="wind_turbine",
@@ -886,6 +893,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         oracle_gains_keys=("wind_turbine",),
         noise_fields=("turbulence_std",),
         disturbance_fields=("v_wind",),
+        version=3,
     ),
     EnvSpec(
         name="battery",
@@ -901,6 +909,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="battery",
         noise_fields=("dispatch_noise_std",),
         disturbance_fields=("target_power",),
+        version=3,
     ),
     # Append new tasks here, never insert: a task's position in REGISTRY is its
     # benchmark seed index, and TargetFoundation derives seeds the same way.
@@ -922,7 +931,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         # v3: the oracle's best hold, rho_floor_tracking and rho_floor, re-measured
         # for the JAX oracle (2.23e-6 mol/L against the CasADi one's 6.29e-6).
-        version=3,
+        version=4,
         # 1200 steps = 60 min at 3 s: six 10-minute blocks, with no
         # effectiveness_overrides.
         tuned_gains_key="unstable_cstr",
@@ -957,6 +966,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("demand_sigma",),
         # No fingerprint_sources: the package imports only itself and the
         # shared plumbing.
+        version=3,
     ),
     EnvSpec(
         name="formation",
@@ -997,6 +1007,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
+        version=3,
     ),
 )
 

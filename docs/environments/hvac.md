@@ -16,7 +16,7 @@ env, params = tg.make("hvac")
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | zone air temperature (deg C) |
 | Episode length | 720 steps of 900 s (7.5 days) |
-| Cite as | `hvac-v2` |
+| Cite as | `hvac-v3` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
 
 ## Action space
@@ -58,7 +58,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 10 fields.
+`reset` samples the initial condition and the target; state has 12 fields.
 
 ## Episode end
 
@@ -85,6 +85,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 900 | s |
 | `max_steps_in_episode` | 720 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `A_floor` | 150 | m^2 |
 | `lambda_at` | 4.5 | - |
 | `f_class` | 2.5 | - |

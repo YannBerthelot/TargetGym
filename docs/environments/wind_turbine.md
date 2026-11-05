@@ -16,7 +16,7 @@ env, params = tg.make("wind_turbine")
 | Observation space | `Box((5,))` |
 | Tracked variable(s) | electrical power (MW) |
 | Episode length | 400 steps of 0.25 s (100 s) |
-| Cite as | `wind_turbine-v2` |
+| Cite as | `wind_turbine-v3` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/wind_turbine/PHYSICS.md) |
 
 ## Action space
@@ -57,7 +57,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 9 fields.
+`reset` samples the initial condition and the target; state has 12 fields.
 
 ## Episode end
 
@@ -84,6 +84,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 0.25 | s |
 | `max_steps_in_episode` | 400 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `R` | 63 | m |
 | `rho` | 1.225 | kg/m^3 |
 | `J_rotor` | 3.87592e+07 | kg m^2 |

@@ -14,14 +14,28 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
-- **`four_tank` reads through noisy instruments, and is version 4.** Its
-  observation reports each level with 0.5 mm of scatter, rounded to 1 mm, and
-  its expert and tuners see those readings. `sensor_noise_scale=0` gives the
-  noise-free task, rounding included. `reward`, trips, the score and the
-  time-in-band and settle KPIs stay on the true levels, and
-  `info["measured_reward"]` holds the cost a plant could compute from its own
-  sensors. The other tasks follow
-  (docs/proposals/measurement-noise.md).
+- **Every task now reads through noisy instruments, and all 24 versions went up
+  by one.** Observations report what a plant's sensors would, with their scatter
+  and digital steps, so `tg.make(name)` gives different observations, and experts
+  and tuners read them too. The figures and their status are in each task's
+  `PHYSICS.md` and in docs/proposals/measurement-noise.md.
+  - `reward`, trips, termination, the score and the time-in-band and settle KPIs
+    stay on the true state, and oracles still read the exact state. Scoring floors
+    and ceilings did not move.
+  - To get the noise-free task back, pass `sensor_noise_scale=0` in the params,
+    which also turns rounding off. Other values test how far a result depends on
+    the figures. Two experts changed for good: `unstable_cstr`'s inner loop and
+    `patrol_bearing_only`'s lead estimator now filter what they differentiate.
+  - `info["measured_reward"]` holds the cost a plant could compute from its own
+    sensors, for a learner to train on. Trips in it come from the true state.
+  - A policy trained on exact observations will meet noise it has not seen, and a
+    number published against an earlier version does not describe these tasks.
+  - `wind_turbine`'s state gains a `power` field, and `patrol_bearing_only`'s
+    elevation now inherits a 25 ft step on the lead's altitude.
+- **States carry two new fields.** `actuator_held` is on every task, and
+  `reward_terms` and `compute_reward_terms` take `tripped=None`. A state built by
+  hand needs nothing unless it has a batch axis, where `vmap` wants a batched
+  `sensor_key` and `actuator_held` too.
 - **A state carries `sensor_key`.** `EnvState` has a keyword-only `sensor_key`,
   which `canonical_reset` stores and a restart keeps, so `get_obs(state,
   params)` takes no key and the same episode key gives the same noise to every
@@ -143,7 +157,6 @@ The next release is 0.8.0, because these changes break code written for
   `action_noise`, default 0, as fractions of the action's span, in a shared
   stage (`base.actuate`) on He et al.'s two-band stiction model.
 - `experts.pid.filtered_derivative`, for a task's own derivative loop.
-
 - `score_policy`, `run_suite` and `env.save_video` take the expert as it is,
   as in `tg.score_policy("cstr", tg.make_expert("cstr"))`.
 - Python 3.14. gymnax's floor is now 1.0.1, its first release that installs

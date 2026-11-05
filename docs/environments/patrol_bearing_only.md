@@ -16,7 +16,7 @@ env, params = tg.make("patrol_bearing_only")
 | Observation space | `Box((21,))` |
 | Tracked variable(s) | measured range (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
-| Cite as | `patrol_bearing_only-v3` |
+| Cite as | `patrol_bearing_only-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 ## Action space
@@ -63,7 +63,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 12 fields.
+`reset` samples the initial condition and the target; state has 14 fields.
 
 ## Episode end
 
@@ -82,7 +82,7 @@ Recorded over 10 seeds of the 200-step episode (see [Baseline results](../baseli
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
-The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity from the follower's own and the change in the relative position, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
+The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity as the filtered rate of its position, with the follower's own motion added back, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
 
 ## Arguments
 
@@ -92,6 +92,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 200 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `gravity` | 9.81 | m/s^2 |
 | `initial_mass` | 73500 | kg |
 | `thrust_output_at_sea_level` | 240000 | N |

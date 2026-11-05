@@ -16,7 +16,7 @@ env, params = tg.make("distillation")
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | yD (mole fraction), xB (mole fraction) |
 | Episode length | 200 steps of 60 s (3.33 h) |
-| Cite as | `distillation-v3` |
+| Cite as | `distillation-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
 
 ## Action space
@@ -59,7 +59,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 7 fields.
+`reset` samples the initial condition and the target; state has 9 fields.
 
 ## Episode end
 
@@ -86,6 +86,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 1 | min |
 | `max_steps_in_episode` | 200 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `alpha` | 1.5 | - |
 | `M_tray` | 0.5 | kmol |
 | `M_drum` | 0.5 | kmol |

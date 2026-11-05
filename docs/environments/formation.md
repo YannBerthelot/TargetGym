@@ -16,7 +16,7 @@ env, params = tg.make("formation")
 | Observation space | `Box((74,))` |
 | Tracked variable(s) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
-| Cite as | `formation-v2` |
+| Cite as | `formation-v3` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
 
 ## Action space
@@ -65,7 +65,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 11 fields.
+`reset` samples the initial condition and the target; state has 13 fields.
 
 ## Episode end
 
@@ -94,6 +94,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 200 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `gravity` | 9.81 | m/s^2 |
 | `initial_mass` | 73500 | kg |
 | `thrust_output_at_sea_level` | 240000 | N |

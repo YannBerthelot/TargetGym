@@ -16,7 +16,7 @@ env, params = tg.make("unstable_cstr")
 | Observation space | `Box((4,))` |
 | Tracked variable(s) | C_a (mol/L) |
 | Episode length | 1200 steps of 3 s (60 min) |
-| Cite as | `unstable_cstr-v3` |
+| Cite as | `unstable_cstr-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Action space
@@ -55,7 +55,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 7 fields.
+`reset` samples the initial condition and the target; state has 9 fields.
 
 ## Episode end
 
@@ -82,6 +82,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 0.05 | min |
 | `max_steps_in_episode` | 1200 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `q` | 100 | L/min |
 | `V` | 100 | L |
 | `rho` | 1000 | g/L |

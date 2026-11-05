@@ -16,7 +16,7 @@ env, params = tg.make("four_tank")
 | Observation space | `Box((6,))` |
 | Tracked variable(s) | h1 (m), h2 (m) |
 | Episode length | 1200 steps of 1 s (20 min) |
-| Cite as | `four_tank-v3` |
+| Cite as | `four_tank-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
 
 ## Action space
@@ -58,7 +58,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 9 fields.
+`reset` samples the initial condition and the target; state has 11 fields.
 
 ## Episode end
 
@@ -85,6 +85,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 1200 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `g` | 9.81 | m/s^2 |
 | `gamma1` | 0.2 | - |
 | `gamma2` | 0.2 | - |

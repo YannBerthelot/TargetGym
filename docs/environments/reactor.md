@@ -16,7 +16,7 @@ env, params = tg.make("reactor")
 | Observation space | `Box((4,))` |
 | Tracked variable(s) | neutron power (normalised) |
 | Episode length | 864 steps of 10 s (2.4 h) |
-| Cite as | `reactor-v3` |
+| Cite as | `reactor-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 
 ## Action space
@@ -55,7 +55,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 12 fields.
+`reset` samples the initial condition and the target; state has 14 fields.
 
 ## Episode end
 
@@ -82,6 +82,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 864 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `Lambda_gen` | 0.0001 | s |
 | `alpha_fuel` | -3e-05 | 1/K |
 | `alpha_coolant` | -5e-05 | 1/K |

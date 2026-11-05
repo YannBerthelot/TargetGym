@@ -16,7 +16,7 @@ env, params = tg.make("battery")
 | Observation space | `Box((5,))` |
 | Tracked variable(s) | delivered power (MW) |
 | Episode length | 360 steps of 5 s (30 min) |
-| Cite as | `battery-v2` |
+| Cite as | `battery-v3` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/battery/PHYSICS.md) |
 
 ## Action space
@@ -56,7 +56,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 9 fields.
+`reset` samples the initial condition and the target; state has 11 fields.
 
 ## Episode end
 
@@ -83,6 +83,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 5 | s |
 | `max_steps_in_episode` | 360 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `energy_nominal` | 7.2e+09 | J |
 | `power_max` | 1e+06 | W |
 | `n_series` | 192 | - |

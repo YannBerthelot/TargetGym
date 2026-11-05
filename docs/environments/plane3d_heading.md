@@ -16,7 +16,7 @@ env, params = tg.make("plane3d_heading")
 | Observation space | `Box((15,))` |
 | Tracked variable(s) | altitude (m) |
 | Episode length | 300 steps of 1 s (5 min) |
-| Cite as | `plane3d_heading-v4` |
+| Cite as | `plane3d_heading-v5` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
@@ -68,7 +68,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 27 fields.
+`reset` samples the initial condition and the target; state has 29 fields.
 
 ## Episode end
 
@@ -95,6 +95,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 300 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `gravity` | 9.81 | m/s^2 |
 | `initial_mass` | 73500 | kg |
 | `thrust_output_at_sea_level` | 240000 | N |

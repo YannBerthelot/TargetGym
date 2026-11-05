@@ -2,7 +2,7 @@
   {
     "name": "plane",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "Altitude hold",
     "params_cls": [
       "target_gym.plane.env",
@@ -46,7 +46,7 @@
   {
     "name": "plane_energy",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "Altitude and airspeed",
     "params_cls": [
       "target_gym.plane.env",
@@ -99,7 +99,7 @@
   {
     "name": "plane_sine",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "Altitude - sinusoid",
     "params_cls": [
       "target_gym.plane.env",
@@ -150,7 +150,7 @@
   {
     "name": "plane3d_heading",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "3D heading",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -199,7 +199,7 @@
   {
     "name": "plane3d_circle",
     "group": "aircraft",
-    "version": 3,
+    "version": 4,
     "display_name": "3D circle",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -248,7 +248,7 @@
   {
     "name": "plane3d_racetrack",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "3D holding pattern",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -297,7 +297,7 @@
   {
     "name": "plane3d_figure8",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "3D figure-8",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -345,7 +345,7 @@
   {
     "name": "patrol",
     "group": "aircraft",
-    "version": 3,
+    "version": 4,
     "display_name": "Patrol - wingman",
     "params_cls": [
       "target_gym.patrol.env",
@@ -384,7 +384,7 @@
   {
     "name": "patrol_bearing_only",
     "group": "aircraft",
-    "version": 3,
+    "version": 4,
     "display_name": "Patrol - wingman, bearing-only",
     "params_cls": [
       "target_gym.patrol.env",
@@ -410,7 +410,7 @@
     },
     "tuned_gains_key": null,
     "gains_keys": [],
-    "baselines_note": "The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity from the follower's own and the change in the relative position, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.",
+    "baselines_note": "The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity as the filtered rate of its position, with the follower's own motion added back, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.",
     "disturbance_fields": [],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
@@ -423,7 +423,7 @@
   {
     "name": "cstr",
     "group": "process",
-    "version": 3,
+    "version": 4,
     "display_name": "CSTR",
     "params_cls": [
       "target_gym.pc_gym.cstr.env",
@@ -458,7 +458,7 @@
   {
     "name": "first_order",
     "group": "process",
-    "version": 3,
+    "version": 4,
     "display_name": "First order",
     "params_cls": [
       "target_gym.pc_gym.first_order.env",
@@ -528,7 +528,7 @@
   {
     "name": "ph_neutralization",
     "group": "process",
-    "version": 2,
+    "version": 3,
     "display_name": "pH neutralisation",
     "params_cls": [
       "target_gym.pc_gym.ph_neutralization.env",
@@ -567,7 +567,7 @@
   {
     "name": "distillation",
     "group": "process",
-    "version": 3,
+    "version": 4,
     "display_name": "Distillation",
     "params_cls": [
       "target_gym.pc_gym.distillation.env",
@@ -606,7 +606,7 @@
   {
     "name": "glass_furnace",
     "group": "industrial",
-    "version": 2,
+    "version": 3,
     "display_name": "Glass Furnace",
     "params_cls": [
       "target_gym.glass_furnace.env",
@@ -645,7 +645,7 @@
   {
     "name": "reactor",
     "group": "industrial",
-    "version": 3,
+    "version": 4,
     "display_name": "Reactor",
     "params_cls": [
       "target_gym.reactor.env",
@@ -684,7 +684,7 @@
   {
     "name": "hvac",
     "group": "industrial",
-    "version": 2,
+    "version": 3,
     "display_name": "Building HVAC",
     "params_cls": [
       "target_gym.hvac.env",
@@ -723,7 +723,7 @@
   {
     "name": "cement_kiln",
     "group": "industrial",
-    "version": 3,
+    "version": 4,
     "display_name": "Cement Kiln",
     "params_cls": [
       "target_gym.cement_kiln.env",
@@ -762,7 +762,7 @@
   {
     "name": "boiler_drum",
     "group": "industrial",
-    "version": 2,
+    "version": 3,
     "display_name": "Boiler Drum",
     "params_cls": [
       "target_gym.boiler_drum.env",
@@ -801,7 +801,7 @@
   {
     "name": "wind_turbine",
     "group": "energy",
-    "version": 2,
+    "version": 3,
     "display_name": "Wind Turbine",
     "params_cls": [
       "target_gym.energy.wind_turbine.env",
@@ -840,7 +840,7 @@
   {
     "name": "battery",
     "group": "energy",
-    "version": 2,
+    "version": 3,
     "display_name": "Battery",
     "params_cls": [
       "target_gym.energy.battery.env",

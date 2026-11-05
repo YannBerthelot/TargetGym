@@ -16,7 +16,7 @@ env, params = tg.make("ph_neutralization")
 | Observation space | `Box((3,))` |
 | Tracked variable(s) | pH |
 | Episode length | 300 steps of 5 s (25 min) |
-| Cite as | `ph_neutralization-v2` |
+| Cite as | `ph_neutralization-v3` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
 
 ## Action space
@@ -54,7 +54,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 7 fields.
+`reset` samples the initial condition and the target; state has 9 fields.
 
 ## Episode end
 
@@ -81,6 +81,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 5 | s |
 | `max_steps_in_episode` | 300 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
 | `V` | 2900 | mL |
 | `q1` | 16.6 | mL/s |
 | `Wa1` | 0.003 | mol/L |
