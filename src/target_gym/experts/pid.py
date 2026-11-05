@@ -167,7 +167,8 @@ def mimo_pid(loop1: Controller, loop2: Controller) -> Controller:
 
 @struct.dataclass
 class PIDState:
-    """Carried state for one SISO PID loop."""
+    """Carried state for one SISO PID loop. ``prev_error`` is the filtered
+    error (``filtered_derivative``)."""
 
     integral: float
     prev_error: float
@@ -208,21 +209,50 @@ class MIMOPIDParams:
 # ---------------------------------------------------------------------------
 
 
+#: The derivative filter's time is the derivative time over this. Commercial
+#: controllers commonly use 10 (Astrom and Hagglund, 2006).
+DERIVATIVE_FILTER_RATIO = 10.0
+#: Keeps the filter defined with no gains at all; too small to move a real gain.
+_NO_GAINS = 1e-30
+
+
+def filtered_derivative(signal, memory, Kp, Kd, dt):
+    """The derivative of ``signal`` through the first-order filter of
+    ``Kd s / (1 + T_f s)``, with ``T_f = |Kd / Kp| / DERIVATIVE_FILTER_RATIO``.
+
+    ``memory`` is the filtered signal, zero or the first sample at the start,
+    and this is backward differences over ``dt``: the filter's output moves
+    ``dt / (T_f + dt)`` of the way to ``signal``, and the derivative is that
+    move over ``dt``. Without derivative action (``Kd = 0``) there is no lag,
+    and ``Kp = 0`` gives no derivative time, so the term dies away.
+
+    The arithmetic stays on Python floats and ``abs``, so the host form keeps
+    the observation's float32 and a traced gain still traces.
+
+    Returns ``(derivative, new memory)``.
+    """
+    proportional = DERIVATIVE_FILTER_RATIO * abs(Kp) * dt + _NO_GAINS
+    filtered = memory + proportional / (proportional + abs(Kd)) * (signal - memory)
+    return (filtered - memory) / dt, filtered
+
+
 def pid_update(e, integral, prev_error, Kp, Ki, Kd, dt, action_min, action_max, xp):
     """The PID recurrence, over whichever array module is passed (``jnp``
     under trace, ``numpy`` on the host), so both forms run one function.
 
     Anti-windup: on saturation the integral is left where it was, so a
     controller pinned at its limit does not wind up a term it cannot spend.
+    The derivative is filtered (``filtered_derivative``), and ``prev_error``
+    carries the filtered error.
 
     Returns ``(u_clipped, new_integral, new_prev_error)``.
     """
     new_integral = integral + e * dt
-    derivative = (e - prev_error) / dt
+    derivative, filtered = filtered_derivative(e, prev_error, Kp, Kd, dt)
     u = Kp * e + Ki * new_integral + Kd * derivative
     u_clipped = xp.clip(u, action_min, action_max)
     new_integral = xp.where(u == u_clipped, new_integral, integral)
-    return u_clipped, new_integral, e
+    return u_clipped, new_integral, filtered
 
 
 def pid_reset(params: PIDParams) -> PIDState:  # noqa: ARG001
