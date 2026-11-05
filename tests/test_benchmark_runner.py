@@ -10,9 +10,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym.base import true_obs
 from target_gym import benchmark as B
 from target_gym import eval as E
+from target_gym.base import true_obs
 from target_gym.cement_kiln.env import discharge_lime
 from target_gym.energy.wind_turbine.env import electrical_power as wind_power
 from target_gym.registry import REGISTRY

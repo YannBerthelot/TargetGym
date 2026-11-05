@@ -7,6 +7,8 @@ so what is derived from it inherits the age. ``sensor_noise_scale`` 0 removes th
 noise and keeps the age, and ``true_obs`` is what the plant is doing now.
 """
 
+import dataclasses
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -158,10 +160,18 @@ def test_the_measured_reward_reads_the_same_late_copy():
 
 
 def test_the_band_kpi_reads_the_plant_and_not_the_late_reading():
+    """The band is half the way to the target, so the plant enters it during
+    the episode, and a reading 5 steps late would enter it 5 steps after."""
     env, params = _first_order((_reading(5),))
-    task = task_info("first_order", env, params, 1)
+    obs, _ = env.reset_env(jax.random.PRNGKey(0), params)
+    start = np.asarray(obs)
+    band = abs(start[1] - start[0]) / 2.0
+    task = dataclasses.replace(
+        task_info("first_order", env, params, 1), e_floor=np.array([[band]])
+    )
+    direction = np.sign(start[1] - start[0])
     policy = CallablePolicy(
-        lambda task: lambda obs, state: np.array([1.0]), name="full", oracle=False
+        lambda task: lambda obs, state: np.array([direction]), name="full", oracle=False
     )
     out = run_policy(
         policy,
@@ -172,7 +182,8 @@ def test_the_band_kpi_reads_the_plant_and_not_the_late_reading():
         record={"x": lambda s, p, t: s.x},
     )
     error = np.abs(out["records"]["x"] - out["target"][:, :, 0])
-    np.testing.assert_array_equal(out["in_band"], error <= task.e_floor)
+    assert out["in_band"].any() and not out["in_band"].all()
+    np.testing.assert_array_equal(out["in_band"], error <= band)
 
 
 def test_the_column_reads_its_analysers_late_and_its_tray_now():

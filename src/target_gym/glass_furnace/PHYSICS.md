@@ -326,7 +326,7 @@ environment in the library.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `glass_furnace` | 1600 | 30 | 13.3 h | 1 in [-1, 1] | 5 | 27 |
+| `glass_furnace` | 1600 | 30 | 13.3 h | 1 in [-1, 1] | 5 | 28 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

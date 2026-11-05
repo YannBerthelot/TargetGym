@@ -230,7 +230,7 @@ and the gains come from `scripts/tune_process_experts.py --envs ph_neutralizatio
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ph_neutralization` | 300 | 5 | 25 min | 1 in [-1, 1] | 3 | 7 |
+| `ph_neutralization` | 300 | 5 | 25 min | 1 in [-1, 1] | 3 | 8 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

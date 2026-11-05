@@ -273,6 +273,19 @@ def test_a_step_reports_the_limited_output_not_the_command():
     np.testing.assert_allclose(info["applied_action"], [0.2, -0.2], rtol=1e-6)
 
 
+def test_a_step_reports_the_same_scatter_the_plant_got():
+    """``action_noise`` is drawn per step, so a report read a step off would
+    show another draw than the one that moved the plant."""
+    env = FourTank()
+    params = FourTankParams(action_noise=0.01)
+    key = jax.random.PRNGKey(0)
+    state = _state(env, params)
+    action = jnp.array([0.2, -0.3])
+    applied, _ = actuate(env, state, action, params)
+    info = env.step_env(key, state, action, params)[-1]
+    np.testing.assert_allclose(info["applied_action"], applied, rtol=1e-6)
+
+
 def test_the_column_starts_with_its_valves_where_the_plant_is():
     """With a rate limit the first step cannot be a jump from the middle of the
     range to the plant's own flows."""
