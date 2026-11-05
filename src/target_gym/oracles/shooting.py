@@ -12,7 +12,8 @@ kinked term or limited quantity per visited state (G5). The rows on them are
 linear, as the IPM needs:
 
 - an epigraph term (T2), cost w t^p: t >= r - tol and t >= 0, plus
-  t >= -r - tol when ``absolute``, one slack t per visited state;
+  t >= -r - tol when ``absolute``, which makes t >= 0 redundant at tol = 0,
+  so it is left out there; one slack t per visited state;
 - a hard limit (T3), lo <= q <= hi on every visited state, elastic: one
   slack per limit and stage, priced per unit at the trip cost.
 
@@ -183,6 +184,9 @@ class Shooting:
         self.loc = np.concatenate([xk, self.ui, self.ei], 1)  # what its rows read
         self.htol = np.array([h.tol for h in m.hinges], float)
         self.absolute = np.array([h.absolute for h in m.hinges], bool)
+        # t >= 0 follows from t >= r and t >= -r at no tolerance, and a third
+        # row active at t = r = 0 would break LICQ, stalling the solve.
+        self.floored = ~(self.absolute & (self.htol == 0.0))
         lim = np.array(
             [(q.lo, q.hi, q.price, q.backoff) for q in m.limits], float
         ).reshape(nl, 4)
@@ -252,7 +256,7 @@ class Shooting:
         reach = [] if moves is None else [jnp.atleast_1d(moves(xa[: self.nx], u))]
         return jnp.concatenate(reach + [
             u - jnp.asarray(self.model.lo), jnp.asarray(self.model.hi) - u,
-            (t - a * (R - self.htol)).ravel(), t.ravel(),
+            (t - a * (R - self.htol)).ravel(), t[:, self.floored].ravel(),
             (t + a * (R + self.htol))[:, self.absolute].ravel(),
             (a * (Q[:, lo] - self.lim_lo[lo]) + el[lo]).ravel(),
             (a * (self.lim_hi[hi] - Q[:, hi]) + el[hi]).ravel(), el,

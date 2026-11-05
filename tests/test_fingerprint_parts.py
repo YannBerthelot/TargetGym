@@ -43,18 +43,20 @@ def _moved(spec, change) -> set[str]:
     "name,rel,parts",
     [
         ("cstr", "pc_gym/cstr/oracle.py", {"oracle"}),
-        # cstr's oracle is on the shared solver, hvac's not yet.
+        # cstr's oracle is on the shared solver, the reactor's not yet.
         ("cstr", "experts/mpc.py", set()),
-        ("hvac", "experts/mpc.py", {"oracle"}),
+        ("reactor", "experts/mpc.py", {"oracle"}),
         ("cstr", "oracles/shooting.py", {"oracle"}),
-        ("hvac", "oracles/shooting.py", set()),
+        ("reactor", "oracles/shooting.py", set()),
         ("cstr", "pc_gym/cstr/experts.py", {"expert"}),
         ("cstr", "experts/pid.py", {"expert"}),
         ("cstr", "pc_gym/cstr/env.py", {"expert", "oracle", "stamp"}),
         # Its oracle no longer falls back to the pair.
         ("compressor_surge", "compressor_surge/experts.py", {"expert"}),
+        # An oracle on the shared solver reads no expert code.
+        ("wind_turbine", "energy/wind_turbine/experts.py", {"expert"}),
         # Oracles that still read expert code: their part moves with it.
-        ("wind_turbine", "energy/wind_turbine/experts.py", {"expert", "oracle"}),
+        ("plane", "experts/pid.py", {"expert", "oracle"}),
         ("formation", "patrol/oracle.py", {"oracle"}),
     ],
 )
@@ -78,7 +80,7 @@ def test_an_edit_stales_only_the_parts_that_read_the_file(
     [
         ("cstr", "cstr", {"expert"}),
         ("unstable_cstr", "unstable_cstr", {"expert"}),
-        ("wind_turbine", "wind_turbine", {"expert", "oracle"}),
+        ("wind_turbine", "wind_turbine", {"expert"}),
         # The formation oracle's lead flies the 3D heading gains; its expert
         # does not read them.
         ("formation", "plane3d_heading", {"oracle"}),

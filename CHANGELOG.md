@@ -69,6 +69,21 @@ The next release is 0.8.0, because these changes break code written for
   Their `make_*_mpc(env, params)` take no keyword arguments, and the unstable
   CSTR's `MPC_HORIZON`, `MPC_PNR_ROUNDING_K`, `MPC_PNR_PENALTY` and
   `unstable_cstr_stage` are gone.
+- **Six more oracles moved to the shared solver, so their oracle rows
+  changed.** hvac, battery, boiler_drum, wind_turbine, glass_furnace and
+  cement_kiln follow the same rule as the five above. The battery's
+  feedforward of the dispatch level and the wind turbine's one-step feedback
+  law are gone, since an oracle now plans the episode's reward. Their
+  `make_*_mpc(env, params)` take no keyword arguments, and
+  `ScheduleFeedforward`, `BoilerDrumGradientMPC`, `WindTurbineNewtonPI` and
+  `make_wind_turbine_gradient_mpc` are gone, with the wind turbine's version-1
+  oracle. Their expert rows did not change. The reactor keeps its planner for
+  now, since it cannot meet the horizon protocol. The glass furnace's protocol
+  gives one move per 15 minutes, too slow to answer a 25-minute reversal, so
+  its oracle scores about 1.85 times worse than the old one, though it still
+  beats the expert about 2 to 1. The cement kiln's oracle fails about 2 % of
+  its solves on the env's stiff calcination, so it scores 1.5 to 2 times worse
+  than the old one, though it beats the expert 25 to 100 times over.
 - **`unstable_cstr` is version 3.** Its floor `rho_floor_tracking` is
   re-derived from the new oracle's hold, which is tighter than the old
   floor.

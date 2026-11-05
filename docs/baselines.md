@@ -109,20 +109,16 @@ That script skips environments already in the file, so naming one with
 ## The MPC
 
 The MPC slot holds the best controller we can build for each task, as an upper
-bound for the others. Where the best causal action has a closed form, the slot
-holds that instead of a planner. Each task's controller lives in its package's
-`experts.py`:
+bound for the others. Each task's controller lives in its package's
+`oracle.py`:
 
 | Implementation | Used by | When it applies |
 |---|---|---|
-| The shared solver (`target_gym.oracles`) | cstr, first_order, four_tank, unstable_cstr, compressor_surge | A problem definition, not a tuned controller (docs/proposals/oracle-audit.md): the episode reward on the noise-free plant, over the horizon the horizon protocol measured, solved once every Cooper sample time by IPOPT's algorithm in JAX with the trips as hard limits. Each solve's certificate is recorded |
-| `NewtonMPC` | ph_neutralization, reactor, hvac, glass_furnace | Iterative LQR on the environment's own step: Newton's method on the action sequence |
-| `GradientMPC` | distillation, boiler_drum, plane_energy, the four 3D aircraft tasks | Differentiates the JAX dynamics and descends the objective |
+| The shared solver (`target_gym.oracles`) | cstr, first_order, four_tank, unstable_cstr, compressor_surge, hvac, glass_furnace, cement_kiln, boiler_drum, wind_turbine, battery | A problem definition, not a tuned controller (docs/proposals/oracle-audit.md): the episode reward on the noise-free plant, over the horizon the horizon protocol measured, solved once every Cooper sample time by IPOPT's algorithm in JAX with the trips as hard limits. Each solve's certificate is recorded |
+| `NewtonMPC` | ph_neutralization, reactor | Iterative LQR on the environment's own step: Newton's method on the action sequence |
+| `GradientMPC` | distillation, plane_energy, the four 3D aircraft tasks | Differentiates the JAX dynamics and descends the objective |
 | Two gradient planners with a handover | plane, plane_sine | Both actuators planned to capture the initial altitude, then the elevator only, with the throttle on the PID's airspeed loop |
-| `SamplingMPC` | cement_kiln | Cross-entropy sampling: gradients through the kiln's transport delay overflow |
-| Feedforward | battery | Commands the scheduled level of the next block, which leaves only the dispatch noise |
 | Feedback law plus a residual planner | patrol, patrol_bearing_only, formation | Flies the lead's own autopilot on the follower's state, and a 30-step planner adds a correction; on formation one planner corrects every seat, the lead's too |
-| Feedback law | wind_turbine | Generator torque solved so the next step's power meets the target; pitch from the PID with its slew capped |
 
 The MPC has no learned parameters. It solves its problem online at every step
 (the oracles on the shared solver once every Cooper sample time, four steps on the four-tank), and carries only a warm start and a few estimator or
@@ -145,11 +141,11 @@ on the mean path: certainty equivalence, not a robust formulation.
 
 **It does not always minimise the reward exactly.** See the next section.
 
-**It is slow**, from about 0.1 ms per step for the feedforward and feedback
-laws to about 1.3 s for the 3D aircraft. The Newton planner keeps its plan on
-the host between steps, so it runs one episode at a time. Use it as a
-reference to measure against, not inside a training loop; the recorded returns
-save you running it at all.
+**It is slow**, from about 0.1 s per solve on the battery to a few seconds on
+the cement kiln. The planners keep their plans on the host between steps, so
+they run one episode at a time. Use the oracle as a reference to measure
+against, not inside a training loop; the recorded returns save you running it
+at all.
 
 ### Why the MPC does not minimise the reward
 
