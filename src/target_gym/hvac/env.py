@@ -46,7 +46,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -231,6 +231,8 @@ class HVACState(EnvState):
     target_T: float  # active comfort setpoint
     setpoint_occupied: float  # this episode's occupied setpoint
     Q_command: float  # commanded heating power (W)
+
+    actuator_held: jax.Array = actuator_field(1)
 
     # ---------------------------------------------------------------------------
     # Derived conductances (ISO 13790 §7). Pure functions of params.
@@ -528,8 +530,12 @@ def check_is_terminal(state: HVACState, params: HVACParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward_terms(state: HVACState, params: HVACParams, xp=jnp):
-    """The reward's additive cost terms in EUR per step (``target_gym.reward``)."""
+def compute_reward_terms(state: HVACState, params: HVACParams, xp=jnp, tripped=None):
+    """The reward's additive cost terms in EUR per step (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
     p = params
     hours = p.delta_t / 3600.0
     occupied = is_occupied(state.time, p)
@@ -540,12 +546,13 @@ def compute_reward_terms(state: HVACState, params: HVACParams, xp=jnp):
     excess = xp.where(occupied, excess_occ, excess_setback)
     comfort = p.comfort_price * hours * excess**p.tracking_exponent
     energy = p.gas_price * state.Q_emitter / 1000.0 * hours
-    terminated, _ = check_is_terminal(state, p, xp)
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, p, xp)
     terms = {
         "tracking": comfort,
         "running": energy,
     }
-    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: HVACState, params: HVACParams, xp=jnp):

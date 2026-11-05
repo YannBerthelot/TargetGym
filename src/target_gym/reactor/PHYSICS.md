@@ -289,3 +289,37 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports power and coolant temperature through their instruments
+(`docs/proposals/measurement-noise.md`). Rod position and the demand stay exact:
+the rods are the controller's own rate-limited command, known by counting steps.
+`sensor_noise_scale = 0` gives the noise-free task.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `n` | 1.9e-4 of rated | | Ex-core power-range ionization chambers | Corrected | [OSTI 7260785](https://www.osti.gov/servlets/purl/7260785) |
+| `T_coolant` | 0.045 K | | Pt100 RTD with TMT82-class transmitter | Corrected | [TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
+
+**Weak figures.** Both are bounds, from opposite sides.
+
+- `n` is an upper bound. The paper's broadband 5.5 and 19 mil are mostly real
+  flux common to all channels, driven by rod actions and a feedwater controller,
+  so the refuter kept only its 2 to 15 Hz band, at most 1.9 mil at 0.01 % per
+  mil. That scatter is a fraction of signal, so it is proportional to `n`. A
+  reading's sigma is a constant, so this task uses the figure at full power at
+  every power. It overstates the bound by up to 3.3 times at the lowest demand of
+  0.3, and understates it only above full power. It stays 24 times below
+  `e_floor`.
+- `T_coolant` is a lower bound. It covers the transmitter alone, at 307 C. Hot-leg
+  streaming is real and likely larger, and no figure for it was opened. NRC
+  documents on power-range accuracy could not be read.
+
+The expert reads these values, and so does every tuner. The oracle plans and acts
+on the true state, so it stays a full-state bound. `reward`, trips and the score
+read the true state. `step_env` sums `info["measured_reward"]` over the ten
+sub-steps as it does `reward`. Each sub-step's true error is shifted by the draw
+in the observation that step returns, because a controller gets one reading per
+step, and any trip comes from the true state. The cost is linear, so noise has no
+floor of the proposal's quadratic form here.

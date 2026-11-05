@@ -55,7 +55,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -277,6 +277,8 @@ class CementKilnState(EnvState):
     rpm: jnp.ndarray
     raw_meal: jnp.ndarray  # kg/s (the disturbance)
     target_lime: jnp.ndarray
+
+    actuator_held: jax.Array = actuator_field(2)
 
     # ---------------------------------------------------------------------------
     # Geometry and material flow
@@ -563,9 +565,16 @@ def check_is_terminal(state: CementKilnState, params: CementKilnParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward_terms(state: CementKilnState, params: CementKilnParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
-    terminated, _ = check_is_terminal(state, params, xp)
+def compute_reward_terms(
+    state: CementKilnState, params: CementKilnParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, params, xp)
     terms = {
         "tracking": R.tracking_cost(
             discharge_lime(state) - state.target_lime,
@@ -576,7 +585,7 @@ def compute_reward_terms(state: CementKilnState, params: CementKilnParams, xp=jn
         ),
         "running": R.running_cost(state.fuel, params.c_hold, params.running_weight, xp),
     }
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: CementKilnState, params: CementKilnParams, xp=jnp):

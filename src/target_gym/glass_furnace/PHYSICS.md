@@ -366,3 +366,35 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports the crown, the preheated air and the delivered fuel flow
+through their instruments (`docs/proposals/measurement-noise.md`), and `fuel_pct`
+inherits the fuel meter's noise. The reversal phase and the setpoint stay exact.
+`sensor_noise_scale = 0` gives the noise-free task.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `T_crown_meas` | 0.36 K | | Type B thermocouple with E+H iTEMP TMT82 transmitter | Confirmed | [TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
+| `T_air_preheat` | 0.32 K | | Type S thermocouple with TMT82 transmitter | Confirmed | [TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
+| `fuel_flow` | 3e-4 kg/s | | Rosemount 8800D vortex gas meter | Not checked | [8800D](https://core.instrumart.com/assets/Rosemount-8800D-Series-Vortex-Flow-Meter-Datasheet.pdf) |
+
+Both thermocouple figures come from the transmitter's accuracy at a stated
+2 sigma, so they are upper bounds on its scatter, electronics only.
+
+**Weak figure.** The refutation pass did not reach `fuel_flow`, and the meter
+class is assumed. It reads the sheet's 0.1 % repeatability, which has no stated
+coverage, as 2 sigma on 0.6 kg/s.
+
+The crown's noise goes after the modelled lag, on a measured copy of the state.
+`T_crown_meas` in the state stays the lag's own value, so one step's noise never
+enters the next reading.
+
+The expert reads these values, and so does every tuner. The oracle plans and acts
+on the true state, so it stays a full-state bound. `reward`, trips and the score
+read the true crown. `info["measured_reward"]` is the same cost on the readings,
+with any trip taken from the true state. Its crown is the thermocouple, lag and
+noise together, because that is the only crown a plant can read, so resting on
+target costs a learner `(0.36 / 1)^2 = 0.13` per step. At `sensor_noise_scale = 0`
+it is the true reward, as on every task, even though the lag remains.

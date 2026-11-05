@@ -303,3 +303,39 @@ trip cost, with tracking and running cost zeroed, until the controller brings
 it back. `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports air, outdoor air, the emitter's heat and solar irradiance
+through their instruments (`docs/proposals/measurement-noise.md`), and `heat_pct`
+inherits the heat meter's noise. The clock channels and the setpoint stay exact.
+`sensor_noise_scale = 0` gives the noise-free task, rounding included.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `T_air` | 0.023 K | 0.1 K at BMS | Digital room sensor, SHT45 class | Confirmed | [SHT45](https://cdn.sparkfun.com/assets/9/7/7/a/d/SHT45-AD1B-R2_datasheet.pdf) |
+| `T_out` | 0.023 K | 0.1 K at BMS | Shielded outdoor sensor | Not checked | [SHT45](https://cdn.sparkfun.com/assets/9/7/7/a/d/SHT45-AD1B-R2_datasheet.pdf) |
+| `Q_emitter` | 27 W | | Hydronic heat meter: Pt100 pair plus flow sensor | Not checked | [TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
+| `solar_gain(time)` | 1 W/m2 | | Kipp & Zonen SMP6 pyranometer | Not checked, no source | [SMP6](https://spaces.awi.de/download/attachments/183009319/KippZonen_Manual_Smart_Pyranometers_DE_HMe.pdf?api=v2) |
+
+The 0.1 K step is this library's own floor for a building management system. The
+sensor's converter resolves 0.01 K, and no source gives the BMS figure. At 0.1 K
+the step dominates: rounding alone gives 0.029 K rms, and a reading mid-bin sits
+still between steps.
+
+**Weak figures.**
+
+- `solar_gain` is a guess. The manual gives offsets under 10 W/m2 and no scatter
+  figure. It is 0.29 % of `solar_norm` at peak.
+- `Q_emitter` has no meter sheet behind it. It is the scatter of a Pt100 pair on
+  an assumed 15 K loop difference, 0.38 % of reading, taken at `Q_heat_max`.
+- `T_out` assumes the zone sensor's class, and the refutation pass did not reach it.
+
+Solar gain is computed from the clock, which must stay exact, so it is a channel
+reading: channel 3 in `solar_norm` units, 1/350 of the 350 W/m2 peak. It reads
+small values of either sign at night, as a real pyranometer's offset does.
+
+The expert reads these values, and so does every tuner. The oracle plans and acts
+on the true state, so it stays a full-state bound. `reward`, trips and the score
+read the true state. `info["measured_reward"]` is the same cost on the readings,
+with any trip taken from the true state.

@@ -6,7 +6,15 @@ import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
 from target_gym import reward as R
-from target_gym.base import canonical_reset, charged_trip_cost, failure_kernel
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    charged_trip_cost,
+    failure_kernel,
+    measured_obs,
+    measured_state,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.reactor.env import (
     ReactorParams,
@@ -54,6 +62,13 @@ class Reactor(
     tracked_names: tuple = ("neutron power (normalised)",)
     obs_target_index: int = 3  # target_n
 
+    # Ex-core ion chambers and a hot-leg RTD (PHYSICS.md, Readings). The flux
+    # figure is its upper bound at full power, held at every power.
+    readings: tuple = (
+        FieldReading("n", sigma=1.9e-4),
+        FieldReading("T_coolant", sigma=0.045),
+    )
+
     def __init__(self, integration_method: str = "tr_bdf2_2"):
         self.obs_shape = (4,)
         self.integration_method = integration_method
@@ -70,11 +85,11 @@ class Reactor(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
+    def reward_terms(self, state, params, tripped=None):
         """Cost terms at one physics sub-step ($ per second). ``step_env``
         returns their exact sum over the control period in
         ``info["reward_terms"]``; this is the instantaneous rate."""
-        return compute_reward_terms(state, params)
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -86,9 +101,11 @@ class Reactor(
         if params is None:
             params = self.default_params
 
-        rho_raw = action
-        if not isinstance(action, float):
-            rho_raw = action.reshape(())
+        action, state = actuate(self, state, jnp.reshape(action, (1,)), params)
+        rho_raw = action.reshape(())
+        # A controller gets one reading a step, so every sub-step's measured
+        # cost carries the draw of the observation this step returns.
+        read_at = state.time + 1
 
         # Action is held constant for `control_period` physics sub-steps. Reward
         # is accumulated across the sub-steps; we freeze the state on natural
@@ -100,13 +117,15 @@ class Reactor(
         # returned state. Checking truncation on the sub-step clock is what
         # used to freeze this plant at a tenth of its episode.
         def sub_step(carry, _):
-            state, cum_reward, cum_terms, terminated = carry
+            state, cum_reward, cum_measured, cum_terms, terminated = carry
             candidate, _metrics = compute_next_state(
                 rho_raw, state, params, integration_method=self.integration_method
             )
             r = compute_reward(candidate, params, xp=jnp)
             terms = compute_reward_terms(candidate, params, xp=jnp)
             term = self.is_terminated(candidate, params)
+            measured = measured_state(self, candidate.replace(time=read_at), params)
+            m = R.total(self.reward_terms(measured, params, tripped=term))
             # Freeze state once terminated; still accumulate the final-step
             # reward. The `~terminated` guard records only the first crossing:
             # once frozen, `term` keeps firing on the held state.
@@ -115,19 +134,21 @@ class Reactor(
             )
             live = jnp.logical_not(terminated)
             next_reward = cum_reward + jnp.where(live, r, 0.0)
+            next_measured = cum_measured + jnp.where(live, m, 0.0)
             next_terms = {
                 k: cum_terms[k] + jnp.where(live, v, 0.0) for k, v in terms.items()
             }
             next_terminated = terminated | term
-            return (next_state, next_reward, next_terms, next_terminated), None
+            carry = next_state, next_reward, next_measured, next_terms, next_terminated
+            return carry, None
 
         # The accumulators take the state's precision: float32 as scored, and
         # float64 under ``enable_x64`` for a planner that rolls the plant so.
         zero = jnp.zeros((), jnp.result_type(state.n))
         zero_terms = {k: zero for k in compute_reward_terms(state, params, xp=jnp)}
-        (new_state, reward, terms, terminated), _ = jax.lax.scan(
+        (new_state, reward, measured, terms, terminated), _ = jax.lax.scan(
             sub_step,
-            (state, zero, zero_terms, jnp.bool_(False)),
+            (state, zero, zero, zero_terms, jnp.bool_(False)),
             xs=None,
             length=CONTROL_PERIOD,
         )
@@ -142,6 +163,7 @@ class Reactor(
         )
         trip = R.trip_cost(params)
         reward = jnp.where(tripped, -trip, reward)
+        measured = jnp.where(tripped, -trip, measured)
         terms = {k: jnp.where(tripped, 0.0, v) for k, v in terms.items()}
         terms["failure"] = jnp.where(tripped, trip, terms["failure"])
 
@@ -159,7 +181,7 @@ class Reactor(
         # Version 2 sums instead: its terms are dollars per physics second, so
         # the sum is the cost of the whole 10 s control step, the unit every
         # other plant's step reward is in.
-        obs = self.get_obs(new_state)
+        obs = self.get_obs(new_state, params)
         reward = jnp.where(params.reward_version == 1, reward / CONTROL_PERIOD, reward)
         # The version-2 terms summed over the sub-steps, exactly as the reward
         # is, for ``target_gym.eval``'s tracking / running split.
@@ -173,9 +195,12 @@ class Reactor(
                 "reward_terms": terms,
                 "tripped": tripped,
                 "trip_cost": charged_trip_cost(tripped, params),
+                # Version 1 has no terms, so there it is the true reward.
+                "measured_reward": R.select(params.reward_version, reward, measured),
             },
         )
 
+    @measured_obs
     def get_obs(self, state: ReactorState, params: ReactorParams = None):
         if params is None:
             params = self.default_params

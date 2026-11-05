@@ -345,3 +345,53 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports free lime, both pyrometers, the exhaust and the raw meal
+feed through their instruments (`docs/proposals/measurement-noise.md`). `fuel_pct`
+and `speed_pct` are the controller's own commands, with no lag, and they stay
+exact with the target. `sensor_noise_scale = 0` gives the noise-free task,
+rounding included.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `lime[-1]`, via `discharge_lime(state)` | 1.8e-4 mass fraction | 1e-4 | XRD channel of a Thermo ARL X900 lab spectrometer | Confirmed; interval assumed | [AN41422](https://documents.thermofisher.com/TFS-Assets/CAD/Application-Notes/free-lime-determination-in-clinker-an41422-en.pdf) |
+| `max(T_solid)`, via `burning_zone_temperature(state)` | 1.6 K | 0.1 K | IMPAC ISR 6 two-colour ratio pyrometer | Confirmed | [ISR 6](https://www.advancedenergy.com/globalassets/resources-root/data-sheets/en-op-isr6-data-sheet.pdf) |
+| `T_solid[0]` | 1.2 K | 0.1 K | IMPAC ISR 6 ratio pyrometer | Confirmed | [ISR 6](https://www.advancedenergy.com/globalassets/resources-root/data-sheets/en-op-isr6-data-sheet.pdf) |
+| `T_exhaust` | 0.33 K | | Type S thermocouple with TMT82 transmitter | Confirmed | [TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
+| `raw_meal` | 0.13 kg/s | | Pfister FRW rotor weighfeeder | Not checked | [FRW](https://www.fuller-technologies.com/files/764b473acc9a2dfc00e9247773be104557c5d5b8.pdf/Fuller-PFISTER-FRW-5-Series-Rotor-Weighfeeder.pdf) |
+
+The pyrometer figures read the sheet's repeatability, with no stated coverage, as
+2 sigma. They exclude kiln dust and flame, so they are lower bounds in a real
+kiln. `T_exhaust` is an upper bound for the electronics and excludes gas
+turbulence. The free-lime figure is ten runs on one pellet, so it excludes
+sampling and preparation, and wet titration is about ten times worse.
+
+**Weak figures.**
+
+- The hourly free-lime sample is an assumption. No standard or handbook was found.
+  Vendor pages give
+  ["hourly to two-hourly"](https://ifactoryapp.com/industries/cement-plant/automated-test-scheduling-lims-sampling-frequency)
+  and ["typically every 2 hours"](https://oxmaint.com/industries/cement-plant/cement-plant-free-lime-quality-control-cmms-process-link),
+  and [GCI Tech Notes 1(7), 1995](https://www.gcisolutions.com/library/gci_tech_notes/gcitn199507.html)
+  calls hourly a conservative strategy for cement process streams, without
+  mentioning free lime. This task takes the short end of that range.
+- The refutation pass did not reach `raw_meal`. It reads a 0.5 % accuracy, with
+  coverage and interval unstated, as 2 sigma on 53.82 kg/s.
+
+Free lime holds its noise between samples while the value stays current, so a
+filter gets one independent draw an hour and no stale value. True sample-and-hold
+would change the control problem, and no accepted expert protocol covers it.
+
+One draw shifts the whole `T_solid` profile, so the burning-zone noise sits after
+the max. Separate draws would lift the max by about 1.77 sigma if all 16 zones sat
+level. The settled profile peaks 6 K above its neighbour, where the lift is under
+0.01 sigma, so the difference shows only when the peak passes between zones.
+`T_solid[0]` has its own pyrometer and its own draw.
+
+The expert reads these values, and so does every tuner. The oracle plans and acts
+on the true state, so it stays a full-state bound. `reward`, trips and the score
+read the true state. `info["measured_reward"]` is the same cost on the readings,
+with any trip taken from the true state, so resting on target costs a learner
+`(1.8e-4 / 5e-4)^2 = 0.13` per step, plus about 0.003 for the 1e-4 rounding.
