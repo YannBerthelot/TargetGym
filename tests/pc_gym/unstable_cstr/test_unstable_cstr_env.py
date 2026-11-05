@@ -122,6 +122,7 @@ def _corners(params):
     f32 = functools.partial(jnp.asarray, dtype=jnp.float32)
     return UnstableCSTRState(
         time=jnp.zeros(len(rows), jnp.int32),
+        sensor_key=jnp.zeros((len(rows), 2), jnp.uint32),
         C_a=f32(rows[:, 0]),
         T=f32(rows[:, 1]),
         T_j=f32(rows[:, 2]),
@@ -499,7 +500,10 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
 
     # Equal to float32 rounding: the step's copy of the reset is compiled
     # inside the step, where XLA may fuse its arithmetic differently.
-    fresh = env.reset_env(restart_key(key, new.time), params)[1].replace(time=new.time)
+    # The instruments stay through a restart, so the sensor key does too.
+    fresh = env.reset_env(restart_key(key, new.time), params)[1].replace(
+        time=new.time, sensor_key=new.sensor_key
+    )
     for name in UnstableCSTRState.__dataclass_fields__:
         np.testing.assert_allclose(
             np.asarray(getattr(new, name)),

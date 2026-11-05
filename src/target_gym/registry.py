@@ -733,7 +733,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # loop near a 64 s time constant. At 500 steps it was still settling.
         tuned_gains_key="four_tank",
         oracle_data=_shared_oracle("four_tank"),
-        version=3,
+        # 4: the levels are read through instruments (PHYSICS.md, Readings).
+        version=4,
     ),
     EnvSpec(
         name="ph_neutralization",

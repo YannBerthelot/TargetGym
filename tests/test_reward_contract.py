@@ -364,9 +364,11 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     assert scored is proposal
     fresh = env.reset_env(restart_key(key, proposal.time), p)[1]
     for name in vars(fresh):
-        if name == "time":
+        if name in ("time", "sensor_key"):
             continue
         _assert_tree_equal(getattr(out, name), getattr(fresh, name))
+    # The instruments stay through a restart.
+    _assert_tree_equal(out.sensor_key, proposal.sensor_key)
     lost = p.replace(continuing=False)
     out, tripped, scored, terminated = failure_kernel(
         Trips(), key, state, proposal, lost

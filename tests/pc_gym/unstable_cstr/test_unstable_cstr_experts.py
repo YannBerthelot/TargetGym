@@ -434,6 +434,7 @@ def _scheduled_starts(env, params, n_random=64, n_alternating=16):
     )
     catches = UnstableCSTRState(
         time=jnp.zeros(i.size, jnp.int32),
+        sensor_key=jnp.zeros((i.size, 2), jnp.uint32),
         C_a=f32(C_a),
         T=f32(steady_temperature(C_a, params, np)),
         T_j=f32(catch_T_j),

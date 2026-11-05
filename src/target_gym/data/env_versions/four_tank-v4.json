@@ -1,0 +1,5 @@
+{
+  "fingerprint": "d6563b61b95940ca",
+  "note": "the levels are read through noisy instruments, and the opt-in actuator stage runs before the dynamics (docs/proposals/measurement-noise.md)",
+  "stamped": "2026-11-05T15:09:37+00:00"
+}
