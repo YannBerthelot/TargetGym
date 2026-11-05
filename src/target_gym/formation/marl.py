@@ -49,8 +49,10 @@ class FormationMARL:
     def default_params(self) -> FormationParams:
         return self.env.default_params
 
-    def get_obs(self, state: FormationState) -> Dict[str, jnp.ndarray]:
-        return self._split(self.env.get_obs(state))
+    def get_obs(
+        self, state: FormationState, params: FormationParams = None
+    ) -> Dict[str, jnp.ndarray]:
+        return self._split(self.env.get_obs(state, params))
 
     def _split(self, joint: jnp.ndarray) -> Dict[str, jnp.ndarray]:
         lead = self.env.lead_obs_dim

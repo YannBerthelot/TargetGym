@@ -118,7 +118,8 @@ def test_without_a_plan_the_oracle_is_the_seat_laws():
     action = np.asarray(oracle.step(obs, state))
 
     lead_params, lead_state = make_plane3d_heading_pid()
-    lead, _ = plane3d_heading_pid_step(lead_params, lead_state, obs[:15])
+    true_obs = env.get_obs(state, params.replace(sensor_noise_scale=0.0))
+    lead, _ = plane3d_heading_pid_step(lead_params, lead_state, true_obs[:15])
     np.testing.assert_allclose(action[:3], np.asarray(lead), atol=1e-6)
     for i in range(2):
         view = _patrol_view(state, i, lead_state)

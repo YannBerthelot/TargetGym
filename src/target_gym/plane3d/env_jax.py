@@ -14,9 +14,16 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import actuate, canonical_reset, finish_step, measured_obs
 from target_gym.expert_access import RegistryExperts
-from target_gym.plane.dynamics import total_wind_3d
+from target_gym.plane.dynamics import (
+    LATERAL,
+    LONGITUDINAL,
+    POSITION,
+    instruments,
+    total_wind_3d,
+)
+from target_gym.plane3d.dynamics import read_angles_3d
 from target_gym.plane3d.env import (
     _RACETRACK_LEG,
     PlaneParams3D,
@@ -52,13 +59,18 @@ class _Airplane3DBase(
       - obs_value_index, obs_target_index
     and implement:
       - compute_reward(state, params)
-      - get_obs(state)
+      - _terms(state, params, tripped=None), the task's reward terms
+      - _observe(state, params)
       - _reset_targets(key, params) -> dict of target fields
     """
 
     render_plane = classmethod(_render)
     screen_width = 600
     screen_height = 400
+
+    # PHYSICS.md section on readings; gamma and psi follow from the velocities.
+    # The path tasks add the GNSS fix, which the heading task has no use for.
+    readings: tuple = instruments(LONGITUDINAL + LATERAL + POSITION)
 
     def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         # observe_wind=False -> wind is a hidden disturbance (POMDP);
@@ -73,8 +85,6 @@ class _Airplane3DBase(
         """Append the realized wind to *obs* when ``observe_wind`` is set."""
         if not self.observe_wind:
             return obs
-        if params is None:
-            params = self.default_params
         # Realized wind = steady mean + altitude shear + current gust.
         wx, wy, wz = total_wind_3d(
             state.z, state.gust_x, state.gust_y, state.gust_z, params
@@ -84,6 +94,17 @@ class _Airplane3DBase(
     @property
     def default_params(self) -> PlaneParams3D:
         return PlaneParams3D()
+
+    def reward_terms(self, state, params, tripped=None):
+        # ``tripped`` marks a measured copy, whose psi is the measured track.
+        if tripped is not None:
+            state = read_angles_3d(state, params)
+        return self._terms(state, params, tripped=tripped)
+
+    @measured_obs
+    def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
+        state = read_angles_3d(state, params)
+        return self._append_wind(self._observe(state, params), state, params)
 
     def step_env(
         self,
@@ -97,7 +118,8 @@ class _Airplane3DBase(
 
         # Not every learner squashes, so a raw action past the box acts as the
         # bound rather than as a command the plant could never receive.
-        power, stick, aileron = jnp.clip(jnp.asarray(action), -1.0, 1.0)
+        action, state = actuate(self, state, jnp.asarray(action).reshape((3,)), params)
+        power, stick, aileron = jnp.clip(action, -1.0, 1.0)
         power = (power + 1) / 2  # [-1, 1] -> [0, 1]
         stick = jnp.deg2rad(stick * 15)  # [-1, 1] -> +/-15 deg
         aileron = jnp.deg2rad(aileron * 25)  # [-1, 1] -> +/-25 deg
@@ -231,6 +253,7 @@ class Plane3DHeading(_Airplane3DBase):
     obs_target_index: int = 10  # target_altitude
     task_type: str = "heading"
     registry_name: str = "plane3d_heading"
+    readings: tuple = instruments(LONGITUDINAL + LATERAL)
 
     @property
     def default_params(self) -> PlaneParams3D:
@@ -260,11 +283,11 @@ class Plane3DHeading(_Airplane3DBase):
     def compute_reward(self, state, params):
         return compute_reward_heading(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms_heading(state, params)
+    def _terms(self, state, params, tripped=None):
+        return compute_reward_terms_heading(state, params, tripped=tripped)
 
-    def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
-        return self._append_wind(get_obs_heading(state, xp=jnp), state, params)
+    def _observe(self, state, params):
+        return get_obs_heading(state, xp=jnp)
 
     @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
@@ -357,11 +380,11 @@ class Plane3DRacetrack(_Airplane3DBase):
     def compute_reward(self, state, params):
         return compute_reward_racetrack(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms_racetrack(state, params)
+    def _terms(self, state, params, tripped=None):
+        return compute_reward_terms_racetrack(state, params, tripped=tripped)
 
-    def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
-        return self._append_wind(get_obs_racetrack(state, xp=jnp), state, params)
+    def _observe(self, state, params):
+        return get_obs_racetrack(state, xp=jnp)
 
     @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
@@ -452,11 +475,11 @@ class Plane3DCircle(_Airplane3DBase):
     def compute_reward(self, state, params):
         return compute_reward_circle(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms_circle(state, params)
+    def _terms(self, state, params, tripped=None):
+        return compute_reward_terms_circle(state, params, tripped=tripped)
 
-    def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
-        return self._append_wind(get_obs_circle(state, xp=jnp), state, params)
+    def _observe(self, state, params):
+        return get_obs_circle(state, xp=jnp)
 
     @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
@@ -555,13 +578,11 @@ class Plane3DFigureEight(_Airplane3DBase):
     def compute_reward(self, state, params):
         return compute_reward_figure8(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms_figure8(state, params)
+    def _terms(self, state, params, tripped=None):
+        return compute_reward_terms_figure8(state, params, tripped=tripped)
 
-    def get_obs(self, state: PlaneState3D, params: PlaneParams3D = None):
-        if params is None:
-            params = self.default_params
-        return self._append_wind(get_obs_figure8(state, params, xp=jnp), state, params)
+    def _observe(self, state, params):
+        return get_obs_figure8(state, params, xp=jnp)
 
     @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):

@@ -6,7 +6,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import (
     integrate_dynamics,
 )
@@ -63,6 +63,8 @@ class PlaneState(EnvState):
     # acting on the aircraft is params.wind_* + gust_*.  Default 0 => no gust.
     gust_x: float = 0.0
     gust_z: float = 0.0
+
+    actuator_held: jax.Array = actuator_field(2)
 
     @property
     def rho(self):
@@ -393,11 +395,16 @@ def check_no_nan(x, id=None):
             raise AssertionError(f"NaN detected in {id}: {x}")
 
 
-def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped=None):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
     p = params
     speed = xp.sqrt(state.x_dot**2 + state.z_dot**2)
-    terminated, _ = check_is_terminal(state, p, xp)
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, p, xp)
     terms = {
         "tracking": R.tracking_cost(
             state.target_altitude - state.z, p.e_floor, p.e_tol, p.tracking_exponent, xp
@@ -406,7 +413,7 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp):
             xp.abs(speed - p.target_speed), p.c_hold, p.running_weight, xp
         ),
     }
-    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: PlaneState, params: PlaneParams, xp=jnp):

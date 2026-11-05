@@ -184,17 +184,18 @@ textbook hold:
   the pitch loop.
 
 On `patrol_bearing_only` an estimator feeds the same hold. Range, azimuth and
-elevation fix the relative position. The lead's velocity is the follower's own
-over the last step plus the change in that position, and its heading is that
-track less the crab the follower flies in the same air.
+elevation fix the relative position. The lead's velocity is the filtered rate of
+that position, with the follower's own motion added back, and its heading is
+that track less the crab the follower flies in the same air.
 
 The gains were tuned on training seeds 100-109 and checked once on held-out
 seeds 200-209 (`scripts/tune_formation_hold.py`,
 `tests/patrol/test_formation_hold.py`). The limit is NASA's F/A-18 figure
 scaled by span: 10 ft one-sigma on a 12.3 m span is 8.5 m on the A320's
-34.1 m. Over the scored part of the episode the full-observation expert holds
-an RMS slot error of 3.4 to 5.2 m (median 4.0) and the bearing-only one 3.8
-to 5.7 m (median 4.4), with no trip. The pursuit-guidance PID it replaced
+34.1 m. Over the scored part of the episode, on exact readings and with a raw
+difference in the estimator, the full-observation expert held an RMS slot error
+of 3.4 to 5.2 m (median 4.0) and the bearing-only one 3.8 to 5.7 m (median 4.4),
+with no trip. The pursuit-guidance PID it replaced
 (2026-10) held 44 to 68 m and 40 to 57 m.
 
 **The oracle** in the MPC slot is `PatrolTwinOracle` (`oracle.py`), a
@@ -301,3 +302,88 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports both aircraft through their instruments, with the slot
+offsets and the commanded slot range exact
+(`docs/proposals/measurement-noise.md`). `sensor_noise_scale = 0` gives the
+noise-free task, rounding included. The follower's readings, on both tasks:
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `z` | 0.2 m | 1 ft | Air data computer baro altitude | Provisional: a ground test set's figure, no airborne one found | [DPST-8000](https://www.avionteq.com/Document/DPST-8000-specification-sheet.pdf) |
+| `x_dot` | 0.03 m/s | 0.125 kt | IRS/GNSS ground velocity | Ceiling: receiver accuracy, not scatter | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `y_dot` | 0.03 m/s | 0.125 kt | IRS/GNSS ground velocity | Ceiling: as `x_dot` | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `z_dot` | 0.03 m/s | 1 ft/min | IRS inertial vertical speed | No source: a placeholder, not a bound | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `theta` | none | 0.010986 deg | IRS pitch attitude | Corrected: rounding only | [HG9900](https://www.honeywellaerospace.com/us/en/products-and-services/products/navigation-and-sensors/inertial-measurement-units/hg9900-inertial-measurement-unit) |
+| `theta_dot` | 4.3e-6 rad/s | 0.015625 deg/s | IRS body pitch rate | Confirmed | [Honeywell Mk VI guide](https://fitness.manualsonline.com/manuals/mfg/honeywell/mk_vi.html?p=254) |
+| `phi` | none | 0.010986 deg | IRS roll attitude | Corrected: rounding only | [HG9900](https://www.honeywellaerospace.com/us/en/products-and-services/products/navigation-and-sensors/inertial-measurement-units/hg9900-inertial-measurement-unit) |
+| `phi_dot` | 4.3e-6 rad/s | 0.015625 deg/s | IRS body roll rate | Confirmed | [Honeywell Mk VI guide](https://fitness.manualsonline.com/manuals/mfg/honeywell/mk_vi.html?p=254) |
+| `gamma` | 1.3e-4 rad at 230 m/s, as 0.03 / V | from the velocities | IRS flight-path angle | Confirmed | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `psi` | 1.3e-4 rad at 230 m/s, as 0.03 / V | from the velocities | IRS true track angle | Confirmed | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `power` | none | 0.003 | Engine thrust indication via FADEC | No source: rounding only | [14 CFR 121 App. M](https://www.law.cornell.edu/cfr/text/14/appendix-M_to_part_121) |
+| `stick` | none | 1.6e-3 rad | Elevator surface position sensor | No source: rounding only | [14 CFR 121 App. M](https://www.law.cornell.edu/cfr/text/14/appendix-M_to_part_121) |
+| `aileron` | none | 2.6e-3 rad | Aileron surface position sensor | No source: rounding only | [14 CFR 121 App. M](https://www.law.cornell.edu/cfr/text/14/appendix-M_to_part_121) |
+| `x`, `y` | 0.27 m | none | GNSS position | Corrected | [NASA AFF](https://ntrs.nasa.gov/api/citations/20030005804/downloads/20030005804.pdf) |
+
+`gamma` and `psi`, the lead's included, are worked out from the velocities read,
+as an IRS does. The slot errors, relative velocities, relative heading and lead
+speed are computed from these readings, so they inherit the noise. That includes
+the slot frame, which turns with the lead's measured track.
+
+The lead's readings on `patrol`:
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `lead.x`, `lead.y` | 0.27 m | none | Lead GNSS fix over the air-to-air datalink | Corrected | [NASA AFF](https://ntrs.nasa.gov/api/citations/20030005820/downloads/20030005820.pdf) |
+| `lead.z` | 0.2 m | 1 ft | Lead baro altitude over the datalink | Provisional: as `z` | [DPST-8000](https://www.avionteq.com/Document/DPST-8000-specification-sheet.pdf) |
+| `lead.x_dot`, `lead.y_dot` | 0.03 m/s | 0.125 kt | Lead IRS/GNSS velocity over the datalink | Ceiling: as `x_dot` | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `lead.z_dot` | 0.03 m/s | 1 ft/min | Lead IRS vertical speed over the datalink | No source: a placeholder | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `lead.psi` | 1.3e-4 rad at 230 m/s, as 0.03 / V | from the lead's velocities | Lead true track over the datalink | Confirmed | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+
+On `patrol_bearing_only` the follower has no datalink, so a TCAS-style sensor
+reports the lead instead. **These figures are provisional, marked pending a real
+sensor.** None has been sourced for a wingman at 150 to 300 m:
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| range | 15 m | none | TCAS II range from Mode S reply timing | No source: unsourced, provisional | none opened |
+| azimuth | 0.026 rad | none | TCAS II four-monopole direction-finding antenna | Corrected: the random part, provisional | [Harman 1984](https://archive.ll.mit.edu/mission/aviation/publications/publication-files/ms-papers/Harman_1984_CACA_MS-6526_WW-18698A.pdf) |
+| elevation | 0.0088 rad at 250 m, as 1 / range | through `lead.z` | TCAS relative altitude from Mode S reports | No source: provisional | none opened |
+
+Range and azimuth are channel readings, drawn on the true geometry, because
+computed from the fixes they would inherit GNSS-grade noise. The tracked value
+is that same range reading, not a second instrument.
+
+Elevation has no draw of its own. TCAS measures no angle: it takes the lead's
+altitude from a Mode S report coded in 25 ft steps. So on this task `lead.z` is
+that report, 0.2 m of baro scatter rounded to 25 ft, and elevation is computed
+from it. This is one altitude path: the rounding's own scatter, 25 ft / sqrt(12)
+or 2.2 m, over a 250 m range gives the 0.0088 rad, and it falls as 1 / range. It
+replaces the datalink table's 1 ft step for `lead.z`, which on this task would
+contradict elevation by a factor of ten. The 25 ft coding comes from no opened
+source. The rounding also leaves a steady error of up to 3.8 m while the lead
+holds its altitude.
+
+`lead.x`, `lead.y` and the lead's velocities are declared on this task too, with
+the figures above, but the observation does not show them. They reach only the
+measured reward, through the slot error and `lead.psi`.
+
+The figure the tracked altitude rests on is weak. No air data computer publishes
+its scatter, so 0.2 m comes from a ground test set, and the benchmark runs at
+`sensor_noise_scale` 0.5 and 2 to show how far a result depends on it. The
+ground velocity figure is a receiver's accuracy, so true scatter is smaller, and
+the vertical speed figure is a placeholder.
+
+The expert reads these values, and so does every tuner. The bearing-only
+estimator takes the lead's velocity as the filtered rate of the lead's position
+(`t_rate`, 20 s), since a raw difference turns 15 m of range noise into 21 m/s of
+speed noise and trips on every training seed. The filter's lag sets a steady
+cross-track offset in a turn of about `V * omega * t_rate / k_y`, so this expert
+does not yet hold the 8.5 m limit: the expert protocol on noisy plants has to
+replace this estimator. The oracle plans and acts on the true state, so it stays
+a full-state bound. `reward`, trips and the score read the true state.
+`info["measured_reward"]` is the same cost on the field readings, with any trip
+taken from the true state. A channel reading stays out of it, so on
+`patrol_bearing_only` it does not see the 15 m of range noise.

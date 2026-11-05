@@ -14,7 +14,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.plane.dynamics import (
     advance_gust,
@@ -69,6 +69,8 @@ class PlaneState3D(EnvState):
     gust_x: float = 0.0
     gust_y: float = 0.0
     gust_z: float = 0.0
+
+    actuator_held: jax.Array = actuator_field(3)
 
     @property
     def rho(self):
@@ -981,12 +983,17 @@ def altitude_cost(state, params, xp=jnp):
     )
 
 
-def _downtime(terms, state, params, xp=jnp):
-    terminated, _ = check_is_terminal_3d(state, params, xp)
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+def _downtime(terms, state, params, xp=jnp, tripped=None):
+    """``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``)."""
+    if tripped is None:
+        tripped, _ = check_is_terminal_3d(state, params, xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
-def compute_reward_terms_heading(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+def compute_reward_terms_heading(
+    state: PlaneState3D, params: PlaneParams3D, xp=jnp, tripped=None
+):
     """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
     heading = R.tracking_cost(
         wrap_angle(state.psi - state.target_heading),
@@ -995,12 +1002,13 @@ def compute_reward_terms_heading(state: PlaneState3D, params: PlaneParams3D, xp=
         params.tracking_exponent,
         xp,
     )
-    return _downtime(
-        {"tracking": altitude_cost(state, params, xp) + heading}, state, params, xp
-    )
+    terms = {"tracking": altitude_cost(state, params, xp) + heading}
+    return _downtime(terms, state, params, xp, tripped)
 
 
-def compute_reward_terms_racetrack(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+def compute_reward_terms_racetrack(
+    state: PlaneState3D, params: PlaneParams3D, xp=jnp, tripped=None
+):
     path = R.tracking_cost(
         distance_to_racetrack(state),
         params.e_floor_path,
@@ -1008,12 +1016,13 @@ def compute_reward_terms_racetrack(state: PlaneState3D, params: PlaneParams3D, x
         params.tracking_exponent,
         xp,
     )
-    return _downtime(
-        {"tracking": altitude_cost(state, params, xp) + path}, state, params, xp
-    )
+    terms = {"tracking": altitude_cost(state, params, xp) + path}
+    return _downtime(terms, state, params, xp, tripped)
 
 
-def compute_reward_terms_circle(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+def compute_reward_terms_circle(
+    state: PlaneState3D, params: PlaneParams3D, xp=jnp, tripped=None
+):
     path = R.tracking_cost(
         distance_to_circle(state),
         params.e_floor_path,
@@ -1021,12 +1030,13 @@ def compute_reward_terms_circle(state: PlaneState3D, params: PlaneParams3D, xp=j
         params.tracking_exponent,
         xp,
     )
-    return _downtime(
-        {"tracking": altitude_cost(state, params, xp) + path}, state, params, xp
-    )
+    terms = {"tracking": altitude_cost(state, params, xp) + path}
+    return _downtime(terms, state, params, xp, tripped)
 
 
-def compute_reward_terms_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
+def compute_reward_terms_figure8(
+    state: PlaneState3D, params: PlaneParams3D, xp=jnp, tripped=None
+):
     _, _, _, dist, _ = nearest_point_on_twisted_lemniscate(state, params)
     path = R.tracking_cost(dist, params.e_floor_path, 0.0, params.tracking_exponent, xp)
-    return _downtime({"tracking": path}, state, params, xp)
+    return _downtime({"tracking": path}, state, params, xp, tripped)

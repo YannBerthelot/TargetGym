@@ -19,7 +19,14 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    ChannelReading,
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.experts.pid import Plane3DHeadingPIDParams, plane3d_pid_reset
 from target_gym.patrol.env import (
@@ -36,7 +43,20 @@ from target_gym.patrol.env import (
     make_cruise_state,
 )
 from target_gym.patrol.rendering import _render
+from target_gym.plane.dynamics import LATERAL, LONGITUDINAL, POSITION, instruments
+from target_gym.plane3d.dynamics import read_angles_3d
 from target_gym.video import SavesVideo
+
+#: The follower's own instruments, and the lead's over the datalink. Their
+#: velocities give both aircraft's gamma and psi (``read_angles_3d``).
+_FOLLOWER = instruments(LONGITUDINAL + LATERAL + POSITION, "follower.")
+_LEAD_VELOCITY = instruments(("x_dot", "y_dot", "z_dot"), "lead.")
+_LEAD_FIX = instruments(POSITION, "lead.")
+#: The relative altitude TCAS gets from a Mode S report: the lead's baro
+#: altitude, coded in 25 ft steps. Rounding, not white noise: it is the one
+#: altitude path behind ``lead.z`` and the elevation channel, whose scatter at
+#: 250 m is ``25 ft / sqrt(12) / 250 m``, 0.0088 rad, falling as 1/range.
+_LEAD_MODE_S_ALTITUDE = FieldReading("lead.z", sigma=0.2, step=25 * 0.3048)
 
 #: The scripted lead's heading autopilot: the 3D heading task's PID on the
 #: gains ``pid_gains.json`` held for it on 2026-11-03 (``plane3d_heading``).
@@ -57,6 +77,14 @@ LEAD_AUTOPILOT = Plane3DHeadingPIDParams(
     Ki_power=4.33e-06,
     Kd_power=0.00646023,
 )
+
+
+def _read_angles(state: PatrolState, params: PatrolParams) -> PatrolState:
+    """Both aircraft's gamma and psi, from their measured velocities."""
+    return state.replace(
+        follower=read_angles_3d(state.follower, params),
+        lead=read_angles_3d(state.lead, params),
+    )
 
 
 class _PlanePatrolBase(
@@ -87,15 +115,22 @@ class _PlanePatrolBase(
         return PatrolParams(max_steps_in_episode=200)
 
     # -- to be provided by subclasses --------------------------------------
-    def get_obs(self, state: PatrolState, params: PatrolParams = None) -> jnp.ndarray:
+    def _observe(self, state: PatrolState) -> jnp.ndarray:
         raise NotImplementedError
+
+    @measured_obs
+    def get_obs(self, state: PatrolState, params: PatrolParams = None) -> jnp.ndarray:
+        return self._observe(_read_angles(state, params))
 
     # -- core --------------------------------------------------------------
     def compute_reward(self, state, params):
         return compute_reward_patrol(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms_patrol(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        # ``tripped`` marks a measured copy, whose psi are the measured tracks.
+        if tripped is not None:
+            state = _read_angles(state, params)
+        return compute_reward_terms_patrol(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -107,6 +142,7 @@ class _PlanePatrolBase(
         if params is None:
             params = self.default_params
 
+        action, state = actuate(self, state, action.reshape((3,)), params)
         new_state, metrics = compute_next_state_patrol(
             action,
             state,
@@ -121,7 +157,7 @@ class _PlanePatrolBase(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params, metrics=metrics
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
     def is_terminated(self, state: PatrolState, params: PatrolParams) -> jax.Array:
         """Natural termination only; the time limit is gymnax's ``is_truncated``."""
@@ -219,7 +255,7 @@ class _PlanePatrolBase(
         )
 
         state = provisional.replace(follower=follower)
-        return self.get_obs(state), state
+        return self.get_obs(state, params), state
 
     # -- rendering / video -------------------------------------------------
     def render(self, screen, state: PatrolState, params: PatrolParams, frames, clock):
@@ -260,11 +296,19 @@ class PlanePatrol(_PlanePatrolBase):
     task_type: str = "patrol"
     registry_name: str = "patrol"
 
+    # PHYSICS.md section on readings.
+    readings: tuple = (
+        *_FOLLOWER,
+        *_LEAD_FIX,
+        *instruments(("z",), "lead."),
+        *_LEAD_VELOCITY,
+    )
+
     def __init__(self, integration_method: str = "rk4_2"):
         super().__init__(integration_method)
         self.obs_shape = (26,)
 
-    def get_obs(self, state: PatrolState, params: PatrolParams = None) -> jnp.ndarray:
+    def _observe(self, state: PatrolState) -> jnp.ndarray:
         return get_obs_full(state, xp=jnp)
 
 
@@ -281,9 +325,26 @@ class PlanePatrolBearingOnly(_PlanePatrolBase):
     task_type: str = "patrol"
     registry_name: str = "patrol_bearing_only"
 
+    # PHYSICS.md section on readings. Provisional, pending a real sensor.
+    # Elevation is no channel of its own: it inherits ``lead.z``. The lead's
+    # other readings reach only the measured reward.
+    readings: tuple = (
+        *_FOLLOWER,
+        *_LEAD_FIX,
+        _LEAD_MODE_S_ALTITUDE,
+        *_LEAD_VELOCITY,
+        ChannelReading(10, sigma=15.0),  # range, m
+        ChannelReading(11, sigma=0.026),  # azimuth, rad
+    )
+
     def __init__(self, integration_method: str = "rk4_2"):
         super().__init__(integration_method)
         self.obs_shape = (21,)
 
-    def get_obs(self, state: PatrolState, params: PatrolParams = None) -> jnp.ndarray:
+    def _observe(self, state: PatrolState) -> jnp.ndarray:
         return get_obs_bearing_only(state, xp=jnp)
+
+    def get_obs(self, state: PatrolState, params: PatrolParams = None) -> jnp.ndarray:
+        # The tracked value is that one range reading, not a second instrument.
+        obs = super().get_obs(state, params)
+        return obs.at[19].set(obs[10])

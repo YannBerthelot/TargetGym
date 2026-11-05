@@ -35,11 +35,13 @@ def _script():
 def test_the_tuning_rollout_flies_the_protocols_episode():
     tune = _script()
     spec = REGISTRY["plane"]
-    params = spec.make_test_params()
+    # With no readings: rounding lifts the float32 difference below to a whole
+    # instrument step when a value sits on a boundary, and the runs part.
+    params = spec.make_test_params().replace(sensor_noise_scale=0.0)
     assert params.turbulence_sigma > 0  # the gusts are part of what must match
 
     _, tracking = tune.rollout(
-        "plane", tune.P2.plane_tecs_step, tune.P2.PlaneTECSParams(), [100]
+        "plane", tune.P2.plane_tecs_step, tune.P2.PlaneTECSParams(), [100], params
     )
     episode = E.run_episode(spec, params, tg.make_expert("plane").host(), seed=100)
 

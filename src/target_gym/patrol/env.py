@@ -26,11 +26,12 @@ jit/vmap/scan-able function over structs.
 
 from typing import Tuple
 
+import jax
 import jax.numpy as jnp
 from flax import struct
 
 from target_gym import reward as R
-from target_gym.base import EnvState
+from target_gym.base import EnvState, actuator_field
 from target_gym.experts.pid import Plane3DPIDState, plane3d_heading_pid_step
 from target_gym.plane.dynamics import advance_gust, step_key
 from target_gym.plane3d.dynamics import compute_velocity_3d
@@ -102,6 +103,8 @@ class PatrolState(EnvState):
     gust_x: float = 0.0
     gust_y: float = 0.0
     gust_z: float = 0.0
+
+    actuator_held: jax.Array = actuator_field(3)
 
 
 @struct.dataclass
@@ -327,8 +330,14 @@ def heading_alignment(state: PatrolState, params: PatrolParams, xp=jnp):
     return xp.exp(-0.5 * (dpsi / params.heading_tolerance) ** 2)
 
 
-def compute_reward_terms_patrol(state: PatrolState, params: PatrolParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+def compute_reward_terms_patrol(
+    state: PatrolState, params: PatrolParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
     p = params
     slot = R.tracking_cost(
         slot_error(state), p.e_floor_slot, p.e_tol_slot, p.tracking_exponent, xp
@@ -340,11 +349,12 @@ def compute_reward_terms_patrol(state: PatrolState, params: PatrolParams, xp=jnp
         p.tracking_exponent,
         xp,
     )
-    terminated, _ = check_is_terminal_patrol(state, p, xp)
+    if tripped is None:
+        tripped, _ = check_is_terminal_patrol(state, p, xp)
     terms = {
         "tracking": slot + heading,
     }
-    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
 def compute_reward_patrol_v1(state: PatrolState, params: PatrolParams, xp=jnp):

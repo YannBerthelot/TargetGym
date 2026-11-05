@@ -3,9 +3,15 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import actuate, canonical_reset, finish_step, measured_obs
 from target_gym.expert_access import RegistryExperts
-from target_gym.plane.dynamics import total_wind_2d
+from target_gym.plane.dynamics import (
+    LONGITUDINAL,
+    compute_gamma,
+    instruments,
+    read_angles,
+    total_wind_2d,
+)
 from target_gym.plane.env import (
     PlaneParams,
     PlaneState,
@@ -46,6 +52,9 @@ class Airplane2D(
     tracked_names: tuple = ("altitude (m)",)
     obs_target_index: int = 6  # target_altitude
 
+    # PHYSICS.md section on readings; gamma follows from the velocities.
+    readings: tuple = instruments(LONGITUDINAL)
+
     def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
         # observe_wind=False -> the wind is a hidden disturbance (POMDP);
         # observe_wind=True  -> wind (wind_x, wind_z) is appended to the obs
@@ -66,8 +75,8 @@ class Airplane2D(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -84,7 +93,8 @@ class Airplane2D(
 
         # Not every learner squashes, so a raw action past the box acts as the
         # bound rather than as a command the plant could never receive.
-        power, stick = jnp.clip(jnp.asarray(action), -1.0, 1.0)
+        action, state = actuate(self, state, jnp.asarray(action).reshape((2,)), params)
+        power, stick = jnp.clip(action, -1.0, 1.0)
         power = (power + 1) / 2  # map from [-1, 1] to [0, 1]
         stick = jnp.deg2rad(stick * 15)  # radians
 
@@ -179,15 +189,16 @@ class Airplane2D(
         obs = self.get_obs(state, params)
         return obs, state
 
+    @measured_obs
     def get_obs(self, state: PlaneState, params: PlaneParams = None):
         """
         Observation vector. When ``observe_wind`` is set, the wind components
         (wind_x, wind_z) are appended so the disturbance is fully observable.
         """
+        gamma = compute_gamma(state.x_dot, state.z_dot)
+        state = read_angles(state, params, gamma=gamma)
         obs = get_obs(state, params, xp=jnp)
         if self.observe_wind:
-            if params is None:
-                params = self.default_params
             # Realized wind = steady mean + altitude shear + current gust.
             wx, wz = total_wind_2d(state.z, state.gust_x, state.gust_z, params)
             obs = jnp.concatenate([obs, jnp.array([wx, wz])])

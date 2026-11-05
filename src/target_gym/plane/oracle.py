@@ -309,9 +309,9 @@ class PlaneMPC(GradientMPC):
 
     The loop runs twice, consistently. In the plant, a live copy of the PID
     (``make_pid``: the task's own gains, see ``_TASK_SETTINGS``) computes the
-    throttle from the observation every step; the loop reads only the
-    airspeed ``x_dot``, which the observation carries unchanged from the
-    state. Inside the planner's rollout, a JAX port of the same loop (same
+    throttle from the true state every step, never the readings, so the
+    oracle stays a full-state bound; the loop reads only the airspeed
+    ``x_dot``. Inside the planner's rollout, a JAX port of the same loop (same
     gains, same anti-windup) computes the throttle from each predicted
     state, its integrator seeded from the live PID's, so the elevator plan
     is optimised against the throttle the plant will actually get. The
@@ -377,11 +377,7 @@ class PlaneMPC(GradientMPC):
             return super().step(obs, state)
         from target_gym.plane.env import get_obs
 
-        o = (
-            np.asarray(obs)
-            if obs is not None
-            else np.asarray(get_obs(state, self.params))
-        )
+        o = np.asarray(get_obs(state, self.params))
         integ0 = float(np.asarray(self._pid.state.speed_integral))  # before this step
         throttle = float(np.asarray(self._pid.step(o), dtype=np.float32)[0])
         aug = (state, jnp.asarray(integ0, jnp.float32))

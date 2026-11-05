@@ -13,7 +13,7 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import actuate, canonical_reset, finish_step, measured_obs
 from target_gym.expert_access import RegistryExperts
 from target_gym.formation.env import (
     LEAD_OBS_BASE,
@@ -30,7 +30,19 @@ from target_gym.formation.env import (
 )
 from target_gym.formation.rendering import _render
 from target_gym.patrol.env import N_LEAD_LEGS, make_cruise_state
+from target_gym.plane.dynamics import LATERAL, LONGITUDINAL, POSITION, instruments
+from target_gym.plane3d.dynamics import read_angles_3d
 from target_gym.video import SavesVideo
+
+_AIRCRAFT = LONGITUDINAL + LATERAL + POSITION
+
+
+def _read_angles(state: FormationState, params: FormationParams):
+    """Every aircraft's gamma and psi, from its measured velocities."""
+    return state.replace(
+        lead=read_angles_3d(state.lead, params),
+        wingmen=read_angles_3d(state.wingmen, params),
+    )
 
 
 class Formation(
@@ -61,6 +73,12 @@ class Formation(
     task_type: str = "formation"
     registry_name: str = "formation"
 
+    # PHYSICS.md section on readings. The lead reports what its own seat reads.
+    readings: tuple = (
+        *instruments(_AIRCRAFT, "lead."),
+        *instruments(_AIRCRAFT, "wingmen."),
+    )
+
     def __init__(self, num_wingmen: int = 2, integration_method: str = "rk4_2"):
         if not 1 <= num_wingmen <= MAX_WINGMEN:
             raise ValueError(
@@ -88,14 +106,18 @@ class Formation(
         return FormationParams(max_steps_in_episode=200)
 
     # -- core --------------------------------------------------------------
+    @measured_obs
     def get_obs(self, state: FormationState, params=None) -> jnp.ndarray:
-        return get_obs_formation(state)
+        return get_obs_formation(_read_angles(state, params))
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        # ``tripped`` marks a measured copy, whose psi are the measured tracks.
+        if tripped is not None:
+            state = _read_angles(state, params)
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -106,6 +128,8 @@ class Formation(
     ):
         if params is None:
             params = self.default_params
+        n = 3 * (self.num_wingmen + 1)
+        action, state = actuate(self, state, action.reshape((n,)), params)
         new_state, metrics = compute_next_state_formation(
             action, state, params, self.integration_method, key=key
         )
@@ -115,7 +139,7 @@ class Formation(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params, metrics=metrics
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
     def is_terminated(self, state: FormationState, params: FormationParams):
         """Natural termination only; the time limit is gymnax's ``is_truncated``."""
@@ -198,8 +222,9 @@ class Formation(
             lead_turn_rate=schedule[0],
             lead_turn_schedule=schedule,
             time=0,
+            actuator_held=jnp.zeros(3 * (k + 1)),
         )
-        return self.get_obs(state), state
+        return self.get_obs(state, params), state
 
     # -- rendering / video -------------------------------------------------
     def render(self, screen, state: FormationState, params, frames, clock):
