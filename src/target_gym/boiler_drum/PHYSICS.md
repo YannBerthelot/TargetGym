@@ -209,27 +209,18 @@ Spec, a strict xfail in `tests/boiler_drum/test_boiler_drum_expert.py`. Mean
 level error under 25 mm (about an inch) on every held-out seed. Measured
 19 to 34 mm, 6 of 10 seeds above.
 
-**MPC wins on horizon, not on tuning.** A 30-step horizon covers the ~35 s
-swell peak, so the optimiser sees the level reverse and keeps feeding through
-a swell. It buys a 10× reduction in level error for a small pressure trade.
-
-Its objective is a **quadratic, not the environment's reward**. The reward's
-tracking bands clip flat beyond `level_band`, which is exactly the situation
-the controller is called on to fix; optimising it directly leaves no gradient
-where one is most needed. The objective shares the reward's *minimiser*, not
-its shape — the same lesson recorded for the pH environment.
-
-**The MPC plans on the mean steam demand, with a large descent budget.** Its
-model is the simulator itself, rolled with a fixed key. Until the oracle
-audit (2026-10-01) the steam-demand noise was not declared in the spec's
-`noise_fields`, so the plan followed one fixed noise path: exactly the
-plant's on protocol seed 0 and a wrong one on every other seed. Declared, the
-plan follows the mean. The descent then needed far more iterations: on the
-protocol seeds, 40 iterations scored 19.2, 160 with a decaying step 8.2, 640
-5.3 and the shipped 1280 4.67, against 23.8 before (zero trips). Each doubling
-still gains about half what the one before it did, so the optimiser, not the
-plant, is what limits it. (The table above predates the version-2 reward and
-this change.)
+**The oracle is the shared solver, on the reward itself (`oracle.py`).** Cooper's
+recipe gives P = 178 steps (356 s), which covers the ~35 s swell peak several
+times over, so the plan sees the level reverse and keeps feeding through a
+swell. The reward has been squared errors in floor units since version 2, so
+no surrogate is needed; the fuel's kink at `c_hold` is an epigraph row, and
+the level and pressure trips are hard limits, backed off by what one
+steam-demand innovation can move them (K11). Every solve converges, in about
+20 iterations, where the `GradientMPC` before it ran 1280 descent steps and
+was still improving. Against that planner the rebuilt oracle is better in the
+quiet blocks and about 5 % worse on seeds 0 and 1 and 5 % better on seed 2
+overall: the gap sits in the blocks where the steam demand swings, and the
+plan assumes that swing decays on its mean path.
 
 ---
 

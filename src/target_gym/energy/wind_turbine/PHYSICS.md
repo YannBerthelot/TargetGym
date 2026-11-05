@@ -154,10 +154,8 @@ chapter 7), on the observation only (`experts.py`, `nrel_baseline_step`):
 
 It replaces a PID that held power by the same constant-power torque but on
 the unfiltered speed, backed off linearly between 0.6 and 0.9 of rated speed,
-under a grid-searched pitch PI. Those constants are now
-`WindTurbineNewtonPI`'s own (Kp 12 deg/rpm, Ki 0.6), so the oracle is
-unchanged. The proposal's change, Region 2's `k w^2` below rated, does not
-apply here: the task runs only above rated wind with a curtailed target, and
+under a grid-searched pitch PI (Kp 12 deg/rpm, Ki 0.6). The proposal's change,
+Region 2's `k w^2` below rated, does not apply here: the task runs only above rated wind with a curtailed target, and
 capping the torque at that law under-brakes at rated speed.
 
 On the held-out seeds 200 to 209 the expert holds 1.10e-4 $ per step, the PID
@@ -169,36 +167,27 @@ seed) and a mean power error under 1 % of the target. Measured 0.25 to
 1.10 %, 1.10 % on seed 200, against 0.08 to 0.14 % for the PID: region 3
 divides by the filtered speed, so the power lags the rotor's speed swings.
 
-**The oracle is a feedback law, not a planner.** Since the oracle audit
-(2026-10) the MPC slot holds `WindTurbineNewtonPI` (`oracle.py`). Generator
-torque reaches its command within a step, so the power the next step is
-scored on is set by this step's torque command: four Newton steps through the
-plant's own model, with the turbulence at its mean, make the predicted power
-equal the target (times the PID's low-speed protection above). What is left
-is the one-step wind innovation, which no causal controller can see; with the
-turbulence switched off the error is float32 rounding. Pitch is the PID's PI
-on rotor speed, in velocity form, with the setpoint at 1.05 x rated and the
-command's slew capped at 0.13 deg per step between 1.01 and 1.09 x rated: a
-command ramping that fast leaves the actuator 0.052 deg behind, which is
-`c_hold` (0.0013 of the 40 deg range). Toward 0.97 and 1.13 x rated the cap
-opens linearly to the actuator's 2 deg per step, and outside that band it is
-lifted.
+**The oracle plans on the shared solver.** Since the oracle rule (2026-11) the
+MPC slot holds the planner of `oracle.py`, run by
+`target_gym.oracles.controller.Oracle`: the episode's reward on the plant with
+the turbulence at its mean, solved once a step over the 290 steps the horizon
+protocol measured (`data/oracle_horizons/wind_turbine.json`). The imbalance
+and the pitch activity are epigraph terms, the rotor speed a hard limit inside
+the trips, the pitch command stays within the actuator's reach over the step,
+and the two kinks left, Cp's floor and the corner of the pitch rate, are
+smoothed at the widths in `data/oracle_widths/wind_turbine.json`.
 
-On the protocol seeds the cost falls from 2.10e-5 to 1.30e-5 $ per step
-(-38%, better on every seed) against the gradient planner it replaced, and the
-best per-seed hold from 1907 W to 1454 W (`scripts/evaluate_baselines.py`,
-`scripts/measure_hold.py`). It needs about 0.1 ms per step, after a one-off
-JIT compile of about 0.4 s per instance, where the planner needed about 0.4 s
-per step; the planner is still the version-1 oracle. Screened over
-seeds 3-199 of the 400-step episode it never trips, and the rotor stays
-within 0.836-1.178 of rated speed (the trips are at 0.40 and 1.25). The peak
-is a start-up transient (seed 149). The low is seed 142, whose lull leaves
-less power in the wind than its 4.79 MW target, so every controller sags
-there, the PID included. A hard cap band without the ramp scored 2.3% better
-on the protocol seeds, but after a gust it let the rotor sag to 0.82-0.89 x
-rated on 16 of the 197 screened seeds and on protocol seed 0 over a longer
-hold (27.2 kW of mean error), and it peaked at 1.218 x rated. (The table above
-predates the version-2 reward and this change.)
+The rotor is an energy store, so the reward alone leaves the plan loose: any
+speed path inside the band that delivers the target costs the same. Left free,
+the plan knows only the wind's mean, rides the speed down to about 0.82 of
+rated in a lull, and pays there with torque dips of hundreds of kilowatts. So
+the plan rests the speed at rated, as the reference turbine does in region 3,
+with a term that costs at most the tie-break's budget over an episode (G12 in
+`docs/proposals/oracle-solver.md`). The reward never sees that term.
+
+The oracle it replaces, a one-step Newton on the torque under the PID's pitch
+PI (`WindTurbineNewtonPI`), went with it, along with the version-1 gradient
+planner.
 
 ---
 

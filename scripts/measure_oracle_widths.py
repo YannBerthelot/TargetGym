@@ -30,6 +30,11 @@ import numpy as np
 
 from target_gym import records
 from target_gym.benchmark import episode_keys
+from target_gym.boiler_drum.env import STEAM_OU_THETA
+from target_gym.cement_kiln.env import FEED_OU_THETA
+from target_gym.energy.wind_turbine.env import WIND_OU_THETA
+from target_gym.glass_furnace.env import M_PULL_AR_RHO
+from target_gym.hvac.env import WEATHER_OU_THETA
 from target_gym.oracles.controller import enable_x64, float64
 from target_gym.oracles.widths import kink_width, limit_backoff, noise_backoff
 from target_gym.registry import REGISTRY
@@ -48,6 +53,34 @@ GUARDS = {
         "the level band keeps h >= h_min"
     },
     "unstable_cstr": {},
+    "hvac": {},
+    "battery": {
+        "current_guards": "energy/battery/env.py:283, :313, :314, :378, the "
+        "charge, power and discriminant clips; the limits keep them off",
+        "calendar_rate": "energy/battery/env.py:336, the two fade hinges are "
+        "the env's while the calendar rate stays under c_hold",
+    },
+    "boiler_drum": {
+        "plant_guards": "boiler_drum/env.py:289, :301, :329, :334, :360, :369, "
+        ":378, :429 to :432; the level and pressure bands keep them off",
+        "condensation": "boiler_drum/env.py:379, max(Q - q_dc subcool, 0)",
+    },
+    "wind_turbine": {
+        "speed_guards": "energy/wind_turbine/env.py:262, :264, :276, :277, "
+        ":355; the speed band keeps them off",
+        "actuator_clips": "energy/wind_turbine/env.py:356, :357; a lag toward "
+        "an in-range command stays in range",
+        "betz": "energy/wind_turbine/env.py:271, Cp's ceiling, never reached",
+    },
+    "glass_furnace": {
+        "flame": "glass_furnace/env.py:522, the flame's clip",
+        "batch_heat": "glass_furnace/env.py:593, heat to the batch max(., 0)",
+        "stored_blanket": "glass_furnace/env.py:806, max(m_batch, 0)",
+    },
+    "cement_kiln": {
+        "plant_guards": "cement_kiln/env.py:311, :361, :364, :394, :395, :407, "
+        ":409, :410, :475, :476; the limits and the speed box keep them off",
+    },
     "compressor_surge": {
         "characteristic": "compressor_surge/env.py:314, the tangent past "
         "phi_join (K9)"
@@ -135,7 +168,126 @@ def compressor_sites(points) -> tuple[dict, list]:
     return out, [float(b) for b in limit_backoff(phi_min, widths, pts, n)]
 
 
-SITES = {"compressor_surge": compressor_sites}
+def wind_sites(points) -> tuple[dict, list]:
+    """Cp's floor and the pitch rate (env.py:271, :309), inside the right-hand
+    side: each delta enters every evaluation of a step at once, the sensitivities
+    of one step sharing their sign, against the electrical power; and the
+    back-off of the speed limit."""
+    from target_gym.energy.wind_turbine.env import electrical_power
+    from target_gym.energy.wind_turbine.oracle import BETZ, wind_model, wind_step
+
+    spec = REGISTRY["wind_turbine"]
+    env, p = spec.make_env(), float64(spec.make_test_params())
+    model = wind_model(env, p)
+    sites = {
+        "cp_floor": ("energy/wind_turbine/env.py:271", BETZ),
+        "pitch_rate": ("energy/wind_turbine/env.py:309", 2.0 * p.pitch_rate_max),
+    }
+    pts = [(float64(s), jnp.asarray(u, jnp.float64)) for s, u in points]
+
+    def run(probe, deltas):
+        state, u = probe
+        return wind_step(
+            env, p, model.state_x(state), u, 0, model.data(state), (0.0, 0.0), deltas
+        )[0]
+
+    out = {}
+    for i, (name, (where, scale)) in enumerate(sorted(sites.items())):
+
+        @jax.jit
+        def site(probe, delta, i=i):
+            x1 = run(probe, jnp.zeros(2).at[i].set(delta[0]))
+            return electrical_power(x1[0], x1[2], p)[None]
+
+        width = kink_width(site, float(scale), pts, [p.precision_floor])
+        out[name] = {
+            "site": where,
+            "scale": float(scale),
+            "width": width,
+            "evaluations": 1,
+        }
+
+    moved = jax.jit(
+        lambda probe: jnp.abs(run(probe, jnp.zeros(2)) - model.state_x(probe[0]))
+    )
+    rate = max(float(moved(q)[1]) for q in pts) / 2.0 / float(p.pitch_tau)
+    out["pitch_rate"]["k6_substep_change"] = rate
+    out["pitch_rate"]["k6_flag"] = (
+        out["pitch_rate"]["width"] is None or out["pitch_rate"]["width"] < rate
+    )
+
+    @jax.jit
+    def speed(probe, deltas):
+        return run(probe, deltas.sum(axis=-1))[0][None]
+
+    widths = [out[name]["width"] or 0.0 for name in sorted(sites)]
+    return out, [float(b) for b in limit_backoff(speed, widths, pts, 1)]
+
+
+def glass_sites(points) -> tuple[dict, list]:
+    """The blanket's guards on what the right-hand side and the flame read
+    (env.py:543, :562, :758): the delta enters every evaluation of a step at
+    once, against the crown; and the back-off of the three bands."""
+    from target_gym.glass_furnace.oracle import glass_model, glass_step
+
+    spec = REGISTRY["glass_furnace"]
+    env, p = spec.make_env(), float64(spec.make_test_params())
+    model = glass_model(env, p)
+    pts = [(float64(s), jnp.asarray(u, jnp.float64)) for s, u in points]
+
+    def run(probe, delta):
+        state, u = probe
+        return glass_step(
+            env, p, model.state_x(state), u, 0, model.data(state), 0.0, delta
+        )[0]
+
+    @jax.jit
+    def site(probe, delta):
+        return run(probe, delta[0])[:1]
+
+    scale = float(p.m_batch_full)
+    width = kink_width(site, scale, pts, [p.precision_floor])
+    out = {
+        "blanket": {
+            "site": "glass_furnace/env.py:543, :562, :758", "scale": scale,
+            "width": width, "evaluations": 1,
+        }
+    }  # fmt: skip
+
+    @jax.jit
+    def bands(probe, deltas):
+        return run(probe, deltas.sum())[:3]
+
+    return out, [float(b) for b in limit_backoff(bands, [width or 0.0], pts, 1)]
+
+
+def kiln_sites(_points) -> tuple[dict, list]:
+    """The burning zone's soft max in the cold limit (env.py:548): it moves no
+    tracked output, so K5 takes the ladder's first rung; K3's shift keeps it
+    conservative, so it needs no back-off."""
+    p = REGISTRY["cement_kiln"].make_test_params()
+    scale = float(p.T_bz_max - p.T_bz_min)
+    return {
+        "burning_zone": {
+            "site": "cement_kiln/env.py:548, :556", "scale": scale,
+            "width": scale / 10.0, "evaluations": 1,
+        }
+    }, []  # fmt: skip
+
+
+SITES = {
+    "cement_kiln": kiln_sites,
+    "compressor_surge": compressor_sites,
+    "glass_furnace": glass_sites,
+    "wind_turbine": wind_sites,
+}
+#: Each task's count of smoothed sites, which its planner's ``widths`` hold.
+N_SITES = {
+    "cement_kiln": 1,
+    "compressor_surge": 2,
+    "glass_furnace": 1,
+    "wind_turbine": 2,
+}
 #: A noisy task's planner model, and its deviation's (decay per step, std).
 NOISY = {
     "compressor_surge": (
@@ -145,6 +297,26 @@ NOISY = {
     "unstable_cstr": (
         "target_gym.pc_gym.unstable_cstr.oracle:unstable_cstr_model",
         lambda p: (np.exp(-p.delta_t / p.Ti_tau), p.Ti_sigma),
+    ),
+    "boiler_drum": (
+        "target_gym.boiler_drum.oracle:boiler_model",
+        lambda p: (1.0 - STEAM_OU_THETA * p.delta_t, p.q_steam_noise_std),
+    ),
+    "wind_turbine": (
+        "target_gym.energy.wind_turbine.oracle:wind_model",
+        lambda p: (1.0 - WIND_OU_THETA * p.delta_t, p.turbulence_std),
+    ),
+    "glass_furnace": (
+        "target_gym.glass_furnace.oracle:glass_model",
+        lambda p: (M_PULL_AR_RHO, p.m_pull_noise_std),
+    ),
+    "cement_kiln": (
+        "target_gym.cement_kiln.oracle:kiln_model",
+        lambda p: (1.0 - FEED_OU_THETA * p.delta_t, p.feed_noise_std),
+    ),
+    "hvac": (
+        "target_gym.hvac.oracle:hvac_model",
+        lambda p: (1.0 - WEATHER_OU_THETA * p.delta_t, p.T_out_noise_std),
     ),
 }
 
@@ -160,7 +332,7 @@ def noise_terms(name: str, points) -> list:
     model = build(env, p)
     a, sigma = decay(p)
     std = float(sigma) * float(np.sqrt(1.0 - a**2))
-    n_sites = 2 if name == "compressor_surge" else 0
+    n_sites = N_SITES.get(name, 0)
     hinges = len(model.hinges)
 
     @jax.jit

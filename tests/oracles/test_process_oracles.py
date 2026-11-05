@@ -1,5 +1,5 @@
-"""The five process oracles on the shared solver (``oracles.controller``):
-cstr, first_order, four_tank, unstable_cstr and compressor_surge.
+"""The oracles on the shared solver (``oracles.controller``): the five process
+tasks of C1 and the six industrial and energy tasks of C2.
 
 Contract, from docs/proposals/oracle-smoothing-protocol.md (sections 2, 3)
 and the owner decisions in oracle-audit.md:
@@ -16,8 +16,9 @@ and the owner decisions in oracle-audit.md:
 - T1r (Amendment 1): a command past an actuator's travel over the step moves
   it as a command at that travel does, so bounding moves there is exact;
 - G10 (solver spec): the tie-break's worst case over an episode, every move
-  of every solve at full size, is the 0.25 reward units half a resolution
-  costs in one step.
+  of every solve at full size, is what half a resolution costs in one step,
+  in floors (Amendment 4): 0.25 where the reward is in floors of p = 2;
+- K3: the kiln's soft max never overstates the max, and is within w ln n of it.
 """
 
 import ast
@@ -32,12 +33,17 @@ import pytest
 
 from target_gym import records
 from target_gym.benchmark import episode_keys
+from target_gym.cement_kiln.oracle import soft_max
 from target_gym.experts.mpc import plan_params
 from target_gym.oracles.controller import enable_x64, float64
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
 FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
+C2 = (
+    "hvac", "battery", "boiler_drum", "wind_turbine", "glass_furnace", "cement_kiln",
+)  # fmt: skip
+ON_SOLVER = FIVE + C2
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -49,7 +55,7 @@ def _oracle(name, **overrides):
 
 
 @pytest.mark.medium
-@pytest.mark.parametrize("name", FIVE)
+@pytest.mark.parametrize("name", ON_SOLVER)
 def test_the_exact_rewrites_replay_on_the_env(name):
     """Ten stages from training seed 100's reset, under the moves that hold
     the actuators (raw 0 where the reset holds none in the box) plus a
@@ -200,7 +206,7 @@ def _imports(path: pathlib.Path) -> set[pathlib.Path]:
     return found
 
 
-@pytest.mark.parametrize("name", FIVE)
+@pytest.mark.parametrize("name", ON_SOLVER)
 def test_the_oracle_reads_no_expert_code(name):
     """Every module the oracle imports, followed to the end, is outside
     experts/ and no experts*.py, and the spec declares no expert reads."""
@@ -256,7 +262,47 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
         )
 
 
-@pytest.mark.parametrize("name", FIVE)
-def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name):
+@pytest.mark.parametrize(
+    "name, budget",
+    [(name, 0.25) for name in FIVE + ("boiler_drum", "glass_furnace", "cement_kiln")]
+    + [
+        # p = 1, in dollars: 500 W, half the 1 kW resolution, for one step of
+        # delta_t s at the imbalance price in $/MWh.
+        ("battery", 500.0e-6 * 100.0 * 5.0 / 3600.0),
+        ("wind_turbine", 500.0e-6 * 100.0 * 0.25 / 3600.0),
+        # 0.03 EUR/(K^2 h) for 0.25 h at (0.1 K / 2)^2.
+        ("hvac", 0.03 * 0.25 * 0.05**2),
+    ],
+)
+def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name, budget):
     _, _, mpc = _oracle(name)
-    assert mpc.shooting.model.tie * mpc.model.nu * mpc.n_ep == pytest.approx(0.25)
+    assert mpc.shooting.model.tie * mpc.model.nu * mpc.n_ep == pytest.approx(budget)
+
+
+# G12's count, by hand from each reward: the outputs it prices at a steady
+# state. The running cost counts, because it prices a level. Wind's does not:
+# it prices the pitch command's gap, which a steady state closes.
+PRICED = {
+    "cstr": 1, "first_order": 1, "four_tank": 2, "unstable_cstr": 1,
+    "compressor_surge": 2,  # header pressure, recycle power
+    "hvac": 2,  # comfort, energy
+    "battery": 2,  # power, fade
+    "boiler_drum": 3,  # level, pressure, fuel
+    "wind_turbine": 1,  # power
+    "glass_furnace": 2,  # crown temperature, gas
+    "cement_kiln": 2,  # free lime, fuel
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("name", ON_SOLVER)
+def test_a_plant_has_a_resting_target_exactly_when_it_has_a_spare_move(name):
+    model = _oracle(name)[2].model
+    assert (model.rest is not None) == (model.nu > PRICED[name])
+
+
+@pytest.mark.parametrize("width", [0.0, 2.0, 28.0])
+def test_the_kilns_soft_max_never_overstates_the_max(width):
+    """K3: three cells 1700, 1705 and 1500 K; from below, within w ln 3."""
+    values = jnp.array([1700.0, 1705.0, 1500.0])
+    assert float(soft_max(values, width)) <= 1705.0 + 1e-3
+    assert float(soft_max(values, width)) >= 1705.0 - width * math.log(3.0) - 1e-3

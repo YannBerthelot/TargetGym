@@ -65,6 +65,11 @@ RATE_LIMITS = {
             "recycle": 2 * min(p.valve_open_rate, p.valve_close_rate),
         },
     ),
+    "wind_turbine": (
+        "P",
+        lambda p: (p.target_power_range[1] - p.target_power_range[0]) / 1.0e6,
+        lambda p: {"pitch": 2 * p.pitch_rate_max / (p.pitch_max - p.pitch_min)},
+    ),
 }
 
 

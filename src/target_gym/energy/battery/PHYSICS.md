@@ -190,22 +190,21 @@ and leaves a charge alone), and that it never trips on the held-out seeds 200
 to 209. There it holds 1.33e-3 dollars per step against a ceiling of
 1.39e-4: 0.98 decades of room.
 
-**The oracle is a feedforward, not a planner.** Delivered power equals the
-command within the step, and the target is the scheduled level plus white
-noise drawn after the action. So the best causal command is the level of the
-block the step is scored against, `dispatch_block(t + 1)`, and what is left is
-the noise, whose expected absolute value is `e_floor`. The oracle commands
-exactly that (`experts.py`, `ScheduleFeedforward`). Measured on the protocol
-seeds, its mean error is 1577 W against the closed-form 1596 W, and its
-protocol cost is 7.82e-4 $/step against 1.115e-3 for the gradient MPC it
-replaced (oracle audit, 2026-10). A controller that knew the noise would
-remove only the noise, and shading the command toward zero to save
-degradation gains about 0.03% on the protocol seeds. It does not guard the
-state of charge. Over 2000 seeds of the scored 30-minute episode the state of
-charge stays within 0.17-0.85 and never trips; over the full 60-minute
-schedule, within 0.10-0.92, still with no trip. So within a scored episode
-the energy budget does not bind on a controller that tracks exactly; what
-tracking costs it is degradation, which the running cost prices.
+**The oracle is the shared solver, and its plan is the schedule.** Delivered
+power equals the command within the step, and the target is the scheduled
+level plus white noise drawn after the action. So the best causal command is
+the level of the block the step is scored against, `dispatch_block(t + 1)`,
+and what is left is the noise, whose expected absolute value is `e_floor`. The
+oracle solves that problem rather than stating its answer: the episode reward
+on the noise-free plant (`oracle.py`, P = 80 steps), with the imbalance's and
+the fade's kinks as epigraph rows and the charge, voltage and temperature
+bands as hard limits. Tracking outweighs fade by about 25 to 1 per watt, so
+the plan commands the level, and the return matches the feedforward that held
+this slot to five digits (seeds 0 and 1). The state of charge is not guarded
+by hand: over 2000 seeds of the scored 30-minute episode it stayed within
+0.17-0.85 under that feedforward, so within a scored episode the energy budget
+does not bind on a controller that tracks exactly; what tracking costs it is
+degradation, which the running cost prices.
 
 ---
 

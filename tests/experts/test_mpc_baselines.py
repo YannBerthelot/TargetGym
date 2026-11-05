@@ -281,8 +281,8 @@ def test_mpc_controls_at_least_as_well_as_the_pid(name):
         f"a planner that trips is not an upper bound. Terminal conditions are "
         f"booleans, so a penalty behind ``where(tripped, ...)`` gives the planner "
         f"the cost of a trip but no gradient away from the boundary; a "
-        f"differentiable barrier on the approach is what works (see "
-        f"make_wind_turbine_gradient_mpc)."
+        f"differentiable limit on the approach is what works (T3 in "
+        f"docs/proposals/oracle-smoothing-protocol.md)."
     )
 
     pid = np.array(recorded["pid_returns"])

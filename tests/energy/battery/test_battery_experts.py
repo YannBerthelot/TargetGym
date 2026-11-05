@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 
 from target_gym import registry
-from target_gym.energy.battery.oracle import ScheduleFeedforward
 from target_gym.experts.mpc import plan_params
+from target_gym.oracles.controller import Oracle
 
 
 def _errors(params, seed):
@@ -33,13 +33,13 @@ def _errors(params, seed):
     return np.array(errors)
 
 
-def test_the_registry_builds_the_feedforward():
+def test_the_registry_builds_the_shared_oracle():
     spec = registry.get("battery")
     oracle = spec.make_mpc(spec.make_env(), spec.make_test_params())
-    assert isinstance(oracle, ScheduleFeedforward)
-    assert oracle.solver_report() == {}
+    assert isinstance(oracle, Oracle)
 
 
+@pytest.mark.medium
 def test_without_noise_it_tracks_every_step_to_rounding():
     params = registry.get("battery").make_test_params().replace(dispatch_noise_std=0.0)
     # float32 rounding leaves about 1-2 W; reading the wrong block misses by
@@ -49,6 +49,7 @@ def test_without_noise_it_tracks_every_step_to_rounding():
         assert _errors(params, seed).max() < tolerance
 
 
+@pytest.mark.medium
 def test_with_noise_it_holds_the_closed_form_floor():
     params = registry.get("battery").make_test_params()
     mean_error = np.mean([_errors(params, seed).mean() for seed in range(3)])

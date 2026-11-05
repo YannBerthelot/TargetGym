@@ -805,6 +805,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # The pull disturbance's AR(1) innovation, zeroed for the oracle, which
         # rolls the simulator and so plans the pull's conditional mean from
         # the state.
+        oracle_data=_shared_oracle("glass_furnace"),
         noise_fields=("m_pull_noise_std",),
         version=3,
     ),
@@ -832,6 +833,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # and as many solar cycles, which is what distinguishes controllers
         # here.
         tuned_gains_key="hvac",
+        oracle_data=_shared_oracle("hvac"),
         disturbance_fields=("weather_dev",),
         noise_fields=("T_out_noise_std",),
         version=3,
@@ -853,6 +855,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("raw_meal",),
         # The raw-meal feed's OU innovation. Declared so the planner plans on the
         # mean (``plan_params``) rather than on one fixed noise path.
+        oracle_data=_shared_oracle("cement_kiln"),
         noise_fields=("feed_noise_std",),
     ),
     EnvSpec(
@@ -870,6 +873,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("q_steam",),
         # The steam demand's OU innovation. Declared so the planner plans on the
         # mean (``plan_params``) rather than on one fixed noise path.
+        oracle_data=_shared_oracle("boiler_drum"),
         noise_fields=("q_steam_noise_std",),
         version=3,
     ),
@@ -889,8 +893,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         # 400 steps = 100 s ~ 7 rotor time constants.
         tuned_gains_key="wind_turbine",
-        oracle_reads=("energy/wind_turbine/experts.py", "experts/pid.py"),
-        oracle_gains_keys=("wind_turbine",),
+        oracle_data=_shared_oracle("wind_turbine"),
         noise_fields=("turbulence_std",),
         disturbance_fields=("v_wind",),
         version=3,
@@ -907,6 +910,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 360 steps = 30 min, a real fraction of the ~96 min it takes to
         # traverse the usable state-of-charge range at full power.
         tuned_gains_key="battery",
+        oracle_data=_shared_oracle("battery"),
         noise_fields=("dispatch_noise_std",),
         disturbance_fields=("target_power",),
         version=3,
