@@ -54,6 +54,10 @@ noisy_tasks = pytest.mark.parametrize("spec", NOISY, ids=lambda s: s.name)
 
 #: Enough steps to see several draws and, on the pumps-off policy, a trip.
 STEPS = 40
+#: Four float32 steps. With and without instruments are two compiled programs,
+#: and JAX 0.11 can round a reward differently in each, by one step of about
+#: 1e-7 relative, though their states match exactly.
+TWO_PROGRAMS = 4 * float(np.finfo(np.float32).eps)
 
 
 def _bounds(env, params):
@@ -241,13 +245,15 @@ def test_scale_zero_is_the_noise_free_task_exactly(spec):
         np.testing.assert_array_equal(a[0], b[0])
         jax.tree_util.tree_map(np.testing.assert_array_equal, a[1], b[1])
         if a[2] is not None:
-            np.testing.assert_array_equal(a[2], b[2])
+            np.testing.assert_allclose(a[2], b[2], rtol=TWO_PROGRAMS)
             np.testing.assert_array_equal(a[3], b[3])
-            np.testing.assert_array_equal(
-                a[4]["measured_reward"], b[4]["measured_reward"]
+            np.testing.assert_allclose(
+                a[4]["measured_reward"], b[4]["measured_reward"], rtol=TWO_PROGRAMS
             )
             if not free.readings:  # a late reading's measured cost is late too
-                np.testing.assert_array_equal(a[4]["measured_reward"], a[2])
+                np.testing.assert_allclose(
+                    a[4]["measured_reward"], a[2], rtol=TWO_PROGRAMS
+                )
 
 
 @noisy_tasks

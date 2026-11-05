@@ -80,8 +80,13 @@ at the end.
 CI runs on pull requests into the integration branch too. Branch protection covers
 only `main`, so these have no required checks and no auto-merge, and are merged by
 hand. The large tier does not run on them, so each plant PR runs the null-policy
-gate locally. `records` stays red there until the re-record, and two examples in
-`docs/using-the-pids.md` fail for the same reason.
+gate locally.
+
+`records` stays red there until the re-record. Four exceptions in `python-app.yml`
+apply to these pull requests only, and all come out when the branch lands: tests run
+past a failing `records`, the small tier uses 2 workers, its timeout is 60 minutes,
+and two examples in `docs/using-the-pids.md` that compare with stale records are
+deselected.
 
 | PR | What | Target | Budget (code + tests) |
 |---|---|---|---|
@@ -177,10 +182,11 @@ updates `docs/proposals/measurement-noise.md`, which still states them.
 
 Row order is by severity within each PR.
 
-Each plant PR also sources its figures, because the benchmark's readiness gates ask
-for it: dead times, sampling intervals, rate limits and lags, and the tracked
-readings the noise proposal left Provisional, which are altitude on the 6 aircraft
-tasks, `unstable_cstr` and pH. What cannot be sourced needs the owner's acceptance.
+Each plant PR also sources its timing and actuator figures, because the benchmark's
+readiness gates ask for it: dead times, sampling intervals, rate limits and lags. A
+figure that cannot be sourced is labelled for the owner to accept. The tracked
+readings the noise proposal left Provisional need no sourcing: they pass as labelled
+under its decision 4, so each `PHYSICS.md` must keep their status.
 
 ### PR 4: process
 

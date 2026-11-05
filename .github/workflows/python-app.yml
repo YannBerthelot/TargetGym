@@ -177,7 +177,7 @@ jobs:
     # there the tests run anyway. Drop this line when that branch lands.
     if: ${{ !cancelled() && (needs.records.result == 'success' || github.base_ref == 'feat/sensor-noise') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ github.base_ref == 'feat/sensor-noise' && 60 || 30 }}
     strategy:
       fail-fast: false
       matrix:
@@ -186,6 +186,12 @@ jobs:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
     env:
       UV_PYTHON: ${{ matrix.python-version }}
+      # On the integration branch only, until its one re-record. Every plant
+      # compiles from scratch there, which shut 4-worker runners down, and these
+      # two examples compare with records that are stale until then, so they
+      # would stop the medium tier and the cache. Drop this when that branch
+      # lands, with the timeout above and the job's `if`.
+      INTEGRATION_ARGS: ${{ github.base_ref == 'feat/sensor-noise' && '-n 2 --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:2] --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:6]' || '' }}
 
     steps:
     - uses: actions/checkout@v4
@@ -236,7 +242,7 @@ jobs:
     # left to the default, so a records test never runs here.
     - name: Small tests
       if: matrix.python-version != '3.13'
-      run: uv run pytest -q -m "not medium and not large and not records"
+      run: uv run pytest -q -m "not medium and not large and not records" $INTEGRATION_ARGS
 
     # Medium tests start other processes, write videos, or compile an aircraft
     # planner or tuner, which peaks at 2.5 to 5 GB. Two workers keep two of
@@ -257,7 +263,7 @@ jobs:
       if: matrix.python-version == '3.13'
       env:
         COVERAGE_CORE: sysmon
-      run: uv run pytest -q -m "not medium and not large and not records" --cov=target_gym
+      run: uv run pytest -q -m "not medium and not large and not records" --cov=target_gym $INTEGRATION_ARGS
 
   large-test:
     # Closed-loop contracts that still roll the plant out here: PID beats the
