@@ -108,7 +108,8 @@ def table(rows: dict) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--envs", nargs="*", default=None)
-    ap.add_argument("--seeds", type=int, default=3)
+    ap.add_argument("--seeds", type=int, default=3, help="the oracle's seeds")
+    ap.add_argument("--expert-seeds", type=int, default=10)
     ap.add_argument(
         "--table", action="store_true", help="print the room map from the file"
     )
@@ -133,13 +134,15 @@ def main() -> int:
             "ceiling": ceiling(name, p),
             "settle": fixed_settle(name),
             "seeds": args.seeds,
+            "pid_seeds": args.expert_seeds,
         }
         for kind, part in (("pid", "expert"), ("mpc", "oracle")):
             if kind not in kinds or part not in fp:
                 continue
             row[f"{part}_fingerprint"] = fp[part]
             t0 = time.time()
-            m = evaluate_controller(name, kind, seeds=args.seeds)
+            seeds = args.expert_seeds if kind == "pid" else args.seeds
+            m = evaluate_controller(name, kind, seeds=seeds)
             m = {k: (float(v) if v == v else None) for k, v in m.items()}
             m["seconds"] = round(time.time() - t0, 1)
             row[kind] = m

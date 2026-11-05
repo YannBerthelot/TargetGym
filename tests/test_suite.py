@@ -40,7 +40,7 @@ def test_the_docs_table_shows_the_tags_the_suite_uses():
     section = DOC.read_text().split("## Why each task has its tags")[1]
     row = re.compile(r"^\| `(\w+)` \| ([^|]+) \|", re.MULTILINE)
     documented = {
-        name: tuple(by_label[t.strip()] for t in tags.split(","))
+        name: tuple(by_label[t.strip()] for t in tags.split(",") if t.strip() != "none")
         for name, tags in row.findall(section.split("\n## ")[0])
     }
     assert documented == suite.CAPABILITIES
@@ -146,3 +146,13 @@ def test_the_expert_run_through_the_suite_sits_on_the_half_ring():
     assert m["transient_ratio"] == pytest.approx(1.0)
     for axis in suite.CAPABILITIES["four_tank"]:
         assert out["profile"]["hold"][axis] == pytest.approx(0.5)
+
+
+def test_first_order_is_a_fixture_and_leaves_every_aggregate():
+    """It has no disturbance, nothing hidden and nothing to learn, so it runs
+    in the suite and its score moves no spoke, even if it ever gains room."""
+    assert suite.CAPABILITIES["first_order"] == ()
+    high = {"score": 0.9, "transient_ratio": 3.0, "oracle_transient_ratio": 3.0}
+    cstr = {"score": 0.1, "transient_ratio": 1.0, "oracle_transient_ratio": 3.0}
+    profile = suite.profile({"first_order": high, "cstr": cstr})
+    assert profile["hold"]["basic"] == pytest.approx(suite.radius(0.1))

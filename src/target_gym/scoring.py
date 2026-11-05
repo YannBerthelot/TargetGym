@@ -3,11 +3,12 @@
 Three numbers answer three questions (docs/rl-protocol.md, section 4). With
 ``b`` the expert's cost per step, ``x`` the policy's and ``c`` the ceiling's:
 
-- ``ratio``: ``b / x`` from the task's burn-in to the end of the episode, per
-  seed, with ``win_rate``, the share of seeds where the policy costs less.
-  Above 1 is better than the expert. The burn-in is ``eval.scored_burn_in``, up
-  to half the episode, and the steps before it are not counted: neither the
-  first reach nor a trip in that stretch shows here.
+- ``ratio``: ``b / x`` over the whole episode, per seed, with ``win_rate``, the
+  share of seeds where the policy costs less. Above 1 is better than the expert.
+  ``beats_expert`` is the verdict: the ratio clears the 1% that separates two
+  recordings of one row (``records.REL_TOL``) and the policy trips no more
+  (``expert_trips``, ``policy_trips``, per episode). The ratio alone can hide a
+  trip, because its interquartile mean trims the worst seeds.
 - ``score``: ``log(b / x) / log(b / c)`` on the tracking cost while holding: 0
   at the expert, 1 at the ceiling (and capped there), negative below the
   expert. Being a ratio of logarithms it has no units and does not depend on
@@ -17,7 +18,14 @@ Three numbers answer three questions (docs/rl-protocol.md, section 4). With
 
 The ceiling is as good as a plant can verify: every tracked quantity within
 its instrument's resolution, at the reward's price (``ceiling``). Consumption
-has no such bound, so ``consumption_ratio`` reports it beside the score.
+has no such bound, so ``consumption_ratio`` reports it beside the score, and
+``s_max`` says how much of the score the task's best known hold allows.
+
+An owner also asks what a win costs in wear and whether it matters.
+``expert_travel`` and ``policy_travel`` are the full strokes moved per episode,
+``expert_reversals`` and ``policy_reversals`` the changes of direction, and
+``expert_off_spec`` and ``policy_off_spec`` the share of the hold outside the
+task's tolerance (``spec_band``).
 
 Moves have no ceiling either. A move is the reset or a target change, and
 ``transient_ratio`` is the expert's cost over the plant's fixed settle after
@@ -54,9 +62,9 @@ from target_gym import eval as E
 from target_gym import records
 from target_gym.eval import fixed_settle
 
-__all__ = ["TRACKED_TERMS", "ceiling", "compare", "fixed_settle", "headroom"]
-__all__ += ["best_known", "recorded", "score", "score_policy", "seed_scores"]
-__all__ += ["settle_band"]
+__all__ = ["CONSUMPTION", "SPEC_BAND", "TRACKED_TERMS", "ceiling", "compare"]
+__all__ += ["fixed_settle", "headroom", "best_known", "recorded", "s_max", "score"]
+__all__ += ["score_policy", "seed_scores", "settle_band", "spec_band"]
 
 #: How far one episode can move a seed's score, either way (``seed_scores``).
 _CLIP_DECADES = 3.0
@@ -107,6 +115,70 @@ TRACKED_TERMS = {
     "wind_turbine": _ONE,
     "hvac": (("precision_floor", None, 1),),
 }
+
+
+def _recycle_power(state, params, tripped):
+    import jax.numpy as jnp
+
+    from target_gym.compressor_surge.env import recycle_power
+
+    return recycle_power(state, params, jnp)
+
+
+#: Per environment, what its reward's ``running_cost`` clips at ``c_hold``, as
+#: ``fn(state, params, tripped)``, so ``consumption_ratio`` can show a saving.
+#: The other running terms charge in full, or are not consumption.
+CONSUMPTION = {
+    "glass_furnace": lambda state, params, tripped: state.fuel_flow,
+    "cement_kiln": lambda state, params, tripped: state.fuel,
+    "boiler_drum": lambda state, params, tripped: state.Q_fuel,
+    "distillation": lambda state, params, tripped: state.V,
+    "ph_neutralization": lambda state, params, tripped: state.q3,
+    "compressor_surge": _recycle_power,
+}
+
+_ALTITUDE_BAND = "the autopilot's +-20 m altitude tolerance, plane/PHYSICS.md"
+_SLOT_BAND = "the expert's 8.5 m slot, patrol/PHYSICS.md"
+
+#: Per environment, the published tolerance on each tracked output, in the
+#: observation's units, with where it comes from. It is a report: it does not
+#: enter the reward. ``None`` is a task with no two-sided band to report.
+#: Any other task gets ``SPEC_RULE_FLOORS`` floors, which is ours and no plant's
+#: figure. Each plant PR replaces its rule with a sourced number
+#: (docs/proposals/industrial-fixes.md).
+SPEC_BAND = {
+    "plane": ((20.0,), _ALTITUDE_BAND),
+    "plane_energy": ((20.0,), _ALTITUDE_BAND),
+    "plane_sine": ((20.0,), _ALTITUDE_BAND),
+    "plane3d_heading": ((20.0,), _ALTITUDE_BAND),
+    "plane3d_circle": ((20.0,), _ALTITUDE_BAND),
+    "plane3d_racetrack": ((20.0,), _ALTITUDE_BAND),
+    "patrol": ((8.5,), _SLOT_BAND),
+    "patrol_bearing_only": ((8.5,), _SLOT_BAND),
+    "formation": ((20.0, 8.5, 8.5), _ALTITUDE_BAND + "; " + _SLOT_BAND),
+    "ph_neutralization": (
+        (0.5,),
+        "a pH 6 to 9 permit, from the lowest target of 6.5, "
+        "ph_neutralization/PHYSICS.md",
+    ),
+    "hvac": None,  # one-sided at night, and the reward prices comfort itself
+}
+SPEC_RULE_FLOORS = 10.0
+
+
+def spec_band(name: str, params=None, env=None) -> np.ndarray | None:
+    """The tolerance on each tracked output, in the observation's units
+    (``SPEC_BAND``), or ``None`` where a task has none."""
+    from target_gym.benchmark import task_info
+    from target_gym.registry import REGISTRY
+
+    if name in SPEC_BAND:
+        entry = SPEC_BAND[name]
+        return None if entry is None else np.asarray(entry[0], float)
+    spec = REGISTRY[name]
+    p = params if params is not None else spec.make_test_params()
+    e = env if env is not None else spec.make_env()
+    return SPEC_RULE_FLOORS * task_info(name, e, p, 1).e_floor[0]
 
 
 def _currency_per_floor(name: str, p) -> float:
@@ -166,6 +238,16 @@ def score(x: float, b: float, c: float) -> float:
     return float(math.log(b / max(x, c)) / math.log(b / c))
 
 
+def s_max(b: float, c: float, bound: float) -> float:
+    """The most of the score a task allows: ``score`` at ``bound``, its best
+    known hold, or 1 where no bound is known or it sits under the ceiling. 0
+    when the expert is already past the bound, NaN with no room to score."""
+    if not b > c:
+        return float("nan")
+    known = bound if bound == bound and bound > 0.0 else c
+    return max(score(known, b, c), 0.0)
+
+
 def headroom(b: float, c: float) -> float:
     """Decades between a cost ``b`` and the ceiling ``c``; 0 within it."""
     return float(math.log10(b / c)) if b > c else 0.0
@@ -205,9 +287,10 @@ def compare(
     """The three numbers and their companions for ``Episode`` lists run on the
     same seeds, in the same order (module docstring). ``band`` adds the
     settling ratio."""
-    b = np.array([E.gain([ep], burn_in)[0] for ep in expert])
-    x = np.array([E.gain([ep], burn_in)[0] for ep in policy])
+    b = np.array([E.gain([ep], 0)[0] for ep in expert])
+    x = np.array([E.gain([ep], 0)[0] for ep in policy])
     ratio, ratio_ci, win_rate = _paired(b, x)
+    expert_trips, policy_trips = E.trip_counts(expert), E.trip_counts(policy)
     moves_b = np.array([E.transient_cost([ep], settle)[0] for ep in expert])
     moves_x = np.array([E.transient_cost([ep], settle)[0] for ep in policy])
     t_ratio, t_ci, t_win = _paired(moves_b, moves_x)
@@ -217,6 +300,11 @@ def compare(
         ratio=ratio,
         ratio_ci=ratio_ci,
         win_rate=win_rate,
+        beats_expert=bool(
+            ratio > 1.0 + records.REL_TOL and sum(policy_trips) <= sum(expert_trips)
+        ),
+        expert_trips=expert_trips,
+        policy_trips=policy_trips,
         score=score(x_hold, b_hold, ceiling),
         headroom=headroom(b_hold, ceiling),
         room_left=headroom(x_hold, ceiling),
@@ -231,13 +319,18 @@ def compare(
         out["expert_settling"] = E.settling_time(expert, band)[0]
         out["policy_settling"] = E.settling_time(policy, band)[0]
         out["settling_ratio"] = _ratio(out["expert_settling"], out["policy_settling"])
-    if "running" in expert[0].terms:
+    key = next((k for k in ("consumption", "running") if k in expert[0].terms), None)
+    if key is not None:
         # Policy over expert. The expert consumes nothing on the tasks whose
         # running weight is zero, so this takes _ratio's convention.
         out["consumption_ratio"] = _ratio(
-            E.gain(policy, burn_in, "running")[0],
-            E.gain(expert, burn_in, "running")[0],
+            E.gain(policy, 0, key)[0], E.gain(expert, 0, key)[0]
         )
+    if expert[0].actions is not None:
+        for side, episodes in (("expert", expert), ("policy", policy)):
+            actions = [ep.actions for ep in episodes]
+            out[f"{side}_travel"] = float(np.mean([E.travel(a) for a in actions]))
+            out[f"{side}_reversals"] = float(np.mean([E.reversals(a) for a in actions]))
     return out
 
 
@@ -303,8 +396,9 @@ def seed_scores(
 
 
 def recorded(name: str | None = None) -> dict:
-    """``name``'s row of the recorded protocol results (``pid`` and ``mpc``,
-    3 seeds of the test configuration), ``{}`` if it has none, or every row
+    """``name``'s row of the recorded protocol results (``pid`` on
+    ``pid_seeds`` seeds, ``mpc`` on ``seeds``, of the test configuration),
+    ``{}`` if it has none, or every row
     by task when ``name`` is None."""
     if name is None:
         return records.load("protocol_results")
@@ -373,19 +467,34 @@ def _score(name: str, make_policy, seeds: int, params) -> dict:
 
     spec = REGISTRY[name]
     p = params if params is not None else spec.make_test_params()
-    expert = [
-        E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=s)
-        for s in range(seeds)
-    ]
-    policy = [
-        E.run_episode(spec, p, as_policy(make_policy()), seed=s) for s in range(seeds)
-    ]
+    tolerance = spec_band(name, p)
+    record = {"consumption": CONSUMPTION[name]} if name in CONSUMPTION else None
+
+    def run(make):
+        return [
+            E.run_episode(spec, p, make(), seed=s, band=tolerance, record=record)
+            for s in range(seeds)
+        ]
+
+    expert = run(lambda: baseline_policy(spec, "pid", p))
+    policy = run(lambda: as_policy(make_policy()))
+    burn_in, settle = E.scored_burn_in(name, p), fixed_settle(name)
     m = compare(
         policy,
         expert,
         ceiling(name, p),
-        E.scored_burn_in(name, p),
-        fixed_settle(name),
+        burn_in,
+        settle,
         band=settle_band(name, p),
     )
-    return {**m, **best_known(recorded(name))}
+    for side, episodes in (("expert", expert), ("policy", policy)):
+        share = E.off_spec_fraction(episodes, burn_in, settle)
+        m[f"{side}_off_spec"] = float("nan") if tolerance is None else share
+    row = recorded(name)
+    bound = row.get("rho_floor", float("nan"))
+    bound = float("nan") if bound is None else bound
+    return {
+        **m,
+        "s_max": s_max(m["expert_hold"], m["ceiling"], bound),
+        **best_known(row),
+    }

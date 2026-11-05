@@ -86,7 +86,7 @@ ABS_TOL = 1e-12
 #: count, the settle) is shared. ``seconds`` is the oracle's: it is what a
 #: recording costs, and the recorder orders its work by it.
 PARTS = {
-    "expert": frozenset({"expert_fingerprint", "pid_returns", "pid"}),
+    "expert": frozenset({"expert_fingerprint", "pid_returns", "pid", "pid_seeds"}),
     "oracle": frozenset(
         {
             "oracle_fingerprint",

@@ -17,8 +17,7 @@ module is the arithmetic.
   (``base.failure_kernel``). By default no episode ends at a trip.
 
 The best per-step reward is about -1 (tracking at the floor, nothing
-avoidable consumed). Compare across plants with the normalised expert
-advantage and the two costs reported separately (``target_gym.eval``).
+avoidable consumed). Compare across plants with ``target_gym.scoring``.
 """
 
 from __future__ import annotations
