@@ -17,9 +17,13 @@ The next release is 0.8.0, because these changes break code written for
 - **The aircraft tasks clip their actions.** On `plane`, `plane3d`, `patrol` and
   `formation` a raw action past `[-1, 1]` now acts as its bound, as it already
   did on every other task; a raw stick of 100 used to ask for 23.6 rad of
-  elevator. Every action inside the box behaves as before, so these tasks keep
-  their versions and recorded numbers. A policy that sent actions outside the
-  box to one of them will not reproduce under the same version.
+  elevator. Every action inside the box reaches the plant as before, so these
+  tasks keep their versions, but a policy that sent actions outside the box to
+  one of them will not reproduce under the same version. A planner also reads
+  a different slope now: half at the bound and zero past it, as on the other
+  tasks. Their oracle rows were re-recorded: on `formation`, hold rose 0.2% and
+  time in band fell from 0.70 to 0.65 between the old and new code on one
+  machine. No oracle seed changed sides against its PID.
 - **CasADi, do-mpc and the `[mpc]` extra are gone.** Every oracle now runs on
   JAX, so `pip install target-gym` runs all of them and `make_oracle` no
   longer raises `ImportError`. `[all]` now installs `[render]` only; pip warns
