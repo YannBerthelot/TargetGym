@@ -493,7 +493,7 @@
   {
     "name": "four_tank",
     "group": "process",
-    "version": 3,
+    "version": 4,
     "display_name": "Four-tank",
     "params_cls": [
       "target_gym.pc_gym.four_tank.env",

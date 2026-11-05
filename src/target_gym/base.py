@@ -1,27 +1,43 @@
+import dataclasses
 import functools
+import operator
 
 import jax
 import jax.numpy as jnp
 from flax import struct
 
-from target_gym.reward import trip_cost
+from target_gym.reward import select, total, trip_cost
+
+#: Salt for the instruments' key, kept apart from every draw ``reset_env`` makes.
+_SENSORS = 0x53454E53
+#: Salt for the actuator's noise, kept apart from the readings' streams.
+_ACTUATOR = 0x41435455
 
 
 def canonical_reset(reset_env):
-    """Give ``reset_env`` the same state dtypes a stepped state has.
+    """Give ``reset_env`` the same state dtypes a stepped state has, and store
+    the episode's ``sensor_key``.
 
     A state built from Python floats is weakly typed, and one ``step_env``
     promotes it, so without this anything jitted over the state compiles twice:
     once for a reset state and once for a stepped one. The cast is trace-time
     only.
+
+    The key is folded from the episode's, so it takes nothing from the draws
+    ``reset_env`` made, and those keep their values. The observation is taken
+    again because ``reset_env`` took its own before the key was there.
     """
 
     @functools.wraps(reset_env)
     def wrapper(self, key, params=None):
         obs, state = reset_env(self, key, params)
-        return obs, jax.tree_util.tree_map(
+        state = jax.tree_util.tree_map(
             lambda x: jnp.asarray(x, dtype=jnp.asarray(x).dtype), state
         )
+        state = state.replace(
+            sensor_key=jax.random.key_data(jax.random.fold_in(key, _SENSORS))
+        )
+        return (self.get_obs(state, params) if _readings(self) else obs), state
 
     return wrapper
 
@@ -33,6 +49,14 @@ class EnvParams:
     #: Leaving the envelope restarts the plant, the normal setting
     #: (``failure_kernel``); ``False`` ends the episode instead.
     continuing: bool = True
+    #: Multiplies every reading's ``sigma`` (``Reading``). 0 is the noise-free
+    #: task, rounding included; other values test how far a result depends on
+    #: the figures.
+    sensor_noise_scale: float = 1.0
+    #: Opt-in actuator defects, as fractions of the action's span (``actuate``).
+    actuator_dead_band: float = 0.0
+    actuator_stiction: float = 0.0
+    action_noise: float = 0.0
 
 
 #: Unit of each numeric params field, read by the generated environment pages.
@@ -41,12 +65,220 @@ class EnvParams:
 PARAM_UNITS = {
     "delta_t": "s",
     "max_steps_in_episode": "steps",
+    "sensor_noise_scale": "-",
+    "actuator_dead_band": "fraction of span",
+    "actuator_stiction": "fraction of span",
+    "action_noise": "fraction of span",
 }
 
 
 @struct.dataclass
 class EnvState:
     time: int
+    #: Where the episode's reading noise comes from (``canonical_reset``). A
+    #: state built by hand gets a fixed key, so it has the same tree as a reset
+    #: one.
+    sensor_key: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(2, jnp.uint32), kw_only=True
+    )
+
+
+# ---------------------------------------------------------------------------
+# Sensors (docs/proposals/measurement-noise.md)
+# ---------------------------------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Reading:
+    """One instrument: ``value + scale * sigma * epsilon``, rounded to ``step``.
+
+    ``sigma`` is the short-term scatter of one reading, in the value's units.
+    ``step`` is the digital step, 0 for none. ``interval`` is the seconds
+    between updates, 0 for every step: ``epsilon`` is held that long, and the
+    value stays current.
+    """
+
+    sigma: float | tuple
+    step: float = 0.0
+    interval: float = 0.0
+
+
+@dataclasses.dataclass(frozen=True)
+class FieldReading(Reading):
+    """A reading applied to a measured copy of the state, before ``get_obs``,
+    so what is derived from the field inherits it.
+
+    ``field`` is a state field, dotted if nested (``"lead.x"``). On an array
+    field, ``index`` reads one element, so each element can have its own
+    instrument, and without it ``sigma`` applies to every element or gives one
+    value per element. ``shared`` takes one draw for the whole array, which
+    puts the noise after a ``max`` over it.
+    """
+
+    field: str
+    index: int | None = None
+    shared: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
+class ChannelReading(Reading):
+    """A reading of ``channel`` of the observation, for a quantity computed
+    from several others. It is taken on the true state's observation, so it
+    inherits no field reading's noise."""
+
+    channel: int
+
+
+def _readings(env):
+    return getattr(env, "readings", ())
+
+
+def _noisy(reading, stream, value, state, params):
+    """``reading`` of ``value`` at ``state``: exactly ``value`` at scale 0.
+
+    ``epsilon`` depends only on the episode's key, the reading's ``stream`` and
+    the update index, so every policy on one episode key meets the same noise.
+    """
+    scale = params.sensor_noise_scale
+    period = jnp.maximum(jnp.round(reading.interval / params.delta_t), 1)
+    update = jnp.asarray(state.time, jnp.int32) // period.astype(jnp.int32)
+    key = jax.random.fold_in(jax.random.fold_in(state.sensor_key, stream), update)
+    shape = () if getattr(reading, "shared", False) else jnp.shape(value)
+    epsilon = jax.random.normal(key, shape, jnp.result_type(value))
+    read = value + scale * jnp.asarray(reading.sigma, epsilon.dtype) * epsilon
+    if reading.step:
+        # Rounded forward, and the instrument's own slope backward: a rounded
+        # value is flat, which would cut a gradient tuner's feedback path.
+        rounded = jnp.round(read / reading.step) * reading.step
+        read = read + jax.lax.stop_gradient(rounded - read)
+    return jnp.where(scale > 0, read, value)
+
+
+def _replace_at(state, path, value):
+    head, _, rest = path.partition(".")
+    if rest:
+        value = _replace_at(getattr(state, head), rest, value)
+    return state.replace(**{head: value})
+
+
+def measured_state(env, state, params):
+    """The copy of ``state`` the instruments report, for ``get_obs`` and the
+    measured reward. It never goes back into the dynamics."""
+    measured = state
+    for stream, reading in enumerate(_readings(env)):
+        if not isinstance(reading, FieldReading):
+            continue
+        field = operator.attrgetter(reading.field)
+        if reading.index is None:
+            value = _noisy(reading, stream, field(state), state, params)
+        else:
+            true = field(state)[reading.index]
+            value = (
+                field(measured)
+                .at[reading.index]
+                .set(_noisy(reading, stream, true, state, params))
+            )
+        measured = _replace_at(measured, reading.field, value)
+    return measured
+
+
+def measured_obs(get_obs):
+    """Make an environment's ``get_obs`` return readings.
+
+    A reading is a pure function of the state, so experts, tuners and Ajax's
+    ``get_raw_obs`` see what the step returned, with no key to pass.
+    """
+
+    @functools.wraps(get_obs)
+    def wrapper(self, state, params=None):
+        params = self.default_params if params is None else params
+        obs = get_obs(self, measured_state(self, state, params), params)
+        channels = [
+            (stream, reading)
+            for stream, reading in enumerate(_readings(self))
+            if isinstance(reading, ChannelReading)
+        ]
+        if channels:
+            true = get_obs(self, state, params)
+            for stream, reading in channels:
+                read = _noisy(reading, stream, true[reading.channel], state, params)
+                obs = obs.at[reading.channel].set(read)
+        return obs
+
+    return wrapper
+
+
+def measured_reward(env, scored, tripped, reward, params):
+    """The reward a plant can compute from its own sensors, for
+    ``info["measured_reward"]``: the costs on the measured copy of ``scored``,
+    with the trip the true state took (``tripped``). ``reward`` keeps the true
+    cost. Version 1 has no terms, so there it is the true reward."""
+    if not _readings(env):
+        return reward
+    terms = env.reward_terms(
+        measured_state(env, scored, params), params, tripped=tripped
+    )
+    return select(params.reward_version, reward, total(terms))
+
+
+# ---------------------------------------------------------------------------
+# Actuators
+# ---------------------------------------------------------------------------
+
+
+def actuator_field(actions: int):
+    """The state field ``actuator_held`` that ``actuate`` needs, for a task
+    with ``actions`` actions: ``actuator_held: jax.Array = actuator_field(2)``."""
+    return struct.field(default_factory=lambda: jnp.zeros(actions), kw_only=True)
+
+
+def actuate(env, state, action, params):
+    """The actuator between the action and ``compute_next_state``: returns
+    ``(applied action, state)``, and at the default of 0 for all three defects
+    exactly ``(action, state)``.
+
+    Dead band and stiction are He, Wang, Pottmann and Qin's model (Ind. Eng.
+    Chem. Res. 46, 2007), which needs only the held output y: with
+    ``e = u[k] - y[k-1]``, the output moves to ``u[k] - sign(e) * f_D`` when
+    ``|e| > f_S`` and otherwise holds. ``actuator_dead_band`` D and
+    ``actuator_stiction`` S are fractions of the action's span, with
+    ``f_D = D / 2`` and ``f_S = D / 2 + S``. So D alone is a pure dead band of
+    width D, S alone sticks through S and slips onto the command, and in
+    Choudhury, Thornhill and Shah's terms (ADCHEM 2003) deadband plus stickband
+    is ``D + S`` and the slip jump ``S``. Their stuck point resets at each
+    reversal, so a command that zigzags as it climbs may not break free; here the
+    force follows the command's distance from the stem. A command at the end
+    of its range reaches it, as in their model.
+
+    ``action_noise`` is positioner repeatability: the output's scatter as a
+    fraction of the span, on top of the held output and not stored in it. It
+    comes from the state, so it is the same for every policy on an episode key.
+    """
+    space = env.action_space(params)
+    low, high = space.low, space.high
+    span = high - low
+    command = jnp.clip(action, low, high)
+    f_d = 0.5 * params.actuator_dead_band * span
+    f_s = f_d + params.actuator_stiction * span
+    gap = command - state.actuator_held
+    held = jnp.where(
+        jnp.abs(gap) > f_s, command - jnp.sign(gap) * f_d, state.actuator_held
+    )
+    held = jnp.where((command <= low) | (command >= high), command, held)
+    key = jax.random.fold_in(
+        jax.random.fold_in(state.sensor_key, _ACTUATOR), state.time
+    )
+    epsilon = jax.random.normal(key, action.shape, action.dtype)
+    applied = jnp.clip(held + params.action_noise * span * epsilon, low, high)
+    active = (
+        (params.actuator_dead_band > 0)
+        | (params.actuator_stiction > 0)
+        | (params.action_noise > 0)
+    )
+    return (
+        jnp.where(active, applied, action),
+        state.replace(actuator_held=jnp.where(active, held, state.actuator_held)),
+    )
 
 
 def _select(cond, a, b):
@@ -79,6 +311,8 @@ def failure_kernel(env, key, state, new_state, params):
 
     - ``params.continuing = False``: a trip ends the episode instead;
       ``terminated`` is raised and the state is the proposal.
+    - The instruments stay: a restart keeps ``sensor_key``, so a policy that
+      trips meets the noise of one that did not.
     - ``params.restart_in_place = True``: the plant keeps its state in either
       mode, and every step outside the envelope is charged.
 
@@ -97,7 +331,7 @@ def failure_kernel(env, key, state, new_state, params):
     continuing = jnp.asarray(getattr(params, "continuing", False), bool)
     lost = jnp.logical_and(tripped, jnp.logical_not(in_place))
     fresh = env.reset_env(restart_key(key, new_state.time), params)[1]
-    fresh = fresh.replace(time=new_state.time)
+    fresh = fresh.replace(time=new_state.time, sensor_key=new_state.sensor_key)
     out = _select(jnp.logical_and(lost, continuing), fresh, new_state)
     return out, tripped, new_state, jnp.logical_and(lost, jnp.logical_not(continuing))
 
@@ -126,14 +360,18 @@ def finish_step(env, key, state, new_state, params, **info):
       keeps the state. After a trip in continuing mode it is the restart
       state, not the state that tripped.
     - ``tripped`` and ``trip_cost`` (``charged_trip_cost``).
+    - ``measured_reward`` (``measured_reward``), what a learner trains on.
+      ``reward`` stays the true cost, and the score reads it.
     """
     new_state, tripped, scored, terminated = failure_kernel(
         env, key, state, new_state, params
     )
+    reward = env.compute_reward(scored, params)
     info = {
         **info,
         "last_state": new_state,
         "tripped": tripped,
         "trip_cost": charged_trip_cost(tripped, params),
+        "measured_reward": measured_reward(env, scored, tripped, reward, params),
     }
-    return new_state, env.compute_reward(scored, params), terminated, info
+    return new_state, reward, terminated, info

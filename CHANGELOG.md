@@ -14,6 +14,23 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
+- **`four_tank` reads through noisy instruments, and is version 4.** Its
+  observation reports each level with 0.5 mm of scatter, rounded to 1 mm, and
+  its expert and tuners see those readings. `sensor_noise_scale=0` gives the
+  noise-free task, rounding included. `reward`, trips and the score stay on
+  the true levels, and `info["measured_reward"]` holds the cost a plant could
+  compute from its own sensors. The other tasks follow
+  (docs/proposals/measurement-noise.md).
+- **A state carries `sensor_key`.** `EnvState` has a keyword-only `sensor_key`,
+  which `canonical_reset` stores and a restart keeps, so `get_obs(state,
+  params)` takes no key and the same episode key gives the same noise to every
+  policy. A restarted state therefore differs from `reset_env` at the restart
+  key in this field as well as in `time`.
+- **The shared PID filters its derivative.** `pid_update` runs
+  `Kd s / (1 + T_f s)` with `T_f` one tenth of the derivative time `|Kd / Kp|`,
+  and `prev_error` now carries the filtered error. A loop built on `siso_pid`,
+  `mimo_pid` or `pid_update` with `Kd` set returns different actions. No shipped
+  expert runs one today: the three that use the loop have `Kd = 0`.
 - **The aircraft tasks clip their actions.** On `plane`, `plane3d`, `patrol` and
   `formation` a raw action past `[-1, 1]` now acts as its bound, as it already
   did on every other task; a raw stick of 100 used to ask for 23.6 rad of
@@ -115,6 +132,16 @@ The next release is 0.8.0, because these changes break code written for
   solve, as against IPOPT's 6.8.
 
 ### Added
+
+- **Sensor noise core.** A task declares `readings` of two kinds:
+  `FieldReading`, on a measured copy of the state before `get_obs`, and
+  `ChannelReading`, on its output. Each has a sigma, optional rounding and an
+  optional update interval, over which a slow instrument holds its noise while
+  its value stays current. `@measured_obs` on `get_obs` turns them on.
+- **Opt-in actuator defects.** `actuator_dead_band`, `actuator_stiction` and
+  `action_noise`, default 0, as fractions of the action's span, in a shared
+  stage (`base.actuate`) on He et al.'s two-band stiction model.
+- `experts.pid.filtered_derivative`, for a task's own derivative loop.
 
 - `score_policy`, `run_suite` and `env.save_video` take the expert as it is,
   as in `tg.score_policy("cstr", tg.make_expert("cstr"))`.

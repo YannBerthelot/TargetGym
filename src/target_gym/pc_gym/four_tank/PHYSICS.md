@@ -291,3 +291,23 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports the four levels through their instruments and the two
+setpoints exactly (`docs/proposals/measurement-noise.md`).
+`sensor_noise_scale = 0` gives the noise-free task, rounding included.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `h1`, `h2`, `h3`, `h4` | 0.5 mm | 1 mm | Guided wave radar level transmitter | Confirmed | [Rosemount 5300](https://www.emerson.com/documents/automation/73580.pdf) |
+
+The expert reads these levels, and so does every tuner. The oracle plans and
+acts on the true state, so it stays a full-state bound. `reward`, trips and the
+score read the true levels. `info["measured_reward"]` is the same cost on the
+readings, with any trip taken from the true state, and a learner can train on
+it.
+
+A plant resting exactly on target pays about 0.67 per step in measured reward.
+The proposal's floor of 0.5 is the scatter alone, `(0.5 mm / 1 mm)^2` per tank.
+Rounding to 1 mm adds `step^2 / 12` to each reading's variance, 1/12 per tank.

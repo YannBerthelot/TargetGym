@@ -56,10 +56,11 @@ def plan_params(spec, params):
     equivalence). Without it a planner rolling the environment under a fixed
     key would plan on one invented noise path, which is the plant's own path
     on seed 0 and gives the MPC perfect foresight there.
+
+    Sensor and actuator noise go too: the oracle stays a full-state bound, and
+    what it reads through ``get_obs`` is the exact state.
     """
-    fields = getattr(spec, "noise_fields", ())
-    if not fields:
-        return params
+    fields = (*getattr(spec, "noise_fields", ()), "sensor_noise_scale", "action_noise")
     return params.replace(**{f: 0.0 for f in fields})
 
 
