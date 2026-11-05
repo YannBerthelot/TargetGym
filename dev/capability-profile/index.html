@@ -2469,6 +2469,8 @@ results and redrawn whenever they are re-recorded:</p>
   (<code>oracle_transient_ratio</code>). A policy that beats it is drawn on the edge,
   and its number in the table says by how much.</li>
 <li><strong>0 at the centre</strong> is as far below the expert as the edge is above it.</li>
+<li><strong>The Hold edge may be out of reach.</strong> Some plants have a known bound above
+  the ceiling, so no controller gets there. <code>s_max</code> gives the most a task allows.</li>
 <li><strong>A grayed label</strong> means no task on that spoke leaves room. On Hold, an
   expert that already holds within the resolution leaves none. On Reach, a
   task counts only where the oracle reaches new targets at least 1.25 times
@@ -2510,8 +2512,9 @@ For the moves:</p>
 </tr>
 </tbody>
 </table>
-<p><code>ratio</code>, <code>win_rate</code> and <code>score</code> are the verdict and the holding score of the
-<a href="../rl-protocol/#4-metrics">protocol</a>.</p>
+<p><code>beats_expert</code>, <code>ratio</code>, <code>win_rate</code> and <code>score</code> are the verdict and the holding
+score of the <a href="../rl-protocol/#4-metrics">protocol</a>, which also lists the trip,
+travel, reversal and off-spec numbers.</p>
 <h2 id="why-each-task-has-its-tags">Why each task has its tags<a class="headerlink" href="#why-each-task-has-its-tags" title="Permanent link">&para;</a></h2>
 <p>Each tag comes from the task's PHYSICS.md (line numbers in brackets).</p>
 <table>
@@ -2525,8 +2528,8 @@ For the moves:</p>
 <tbody>
 <tr>
 <td><code>first_order</code></td>
-<td>basic</td>
-<td>No disturbance, nothing hidden, nothing stochastic (73, 90).</td>
+<td>none</td>
+<td>A sanity fixture with no disturbance, nothing hidden and nothing stochastic (73, 90), so it is in no aggregate.</td>
 </tr>
 <tr>
 <td><code>cstr</code></td>

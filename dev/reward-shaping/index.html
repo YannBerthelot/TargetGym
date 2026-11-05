@@ -2545,8 +2545,7 @@ environment's <code>compute_reward_terms</code> returns the three terms and
 dimensionless plants (tracking at the floor, nothing avoidable consumed), and
 minus the unavoidable bill on the priced ones. The reward is not capped, and
 its per-step scale differs by orders of magnitude between plants. To compare
-across plants, use the normalised expert advantage and the two costs reported
-separately (<code>target_gym.eval</code>), not the raw return.</p>
+across plants, use <code>target_gym.scoring</code>, not the raw return.</p>
 <h3 id="tracking-the-error-in-units-of-what-is-achievable">Tracking: the error in units of what is achievable<a class="headerlink" href="#tracking-the-error-in-units-of-what-is-achievable" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>tracking_cost = ( max(|e| - e_tol, 0) / e_floor ) ** p
 </code></pre></div>
