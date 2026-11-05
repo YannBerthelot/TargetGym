@@ -286,7 +286,8 @@ def run_policy(
     outputs and their targets after the step; ``value0`` / ``target0``
     ``(n, n_out)`` at the reset), ``terminated`` (latched from
     the step on which the episode terminated), and ``info_error`` where the
-    plant reports its true tracking error; per episode ``length`` (its own
+    plant reports its true tracking error; ``action_low`` / ``action_high``, the
+    box the plant clips to; per episode ``length`` (its own
     ``max_steps``, cut at a termination); ``terms`` (name -> ``(n, T)``) where
     the plant reports its reward terms; the policy's final ``carry``;
     ``wall_s``. A terminated episode is
@@ -381,6 +382,7 @@ def run_policy(
     out["terms"] = {k: np.stack(v, axis=1) for k, v in terms_rec.items()}
     out["records"] = {k: np.stack(v, axis=1) for k, v in records_rec.items()}
     out["value0"], out["target0"] = first_value, first_target
+    out["action_low"], out["action_high"] = task.action_low, task.action_high
     out["length"] = length
     out["carry"] = carry  # the policy's final carry, for its own diagnostics
     out["wall_s"] = time.perf_counter() - t0
@@ -389,18 +391,23 @@ def run_policy(
 
 def episodes_of(rollout: Mapping[str, Any]) -> list[Episode]:
     """The protocol's :class:`~target_gym.eval.Episode` records of a
-    :func:`run_policy` rollout, each cut at its own length."""
+    :func:`run_policy` rollout, each cut at its own length. The actions are
+    clipped to the box, as the plant reads them, and given as fractions of
+    their span. A quantity the rollout recorded joins the terms."""
     out = []
+    low = np.ravel(rollout["action_low"])
+    span = np.ravel(rollout["action_high"]) - low
+    named = {**rollout["terms"], **rollout.get("records", {})}
     for i, L in enumerate(np.asarray(rollout["length"], int)):
+        actions = np.asarray(rollout["action"][i, :L], float)
         out.append(
             Episode(
                 cost=-np.asarray(rollout["reward"][i, :L], float),
                 in_band=np.asarray(rollout["in_band"][i, :L], bool),
                 target_change=np.asarray(rollout["target_change"][i, :L], bool),
                 failed=np.asarray(rollout["tripped"][i, :L], bool),
-                terms={
-                    k: np.asarray(v[i, :L], float) for k, v in rollout["terms"].items()
-                },
+                terms={k: np.asarray(v[i, :L], float) for k, v in named.items()},
+                actions=np.clip((actions - low) / span, 0.0, 1.0),
             )
         )
     return out

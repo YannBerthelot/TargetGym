@@ -73,14 +73,15 @@ shipped PID) and `c` the ceiling's.
 **Against the expert: `b / x`** per seed, on identical evaluation episodes,
 with the share of seeds the policy wins. Pairing removes the variance from
 initial conditions and targets, which on these tasks is large: the circle
-task's radius alone moved the PID's return by a factor of two. It runs from the
-task's burn-in to the end of the episode, consumption and target changes
-included, so it is the verdict on the long run. The burn-in is
-`eval.scored_burn_in`, the task's measured burn-in capped at half the episode.
-Every task has one except `battery` and `unstable_cstr`, and on 12 of the 24 it
-reaches the cap, so the first reach and any trip before the burn-in ends are not
-in this ratio. `transient_ratio` scores the reach, and `seed_scores` below the
-whole episode.
+task's radius alone moved the PID's return by a factor of two. It covers the
+whole episode from the reset on, with the first reach, consumption, target
+changes and trips included.
+
+**The verdict is `beats_expert`:** the ratio is more than 1% above 1, past what
+separates two recordings of one row, and the policy tripped no more than the
+expert. The ratio alone is not enough. Its interquartile mean trims the worst
+seeds, so a policy that trips on 2 of 10 seeds can keep its ratio. `expert_trips`
+and `policy_trips` give the counts per episode.
 
 **Across environments: the score `S = log(b / x) / log(b / c)`**, on the
 tracking cost while holding. It is 0 at the expert, 1 at the ceiling and never
@@ -98,7 +99,25 @@ task has nothing left to score.
 
 The hold starts after a settle fixed per plant, so every controller is scored
 over the same window. Beside the score, `consumption_ratio` compares the fuel,
-energy or wear, which no resolution bounds.
+energy or wear, which no resolution bounds. Where the reward clips consumption at
+`c_hold`, it reads the quantity itself, so a saving shows. `s_max` is the most of
+the score the task's best known hold allows.
+
+**What a win costs, and whether it matters:** three more numbers come for both
+sides, none of them part of the verdict.
+
+- `expert_travel` and `policy_travel`: full strokes of the actuators per episode.
+- `expert_reversals` and `policy_reversals`: changes of direction per episode,
+  past a dead band of 0.25% of the span, about what a digital valve positioner
+  can resolve.
+- `expert_off_spec` and `policy_off_spec`: the share of the hold outside the
+  task's tolerance (`scoring.spec_band`). NaN on `hvac`, whose band is one-sided
+  at night.
+
+A published tolerance sets the band where the repository cites one: the
+autopilot's 20 m on altitude, the 8.5 m slot, and a pH 6 to 9 permit. The other
+tasks use ten floors. That rule is ours and no plant's figure, and
+`scoring.SPEC_BAND` shows which tasks have a published tolerance.
 
 **Reaching new targets: `transient_ratio`**, the expert's cost over the
 settle after each move divided by the policy's, per seed, with its own win

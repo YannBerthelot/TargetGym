@@ -72,7 +72,7 @@ LABELS = {
 #: every tag is the table in docs/capability-profile.md, which a test keeps in
 #: step with this one.
 CAPABILITIES = {
-    "first_order": ("basic",),
+    "first_order": (),  # a sanity fixture: it runs, and moves no spoke
     "cstr": ("basic", "nonlinearity"),
     "unstable_cstr": ("instability", "disturbance", "safety"),
     "ph_neutralization": ("nonlinearity", "disturbance"),
