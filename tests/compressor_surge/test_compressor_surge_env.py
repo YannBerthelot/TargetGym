@@ -232,7 +232,8 @@ def test_observation_units_schedules_and_integrator(env, params):
     pressures in kPa and the speeds and valve in percent; the tracked channel
     is the pressure against its setpoint. Both schedules fill the episode
     exactly, and the plant integrates with RK4 alone."""
-    obs, state = env.reset_env(jax.random.PRNGKey(0), params)
+    quiet = params.replace(sensor_noise_scale=0.0)
+    obs, state = env.reset_env(jax.random.PRNGKey(0), quiet)
     opening = float(state.demand_levels[0] + state.demand_dev)
     expected = [
         float(state.dp) / KPA,
@@ -289,6 +290,7 @@ def test_observed_margin_matches_the_state(env, params):
     observation, ``surge_margin_from_obs``, equals m_c / (surge flow at
     rated x N) - 1 from the state, and ``pair_init``'s integrators equal the
     state's drive setpoint and valve, to float32 rounding (1e-6 relative)."""
+    params = params.replace(sensor_noise_scale=0.0)
     key = jax.random.PRNGKey(3)
     init, policy = _policy("pair")
 

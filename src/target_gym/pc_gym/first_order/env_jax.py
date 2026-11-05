@@ -5,7 +5,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.first_order.env import (
     FirstOrderParams,
@@ -41,6 +47,10 @@ class FirstOrderSystem(
     tracked_names: tuple = ("x",)
     obs_target_index: int = 1  # target_x
 
+    # An abstract lag has no instrument: a smart transmitter's figure, by
+    # analogy (PHYSICS.md section on readings).
+    readings: tuple = (FieldReading("x", sigma=1.1e-3),)
+
     def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (2,)
         self.integration_method = integration_method
@@ -52,8 +62,8 @@ class FirstOrderSystem(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -65,12 +75,13 @@ class FirstOrderSystem(
         if params is None:
             params = self.default_params
 
-        u = action
-        if not isinstance(action, float):
-            u = action.reshape(())
+        action, state = actuate(self, state, jnp.reshape(action, (1,)), params)
 
         new_state, metrics = compute_next_state(
-            u, state, params, integration_method=self.integration_method
+            action.reshape(()),
+            state,
+            params,
+            integration_method=self.integration_method,
         )
 
         # A trip is part of the kernel: the step is charged the trip cost and
@@ -79,8 +90,9 @@ class FirstOrderSystem(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state: FirstOrderState, params: FirstOrderParams = None):
         if params is None:
             params = self.default_params

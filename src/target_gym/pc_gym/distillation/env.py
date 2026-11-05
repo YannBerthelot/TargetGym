@@ -45,7 +45,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -217,6 +217,8 @@ class DistillationState(EnvState):
     target_yD: float
     target_xB: float
 
+    actuator_held: jax.Array = actuator_field(2)
+
 
 def vle(x, params: DistillationParams):
     """Vapour composition in equilibrium with liquid ``x``."""
@@ -323,7 +325,7 @@ def compute_next_state(
 # cost of a cached call. Callers that want it fused already jit ``step_env``,
 # which traces this inline.
 def tray_temperature(state: DistillationState):
-    """The stage-15 thermocouple's reading, K (``TEMPERATURE_STAGE``)."""
+    """The stage-15 tray sensor's reading, K (``TEMPERATURE_STAGE``)."""
     x = state.x[TEMPERATURE_STAGE - 1]
     return T_BOIL_LIGHT * x + T_BOIL_HEAVY * (1.0 - x)
 
@@ -359,10 +361,17 @@ def check_is_terminal(state: DistillationState, params: DistillationParams, xp=j
     return terminated, truncated
 
 
-def compute_reward_terms(state: DistillationState, params: DistillationParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+def compute_reward_terms(
+    state: DistillationState, params: DistillationParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
     p = params
-    terminated, _ = check_is_terminal(state, p, xp)
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, p, xp)
     track = R.tracking_cost(
         state.target_yD - state.x[-1], p.e_floor_top, p.e_tol, p.tracking_exponent, xp
     ) + R.tracking_cost(
@@ -372,7 +381,7 @@ def compute_reward_terms(state: DistillationState, params: DistillationParams, x
         "tracking": track,
         "running": R.running_cost(state.V, p.c_hold, p.running_weight, xp),
     }
-    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: DistillationState, params: DistillationParams, xp=jnp):

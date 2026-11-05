@@ -5,7 +5,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.compressor_surge.env import (
     CompressorSurgeParams,
     CompressorSurgeState,
@@ -47,6 +53,16 @@ class CompressorSurge(
     tracked_names: tuple = ("header pressure (kPa)",)
     obs_target_index: int = 6  # live setpoint
 
+    # PHYSICS.md section on readings. The delivered flow is computed, so its
+    # meter reads through ``demand_dev``. 1 rpm at an assumed 10,000 rpm.
+    readings: tuple = (
+        FieldReading("dp", sigma=9.17),
+        FieldReading("m_c", sigma=0.021),
+        FieldReading("demand_dev", sigma=8.4e-4),
+        FieldReading("N", sigma=5.8e-5, step=1e-4),
+        FieldReading("x", sigma=1.5e-3),
+    )
+
     def __init__(self, integration_method: str = "rk4_10"):
         # "rk4_N": N substeps per step, each one actuator rate-limit update and
         # one RK4 step of delta_t / N. Checked here so a bad string fails at
@@ -63,8 +79,8 @@ class CompressorSurge(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -80,6 +96,7 @@ class CompressorSurge(
             params = self.default_params
 
         action = jnp.reshape(jnp.asarray(action), (2,))
+        action, state = actuate(self, state, action, params)
         new_state, metrics = compute_next_state(
             action, state, params, key, integration_method=self.integration_method
         )
@@ -96,6 +113,7 @@ class CompressorSurge(
         )
         return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(
         self, state: CompressorSurgeState, params: CompressorSurgeParams = None
     ):

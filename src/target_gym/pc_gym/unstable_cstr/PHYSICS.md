@@ -80,9 +80,8 @@ Deliberately **not** modelled:
 |---|---|
 | Aqueous heat capacity (D1) | C = 0.239 J/(g K) is what every source above uses; section 9. |
 | Jacket energy balance (D2) | The jacket follows the command through a fixed lag, whatever heat it removes. |
-| Analyser dead time (D3) | C_a is observed at once. |
+| Analyser dead time (D3) | C_a is observed at once, with noise (section Readings). |
 | Feed-concentration disturbance (D4) | Only the feed temperature drifts. |
-| Measurement noise (D5) | Observations are exact. |
 | Side reactions, catalyst decay | One irreversible first-order step, as in cstr. |
 | Volume, boiling, pressure | Constant holdup, liquid phase throughout. |
 | The ignited branch above the trip | The 365 K interlock trips first (section 2). |
@@ -302,8 +301,8 @@ restart.
 | 3 | target `C_a`, the current block's level (mol/L) |
 
 **Observation.** Hidden: the drift `Ti_dev`, the
-later levels and the block clock. C_a is read instantly and without noise
-(D3, D5). T is observed because no P or PI loop on C_a alone can stabilise
+later levels and the block clock. C_a is read instantly, with the analyser's
+noise (D3, section Readings). T is observed because no P or PI loop on C_a alone can stabilise
 the plant (`test_no_p_or_pi_loop_on_c_a_stabilises`). On the linearisation
 with the lag, a loop on C_a alone leaves one coefficient of the closed-loop
 polynomial at det − tr/tau_j, which is −28.95 at 0.45 and −9.35 at 0.65
@@ -617,8 +616,8 @@ checks the order on 32 seeds with full heating, a 305.75 K constant, a
 
 Each carries a strict xfail that states what a real plant does and fails the
 suite if the model starts doing it. D1 and D4 are in
-`tests/pc_gym/unstable_cstr/test_unstable_cstr_physics.py`, and D2, D3 and D5
-in `tests/pc_gym/unstable_cstr/test_unstable_cstr_env.py`. The numbers below
+`tests/pc_gym/unstable_cstr/test_unstable_cstr_physics.py`, and D2 and D3 in
+`tests/pc_gym/unstable_cstr/test_unstable_cstr_env.py`. The numbers below
 are what the model gives in each test.
 
 **⚠️ D1. The heat capacity is far below an aqueous feed's.** C = 0.239
@@ -649,11 +648,6 @@ temperature drift off and steps each target's equilibrium 20 times under
 fresh keys. C_a moves by at most 3.3e-16 mol/L, float64 rounding, where the
 test asks for more than 1e-6 mol/L, 1 % of the analyser's resolution
 (measured).
-
-**⚠️ D5. No measurement noise.** Two observations of one state are identical.
-In `test_observations_are_noisy` one state stepped with one action under
-keys 1 and 2 gives the same observation to the last bit, since the key only
-draws the hidden drift's next innovation (measured).
 
 ---
 
@@ -763,3 +757,38 @@ selects the version-1 reward of section 8 (`precision_floor` and
   `tests/pc_gym/unstable_cstr/test_unstable_cstr_experts.py`, checks the
   floor and both references against the recorded MPC hold instead, and the
   protocol's MPC hold cost (6.9e-4) against the reference.
+
+## Readings
+
+The observation reports concentration and both temperatures through their
+instruments and the live target exactly (`docs/proposals/measurement-noise.md`).
+`sensor_noise_scale = 0` gives the noise-free task.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `C_a` | 5e-4 mol/L | none | Online UV-Vis process photometer with flow cell | Provisional | [OMA-300](https://www.ima.co.uk/wp-content/uploads/AA_DS001A_OMA300.pdf) |
+| `T`, `T_j` | 0.04 K | none | Pt100 RTD with HART head transmitter | Confirmed | [iTEMP TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
+
+`C_a`, the tracked quantity, rests on a weak figure. The sheet gives only a
+sensitivity of 0.1 % of full scale. Reading that as 2 sigma and mapping it to a
+1 mol/L full scale are ours, and the 1 to 5 s response barely fits the 3 s step.
+`T` and `T_j` are upper bounds on scatter: the sheet gives ±0.08 °C, stated as
+2 sigma and including non-linearity and repeatability.
+
+The expert reads these readings, and so does every tuner. The oracle plans and
+acts on the true state, so it stays a full-state bound. `reward`, trips and the
+score read the true state. `info["measured_reward"]` is the same cost on the
+readings, with any trip taken from the true state, and a learner can train on
+it.
+
+A plant resting exactly on target pays 25 per step in measured reward,
+`(5e-4 / 1e-4)^2`. `e_floor` and `precision_floor` stay at 1e-4, so the ceiling
+sits below anything this analyser could verify.
+
+The cascade's inner derivative now reads `T` through the shared filter
+(`pid.filtered_derivative`), with a filter time of one-tenth of the derivative
+time, 0.011 min on the stored gains. On a 0.05 min step that passes 82 % of a
+step in `T`, so it cuts the derivative's noise only a little. The linearised
+rates at 0.45 mol/L are now +1.15 /min for the plain 6 s gains and -0.03 /min for
+the marginal ones. The rates and the episode figures in section 7 that were
+measured with the raw difference are measured again with the expert protocols.

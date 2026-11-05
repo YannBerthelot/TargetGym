@@ -200,3 +200,27 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+This plant is an abstract lag, so **it has no real instrument**. Its one reading
+is a convention, not a measurement (`docs/proposals/measurement-noise.md`).
+`sensor_noise_scale = 0` gives the noise-free task. The setpoint stays exact.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `x` | 1.1e-3 | none | None: a smart transmitter's class, by analogy | Confirmed, as an analogy | [EJA530E](https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf) |
+
+The figure applies the transmitter's ±0.055 % of span, a 3-sigma conformance
+figure, to the 6-unit span: 6 × 0.00055 / 3 = 1.1e-3. The proposal marks it
+Confirmed because the transmitter's number holds, not because anything measures
+this plant.
+
+The expert reads these readings, and so does every tuner. The oracle plans and
+acts on the true state, so it stays a full-state bound. `reward`, trips and the
+score read the true state. `info["measured_reward"]` is the same cost on the
+readings, with any trip taken from the true state, and a learner can train on
+it.
+
+A plant resting exactly on target pays 0.034 per step in measured reward,
+`(1.1e-3 / 6e-3)^2`.

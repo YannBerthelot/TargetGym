@@ -6,7 +6,7 @@ where each state is scored, where resets sit against the point of no return,
 the feed drift, the trip and its fresh restart through ``base.failure_kernel``,
 both reward versions and the order version 1 gives, where full heating and full
 cooling take the plant, the error envelope and the regime of validity, and
-integrator convergence. Deviations D2, D3 and D5 are strict xfails at the end.
+integrator convergence. Deviations D2 and D3 are strict xfails at the end.
 Runs in float32, as the env ships, except where a test states otherwise.
 """
 
@@ -123,6 +123,7 @@ def _corners(params):
     return UnstableCSTRState(
         time=jnp.zeros(len(rows), jnp.int32),
         sensor_key=jnp.zeros((len(rows), 2), jnp.uint32),
+        actuator_held=jnp.zeros((len(rows), 1)),
         C_a=f32(rows[:, 0]),
         T=f32(rows[:, 1]),
         T_j=f32(rows[:, 2]),
@@ -231,7 +232,9 @@ def _full_heating_from_extinction(params, integration_method="rk4_1", n=40):
 def test_observation_is_the_measured_state_and_the_live_target(env, params):
     """The observation is ``[C_a, T, T_j, live target]``, the tracked channel
     is the concentration, and the blocks fill the episode exactly."""
-    obs, state = env.reset_env(jax.random.PRNGKey(0), params)
+    obs, state = env.reset_env(
+        jax.random.PRNGKey(0), params.replace(sensor_noise_scale=0.0)
+    )
     expected = [state.C_a, state.T, state.T_j, live_target(state, params)]
     np.testing.assert_array_equal(np.asarray(obs), np.asarray(expected))
     assert float(obs[env.obs_value_index]) == float(state.C_a)
@@ -904,18 +907,12 @@ def test_analyser_has_dead_time(params, step):
     assert max(seen) < 1e-6
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Deviation D5: observations are exact; there is no measurement noise.",
-)
-def test_observations_are_noisy(params, step):
-    """D5. Two readings of one plant differ by the instruments' noise. Here
-    the same state stepped with the same action under two keys gives the
-    same observation to the last bit: the key only draws the hidden drift's
-    next innovation."""
+def test_two_readings_of_one_plant_differ(params, env):
+    """A plant held still still reads differently from one step to the next:
+    the instruments' noise, drawn per update (docs/proposals/measurement-noise.md).
+    Each of the three physical channels moves and the live target does not."""
     state = _settled(params, 0.55)
-    action = jnp.array([raw_from_coolant(float(state.T_j), params)])
-    obs_1 = step(jax.random.PRNGKey(1), state, action, params)[0]
-    obs_2 = step(jax.random.PRNGKey(2), state, action, params)[0]
-    assert np.any(np.asarray(obs_1) != np.asarray(obs_2))
+    first = env.get_obs(state.replace(time=1), params)
+    second = env.get_obs(state.replace(time=2), params)
+    assert np.all(np.asarray(first[:3]) != np.asarray(second[:3]))
+    assert float(first[3]) == float(second[3])

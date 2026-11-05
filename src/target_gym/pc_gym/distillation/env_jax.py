@@ -5,10 +5,17 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.distillation.env import (
     N_STAGES,
+    TEMPERATURE_STAGE,
     DistillationParams,
     DistillationState,
     check_is_terminal,
@@ -42,6 +49,14 @@ class DistillationColumn(
     tracked_names: tuple = ("yD (mole fraction)", "xB (mole fraction)")
     obs_target_index: tuple = (4, 5)  # target_yD, target_xB
 
+    # A chromatograph on each product and an RTD on the tray (PHYSICS.md section
+    # on readings). ``interval`` is in ``delta_t``'s unit, so 5 is 5 minutes.
+    readings: tuple = (
+        FieldReading("x", index=0, sigma=4e-4, interval=5.0),
+        FieldReading("x", index=TEMPERATURE_STAGE - 1, sigma=3e-3),
+        FieldReading("x", index=-1, sigma=4e-4, interval=5.0),
+    )
+
     def __init__(self, integration_method: str = "rk4_16"):
         self.obs_shape = (7,)
         self.integration_method = integration_method
@@ -53,8 +68,8 @@ class DistillationColumn(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -66,6 +81,7 @@ class DistillationColumn(
         if params is None:
             params = self.default_params
         action = jnp.atleast_1d(jnp.asarray(action)).reshape(-1)
+        action, state = actuate(self, state, action, params)
 
         new_state, _ = compute_next_state(
             action, state, params, key, integration_method=self.integration_method
@@ -76,8 +92,9 @@ class DistillationColumn(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state: DistillationState, params: DistillationParams = None):
         if params is None:
             params = self.default_params

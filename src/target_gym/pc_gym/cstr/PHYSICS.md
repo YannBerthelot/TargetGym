@@ -284,3 +284,30 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports concentration and temperature through their instruments
+and the setpoint exactly (`docs/proposals/measurement-noise.md`).
+`sensor_noise_scale = 0` gives the noise-free task.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `C_a` | 5e-4 mol/L | none | Online UV-Vis process photometer with flow cell | Provisional | [OMA-300](https://www.ima.co.uk/wp-content/uploads/AA_DS001A_OMA300.pdf) |
+| `T` | 0.04 K | none | Pt100 RTD with HART head transmitter | Confirmed | [iTEMP TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
+
+`C_a`, the tracked quantity, rests on a weak figure. The sheet gives only a
+sensitivity of 0.1 % of full scale. Reading that as 2 sigma and mapping it to a
+1 mol/L full scale are ours. `T` is an upper bound on scatter: the sheet gives ±0.08 °C, stated as 2 sigma and
+including non-linearity and repeatability, and the true scatter is unknown and
+smaller.
+
+The expert reads these readings, and so does every tuner. The oracle plans and
+acts on the true state, so it stays a full-state bound. `reward`, trips and the
+score read the true state. `info["measured_reward"]` is the same cost on the
+readings, with any trip taken from the true state, and a learner can train on
+it.
+
+A plant resting exactly on target pays 25 per step in measured reward,
+`(5e-4 / 1e-4)^2`. `e_floor` and `precision_floor` stay at 1e-4, so the ceiling
+sits below anything this analyser could verify.

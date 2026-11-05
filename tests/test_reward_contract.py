@@ -177,14 +177,15 @@ def test_reward_version_1_is_still_the_shipped_reward(spec):
 
 @pytest.mark.parametrize("name", ["first_order", "cstr"])
 def test_version_1_reproduces_its_recorded_baseline(name):
-    """The v1 baseline file is kept, and the v1 reward reproduces it."""
+    """The v1 baseline file is kept, and the v1 reward reproduces it on the
+    noise-free plant it was recorded on."""
     from target_gym.runners.runners import baseline_policy, rollout
 
     v1 = json.loads((BASELINES_PATH.parent / "baseline_returns_v1.json").read_text())[
         name
     ]
     spec = REGISTRY[name]
-    p = spec.make_test_params(reward_version=1)
+    p = spec.make_test_params(reward_version=1, sensor_noise_scale=0.0)
     for seed in range(2):
         _, _, r = rollout(spec, p, baseline_policy(spec, "pid", p), seed=seed)
         assert float(r.sum()) == pytest.approx(v1["pid_returns"][seed], abs=1e-3)
