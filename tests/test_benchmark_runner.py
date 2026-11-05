@@ -104,7 +104,9 @@ def _off_target(name, **offsets):
     env, params, task = _setup(name, 1)
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     state = state.replace(**{k: fn(state, params) for k, fn in offsets.items()})
-    return env.get_obs(state, params)[None], params, task
+    # The band is a claim about the plant, so read it without the instruments.
+    quiet = params.replace(sensor_noise_scale=0.0)
+    return env.get_obs(state, quiet)[None], params, task
 
 
 # Two outputs, each moved ``a`` and ``b`` floors off its target.

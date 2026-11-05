@@ -21,6 +21,7 @@ held to the shared contract the day it declares them.
 """
 
 import dataclasses
+import operator
 import types
 
 import jax
@@ -93,6 +94,30 @@ def _quiet(params):
     return params.replace(sensor_noise_scale=0.0)
 
 
+def _added(env, state, params):
+    """``(what each reading adds at state, the values it adds to)``, flat.
+
+    Read at the readings, not across the observation: a channel derived from a
+    reading (an aircraft's path error, its ``gamma``) takes a share of the same
+    draw that depends on the plant's state.
+    """
+    measured = measured_state(env, state, params)
+    fields = [
+        operator.attrgetter(r.field)
+        for r in env.readings
+        if isinstance(r, FieldReading)
+    ]
+    values = [np.ravel(f(state)) for f in fields]
+    added = [np.ravel(f(measured)) - v for f, v in zip(fields, values)]
+    channels = [r.channel for r in env.readings if isinstance(r, ChannelReading)]
+    if channels:
+        true = np.asarray(env.get_obs(state, _quiet(params)))[channels]
+        read = np.asarray(env.get_obs(state, params))[channels]
+        values.append(true)
+        added.append(read - true)
+    return np.concatenate(added), np.concatenate(values)
+
+
 # ---------------------------------------------------------------------------
 # One episode key, one noise path
 # ---------------------------------------------------------------------------
@@ -107,9 +132,8 @@ def test_two_policies_on_one_episode_key_see_identical_noise_draws(spec):
 
     def draws(action, step_stream):
         rows = _rollout(env, params, key, action, step_stream=step_stream)
-        return np.stack(
-            [np.asarray(o - env.get_obs(s, _quiet(params))) for o, s, *_ in rows]
-        ), np.stack([np.asarray(env.get_obs(s, _quiet(params))) for _, s, *_ in rows])
+        added, values = zip(*(_added(env, s, params) for _, s, *_ in rows))
+        return np.stack(added), np.stack(values)
 
     # Different step keys too: the noise belongs to the episode key alone.
     a, true_a = draws(low, 1)
@@ -149,8 +173,14 @@ def test_a_reading_is_a_pure_function_of_the_state(spec):
     obs, state = env.reset_env(key, params)
     np.testing.assert_array_equal(obs, env.get_obs(state, params))
     obs, state, *_ = jax.jit(env.step_env)(key, state, low, params)
-    np.testing.assert_array_equal(obs, env.get_obs(state, params))
-    np.testing.assert_array_equal(obs, env.get_obs(state, params))
+    # Compiled into the step, a derived channel rounds a float32 step or so
+    # apart: 1e-3 m on the racetrack's 15 km coordinates, or 1 part in 1.6e7.
+    np.testing.assert_allclose(
+        obs, env.get_obs(state, params), rtol=1e-6, atol=2e-3
+    )
+    np.testing.assert_array_equal(
+        env.get_obs(state, params), env.get_obs(state, params)
+    )
 
 
 def test_different_episode_keys_give_different_noise():
@@ -203,11 +233,10 @@ def test_scale_scales_the_noise(spec):
     env = _unrounded(_own_env(spec))
     params = spec.make_test_params()
     _, state = env.reset_env(jax.random.PRNGKey(1), params)
-    true = env.get_obs(state, _quiet(params))
-    one = env.get_obs(state, params) - true
-    two = env.get_obs(state, params.replace(sensor_noise_scale=2.0)) - true
-    tol = 8 * np.spacing(np.abs(np.asarray(true, np.float32)))
-    assert np.all(np.abs(np.asarray(two) - 2.0 * np.asarray(one)) <= tol)
+    one, values = _added(env, state, params)
+    two, _ = _added(env, state, params.replace(sensor_noise_scale=2.0))
+    tol = 8 * np.spacing(np.abs(np.asarray(values, np.float32)))
+    assert np.all(np.abs(two - 2.0 * one) <= tol)
 
 
 @noisy_tasks
@@ -663,5 +692,6 @@ def test_noise_runs_under_jit_vmap_and_scan(spec):
 
     rows = _rollout(env, params, keys[1], action, steps=8)
     eager = np.stack([np.asarray(o) for o, *_ in rows[1:]])
-    np.testing.assert_allclose(obs[1], eager, rtol=1e-5)
-    np.testing.assert_allclose(first[1], rows[0][0], rtol=1e-5)
+    # atol: a channel derived from 15 km coordinates has a 1 mm float32 step.
+    np.testing.assert_allclose(obs[1], eager, rtol=1e-5, atol=2e-3)
+    np.testing.assert_allclose(first[1], rows[0][0], rtol=1e-5, atol=2e-3)

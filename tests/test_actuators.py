@@ -212,14 +212,15 @@ def test_a_restart_returns_the_actuator_to_rest():
 @pytest.mark.parametrize("spec", NOISY, ids=lambda s: s.name)
 def test_every_task_with_readings_runs_the_actuator_stage(spec):
     """A task wired for readings must not ignore a dead-band request: the field
-    would look set and do nothing."""
+    would look set and do nothing. A command at the top of the range lands on
+    it, so this reads the stage's own memory. The plant's state would not show
+    it: ``compressor_surge``'s rate-limited actuators move at their limit from
+    the reset with or without the stage."""
     env, params = spec.make_env(), spec.make_test_params()
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
     space = env.action_space(params)
-    action = jnp.broadcast_to(0.5 * (space.low + space.high), space.shape)
-    action = action.astype(jnp.float32)
-    moved = env.step_env(key, state, action, params.replace(action_noise=0.05))[1]
-    still = env.step_env(key, state, action, params)[1]
-    differ = jax.tree_util.tree_map(lambda a, b: bool(jnp.any(a != b)), moved, still)
-    assert any(jax.tree_util.tree_leaves(differ))
+    action = jnp.broadcast_to(space.high, space.shape).astype(jnp.float32)
+    params = params.replace(actuator_dead_band=0.01)
+    new = env.step_env(key, state, action, params)[1]
+    np.testing.assert_array_equal(new.actuator_held, action)
