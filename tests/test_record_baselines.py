@@ -104,3 +104,17 @@ def test_recording_the_expert_part_keeps_the_oracle_part(store):
     }
     changed = {p for p, b in _snapshot().items() if before.get(p) != b}
     assert changed == {str(records.path("baseline_returns", "first_order"))}
+
+
+def test_the_seeds_certificates_merge_into_the_rows_worst_and_counts():
+    """The oracle part of a row: the solves and failures summed, the mean
+    iterations weighted by solves, each certificate's worst value, and the
+    guard flags summed. By hand: (2 x 3 + 4 x 1) / 6 = 1.7 iterations."""
+    a = {"solver_calls": 2, "solver_failures": 1, "solver_capped": 0}
+    a |= {"solver_mean_iters": 3.0, "solver_max_error": 1e-9, "solver_guard_flags": 1}
+    b = {"solver_calls": 4, "solver_failures": 0, "solver_capped": 1}
+    b |= {"solver_mean_iters": 1.0, "solver_max_error": 4e-9, "solver_guard_flags": 2}
+    assert _load()._merge_reports([a, b]) == {
+        "solver_calls": 6, "solver_failures": 1, "solver_capped": 1,
+        "solver_mean_iters": 1.7, "solver_max_error": 4e-9, "solver_guard_flags": 3,
+    }  # fmt: skip

@@ -141,6 +141,9 @@ Two notes that apply to every task:
 
 ### Correction to the draft: no rate limit acts between steps
 
+> Amended 2026-11-04 (Amendment 1, at the end): the bound that makes these
+> rate limits exact is the travel over the hold, not over one substep (T1r).
+
 The draft turns rate limits into constraints on planned moves. In the 24
 tasks no rate limit acts between steps. All four act inside the step, so the
 planner's move does not reach them:
@@ -449,3 +452,66 @@ Not read, and not relied on beyond what is stated:
 - **Stewart and Anitescu**, full text: paywalled; the abstract only. Its
   setting is a discontinuous right-hand side and Euler steps; applying it to
   the continuous kinks here is a reading, not a statement of the paper.
+
+## Amendment 1, 2026-11-04: rate limits, and a back-off on every limit
+
+C1 rebuilt the compressor's oracle under this protocol. It lost to its
+expert by 20 to 60 times on training seeds 100 and 101, where main's oracle
+beat it on all ten test seeds. The owner accepted both changes below on
+2026-11-04, and with them a records gate: an oracle under the rule beats its
+expert on every recorded seed.
+
+**T1r, a rate limit's reach.** Section 4 bounded a command to one
+substep's travel, found that it forbids moves the env allows, and smoothed
+the four in-step rate limits instead (T5). The exact bound is the travel
+over the hold, the steps a move is held. A command beyond it moves the
+actuator at full rate in every substep, exactly as a command at it does, so
+bounding each command to that reach from the actuator's position forbids no
+trajectory. Without it, a command past the reach changes nothing in the
+model, and IPOPT stopped at plans that did nothing: at step 50 of seed 100,
+a converged plan (KKT error 6e-11) earned -3.07e6 over its horizon, worse
+than holding still (-3.01e6), while the expert's moves earned -1.46e6.
+Main's NLP had these rows ("the rate reach", one step's travel), as QB's
+hard rate-of-change limits and MW's increment bounds put them. T5 still
+smooths the corner left inside the reach, where the actuator arrives
+mid-step. Sites: the compressor's drive and valve (C1); the reactor's rod
+and the wind turbine's pitch take the same treatment when C2 rebuilds them.
+For the pitch, a rate limit inside the right-hand side, the reach is where
+the rate stays saturated for the whole hold, derived with that rebuild.
+
+**K11, a limit's back-off.** With T1r the compressor tracked exactly but
+held its trip variable on the trip line. Two things then tripped it. On the
+noise-free plant the plan passed the line by the solver's tolerance, since
+the trip test is a strict comparison. On the noisy plant one innovation of
+the demand deviation moved the next step's trip variable, which the
+noise-free plan cannot foresee: 7.9e-4 at one sigma, against a smoothing gap
+of 6.7e-5. Each hard limit is therefore planned inside its bound by the
+planner's worst one-step error on the limited quantity q, measured at K5's
+probe points, as the sum of:
+
+- the smoothing's gap: sum over sites of w log 2 times the sum of
+  |dq / d delta| over the site's evaluations (K5's bound, on q);
+- the noise: z s max |dq / d d|, s the standard deviation of one innovation
+  of the plant's noise-driven deviation d, and z the normal quantile of a
+  1 % risk of any such trip over the ten recorded seeds, split evenly over
+  their steps (Boole's inequality). The 1 % is ours; a tenfold change moves
+  the compressor's back-off by about 10 %;
+- the solver's tolerance, (bound_relax_factor + tol) max(1, |bound|).
+
+This is constraint tightening by a bound on the model's error, as robust
+MPC does (Mayne, Seron and Rakovic, Automatica 41 (2005); risk split by
+Boole's inequality as in Blackmore and Ono, AIAA GNC 2009; neither re-read
+here). A task with no smoothing and no noise keeps the solver's term alone,
+and a limit with no inside (lo = hi, as a line-out) is not backed off. The
+values are in `limit_backoffs` in each task's widths file: 0.0040 on the
+compressor's trip line, 0.055 K on the unstable CSTR's temperature band.
+
+**Scaling.** The builder scales variables by typical magnitudes. Under T1r a
+move's typical size is its reach, not its range, so a task with move rows
+gives it (`move_scale`). On the compressor this took 174 capped and 15
+failed solves down to 52 and 0, seed 100, with median iterations 28 to 7.
+
+**Capped solves stay applied.** A solve the cap stops applies its last
+iterate, as before. Keeping the shifted plan instead was tried and rejected
+on evidence: it froze the valve through a run of capped solves as demand
+fell, and the plant tripped.

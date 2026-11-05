@@ -364,3 +364,108 @@ Recommended option first.
 | G5 | Epigraph rows on visited states | one algebraic variable per kinked term per visited state, with `stage_kkt_solve` extended to carry them. Or epigraph at stage boundaries only (fewer variables, not exact for b > 1) |
 | G6 | If B is chosen: where to split | at the reward's convex terms (MBD21). Or at the whole state, as the probe did (not a GGN where -reward is nonconvex) |
 | G7 | Budget check | set a per-episode compute budget, then rerun glass_furnace under Form A with its kink rewritten (smoothing T2) before G1 is final. Or decide G1 now on plane3d_circle alone |
+
+## 14. Amendment 1, 2026-11-04: what C1's validation found
+
+C1 ran the five process oracles on the solver above for training seeds 100
+and 101 and found three faults, none in the rules. The owner accepted the
+three fixes on 2026-11-04. Each was checked first on a copy of the code,
+then rebuilt test first.
+
+**The port left out three parts of IPOPT's line search** (read: IPOPT 3.14
+source, IpBacktrackingLineSearch.cpp, IpFilterLSAcceptor.cpp, IpUtils.cpp):
+
+- when the line search fails at a point that meets the acceptable tolerance,
+  IPOPT stops there ("Solved To Acceptable Level") instead of restoring;
+- its accept tests allow 10 eps of the reference value (Compare_le);
+- a step below 10 eps of the variables, with the violation at most 1e-4, is
+  taken whole (DetectTinyStep).
+
+Its backtracking also runs only while the step exceeds alpha_min. The port
+compared with >=, and since alpha_min is 0 when the violation is, four_tank's
+solve looped forever at a step of 0. Without the first part, cstr's warm
+solves at a held target ended failed after four restorations: 18 and 49 of
+150. With it, none failed. The other two parts changed nothing measurable
+there and are kept because they are IPOPT's. IPOPT's soft restoration and
+its stop after repeated tiny steps are still not ported.
+
+**G8, cold start.** A cold solve started from the held moves simulated
+forward: four_tank's reset has both pumps off, the simulation drained the
+tanks, and the solve never recovered (seed 101: no solve converged, 47
+trips). Multiple shooting keeps every state a variable so that no such
+simulation is needed. It can start from a dynamically infeasible guess,
+which single shooting cannot (Vanroye et al., FATROP, arXiv 2303.16746).
+Every state now starts at the measured one, with the moves still held.
+four_tank then had no failure and no trip.
+
+**G9, the stages past the episode.** As the horizon shrinks at the episode's
+end, the stages past it still ran the plant. On the open-loop unstable CSTR
+their states reached 1e41, and the last 8 solves of seed 100 failed. Those
+stages now hold their state, since no plant runs past the episode. The
+shrinking horizon (H_k) is unchanged.
+
+The compressor's solves still hit the cap at about the same rate, and none
+of the three changes it. Its rate-limit widths are K6-flagged (the smoothed
+corner is crossed within one integrator substep), and it is diagnosed next.
+
+## 15. Amendment 2, 2026-11-04: G10, a tie-break on moves
+
+With T1r and K11 in place, 2 to 4 % of the compressor's solves still hit the
+cap. The cause is not the surge line: the capped solves sat 0.07 to 0.13 above
+it. Two moves track one output, and while recycle power is under `c_hold`
+nothing prices how the work is split between them, so the optimum is not
+unique: 26 of the 52 eigenvalues of the move Hessian are zero at a plan. With
+the barrier at its floor, Newton wandered along that valley, its error
+bouncing between 2e-7 and 5e-5 until the cap. Corners 10 times wider also
+cleared 8 of 8 captured solves, by adding curvature, at the cost of K5's
+accuracy and a tenfold K11 back-off. They were not taken.
+
+**G10.** The objective adds tie x sum over planned stages of |du|^2, du a
+move's change from the one before, in units of its scale (its reach under T1r,
+else its range), u_hold before the first. This is input move suppression, one
+of the two strategies industrial MPC uses against ill-conditioning. It raises
+the matrix's diagonal, lowers the condition number and "tends to minimize the
+norm of the MV moves" (QB, section 3.4.3, p. 752; QB's "fat plant", more MVs
+than CVs, is this case). Here it is sized to pick one plan among equal ones
+and nothing else: tie = 0.25 / (moves x solves in the episode), so that every
+move of every solve at full size costs 0.25 reward units over the episode.
+That is what an error of half the resolution costs in one step, (q / 2)^2 /
+e_floor^2, with e_floor clamped at the resolution q, as on all five tasks so
+far. The term enters the solve only: the plan's cost and the record's reward
+do not contain it.
+
+It applies to every task on the shared builder, with no per-task condition.
+A task whose reward already fixes its moves has no flat direction to pick
+along, and the term cannot cost it more than the budget above. The aircraft,
+kiln, boiler, wind turbine and formation have more moves than tracked
+outputs, so C2 and D may need it.
+
+**Provenance.** The value was derived after 1e-4 had been seen to clear 8 of 8
+captured solves (1e-6 cleared 7, 1e-8 cleared 5). It uses task constants only,
+and no return was used in choosing it, but it is not strictly pre-hoc.
+Compressor, training seeds 100 to 102: capped 49, 26, 51 down to 0, 0, 0.
+
+## 16. Amendment 3, 2026-11-04: G11, a cold retry
+
+The records gate failed on the first re-record: unstable_cstr tripped once on
+the ten test seeds and lost that seed to its expert, with 10 failed and 7
+capped solves. It is an exothermic reactor, open-loop unstable, and the
+failures sat at one event: the step of the target at step 600, where the plan
+heats the jacket and then brakes at full cooling. The plan's active set has
+to change there, and warm starts begin with their slacks 1e-9 off their
+bounds, so the steps collapsed to 1e-3 and below and the iterates jammed. At
+six captured states the warm solve ended at a cost of about 3e13 and the cold
+solve, from the same state, converged in about 30 iterations to about 3e6.
+
+**G11.** A warm solve that fails or hits the cap is solved again cold (G8's
+start, with K7's rungs). If that solve fails too, the shifted plan applies, as
+the owner decided (oracle-audit.md, decision 5). A superseded solve is counted
+in `solver_retries`, not in the failed or capped counts. Main's compressor
+oracle retried in the same way before it handed a step to its expert.
+
+Measured, ten test seeds and ten training seeds: unstable_cstr 20 of 20 wins,
+no trip, no failed or capped solve, 7 retries in 24,000 solves. The plan's
+heat-then-brake around the target's step stays aggressive by design: it is the
+noise-free optimum. T reached 357 K against a 365 K trip with the jacket at
+its minimum on seed 8, and this CPU did not trip where CI's did. The gate on
+the recorded seeds remains the check on that margin.

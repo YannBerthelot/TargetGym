@@ -300,3 +300,24 @@ def test_mpc_controls_at_least_as_well_as_the_pid(name):
         f"not descend (a clipped plateau) or one that did not share the reward's "
         f"minimiser (a mis-scaled or non-monotone term), never a tuning problem."
     )
+
+
+@pytest.mark.records
+@pytest.mark.parametrize(
+    "name", [n for n in MPC_ENVS if REGISTRY[n].has_pid and REGISTRY[n].oracle_data]
+)
+def test_an_oracle_under_the_rule_beats_its_expert_on_every_seed(name):
+    """The owner's gate (2026-11-04): an oracle built under the oracle rule
+    (docs/proposals/oracle-audit.md; ``EnvSpec.oracle_data``) beats its expert
+    on every recorded seed, with no allowance. The other oracles join as they
+    are rebuilt. A seed it loses is a fault in the problem or the solver to
+    diagnose, as the compressor's missing reach bound was, never a number to
+    tune."""
+    recorded = load_recorded_baselines()[name]
+    pid, mpc = np.array(recorded["pid_returns"]), np.array(recorded["mpc_returns"])
+    lost = np.flatnonzero(mpc < pid)
+    assert lost.size == 0, (
+        f"{name}: the oracle loses to its expert on seeds {lost.tolist()} of "
+        f"{recorded['seeds']} (oracle {np.round(mpc[lost], 1).tolist()}, expert "
+        f"{np.round(pid[lost], 1).tolist()})."
+    )

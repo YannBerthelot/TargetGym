@@ -68,8 +68,13 @@ from target_gym.pc_gym.unstable_cstr.experts import (  # noqa: E402
     setpoint_window,
     trips_under_full_cooling,
 )
-from target_gym.pc_gym.unstable_cstr.oracle import MPC_HORIZON  # noqa: E402
 from target_gym.utils import convert_raw_action_to_range  # noqa: E402
+
+#: The oracle's horizon until 0.8, in steps: 1.52 times the 21-step recovery
+#: (section pnr). The oracle on the shared solver plans P steps by the horizon
+#: protocol (data/oracle_horizons/unstable_cstr.json); the sections that size
+#: or window by this number describe the former one.
+MPC_HORIZON = 32
 
 try:
     from jax import enable_x64

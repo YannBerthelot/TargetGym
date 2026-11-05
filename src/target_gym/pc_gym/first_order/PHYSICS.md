@@ -87,6 +87,24 @@ terminal guard on `|x| > 3` is unreachable: `x` is first-order toward `K·u`,
 which the action bounds cap at ±2, from a start inside ±0.5. This environment
 cannot end early, so its `mpc_terminated_early` is always 0.
 
+**The oracle.** The MPC slot is a problem definition, not a tuned
+controller (docs/proposals/oracle-audit.md): the shared solver's oracle
+(`target_gym.oracles`). Once every step (Cooper's sample time from the
+horizon protocol, `data/oracle_horizons/first_order.json`), it plans P = 62
+moves from the true state, fewer near the episode's end, and applies the
+first. The plan maximises the episode reward over the horizon on the
+environment's own dynamics. The input's clip is replaced by a bound on the
+move, and the tracking term is written as (e / e_floor)^2, the reward itself
+since e_tol is 0 and p is 2. The `|x| < 3` band is a hard limit on every
+planned state, elastic at the trip cost per unit, and never binds. IPOPT's
+algorithm solves it with exact Hessians to a scaled KKT error of 1e-8, or
+stops at 150 iterations. A cold start puts every planned state at the
+measured one and holds the input the reset records, a
+later solve starts from the last plan shifted one step, and a warm solve that fails or hits the cap is solved again cold,
+and one that still fails applies the last plan's next move. Every solve's certificate (KKT error,
+iterations, violation, and the plan replayed on `step_env`) is summed into
+the record.
+
 The environment exists so that a new algorithm, wrapper or integration method
 can be checked against something with a known answer before being pointed at a
 kiln.

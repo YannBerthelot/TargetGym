@@ -1,54 +1,57 @@
-"""The oracle (the MPC slot) for the four-tank task.
+"""The oracle (the MPC slot) for the four-tank task, on the shared solver.
 
 Kept apart from the expert (``experts.py``) so that each has a fingerprint of
-its own (``provenance.oracle_fingerprint``): changing the oracle re-records
-only the oracle rows of this package's tasks. The shared machinery
-(GradientMPC, NewtonMPC, SamplingMPC and the v2 objective helpers) stays in
-``target_gym.experts.mpc``, which is in every oracle fingerprint.
+its own (``provenance.oracle_fingerprint``). The planner problem, by the
+smoothing protocol's inventory (docs/proposals/oracle-smoothing-protocol.md,
+section 5.3), run by ``target_gym.oracles.controller.Oracle``:
+
+- model: the env's own ``compute_velocity`` and integrator, with the raw
+  moves' clips removed and the moves bounded instead (T1);
+- objective: both lower tanks' tracking terms as (e / e_floor)^2, exact
+  since e_tol = 0 and p = 2 (T2);
+- limits: every level inside the trip band, h_min < h < h_max, on every
+  visited state, elastic at the trip cost per metre (T3);
+- dropped guard: the outflow's sqrt(max(h, 0)) (T4), kept off its edge by
+  the band; every plan's levels are checked against 0.
+
+The reset state's pump voltages are 0 V until the first step, so the cold
+start holds both pumps off.
 """
 
-from target_gym.experts.mpc import NewtonMPC, protocol_burn_in, window_weights
+import jax.numpy as jnp
+from jax.tree_util import Partial as partial
 
-# ---------------------------------------------------------------------------
-# FourTank
-# ---------------------------------------------------------------------------
+from target_gym.integration import integrate_dynamics
+from target_gym.oracles.controller import Oracle, TaskModel, raw_of
+from target_gym.oracles.shooting import Limit
+from target_gym.pc_gym.four_tank.env import compute_velocity
+from target_gym.reward import trip_cost
 
 
-def make_four_tank_mpc(
-    env,
-    params,
-    window_start: int | None = None,
-    resolve_every: int = 25,
-    pre_weight: float = 1e-3,
-    horizon: int | None = None,
-    n_iter: int = 20,
-    n_iter_cold: int = 60,
-):
-    """The four-tank's oracle: ``NewtonMPC`` over the rest of the episode.
+def four_tank_model(env, p) -> TaskModel:
+    assert float(p.e_tol) == 0.0 and float(p.tracking_exponent) == 2.0
 
-    It re-solves every 25 steps on the env's own step and reward, both lower
-    tanks' tracking cost in floor units. A level at a trip limit is charged
-    the trip in the planner's own rollout, which no plan here comes near.
-    ``window_start`` is where the protocol starts scoring, read by default
-    from its burn-in (``protocol_burn_in``: 270 steps of the registered
-    1200), and the steps before it weigh ``pre_weight``, so the window weighs
-    1000 times more (``window_weights``). That weighting is what matters
-    here: the plant is non-minimum-phase (``gamma1 + gamma2`` = 0.4), and the
-    exact optimum of an unweighted all-step cost leaves a tail in the scored
-    window. The episode's first solve starts cold and runs ``n_iter_cold``
-    iterations; later ones start from the previous plan.
-    """
-    if window_start is None:
-        window_start = protocol_burn_in("four_tank", params)
-    steps = int(params.max_steps_in_episode)
-    horizon = steps if horizon is None else int(horizon)
-    return NewtonMPC(
-        env,
-        params,
-        horizon=horizon,
-        n_iter=n_iter,
-        n_iter_cold=n_iter_cold,
-        action_dim=2,
-        weights=window_weights(steps, window_start, pre_weight, horizon),
-        resolve_every=resolve_every,
-    )
+    def step(d, x, u, t):
+        v = p.v_min + 0.5 * (u + 1.0) * (p.v_max - p.v_min)  # T1
+        h, _ = integrate_dynamics(
+            positions=x, delta_t=p.delta_t, method=env.integration_method,
+            compute_velocity=partial(compute_velocity, action=v, params=p),
+        )  # fmt: skip
+        cost = jnp.sum(((d["task"] - h[:2]) / p.e_floor) ** 2)
+        return h, cost, h, h[:2], h  # the guard's edge is h = 0
+
+    band = Limit(p.h_min, p.h_max, float(trip_cost(p)))
+    return TaskModel(
+        nx=4, nu=2, step=step,
+        state_x=lambda s: jnp.stack([s.h1, s.h2, s.h3, s.h4]),
+        data=lambda s: jnp.stack([s.target_h1, s.target_h2]),
+        hold=lambda s: raw_of(jnp.stack([s.v1, s.v2]), p.v_min, p.v_max),
+        tracked=lambda s: jnp.stack([s.h1, s.h2]),
+        resolution=(float(p.precision_floor),) * 2,
+        limits=(band,) * 4,
+    )  # fmt: skip
+
+
+def make_four_tank_mpc(env, params) -> Oracle:
+    """Registry factory: the shared solver's oracle on ``four_tank_model``."""
+    return Oracle(env, params, "four_tank", four_tank_model)

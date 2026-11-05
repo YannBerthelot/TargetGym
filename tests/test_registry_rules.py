@@ -245,6 +245,11 @@ _CONTROLLER_MODULES = {
     "target_gym.experts.pid",
     "target_gym.experts.mpc",
 }
+#: The shared solver: in the oracle fingerprint of a task with ``oracle_data``.
+_SOLVER_MODULES = {
+    "target_gym.oracles",
+    *(f"target_gym.oracles.{p.stem}" for p in (SRC / "oracles").glob("*.py")),
+}
 
 
 def _imports(tree) -> list[tuple[ast.Import | ast.ImportFrom, bool]]:
@@ -276,7 +281,8 @@ def test_imports_stay_inside_the_fingerprint():
     only itself, the shared plumbing and the modules its spec declares in
     ``fingerprint_sources``, and every task's experts*.py and oracle*.py import only its
     own package, the shared plumbing, its declared sources and the shared
-    controller code. Relative imports are refused because the check reads
+    controller code, with the shared solver for an oracle on it
+    (``oracle_data``). Relative imports are refused because the check reads
     absolute names only. Any other file imports its package's controllers
     only inside a function, as the env_jax files of the 21 do: the version
     stamp leaves the controllers out, so physics that depended on them could change
@@ -297,6 +303,8 @@ def test_imports_stay_inside_the_fingerprint():
             allowed = _SHARED_MODULES | declared
             if is_experts:
                 allowed |= _CONTROLLER_MODULES
+            if path.name.startswith("oracle") and s.oracle_data:
+                allowed |= _SOLVER_MODULES
             for node, in_function in _imports(ast.parse(path.read_text())):
                 where = f"{path.relative_to(ROOT)}:{node.lineno}"
                 if isinstance(node, ast.ImportFrom) and node.level:

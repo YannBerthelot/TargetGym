@@ -12,9 +12,11 @@ from target_gym.oracles.horizon import (
     cooper_horizons,
     episode_samples,
     horizon_at,
+    ramp_samples,
     sample_steps,
     sample_time,
     task_horizon,
+    task_ramp,
 )
 
 
@@ -86,3 +88,40 @@ def test_no_horizon_past_the_episode_and_a_partial_last_sample_counts():
 def test_a_task_with_no_valid_pair_gets_no_protocol_horizon():
     # Amendment 2 (N3, replacing H20): no T_c, no P; the task keeps its oracle.
     assert task_horizon({}, dt=0.5) == (None, {}, None)
+
+
+@pytest.mark.parametrize(
+    "span, gain, rate, T, expected",
+    [
+        # The compressor by hand: 8000 Pa / (7206 Pa per unit x 2 x 0.03 / 0.35
+        # units/s) = 6.478 s; at T = 0.1 s, 64.8 samples, rounded up.
+        (8000.0, 7206.0, 2 * 0.03 / 0.35, 0.1, 65),
+        (8000.0, -7206.0, 2 * 0.03 / 0.35, 0.1, 65),  # the gain's sign is no matter
+        (10.0, 2.0, 1.0, 1.0, 5),  # 10 / 2 = 5 units at 1 unit/s: exactly 5
+        (10.0, 2.0, 1.0, 0.3, 17),  # 5 s / 0.3 s = 16.7
+    ],
+)
+def test_a_ramp_is_the_samples_a_rate_limit_takes_to_cross_the_target_range(
+    span, gain, rate, T, expected
+):
+    assert ramp_samples(span, gain, rate, T) == expected
+
+
+def test_a_task_ramp_is_the_longest_over_its_rate_limited_fits():
+    """Two MVs on one CV, three fits. By hand, over a span of 12: "slow" at
+    gain 3 and 4 units of rate 1 takes 4 s and 3 s; "fast" at gain 2 and rate
+    10 takes 0.6 s. The longest is 4 s, 8 samples at T = 0.5. A CV or an MV
+    with no rate limit does not count."""
+    fits = {
+        ("slow", "y", 100): {"k": 3.0},
+        ("slow", "y", 101): {"k": -4.0},
+        ("fast", "y", 100): {"k": 2.0},
+        ("free", "y", 100): {"k": 0.1},
+        ("slow", "z", 100): {"k": 0.1},
+    }
+    rates = {"slow": 1.0, "fast": 10.0}
+    assert task_ramp(fits, "y", 12.0, rates, 0.5) == (8, ("slow", "y", 100))
+
+
+def test_a_task_with_no_rate_limited_fit_has_no_ramp():
+    assert task_ramp({("u", "y", 100): {"k": 1.0}}, "y", 1.0, {}, 0.5) == (0, None)

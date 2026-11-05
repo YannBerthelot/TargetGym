@@ -58,6 +58,11 @@ BASELINES_PATH = _ROOT / "data" / "baseline_returns"
 # expert rows (pid.py) or oracle rows (mpc.py).
 _EXPERT_SOURCES = (_ROOT / "experts" / "pid.py",)
 _ORACLE_SOURCES = (_ROOT / "experts" / "mpc.py",)
+#: The shared solver (``target_gym.oracles``), in place of experts/mpc.py in
+#: the oracle part of every task whose oracle stands on it (``oracle_data``).
+_SOLVER_SOURCES = tuple(sorted((_ROOT / "oracles").glob("*.py")))
+#: The keys of a data file that only describe the run that wrote it.
+_RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 
 #: The two parts of a record, each with a fingerprint of its own.
 PARTS = ("expert", "oracle")
@@ -196,9 +201,8 @@ def _env_sources(spec, controllers: bool = True) -> list[pathlib.Path]:
 
 def _side(path: pathlib.Path) -> str | None:
     """The part a controller file belongs to, or ``None`` for any other file:
-    ``oracle*`` files and the compressor oracle's solver (``experts_ipm.py``)
-    are the oracle's, the other ``experts*`` files the expert's."""
-    if path.name.startswith("oracle") or path.name == "experts_ipm.py":
+    ``oracle*`` files are the oracle's, ``experts*`` files the expert's."""
+    if path.name.startswith("oracle"):
         return "oracle"
     return "expert" if path.name.startswith("experts") else None
 
@@ -217,8 +221,10 @@ def expert_sources(spec) -> list[pathlib.Path]:
 
 def oracle_sources(spec) -> list[pathlib.Path]:
     """The files the oracle part depends on: the environment's non-controller
-    modules, the shared physics, experts/mpc.py, the task's oracle modules,
-    and the expert code its oracle still reads (``spec.oracle_reads``)."""
+    modules, the shared physics, the shared machinery (experts/mpc.py, or the
+    shared solver's modules for a task with ``oracle_data``), the task's
+    oracle modules, and the expert code its oracle still reads
+    (``spec.oracle_reads``)."""
     own = [p for p in _env_sources(spec) if _side(p) == "oracle"]
     reads = []
     for rel in spec.oracle_reads:
@@ -227,7 +233,7 @@ def oracle_sources(spec) -> list[pathlib.Path]:
         reads.append(_ROOT / rel)
     return sorted(
         {*_env_sources(spec, controllers=False), *_PHYSICS_SOURCES}
-        | {*_ORACLE_SOURCES, *own, *reads},
+        | {*(_SOLVER_SOURCES if spec.oracle_data else _ORACLE_SOURCES), *own, *reads},
         key=str,
     )
 
@@ -304,10 +310,24 @@ def expert_fingerprint(spec) -> str:
     return _fingerprint(spec, "expert", expert_sources(spec), gains_entries)
 
 
+def _data_digest(rel: str) -> str:
+    """A data file an oracle reads (``spec.oracle_data``), as ``rel`` and the
+    hash of its values, the keys that describe its run left out."""
+    path = _ROOT / rel
+    if not path.is_file():
+        raise FileNotFoundError(f"oracle_data names {rel!r}, which does not exist")
+    row = {k: v for k, v in json.loads(path.read_text()).items() if k not in _RUN_KEYS}
+    return (
+        f"{rel}:{hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest()}"
+    )
+
+
 def oracle_fingerprint(spec) -> str:
     """Everything that determines the oracle's rows: ``oracle_sources``, the
     gains the oracle still reads (``spec.oracle_gains_keys``), its noise
-    fields, and what both parts share (``_fingerprint``).
+    fields, the values of the data files it reads (``spec.oracle_data``: an
+    oracle on the shared solver's horizon and smoothing widths), and what
+    both parts share (``_fingerprint``).
 
     The noise fields are which parameters the planner zeroes for its own
     model. Not a parameter *value*, yet they decide whether the MPC plans on
@@ -320,7 +340,7 @@ def oracle_fingerprint(spec) -> str:
         "oracle",
         oracle_sources(spec),
         lambda s, allgains: _entries(s, allgains, set(s.oracle_gains_keys)),
-        sorted(spec.noise_fields),
+        sorted(spec.noise_fields) + [_data_digest(rel) for rel in spec.oracle_data],
     )
 
 
