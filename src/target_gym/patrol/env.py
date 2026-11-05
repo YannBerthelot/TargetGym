@@ -529,8 +529,12 @@ def get_obs_bearing_only(state: PatrolState, xp=jnp):
 
 
 def decode_action(action: jnp.ndarray):
-    """Map a raw [-1, 1]^3 action to physical (power[0,1], stick[rad], aileron[rad])."""
-    power, stick, aileron = action
+    """Map a raw [-1, 1]^3 action to physical (power[0,1], stick[rad], aileron[rad]).
+
+    Not every learner squashes, so a raw action past the box acts as the bound
+    rather than as a command the plant could never receive.
+    """
+    power, stick, aileron = jnp.clip(jnp.asarray(action), -1.0, 1.0)
     power = (power + 1) / 2
     stick = jnp.deg2rad(stick * 15)
     aileron = jnp.deg2rad(aileron * 25)

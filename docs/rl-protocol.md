@@ -73,9 +73,14 @@ shipped PID) and `c` the ceiling's.
 **Against the expert: `b / x`** per seed, on identical evaluation episodes,
 with the share of seeds the policy wins. Pairing removes the variance from
 initial conditions and targets, which on these tasks is large: the circle
-task's radius alone moved the PID's return by a factor of two. It covers the
-whole scored episode, consumption and target changes included, so it is the
-verdict.
+task's radius alone moved the PID's return by a factor of two. It runs from the
+task's burn-in to the end of the episode, consumption and target changes
+included, so it is the verdict on the long run. The burn-in is
+`eval.scored_burn_in`, the task's measured burn-in capped at half the episode.
+Every task has one except `battery` and `unstable_cstr`, and on 12 of the 24 it
+reaches the cap, so the first reach and any trip before the burn-in ends are not
+in this ratio. `transient_ratio` scores the reach, and `seed_scores` below the
+whole episode.
 
 **Across environments: the score `S = log(b / x) / log(b / c)`**, on the
 tracking cost while holding. It is 0 at the expert, 1 at the ceiling and never
@@ -104,6 +109,27 @@ plant's band and stays. Moves have no ceiling; the oracle's recorded ratio is
 shown as the best known, for information. [The capability
 profile](capability-profile.md) puts both kinds of score on a radar per
 capability.
+
+**One number per training seed: `seed_scores`.** A test that compares trained
+agents, such as AdaStop, needs one number per seed, defined on every task. This
+is the expert's ratio again, on the whole episode with no burn-in, averaged in
+logs over each seed's episodes:
+
+    s = mean over episodes e of clip(log10(max(b_e, c) / max(x_e, c)), -3, +3)
+
+Above 0 beats the expert. All three costs are per step: `b_e` and `x_e` are the
+mean cost per step over every step of episode `e`, on the same episode, and `c`
+is the task's ceiling. Passing an episode's summed cost would put the floor a
+whole episode length too low.
+
+Averaging logs per episode stops one large-target episode from dominating, which
+a ratio of mean costs does not. The floor stops a cost near zero from reading as
+300 decades. It sits on both sides, so two costs within the resolution tie at 0
+and an expert below the ceiling is scored from the ceiling. The clip is there because one
+trip can cost more decades than a good policy gains on a whole episode, which
+also means the score alone cannot say how many trips there were. Pass `trips`
+and `seed_scores` adds `trip_rate`, the trips per episode for each seed, read
+from the counts and untouched by the clip.
 
 **Report the interquartile mean with a 95% stratified bootstrap confidence
 interval**, plus the win rate against the expert. Not the mean alone. This is
@@ -157,6 +183,10 @@ to flatter one side, which matters for a comparison whose result is the point.
 
 `gamma` is **not** in the hyperparameter search for that reason.
 
+**A driver computes `gamma` from the task's params, as
+`1 - 1 / params.max_steps_in_episode`, and never copies it from the table
+below.** The table shows what the rule gives today, for reading alongside tau.
+
 ### What the measurement is still for
 
 The physics check has not gone away, it has changed job: it verifies that the
@@ -167,8 +197,8 @@ before reading any result from it.
 
 | environment | N | tau (steps) | 5·tau | gamma |
 | --- | --- | --- | --- | --- |
-| cstr | 100 | 5 | 25 | 0.99000 |
-| first_order | 100 | 10 | 50 | 0.99000 |
+| cstr | 150 | 5 | 25 | 0.99333 |
+| first_order | 150 | 10 | 50 | 0.99333 |
 | hvac | 720 | 62 | 310 | 0.99861 |
 | plane | 280 | 23 | 115 | 0.99643 |
 | plane_energy | 1600 | 23 | 115 | 0.99938 |
@@ -185,7 +215,7 @@ before reading any result from it.
 | battery | 360 | 1 | 5 | 0.99722 |
 | boiler_drum | 400 | 3 | 15 | 0.99750 |
 | wind_turbine | 400 | 1 | 5 | 0.99750 |
-| four_tank | 500 | 38 | 190 | 0.99800 |
+| four_tank | 1200 | 38 | 190 | 0.99917 |
 | ph_neutralization | 300 | 14 | 70 | 0.99667 |
 | reactor | 864 | 1 | 5 | 0.99884 |
 | unstable_cstr | 1200 | 6.3 to 14.4 | 32 to 72 | 0.99917 |
@@ -419,7 +449,9 @@ because of it.
 
 Every run is written through `target_gym.rl_results.record_result`, which stamps
 the environment fingerprint so a result cannot outlive the environment it
-describes. See [docs/rl-baselines.md](rl-baselines.md).
+describes. A run whose agent used the expert, in training or at deployment,
+passes `expert_based=True` to stamp the expert fingerprint too, so retuning the
+expert marks it stale. See [docs/rl-baselines.md](rl-baselines.md).
 
 Tags distinguish the arms: `{algorithm}/{tabula|residual-a0.25|guided}/{budget}`.
 Learning curves are stored alongside the final returns, since section 8 makes

@@ -291,3 +291,176 @@ def test_score_policy_still_takes_a_factory_with_a_warning():
         old = scoring.score_policy("first_order", lambda: policy, seeds=1)
     new = scoring.score_policy("first_order", policy, seeds=1)
     assert new["ratio"] == old["ratio"]
+
+
+# The score per training seed (docs/rl-protocol.md, section 4). Contract, from
+# the study's formula:
+#
+#     s = mean over episodes e of clip(log10(b_e / max(x_e, c)), -3, +3)
+#
+# with costs per step over the whole episode, shaped (seeds, episodes), and
+# above 0 beating the expert. Assumed where the formula is silent, and reported
+# to the owner: the floor applies to b_e too, so two costs within the
+# resolution tie at 0. As written, an expert at b_e = 0 would score a policy at
+# the same cost -3, and no policy could reach 0 on an episode with b_e < c. That
+# episode is real: the shipped glass_furnace expert costs 0.84 c on seed 1
+# (2026-11-05), so a copy of it would score -0.08. Nothing changes for b_e >= c.
+def _s(b, x, c=1.0, **kwargs):
+    return scoring.seed_scores(
+        expert_cost_per_step=b, policy_cost_per_step=x, ceiling_per_step=c, **kwargs
+    )
+
+
+@pytest.mark.parametrize(
+    "b, x, want",
+    [
+        (100.0, 10.0, 1.0),  # ten times cheaper: one decade
+        (100.0, 100.0, 0.0),  # level with the expert
+        (10.0, 100.0, -1.0),  # ten times dearer
+        (100.0, 1.0, 2.0),  # at the ceiling: log10(100 / 1)
+        (100.0, 0.5, 2.0),  # past the ceiling reads as the ceiling
+        (100.0, 0.0, 2.0),  # zero cost reads as the ceiling, not 300 decades
+        (1e3, 1.0, 3.0),  # exactly at the clip
+        (1e4, 1.0, 3.0),  # four decades clip to three
+        (1.0, 1e3, -3.0),  # exactly at the clip
+        (1.0, 1e4, -3.0),  # one trip's worth of cost clips to three
+        (1.0, float("inf"), -3.0),  # a diverged policy is the worst score
+    ],
+)
+def test_one_episode_scores_its_decades_against_the_expert(b, x, want):
+    assert _s([[b]], [[x]])["score"] == pytest.approx([want])
+
+
+@pytest.mark.parametrize(
+    "b, x, want",
+    [
+        (0.0, 0.0, 0.0),  # both perfect: a tie, not a ratio of 0 or a NaN
+        (0.0, 0.5, 0.0),  # both within the resolution
+        (0.5, 0.1, 0.0),  # cheaper, but no plant could verify it
+        (0.0, 10.0, -1.0),  # a decade past the ceiling, whatever b is below it
+        (0.5, 10.0, -1.0),
+    ],
+)
+def test_an_expert_within_the_resolution_scores_from_the_ceiling(b, x, want):
+    assert _s([[b]], [[x]])["score"] == pytest.approx([want])
+
+
+def test_the_floor_is_the_tasks_ceiling():
+    """With a ceiling of 10, a free policy against an expert at 100 has one
+    decade to gain, not two."""
+    assert _s([[100.0]], [[0.0]], c=10.0)["score"] == pytest.approx([1.0])
+
+
+def test_each_seed_gets_the_mean_of_its_own_episodes():
+    """Rows are seeds. Seed 0 logs +1, +1, +1; seed 1 logs 0, -1, +1."""
+    b = np.full((2, 3), 100.0)
+    x = [[10.0, 10.0, 10.0], [100.0, 1000.0, 10.0]]
+    assert _s(b, x)["score"] == pytest.approx([1.0, 0.0])
+
+
+def test_each_episode_is_clipped_before_the_mean():
+    """+5 clips to +3 beside a -1, so the mean is 1. Clipping the mean of
+    the raw logs would give 2."""
+    assert _s([[1e5, 1.0]], [[1.0, 10.0]])["score"] == pytest.approx([1.0])
+
+
+def test_costs_are_paired_episode_by_episode():
+    """Logs 0 and +2 give 1. The same costs on the other episodes log -3 and
+    +5, which clips to +3, and give 0: without the clip and the floor a mean
+    of logs cannot see the pairing, so that is where it has to be tested."""
+    b = [[1.0, 1e5]]
+    assert _s(b, [[1.0, 1e3]])["score"] == pytest.approx([1.0])
+    assert _s(b, [[1e3, 1.0]])["score"] == pytest.approx([0.0])
+
+
+def test_one_large_target_episode_does_not_dominate():
+    """Ten times cheaper at a small target and twice as dear at a large one
+    logs +1 and -0.30103, a mean of +0.34949. The ratio of mean costs,
+    1001 / 2000.1, would call that a loss."""
+    m = _s([[1.0, 1000.0]], [[0.1, 2000.0]], c=0.01)
+    assert m["score"] == pytest.approx([0.34948500])
+
+
+def test_the_score_is_antisymmetric_and_bounded_on_any_costs():
+    """Swapping the two sides negates the score, whatever the costs."""
+    rng = np.random.default_rng(0)
+    b, x = 10.0 ** rng.uniform(-3, 6, (2, 4, 8))
+    forward, backward = _s(b, x)["score"], _s(x, b)["score"]
+    assert forward == pytest.approx(-backward)
+    assert np.all(np.abs(forward) <= 3.0)
+
+
+def test_the_score_does_not_depend_on_the_cost_unit():
+    """A plant priced in euros scores the same in cents."""
+    rng = np.random.default_rng(1)
+    b, x = 10.0 ** rng.uniform(-3, 6, (2, 4, 8))
+    assert _s(b, x, c=2.0)["score"] == pytest.approx(
+        _s(100 * b, 100 * x, c=200.0)["score"]
+    )
+
+
+@pytest.mark.parametrize(
+    "b, x, c",
+    [
+        ([[1.0]], [[-1.0]], 1.0),  # reward terms are non-negative
+        ([[-1.0]], [[1.0]], 1.0),
+        ([[1.0]], [[float("nan")]], 1.0),  # NaN must not reach a test
+        ([[float("nan")]], [[1.0]], 1.0),
+        ([[float("inf")]], [[1.0]], 1.0),  # no reference to score against
+        ([[1.0]], [[1.0]], 0.0),  # no floor
+        ([1.0, 1.0], [1.0, 1.0], 1.0),  # no seed axis
+        ([[1.0, 1.0]], [[1.0], [1.0]], 1.0),  # episodes cannot be paired
+        (np.ones((2, 3)), np.ones((1, 3)), 1.0),  # would broadcast
+        (np.ones((2, 0)), np.ones((2, 0)), 1.0),  # nothing to score
+    ],
+)
+def test_costs_that_cannot_be_scored_are_refused(b, x, c):
+    with pytest.raises(ValueError):
+        _s(b, x, c=c)
+
+
+def test_the_arguments_must_be_named():
+    """Positional costs could swap the sides or pass an episode total without
+    a word; the names carry the sign and the unit."""
+    with pytest.raises(TypeError):
+        scoring.seed_scores([[1.0]], [[1.0]], 1.0)
+
+
+def test_the_trip_rate_counts_what_the_clip_hides():
+    """One trip per episode and three per episode both clip to -3 on every
+    episode. The rate tells the seeds apart, and goes past 1 per episode."""
+    x = np.full((2, 2), 1e6)
+    m = _s(np.ones((2, 2)), x, trips=[[1, 1], [3, 3]])
+    assert m["score"] == pytest.approx([-3.0, -3.0])
+    assert m["trip_rate"] == pytest.approx([1.0, 3.0])
+
+
+def test_the_trip_rate_reads_flags_as_the_share_of_episodes():
+    m = _s(np.ones((1, 4)), np.ones((1, 4)), trips=[[True, False, False, True]])
+    assert m["trip_rate"] == pytest.approx([0.5])
+
+
+def test_there_is_no_trip_rate_without_trip_information():
+    assert "trip_rate" not in _s([[1.0]], [[1.0]])
+
+
+@pytest.mark.parametrize("trips", [[[1]], [[1, 1, 1]], [[-1, 1]], [[1, float("nan")]]])
+def test_trips_that_do_not_match_the_episodes_are_refused(trips):
+    with pytest.raises(ValueError):
+        _s(np.ones((1, 2)), np.ones((1, 2)), trips=trips)
+
+
+def test_the_burn_in_ratio_does_not_see_an_early_trip_and_the_seed_score_does():
+    """The documented difference between the two. Both controllers cost 10 per
+    step, but the policy pays 1e5 on step 5, inside a burn-in of 20 of 100
+    steps. The ratio, from the burn-in on, reads a tie; over the whole episode
+    the policy costs (99 * 10 + 1e5) / 100 = 1009.9 per step, a log of
+    log10(10 / 1009.9) = -2.00428."""
+    spike = np.full(100, 10.0)
+    spike[5] = 1e5
+    expert = [_episode(np.full(100, 10.0))] * 2
+    policy = [_episode(spike)] * 2
+    assert scoring.compare(policy, expert, 0.1, 20, settle=10)["ratio"] == 1.0
+    b = [[E.gain([ep], 0)[0] for ep in expert]]
+    x = [[E.gain([ep], 0)[0] for ep in policy]]
+    assert _s(b, x, c=0.1)["score"] == pytest.approx([-2.00428], abs=1e-5)

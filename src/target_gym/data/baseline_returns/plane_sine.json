@@ -1,7 +1,7 @@
 {
-  "cpu": "AMD EPYC 7763 64-Core Processor",
-  "expert_fingerprint": "3b3b5b9cdce9a80d",
-  "generated": "2026-11-03T03:31:40+00:00",
+  "cpu": "AMD EPYC 9V45 96-Core Processor",
+  "expert_fingerprint": "fa1ceea5c8f1e1e7",
+  "generated": "2026-11-04T22:00:41+00:00",
   "mpc_returns": [
     -625004.428234,
     -2741.332889,
@@ -15,7 +15,7 @@
     -12942.533346
   ],
   "mpc_trips": 0,
-  "oracle_fingerprint": "d7dc93ece36b0bf1",
+  "oracle_fingerprint": "cc78b3097cae07aa",
   "pid_returns": [
     -8085072.635111,
     -5534.997087,
@@ -28,7 +28,7 @@
     -21663.637741,
     -24323.6512
   ],
-  "seconds": 2025.0,
+  "seconds": 1062.3,
   "seeds": 10,
   "steps": 480
 }

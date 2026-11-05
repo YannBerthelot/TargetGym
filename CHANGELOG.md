@@ -14,6 +14,16 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
+- **The aircraft tasks clip their actions.** On `plane`, `plane3d`, `patrol` and
+  `formation` a raw action past `[-1, 1]` now acts as its bound, as it already
+  did on every other task; a raw stick of 100 used to ask for 23.6 rad of
+  elevator. Every action inside the box reaches the plant as before, so these
+  tasks keep their versions, but a policy that sent actions outside the box to
+  one of them will not reproduce under the same version. A planner also reads
+  a different slope now: half at the bound and zero past it, as on the other
+  tasks. Their oracle rows were re-recorded: on `formation`, hold rose 0.2% and
+  time in band fell from 0.70 to 0.65 between the old and new code on one
+  machine. No oracle seed changed sides against its PID.
 - **CasADi, do-mpc and the `[mpc]` extra are gone.** Every oracle now runs on
   JAX, so `pip install target-gym` runs all of them and `make_oracle` no
   longer raises `ImportError`. `[all]` now installs `[render]` only; pip warns
@@ -128,15 +138,35 @@ The next release is 0.8.0, because these changes break code written for
 
 - Each release now has a GitHub Release, with its changelog entry as notes and
   the wheel and sdist PyPI received.
+- **`scoring.seed_scores` gives one score per training seed**, for a test across
+  trained agents such as AdaStop: the mean over episodes of
+  `clip(log10(max(b, c) / max(x, c)), -3, +3)`, on costs per step over the whole
+  episode with no burn-in. With `trips` it also returns the trip rate, which the
+  clip hides.
+- **`record_result(..., expert_based=True)` stamps `expert_fingerprint`, and
+  `is_current` checks it**, so retuning an expert marks the runs that used it
+  stale. A tabula-rasa run stays current through a retune, and records without
+  the field stay valid.
 
 ### Fixed
 
+- **The discount table in `docs/rl-protocol.md` had three stale rows.** `four_tank`
+  runs 1200 steps, not 500, and `cstr` and `first_order` 150, not 100, so their
+  `gamma` is 0.99917, 0.99333 and 0.99333. A test now reads the table against
+  each task's params, and the page says drivers compute `gamma` from them.
+- **The docs said `b / x` covers the whole scored episode.** It starts at the
+  task's burn-in, up to half the episode, so the first reach and early trips are
+  not in it. The behaviour is unchanged, and `scoring.py` and
+  `docs/rl-protocol.md` now say so.
 - **`gymnasium.utils.env_checker.check_env` passes on every task.** It failed on
   the ten tasks with an array in their state, because `info["last_state"]` was
   a state dataclass and Gymnasium compares info values with `==`. Through
   `make_gymnasium`, `info["last_state"]` is now a plain dict of NumPy arrays.
 - **`GymnasiumEnv` accepts scalar action bounds**, which gymnax allows. It raised
   a `ValueError` on `spaces.Box(-1.0, 1.0, (n,))`.
+- **`env.state_space()` works on every task.** It raised an `AttributeError` on
+  the 2D and 3D aircraft and returned a one-dimensional placeholder on patrol and
+  formation.
 
 ## [0.7.0] - 2026-11-02
 

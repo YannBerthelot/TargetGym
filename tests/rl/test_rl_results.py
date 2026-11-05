@@ -8,10 +8,12 @@ the environment it claims to.
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
-from target_gym import rl_results
+from target_gym import provenance, rl_results
 from target_gym.provenance import environment_fingerprint
 from target_gym.registry import REGISTRY
 
@@ -81,3 +83,75 @@ def test_result_is_comparable_to_the_shipped_baselines(key):
         f"{key}: scored over {record['episode_steps']} steps, but the "
         f"environment's own episode is {episode}"
     )
+
+
+@pytest.mark.skipif(not RECORDS, reason="no learned-policy results recorded yet")
+@pytest.mark.parametrize("key", sorted(RECORDS))
+def test_record_of_an_expert_based_agent_still_describes_its_expert(key):
+    """An agent that ran the expert learned on that expert: a retune leaves
+    the number describing a controller that no longer ships."""
+    assert rl_results.is_current(RECORDS[key]), (
+        f"{key}: its environment or the expert it ran has changed since this was "
+        "trained. Re-train and re-record, or drop the entry."
+    )
+
+
+# The staleness contract (src/target_gym/rl_results.py): a record is current
+# while the environment it names is, and, if the agent ran the expert, while
+# that expert is. Records written before ``expert_fingerprint`` existed carry
+# no such field and stay current.
+TASK = "first_order"
+
+
+def _recorded(tmp_path, monkeypatch, **kwargs) -> dict:
+    """A result written through ``record_result`` and read back from its file."""
+    monkeypatch.setattr(rl_results, "RL_RESULTS_PATH", tmp_path / "rl_results.json")
+    rl_results.record_result(
+        env=TASK,
+        algorithm="SAC",
+        library="ajax",
+        returns=[-1.0, -2.0],
+        episode_steps=150,
+        total_timesteps=1_000,
+        **kwargs,
+    )
+    return rl_results.load_results()[rl_results.result_key(TASK, "SAC")]
+
+
+def _retune(tmp_path, monkeypatch) -> None:
+    """Change the task's gains the way ``scripts/tune_pid.py`` would: in the
+    gains file, leaving the environment's own fingerprint where it was."""
+    gains = json.loads(provenance.GAINS_PATH.read_text())
+    gains[TASK] = {"retuned": True}
+    path = tmp_path / "pid_gains.json"
+    path.write_text(json.dumps(gains))
+    monkeypatch.setattr(provenance, "GAINS_PATH", path)
+
+
+def test_a_retune_marks_an_expert_based_run_stale(tmp_path, monkeypatch):
+    record = _recorded(tmp_path, monkeypatch, expert_based=True)
+    assert rl_results.is_current(record)
+    _retune(tmp_path, monkeypatch)
+    assert not rl_results.is_current(record)
+
+
+def test_a_retune_leaves_a_tabula_rasa_run_current(tmp_path, monkeypatch):
+    """It never ran the expert, and training it cost GPU-hours."""
+    record = _recorded(tmp_path, monkeypatch)
+    _retune(tmp_path, monkeypatch)
+    assert rl_results.is_current(record)
+
+
+def test_a_record_older_than_the_expert_fingerprint_stays_current(
+    tmp_path, monkeypatch
+):
+    record = _recorded(tmp_path, monkeypatch, expert_based=True)
+    del record["expert_fingerprint"]
+    _retune(tmp_path, monkeypatch)
+    assert rl_results.is_current(record)
+
+
+@pytest.mark.parametrize("expert_based", [False, True])
+def test_an_environment_change_marks_any_run_stale(tmp_path, monkeypatch, expert_based):
+    record = _recorded(tmp_path, monkeypatch, expert_based=expert_based)
+    assert not rl_results.is_current({**record, "env_fingerprint": "older"})
