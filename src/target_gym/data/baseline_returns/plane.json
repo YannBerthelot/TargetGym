@@ -1,7 +1,7 @@
 {
-  "cpu": "AMD EPYC 9V74 80-Core Processor",
-  "expert_fingerprint": "b2d9a3abfa74653c",
-  "generated": "2026-11-03T03:14:00+00:00",
+  "cpu": "AMD EPYC 9V45 96-Core Processor",
+  "expert_fingerprint": "0843f325293b7b9e",
+  "generated": "2026-11-04T21:55:38+00:00",
   "mpc_returns": [
     -882754.006576,
     -7537.518964,
@@ -15,7 +15,7 @@
     -27443.915997
   ],
   "mpc_trips": 0,
-  "oracle_fingerprint": "331040c9a1f3762b",
+  "oracle_fingerprint": "a9215713b0b3d9a5",
   "pid_returns": [
     -4795793.795298,
     -9315.523376,
@@ -28,7 +28,7 @@
     -5034.652473,
     -26814.956036
   ],
-  "seconds": 998.4,
+  "seconds": 758.1,
   "seeds": 10,
   "steps": 280
 }
