@@ -32,15 +32,14 @@ The next release is 0.8.0, because these changes break code written for
     number published against an earlier version does not describe these tasks.
   - `wind_turbine`'s state gains a `power` field, and `patrol_bearing_only`'s
     elevation now inherits a 25 ft step on the lead's altitude.
-- **States carry two new fields.** `actuator_held` is on every task, and
-  `reward_terms` and `compute_reward_terms` take `tripped=None`. A state built by
-  hand needs nothing unless it has a batch axis, where `vmap` wants a batched
-  `sensor_key` and `actuator_held` too.
-- **A state carries `sensor_key`.** `EnvState` has a keyword-only `sensor_key`,
-  which `canonical_reset` stores and a restart keeps, so `get_obs(state,
-  params)` takes no key and the same episode key gives the same noise to every
-  policy. A restarted state therefore differs from `reset_env` at the restart
-  key in this field as well as in `time`.
+- **A state carries `sensor_key` and `actuator_held`.** `EnvState` has a
+  keyword-only `sensor_key`, which `canonical_reset` stores and a restart keeps,
+  so `get_obs(state, params)` takes no key and the same episode key gives the
+  same noise to every policy. A restarted state therefore differs from
+  `reset_env` at the restart key in this field as well as in `time`. Every task's
+  state also holds the actuator's output in `actuator_held`. A state built by
+  hand needs neither field unless it has a batch axis, where `vmap` wants both
+  batched. `reward_terms` and `compute_reward_terms` take `tripped=None`.
 - **The shared PID filters its derivative.** `pid_update` runs
   `Kd s / (1 + T_f s)` with `T_f` one tenth of the derivative time `|Kd / Kp|`,
   and `prev_error` now carries the filtered error. A loop built on `siso_pid`,

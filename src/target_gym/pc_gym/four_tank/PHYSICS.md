@@ -253,7 +253,7 @@ tests by `scripts/tune_process_experts.py --envs four_tank`.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `four_tank` | 1200 | 1 | 20 min | 2 in [-1, 1] | 6 | 8 |
+| `four_tank` | 1200 | 1 | 20 min | 2 in [-1, 1] | 6 | 10 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

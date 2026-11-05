@@ -246,7 +246,7 @@ smooth PID controller tuning", 2012) from step tests, and stored by
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `cstr` | 150 | 15 | 38 min | 1 in [-1, 1] | 3 | 4 |
+| `cstr` | 150 | 15 | 38 min | 1 in [-1, 1] | 3 | 5 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

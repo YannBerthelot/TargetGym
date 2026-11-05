@@ -240,7 +240,7 @@ weakest-cell behaviour that actually determines real pack limits.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `battery` | 360 | 5 | 30 min | 1 in [-1, 1] | 5 | 19 |
+| `battery` | 360 | 5 | 30 min | 1 in [-1, 1] | 5 | 20 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

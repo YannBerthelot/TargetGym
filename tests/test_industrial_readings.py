@@ -74,7 +74,6 @@ STEPS = {
     ("cement_kiln", 0): 0.01,  # 1e-4 mass fraction, in percent
     ("cement_kiln", 1): 0.1,
     ("cement_kiln", 3): 0.1,
-    ("battery", 1): 190.73e-6,
     ("battery", 2): 152.59e-6 / 0.05,  # GPIO step over the 50 mV/K divider
 }
 

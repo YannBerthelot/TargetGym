@@ -257,8 +257,8 @@ and is not modelled.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `patrol` | 200 | 1 | 3 min | 3 in [-1, 1] | 26 | 15 |
-| `patrol_bearing_only` | 200 | 1 | 3 min | 3 in [-1, 1] | 21 | 15 |
+| `patrol` | 200 | 1 | 3 min | 3 in [-1, 1] | 26 | 18 |
+| `patrol_bearing_only` | 200 | 1 | 3 min | 3 in [-1, 1] | 21 | 18 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

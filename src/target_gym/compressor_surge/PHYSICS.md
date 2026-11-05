@@ -881,7 +881,7 @@ under 1e-3 kg/s.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 7 | 17 |
+| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 7 | 19 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

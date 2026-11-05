@@ -162,7 +162,7 @@ and stores them in `src/target_gym/data/pid_gains.json`; the factory is
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `first_order` | 150 | 0.05 | 8 s | 1 in [-1, 1] | 2 | 3 |
+| `first_order` | 150 | 0.05 | 8 s | 1 in [-1, 1] | 2 | 4 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

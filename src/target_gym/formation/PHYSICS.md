@@ -202,7 +202,7 @@ have to be tuned on training seeds and checked on fresh held-out ones.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 18 |
+| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 27 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

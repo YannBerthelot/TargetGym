@@ -251,7 +251,7 @@ SIMC (Skogestad and Grimholt 2012), from step tests on training seeds 100 to
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `distillation` | 200 | 60 | 3.3 h | 2 in [-1, 1] | 7 | 46 |
+| `distillation` | 200 | 60 | 3.3 h | 2 in [-1, 1] | 7 | 48 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
