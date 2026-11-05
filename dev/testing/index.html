@@ -2508,9 +2508,7 @@ environments is checked in one place.</p>
 <ul>
 <li><strong><code>tests/test_env_conformance.py</code></strong> owns every contract that applies to all
   environments: shapes, spaces, the clock, keys, finiteness, <code>jit</code> and <code>vmap</code>. A
-  new environment inherits it by registering. A task that does not meet a contract
-  yet goes in a <code>KNOWN_*</code> table with its reason, which makes the check a strict
-  xfail for that task, so fixing the gap fails until its entry goes.</li>
+  new environment inherits it by registering.</li>
 <li><strong>An environment's own folder</strong> holds its physics and its bounds: published
   values, emergent behaviour, its limits and how its actions map onto them.</li>
 <li><strong>Tests that restate configuration go.</strong> A test that compares a setting with the
