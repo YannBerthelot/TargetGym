@@ -53,8 +53,11 @@ its `PHYSICS.md` carries a written exception the owner accepted.
    held-out seeds with `ratio` above 1. The null policies are:
    - constant action at the middle of the range, and at each bound;
    - target echo, where the action shares the target's units;
-   - an I-only loop, tuned by SIMC from the shared bump test;
-   - a static table `u = f(target)`, built on training seeds.
+   - a static table `u = f(target)`, built on training seeds;
+   - that table with an I-only trim, tuned by SIMC where the shared bump test
+     has a valid fit;
+   - any policy a review found to beat the expert, kept as a named witness. It
+     needs no tuning rule, because a win proves the defect however it was tuned.
 2. **The expert's result looks like the real thing.** Its hold is within a factor
    of 2 of a sourced real-world figure, or the source says why it may not be.
 3. **The oracle's win is operable.** Every limit a real plant enforces is a trip
@@ -65,15 +68,18 @@ finding. Each fix removes its own xfail.
 
 ## Order of work
 
-Everything but PR 1 targets `feat/sensor-noise` from 509fd5b, the integration
-branch, because the noise work stales all 24 stamps and has to land at one
-re-record. That branch is local only, and its version stamps are branch stamps,
-to be redone at the end.
+PRs 3 to 9 target `feat/sensor-noise` from 509fd5b, the integration branch,
+because the noise work stales all 24 stamps and has to land at one re-record.
+That branch is local only, and its version stamps are branch stamps, to be redone
+at the end.
+
+CI runs only on pull requests into `main`, so a pull request into the integration
+branch gets no checks. Before PR 3, that branch needs a way to get them.
 
 | PR | What | Target | Budget (code + tests) |
 |---|---|---|---|
 | 1 | Scoring: trips, travel, true consumption, spec band | `main`, stales nothing | 150 + 120 |
-| 2 | Null-policy gate, red on the known failures | integration | 120 + 60 |
+| 2 | Null-policy gate, red on the known failures | `main`, tests only | 120 + 60 |
 | 3 | Sensor dead time, true sampling, actuator rate and lag; `distillation` pilot | integration | 200 + 200 |
 | 4 | Process plants | integration | 250 + 240 |
 | 5 | Thermal plants | integration | 300 + 250 |
@@ -204,6 +210,12 @@ terms charge command lag today.
 Wake is left out unless a usable model turns up. Say so in `PHYSICS.md`.
 
 ## Expert protocols, amended
+
+PR 9 also applies `docs/proposals/expert-protocols-noise.md`, which removes the
+twin-run bump test and makes bump tests single runs sized by a measured noise
+band. N8 there must allow for dead time and true sampling. PR 9 reruns the noise
+measurement on the changed plants first, and keys the gains store by task and
+noise level, with today's entries as level 1.
 
 | Task | Amendment |
 |---|---|
