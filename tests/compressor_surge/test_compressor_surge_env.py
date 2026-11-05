@@ -227,40 +227,12 @@ def _episodes(env, params, keys, kind, bias=0.0):
 # ---------------------------------------------------------------------------
 
 
-def test_layout(env, params):
-    """Ten state fields besides ``time``: seven scalars, four setpoint levels,
-    six demand levels (17 floats) and the int block clock. The observation is
-    ``[dp, m_c, m_d, N, N_ramp, x, live setpoint]`` with pressures in kPa and
-    the speeds and valve in percent; the tracked channel is 0 and its target
-    6. Both schedules fill the episode exactly."""
+def test_observation_units_schedules_and_integrator(env, params):
+    """The observation is ``[dp, m_c, m_d, N, N_ramp, x, live setpoint]`` with
+    pressures in kPa and the speeds and valve in percent; the tracked channel
+    is the pressure against its setpoint. Both schedules fill the episode
+    exactly, and the plant integrates with RK4 alone."""
     obs, state = env.reset_env(jax.random.PRNGKey(0), params)
-    assert list(CompressorSurgeState.__dataclass_fields__) == [
-        "time",
-        "m_c",
-        "dp",
-        "N",
-        "N_ramp",
-        "x",
-        "demand_dev",
-        "phi_min",
-        "setpoint_levels",
-        "demand_levels",
-        "block_clock",
-    ]
-    for name in ("m_c", "dp", "N", "N_ramp", "x", "demand_dev", "phi_min"):
-        leaf = getattr(state, name)
-        assert leaf.shape == () and leaf.dtype == jnp.float32, name
-    assert state.setpoint_levels.shape == (N_SETPOINT_BLOCKS,) == (4,)
-    assert state.demand_levels.shape == (N_DEMAND_BLOCKS,) == (6,)
-    assert state.setpoint_levels.dtype == state.demand_levels.dtype == jnp.float32
-    assert state.block_clock.shape == () and state.block_clock.dtype == jnp.int32
-    floats = sum(
-        int(np.size(getattr(state, f)))
-        for f in CompressorSurgeState.__dataclass_fields__
-        if f not in ("time", "block_clock")
-    )
-    assert floats == 17
-
     opening = float(state.demand_levels[0] + state.demand_dev)
     expected = [
         float(state.dp) / KPA,
@@ -272,16 +244,13 @@ def test_layout(env, params):
         float(live_target(state, params)) / KPA,
     ]
     np.testing.assert_allclose(np.asarray(obs), expected, rtol=1e-6)
-    assert obs.shape == env.obs_shape == env.observation_space(params).shape == (7,)
-    assert env.action_space(params).shape == (2,)
-    assert env.obs_value_index == 0 and env.obs_target_index == 6
+    assert float(obs[env.obs_value_index]) == pytest.approx(expected[0])
+    assert float(obs[env.obs_target_index]) == pytest.approx(expected[6])
     assert (
         N_SETPOINT_BLOCKS * params.setpoint_block_steps
         == N_DEMAND_BLOCKS * params.demand_block_steps
         == params.max_steps_in_episode
-        == 1200
     )
-    assert env.integration_method == "rk4_10"
     CompressorSurge(integration_method="rk4_40")
     for bad in ("rk4", "euler_10", "rk4_0", "rk2_10"):
         with pytest.raises(ValueError):

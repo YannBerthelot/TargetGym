@@ -157,22 +157,6 @@ def test_electrical_power_is_torque_times_speed(params):
     assert p2 == pytest.approx(2.0 * p1, rel=1e-6)
 
 
-def test_state_stays_finite_over_an_episode(params):
-    env = WindTurbine()
-    p = params.replace(max_steps_in_episode=200)
-    key = jax.random.PRNGKey(0)
-    _, state = env.reset_env(key, p)
-    _jstep = jax.jit(env.step_env)
-    for _ in range(200):
-        key, sub = jax.random.split(key)
-        _, state, reward, terminated, _ = _jstep(sub, state, jnp.zeros(2), p)
-        for leaf in jax.tree_util.tree_leaves(state):
-            assert np.all(np.isfinite(np.asarray(leaf)))
-        assert np.isfinite(float(reward))
-        if bool(terminated):
-            break
-
-
 # ---------------------------------------------------------------------------
 # 4. Task interface
 # ---------------------------------------------------------------------------
@@ -184,7 +168,6 @@ def test_observation_hides_the_wind(params):
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     state = state.replace(v_wind=42.42, v_mean=37.37)
     obs = env.get_obs(state, params)
-    assert obs.shape == (5,)
     for hidden in (42.42, 37.37):
         assert not bool(jnp.any(jnp.isclose(obs, hidden)))
 

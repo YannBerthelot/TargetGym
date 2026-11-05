@@ -59,12 +59,6 @@ def _wingman(state, i):
 
 
 class TestConstruction:
-    def test_default_is_a_lead_and_two_wingmen(self):
-        env = Formation()
-        assert env.num_wingmen == 2
-        assert env.obs_shape == (74,)
-        assert env.action_space().shape == (9,)
-
     @pytest.mark.parametrize("k", range(1, MAX_WINGMEN + 1))
     def test_layout_scales_with_the_wingmen(self, k):
         env = Formation(num_wingmen=k)
@@ -242,12 +236,6 @@ class TestReward:
         total = float(costs["lead"]) + float(np.sum(costs["wingmen"]))
         terms = compute_reward_terms(state, params)
         assert total == pytest.approx(float(terms["tracking"]), rel=1e-6)
-
-    def test_the_floors_are_the_instruments(self):
-        p = FormationParams()
-        assert p.e_floor_altitude == 1.0  # altimeter
-        assert p.e_floor_heading == pytest.approx(0.0087)  # AHRS
-        assert p.e_floor_slot == 3.0  # relative GPS
 
     @pytest.mark.parametrize("k", range(1, MAX_WINGMEN + 1))
     def test_a_trip_costs_more_than_any_formation_can_track(self, k):

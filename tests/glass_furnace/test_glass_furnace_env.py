@@ -13,10 +13,7 @@ import numpy as np
 import pytest
 
 from target_gym.glass_furnace.env import (
-    N_REGEN_NODES,
-    N_SETPOINTS,
     GlassFurnaceParams,
-    GlassFurnaceState,
     check_is_terminal,
     compute_next_state,
     compute_reward,
@@ -102,27 +99,6 @@ def _settle(key, state, action, p):
 # ---------------------------------------------------------------------------
 # 1. Structural invariants (first principles)
 # ---------------------------------------------------------------------------
-
-
-def test_velocity_vector_has_one_entry_per_state(params):
-    state = _state(params)
-    position = jnp.concatenate(
-        [
-            jnp.array([state.T_crown, state.T_melt, state.T_work, state.m_batch]),
-            state.T_rA,
-            state.T_rB,
-        ]
-    )
-    v, _ = compute_velocity(
-        position,
-        action=0.6,
-        m_pull=params.m_pull,
-        phase=0.0,
-        T_gas=1650.0,
-        params=params,
-    )
-    assert v.shape == (4 + 2 * N_REGEN_NODES,)
-    assert np.all(np.isfinite(np.asarray(v)))
 
 
 def test_more_fuel_gives_a_hotter_flame(params):
@@ -286,7 +262,7 @@ def test_underfiring_and_overfiring_both_terminate():
 
 
 @pytest.mark.parametrize("method", ["rk2_2", "rk4_2", "rk4_4"])
-def test_state_advances_under_each_integrator(method, params):
+def test_fuel_stays_inside_its_range_under_each_integrator(method, params):
     state = _state(params)
     new_state, _ = compute_next_state(
         fuel_raw=0.0,
@@ -295,16 +271,12 @@ def test_state_advances_under_each_integrator(method, params):
         key=jax.random.PRNGKey(0),
         integration_method=method,
     )
-    assert new_state.time == state.time + 1
     # ``fuel_flow`` is what is *delivered*, which is what a gas meter reads and
     # what the observation reports, so the reversal changeover can take it below
     # ``fuel_min`` for a step or two. The action mapping itself still respects
     # the range: the commanded flow enters the pipeline inside it.
     assert 0.0 <= float(new_state.fuel_flow) <= params.fuel_max
     assert params.fuel_min <= float(new_state.fuel_pipeline[-1]) <= params.fuel_max
-    assert new_state.T_rA.shape == (N_REGEN_NODES,)
-    for leaf in jax.tree_util.tree_leaves(new_state):
-        assert np.all(np.isfinite(np.asarray(leaf)))
 
 
 def test_action_is_clipped_to_the_fuel_range(params):
@@ -359,16 +331,3 @@ def test_terminal_on_crown_out_of_bounds(params):
     assert bool(
         check_is_terminal(state.replace(T_crown=params.T_crown_min - 1.0), params)[0]
     )
-
-
-def test_truncation_on_max_steps():
-    p = GlassFurnaceParams(max_steps_in_episode=50)
-    env = GlassFurnace()
-    _, state = env.reset_env(jax.random.PRNGKey(0), p)
-    assert bool(check_is_terminal(state.replace(time=50), p)[1])
-
-
-def test_setpoint_schedule_has_the_declared_length(params):
-    state = _state(params)
-    assert state.target_schedule.shape == (N_SETPOINTS,)
-    assert isinstance(state, GlassFurnaceState)

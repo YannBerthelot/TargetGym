@@ -6,7 +6,6 @@ from target_gym.glass_furnace.env import (
     FUEL_DEAD_TIME_STEPS,
     N_REGEN_NODES,
     N_SETPOINTS,
-    GlassFurnaceParams,
     GlassFurnaceState,
 )
 from target_gym.glass_furnace.env_jax import GlassFurnace
@@ -36,15 +35,10 @@ def _make_state(**overrides) -> GlassFurnaceState:
     return GlassFurnaceState(**defaults)
 
 
-def test_reset_env_returns_obs_and_state():
+def test_reset_places_the_furnace_on_a_consistent_operating_point():
     env = GlassFurnace()
     key = jax.random.PRNGKey(0)
-    obs, state = env.reset_env(key)
-
-    assert obs.shape == env.obs_shape
-    assert isinstance(state, GlassFurnaceState)
-
-    assert state.time == 0
+    _, state = env.reset_env(key)
 
     # Initial crown temperature within the configured initial range
     assert (
@@ -69,62 +63,7 @@ def test_reset_env_returns_obs_and_state():
     # ...and that ordering must be physical: flame > crown > melt > work.
     assert state.T_gas > state.T_crown > state.T_melt > state.T_work
     # Checker stack starts with its hot-to-cold gradient.
-    assert state.T_rA.shape == (N_REGEN_NODES,)
     assert float(state.T_rA[0]) > float(state.T_rA[-1])
-
-
-@pytest.mark.parametrize("method", ["euler_1", "rk2_1", "rk4_1"])
-def test_step_env_updates_state_and_obs(method):
-    env = GlassFurnace(integration_method=method)
-    key = jax.random.PRNGKey(0)
-    obs, state = env.reset_env(key)
-
-    action = jnp.array([0.0])
-
-    obs2, state2, reward, done, info = env.step_env(key, state, action)
-
-    assert obs2.shape == env.obs_shape
-    assert isinstance(state2, GlassFurnaceState)
-    assert state2.time == state.time + 1
-    assert jnp.isfinite(reward)
-    assert done.dtype == jnp.bool_
-
-    assert "last_state" in info
-    assert isinstance(info["last_state"], GlassFurnaceState)
-
-
-def test_action_and_observation_space():
-    env = GlassFurnace()
-
-    a_space = env.action_space()
-    assert a_space.shape == (1,)
-    assert jnp.all(a_space.low == -1.0)
-    assert jnp.all(a_space.high == 1.0)
-
-    o_space = env.observation_space(env.default_params)
-    assert o_space.shape == env.obs_shape
-
-    s_space = env.state_space(env.default_params)
-    assert s_space.shape == len(GlassFurnaceState.__dataclass_fields__)
-
-
-def test_is_terminal_propagates_logic():
-    env = GlassFurnace()
-    # A "nice" state shouldn't terminate
-    state = _make_state()
-    terminated = env.is_terminated(state, env.default_params)
-    truncated = env.is_truncated(state, env.default_params)
-    assert bool(terminated) is False
-    assert bool(truncated) is False
-
-
-def test_get_obs_matches_manual_call():
-    env = GlassFurnace()
-    state = _make_state()
-    obs1 = env.get_obs(state)
-    obs2 = env.get_obs(state, env.default_params)
-    assert obs1.shape == env.obs_shape
-    assert jnp.allclose(obs1, obs2)
 
 
 def test_observation_hides_unmeasurable_states():
@@ -145,24 +84,7 @@ def test_observation_hides_unmeasurable_states():
     )
     state = _make_state(**sentinels)
     obs = env.get_obs(state)
-    assert obs.shape == (5,)
     for hidden in (1234.5, 5678.9, 4321.0, 8765.0, 2468.0):
         assert not bool(
             jnp.any(jnp.isclose(obs, hidden))
         ), f"hidden state {hidden} leaked into the observation"
-
-
-def test_full_episode_is_finite():
-    """Running a short episode with constant zero raw fuel should stay finite."""
-    env = GlassFurnace()
-    params = GlassFurnaceParams(max_steps_in_episode=50)
-    key = jax.random.PRNGKey(0)
-    _, state = env.reset_env(key, params)
-
-    _jstep = jax.jit(env.step_env)
-    for _ in range(50):
-        _, state, reward, done, _ = _jstep(key, state, jnp.array([0.0]), params)
-        assert jnp.isfinite(state.T_crown)
-        assert jnp.isfinite(state.T_melt)
-        assert jnp.isfinite(state.T_work)
-        assert jnp.isfinite(reward)

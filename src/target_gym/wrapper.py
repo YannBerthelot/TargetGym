@@ -5,6 +5,7 @@ import gymnasium as gym
 import jax
 import jax.numpy as jnp
 import numpy as np
+from flax import serialization
 from gymnasium import spaces
 
 from target_gym.base import EnvParams
@@ -46,8 +47,8 @@ class GymnasiumEnv(gym.Env):
         if hasattr(self.jax_env, "action_space"):
             action_space = self.jax_env.action_space()
             self.action_space = spaces.Box(
-                low=np.array(action_space.low),
-                high=np.array(action_space.high),
+                low=np.broadcast_to(action_space.low, action_space.shape),
+                high=np.broadcast_to(action_space.high, action_space.shape),
                 shape=action_space.shape,
                 dtype=np.float32,
             )
@@ -107,14 +108,18 @@ class GymnasiumEnv(gym.Env):
         # report the real flag instead of the hardcoded False this used
         # to return.
         truncated = self.jax_env.is_truncated(new_state, self.env_params)
+        # NumPy like the rest of the step: Gymnasium compares info leaves as
+        # NumPy or Python values and has no case for JAX's. It compares
+        # anything else with ``==``, which a state dataclass with an array
+        # field cannot answer, so the state goes out as a plain dict.
+        info = jax.tree_util.tree_map(np.asarray, info)
+        info["last_state"] = serialization.to_state_dict(info["last_state"])
         return (
             np.array(obs, dtype=np.float32),
             float(reward),
             bool(terminated),
             bool(truncated),
-            # NumPy like the rest of the step: Gymnasium compares info
-            # leaves as NumPy or Python values and has no case for JAX's.
-            jax.tree_util.tree_map(np.asarray, info),
+            info,
         )
 
     def render(self):

@@ -227,37 +227,14 @@ def _full_heating_from_extinction(params, integration_method="rk4_1", n=40):
 # ---------------------------------------------------------------------------
 
 
-def test_layout(env, params):
-    """Eleven state entries besides ``time``: four scalars, six levels and the
-    block clock. The observation is ``[C_a, T, T_j, live target]``."""
+def test_observation_is_the_measured_state_and_the_live_target(env, params):
+    """The observation is ``[C_a, T, T_j, live target]``, the tracked channel
+    is the concentration, and the blocks fill the episode exactly."""
     obs, state = env.reset_env(jax.random.PRNGKey(0), params)
-    assert list(UnstableCSTRState.__dataclass_fields__) == [
-        "time",
-        "C_a",
-        "T",
-        "T_j",
-        "Ti_dev",
-        "target_levels",
-        "block_clock",
-    ]
-    for name in ("C_a", "T", "T_j", "Ti_dev"):
-        leaf = getattr(state, name)
-        assert leaf.shape == () and leaf.dtype == jnp.float32, name
-    assert state.target_levels.shape == (N_BLOCKS,)
-    assert state.target_levels.dtype == jnp.float32
-    assert state.block_clock.shape == () and state.block_clock.dtype == jnp.int32
-    entries = sum(
-        int(np.size(getattr(state, f)))
-        for f in UnstableCSTRState.__dataclass_fields__
-        if f != "time"
-    )
-    assert entries == 11
-
     expected = [state.C_a, state.T, state.T_j, live_target(state, params)]
     np.testing.assert_array_equal(np.asarray(obs), np.asarray(expected))
-    assert obs.shape == env.obs_shape == env.observation_space(params).shape == (4,)
-    assert env.action_space(params).shape == (1,)
-    assert env.obs_value_index == 0 and env.obs_target_index == 3
+    assert float(obs[env.obs_value_index]) == float(state.C_a)
+    assert float(obs[env.obs_target_index]) == float(live_target(state, params))
     assert params.max_steps_in_episode == N_BLOCKS * params.block_steps
 
 
@@ -862,36 +839,6 @@ def test_rk4_1_matches_rk4_16(params):
 # ---------------------------------------------------------------------------
 # 9. JAX transforms
 # ---------------------------------------------------------------------------
-
-
-def test_step_is_jittable_and_vmappable(env, params, step):
-    """``step_env`` gives the same step under ``jit``, and reset and step batch
-    over seeds under ``vmap`` and run under ``lax.scan``."""
-    key = jax.random.PRNGKey(4)
-    _, state = env.reset_env(key, params)
-    action = jnp.array([0.1])
-    obs_e, s_e, r_e, _, _ = env.step_env(key, state, action, params)
-    obs_j, s_j, r_j, _, _ = step(key, state, action, params)
-    np.testing.assert_allclose(np.asarray(obs_j), np.asarray(obs_e), rtol=1e-6)
-    assert float(r_j) == pytest.approx(float(r_e), rel=1e-4, abs=1e-4)
-    assert int(s_j.block_clock) == int(s_e.block_clock) == 1
-
-    n = 8
-    keys = jax.random.split(key, n)
-    obs, states = jax.vmap(lambda k: env.reset_env(k, params))(keys)
-    assert obs.shape == (n, 4)
-    obs2, states2, rewards, terminated, info = jax.vmap(
-        lambda k, s: env.step_env(k, s, action, params)
-    )(keys, states)
-    assert obs2.shape == (n, 4) and rewards.shape == (n,) and terminated.shape == (n,)
-    assert info["tripped"].shape == (n,)
-    assert states2.target_levels.shape == (n, N_BLOCKS)
-    assert np.all(np.isfinite(np.asarray(rewards)))
-
-    scanned, rewards, _ = _rollout(env, params, state, action, key, 50)
-    assert rewards.shape == (50,)
-    assert np.all(np.isfinite(np.asarray(rewards)))
-    assert int(scanned.time[-1]) == 50
 
 
 # ---------------------------------------------------------------------------

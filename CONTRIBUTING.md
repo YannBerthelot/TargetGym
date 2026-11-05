@@ -87,6 +87,30 @@ smaller library than the one that ships.
 
 ## Adding an environment
 
+### Start with a tracer bullet
+
+Register a new environment first, with the crudest dynamics that run, and refine
+the physics afterwards. One state lagging toward the action is enough to start,
+with no expert yet and a `baselines_note` that says so:
+
+```bash
+pytest tests/test_env_conformance.py -k <name> -m ""
+```
+
+That runs the whole battery from day one, so a mistake in the interface shows up
+before any physics depends on it: spaces, the clock, keys, `jit` and `vmap`, the
+Gymnasium view. A one-state plant of about 130 lines passed it in 5 s. Then refine
+the dynamics behind that interface, with the battery green at each step.
+
+The rest of the suite reads the registry too, so a task registered this way fails
+elsewhere: 17 tests when this was tried on 2026-11-04. Read those as the list of
+what the task still needs, and leave them for last, because each one records
+something the physics decides: its exports, `PHYSICS.md`, its page in the docs, its
+capability tags, a renderer, its reward documentation, a version stamp and a hold
+row. Keep the work on a branch until they pass.
+
+### What a finished environment holds
+
 An environment lives in its own package under `src/target_gym/`, following the
 shape of an existing one such as `src/target_gym/boiler_drum/`:
 

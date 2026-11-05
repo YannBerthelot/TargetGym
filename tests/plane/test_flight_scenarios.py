@@ -293,12 +293,13 @@ def test_flying_into_the_ground_trips_the_aircraft(env, params):
     assert traj["z"][-1] > -(one_step + 1.0)
 
 
-@pytest.mark.parametrize(
-    "power_raw,stick_raw",
-    [(-1.0, -1.0), (-1.0, 1.0), (1.0, -1.0), (1.0, 1.0), (0.0, 0.0)],
-)
-def test_extreme_inputs_stay_numerically_finite(env, params, power_raw, stick_raw):
-    """Saturated controls may depart controlled flight, but must not produce NaN."""
+@pytest.mark.parametrize("power_raw,stick_raw", [(-1.0, 1.0), (1.0, -1.0)])
+def test_opposed_saturated_controls_stay_numerically_finite(
+    env, params, power_raw, stick_raw
+):
+    """Saturated controls may depart controlled flight, but must not produce
+    NaN. Conformance saturates both axes the same way; these are the corners
+    it does not reach."""
     traj = fly(env, params, power_raw=power_raw, stick_raw=stick_raw, steps=120)
     for name in ("z", "v", "theta", "alpha", "z_dot"):
         assert np.all(np.isfinite(traj[name])), f"non-finite {name}"

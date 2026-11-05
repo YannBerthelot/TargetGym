@@ -126,6 +126,36 @@ jobs:
           exit 1
         fi
 
+  learning:
+    # A short PPO run on one task per group (tests/rl/test_learning.py). Ajax
+    # needs JAX 0.10 or later, which uv.lock gives Python 3.14 alone. The tests
+    # skip without the learning group, so a skip here means it did not install,
+    # and fails the job.
+    name: learning
+    needs: records
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      UV_PYTHON: "3.14"
+      JAX_PLATFORMS: cpu
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: ${{ env.UV_VERSION }}
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+    - name: Install dependencies
+      run: uv sync --frozen --group dev --group learning
+    - name: Run the learning tests
+      run: |
+        set -o pipefail
+        uv run pytest -q -m "learning and not records" -rs | tee "$RUNNER_TEMP/learning.log"
+        if grep -q " skipped" "$RUNNER_TEMP/learning.log"; then
+          echo "::error::a learning test skipped, so the learning group is not installed"
+          exit 1
+        fi
+
   test:
     # Every interpreter in the project's requires-python window. The columns
     # run concurrently, so covering four of them costs runner minutes but not

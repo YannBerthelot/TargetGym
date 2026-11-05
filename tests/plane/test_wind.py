@@ -37,12 +37,6 @@ def _final_alt_2d(env, params, n=300):
 
 
 class TestBackwardCompatible:
-    def test_default_no_wind_obs_shape_2d(self):
-        assert Plane().obs_shape == (10,)
-
-    def test_default_no_wind_obs_shape_3d(self):
-        assert Plane3D().obs_shape == (15,)
-
     def test_zero_wind_gust_stays_zero(self):
         env = Plane()
         params = PlaneParams(max_steps_in_episode=50, turbulence_sigma=0.0, **FIXED)
