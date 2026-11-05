@@ -1,13 +1,13 @@
 {
   "M": 5,
   "N": 21,
-  "P": 26,
+  "P": 91,
   "P_set_by": {
     "cv": "phi_min",
     "mv": "speed",
     "seed": 106
   },
-  "P_steps": 26,
+  "P_steps": 91,
   "T_c_seconds": 0.1,
   "T_c_set_by": {
     "cv": "dp",
@@ -42,7 +42,7 @@
   "dt": 0.1,
   "episode_samples": 1200,
   "episode_steps": 1200,
-  "generated": "2026-11-03T21:02:28+00:00",
+  "generated": "2026-11-04T20:04:10+00:00",
   "pairs": [
     {
       "M": null,
@@ -5716,7 +5716,13 @@
     }
   ],
   "plans_to_episode_end": false,
-  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 and 2",
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 3",
+  "ramp": 65,
+  "ramp_set_by": {
+    "cv": "dp",
+    "mv": "speed",
+    "seed": 106
+  },
   "retests": 40,
   "status": "compliant",
   "test": {

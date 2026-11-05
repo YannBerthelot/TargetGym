@@ -225,12 +225,18 @@ def _merge_reports(reports: list[dict]) -> dict:
     weighted = sum(
         r.get("solver_mean_iters", 0.0) * r.get("solver_calls", 0) for r in reports
     )
-    return {
+    out = {
         "solver_calls": calls,
         "solver_failures": sum(r.get("solver_failures", 0) for r in reports),
         "solver_capped": sum(r.get("solver_capped", 0) for r in reports),
         "solver_mean_iters": round(weighted / calls, 1),
     }
+    # An oracle on the shared solver certifies every solve
+    # (``oracles.controller``): the worst of each measure, and the counts.
+    for key in sorted({k for r in reports for k in r} - set(out)):
+        values = [r[key] for r in reports if key in r]
+        out[key] = max(values) if key.startswith("solver_max_") else sum(values)
+    return out
 
 
 def _batch_seeds() -> bool:

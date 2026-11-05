@@ -41,13 +41,31 @@ import numpy as np
 
 from target_gym import records
 from target_gym.identification import TRAIN_SEEDS, Plant, evidence, identify
-from target_gym.oracles.horizon import episode_samples, sample_time, task_horizon
+from target_gym.oracles.horizon import (
+    episode_samples,
+    sample_time,
+    task_horizon,
+    task_ramp,
+)
 from target_gym.registry import REGISTRY
 
 EVIDENCE = pathlib.Path(__file__).resolve().parent.parent / "evidence"
 #: What the package keeps of a task's horizon (H13); the rest is evidence.
-SUMMARY = ("protocol", "compliant", "T_c_steps", "N", "M", "P", "T_c_set_by")
-SUMMARY += ("P_set_by", "counts", "cpu", "generated")
+SUMMARY = ("protocol", "compliant", "T_c_steps", "N", "M", "ramp", "P")
+SUMMARY += ("T_c_set_by", "P_set_by", "ramp_set_by", "counts", "cpu", "generated")
+#: H21: a task's tracked CV with a target range, and each rate-limited MV's
+#: slower rate, in raw action units per second as the steps and gains are. The
+#: wind pitch joins with C2's rebuild; the reactor's rod has no compliant horizon.
+RATE_LIMITS = {
+    "compressor_surge": (
+        "dp",
+        lambda p: p.p_ref_range[1] - p.p_ref_range[0],
+        lambda p: {
+            "speed": 2 * p.drive_rate / (p.N_max - p.N_min),
+            "recycle": 2 * min(p.valve_open_rate, p.valve_close_rate),
+        },
+    ),
+}
 
 
 def write(name: str, row: dict) -> None:
@@ -251,6 +269,19 @@ def measure(name: str) -> dict:
     if top is not None:  # else non-compliant: no protocol horizon (N3)
         (N, M, P), n_samples = rows[top], episode_samples(n_ep, tc)
         fastest = min(valid, key=lambda k: sample_time(valid[k]))
+        ramp, ramp_key = 0, None
+        if name in RATE_LIMITS:
+            # A gain needs a settled fit, not a quiet one: V1, the noise test
+            # alone failing, leaves it usable (H21).
+            usable = {
+                key[k]: r["fit"]
+                for k, r in pairs.items()
+                if r.get("fit") and r["label"] != "insignificant"
+                and set(r.get("failed", [])) <= {"V1"}
+            }  # fmt: skip
+            cv, span, rates = RATE_LIMITS[name]
+            ramp, ramp_key = task_ramp(usable, cv, float(span(p)), rates(p), tc * dt)
+        P += ramp
         horizon = {
             "episode_samples": n_samples,
             "T_c_steps": tc,
@@ -258,9 +289,11 @@ def measure(name: str) -> dict:
             "T_c_set_by": dict(zip(at, fastest)),
             "N": N,
             "M": M,
+            "ramp": ramp,
             "P": P,
             "P_steps": P * tc,
             "P_set_by": dict(zip(at, top)),
+            **({"ramp_set_by": dict(zip(at, ramp_key))} if ramp_key else {}),
             "plans_to_episode_end": P >= n_samples,
         }
     labels = [r["label"] for r in pairs.values()]
@@ -275,7 +308,7 @@ def measure(name: str) -> dict:
         )
     )
     row = {
-        "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 and 2",
+        "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 3",
         "dt": dt,
         "episode_steps": n_ep,
         "compliant": bool(horizon),

@@ -30,6 +30,12 @@ what follows is the trace of that earlier stance.
 - **Margins and failed solves (3, 5):** a hard constraint at each trip
   limit; elastic slack priced at the trip cost when no plan is feasible; on
   a failed solve, the previous plan's next action, never the expert.
+  Amended 2026-11-04: a warm solve that fails or hits the cap is first solved
+  again cold (G11 in [oracle-solver.md](oracle-solver.md)); the constraint sits inside the limit by the planner's
+  worst one-step error on it and the solver's tolerance (K11 in
+  [oracle-smoothing-protocol.md](oracle-smoothing-protocol.md), Amendment
+  1), and an oracle under the rule beats its expert on every recorded seed
+  (a records check).
 - **Horizon (2):** none of the three options. The owner asked for a clear
   protocol from practice: [oracle-horizon-protocol.md](oracle-horizon-protocol.md),
   Cooper's DMC recipe at Cooper's sample time, accepted the same day.

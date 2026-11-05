@@ -127,6 +127,11 @@ class EnvSpec:
         ``pid_gains.json`` keys the task's oracle still reads, hashed into its
         oracle fingerprint, so an expert retune stales those oracle rows too.
         Empty once an oracle stands on its own.
+    oracle_data:
+        The data files (relative to ``src/target_gym``) an oracle on the
+        shared solver (``target_gym.oracles``) reads: its horizon summary and
+        its smoothing widths. Their values enter its oracle fingerprint, which
+        then covers the shared solver's modules in place of experts/mpc.py.
     baselines_note:
         Set when ``make_pid``/``make_mpc`` are ``None``: a short explanation
         of why, surfaced by the baseline-coverage test so a missing expert is
@@ -189,6 +194,7 @@ class EnvSpec:
     gains_keys: tuple[str, ...] = ()
     oracle_reads: tuple[str, ...] = ()
     oracle_gains_keys: tuple[str, ...] = ()
+    oracle_data: tuple[str, ...] = ()
     baselines_note: str | None = None
     expert_degraded: str | None = None
     mpc_degraded: str | None = None
@@ -473,6 +479,12 @@ def _mpc(factory_name: str, module: str) -> Callable[[Any, Any], Any]:
     return make
 
 
+def _shared_oracle(name: str) -> tuple[str, ...]:
+    """The data an oracle on the shared solver reads: its horizon summary
+    and its smoothing widths (``EnvSpec.oracle_data``)."""
+    return (f"data/oracle_horizons/{name}.json", f"data/oracle_widths/{name}.json")
+
+
 # ---------------------------------------------------------------------------
 # The registry
 # ---------------------------------------------------------------------------
@@ -682,6 +694,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # within twice the level it holds. At 100 the scored hold was the last
         # third.
         tuned_gains_key="cstr",
+        oracle_data=_shared_oracle("cstr"),
         version=3,
     ),
     EnvSpec(
@@ -699,6 +712,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 150 steps, twice the 63 steps the SIMC PI takes to come within twice
         # the level it holds. At 100 the scored hold was the last 37 steps.
         tuned_gains_key="first_order",
+        oracle_data=_shared_oracle("first_order"),
         version=3,
     ),
     EnvSpec(
@@ -718,6 +732,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # non-minimum phase (gamma1 + gamma2 = 0.4), which caps any feedback
         # loop near a 64 s time constant. At 500 steps it was still settling.
         tuned_gains_key="four_tank",
+        oracle_data=_shared_oracle("four_tank"),
         version=3,
     ),
     EnvSpec(
@@ -910,8 +925,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 1200 steps = 60 min at 3 s: six 10-minute blocks, with no
         # effectiveness_overrides.
         tuned_gains_key="unstable_cstr",
-        oracle_reads=("pc_gym/unstable_cstr/experts.py", "experts/pid.py"),
-        oracle_gains_keys=("unstable_cstr",),
+        oracle_data=_shared_oracle("unstable_cstr"),
         disturbance_fields=("Ti_dev",),
         noise_fields=("Ti_sigma",),
         # The balances and the ten parameter values are imported from cstr, so an
@@ -935,8 +949,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 1200 steps = 120 s at 0.1 s: four 30-second setpoint blocks and six
         # 20-second demand blocks, with no effectiveness_overrides.
         tuned_gains_key="compressor_surge",
-        oracle_reads=("compressor_surge/experts.py", "experts/pid.py"),
-        oracle_gains_keys=("compressor_surge",),
+        oracle_data=_shared_oracle("compressor_surge"),
         # The OU deviation of the consumers' opening, zero-mean;
         # demand_sigma is its stationary sd.
         disturbance_fields=("demand_dev",),

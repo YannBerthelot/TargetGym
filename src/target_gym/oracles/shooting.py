@@ -22,8 +22,15 @@ stage past the horizon carries the last planned stage's rows. It costs
 nothing, and its move is held to the last planned one by a cost that cannot
 move the optimum, since that move reaches nothing costed. Stage 0's rows
 would bind the measured state and are dropped.
+
+A solve may plan fewer stages than it was built for (``active``), as the
+horizon shrinks at the episode's end (H_k = min(P, N_ep - k)): the stages
+past it cost nothing, carry no rows, hold their moves to the last planned
+one in the same way and hold their state, since no plant runs past the
+episode (G9), so one compiled problem serves every H_k.
 """
 
+import functools
 from typing import Callable, NamedTuple
 
 import jax
@@ -50,6 +57,9 @@ MAX_ITER, TOL = 150, 1e-8
 COLD_MU, COLD_PUSH, WARM_MU, WARM_PUSH = 0.1, 1e-2, 1e-4, 1e-9
 #: IPOPT's ``bound_relax_factor`` and ``nlp_scaling_max_gradient`` (read).
 BOUND_RELAX, MAX_GRADIENT = 1e-8, 100.0
+#: What a converged plan may still pass a limit by, per unit of max(1, |bound|):
+#: IPOPT's bound relaxation and its tolerance, backed off every limit.
+SOLVER_SLACK = BOUND_RELAX + TOL
 
 
 class Hinge(NamedTuple):
@@ -63,11 +73,16 @@ class Hinge(NamedTuple):
 
 
 class Limit(NamedTuple):
-    """A hard limit (T3) ``lo <= q <= hi``, elastic at ``price`` per unit."""
+    """A hard limit (T3) ``lo <= q <= hi``, elastic at ``price`` per unit,
+    planned ``backoff`` inside each bound: the planner's worst one-step error
+    on q, from smoothing and noise (the smoothing protocol's K11). The builder
+    backs it off by IPOPT's bound relaxation and tolerance as well, never past
+    the middle, so a limit with no inside (lo = hi) is held as it is."""
 
     lo: float = -np.inf
     hi: float = np.inf
     price: float = 1.0
+    backoff: float = 0.0
 
 
 class StageModel(NamedTuple):
@@ -76,7 +91,14 @@ class StageModel(NamedTuple):
     ``(x_next, cost, y)``: the cost and outputs of the state reached, ``y``
     one argument r per hinge then one quantity q per limit. ``data`` is the
     solve's exogenous data, any pytree. ``lo`` and ``hi`` bound the move
-    (T1: the model never clips it)."""
+    (T1: the model never clips it). ``move_rows(x, u)``, rows >= 0 affine in
+    a stage's start x and its move u, bound each move from its state: an
+    actuator's reach over the hold (T1r), stage 0's from the measured state;
+    ``move_scale`` is then each move's typical size, its reach, for the
+    variable scaling (default: its range). ``tie`` prices each planned move's
+    squared change from the one before, in that scale, u_hold before the
+    first: input move suppression at a size that only picks one plan among
+    equal ones, where the reward leaves moves undetermined (G10)."""
 
     step: Callable
     block: int
@@ -84,6 +106,9 @@ class StageModel(NamedTuple):
     hi: tuple
     hinges: tuple = ()
     limits: tuple = ()
+    move_rows: Callable | None = None
+    move_scale: tuple | None = None
+    tie: float = 0.0
 
 
 class Certificate(NamedTuple):
@@ -131,9 +156,12 @@ class Shooting:
     """The NLP of ``model`` over ``n_stages`` held moves, for ``nx`` states.
 
     ``solve(data, x0, u_hold, previous=None)`` plans from the measured state
-    x0. Cold, it starts from the moves ``u_hold`` that hold the actuators
-    where they are, never from an expert; warm, from ``previous`` and its
-    multipliers shifted one stage. A failed solve returns the plan it
+    x0. Cold, it starts with every state at x0 and the moves ``u_hold`` that
+    hold the actuators where they are, never from an expert (G8: multiple
+    shooting needs no simulated start, which an unstable plant or a pump
+    held off would run away from); warm, from ``previous`` and its
+    multipliers shifted one stage (the caller retries a warm solve cold if
+    it fails or hits the cap, G11). A failed solve returns the plan it
     started from, so its next move is the previous plan's next one. Jitted;
     run it under x64 for its tolerance.
     """
@@ -153,13 +181,24 @@ class Shooting:
         xk = np.concatenate([np.full((1, nxa), n), self.xi[:-1]])  # x_0: no variable
         self.dyn = np.concatenate([xk[:, :nx], self.ui], 1)  # what a stage reads
         self.loc = np.concatenate([xk, self.ui, self.ei], 1)  # what its rows read
-        self.active = (np.arange(N) > 0).astype(float)
-        self.weight = (np.arange(N) < n_stages).astype(float)
         self.htol = np.array([h.tol for h in m.hinges], float)
         self.absolute = np.array([h.absolute for h in m.hinges], bool)
-        lim = np.array([(q.lo, q.hi, q.price) for q in m.limits], float).reshape(nl, 3)
-        self.lim_lo, self.lim_hi, self.price = lim.T
+        lim = np.array(
+            [(q.lo, q.hi, q.price, q.backoff) for q in m.limits], float
+        ).reshape(nl, 4)
+        lo, hi, self.price, back = lim.T
+        with np.errstate(invalid="ignore"):  # inf bounds stay inf
+            in_lo = back + SOLVER_SLACK * np.maximum(1.0, np.abs(lo))
+            in_hi = back + SOLVER_SLACK * np.maximum(1.0, np.abs(hi))
+            # Never past the middle: a limit with no inside (lo = hi, an
+            # elastic equality such as a line-out) is held as it is.
+            half = np.where(np.isfinite(hi - lo), 0.5 * (hi - lo), np.inf)
+            self.lim_lo = lo + np.minimum(in_lo, half)
+            self.lim_hi = hi - np.minimum(in_hi, half)
         self.solve = jax.jit(self._solve)
+        #: A warm solve from ``previous`` as it stands, not shifted: the next
+        #: rung of a cold solve's width continuation (K7).
+        self.resolve = jax.jit(functools.partial(self._solve, shift=False))
 
     def unpack(self, z):
         N, a, b = self.N, self.N * self.nxa, self.N * (self.nxa + self.nu)
@@ -209,7 +248,9 @@ class Shooting:
         0 on stage 0, whose rows then only bound its slacks."""
         R, Q, t, el = self._split(xa, e)
         lo, hi = (np.flatnonzero(np.isfinite(v)) for v in (self.lim_lo, self.lim_hi))
-        return jnp.concatenate([
+        moves = self.model.move_rows
+        reach = [] if moves is None else [jnp.atleast_1d(moves(xa[: self.nx], u))]
+        return jnp.concatenate(reach + [
             u - jnp.asarray(self.model.lo), jnp.asarray(self.model.hi) - u,
             (t - a * (R - self.htol)).ravel(), t.ravel(),
             (t + a * (R + self.htol))[:, self.absolute].ravel(),
@@ -238,15 +279,20 @@ class Shooting:
             out = out + h.weight * jnp.sum(t[:, i] ** h.power)
         return out
 
-    def _solve(self, data, x0, u_hold, previous: Plan | None = None):
+    def _solve(self, data, x0, u_hold, previous=None, active=None, shift=True):
         N, nx, nxa, nu, n = self.N, self.nx, self.nxa, self.nu, self.n
         b, ui, ei, dyn, loc = self.model.block, self.ui, self.ei, self.dyn, self.loc
         cold = previous is None
-        ks, act, wk = jnp.arange(N), jnp.asarray(self.active), jnp.asarray(self.weight)
+        ks = jnp.arange(N)
+        active = self.S if active is None else active
+        wk = (ks < active).astype(x0.dtype)  # the costed stages
+        act = ((ks > 0) & (ks <= active)).astype(x0.dtype)  # rows on their outputs
+        pin = ((ks > 0) & (ks >= active)).astype(x0.dtype)  # moves reaching nothing
         x0a = jnp.concatenate([x0, jnp.zeros(nxa - nx, x0.dtype)])
 
         def stage(v, k):
-            return self._stage(data, x0, v, k)
+            nxt, cost = self._stage(data, x0, v, k)
+            return jnp.where(k >= active, nxt.at[:nx].set(v[:nx]), nxt), cost
 
         def V_of(z):
             xs, us, _ = self.unpack(z)
@@ -254,25 +300,31 @@ class Shooting:
                 [jnp.concatenate([x0a[None], xs[:-1]])[:, :nx], us], 1
             )
 
-        def feasible(us, es):
-            """The states re-simulated from the moves (the restoration), each
-            slack raised to what its rows need."""
-
-            def advance(x, k):
-                nxt = stage(jnp.concatenate([x, us[k]]), k)[0]
-                return nxt[:nx], nxt
-
-            xs = jax.lax.scan(advance, x0, ks)[1]
+        def slacked(xs, us, es):
+            """z of the states, moves and slacks, each slack raised to what
+            its rows need."""
             need = jax.vmap(self._need)(jnp.concatenate([x0a[None], xs[:-1]]), act)
             return jnp.concatenate(
                 [xs.ravel(), us.ravel(), jnp.maximum(es, need).ravel()]
             )
 
+        def feasible(us, es):
+            """The states re-simulated from the moves (the restoration)."""
+
+            def advance(x, k):
+                nxt = stage(jnp.concatenate([x, us[k]]), k)[0]
+                return nxt[:nx], nxt
+
+            return slacked(jax.lax.scan(advance, x0, ks)[1], us, es)
+
         if cold:
-            z0 = feasible(jnp.tile(u_hold, (N, 1)), jnp.zeros((N, self.ne)))
+            # Every state at x0, each with the outputs of one stage from it.
+            held = jnp.concatenate([x0, u_hold])
+            xs = jax.vmap(lambda k: stage(held, k)[0])(ks).at[:, :nx].set(x0)
+            z0 = slacked(xs, jnp.tile(u_hold, (N, 1)), jnp.zeros((N, self.ne)))
             lam0 = jnp.zeros(N * nxa)
         else:
-            z0, lam0, w0 = self.shift(previous)
+            z0, lam0, w0 = self.shift(previous) if shift else previous[:3]
 
         def f(z):
             l = jax.vmap(stage)(V_of(z), ks)[1]
@@ -326,6 +378,8 @@ class Shooting:
         du = jnp.maximum(
             jnp.abs(jnp.asarray(self.model.lo)), jnp.abs(jnp.asarray(self.model.hi))
         )
+        if self.model.move_scale is not None:
+            du = jnp.asarray(self.model.move_scale, du.dtype)
         de = jnp.concatenate([jnp.ones(b * self.nh), 1.0 / jnp.asarray(self.price)])
         D = jnp.concatenate([jnp.tile(dx, N), jnp.tile(du, N), jnp.tile(de, N)])
         Rs, Dl = D[: N * nxa], jnp.concatenate([D, jnp.ones(1)])[loc]  # (N, nloc)
@@ -339,19 +393,31 @@ class Shooting:
             jnp.sum(Gk != 0, -1) == 1, 1.0 / big, jnp.minimum(1.0, MAX_GRADIENT / big)
         )
         Gh, mrow = Gh * rs[:, :, None], Gk.shape[1]
+        # Stage 0's rows read the measured state, a constant: into g0.
+        Gh = Gh.at[0, :, :nxa].set(0.0)
         G = StageRows(Gh[..., :nxa], Gh[..., nxa : nxa + nu], Gh[..., nxa + nu :])
-        rs, g0k = rs.ravel(), (jax.vmap(self._rows)(*zeros, act) * rs).ravel()
+        starts = zeros[0].at[0].set(x0a)
+        rs, g0k = (
+            rs.ravel(),
+            (jax.vmap(self._rows)(starts, *zeros[1:], act) * rs).ravel(),
+        )
         g0 = g0k + BOUND_RELAX * jnp.maximum(1.0, jnp.abs(g0k))
 
-        a, p = ui[-1], ui[-2]  # the stage past the horizon holds the last move
         osc = jnp.minimum(
             1.0, MAX_GRADIENT / jnp.max(jnp.abs(D * derivs(z0, None, False)[0]))
         )
+        # Each move's weight on its change from the one before: the pin past
+        # the plan, and the tie-break on it, in the scaled objective's units.
+        weight = pin + osc * self.model.tie * wk
+
+        def change(zh):
+            """Each scaled move less the one before, u_hold before the first."""
+            return jnp.diff(zh[ui], axis=0, prepend=(u_hold / du)[None])
 
         def scaled(zh, lam, hess=True):
             gf, H, J, c = derivs(D * zh, lam / (osc * Rs), hess)
-            d = 2.0 * (zh[a] - zh[p])
-            gf = (osc * D * gf).at[a].add(d).at[p].add(-d)
+            d = 2.0 * weight[:, None] * change(zh)
+            gf = (osc * D * gf).at[ui].add(d).at[ui[:-1]].add(-d[1:])
             J = StageJacobian(
                 J.E / Rk[:, :, None] * Rk[:, None, :],
                 J.A / Rk[:, :, None] * Dl[:, None, :nxa],
@@ -360,8 +426,10 @@ class Shooting:
             if hess:
                 u = nxa + np.arange(nu)
                 Dk = osc * Dl[:, :, None] * H.D * Dl[:, None, :]
-                Dk = Dk.at[-2:, u, u].add(2.0)
-                P = H.P.at[-1, np.arange(nu), np.arange(nu)].add(-2.0)
+                both = 2.0 * (weight + jnp.concatenate([weight[1:], jnp.zeros(1)]))
+                Dk = Dk.at[:, u, u].add(both[:, None])
+                off = -2.0 * weight.at[0].set(0.0)  # no move before stage 0's
+                P = H.P.at[:, np.arange(nu), np.arange(nu)].add(off[:, None])
                 H = StageHessian(Dk, P, osc * H.end)
             return gf, H, J, c / Rs
 
@@ -370,7 +438,7 @@ class Shooting:
             return feasible(us, es) / D
 
         nlp = NLP(
-            f=lambda zh: osc * f(D * zh) + jnp.sum((zh[a] - zh[p]) ** 2),
+            f=lambda zh: osc * f(D * zh) + jnp.sum(weight[:, None] * change(zh) ** 2),
             c=lambda zh: c_fn(D * zh) / Rs, derivs=scaled, G=G, g0=g0, restore=restore,
             kkt=stage_kkt_solve, barrier=stage_barrier, shift=stage_shift,
         )  # fmt: skip

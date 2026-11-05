@@ -19,6 +19,7 @@ RECORD_CHECKS = {
     "tests/experts/test_mpc_baselines.py": {
         "test_recorded_baseline_still_describes_this_tree",
         "test_mpc_controls_at_least_as_well_as_the_pid",
+        "test_an_oracle_under_the_rule_beats_its_expert_on_every_seed",
     },
     "tests/test_reward_contract.py": {
         "test_recorded_protocol_row_still_describes_this_tree",

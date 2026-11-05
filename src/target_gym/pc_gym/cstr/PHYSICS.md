@@ -140,19 +140,27 @@ below.
 from the sampled setpoint. That is inherited from PC-gym and is why the shared
 conformance suite skips its PRNG-hygiene checks.
 
-**The oracle plans the rest of the episode.** Determinism and a 150-step
-episode make the plant's optimum computable, so the MPC slot holds it:
-`NewtonMPC` (iterative LQR) over every remaining step of the environment's own
-`step_env`, re-solved from the true state every step. Its cost is the
-concentration's tracking term in floor units, with the steps of the
-protocol's 12-step burn-in weighted 1e-3. On the protocol seeds it scores
-about 1.5e-8 per step with zero trips, and holds the target to float32
-resolution once settled. It gives, to the unit, the returns of the IPOPT
-shrinking-horizon NLP it replaced in November 2026, which had in turn
-replaced, in the oracle audit (2026-10), PC-gym's 5-step do-mpc controller,
-whose move penalty, written against a cost in raw mol/L, was 1e4 in floor
-units and alone made its 0.317 per step. `e_floor` is the analyser's
-resolution and `rho_floor` is 0, both documented minima, so neither moved.
+**The oracle.** The MPC slot is a problem definition, not a tuned
+controller (docs/proposals/oracle-audit.md): the shared solver's oracle
+(`target_gym.oracles`). Once every T_c, Cooper's sample time from the
+horizon protocol (one step here, `data/oracle_horizons/cstr.json`), it plans
+P = 32 moves from the true state and applies the first. Near the end of the
+episode the plan shrinks to the steps that are left. The plan maximises the
+episode reward over the horizon on the environment's own dynamics with the
+noise zeroed. Two rewrites make that problem smooth without changing it
+on any plan in the box: the coolant command's clip is replaced by a bound
+on the move, and the tracking term is written as (e / e_floor)^2, which is
+the reward itself since e_tol is 0 and p is 2. The trip test is constant,
+so no limit enters, and nothing is smoothed. IPOPT's algorithm solves it
+with exact Hessians to a scaled KKT error of 1e-8, or stops at 150
+iterations. A cold start puts every planned state at the measured one and
+holds the coolant the reset records, which clips to full cooling since the
+reset carries none, and each later solve starts
+from the last plan shifted one step. A warm solve that fails or hits the cap is solved again cold,
+and one that still fails applies the last plan's next move. Every solve's certificate (KKT error, iterations, violation, and
+the plan replayed on `step_env`) is summed into the record. `e_floor` is the
+analyser's resolution and `rho_floor` is 0, both documented minima, so the
+oracle sets neither.
 
 ---
 

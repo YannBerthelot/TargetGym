@@ -19,7 +19,7 @@ sensitivity table), **measured** (from a repo script run on the built env).
 `--section pnr` or `--sensitivity` names the part of it that prints the
 figure. Its tables score a hold on a fixed window of their own, minutes 6 to
 8.4 of each block (120 <= block_clock % 200 < 168), which ends before the
-MPC's 32-step horizon reaches the next switch. The hold that sets the floor
+32-step horizon of the MPC before 0.8 reaches the next switch. The hold that sets the floor
 comes from `scripts/measure_hold.py` instead (the reward section).
 
 ---
@@ -213,8 +213,8 @@ targets up to 0.464 mol/L.
 6 s lag, full cooling turns the excursion at its peak 16 to 19 steps later at
 dTi 0 (0.80 to 0.95 min; the highest peak is 363.80 K, at 0.45) and 20 to 21
 steps later at dTi +6 K (1.00 to 1.05 min) (derived, `--section pnr`). The
-longest, 21 steps at 0.60 and 0.65 mol/L and dTi +6 K, sets the MPC's
-horizon (section 7).
+longest, 21 steps at 0.60 and 0.65 mol/L and dTi +6 K, set the horizon of
+the MPC before 0.8 (section 7).
 
 ---
 
@@ -515,40 +515,39 @@ C_a within 0.01 mol/L of its target, that T stays above the ignition fold
 every step, and that at the eight steps of each episode closest to that line
 the exact point of no return is at least 0.25 K above T.
 
-**MPC** (`make_unstable_cstr_mpc`). `NewtonMPC` (iterative LQR) on the env's
-own `step_env`, over `MPC_HORIZON` steps, re-solved every step. Its line
-search rolls the plan forward under the feedback gains of the Riccati sweep,
-and each solve starts from the previous plan replayed under its own gains,
-which is what keeps the unstable mode from running a single-shooting rollout
-away. The stage cost is the version-2 reward in floor units plus a barrier on
-T past `pnr_line(C_a)`, quadratic over its first `MPC_PNR_ROUNDING_K` (1 K,
-ours) and then `MPC_PNR_PENALTY` (9.891e6 per K, ours) in reward units, the
-tracking cost of a 0.3145 mol/L error. Each solve also rolls out the cascade PID from
-the true state and starts from the cheaper of the two plans, so the plan is
-never worse than the PID's under the planner's model. Like every MPC in the
-suite it is an oracle ceiling: it reads the true state, the drift and the
-whole schedule, and plans the drift's conditional mean a^k dTi, the env's own
-update with `Ti_sigma` zeroed (`plan_params`).
+**MPC** (`make_unstable_cstr_mpc`). The MPC slot is a problem definition,
+not a tuned controller (docs/proposals/oracle-audit.md): the shared solver's
+oracle (`target_gym.oracles`). It reads no expert code and no gains. Once
+every step (Cooper's sample time from the horizon protocol,
+`data/oracle_horizons/unstable_cstr.json`, measured on the stabilised plant
+as its section 4.4 sets out), it plans P = 76 moves of the raw coolant from
+the true state, fewer near the episode's end, and applies the first. The plan
+maximises the episode reward over the horizon on the environment's own
+dynamics, with the feed drift on its noise-free mean path, a^k dTi
+(`plan_params`). The command's clip is replaced by a bound on the move, and
+the tracking term against the schedule's live level is written as
+(e / e_floor)^2, the reward itself since e_tol is 0 and p is 2. The trip,
+T_valid_min < T < T_trip and C_a >= 0, is a hard limit on every planned
+step, elastic at the trip cost per unit, planned inside its bounds by one
+innovation of the feed drift at its 1 % quantile (K11: 0.055 K on T,
+`data/oracle_widths/unstable_cstr.json`). The plan's last state must be an
+equilibrium under its last move (the horizon protocol's terminal line-out,
+D4): the change of each state over one more step is held at zero, elastic
+at the trip cost per unit. Nothing is smoothed. IPOPT's algorithm solves it
+with exact Hessians to a scaled KKT error of 1e-8, or stops at 150
+iterations. A cold start puts every planned state at the measured one and
+holds the jacket where the reset put it (simulating that held jacket ahead
+would run the open-loop unstable reactor away), a later
+solve starts from the last plan shifted one step, and a warm solve that fails or hits the cap is solved again cold,
+and one that still fails applies the last plan's next move. Every solve's certificate (KKT error,
+iterations, violation, and the plan replayed on `step_env`) is summed into
+the record.
 
-The barrier is there for the noise. Planning on the mean drift, the planner
-without it crossed the conservative line ahead of a hot-going switch on a path
-that the mean drift makes recoverable, and a +3 K drift made it a runaway: one
-trip on the ten recorded seeds. With it none of seeds 0 to 29 trips, and the
-ten recorded seeds cost 4.0e6 per episode against 4.7e6 for the CasADi NMPC on
-collocation it replaced in November 2026 (horizon 32, a soft bound 1 K inside
-the line, an LQR terminal weight, the PID as fallback).
-
-**Horizon.** `MPC_HORIZON` is 32 steps (1.6 min, ours). Across the band that
-is 2.2 to 5.1 unstable time constants (1.6 min times lambda+ of 1.391 to
-3.158 /min, derived). It is 1.52 times the longest boundary-to-peak time, 21
-steps at dTi +6 K (section 2), so a plan that starts next to the point of no
-return runs past the peak of the excursion it is turning. 32 is the smallest
-whole number of steps at least 1.5 times 21. The horizon is shorter than the
-PID's longest 90 % closure of a switch, 48 steps or 2.40 min on 0.55 to 0.65
-mol/L (derived, `--section settle`). `scripts/audit_mpc_horizons.py --envs
-unstable_cstr` returns ok. It finds the PID closing 63 % of the reset error
-(0.0059 mol/L) in 15 steps, a ratio of 32 / 15 = 2.13 (measured). That audit
-times only the reset error, so it never sees a 0.1 mol/L switch.
+Until 0.8 the oracle was an iterative LQR over 32 steps (1.52 times the
+longest boundary-to-peak time), guided by the cascade PID, with a barrier on
+T past `pnr_line(C_a)` that was added after one trip on the recorded seeds.
+The rule removes both: the horizon comes from the protocol, and the only
+limit is the task's own trip.
 
 **Recorded results.** Both controllers' returns over 10 seeds
 (`scripts/record_baselines.py`) are on the

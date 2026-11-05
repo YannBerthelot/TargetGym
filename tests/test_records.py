@@ -88,6 +88,9 @@ def test_what_describes_the_recording_is_not_compared():
     old = {"gain": 1.0, "seconds": 3.0, "generated": "then", "cpu": "Apple M2"}
     new = {"gain": 1.0, "seconds": 9.0, "generated": "now", "cpu": "AMD EPYC 7763"}
     assert records.same(old, new)
+    # An oracle's worst KKT error certifies the run; its digits move by CPU.
+    assert records.same({"solver_max_error": 1e-9}, {"solver_max_error": 5e-9})
+    assert not records.same({"solver_failures": 0}, {"solver_failures": 1})
 
 
 def test_a_stamped_row_notes_its_cpu_and_keeps_its_numbers():
