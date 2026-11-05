@@ -239,6 +239,23 @@ def test_a_rate_limit_caps_what_a_lag_would_move():
     assert _track(params, [1.0] * 2) == pytest.approx([0.2, 0.4], abs=1e-6)
 
 
+def test_each_actuator_can_have_its_own_rate():
+    """0.1 and 0.05 of the span of 2 per second, at 1 s steps."""
+    env = FourTank()
+    params = FourTankParams(actuator_rate=(0.1, 0.05))
+    applied, _ = actuate(env, _state(env, params), jnp.array([1.0, 1.0]), params)
+    np.testing.assert_allclose(applied, [0.2, 0.1], rtol=1e-6)
+
+
+def test_an_actuator_with_no_lag_beside_one_with_a_lag_moves_at_once():
+    """Half the gap on the first, with ``tau = 1 / ln 2``, all of it on the
+    second."""
+    env = FourTank()
+    params = FourTankParams(actuator_lag=(1.0 / np.log(2.0), 0.0))
+    applied, _ = actuate(env, _state(env, params), jnp.array([1.0, 1.0]), params)
+    np.testing.assert_allclose(applied, [0.5, 1.0], rtol=1e-6)
+
+
 def test_a_rate_limit_bounds_a_step_of_a_task_with_sub_steps():
     """``reactor`` runs 10 s per step, so 0.01 of the span of 2 per second moves
     0.2 per step, not 0.02."""
