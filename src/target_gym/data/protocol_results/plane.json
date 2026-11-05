@@ -1,8 +1,8 @@
 {
   "ceiling": 1.0,
-  "cpu": "AMD EPYC 9V74 80-Core Processor",
-  "expert_fingerprint": "b2d9a3abfa74653c",
-  "generated": "2026-11-03T03:24:17+00:00",
+  "cpu": "AMD EPYC 9V45 96-Core Processor",
+  "expert_fingerprint": "0843f325293b7b9e",
+  "generated": "2026-11-04T22:04:07+00:00",
   "mpc": {
     "failure": 0.0,
     "failure_rate": 0.0,
@@ -19,7 +19,7 @@
     "reach_cost_ci": 552898.9944580795,
     "reach_fraction": 0.0380952380952381,
     "running": 0.15831250523548251,
-    "seconds": 609.1,
+    "seconds": 502.6,
     "settling_time": 264.0,
     "settling_time_ci": 17.567257422071705,
     "time_in_band": 0.8404761904761905,
@@ -28,7 +28,7 @@
     "transient_cost_ci": 552931.6894875864,
     "unsettled_fraction": 0.0
   },
-  "oracle_fingerprint": "331040c9a1f3762b",
+  "oracle_fingerprint": "a9215713b0b3d9a5",
   "pid": {
     "failure": 0.0,
     "failure_rate": 0.0,
@@ -45,7 +45,7 @@
     "reach_cost_ci": 3045979.038992096,
     "reach_fraction": 0.12857142857142856,
     "running": 0.0,
-    "seconds": 2.7,
+    "seconds": 2.1,
     "settling_time": 279.0,
     "settling_time_ci": 1.96,
     "time_in_band": 0.3642857142857143,

@@ -82,7 +82,9 @@ class Airplane2D(
         if params is None:
             params = self.default_params
 
-        power, stick = action
+        # Not every learner squashes, so a raw action past the box acts as the
+        # bound rather than as a command the plant could never receive.
+        power, stick = jnp.clip(jnp.asarray(action), -1.0, 1.0)
         power = (power + 1) / 2  # map from [-1, 1] to [0, 1]
         stick = jnp.deg2rad(stick * 15)  # radians
 
@@ -213,10 +215,10 @@ class Airplane2D(
         return spaces.Box(-inf, inf, self.obs_shape, dtype=jnp.float32)
 
     def state_space(self, params: PlaneParams) -> spaces.Box:
-        """Observation space of the environment."""
+        """State space of the environment."""
         inf = jnp.finfo(jnp.float32).max
         return spaces.Box(
-            -inf, inf, len(PlaneState.__class_params__), dtype=jnp.float32
+            -inf, inf, len(PlaneState.__dataclass_fields__), dtype=jnp.float32
         )
 
 
