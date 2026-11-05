@@ -95,7 +95,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -352,6 +352,8 @@ class ReactorState(EnvState):
     #: limit. Carried so the reward can charge for demanding motion the rods
     #: cannot deliver; see ``compute_reward``.
     rho_ext_cmd: float
+
+    actuator_held: jax.Array = actuator_field(1)
 
 
 def steady_state_precursors(n_0: float, params: ReactorParams) -> jnp.ndarray:
@@ -688,8 +690,14 @@ def check_is_terminal(state: ReactorState, params: ReactorParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward_terms(state: ReactorState, params: ReactorParams, xp=jnp):
-    """The reward's additive cost terms in $ per physics second (``target_gym.reward``)."""
+def compute_reward_terms(
+    state: ReactorState, params: ReactorParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms in $ per physics second (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
     p = params
     per_unit_s = (
         p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW * 1000.0 / 3600.0
@@ -703,12 +711,13 @@ def compute_reward_terms(state: ReactorState, params: ReactorParams, xp=jnp):
     rho_scale = xp.maximum(xp.abs(p.rho_ext_min), xp.abs(p.rho_ext_max))
     excess = xp.abs(state.rho_ext_cmd - state.rho_ext) / rho_scale
     rod_wear = p.rod_wear_weight * per_unit_s * p.e_floor * excess
-    terminated, _ = check_is_terminal(state, p, xp)
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, p, xp)
     terms = {
         "tracking": tracking,
         "running": rod_wear,
     }
-    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: ReactorState, params: ReactorParams, xp=jnp):

@@ -5,7 +5,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.cement_kiln.env import (
     CementKilnParams,
     CementKilnState,
@@ -44,6 +50,18 @@ class CementKiln(
     tracked_names: tuple = ("discharge free lime (%)",)
     obs_target_index: int = 7  # target free lime
 
+    # Two pyrometers, a thermocouple, a weighfeeder and a lab assay (PHYSICS.md,
+    # Readings). The burning-zone pyrometer reads ``max(T_solid)`` once, so one
+    # draw shifts the whole profile, and the back-end pyrometer replaces it on
+    # zone 0. Free lime is a lab sample, assumed hourly, and holds its noise.
+    readings: tuple = (
+        FieldReading("T_solid", sigma=1.6, step=0.1, shared=True),
+        FieldReading("T_solid", index=0, sigma=1.2, step=0.1),
+        FieldReading("T_exhaust", sigma=0.33),
+        FieldReading("raw_meal", sigma=0.13),
+        FieldReading("lime", index=-1, sigma=1.8e-4, step=1e-4, interval=3600.0),
+    )
+
     def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (8,)
         self.integration_method = integration_method
@@ -55,8 +73,8 @@ class CementKiln(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -68,6 +86,8 @@ class CementKiln(
         if params is None:
             params = self.default_params
 
+        action, state = actuate(self, state, action.reshape((2,)), params)
+
         new_state, _ = compute_next_state(
             action, state, params, key, integration_method=self.integration_method
         )
@@ -77,8 +97,9 @@ class CementKiln(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state: CementKilnState, params: CementKilnParams = None):
         if params is None:
             params = self.default_params

@@ -286,3 +286,40 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports state of charge, cell voltage, temperature and delivered
+power through their instruments (`docs/proposals/measurement-noise.md`). The
+dispatch request stays exact. `sensor_noise_scale = 0` gives the noise-free task,
+rounding included.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `soc` | 4.7e-5 | | BMS estimator on TI BQ79616 cell data | Not checked | [BQ79616](https://www.ti.com/lit/ds/symlink/bq79616.pdf) |
+| `V_cell` | 5.5e-5 V | 190.73 uV | TI BQ79616 cell monitor | Not checked | [BQ79616](https://www.ti.com/lit/ds/symlink/bq79616.pdf) |
+| `T_cell` | 0.03 K | 0.003 K | 10 kOhm NTC on a BQ79616 GPIO input | Not checked | [BQ79616](https://www.ti.com/lit/ds/symlink/bq79616.pdf) |
+| `power` | 330 W | | SEL-735 revenue meter | Confirmed | [SEL-735](https://selinc.com/products/735/) |
+
+**Weak figures.**
+
+- The refutation pass reached only `power`. That figure reads the class 0.1S limit
+  at 1 MW as 3 sigma, which the page does not state, and it scales with reading,
+  so it is an upper bound below full power.
+- `soc` is an estimate, not a sensor: voltage scatter over an OCV slope of 1.16 V
+  per unit. Real state-of-charge error is a slow bias, left out as all bias is.
+- `V_cell` has no noise figure. The sheet's ENOB of 16 at one LSB gives
+  LSB/sqrt(12) = 55 uV, which is already a quantisation figure. The proposal lists
+  both that sigma and the LSB as a step, so the reading here carries both, about
+  78 uV rms against 55 uV. That is pessimistic by a factor of about 1.4 on a
+  channel nothing tracks.
+- `T_cell` assumes a divider slope of 50 mV/K near 25 C, which also turns the
+  sheet's 152.59 uV GPIO step into 0.003 K.
+
+Cell voltage is computed from current, charge and the hidden diffusion voltage, so
+it is a channel reading: it inherits nothing from `soc`.
+
+The expert reads these values, and so does every tuner. The oracle plans and acts
+on the true state, so it stays a full-state bound. `reward`, trips and the score
+read the true state. `info["measured_reward"]` is the same cost on the readings,
+with any trip taken from the true state. Trips read the true cell voltage.

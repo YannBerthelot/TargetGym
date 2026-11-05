@@ -276,3 +276,39 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports speed, pitch, torque and electrical power through their
+instruments (`docs/proposals/measurement-noise.md`), and `omega_rpm` and
+`torque_pct` inherit their sensors' noise. The target stays exact.
+`sensor_noise_scale = 0` gives the noise-free task.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `omega` | 5.2e-4 rad/s | | Generator-shaft speed sensor | Confirmed | [Odgaard benchmark](https://vbn.aau.dk/ws/files/56213377/safeprocess_2009_1.pdf) |
+| `pitch` | 0.2 deg | | Blade pitch position sensor | Confirmed | [Odgaard benchmark](https://vbn.aau.dk/ws/files/56213377/safeprocess_2009_1.pdf) |
+| `torque` | 90 N m | | Generator torque from the converter | Confirmed | [Odgaard benchmark](https://vbn.aau.dk/ws/files/56213377/safeprocess_2009_1.pdf) |
+| `power` | 1 kW | | Generator power measurement | Confirmed | [Odgaard benchmark](https://vbn.aau.dk/ws/files/56213377/safeprocess_2009_1.pdf) |
+
+**Weak figures.** Confirmed here means the numbers are on the page. All four are
+assumed simulation inputs of a published 4.8 MW benchmark, not measurements. The
+90 N m was sized for about 30 kN m, so scaled to this turbine it would be about
+130 N m. `omega` divides the benchmark's generator-shaft figure by the gear ratio.
+Power has an independent cross-check: the IEC class 0.1S bound over three gives
+1.7 kW at 5 MW.
+
+Electrical power is its own instrument. Speed times torque through their own
+sensors would scatter about 10.6 kW against the 1 kW meter and the 1.68 kW
+`e_floor`. The proposal lists it as a channel reading, but the reward tracks it
+and a channel reading stays out of the measured copy, so the task keeps `power` as
+a state field, always `electrical_power(omega, torque)`, with a field reading.
+
+The expert reads these values, and so does every tuner. The oracle plans and acts
+on the true state, so it stays a full-state bound. `reward`, trips and the score
+read the true state. `info["measured_reward"]` is the same cost on the readings,
+with any trip taken from the true state. Its tracking term sees the 1 kW meter.
+Its fatigue term sees the 0.2 deg pitch sensor, 0.005 of `pitch_max` against a
+hold-phase activity of 0.0013, so with pitch exactly on command a learner is
+charged about 2.2 times the tracking cost at `e_floor`, which the true reward does
+not charge.

@@ -316,3 +316,31 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports drum level, drum pressure and steam flow through their
+instruments (`docs/proposals/measurement-noise.md`). `fuel_pct` and `feed_pct` are
+the controller's own commands, with no lag, and they stay exact with both targets.
+`sensor_noise_scale = 0` gives the noise-free task.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `level` | 0.5 mm | | Rosemount 5300 guided-wave radar | Confirmed | [5300](https://www.emerson.com/documents/automation/73580.pdf) |
+| `pressure` | 0.022 bar | | Yokogawa EJA530E pressure transmitter | Confirmed | [EJA530E](https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf) |
+| `q_steam` | 0.047 kg/s | | Rosemount 8800D vortex class | Not checked | [8800D](https://core.instrumart.com/assets/Rosemount-8800D-Series-Vortex-Flow-Meter-Datasheet.pdf) |
+
+`level` excludes drum surface turbulence, so on a real drum it is a lower bound.
+`pressure` is an upper bound: 0.055 % of an assumed 0 to 120 bar span at a stated
+3 sigma, a conformance figure that includes linearity and hysteresis.
+
+**Weak figure.** The refutation pass did not reach `q_steam`. It reads the sheet's
+0.1 % repeatability as 2 sigma on 93.35 kg/s, and a main this large may use flow
+nozzles instead.
+
+The expert reads these values, and so does every tuner. The oracle plans and acts
+on the true state, so it stays a full-state bound. `reward`, trips and the score
+read the true state. `info["measured_reward"]` is the same cost on the readings,
+with any trip taken from the true state, so resting on target costs a learner
+`(0.022 / 0.05)^2 = 0.19` per step in pressure and `(0.5 / 2.67)^2 = 0.035` in
+level.

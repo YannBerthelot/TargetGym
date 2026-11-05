@@ -5,7 +5,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.glass_furnace.env import (
     FUEL_DEAD_TIME_STEPS,
@@ -45,6 +51,15 @@ class GlassFurnace(
     tracked_names: tuple = ("crown temperature (K)",)
     obs_target_index: int = 4  # target_T_crown
 
+    # Two thermocouples and a vortex meter (PHYSICS.md, Readings). The crown's
+    # noise goes after the modelled lag, on the measured copy: the state keeps
+    # the lag clean.
+    readings: tuple = (
+        FieldReading("T_crown_meas", sigma=0.36),
+        FieldReading("T_air_preheat", sigma=0.32),
+        FieldReading("fuel_flow", sigma=3e-4),
+    )
+
     def __init__(self, integration_method: str = "rk4_2"):
         self.obs_shape = (5,)
         self.positions_history = []
@@ -57,8 +72,8 @@ class GlassFurnace(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -70,12 +85,14 @@ class GlassFurnace(
         if params is None:
             params = self.default_params
 
-        fuel_raw = action
-        if not isinstance(action, float):
-            fuel_raw = action.reshape(())
+        action, state = actuate(self, state, jnp.reshape(action, (1,)), params)
 
         new_state, metrics = compute_next_state(
-            fuel_raw, state, params, key, integration_method=self.integration_method
+            action.reshape(()),
+            state,
+            params,
+            key,
+            integration_method=self.integration_method,
         )
 
         # A trip is part of the kernel: the step is charged the trip cost and
@@ -84,8 +101,9 @@ class GlassFurnace(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state: GlassFurnaceState, params: GlassFurnaceParams = None):
         if params is None:
             params = self.default_params

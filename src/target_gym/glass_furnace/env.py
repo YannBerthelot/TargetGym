@@ -63,7 +63,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -405,6 +405,8 @@ class GlassFurnaceState(EnvState):
     fuel_flow: float
     T_air_preheat: float
     T_stack: float
+
+    actuator_held: jax.Array = actuator_field(1)
 
 
 def glass_c_p(T, params: GlassFurnaceParams):
@@ -869,12 +871,25 @@ def check_is_terminal(state: GlassFurnaceState, params: GlassFurnaceParams, xp=j
     return terminated, truncated
 
 
-def compute_reward_terms(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
-    terminated, _ = check_is_terminal(state, params, xp)
+def compute_reward_terms(
+    state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``reward`` scores the true crown. ``tripped`` marks a measured copy
+    (``base.measured_reward``): its trip comes from the true state, and its
+    crown from the thermocouple, the only crown a plant can read. At
+    ``sensor_noise_scale`` 0 no instrument stands in between, so the measured
+    cost is the true one.
+    """
+    crown = state.T_crown
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, params, xp)
+    else:
+        crown = xp.where(params.sensor_noise_scale > 0, state.T_crown_meas, crown)
     terms = {
         "tracking": R.tracking_cost(
-            state.target_T_crown - state.T_crown,
+            state.target_T_crown - crown,
             params.e_floor,
             params.e_tol,
             params.tracking_exponent,
@@ -884,7 +899,7 @@ def compute_reward_terms(state: GlassFurnaceState, params: GlassFurnaceParams, x
             state.fuel_flow, params.c_hold, params.running_weight, xp
         ),
     }
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp):

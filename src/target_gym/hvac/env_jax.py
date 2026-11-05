@@ -5,7 +5,14 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    ChannelReading,
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.hvac.env import (
     HVACParams,
@@ -45,6 +52,16 @@ class BuildingHVAC(
     tracked_names: tuple = ("zone air temperature (deg C)",)
     obs_target_index: int = 6  # target_T
 
+    # Two temperature sensors, a heat meter and a pyranometer (PHYSICS.md,
+    # Readings). Solar gain comes from the clock, which stays exact, so its
+    # reading goes on channel 3: 1 W/m2 of the 350 W/m2 peak.
+    readings: tuple = (
+        FieldReading("T_air", sigma=0.023, step=0.1),
+        FieldReading("T_out", sigma=0.023, step=0.1),
+        FieldReading("Q_emitter", sigma=27.0),
+        ChannelReading(3, sigma=1.0 / 350.0),
+    )
+
     def __init__(self, integration_method: str = "rk4_2"):
         self.obs_shape = (7,)
         self.integration_method = integration_method
@@ -56,8 +73,8 @@ class BuildingHVAC(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -69,12 +86,14 @@ class BuildingHVAC(
         if params is None:
             params = self.default_params
 
-        action_raw = action
-        if not isinstance(action, float):
-            action_raw = action.reshape(())
+        action, state = actuate(self, state, jnp.reshape(action, (1,)), params)
 
         new_state, _ = compute_next_state(
-            action_raw, state, params, key, integration_method=self.integration_method
+            action.reshape(()),
+            state,
+            params,
+            key,
+            integration_method=self.integration_method,
         )
         # A trip is part of the kernel: the step is charged the trip cost and
         # the plant restarts at once, or is lost (``terminated``) with
@@ -82,8 +101,9 @@ class BuildingHVAC(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state: HVACState, params: HVACParams = None):
         if params is None:
             params = self.default_params

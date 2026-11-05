@@ -5,7 +5,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.boiler_drum.env import (
     BoilerDrumParams,
     BoilerDrumState,
@@ -43,6 +49,14 @@ class BoilerDrum(
     tracked_names: tuple = ("drum level (m)", "drum pressure (bar)")
     obs_target_index: tuple = (5, 6)  # target_level, target_pressure
 
+    # Guided-wave radar, a pressure transmitter and a vortex meter (PHYSICS.md,
+    # Readings).
+    readings: tuple = (
+        FieldReading("level", sigma=5e-4),
+        FieldReading("pressure", sigma=0.022),
+        FieldReading("q_steam", sigma=0.047),
+    )
+
     def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (7,)
         self.integration_method = integration_method
@@ -54,8 +68,8 @@ class BoilerDrum(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -67,6 +81,8 @@ class BoilerDrum(
         if params is None:
             params = self.default_params
 
+        action, state = actuate(self, state, action.reshape((2,)), params)
+
         new_state, _ = compute_next_state(
             action, state, params, key, integration_method=self.integration_method
         )
@@ -76,8 +92,9 @@ class BoilerDrum(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state: BoilerDrumState, params: BoilerDrumParams = None):
         if params is None:
             params = self.default_params

@@ -5,7 +5,14 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    ChannelReading,
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.energy.battery.env import (
     N_DISPATCH_BLOCKS,
     BatteryParams,
@@ -40,6 +47,17 @@ class GridBattery(
     tracked_names: tuple = ("delivered power (MW)",)
     obs_target_index: int = 4  # dispatch (MW)
 
+    # A BMS estimate, a cell monitor, an NTC and a revenue meter (PHYSICS.md,
+    # Readings). Cell voltage is computed from current, charge and a hidden
+    # state, so its reading goes on channel 1. The NTC's step is 152.59 uV at
+    # the GPIO over the assumed 50 mV/K divider.
+    readings: tuple = (
+        FieldReading("soc", sigma=4.7e-5),
+        ChannelReading(1, sigma=5.5e-5, step=190.73e-6),
+        FieldReading("T_cell", sigma=0.03, step=152.59e-6 / 0.05),
+        FieldReading("power", sigma=330.0),
+    )
+
     def __init__(self, integration_method: str = "rk4_2"):
         self.obs_shape = (5,)
         self.integration_method = integration_method
@@ -51,8 +69,8 @@ class GridBattery(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -63,12 +81,14 @@ class GridBattery(
     ):
         if params is None:
             params = self.default_params
-        action_raw = action
-        if not isinstance(action, float):
-            action_raw = jnp.asarray(action).reshape(())
+        action, state = actuate(self, state, jnp.reshape(action, (1,)), params)
 
         new_state, _ = compute_next_state(
-            action_raw, state, params, key, integration_method=self.integration_method
+            action.reshape(()),
+            state,
+            params,
+            key,
+            integration_method=self.integration_method,
         )
         # A trip is part of the kernel: the step is charged the trip cost and
         # the plant restarts at once, or is lost (``terminated``) with
@@ -76,8 +96,9 @@ class GridBattery(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state, params: BatteryParams = None):
         if params is None:
             params = self.default_params

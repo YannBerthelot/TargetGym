@@ -48,7 +48,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -240,6 +240,11 @@ class WindTurbineState(EnvState):
     pitch_cmd: float
     torque_cmd: float
     target_power: float
+    #: Electrical output (W), always ``electrical_power(omega, torque)``. A field
+    #: so the meter can be its own reading (PHYSICS.md, Readings).
+    power: float
+
+    actuator_held: jax.Array = actuator_field(2)
 
 
 def rotor_area(params: WindTurbineParams):
@@ -364,6 +369,7 @@ def compute_next_state(
             v_wind=v_wind,
             pitch_cmd=pitch_cmd,
             torque_cmd=torque_cmd,
+            power=electrical_power(omega, torque, p),
             time=state.time + 1,
         ),
         None,
@@ -390,7 +396,7 @@ def get_obs(state: WindTurbineState, params: WindTurbineParams):
             state.omega * 60.0 / (2.0 * jnp.pi),
             state.pitch,
             100.0 * state.torque / p.torque_max,
-            electrical_power(state.omega, state.torque, p) / 1.0e6,
+            state.power / 1.0e6,
             state.target_power / 1.0e6,
         ]
     )
@@ -406,10 +412,21 @@ def check_is_terminal(state: WindTurbineState, params: WindTurbineParams, xp=jnp
     return terminated, truncated
 
 
-def compute_reward_terms(state: WindTurbineState, params: WindTurbineParams, xp=jnp):
-    """The reward's additive cost terms in $ per step (``target_gym.reward``)."""
+def compute_reward_terms(
+    state: WindTurbineState, params: WindTurbineParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms in $ per step (``target_gym.reward``).
+
+    ``tripped`` marks a measured copy (``base.measured_reward``): its trip comes
+    from the true state, and its power from the meter. Speed times torque,
+    through their own sensors, would scatter about 10.6 kW against its 1 kW.
+    """
     p = params
     power = electrical_power(state.omega, state.torque, p)
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, p, xp)
+    else:
+        power = state.power
     per_W_step = p.imbalance_price / 1.0e6 * p.delta_t / 3600.0  # $ per W per step
     tracking = (
         per_W_step
@@ -424,12 +441,11 @@ def compute_reward_terms(state: WindTurbineState, params: WindTurbineParams, xp=
         * p.e_floor
         * R.running_cost(activity, p.c_hold, p.fatigue_weight, xp)
     )
-    terminated, _ = check_is_terminal(state, p, xp)
     terms = {
         "tracking": tracking,
         "running": fatigue,
     }
-    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: WindTurbineState, params: WindTurbineParams, xp=jnp):
