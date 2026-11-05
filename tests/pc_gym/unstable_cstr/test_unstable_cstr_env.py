@@ -123,6 +123,7 @@ def _corners(params):
     return UnstableCSTRState(
         time=jnp.zeros(len(rows), jnp.int32),
         sensor_key=jnp.zeros((len(rows), 2), jnp.uint32),
+        sensor_history=jnp.zeros((len(rows), 1, 1)),
         actuator_held=jnp.zeros((len(rows), 1)),
         C_a=f32(rows[:, 0]),
         T=f32(rows[:, 1]),

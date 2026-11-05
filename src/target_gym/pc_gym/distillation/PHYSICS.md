@@ -187,10 +187,11 @@ flow dynamic (and the K2 vapour effect). Without it a reflux change reaches
 every tray instantly, so the column responds faster to L than a real one and
 the L→composition path is missing a lag of order a minute per tray.
 
-**⚠️ D2 — no analyser dead time.** Product analysers report the current
-composition, with the noise of a real one held through its cycle (section
-Readings). Real ones also report a sample minutes old, which on a plant this
-ill-conditioned materially changes achievable performance.
+**D2 — analyser dead time, closed.** Product analysers report a sample one
+5-minute cycle old, held until the next (section Readings). On a plant this
+ill-conditioned that changes what is achievable: at 5 minutes the expert's gains,
+tuned without it, lose the column, so its tuning is redone under the expert
+protocols.
 
 **⚠️ D3 — constant molar flows.** Standard for this benchmark, but it means
 energy balance effects (varying latent heats, subcooling) cannot appear.
@@ -251,7 +252,7 @@ SIMC (Skogestad and Grimholt 2012), from step tests on training seeds 100 to
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `distillation` | 200 | 60 | 3.3 h | 2 in [-1, 1] | 7 | 48 |
+| `distillation` | 200 | 60 | 3.3 h | 2 in [-1, 1] | 7 | 68 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -302,8 +303,8 @@ not show them.
 
 | reading | sigma | step | instrument | status | source |
 | --- | --- | --- | --- | --- | --- |
-| `x[-1]`, `yD` | 4e-4 mole fraction, held 5 min | none | Process gas chromatograph | Confirmed | [GC8000](https://www.yokogawa.com/be-nl/solutions/products-and-services/measurement/analyzers/gas-analyzers/process-gas-chromatographs/process-gas-chromatograph-gc8000/) |
-| `x[0]`, `xB` | 4e-4 mole fraction, held 5 min | none | Process gas chromatograph | Confirmed | [GC8000](https://www.yokogawa.com/be-nl/solutions/products-and-services/measurement/analyzers/gas-analyzers/process-gas-chromatographs/process-gas-chromatograph-gc8000/) |
+| `x[-1]`, `yD` | 4e-4 mole fraction, sampled every 5 min, 5 min old | none | Process gas chromatograph | Confirmed | [GC8000](https://www.yokogawa.com/be-nl/solutions/products-and-services/measurement/analyzers/gas-analyzers/process-gas-chromatographs/process-gas-chromatograph-gc8000/) |
+| `x[0]`, `xB` | 4e-4 mole fraction, sampled every 5 min, 5 min old | none | Process gas chromatograph | Confirmed | [GC8000](https://www.yokogawa.com/be-nl/solutions/products-and-services/measurement/analyzers/gas-analyzers/process-gas-chromatographs/process-gas-chromatograph-gc8000/) |
 | `x[14]`, carries `T_15` | 3e-3 mole fraction, 0.04 K on `T_15` | none | Pt100 RTD tray sensor with HART head transmitter | Confirmed | [iTEMP TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
 
 **The analyser's cycle is 5 minutes, and it is ours.** The GC8000 page gives a
@@ -313,8 +314,11 @@ on that page. 5 minutes is the fast end of that range, and it sits inside the 3
 to 6 minutes between samples that a distillation analyser patent claims, with a
 4-minute analysis in its example
 ([US 5464504](https://patents.google.com/patent/US5464504)). Each analyser
-holds its noise for those five 1-minute steps, and the value stays current
-(`docs/proposals/measurement-noise.md`, Decided, 5), so D2 still stands.
+holds its value and its noise for those five 1-minute steps, and what it reports
+is one cycle old, the time the analysis takes. So step `t` reads step
+`5 * (t // 5) - 5`, and no earlier than the reset. A restart refills the analysers
+from the restarted plant. The tray thermocouple stays on-line, which is why the
+temperature loop is the fast one.
 
 `interval` is in the units of `delta_t`, so it is 5.0 here and not 300.
 

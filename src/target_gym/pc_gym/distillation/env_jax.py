@@ -27,6 +27,8 @@ from target_gym.pc_gym.distillation.env import (
 from target_gym.pc_gym.distillation.rendering import _render
 from target_gym.video import SavesVideo
 
+_CHROMATOGRAPH = dict(interval=5.0, dead_time=5.0, sampled=True)
+
 
 class DistillationColumn(
     RegistryExperts,
@@ -50,11 +52,12 @@ class DistillationColumn(
     obs_target_index: tuple = (4, 5)  # target_yD, target_xB
 
     # A chromatograph on each product and an RTD on the tray (PHYSICS.md section
-    # on readings). ``interval`` is in ``delta_t``'s unit, so 5 is 5 minutes.
+    # on readings). ``interval`` and ``dead_time`` are in ``delta_t``'s unit, so
+    # 5 is 5 minutes: a cycle reports what was sampled one cycle earlier.
     readings: tuple = (
-        FieldReading("x", index=0, sigma=4e-4, interval=5.0),
+        FieldReading("x", index=0, sigma=4e-4, **_CHROMATOGRAPH),
         FieldReading("x", index=TEMPERATURE_STAGE - 1, sigma=3e-3),
-        FieldReading("x", index=-1, sigma=4e-4, interval=5.0),
+        FieldReading("x", index=-1, sigma=4e-4, **_CHROMATOGRAPH),
     )
 
     def __init__(self, integration_method: str = "rk4_16"):
@@ -93,6 +96,15 @@ class DistillationColumn(
             self, key, state, new_state, params
         )
         return self.get_obs(new_state, params), new_state, reward, terminated, info
+
+    def initial_action(self, state, params):
+        """The raw action that holds the reset plant's own flows."""
+        return jnp.stack(
+            [
+                2.0 * (state.L - params.L_min) / (params.L_max - params.L_min) - 1.0,
+                2.0 * (state.V - params.V_min) / (params.V_max - params.V_min) - 1.0,
+            ]
+        )
 
     @measured_obs
     def get_obs(self, state: DistillationState, params: DistillationParams = None):

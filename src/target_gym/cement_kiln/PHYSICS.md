@@ -305,7 +305,7 @@ peak temperature is resolution-limited; a finer grid shifts it modestly.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `cement_kiln` | 700 | 30 | 5.8 h | 2 in [-1, 1] | 8 | 87 |
+| `cement_kiln` | 700 | 30 | 5.8 h | 2 in [-1, 1] | 8 | 88 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

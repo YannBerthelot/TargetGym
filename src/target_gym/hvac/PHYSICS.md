@@ -256,7 +256,7 @@ rather than claimed in fifteen.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `hvac` | 720 | 900 | 180.0 h | 1 in [-1, 1] | 7 | 10 |
+| `hvac` | 720 | 900 | 180.0 h | 1 in [-1, 1] | 7 | 11 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

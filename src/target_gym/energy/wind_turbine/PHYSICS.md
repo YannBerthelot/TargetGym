@@ -231,7 +231,7 @@ loading and individual pitch control has nothing to act on.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `wind_turbine` | 400 | 0.25 | 100 s | 2 in [-1, 1] | 5 | 11 |
+| `wind_turbine` | 400 | 0.25 | 100 s | 2 in [-1, 1] | 5 | 12 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

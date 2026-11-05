@@ -249,7 +249,7 @@ least 90 % of hold steps on every held-out seed
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 864 | 10 | 2.4 h | 1 in [-1, 1] | 4 | 15 |
+| `reactor` | 864 | 10 | 2.4 h | 1 in [-1, 1] | 4 | 16 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

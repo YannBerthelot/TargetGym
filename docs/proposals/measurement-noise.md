@@ -22,9 +22,10 @@ tuned once, on realistic readings. If it lands after, they are tuned twice.
 
 ## Decided
 
-1. **Sensors are scored, actuators are opt-in.** Sensor noise is on in every
-   scored task. Dead band, stiction and action noise are built but default to
-   off, so they move no baseline.
+1. **Sensors are scored, actuator defects are opt-in.** Sensor noise is on in
+   every scored task. Dead band, stiction and action noise are built but default
+   to off. Reversed in part on 2026-11-05: rate limits and lags are plant physics
+   and are scored ([industrial fixes](industrial-fixes.md)).
 2. **Every physical reading is noisy.** Setpoints, schedules, time and the
    controller's own commands stay exact.
 3. **Learners train on measured reward, and scoring uses the true cost.**
@@ -33,15 +34,17 @@ tuned once, on realistic readings. If it lands after, they are tuned twice.
 4. **Weak figures ship labelled.** Each keeps its status in the task's
    `PHYSICS.md`, and the benchmark runs at `sensor_noise_scale` 0.5 and 2 to
    show how far its results depend on them.
-5. **Slow analysers hold their noise only.** The value stays current. True
-   sample-and-hold would change the control problem on `distillation` and
-   `cement_kiln`, and no accepted expert protocol covers it.
+5. **Slow analysers hold their value.** Reversed on 2026-11-05. This decision
+   first held the noise only, with the value current. The review found that
+   hid the real control problem, so a reading now has dead time and true
+   sampling, `distillation` first and each other plant in its own PR.
 6. **`patrol_bearing_only` uses provisional figures on its bearing channels,**
    so every task has noise. No real sensor has been sourced for a wingman at
    150 to 300 m, and these values stay marked as such until one is. The refuter
    asked for a source for the range figure before shipping; the owner chose to
    ship it labelled.
-7. **Floors and ceilings stay as they are.** Scores stay on today's scale.
+7. **Floors and ceilings stay as they are.** Reversed on 2026-11-05. They change
+   once, on the rebuilt plants, in PR 8 of the [industrial fixes](industrial-fixes.md).
 
 ## The noise model
 

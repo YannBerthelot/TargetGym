@@ -53,7 +53,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 6 fields.
+`reset` samples the initial condition and the target; state has 7 fields.
 
 ## Episode end
 
@@ -84,6 +84,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
 | `action_noise` | 0 | fraction of span |
+| `actuator_rate` | 0 | fraction of span per delta_t unit |
+| `actuator_lag` | 0 | delta_t units |
 | `K` | 1 | - |
 | `tau` | 0.5 | s |
 | `u_min` | -2 | - |

@@ -1,5 +1,5 @@
 {
-  "fingerprint": "c5fe08b615b15c0b",
-  "note": "readings: observations report noisy instruments, with the opt-in actuator stage before the dynamics (docs/proposals/measurement-noise.md)",
-  "stamped": "2026-11-05T18:39:30+00:00"
+  "fingerprint": "318f969d28ee5e7a",
+  "note": "Branch stamp on feat/sensor-noise: late readings and actuator dynamics. distillation changed and its version is already bumped on this branch; the other tasks' physics did not. Redone at the 0.8.0 re-record.",
+  "stamped": "2026-11-05T21:27:14+00:00"
 }

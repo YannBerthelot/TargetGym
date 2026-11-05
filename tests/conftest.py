@@ -12,6 +12,8 @@ worker leaves the parallelism to xdist, which is where it belongs.
 
 import os
 
+import pytest
+
 for _var, _value in (
     # pygame and matplotlib both fail on a runner with no display unless told
     # to render offscreen. CI has no display; neither does a container.
@@ -60,6 +62,18 @@ _CACHE_DIR = os.environ.get(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".jax_cache"
     ),
 )
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _free_compiled_programs():
+    """Drop compiled programs after each module, where ``FREE_COMPILED_PROGRAMS``
+    is set. A cold run on the older JAX fills a CI runner with them, whatever
+    the worker count, and the on-disk cache brings back what is needed."""
+    yield
+    if os.environ.get("FREE_COMPILED_PROGRAMS"):
+        import jax
+
+        jax.clear_caches()
 
 
 def pytest_configure(config):  # noqa: ARG001

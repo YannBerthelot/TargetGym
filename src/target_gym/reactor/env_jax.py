@@ -9,6 +9,7 @@ from target_gym import reward as R
 from target_gym.base import (
     FieldReading,
     actuate,
+    applied_action,
     canonical_reset,
     charged_trip_cost,
     failure_kernel,
@@ -197,6 +198,7 @@ class Reactor(
                 "trip_cost": charged_trip_cost(tripped, params),
                 # Version 1 has no terms, so there it is the true reward.
                 "measured_reward": R.select(params.reward_version, reward, measured),
+                "applied_action": applied_action(self, state, params),
             },
         )
 

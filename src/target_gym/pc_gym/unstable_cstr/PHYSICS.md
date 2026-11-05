@@ -661,7 +661,7 @@ test asks for more than 1e-6 mol/L, 1 % of the analyser's resolution
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `unstable_cstr` | 1200 | 3 | 60 min | 1 in [-1, 1] | 4 | 11 |
+| `unstable_cstr` | 1200 | 3 | 60 min | 1 in [-1, 1] | 4 | 12 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

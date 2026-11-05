@@ -244,12 +244,11 @@ def _batched(env, per_episode_params: bool):
     import jax
     import jax.numpy as jnp
 
+    from target_gym.base import true_obs as plant_now
+
     pa = 0 if per_episode_params else None
     step_all = jax.vmap(env.step_env, in_axes=(0, 0, 0, pa))
-    true_obs = jax.vmap(
-        lambda state, p: env.get_obs(state, p.replace(sensor_noise_scale=0.0)),
-        in_axes=(0, pa),
-    )
+    true_obs = jax.vmap(lambda state, p: plant_now(env, state, p), in_axes=(0, pa))
     instrumented = bool(getattr(env, "readings", ()))
 
     def advance(keys, state, obs, action, params, done):
@@ -289,7 +288,8 @@ def run_policy(
     Returns per-episode, per-step arrays ``(n, T)``: ``reward``, ``tripped``
     (``info["tripped"]``, False where the plant reports none), ``in_band``
     (every tracked error within ``e_floor``, on the true outputs, since this
-    KPI describes the plant and not its instruments), ``target_change``,
+    KPI describes the plant and not its instruments), ``applied`` ``(n, T,
+    n_act)``, what the actuator did with each action, ``target_change``,
     ``action`` ``(n, T, n_act)``, ``value`` / ``target`` ``(n, T, n_out)`` (the
     outputs as the policy read them, and their targets, after the step;
     ``value0`` / ``target0``
@@ -343,9 +343,8 @@ def run_policy(
     vi, ti = list(task.value_index), list(task.target_index)
     done = np.zeros(n, bool)
     length = np.minimum(task.max_steps, T).astype(int)
-    rec: dict[str, list] = {
-        k: [] for k in ("reward", "tripped", "terminated", "action", "value", "target")
-    }
+    names = ("reward", "tripped", "terminated", "action", "applied", "value", "target")
+    rec: dict[str, list] = {k: [] for k in names}
     err_rec, band_rec, terms_rec = [], [], {}
     t0 = time.perf_counter()
     for t in range(T):
@@ -367,6 +366,9 @@ def run_policy(
                 np.asarray(fn(state, params, jnp.asarray(tripped)), float)
             )
         rec["action"].append(np.asarray(action))
+        applied = info.get("applied_action") if isinstance(info, dict) else None
+        applied = action if applied is None else applied
+        rec["applied"].append(np.reshape(np.asarray(applied), (n, task.n_act)))
         rec["value"].append(o[:, vi])
         rec["target"].append(o[:, ti])
         band_rec.append(task.in_band(np.asarray(true)))
@@ -401,14 +403,14 @@ def run_policy(
 def episodes_of(rollout: Mapping[str, Any]) -> list[Episode]:
     """The protocol's :class:`~target_gym.eval.Episode` records of a
     :func:`run_policy` rollout, each cut at its own length. The actions are
-    clipped to the box, as the plant reads them, and given as fractions of
-    their span. A quantity the rollout recorded joins the terms."""
+    what the actuator applied, as fractions of their span. A quantity the
+    rollout recorded joins the terms."""
     out = []
     low = np.ravel(rollout["action_low"])
     span = np.ravel(rollout["action_high"]) - low
     named = {**rollout["terms"], **rollout.get("records", {})}
     for i, L in enumerate(np.asarray(rollout["length"], int)):
-        actions = np.asarray(rollout["action"][i, :L], float)
+        actions = np.asarray(rollout["applied"][i, :L], float)
         out.append(
             Episode(
                 cost=-np.asarray(rollout["reward"][i, :L], float),
