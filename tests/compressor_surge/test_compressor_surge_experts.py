@@ -41,7 +41,6 @@ from target_gym.compressor_surge.experts import (
     GUARD_POINTS,
     GUARD_TRAVEL_STEPS,
     HELD_GAINS,
-    SURGE_CONTROL_LINE,
     TUNED_GAINS,
     CompressorSurgePair,
     PairState,
@@ -127,13 +126,13 @@ def _run_class(pair, env, params, step, key, n):
 
 def test_default_gains_are_finite_and_tuned_ones_nonzero():
     """The coordinate search multiplies gains, so a tuned gain that starts
-    at zero never moves. The tuned and held names split the gains, and the
-    control line rendering draws is the pair's."""
+    at zero never moves, and it moves every gain it is not told to hold, so
+    a new gain has to be named tuned or held. The override sits at half the
+    control margin, where rendering draws its alarm."""
     assert all(np.isfinite(v) for v in DEFAULT_GAINS.values())
     assert all(DEFAULT_GAINS[k] != 0.0 for k in TUNED_GAINS)
     assert set(TUNED_GAINS) | set(HELD_GAINS) == set(DEFAULT_GAINS)
     assert not set(TUNED_GAINS) & set(HELD_GAINS)
-    assert SURGE_CONTROL_LINE == DEFAULT_GAINS["surge_line"] == 0.15
     assert DEFAULT_GAINS["override_line"] == 0.5 * DEFAULT_GAINS["surge_line"]
 
 
