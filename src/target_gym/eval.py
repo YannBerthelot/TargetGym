@@ -50,6 +50,10 @@ _ANTICIPATION_RATIO = 10.0  # its median is at least this many times the level
 _ANTICIPATION_SHARE = 0.8  # share of its steps above twice the level
 _ANTICIPATION_MAX_DIP = 2  # most steps in a row at or below twice the level
 _ANTICIPATION_SHORT_RATIO = 100.0  # every step of a 1- or 2-step run is above
+#: The smallest move back that counts as a reversal, as a fraction of the
+#: span: a digital positioner's hysteresis plus dead band (Fisher DVC6200,
+#: docs/proposals/measurement-noise.md). A real valve does not follow less.
+REVERSAL_DEAD_BAND = 0.0025
 
 
 @dataclass
@@ -59,6 +63,7 @@ class Episode:
     target_change: np.ndarray  # bool per step: a new target became active
     failed: np.ndarray | None = None  # bool per step: the plant tripped on this step
     terms: dict = field(default_factory=dict)  # name -> per-step array
+    actions: np.ndarray | None = None  # (T, n_act), as fractions of each span
 
 
 def _cycles(ep: Episode):
@@ -376,6 +381,45 @@ def failure_rate(episodes):
     return n_fail / max(n_cyc, 1)
 
 
+def trip_counts(episodes) -> list[int]:
+    """The trips of each episode, wherever they fell."""
+    return [0 if ep.failed is None else int(ep.failed.sum()) for ep in episodes]
+
+
+def travel(actions) -> float:
+    """Full strokes moved over ``(T, n_act)`` actions given as fractions of
+    their span, summed over the actuators."""
+    return float(np.abs(np.diff(np.asarray(actions, float), axis=0)).sum())
+
+
+def reversals(actions, dead_band: float = REVERSAL_DEAD_BAND) -> int:
+    """Changes of direction of ``(T, n_act)`` actions, summed over the
+    actuators. A move back counts once it passes ``dead_band`` from the last
+    turning point, so a pause is not a reversal and jitter inside the band is
+    none."""
+    count = 0
+    for u in np.asarray(actions, float).T:
+        anchor, direction = u[0], 0
+        for v in u[1:]:
+            if direction * (v - anchor) >= 0.0 and direction != 0:
+                anchor = v  # still going the same way: a new turning point
+            elif abs(v - anchor) > dead_band:
+                count += direction != 0
+                anchor, direction = v, 1 if v > anchor else -1
+    return count
+
+
+def off_spec_fraction(episodes, burn_in: int, settle: int | None = None) -> float:
+    """Share of the hold steps outside the band ``in_band`` was recorded
+    against, averaged over the episodes."""
+    vals = []
+    for ep in episodes:
+        m = hold_mask(ep, burn_in, settle)
+        if m.sum() >= 1:
+            vals.append(1.0 - ep.in_band[m].mean())
+    return float(np.mean(vals)) if vals else float("nan")
+
+
 def time_in_band(episodes, burn_in: int):
     vals = [ep.in_band[burn_in:].mean() for ep in episodes if len(ep.cost) > burn_in]
     return float(np.mean(vals)) if vals else float("nan")
@@ -492,7 +536,7 @@ def scored_burn_in(name: str, params) -> int:
     return min(burn_in, int(params.max_steps_in_episode) // 2)
 
 
-def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
+def run_episode(spec, params, policy, seed: int = 0, band=None, record=None) -> Episode:
     """One episode of a registered environment as an ``Episode`` record: the
     benchmark's one-episode run on ``PRNGKey(seed)`` (``runners.one_episode``).
 
@@ -500,7 +544,8 @@ def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
     ``-reward``; the terms come from ``env.reward_terms`` when the environment
     provides one. ``band`` is a per-output error tolerance for the
     time-in-band KPI, in the observation's units (defaults to the task's own,
-    ``benchmark.task_info``'s ``e_floor``).
+    ``benchmark.task_info``'s ``e_floor``). ``record`` is ``run_policy``'s: named
+    per-step quantities of the state, kept in the episode's ``terms``.
     """
     import dataclasses
 
@@ -511,7 +556,8 @@ def run_episode(spec, params, policy, seed: int = 0, band=None) -> Episode:
     if band is not None:
         e_floor = np.broadcast_to(np.asarray(band, float), task.e_floor.shape)
         task = dataclasses.replace(task, e_floor=e_floor.copy())
-    return episodes_of(one_episode(spec, params, policy, seed, task=task))[0]
+    rollout = one_episode(spec, params, policy, seed, task=task, record=record)
+    return episodes_of(rollout)[0]
 
 
 def evaluate_controller(name: str, kind: str = "pid", seeds: int = 3, params=None):

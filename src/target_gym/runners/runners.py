@@ -85,7 +85,9 @@ def _action_bounds(env, params) -> tuple[np.ndarray, np.ndarray]:
     )
 
 
-def one_episode(spec, params, policy: Callable, seed: int = 0, task=None) -> dict:
+def one_episode(
+    spec, params, policy: Callable, seed: int = 0, task=None, record=None
+) -> dict:
     """``benchmark.run_policy``'s one-episode run of ``policy`` on
     ``PRNGKey(seed)``, the loop every helper here runs.
 
@@ -93,7 +95,8 @@ def one_episode(spec, params, policy: Callable, seed: int = 0, task=None) -> dic
     ``policy(obs, state)`` -- the MPC baselines need the full state. It gets
     the NumPy view of the observation: given a JAX array, every operation in a
     host PID is a separate un-jitted dispatch. ``task`` overrides the
-    :class:`~target_gym.benchmark.TaskInfo` (``eval.run_episode``'s band).
+    :class:`~target_gym.benchmark.TaskInfo` (``eval.run_episode``'s band), and
+    ``record`` names per-step quantities to keep, as ``run_policy`` has it.
     """
     from target_gym.benchmark import CallablePolicy, run_policy, task_info
 
@@ -102,7 +105,8 @@ def one_episode(spec, params, policy: Callable, seed: int = 0, task=None) -> dic
     call = policy if wants_state else (lambda obs, state: policy(obs))
     adapter = CallablePolicy(lambda _task: call, name="policy", oracle=wants_state)
     task = task_info(spec.name, env, params, 1) if task is None else task
-    return run_policy(adapter, env, params, task, jax.random.PRNGKey(seed))
+    key = jax.random.PRNGKey(seed)
+    return run_policy(adapter, env, params, task, key, record=record)
 
 
 def _before_each_step(out: dict, key: str) -> np.ndarray:

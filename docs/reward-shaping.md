@@ -25,8 +25,7 @@ The best achievable per-step reward is about `-1` per tracked output on the
 dimensionless plants (tracking at the floor, nothing avoidable consumed), and
 minus the unavoidable bill on the priced ones. The reward is not capped, and
 its per-step scale differs by orders of magnitude between plants. To compare
-across plants, use the normalised expert advantage and the two costs reported
-separately (`target_gym.eval`), not the raw return.
+across plants, use `target_gym.scoring`, not the raw return.
 
 ### Tracking: the error in units of what is achievable
 

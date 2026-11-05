@@ -4,32 +4,49 @@ environment's ceiling, and the fixed settle."""
 
 from __future__ import annotations
 
+import importlib.util
 import math
+import pathlib
+import sys
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
+import target_gym as tg
 from target_gym import eval as E
 from target_gym import records, scoring
 from target_gym import reward as R
 from target_gym.registry import REGISTRY
 
 
-def _episode(cost, running=None, target_change=None):
+def _episode(
+    cost,
+    running=None,
+    target_change=None,
+    trips=0,
+    actions=None,
+    consumption=None,
+    in_band=None,
+):
     n = len(cost)
     terms = {"tracking": np.asarray(cost, float)}
     if running is not None:
         terms["running"] = np.asarray(running, float)
     tc = np.zeros(n, bool) if target_change is None else target_change
     total = terms["tracking"] + terms.get("running", 0.0)
+    if consumption is not None:
+        terms["consumption"] = np.asarray(consumption, float)
+    failed = np.zeros(n, bool)
+    failed[:trips] = True
     return E.Episode(
         cost=total,
-        in_band=np.ones(n, bool),
+        in_band=np.ones(n, bool) if in_band is None else np.asarray(in_band, bool),
         target_change=tc,
-        failed=np.zeros(n, bool),
+        failed=failed,
         terms=terms,
+        actions=None if actions is None else np.asarray(actions, float),
     )
 
 
@@ -450,17 +467,264 @@ def test_trips_that_do_not_match_the_episodes_are_refused(trips):
         _s(np.ones((1, 2)), np.ones((1, 2)), trips=trips)
 
 
-def test_the_burn_in_ratio_does_not_see_an_early_trip_and_the_seed_score_does():
-    """The documented difference between the two. Both controllers cost 10 per
-    step, but the policy pays 1e5 on step 5, inside a burn-in of 20 of 100
-    steps. The ratio, from the burn-in on, reads a tie; over the whole episode
-    the policy costs (99 * 10 + 1e5) / 100 = 1009.9 per step, a log of
-    log10(10 / 1009.9) = -2.00428."""
+def test_the_verdict_and_the_seed_score_both_see_an_early_trip():
+    """Both read the whole episode. Both controllers cost 10 per step, but the
+    policy pays 1e5 on step 5, inside a burn-in of 20 of 100 steps. Over the
+    whole episode it costs (99 * 10 + 1e5) / 100 = 1009.9 per step, so the
+    ratio is 10 / 1009.9, a log of log10(10 / 1009.9) = -2.00428."""
     spike = np.full(100, 10.0)
     spike[5] = 1e5
     expert = [_episode(np.full(100, 10.0))] * 2
     policy = [_episode(spike)] * 2
-    assert scoring.compare(policy, expert, 0.1, 20, settle=10)["ratio"] == 1.0
+    m = scoring.compare(policy, expert, 0.1, 20, settle=10)
+    assert m["ratio"] == pytest.approx(10.0 / 1009.9)
     b = [[E.gain([ep], 0)[0] for ep in expert]]
     x = [[E.gain([ep], 0)[0] for ep in policy]]
     assert _s(b, x, c=0.1)["score"] == pytest.approx([-2.00428], abs=1e-5)
+
+
+# The contract of the rest of this file is docs/proposals/industrial-fixes.md,
+# PR 1: what an owner needs beside the ratio. A win has to survive a trip,
+# wear is reported, a saving shows, and a score says how far it can go.
+
+
+def test_compare_counts_each_sides_trips_per_episode():
+    expert = [_episode(np.ones(50), trips=n) for n in (0, 1, 0)]
+    policy = [_episode(np.ones(50), trips=n) for n in (2, 0, 1)]
+    m = scoring.compare(policy, expert, ceiling=0.1, burn_in=10, settle=5)
+    assert m["expert_trips"] == [0, 1, 0]
+    assert m["policy_trips"] == [2, 0, 1]
+
+
+@pytest.mark.parametrize(
+    "cost, trips, expert_trips, wins",
+    [
+        (0.5, 0, 0, True),  # cheaper, and no trips
+        (0.5, 1, 0, False),  # cheaper, but it trips where the expert does not
+        (0.5, 1, 1, True),  # cheaper, and no worse on trips
+        (1.0, 0, 0, False),  # a tie is not a win
+        (0.995, 0, 0, False),  # nor is a gap two recordings of one row can show
+        (0.98, 0, 0, True),  # past that 1%
+        (2.0, 0, 0, False),  # dearer
+    ],
+)
+def test_a_win_costs_less_and_trips_no_more_than_the_expert(
+    cost, trips, expert_trips, wins
+):
+    expert = [_episode(np.ones(50), trips=expert_trips)] * 4
+    policy = [_episode(np.full(50, cost), trips=trips)] * 4
+    m = scoring.compare(policy, expert, ceiling=0.1, burn_in=10, settle=5)
+    assert m["beats_expert"] is wins
+
+
+def test_a_win_survives_no_trip_the_interquartile_mean_trims():
+    """The mean trims 2 of 10 seeds from each end. A policy twice as cheap
+    that pays 1e9 on 2 seeds keeps a ratio of exactly 2, so only the gate can
+    refuse it."""
+    trip = np.full(100, 0.5)
+    trip[50] = 1e9
+    expert = [_episode(np.ones(100))] * 10
+    policy = [_episode(np.full(100, 0.5))] * 8
+    policy += [_episode(trip, trips=1)] * 2
+    m = scoring.compare(policy, expert, ceiling=0.1, burn_in=10, settle=5)
+    assert m["ratio"] == pytest.approx(2.0)
+    assert m["beats_expert"] is False
+
+
+@pytest.mark.parametrize(
+    "actions, strokes",
+    [
+        ([[0.5], [0.5], [0.5]], 0.0),
+        ([[0.0], [0.5], [0.25]], 0.75),  # 0.5 up and 0.25 down
+        ([[0.0, 1.0], [0.5, 1.0], [0.5, 0.0]], 1.5),  # 0.5 and 1 on two actuators
+    ],
+)
+def test_travel_is_the_distance_moved_in_full_strokes(actions, strokes):
+    assert E.travel(np.array(actions)) == pytest.approx(strokes)
+
+
+@pytest.mark.parametrize(
+    "position, count",
+    [
+        ([0.5, 0.5, 0.5, 0.5], 0),
+        ([0.0, 0.1, 0.2, 0.3], 0),  # one direction
+        ([0.0, 0.5, 0.2, 0.6], 2),  # up, down, up
+        ([0.0, 0.5, 0.5, 0.2], 1),  # a pause is not a reversal
+        ([0.5, 0.501, 0.499, 0.501], 0),  # inside the 0.25% dead band
+    ],
+)
+def test_a_reversal_is_a_change_of_direction_past_the_dead_band(position, count):
+    assert E.reversals(np.array(position)[:, None]) == count
+
+
+def test_compare_reports_each_sides_travel_and_reversals_per_episode():
+    still = np.full((100, 1), 0.5)
+    chatter = np.tile([[0.0], [1.0]], (50, 1))
+    expert = [_episode(np.ones(100), actions=still)] * 2
+    policy = [_episode(np.ones(100), actions=chatter)] * 2
+    m = scoring.compare(policy, expert, ceiling=0.1, burn_in=10, settle=5)
+    assert m["expert_travel"] == 0.0
+    assert m["policy_travel"] == pytest.approx(99.0)  # one stroke per step
+    assert m["expert_reversals"] == 0.0
+    assert m["policy_reversals"] == 98.0  # every step but the first two
+
+
+class _BangBang:
+    """Full throw each way, three times past the box."""
+
+    def __init__(self):
+        self.sign = 1.0
+
+    def __call__(self, obs):
+        self.sign = -self.sign
+        return np.array([3.0 * self.sign])
+
+
+def test_an_episode_records_actions_as_fractions_of_the_span_after_the_box():
+    """Past the box a command does nothing more, so each step of 150 on
+    ``first_order`` moves one full stroke: 149 strokes and 148 reversals."""
+    spec = REGISTRY["first_order"]
+    ep = E.run_episode(spec, spec.make_test_params(), _BangBang(), seed=0)
+    assert ep.actions.min() == 0.0 and ep.actions.max() == 1.0
+    assert E.travel(ep.actions) == pytest.approx(149.0)
+    assert E.reversals(ep.actions) == 148
+
+
+def test_a_saving_shows_where_the_rewards_clip_hides_it():
+    """Both sides sit below ``c_hold``, so the reward charges neither, but the
+    policy burns 9 per step against the expert's 10."""
+    expert = [
+        _episode(np.ones(200), running=np.zeros(200), consumption=np.full(200, 10.0))
+    ] * 3
+    policy = [
+        _episode(np.ones(200), running=np.zeros(200), consumption=np.full(200, 9.0))
+    ] * 3
+    m = scoring.compare(policy, expert, ceiling=0.1, burn_in=20, settle=10)
+    assert m["consumption_ratio"] == pytest.approx(0.9)
+
+
+@pytest.mark.parametrize("name", sorted(scoring.CONSUMPTION))
+def test_the_consumption_is_the_quantity_the_reward_clips(name):
+    """With ``c_hold`` at half of it the clip is off, so the reward's running
+    term is ``w * (c - c / 2) / (c / 2) = w``. A table entry that read another
+    quantity would give another number."""
+    spec = REGISTRY[name]
+    env, p = spec.make_env(), spec.make_test_params()
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset(key, p)
+    for _ in range(3):
+        action = jnp.zeros(env.action_space(p).shape or (1,))
+        _, state, *_ = env.step(key, state, action, p)
+    c = float(scoring.CONSUMPTION[name](state, p, False))
+    assert c > 0.0
+    terms = env.reward_terms(state, p.replace(c_hold=c / 2.0))
+    assert float(terms["running"]) == pytest.approx(float(p.running_weight), rel=1e-5)
+
+
+@pytest.mark.parametrize("name", sorted(REGISTRY))
+def test_every_task_states_a_band_per_tracked_output_or_none(name):
+    spec = REGISTRY[name]
+    band = scoring.spec_band(name)
+    if name == "hvac":  # one-sided at night, and the reward prices it
+        assert band is None
+        return
+    assert band.shape == (len(spec.make_env().tracked_names),)
+    assert np.isfinite(band).all() and (band > 0).all()
+
+
+@pytest.mark.parametrize(
+    "name, band",
+    [
+        ("plane", [20.0]),  # the autopilot's +-20 m, plane/PHYSICS.md
+        ("plane3d_racetrack", [20.0]),
+        ("patrol", [8.5]),  # the slot's 8.5 m, patrol/PHYSICS.md
+        ("formation", [20.0, 8.5, 8.5]),  # the lead, then each wingman
+        ("ph_neutralization", [0.5]),  # pH 6 to 9, from a target as low as 6.5
+    ],
+)
+def test_a_published_tolerance_is_the_band(name, band):
+    np.testing.assert_allclose(scoring.spec_band(name), band)
+    assert scoring.SPEC_BAND[name] != "ours"
+
+
+@pytest.mark.parametrize(
+    "name, band",
+    [
+        ("distillation", [1e-3, 1e-3]),  # floors of 1e-4 mole fraction
+        ("cement_kiln", [0.5]),  # a 5e-4 fraction is 0.05 pp of the observed %
+    ],
+)
+def test_a_task_with_no_published_tolerance_gets_ten_floors(name, band):
+    np.testing.assert_allclose(scoring.spec_band(name), band)
+    assert name not in scoring.SPEC_BAND
+
+
+def test_off_spec_reads_the_steps_outside_the_band_during_the_hold():
+    """Steps 0 and 1 are the burn-in, so their misses do not count. Of the
+    other 8 steps, 1 is out on the first episode and 3 on the second."""
+    first = _episode(np.ones(10), in_band=[0, 0, 1, 1, 0, 1, 1, 1, 1, 1])
+    second = _episode(np.ones(10), in_band=[1, 1, 0, 0, 0, 1, 1, 1, 1, 1])
+    assert E.off_spec_fraction([first, second], 2, 1) == pytest.approx((1 + 3) / 16)
+
+
+@pytest.mark.parametrize(
+    "b, c, bound, want",
+    [
+        (100.0, 1.0, 10.0, 0.5),  # one of the two decades is reachable
+        (100.0, 1.0, 0.5, 1.0),  # a bound under the ceiling leaves it reachable
+        (100.0, 1.0, 0.0, 1.0),  # no bound known
+        (100.0, 1.0, float("nan"), 1.0),
+        (100.0, 1.0, 200.0, 0.0),  # the expert is already past the best known
+    ],
+)
+def test_s_max_is_the_score_the_best_known_bound_allows(b, c, bound, want):
+    assert scoring.s_max(b, c, bound) == pytest.approx(want)
+
+
+def test_there_is_no_s_max_without_room():
+    assert math.isnan(scoring.s_max(0.5, 1.0, 0.1))
+
+
+def test_score_policy_reports_the_owners_numbers_for_both_sides():
+    """The expert against itself: a tie, so no win, and both sides alike. The
+    band is ten floors, and its PID ends inside it, so the hold is on spec."""
+    m = scoring.score_policy("first_order", tg.make_expert("first_order"), seeds=2)
+    assert m["beats_expert"] is False
+    assert m["policy_trips"] == m["expert_trips"] == [0, 0]
+    assert m["policy_travel"] == pytest.approx(m["expert_travel"])
+    assert m["policy_reversals"] == m["expert_reversals"]
+    assert m["policy_off_spec"] == m["expert_off_spec"] == 0.0
+    assert m["s_max"] != m["s_max"]  # no room, so no s_max
+
+
+def _protocol_script():
+    path = pathlib.Path(__file__).parent.parent / "scripts" / "evaluate_baselines.py"
+    spec = importlib.util.spec_from_file_location("evaluate_baselines", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_protocol_records_the_expert_on_ten_seeds_and_the_oracle_on_three(
+    monkeypatch,
+):
+    """Three seeds miss the pH expert's cycling on seeds 3 to 5, and an oracle
+    costs too much for ten."""
+    script = _protocol_script()
+    asked, written = {}, {}
+
+    def fake(name, kind, seeds):
+        asked[kind] = seeds
+        return {"gain": 1.0, "hold": 1.0, "reach_cost": 1.0, "failure_rate": 0.0}
+
+    monkeypatch.setattr(script, "evaluate_controller", fake)
+    monkeypatch.setattr(script.records, "load", lambda kind: {})
+    monkeypatch.setattr(
+        script.records, "write", lambda kind, name, row: written.update(row)
+    )
+    monkeypatch.setattr(script, "table", lambda rows: "")
+    monkeypatch.setattr(sys, "argv", ["evaluate_baselines", "--envs", "first_order"])
+    assert script.main() == 0
+    assert asked == {"pid": 10, "mpc": 3}
+    assert written["pid_seeds"] == 10
+    assert written["seeds"] == 3
