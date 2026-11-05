@@ -204,7 +204,7 @@ def null_policies(name: str) -> list[Null]:
 
 def gate(name: str) -> dict:
     """``{policy: (ratio, win_rate)}`` on the held-out seeds."""
-    spec, params = REGISTRY[name], REGISTRY[name].make_test_params()
+    params = REGISTRY[name].make_test_params()
     expert = episodes_of(_rollout(shipped_policy("pid"), name, HELD_OUT))
     out = {}
     for policy in null_policies(name):
