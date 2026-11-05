@@ -4,7 +4,7 @@ Specification of 2026-11-03, for owner review. Nothing here has been run or
 implemented. It replaces the audit's rule B, max(expert settle, 5 x tau_63),
 which had no source (`oracle-audit.md`, section 5, Horizon).
 
-> Amendment 3, 2026-11-05 (section 12): a rate limit's ramp joins P (H21).
+> Amendment 3, 2026-11-04 (section 12): a rate limit's ramp joins P (H21).
 >
 > Amendment 1, 2026-11-03: after the first run (8 of 14 identifications
 > failed), the owner accepted H14 to H20 and every recommendation D8 to D14.
@@ -750,7 +750,7 @@ then the plant's settling. Here the pair that shows it, speed to header
 pressure, failed V1 on all ten seeds (SNR about 7 of the 10 required, with a
 fit of 97 %), so P came from a faster pair.
 
-**H21 (owner decision, 2026-11-05).** For a task with a target range and
+**H21 (owner decision, 2026-11-04).** For a task with a target range and
 rate-limited MVs:
 
     P = N + M + ramp

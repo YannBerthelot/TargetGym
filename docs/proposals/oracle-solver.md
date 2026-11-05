@@ -445,7 +445,7 @@ captured solves (1e-6 cleared 7, 1e-8 cleared 5). It uses task constants only,
 and no return was used in choosing it, but it is not strictly pre-hoc.
 Compressor, training seeds 100 to 102: capped 49, 26, 51 down to 0, 0, 0.
 
-## 16. Amendment 3, 2026-11-05: G11, a cold retry
+## 16. Amendment 3, 2026-11-04: G11, a cold retry
 
 The records gate failed on the first re-record: unstable_cstr tripped once on
 the ten test seeds and lost that seed to its expert, with 10 failed and 7
