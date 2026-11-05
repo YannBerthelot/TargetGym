@@ -73,14 +73,18 @@ because the noise work stales all 24 stamps and has to land at one re-record.
 That branch is local only, and its version stamps are branch stamps, to be redone
 at the end.
 
-CI runs only on pull requests into `main`, so a pull request into the integration
-branch gets no checks. Before PR 3, that branch needs a way to get them.
+CI runs on pull requests into the integration branch too. Branch protection covers
+only `main`, so these have no required checks and no auto-merge, and are merged by
+hand. The large tier does not run on them, so each plant PR runs the null-policy
+gate locally. `records` stays red there until the re-record, and two examples in
+`docs/using-the-pids.md` fail for the same reason.
 
 | PR | What | Target | Budget (code + tests) |
 |---|---|---|---|
 | 1 | Scoring: trips, travel, true consumption, spec band | `main`, stales nothing | 150 + 120 |
 | 2 | Null-policy gate, red on the known failures | `main`, tests only | 120 + 60 |
 | 3 | Sensor dead time, true sampling, actuator rate and lag; `distillation` pilot | integration | 200 + 200 |
+| 3b | The expert interface, its own session | integration | its own |
 | 4 | Process plants | integration | 250 + 240 |
 | 5 | Thermal plants | integration | 300 + 250 |
 | 6 | Energy plants, `battery` and `reactor` rebuilt | integration | 600 + 400 |
@@ -92,8 +96,9 @@ branch gets no checks. Before PR 3, that branch needs a way to get them.
 
 Then the benchmark rechecks its task list and opens its GPU window.
 
-PRs 4 to 7 can run in parallel, one session each, once PR 3 is in. PR 7b follows
-PR 7, whose dynamics it shares. C2 and D hold until their plants are done.
+PRs 4 to 7 can run in parallel, one session each, once PRs 3 and 3b are in. PR 3b
+needs PR 3's applied action, and PRs 6, 7 and 9 rework experts on top of it. PR 7b
+follows PR 7, whose dynamics it shares. C2 and D hold until their plants are done.
 
 ## Scoring
 
@@ -135,8 +140,15 @@ moving a recorded one.
   so a policy's rising excursion leaves the hold. Replace it with a fixed count of
   steps before each move, per task.
 - **Linear consumption.** `running_cost` becomes `w * c / c_hold`. The clip gives
-  no credit for saving, and it charges fluctuation that a fuel bill does not.
+  no credit for saving, and it charges fluctuation that a fuel bill does not. This
+  adds about `w` to every step's cost on the 6 tasks it covers, which compresses
+  `seed_scores` there. That needs the owner's decision before PR 8.
 - **Constants, once.** See [Constants](#constants).
+- **Null policies in the package.** They move out of `tests/`, with their tables
+  and gains stored in records, because the bump-test evidence is outside the wheel.
+  ExpertBench runs them as reference rows through `run_policy`.
+- **A credibility record per task,** through `records`: each null's result, the
+  expert's sourced figure and any accepted exception.
 
 ## Shared plant stages (PR 3)
 
@@ -150,6 +162,12 @@ updates `docs/proposals/measurement-noise.md`, which still states them.
   scored tasks. These are plant physics with sourced numbers.
 - **Stiction and dead band stay opt-in.** No source gives a typical stiction
   range, so noise decision 1 stands for these.
+- **Applied action.** `info["applied_action"]` reports what the actuator did, and
+  `Episode.actions` reads it, so `travel` and `reversals` measure the actuator, not
+  the command.
+- **What scale 0 means.** Dead time, sampling and rate limits stay on at
+  `sensor_noise_scale` 0, so it stops meaning the ideal plant. `measured_reward`
+  reads the same delayed copy as the observation.
 
 ## Plants
 
@@ -184,7 +202,8 @@ Row order is by severity within each PR.
 | `compressor_surge` | Ramp setpoints; per-episode surge-line offset, so the margin is not known exactly |
 
 Also in PR 6: charge actual travel on `reactor` and `wind_turbine`, whose wear
-terms charge command lag today.
+terms charge command lag today, and have the `battery` expert return `(n, 1)`
+where it returns `(n,)` today.
 
 ### PR 7: aircraft
 
@@ -193,7 +212,7 @@ terms charge command lag today.
 | Gust rolling moment | all 3D |
 | Trips on load factor, EAS, Mach and bank; `CL` capped at a buffet line | all |
 | Engine lag about 3 s, 5% idle; retire the patches for the old lag | all |
-| Policies send 1 Hz bank and pitch demands through a fixed inner loop. Its gains come once from the accepted attitude procedure and stay task constants | all |
+| Policies, experts and oracles all send 1 Hz bank and pitch demands, through a fixed inner loop in the plant, so they share an action space. Its gains come once from the accepted attitude procedure and stay task constants | all |
 | Speed schedule in CAS and Mach | `plane` family |
 | Tips at 25 deg at flown speed, `a` about 35 km at 230 m/s | `plane3d_figure8` |
 
@@ -215,7 +234,9 @@ PR 9 also applies `docs/proposals/expert-protocols-noise.md`, which removes the
 twin-run bump test and makes bump tests single runs sized by a measured noise
 band. N8 there must allow for dead time and true sampling. PR 9 reruns the noise
 measurement on the changed plants first, and keys the gains store by task and
-noise level, with today's entries as level 1.
+noise level, with today's entries as level 1. `make_expert(name,
+sensor_noise_scale=level)` and `make_pid_controller` take the level, a level with
+no gains raises, and no level means the shipped gains.
 
 | Task | Amendment |
 |---|---|
@@ -283,8 +304,13 @@ itself stays on CI.
   the benchmark's 1M steps.
 - **The inner loop moves into the plant,** so aircraft policies no longer touch
   the surfaces. Say so in the docs.
-- **ExpertBench records** "actuator defects are opt-in". Rate limits are plant
-  physics, not defects, but its decisions page should be updated.
+- **ExpertBench depends on some of this.** Its `docs/targetgym-contract.md` lists
+  what it calls. Tell it before `tg.make`'s noise override, the `info` keys,
+  `seed_scores`, `ceiling` or `make_pid_controller().batched()` change, flag any
+  `max_steps_in_episode` that moves by more than about 2 times, and any change of
+  step such as `reactor`'s, and send it the freeze commit. It records "actuator
+  defects are opt-in"; rate limits are plant physics, not defects, but its decisions
+  page should be updated.
 - **Reviewer-only claims may not hold.** Each gets a failing test first.
 - **Earlier aircraft noise numbers are unreliable.** Until 16df296, seven plane
   and plane3d tasks gave every episode one noise path after step 1, so noise-on
