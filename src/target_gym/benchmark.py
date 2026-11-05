@@ -246,6 +246,11 @@ def _batched(env, per_episode_params: bool):
 
     pa = 0 if per_episode_params else None
     step_all = jax.vmap(env.step_env, in_axes=(0, 0, 0, pa))
+    true_obs = jax.vmap(
+        lambda state, p: env.get_obs(state, p.replace(sensor_noise_scale=0.0)),
+        in_axes=(0, pa),
+    )
+    instrumented = bool(getattr(env, "readings", ()))
 
     def advance(keys, state, obs, action, params, done):
         obs_n, state_n, r, term, info = step_all(keys, state, action, params)
@@ -256,7 +261,9 @@ def _batched(env, per_episode_params: bool):
                 jnp.reshape(live, live.shape + (1,) * (new.ndim - 1)), new, old
             )
 
-        return freeze(obs_n, obs), jax.tree.map(freeze, state_n, state), r, term, info
+        obs_n, state_n = freeze(obs_n, obs), jax.tree.map(freeze, state_n, state)
+        true = true_obs(state_n, params) if instrumented else obs_n
+        return obs_n, state_n, true, r, term, info
 
     terms_fn = getattr(env, "reward_terms", None)
     return (
@@ -281,9 +288,11 @@ def run_policy(
 
     Returns per-episode, per-step arrays ``(n, T)``: ``reward``, ``tripped``
     (``info["tripped"]``, False where the plant reports none), ``in_band``
-    (every tracked error within ``e_floor``), ``target_change``, ``action``
-    ``(n, T, n_act)``, ``value`` / ``target`` ``(n, T, n_out)`` (the measured
-    outputs and their targets after the step; ``value0`` / ``target0``
+    (every tracked error within ``e_floor``, on the true outputs, since this
+    KPI describes the plant and not its instruments), ``target_change``,
+    ``action`` ``(n, T, n_act)``, ``value`` / ``target`` ``(n, T, n_out)`` (the
+    outputs as the policy read them, and their targets, after the step;
+    ``value0`` / ``target0``
     ``(n, n_out)`` at the reset), ``terminated`` (latched from
     the step on which the episode terminated), and ``info_error`` where the
     plant reports its true tracking error; per episode ``length`` (its own
@@ -344,7 +353,7 @@ def run_policy(
         else:
             action, carry = policy.act(carry, obs, t)
         action = jnp.reshape(jnp.asarray(action, jnp.float32), (n, task.n_act))
-        obs, state, r, term, info = advance(
+        obs, state, true, r, term, info = advance(
             step_keys[t], state, obs, action, params, jnp.asarray(done)
         )
         o = np.asarray(obs)
@@ -359,7 +368,7 @@ def run_policy(
         rec["action"].append(np.asarray(action))
         rec["value"].append(o[:, vi])
         rec["target"].append(o[:, ti])
-        band_rec.append(task.in_band(o))
+        band_rec.append(task.in_band(np.asarray(true)))
         if isinstance(info, dict) and "error" in info:
             err_rec.append(np.asarray(info["error"], float))
         step_terms = info.get("reward_terms") if isinstance(info, dict) else None

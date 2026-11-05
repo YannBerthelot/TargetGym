@@ -36,6 +36,8 @@ from target_gym.base import (
     FieldReading,
     measured_state,
 )
+from target_gym.benchmark import episodes_of, run_policy, task_info
+from target_gym.eval import time_in_band
 from target_gym.experts.mpc import plan_params
 from target_gym.pc_gym.four_tank.env import FourTankParams
 from target_gym.pc_gym.four_tank.env_jax import FourTank
@@ -378,6 +380,86 @@ def test_rounding_adds_its_quantisation_variance_to_the_floor():
     true, measured, n = _hold_costs(env, FourTankParams())
     assert measured == pytest.approx(2.0 / 3.0, abs=4 * (2.0 / 3.0) / np.sqrt(n))
     assert true < 1e-2, "the plant did not hold its target"
+
+
+class _HoldStill:
+    """The smallest benchmark policy: raw action 0 on every step."""
+
+    name = "still"
+
+    def reset(self, key, obs, task):
+        return jnp.zeros((task.n_episodes, task.n_act))
+
+    def act(self, carry, obs, t):
+        return carry, carry
+
+
+#: Shared, so the rollouts below compile once.
+_RESTING_PLANT = FourTank()
+
+
+def _resting_on(offset):
+    """Four-tank params whose every episode starts at rest at raw action 0,
+    with both targets ``offset`` metres above the levels it rests on."""
+    params = FourTankParams()
+    h1, h2, h3, h4 = (float(h) for h in _steady_levels(params, 5.0))
+    return params.replace(
+        initial_h1_range=(h1, h1),
+        initial_h2_range=(h2, h2),
+        initial_h3_range=(h3, h3),
+        initial_h4_range=(h4, h4),
+        target_h1_range=(h1 + offset, h1 + offset),
+        target_h2_range=(h2 + offset, h2 + offset),
+    )
+
+
+def _hold_rollout(offset):
+    params = _resting_on(offset)
+    task = task_info("four_tank", _RESTING_PLANT, params, 4)
+    key = jax.random.PRNGKey(0)
+    return run_policy(_HoldStill(), _RESTING_PLANT, params, task, key, n_steps=200)
+
+
+def test_a_perfect_hold_counts_as_always_in_band():
+    """``time_in_band`` and the settle read the plant, not its instruments.
+
+    The band is ``e_floor``, 1 mm, on each tank, and a reading scatters by
+    0.5 mm with 1 mm rounding on top. So a reading alone leaves the band on
+    about 5% of steps per tank (2 sigma), and 800 steps read from ``obs`` cannot
+    all stay in. The policy still reads its instruments: ``value`` is what it
+    saw, and it is off target.
+    """
+    out = _hold_rollout(0.0)
+    assert out["in_band"].all()
+    assert time_in_band(episodes_of(out), 0) == 1.0
+    assert np.any(out["value"] != out["target"])
+
+
+def test_per_episode_plants_read_the_band_on_their_own_true_outputs():
+    """A study that gives each episode its own params, here two plants on
+    target and two off it by 2 mm."""
+    on, off = _resting_on(0.0), _resting_on(2e-3)
+    params = jax.tree.map(lambda a, b: jnp.stack([a, a, b, b]), on, off)
+    task = task_info("four_tank", _RESTING_PLANT, params, 4, per_episode_params=True)
+    out = run_policy(
+        _HoldStill(),
+        _RESTING_PLANT,
+        params,
+        task,
+        jax.random.PRNGKey(0),
+        n_steps=50,
+        per_episode_params=True,
+    )
+    assert out["in_band"][:2].all()
+    assert not out["in_band"][2:].any()
+
+
+def test_a_hold_outside_the_band_counts_as_never_in_band():
+    """2 mm off a 1 mm band, on the true levels. Noise would carry a reading
+    inside on about 2% of steps, and that must not count."""
+    out = _hold_rollout(2e-3)
+    assert not out["in_band"].any()
+    assert time_in_band(episodes_of(out), 0) == 0.0
 
 
 def test_oracle_planning_params_are_noise_free():

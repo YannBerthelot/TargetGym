@@ -303,10 +303,10 @@ setpoints exactly (`docs/proposals/measurement-noise.md`).
 | `h1`, `h2`, `h3`, `h4` | 0.5 mm | 1 mm | Guided wave radar level transmitter | Confirmed | [Rosemount 5300](https://www.emerson.com/documents/automation/73580.pdf) |
 
 The expert reads these levels, and so does every tuner. The oracle plans and
-acts on the true state, so it stays a full-state bound. `reward`, trips and the
-score read the true levels. `info["measured_reward"]` is the same cost on the
-readings, with any trip taken from the true state, and a learner can train on
-it.
+acts on the true state, so it stays a full-state bound. `reward`, trips, the
+score and the time-in-band and settle KPIs read the true levels.
+`info["measured_reward"]` is the same cost on the readings, with any trip taken
+from the true state, and a learner can train on it.
 
 A plant resting exactly on target pays about 0.67 per step in measured reward.
 The proposal's floor of 0.5 is the scatter alone, `(0.5 mm / 1 mm)^2` per tank.

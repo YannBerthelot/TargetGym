@@ -17,9 +17,10 @@ The next release is 0.8.0, because these changes break code written for
 - **`four_tank` reads through noisy instruments, and is version 4.** Its
   observation reports each level with 0.5 mm of scatter, rounded to 1 mm, and
   its expert and tuners see those readings. `sensor_noise_scale=0` gives the
-  noise-free task, rounding included. `reward`, trips and the score stay on
-  the true levels, and `info["measured_reward"]` holds the cost a plant could
-  compute from its own sensors. The other tasks follow
+  noise-free task, rounding included. `reward`, trips, the score and the
+  time-in-band and settle KPIs stay on the true levels, and
+  `info["measured_reward"]` holds the cost a plant could compute from its own
+  sensors. The other tasks follow
   (docs/proposals/measurement-noise.md).
 - **A state carries `sensor_key`.** `EnvState` has a keyword-only `sensor_key`,
   which `canonical_reset` stores and a restart keeps, so `get_obs(state,
