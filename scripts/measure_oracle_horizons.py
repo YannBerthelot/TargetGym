@@ -187,6 +187,7 @@ TASKS = {
 def _stabilised(p):
     """The unstable_cstr base loop: the expert's inner PD on T, its setpoint
     held at the mean of the cascade's last 20 outputs and stepped as given."""
+    from target_gym.experts.pid import filtered_derivative
     from target_gym.pc_gym.unstable_cstr import experts as X
 
     g, dt = X.load_gains(), float(p.delta_t)
@@ -194,8 +195,10 @@ def _stabilised(p):
     def actuate(u, y, T_prev):
         T = y[1]  # the CV "T"
         T_prev = T if T_prev is None else T_prev
-        T_c = g["Tc_bias"] + g["Kp_T"] * (u[0] - T) - g["Kd_T"] * (T - T_prev) / dt
-        return [float(X.raw_from_coolant(np.clip(T_c, p.T_c_min, p.T_c_max), p))], T
+        rate, T_filtered = filtered_derivative(T, T_prev, g["Kp_T"], g["Kd_T"], dt)
+        T_c = g["Tc_bias"] + g["Kp_T"] * (u[0] - T) - g["Kd_T"] * rate
+        raw = float(X.raw_from_coolant(np.clip(T_c, p.T_c_min, p.T_c_max), p))
+        return [raw], T_filtered
 
     return {
         "actuate": actuate,

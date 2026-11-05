@@ -53,7 +53,7 @@ class GridBattery(
     # the GPIO over the assumed 50 mV/K divider.
     readings: tuple = (
         FieldReading("soc", sigma=4.7e-5),
-        ChannelReading(1, sigma=5.5e-5, step=190.73e-6),
+        ChannelReading(1, sigma=5.5e-5),
         FieldReading("T_cell", sigma=0.03, step=152.59e-6 / 0.05),
         FieldReading("power", sigma=330.0),
     )

@@ -93,9 +93,10 @@ class Reading:
     """One instrument: ``value + scale * sigma * epsilon``, rounded to ``step``.
 
     ``sigma`` is the short-term scatter of one reading, in the value's units.
-    ``step`` is the digital step, 0 for none. ``interval`` is the seconds
-    between updates, 0 for every step: ``epsilon`` is held that long, and the
-    value stays current.
+    ``step`` is the digital step, 0 for none. ``interval`` is the time between
+    updates in ``delta_t``'s units, 0 for every step: seconds on most tasks,
+    but minutes on ``distillation``, ``cstr`` and ``unstable_cstr``. ``epsilon``
+    is held that long, and the value stays current.
     """
 
     sigma: float | tuple

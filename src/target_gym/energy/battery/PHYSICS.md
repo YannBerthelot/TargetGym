@@ -297,7 +297,7 @@ rounding included.
 | reading | sigma | step | instrument | status | source |
 | --- | --- | --- | --- | --- | --- |
 | `soc` | 4.7e-5 | | BMS estimator on TI BQ79616 cell data | Not checked | [BQ79616](https://www.ti.com/lit/ds/symlink/bq79616.pdf) |
-| `V_cell` | 5.5e-5 V | 190.73 uV | TI BQ79616 cell monitor | Not checked | [BQ79616](https://www.ti.com/lit/ds/symlink/bq79616.pdf) |
+| `V_cell` | 5.5e-5 V | | TI BQ79616 cell monitor | Not checked | [BQ79616](https://www.ti.com/lit/ds/symlink/bq79616.pdf) |
 | `T_cell` | 0.03 K | 0.003 K | 10 kOhm NTC on a BQ79616 GPIO input | Not checked | [BQ79616](https://www.ti.com/lit/ds/symlink/bq79616.pdf) |
 | `power` | 330 W | | SEL-735 revenue meter | Confirmed | [SEL-735](https://selinc.com/products/735/) |
 
@@ -309,10 +309,8 @@ rounding included.
 - `soc` is an estimate, not a sensor: voltage scatter over an OCV slope of 1.16 V
   per unit. Real state-of-charge error is a slow bias, left out as all bias is.
 - `V_cell` has no noise figure. The sheet's ENOB of 16 at one LSB gives
-  LSB/sqrt(12) = 55 uV, which is already a quantisation figure. The proposal lists
-  both that sigma and the LSB as a step, so the reading here carries both, about
-  78 uV rms against 55 uV. That is pessimistic by a factor of about 1.4 on a
-  channel nothing tracks.
+  LSB/sqrt(12) = 55 uV, which is already a quantisation figure, so no rounding goes
+  on top of it: `sigma` holds the 190.73 uV LSB.
 - `T_cell` assumes a divider slope of 50 mV/K near 25 C, which also turns the
   sheet's 152.59 uV GPIO step into 0.003 K.
 
