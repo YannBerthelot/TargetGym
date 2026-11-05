@@ -219,13 +219,13 @@
     "note": "NREL 5 MW baseline (Jonkman et al. 2009, ch. 7): pitch PI on the filtered generator speed, Kp and Ki by pole placement (wn 0.6, zeta 0.7) on the best-fit dP/dtheta of this plant's Cp surface along the region-3 curve; that line is flat, so no gain schedule (scripts/wind_turbine_gains.py). Generator speed in rad/s to pitch in rad."
   },
   "cement_kiln": {
-    "Kp_inner": 0.03720405423566248,
-    "Ki_inner": 4.368147686292763e-05,
+    "Kp_inner": 0.04060008779803512,
+    "Ki_inner": 4.986839922659246e-05,
     "model_inner": {
-      "k": 406.8997080955525,
-      "tau": 3223.373352016678,
-      "theta": 106.46404639776924,
-      "tau_c": 106.46404639776924
+      "k": 410.27004975634486,
+      "tau": 3390.301646961275,
+      "theta": 101.7680746417087,
+      "tau_c": 101.7680746417087
     },
     "lime_halfwidth": 0.004,
     "step": 0.1,
