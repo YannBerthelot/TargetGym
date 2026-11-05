@@ -123,9 +123,26 @@ The next release is 0.8.0, because these changes break code written for
 
 - Each release now has a GitHub Release, with its changelog entry as notes and
   the wheel and sdist PyPI received.
+- **`scoring.seed_scores` gives one score per training seed**, for a test across
+  trained agents such as AdaStop: the mean over episodes of
+  `clip(log10(max(b, c) / max(x, c)), -3, +3)`, on costs per step over the whole
+  episode with no burn-in. With `trips` it also returns the trip rate, which the
+  clip hides.
+- **`record_result(..., expert_based=True)` stamps `expert_fingerprint`, and
+  `is_current` checks it**, so retuning an expert marks the runs that used it
+  stale. A tabula-rasa run stays current through a retune, and records without
+  the field stay valid.
 
 ### Fixed
 
+- **The discount table in `docs/rl-protocol.md` had three stale rows.** `four_tank`
+  runs 1200 steps, not 500, and `cstr` and `first_order` 150, not 100, so their
+  `gamma` is 0.99917, 0.99333 and 0.99333. A test now reads the table against
+  each task's params, and the page says drivers compute `gamma` from them.
+- **The docs said `b / x` covers the whole scored episode.** It starts at the
+  task's burn-in, up to half the episode, so the first reach and early trips are
+  not in it. The behaviour is unchanged, and `scoring.py` and
+  `docs/rl-protocol.md` now say so.
 - **`gymnasium.utils.env_checker.check_env` passes on every task.** It failed on
   the ten tasks with an array in their state, because `info["last_state"]` was
   a state dataclass and Gymnasium compares info values with `==`. Through
