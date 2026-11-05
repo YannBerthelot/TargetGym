@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from target_gym.base import true_obs
 from target_gym import benchmark as B
 from target_gym import eval as E
 from target_gym.cement_kiln.env import discharge_lime
@@ -105,8 +106,7 @@ def _off_target(name, **offsets):
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     state = state.replace(**{k: fn(state, params) for k, fn in offsets.items()})
     # The band is a claim about the plant, so read it without the instruments.
-    quiet = params.replace(sensor_noise_scale=0.0)
-    return env.get_obs(state, quiet)[None], params, task
+    return true_obs(env, state, params)[None], params, task
 
 
 # Two outputs, each moved ``a`` and ``b`` floors off its target.

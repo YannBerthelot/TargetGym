@@ -70,8 +70,12 @@ def _own_env(spec):
 
 
 def _unrounded(env):
-    """Rounding hides ``epsilon``, so read the draws with no digital step."""
-    env.readings = tuple(dataclasses.replace(r, step=0.0) for r in env.readings)
+    """Rounding hides ``epsilon``, and so does a late value, so read the draws
+    with no digital step and no age."""
+    env.readings = tuple(
+        dataclasses.replace(r, step=0.0, dead_time=0.0, sampled=False)
+        for r in env.readings
+    )
     return env
 
 
@@ -218,9 +222,14 @@ def test_sensor_noise_is_on_by_default():
 
 @noisy_tasks
 def test_scale_zero_is_the_noise_free_task_exactly(spec):
-    """Rounding goes too: at 0 no instrument stands between task and policy."""
+    """Rounding goes too. An instrument's age stays: a reading with no scatter
+    and no step still reports late (tests/test_sensor_delay.py)."""
     noisy, free = _own_env(spec), _own_env(spec)
-    free.readings = ()
+    free.readings = tuple(
+        dataclasses.replace(r, sigma=0.0, step=0.0)
+        for r in free.readings
+        if r.dead_time > 0 or r.sampled
+    )
     params = spec.make_test_params()
     key = jax.random.PRNGKey(5)
     low, high = _bounds(noisy, params)
@@ -237,7 +246,8 @@ def test_scale_zero_is_the_noise_free_task_exactly(spec):
             np.testing.assert_array_equal(
                 a[4]["measured_reward"], b[4]["measured_reward"]
             )
-            np.testing.assert_array_equal(a[4]["measured_reward"], a[2])
+            if not free.readings:  # a late reading's measured cost is late too
+                np.testing.assert_array_equal(a[4]["measured_reward"], a[2])
 
 
 @noisy_tasks

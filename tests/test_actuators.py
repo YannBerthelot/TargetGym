@@ -23,6 +23,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from target_gym import eval as E
 from target_gym.base import EnvParams, actuate
 from target_gym.pc_gym.four_tank.env import FourTankParams
 from target_gym.pc_gym.four_tank.env_jax import FourTank
@@ -58,15 +59,18 @@ def test_defects_default_to_off():
     assert params.action_noise == 0.0
 
 
-def test_at_zero_the_stage_changes_nothing():
-    """Every action, in range or past it: the plant's own clip decides."""
+def test_at_zero_the_stage_changes_no_action_and_records_it():
+    """Every action, in range or past it: the plant's own clip decides, and
+    ``actuator_held`` keeps what reaches it, for ``info["applied_action"]``."""
     env, params = FourTank(), FourTankParams()
     state = _state(env, params)
     for action in ([0.25, -0.75], [1.0, -1.0], [3.0, -7.0]):
         action = jnp.array(action)
         applied, new = actuate(env, state, action, params)
         np.testing.assert_array_equal(applied, action)
-        jax.tree_util.tree_map(np.testing.assert_array_equal, new, state)
+        np.testing.assert_array_equal(new.actuator_held, jnp.clip(action, -1, 1))
+        rest = new.replace(actuator_held=state.actuator_held)
+        jax.tree_util.tree_map(np.testing.assert_array_equal, rest, state)
 
 
 def test_a_dead_band_holds_inside_its_width_and_follows_outside():
@@ -207,6 +211,95 @@ def test_a_restart_returns_the_actuator_to_rest():
             break
     assert tripped, "pumps off did not trip within 60 steps"
     np.testing.assert_array_equal(state.actuator_held, jnp.zeros(2))
+
+
+def test_rate_and_lag_default_to_off():
+    assert EnvParams().actuator_rate == 0.0
+    assert EnvParams().actuator_lag == 0.0
+
+
+def test_a_rate_limit_moves_the_output_at_most_its_rate():
+    """0.1 of the span of 2 per second, at 1 s steps, is 0.2 per step, all the
+    way to the end of the range."""
+    params = FourTankParams(actuator_rate=0.1)
+    assert _track(params, [1.0] * 6) == pytest.approx(
+        [0.2, 0.4, 0.6, 0.8, 1.0, 1.0], abs=1e-6
+    )
+
+
+def test_a_lag_closes_a_fraction_of_the_gap_each_step():
+    """``1 - exp(-dt / tau)`` of the gap: with ``tau = 1 / ln 2`` at 1 s steps
+    that is half."""
+    params = FourTankParams(actuator_lag=1.0 / np.log(2.0))
+    assert _track(params, [1.0] * 3) == pytest.approx([0.5, 0.75, 0.875], abs=1e-6)
+
+
+def test_a_rate_limit_caps_what_a_lag_would_move():
+    params = FourTankParams(actuator_lag=1.0 / np.log(2.0), actuator_rate=0.1)
+    assert _track(params, [1.0] * 2) == pytest.approx([0.2, 0.4], abs=1e-6)
+
+
+def test_a_rate_limit_bounds_a_step_of_a_task_with_sub_steps():
+    """``reactor`` runs 10 s per step, so 0.01 of the span of 2 per second moves
+    0.2 per step, not 0.02."""
+    spec = REGISTRY["reactor"]
+    env = spec.make_env()
+    params = spec.make_test_params().replace(actuator_rate=0.01)
+    state = _state(env, params)
+    applied, _ = actuate(env, state, jnp.array([1.0]), params)
+    assert float(applied[0]) == pytest.approx(0.2, abs=1e-6)
+
+
+@pytest.mark.parametrize("spec", REGISTRY.values(), ids=lambda s: s.name)
+def test_a_step_reports_what_the_actuator_applied(spec):
+    """Past the box a command does nothing more, so the report is the box."""
+    env, params = spec.make_env(), spec.make_test_params()
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, params)
+    shape = env.action_space(params).shape
+    info = env.step_env(key, state, jnp.full(shape, 3.0), params)[-1]
+    high = env.action_space(params).high
+    np.testing.assert_allclose(
+        info["applied_action"], np.broadcast_to(high, shape), rtol=1e-6
+    )
+
+
+def test_a_step_reports_the_limited_output_not_the_command():
+    env = FourTank()
+    params = FourTankParams(actuator_rate=0.1)
+    key = jax.random.PRNGKey(0)
+    state = _state(env, params)
+    info = env.step_env(key, state, jnp.array([1.0, -1.0]), params)[-1]
+    np.testing.assert_allclose(info["applied_action"], [0.2, -0.2], rtol=1e-6)
+
+
+def test_the_column_starts_with_its_valves_where_the_plant_is():
+    """With a rate limit the first step cannot be a jump from the middle of the
+    range to the plant's own flows."""
+    spec = REGISTRY["distillation"]
+    env, p = spec.make_env(), spec.make_test_params()
+    state = _state(env, p)
+    span = np.array([p.L_max - p.L_min, p.V_max - p.V_min])
+    want = 2.0 * (np.array([state.L, state.V]) - [p.L_min, p.V_min]) / span - 1.0
+    np.testing.assert_allclose(state.actuator_held, want, rtol=1e-6)
+
+
+class _BangBang:
+    def __init__(self):
+        self.sign = 1.0
+
+    def __call__(self, obs):
+        self.sign = -self.sign
+        return np.array([self.sign])
+
+
+def test_an_episodes_travel_is_what_the_actuator_did():
+    """0.2 of the span per second at 0.05 s steps is 0.01 strokes per step,
+    over the 149 moves of ``first_order``'s 150 steps."""
+    spec = REGISTRY["first_order"]
+    params = spec.make_test_params().replace(actuator_rate=0.2)
+    ep = E.run_episode(spec, params, _BangBang(), seed=0)
+    assert E.travel(ep.actions) == pytest.approx(1.49, rel=1e-4)
 
 
 @pytest.mark.parametrize("spec", NOISY, ids=lambda s: s.name)

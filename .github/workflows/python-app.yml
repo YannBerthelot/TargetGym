@@ -105,6 +105,9 @@ jobs:
     # minutes but no wall-clock. Like them, it waits for the records job.
     name: agent
     needs: records
+    # Records stay stale on the integration branch until its one re-record, so
+    # there the tests run anyway. Drop this line when that branch lands.
+    if: ${{ !cancelled() && (needs.records.result == 'success' || github.base_ref == 'feat/sensor-noise') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -135,6 +138,9 @@ jobs:
     # and fails the job.
     name: learning
     needs: records
+    # Records stay stale on the integration branch until its one re-record, so
+    # there the tests run anyway. Drop this line when that branch lands.
+    if: ${{ !cancelled() && (needs.records.result == 'success' || github.base_ref == 'feat/sensor-noise') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -167,6 +173,9 @@ jobs:
     # three interpreters spend their runner minutes on a tree that needs a
     # re-record first.
     needs: records
+    # Records stay stale on the integration branch until its one re-record, so
+    # there the tests run anyway. Drop this line when that branch lands.
+    if: ${{ !cancelled() && (needs.records.result == 'success' || github.base_ref == 'feat/sensor-noise') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:

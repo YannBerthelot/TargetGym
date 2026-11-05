@@ -32,6 +32,15 @@ The next release is 0.8.0, because these changes break code written for
     number published against an earlier version does not describe these tasks.
   - `wind_turbine`'s state gains a `power` field, and `patrol_bearing_only`'s
     elevation now inherits a 25 ft step on the lead's altitude.
+- **Readings can be late.** `Reading` has `dead_time` and `sampled`, and
+  `distillation`'s analysers now report a sample 5 minutes old, every 5 minutes.
+  `sensor_noise_scale` 0 removes noise only, so it no longer means the plant as it
+  is: use `base.true_obs` for that. `measured_reward` reads the same late copy.
+  Each state has `sensor_history`, and a state built by hand with a batch axis
+  needs it batched too.
+- **`info["applied_action"]` reports what the actuator did,** on every task, and
+  `Episode.actions`, `travel` and `reversals` read it. `actuator_held` now records
+  it at the defaults too, so `actuate` changes the state even with every field 0.
 - **A state carries `sensor_key` and `actuator_held`.** `EnvState` has a
   keyword-only `sensor_key`, which `canonical_reset` stores and a restart keeps,
   so `get_obs(state, params)` takes no key and the same episode key gives the
@@ -163,6 +172,9 @@ The next release is 0.8.0, because these changes break code written for
   `ChannelReading`, on its output. Each has a sigma, optional rounding and an
   optional update interval, over which a slow instrument holds its noise while
   its value stays current. `@measured_obs` on `get_obs` turns them on.
+- **Actuator dynamics.** `actuator_rate` and `actuator_lag` limit how the output
+  follows the command, and a task's `initial_action(state, params)` starts its
+  actuator where the plant is. They default to 0, and each plant sets its own.
 - **Opt-in actuator defects.** `actuator_dead_band`, `actuator_stiction` and
   `action_noise`, default 0, as fractions of the action's span, in a shared
   stage (`base.actuate`) on He et al.'s two-band stiction model.

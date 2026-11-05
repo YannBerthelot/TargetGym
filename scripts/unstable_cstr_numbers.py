@@ -140,6 +140,7 @@ def _states(C_a, T, T_j, Ti_dev, levels=None, dtype=None):
     return UnstableCSTRState(
         time=jnp.zeros(n, jnp.int32),
         sensor_key=jnp.zeros((n, 2), jnp.uint32),
+        sensor_history=jnp.zeros((n, 1, 1)),
         actuator_held=jnp.zeros((n, 1)),
         C_a=f(C_a),
         T=f(T),
