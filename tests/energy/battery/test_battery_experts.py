@@ -180,6 +180,14 @@ def test_a_plan_that_turns_where_the_reference_does_costs_what_the_env_charges(
     assert float(cert["replay_gap"]) <= 1e-10
 
 
+def _unbound(**fields):
+    return (
+        registry.get("battery")
+        .make_test_params()
+        .replace(dispatch_range=1e5, max_steps_in_episode=720, **fields)
+    )
+
+
 @pytest.mark.large
 def test_it_never_trips_where_following_exactly_would():
     """The default window, on seeds where the pack runs out under exact following."""
