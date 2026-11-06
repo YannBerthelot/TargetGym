@@ -65,9 +65,13 @@ quadratic whose physical (smaller) root is taken.
 pack's life. A half-cycle costs `Phi(d) / 2`, charged as its depth grows, so the
 marginal wear of a deep swing is high and that of a shallow one low. Swings smaller
 than `cycle_hysteresis` are not turning points (a racetrack filter), and count as
-ripple, charged by throughput at the stress of a cycle that deep. Full rain-flow
-counting needs an unbounded stack, so this keeps two states: where the half-cycle
-turned, and how far it has reached.
+ripple, charged by throughput at the stress of a cycle that deep. Larger swings are
+counted by rainflow (ASTM E1049), on a stack of the turns still open: a swing that
+runs back as far as the one before it closes a cycle of that range, and the outer
+half-cycle takes up where it stopped, so a swing costs its own cycle and cannot
+restart the range around it. 0.1 to 0.8 split by a swing of 0.06 costs
+`Phi(0.7) / 2 + Phi(0.06)`. The stack holds 48 turns, more than the 47 half-cycles an
+episode can hold at full power.
 
 Deliberately **not** modelled:
 
@@ -223,11 +227,13 @@ which is 5 % inside the trips as the MESA-1 report advises. The integrator stops
 while the guard sheds. Its gains predate the rebuild, and PR 9 writes its protocol
 afresh.
 
-**The oracle is a stand-in** until the shared solver replaces it (#141, PR 9). It
-reads the true state, commands the signal's next value, and stops following at the
-bound of Xu et al. 2017, Algorithm 1, a depth of 0.64 on these prices, or at the
-charge and voltage limits. That is an online policy, so it leads by only 2 % and wins
-8 of 10 seeds. It does not yet meet the oracle rule's win on every seed.
+**The oracle is the shared solver (`oracle.py`).** The rerun horizon reaches the
+episode's end, through the pack's thermal time constant, so every solve plans the
+whole window, at one step of 5 s: 2880 solves of up to 2880 stages, about 0.8 s each.
+The peak of a half-cycle is an epigraph, and each turn and closed swing is fixed for
+the solve where a reference following the planned signal makes it, since a turn is a
+jump Newton cannot cross. That rule is ours. A plan that turns only there costs what
+the env charges, to rounding.
 
 ---
 
@@ -242,10 +248,11 @@ particular cell chemistry is generic NMC-like.
 branch captures the dominant minute-scale polarisation and misses both faster and
 slower components.
 
-**⚠️ D3: depth counts a half-cycle at a time.** The racetrack filter is not full
-rain-flow counting: a large cycle broken by a swing of more than 0.05 counts as
-two shallower ones, which understates it. The ripple term also runs on the deep
-half-cycles' throughput, which overstates a 0.8 half-cycle by about 6 %.
+**⚠️ D3: ripple is charged on all throughput.** The ripple term also runs on the deep
+half-cycles' throughput, which overstates a 0.8 half-cycle by about 6 %. Depth itself
+is counted by rainflow since the sawtooth finding of 2026-11-06: a racetrack filter
+alone let a swing past 0.05 restart a half-cycle, which paid $31 on test seed 3. Now
+no seed gains at any depth.
 
 **⚠️ D4: no cell imbalance.** A lumped pack cannot represent the weakest-cell
 behaviour that actually determines real pack limits.

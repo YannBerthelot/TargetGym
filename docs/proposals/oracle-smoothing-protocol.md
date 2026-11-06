@@ -611,7 +611,8 @@ so it takes T1r and a T5 site, at 30 N m/s on a scale of 30 kN m/s.
 
 **The battery's half-cycles (`half_cycle`, #156).** Section 5.4 has no row for them,
 and no class fits. A half-cycle's peak is a running max, and its turn is a jump, in
-what it charges and in its anchor. Written for the owner's review:
+what it charges and in its anchor. The fixed turn below is ours, accepted by the owner
+on 2026-11-06:
 
 - the peak's growth is a second move, >= 0, and a row keeps the peak past the charge
   on every visited state, so a plateau at the peak costs what the env charges (T2:
@@ -625,6 +626,7 @@ what it charges and in its anchor. Written for the owner's review:
   two pieces do not join. K4's scale is the hysteresis, and K5 takes the first rung,
   since no tracked output moves.
 
-The plan cannot find a sawtooth that restarts a half-cycle by swinging back past the
-hysteresis, because it cannot place a turn. Whether the env pays for one is a separate
-question for the plant.
+On the same day the env was found to pay for a sawtooth that restarted a half-cycle,
+and the owner had `half_cycle` count by rainflow. So a closed swing is fixed the same
+way as a turn, where the reference runs back past it. The plan carries the two nearest
+open turns as states, and a third comes from the reference.

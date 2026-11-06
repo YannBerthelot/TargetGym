@@ -26,11 +26,11 @@ import numpy as np
 import pytest
 
 from target_gym.energy.battery.env import (
+    N_TURNS,
     BatteryParams,
     compute_next_state,
     compute_reward_terms,
     current_for_power,
-    N_TURNS,
     cycle_stress,
     degradation_rate,
     half_cycle,
