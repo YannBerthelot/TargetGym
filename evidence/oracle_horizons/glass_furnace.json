@@ -8,6 +8,7 @@
     "seed": 108
   },
   "P_steps": 4582,
+  "P_without_quiet_fits": 158,
   "T_c_seconds": 870.0,
   "T_c_set_by": {
     "cv": "T_work",
@@ -42,6 +43,7 @@
   "counts": {
     "insignificant": 0,
     "invalid": 20,
+    "quiet": 5,
     "valid": 10
   },
   "cpu": "AMD EPYC 9454 48-Core Processor",
@@ -52,7 +54,7 @@
   "dt": 30.0,
   "episode_samples": 56,
   "episode_steps": 1600,
-  "generated": "2026-11-06T11:40:07+00:00",
+  "generated": "2026-11-06T12:19:56+00:00",
   "pairs": [
     {
       "M": null,
@@ -4296,7 +4298,119 @@
     }
   ],
   "plans_to_episode_end": true,
-  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 3",
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 4",
+  "quiet_fits": [
+    {
+      "P": 63,
+      "cv": "T_work",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.5826,
+        "k": 0.000743567,
+        "k_3sigma": 1.23324e-06,
+        "model": "integrating_lag",
+        "sigma": 0.17883,
+        "snr": 6.15345,
+        "sse": 204.673,
+        "tau2": 401.05,
+        "theta": 2011.27
+      },
+      "mv": "fuel",
+      "seed": 100,
+      "test": 2
+    },
+    {
+      "P": 60,
+      "cv": "T_work",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.1054,
+        "k": 0.00075009,
+        "k_3sigma": 1.37876e-06,
+        "model": "integrating_lag",
+        "sigma": 0.200467,
+        "snr": 5.51904,
+        "sse": 257.197,
+        "tau2": 6.50301,
+        "theta": 2067.3
+      },
+      "mv": "fuel",
+      "seed": 104,
+      "test": 2
+    },
+    {
+      "P": 75,
+      "cv": "T_work",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.8172,
+        "k": 0.000733873,
+        "k_3sigma": 1.15239e-06,
+        "model": "integrating_lag",
+        "sigma": 0.166154,
+        "snr": 6.5454,
+        "sse": 176.686,
+        "tau2": 654.87,
+        "theta": 2478.58
+      },
+      "mv": "fuel",
+      "seed": 105,
+      "test": 2
+    },
+    {
+      "P": 61,
+      "cv": "T_work",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.4784,
+        "k": 0.000736248,
+        "k_3sigma": 1.24994e-06,
+        "model": "integrating_lag",
+        "sigma": 0.181399,
+        "snr": 5.99476,
+        "sse": 210.595,
+        "tau2": 413.472,
+        "theta": 1896.21
+      },
+      "mv": "fuel",
+      "seed": 106,
+      "test": 2
+    },
+    {
+      "P": 67,
+      "cv": "T_work",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.1052,
+        "k": 0.000755715,
+        "k_3sigma": 1.38915e-06,
+        "model": "integrating_lag",
+        "sigma": 0.201115,
+        "snr": 5.48609,
+        "sse": 258.861,
+        "tau2": 419.943,
+        "theta": 2195.23
+      },
+      "mv": "fuel",
+      "seed": 108,
+      "test": 2
+    }
+  ],
   "ramp": 0,
   "retests": 20,
   "status": "compliant",

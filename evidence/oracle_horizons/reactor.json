@@ -8,6 +8,7 @@
     "seed": 100
   },
   "P_steps": 10,
+  "P_without_quiet_fits": 10,
   "T_c_seconds": 30.0,
   "T_c_set_by": {
     "cv": "T_hot",
@@ -49,6 +50,7 @@
   "counts": {
     "insignificant": 5,
     "invalid": 15,
+    "quiet": 0,
     "valid": 20
   },
   "cpu": "AMD EPYC 9454 48-Core Processor",
@@ -59,7 +61,7 @@
   "dt": 30.0,
   "episode_samples": 1440,
   "episode_steps": 1440,
-  "generated": "2026-11-06T11:32:26+00:00",
+  "generated": "2026-11-06T12:19:00+00:00",
   "pairs": [
     {
       "M": 2,
@@ -4983,7 +4985,8 @@
     }
   ],
   "plans_to_episode_end": false,
-  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 3",
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 4",
+  "quiet_fits": [],
   "ramp": 2,
   "ramp_set_by": {
     "cv": "T_avg",

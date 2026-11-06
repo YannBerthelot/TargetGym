@@ -8,6 +8,7 @@
     "seed": 102
   },
   "P_steps": 237,
+  "P_without_quiet_fits": 237,
   "T_c_seconds": 2.0,
   "T_c_set_by": {
     "cv": "pressure",
@@ -35,6 +36,7 @@
   "counts": {
     "insignificant": 0,
     "invalid": 22,
+    "quiet": 9,
     "valid": 18
   },
   "cpu": "AMD EPYC 9454 48-Core Processor",
@@ -42,7 +44,7 @@
   "dt": 2.0,
   "episode_samples": 400,
   "episode_steps": 400,
-  "generated": "2026-11-06T11:39:21+00:00",
+  "generated": "2026-11-06T12:18:56+00:00",
   "pairs": [
     {
       "M": null,
@@ -4591,7 +4593,207 @@
     }
   ],
   "plans_to_episode_end": false,
-  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 3",
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 4",
+  "quiet_fits": [
+    {
+      "P": 138,
+      "cv": "pressure",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.1667,
+        "k": 0.195171,
+        "k_3sigma": 0.00594687,
+        "model": "integrating_lag",
+        "sigma": 0.0189115,
+        "snr": 5.72771,
+        "sse": 0.0339763,
+        "tau2": 8.81484e-05,
+        "theta": 12.2204
+      },
+      "mv": "fuel",
+      "seed": 100,
+      "test": 0
+    },
+    {
+      "P": 98,
+      "cv": "pressure",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.9591,
+        "k": 0.206104,
+        "k_3sigma": 0.00551957,
+        "model": "integrating_lag",
+        "sigma": 0.0154964,
+        "snr": 6.85828,
+        "sse": 0.020652,
+        "tau2": 0.00300602,
+        "theta": 8.40523
+      },
+      "mv": "fuel",
+      "seed": 105,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "pressure",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.0979,
+        "k": 0.221289,
+        "k_3sigma": 0.00538326,
+        "model": "integrating_lag",
+        "sigma": 0.0377885,
+        "snr": 5.47518,
+        "sse": 0.218755,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "fuel",
+      "seed": 106,
+      "test": 0
+    },
+    {
+      "P": 54,
+      "cv": "pressure",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.4601,
+        "k": 0.22268,
+        "k_3sigma": 0.0062032,
+        "model": "integrating_lag",
+        "sigma": 0.0116578,
+        "snr": 7.56658,
+        "sse": 0.00888024,
+        "tau2": 5.63893,
+        "theta": 1.83382
+      },
+      "mv": "fuel",
+      "seed": 107,
+      "test": 1
+    },
+    {
+      "P": 54,
+      "cv": "pressure",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.435,
+        "k": 0.22226,
+        "k_3sigma": 0.00621978,
+        "model": "integrating_lag",
+        "sigma": 0.0234025,
+        "snr": 7.50629,
+        "sse": 0.0357879,
+        "tau2": 5.60882,
+        "theta": 1.82714
+      },
+      "mv": "fuel",
+      "seed": 107,
+      "test": 2
+    },
+    {
+      "P": 165,
+      "cv": "level",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.8615,
+        "k": 0.00835591,
+        "k_3sigma": 4.03693e-05,
+        "model": "integrating_lag",
+        "sigma": 8.79081e-05,
+        "snr": 8.39406,
+        "sse": 3.10922e-06,
+        "tau2": 8.17418,
+        "theta": 11.1069
+      },
+      "mv": "feedwater",
+      "seed": 103,
+      "test": 1
+    },
+    {
+      "P": 10,
+      "cv": "pressure",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.1803,
+        "k": -0.0532997,
+        "k_3sigma": 0.00187269,
+        "model": "integrating_lag",
+        "sigma": 0.00211866,
+        "snr": 7.47816,
+        "sse": 0.000237235,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "feedwater",
+      "seed": 103,
+      "test": 0
+    },
+    {
+      "P": 152,
+      "cv": "level",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.1199,
+        "k": 0.00761586,
+        "k_3sigma": 3.37272e-05,
+        "model": "integrating_lag",
+        "sigma": 7.61961e-05,
+        "snr": 8.36176,
+        "sse": 2.32941e-06,
+        "tau2": 9.41264,
+        "theta": 9.37701
+      },
+      "mv": "feedwater",
+      "seed": 104,
+      "test": 1
+    },
+    {
+      "P": 151,
+      "cv": "level",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.1054,
+        "k": 0.00769102,
+        "k_3sigma": 2.86344e-05,
+        "model": "integrating_lag",
+        "sigma": 7.66706e-05,
+        "snr": 8.31002,
+        "sse": 3.31876e-06,
+        "tau2": 9.9687,
+        "theta": 9.05452
+      },
+      "mv": "feedwater",
+      "seed": 104,
+      "test": 2
+    }
+  ],
   "ramp": 0,
   "retests": 23,
   "status": "compliant",

@@ -1,13 +1,15 @@
 {
-  "M": 2,
-  "N": 6,
-  "P": 8,
+  "M": 155,
+  "N": 775,
+  "P": 930,
   "P_set_by": {
     "cv": "T_air",
     "mv": "heating",
-    "seed": 101
+    "seed": 102,
+    "test": 1
   },
-  "P_steps": 8,
+  "P_steps": 930,
+  "P_without_quiet_fits": 8,
   "T_c_seconds": 900.0,
   "T_c_set_by": {
     "cv": "T_air",
@@ -28,6 +30,7 @@
   "counts": {
     "insignificant": 4,
     "invalid": 1,
+    "quiet": 2,
     "valid": 5
   },
   "cpu": "AMD EPYC 9454 48-Core Processor",
@@ -35,7 +38,7 @@
   "dt": 900.0,
   "episode_samples": 720,
   "episode_steps": 720,
-  "generated": "2026-11-06T11:32:24+00:00",
+  "generated": "2026-11-06T12:18:57+00:00",
   "pairs": [
     {
       "M": null,
@@ -1356,8 +1359,54 @@
       ]
     }
   ],
-  "plans_to_episode_end": false,
-  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 3",
+  "plans_to_episode_end": true,
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 4",
+  "quiet_fits": [
+    {
+      "P": 930,
+      "cv": "T_air",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 98.129,
+        "k": 22.9639,
+        "k_3sigma": 0.0431348,
+        "model": "fopdt",
+        "sigma": 0.0772275,
+        "snr": 9.96794,
+        "sse": 8.32626,
+        "tau": 139384.0,
+        "theta": "< dt"
+      },
+      "mv": "heating",
+      "seed": 102,
+      "test": 1
+    },
+    {
+      "P": 924,
+      "cv": "T_air",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.9592,
+        "k": 22.9194,
+        "k_3sigma": 0.0536559,
+        "model": "fopdt",
+        "sigma": 0.0824919,
+        "snr": 9.32406,
+        "sse": 8.14837,
+        "tau": 138557.0,
+        "theta": "< dt"
+      },
+      "mv": "heating",
+      "seed": 103,
+      "test": 1
+    }
+  ],
   "ramp": 0,
   "retests": 15,
   "status": "compliant",

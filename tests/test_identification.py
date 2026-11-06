@@ -30,6 +30,7 @@ from target_gym.identification import (
     evidence,
     fit,
     identify,
+    quiet_fits,
     insignificant,
     judge,
     nrmse_fit,
@@ -259,3 +260,57 @@ def test_bump_test_on_first_order_returns_its_documented_lag():
         f = fit("fopdt", plant.dt, run.dy[:, 0], run.U[:, :1])
         np.testing.assert_allclose([f["k"], f["tau"]], [2.0, 0.5], rtol=1e-3)
         assert f["theta"] == pytest.approx(0.0, abs=1e-3) and math.isfinite(f["fit"])
+
+
+def _analysis(fit_percent=96.0, **failed):
+    """One response's analysis, its FOPDT fit failing the checks in ``failed``."""
+    checks = {"V1": True, "V2": True, "V3": True, "V4": True, **failed}
+    return {"zero": False, "fits": {"fopdt": {"fit": fit_percent, **checks}}}
+
+
+def _pairs(analysis, label="invalid"):
+    return {(0, 0, 0): {"tests": [(None, analysis)], "label": label}}
+
+
+FOPDT = {0: {"class": "fopdt"}}
+
+
+def test_a_fit_failing_v1_alone_at_95_percent_is_quiet():
+    """Amendment 4: V1 failed, the rest passed, a fit of at least 95 %."""
+    assert list(quiet_fits(_pairs(_analysis(95.0, V1=False)), FOPDT)) == [(0, 0, 0, 0)]
+
+
+@pytest.mark.parametrize(
+    "analysis",
+    [
+        _analysis(94.9, V1=False),  # under the bar
+        _analysis(99.0, V1=False, V2=False),  # V1 not alone
+        _analysis(99.0),  # valid, which needs no exception
+    ],
+)
+def test_a_fit_that_is_not_quiet_stays_out(analysis):
+    assert quiet_fits(_pairs(analysis), FOPDT) == {}
+
+
+def test_a_zero_model_has_no_quiet_fit():
+    """As H21: an insignificant pair is noise, whatever one test's fit read."""
+    pairs = _pairs(_analysis(99.0, V1=False), label="insignificant")
+    assert quiet_fits(pairs, FOPDT) == {}
+
+
+def test_a_quiet_fit_is_read_under_its_cvs_class():
+    """Only the structure the CV's class names counts (H17)."""
+    pairs = _pairs(_analysis(99.0, V1=False))
+    assert quiet_fits(pairs, {0: {"class": "integrating_lag"}}) == {}
+
+
+def test_every_test_of_a_pair_is_read_not_only_the_kept_one():
+    """A retest can keep a fast valid fit while an earlier test held the slow
+    quiet one: hvac's seed 103 kept its 979 s fit over its 139,000 s one."""
+    pairs = {
+        (0, 0, 0): {
+            "tests": [(None, _analysis(98.0, V1=False)), (None, _analysis(92.0))],
+            "label": "valid",
+        }
+    }
+    assert list(quiet_fits(pairs, FOPDT)) == [(0, 0, 0, 0)]

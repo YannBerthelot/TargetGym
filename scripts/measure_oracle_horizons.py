@@ -22,8 +22,9 @@ Per training seed 100-109 (``target_gym.identification``):
    (H15, H18), and each pair-seed ends valid, insignificant or invalid under
    its CV's class (H16, H17, H19).
 
-Only valid fits enter T_c and P (``target_gym.oracles.horizon``). A task with
-none is non-compliant: no protocol horizon is written, and it keeps its
+Only valid fits enter T_c. P also reads a fit that failed V1 alone at a fit of
+at least 95 % (``target_gym.oracles.horizon``, Amendment 4). A task with no
+valid fit is non-compliant: no protocol horizon is written, and it keeps its
 current oracle (Amendment 2, N3). unstable_cstr is measured
 on its stabilised plant (section 4.4): the cascade's outer loop in manual,
 the inner PD closed, its setpoint stepped 0.5 K down as in the expert test.
@@ -40,7 +41,13 @@ import jax.numpy as jnp
 import numpy as np
 
 from target_gym import records
-from target_gym.identification import TRAIN_SEEDS, Plant, evidence, identify
+from target_gym.identification import (
+    TRAIN_SEEDS,
+    Plant,
+    evidence,
+    identify,
+    quiet_fits,
+)
 from target_gym.oracles.horizon import (
     episode_samples,
     sample_time,
@@ -300,13 +307,15 @@ def measure(name: str) -> dict:
     dt, n_ep = plant.dt, plant.n_ep
     key = {(j, i, s): (mvs[j], cvs[i], TRAIN_SEEDS[s]) for j, i, s in pairs}
     valid = {key[k]: r["fit"] for k, r in pairs.items() if r["label"] == "valid"}
-    tc, rows, top = task_horizon(valid, dt)
-    at = ("mv", "cv", "seed")
+    quiet = {(*key[k[:3]], k[3]): f for k, f in quiet_fits(pairs, classes).items()}
+    tc, rows, top = task_horizon(valid, dt, quiet)
+    at = ("mv", "cv", "seed", "test")
     horizon = {}
     if top is not None:  # else non-compliant: no protocol horizon (N3)
         (N, M, P), n_samples = rows[top], episode_samples(n_ep, tc)
         fastest = min(valid, key=lambda k: sample_time(valid[k]))
         ramp, ramp_key = 0, None
+        without = max(v[2] for k, v in rows.items() if len(k) == 3)
         if name in RATE_LIMITS:
             # A gain needs a settled fit, not a quiet one: V1, the noise test
             # alone failing, leaves it usable (H21).
@@ -328,6 +337,7 @@ def measure(name: str) -> dict:
             "M": M,
             "ramp": ramp,
             "P": P,
+            "P_without_quiet_fits": without + ramp,
             "P_steps": P * tc,
             "P_set_by": dict(zip(at, top)),
             **({"ramp_set_by": dict(zip(at, ramp_key))} if ramp_key else {}),
@@ -345,7 +355,7 @@ def measure(name: str) -> dict:
         )
     )
     row = {
-        "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 3",
+        "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 4",
         "dt": dt,
         "episode_steps": n_ep,
         "compliant": bool(horizon),
@@ -356,7 +366,14 @@ def measure(name: str) -> dict:
             "keeps its current oracle, and C1 and C2 leave it as it is (N3)"
         ),
         **horizon,
-        "counts": {k: labels.count(k) for k in ("valid", "invalid", "insignificant")},
+        "counts": {
+            **{k: labels.count(k) for k in ("valid", "invalid", "insignificant")},
+            "quiet": len(quiet),
+        },
+        "quiet_fits": [
+            {**dict(zip(at, k)), "fit": f, "P": rows.get(k, (None,) * 3)[2]}
+            for k, f in quiet.items()
+        ],
         "retests": sum(len(r["tests"]) - 1 for (j, i, s), r in pairs.items() if i == 0),
         "zero_models": zero,
         "cvs_without_valid_pair": [c for c in cvs if not any(k[1] == c for k in valid)],

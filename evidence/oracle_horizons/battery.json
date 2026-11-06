@@ -8,6 +8,7 @@
     "seed": 107
   },
   "P_steps": 3023,
+  "P_without_quiet_fits": 3023,
   "T_c_seconds": 5.0,
   "T_c_set_by": {
     "cv": "soc",
@@ -49,6 +50,7 @@
   "counts": {
     "insignificant": 5,
     "invalid": 11,
+    "quiet": 7,
     "valid": 24
   },
   "cpu": "AMD EPYC 9454 48-Core Processor",
@@ -58,7 +60,7 @@
   "dt": 5.0,
   "episode_samples": 2880,
   "episode_steps": 2880,
-  "generated": "2026-11-06T11:32:39+00:00",
+  "generated": "2026-11-06T12:19:20+00:00",
   "pairs": [
     {
       "M": 1,
@@ -4127,7 +4129,163 @@
     }
   ],
   "plans_to_episode_end": true,
-  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 3",
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 4",
+  "quiet_fits": [
+    {
+      "P": 10,
+      "cv": "V_cell",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.766,
+        "k": -0.000233436,
+        "k_3sigma": 5.53302e-07,
+        "model": "integrating_lag",
+        "sigma": 0.00716384,
+        "snr": 7.61699,
+        "sse": 0.194914,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "power",
+      "seed": 102,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "soc",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.5961,
+        "k": -0.000140769,
+        "k_3sigma": 3.35399e-07,
+        "model": "integrating_lag",
+        "sigma": 0.00236402,
+        "snr": 8.74141,
+        "sse": 0.0119813,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "power",
+      "seed": 104,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "soc",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6734,
+        "k": -0.000166119,
+        "k_3sigma": 2.16273e-07,
+        "model": "integrating_lag",
+        "sigma": 2.19948e-06,
+        "snr": 7.16555,
+        "sse": 1.39402e-08,
+        "tau2": 0.000314071,
+        "theta": "< dt"
+      },
+      "mv": "power",
+      "seed": 104,
+      "test": 1
+    },
+    {
+      "P": 10,
+      "cv": "soc",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.5302,
+        "k": -0.000159449,
+        "k_3sigma": 2.82108e-07,
+        "model": "integrating_lag",
+        "sigma": 4.2225e-06,
+        "snr": 3.7325,
+        "sse": 1.02904e-07,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "power",
+      "seed": 104,
+      "test": 2
+    },
+    {
+      "P": 2105,
+      "cv": "T_cell",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.1526,
+        "k": -11.5681,
+        "k_3sigma": 0.0362449,
+        "model": "fopdt",
+        "sigma": 0.0277545,
+        "snr": 6.90162,
+        "sse": 1.4192,
+        "tau": 1713.49,
+        "theta": 124.14
+      },
+      "mv": "power",
+      "seed": 104,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "V_cell",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.1175,
+        "k": -0.000228081,
+        "k_3sigma": 4.95658e-07,
+        "model": "integrating_lag",
+        "sigma": 0.00661121,
+        "snr": 8.1963,
+        "sse": 0.156417,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "power",
+      "seed": 105,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "V_cell",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.7243,
+        "k": -0.000225473,
+        "k_3sigma": 5.39692e-07,
+        "model": "integrating_lag",
+        "sigma": 0.00707947,
+        "snr": 7.57547,
+        "sse": 0.185444,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "power",
+      "seed": 109,
+      "test": 0
+    }
+  ],
   "ramp": 0,
   "retests": 8,
   "status": "compliant",

@@ -123,6 +123,42 @@ def test_a_task_ramp_is_the_longest_over_its_rate_limited_fits():
     assert task_ramp(fits, "y", 12.0, rates, 0.5) == (8, ("slow", "y", 100))
 
 
+def _at(tau):
+    return {"model": "fopdt", "k": 1.0, "tau": tau, "theta": 0.0}
+
+
+def test_a_quiet_fit_can_set_p():
+    """Amendment 4. dt 100 s, a valid fit of tau 10000 s: T_c = 1000 s, 10 steps,
+    N = 50 + 1, M = 10 + 1, P = 62. A quiet fit of tau 50000 s at that T_c: N =
+    250 + 1, M = 50 + 1, P = 302, which takes the maximum."""
+    tc, rows, top = task_horizon(
+        {("u", "y", 100): _at(1e4)}, 100.0, quiet={("u", "y", 101, 1): _at(5e4)}
+    )
+    assert tc == 10
+    assert top == ("u", "y", 101, 1)
+    assert rows[top] == (251, 51, 302)
+
+
+def test_a_quiet_fit_never_sets_t_c():
+    """Tau 5000 s alone would give T_c = 500 s, 5 steps. It stays 10: H2 reads
+    valid fits only, and the quiet fit's P of 26 + 6 = 32 leaves P at 62."""
+    tc, rows, top = task_horizon(
+        {("u", "y", 100): _at(1e4)}, 100.0, quiet={("u", "y", 101, 1): _at(5e3)}
+    )
+    assert tc == 10
+    assert top == ("u", "y", 100)
+    assert rows[("u", "y", 101, 1)] == (26, 6, 32)
+
+
+def test_quiet_fits_alone_make_no_horizon():
+    """No valid fit means no T_c, so the task stays non-compliant (N3)."""
+    assert task_horizon({}, 100.0, quiet={("u", "y", 101, 1): _at(5e4)}) == (
+        None,
+        {},
+        None,
+    )
+
+
 def test_an_integrating_fit_gives_no_ramp():
     """H21 divides by a settled gain. An integrating fit's k' is a slope, per
     second, so span / (|k'| rate) is no time at all: on the boiler's pressure it

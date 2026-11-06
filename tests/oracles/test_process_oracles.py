@@ -42,7 +42,10 @@ from target_gym.runners.runners import pid_policy
 FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
 #: A clock 5 steps before a switch, so the ten stages below cross a target's ramp.
 START_CLOCK = {"unstable_cstr": 195}
-C2 = ("hvac", "battery", "boiler_drum", "wind_turbine", "glass_furnace", "cement_kiln")
+C2 = (
+    "hvac", "battery", "boiler_drum", "wind_turbine", "glass_furnace", "cement_kiln",
+    "reactor",
+)  # fmt: skip
 ON_SOLVER = FIVE + C2
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
@@ -311,6 +314,8 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
         # delta_t s at the imbalance price in $/MWh.
         ("battery", 500.0e-6 * 100.0 * 5.0 / 3600.0),
         ("wind_turbine", 500.0e-6 * 100.0 * 0.25 / 3600.0),
+        # p = 1, in dollars: half the 0.05 K floor for a 30 s step at $230/h per K.
+        ("reactor", 230.0 / 3600.0 * 30.0 * 0.025),
         # 0.03 EUR/(K^2 h) for 0.25 h at (0.1 K / 2)^2.
         ("hvac", 0.03 * 0.25 * 0.05**2),
     ],
@@ -332,6 +337,7 @@ PRICED = {
     "wind_turbine": 1,  # power
     "glass_furnace": 2,  # crown temperature, gas
     "cement_kiln": 2,  # free lime, fuel
+    "reactor": 1,  # Tavg: the rods' travel stops at a steady state
 }  # fmt: skip
 
 
