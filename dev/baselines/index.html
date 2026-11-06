@@ -2616,9 +2616,8 @@ return, or relay autotuning) and live in <code>src/target_gym/data/pid_gains.jso
 </ul>
 <h2 id="the-mpc">The MPC<a class="headerlink" href="#the-mpc" title="Permanent link">&para;</a></h2>
 <p>The MPC slot holds the best controller we can build for each task, as an upper
-bound for the others. Where the best causal action has a closed form, the slot
-holds that instead of a planner. Each task's controller lives in its package's
-<code>experts.py</code>:</p>
+bound for the others. Each task's controller lives in its package's
+<code>oracle.py</code>:</p>
 <table>
 <thead>
 <tr>
@@ -2630,17 +2629,17 @@ holds that instead of a planner. Each task's controller lives in its package's
 <tbody>
 <tr>
 <td>The shared solver (<code>target_gym.oracles</code>)</td>
-<td>cstr, first_order, four_tank, unstable_cstr, compressor_surge</td>
+<td>cstr, first_order, four_tank, unstable_cstr, compressor_surge, hvac, glass_furnace, cement_kiln, boiler_drum, wind_turbine, battery</td>
 <td>A problem definition, not a tuned controller (docs/proposals/oracle-audit.md): the episode reward on the noise-free plant, over the horizon the horizon protocol measured, solved once every Cooper sample time by IPOPT's algorithm in JAX with the trips as hard limits. Each solve's certificate is recorded</td>
 </tr>
 <tr>
 <td><code>NewtonMPC</code></td>
-<td>ph_neutralization, reactor, hvac, glass_furnace</td>
+<td>ph_neutralization, reactor</td>
 <td>Iterative LQR on the environment's own step: Newton's method on the action sequence</td>
 </tr>
 <tr>
 <td><code>GradientMPC</code></td>
-<td>distillation, boiler_drum, plane_energy, the four 3D aircraft tasks</td>
+<td>distillation, plane_energy, the four 3D aircraft tasks</td>
 <td>Differentiates the JAX dynamics and descends the objective</td>
 </tr>
 <tr>
@@ -2649,24 +2648,9 @@ holds that instead of a planner. Each task's controller lives in its package's
 <td>Both actuators planned to capture the initial altitude, then the elevator only, with the throttle on the PID's airspeed loop</td>
 </tr>
 <tr>
-<td><code>SamplingMPC</code></td>
-<td>cement_kiln</td>
-<td>Cross-entropy sampling: gradients through the kiln's transport delay overflow</td>
-</tr>
-<tr>
-<td>Feedforward</td>
-<td>battery</td>
-<td>Commands the scheduled level of the next block, which leaves only the dispatch noise</td>
-</tr>
-<tr>
 <td>Feedback law plus a residual planner</td>
 <td>patrol, patrol_bearing_only, formation</td>
 <td>Flies the lead's own autopilot on the follower's state, and a 30-step planner adds a correction; on formation one planner corrects every seat, the lead's too</td>
-</tr>
-<tr>
-<td>Feedback law</td>
-<td>wind_turbine</td>
-<td>Generator torque solved so the next step's power meets the target; pitch from the PID with its slew capped</td>
 </tr>
 </tbody>
 </table>
@@ -2686,11 +2670,11 @@ plus what the PID leaves on the table.</p>
 spec declares in <code>noise_fields</code> for their own copy of the params, so they plan
 on the mean path: certainty equivalence, not a robust formulation.</p>
 <p><strong>It does not always minimise the reward exactly.</strong> See the next section.</p>
-<p><strong>It is slow</strong>, from about 0.1 ms per step for the feedforward and feedback
-laws to about 1.3 s for the 3D aircraft. The Newton planner keeps its plan on
-the host between steps, so it runs one episode at a time. Use it as a
-reference to measure against, not inside a training loop; the recorded returns
-save you running it at all.</p>
+<p><strong>It is slow</strong>, from about 0.1 s per solve on the battery to a few seconds on
+the cement kiln. The planners keep their plans on the host between steps, so
+they run one episode at a time. Use the oracle as a reference to measure
+against, not inside a training loop; the recorded returns save you running it
+at all.</p>
 <h3 id="why-the-mpc-does-not-minimise-the-reward">Why the MPC does not minimise the reward<a class="headerlink" href="#why-the-mpc-does-not-minimise-the-reward" title="Permanent link">&para;</a></h3>
 <p>An MPC objective must share the reward's <strong>minimiser</strong>, not necessarily its
 shape, and must give the optimiser a gradient.</p>
