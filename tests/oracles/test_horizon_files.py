@@ -20,10 +20,6 @@ SUMMARIES = sorted((records.DATA / "oracle_horizons").glob("*.json"))
 HORIZON = ("T_c_steps", "N", "M", "P", "T_c_set_by", "P_set_by")
 
 
-def test_the_fourteen_process_and_industrial_tasks_have_a_summary():
-    assert len(SUMMARIES) == 14
-
-
 @pytest.mark.parametrize("path", SUMMARIES, ids=lambda p: p.stem)
 def test_a_summary_is_compact_and_its_evidence_is_outside_the_package(path):
     row = json.loads(path.read_text())

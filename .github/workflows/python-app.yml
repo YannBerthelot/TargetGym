@@ -7,7 +7,9 @@ on:
   push:
     branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
+    # feat/sensor-noise carries the 0.8.0 plant fixes until their one re-record
+    # (docs/proposals/industrial-fixes.md). Drop it when that branch lands.
+    branches: [ "main", "feat/sensor-noise" ]
 
 permissions:
   contents: read

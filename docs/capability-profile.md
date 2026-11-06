@@ -51,6 +51,8 @@ results and redrawn whenever they are re-recorded:
   (`oracle_transient_ratio`). A policy that beats it is drawn on the edge,
   and its number in the table says by how much.
 - **0 at the centre** is as far below the expert as the edge is above it.
+- **The Hold edge may be out of reach.** Some plants have a known bound above
+  the ceiling, so no controller gets there. `s_max` gives the most a task allows.
 - **A grayed label** means no task on that spoke leaves room. On Hold, an
   expert that already holds within the resolution leaves none. On Reach, a
   task counts only where the oracle reaches new targets at least 1.25 times
@@ -72,8 +74,9 @@ For the moves:
 | `expert_settling`, `policy_settling` | Those settling times, in steps per move. |
 | `oracle_transient_ratio`, `oracle_settling_ratio` | The oracle's recorded ratios, the best known. NaN until the protocol records moves. |
 
-`ratio`, `win_rate` and `score` are the verdict and the holding score of the
-[protocol](rl-protocol.md#4-metrics).
+`beats_expert`, `ratio`, `win_rate` and `score` are the verdict and the holding
+score of the [protocol](rl-protocol.md#4-metrics), which also lists the trip,
+travel, reversal and off-spec numbers.
 
 ## Why each task has its tags
 
@@ -81,7 +84,7 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
 
 | Task | Capabilities | From the physics |
 |---|---|---|
-| `first_order` | basic | No disturbance, nothing hidden, nothing stochastic (73, 90). |
+| `first_order` | none | A sanity fixture with no disturbance, nothing hidden and nothing stochastic (73, 90), so it is in no aggregate. |
 | `cstr` | basic, nonlinearity | Arrhenius gain (68); nothing hidden (119). |
 | `unstable_cstr` | instability, disturbance, safety | Held on its open-loop unstable middle steady state (5); the feed temperature drifts unmeasured (290); trips at 365 K, within 5 to 20 steps at full heating (279, 338). |
 | `ph_neutralization` | nonlinearity, disturbance | The gain varies 45 times across the range (94); the buffer flow is unmeasured (97). |

@@ -14,6 +14,17 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
+- **`ratio` and `win_rate` read the whole episode.** `compare` and `score_policy`
+  used to drop the burn-in, half the episode on 12 tasks, so a trip inside it
+  cost nothing. `consumption_ratio` reads the whole episode too. These numbers
+  move on any task with a costly first reach. `hold`, `score` and the recorded
+  rows do not. Use `beats_expert` as the verdict, because the ratio's interquartile
+  mean can still trim a trip.
+- **`consumption_ratio` reads the quantity itself** on `glass_furnace`,
+  `cement_kiln`, `boiler_drum`, `distillation`, `ph_neutralization` and
+  `compressor_surge`, where the reward clips it at `c_hold`, so a saving shows.
+- **`first_order` has left the capability radar.** It is a sanity fixture, and
+  `CAPABILITIES["first_order"]` is now empty.
 - **The aircraft tasks clip their actions.** On `plane`, `plane3d`, `patrol` and
   `formation` a raw action past `[-1, 1]` now acts as its bound, as it already
   did on every other task; a raw stick of 100 used to ask for 23.6 rad of
@@ -133,6 +144,16 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Added
 
+- **What an owner asks, beside the ratio.** `score_policy` and `compare` now
+  report `beats_expert`, `expert_trips` and `policy_trips`, and each side's
+  actuator `travel` and `reversals`. `score_policy` also reports each side's
+  `off_spec` share of the hold, against `scoring.spec_band`, and `s_max`, the
+  most of the score a task's best known hold allows. `Episode` carries `actions`
+  as fractions of their span, and `eval.run_episode` takes `record`. Most bands are
+  a rule of ten floors for now, not a plant's figure.
+- **Protocol rows record the expert on 10 seeds** from the next re-record, as
+  `pid_seeds`, because 3 seeds miss the `ph_neutralization` expert's cycling on
+  seeds 3 to 5. Oracles stay on 3.
 - `score_policy`, `run_suite` and `env.save_video` take the expert as it is,
   as in `tg.score_policy("cstr", tg.make_expert("cstr"))`.
 - Python 3.14. gymnax's floor is now 1.0.1, its first release that installs
