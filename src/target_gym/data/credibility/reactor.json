@@ -8,7 +8,7 @@
     "what": "rod control dead band, +-1.5 F, not a measured hold"
   },
   "expert_fingerprint": "a59e8ded573a8421",
-  "generated": "2026-11-06T12:01:19+00:00",
+  "generated": "2026-11-06T12:41:33+00:00",
   "null_wins": [
     "Tavg integrator"
   ],

@@ -8,7 +8,7 @@
     "what": "altitude-keeping tolerance, +-65 ft, not a measured hold"
   },
   "expert_fingerprint": "e4f7d3e2c931631c",
-  "generated": "2026-11-06T12:01:08+00:00",
+  "generated": "2026-11-06T12:41:25+00:00",
   "null_wins": [
     "constant 0.5"
   ],
