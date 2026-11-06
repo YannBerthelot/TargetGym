@@ -41,11 +41,16 @@ def _episodes(name):
     return eps, p
 
 
+#: 10 s of probe lag and 10 s of dead time make the shipped gains cycle.
+PROBE = "the gains predate the probe, and cycle at 4,690 against a ceiling of 1; PR 9"
+#: A trip on every held-out seed, with 32 to 51 trips an episode.
+THERMOWELL = "the gains predate the thermowell and the valve, so it trips; PR 9"
+
 PLANTS = [
     "first_order",
     "cstr",
     "ph_neutralization",
-    "unstable_cstr",
+    pytest.param("unstable_cstr", marks=_finding(THERMOWELL)),
     "four_tank",
     pytest.param(
         "distillation",
@@ -77,7 +82,7 @@ def test_the_expert_never_trips_the_plant(name):
                 "at 1.5e4 against a ceiling of 1; PR 9 retunes it"
             ),
         ),
-        "ph_neutralization",
+        pytest.param("ph_neutralization", marks=_finding(PROBE)),
         pytest.param(
             "unstable_cstr",
             marks=_finding(

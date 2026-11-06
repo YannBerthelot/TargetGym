@@ -320,6 +320,7 @@ def compute_next_state(
 # which traces this inline.
 def get_obs(state: PHState, params: PHParams):
     """``[pH, q3_pct, target_pH]`` -- a pH probe and the operator's own valve.
+    The env reads pH through the probe's lag, dead time and noise.
 
     The reaction invariants and the buffer flow are hidden. That is not an
     artificial restriction: a plant has a pH electrode, not an on-line assay

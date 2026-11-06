@@ -38,6 +38,8 @@ from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
 FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
+#: A clock 5 steps before a switch, so the ten stages below cross a target's ramp.
+START_CLOCK = {"unstable_cstr": 195}
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -67,6 +69,8 @@ def test_the_exact_rewrites_replay_on_the_env(name, load):
         if load is not None:
             state = state.replace(load=jnp.array(load, state.load.dtype))
         st, m = float64(state), oracle.model
+        if name in START_CLOCK:
+            st = st.replace(block_clock=jnp.asarray(START_CLOCK[name], jnp.int64))
         hold = jnp.where(jnp.abs(m.hold(st)) < 1.0, m.hold(st), 0.0)
         wave = 0.05 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]
         moves = jnp.clip(hold + wave, -1.0, 1.0)

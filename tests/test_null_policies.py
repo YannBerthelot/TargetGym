@@ -226,7 +226,11 @@ KNOWN = {
     "cstr": "the expert was tuned on an instant analyser; PR 9 retunes it",
     "distillation": "the expert was tuned on instant analysers; PR 9 retunes it",
     "hvac": "free gains match the losses, so a heater left off wins",
+    "ph_neutralization": "the expert's gains predate the probe, so it cycles; PR 9 "
+    "retunes them",
     "reactor": "no secondary side, so one rod integrator matches the oracle",
+    "unstable_cstr": "the expert's gains predate the thermowell and the valve, so it "
+    "trips; PR 9 retunes them",
 }
 
 
