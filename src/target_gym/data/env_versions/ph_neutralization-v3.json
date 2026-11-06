@@ -1,5 +1,5 @@
 {
-  "fingerprint": "0b30034642529f47",
-  "note": "Branch stamp on feat/sensor-noise: pH probe; unstable_cstr thermowell, valve and target ramp. Redone at the 0.8.0 re-record.",
-  "stamped": "2026-11-06T00:29:32+00:00"
+  "fingerprint": "524842928d826f57",
+  "note": "Branch stamp on feat/sensor-noise, redone at the 0.8.0 re-record: the batch of PRs 4 to 7 and the expert tools, with actuate keeping its slope at a held command.",
+  "stamped": "2026-11-06T10:48:55+00:00"
 }

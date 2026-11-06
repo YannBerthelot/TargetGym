@@ -147,6 +147,59 @@ The next release is 0.8.0, because these changes break code written for
   before each episode. The 0.7.0 factory, `score_policy(name, make_policy)`,
   still works and warns.
 
+- **Plants and task definitions changed, so 0.7.0 results do not carry over.** The
+  sources, and which figures are ours, are in each task's `PHYSICS.md`.
+  - `distillation`: tray hydraulics with `tau_L = 0.063 min`, wider flow limits (`L`
+    2.20 to 3.40, `V` 2.70 to 3.90), and corrected RGA, condition number and
+    stiffness figures. A task definition change: results before this do not carry
+    over.
+  - **`cstr`:** the analyser reports `C_a` 1 min late, and unmeasured
+    feed-temperature and feed-concentration steps arrive after the settle. The
+    target band narrows to (0.87, 0.90) mol/L. The plant has no trip, and the docs
+    no longer say it does. **`four_tank`:** unmeasured flow steps on the lower tanks
+    arrive after the settle. The plant constants are labelled as PC-gym's, not the
+    Johansson rig's.
+  - Expert gains are stored by noise level: `make_expert(name,
+    sensor_noise_scale=level)` takes the gains tuned at that level, and a level with
+    no stored gains raises. `gain()` raises on a missing key instead of using its
+    default. `target_gym.identification` gains single-run bump tests for tuning on
+    noisy, late readings (`Plant.bump`, `single_run`, `noise_tune`).
+  - `ph_neutralization`: the pH probe has a 10 s lag and 10 s of dead time.
+  - `unstable_cstr`: `T` reads through a 10 s thermowell, the coolant passes a 2 s,
+    8 %/s valve, targets ramp at 1/30 mol/L per minute, and the jacket is labelled
+    synthetic.
+  - `battery` is rebuilt: a 4 h regulation window, 2880 steps, with a 7-entry
+    observation and cycle-depth wear. `reactor` is rebuilt: a steam generator, a
+    100-50-100 day at 30 s steps, 1440 steps, a 6-entry observation, and Tavg as the
+    tracked output. Recorded numbers for both no longer apply.
+  - `wind_turbine`: the NREL 5 MW power coefficient now comes from ROSCO's published
+    table. Generator torque is rate limited, the power target moves every 25 s,
+    overspeed above 1.10 x rated is charged, and fatigue charges pitch travel.
+  - `compressor_surge`: setpoints ramp over 10 s, each episode has a hidden surge
+    line up to 5 % right of the map's, and valve travel is charged as a new `wear`
+    reward term.
+  - `boiler_drum`: fuel and feedwater now have rate limits and lags, and steam flow
+    follows drum pressure at a hidden turbine valve; `obs[3]` and `obs[4]` report
+    actuator positions. `glass_furnace`: fuel slews at 1/1800 of its span per
+    second; reset sits on the settled orbit; the observation gains `pull` at index
+    5, from 5 channels to 6; the gas's heating value is a hidden disturbance.
+    Removed params: `initial_T_melt_offset`, `initial_T_work_offset`,
+    `initial_T_regen_hot`, `initial_T_regen_cold`, `initial_m_batch`. New:
+    `lhv_noise_std`, `initial_T_meas_offset`. `hvac`: `solar_peak` falls from 350 to
+    175 W/m2, a heating season's mean, so the building needs heat.
+  - Aircraft policies, experts and oracles now send 1 Hz bank and pitch demands. A
+    fixed inner loop in the plant flies the surfaces, so a policy no longer touches
+    them.
+  - Aircraft trip on load factor, EAS, Mach and bank, and the wing's lift stops at a
+    buffet line.
+  - Turbulence reaches the bank through a rolling gust. The engine has a 1.7 s lag,
+    from 14 CFR 33.73(b)'s 5 s from idle to 95%, and 5% idle. A reset aircraft
+    engages in trim.
+  - The plane family's airspeed demand is 290 kt CAS then M 0.78: target_speed is
+    replaced by target_cas and target_mach.
+  - plane3d_figure8 is about 35 km across its half-width, and its episode is 1000
+    steps.
+
 ### Changed
 
 - Before moving to the shared solver (above), the compressor's oracle solved

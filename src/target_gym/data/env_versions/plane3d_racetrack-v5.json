@@ -1,5 +1,5 @@
 {
-  "fingerprint": "02c5566a3bbfb059",
-  "note": "Branch stamp on feat/sensor-noise: PR 7 moves the aircraft to a fixed inner loop with gust roll, envelope trips, a 1.7 s engine and a speed schedule; to be redone at the re-record.",
-  "stamped": "2026-11-06T10:33:08+00:00"
+  "fingerprint": "48195517e74e641f",
+  "note": "Branch stamp on feat/sensor-noise, redone at the 0.8.0 re-record: the batch of PRs 4 to 7 and the expert tools, with actuate keeping its slope at a held command.",
+  "stamped": "2026-11-06T10:48:55+00:00"
 }

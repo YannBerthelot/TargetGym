@@ -1,5 +1,5 @@
 {
-  "fingerprint": "0a512f6d1facbf51",
-  "note": "Branch stamp on feat/sensor-noise: wind_turbine takes ROSCO's Cp table, a torque rate, a moving dispatch, a rotor-speed cost and travel fatigue; compressor_surge takes setpoint ramps, a hidden surge-line offset and a valve wear term. Redone at the 0.8.0 re-record.",
-  "stamped": "2026-11-06T00:36:26+00:00"
+  "fingerprint": "d2ff42ee9aa588a3",
+  "note": "Branch stamp on feat/sensor-noise, redone at the 0.8.0 re-record: the batch of PRs 4 to 7 and the expert tools, with actuate keeping its slope at a held command.",
+  "stamped": "2026-11-06T10:48:55+00:00"
 }
