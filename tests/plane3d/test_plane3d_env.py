@@ -344,29 +344,27 @@ def test_roll_authority_matches_a_transport_aircraft():
     surface. With that, full aileron gives ~32 deg/s, against an A320's 15 deg/s
     in normal law and 25-30 deg/s of raw aileron authority.
     """
-    import jax
     import jax.numpy as jnp
     import numpy as np
 
-    from target_gym.registry import REGISTRY
+    from target_gym.plane.dynamics import AILERON_TRAVEL
+    from target_gym.plane3d.dynamics import compute_acceleration_3d
+    from target_gym.plane3d.env import PlaneParams3D
 
-    spec = REGISTRY["plane3d_heading"]
-    env = spec.make_env()
-    params = spec.params_cls(max_steps_in_episode=200)
-    step = jax.jit(env.step_env)
-    key = jax.random.PRNGKey(0)
-    _, state = env.reset_env(key, params)
+    # A policy no longer reaches the surface, so this reads the moments. The
+    # steady rate is where full aileron meets roll damping, which is linear in
+    # the rate: p = accel(p = 0) / (accel(p = 0) - accel(p = 1 deg/s)) deg/s.
+    params = PlaneParams3D()
+    positions = jnp.array([0.0, 0.0, 5500.0, 0.02, 0.0])
+    action = (40_000.0, 0.0, AILERON_TRAVEL)
 
-    rates = []
-    for _ in range(200):
-        _, state, _, terminated, _ = step(
-            key, state, jnp.array([0.0, 0.0, 1.0]), params
+    def roll_accel(rate):
+        velocities = jnp.array([200.0, 0.0, 0.0, 0.0, float(np.deg2rad(rate))])
+        return float(
+            compute_acceleration_3d(velocities, positions, action, params)[0][4]
         )
-        rates.append(abs(float(np.rad2deg(state.phi_dot))))
-        if bool(terminated):
-            break
 
-    steady = float(np.median(rates[-20:]))
+    steady = roll_accel(0.0) / (roll_accel(0.0) - roll_accel(1.0))
     assert 20.0 < steady < 45.0, (
         f"full aileron rolls at {steady:.0f} deg/s; a transport aircraft manages "
         "25-30, and a value far above that means the surface is being credited "

@@ -39,7 +39,7 @@ class FormationMARL:
     (see :class:`Formation`). The joint environment is ``self.env``.
     """
 
-    def __init__(self, num_wingmen: int = 2, integration_method: str = "rk4_2"):
+    def __init__(self, num_wingmen: int = 2, integration_method: str = "rk4_1"):
         self.env = Formation(num_wingmen, integration_method)
         self.num_wingmen = num_wingmen
         self.agents = [LEAD] + [wingman_name(i) for i in range(num_wingmen)]

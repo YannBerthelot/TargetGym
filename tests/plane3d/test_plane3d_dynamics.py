@@ -7,7 +7,6 @@ from target_gym.plane3d.dynamics import (
     compute_acceleration_3d,
     compute_alpha_3d,
     compute_gamma_3d,
-    compute_next_aileron,
     compute_psi,
     compute_velocity_3d,
     newton_second_law_3d,
@@ -119,21 +118,6 @@ class TestNewtonSecondLaw3D:
         assert float(F_x) == pytest.approx(0.0, abs=1e-6)
         assert float(F_y) == pytest.approx(0.0, abs=1e-6)
         assert float(F_z) == pytest.approx(-100_000.0, abs=1e-2)
-
-
-class TestAileron:
-    def test_compute_next_aileron_approaches_target(self):
-        """Aileron should approach requested value."""
-        current = 0.0
-        requested = 0.3
-        for _ in range(100):
-            current = compute_next_aileron(requested, current, 1.0)
-        assert float(current) == pytest.approx(requested, abs=0.01)
-
-    def test_compute_next_aileron_smooth(self):
-        """Aileron should not jump instantly."""
-        result = compute_next_aileron(1.0, 0.0, 1.0)
-        assert 0.0 < float(result) < 1.0
 
 
 class TestComputeAcceleration3D:

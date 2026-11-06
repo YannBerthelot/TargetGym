@@ -20,6 +20,7 @@ from target_gym.experts.mpc import (
     _pid_rollout_plan,
     _v2_objective,
 )
+from target_gym.plane.dynamics import PITCH_DEMAND_MAX
 
 _PLANE_STALL_MARGIN = 1.3  # multiples of stall speed at which the barrier starts
 _PLANE_BARRIER_WEIGHT = 10.0
@@ -176,11 +177,12 @@ def cascaded_pid_factory(gains_key: str):
         stored = _pid_mod.load_gains()
         if gains_key not in stored:
             raise KeyError(f"no {gains_key!r} entry in data/pid_gains.json")
+        # Skips the attitude gains an entry still holds: the plant flies those.
         params = PlaneCascadedPIDParams(
             **{
                 k: float(v)
                 for k, v in stored[gains_key].items()
-                if not isinstance(v, (str, dict, list))
+                if k in PlaneCascadedPIDParams.__dataclass_fields__
             }
         )
         return _pid_mod.Controller(
@@ -521,8 +523,8 @@ def make_plane_mpc(
     speed_loop=_TASK_DEFAULT,
     handover=_TASK_DEFAULT,
 ):
-    """Gradient MPC for Airplane2D: optimises power and stick in [-1, 1], or
-    the stick alone with the throttle on the PID's airspeed loop, or the
+    """Gradient MPC for Airplane2D: optimises the throttle and the pitch demand
+    in [-1, 1], or the demand alone with the throttle on the PID's airspeed loop, or the
     first until the aircraft has captured its altitude and the second from
     there (``PlaneHandoverMPC``, on ``plane`` and ``plane_sine``).
 
@@ -678,8 +680,6 @@ class PlaneCascadedPIDParams:
     Ki_vs: float = 4.0e-4
     theta_trim: float = 0.032  # rad, ~1.85 deg cruise trim
     theta_max: float = 0.26  # rad, ~15 deg pitch limit
-    Kp_theta: float = 4.0  # pitch error (rad) -> elevator (raw)
-    Kd_theta: float = 3.0  # pitch-rate damping
     alpha_max: float = 0.19  # rad, ~11 deg, inside the 15 deg stall
     target_speed: float = 230.0  # m/s, held by the throttle loop
     cruise_power: float = -0.65  # raw, ~0.175 throttle at cruise
@@ -701,14 +701,12 @@ def plane_cascaded_pid_step(params, state, obs, xp=jnp):
 
     Keep the arithmetic order: the NumPy run reproduces the scored baseline
     bit for bit. Returns
-    ``([power, stick], new_state)``.
+    ``([throttle, pitch demand], new_state)``.
     """
     p = params
     x_dot = obs[..., 0]
     z = obs[..., 1]
     z_dot = obs[..., 2]
-    theta = obs[..., 3]
-    theta_dot = obs[..., 4]
     gamma = obs[..., 5]
     target_altitude = obs[..., 6]
 
@@ -729,9 +727,8 @@ def plane_cascaded_pid_step(params, state, obs, xp=jnp):
     limited = xp.abs(theta_cmd - p.theta_trim) >= p.theta_max - 1e-6
     vs_integral = xp.where(limited, vs_integral - vs_err * p.dt, vs_integral)
 
-    # Inner loop: pitch -> elevator, with rate damping.
-    stick = p.Kp_theta * (theta_cmd - theta) - p.Kd_theta * theta_dot
-    stick = xp.clip(stick, -1.0, 1.0)
+    # The plant's inner loop holds the pitch demand.
+    pitch = xp.clip(theta_cmd / PITCH_DEMAND_MAX, -1.0, 1.0)
 
     # Throttle loop: hold airspeed.
     speed_err = p.target_speed - x_dot
@@ -745,4 +742,4 @@ def plane_cascaded_pid_step(params, state, obs, xp=jnp):
     new_state = PlaneCascadedPIDState(
         vs_integral=vs_integral, speed_integral=speed_integral
     )
-    return xp.stack([power_clipped, stick], axis=-1), new_state
+    return xp.stack([power_clipped, pitch], axis=-1), new_state

@@ -25,8 +25,6 @@ from target_gym.plane.dynamics import (
 )
 from target_gym.utils import compute_norm_from_coordinates
 
-AILERON_RESPONSE_RATE = 0.9
-
 
 def rolling_gust(key, speed, params):
     """The roll rate turbulence puts on the wing this step, in rad/s (PHYSICS.md).
@@ -46,14 +44,6 @@ def rolling_gust(key, speed, params):
     level = sigma_w2 / (speed * length)
     level = level * 0.8 * (jnp.pi * length / (4.0 * span)) ** (1.0 / 3.0)
     return jnp.sqrt(jnp.pi * level / dt) * jax.random.normal(key)
-
-
-def compute_next_aileron(
-    requested_aileron, current_aileron, delta_t, rate: float = AILERON_RESPONSE_RATE
-):
-    """First-order lag toward the requested aileron deflection."""
-    aileron_diff = requested_aileron - current_aileron
-    return current_aileron + rate * delta_t * aileron_diff
 
 
 def compute_velocity_3d(x_dot, y_dot, z_dot):

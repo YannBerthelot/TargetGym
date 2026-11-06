@@ -17,7 +17,7 @@ Two reasons this layer matters:
 Sign conventions (from ``Airplane2D.step_env``):
     action = [power_raw, stick_raw], both in [-1, 1]
     throttle = (power_raw + 1) / 2      in [0, 1]
-    elevator = stick_raw * 15 degrees   positive = nose up
+    pitch demand = stick_raw * 15 deg   positive = nose up, held by the inner loop
 """
 
 import jax
@@ -312,7 +312,8 @@ def test_level_flight_oscillation_is_bounded(env, params):
     means level flight is never perfectly static. What matters is that the
     swings stay bounded rather than growing.
     """
-    traj = fly(env, params, power_raw=TRIM_POWER_RAW, stick_raw=0.0, steps=600)
+    # A level pitch for this speed, 1.85 deg, rather than a level elevator.
+    traj = fly(env, params, power_raw=TRIM_POWER_RAW, stick_raw=0.12, steps=600)
     excursion = np.abs(traj["z"] - CRUISE_ALT)
     first_half = excursion[: len(excursion) // 2].max()
     second_half = excursion[len(excursion) // 2 :].max()

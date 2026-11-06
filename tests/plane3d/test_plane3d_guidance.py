@@ -46,19 +46,6 @@ def _on_target(name):
     return o
 
 
-@pytest.mark.parametrize("name", TASKS)
-def test_the_bank_loop_damps_the_roll_rate(name):
-    """The aileron commands a roll rate, so a roll already under way must be
-    met with opposite aileron, whatever the guidance asks for."""
-    obs = _on_target(name)
-    ailerons = []
-    for rate in (-0.1, 0.1):
-        o = obs.copy()
-        o[7] = rate
-        ailerons.append(float(tg.make_expert(name).host()(o)[2]))
-    assert ailerons[1] < ailerons[0]
-
-
 def test_l1_flies_the_curvature_on_the_path():
     """On the path and along it, L1 asks for exactly the turn the path makes;
     off it to the side a positive bank turns toward, it steers back."""
@@ -113,16 +100,16 @@ def test_the_figure8_expert_banks_for_the_curvature_on_the_path(tau, direction):
     does not carry, from where it is on the pattern. One observation a little
     earlier along the path comes first, as any second of flight would. The
     look-ahead, which banks ahead of the curvature for the roll loop's lag,
-    is turned off so the bank is the curvature's own."""
+    is turned off so the bank is the curvature's own, and the demand it sends
+    the inner loop is the bank it is already at."""
     params = X.make_plane3d_figure8_pid_controller().params.replace(curvature_lead=0.0)
     state = X.Plane3DGuidanceState()
     _, state = X.plane3d_figure8_step(
         params, state, _on_the_figure8(tau - 0.02 * direction, direction), np
     )
-    action, _ = X.plane3d_figure8_step(
-        params, state, _on_the_figure8(tau, direction), np
-    )
-    assert action[2] == pytest.approx(0.0, abs=1e-4)
+    obs = _on_the_figure8(tau, direction)
+    action, _ = X.plane3d_figure8_step(params, state, obs, np)
+    assert action[2] * X.BANK_DEMAND_MAX == pytest.approx(obs[6], abs=1e-4)
 
 
 # The contract for the accuracy tests, set before measuring:

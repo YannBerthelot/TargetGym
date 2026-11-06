@@ -79,7 +79,7 @@ class Formation(
         *instruments(_AIRCRAFT, "wingmen."),
     )
 
-    def __init__(self, num_wingmen: int = 2, integration_method: str = "rk4_2"):
+    def __init__(self, num_wingmen: int = 2, integration_method: str = "rk4_1"):
         if not 1 <= num_wingmen <= MAX_WINGMEN:
             raise ValueError(
                 f"num_wingmen must be in 1..{MAX_WINGMEN}, got {num_wingmen}"

@@ -229,29 +229,29 @@ def test_still_air_has_no_rolling_gust(params):
 
 
 def test_scored_turbulence_reaches_the_bank():
-    """The review's finding: with no aileron in the scored turbulence the bank
-    stayed 0. A held white p_g of std s walks the bank as s sqrt(t), since the
-    1 s roll mode passes it and nothing else acts on the bank. At 200 m/s,
-    s = 0.0146 rad/s, so 120 s gives 0.16 rad, 9 deg. Over 16 seeds that RMS
-    scatters by 18%, and speed moves s by a little, so 4 to 25 deg is wide."""
+    """The review's finding: in the scored turbulence with nothing commanded the
+    bank stayed exactly 0. Now p_g works on the roll axis and the inner loop works
+    against it. With a held white gust of s = 0.0146 rad/s at 200 m/s and a bank
+    loop of time constant T = 1.5 s, the bank's RMS is s sqrt(T / 2) = 0.7 deg, so
+    0.2 to 2 deg, and the aileron answers it, Kp_roll times that of its travel."""
     spec = REGISTRY["plane3d_heading"]
     env = spec.make_env()
     params = spec.make_test_params().replace(max_steps_in_episode=200)
 
-    def bank_after(seed):
+    def attitude(seed):
         key = jax.random.PRNGKey(seed)
         _, state = env.reset_env(key, params)
 
         def body(state, k):
-            action = jnp.array([0.0, -0.3, 0.0])
-            return env.step_env(k, state, action, params)[1], None
+            state = env.step_env(k, state, jnp.array([0.0, 0.12, 0.0]), params)[1]
+            return state, (state.phi, state.aileron)
 
-        state, _ = jax.lax.scan(body, state, jax.random.split(key, 120))
-        return state.phi
+        return jax.lax.scan(body, state, jax.random.split(key, 120))[1]
 
-    banks = jax.jit(jax.vmap(bank_after))(jnp.arange(16))
-    rms = float(jnp.degrees(jnp.sqrt(jnp.mean(banks**2))))
-    assert 4.0 < rms < 25.0
+    phi, aileron = jax.jit(jax.vmap(attitude))(jnp.arange(16))
+    rms = float(jnp.degrees(jnp.sqrt(jnp.mean(phi[:, 30:] ** 2))))
+    assert 0.2 < rms < 2.0
+    assert float(jnp.max(jnp.abs(aileron[:, 30:]))) > 0.0
 
 
 def test_the_3d_engine_shares_the_lag_and_the_idle():

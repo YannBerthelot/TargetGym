@@ -12,8 +12,8 @@ The aircraft's own numbers, as ArduPilot's tuning guide has a pilot measure
 them in flight: ``climb_max``, the climb full throttle sustains at cruise
 speed, and ``sink_min``, the sink at idle. ``thr_trim`` is the throttle that
 holds level cruise and ``pitch_trim`` the pitch that does. ``AIRLINER`` holds
-this aircraft's, which the 2D and 3D tasks share, and ``pitch_hold`` is the
-attitude loop TECS's pitch demand goes to.
+this aircraft's, which the 2D and 3D tasks share. TECS's pitch demand goes to
+the plant, whose fixed inner loop holds it (``plane.dynamics.attitude_axis``).
 """
 
 from __future__ import annotations
@@ -137,17 +137,6 @@ def tecs_step(p, state, h, h_dot, v, h_dem, v_dem, phi, xp):
         started=xp.ones_like(h),
     )
     return thr, pitch, new_state
-
-
-def pitch_hold(p, integ, theta_cmd, theta, theta_dot, xp):
-    """The pitch attitude loop under TECS: PI on the pitch error, damped on
-    pitch rate, the integral frozen while the stick is saturated. ``p``
-    carries ``Kp_theta``, ``Ki_theta``, ``Kd_theta`` and ``dt``. Returns
-    ``(stick, new integral)``."""
-    err = theta_cmd - theta
-    unclipped = p.Kp_theta * err + p.Ki_theta * integ - p.Kd_theta * theta_dot
-    stick = xp.clip(unclipped, -1.0, 1.0)
-    return stick, xp.where(unclipped == stick, integ + err * p.dt, integ)
 
 
 # The airliner's numbers, from a flight test of the model at 230 m/s with no

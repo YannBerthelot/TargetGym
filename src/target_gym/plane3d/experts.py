@@ -15,11 +15,11 @@ from target_gym.experts.pid import (
     _wrap_angle,
     register_learnable_gains,
 )
+from target_gym.plane.dynamics import BANK_DEMAND_MAX, PITCH_DEMAND_MAX
 from target_gym.plane.experts_tecs import (
     AIRLINER,
     TECSParams,
     TECSState,
-    pitch_hold,
     tecs_step,
 )
 
@@ -28,16 +28,15 @@ from target_gym.plane.experts_tecs import (
 # ---------------------------------------------------------------------------
 #
 # Each task's expert is what a fixed-wing autopilot flies (PX4, ArduPilot):
-# TECS for height and speed (``plane.experts_tecs``) over a pitch loop, and a
-# damped bank loop under a lateral guidance law. The heading task holds a
-# course; the circle, racetrack and figure-8 share L1 guidance (Park, Deyst and
+# TECS for height and speed (``plane.experts_tecs``) and a bank demand from a
+# lateral guidance law, both held by the plant's fixed inner loop. The heading
+# task holds a course; the circle, racetrack and figure-8 share L1 guidance (Park, Deyst and
 # How, 2004), the law ArduPilot flies paths and loiters with, plus the path's
 # curvature as a coordinated-turn feedforward. Each is one pure
 # ``step(params, state, obs, xp)`` for ``experts.pid.Controller``: NumPy on
 # the host, jnp under jit.
 #
-# Signs: a positive bank turns toward increasing heading, and a positive
-# aileron rolls that way. ``cross`` is the offset from the path, positive on
+# Signs: a positive bank turns toward increasing heading. ``cross`` is the offset from the path, positive on
 # that same side, and ``curvature`` is positive where the path turns that way.
 
 _BANK_45 = float(np.deg2rad(45.0))
@@ -47,7 +46,7 @@ _HALF_PI = float(np.pi / 2.0)
 
 @struct.dataclass
 class Plane3DGuidanceParams:
-    """Lateral guidance and its bank loop, over TECS and a pitch loop.
+    """Lateral guidance and TECS, sending the plant's inner loop its demands.
 
     ``tau_hdg`` is the course hold's time constant (heading task). ``period``
     and ``damping`` are L1's, as ArduPilot names them ``NAVL1_PERIOD`` and
@@ -64,8 +63,6 @@ class Plane3DGuidanceParams:
     the model's clean 1 g stall, 80 m/s at 73.5 t, CL_max 1.5 and 122.6 m^2.
     """
 
-    Kp_roll: float = 6.0
-    Kd_roll: float = 3.0
     max_bank_rad: float = _BANK_45
     turn_bank_margin: float = 0.85
     tau_hdg: float = 10.0
@@ -73,9 +70,6 @@ class Plane3DGuidanceParams:
     damping: float = 0.75
     figure8_altitude_amplitude: float = 200.0
     curvature_lead: float = 1.0
-    Kp_theta: float = 8.0
-    Ki_theta: float = 2.0
-    Kd_theta: float = 0.3
     alpha_max: float = 0.19
     k_bank_comp: float = 0.15
     target_speed: float = 230.0
@@ -87,12 +81,10 @@ class Plane3DGuidanceParams:
 
 @struct.dataclass
 class Plane3DGuidanceState:
-    """TECS's state, the pitch loop's integral, and on the figure-8 the last
-    path point's altitude, the way the path turns, and the pattern's
+    """TECS's state, and on the figure-8 the last path point's altitude, the way the path turns, and the pattern's
     orientation averaged over ``samples`` observations."""
 
     tecs: TECSState = struct.field(default_factory=TECSState)
-    theta_integ: float = 0.0
     path_z: float = 0.0
     turn_sign: float = 1.0
     orientation: float = 0.0
@@ -132,13 +124,11 @@ def l1_lateral_accel(params, cross, tangent, curvature, obs, xp):
 
 
 def _fly(params, state, obs, xp, h_dem, accel, target_speed, **carry):
-    """The autopilot under a guidance law: TECS on height and speed, a pitch
-    loop holding its demand, and the bank that makes ``accel`` in a
-    coordinated turn, held by a loop damped on roll rate."""
+    """The autopilot under a guidance law: TECS on height and speed, and the
+    bank that makes ``accel`` in a coordinated turn. Returns the demands the
+    plant's inner loop holds, ``[throttle, pitch, bank]`` in [-1, 1]."""
     z, z_dot = obs[..., 2], obs[..., 3]
-    theta, theta_dot = obs[..., 4], obs[..., 5]
-    phi, phi_dot = obs[..., 6], obs[..., 7]
-    gamma = obs[..., 8]
+    phi, gamma = obs[..., 6], obs[..., 8]
     v = xp.sqrt(obs[..., 0] ** 2 + obs[..., 1] ** 2 + z_dot**2)
     # Stall prevention, as ArduPilot's STALL_PREVENTION: never slower than
     # the speed at which the full bank is safe, and never more bank than the
@@ -154,15 +144,9 @@ def _fly(params, state, obs, xp, h_dem, accel, target_speed, **carry):
     load_factor = 1.0 / xp.maximum(xp.cos(phi), 0.35)
     theta_cmd = pitch + params.k_bank_comp * (load_factor - 1.0)
     theta_cmd = xp.clip(theta_cmd, gamma - params.alpha_max, gamma + params.alpha_max)
-    stick, theta_integ = pitch_hold(
-        params, state.theta_integ, theta_cmd, theta, theta_dot, xp
-    )
     bank = xp.clip(xp.arctan(accel / params.gravity), -max_bank, max_bank)
-    aileron = xp.clip(
-        params.Kp_roll * (bank - phi) - params.Kd_roll * phi_dot, -1.0, 1.0
-    )
-    new_state = state.replace(tecs=tecs, theta_integ=theta_integ, **carry)
-    return xp.stack([power, stick, aileron], axis=-1), new_state
+    action = [power, theta_cmd / PITCH_DEMAND_MAX, bank / BANK_DEMAND_MAX]
+    return xp.stack(action, axis=-1), state.replace(tecs=tecs, **carry)
 
 
 def plane3d_heading_step(params, state, obs, xp=jnp):
@@ -248,10 +232,9 @@ def plane3d_figure8_step(params, state, obs, xp=jnp):
     )
 
 
-_LATERAL_GAINS = ("Kp_roll", "Kd_roll")
-register_learnable_gains(plane3d_heading_step, _LATERAL_GAINS + ("tau_hdg",))
+register_learnable_gains(plane3d_heading_step, ("tau_hdg",))
 for _step in (plane3d_circle_step, plane3d_racetrack_step, plane3d_figure8_step):
-    register_learnable_gains(_step, _LATERAL_GAINS + ("period", "damping"))
+    register_learnable_gains(_step, ("period", "damping"))
 
 
 def make_plane3d_heading_pid_controller() -> Controller:
@@ -280,13 +263,10 @@ def make_plane3d_figure8_pid_controller() -> Controller:
 _HEADING = Plane3DGuidanceParams()
 _PATH = Plane3DGuidanceParams()
 # The figure-8 flies slower and higher than the other tasks, banked most of
-# the way. At that lower dynamic pressure the pitch loop above oscillated,
-# about 9 s a cycle, so it gets pitch-rate damping and a faster, better damped
-# TECS, chosen to hold with any one gain 25% off. Over the training patterns,
-# ten turbulence draws each, it holds height within 1.9 m and path within
-# 2.3 m. Its lobe tips are flown with a quarter of the bank in hand.
+# the way, so it gets a faster, better damped TECS, chosen to hold with any one
+# gain 25% off. Its lobe tips are flown with a quarter of the bank in hand. PR 9
+# replaces these with the shared tune.
 _FIGURE8 = Plane3DGuidanceParams(
-    Kd_theta=6.0,
     turn_bank_margin=0.75,
     tecs=AIRLINER.replace(time_const=1.5, ptch_damp=2.0),
 )

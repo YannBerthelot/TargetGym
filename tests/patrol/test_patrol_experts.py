@@ -17,10 +17,10 @@ import pytest
 
 from target_gym import registry
 from target_gym.experts.mpc import plan_params
-from target_gym.experts.pid import plane3d_heading_pid_step
 from target_gym.patrol.env import (
     desired_slot_position,
     get_obs_heading,
+    lead_autopilot_step,
     slot_error,
     wrap_angle,
 )
@@ -57,7 +57,7 @@ def test_in_the_slot_the_law_is_the_lead_autopilot():
     lead_cmd = lead.replace(
         target_heading=wrap_angle(lead.target_heading + state.lead_turn_rate)
     )
-    lead_action, _ = plane3d_heading_pid_step(
+    lead_action, _ = lead_autopilot_step(
         env._lead_pid_params, state.lead_pid, get_obs_heading(lead_cmd)
     )
     np.testing.assert_allclose(

@@ -17,11 +17,18 @@ from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.plane.dynamics import (
+    AILERON_TRAVEL,
+    INNER_STEPS,
+    STICK_RESPONSE_RATE,
+    STICK_TRAVEL,
+    InnerLoop,
     advance_gust,
+    airspeed_scaler,
+    attitude_axis,
     compute_air_density_from_altitude,
     compute_Mach_from_velocity_and_speed_of_sound,
     compute_next_power,
-    compute_next_stick,
+    compute_next_surface,
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
     step_key,
@@ -30,7 +37,6 @@ from target_gym.plane.dynamics import (
 from target_gym.plane3d.dynamics import (
     compute_acceleration_3d,
     compute_alpha_3d,
-    compute_next_aileron,
     compute_psi,
     compute_velocity_3d,
     rolling_gust,
@@ -70,6 +76,9 @@ class PlaneState3D(EnvState):
     gust_x: float = 0.0
     gust_y: float = 0.0
     gust_z: float = 0.0
+    # The inner loop's integrals, in surface units.
+    pitch_integ: float = 0.0
+    roll_integ: float = 0.0
 
     actuator_held: jax.Array = actuator_field(3)
 
@@ -102,16 +111,18 @@ class PlaneParams3D(EnvParams):
     initial_fuel_quantity: float = 23860 / 1.25
     specific_fuel_consumption: float = 17.5 / 1000
 
-    # Actuator lags, as first-order rates per second. TUNED -- not sourced.
-    # PlaneParams3D does not inherit from PlaneParams, so these are declared
-    # here as well; the values match the 2D aircraft's.
+    # PlaneParams3D does not inherit from PlaneParams, so the engine, the
+    # surfaces and the inner loop are declared here as well; the values match
+    # the 2D aircraft's.
     # A 3 s engine above 5% idle, both the plan's choice and labelled ours in
     # PHYSICS.md: 14 CFR 33.73(b) gives idle to 95% in 5 s, which a first-order
     # lag meets at 1.7 s, so this one is slower than the certified limit.
     power_response_rate: float = 1.0 / 3.0
     idle_power: float = 0.05
-    stick_response_rate: float = 0.9
-    aileron_response_rate: float = 0.9
+    stick_response_rate: float = STICK_RESPONSE_RATE
+    aileron_response_rate: float = STICK_RESPONSE_RATE
+    surface_rate_limit: float = jnp.pi / 6.0
+    inner_loop: InnerLoop = InnerLoop()
 
     # span^2 / S for the A320. PlaneParams3D does not inherit from PlaneParams,
     # so the shared aerodynamics needs its own copy; the value matches.
@@ -299,6 +310,7 @@ PARAM_UNITS = {
     "power_response_rate": "1/s",
     "idle_power": "-",
     "stick_response_rate": "1/s",
+    "surface_rate_limit": "rad/s",
     "k_drag": "-",
     "I": "kg.m^2",
     "moment_arm_stabilizer": "m",
@@ -850,17 +862,20 @@ def get_obs_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
 _ROLLING_GUST = 0x524F4C4C
 
 
-@partial(jax.jit, static_argnames=["integration_method"])
+@partial(jax.jit, static_argnames=["integration_method", "inner_steps"])
 def compute_next_state_3d(
     power_requested: float,
-    stick_requested: float,
-    aileron_requested: float,
+    pitch_demand: float,
+    bank_demand: float,
     state: PlaneState3D,
     params: PlaneParams3D,
-    integration_method: str = "rk4_2",
+    integration_method: str = "rk4_1",
     key=None,
+    inner_steps: int = INNER_STEPS,
 ):
-    """Compute next state using the 3D dynamics model.
+    """One step: the demands held while the inner loop flies ``inner_steps``
+    sub-steps, each moving the surfaces and the engine and integrating the
+    dynamics. The surfaces are the loop's, never the caller's.
 
     Wind is a physics-engine property: total wind = steady ``params.wind_x/y/z``
     plus an Ornstein-Uhlenbeck turbulence gust (advanced with ``key`` when
@@ -869,41 +884,29 @@ def compute_next_state_3d(
     ``wind = 0`` with ``turbulence_sigma = 0`` reproduces the original behaviour;
     ``key=None`` freezes the gust (constant wind).
     """
-    dt = params.delta_t
-    power = compute_next_power(
-        power_requested,
-        state.power,
-        dt,
-        params.power_response_rate,
-        params.idle_power,
-    )
-    stick = compute_next_stick(
-        stick_requested, state.stick, dt, params.stick_response_rate
-    )
-    aileron = compute_next_aileron(aileron_requested, state.aileron, dt)
+    dt = params.delta_t / inner_steps
 
     # Total wind = steady mean + altitude shear + OU turbulence gust.
     gust = advance_gust(
         jnp.array([state.gust_x, state.gust_y, state.gust_z]),
         params.turbulence_theta,
         params.turbulence_sigma,
-        dt,
+        params.delta_t,
         step_key(key, state.time),
     )
     total_wind_x, total_wind_y, total_wind_z = total_wind_3d(
         state.z, gust[0], gust[1], gust[2], params
     )
-    # Engine ram/Mach effects depend on airspeed, not ground speed.
-    air_speed = compute_velocity_3d(
-        state.x_dot - total_wind_x,
-        state.y_dot - total_wind_y,
-        state.z_dot - total_wind_z,
-    )
     # With no key the caller owns the air (a patrol's shared gust), as above.
     gust_roll_rate = params.gust_roll_rate
     if key is not None:
         roll_key = jax.random.fold_in(step_key(key, state.time), _ROLLING_GUST)
-        gust_roll_rate = gust_roll_rate + rolling_gust(roll_key, air_speed, params)
+        speed = compute_velocity_3d(
+            state.x_dot - total_wind_x,
+            state.y_dot - total_wind_y,
+            state.z_dot - total_wind_z,
+        )
+        gust_roll_rate = gust_roll_rate + rolling_gust(roll_key, speed, params)
     # All-up mass for this step: fuel is a component of ``initial_mass``, so
     # burning it subtracts. Threaded through ``eff_params`` because the
     # dynamics read ``params.initial_mass``.
@@ -915,56 +918,116 @@ def compute_next_state_3d(
         gust_roll_rate=gust_roll_rate,
         initial_mass=mass_now,
     )
+    gains = params.inner_loop
 
-    M_air = compute_Mach_from_velocity_and_speed_of_sound(
-        air_speed, state.speed_of_sound
-    )
-    thrust = compute_thrust_output(
-        power=power,
-        thrust_output_at_sea_level=params.thrust_output_at_sea_level,
-        rho=state.rho,
-        M=M_air,
-    )
-
-    positions = jnp.array([state.x, state.y, state.z, state.theta, state.phi])
-    velocities = jnp.array(
-        [
-            state.x_dot,
-            state.y_dot,
-            state.z_dot,
-            state.theta_dot,
-            state.phi_dot,
-        ]
-    )
-
-    _compute_acceleration = partial(
-        compute_acceleration_3d,
-        action=(thrust, stick, aileron),
-        params=eff_params,
-        clip=True,
-        min_clip_boundaries=(-100, -100, -100, -1.5, -1.5),
-        max_clip_boundaries=(100, 100, 100, 1.5, 1.5),
-    )
-
-    (x_dot, y_dot, z_dot, theta_dot, phi_dot), (x, y, z, theta, phi), metrics = (
-        integrate_dynamics(
+    def inner(carry, _):
+        velocities, positions, power, surfaces, integrals, burned = carry
+        x_dot, y_dot, z_dot, theta_dot, phi_dot = velocities
+        _, _, z, theta, phi = positions
+        stick, aileron = surfaces
+        pitch_integ, roll_integ = integrals
+        # Air data and the engine's ram/Mach effects read airspeed.
+        air_speed = compute_velocity_3d(
+            x_dot - total_wind_x, y_dot - total_wind_y, z_dot - total_wind_z
+        )
+        rho = compute_air_density_from_altitude(z)
+        eas = air_speed * jnp.sqrt(rho / params.air_density_at_sea_level)
+        scaler = airspeed_scaler(eas, gains)
+        stick_output, pitch_integ = attitude_axis(
+            gains.Kp_theta,
+            gains.Ki_theta,
+            gains.Kd_theta,
+            pitch_demand - theta,
+            theta_dot,
+            pitch_integ,
+            scaler,
+            dt,
+        )
+        aileron_output, roll_integ = attitude_axis(
+            gains.Kp_roll,
+            gains.Ki_roll,
+            gains.Kd_roll,
+            bank_demand - phi,
+            phi_dot,
+            roll_integ,
+            scaler,
+            dt,
+        )
+        stick = compute_next_surface(
+            stick_output * STICK_TRAVEL,
+            stick,
+            dt,
+            params.stick_response_rate,
+            params.surface_rate_limit,
+        )
+        aileron = compute_next_surface(
+            aileron_output * AILERON_TRAVEL,
+            aileron,
+            dt,
+            params.aileron_response_rate,
+            params.surface_rate_limit,
+        )
+        power = compute_next_power(
+            power_requested,
+            power,
+            dt,
+            params.power_response_rate,
+            params.idle_power,
+        )
+        thrust = compute_thrust_output(
+            power=power,
+            thrust_output_at_sea_level=params.thrust_output_at_sea_level,
+            rho=rho,
+            M=compute_Mach_from_velocity_and_speed_of_sound(
+                air_speed, compute_speed_of_sound_from_altitude(z)
+            ),
+        )
+        accelerate = partial(
+            compute_acceleration_3d,
+            action=(thrust, stick, aileron),
+            params=eff_params,
+            clip=True,
+            min_clip_boundaries=(-100, -100, -100, -1.5, -1.5),
+            max_clip_boundaries=(100, 100, 100, 1.5, 1.5),
+        )
+        velocities, positions, metrics = integrate_dynamics(
             velocities=velocities,
             positions=positions,
             delta_t=dt,
-            compute_acceleration=_compute_acceleration,
+            compute_acceleration=accelerate,
             method=integration_method,
         )
+        # Fuel burned over the sub-step, charged against the thrust produced.
+        burned = burned + params.specific_fuel_consumption * 1e-3 * thrust * dt
+        return (
+            velocities,
+            positions,
+            power,
+            (stick, aileron),
+            (pitch_integ, roll_integ),
+            burned,
+        ), metrics
+
+    start = (
+        jnp.array(
+            [state.x_dot, state.y_dot, state.z_dot, state.theta_dot, state.phi_dot]
+        ),
+        jnp.array([state.x, state.y, state.z, state.theta, state.phi]),
+        state.power,
+        (state.stick, state.aileron),
+        (state.pitch_integ, state.roll_integ),
+        jnp.zeros_like(state.fuel),
     )
+    end, metrics = jax.lax.scan(inner, start, None, length=inner_steps)
+    x_dot, y_dot, z_dot, theta_dot, phi_dot = end[0]
+    x, y, z, theta, phi = end[1]
+    power, (stick, aileron), (pitch_integ, roll_integ), burned = end[2:]
+    metrics = jax.tree_util.tree_map(lambda m: m[-1], metrics)
 
     alpha, gamma = compute_alpha_3d(theta, x_dot, y_dot, z_dot)
     psi = compute_psi(x_dot, y_dot)
-    # Total all-up mass. ``initial_fuel_quantity`` is a *component* of
-    # ``initial_mass``, not an addition to it, and matches the mass the
-    # dynamics actually integrate (see compute_acceleration). Once fuel
-    # burn is implemented this becomes initial_mass - burned.
-    # Fuel burned this step, charged against the thrust actually produced.
-    burn = params.specific_fuel_consumption * 1e-3 * thrust * dt
-    fuel = jnp.clip(state.fuel - burn, 0.0, params.initial_fuel_quantity)
+    # Total all-up mass: fuel is a component of ``initial_mass``.
+    fuel = jnp.clip(state.fuel - burned, 0.0, params.initial_fuel_quantity)
     m = params.initial_mass - (params.initial_fuel_quantity - fuel)
 
     new_state = PlaneState3D(
@@ -997,6 +1060,8 @@ def compute_next_state_3d(
         gust_x=gust[0],
         gust_y=gust[1],
         gust_z=gust[2],
+        pitch_integ=pitch_integ,
+        roll_integ=roll_integ,
     )
     return new_state, metrics
 

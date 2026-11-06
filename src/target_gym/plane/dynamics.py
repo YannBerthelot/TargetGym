@@ -4,6 +4,7 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
+from flax import struct
 from gymnax.environments import EnvParams
 
 from target_gym.base import FieldReading
@@ -188,7 +189,7 @@ EPS = 1e-8
 # table rather than sitting unsourced in the code.
 POWER_RESPONSE_RATE = 1.0 / 3.0
 IDLE_POWER = 0.05
-STICK_RESPONSE_RATE = 0.9
+STICK_RESPONSE_RATE = 1.0 / 0.06
 
 
 def compute_next_power(
@@ -206,12 +207,67 @@ def compute_next_power(
     )
 
 
-def compute_next_stick(
-    requested_stick, current_stick, delta_t, rate: float = STICK_RESPONSE_RATE
-):
-    """First-order lag toward the requested stick deflection."""
-    stick_diff = requested_stick - current_stick
-    return current_stick + rate * delta_t * stick_diff
+def compute_next_surface(requested, current, delta_t, rate, rate_limit):
+    """A control surface after ``delta_t``: a first-order lag, solved exactly,
+    toward ``requested``, moving no faster than ``rate_limit``."""
+    move = (requested - current) * (1.0 - jnp.exp(-rate * delta_t))
+    most = rate_limit * delta_t
+    return current + jnp.clip(move, -most, most)
+
+
+# ---------------------------------------------------------------------------
+# The fixed inner loop (PHYSICS.md section on the inner loop)
+# ---------------------------------------------------------------------------
+
+#: Control sub-steps per step: the inner loop closes at 4 Hz, around a short
+#: period of about 2.5 s that a 1 s step could not resolve.
+INNER_STEPS = 4
+#: What a full action demands: the pitch TECS is limited to and the bank
+#: ArduPilot's FBWA gives at full stick, which is the model's validity too.
+PITCH_DEMAND_MAX = 15.0 * _DEG
+BANK_DEMAND_MAX = 45.0 * _DEG
+#: The surfaces' travel, which the loop's output in [-1, 1] spans.
+STICK_TRAVEL = 15.0 * _DEG
+AILERON_TRAVEL = 25.0 * _DEG
+
+
+@struct.dataclass
+class InnerLoop:
+    """The attitude loop's gains, per radian of error and rad/s of rate, one
+    tune for every task (``scripts/tune_inner_loop.py``, by the manual procedure
+    of ``docs/proposals/expert-protocols-aircraft.md``), and ArduPilot's airspeed
+    scaler about the tuning test's EAS, 230 m/s at 5500 m."""
+
+    Kp_theta: float = 6.3662
+    Ki_theta: float = 0.0318
+    Kd_theta: float = 0.1273
+    Kp_roll: float = 0.8913
+    Ki_roll: float = 0.0318
+    Kd_roll: float = 0.1273
+    scaling_speed: float = 173.5  # m/s, SCALING_SPEED
+    scale_min: float = 0.3  # min(0.5, 0.5 ARSPD_FBW_MIN / SCALING_SPEED)
+    scale_max: float = 2.0  # max(2, 1.5 VMO / SCALING_SPEED)
+
+
+def airspeed_scaler(eas, gains: InnerLoop):
+    """ArduPilot's surface scaler: a surface's moment goes with EAS^2."""
+    return jnp.clip(
+        gains.scaling_speed / jnp.maximum(eas, 1.0), gains.scale_min, gains.scale_max
+    )
+
+
+def attitude_axis(kp, ki, kd, error, rate, integral, scaler, dt):
+    """One axis of the attitude loop: ``(surface in [-1, 1], new integral)``.
+
+    ``AP_RollController``'s law reduced to P on the angle and D on the rate
+    (the proposal's section 1), with the scaler on the angle path and squared
+    on the rate path. The integral is in surface units, so a scaler change does
+    not move its trim, and it freezes while the surface is saturated.
+    """
+    output = kp * scaler * error + integral - kd * scaler**2 * rate
+    surface = jnp.clip(output, -1.0, 1.0)
+    grown = integral + ki * scaler**2 * error * dt
+    return surface, jnp.where(output == surface, grown, integral)
 
 
 def compute_thrust_output(

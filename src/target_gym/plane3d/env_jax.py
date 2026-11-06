@@ -6,7 +6,8 @@ Three task variants sharing the same 3D physics:
   - Plane3DCircle:   fly a circle of given radius at a target altitude
   - Plane3DFigureEight: fly a figure-8 (lemniscate) at a target altitude
 
-Actions: power (throttle), stick (elevator), aileron (roll control).
+Actions: throttle, pitch demand, bank demand, held for the step. A fixed inner
+loop in the plant flies the surfaces to the demands; a policy does not touch them.
 """
 
 import chex
@@ -17,8 +18,10 @@ from gymnax.environments import environment, spaces
 from target_gym.base import actuate, canonical_reset, finish_step, measured_obs
 from target_gym.expert_access import RegistryExperts
 from target_gym.plane.dynamics import (
+    BANK_DEMAND_MAX,
     LATERAL,
     LONGITUDINAL,
+    PITCH_DEMAND_MAX,
     POSITION,
     instruments,
     total_wind_3d,
@@ -72,7 +75,7 @@ class _Airplane3DBase(
     # The path tasks add the GNSS fix, which the heading task has no use for.
     readings: tuple = instruments(LONGITUDINAL + LATERAL + POSITION)
 
-    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         # observe_wind=False -> wind is a hidden disturbance (POMDP);
         # observe_wind=True  -> (wind_x, wind_y, wind_z) appended to the obs
         #                       (fully-observable baseline).
@@ -119,15 +122,13 @@ class _Airplane3DBase(
         # Not every learner squashes, so a raw action past the box acts as the
         # bound rather than as a command the plant could never receive.
         action, state = actuate(self, state, jnp.asarray(action).reshape((3,)), params)
-        power, stick, aileron = jnp.clip(action, -1.0, 1.0)
+        power, pitch, bank = jnp.clip(action, -1.0, 1.0)
         power = (power + 1) / 2  # [-1, 1] -> [0, 1]
-        stick = jnp.deg2rad(stick * 15)  # [-1, 1] -> +/-15 deg
-        aileron = jnp.deg2rad(aileron * 25)  # [-1, 1] -> +/-25 deg
 
         new_state, metrics = compute_next_state_3d(
             power,
-            stick,
-            aileron,
+            pitch * PITCH_DEMAND_MAX,  # [-1, 1] -> +/-15 deg
+            bank * BANK_DEMAND_MAX,  # [-1, 1] -> +/-45 deg
             state,
             params,
             integration_method=self.integration_method,
@@ -245,7 +246,7 @@ class Plane3DHeading(_Airplane3DBase):
         [x_dot, y_dot, z, z_dot, theta, theta_dot, phi, phi_dot,
          gamma, psi, target_altitude, target_heading, power, stick, aileron]
 
-    Action (3,): [power, stick, aileron] each in [-1, 1]
+    Action (3,): [throttle, pitch demand, bank demand] each in [-1, 1]
     """
 
     obs_value_index: int = 2  # z (altitude)
@@ -276,7 +277,7 @@ class Plane3DHeading(_Airplane3DBase):
             failure_cost=2.0 * (12192.0 / 1.0) ** 2,
         )
 
-    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         self.obs_shape = (18,) if observe_wind else (15,)
 
@@ -334,7 +335,7 @@ class Plane3DRacetrack(_Airplane3DBase):
          target_heading, power, stick, aileron,
          cross_track, tangent_heading, curvature]
 
-    Action (3,): [power, stick, aileron] each in [-1, 1]
+    Action (3,): [throttle, pitch demand, bank demand] each in [-1, 1]
     """
 
     obs_value_index: int = 2
@@ -371,7 +372,7 @@ class Plane3DRacetrack(_Airplane3DBase):
             failure_cost=2.0 * (12192.0 / 1.0) ** 2,
         )
 
-    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         # 21: the circle's 18 plus target_heading and the two guidance values
         # the pattern's geometry determines exactly. 23 with the wind sensor.
@@ -442,7 +443,7 @@ class Plane3DCircle(_Airplane3DBase):
          gamma, psi, target_altitude, rel_x, rel_y, target_radius,
          power, stick, aileron]
 
-    Action (3,): [power, stick, aileron] each in [-1, 1]
+    Action (3,): [throttle, pitch demand, bank demand] each in [-1, 1]
     """
 
     obs_value_index: int = 2
@@ -468,7 +469,7 @@ class Plane3DCircle(_Airplane3DBase):
 
     tracked_names: tuple = ("altitude (m)",)
 
-    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         self.obs_shape = (20,) if observe_wind else (17,)
 
@@ -545,7 +546,7 @@ class Plane3DFigureEight(_Airplane3DBase):
          nearest_dx, nearest_dy, nearest_dz, tangent_heading,
          power, stick, aileron, path_distance, target_path_distance(=0)]
 
-    Action (3,): [power, stick, aileron] each in [-1, 1]
+    Action (3,): [throttle, pitch demand, bank demand] each in [-1, 1]
     """
 
     # The reward charges the distance to the curve, not the altitude: the
@@ -571,7 +572,7 @@ class Plane3DFigureEight(_Airplane3DBase):
 
     tracked_names: tuple = ("distance to path (m)",)
 
-    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         self.obs_shape = (24,) if observe_wind else (21,)
 

@@ -91,11 +91,10 @@ def formation_team_step(params, state, obs, xp=jnp):
 #: The lead's tuning, on the formation's training seeds 100-109 with the
 #: wingmen flying :data:`HOLD`, checked on held-out seeds 200-209
 #: (scripts/tune_formation_hold.py, [lead pitch]). TECS flies the pitch on
-#: height alone (the airliner's ``spd_weight`` 0), a little faster and better
-#: damped than the heading task's (``time_const`` 1.5 against 2, ``Kd_theta``
-#: 1.0 against 0.3). Every other autopilot value is the 3D heading task's
-#: (scripts/tune_aircraft_guidance.py).
-LEAD = FormationLeadParams(Kd_theta=1.0, tecs=AIRLINER.replace(time_const=1.5))
+#: height alone (the airliner's ``spd_weight`` 0), a little faster than the
+#: heading task's (``time_const`` 1.5 against 2). Every other autopilot value is
+#: the 3D heading task's (scripts/tune_aircraft_guidance.py).
+LEAD = FormationLeadParams(tecs=AIRLINER.replace(time_const=1.5))
 
 
 def make_formation_pid_controller(num_wingmen: int = 2) -> Controller:

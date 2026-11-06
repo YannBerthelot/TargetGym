@@ -7,6 +7,7 @@ from target_gym.base import actuate, canonical_reset, finish_step, measured_obs
 from target_gym.expert_access import RegistryExperts
 from target_gym.plane.dynamics import (
     LONGITUDINAL,
+    PITCH_DEMAND_MAX,
     compute_gamma,
     instruments,
     read_angles,
@@ -38,7 +39,9 @@ class Airplane2D(
     """
     JAX-compatible 2D airplane environment.
 
-    Action (2,): [power, stick], raw in [-1, 1]
+    Action (2,): [throttle, pitch demand], raw in [-1, 1], held for the step. A
+    fixed inner loop in the plant flies the elevator to the demand (+-15 deg at
+    full action); a policy does not touch the surfaces.
     """
 
     registry_name: str = "plane"
@@ -55,7 +58,7 @@ class Airplane2D(
     # PHYSICS.md section on readings; gamma follows from the velocities.
     readings: tuple = instruments(LONGITUDINAL)
 
-    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         # observe_wind=False -> the wind is a hidden disturbance (POMDP);
         # observe_wind=True  -> wind (wind_x, wind_z) is appended to the obs
         #                       (a fully-observable baseline / feedforward case).
@@ -94,13 +97,12 @@ class Airplane2D(
         # Not every learner squashes, so a raw action past the box acts as the
         # bound rather than as a command the plant could never receive.
         action, state = actuate(self, state, jnp.asarray(action).reshape((2,)), params)
-        power, stick = jnp.clip(action, -1.0, 1.0)
+        power, pitch = jnp.clip(action, -1.0, 1.0)
         power = (power + 1) / 2  # map from [-1, 1] to [0, 1]
-        stick = jnp.deg2rad(stick * 15)  # radians
 
         new_state, metrics = compute_next_state(
             power,
-            stick,
+            pitch * PITCH_DEMAND_MAX,
             state,
             params,
             integration_method=self.integration_method,
@@ -241,7 +243,7 @@ class PlaneEnergy(Airplane2D):
     airspeed for altitude for free. Scoring both forces the trade,
     repeatedly. The pure staircase is ``PlaneParams(speed_weight=0.0)``.
 
-    Action (2,): [power, stick], raw in [-1, 1]
+    Action (2,): [throttle, pitch demand], raw in [-1, 1], as ``Airplane2D``.
     """
 
     registry_name: str = "plane_energy"
@@ -275,7 +277,7 @@ class PlaneSine(Airplane2D):
     """``plane_sine``: the 2D aircraft tracking a sinusoidal altitude, a probe
     of the closed loop's bandwidth.
 
-    Action (2,): [power, stick], raw in [-1, 1]
+    Action (2,): [throttle, pitch demand], raw in [-1, 1], as ``Airplane2D``.
     """
 
     registry_name: str = "plane_sine"
