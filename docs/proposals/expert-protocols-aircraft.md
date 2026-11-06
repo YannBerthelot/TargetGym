@@ -150,9 +150,10 @@ before the rerun and replacing what is above where they differ:
   sets a cruise throttle before the tests and says nothing of it during them, and G-TECS has TECS
   hold energy with the throttle but gives no hold for a test.
 - **The hold's gains follow SIMC,** by the rule section 3.5 uses, from the plant's known numbers and
-  no bump test. Lever to speed is k' / (s (3 s + 1)), k' the thrust slope over the mass at the test
-  point. A 1 s sample adds 0.5 s of delay, and the half rule folds the 3 s lag in: theta_e = 2 s.
-  The tight setting tau_c = theta_e gives a gain of 1 / (4 k') and an integral time of 16 s.
+  no bump test. Lever to speed is k' / (s (1.7 s + 1)), k' the thrust slope over the mass at the test
+  point. A 1 s sample adds 0.5 s of delay, and the half rule folds the 1.7 s engine lag in:
+  theta_e = 1.35 s. The tight setting tau_c = theta_e gives a gain of 1 / (2.7 k') and an integral
+  time of 10.8 s.
 - **The overshoot reading stays as section 2 writes it,** on the whole hold.
 - **D stops at the guide's limit,** 0.1 [0.127], and ships there if no test oscillates (section 4's
   rule for a cap). This replaces step 3's "no cap", whose reason did not hold.

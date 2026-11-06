@@ -58,11 +58,12 @@ def test_a_late_peak_past_5_percent_is_still_an_overshoot():
 
 
 def test_the_speed_hold_is_the_simc_rule_on_the_plants_numbers():
-    """A slope of 1.4 m/s^2 per lever, at 1 s samples, through the 3 s engine:
-    theta_e = 0.5 + 1.5 = 2 s, so 1 / (2 * 1.4 * 2) = 0.1786 and 8 * 2 = 16 s."""
-    gain, integral_time = _script().speed_hold_gains(1.4)
-    assert gain == pytest.approx(0.1786, abs=1e-4)
-    assert integral_time == pytest.approx(16.0)
+    """A slope of 1.4 m/s^2 per lever, at 1 s samples, through the 1.7 s engine:
+    theta_e = 0.5 + 0.85 = 1.35 s, so 1 / (2 * 1.4 * 1.35) = 0.2646, and
+    8 * 1.35 = 10.8 s."""
+    gain, integral_time = _script().speed_hold_gains(1.4, 1.7)
+    assert gain == pytest.approx(0.2646, abs=1e-4)
+    assert integral_time == pytest.approx(10.8)
 
 
 def test_two_sign_changes_past_the_band_after_the_peak_are_an_oscillation():

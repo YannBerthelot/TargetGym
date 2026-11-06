@@ -44,7 +44,7 @@ def _finding(reason):
     return pytest.mark.xfail(strict=True, reason=f"finding: {reason}")
 
 
-_STALE = _finding("PR 9: the hold's gains predate the plant and the 3 s engine")
+_STALE = _finding("PR 9: the hold's gains predate the plant")
 
 
 @functools.cache
@@ -103,7 +103,7 @@ def test_the_follower_holds_its_slot(name, seed):
 
 @pytest.mark.large
 @pytest.mark.parametrize(
-    "seed", [s if s == 205 else pytest.param(s, marks=_STALE) for s in HELD_OUT]
+    "seed", [pytest.param(s, marks=_STALE) if s >= 207 else s for s in HELD_OUT]
 )
 def test_every_formation_wingman_holds_its_slot(seed):
     tripped, rms, _, _ = _episode("formation", seed)

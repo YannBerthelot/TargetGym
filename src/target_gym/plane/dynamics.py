@@ -187,7 +187,7 @@ EPS = 1e-8
 # First-order actuator lags. They are parameters so that a slower engine or a
 # stiffer control system is expressible, and so that they appear in the parameter
 # table rather than sitting unsourced in the code.
-POWER_RESPONSE_RATE = 1.0 / 3.0
+POWER_RESPONSE_RATE = 1.0 / 1.7
 IDLE_POWER = 0.05
 STICK_RESPONSE_RATE = 1.0 / 0.06
 

@@ -43,18 +43,18 @@ ROLL_HOLD, PITCH_HOLD = 30.0, 20.0
 P_START, P_STEP, P_MAX = 1.0, 0.1, 5.0
 D_START = {"roll": 0.08, "pitch": 0.04}
 D_STEP, D_MAX, I_STEP = 0.01, 0.1, 0.05
-#: The speed hold's sample, the plant's action rate, and the engine's lag it works
-#: through (the amendment).
-SPEED_HOLD_SAMPLE, ENGINE_LAG = 1.0, 3.0
+#: The speed hold's sample, the plant's action rate (the amendment).
+SPEED_HOLD_SAMPLE = 1.0
 #: Band of the readings: 5% of the step (section 2).
 BAND = 0.05
 
 
-def speed_hold_gains(slope):
+def speed_hold_gains(slope, lag):
     """The speed hold's PI, ``(gain, integral time)``, by the amendment's SIMC rule:
-    the lever moves the speed as ``slope / (s (3 s + 1))``, so at 1 s samples
-    theta_e = 0.5 + 3 / 2 = 2 s and tau_c = theta_e gives 1 / (4 slope) and 16 s."""
-    delay = 0.5 * SPEED_HOLD_SAMPLE + 0.5 * ENGINE_LAG
+    the lever moves the speed as ``slope / (s (lag s + 1))``, so with half a sample
+    of delay and the half rule, theta_e = sample / 2 + lag / 2, and the tight setting
+    tau_c = theta_e gives 1 / (2 slope theta_e) and 8 theta_e."""
+    delay = 0.5 * SPEED_HOLD_SAMPLE + 0.5 * lag
     return 1.0 / (2.0 * slope * delay), 8.0 * delay
 
 
@@ -120,7 +120,7 @@ def make_flight(params, trimmed):
     plant's own step, one sub-step at a time."""
     theta, stick, lever, slope = trimmed
     idle = params.idle_power
-    gain, integral_time = speed_hold_gains(slope)
+    gain, integral_time = speed_hold_gains(slope, 1.0 / params.power_response_rate)
     per_sample = int(SPEED_HOLD_SAMPLE / SUBSTEP)
     power = idle + (1.0 - idle) * lever
     start = _level(params, theta, stick, power, stick / STICK_TRAVEL)

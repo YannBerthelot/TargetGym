@@ -118,7 +118,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `k_shock_stall` | 4 | - |
 | `shock_stall_floor` | 0.25 | - |
 | `precision_floor` | 1 | m |
-| `power_response_rate` | 0.333333 | 1/s |
+| `power_response_rate` | 0.588235 | 1/s |
 | `idle_power` | 0.05 | - |
 | `stick_response_rate` | 16.6667 | 1/s |
 | `surface_rate_limit` | 0.523599 | rad/s |

@@ -853,12 +853,13 @@ def test_burning_fuel_lightens_the_aircraft():
 
 
 # ---------------------------------------------------------------------------
-# The engine: a 3 s lag above 5% idle (PHYSICS.md section 3)
+# The engine: a 1.7 s lag above 5% idle (PHYSICS.md section 3)
 # ---------------------------------------------------------------------------
 #
-# Contract: the engine state follows the lever as a first-order lag with a 3 s
-# time constant, so a lever step closes 1 - 1/e of the gap in 3 s, and the lever's
-# range maps onto idle to full, so the bottom stop is 5% and the top 100%.
+# Contract: the engine state follows the lever as a first-order lag with a 1.7 s
+# time constant, the one that takes 14 CFR 33.73(b)'s 5 s from idle to 95% (from 5%
+# of full power the gap has to fall by 19, so 1.7 ln 19 = 5.006 s). The lever's range
+# maps onto idle to full, so the bottom stop is 5% and the top 100%.
 
 
 def _engine_after(action, seconds, start):
@@ -874,14 +875,15 @@ def _engine_after(action, seconds, start):
     return float(state.power)
 
 
-def test_the_engine_closes_63_percent_of_a_lever_step_in_3_s():
-    # Idle 0.05 to full 1.0, so 0.05 + 0.95 (1 - e^-1) = 0.6505.
-    assert _engine_after([1.0, 0.0], 3, 0.05) == pytest.approx(0.6505, abs=2e-3)
+def test_the_engine_follows_a_lever_step_on_its_1_7_s_lag():
+    # 0.05 + 0.95 (1 - e^(-2 / 1.7)) = 0.7071.
+    assert _engine_after([1.0, 0.0], 2, 0.05) == pytest.approx(0.7071, abs=2e-3)
 
 
-def test_the_engine_is_past_95_percent_of_a_full_lever_step_by_9_s():
-    # 0.05 + 0.95 (1 - e^-3) = 0.9527, the slowest the 3 s lag allows.
-    assert _engine_after([1.0, 0.0], 9, 0.05) == pytest.approx(0.9527, abs=2e-3)
+def test_the_engine_goes_from_idle_to_95_percent_in_the_rules_5_s():
+    # 0.05 + 0.95 (1 - e^(-5 / 1.7)) = 0.9498: 1.7 s is the rule to two figures,
+    # 6 ms over it, inside this tolerance. 1.698 s would be exact.
+    assert _engine_after([1.0, 0.0], 5, 0.05) == pytest.approx(0.95, abs=2e-3)
 
 
 def test_the_lever_at_its_stop_settles_at_idle_not_at_zero():

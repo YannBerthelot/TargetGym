@@ -111,7 +111,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `C_z0` | 0.9 | - |
 | `initial_fuel_quantity` | 19088 | kg |
 | `specific_fuel_consumption` | 0.0175 | kg/(kN.s) |
-| `power_response_rate` | 0.333333 | 1/s |
+| `power_response_rate` | 0.588235 | 1/s |
 | `idle_power` | 0.05 | - |
 | `stick_response_rate` | 16.6667 | 1/s |
 | `aileron_response_rate` | 16.6667 | 1/s |

@@ -310,7 +310,7 @@ observation alone:
   expert averages it from the observed tangent. The curvature is read one
   second ahead, the bank loop's lag.
 
-Its guidance and TECS gains predate the inner loop, the 3 s engine and the
+Its guidance and TECS gains predate the inner loop, the 1.7 s engine and the
 envelope, so the figures that used to stand here no longer hold. **TECS's
 `time_const` of 2 pulls past 2.5 g on height captures**, stepping the pitch demand
 by about 10 deg in a second, and PR 9 retunes it by the accepted procedure. On

@@ -117,10 +117,9 @@ class PlaneParams3D(EnvParams):
     # PlaneParams3D does not inherit from PlaneParams, so the engine, the
     # surfaces and the inner loop are declared here as well; the values match
     # the 2D aircraft's.
-    # A 3 s engine above 5% idle, both the plan's choice and labelled ours in
-    # PHYSICS.md: 14 CFR 33.73(b) gives idle to 95% in 5 s, which a first-order
-    # lag meets at 1.7 s, so this one is slower than the certified limit.
-    power_response_rate: float = 1.0 / 3.0
+    # A 1.7 s engine above 5% idle. 14 CFR 33.73(b) gives idle to 95% in 5 s, and
+    # a first-order lag takes ln 19 of its time constant to do that (5.006 s).
+    power_response_rate: float = 1.0 / 1.7
     idle_power: float = 0.05
     stick_response_rate: float = STICK_RESPONSE_RATE
     aileron_response_rate: float = STICK_RESPONSE_RATE

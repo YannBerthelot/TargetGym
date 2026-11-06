@@ -70,10 +70,10 @@ density path. Harmless at 0.01 %, but the two should be unified.
 | `I` | 9.0 × 10⁶ | kg·m² | TUNED — not sourced. Order-of-magnitude plausible for a 37 m fuselage. | ⚠️ |
 | `moment_arm_stabilizer` | 15.0 | m | TUNED — plausible tail arm for A320 geometry | ⚠️ |
 | `moment_arm_wings` | 1.5 | m | TUNED — wing AC to CG offset | ⚠️ |
-| `power_response_rate` | 1/3 | 1/s | **Ours, for the owner.** The plan's 3 s engine lag. 14 CFR 33.73(b) gives idle to 95 % in 5 s, which a first-order lag meets at 1.7 s; at 3 s it takes 8.8 s | ⚠️ |
+| `power_response_rate` | 1/1.7 | 1/s | 14 CFR 33.73(b): idle to 95 % in 5 s. A first-order lag takes ln 19 of its time constant, so 1.7 s gives 5.006 s, the rule to two figures and 6 ms over it (1.698 s is exact). A sea-level static certification limit, flown here at every altitude | ✅ |
 | `idle_power` | 0.05 | – | **Ours, for the owner.** The plan's flight idle, 5 % of full power. The lever's range maps onto idle to full | ⚠️ |
 | `stick_response_rate` | 1/0.06 | 1/s | First-order 0.06 s, which matched an industry actuator model for the elevator of the VELA concept (ICAS 2006, paper 531). Another aircraft, so borrowed | ⚠️ |
-| `surface_rate_limit` | 30 | deg/s | **Ours, for the owner.** Full elevator travel in a second. No A320 rate was found in an open source | ⚠️ |
+| `surface_rate_limit` | 30 | deg/s | Ours, accepted by the owner on 2026-11-06 as a working value. Full elevator travel in a second. No A320 rate was found in an open source | ⚠️ |
 
 **Mass bookkeeping.** `compute_acceleration` integrates `params.initial_mass`.
 `state.m` previously reported `initial_mass + fuel = 92 588 kg`, which both
@@ -106,7 +106,7 @@ CL_wing = min(CL, CL_max - buffet_slope·max(0, M - buffet_mach))
 | `CL_max` | 1.5 | Attainable: peak CL 1.53 at α = 15.0°, so the clamp now binds. | ✅ |
 | `M_crit` | 0.80 | Drag-divergence Mach. Was declared **twice** (0.78, 0.80); 0.80 always won. | ✅ |
 | `k_drag` | 5.0 | TUNED — transonic drag-rise strength | ⚠️ |
-| `buffet_mach`, `buffet_slope` | 0.3, 1.4 | **Ours, for the owner.** Prandtl-Glauert let the wing reach CL 2.0 at M 0.7 and full stick pull 5.2 g at 3500 m (the review read 5.5). No open A320 chart was found. The line starts at `CL_max` and is anchored on the 30 % lift margin a cruise keeps to buffet (Dandois et al., ONERA AerospaceLab 6, 2013): 65 t at FL390 and M 0.78 has CL 0.632, so 0.82, and the line gives 0.83 there. The wing's only: the tail keeps its own limit | ⚠️ |
+| `buffet_mach`, `buffet_slope` | 0.3, 1.4 | Ours, accepted by the owner on 2026-11-06 as a working value. Prandtl-Glauert let the wing reach CL 2.0 at M 0.7 and full stick pull 5.2 g at 3500 m (the review read 5.5). No open A320 chart was found. The line starts at `CL_max` and is anchored on the 30 % lift margin a cruise keeps to buffet (Dandois et al., ONERA AerospaceLab 6, 2013): 65 t at FL390 and M 0.78 has CL 0.632, so 0.82, and the line gives 0.83 there. The wing's only: the tail keeps its own limit | ⚠️ |
 
 ### Post-stall — the flat-plate branch
 
@@ -278,9 +278,9 @@ The gains are task constants, one tune for every task, from the attitude procedu
 of `docs/proposals/expert-protocols-aircraft.md` (ArduPlane 4.0.9's manual P, D, I),
 with its amendment of 2026-11-06, run once in still air by
 `scripts/tune_inner_loop.py`. The throttle holds 230 m/s through both tests, by a PI
-at 1 Hz whose gains follow from the plant's numbers by SIMC. That hold is ours: the
-guides give none. It keeps the speed within 223 to 236 m/s, so the speed mode no
-longer reads as overshoot.
+at 1 Hz whose gains follow from the plant's numbers by SIMC, 0.265 per m/s and 10.8 s.
+That hold is ours: the guides give none. It keeps the speed within 224 to 234 m/s, so
+the speed mode no longer reads as overshoot.
 
 | axis | P (ArduPilot, ours) | D | I | how the recipe ended |
 |---|---|---|---|---|
@@ -290,19 +290,18 @@ longer reads as overshoot.
 **⚠️ For the owner.**
 
 - **Pitch P is the cap's, not the recipe's choice.** No test overshoots at any P up
-  to the 5.0 of `AUTOTUNE_MAX_P`, so the number says the recipe found no limit below
-  it.
+  to the recipe's cap of 5.0, so the number says it found no limit below that.
 - **D stops at the guide's 0.1,** by the amendment. No test oscillated on either axis:
   past about 10 the roll loop only slows down.
-- **Roll's P is a reading of ours.** The defaults already overshoot, and the recipe's
-  "back one step" gives 0.9, which still overshoots by 8 %. P walks down to 0.7, the
-  last clean step.
+- **Roll's P stands at 0.7 under the overshoot rule,** the owner's call on 2026-11-06.
+  The defaults already overshoot and one step back still does, by 8 %, so P walks down
+  to the last clean step.
 - **Step 4 halves I and does not fly the result,** so the shipped roll loop overshoots
   a 45 deg step by 12 %, past the 5 % reading and inside the 22 % that reads as
   oscillation. It reaches the step in 4 s at 14.5 deg/s, near the 15 deg/s of the
   A320's normal law, and the integral takes until 20 s to bring it back inside 5 %.
 
-Pitch reaches 63 % of a step in about 1 s, overshoots by 3.3 % at most, and is inside
+Pitch reaches 63 % of a step in about 1 s, overshoots by 2.5 % at most, and is inside
 5 % by 5 s.
 
 A reset aircraft engages in trim (`trim_stick`): its elevator started 5 deg from

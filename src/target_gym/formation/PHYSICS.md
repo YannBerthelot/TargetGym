@@ -122,7 +122,7 @@ Virginia University's three-aircraft trials), not of a deployed product.
 
 The lead holds the route with the 3D heading task's autopilot: a course hold
 on the heading the route commands, with the leg's turn rate fed forward, and
-TECS on height and speed. With the engine's 3 s lag TECS's throttle flies as
+TECS on height and speed. With the engine's 1.7 s lag TECS's throttle flies as
 smooth and predictable as a formation lead should, so the set power the old 20 s
 lag called for is gone.
 

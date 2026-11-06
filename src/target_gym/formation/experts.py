@@ -41,7 +41,7 @@ from target_gym.plane3d.experts import (
 class FormationLeadParams(Plane3DGuidanceParams):
     """The lead's autopilot: the heading task's course hold and TECS on
     height and speed. A formation lead flies smooth and predictable, and with
-    the engine's 3 s lag TECS's throttle does."""
+    the engine's 1.7 s lag TECS's throttle does."""
 
 
 @struct.dataclass

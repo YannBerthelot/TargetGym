@@ -50,10 +50,9 @@ CYCLE_GAPS: dict[str, str] = {
     "plane_sine": _STALE_TECS,
 }
 DOUBLING_GAPS: dict[str, str] = {
-    "plane3d_circle": _STALE_TECS,
-    "plane3d_heading": _STALE_TECS,
     "plane3d_racetrack": _STALE_TECS,
     "plane_energy": _STALE_TECS,
+    "plane_sine": _STALE_TECS,
 }
 # compressor_surge's schedule ends at step 1200 and then holds its last levels,
 # so a run twice as long adds 1200 quiet steps and its hold falls 2.2x without
