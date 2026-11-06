@@ -124,6 +124,13 @@ def test_a_level_outside_the_study_raises(store, level):
         REGISTRY["first_order"].make_pid_controller(level)
 
 
+def test_a_stray_file_does_not_add_a_level(store):
+    # The levels are the study's, whatever files sit beside the shipped one.
+    store(3, {"first_order": store.shipped["first_order"]})
+    with pytest.raises(KeyError, match="the levels are"):
+        REGISTRY["first_order"].make_pid_controller(3)
+
+
 def test_a_level_with_no_file_raises_for_every_task_form():
     # Nothing is stored at 2 yet, so no task may answer from the shipped gains.
     with pytest.raises(KeyError, match=r"first_order.*2"):
