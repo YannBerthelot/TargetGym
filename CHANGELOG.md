@@ -142,9 +142,7 @@ The next release is 0.8.0, because these changes break code written for
   now, since it cannot meet the horizon protocol. The glass furnace's protocol
   gives one move per 15 minutes, too slow to answer a 25-minute reversal, so
   its oracle scores about 2 times worse than the old one, though it still beats
-  the expert about 2 to 1. The cement kiln's oracle fails about 3 % of its
-  solves on the env's stiff calcination, so it averages -406 against -110 for
-  the old one, though it beats the expert by at least 11 to 1. The wind
+  the expert about 2 to 1. The wind
   turbine's oracle beats the old one on nine of its ten seeds, and on seed 9
   falls to -0.064 against -0.0071, just ahead of the expert.
 - **`unstable_cstr` is version 3.** Its floor `rho_floor_tracking` is
@@ -216,6 +214,66 @@ The next release is 0.8.0, because these changes break code written for
     replaced by target_cas and target_mach.
   - plane3d_figure8 is about 35 km across its half-width, and its episode is 1000
     steps.
+  - **`cement_kiln` steps calcination exactly, which changes the task.** The 30 s
+    explicit step was far past what RK4 can follow, so a fraction's error grew up to
+    231 times a step behind a clip at 1, the reaction's heat came from RK4's stage
+    rates (about 13 times the carbonate in a hot zone), and discharge free lime ran
+    up to 0.47 of `e_floor` off the model's own equations. Numbers recorded on
+    earlier versions do not carry over. `calcination_step` and `advance` are the new
+    step. `compute_velocity` remains the model's equations, and an integrator run
+    over it alone is no longer the env's step. Over the ten test seeds the kiln's
+    oracle goes from 234 failed solves of 7000 to none, its mean return from -406 to
+    -29, and it beats the expert on every seed, by at least 65 times.
+  - Renamed patrol_bearing_only to patrol_range_bearing, and PlanePatrolBearingOnly
+    to PlanePatrolRangeBearing: the task measures range, so it is not bearings-only.
+    tg.make on the old name raises a KeyError naming the new one.
+  - patrol, patrol_range_bearing and formation: a follower meets the lead's gust a
+    slot distance later, and what its offset leaves unshared is its own draw, so
+    turbulence no longer cancels in the slot error. Each wing has its own rolling
+    gust.
+  - These tasks trip on the aircraft envelope: load factor, EAS, Mach and bank.
+  - min_separation is 40 m, over the wingspan, from 25 m.
+  - The lead's route turns at up to +-0.03 rad/s, from 0.003, about 30 deg of bank.
+  - The patrols' scripted lead is the 3D heading expert on the speed schedule, and
+    every aircraft spawns on that schedule. The formation expert's lead flies it
+    too.
+  - Upgrade note: replace the old task and class names. The `-v4` stamps moved with
+    the task, and old recorded rows carry the new name.
+  - The hold is now the same steps for every controller: each task has a fixed lead
+    before a target change, replacing a window searched per run. `hvac`'s is 18
+    steps. `running_cost` is now `w * c / c_hold`, so a saving below `c_hold` pays.
+    The running term adds about `w` per step on `glass_furnace`, `cement_kiln`,
+    `boiler_drum`, `distillation`, `ph_neutralization` and `compressor_surge`, which
+    compresses `seed_scores` there. New: `reward.excess_cost`, for activity charged
+    past a dead band. `ceiling("reactor")` is per control step, $0.0958.
+    `wind_turbine`'s resolution is 1.7 kW, a class 0.1S meter at 5 MW. `cstr` and
+    `unstable_cstr` floors move to 5e-4 mol/L and `distillation`'s to 4e-4, the
+    analysers' scatter, so tracking costs there fall by 25 and 16 times.
+    `FIXED_SETTLE`: `reactor` 20, `wind_turbine` 48. New:
+    `target_gym.null_policies`, policies that do no real control, for reference
+    rows; `records.load("credibility")`, each task's record. `SPEC_BAND` altitude is
+    +-65 ft, from the RVSM rule, on `plane`, `plane_energy`, `plane_sine` and the 3D
+    tasks. `glass_furnace` has a vendor's figure, marked secondary, and `reactor`'s
+    band is labelled ours until its source is re-opened.
+  - **`first_order`, `cstr`, `four_tank`, `ph_neutralization`, `distillation`,
+    `unstable_cstr`, `compressor_surge`:** the experts are retuned on the new plants
+    by fixed recipes from single-run bump tests, and gains are stored at noise
+    levels 0.5, 1 and 2.
+  - **`distillation`:** the episode doubles to 400 steps, a task change, so results
+    before this do not carry over. The expert runs a tight tray-temperature loop
+    with a ramped setpoint under two composition loops gated on the analysers'
+    updates.
+  - **`compressor_surge`:** the control line is 0.10, with the override at 0.05, and
+    the anti-surge gain is capped at 1.
+  - **`unstable_cstr`:** the inner loop's gains come from the datasheet, and
+    `PNR_LINE` is refit.
+  - The expert guards on `unstable_cstr` and `compressor_surge` report and no longer
+    refuse gains.
+  - patrol, patrol_range_bearing and formation: a follower flies in the lead's wake,
+    a horseshoe vortex with Burnham's core that takes the lead's lift, lies on its
+    past track and sinks. It reaches the follower as lift, side force and rolling
+    moment, and the drag saving of the sweet spot follows from the upwash.
+    wake_strength=0 turns it off.
 
 ### Changed
 
