@@ -193,8 +193,10 @@ the plants of PRs 3 to 7, for the seven process tasks. Each step below is fixed;
 a poor result ships (C9). `scripts/tune_process_experts.py` runs them. Bump tests
 have been looked at to set these rules up: scores have not.
 
-**Owner decisions, 2026-11-06.** R1 to R6 below are accepted. R7 came after them, from
-doubling `distillation`'s episode. A bump test belongs to the recipe, so its length
+**Owner decisions, 2026-11-06.** R1 to R6 below are accepted. So are three readings
+in the recipes below: "near `q2 = 0`" read as `q2 = 0`, the compressor schedule check
+as D3's ladder (0.10, 0.125, 0.15), and `unstable_cstr`'s inner PD from the datasheet.
+R7 came after them, from doubling `distillation`'s episode. A bump test belongs to the recipe, so its length
 should never have followed the task's, and every recipe here read it: `Plant` holds
 one episode before the baseline and keys its noise on the episode's length. That is
 the design reason. It was also chosen with the doubling check's result in hand: stored
