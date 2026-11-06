@@ -20,10 +20,12 @@ section 5.4, and Amendment 3), run by ``target_gym.oracles.controller.Oracle``:
   guard below);
 - a half-cycle's turn is a jump, in what it charges and in its anchor, so no
   plan may cross one: each turn is fixed where the planned signal reverses,
-  once a reference following it has swung past ``cycle_hysteresis`` (class X,
-  from the solve's start). A plan that turns only there meets the env's charge;
-  K8 reports any other's gap. The charge a new half-cycle jumps to at the
-  hysteresis is blended by the logistic at the K5 width (T5, ``data/oracle_widths/
+  once a reference following it has swung past ``cycle_hysteresis``, and each
+  closed swing where the reference runs back past it (class X, from the solve's
+  start, ours). The plan carries the two open turns nearest; a third comes from
+  the reference. A plan that turns only there meets the env's rainflow count; K8
+  reports any other's gap. The charge a new half-cycle jumps to at the hysteresis
+  is blended by the logistic at the K5 width (T5, ``data/oracle_widths/
   battery.json``);
 - limits: the state of charge, cell voltage and temperature, on every visited
   state, elastic at the trip cost per unit (T3); the inverter's draw within 0.999
@@ -36,6 +38,8 @@ The reward is in dollars, so the tie-break's budget is what half a resolution
 costs in one step in dollars (G10). The cold start holds the delivered power.
 """
 
+from typing import NamedTuple
+
 import jax
 import jax.numpy as jnp
 from jax.tree_util import Partial as partial
@@ -43,9 +47,11 @@ from jax.tree_util import Partial as partial
 from target_gym.energy.battery.env import (
     compute_velocity,
     current_for_power,
+    cycle_events,
     cycle_stress,
     degradation_rate,
     dispatch_block,
+    half_cycle,
     inverter_input,
     inverter_output,
     max_deliverable_power,
@@ -57,39 +63,63 @@ from target_gym.oracles.shooting import Hinge, Limit
 from target_gym.reward import trip_cost
 
 
-def half_cycles(p, soc, anchor, peak, signal):
-    """Per step of a plan, ``(turns, heading)``: whether the half-cycle turns as
-    that step leaves its state, and the heading after it. A reference follows the
-    planned ``signal`` through ``half_cycle``'s hysteresis, and a turn it finds
-    goes back to the peak it left, where the charge reversed."""
+class Cycles(NamedTuple):
+    """Per step of a plan, what a reference following the planned signal does to
+    the half-cycle: whether it turns as that step leaves its state, the heading
+    after it, whether it closes a swing there, and then the two open turns that
+    close uncovers, the nearest first."""
+
+    turned: jnp.ndarray
+    heading: jnp.ndarray
+    folded: jnp.ndarray
+    below: jnp.ndarray
+
+
+def half_cycles(p, soc, anchor, peak, turns, count, signal) -> Cycles:
+    """The reference's half-cycles: it follows ``signal`` through ``half_cycle``'s
+    own rainflow count, and a turn it finds goes back to the peak it left, where
+    the charge reversed."""
     per_W = p.delta_t / (p.pack_kWh * 3.6e6)
+    n = signal.size
 
     def walk(c, t):
-        soc, peak, at, heading, first, marks = c
+        soc, anchor, peak, stack, count, at, heading, first, marks, folds, below = c
         soc = jnp.clip(soc - per_W * (signal[t] + p.aux_load), p.soc_min, p.soc_max)
-        extends = (soc - peak) * heading > 0.0
-        turns = ~extends & (jnp.abs(soc - peak) > p.cycle_hysteresis)
-        marks = marks.at[at].add(turns.astype(marks.dtype))
-        first = jnp.where(first == 0.0, turns * jnp.sign(soc - peak), first)
-        heading = jnp.where(turns, jnp.sign(soc - peak), heading)
+        extends, turned, closes = cycle_events(anchor, peak, stack, count, soc, p)
+        fold = closes & (count > 1)
+        marks = marks.at[at].add(turned.astype(marks.dtype))
+        first = jnp.where(first == 0.0, turned * jnp.sign(soc - peak), first)
+        heading = jnp.where(turned, jnp.sign(soc - peak), heading)
         # The last step at the peak: the reference rests there at the window.
-        at = jnp.where(extends | turns | (soc == peak), t + 1, at)
+        at = jnp.where(extends | turned | (soc == peak), t + 1, at)
+        anchor, peak, stack, count, _ = half_cycle(anchor, peak, stack, count, soc, p)
+        folds = folds.at[t].set(fold.astype(folds.dtype))
+        left = jnp.stack([stack[count - 1], stack[count - 2]])
+        below = below.at[t].set(left)
         return (
             soc,
-            jnp.where(extends | turns, soc, peak),
+            anchor,
+            peak,
+            stack,
+            count,
             at,
             heading,
             first,
             marks,
+            folds,
+            below,
         ), 0
 
-    marks = jnp.zeros(signal.size + 1, soc.dtype)
+    zeros = jnp.zeros(n + 1, soc.dtype)
     start = jnp.sign(peak - anchor)
-    carry = (soc, peak, 0, start, 0.0 * soc, marks)
-    (*_, first, marks), _ = jax.lax.scan(walk, carry, jnp.arange(signal.size))
+    carry = (
+        soc, anchor, peak, turns, count, 0, start, 0.0 * soc, zeros,
+        jnp.zeros(n, soc.dtype), jnp.zeros((n, 2), soc.dtype),
+    )  # fmt: skip
+    (*_, first, marks, folds, below), _ = jax.lax.scan(walk, carry, jnp.arange(n))
     before = jnp.where(start == 0.0, -first, start)
     flips = jnp.cumsum(marks[:-1])
-    return marks[:-1], before * (1.0 - 2.0 * jnp.mod(flips, 2.0))
+    return Cycles(marks[:-1], before * (1.0 - 2.0 * jnp.mod(flips, 2.0)), folds, below)
 
 
 def battery_model(env, p) -> TaskModel:
@@ -114,7 +144,7 @@ def battery_model(env, p) -> TaskModel:
         return cycle_stress(depth, p) * step
 
     def step(d, x, u, t):
-        signal, turns, heading = d["task"]
+        signal, cycles = d["task"]
         width = d["widths"][0]
         command = u[0] * p.power_max  # T1
         positions, _ = integrate_dynamics(
@@ -126,11 +156,24 @@ def battery_model(env, p) -> TaskModel:
         V = terminal_voltage(current, soc, v_rc, p)
         power = inverter_output(V * current, p) - p.aux_load
 
-        turned, h = turns[t], heading[t]
-        anchor = x[3] + turned * (x[4] - x[3])
-        peak = x[4] + turned * (x[0] - x[4]) + h * 0.5 * (u[1] + 1.0) * grows
-        spent = (1.0 - turned) * charge(x[4] - x[3], width)
-        life = 0.5 * (charge(peak - anchor, width) - spent)
+        old_anchor, old_peak, last, outer = x[3], x[4], x[5], x[6]
+        turned, h, folded = cycles.turned[t], cycles.heading[t], cycles.folded[t]
+        grown = h * 0.5 * (u[1] + 1.0) * grows
+        stays = 1.0 - turned - folded
+        anchor = stays * old_anchor + turned * old_peak + folded * outer
+        peak = grown + stays * old_peak + turned * x[0] + folded * last
+        now = charge(peak - anchor, width)
+        was = charge(old_peak - old_anchor, width)
+        closing = charge(last - old_anchor, width) - was + now
+        life = 0.5 * (
+            stays * (now - was) + turned * now
+            + folded * (closing - charge(last - outer, width))
+        )  # fmt: skip
+        stack = (
+            stays * jnp.stack([last, outer])
+            + turned * jnp.stack([old_anchor, last])
+            + folded * cycles.below[t]
+        )
 
         calendar = degradation_rate(0.0, T, p)  # a literal current: no abs
         ripple = (degradation_rate(1.0, T, p) - calendar) * current * p.delta_t
@@ -144,22 +187,29 @@ def battery_model(env, p) -> TaskModel:
             (room - drawn) / p.power_max, (room + drawn) / p.power_max,
             h * (peak - soc),
         ])  # fmt: skip
-        guard = (fade + jnp.abs(ripple)) / p.c_hold + 1e-9
-        x1 = jnp.concatenate([positions, jnp.stack([anchor, peak])])
+        guard = (fade - p.life_fade * life + jnp.abs(ripple)) / p.c_hold + 1e-9
+        x1 = jnp.concatenate([positions, jnp.stack([anchor, peak]), stack])
         return x1, dollars * fade, y, power[None], (guard,)
 
+    @jax.jit
     def data(s):
         ts = jnp.arange(n)
         levels = s.dispatch_schedule[dispatch_block(s.time + 1 + ts, p)]
         signal = jnp.clip(
             levels + s.regulation * decay ** (ts + 1.0), -p.power_max, p.power_max
         )
-        return (signal, *half_cycles(p, s.soc, s.soc_anchor, s.soc_peak, signal))
+        cycles = half_cycles(
+            p, s.soc, s.soc_anchor, s.soc_peak, s.soc_turns, s.n_turns, signal
+        )
+        return signal, cycles
 
     price = float(trip_cost(p))
     return TaskModel(
-        nx=5, nu=2, step=step,
-        state_x=lambda s: jnp.stack([s.soc, s.v_rc, s.T_cell, s.soc_anchor, s.soc_peak]),
+        nx=7, nu=2, step=step,
+        state_x=lambda s: jnp.stack([
+            s.soc, s.v_rc, s.T_cell, s.soc_anchor, s.soc_peak,
+            s.soc_turns[s.n_turns - 1], s.soc_turns[s.n_turns - 2],
+        ]),
         data=data,
         hold=lambda s: jnp.stack([
             raw_of(s.power + p.aux_load, -p.power_max, p.power_max),

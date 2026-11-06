@@ -11,6 +11,9 @@ in PHYSICS.md section 3, not from the code:
 * A cycle of depth ``u`` costs ``Phi(u) = 5.24e-4 u^2.03`` of the pack's life, half
   on each half-cycle (Xu et al. 2017, 2018). The life ends at 20 % fade and the
   pack costs $300/kWh.
+* Depth is counted by rainflow (ASTM E1049): a swing that a larger one contains is
+  a closed cycle of its own range, and the larger range runs on through it, so a
+  swing cannot restart a half-cycle. Ranges in the worked examples are by hand.
 * The regulation signal is AR(1): ``r' = phi r + std eps`` with ``phi =
   exp(-dt / tau)``, drawn after the action, so no causal policy beats
   ``E|eps| = std sqrt(2 / pi)``.
@@ -27,6 +30,7 @@ from target_gym.energy.battery.env import (
     compute_next_state,
     compute_reward_terms,
     current_for_power,
+    N_TURNS,
     cycle_stress,
     degradation_rate,
     half_cycle,
@@ -55,14 +59,37 @@ def _step(state, command_W):
     return new
 
 
+def _phi(depth):
+    return 5.24e-4 * depth**2.03
+
+
+def _cycle(anchor, peak, soc):
+    """One step of a half-cycle with nothing on its stack: ``(life used)``."""
+    turns = jnp.zeros(N_TURNS)
+    return half_cycle(anchor, peak, turns, 0, soc, P)[-1]
+
+
 def _follow(soc_path):
     """Life used by moving through ``soc_path``, half-cycle by half-cycle."""
     anchor = peak = soc_path[0]
+    turns, count = jnp.zeros(N_TURNS), 0
     life = 0.0
     for soc in soc_path[1:]:
-        anchor, peak, used = half_cycle(anchor, peak, soc, P)
+        anchor, peak, turns, count, used = half_cycle(
+            anchor, peak, turns, count, soc, P
+        )
         life += float(used)
     return life
+
+
+def _through(*points):
+    """The charge moving in straight lines through ``points``, 1e-3 a step, as a
+    step of about 1.2 MW would, landing on each exactly."""
+    legs = [
+        np.linspace(a, b, int(round(abs(b - a) / 1e-3)) + 1)
+        for a, b in zip(points, points[1:])
+    ]
+    return np.concatenate([legs[0]] + [leg[1:] for leg in legs[1:]])
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +189,59 @@ def test_ripple_inside_the_hysteresis_adds_no_deep_cycle():
     assert _follow(ripple) == pytest.approx(0.5 * 5.24e-4 * depth**2.03, rel=1e-3)
 
 
+@pytest.mark.parametrize(
+    "points, expected",
+    [
+        # One half-cycle of 0.7, straight.
+        ((0.1, 0.8), 0.5 * _phi(0.7)),
+        # A swing of 0.06 inside it closes as a full cycle of its own, and the 0.7
+        # runs on through it, so a swing buys nothing back.
+        ((0.1, 0.45, 0.39, 0.8), 0.5 * _phi(0.7) + _phi(0.06)),
+        # Three swings cost three such cycles, and the outer range stays 0.7.
+        (
+            (0.1, 0.3, 0.24, 0.5, 0.44, 0.65, 0.59, 0.8),
+            0.5 * _phi(0.7) + 3.0 * _phi(0.06),
+        ),
+        # A swing that does not come back is an open half-cycle of its own.
+        ((0.1, 0.45, 0.39), 0.5 * _phi(0.35) + 0.5 * _phi(0.06)),
+        # Coming back to the peak closes it, with no more for the outer range yet.
+        ((0.1, 0.45, 0.39, 0.45), 0.5 * _phi(0.35) + _phi(0.06)),
+        # A larger swing ends the first half-cycle, which it does not sit inside.
+        ((0.5, 0.6, 0.2), 0.5 * _phi(0.1) + 0.5 * _phi(0.4)),
+        # Nested: 0.5 to 0.4 closes inside 0.6 to 0.3, which closes inside 0.1 to 0.8.
+        ((0.1, 0.6, 0.3, 0.5, 0.4, 0.8), 0.5 * _phi(0.7) + _phi(0.3) + _phi(0.1)),
+    ],
+)
+def test_rainflow_counts_each_range_once(points, expected):
+    assert _follow(_through(*points)) == pytest.approx(expected, rel=1e-3)
+
+
+def test_no_swing_makes_a_half_cycle_cheaper_than_its_depth():
+    """The sawtooth a racetrack filter pays for, in reverse order of size too: any
+    split of 0.1 to 0.8 costs at least Phi(0.7) / 2."""
+    straight = 0.5 * _phi(0.7)
+    for mid in (0.2, 0.35, 0.5, 0.65):
+        for swing in (0.051, 0.1, 0.15):
+            path = _through(0.1, mid, mid - swing, 0.8)
+            assert _follow(path) >= straight * (1.0 - 1e-3)
+
+
+def test_the_stack_outlasts_an_episode():
+    """A half-cycle past the 0.05 hysteresis takes at least 61 steps at 1 MW, 8.2e-4
+    of charge a step, so 2880 steps hold at most 47 of them."""
+    per_step = float(P.power_max) * float(P.delta_t) / (float(P.pack_kWh) * 3.6e6)
+    assert int(P.max_steps_in_episode) / (0.05 / per_step) <= N_TURNS
+
+
+def test_a_stack_past_its_size_drops_its_oldest_turn():
+    """Swings each smaller than the last leave every turn open. Past ``N_TURNS`` the
+    oldest goes, the state keeps its shape, and the charge stays finite."""
+    amplitude = 0.8 - 0.6 * np.arange(N_TURNS + 8) / (N_TURNS + 8)
+    centre = 0.5
+    points = [centre + (-1) ** i * a / 2 for i, a in enumerate(amplitude)]
+    assert np.isfinite(_follow(_through(*points)))
+
+
 def test_splitting_a_depth_costs_less_than_going_deep():
     """Convexity: 0.3 down and back twice is cheaper than 0.6 once."""
     shallow = np.concatenate([np.linspace(0.5, 0.2, 30), np.linspace(0.2, 0.5, 30)[1:]])
@@ -180,7 +260,7 @@ def test_past_the_threshold_the_next_mwh_wears_more_than_its_imbalance():
     def wear_per_MWh(depth):
         du = 1e-3
         start = 0.05
-        _, _, before = half_cycle(start, start + depth, start + depth + du, P)
+        before = _cycle(start, start + depth, start + depth + du)
         fade = float(before) * float(P.life_fade)
         return float(P.fade_price) * float(P.pack_kWh) * fade / (du * P.pack_kWh / 1e3)
 
@@ -192,7 +272,7 @@ def test_the_reward_charges_a_step_its_deep_fade():
     calendar does: ``fade_price * pack_kWh * life_fade * life``."""
     state = _rest(soc=0.3)
     state = state.replace(soc_anchor=jnp.float32(0.8), soc_peak=jnp.float32(0.3))
-    _, _, life = half_cycle(0.8, 0.3, 0.29, P)
+    life = _cycle(0.8, 0.3, 0.29)
     fade = float(P.life_fade) * float(life)
     moved = state.replace(soc=jnp.float32(0.29), deep_fade=jnp.float32(fade))
     extra = float(compute_reward_terms(moved, P)["running"]) - float(

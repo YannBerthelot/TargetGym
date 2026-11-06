@@ -809,7 +809,7 @@ seeds, -17.18 against -16.54. At P = 932 it wins 10 of 10, at -12.90.
 | --- | --- | --- | --- | --- | --- | --- |
 | battery | 1 | 80 | 1 | 3023 | 3023 | power to T_cell, seed 107, valid |
 | boiler_drum | 1 | 178 | 1 | 237 | 237 | fuel to pressure, seed 102, valid |
-| cement_kiln | 1 | 20 | 1 | 20 | **1048** | fuel to T_bz, seed 108, 96.4 %, 7.4 |
+| cement_kiln | 1 | 20 | 1 | 20 | deferred, see below | |
 | compressor_surge | 1 | 91 | 1 | 95 | **187** | speed to dp, seed 105, 96.8 %, 5.8 |
 | distillation | none | none | 1 | 165 | **336** | V to xB, seed 106, 98.3 %, 9.97 |
 | first_order | 1 | 62 | 1 | 62 | 62 | u to x, seed 104, valid |
@@ -820,6 +820,14 @@ seeds, -17.18 against -16.54. At P = 932 it wins 10 of 10, at -12.90.
 | wind_turbine | 1 | 290 | 1 | 159 | **266** | pitch to P, seed 109, 97.8 %, 8.7 |
 
 P includes H21's ramp: 5 on the wind, 64 on the compressor, 2 on the reactor.
+
+**The kiln is open, deferred by the owner on 2026-11-06.** H22 gives it P = 1048, set
+by fuel to T_bz on seed 108: tau 5220 s, a fit of 96.4 %, 7.4 bands, on a limit CV, and
+4084 to 4458 s on the other seeds, which reads as the refractory's slow mode, not a
+bad fit. That plans all 700 steps, and is impractical: about 37 h a seed at 170 to
+330 s a solve, 10.7 GB a process, which CI cannot record. Its file stays at #160's
+P = 20 and no ten-seed run was made at 1048. No exception is granted, so the kiln's
+horizon is open, not compliant, until this is settled.
 
 `ph_neutralization` stays non-compliant. `cstr` and `unstable_cstr` have no valid fit
 on their changed plants, under experts PR 9 has yet to retune, so they keep their

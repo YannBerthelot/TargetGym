@@ -1,15 +1,13 @@
 {
-  "M": 176,
-  "N": 872,
-  "P": 1048,
+  "M": 4,
+  "N": 16,
+  "P": 20,
   "P_set_by": {
-    "cv": "T_bz",
-    "mv": "fuel",
-    "seed": 108,
-    "test": 2
+    "cv": "lime",
+    "mv": "speed",
+    "seed": 104
   },
-  "P_steps": 1048,
-  "P_without_quiet_fits": 20,
+  "P_steps": 20,
   "T_c_seconds": 30.0,
   "T_c_set_by": {
     "cv": "lime",
@@ -37,7 +35,6 @@
   "counts": {
     "insignificant": 8,
     "invalid": 30,
-    "quiet": 9,
     "valid": 2
   },
   "cpu": "AMD EPYC 9454 48-Core Processor",
@@ -47,7 +44,7 @@
   "dt": 30.0,
   "episode_samples": 700,
   "episode_steps": 700,
-  "generated": "2026-11-06T12:19:15+00:00",
+  "generated": "2026-11-05T21:51:51+00:00",
   "pairs": [
     {
       "M": null,
@@ -5911,208 +5908,8 @@
       ]
     }
   ],
-  "plans_to_episode_end": true,
-  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 4",
-  "quiet_fits": [
-    {
-      "P": 810,
-      "cv": "T_bz",
-      "fit": {
-        "V1": false,
-        "V2": true,
-        "V3": true,
-        "V4": true,
-        "fit": 96.8735,
-        "k": 339.478,
-        "k_3sigma": 1.9184,
-        "model": "fopdt",
-        "sigma": 0.893783,
-        "snr": 6.44758,
-        "sse": 559.201,
-        "tau": 3986.6,
-        "theta": 200.887
-      },
-      "mv": "fuel",
-      "seed": 100,
-      "test": 0
-    },
-    {
-      "P": 761,
-      "cv": "T_bz",
-      "fit": {
-        "V1": false,
-        "V2": true,
-        "V3": true,
-        "V4": true,
-        "fit": 96.2738,
-        "k": 326.648,
-        "k_3sigma": 2.10407,
-        "model": "fopdt",
-        "sigma": 2.07451,
-        "snr": 5.41048,
-        "sse": 3012.57,
-        "tau": 3727.94,
-        "theta": 221.518
-      },
-      "mv": "fuel",
-      "seed": 100,
-      "test": 1
-    },
-    {
-      "P": 757,
-      "cv": "T_bz",
-      "fit": {
-        "V1": false,
-        "V2": true,
-        "V3": true,
-        "V4": true,
-        "fit": 95.4266,
-        "k": 274.048,
-        "k_3sigma": 2.16917,
-        "model": "fopdt",
-        "sigma": 1.07246,
-        "snr": 4.55324,
-        "sse": 805.115,
-        "tau": 3758.0,
-        "theta": 62.7203
-      },
-      "mv": "fuel",
-      "seed": 101,
-      "test": 0
-    },
-    {
-      "P": 755,
-      "cv": "T_bz",
-      "fit": {
-        "V1": false,
-        "V2": true,
-        "V3": true,
-        "V4": true,
-        "fit": 95.4462,
-        "k": 285.221,
-        "k_3sigma": 1.84683,
-        "model": "fopdt",
-        "sigma": 2.28676,
-        "snr": 4.48036,
-        "sse": 4382.15,
-        "tau": 3727.19,
-        "theta": 131.551
-      },
-      "mv": "fuel",
-      "seed": 101,
-      "test": 1
-    },
-    {
-      "P": 640,
-      "cv": "T_bz",
-      "fit": {
-        "V1": false,
-        "V2": true,
-        "V3": true,
-        "V4": true,
-        "fit": 95.3144,
-        "k": 259.002,
-        "k_3sigma": 1.89305,
-        "model": "fopdt",
-        "sigma": 1.06322,
-        "snr": 4.43425,
-        "sse": 791.367,
-        "tau": 3102.7,
-        "theta": 284.343
-      },
-      "mv": "fuel",
-      "seed": 105,
-      "test": 0
-    },
-    {
-      "P": 822,
-      "cv": "T_bz",
-      "fit": {
-        "V1": false,
-        "V2": true,
-        "V3": true,
-        "V4": true,
-        "fit": 96.0417,
-        "k": 281.599,
-        "k_3sigma": 0.999394,
-        "model": "fopdt",
-        "sigma": 0.116053,
-        "snr": 5.32989,
-        "sse": 18.8557,
-        "tau": 4084.32,
-        "theta": 72.8208
-      },
-      "mv": "fuel",
-      "seed": 106,
-      "test": 2
-    },
-    {
-      "P": 871,
-      "cv": "T_bz",
-      "fit": {
-        "V1": false,
-        "V2": true,
-        "V3": true,
-        "V4": true,
-        "fit": 97.1183,
-        "k": 304.668,
-        "k_3sigma": 0.79294,
-        "model": "fopdt",
-        "sigma": 0.203394,
-        "snr": 6.05638,
-        "sse": 57.9615,
-        "tau": 4343.02,
-        "theta": 45.4429
-      },
-      "mv": "fuel",
-      "seed": 107,
-      "test": 2
-    },
-    {
-      "P": 1048,
-      "cv": "T_bz",
-      "fit": {
-        "V1": false,
-        "V2": true,
-        "V3": true,
-        "V4": true,
-        "fit": 96.3886,
-        "k": 301.578,
-        "k_3sigma": 1.0079,
-        "model": "fopdt",
-        "sigma": 0.0405838,
-        "snr": 7.42039,
-        "sse": 2.30977,
-        "tau": 5220.77,
-        "theta": 52.4871
-      },
-      "mv": "fuel",
-      "seed": 108,
-      "test": 2
-    },
-    {
-      "P": 893,
-      "cv": "T_bz",
-      "fit": {
-        "V1": false,
-        "V2": true,
-        "V3": true,
-        "V4": true,
-        "fit": 95.351,
-        "k": 321.619,
-        "k_3sigma": 1.63998,
-        "model": "fopdt",
-        "sigma": 2.70314,
-        "snr": 4.45268,
-        "sse": 8797.63,
-        "tau": 4458.34,
-        "theta": "< dt"
-      },
-      "mv": "fuel",
-      "seed": 109,
-      "test": 1
-    }
-  ],
+  "plans_to_episode_end": false,
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 3",
   "ramp": 0,
   "retests": 39,
   "status": "compliant",
