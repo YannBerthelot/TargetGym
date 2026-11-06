@@ -357,7 +357,9 @@ measured, `--section reach`).
 live setpoint, and a step on a ramp is scored against where the ramp has reached
 (`test_live_target_follows_the_block_clock`). The scorer reads a ramp as one move, at
 its start (`test_a_compressor_ramp_starts_one_cycle`), so the 100-step fixed settle
-is the ramp itself and the hold opens as the ramp ends.
+is the ramp itself and the hold opens as the ramp ends. The pair settles about 147
+steps after a ramp starts (training seeds 100 to 109), so PR 8's settle should cover
+that.
 
 **Trip and restart.** The plant trips when the soft minimum of Phi over a
 step's substeps falls below the episode's line, 2W (1 + `surge_offset`). The map's
@@ -495,6 +497,24 @@ setpoint rows, which ran on steps. Held at 24 kPa, the setpoint lets the margin-
 run without a trip and cuts G10's cost to a third; over 22 to 26 kPa the
 chaser trips in 3.1 % of episodes. The steps, and their size, are what make
 a policy that ignores the margin trip.
+
+**Ramps and the offset.** The table above ran on steps. Share of 256 episodes with a
+trip on the shipped plant (seeds 1000 to 1255, measured):
+
+| chaser bias | steps, offset on | 5 s ramp | 10 s ramp, as shipped | 10 s ramp, offset off |
+|---|---|---|---|---|
+| 0.20 | 77.7 % | 70.3 % | 69.1 % | 64.5 % |
+| 0.25 | 38.7 % | 25.0 % | 19.9 % | 12.9 % |
+| 0.30 | 12.5 % | 2.7 % | 0.8 % | 0.0 % |
+| recycle shut | 100 % | 100 % | 100 % | 100 % |
+
+Ignoring the margin still trips the plant, but the near-safe end of that family is
+much safer, because a falling setpoint no longer asks the drive for a full-rate cut.
+Bias 0.3 is close to a fixed valve that clears every block, so
+`test_setpoint_chasing_without_the_margin_trips`
+moved to bias 0.25. Ramp length matters little between 5 and 10 s, and the offset adds
+about a third to the trips at 0.20 to 0.25, which is what it is for. Figures elsewhere
+that quote the chaser at 0.3 are the stepped plant's.
 
 **Helmholtz scale.** The `V_p` and `L_c` rows move f_H over 1.56 to
 3.13 Hz and B over 1.27 to 2.54. Across them the recycle-shut policy trips
@@ -944,7 +964,7 @@ is forced pay a running cost no controller can avoid, and recycle below
 | `restart_steps` | 9000 (15 min, ours, provisional) | no source gives a restart time; a trip costs 9000 x 1.131e6 = 1.018e10 (derived, `--section params`, `test_restart_and_failure_cost_are_derived`) |
 | `c_hold` | 62 270 W (62.27 kW, measured) | the NMPC's mean recycle power over its hold, from `scripts/measure_hold.py --envs compressor_surge` (the pair's is 66.1 kW). It replaced a provisional 49.6 kW; the oracle reads `c_hold` through the reward |
 | `running_weight` | 1 (ours, provisional) | one floor-width of tracking error is worth once the hold-phase recycle power |
-| `travel_free` | 0.0025 per step | read: the least a real valve follows, a digital positioner's hysteresis plus dead band, 0.25 % of span (Fisher DVC6200, `docs/proposals/measurement-noise.md`, the same figure as `eval.REVERSAL_DEAD_BAND`). Wear is charged above it. Not a measured hold, since the pair's own valve travels 0.0073 per step in hold (measured, seeds 100 to 109), mostly flow-noise chatter through `kp_surge` |
+| `travel_free` | 0.0025 per step | read: the least a real valve follows, a digital positioner's hysteresis plus dead band, 0.25 % of span (Fisher DVC6200, `docs/proposals/measurement-noise.md`, the same figure as `eval.REVERSAL_DEAD_BAND`). Wear is charged above it. Not a measured hold, since the pair's own valve travels 0.0071 per step in hold (measured, seeds 100 to 109), mostly flow-noise chatter through `kp_surge` |
 | `travel_weight` | 1 (ours, provisional) | twice the free travel in one step is worth one floor-width of tracking error. A full stroke at 0.05 per step costs 19 per step |
 | `precision_floor` | 0.0275 kPa (derived) | the header-pressure transmitter's reference accuracy, 0.055 % of calibrated span (read: Yokogawa EJA530E gauge transmitter, GS 01C31F01-01EN, p.1, capsule A at spans of 20 kPa or more, https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf; Siemens SITRANS P320, catalog FI 01 09/2026, p.1/14, 1 bar cell at a turn-down of 5 or less, https://support.industry.siemens.com/cs/attachments/109765052/sitransp_p320_p420_fi01_en.pdf), times a 0 to 50 kPa calibrated span (ours). It covers linearity, hysteresis and repeatability together, and the Yokogawa sheet states it as a 3-sigma bound, so an error below it is one the instrument cannot tell from a smaller one. Neither sheet gives a finer measuring resolution; the one resolution found, the current output's quantisation (Endress+Hauser Cerabar PMP71B, TI01509P, p.24, https://bdih-download.endress.com/file/11181feb66c9cd03e4256402f1eff641/TI01509PEN_1025-00.pdf), is finer than the repeatability and is not used. The value scales with the span. Version 1's floor and the clamp on `e_floor`, so while the clamp binds it sets the version-2 scale |
 | `rho_floor_tracking` | 1.40e-5 (derived from the measured hold) | (lowest per-seed MPC hold / `e_floor`)^2 = (1.03e-4 / 0.0275)^2, from `scripts/measure_hold.py`; below 1 because the clamp binds |

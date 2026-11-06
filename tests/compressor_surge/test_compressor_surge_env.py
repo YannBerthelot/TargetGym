@@ -962,13 +962,13 @@ def test_full_travel_high_never_trips(env, params):
 def test_setpoint_chasing_without_the_margin_trips(env, params):
     """The hardness claim on the env, 64 seeds: a pressure PI on speed with
     the recycle shut trips in every episode, and the margin-blind chaser at
-    bias 0.3, which uses the recycle for pressure and ignores the margin,
+    bias 0.25, which uses the recycle for pressure and ignores the margin,
     trips in at least one. On 256 other seeds (1000 to 1255) the two trip in
-    100 % and 11.3 % of episodes (measured, scripts/compressor_surge_numbers.py
-    --hardness)."""
+    100 % and 19.9 % of episodes (measured, PHYSICS.md section 6). Ramps took
+    the chaser this test first used, at bias 0.3, from 12.5 % to 0.8 %."""
     keys = jax.vmap(jax.random.PRNGKey)(jnp.arange(64))
     _, shut = _episodes(env, params, keys, "fixed", 0.0)
-    _, chaser = _episodes(env, params, keys, "chaser", 0.3)
+    _, chaser = _episodes(env, params, keys, "chaser", 0.25)
     assert shut.any(axis=1).all()
     assert chaser.any()
 
