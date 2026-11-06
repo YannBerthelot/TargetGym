@@ -713,6 +713,12 @@ EFFECTIVENESS_GAPS = {
 # to demonstrate anything and lost to a constant.
 
 
+#: Experts a plant change left behind. Strict, so PR 9's retune removes the line.
+STALE_EXPERTS = {
+    "cstr": "the cascade's gains predate the 1 min analyser; PR 9 retunes it",
+}
+
+
 @pytest.mark.large
 def test_pid_outperforms_the_best_constant_action(spec, request):
     """The shipped PID must beat every open-loop constant action.
@@ -725,8 +731,8 @@ def test_pid_outperforms_the_best_constant_action(spec, request):
         pytest.skip(f"{spec.name}: {spec.baselines_note}")
     if spec.expert_degraded:
         pytest.xfail(f"{spec.name}: {spec.expert_degraded}")
-    if spec.name in EFFECTIVENESS_GAPS:
-        reason = EFFECTIVENESS_GAPS[spec.name]
+    if spec.name in EFFECTIVENESS_GAPS or spec.name in STALE_EXPERTS:
+        reason = EFFECTIVENESS_GAPS.get(spec.name) or STALE_EXPERTS[spec.name]
         request.applymarker(pytest.mark.xfail(strict=True, reason=reason))
 
     env, eff_params, _ = _effectiveness_env(spec)

@@ -223,6 +223,7 @@ def gate(name: str) -> dict:
 #: The PR that fixes one removes its line.
 KNOWN = {
     "battery": "the plant delivers the command, so an echo of the target wins",
+    "cstr": "the expert was tuned on an instant analyser; PR 9 retunes it",
     "distillation": "the expert was tuned on instant analysers; PR 9 retunes it",
     "hvac": "free gains match the losses, so a heater left off wins",
     "reactor": "no secondary side, so one rod integrator matches the oracle",
