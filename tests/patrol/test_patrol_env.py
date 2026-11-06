@@ -155,6 +155,9 @@ class TestExpert:
             # that exposed the missing term.
             -0.003,
             0.003,
+            # The route's hardest leg since PR 7b.
+            -0.03,
+            0.03,
         ],
     )
     def test_expert_holds_formation(self, turn):

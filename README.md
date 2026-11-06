@@ -220,7 +220,7 @@ can also anchor on the ceiling and gives the numbers.
   <img alt="Each task's oracle hold cost and ceiling relative to its expert, on a log scale" src="https://yannberthelot.github.io/TargetGym/latest/images/results-vs-expert.svg" width="680">
 </picture>
 
-Every environment ships a tuned PID and an MPC. On `patrol_bearing_only`, which
+Every environment ships a tuned PID and an MPC. On `patrol_range_bearing`, which
 withholds the slot error a planner would read, the MPC slot holds `patrol`'s
 oracle reading the true state, labelled a full-state bound.
 

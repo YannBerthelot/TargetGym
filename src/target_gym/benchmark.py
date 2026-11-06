@@ -136,7 +136,7 @@ _OUTPUT_FLOORS: dict[str, tuple[tuple[str, float], ...]] = {
     "plane3d_racetrack": (("e_floor_altitude", 1.0),),
     "plane3d_figure8": (("e_floor_path", 1.0),),  # the distance to the curve
     "patrol": (("e_floor_slot", 1.0),),
-    "patrol_bearing_only": (("e_floor_slot", 1.0),),  # its measured slot range
+    "patrol_range_bearing": (("e_floor_slot", 1.0),),  # its measured slot range
     "formation": (("e_floor_altitude", 1.0), ("e_floor_slot", 1.0)),
     "distillation": (("e_floor_top", 1.0), ("e_floor_bottom", 1.0)),  # yD, xB
     "boiler_drum": (("e_floor_level", 1.0), ("e_floor_pressure", 1.0)),

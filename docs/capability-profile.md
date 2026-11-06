@@ -106,7 +106,7 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
 | `plane3d_racetrack` | moving target | A path. |
 | `plane3d_figure8` | moving target | A climbing and descending path. |
 | `patrol` | moving target | The slot moves with a manoeuvring lead (8, 9). |
-| `patrol_bearing_only` | moving target, partial observability | A bearing-only sensor (46): the lead's heading is not observed. |
+| `patrol_range_bearing` | moving target, partial observability | A range-and-bearing sensor (46): the lead's heading is not observed. |
 | `formation` | multi-agent, moving target | Every aircraft is flown by the policy, on one team cost. |
 
 ## Limits

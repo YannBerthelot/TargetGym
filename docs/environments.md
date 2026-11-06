@@ -16,7 +16,7 @@ whole of what differs between them:
   by `env.tracked_names`.
 - **PID / MPC** say whether a baseline ships. Where one does not, the registry
   records why in `baselines_note` rather than leaving it silent, and the same
-  note qualifies a shipped one that needs it (`patrol_bearing_only`'s MPC is a
+  note qualifies a shipped one that needs it (`patrol_range_bearing`'s MPC is a
   full-state bound).
 - **Physics** links the environment's contract: sourced parameters, published
   validation targets asserted by tests, and quantified known deviations.
@@ -47,10 +47,10 @@ To pick one by what you want to test, see
 | `plane3d_racetrack` | `plane3d_racetrack-v5` | (21,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `plane3d_figure8` | `plane3d_figure8-v5` | (21,) | (3,) | distance to path (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 | `patrol` | `patrol-v4` | (26,) | (3,) | slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
-| `patrol_bearing_only` | `patrol_bearing_only-v4` | (21,) | (3,) | measured range (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
+| `patrol_range_bearing` | `patrol_range_bearing-v4` | (21,) | (3,) | measured range (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 | `formation` | `formation-v3` | (74,) | (9,) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
 
-> `patrol_bearing_only` -- The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity as the filtered rate of its position, with the follower's own motion added back, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
+> `patrol_range_bearing` -- The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity as the filtered rate of its position, with the follower's own motion added back, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a range-and-bearing controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
 
 > `formation` -- The PID flies the lead seat as a formation lead: the 3D heading task's course hold and pitch on height, aimed at the heading the route commands, at a set power, so its wingmen have a steady reference. Each wingman seat flies the patrol's formation hold. The MPC slot is the patrol oracle's design applied to the whole formation: the patrol's lead autopilot in the lead seat and its twin-autopilot law in each wingman seat, with one residual planner over every seat on the team cost.
 

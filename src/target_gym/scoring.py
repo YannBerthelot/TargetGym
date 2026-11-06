@@ -87,7 +87,7 @@ TRACKED_TERMS = {
     "plane3d_racetrack": (_ALTITUDE, _PATH),
     "plane3d_figure8": (_PATH,),
     "patrol": (_SLOT, _HEADING),
-    "patrol_bearing_only": (_SLOT, _HEADING),
+    "patrol_range_bearing": (_SLOT, _HEADING),
     "formation": (
         _ALTITUDE,
         _HEADING,
@@ -154,7 +154,7 @@ SPEC_BAND = {
     "plane3d_circle": ((20.0,), _ALTITUDE_BAND),
     "plane3d_racetrack": ((20.0,), _ALTITUDE_BAND),
     "patrol": ((8.5,), _SLOT_BAND),
-    "patrol_bearing_only": ((8.5,), _SLOT_BAND),
+    "patrol_range_bearing": ((8.5,), _SLOT_BAND),
     "formation": ((20.0, 8.5, 8.5), _ALTITUDE_BAND + "; " + _SLOT_BAND),
     "ph_neutralization": (
         (0.5,),

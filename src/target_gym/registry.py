@@ -60,7 +60,7 @@ DISPLAY_NAMES: dict[str, str] = {
     "plane_energy": "Altitude and airspeed",
     "plane": "Altitude hold",
     "patrol": "Patrol - wingman",
-    "patrol_bearing_only": "Patrol - wingman, bearing-only",
+    "patrol_range_bearing": "Patrol - wingman, range and bearing",
     "unstable_cstr": "Unstable CSTR",
 }
 
@@ -136,7 +136,7 @@ class EnvSpec:
         Set when ``make_pid``/``make_mpc`` are ``None``: a short explanation
         of why, surfaced by the baseline-coverage test so a missing expert is
         a documented gap rather than a silent one. Also set where both ship
-        but one needs saying what it is (``patrol_bearing_only``'s MPC is a
+        but one needs saying what it is (``patrol_range_bearing``'s MPC is a
         full-state bound); the environment pages print it beside the numbers.
     disturbance_fields:
         State fields holding a *zero-mean stochastic disturbance* (gusts, load
@@ -323,10 +323,10 @@ def _patrol():
     return PlanePatrol()
 
 
-def _patrol_bearing_only():
-    from target_gym.patrol.env_jax import PlanePatrolBearingOnly
+def _patrol_range_bearing():
+    from target_gym.patrol.env_jax import PlanePatrolRangeBearing
 
-    return PlanePatrolBearingOnly()
+    return PlanePatrolRangeBearing()
 
 
 def _cstr():
@@ -640,10 +640,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # experts.py, as the 3D aircraft's are.
         oracle_reads=("experts/pid.py",),
         noise_fields=("turbulence_sigma",),
-        # The 3D aircraft it flies, and the heading PID its lead flies on
-        # (physics here, so declared for the version stamp too); the
-        # autopilot and TECS its expert flies under the formation hold (experts
-        # files, so in the expert fingerprint only).
+        # The 3D aircraft it flies; the PID its oracle's twin law flies (physics
+        # here, so declared for the version stamp too); the autopilot and TECS
+        # its lead and its expert fly (experts files, so in the expert
+        # fingerprint only: the lead's values are constants in patrol/env.py).
         fingerprint_sources=(
             "plane/dynamics.py",
             "plane3d/dynamics.py",
@@ -655,16 +655,16 @@ _SPECS: tuple[EnvSpec, ...] = (
         version=4,
     ),
     EnvSpec(
-        name="patrol_bearing_only",
+        name="patrol_range_bearing",
         group="aircraft",
-        env_factory=_patrol_bearing_only,
+        env_factory=_patrol_range_bearing,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
         make_pid=_pid(
-            "make_patrol_bearing_only_pid_controller",
+            "make_patrol_range_bearing_pid_controller",
             module="target_gym.patrol.experts",
         ),
         make_mpc=_mpc(
-            "make_patrol_bearing_only_mpc", module="target_gym.patrol.oracle"
+            "make_patrol_range_bearing_mpc", module="target_gym.patrol.oracle"
         ),
         oracle_reads=("experts/pid.py",),
         baselines_note=(
@@ -677,7 +677,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "with the follower's own motion added back, and its heading from "
             "that track less "
             "the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true "
-            "state, so it is a full-state bound, not a bearing-only "
+            "state, so it is a full-state bound, not a range-and-bearing "
             "controller. On a task defined by what the observation withholds, "
             "its score measures information and control together: what the "
             "hidden lead state is worth plus what a policy leaves on the "
@@ -1050,11 +1050,17 @@ def specs_in_group(group: str) -> Iterator[EnvSpec]:
     return (spec for spec in _SPECS if spec.group == group)
 
 
+#: Names that changed, so an old script is told where its task went.
+RENAMED = {"patrol_bearing_only": "patrol_range_bearing"}
+
+
 def get(name: str) -> EnvSpec:
     """Look up one spec by registry name."""
     try:
         return REGISTRY[name]
     except KeyError:
+        if name in RENAMED:
+            raise KeyError(f"{name!r} is now {RENAMED[name]!r}") from None
         raise KeyError(
             f"Unknown environment {name!r}; registered: {sorted(REGISTRY)}"
         ) from None
