@@ -72,6 +72,22 @@ def _oracle(name, **overrides):
 
 
 @pytest.mark.medium
+def test_the_kiln_solves_seed_zeros_reset():
+    """Seed 0's first solve never succeeded on the explicit step, whose hot
+    cells gave the plan a Hessian of 1e18 (oracle-solver.md, section 17, and
+    the amendment that closes it). With calcination stepped stably it is a
+    plain solve: converged, inside the cap, with no retry."""
+    env, params, oracle = _oracle("cement_kiln")
+    key = episode_keys(jax.random.PRNGKey(0), 1, 700)[0][0]
+    obs, state = env.reset_env(key, params)
+    oracle.step(obs, state)
+    report = oracle.solver_report()
+    assert report["solver_failures"] == 0
+    assert report["solver_capped"] == 0
+    assert report["solver_retries"] == 0
+
+
+@pytest.mark.medium
 @pytest.mark.parametrize(
     "name, load",
     [

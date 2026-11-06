@@ -87,7 +87,8 @@ batch. A new push cancels the last run, so batches are the unit of checking.
 come out when the branch lands: tests run past a failing `records`, the small tier
 uses 2 workers, its timeout is 60 minutes, compiled programs are freed after each
 module, memory and disk are logged, and two examples in `docs/using-the-pids.md` that
-compare with stale records are deselected.
+compare with stale records are deselected. The large tier takes the same
+workers, freeing and logging, with a 120 minute timeout.
 
 | PR | What | Target | Budget (code + tests) |
 |---|---|---|---|

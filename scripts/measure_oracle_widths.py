@@ -78,8 +78,10 @@ GUARDS = {
         "stored_blanket": "glass_furnace/env.py:806, max(m_batch, 0)",
     },
     "cement_kiln": {
-        "plant_guards": "cement_kiln/env.py:311, :361, :364, :394, :395, :407, "
-        ":409, :410, :475, :476; the limits and the speed box keep them off",
+        "plant_guards": "cement_kiln/env.py:313, :363, :366, :392, :416, :444, "
+        ":445, :456, :457, :546, :547, :548, :549; the limits and the speed box "
+        "keep them off, calcination_step keeps alpha a fraction, and lime stays "
+        "inside [0, 1] below the trip",
     },
     "compressor_surge": {
         "characteristic": "compressor_surge/env.py:314, the tangent past "
@@ -262,14 +264,14 @@ def glass_sites(points) -> tuple[dict, list]:
 
 
 def kiln_sites(_points) -> tuple[dict, list]:
-    """The burning zone's soft max in the cold limit (env.py:548): it moves no
+    """The burning zone's soft max in the cold limit (env.py:627): it moves no
     tracked output, so K5 takes the ladder's first rung; K3's shift keeps it
     conservative, so it needs no back-off."""
     p = REGISTRY["cement_kiln"].make_test_params()
     scale = float(p.T_bz_max - p.T_bz_min)
     return {
         "burning_zone": {
-            "site": "cement_kiln/env.py:548, :556", "scale": scale,
+            "site": "cement_kiln/env.py:576, :627", "scale": scale,
             "width": scale / 10.0, "evaluations": 1,
         }
     }, []  # fmt: skip
