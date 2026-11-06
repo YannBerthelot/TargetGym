@@ -215,7 +215,7 @@ divides by the filtered speed, so the power lags the rotor's speed swings.
 **The oracle plans on the shared solver.** Since the oracle rule (2026-11) the
 MPC slot holds the planner of `oracle.py`, run by
 `target_gym.oracles.controller.Oracle`: the episode's reward on the plant with
-the turbulence at its mean, solved once a step over the 159 steps the horizon
+the turbulence at its mean, solved once a step over the 266 steps the horizon
 protocol measured (`data/oracle_horizons/wind_turbine.json`). The imbalance, the
 pitch's travel and the speed above its band are epigraph terms, the rotor speed a
 hard limit inside the trips, and both commands stay within their actuator's reach

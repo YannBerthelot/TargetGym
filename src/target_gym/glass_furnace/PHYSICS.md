@@ -301,21 +301,15 @@ gains score the same (88.8 to 96.9 %, peaks 4.4 to 7.1 K): the misses are
 the firing interruptions at each reversal, which a PI on the crown meets only
 after the fact.
 
-**The figures below predate the fuel slew.** On the limited plant the `NewtonMPC`
-before the shared solver stalled at 8.84 K on seed 2 (strict xfail, PR 9): a planner gets no gradient from
-`actuate` at `command == held` or past the rate limit. With that patched and the
-plan made by rate, it holds 0.29 K.
-
 **The oracle.** It is the shared solver on the plant itself (`oracle.py`):
 all four checker nodes per chamber, the fuel pipeline, the flame's algebraic
-solve and the reversal cycle, with the pull planned on its mean path. Cooper's
-recipe sets one move per 15 minutes (T_c = 30 steps, from the working end's
-fits; the crown's own fits fail the noise test, H16), and the plan runs to the
-episode's end. The move is held for those 15 minutes, as DMC executes it, so
-the oracle cannot answer a single 25-minute reversal, and it scores about 2
-times worse than the `NewtonMPC` that held this slot, which re-solved every
-step, while beating the expert about 2 to 1 (mean of the ten test seeds, -903
-against -451 and -1878).
+solve and the reversal cycle, with the pull and the gas's heating value planned on
+their mean paths. Cooper's recipe sets one move per 14.5 minutes (T_c = 29 steps,
+from the working end's fits; the crown's own fits fail the noise test, H16), and the
+plan runs to the episode's end. Each move is the valve's slew, held for those 14.5
+minutes, so the plan sees through the rate limit that stalled the fuel at 8.84 K. It
+still cannot answer a single 25-minute reversal: on protocol seed 2 it holds 0.44 K,
+against the 0.29 K of a planner that solved every step and the 0.25 K bound.
 
 Before that the oracle was `NewtonMPC` (iterative LQR) on `step_env`, over a
 120-step horizon, and before it a CasADi model of the plant (oracle audit,
