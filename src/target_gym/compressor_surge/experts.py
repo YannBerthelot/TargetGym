@@ -10,19 +10,22 @@ fallback), so this module is in the oracle fingerprint too.
 The pair is the arrangement industrial anti-surge systems use. A pressure PI
 on the drive's speed command tracks the header setpoint. An anti-surge PI on
 the recycle valve holds the compressor's flow-coefficient margin on a control
-line 15 % right of the surge line, with external-reset anti-windup that keeps
-its integrator within 0.05 of the observed valve, and a full-opening override
-below 7.5 % held for 2 s. The only model knowledge it uses is the surge line
-(``surge_flow_per_speed``), which a vendor gives every anti-surge controller.
+line right of the surge line, with external-reset anti-windup that keeps its
+integrator within a band of the observed valve, and a full-opening override
+held open for the valve's stroke. The only model knowledge it uses is the surge
+line (``surge_flow_per_speed``), which a vendor gives every anti-surge
+controller. The stored values come from
+``scripts/tune_process_experts.py`` (PHYSICS.md section 7).
 
-Its factory refuses gains whose linearised closed loop decays too slowly at
-five control-line points, or whose stress battery comes too close to the
-surge line or leaves the valve in a limit cycle (``check_pair_gains``). That
-keeps the tuner's search away from a controller that rings or trips, since
-the return sees the distance to the surge line only once a trip happens.
+``check_pair_gains`` reports gains whose linearised closed loop decays too
+slowly at five control-line points, or whose stress battery comes too close to
+the surge line or leaves the valve in a limit cycle. Its thresholds are ours,
+so it cannot veto a protocol's values (expert-protocols-process.md, D2): the
+factory ships them and the recipe prints it.
 """
 
 import functools
+import math
 from typing import NamedTuple
 
 import jax
@@ -88,14 +91,15 @@ DEFAULT_GAINS: dict = {
     "override_hold": 2.0,
     # External reset band on the anti-surge integrator, in opening (ours).
     "reset_band": 0.05,
+    # Filter on the margin the anti-surge PI reads, in s; the override reads
+    # the margin unfiltered.
+    "Tf_surge": 0.0,
 }
 #: The gains the tuner searches.
 TUNED_GAINS = ("kp_speed", "ki_speed", "kp_surge", "ki_surge")
 #: The gains it holds. Their right value is set by the distance to the surge
 #: line, which the return sees only once a trip happens.
-HELD_GAINS = ("surge_line", "override_line", "override_hold", "reset_band")
-#: The pair's control line, which rendering draws.
-SURGE_CONTROL_LINE = DEFAULT_GAINS["surge_line"]
+HELD_GAINS = ("surge_line", "override_line", "override_hold", "reset_band", "Tf_surge")
 
 
 def surge_margin_from_obs(obs, params: CompressorSurgeParams):
@@ -142,6 +146,8 @@ class PairState(NamedTuple):
     I_x: float
     #: Time the override still holds the valve open (s).
     timer: float
+    #: The filtered margin, NaN until the first reading.
+    margin: float = math.nan
 
 
 def pair_init(obs, xp=np) -> PairState:
@@ -157,6 +163,7 @@ def pair_init(obs, xp=np) -> PairState:
         I_N=obs[4] / 100.0,
         I_x=obs[5] / 100.0,
         timer=xp.zeros_like(obs[0]),
+        margin=xp.full_like(obs[0], math.nan),
     )
 
 
@@ -186,7 +193,11 @@ def pair_step(gains, ps: PairState, obs, params: CompressorSurgeParams, xp=np):
     x_obs = obs[5] / 100.0
     band = gains["reset_band"]
     margin = surge_margin_from_obs(obs, params)
-    es = gains["surge_line"] - margin
+    last = xp.where(xp.isnan(ps.margin), margin, ps.margin)
+    moves = 1.0 - xp.exp(-dt / xp.where(gains["Tf_surge"] > 0, gains["Tf_surge"], 1.0))
+    moves = xp.where(gains["Tf_surge"] > 0, moves, 1.0)
+    filtered = last + moves * (margin - last)
+    es = gains["surge_line"] - filtered
     I_x = xp.clip(ps.I_x, x_obs - band, x_obs + band)
     x_raw = I_x + gains["kp_surge"] * es
     x_held = ((x_raw <= 0.0) & (es < 0.0)) | ((x_raw >= 1.0) & (es > 0.0))
@@ -204,7 +215,7 @@ def pair_step(gains, ps: PairState, obs, params: CompressorSurgeParams, xp=np):
     x_cmd = xp.where(timer > 0.5 * dt, 1.0, xp.clip(x_raw, 0.0, 1.0))
 
     u_raw = raw_from_commands(N_cmd, x_cmd, params, xp)
-    return u_raw, PairState(I_N=I_N, I_x=I_x, timer=timer)
+    return u_raw, PairState(I_N=I_N, I_x=I_x, timer=timer, margin=filtered)
 
 
 def pair_track(
@@ -224,11 +235,13 @@ def pair_track(
     N_applied, x_applied = commands_from_raw(u_raw, params, xp)
     x_obs = obs[5] / 100.0
     band = gains["reset_band"]
-    es = gains["surge_line"] - surge_margin_from_obs(obs, params)
+    margin = surge_margin_from_obs(obs, params)
+    es = gains["surge_line"] - margin
     return PairState(
         I_N=N_applied - gains["kp_speed"] * e,
         I_x=xp.clip(x_applied - gains["kp_surge"] * es, x_obs - band, x_obs + band),
         timer=xp.zeros_like(ps.timer),
+        margin=margin,
     )
 
 
@@ -310,10 +323,8 @@ def load_gains() -> dict:
 
 
 def make_compressor_surge_pid() -> CompressorSurgePair:
-    """Registry factory: the stored gains, refused unless the guard passes."""
-    gains = load_gains()
-    check_pair_gains(gains)
-    return CompressorSurgePair(gains)
+    """Registry factory: the stored gains."""
+    return CompressorSurgePair(load_gains())
 
 
 @struct.dataclass
@@ -328,6 +339,7 @@ class CompressorSurgePIDParams:
     override_line: float
     override_hold: float
     reset_band: float
+    Tf_surge: float
     plant: CompressorSurgeParams
 
 
@@ -338,6 +350,7 @@ class CompressorSurgePIDState:
     I_N: float
     I_x: float
     timer: float
+    margin: float
     started: bool
 
 
@@ -351,20 +364,21 @@ def compressor_surge_pid_step(params, state, obs, xp=jnp):
         I_N=xp.where(state.started, state.I_N, fresh.I_N),
         I_x=xp.where(state.started, state.I_x, fresh.I_x),
         timer=xp.where(state.started, state.timer, fresh.timer),
+        margin=xp.where(state.started, state.margin, fresh.margin),
     )
     u_raw, ps = pair_step(gains, ps, obs, params.plant, xp)
     return u_raw, CompressorSurgePIDState(
-        I_N=ps.I_N, I_x=ps.I_x, timer=ps.timer, started=True
+        I_N=ps.I_N, I_x=ps.I_x, timer=ps.timer, margin=ps.margin, started=True
     )
 
 
 def make_compressor_surge_pid_controller() -> _pid_mod.Controller:
     """``make_compressor_surge_pid`` as a ``Controller``: the same stored
-    gains, the same guard and the same checks on the gain names."""
+    gains and the same checks on the gain names."""
     pair = make_compressor_surge_pid()
     return _pid_mod.Controller(
         CompressorSurgePIDParams(**pair.gains, plant=pair.params),
-        CompressorSurgePIDState(I_N=0.0, I_x=0.0, timer=0.0, started=False),
+        CompressorSurgePIDState(I_N=0.0, I_x=0.0, timer=0.0, margin=0.0, started=False),
         compressor_surge_pid_step,
     )
 
@@ -510,7 +524,8 @@ def _guard_functions(params: CompressorSurgeParams):
             0,
             quiet,
         )
-        ps = PairState(I_N=z[5], I_x=z[6], timer=jnp.zeros_like(z[0]))
+        ps = PairState(I_N=z[5], I_x=z[6], timer=jnp.zeros_like(z[0]), margin=None)
+        ps = ps._replace(margin=jnp.full_like(z[0], jnp.nan))
         u_raw, ps = pair_step(gains, ps, get_obs(state, quiet), quiet, xp=jnp)
         new = compute_next_state(u_raw, state, quiet, jax.random.PRNGKey(0))[0]
         return jnp.stack([new.m_c, new.dp, new.N, new.N_ramp, new.x, ps.I_N, ps.I_x])

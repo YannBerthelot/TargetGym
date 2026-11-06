@@ -185,4 +185,76 @@ either SIMC text; C5 cites it from him and adds the margin argument.
 | D9 | `sp_trim_max` half the interlock gap (67 K, ours) or keep 120 K | Half gap; 120 K has no source either |
 | D10 | Leave `c_hold` and `e_floor` as stamped, report drift only | Yes; moving them re-stamps the env versions |
 
+## 9. The recipes as run on the new plants
+
+Written on 2026-11-06, before any held-out seed ran. It applies sections 1 to 4
+with `expert-protocols-noise.md` and the amendments of `industrial-fixes.md`, on
+the plants of PRs 3 to 7, for the seven process tasks. Each step below is fixed;
+a poor result ships (C9). `scripts/tune_process_experts.py` runs them. Bump tests
+have been looked at to set these rules up: scores have not.
+
+**Shared.**
+
+| # | Choice | Value | Label |
+|---|---|---|---|
+| R1 | Where a test starts | In manual at the rest the seed's last target needs, from the plant's balances, or under a fixed loop where nobody can leave it in manual. No stored gain enters, so a run does not depend on what it replaces (`Plant(controller=...)`) | ours |
+| R2 | Loads in a test | Off, as an engineer waits for a quiet spell: `load_scale` 0 on `cstr` and `four_tank`, a steady feed on `distillation`. The sensors stay on | ours |
+| R3 | Kc,min in N7 | `u_d / NB`, with `u_d` the output move the largest load takes: the noise a loop passes need not fall below that. Our rule, since no source gives a `y_max`. It answers the noise level through `NB` | ours |
+| R4 | N8 on an update | The loop acts if the reading has moved past `NB` from the one it holds, or sits past `NB` from the target, since a target move is a move. Integrates over its own cycle, `wait` updates | derived |
+| R5 | An analyser loop's noise rules | The gate takes noise out, so N5 and N7 do not apply | derived |
+| R6 | Tests a trip cuts | Dropped from the pool, and the count prints | ours |
+
+**`cstr`.** Rest from both balances. Inner: T on the coolant, 0.1 raw grown by N3,
+60 steps, valve. Outer: C_a on the inner loop's setpoint, 0.5 K grown by N3 up to
+what the coolant's room allows through the steady gain, 80 steps, with the inner
+loop closed as run. `u_d` is the coolant and setpoint moves of the load limits at
+the middle target.
+
+**`first_order`.** Rest at the target. N1 to N7, no load.
+
+**`ph_neutralization`.** The buffer stream off, `q2 = 0`, the plant's lower limit
+and the steepest curve there is: "near `q2 = 0`" read as the limit itself. Rest
+from the true curve there; the fit is in the expert's demand units on the nominal
+curve. +0.1 mL/s, 120 steps. `u_d` is the buffer's whole span of the demand at the
+middle target.
+
+**`four_tank`.** Rest from the balances, loads off. Each pump stepped 0.3 V for 2000
+s, gains from the last 200 s, the RGA read from their median, then the decoupler,
+then each loop 0.3 V in its own `w`, 1500 steps. Pumps, so no N5 or N7.
+
+**`distillation`.** A steady feed. The steady gains and the RGA come from the
+model in float64: three pairings. A P loop on the tray, 0.16 kmol/min per K (ours,
+a commissioning gain), holds the column through the tray test, since nobody leaves
+one in manual, and the fit reads the input it recorded. Tray: integrating with lag,
+boilup 0.005 kmol/min grown by N3, 20 min. Then, with the tray's PI closed as run,
+yD on reflux and xB on the tray's setpoint, 600 min on the analyser grid, 5 % of
+reflux's span and a matching setpoint step, no further than keeps a product in its
+target box (0.005 through the steady gains). `u_d` on the tray loop is `F` times
+the feed's 3 sd, from the mass balance. `sp_rate` is section 4's item 6 on the
+tray loop and boilup's room from the published point. `wait` is `Instrument.gate`.
+
+**`unstable_cstr`.** The inner PD is SIMC on the datasheet: slope UA / (rho C V),
+lag the thermowell's plus half the jacket's (half rule), delay the other half, the
+valve and half a step. A closed test of the inner loop was tried: in the 36 s this
+pole allows it read 12 K/min/K at a fit of 60 % for the datasheet's 2.09, because a
+gain and a lag draw one curve there. So the datasheet stands. N5 and N7 leave it
+alone, since a loop that stabilises the plant cannot trade speed for wear (R10 of
+the sourcing keeps a stabilising D). A P loop alone holds this plant at no gain
+tried, so PD settles it. Outer: C_a on the setpoint, inner closed, 0.5 K grown by
+N3 up to the coolant's room over `Kp_T`, 80 steps, then section 4's items 2 to 6.
+Item 6 reads `room x k'`. `check_cascade_gains` sees the thermowell and the valve,
+and prints.
+
+**`compressor_surge`.** Rest from `settled_point` at the levels the schedule ends
+on, the valve and drive held. Speed: +5 % of its span grown by N3, 100 steps, no
+dead band. Valve: 0.1 raw grown by N3 at the points with the valve open, 100 steps,
+1 % dead band, then the 1.0 cap. `u_d` is the demand's 3 sd as a recycle opening.
+**The schedule check,** a closed run of the pair on the training seeds' own
+schedules: a line passes with no trip and a map margin never under its override
+line, half the line. A line that fails climbs D3's ladder, 0.10, 0.125, 0.15, and
+re-runs the recipe; the last rung ships. The battery prints.
+
+**The RGA on `unstable_cstr`.** One MV, so there is no pairing to choose: the check
+is which reading closes the inner loop. Reported in the PR.
+
 **Source check.** PDFs: WebFetch cannot parse them, so I extracted text with pdftotext from the saved files and re-read each cited passage in a second pass. Web pages: fetched twice with different questions. Checked this way: Skogestad and Grimholt 2012 (eq. 5.12, 5.27-5.31, 5.32, 5.35, 5.38-5.39, Tables 5.1 and 5.2); Shinskey's "Characterizers" (Valmet PDF; Automation.com returns 403, so a search summary of it was the second read); Mirsky (10 % remark, open-loop line, gain under 1, stroke times); Jantzen 1998 (design checklist, GE x GU); Astrom and Hagglund 3.5 (T_t bracket, conditional integration, K T_t / T_i offset); McMillan 2012 (twice); Orion BMS (form only, no numbers). Read once: Shinskey and Gerry 2006 (bump test). **Not confirmed on a second fetch:** the Rockwell PlantPAX page (403; Fieldbus parameter names come from vendor-manual snippets in a search); Seborg et al. on setpoint limits and a ramp tied to tau_c + theta (found nowhere; the audit's attribution is unverified); Mirsky page numbers (taken from PHYSICS.md); any varying-gain guidance by Skogestad (absent from the 2003 paper, the 2012 chapter and his 2025 ABB slides).
