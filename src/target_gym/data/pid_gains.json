@@ -340,5 +340,11 @@
     "Kp": 8.785357,
     "Ti": 40.000001,
     "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
+  },
+  "battery": {
+    "Kp": 0.5,
+    "Ki": 0.02,
+    "guard_margin": 0.12,
+    "note": "The literals its factory passed to gain(), stored unchanged. Retuned by protocol in PR 9."
   }
 }

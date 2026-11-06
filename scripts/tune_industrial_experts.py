@@ -2,9 +2,11 @@
 simulator's training seeds.
 
 Run with ``uv run python scripts/tune_industrial_experts.py [--envs ...]
-[--write] [--check]``. Without ``--write`` it prints the step-test models and
-the settings; ``--write`` stores them in ``src/target_gym/data/pid_gains.json``;
-``--check`` scores the stored expert on the held-out seeds against the ceiling.
+[--level 2] [--write] [--check]``. Without ``--write`` it prints the step-test
+models and the settings; ``--write`` stores them in
+``src/target_gym/data/pid_gains.json``, or that level's file (``--level``, the
+sensor noise it tunes on); ``--check`` scores the stored expert on the held-out
+seeds against the ceiling.
 
 * ``boiler_drum``: three-element control, both loops lambda-tuned. A step on
   the feedwater trim (pressure loop in auto) and one on the firing (level loop
@@ -22,8 +24,9 @@ the settings; ``--write`` stores them in ``src/target_gym/data/pid_gains.json``;
   on the training seeds, from the package's ``DEFAULT_GAINS``.
 
 A step test runs from the steady state each training seed (100-109) reaches
-under the shipped expert, and its response is taken against an unstepped run
-on the same noise. The digital loop adds half a sample to the delay (SIMC's
+under the shipped expert, in one run: hold, record a baseline, step
+(docs/proposals/expert-protocols-noise.md, N1). Nobody holds a drum level, so
+that test stays closed. The digital loop adds half a sample to the delay (SIMC's
 half rule). The closed-loop time constant (``lam`` or ``tau_c``) is the one
 tuning choice: ``theta``, ``2 theta`` or ``3 theta``, the looser one only if it
 is more than 1 % cheaper over the training seeds (the rule the process-plant
@@ -51,12 +54,15 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import target_gym.experts.pid as pid_mod  # noqa: E402
 from target_gym import eval as E  # noqa: E402
-from target_gym.provenance import GAINS_PATH  # noqa: E402
+from target_gym.identification import BASELINE, fit  # noqa: E402
+from target_gym.provenance import GAIN_LEVELS, gains_path  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 from target_gym.scoring import ceiling  # noqa: E402
 
 TRAIN = range(100, 110)
 HELD_OUT = range(200, 210)
+#: The sensor noise a run tunes on and the level it writes, set by ``--level``.
+LEVEL = 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -65,29 +71,29 @@ HELD_OUT = range(200, 210)
 
 
 def step_response(name, seed, act, n_settle, n_test, delta):
-    """``act(expert, obs, t, delta) -> raw`` drives the plant; the response of
-    observation channel ``act.channel`` to ``delta`` against ``0``."""
+    """One run (N1): the shipped expert settles, ``act(expert, obs, t, delta) ->
+    raw`` holds through the baseline and then steps. The response is observation
+    channel ``act.channel`` less the baseline's mean."""
     spec = REGISTRY[name]
     env = spec.make_env()
-    p = spec.make_test_params(max_steps_in_episode=n_settle + n_test + 5)
+    n = n_settle + BASELINE + n_test
+    p = spec.make_test_params(sensor_noise_scale=LEVEL, max_steps_in_episode=n + 5)
     step = jax.jit(env.step_env)
-
-    def run(d):
-        expert = spec.make_pid_controller().host()
-        expert.reset()
-        act.reset()
-        key = jax.random.PRNGKey(seed)
-        obs, state = env.reset_env(key, p)
-        ys = []
-        for t in range(n_settle + n_test):
-            a = act(expert, np.asarray(obs), t - n_settle, d)
-            obs, state, *_ = step(jax.random.fold_in(key, t), state, jnp.asarray(a), p)
-            if t >= n_settle:
-                ys.append(float(np.asarray(obs)[act.channel]))
-        return np.array(ys)
-
+    expert = spec.make_pid_controller().host()
+    expert.reset()
+    act.reset()
+    key = jax.random.PRNGKey(seed)
+    obs, state = env.reset_env(key, p)
+    ys = []
+    for t in range(n):
+        d = delta if t >= n_settle + BASELINE else 0.0
+        a = act(expert, np.asarray(obs), t - n_settle, d)
+        obs, state, *_ = step(jax.random.fold_in(key, t), state, jnp.asarray(a), p)
+        if t >= n_settle:
+            ys.append(float(np.asarray(obs)[act.channel]))
+    ys = np.array(ys)
     t = np.arange(1, n_test + 1) * float(p.delta_t)
-    return t, run(delta) - run(0.0), float(p.delta_t)
+    return t, ys[BASELINE:] - ys[:BASELINE].mean(), float(p.delta_t)
 
 
 def fit_integrating(t, dy, du):
@@ -131,7 +137,7 @@ def simc_integrating(k, theta, tau_c):
 def train_cost(name, settings):
     """Mean cost per step over the training seeds with ``settings`` stored."""
     spec = REGISTRY[name]
-    p = spec.make_test_params()
+    p = spec.make_test_params(sensor_noise_scale=LEVEL)
     stored = dict(pid_mod.load_gains())
     pid_mod._gains_cache = {**stored, name: {**stored.get(name, {}), **settings}}
     try:
@@ -185,30 +191,51 @@ class _OpenLoop:
         return a
 
 
+class _Closed:
+    """The expert stays in auto and ``d`` lands on output ``index``, whose
+    moves it records: nobody holds a drum level open loop (N1)."""
+
+    def __init__(self, channel, index):
+        self.channel, self.index = channel, index
+
+    def reset(self):
+        self.sent = []
+
+    def __call__(self, expert, obs, t, d):
+        a = np.array(expert(obs), float)
+        a[self.index] = np.clip(a[self.index] + d, -1.0, 1.0)
+        if t >= 0:
+            self.sent.append(a[self.index])
+        return a
+
+
 def tune_boiler_drum() -> dict:
     from target_gym.boiler_drum.env import BoilerDrumParams
 
     q_max = float(BoilerDrumParams().q_feed_max)
 
-    def feed_trim(a, obs):  # feed = steam + trim, the level loop opened
-        trim = 0.5 * (a[1] + 1.0) * q_max - obs[2]
-        return lambda o, d: 2.0 * np.clip(o[2] + trim + d, 0.0, q_max) / q_max - 1.0
+    def level_step(s, du):
+        test = _Closed(0, 1)
+        t, dy, dt = step_response("boiler_drum", s, test, 150, 120, 2 * du / q_max)
+        u = 0.5 * q_max * np.array(test.sent)  # raw feed to feed units
+        f = fit("integrating_lag", dt, dy, u[BASELINE:] - u[:BASELINE].mean())
+        return f["k"], f["theta"] + f["tau2"], dt
 
     def firing(a, obs):  # the firing held, the pressure loop opened
         u0 = float(a[0])
         return lambda o, d: float(np.clip(u0 + d, -1.0, 1.0))
 
     out = {}
-    for loop, channel, index, hold, du in (
-        ("pressure", 1, 0, firing, 0.02),
-        ("level", 0, 1, feed_trim, 2.0),
-    ):
+    for loop in ("pressure", "level"):
         models = []
         for s in TRAIN:
-            t, dy, dt = step_response(
-                "boiler_drum", s, _OpenLoop(channel, index, hold), 150, 120, du
-            )
-            models.append(fit_integrating(t, dy, du))
+            if loop == "level":
+                *model, dt = level_step(s, 2.0)
+            else:
+                test = _OpenLoop(1, 0, firing)
+                t, dy, dt = step_response("boiler_drum", s, test, 150, 120, 0.02)
+                model = fit_integrating(t, dy, 0.02)
+            models.append(model)
         k, theta = np.median(models, axis=0)
         theta = float(theta) + dt / 2
         print(f"{loop}: k' {k:.4g} per s, theta {theta:.3g} s (with half a sample)")
@@ -357,19 +384,20 @@ TUNERS = {
 
 
 def write(name: str, settings: dict) -> None:
-    stored = json.loads(GAINS_PATH.read_text())
+    path = gains_path(LEVEL)
+    stored = json.loads(path.read_text()) if path.exists() else {}
     stored[name] = settings
-    GAINS_PATH.write_text(json.dumps(stored, indent=2) + "\n")
+    path.write_text(json.dumps(stored, indent=2) + "\n")
     pid_mod._gains_cache = None
-    print(f"wrote {name} to {GAINS_PATH.relative_to(ROOT)}")
+    print(f"wrote {name} to {path.relative_to(ROOT)}")
 
 
 def check(name: str) -> None:
     """The stored expert's hold on the held-out seeds, against the ceiling."""
     spec = REGISTRY[name]
-    p = spec.make_test_params()
+    p = spec.make_test_params(sensor_noise_scale=LEVEL)
     eps = [
-        E.run_episode(spec, p, spec.make_pid_controller().host(), seed=s)
+        E.run_episode(spec, p, spec.make_pid_controller(LEVEL).host(), seed=s)
         for s in HELD_OUT
     ]
     holds = np.array(
@@ -388,11 +416,14 @@ def check(name: str) -> None:
 
 
 def main() -> None:
+    global LEVEL
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--envs", nargs="+", default=list(TUNERS))
+    parser.add_argument("--level", type=float, default=LEVEL, choices=GAIN_LEVELS)
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
+    LEVEL = args.level
     for name in args.envs:
         if name in TUNERS and not (args.check and not args.write):
             settings = TUNERS[name]()
