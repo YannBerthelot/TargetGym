@@ -406,6 +406,10 @@ of no return, and the MPC no closer than 1.519 K (measured, section 7).
 
 ## 6. Jacket lag sensitivity
 
+**Written exception under the credibility check on sourced figures, accepted by the
+owner on 2026-11-06.** `tau_j` of 6 s is synthetic: no published jacket gives it. It
+stays because this section shows what it changes.
+
 **The jacket is synthetic.** `tau_j` is not a hardware figure. 6 s is the longest
 lag at which the cascade held, chosen from the tables below. Real hardware does
 not give it: a mixed jacket has 1/tau_j = F/V_j + UA/(rho_w c_w V_j), so with the

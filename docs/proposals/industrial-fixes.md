@@ -160,6 +160,12 @@ moving a recorded one.
   ExpertBench runs them as reference rows through `run_policy`.
 - **A credibility record per task,** through `records`: each null's result, the
   expert's sourced figure and any accepted exception.
+- **Settle counts that see ramps.** `FIXED_SETTLE["reactor"]` is 1, but a ramp is one
+  move lasting 20 steps, so it needs at least 20. `wind_turbine`'s is 0, from when its
+  target never moved; the expert settles in about 36 steps and the oracle in about 48.
+- **Ceilings from the rebuilt prices.** `ceiling("reactor")` must equal the 0.05 K
+  floor, and returns 0.0032 today. `wind_turbine`'s floor note says 1 kW where the
+  branch's resolution is 1.7 kW, which moves its ceiling from 6.94e-6 to 1.18e-5.
 
 ## Shared plant stages (PR 3)
 
@@ -251,6 +257,11 @@ C2 is landing on `main` as #141, ahead of these plants. Its solver code carries 
 and its six oracle rows re-record after the plant PRs. `distillation`'s expert loses
 the column to the analyser delay from PR 3 until PR 9 retunes it.
 
+Oracles on rate-limited plants plan through `actuate`. Its slope at a held command is
+fixed on the integration branch, but the clip still has none past the limit, so they
+plan by rate. On `glass_furnace` seed 2 both together reach 0.29 K, against 8.84 K as
+shipped. The aircraft surface rate limit and attitude clip have the same gap.
+
 PR 9 also applies `docs/proposals/expert-protocols-noise.md`, which removes the
 twin-run bump test and makes bump tests single runs sized by a measured noise
 band. N8 there must allow for dead time and true sampling. PR 9 reruns the noise
@@ -297,6 +308,17 @@ Chosen by the owner on 2026-11-05.
    demands, and no longer touch the surfaces. The alternatives were a 4 Hz step,
    at four times the steps and oracle cost, or keeping 1 Hz with a label.
 4. **`battery` and `reactor` are both rebuilt.**
+
+Chosen by the owner on 2026-11-06.
+
+5. **The aircraft engine lag is 1.7 s,** which meets 14 CFR 33.73(b)'s 5 s from idle
+   to 95%, in place of 3 s, which takes 8.8 s.
+6. **These stand as working values, labelled ours,** and can still change before the
+   re-record: pH lag 10 s and dead time 10 s, coolant valve lag 2 s and rate 8 %/s,
+   boiler firing lag 20 s, glass fuel slew 1 % per min, aircraft surface rate 30 deg/s
+   and the buffet line.
+7. **`unstable_cstr`'s `tau_j` of 6 s is a written exception under check 2.** It is
+   synthetic, and its `PHYSICS.md` says so.
 
 ## Cost
 

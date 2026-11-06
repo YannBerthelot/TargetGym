@@ -410,7 +410,10 @@ def actuate(env, state, action, params):
     f_s = f_d + params.actuator_stiction * span
     last = state.actuator_held
     gap = command - last
-    wanted = jnp.where(jnp.abs(gap) > f_s, command - jnp.sign(gap) * f_d, last)
+    # With no band the command is the output even at gap 0, where taking ``last``
+    # gives the same value but no slope, and a planner needs the slope.
+    moves = (jnp.abs(gap) > f_s) | (f_s == 0)
+    wanted = jnp.where(moves, command - jnp.sign(gap) * f_d, last)
     wanted = jnp.where((command <= low) | (command >= high), command, wanted)
     dt = _control_step(env, params)
     lag, rate = jnp.asarray(params.actuator_lag), jnp.asarray(params.actuator_rate)

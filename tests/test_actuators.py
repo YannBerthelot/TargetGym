@@ -227,6 +227,21 @@ def test_a_rate_limit_moves_the_output_at_most_its_rate():
     )
 
 
+def test_inside_its_rate_limit_the_output_follows_the_command_at_every_point():
+    """0.2 of room per step, so the output is the command and d applied / d command
+    is 1, standing still included: a plan that holds must see what moving would do."""
+    params = FourTankParams(actuator_rate=0.1)
+    env = FourTank()
+    state = _state(env, params)
+    held = state.actuator_held
+
+    def applied(first):
+        return actuate(env, state, held.at[0].set(first), params)[0][0]
+
+    for move in (0.0, 0.1, -0.1):
+        np.testing.assert_allclose(jax.grad(applied)(held[0] + move), 1.0)
+
+
 def test_a_lag_closes_a_fraction_of_the_gap_each_step():
     """``1 - exp(-dt / tau)`` of the gap: with ``tau = 1 / ln 2`` at 1 s steps
     that is half."""
