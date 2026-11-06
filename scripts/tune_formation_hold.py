@@ -1,6 +1,6 @@
 """Tune the formation hold off the scored seeds, and check it on held-out ones.
 
-The expert of ``patrol``, ``patrol_bearing_only`` and the formation's wingmen
+The expert of ``patrol``, ``patrol_range_bearing`` and the formation's wingmen
 is a formation hold (``patrol.experts.FormationHoldParams``) over the 3D
 tasks' autopilot; the formation's lead flies that autopilot's course hold and
 pitch at a set power (``formation.experts.FormationLeadParams``). Every value
@@ -52,7 +52,7 @@ from target_gym.formation.env import slot_errors  # noqa: E402
 from target_gym.patrol.env import slot_error, wrap_angle  # noqa: E402
 
 TRAIN, HELD_OUT = range(100, 110), range(200, 210)
-PATROL = ("patrol", "patrol_bearing_only")
+PATROL = ("patrol", "patrol_range_bearing")
 SLOT_RMS_M, ALTITUDE_M = 8.5, 2.0
 _ROLLOUTS = {}
 

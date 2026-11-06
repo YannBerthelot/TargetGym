@@ -1,13 +1,13 @@
-# Patrol - wingman, bearing-only
+# Patrol - wingman, range and bearing
 
-<p align="center"><img src="../../videos/patrol_bearing_only/pid_output.gif" width="480px"/></p>
+<p align="center"><img src="../../videos/patrol_range_bearing/pid_output.gif" width="480px"/></p>
 
-The `patrol` task flown from a passive sensor: the wingman sees range, azimuth and elevation to the lead instead of the lead's relative state. The lead's heading, which places the slot, is not measured and has to be inferred from how the bearing changes. The tracked value is the measured range, against the distance at which the slot sits from the lead.
+The `patrol` task flown from a TCAS-style sensor: the wingman sees range, azimuth and elevation to the lead instead of the lead's relative state. The lead's heading, which places the slot, is not measured and has to be inferred from how the bearing changes. The tracked value is the measured range, against the distance at which the slot sits from the lead.
 
 ```python
 import target_gym as tg
 
-env, params = tg.make("patrol_bearing_only")
+env, params = tg.make("patrol_range_bearing")
 ```
 
 | | |
@@ -16,7 +16,7 @@ env, params = tg.make("patrol_bearing_only")
 | Observation space | `Box((21,))` |
 | Tracked variable(s) | measured range (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
-| Cite as | `patrol_bearing_only-v4` |
+| Cite as | `patrol_range_bearing-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 ## Action space
@@ -63,7 +63,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 15 fields.
+`reset` samples the initial condition and the target; state has 14 fields.
 
 ## Episode end
 
@@ -82,11 +82,11 @@ Recorded over 10 seeds of the 200-step episode (see [Baseline results](../baseli
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
-The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity as the filtered rate of its position, with the follower's own motion added back, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
+The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity as the filtered rate of its position, with the follower's own motion added back, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a range-and-bearing controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
 
 ## Arguments
 
-The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("patrol_bearing_only", max_steps_in_episode=...)`.
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("patrol_range_bearing", max_steps_in_episode=...)`.
 
 | parameter | value | unit |
 |---|---|---|
@@ -183,7 +183,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `shear_ref_alt` | 0 | m |
 | `slot_tolerance` | 60 | m |
 | `heading_tolerance` | 0.5236 | rad |
-| `min_separation` | 25 | m |
+| `min_separation` | 40 | m |
 | `max_slot_error` | 1500 | m |
 | `slot_precision_floor` | 3 | m |
 | `e_floor_slot` | 3 | m |

@@ -5,10 +5,10 @@ its own (``provenance.oracle_fingerprint``). The planner problem, by the
 smoothing protocol's inventory (docs/proposals/oracle-smoothing-protocol.md,
 section 5.4), run by ``target_gym.oracles.controller.Oracle``:
 
-- model: the env's own ``compute_velocity`` and integrator, with the raw
-  moves' clips removed and the moves bounded instead (T1), run in float64,
-  which keeps the Arrhenius terms' derivatives finite; the raw-meal feed on
-  its noise-free mean path, updated before the step as the env does;
+- model: the env's own step, ``advance``, with the raw moves' clips removed
+  and the moves bounded instead (T1), run in float64, which keeps the
+  Arrhenius terms' derivatives finite; the raw-meal feed on its noise-free
+  mean path, updated before the step as the env does;
 - objective: the free-lime tracking term as (e / e_floor)^2, exact since
   e_tol = 0 and p = 2, and the running cost max(fuel - c_hold, 0) through
   epigraph rows on every visited state (T2);
@@ -17,11 +17,9 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   burning zone above T_bz_min, its max over the cells a conservative soft max
   (K2, K3; K5's width, in the widths file); and the discharge's free lime
   below lime_max;
-- kept: the env's clip of the two fractions after the step (env.py:477,
-  :478), exact: the hot cells sit on it, where the explicit step amplifies a
-  fraction's error a millionfold and only the clip bounds it, so it is no
-  guard to drop;
-- dropped guards (T4): the speed, gas-march and temperature guards.
+- dropped guards (T4): the speed, gas-march and temperature guards, and the
+  clip of the two fractions after the step: ``calcination_step`` keeps alpha a
+  fraction by construction, and lime stays inside [0, 1] below the trip.
 
 The trip's reset, which ``step_env`` evaluates on every step (the kiln's
 4000-step profile march), drops out of a feasible plan with the trip. The
@@ -30,10 +28,8 @@ cold start holds the fuel and the speed where they are.
 
 import jax.numpy as jnp
 from jax.scipy.special import logsumexp
-from jax.tree_util import Partial as partial
 
-from target_gym.cement_kiln.env import FEED_OU_THETA, compute_velocity
-from target_gym.integration import integrate_dynamics
+from target_gym.cement_kiln.env import FEED_OU_THETA, advance
 from target_gym.oracles.controller import Oracle, TaskModel, raw_of
 from target_gym.oracles.shooting import Hinge, Limit
 from target_gym.reward import trip_cost
@@ -57,13 +53,7 @@ def kiln_model(env, p) -> TaskModel:
         fuel = p.fuel_min + 0.5 * (u[0] + 1.0) * (p.fuel_max - p.fuel_min)  # T1
         rpm = p.rpm_min + 0.5 * (u[1] + 1.0) * (p.rpm_max - p.rpm_min)
         meal = p.raw_meal_nominal + deviation * decay ** (t + 1)
-        x1, _ = integrate_dynamics(
-            positions=x, delta_t=p.delta_t, method=env.integration_method,
-            compute_velocity=partial(
-                compute_velocity, action=(fuel, rpm), raw_meal=meal, params=p
-            ),
-        )  # fmt: skip
-        x1 = x1.at[2 * n :].set(jnp.clip(x1[2 * n :], 0.0, 1.0))
+        x1 = advance(x, (fuel, rpm), meal, p, env.integration_method)
         lime, T_solid = x1[-1], x1[:n]
         cost = ((lime - target) / p.e_floor) ** 2
         y = jnp.concatenate([

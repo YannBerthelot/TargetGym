@@ -224,19 +224,19 @@ before reading any result from it.
 | plane_sine | 480 | 23 | 115 | 0.99792 |
 | plane3d_heading | 300 | 14 | 70 | 0.99667 |
 | plane3d_circle | 300 | 14 | 70 | 0.99667 |
-| plane3d_figure8 | 400 | 38 | 190 | 0.99750 |
+| plane3d_figure8 | 1000 | 38 | 190 | 0.99900 |
 | plane3d_racetrack | 650 | 14 | 70 | 0.99846 |
 | patrol | 200 | 13 | 65 | 0.99500 |
-| patrol_bearing_only | 200 | 12 | 60 | 0.99500 |
+| patrol_range_bearing | 200 | 12 | 60 | 0.99500 |
 | distillation | 200 | 8 | 40 | 0.99500 |
 | glass_furnace | 1600 | 132 | 660 | 0.99938 |
 | cement_kiln | 700 | 58 | 290 | 0.99857 |
-| battery | 360 | 1 | 5 | 0.99722 |
+| battery | 2880 | 1 | 5 | 0.99965 |
 | boiler_drum | 400 | 3 | 15 | 0.99750 |
 | wind_turbine | 400 | 1 | 5 | 0.99750 |
 | four_tank | 1200 | 38 | 190 | 0.99917 |
 | ph_neutralization | 300 | 14 | 70 | 0.99667 |
-| reactor | 864 | 1 | 5 | 0.99884 |
+| reactor | 1440 | 1 | 5 | 0.99931 |
 | unstable_cstr | 1200 | 6.3 to 14.4 | 32 to 72 | 0.99917 |
 | compressor_surge | 1200 | 49.3 | 247 | 0.99917 |
 | formation | 200 | 36 | 180 | 0.99500 |

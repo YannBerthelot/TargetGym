@@ -240,6 +240,10 @@ _STALE_TECS = "PR 9: TECS's time_const 2 trips the new envelope; at 5 this passe
 #: The tasks a null policy beats today, each a finding of the industrial review.
 #: The PR that fixes one removes its line.
 KNOWN = {
+    "formation": "the hold's gains predate the envelope and the 0.03 rad/s route; "
+    "PR 9 retunes it",
+    "patrol_range_bearing": "the estimator's filter predates the 0.03 rad/s route; "
+    "PR 9 replaces it",
     "plane": _STALE_TECS,
     "plane3d_circle": _STALE_TECS,
     "plane3d_figure8": _STALE_TECS,

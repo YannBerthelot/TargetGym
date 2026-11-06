@@ -35,6 +35,25 @@ knob on the same response.
 about 8 s against 25 minutes for the solid, a factor of ~180. Solving it
 algebraically each step removes the stiffest dynamics at no cost in fidelity.
 
+**Calcination is stepped exactly.** At the burning zone its rate constant is
+1.3 /s, 40 times what one explicit 30 s step can follow: RK4's limit is
+k h = 2.785, which calcination passes above 1429 K. So `calcination_step` holds
+the temperatures over the step and solves the residual's linear decay in closed
+form, by exponential Euler (Hochbruck and Ostermann 2010, eq. 1.6), marching
+each zone's mean down the kiln, and the other states take RK4 with that mean
+rate held. So the reaction's heat is the carbonate that reacted. Every weight
+is positive and they sum to at most 1, so alpha needs no clip, and the ODE's
+steady states are the step's own.
+
+Against a 0.25 s explicit run of the same equations, discharge free lime stays
+within a tenth of `e_floor` through fuel and speed moves. The explicit step it
+replaced was 0.47 of `e_floor` off, took the heat of about 13 times the carbonate
+in a hot zone, and multiplied a fraction's error up to 231 times a step, held
+back only by a clip at 1. Free lime stays on RK4: it is stable up to 1898 K,
+above the operating range, and an exact step lost the tracked output's accuracy
+(0.58 of `e_floor`). A rate constant raised by a factor f lowers that limit, to
+1878 K at f = 1.2 and 1855 K at f = 1.5, where `rk4_2` would be needed.
+
 **The flame is distributed**, decaying exponentially over ~15 m from the
 burner. This is not cosmetic: a point source at the burner end dumps the whole
 firing rate into one 3.75 m slice, exhausts the gas immediately, and leaves the
@@ -175,31 +194,27 @@ discharge assay report. The axial profile is hidden.
 
 Expensive to step, honestly so: 64 coupled states with a sequential gas sweep.
 
-**The oracle is the shared solver (`oracle.py`).** The fast reactions are the
-hard part. In the hot cells a reaction's rate times the 30 s step is far past
-what the explicit integrator can follow, so one step amplifies a fraction's
-error about a millionfold, and only the env's clip of the fractions to [0, 1]
-bounds it. Those cells sit on the clip, so the planner's model keeps it,
-exactly, where the inventory had dropped it. That is what the audit's
-"derivatives" came to: in float64 they are finite, and with the clip they are
-usable. (In float32 reverse mode they overflow after about eight steps, which
-is why `GradientMPC` once sat at its initial action and a cross-entropy
-sampler held this slot; it was planning 96 x 32 samples per step.)
+**The oracle is the shared solver (`oracle.py`).** The planner runs the env's
+own step, `advance`, in float64, with the raw moves' clips removed. The
+fractions need no clip there: alpha's step keeps it a fraction, and lime stays
+inside [0, 1] below the trip. (Through the explicit step that this replaced,
+float32 reverse-mode derivatives overflowed after about eight steps, which is
+why `GradientMPC` once sat at its initial action and a cross-entropy sampler
+held this slot; it was planning 96 x 32 samples per step.)
 
 The rest is the rule: the episode reward on the mean feed, a hard limit per
 cell at `T_bz_max`, the burning zone's soft max above `T_bz_min`, and free lime
-below `lime_max`. Cooper's recipe gives P = 22 steps (11 minutes) from the
+below `lime_max`. Cooper's recipe gives P = 20 steps (10 minutes) from the
 speed-to-lime pair, well short of the 25-minute transport delay, because the
 kiln's speed moves discharge lime at once.
 
-**Where it falls short.** About 3 % of the solves fail, for the reason above:
-a plan's free states can sit just off the clip, where the exact Hessian
-reaches 1e18 and no shift gives a usable step. A failed solve applies the
-previous plan's next move, or the held actuators at the start of an episode,
-where there is no previous plan. Over the ten test seeds the oracle averages
--406 against -110 for the `NewtonMPC` that held this slot, and on every seed it
-beats the expert by at least 11 to 1. Integrating calcination stably in the env
-would remove the cause.
+Over the ten test seeds none of the 7000 solves fails or reaches the cap, at
+about 10 iterations each, one warm solve is replaced by a cold retry, and
+nothing trips. On the explicit step 234 of those solves failed. The first
+steps' cost is the plant's reach, not the planner's: on a far target the plan
+goes straight to full fuel and least speed, which moves discharge lime about
+3.1e-3 in a step, so seed 0's target, 8.3e-3 away, costs about 150 before it is
+met.
 
 ---
 

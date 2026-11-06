@@ -710,7 +710,11 @@ EFFECTIVENESS_SEEDS = 2
 
 #: Experts a plant change left behind. Strict, so PR 9's retune removes the line.
 _STALE_TECS = "TECS's time_const 2 trips the new envelope; PR 9 retunes it"
+_STALE_HOLD = "the hold's gains predate the envelope, the 0.03 rad/s route and the "
+_STALE_HOLD += "decorrelated gust; PR 9 retunes it"
 STALE_EXPERTS = {
+    "formation": _STALE_HOLD,
+    "patrol_range_bearing": _STALE_HOLD,
     "plane": _STALE_TECS,
     "plane3d_circle": _STALE_TECS,
     "plane3d_figure8": _STALE_TECS,

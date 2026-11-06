@@ -307,7 +307,7 @@ def _baseline_section(spec, row: dict | None) -> str:
                 )
             lines.append(summary + ".")
         # A note on a task that ships both baselines says what one of them
-        # is (patrol_bearing_only's MPC is a full-state bound), so it stays
+        # is (patrol_range_bearing's MPC is a full-state bound), so it stays
         # beside the numbers it qualifies.
         if spec.baselines_note:
             lines.append(f"\n{spec.baselines_note}")

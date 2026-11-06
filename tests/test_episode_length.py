@@ -39,7 +39,11 @@ SEEDS = (100, 101, 102)
 # PR lengthens the episode to its new expert and removes the mark. Strict, so a
 # task that starts passing says so.
 _STALE_TECS = "TECS's time_const 2 trips the new envelope; PR 9 retunes it"
+_STALE_HOLD = "the hold's gains predate the envelope, the 0.03 rad/s route and the "
+_STALE_HOLD += "decorrelated gust; PR 9 retunes it"
 CYCLE_GAPS: dict[str, str] = {
+    "formation": _STALE_HOLD,
+    "patrol_range_bearing": _STALE_HOLD,
     "plane": _STALE_TECS,
     "plane3d_circle": _STALE_TECS,
     "plane3d_heading": _STALE_TECS,

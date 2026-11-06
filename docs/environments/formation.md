@@ -65,11 +65,11 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 14 fields.
+`reset` samples the initial condition and the target; state has 13 fields.
 
 ## Episode end
 
-**Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The formation trips when any aircraft leaves the altitude band, any two aircraft come within ``min_separation`` (25 m), or any wingman is ``max_slot_error`` (1500 m) from its slot. The whole formation restarts. See [Reward shaping](../reward-shaping.md#failure).
+**Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The formation trips when any aircraft leaves the 3D tasks' envelope (altitude, bank, load factor, EAS, Mach), any two aircraft come within ``min_separation`` (40 m), or any wingman is ``max_slot_error`` (1500 m) from its slot. The whole formation restarts. See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 200 steps.
 
@@ -185,7 +185,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `shear_ref_alt` | 0 | m |
 | `slot_tolerance` | 60 | m |
 | `heading_tolerance` | 0.5236 | rad |
-| `min_separation` | 25 | m |
+| `min_separation` | 40 | m |
 | `max_slot_error` | 1500 | m |
 | `slot_precision_floor` | 3 | m |
 | `e_floor_slot` | 3 | m |
