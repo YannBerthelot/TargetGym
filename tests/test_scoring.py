@@ -700,12 +700,12 @@ def test_every_task_states_a_band_per_tracked_output_or_none(name):
 @pytest.mark.parametrize(
     "name, band",
     [
-        ("plane", [20.0]),  # the autopilot's +-20 m, plane/PHYSICS.md
-        ("plane3d_racetrack", [20.0]),
+        ("plane", [65.0 * 0.3048]),  # +-65 ft, 14 CFR 91 Appendix G
+        ("plane3d_racetrack", [65.0 * 0.3048]),
         ("patrol", [8.5]),  # the slot's 8.5 m, patrol/PHYSICS.md
         ("formation", [20.0, 8.5, 8.5]),  # the lead, then each wingman
         ("ph_neutralization", [0.5]),  # pH 6 to 9, from a target as low as 6.5
-        ("reactor", [1.5 / 1.8]),  # the rods' +-1.5 F, in K
+        ("glass_furnace", [10.0]),  # +-10 C, a vendor's melting-section figure
     ],
 )
 def test_a_published_tolerance_is_the_band(name, band):
@@ -723,6 +723,14 @@ def test_a_published_tolerance_is_the_band(name, band):
 def test_a_task_with_no_published_tolerance_gets_ten_floors(name, band):
     np.testing.assert_allclose(scoring.spec_band(name), band)
     assert name not in scoring.SPEC_BAND
+
+
+def test_a_tolerance_says_how_far_it_was_sourced():
+    """A secondary source says so, and a figure no second pass could re-open is
+    labelled ours: the rods' +-1.5 F, 1.5 / 1.8 K."""
+    assert scoring.SPEC_BAND["glass_furnace"][1].startswith("secondary")
+    assert scoring.SPEC_BAND["reactor"][1].startswith("ours")
+    np.testing.assert_allclose(scoring.spec_band("reactor"), [1.5 / 1.8])
 
 
 def test_off_spec_reads_the_steps_outside_the_band_during_the_hold():

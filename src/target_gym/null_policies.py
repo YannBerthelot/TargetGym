@@ -43,8 +43,8 @@ from target_gym import records, scoring
 from target_gym.benchmark import episodes_of, run_policy, shipped_policy, task_info
 from target_gym.registry import REGISTRY
 
-__all__ = ["EXCEPTIONS", "EXPERT_FIGURES", "HELD_OUT", "Null", "Table", "WINS_TO_FAIL"]
-__all__ += ["credibility_row", "gate", "null_policies", "run_on_seeds"]
+__all__ = ["EXCEPTIONS", "EXPERT_FIGURES", "HELD_OUT", "NO_FIGURE", "Null", "Table"]
+__all__ += ["WINS_TO_FAIL", "credibility_row", "gate", "null_policies", "run_on_seeds"]
 __all__ += ["wins_like_the_expert"]
 
 HELD_OUT = tuple(range(200, 210))
@@ -54,15 +54,22 @@ WINS_TO_FAIL = 6
 ECHO = ("battery",)
 
 _RVSM = {
-    "value": 19.8,
+    "value": 65.0 * 0.3048,
     "unit": "m",
-    "what": "altitude-keeping tolerance, +-65 ft, not a measured hold",
-    "source": "14 CFR 91 Appendix G (RVSM), docs/proposals/scoring-and-experts.md",
+    "what": "automatic altitude control band, +-65 ft, straight and level in still "
+    "air; a requirement, not a measured hold",
+    "source": "14 CFR 91 Appendix G, section 2(c)(2)(i)",
+    "url": "https://www.law.cornell.edu/cfr/text/14/appendix-G_to_part_91",
+    "status": "read, primary",
 }
+
+#: What a credibility row says of a task with no sourced figure. Only the owner
+#: can grant an exception to check 2 (docs/proposals/industrial-fixes.md).
+NO_FIGURE = {"status": "no sourced figure"}
 
 #: Per task, the sourced real-world figure its expert's hold answers to
 #: (check 2), with what it is and where it comes from. A task not listed has
-#: none yet.
+#: none.
 EXPERT_FIGURES = {
     "plane": _RVSM,
     "plane_energy": _RVSM,
@@ -70,11 +77,25 @@ EXPERT_FIGURES = {
     "plane3d_heading": _RVSM,
     "plane3d_circle": _RVSM,
     "plane3d_racetrack": _RVSM,
-    "reactor": {
-        "value": 1.5 / 1.8,
+    "glass_furnace": {
+        "value": 10.0,
         "unit": "K",
-        "what": "rod control dead band, +-1.5 F, not a measured hold",
-        "source": "NRC HRTD 8.1, cited in reactor/PHYSICS.md, not opened here",
+        "what": "melting-section band of a float furnace, 1550 C +-10 C; not the "
+        "crown and not a measured hold",
+        "source": "a temperature-control vendor's blog, naming no original",
+        "url": "https://lorentzzi.com/es/glass-production-precise-temperature-"
+        "control-solutions-from-lorentzzi",
+        "status": "read, secondary",
+    },
+    "cement_kiln": {
+        "value": 0.3,
+        "unit": "percent free lime",
+        "what": "target on free lime variability, sigma under 0.3 %; a target, not "
+        "a measured hold",
+        "source": "a maintenance-software vendor's page, naming no original",
+        "url": "https://oxmaint.com/industries/cement-plant/cement-plant-process-"
+        "control-apc-expert-systems",
+        "status": "read, secondary",
     },
 }
 
@@ -210,6 +231,6 @@ def credibility_row(name: str, results: dict) -> dict:
     return {
         "nulls": {k: {"ratio": r, "win_rate": w} for k, (r, w) in results.items()},
         "null_wins": sorted(k for k, v in results.items() if wins_like_the_expert(*v)),
-        "expert_figure": EXPERT_FIGURES.get(name),
+        "expert_figure": EXPERT_FIGURES.get(name, NO_FIGURE),
         "exception": EXCEPTIONS.get(name),
     }

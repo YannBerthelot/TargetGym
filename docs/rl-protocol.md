@@ -114,10 +114,10 @@ sides, none of them part of the verdict.
   task's tolerance (`scoring.spec_band`). NaN on `hvac`, whose band is one-sided
   at night.
 
-A published tolerance sets the band where the repository cites one: the
-autopilot's 20 m on altitude, the 8.5 m slot, and a pH 6 to 9 permit. The other
-tasks use ten floors. That rule is ours and no plant's figure, and
-`scoring.SPEC_BAND` shows which tasks have a published tolerance.
+A published tolerance sets the band where one was read: 65 ft on altitude from
+the RVSM rule, the 8.5 m slot, and a pH 6 to 9 permit. The other tasks use ten
+floors. That rule is ours and no plant's figure. `scoring.SPEC_BAND` shows which
+tasks have a tolerance and how far each was sourced.
 
 **Reaching new targets: `transient_ratio`**, the expert's cost over the
 settle after each move divided by the policy's, per seed, with its own win

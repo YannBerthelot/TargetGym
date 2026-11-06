@@ -17,6 +17,7 @@ from target_gym import records
 from target_gym.null_policies import (
     EXCEPTIONS,
     EXPERT_FIGURES,
+    NO_FIGURE,
     Null,
     credibility_row,
     gate,
@@ -141,7 +142,25 @@ def test_every_task_has_a_credibility_record_of_its_nulls(name):
     row = records.load_row("credibility", name)
     assert set(row["nulls"]) == {policy.name for policy in null_policies(name)}
     assert row["exception"] == EXCEPTIONS.get(name)
-    assert row["expert_figure"] == EXPERT_FIGURES.get(name)
+    assert row["expert_figure"] == EXPERT_FIGURES.get(name, NO_FIGURE)
+
+
+def test_a_task_with_no_sourced_figure_says_so():
+    """Silence must not read as a pass: check 2 needs a figure or the owner's
+    written exception. The rods' +-1.5 F could not be re-opened, so ``reactor``
+    has none."""
+    for name in ("four_tank", "reactor"):
+        row = credibility_row(name, {})
+        assert row["expert_figure"] == {"status": "no sourced figure"}
+
+
+def test_a_sourced_figure_says_where_it_was_read_and_how():
+    row = credibility_row("plane", {})
+    assert row["expert_figure"]["status"] == "read, primary"
+    assert row["expert_figure"]["value"] == pytest.approx(19.812)
+    assert credibility_row("glass_furnace", {})["expert_figure"]["status"] == (
+        "read, secondary"
+    )
 
 
 def test_the_record_names_each_null_that_wins_and_the_exception():

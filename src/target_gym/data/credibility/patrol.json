@@ -1,9 +1,11 @@
 {
   "cpu": "Apple M4 Pro",
   "exception": null,
-  "expert_figure": null,
+  "expert_figure": {
+    "status": "no sourced figure"
+  },
   "expert_fingerprint": "a3aa2c7cb8ce102d",
-  "generated": "2026-11-06T12:40:25+00:00",
+  "generated": "2026-11-06T12:52:54+00:00",
   "null_wins": [],
   "nulls": {
     "constant 0.0": {

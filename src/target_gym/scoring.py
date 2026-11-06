@@ -137,22 +137,25 @@ CONSUMPTION = {
     "compressor_surge": _recycle_power,
 }
 
+_RVSM = 65.0 * 0.3048  # m
+_RVSM_BAND = "+-65 ft about an acquired altitude, 14 CFR 91 App. G, 2(c)(2)(i)"
 _ALTITUDE_BAND = "the autopilot's +-20 m altitude tolerance, plane/PHYSICS.md"
 _SLOT_BAND = "the expert's 8.5 m slot, patrol/PHYSICS.md"
 
-#: Per environment, the published tolerance on each tracked output, in the
-#: observation's units, with where it comes from. It is a report: it does not
-#: enter the reward. ``None`` is a task with no two-sided band to report.
+#: Per environment, the tolerance on each tracked output, in the observation's
+#: units, with where it comes from: a secondary source says so, and a figure no
+#: second pass could re-open is labelled ours. It is a report: it does not enter
+#: the reward. ``None`` is a task with no two-sided band to report.
 #: Any other task gets ``SPEC_RULE_FLOORS`` floors, which is ours and no plant's
 #: figure, until a sourced number replaces it
 #: (docs/proposals/industrial-fixes.md).
 SPEC_BAND = {
-    "plane": ((20.0,), _ALTITUDE_BAND),
-    "plane_energy": ((20.0,), _ALTITUDE_BAND),
-    "plane_sine": ((20.0,), _ALTITUDE_BAND),
-    "plane3d_heading": ((20.0,), _ALTITUDE_BAND),
-    "plane3d_circle": ((20.0,), _ALTITUDE_BAND),
-    "plane3d_racetrack": ((20.0,), _ALTITUDE_BAND),
+    "plane": ((_RVSM,), _RVSM_BAND),
+    "plane_energy": ((_RVSM,), _RVSM_BAND),
+    "plane_sine": ((_RVSM,), _RVSM_BAND),
+    "plane3d_heading": ((_RVSM,), _RVSM_BAND),
+    "plane3d_circle": ((_RVSM,), _RVSM_BAND),
+    "plane3d_racetrack": ((_RVSM,), _RVSM_BAND),
     "patrol": ((8.5,), _SLOT_BAND),
     "patrol_bearing_only": ((8.5,), _SLOT_BAND),
     "formation": ((20.0, 8.5, 8.5), _ALTITUDE_BAND + "; " + _SLOT_BAND),
@@ -161,9 +164,15 @@ SPEC_BAND = {
         "a pH 6 to 9 permit, from the lowest target of 6.5, "
         "ph_neutralization/PHYSICS.md",
     ),
+    "glass_furnace": (
+        (10.0,),
+        "secondary: a float furnace's melting section, 1550 C +-10 C, a vendor's "
+        "blog naming no original; the crown has no figure of its own",
+    ),
     "reactor": (
         (1.5 / 1.8,),
-        "the rod controller's +-1.5 F dead band, NRC HRTD 8.1, reactor/PHYSICS.md",
+        "ours: the rod controller's +-1.5 F dead band, as reactor/PHYSICS.md cites "
+        "NRC HRTD 8.1, which no second pass could re-open",
     ),
     "hvac": None,  # one-sided at night, and the reward prices comfort itself
 }

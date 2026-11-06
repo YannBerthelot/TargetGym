@@ -2,13 +2,15 @@
   "cpu": "Apple M4 Pro",
   "exception": null,
   "expert_figure": {
-    "source": "14 CFR 91 Appendix G (RVSM), docs/proposals/scoring-and-experts.md",
+    "source": "14 CFR 91 Appendix G, section 2(c)(2)(i)",
+    "status": "read, primary",
     "unit": "m",
-    "value": 19.8,
-    "what": "altitude-keeping tolerance, +-65 ft, not a measured hold"
+    "url": "https://www.law.cornell.edu/cfr/text/14/appendix-G_to_part_91",
+    "value": 19.812,
+    "what": "automatic altitude control band, +-65 ft, straight and level in still air; a requirement, not a measured hold"
   },
   "expert_fingerprint": "cd7f08c03dc75a57",
-  "generated": "2026-11-06T12:41:11+00:00",
+  "generated": "2026-11-06T12:53:27+00:00",
   "null_wins": [
     "constant 0.5",
     "constant 1.0",

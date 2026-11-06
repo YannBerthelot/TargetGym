@@ -290,9 +290,12 @@ Floors, `c_hold`, `rho_floor` and the fixed settle change once, in PR 8, as a
 task change under CONTRIBUTING's rule, and freeze again. Instrument floors stay
 where the instrument did not change.
 
-Where a floor is finer than the instrument scatter, which the noise proposal
-lists for `cstr`, `distillation`, `boiler_drum` and `glass_furnace`, it moves to
-the instrument's figure.
+Where a floor is finer than the instrument scatter, it moves to the instrument's
+figure. That is `cstr`, `unstable_cstr`, which reads the same analyser, and
+`distillation`. This section first named `boiler_drum` and `glass_furnace` too, but
+their floors are coarser than the scatter, 0.05 bar against 0.022 bar and 1 K against
+0.36 K. The noise proposal says they sit near accuracy bands, not that they are too
+fine, so they stay.
 
 ## Deferred past 0.8.0
 

@@ -2,13 +2,10 @@
   "cpu": "Apple M4 Pro",
   "exception": null,
   "expert_figure": {
-    "source": "NRC HRTD 8.1, cited in reactor/PHYSICS.md, not opened here",
-    "unit": "K",
-    "value": 0.8333333333333333,
-    "what": "rod control dead band, +-1.5 F, not a measured hold"
+    "status": "no sourced figure"
   },
   "expert_fingerprint": "a59e8ded573a8421",
-  "generated": "2026-11-06T12:41:33+00:00",
+  "generated": "2026-11-06T12:53:44+00:00",
   "null_wins": [
     "Tavg integrator"
   ],
