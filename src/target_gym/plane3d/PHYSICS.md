@@ -424,10 +424,10 @@ xfail. That is a controller gap, not a physics gap; it is tracked in
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane3d_circle` | 300 | 1 | 5 min | 3 in [-1, 1] | 17 | 30 |
-| `plane3d_figure8` | 400 | 1 | 7 min | 3 in [-1, 1] | 21 | 30 |
-| `plane3d_heading` | 300 | 1 | 5 min | 3 in [-1, 1] | 15 | 30 |
-| `plane3d_racetrack` | 650 | 1 | 11 min | 3 in [-1, 1] | 21 | 30 |
+| `plane3d_circle` | 300 | 1 | 5 min | 3 in [-1, 1] | 17 | 33 |
+| `plane3d_figure8` | 1000 | 1 | 17 min | 3 in [-1, 1] | 21 | 33 |
+| `plane3d_heading` | 300 | 1 | 5 min | 3 in [-1, 1] | 15 | 33 |
+| `plane3d_racetrack` | 650 | 1 | 11 min | 3 in [-1, 1] | 21 | 33 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

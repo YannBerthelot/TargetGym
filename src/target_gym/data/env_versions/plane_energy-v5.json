@@ -1,5 +1,5 @@
 {
-  "fingerprint": "d8252b6e89fd5b6b",
-  "note": "Branch stamp on feat/sensor-noise: sensor lag and per-actuator rates, unused by any task yet. Redone at the 0.8.0 re-record.",
-  "stamped": "2026-11-05T23:42:02+00:00"
+  "fingerprint": "c5adbf46afcff88d",
+  "note": "Branch stamp on feat/sensor-noise: PR 7 moves the aircraft to a fixed inner loop with gust roll, envelope trips, a 3 s engine and a speed schedule; to be redone at the re-record.",
+  "stamped": "2026-11-06T01:28:16+00:00"
 }

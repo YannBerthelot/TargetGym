@@ -319,8 +319,12 @@
       "make_plane3d_mpc"
     ],
     "scored_overrides": {
-      "max_steps_in_episode": 400,
-      "failure_cost": 88888888.8888889,
+      "max_steps_in_episode": 1000,
+      "target_radius_range": [
+        34000.0,
+        36000.0
+      ],
+      "failure_cost": 1088888888.8888888,
       "rho_floor_tracking": 0.1840696011111111,
       "rho_floor": 0.1840696011111111
     },

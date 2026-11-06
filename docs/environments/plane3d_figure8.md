@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/plane3d_figure8/pid_output.gif" width="480px"/></p>
 
-Follow a twisted figure-8 that climbs and descends, with the 3D airliner. The bank has to reverse through wings level at every crossover, and the observation gives the vector to the nearest point of the path and the path's heading there, but not its curvature.
+Follow a twisted figure-8 that climbs and descends, with the 3D airliner. The bank has to reverse through wings level at every crossover, and the observation gives the vector to the nearest point of the path and the path's heading there, but not its curvature. The half-width is 34 to 36 km, so the tips, of radius a / 3, take 25 deg of bank at 230 m/s and less at the speed flown. They used to be 2.7 to 4 km, 46 to 57 deg at cruise. A lap is 183 km, so 1000 steps reach both tips at the slowest speed the schedule flies.
 
 ```python
 import target_gym as tg
@@ -15,7 +15,7 @@ env, params = tg.make("plane3d_figure8")
 | Action space | `Box((3,))`, all actions in [-1, 1] |
 | Observation space | `Box((21,))` |
 | Tracked variable(s) | distance to path (m) |
-| Episode length | 400 steps of 1 s (6.67 min) |
+| Episode length | 1000 steps of 1 s (16.7 min) |
 | Cite as | `plane3d_figure8-v5` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
@@ -26,9 +26,9 @@ actuator range inside the environment.
 
 | # | meaning | min | max |
 |---|---|---|---|
-| 0 | power | -1 | 1 |
-| 1 | stick | -1 | 1 |
-| 2 | aileron | -1 | 1 |
+| 0 | throttle | -1 | 1 |
+| 1 | pitch demand | -1 | 1 |
+| 2 | bank demand | -1 | 1 |
 
 ## Observation space
 
@@ -63,13 +63,13 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 30 fields.
+`reset` samples the initial condition and the target; state has 33 fields.
 
 ## Episode end
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 400 steps.
+**Truncation.** After 1000 steps.
 
 ## Baselines
 
@@ -89,7 +89,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
-| `max_steps_in_episode` | 400 | steps |
+| `max_steps_in_episode` | 1000 | steps |
 | `sensor_noise_scale` | 1 | - |
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
@@ -106,9 +106,18 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `C_z0` | 0.9 | - |
 | `initial_fuel_quantity` | 19088 | kg |
 | `specific_fuel_consumption` | 0.0175 | kg/(kN.s) |
-| `power_response_rate` | 0.05 | 1/s |
-| `stick_response_rate` | 0.9 | 1/s |
-| `aileron_response_rate` | 0.9 | 1/s |
+| `power_response_rate` | 0.333333 | 1/s |
+| `idle_power` | 0.05 | - |
+| `stick_response_rate` | 16.6667 | 1/s |
+| `aileron_response_rate` | 16.6667 | 1/s |
+| `surface_rate_limit` | 0.523599 | rad/s |
+| `load_factor_max` | 2.5 | g |
+| `load_factor_min` | -1 | g |
+| `vmo_eas` | 180.056 | m/s |
+| `mmo` | 0.82 | - |
+| `buffet_mach` | 0.3 | - |
+| `buffet_slope` | 1.4 | - |
+| `bank_limit` | 1.0472 | rad |
 | `aspect_ratio` | 9.48 | - |
 | `aileron_effectiveness` | 0.4 | - |
 | `cl_alpha` | 0.08786 | 1/deg |
@@ -144,7 +153,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `e_floor_heading` | 0.0087 | rad |
 | `e_floor_path` | 3 | m |
 | `tracking_exponent` | 2 | - |
-| `failure_cost` | 8.88889e+07 | reward |
+| `failure_cost` | 1.08889e+09 | reward |
 | `restart_steps` | 3600 | steps |
 | `rho_floor_tracking` | 0.18407 | reward |
 | `rho_floor` | 0.18407 | reward |
@@ -165,6 +174,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `wind_z` | 0 | m/s |
 | `turbulence_sigma` | 1.2 | m/s |
 | `turbulence_theta` | 0.2 | 1/s |
+| `turbulence_scale_length` | 533.4 | m |
+| `gust_roll_rate` | 0 | rad/s |
 | `wind_shear_x` | 0 | 1/s |
 | `wind_shear_y` | 0 | 1/s |
 | `shear_ref_alt` | 0 | m |

@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/plane_energy/pid_output.gif" width="480px"/></p>
 
-Walk a ladder of eight altitude levels while holding a commanded airspeed, with the same airliner as `plane`. Scoring airspeed as well as altitude removes the spare degree of freedom two actuators would have on one objective, so throttle and elevator have to share the work.
+Walk a ladder of eight altitude levels while holding a commanded airspeed, with the same airliner as `plane`. Scoring airspeed as well as altitude removes the spare degree of freedom two actuators would have on one objective, so throttle and pitch have to share the work. The commanded airspeed is a schedule, below.
 
 ```python
 import target_gym as tg
@@ -26,8 +26,8 @@ actuator range inside the environment.
 
 | # | meaning | min | max |
 |---|---|---|---|
-| 0 | power | -1 | 1 |
-| 1 | stick | -1 | 1 |
+| 0 | throttle | -1 | 1 |
+| 1 | pitch demand | -1 | 1 |
 
 ## Observation space
 
@@ -62,11 +62,11 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 20 fields.
+`reset` samples the initial condition and the target; state has 22 fields.
 
 ## Episode end
 
-**Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The aircraft trips when its altitude leaves ``[min_alt, max_alt]``. See [Reward shaping](../reward-shaping.md#failure).
+**Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The aircraft trips when its altitude leaves ``[min_alt, max_alt]`` or it leaves the envelope (``plane.dynamics.outside_envelope``). See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 1600 steps.
 
@@ -118,8 +118,16 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `k_shock_stall` | 4 | - |
 | `shock_stall_floor` | 0.25 | - |
 | `precision_floor` | 1 | m |
-| `power_response_rate` | 0.05 | 1/s |
-| `stick_response_rate` | 0.9 | 1/s |
+| `power_response_rate` | 0.333333 | 1/s |
+| `idle_power` | 0.05 | - |
+| `stick_response_rate` | 16.6667 | 1/s |
+| `surface_rate_limit` | 0.523599 | rad/s |
+| `load_factor_max` | 2.5 | g |
+| `load_factor_min` | -1 | g |
+| `vmo_eas` | 180.056 | m/s |
+| `mmo` | 0.82 | - |
+| `buffet_mach` | 0.3 | - |
+| `buffet_slope` | 1.4 | - |
 | `k_drag` | 5 | - |
 | `I` | 9000000 | kg.m^2 |
 | `moment_arm_stabilizer` | 15 | m |
@@ -139,7 +147,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `min_alt` | 0 | m |
 | `max_alt` | 12191.4 | m |
 | `speed_weight` | 0.5 | - |
-| `target_speed` | 230 | m/s |
+| `target_cas` | 149.189 | m/s |
+| `target_mach` | 0.78 | - |
 | `speed_precision_floor` | 0.5 | m/s |
 | `speed_envelope` | 60 | m/s |
 | `target_pattern` | 1 | - |
