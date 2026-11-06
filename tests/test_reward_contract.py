@@ -178,13 +178,20 @@ def test_reward_version_1_is_still_the_shipped_reward(spec):
 @pytest.mark.parametrize(
     "name",
     [
-        "first_order",
+        pytest.param(
+            "first_order",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="recorded on the gains PR 9 replaced; needs a new v1 baseline",
+            ),
+        ),
         pytest.param(
             "cstr",
             marks=pytest.mark.xfail(
                 strict=True,
                 reason="recorded on the plant before the analyser, loads and "
-                "narrower band; needs PR 9's gains and a new v1 baseline",
+                "narrower band, and on the gains PR 9 replaced; needs a new v1 "
+                "baseline",
             ),
         ),
     ],

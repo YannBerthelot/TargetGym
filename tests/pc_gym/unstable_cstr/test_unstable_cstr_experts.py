@@ -198,13 +198,22 @@ def test_guard_refuses_unstable_and_marginal_gains(monkeypatch):
     pins the rates themselves."""
     assert closed_loop_rates(PLAIN_6S)[0] > 0.0
     assert closed_loop_rates(MARGINAL_6S)[0] > 0.0
-    assert np.all(closed_loop_rates(SLOW_OUTER) <= -GUARD_MIN_DECAY)
-    for gains in (PLAIN_6S, MARGINAL_6S, {**SLOW_OUTER, "sp_above": 0.5}):
+    # A slow outer loop decays, but too slowly for GUARD_MIN_DECAY.
+    assert np.all(closed_loop_rates(SLOW_OUTER) < 0.0)
+    assert setpoint_clip_margins({**DEFAULT_GAINS, "sp_above": 0.5}).min() <= 0.0
+    for gains in (PLAIN_6S, MARGINAL_6S, SLOW_OUTER):
         with pytest.raises(UnstableCascadeGains):
             check_cascade_gains(gains)
 
     with enable_x64():
-        rates = [closed_loop_rates(load_gains(), Ti_dev=d) for d in (-6.0, 0.0, 6.0)]
+        # A free setpoint: the shipped window clips the equilibrium at -6 K.
+        free = {
+            **SLOW_OUTER,
+            "sp_below": 50.0,
+            "sp_above": 50.0,
+            "sp_line_margin": -50.0,
+        }
+        rates = [closed_loop_rates(free, Ti_dev=d) for d in (-6.0, 0.0, 6.0)]
     np.testing.assert_allclose(rates[0], rates[1], rtol=0.0, atol=1e-6)
     np.testing.assert_allclose(rates[2], rates[1], rtol=0.0, atol=1e-6)
 
