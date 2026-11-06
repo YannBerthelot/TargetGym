@@ -233,13 +233,14 @@ class EnvSpec:
             raise NotImplementedError(self.baselines_note or "no PID ships")
         from target_gym.provenance import level_gains
 
+        make: Any = self.make_pid  # ``_pid`` hangs ``controller`` on the function
         stored = level_gains(self, sensor_noise_scale)
         if stored is None:
-            return self.make_pid.controller()
+            return make.controller()
         from target_gym.experts.pid import gains_from
 
         with gains_from(stored):
-            return self.make_pid.controller()
+            return make.controller()
 
     @property
     def has_mpc(self) -> bool:

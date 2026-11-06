@@ -1,5 +1,5 @@
 {
-  "fingerprint": "7246d2426111123e",
-  "note": "Branch stamp on feat/sensor-noise: sensor lag and per-actuator rates, unused by any task yet. Redone at the 0.8.0 re-record.",
-  "stamped": "2026-11-06T00:05:54+00:00"
+  "fingerprint": "a3836122b1ee37e4",
+  "note": "Branch stamp on feat/sensor-noise, redone at the 0.8.0 re-record. Moved because experts/pid.py gained gains_from and gain() now raises on a missing key: every gain the patrol environment reads is stored and unchanged, so its behaviour cannot have moved.",
+  "stamped": "2026-11-06T00:36:13+00:00"
 }
