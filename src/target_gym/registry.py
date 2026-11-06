@@ -820,11 +820,11 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_glass_furnace_mpc", module="target_gym.glass_furnace.oracle"
         ),
         tuned_gains_key="glass_furnace",
-        disturbance_fields=("m_pull_disturbance",),
-        # The pull disturbance's AR(1) innovation, zeroed for the oracle, which
-        # rolls the simulator and so plans the pull's conditional mean from
+        disturbance_fields=("m_pull_disturbance", "lhv_deviation"),
+        # The AR(1) innovations of the pull and the gas, zeroed for the oracle,
+        # which rolls the simulator and so plans their conditional means from
         # the state.
-        noise_fields=("m_pull_noise_std",),
+        noise_fields=("m_pull_noise_std", "lhv_noise_std"),
         version=3,
     ),
     EnvSpec(

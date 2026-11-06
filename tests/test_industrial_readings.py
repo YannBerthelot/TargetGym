@@ -52,7 +52,7 @@ SCATTER = {
         0: 0.023,
         1: 0.023,
         2: 100.0 * 27.0 / 7200.0,  # Q_heat_max
-        3: 1.0 / 350.0,  # 1 W/m2 of solar_peak
+        3: 1.0 / 175.0,  # 1 W/m2 of solar_peak
     },
     "boiler_drum": {0: 5e-4, 1: 0.022, 2: 0.047},
     "cement_kiln": {1: 1.6, 2: 0.33, 3: 1.2, 4: 0.13},
@@ -314,7 +314,7 @@ def test_glass_furnace_measured_reward_is_the_cost_of_the_reading_received():
         obs, state, reward, _, info = env.step_env(
             jax.random.fold_in(key, t), state, jnp.zeros(1), params
         )
-        crown, _, fuel_pct, _, target = np.asarray(obs, np.float64)
+        crown, _, fuel_pct, _, target, _ = np.asarray(obs, np.float64)
         running = max(fuel_pct * params.fuel_max / 100.0 - params.c_hold, 0.0)
         running *= params.running_weight / params.c_hold
         expected = (target - crown) ** 2 + running

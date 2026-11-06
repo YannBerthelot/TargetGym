@@ -636,14 +636,16 @@
     "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
-      "m_pull_disturbance"
+      "m_pull_disturbance",
+      "lhv_deviation"
     ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
     "noise_fields": [
-      "m_pull_noise_std"
+      "m_pull_noise_std",
+      "lhv_noise_std"
     ]
   },
   {

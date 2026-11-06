@@ -237,7 +237,6 @@ def gate(name: str) -> dict:
 KNOWN = {
     "cstr": "the expert was tuned on an instant analyser; PR 9 retunes it",
     "distillation": "the expert was tuned on instant analysers; PR 9 retunes it",
-    "hvac": "free gains match the losses, so a heater left off wins",
     "ph_neutralization": "the expert's gains predate the probe, so it cycles; PR 9 "
     "retunes them",
     "reactor": "PR 9: an integrator on Tavg beats the rod program's dead band",
