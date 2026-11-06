@@ -566,13 +566,18 @@ class Plane3DFigureEight(_Airplane3DBase):
         # The scored configuration: the path term alone, its floor the 3 m
         # GPS resolution. The oracle holds below it, and rho is its lowest
         # per-seed hold (1.2871 m; `scripts/measure_hold.py`) in floor units.
+        # The tips have radius a / 3, so at 25 deg of bank and 230 m/s a is
+        # 34.7 km. A lap is 5.244 a, 183 km, so 1000 steps reach both tips at
+        # the slowest speed the schedule flies and nearly close the lap. The
+        # failure cost is twice the path's size, as it was at the old 10 km.
         rho = (1.2871 / 3.0) ** 2
         return PlaneParams3D(
-            max_steps_in_episode=400,
+            max_steps_in_episode=1000,
+            target_radius_range=(34_000.0, 36_000.0),
             e_floor_path=3.0,
             rho_floor_tracking=rho,
             rho_floor=rho,
-            failure_cost=2.0 * (20000.0 / 3.0) ** 2,
+            failure_cost=2.0 * (70000.0 / 3.0) ** 2,
         )
 
     tracked_names: tuple = ("distance to path (m)",)

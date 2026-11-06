@@ -646,3 +646,68 @@ class TestRacetrackGuidance:
             left = np.array([-np.sin(local), np.cos(local)])
             cross, _ = self._at(state, *(pts[i] + 50.0 * left))
             assert cross == pytest.approx(50.0, abs=1.0), (i, cross)
+
+
+# ─── The figure-8's size (docs/proposals/industrial-fixes.md, PR 7) ─────
+#
+# Contract: the lemniscate's tips have radius a / 3, and the aircraft flies them at
+# 25 deg of bank at the speed it flies, with a about 35 km at 230 m/s. By hand,
+# tan 25 deg = 0.4663, so R = 230^2 / (9.81 * 0.4663) = 11.56 km and a = 34.7 km.
+
+
+def _figure8_radii():
+    from target_gym.plane3d.env_jax import Plane3DFigureEight
+
+    env = Plane3DFigureEight()
+    params = env.default_params
+    keys = jax.random.split(jax.random.PRNGKey(0), 64)
+    reset = jax.vmap(lambda k: env.reset_env(k, params)[1])
+    return np.asarray(reset(keys).target_radius), params
+
+
+def test_the_figure8_is_about_35_km_across_its_half_width():
+    radii, _ = _figure8_radii()
+    assert 33_000.0 < radii.min() and radii.max() < 37_000.0
+
+
+def test_the_figure8_tips_ask_for_no_more_than_25_degrees_at_the_flown_speed():
+    from target_gym.plane.dynamics import scheduled_airspeed
+
+    radii, params = _figure8_radii()
+    # The fastest the schedule flies at the top of the altitude band.
+    top = params.target_altitude_range[1] + params.figure8_altitude_amplitude
+    speed = float(scheduled_airspeed(top, 290.0 * 1852.0 / 3600.0, 0.78))
+    bank = np.degrees(np.arctan(speed**2 / (9.81 * radii.min() / 3.0)))
+    assert bank <= 25.0
+
+
+def test_the_figure8_episode_reaches_both_tips():
+    """The far tip is half a lap away, 2.622 a, and the slowest the schedule
+    flies is 171 m/s at 3000 m, so 36 km takes 552 s."""
+    radii, params = _figure8_radii()
+    assert params.max_steps_in_episode * params.delta_t >= 2.622 * radii.max() / 171.0
+
+
+def test_the_figure8_curve_is_read_to_under_a_metre_on_its_tips():
+    """Half way between two samples at a tip, the chord misses the curve by its
+    sagitta, s^2 / 8R. 800 samples give s = a 2 pi / 800 = 275 m at a = 35 km, and
+    R = a / 3, so 0.81 m. It must stay under the 3 m floor by this much, or the
+    reward reads the sampling (check 11 of the model review)."""
+    from target_gym.plane3d.env import nearest_point_on_twisted_lemniscate
+    from target_gym.plane3d.env_jax import Plane3DFigureEight
+
+    env = Plane3DFigureEight()
+    params = env.default_params.replace(sensor_noise_scale=0.0)
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    a = 35_000.0
+    tau = np.pi * 2.0 / 800.0 / 2.0
+    denom = 1.0 + np.sin(tau) ** 2
+    state = state.replace(
+        target_radius=jnp.float32(a),
+        target_heading=jnp.float32(0.0),
+        x=jnp.float32(a * np.cos(tau) / denom),
+        y=jnp.float32(a * np.sin(tau) * np.cos(tau) / denom),
+        z=jnp.float32(float(state.target_altitude) + 200.0 * np.sin(tau)),
+    )
+    *_, dist, _ = nearest_point_on_twisted_lemniscate(state, params)
+    assert float(dist) < 1.0

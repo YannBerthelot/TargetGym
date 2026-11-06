@@ -639,7 +639,8 @@ def compute_reward_circle(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     )
 
 
-_N_CURVE_SAMPLES = 400
+#: Fine enough to leave a sagitta under 1 m at the 35 km tips.
+_N_CURVE_SAMPLES = 800
 
 # Straight-leg half-length of the holding pattern, in turn radii. A standard
 # civil hold is a one-minute leg, which at these speeds and bank limits is
@@ -686,7 +687,7 @@ def nearest_point_on_twisted_lemniscate(state: PlaneState3D, params: PlaneParams
     idx = jnp.argmin(dists_sq)
 
     # Sub-sample refinement.  The coarse argmin is quantised by the sample
-    # spacing (~100 m for a 44 km lemniscate at 400 samples), so an aircraft
+    # spacing (~230 m for a 35 km lemniscate at 800 samples), so an aircraft
     # flying *exactly* along the commanded curve is reported up to half a
     # spacing off it -- an order of magnitude more than the tracking error the
     # reward is meant to resolve, which floors how precisely any controller can
