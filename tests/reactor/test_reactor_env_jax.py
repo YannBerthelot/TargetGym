@@ -89,13 +89,13 @@ def test_the_load_wobbles_inside_its_day():
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
 
-    # Well before any ramp: the day says 1, and the wobble can only go below it.
+    # Well before any ramp: the day says 1, and the wobble moves about it.
     targets = [float(state.target_n)]
     _jstep = jax.jit(env.step_env)
     for _ in range(30):
         _, state, _, _, _ = _jstep(key, state, jnp.array([0.0]), params)
         targets.append(float(state.target_n))
-    assert max(targets) <= 1.0
+    assert max(targets) < 1.05
     assert min(targets) > 0.95
     assert max(targets) - min(targets) > 1e-4
 

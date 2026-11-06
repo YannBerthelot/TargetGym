@@ -193,7 +193,8 @@ class ReactorParams(EnvParams):
     load_ramp_rate: float = 0.05 / 60.0  # 1/s
     ramp_down_range: Tuple[float, float] = (1800.0, 7200.0)  # s
     hold_range: Tuple[float, float] = (3.0 * 3600.0, 8.0 * 3600.0)  # s
-    # The wobble is an OU process on the load: 5 min correlation, 0.5 % sd.
+    # The wobble is an OU process on the load: 5 min correlation, 0.5 % sd, two-sided
+    # at full load too, so the scorer's median step stays the wobble's.
     demand_theta: float = 1.0 / 300.0
     demand_sigma: float = 4.08e-4
 
@@ -225,9 +226,10 @@ class ReactorParams(EnvParams):
     # Tracking: Tavg against its program. Off program, steam conditions cost
     # output: ``imbalance_multiple`` is 1.25 x spot x 0.23 %/K, the Carnot slope at
     # 547 K steam and 305 K condenser, so $100/MWh on 0.23 % of 1 GWe per K is
-    # $230/h per K, linear (p = 1). Rod wear: the steps the rods actually moved at
-    # ``rod_step_price``. A trip is charged the restart time at twice the dearest
-    # surviving step.
+    # $230/h per K, linear (p = 1): $1.917 per K over a 30 s step, and
+    # ``rho_floor_tracking`` over a step at the floor. Rod wear: the steps the rods
+    # actually moved at ``rod_step_price``. A trip is charged the restart time at
+    # twice the dearest surviving step.
     reward_version: int = 2
     e_floor: float = 0.05  # K, the RTD reading's resolution
     e_tol: float = 0.0
@@ -623,7 +625,7 @@ def compute_next_state(
     day = scheduled_load(
         new_physics_time * p.delta_t, state.ramp_down_at, state.ramp_up_at, p
     )
-    new_load = jnp.clip(day + wobble, 0.0, 1.0)
+    new_load = day + wobble
 
     return (
         state.replace(

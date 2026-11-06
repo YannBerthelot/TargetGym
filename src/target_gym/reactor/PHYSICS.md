@@ -21,8 +21,9 @@ matched the full-state oracle, because power was all there was to hold.
 The rebuilt task asks **how to hold Tavg on its program through a 100-50-100 day.**
 With a steam generator in the loop, the turbine sets the heat leaving the primary,
 and energy balance then fixes steady power at the load wherever the rods are. Rods
-100 pcm apart leave `n` at 0.8000 and move Tavg by 6 K. So the rods' job is Tavg,
-which is what a PWR's rod control does, and what the tracked output now is.
+200 pcm apart leave `n` at 0.8000 and move Tavg by 6 K. So the rods' job is Tavg,
+which is what a PWR's rod control does, and what the tracked output now is. The owner
+chose that on 2026-11-06, with the 30 s step in section 3, over keeping `n` scored.
 
 Three things make that a control problem:
 
@@ -217,7 +218,9 @@ balance by hundreds of pcm. Rod travel wears the mechanism, and costs are in dol
 **The day.** Each episode starts at full load on program, with xenon at the
 equilibrium of a recent power of 0.9 to 1.0. The load starts down between 0.5 and 2 h
 in, holds at 50 % for 3 to 8 h and comes back, each ramp at 5 %/min, with a small
-frequency-control wobble on top.
+frequency-control wobble on top. The wobble is two-sided at full load as well, so the
+load can pass 1 by a fraction of a percent. Each ramp is one move to the scorer, so a
+day has three cycles, and a ramp lasts 20 steps.
 
 **Why it is hard.**
 
@@ -284,26 +287,26 @@ Measured on the held-out seeds 200 to 209 (2026-11-06), before any re-record.
 
 | policy | ratio to the expert | seeds won | trips | Tavg cost | rod cost |
 |---|---|---|---|---|---|
-| expert | 1 | | 0 | $1219 | $479 |
-| oracle, 4 seeds | 2.0 | 4 of 4 | 0 | $172 | $692 |
-| table of the target | 0.09 | 0 of 10 | 0 | | |
-| the review's rod integrator, as written | 0.16 | 0 of 10 | 0 | $10,499 | $619 |
-| the same, at its per-second gain | 0.05 | 0 of 10 | 1 | | |
+| expert | 1 | | 0 | $1163 | $480 |
+| oracle, 4 seeds | 1.8 | 4 of 4 | 0 | $206 | $755 |
+| a plain integrator on Tavg, the gate's witness | **1.17** | **10 of 10** | 0 | $798 | $598 |
+| table with an I-only trim on Tavg, SIMC gain | 0.72 | 0 of 10 | 0 | $885 | $1407 |
+| the review's rod integrator, as written | 0.15 | 0 of 10 | 0 | $10,534 | $712 |
+| table of the target | 0.11 | 0 of 10 | 0 | | |
 | constant, middle of the range | 0.04 | 0 of 10 | 0 | | |
-| table with an I-only trim on Tavg, SIMC gain | **1.26** | **10 of 10** | 0 | $420 | $945 |
-| a plain integrator on Tavg, the gate's witness | **1.29** | **10 of 10** | 0 | | |
+| the review's law, at its per-second gain | 0.04 | 0 of 10 | 2 | | |
 
 The review's law stopped winning because of the plant: it holds energy, which keeps
 Tavg near its starting value and off program at part load. The oracle's row is the
 shipped `NewtonMPC` on the true state, xenon and the day's schedule included, on seeds
 200 to 203 with its protocol still to come in PR 9.
 
-**An integrator on Tavg beats the rod program.** The dead band costs $799 of Tavg
-error to save $466 of rod travel, at the $1 a step labelled ours above. The two break
-even at $1.71 a step. Either the rod price is too low, or a controller tighter than the
-Westinghouse program is simply better on this reward. That is for the owner and PR 9,
-and the gate shows it as a strict xfail with this witness in place. The price was not
-moved to make it pass.
+**An integrator on Tavg beats the rod program.** The dead band costs $365 of Tavg
+error to save $119 of rod travel, at the $1 a step labelled ours above. The two break
+even at about $3 a step, between $1.9 and $5.8 by seed. Either the rod price is too
+low, or a controller tighter than the Westinghouse program is simply better on this
+reward. That is for the owner and PR 9, and the gate shows it as a strict xfail with
+this witness in place. The price was not moved to make it pass.
 
 ---
 
@@ -335,10 +338,13 @@ which is what the recorded baselines use.
 | `e_floor` | 0.05 K | the RTD reading's resolution, about its 0.045 K scatter: a documented minimum, not a certified floor |
 | `e_tol` | 0 | none. The rod program's dead band is the controller's, not the reward's |
 | `tracking_exponent` | 1 | linear, as lost output is |
-| `imbalance_multiple` | 1.25 x 0.0023 per K of `spot_price_per_MWh` on `P_electric_GW` | **ours.** Off program, steam conditions cost output. The Carnot slope at 547 K steam and 305 K condenser is 0.23 %/K, and at the one imbalance price of the priced plants, $100/MWh on 1 GWe, that is $230/h per K. It prices a hot plant as a cold one, which the slope does not say |
+| `imbalance_multiple` | 1.25 x 0.0023 per K of `spot_price_per_MWh` on `P_electric_GW` | **ours.** Off program, steam conditions cost output. The relative Carnot slope at 547 K steam and 305 K condenser is 305 / (547 x 242) = 0.23 %/K. At the one imbalance price of the priced plants, $100/MWh (1.25 x the $80 spot), on `P_electric_GW` = 1.0 GW, a third of the 3 GW thermal, that is 100 x 1000 x 0.0023 = $230/h per K, so **$1.917 per K over a 30 s step**. It prices a hot plant as a cold one, which the slope does not say |
 | `rod_step_price` | $1 per step | **ours.** Rod travel, as the steps the rods actually moved. Mechanism lives of 6 to 9 million steps turned up in search results, but neither reader could open one |
 | `failure_cost` | 87.34 $ per step | twice the dearest step that survives: 40 K off program, $7.67, and 36 rod steps, $36, per 30 s |
 | `restart_steps` | 5760 (48 h) | restart time priced into a trip, `restart_steps x failure_cost` (a SCRAM's xenon-limited restart; provisional); where a plant engineer would get it: the plant's restart procedure |
+
+A step at the floor costs `rho_floor_tracking`, $0.0958: the price per K over the 30
+s step, times `e_floor`.
 
 `rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which

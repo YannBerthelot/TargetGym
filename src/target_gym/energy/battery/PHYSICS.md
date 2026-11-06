@@ -138,7 +138,7 @@ by two readers, and **ours** means a choice for the owner to accept.
 | `dispatch_block_seconds` | 3600 | s | Ours: the hour regulation markets clear in | ⚠️ |
 | `dispatch_range` | +-0.8 MW | W | Ours: leaves the regulation movement room inside 1 MW | ⚠️ |
 | `dispatch_noise_std`, `regulation_tau` | 10 kW, 900 s | – | Ours: a movement of about 95 kW sd and a small innovation. A real signal comes every 2 to 6 s (Xu et al. 2017), so the 5 s step is one instruction | ⚠️ |
-| `max_steps_in_episode` | 2880 | steps | Ours: 4 h, chosen so exact following leaves the window on most seeds (3 h: 51 %, 4 h: 62 %) | ⚠️ |
+| `max_steps_in_episode` | 2880 | steps | Ours: 4 h, chosen so exact following leaves the window on most seeds (65 % over 4 h, against 36 % over 2 h and 51 % over 3 h in a coarser calibration) | ⚠️ |
 | `delta_t` | 5.0 | s | One regulation instruction | ✅ |
 
 **Actuator and timing figures.** The inverter has no rate limit or lag here, labelled
@@ -171,8 +171,8 @@ is a real decision.
 
 **The window binds.** From a state of charge drawn in 0.35 to 0.75, four hourly
 levels of up to 0.8 MW move up to 2.8 times the pack's capacity. Following them
-exactly left the charge window on 62 % of seeds in calibration, and the cell's
-voltage limit comes sooner: at rated current it trips near 8 to 10 % charge, and near
+exactly leaves the charge window on 65 % of 400 seeds, and the cell's voltage limit
+comes sooner: at rated current it trips near 8 to 10 % charge, and near
 85 % on charge.
 
 **The signal.** Each hourly level is drawn uniformly in +-0.8 MW. On top goes an
