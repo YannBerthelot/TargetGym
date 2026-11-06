@@ -1,5 +1,5 @@
 {
-  "fingerprint": "99c59a5b78941f40",
-  "note": "Branch stamp on feat/sensor-noise: late readings and actuator dynamics. distillation changed and its version is already bumped on this branch; the other tasks' physics did not. Redone at the 0.8.0 re-record.",
-  "stamped": "2026-11-05T21:27:14+00:00"
+  "fingerprint": "39d32d0b1c1b3d4a",
+  "note": "Branch stamp on feat/sensor-noise: sensor lag and per-actuator rates, unused by any task yet. Redone at the 0.8.0 re-record.",
+  "stamped": "2026-11-06T00:05:54+00:00"
 }

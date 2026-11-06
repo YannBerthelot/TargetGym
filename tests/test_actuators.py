@@ -239,6 +239,23 @@ def test_a_rate_limit_caps_what_a_lag_would_move():
     assert _track(params, [1.0] * 2) == pytest.approx([0.2, 0.4], abs=1e-6)
 
 
+def test_each_actuator_can_have_its_own_rate():
+    """0.1 and 0.05 of the span of 2 per second, at 1 s steps."""
+    env = FourTank()
+    params = FourTankParams(actuator_rate=(0.1, 0.05))
+    applied, _ = actuate(env, _state(env, params), jnp.array([1.0, 1.0]), params)
+    np.testing.assert_allclose(applied, [0.2, 0.1], rtol=1e-6)
+
+
+def test_an_actuator_with_no_lag_beside_one_with_a_lag_moves_at_once():
+    """Half the gap on the first, with ``tau = 1 / ln 2``, all of it on the
+    second."""
+    env = FourTank()
+    params = FourTankParams(actuator_lag=(1.0 / np.log(2.0), 0.0))
+    applied, _ = actuate(env, _state(env, params), jnp.array([1.0, 1.0]), params)
+    np.testing.assert_allclose(applied, [0.5, 1.0], rtol=1e-6)
+
+
 def test_a_rate_limit_bounds_a_step_of_a_task_with_sub_steps():
     """``reactor`` runs 10 s per step, so 0.01 of the span of 2 per second moves
     0.2 per step, not 0.02."""
@@ -252,8 +269,10 @@ def test_a_rate_limit_bounds_a_step_of_a_task_with_sub_steps():
 
 @pytest.mark.parametrize("spec", REGISTRY.values(), ids=lambda s: s.name)
 def test_a_step_reports_what_the_actuator_applied(spec):
-    """Past the box a command does nothing more, so the report is the box."""
-    env, params = spec.make_env(), spec.make_test_params()
+    """Past the box a command does nothing more, so the report is the box. With
+    the task's own rate and lag off, so that one step can reach it."""
+    env = spec.make_env()
+    params = spec.make_test_params().replace(actuator_rate=0.0, actuator_lag=0.0)
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
     shape = env.action_space(params).shape
@@ -327,6 +346,8 @@ def test_every_task_with_readings_runs_the_actuator_stage(spec):
     _, state = env.reset_env(key, params)
     space = env.action_space(params)
     action = jnp.broadcast_to(space.high, space.shape).astype(jnp.float32)
-    params = params.replace(actuator_dead_band=0.01)
+    params = params.replace(
+        actuator_dead_band=0.01, actuator_rate=0.0, actuator_lag=0.0
+    )
     new = env.step_env(key, state, action, params)[1]
     np.testing.assert_array_equal(new.actuator_held, action)

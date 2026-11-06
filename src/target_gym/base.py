@@ -67,7 +67,8 @@ class EnvParams:
     action_noise: float = 0.0
     #: The actuator's own dynamics (``actuate``): the fastest it moves, as a
     #: fraction of the span per ``delta_t`` unit, and its first-order lag, in
-    #: ``delta_t`` units. 0 is none. A task's params set these from its hardware.
+    #: ``delta_t`` units. 0 is none. A task's params set these from its hardware,
+    #: as one number or a tuple with one per action.
     actuator_rate: float = 0.0
     actuator_lag: float = 0.0
 
@@ -124,9 +125,10 @@ class Reading:
     it reports, and with ``sampled`` it reports the same value from one update
     to the next, instead of a current value with held noise. At step ``t``, with
     both in steps, it reports the value at ``interval * (t // interval) -
-    dead_time``. A late reading must be a scalar, and neither goes at
-    ``sensor_noise_scale`` 0, which removes noise only: ``true_obs`` is the plant
-    now.
+    dead_time``. ``lag`` is the sensor's first-order time constant, in the same
+    units, applied to what the instrument sees, before its dead time. A late
+    reading must be a scalar, and none of these goes at ``sensor_noise_scale`` 0,
+    which removes noise only: ``true_obs`` is the plant now.
     """
 
     sigma: float | tuple
@@ -134,6 +136,7 @@ class Reading:
     interval: float = 0.0
     dead_time: float = 0.0
     sampled: bool = False
+    lag: float = 0.0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -188,16 +191,20 @@ def _noisy(reading, stream, value, state, params):
 
 
 def _delayed(env):
-    return tuple(r for r in _readings(env) if r.dead_time > 0 or r.sampled)
+    return tuple(r for r in _readings(env) if r.dead_time > 0 or r.sampled or r.lag > 0)
 
 
 def _history_steps(env) -> int:
     """How far back a late reading reaches. From the default step, because the
-    history's shape cannot depend on a traced ``delta_t``."""
-    dt = float(env.default_params.delta_t)
+    history's shape cannot depend on a traced ``delta_t``. At least 2, so a
+    history is never the shape of the placeholder on a state built by hand."""
+    dt = float(_control_step(env, env.default_params))
     return 1 + max(
-        round(r.dead_time / dt) + max(round(r.interval / dt) - 1, 0)
-        for r in _delayed(env)
+        1,
+        *(
+            round(r.dead_time / dt) + max(round(r.interval / dt) - 1, 0)
+            for r in _delayed(env)
+        ),
     )
 
 
@@ -239,9 +246,15 @@ def remember(env, state, new_state, params):
         return new_state
     if not _has_history(env, state):
         return new_state.replace(sensor_history=_fresh_history(env, new_state, params))
-    now = _late_values(env, new_state, params)[:, None]
+    now = _late_values(env, new_state, params)
+    last = state.sensor_history[:, 0]
+    lags = jnp.asarray([r.lag for r in _delayed(env)], last.dtype)
+    closes = 1.0 - jnp.exp(-_control_step(env, params) / jnp.where(lags > 0, lags, 1.0))
+    now = jnp.where(lags > 0, last + closes * (now - last), now)
     return new_state.replace(
-        sensor_history=jnp.concatenate([now, state.sensor_history[:, :-1]], axis=1)
+        sensor_history=jnp.concatenate(
+            [now[:, None], state.sensor_history[:, :-1]], axis=1
+        )
     )
 
 
@@ -251,9 +264,10 @@ def _aged(env, reading, value, state, params):
     delayed = _delayed(env)
     if reading not in delayed or not _has_history(env, state):
         return value
-    age = jnp.round(reading.dead_time / params.delta_t).astype(jnp.int32)
+    dt = _control_step(env, params)
+    age = jnp.round(reading.dead_time / dt).astype(jnp.int32)
     if reading.sampled:
-        period = jnp.maximum(jnp.round(reading.interval / params.delta_t), 1)
+        period = jnp.maximum(jnp.round(reading.interval / dt), 1)
         age = age + jnp.asarray(state.time, jnp.int32) % period.astype(jnp.int32)
     last = state.sensor_history.shape[1] - 1
     return state.sensor_history[delayed.index(reading), jnp.minimum(age, last)]
@@ -399,19 +413,17 @@ def actuate(env, state, action, params):
     wanted = jnp.where(jnp.abs(gap) > f_s, command - jnp.sign(gap) * f_d, last)
     wanted = jnp.where((command <= low) | (command >= high), command, wanted)
     dt = _control_step(env, params)
-    lag = params.actuator_lag
+    lag, rate = jnp.asarray(params.actuator_lag), jnp.asarray(params.actuator_rate)
     closes = jnp.where(lag > 0, 1.0 - jnp.exp(-dt / jnp.where(lag > 0, lag, 1.0)), 1.0)
-    most = jnp.where(
-        params.actuator_rate > 0, params.actuator_rate * span * dt, jnp.inf
-    )
+    most = jnp.where(rate > 0, rate * span * dt, jnp.inf)
     held = last + jnp.clip(closes * (wanted - last), -most, most)
     applied = jnp.clip(held + _scatter(state, action, params, span), low, high)
     active = (
         (params.actuator_dead_band > 0)
         | (params.actuator_stiction > 0)
         | (params.action_noise > 0)
-        | (params.actuator_rate > 0)
-        | (params.actuator_lag > 0)
+        | (rate > 0)
+        | (lag > 0)
     )
     return jnp.where(active, applied, action), state.replace(actuator_held=held)
 

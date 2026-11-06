@@ -14,7 +14,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym.base import FieldReading, measured_state, true_obs
+from target_gym.base import FieldReading, measured_state, remember, true_obs
 from target_gym.benchmark import CallablePolicy, run_policy, task_info
 from target_gym.registry import REGISTRY
 
@@ -66,6 +66,31 @@ def test_a_reading_reports_the_value_of_its_last_update_less_its_dead_time(
 ):
     true, read = _trace((_reading(dead, every),))
     np.testing.assert_allclose(read, [true[age(t)] for t in range(len(true))])
+
+
+def test_a_lagged_reading_rises_as_a_first_order_sensor():
+    """A true value that steps by 1 reads ``1 - exp(-k dt / tau)`` after k steps.
+    With ``tau`` of 2 steps, that is 0.3935, 0.6321 and 0.7769."""
+    env, params = _first_order((_reading(lag=2 * STEP),))
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    state = state.replace(x=jnp.zeros_like(state.x))
+    state = state.replace(sensor_history=jnp.zeros_like(state.sensor_history))
+    one = state.replace(x=jnp.ones_like(state.x))
+    read = []
+    for _ in range(3):
+        state = remember(env, state, one, params)
+        read.append(float(env.get_obs(state, params)[0]))
+    np.testing.assert_allclose(read, [0.39347, 0.63212, 0.77687], atol=1e-4)
+
+
+def test_a_hand_built_state_reads_a_lagged_value_now_and_not_zero():
+    """A lag-only reading needs one step of history, the same shape as the
+    placeholder a state built by hand carries, which must not be read as a
+    history of zeros."""
+    env, params = _first_order((_reading(lag=2 * STEP),))
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    built = state.replace(sensor_history=jnp.zeros((1, 1)))
+    assert float(env.get_obs(built, params)[0]) == float(state.x)
 
 
 def test_a_sampled_reading_holds_its_noise_with_its_value():
