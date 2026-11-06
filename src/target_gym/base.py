@@ -26,6 +26,9 @@ def canonical_reset(reset_env):
     The key is folded from the episode's, so it takes nothing from the draws
     ``reset_env`` made, and those keep their values. The observation is taken
     again because ``reset_env`` took its own before the key was there.
+
+    Late instruments start out reading the reset plant, and a task with an
+    ``initial_action(state, params)`` starts its actuator where the plant is.
     """
 
     @functools.wraps(reset_env)
@@ -37,6 +40,11 @@ def canonical_reset(reset_env):
         state = state.replace(
             sensor_key=jax.random.key_data(jax.random.fold_in(key, _SENSORS))
         )
+        p = self.default_params if params is None else params
+        if _delayed(self):
+            state = state.replace(sensor_history=_fresh_history(self, state, p))
+        if hasattr(self, "initial_action"):
+            state = state.replace(actuator_held=self.initial_action(state, p))
         return (self.get_obs(state, params) if _readings(self) else obs), state
 
     return wrapper
@@ -57,6 +65,12 @@ class EnvParams:
     actuator_dead_band: float = 0.0
     actuator_stiction: float = 0.0
     action_noise: float = 0.0
+    #: The actuator's own dynamics (``actuate``): the fastest it moves, as a
+    #: fraction of the span per ``delta_t`` unit, and its first-order lag, in
+    #: ``delta_t`` units. 0 is none. A task's params set these from its hardware,
+    #: as one number or a tuple with one per action.
+    actuator_rate: float = 0.0
+    actuator_lag: float = 0.0
 
 
 #: Unit of each numeric params field, read by the generated environment pages.
@@ -69,6 +83,8 @@ PARAM_UNITS = {
     "actuator_dead_band": "fraction of span",
     "actuator_stiction": "fraction of span",
     "action_noise": "fraction of span",
+    "actuator_rate": "fraction of span per delta_t unit",
+    "actuator_lag": "delta_t units",
 }
 
 
@@ -80,6 +96,13 @@ class EnvState:
     #: one.
     sensor_key: jax.Array = struct.field(
         default_factory=lambda: jnp.zeros(2, jnp.uint32), kw_only=True
+    )
+    #: ``(late readings, steps)``, newest first: what ``Reading.dead_time`` and
+    #: ``Reading.sampled`` read back from. A placeholder on a task with none:
+    #: one element and not zero, because whatever reshapes every field of a
+    #: batched state cannot reshape an empty one.
+    sensor_history: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros((1, 1)), kw_only=True
     )
 
 
@@ -96,12 +119,24 @@ class Reading:
     ``step`` is the digital step, 0 for none. ``interval`` is the time between
     updates in ``delta_t``'s units, 0 for every step: seconds on most tasks,
     but minutes on ``distillation``, ``cstr`` and ``unstable_cstr``. ``epsilon``
-    is held that long, and the value stays current.
+    is held that long.
+
+    A reading can be late. ``dead_time``, in the same units, is the age of what
+    it reports, and with ``sampled`` it reports the same value from one update
+    to the next, instead of a current value with held noise. At step ``t``, with
+    both in steps, it reports the value at ``interval * (t // interval) -
+    dead_time``. ``lag`` is the sensor's first-order time constant, in the same
+    units, applied to what the instrument sees, before its dead time. A late
+    reading must be a scalar, and none of these goes at ``sensor_noise_scale`` 0,
+    which removes noise only: ``true_obs`` is the plant now.
     """
 
     sigma: float | tuple
     step: float = 0.0
     interval: float = 0.0
+    dead_time: float = 0.0
+    sampled: bool = False
+    lag: float = 0.0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -155,6 +190,89 @@ def _noisy(reading, stream, value, state, params):
     return jnp.where(scale > 0, read, value)
 
 
+def _delayed(env):
+    return tuple(r for r in _readings(env) if r.dead_time > 0 or r.sampled or r.lag > 0)
+
+
+def _history_steps(env) -> int:
+    """How far back a late reading reaches. From the default step, because the
+    history's shape cannot depend on a traced ``delta_t``. At least 2, so a
+    history is never the shape of the placeholder on a state built by hand."""
+    dt = float(_control_step(env, env.default_params))
+    return 1 + max(
+        1,
+        *(
+            round(r.dead_time / dt) + max(round(r.interval / dt) - 1, 0)
+            for r in _delayed(env)
+        ),
+    )
+
+
+def true_obs(env, state, params):
+    """The observation with no instrument in the way: the plant now, for what
+    is a claim about the plant (the time-in-band KPI), never for a controller."""
+    get_obs = type(env).get_obs
+    return getattr(get_obs, "__wrapped__", get_obs)(env, state, params)
+
+
+def _late_values(env, state, params):
+    """What each late reading's instrument sees now, true and undelayed."""
+    obs = true_obs(env, state, params)
+    values = []
+    for reading in _delayed(env):
+        if isinstance(reading, ChannelReading):
+            values.append(obs[reading.channel])
+        else:
+            value = operator.attrgetter(reading.field)(state)
+            values.append(value if reading.index is None else value[reading.index])
+    if any(jnp.ndim(v) != 0 for v in values):
+        raise ValueError("a late reading must be a scalar: give its array an index")
+    return jnp.stack(values)
+
+
+def _fresh_history(env, state, params):
+    return jnp.tile(_late_values(env, state, params)[:, None], (1, _history_steps(env)))
+
+
+def _has_history(env, state) -> bool:
+    return state.sensor_history.shape == (len(_delayed(env)), _history_steps(env))
+
+
+def remember(env, state, new_state, params):
+    """``new_state`` with its late readings recorded. The history comes from
+    ``state``, so a task that rebuilds its state cannot drop it. A state built
+    by hand has none, and starts one here."""
+    if not _delayed(env):
+        return new_state
+    if not _has_history(env, state):
+        return new_state.replace(sensor_history=_fresh_history(env, new_state, params))
+    now = _late_values(env, new_state, params)
+    last = state.sensor_history[:, 0]
+    lags = jnp.asarray([r.lag for r in _delayed(env)], last.dtype)
+    closes = 1.0 - jnp.exp(-_control_step(env, params) / jnp.where(lags > 0, lags, 1.0))
+    now = jnp.where(lags > 0, last + closes * (now - last), now)
+    return new_state.replace(
+        sensor_history=jnp.concatenate(
+            [now[:, None], state.sensor_history[:, :-1]], axis=1
+        )
+    )
+
+
+def _aged(env, reading, value, state, params):
+    """``value`` as a late ``reading`` reports it at ``state``, or ``value`` if
+    the reading is not late (``Reading``)."""
+    delayed = _delayed(env)
+    if reading not in delayed or not _has_history(env, state):
+        return value
+    dt = _control_step(env, params)
+    age = jnp.round(reading.dead_time / dt).astype(jnp.int32)
+    if reading.sampled:
+        period = jnp.maximum(jnp.round(reading.interval / dt), 1)
+        age = age + jnp.asarray(state.time, jnp.int32) % period.astype(jnp.int32)
+    last = state.sensor_history.shape[1] - 1
+    return state.sensor_history[delayed.index(reading), jnp.minimum(age, last)]
+
+
 def _replace_at(state, path, value):
     head, _, rest = path.partition(".")
     if rest:
@@ -171,9 +289,10 @@ def measured_state(env, state, params):
             continue
         field = operator.attrgetter(reading.field)
         if reading.index is None:
-            value = _noisy(reading, stream, field(state), state, params)
+            true = _aged(env, reading, field(state), state, params)
+            value = _noisy(reading, stream, true, state, params)
         else:
-            true = field(state)[reading.index]
+            true = _aged(env, reading, field(state)[reading.index], state, params)
             value = (
                 field(measured)
                 .at[reading.index]
@@ -202,7 +321,8 @@ def measured_obs(get_obs):
         if channels:
             true = get_obs(self, state, params)
             for stream, reading in channels:
-                read = _noisy(reading, stream, true[reading.channel], state, params)
+                value = _aged(self, reading, true[reading.channel], state, params)
+                read = _noisy(reading, stream, value, state, params)
                 obs = obs.at[reading.channel].set(read)
         return obs
 
@@ -233,10 +353,32 @@ def actuator_field(actions: int):
     return struct.field(default_factory=lambda: jnp.zeros(actions), kw_only=True)
 
 
+def _control_step(env, params):
+    """A step's length in ``delta_t`` units, sub-steps included."""
+    return getattr(env, "control_period", 1) * params.delta_t
+
+
+def _scatter(state, action, params, span):
+    key = jax.random.fold_in(
+        jax.random.fold_in(state.sensor_key, _ACTUATOR), state.time
+    )
+    epsilon = jax.random.normal(key, action.shape, action.dtype)
+    return params.action_noise * span * epsilon
+
+
+def applied_action(env, state, params):
+    """What ``actuate`` sent the plant, for ``info["applied_action"]``. ``state``
+    is the one ``actuate`` returned."""
+    space = env.action_space(params)
+    held = state.actuator_held
+    scatter = _scatter(state, held, params, space.high - space.low)
+    return jnp.clip(held + scatter, space.low, space.high)
+
+
 def actuate(env, state, action, params):
     """The actuator between the action and ``compute_next_state``: returns
-    ``(applied action, state)``, and at the default of 0 for all three defects
-    exactly ``(action, state)``.
+    ``(applied action, state)``. At the default of 0 for every field the action
+    passes as it is, and ``actuator_held`` records it clipped to the box.
 
     Dead band and stiction are He, Wang, Pottmann and Qin's model (Ind. Eng.
     Chem. Res. 46, 2007), which needs only the held output y: with
@@ -254,6 +396,11 @@ def actuate(env, state, action, params):
     ``action_noise`` is positioner repeatability: the output's scatter as a
     fraction of the span, on top of the held output and not stored in it. It
     comes from the state, so it is the same for every policy on an episode key.
+
+    ``actuator_lag`` tau then closes ``1 - exp(-dt / tau)`` of the gap to that
+    output each step, and ``actuator_rate`` caps the move at the rate times the
+    span and the step. So a rate-limited actuator reaches the end of its range at
+    its rate, not at once.
     """
     space = env.action_space(params)
     low, high = space.low, space.high
@@ -261,25 +408,27 @@ def actuate(env, state, action, params):
     command = jnp.clip(action, low, high)
     f_d = 0.5 * params.actuator_dead_band * span
     f_s = f_d + params.actuator_stiction * span
-    gap = command - state.actuator_held
-    held = jnp.where(
-        jnp.abs(gap) > f_s, command - jnp.sign(gap) * f_d, state.actuator_held
-    )
-    held = jnp.where((command <= low) | (command >= high), command, held)
-    key = jax.random.fold_in(
-        jax.random.fold_in(state.sensor_key, _ACTUATOR), state.time
-    )
-    epsilon = jax.random.normal(key, action.shape, action.dtype)
-    applied = jnp.clip(held + params.action_noise * span * epsilon, low, high)
+    last = state.actuator_held
+    gap = command - last
+    # With no band the command is the output even at gap 0, where taking ``last``
+    # gives the same value but no slope, and a planner needs the slope.
+    moves = (jnp.abs(gap) > f_s) | (f_s == 0)
+    wanted = jnp.where(moves, command - jnp.sign(gap) * f_d, last)
+    wanted = jnp.where((command <= low) | (command >= high), command, wanted)
+    dt = _control_step(env, params)
+    lag, rate = jnp.asarray(params.actuator_lag), jnp.asarray(params.actuator_rate)
+    closes = jnp.where(lag > 0, 1.0 - jnp.exp(-dt / jnp.where(lag > 0, lag, 1.0)), 1.0)
+    most = jnp.where(rate > 0, rate * span * dt, jnp.inf)
+    held = last + jnp.clip(closes * (wanted - last), -most, most)
+    applied = jnp.clip(held + _scatter(state, action, params, span), low, high)
     active = (
         (params.actuator_dead_band > 0)
         | (params.actuator_stiction > 0)
         | (params.action_noise > 0)
+        | (rate > 0)
+        | (lag > 0)
     )
-    return (
-        jnp.where(active, applied, action),
-        state.replace(actuator_held=jnp.where(active, held, state.actuator_held)),
-    )
+    return jnp.where(active, applied, action), state.replace(actuator_held=held)
 
 
 def _select(cond, a, b):
@@ -363,7 +512,10 @@ def finish_step(env, key, state, new_state, params, **info):
     - ``tripped`` and ``trip_cost`` (``charged_trip_cost``).
     - ``measured_reward`` (``measured_reward``), what a learner trains on.
       ``reward`` stays the true cost, and the score reads it.
+    - ``applied_action`` (``applied_action``), what the actuator did, from the
+      ``state`` ``actuate`` returned.
     """
+    new_state = remember(env, state, new_state, params)
     new_state, tripped, scored, terminated = failure_kernel(
         env, key, state, new_state, params
     )
@@ -374,5 +526,6 @@ def finish_step(env, key, state, new_state, params, **info):
         "tripped": tripped,
         "trip_cost": charged_trip_cost(tripped, params),
         "measured_reward": measured_reward(env, scored, tripped, reward, params),
+        "applied_action": applied_action(env, state, params),
     }
     return new_state, reward, terminated, info

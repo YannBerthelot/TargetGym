@@ -139,7 +139,10 @@ def _formation_errors(obs, state, params):
 
 
 def _plane_speed(obs, state, params):
-    return abs(float(np.sqrt(state.x_dot**2 + state.z_dot**2) - params.target_speed))
+    from target_gym.plane.env import target_airspeed
+
+    speed = np.sqrt(state.x_dot**2 + state.z_dot**2)
+    return abs(float(speed - target_airspeed(state, params)))
 
 
 def _battery_fade(obs, state, params):

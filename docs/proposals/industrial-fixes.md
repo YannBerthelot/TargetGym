@@ -66,6 +66,10 @@ its `PHYSICS.md` carries a written exception the owner accepted.
 Check 1 runs as a large test, one strict xfail per failing task, naming the
 finding. Each fix removes its own xfail.
 
+The owner has decided what these checks decide: a task enters the benchmark only
+if it passes all three or has a written exception the owner accepted. The harness
+reads the list from PR 8's credibility record at the freeze.
+
 ## Order of work
 
 PRs 3 to 9 target `feat/sensor-noise` from 509fd5b, the integration branch,
@@ -73,11 +77,17 @@ because the noise work stales all 24 stamps and has to land at one re-record.
 That branch is local only, and its version stamps are branch stamps, to be redone
 at the end.
 
-CI runs on pull requests into the integration branch too. Branch protection covers
-only `main`, so these have no required checks and no auto-merge, and are merged by
-hand. The large tier does not run on them, so each plant PR runs the null-policy
-gate locally. `records` stays red there until the re-record, and two examples in
-`docs/using-the-pids.md` fail for the same reason.
+Pull requests into the integration branch run lint and docs only, and merge by
+hand, so resolving a conflict costs a minute of CI and sessions rerun nothing. The
+full run, the large tier and the null-policy gate included, is one draft pull
+request from that branch into `main`, which never merges by hand and runs after each
+batch. A new push cancels the last run, so batches are the unit of checking.
+
+`records` stays red there until the re-record. These exceptions in `python-app.yml`
+come out when the branch lands: tests run past a failing `records`, the small tier
+uses 2 workers, its timeout is 60 minutes, compiled programs are freed after each
+module, memory and disk are logged, and two examples in `docs/using-the-pids.md` that
+compare with stale records are deselected.
 
 | PR | What | Target | Budget (code + tests) |
 |---|---|---|---|
@@ -96,7 +106,8 @@ gate locally. `records` stays red there until the re-record, and two examples in
 
 Then the benchmark rechecks its task list and opens its GPU window.
 
-PRs 4 to 7 can run in parallel, one session each, once PRs 3 and 3b are in. PR 3b
+The owner asked for parallel sessions, one per plant group, plus one for the expert
+machinery of PR 9, which does not depend on the plants. PRs 4 to 7 run that way. PR 3b
 needs PR 3's applied action, and PRs 6, 7 and 9 rework experts on top of it. PR 7b
 follows PR 7, whose dynamics it shares. C2 and D hold until their plants are done.
 
@@ -149,6 +160,14 @@ moving a recorded one.
   ExpertBench runs them as reference rows through `run_policy`.
 - **A credibility record per task,** through `records`: each null's result, the
   expert's sourced figure and any accepted exception.
+- **Settle counts that see ramps.** `FIXED_SETTLE["reactor"]` is 1, but a ramp is one
+  move lasting 20 steps, so it needs at least 20. `wind_turbine`'s is 0, from when its
+  target never moved; the expert settles in about 36 steps and the oracle in about 48.
+- **Ceilings from the rebuilt prices.** `ceiling("reactor")` must be per control step,
+  $0.0958 at the 0.05 K floor, and returns 0.0032 today. `tests/test_scoring.py` reads
+  one sub-step, which is what hid this: it must read the step, and lose its strict
+  xfail. `wind_turbine`'s floor note says 1 kW where the
+  branch's resolution is 1.7 kW, which moves its ceiling from 6.94e-6 to 1.18e-5.
 
 ## Shared plant stages (PR 3)
 
@@ -173,6 +192,12 @@ updates `docs/proposals/measurement-noise.md`, which still states them.
 
 Row order is by severity within each PR.
 
+Each plant PR also sources its timing and actuator figures, because the benchmark's
+readiness gates ask for it: dead times, sampling intervals, rate limits and lags. A
+figure that cannot be sourced is labelled for the owner to accept. The tracked
+readings the noise proposal left Provisional need no sourcing: they pass as labelled
+under its decision 4, so each `PHYSICS.md` must keep their status.
+
 ### PR 4: process
 
 | Task | Change |
@@ -187,7 +212,7 @@ Row order is by severity within each PR.
 
 | Task | Change |
 |---|---|
-| `cement_kiln` | Free lime sampled hourly and 60 min old; hidden drift on burnability and coal heating value; steady feed, or make feed an action; longer episode; check the clinkering heat sign first (r) |
+| `cement_kiln` | Free lime sampled hourly and 60 min old; hidden drift on burnability and coal heating value; steady feed, or make feed an action; longer episode; check the clinkering heat sign first (r). An exact calcination step lands here from its own session. If drift scales `A_clinker` by more than about 1.2, the kiln also needs `rk4_2`, at twice the step cost |
 | `hvac` | `solar_peak` 175 or a cloud process, so that heating is needed |
 | `boiler_drum` | Firing lag and rate limit, then re-identify; steam draw follows pressure |
 | `glass_furnace` | Fuel slew limit; settled reset; observe pull; hide gas heating value or cullet |
@@ -196,8 +221,8 @@ Row order is by severity within each PR.
 
 | Task | Change |
 |---|---|
-| `battery` | Rebuild: a regulation signal over a multi-hour, energy-limited window, so state of charge is the problem; next block in the observation |
-| `reactor` | Rebuild: steam generator node so turbine load drives `T_cold`; 100-50-100 ramps at 5%/min over 12 h at 60 s steps, so xenon and the rods bind; correct rod speeds |
+| `battery` | Rebuild: a regulation signal over a 4 h, energy-limited window, 2880 steps at 5 s, so state of charge is the problem; next block in the observation |
+| `reactor` | Rebuild: steam generator node so turbine load drives `T_cold`; tracks Tavg against Tref(load), not neutron power, which the turbine now sets, with a kelvin price labelled ours; 100-50-100 ramps at 5%/min over 12 h at 30 s steps, 1440 steps, because 60 s breaks the rod program; correct rod speeds |
 | `wind_turbine` | Published NREL 5 MW `Cp` surface; torque rate limit; setpoint moves; a rotor-speed cost |
 | `compressor_surge` | Ramp setpoints; per-episode surge-line offset, so the margin is not known exactly |
 
@@ -229,6 +254,15 @@ where it returns `(n,)` today.
 Wake is left out unless a usable model turns up. Say so in `PHYSICS.md`.
 
 ## Expert protocols, amended
+
+C2 is landing on `main` as #141, ahead of these plants. Its solver code carries over,
+and its six oracle rows re-record after the plant PRs. `distillation`'s expert loses
+the column to the analyser delay from PR 3 until PR 9 retunes it.
+
+Oracles on rate-limited plants plan through `actuate`. Its slope at a held command is
+fixed on the integration branch, but the clip still has none past the limit, so they
+plan by rate. On `glass_furnace` seed 2 both together reach 0.29 K, against 8.84 K as
+shipped. The aircraft surface rate limit and attitude clip have the same gap.
 
 PR 9 also applies `docs/proposals/expert-protocols-noise.md`, which removes the
 twin-run bump test and makes bump tests single runs sized by a measured noise
@@ -276,6 +310,17 @@ Chosen by the owner on 2026-11-05.
    demands, and no longer touch the surfaces. The alternatives were a 4 Hz step,
    at four times the steps and oracle cost, or keeping 1 Hz with a label.
 4. **`battery` and `reactor` are both rebuilt.**
+
+Chosen by the owner on 2026-11-06.
+
+5. **The aircraft engine lag is 1.7 s,** which meets 14 CFR 33.73(b)'s 5 s from idle
+   to 95%, in place of 3 s, which takes 8.8 s.
+6. **These stand as working values, labelled ours,** and can still change before the
+   re-record: pH lag 10 s and dead time 10 s, coolant valve lag 2 s and rate 8 %/s,
+   boiler firing lag 20 s, glass fuel slew 1 % per min, aircraft surface rate 30 deg/s
+   and the buffet line.
+7. **`unstable_cstr`'s `tau_j` of 6 s is a written exception under check 2.** It is
+   synthetic, and its `PHYSICS.md` says so.
 
 ## Cost
 

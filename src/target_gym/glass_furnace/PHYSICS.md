@@ -26,6 +26,7 @@ algebraic variable:
 | `m_batch` | unmelted batch blanket on the melt (hidden) | ~1 h |
 | `T_crown_meas` | crown thermocouple reading — **what the observation reports** | 120 s |
 | `fuel_pipeline[2]` | fuel commanded but not yet burning (hidden) | 60 s |
+| `lhv_deviation` | the gas's heating value off `LHV` (hidden) | 1 day |
 | `T_gas` *(algebraic)* | flame / combustion-space gas | ~0.5 s |
 
 **`T_gas` is solved to steady state, not integrated.** Its radiative time
@@ -92,11 +93,11 @@ merely plausible-looking.
 | `N_REGEN_NODES` | 4 | – | Per chamber; enough to develop a hot-to-cold gradient | ⚠️ |
 | `C_regen_node` | 3.0e7 | J/K | Thermally active checker layer | ⚠️ |
 | `eps_regen_node` | 0.80 | – | Per-node effectiveness; TUNED to hit air-preheat and stack targets jointly | ⚠️ |
-| `reversal_period` | 1500 | s | 25 min, typical float furnace | ✅ |
-| `reversal_dead_time` | 40 | s | Firing interrupted while the valves change over | ⚠️ |
+| `reversal_period` | 1500 | s | Timing table, *Actuators and timing* | ✅ |
+| `reversal_dead_time` | 40 | s | Timing table | ✅ |
 | `reversal_firing_floor` | 0.05 | – | Pilots stay lit through the changeover | ⚠️ |
-| `tau_thermocouple` | 120 | s | Crown element in a refractory sheath | ⚠️ |
-| `FUEL_DEAD_TIME_STEPS` | 2 | steps | 60 s: gas train, air adjustment, flame development | ⚠️ |
+| `tau_thermocouple` | 120 | s | Timing table | ⚠️ |
+| `FUEL_DEAD_TIME_STEPS` | 2 | steps | Timing table | ⚠️ |
 | `charge_period` / `charge_duty` | 300 / 0.30 | s / – | Reciprocating batch charger cycle | ⚠️ |
 | `charge_mass_jitter` | 0.15 | – | Dose-to-dose mass variation | ⚠️ |
 
@@ -140,6 +141,7 @@ instruments have to steer a large, slow plant.
 | 2 | fuel flow, percent of maximum |
 | 3 | regenerator phase: 0 while regenerator A preheats the air, 1 while B does |
 | 4 | target crown temperature (°C) |
+| 5 | pull, the glass leaving the furnace (kg/s) |
 
 **Setpoint band 1565–1610 °C.** Operationally realistic — a float furnace is
 trimmed ±10–20 °C around nominal. The previous 1500–1650 °C band was
@@ -189,14 +191,36 @@ what integral action cancels perfectly. Pulsed charging puts content at the
 charger frequency instead, which the loop has to reject rather than integrate
 away. Open-loop crown swing went from 10 K to 23 K.
 
-**Reset** starts from a *consistent operating point* — offsets measured from
-the settled steady state at nominal firing — not arbitrary temperatures. A
-furnace that takes days to equilibrate would otherwise spend the whole episode
-in an initial transient with nothing to control.
+**Reset** starts on the furnace's settled orbit. A furnace that takes days to
+equilibrate would otherwise spend the whole episode in an initial transient with
+nothing to control, and it did: the reset's offsets dated from before the firing
+interruption and the pulsed charger, so with the crown held the melt fell
+2.4 K/h over the first reversal cycle (the review measured -0.9 K/h, over a
+longer window) and the fuel climbed 10 % over the episode. The air preheat
+reading started 240 K too hot.
 
-**Observation.** A real furnace has crown and air-preheat thermocouples and the
-operator knows the reversal state. Glass temperatures, checker profile, batch mass and the
-pull-rate disturbance are hidden: **6 of 9 dynamic quantities**.
+`settled_point` reads the orbit from two rows, each a constant firing (raw -0.1
+and +0.1) run for 2000 h with the disturbances off and read where an episode
+starts, just after a full reversal cycle. Over the reset's crown range it
+interpolates them, and the middle agrees with a run at raw 0 within 0.03 K and
+1 kg of batch. Each regenerator gets its own profile, since the chamber about to preheat the air is
+the hot one. Rerun the rows if the plant's balance changes, or the reset silently
+stops being settled; `test_reset_sits_on_the_steady_state_of_its_firing` fails
+when that happens.
+
+**Pull is measured, gas is not.** A float line sets its ribbon speed and width,
+so it knows its pull, and the observation reports it, exact. The disturbance a
+crown loop cannot see is the gas: a burner with no calorimeter turns a kilogram
+into more or less heat as the supply changes. That is a gain on the firing, and
+the air stays ratioed to the mass. A furnace is found running on the gas of the
+day, so reset's fuel flow burns the orbit's heat on it. `m_pull_noise_std` stays
+0.4 kg/s, 7 % of the pull. **Weak figure:** that is more than a line that is
+"steady and known" should wander, and no source for a line's real scatter was
+found, so it is left for the owner.
+
+**Observation.** A real furnace has crown and air-preheat thermocouples, the
+operator knows the reversal state, and the line knows its pull. Glass
+temperatures, checker profile, batch mass and the gas's heating value are hidden.
 
 ---
 
@@ -262,9 +286,14 @@ work on this plant: the crown temperature integrates the firing rate, so
 under a bang-bang relay it drifts without sustained zero-crossings and
 Åström–Hägglund has no ultimate gain or period to extract.
 
-On the held-out seeds 200 to 209 it holds 0.739 a step, the grid-searched
-gains 0.837, against a ceiling of 1: the base layer already tracks within
-the thermocouple's resolution, so the task has no room left for the hold.
+On the held-out seeds 200 to 209 it held 0.739 a step, the grid-searched
+gains 0.837, against a ceiling of 1, before the slew limit: the base layer
+tracked within the thermocouple's resolution, so the task had no room left for
+the hold. These gains predate the limit, and PR 9 of the industrial fixes
+retunes them. They demand a relay, saturated on 95 % of steps (the review: 94 %),
+because 12 per K on a 0.36 K reading spans the action. The review had the fuel
+moving 2.3 % of firing a step; the actuator now moves it 0.49 %, its limit
+nearly every step, and the same gains hold 1.12 K with no trips.
 Spec, a strict xfail in `tests/glass_furnace/test_glass_furnace_pid.py`: the
 true crown within 2 K on at least 95 % of hold steps. Measured 88.8 to
 97.0 %, 6 of 10 seeds under, with peaks of 4.3 to 6.9 K. The grid-searched
@@ -272,16 +301,21 @@ gains score the same (88.8 to 96.9 %, peaks 4.4 to 7.1 K): the misses are
 the firing interruptions at each reversal, which a PI on the crown meets only
 after the fact.
 
+**The figures below predate the fuel slew.** On the limited plant the `NewtonMPC`
+before the shared solver stalled at 8.84 K on seed 2 (strict xfail, PR 9): a planner gets no gradient from
+`actuate` at `command == held` or past the rate limit. With that patched and the
+plan made by rate, it holds 0.29 K.
+
 **The oracle.** It is the shared solver on the plant itself (`oracle.py`):
 all four checker nodes per chamber, the fuel pipeline, the flame's algebraic
 solve and the reversal cycle, with the pull planned on its mean path. Cooper's
 recipe sets one move per 15 minutes (T_c = 30 steps, from the working end's
 fits; the crown's own fits fail the noise test, H16), and the plan runs to the
 episode's end. The move is held for those 15 minutes, as DMC executes it, so
-the oracle cannot answer a single 25-minute reversal, and it scores about 1.85
+the oracle cannot answer a single 25-minute reversal, and it scores about 2
 times worse than the `NewtonMPC` that held this slot, which re-solved every
-step, while beating the expert about 2 to 1 (seed 0, -1109 against -600 and
--2183).
+step, while beating the expert about 2 to 1 (mean of the ten test seeds, -903
+against -451 and -1878).
 
 Before that the oracle was `NewtonMPC` (iterative LQR) on `step_env`, over a
 120-step horizon, and before it a CasADi model of the plant (oracle audit,
@@ -324,7 +358,7 @@ environment in the library.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `glass_furnace` | 1600 | 30 | 13.3 h | 1 in [-1, 1] | 5 | 27 |
+| `glass_furnace` | 1600 | 30 | 13.3 h | 1 in [-1, 1] | 6 | 29 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -365,11 +399,35 @@ false unless `continuing = False`, which ends the episode on that step instead; 
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
 
+## Actuators and timing
+
+| figure | value | status | source |
+| --- | --- | --- | --- |
+| fuel slew | 1/1800 of the span per s: the full band in 30 min, 1 % of firing per min | **Ours, for the owner to accept** | see below |
+| reversal period | 25 min | Read | 20 to 30 min, [Hubert, Lehigh glass lecture 3](https://www.lehigh.edu/imi/teched/GlassProcess/Lectures/Lecture03_Hubert_industglassmeltfurnaces.pdf) |
+| firing gap at a reversal | 40 s | Read | about 30 to 60 s with no flames, same lecture, and [this Mustansiriyah lecture](https://uomustansiriyah.edu.iq/media/lectures/5/5_2018_11_25!11_08_27_PM.pdf) |
+| fuel transport delay | 60 s | **Ours** | gas train, air adjustment, flame development; no source found |
+| crown thermocouple lag | 120 s | **Ours** | a refractory sheath; no source found |
+| control interval | 30 s | **Ours** | a supervisory loop's interval; no source found |
+| gas heating value | 1 % (1 sigma) | Read for the size | ΔHi 4 % between North Sea and Russian H-gas with Wobbe within 0.4 %, Leipzig 2011, [Leicher, GWI, 2019](https://www.energigas.se/media/2515/1_2-joerg-leicher_gwi-s.pdf), slides 13 and 27; two sigma either side of the mean |
+| its correlation time | 1 day | Read for the range, the day is ours | composition varies "usually weekly and sometimes even daily", [Glass Service, GM3 2021](https://www.glassonline.com/wp-content/uploads/2025/01/GLASS-SERVICE-GM3_2021.pdf); the fast end, since a 13 h episode sees little of a week |
+
+**The slew limit is not sourced.** Our judgement is that the gas valve is not what
+limits a furnace, and that keeping the air, the regenerators and the glass together
+is. Havel et al.
+([2006](https://www.irsm.cas.cz/materialy/cs_content/2006/Havel_CS_2006_0000.pdf))
+ask that temperature changes in the tank stay below a limit, and give no number.
+No published move limit was found for a float furnace. 1 % of firing per minute is
+0.5 % a step, under a quarter of the 2.3 % the review saw. It still allows a 6 K
+trim, 0.0032 kg/s at the plant's steady gain, in about one step, and answers a 4 %
+change of gas in four minutes, so it limits the loop and not the task.
+
 ## Readings
 
 The observation reports the crown, the preheated air and the delivered fuel flow
 through their instruments (`docs/proposals/measurement-noise.md`), and `fuel_pct`
-inherits the fuel meter's noise. The reversal phase and the setpoint stay exact.
+inherits the fuel meter's noise. The reversal phase, the setpoint and the pull
+stay exact.
 `sensor_noise_scale = 0` gives the noise-free task.
 
 | reading | sigma | step | instrument | status | source |

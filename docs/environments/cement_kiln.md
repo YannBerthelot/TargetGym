@@ -60,7 +60,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 13 fields.
+`reset` samples the initial condition and the target; state has 14 fields.
 
 ## Episode end
 
@@ -75,7 +75,7 @@ Recorded over 10 seeds of the 700-step episode (see [Baseline results](../baseli
 | controller | mean return | cost per step |
 |---|---|---|
 | PID | -1.275e+04 | 18.21 |
-| MPC | -110 | 0.1571 |
+| MPC | -406.2 | 0.5802 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
@@ -91,6 +91,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
 | `action_noise` | 0 | fraction of span |
+| `actuator_rate` | 0 | fraction of span per delta_t unit |
+| `actuator_lag` | 0 | delta_t units |
 | `reward_version` | 2 | - |
 | `e_floor` | 0.0005 | - |
 | `e_tol` | 0 | - |

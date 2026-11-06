@@ -27,7 +27,7 @@ from target_gym.video import SavesVideo
 
 
 class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRParams]):
-    """Exothermic CSTR holding concentration against runaway.
+    """Exothermic CSTR holding concentration through unmeasured feed loads.
 
     Action (1,): [coolant temperature], raw in [-1, 1] -> [T_c_min, T_c_max]
     """
@@ -43,8 +43,12 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
     tracked_names: tuple = ("C_a (mol/L)",)
     obs_target_index: int = 2  # target_CA
 
-    # Process photometer and Pt100 RTD (PHYSICS.md section on readings).
-    readings: tuple = (FieldReading("C_a", sigma=5e-4), FieldReading("T", sigma=0.04))
+    # Process photometer on a 1 min sample loop, and Pt100 RTD (PHYSICS.md
+    # section on readings). ``dead_time`` is in ``delta_t``'s minutes.
+    readings: tuple = (
+        FieldReading("C_a", sigma=5e-4, dead_time=1.0),
+        FieldReading("T", sigma=0.04),
+    )
 
     def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (3,)

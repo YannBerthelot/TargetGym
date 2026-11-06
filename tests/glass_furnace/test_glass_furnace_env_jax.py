@@ -1,6 +1,5 @@
 import jax
 import jax.numpy as jnp
-import pytest
 
 from target_gym.glass_furnace.env import (
     FUEL_DEAD_TIME_STEPS,
@@ -25,6 +24,7 @@ def _make_state(**overrides) -> GlassFurnaceState:
         target_T_crown=1587.0,
         target_schedule=jnp.full((N_SETPOINTS,), 1587.0),
         m_pull_disturbance=jnp.zeros(()),
+        lhv_deviation=jnp.zeros(()),
         T_crown_meas=1587.0,
         fuel_pipeline=jnp.full((FUEL_DEAD_TIME_STEPS,), 0.6),
         fuel_flow=0.6,
@@ -52,15 +52,9 @@ def test_reset_places_the_furnace_on_a_consistent_operating_point():
         <= float(state.target_T_crown)
         <= env.default_params.target_T_crown_range[1]
     )
-    # Reset places the furnace on a consistent operating point: every zone is
-    # offset from the sampled crown temperature by its measured steady-state
-    # offset, rather than being pinned to an absolute default.
-    p = env.default_params
-    crown = float(state.T_crown)
-    assert float(state.T_gas) == pytest.approx(crown + p.initial_T_gas_offset)
-    assert float(state.T_melt) == pytest.approx(crown + p.initial_T_melt_offset)
-    assert float(state.T_work) == pytest.approx(crown + p.initial_T_work_offset)
-    # ...and that ordering must be physical: flame > crown > melt > work.
+    # Reset places the furnace on its settled orbit
+    # (test_glass_furnace_operating_point.py), and that ordering must be
+    # physical: flame > crown > melt > work.
     assert state.T_gas > state.T_crown > state.T_melt > state.T_work
     # Checker stack starts with its hot-to-cold gradient.
     assert float(state.T_rA[0]) > float(state.T_rA[-1])
@@ -69,9 +63,9 @@ def test_reset_places_the_furnace_on_a_consistent_operating_point():
 def test_observation_hides_unmeasurable_states():
     """Only real plant instrumentation is observable.
 
-    obs = [T_crown_meas, T_air_preheat, fuel_pct, reversal_phase, target].
+    obs = [T_crown_meas, T_air_preheat, fuel_pct, reversal_phase, target, pull].
     Glass-zone temperatures, the checker profile, the batch blanket mass and
-    the pull-rate disturbance are all hidden. The crown reading is the
+    the gas's heating value are all hidden. The crown reading is the
     *instrument*, which lags the true crown temperature.
     """
     env = GlassFurnace()
@@ -79,7 +73,7 @@ def test_observation_hides_unmeasurable_states():
         T_melt=1234.5,
         T_work=5678.9,
         m_batch=4321.0,
-        m_pull_disturbance=8765.0,
+        lhv_deviation=8765.0,
         T_rA=jnp.full((N_REGEN_NODES,), 2468.0),
     )
     state = _make_state(**sentinels)

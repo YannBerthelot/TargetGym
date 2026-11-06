@@ -319,8 +319,12 @@
       "make_plane3d_mpc"
     ],
     "scored_overrides": {
-      "max_steps_in_episode": 400,
-      "failure_cost": 88888888.8888889,
+      "max_steps_in_episode": 1000,
+      "target_radius_range": [
+        34000.0,
+        36000.0
+      ],
+      "failure_cost": 1088888888.8888888,
       "rho_floor_tracking": 0.1840696011111111,
       "rho_floor": 0.1840696011111111
     },
@@ -453,7 +457,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "load_scale"
+    ]
   },
   {
     "name": "first_order",
@@ -523,7 +529,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "load_scale"
+    ]
   },
   {
     "name": "ph_neutralization",
@@ -632,14 +640,16 @@
     "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
-      "m_pull_disturbance"
+      "m_pull_disturbance",
+      "lhv_deviation"
     ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
     "noise_fields": [
-      "m_pull_noise_std"
+      "m_pull_noise_std",
+      "lhv_noise_std"
     ]
   },
   {
@@ -666,9 +676,7 @@
       "target_gym.reactor.oracle",
       "make_reactor_mpc"
     ],
-    "scored_overrides": {
-      "max_steps_in_episode": 864
-    },
+    "scored_overrides": {},
     "tuned_gains_key": "reactor",
     "gains_keys": [],
     "baselines_note": null,

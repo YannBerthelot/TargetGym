@@ -158,9 +158,8 @@ def test_reflux_and_boilup_push_compositions_oppositely(params):
 def test_default_integrator_is_stable_and_fewer_substeps_are_not(params):
     """16 substeps is a stability requirement, not accuracy tuning.
 
-    Tray time constant ~0.17 min gives |lambda| ~ 11.8 /min, and RK4 needs
-    h*|lambda| < 2.78. At dt = 1 min that means at least ~5 substeps; in
-    practice the profile only survives at 16.
+    The stiffest mode is |lambda| = 32.5 /min at the nominal point and 37.6 /min
+    across the flow box, and RK4 needs h*|lambda| < 2.78 (PHYSICS.md section 4).
     """
     p = params.replace(zF_noise_std=0.0)
     raw = _raw(NOMINAL_L, NOMINAL_V, p)

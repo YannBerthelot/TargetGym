@@ -27,7 +27,7 @@ Deliberately **not** modelled (and why):
 | ~~Fuel burn~~ | **Now modelled.** ``specific_fuel_consumption`` charges thrust against the tank each step and ``m`` is recomputed from what is left, so the aircraft lightens as it flies. This row said mass was held constant long after that stopped being true. |
 | Flaps / slats / gear | Clean configuration only. Makes the low-speed regime unrepresentative — see §5. |
 | Aeroelasticity, ground effect | Negligible at task altitudes. |
-| Engine spool dynamics beyond first-order lag | `compute_next_power` is a 1st-order lag; adequate for setpoint tracking. |
+| Engine spool dynamics beyond first-order lag | `compute_next_power` is a 1st-order lag above idle; a real engine spools slowest near idle. |
 
 ---
 
@@ -70,8 +70,10 @@ density path. Harmless at 0.01 %, but the two should be unified.
 | `I` | 9.0 × 10⁶ | kg·m² | TUNED — not sourced. Order-of-magnitude plausible for a 37 m fuselage. | ⚠️ |
 | `moment_arm_stabilizer` | 15.0 | m | TUNED — plausible tail arm for A320 geometry | ⚠️ |
 | `moment_arm_wings` | 1.5 | m | TUNED — wing AC to CG offset | ⚠️ |
-| `power_response_rate` | 0.05 | 1/s | TUNED — first-order spool rate; an airliner reaches ~63 % of a throttle change in ~20 s | ⚠️ |
-| `stick_response_rate` | 0.9 | 1/s | TUNED — control-surface lag, deliberately far faster than the engine | ⚠️ |
+| `power_response_rate` | 1/1.7 | 1/s | 14 CFR 33.73(b): idle to 95 % in 5 s. A first-order lag takes ln 19 of its time constant, so 1.7 s gives 5.006 s, the rule to two figures and 6 ms over it (1.698 s is exact). A sea-level static certification limit, flown here at every altitude | ✅ |
+| `idle_power` | 0.05 | – | **Ours, for the owner.** The plan's flight idle, 5 % of full power. The lever's range maps onto idle to full | ⚠️ |
+| `stick_response_rate` | 1/0.06 | 1/s | First-order 0.06 s, which matched an industry actuator model for the elevator of the VELA concept (ICAS 2006, paper 531). Another aircraft, so borrowed | ⚠️ |
+| `surface_rate_limit` | 30 | deg/s | Ours, accepted by the owner on 2026-11-06 as a working value. Full elevator travel in a second. No A320 rate was found in an open source | ⚠️ |
 
 **Mass bookkeeping.** `compute_acceleration` integrates `params.initial_mass`.
 `state.m` previously reported `initial_mass + fuel = 92 588 kg`, which both
@@ -90,6 +92,7 @@ CL_lin = cl0 + cl_alpha·α                       α in degrees
 CL     = min(CL_lin / (1 + exp(1.5·(α - (aoa_stall + aoa_stall_width)))), CL_max) / β
 CD     = cd0 + k·CL²  + k_drag·max(0, M - M_crit)²
 β      = sqrt(1 - M²)
+CL_wing = min(CL, CL_max - buffet_slope·max(0, M - buffet_mach))
 ```
 
 | Symbol | Value | Derivation / source | |
@@ -103,6 +106,7 @@ CD     = cd0 + k·CL²  + k_drag·max(0, M - M_crit)²
 | `CL_max` | 1.5 | Attainable: peak CL 1.53 at α = 15.0°, so the clamp now binds. | ✅ |
 | `M_crit` | 0.80 | Drag-divergence Mach. Was declared **twice** (0.78, 0.80); 0.80 always won. | ✅ |
 | `k_drag` | 5.0 | TUNED — transonic drag-rise strength | ⚠️ |
+| `buffet_mach`, `buffet_slope` | 0.3, 1.4 | Ours, accepted by the owner on 2026-11-06 as a working value. Prandtl-Glauert let the wing reach CL 2.0 at M 0.7 and full stick pull 5.2 g at 3500 m (the review read 5.5). No open A320 chart was found. The line starts at `CL_max` and is anchored on the 30 % lift margin a cruise keeps to buffet (Dandois et al., ONERA AerospaceLab 6, 2013): 65 t at FL390 and M 0.78 has CL 0.632, so 0.82, and the line gives 0.83 there. The wing's only: the tail keeps its own limit | ⚠️ |
 
 ### Post-stall — the flat-plate branch
 
@@ -168,7 +172,7 @@ it replaced the logarithmic reward of version 1.
 ### Task: `plane`
 
 Hold an A320-class airliner at a target altitude in light-to-moderate
-turbulence with throttle and elevator. This is the suite's transparent
+turbulence with throttle and a pitch demand. This is the suite's transparent
 aircraft: nearly the whole state is observed and only the gusts are hidden, so
 the difficulty is the plant itself, with slow climbs and pitch, speed and
 thrust all coupled.
@@ -176,7 +180,7 @@ thrust all coupled.
 ### Task: `plane_sine`
 
 Track an altitude that moves as a sinusoid, with the same airliner, throttle
-and elevator as `plane`. A moving reference tests how well a controller
+and pitch demand as `plane`. A moving reference tests how well a controller
 follows a frequency, not only how well it holds a level.
 
 ### Task: `plane_energy`
@@ -184,7 +188,8 @@ follows a frequency, not only how well it holds a level.
 Walk a ladder of eight altitude levels while holding a commanded airspeed,
 with the same airliner as `plane`. Scoring airspeed as well as altitude
 removes the spare degree of freedom two actuators would have on one
-objective, so throttle and elevator have to share the work.
+objective, so throttle and pitch have to share the work. The commanded airspeed
+is a schedule, below.
 
 ### Observation: `plane`, `plane_sine`, `plane_energy`
 
@@ -251,12 +256,87 @@ commanded level and the tracking term scored nothing, so the benchmark was
 deciding on airspeed alone. The planners plan on the mean wind
 (`turbulence_sigma` is in the spec's `noise_fields`), as a real MPC would.
 
+### The inner loop
+
+**A policy does not touch the surfaces.** An action is `[throttle, pitch demand]`,
+in [-1, 1], held for the 1 s step, and full action is +-15 deg of pitch. The plant
+flies the elevator to the demand. Policies, experts and oracles all send the same
+1 Hz demands, so they share one action space. The review's reason: a 1 s step sits
+on the 2.5 s short period (2.5 rad/s, damping 0.36 at 5500 m), so a controller on
+the surfaces at 1 Hz was fighting its own sample rate. The rejected alternative was
+a 4 Hz step, at four times the steps and the oracle's cost.
+
+The loop runs at 4 Hz inside the step (`attitude_axis`, `compute_next_state`), and
+each sub-step moves the surface and the engine and integrates the dynamics with
+one RK4 step, so the sixteen force evaluations a step costs are twice the eight of
+the old `rk4_2`. One axis is `kp s err + integral - kd s^2 rate`, clipped to the
+surface's travel, which is `AP_RollController` with its integral in surface units,
+frozen while the surface is saturated. `s` is ArduPilot's airspeed scaler, tuning
+EAS over EAS, clamped to [0.3, 2].
+
+The gains are task constants, one tune for every task, from the attitude procedure
+of `docs/proposals/expert-protocols-aircraft.md` (ArduPlane 4.0.9's manual P, D, I),
+with its amendment of 2026-11-06, run once in still air by
+`scripts/tune_inner_loop.py`. The throttle holds 230 m/s through both tests, by a PI
+at 1 Hz whose gains follow from the plant's numbers by SIMC, 0.265 per m/s and 10.8 s.
+That hold is ours: the guides give none. It keeps the speed within 224 to 234 m/s, so
+the speed mode no longer reads as overshoot.
+
+| axis | P (ArduPilot, ours) | D | I | how the recipe ended |
+|---|---|---|---|---|
+| pitch | 5.0, 6.366 | 0.1, 0.1273 | 0.2, 0.2546 | **P at its cap**, D at the guide's limit, I halved from the first test that overshot, 0.4 |
+| roll | 0.7, 0.8913 | 0.1, 0.1273 | 0.025, 0.0318 | P walked down from 1.0, D at the guide's limit, I halved from 0.05, its first test |
+
+**⚠️ For the owner.**
+
+- **Pitch P is the cap's, not the recipe's choice.** No test overshoots at any P up
+  to the recipe's cap of 5.0, so the number says it found no limit below that.
+- **D stops at the guide's 0.1,** by the amendment. No test oscillated on either axis:
+  past about 10 the roll loop only slows down.
+- **Roll's P stands at 0.7 under the overshoot rule,** the owner's call on 2026-11-06.
+  The defaults already overshoot and one step back still does, by 8 %, so P walks down
+  to the last clean step.
+- **Step 4 halves I and does not fly the result,** so the shipped roll loop overshoots
+  a 45 deg step by 12 %, past the 5 % reading and inside the 22 % that reads as
+  oscillation. It reaches the step in 4 s at 14.5 deg/s, near the 15 deg/s of the
+  A320's normal law, and the integral takes until 20 s to bring it back inside 5 %.
+
+Pitch reaches 63 % of a step in about 1 s, overshoots by 2.5 % at most, and is inside
+5 % by 5 s.
+
+A reset aircraft engages in trim (`trim_stick`): its elevator started 5 deg from
+trim, so a 1.8 deg demand pulled 1.9 g in the first second.
+
+### The envelope
+
+The plant trips outside these limits (`check_is_terminal`, read on the true state):
+
+| limit | value | source | |
+|---|---|---|---|
+| load factor | +2.5, -1 | 14 CFR 25.337(b) and (c) | ✅ |
+| `vmo_eas` | 350 kt EAS | OpenAP's A320 data; the FAA sheet A28NM was not opened. VMO is in CAS, and EAS is within a few knots of it below M 0.6 | ✅ |
+| `mmo` | 0.82 | as above | ✅ |
+| bank (3D) | 60 deg | 14 CFR 91.307(c). The demand stops at 45 | ✅ |
+
+The load factor read is the step's worst, not its last, so a pull inside a step
+counts. Neither the altitude band nor these limits end an episode: `failure_kernel`
+charges the trip and restarts the aircraft. The patrol tasks do not read them yet,
+which is PR 7b.
+
+### The speed schedule
+
+The airspeed demand is 290 kt CAS, then M 0.78 (`scheduled_airspeed`), EUROCONTROL's
+A320 climb figures, since a fixed 230 m/s was 385 KEAS at 3000 m, past VMO. It gives
+171 m/s at 3000 m, 193 at 5500 and 219 at 8000, the CAS branch all the way: the
+crossover is near 9600 m. Observation 9 and the airspeed term read it at the
+aircraft's height.
+
 ### The expert
 
-The PID slot holds TECS over a PI pitch loop (`plane_tecs_step` in
-`experts.py`), what PX4 and ArduPilot fly for height and speed and the 3D
-expert's longitudinal half, with the same aircraft numbers and tuning
-(`plane3d/PHYSICS.md`, `scripts/tune_aircraft_guidance.py`). Throttle closes
+The PID slot holds TECS (`plane_tecs_step` in `experts.py`), what PX4 and ArduPilot
+fly for height and speed and the 3D expert's longitudinal half, with the same
+aircraft numbers and tuning (`plane3d/PHYSICS.md`,
+`scripts/tune_aircraft_guidance.py`). Its pitch demand goes to the inner loop. Throttle closes
 the total energy error and pitch holds height. On held-out seeds 200-209 it
 holds altitude within 1.5 m on average on `plane`, 1.9 m on `plane_sine`, and
 1.6 m on `plane_energy` once each ladder step is captured; the airliner climbs
@@ -437,9 +517,9 @@ sites (2D, 3D and patrol) now say so.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane` | 280 | 1 | 5 min | 2 in [-1, 1] | 10 | 18 |
-| `plane_energy` | 1600 | 1 | 27 min | 2 in [-1, 1] | 10 | 18 |
-| `plane_sine` | 480 | 1 | 8 min | 2 in [-1, 1] | 10 | 18 |
+| `plane` | 280 | 1 | 5 min | 2 in [-1, 1] | 10 | 21 |
+| `plane_energy` | 1600 | 1 | 27 min | 2 in [-1, 1] | 10 | 21 |
+| `plane_sine` | 480 | 1 | 8 min | 2 in [-1, 1] | 10 | 21 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from target_gym import Formation, FormationParams
-from target_gym.experts.pid import make_plane3d_heading_pid, plane3d_heading_pid_step
+from target_gym.experts.pid import make_plane3d_heading_pid
 from target_gym.formation.env import (
     MAX_WINGMEN,
     aircraft_costs,
@@ -29,6 +29,7 @@ from target_gym.patrol.env import (
     PatrolState,
     compute_reward_terms_patrol,
     get_obs_full,
+    lead_autopilot_step,
     lead_leg,
 )
 from target_gym.patrol.env_jax import PlanePatrol
@@ -186,7 +187,7 @@ def test_with_the_autopilot_in_the_lead_seat_each_wingman_flies_a_patrol(k):
     pid_params, pid = make_plane3d_heading_pid()
     actions = jax.random.uniform(jax.random.PRNGKey(7), (k, 3), minval=-1, maxval=1)
     for _ in range(3):
-        lead_action, new_pid = plane3d_heading_pid_step(pid_params, pid, obs[:15])
+        lead_action, new_pid = lead_autopilot_step(pid_params, pid, obs[:15])
         joint = jnp.concatenate([lead_action, actions.ravel()])
         obs2, new, _, _, _ = env.step_env(KEY, state, joint, params)
         for i in range(k):

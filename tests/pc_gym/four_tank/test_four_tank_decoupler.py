@@ -21,7 +21,7 @@ from target_gym.pc_gym.four_tank.experts import (
     steady_voltages,
 )
 
-P = FourTankParams()
+P = FourTankParams(load_scale=0.0)  # the balances at rest, with no load on them
 EXPERT = make_four_tank_pid_controller()
 TARGETS = (0.15, 0.21)
 

@@ -34,12 +34,12 @@ def wingman_name(i: int) -> str:
 class FormationMARL:
     """A lead and ``num_wingmen`` wingmen (1 to 4), one agent per aircraft.
 
-    Each agent acts with ``[power, stick, aileron]`` in [-1, 1]. The lead
+    Each agent acts with ``[throttle, pitch demand, bank demand]`` in [-1, 1]. The lead
     observes ``16 + 3 * num_wingmen`` values, each wingman the patrol's 26
     (see :class:`Formation`). The joint environment is ``self.env``.
     """
 
-    def __init__(self, num_wingmen: int = 2, integration_method: str = "rk4_2"):
+    def __init__(self, num_wingmen: int = 2, integration_method: str = "rk4_1"):
         self.env = Formation(num_wingmen, integration_method)
         self.num_wingmen = num_wingmen
         self.agents = [LEAD] + [wingman_name(i) for i in range(num_wingmen)]

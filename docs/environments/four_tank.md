@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/four_tank/pid_output.gif" width="480px"/></p>
 
-Hold the levels of the two lower tanks of Johansson's quadruple-tank process with two pumps. Each pump sends most of its flow to the upper tank on the other side, which drains into the opposite lower tank, so pairing each pump with the tank below it is the wrong move and the response is non-minimum phase. All four levels are measured: the difficulty is the coupling, not what is seen.
+Hold the levels of the two lower tanks of Johansson's quadruple-tank process with two pumps. Each pump sends most of its flow to the upper tank on the other side, which drains into the opposite lower tank, so pairing each pump with the tank below it is the wrong move and the response is non-minimum phase. All four levels are measured, but after the settle the lower tanks take flows nothing measures, so the difficulty is the coupling and the loads.
 
 ```python
 import target_gym as tg
@@ -58,7 +58,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 11 fields.
+`reset` samples the initial condition and the target; state has 13 fields.
 
 ## Episode end
 
@@ -89,6 +89,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
 | `action_noise` | 0 | fraction of span |
+| `actuator_rate` | 0 | fraction of span per delta_t unit |
+| `actuator_lag` | 0 | delta_t units |
 | `g` | 9.81 | m/s^2 |
 | `gamma1` | 0.2 | - |
 | `gamma2` | 0.2 | - |
@@ -108,6 +110,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `precision_floor` | 0.001 | m |
 | `h_max` | 1.5 | m |
 | `tracking_band` | 0.05 | m |
+| `load_flow` | 0.00025 | m^3/s |
+| `load_start` | 581 | steps |
+| `load_period` | 300 | steps |
+| `load_scale` | 1 | - |
 | `reward_version` | 2 | - |
 | `e_floor` | 0.001 | m |
 | `e_tol` | 0 | m |

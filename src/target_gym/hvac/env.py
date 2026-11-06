@@ -90,7 +90,9 @@ class HVACParams(EnvParams):
     T_out_mean: float = 5.0  # C, seasonal mean (heating season)
     T_out_amplitude: float = 5.0  # C, half daily swing
     T_out_noise_std: float = 3.0  # C, OU deviation std
-    solar_peak: float = 350.0  # W/m^2 on the glazing at solar noon
+    # W/m^2 on the glazing at noon, a heating season's mean over four facades
+    # with the cloud in it, not a clear-sky peak: PHYSICS.md, Solar gain.
+    solar_peak: float = 175.0
 
     # ---- Internal gains ----
     gain_occupied: float = 8.0  # W/m^2 (people, lighting, equipment)
@@ -135,12 +137,8 @@ class HVACParams(EnvParams):
     # ---- Reward (docs/reward-shaping.md; version 2), in euros per step ----
     # Comfort: while occupied, a quadratic penalty on the air temperature
     # outside a +-``comfort_tolerance`` band about the setpoint; during the
-    # setback, on the shortfall below ``setpoint_setback`` only. This plant
-    # cannot cool, and under its clear-sky solar gains the zone sits above the
-    # setback target every night and above the occupied band two thirds of
-    # the day whatever the controller does (`scripts/measure_hold.py`: mean
-    # signed error +4.3 K at setback, +1.2 K occupied, for the shipped MPC);
-    # a symmetric night target would score the weather. Priced at
+    # setback, on the shortfall below ``setpoint_setback`` only: this plant
+    # cannot cool, so a symmetric night target would score the weather. Priced at
     # ``comfort_price`` per K^2 per hour (provisional; sweep 0.1 / 0.2 / 0.4).
     # Energy: the emitter's heat at ``gas_price`` per kWh, charged in full --
     # it is the bill this plant exists to trade against comfort. Floor:

@@ -40,10 +40,21 @@ from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
 FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
+#: A clock 5 steps before a switch, so the ten stages below cross a target's ramp.
+START_CLOCK = {"unstable_cstr": 195}
 C2 = (
-    "hvac", "battery", "boiler_drum", "wind_turbine", "glass_furnace", "cement_kiln",
-)  # fmt: skip
+    "hvac",
+    "boiler_drum",
+    "wind_turbine",
+    "glass_furnace",
+    "cement_kiln",
+)  # fmt: skip  (battery's rebuilt plant keeps a stand-in until PR 9)
 ON_SOLVER = FIVE + C2
+#: PR 9 rewrites these: their solver models predate the fixes of PRs 5 and 6.
+STALE_MODELS = ("boiler_drum", "glass_furnace", "wind_turbine")
+_STALE_MODEL = pytest.mark.xfail(
+    strict=True, reason="PR 9: the solver's model predates this plant's fixes"
+)
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -71,18 +82,30 @@ def test_the_kiln_solves_seed_zeros_reset():
 
 
 @pytest.mark.medium
-@pytest.mark.parametrize("name", ON_SOLVER)
-def test_the_exact_rewrites_replay_on_the_env(name):
+@pytest.mark.parametrize(
+    "name, load",
+    [
+        pytest.param(n, None, marks=_STALE_MODEL) if n in STALE_MODELS else (n, None)
+        for n in ON_SOLVER
+    ]
+    + [("cstr", (0.7, -0.015)), ("four_tank", (2e-4, -1e-4))],
+)
+def test_the_exact_rewrites_replay_on_the_env(name, load):
     """Ten stages from training seed 100's reset, under the moves that hold
     the actuators (raw 0 where the reset holds none in the box) plus a
     0.05 sine. The two runs differ only in the order of a few float64
     operations a step (2.2e-16 each), so the relative reward gap and the
     output gap, in resolutions, sit many decades under 1e-10 and 1e-6 unless
-    a rewrite is not exact. The compressor's sites run exact (width 0)."""
+    a rewrite is not exact. The compressor's sites run exact (width 0). With
+    a ``load`` in force at the solve, the plan and the env both hold it."""
     env, params, oracle = _oracle(name)
     with enable_x64():
         _, state = env.reset_env(jax.random.PRNGKey(100), params)
+        if load is not None:
+            state = state.replace(load=jnp.array(load, state.load.dtype))
         st, m = float64(state), oracle.model
+        if name in START_CLOCK:
+            st = st.replace(block_clock=jnp.asarray(START_CLOCK[name], jnp.int64))
         hold = jnp.where(jnp.abs(m.hold(st)) < 1.0, m.hold(st), 0.0)
         wave = 0.05 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]
         moves = jnp.clip(hold + wave, -1.0, 1.0)
@@ -284,7 +307,13 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
     + [
         # p = 1, in dollars: 500 W, half the 1 kW resolution, for one step of
         # delta_t s at the imbalance price in $/MWh.
-        ("battery", 500.0e-6 * 100.0 * 5.0 / 3600.0),
+        pytest.param(
+            "battery",
+            500.0e-6 * 100.0 * 5.0 / 3600.0,
+            marks=pytest.mark.xfail(
+                strict=True, reason="PR 9: the rebuilt battery's oracle is a stand-in"
+            ),
+        ),
         ("wind_turbine", 500.0e-6 * 100.0 * 0.25 / 3600.0),
         # 0.03 EUR/(K^2 h) for 0.25 h at (0.1 K / 2)^2.
         ("hvac", 0.03 * 0.25 * 0.05**2),

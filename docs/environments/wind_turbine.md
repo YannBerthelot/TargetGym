@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/wind_turbine/pid_output.gif" width="480px"/></p>
 
-Hold the electrical power of the NREL 5 MW reference turbine at a curtailed setpoint in turbulent, above-rated wind, with blade pitch and generator torque. The rotor-effective wind is hidden and has to be inferred from how the rotor behaves, while rotor speed stays regulated. Costs are in dollars.
+Hold the electrical power of the NREL 5 MW reference turbine at a curtailed setpoint in turbulent, above-rated wind, with blade pitch and generator torque. The rotor-effective wind is hidden and has to be inferred from how the rotor behaves, while rotor speed stays regulated. The dispatch moves every 25 s. Costs are in dollars.
 
 ```python
 import target_gym as tg
@@ -39,7 +39,7 @@ actuator range inside the environment.
 | 1 | blade pitch (deg) |
 | 2 | generator torque, percent of maximum |
 | 3 | electrical power (MW) |
-| 4 | target power (MW) |
+| 4 | target power (MW), the live dispatch level |
 
 ## Rewards
 
@@ -57,7 +57,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 12 fields.
+`reset` samples the initial condition and the target; state has 16 fields.
 
 ## Episode end
 
@@ -72,7 +72,7 @@ Recorded over 10 seeds of the 400-step episode (see [Baseline results](../baseli
 | controller | mean return | cost per step |
 |---|---|---|
 | PID | -0.05611 | 0.0001403 |
-| MPC | -0.005915 | 1.479e-05 |
+| MPC | -0.01107 | 2.767e-05 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
@@ -88,6 +88,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
 | `action_noise` | 0 | fraction of span |
+| `actuator_rate` | 0 | fraction of span per delta_t unit |
+| `actuator_lag` | 0 | delta_t units |
 | `R` | 63 | m |
 | `rho` | 1.225 | kg/m^3 |
 | `J_rotor` | 3.87592e+07 | kg m^2 |
@@ -98,17 +100,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `v_rated` | 11.4 | m/s |
 | `omega_rated_rpm` | 12.1 | rpm |
 | `v_cut_out` | 25 | m/s |
-| `cp_c1` | 0.5176 | - |
-| `cp_c2` | 116 | - |
-| `cp_c3` | 0.4 | 1/deg |
-| `cp_c4` | 5 | - |
-| `cp_c5` | 21 | - |
-| `cp_c6` | 0.0068 | - |
 | `pitch_min` | 0 | deg |
 | `pitch_max` | 40 | deg |
 | `pitch_rate_max` | 8 | deg/s |
 | `pitch_tau` | 0.2 | s |
 | `torque_max` | 47400 | N m |
+| `torque_rate_max` | 15000 | N m/s |
 | `torque_tau` | 0.1 | s |
 | `turbulence_std` | 1.2 | m/s |
 | `v_min` | 4 | m/s |
@@ -119,13 +116,16 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `precision_floor` | 1000 | W |
 | `power_envelope` | 5e+06 | W |
 | `pitch_activity_weight` | 0.02 | - |
+| `target_block_steps` | 100 | steps |
 | `reward_version` | 2 | - |
 | `e_floor` | 1680 | W |
 | `e_tol` | 0 | W |
 | `tracking_exponent` | 1 | - |
 | `imbalance_price` | 100 | $/MWh |
-| `c_hold` | 0.0013 | - |
+| `c_hold` | 0.0023 | - |
 | `fatigue_weight` | 1 | - |
+| `speed_band` | 1.1 | - |
+| `speed_weight` | 200 | - |
 | `failure_cost` | 0.0972222 | reward |
 | `restart_steps` | 2400 | steps |
 | `rho_floor_tracking` | 1.00972e-05 | reward |

@@ -126,9 +126,13 @@ def _deprecated(old: str) -> None:
     )
 
 
-def make_expert(name: str) -> Expert:
-    """The shipped expert for ``name``: see :class:`Expert`."""
-    return Expert(registry.get(name).make_pid_controller())
+def make_expert(name: str, sensor_noise_scale: float | None = None) -> Expert:
+    """The shipped expert for ``name``: see :class:`Expert`.
+
+    ``sensor_noise_scale`` takes the gains tuned at that noise level, for an
+    environment made with the same level. None and 1 mean the shipped gains,
+    and a level with no stored gains raises."""
+    return Expert(registry.get(name).make_pid_controller(sensor_noise_scale))
 
 
 def make_oracle(name: str, params=None):

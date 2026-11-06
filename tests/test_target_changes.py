@@ -72,9 +72,9 @@ def test_a_change_in_any_output_counts_from_the_target_at_reset():
 # ``time`` from i to i + 1, so level k becomes active at entry k block - 1.
 #   plane_energy (v4): target_steps = 8 treads over 1600 steps, 200 steps each
 #     (``plane.env.commanded_altitude``); the eighth starts on the last step.
-#   compressor_surge: N_SETPOINT_BLOCKS = 4 blocks of setpoint_block_steps 300.
+#   wind_turbine: N_TARGET_BLOCKS = 4 blocks of target_block_steps 100.
 #   glass_furnace: N_SETPOINTS = 5 slots over 1600 steps, 320 each.
-SCHEDULES = [("plane_energy", 200, 8), ("compressor_surge", 300, 3)]
+SCHEDULES = [("plane_energy", 200, 8), ("wind_turbine", 100, 3)]
 SCHEDULES += [("glass_furnace", 320, 4)]
 
 
@@ -92,10 +92,43 @@ def test_the_scorer_starts_a_cycle_at_every_scheduled_setpoint(name, block, n_ch
 
 
 @pytest.mark.large
-@pytest.mark.parametrize("name", ["reactor", "plane_sine"])
+def test_a_compressor_ramp_starts_one_cycle():
+    """N_SETPOINT_BLOCKS = 4 blocks of 300 steps, each opening on a 100-step
+    ramp. The target at ``time`` t + 1 first moves at t = 0, 300, 600 and 900."""
+    spec = REGISTRY["compressor_surge"]
+    p = spec.make_test_params()
+    for seed in (100, 101):
+        ep = E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=seed)
+        np.testing.assert_array_equal(
+            np.flatnonzero(ep.target_change),
+            [0, 300, 600, 900],
+            err_msg=f"seed {seed}",
+        )
+
+
+@pytest.mark.large
+@pytest.mark.parametrize("name", ["plane_sine"])
 def test_a_drifting_or_smooth_target_starts_no_cycle_in_the_scorer(name):
-    # reactor: an Ornstein-Uhlenbeck power demand; plane_sine: a sine altitude.
+    # plane_sine: a sine altitude.
     spec = REGISTRY[name]
     p = spec.make_test_params()
     ep = E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=100)
     assert not ep.target_change.any()
+
+
+def test_a_ramp_that_moves_on_under_half_the_steps_is_one_move():
+    """Its median step is 0, so each ramp step would look like a new target,
+    and a task would get hundreds of cycles from a few moves. A ramp is one move,
+    counted where it starts. Here 20 steps from step 40, in 100."""
+    targets = np.concatenate([np.zeros(40), np.linspace(0.05, 1.0, 20), np.ones(40)])[
+        :, None
+    ]
+    assert list(_changes(targets, 0.0)) == [40]
+
+
+def test_two_ramps_are_two_moves():
+    up = np.linspace(0.1, 1.0, 10)
+    targets = np.concatenate(
+        [np.zeros(30), up, np.ones(30), up[::-1] - 0.1, np.zeros(20)]
+    )[:, None]
+    assert list(_changes(targets, 0.0)) == [30, 70]

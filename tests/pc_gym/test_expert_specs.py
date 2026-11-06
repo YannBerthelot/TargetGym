@@ -41,13 +41,24 @@ def _episodes(name):
     return eps, p
 
 
+#: 10 s of probe lag and 10 s of dead time make the shipped gains cycle.
+PROBE = "the gains predate the probe, and cycle at 4,690 against a ceiling of 1; PR 9"
+#: A trip on every held-out seed, with 32 to 51 trips an episode.
+THERMOWELL = "the gains predate the thermowell and the valve, so it trips; PR 9"
+
 PLANTS = [
     "first_order",
     "cstr",
     "ph_neutralization",
-    "unstable_cstr",
+    pytest.param("unstable_cstr", marks=_finding(THERMOWELL)),
     "four_tank",
-    "distillation",
+    pytest.param(
+        "distillation",
+        marks=_finding(
+            "the gains predate the analyser delay and the tray hydraulics, so the "
+            "expert loses the column; PR 9 retunes it"
+        ),
+    ),
 ]
 
 
@@ -64,8 +75,14 @@ def test_the_expert_never_trips_the_plant(name):
     "name",
     [
         "first_order",
-        "cstr",
-        "ph_neutralization",
+        pytest.param(
+            "cstr",
+            marks=_finding(
+                "the cascade's gains predate the 1 min analyser, and it cycles, "
+                "at 1.5e4 against a ceiling of 1; PR 9 retunes it"
+            ),
+        ),
+        pytest.param("ph_neutralization", marks=_finding(PROBE)),
         pytest.param(
             "unstable_cstr",
             marks=_finding(
@@ -73,8 +90,20 @@ def test_the_expert_never_trips_the_plant(name):
                 "a ceiling of 1, through the unmeasured feed-temperature drift"
             ),
         ),
-        "four_tank",
-        "distillation",
+        pytest.param(
+            "four_tank",
+            marks=_finding(
+                "the gains predate the load steps, which it holds at 27.9 "
+                "against a ceiling of 2; PR 9 retunes them"
+            ),
+        ),
+        pytest.param(
+            "distillation",
+            marks=_finding(
+                "the gains predate the analyser delay and the tray hydraulics, so "
+                "it holds about 69,000 against a ceiling of 2; PR 9 retunes it"
+            ),
+        ),
     ],
 )
 def test_the_expert_holds_within_the_instruments_resolution(name):

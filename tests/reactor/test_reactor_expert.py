@@ -4,19 +4,18 @@ Contract, from the NRC's Westinghouse Technology training manual (HRTD 8.1,
 rod control; HRTD 5.0, the Tavg program and the 40 s rate/lag), not from the
 code:
 
-* Tavg is programmed linearly in load from no-load to full power. Here the
-  cold leg is the coolant inlet and the hot leg the observed coolant node, so
-  ``Tref = T_inlet + P / (2 m cp) * load``; the load is the demand.
+* Tavg is programmed linearly in load from no-load to full power, and the plant
+  reports both.
 * The total error, in deg F, is ``(Tref - Tavg)`` plus the power-mismatch
-  term: a rate/lag ``40 s / (1 + 40 s)`` on (demand - power) in % power,
+  term: a rate/lag ``40 s / (1 + 40 s)`` on (load - power) in % power,
   through a nonlinear gain of 0.3 F per % up to 1 % and 1.5 F per % beyond,
   times a variable gain of 2 up to 50 % load and 1 / load above.
 * Rod speed: none inside +-1.5 F from rest; once moving, the rods stop only
   at 1.0 F (lockup); 8 steps/min to 3 F, then 32 steps/min per F, 72 steps/min
   from 5 F. A positive error withdraws.
-* Ours: the 228-step stroke spans the rods' range, so a speed of ``s``
-  steps/min moves the command by ``2 s * 10 / (60 * 228)`` of the [-1, 1]
-  action per 10 s step (72 steps/min: 0.10526).
+* The 228-step stroke spans the rods' range, so a speed of ``s`` steps/min moves
+  the command by ``2 s * 30 / (60 * 228)`` of the [-1, 1] action per 30 s step
+  (72 steps/min: 0.31579).
 """
 
 import jax
@@ -27,16 +26,14 @@ import target_gym as tg
 from target_gym.registry import REGISTRY
 
 P = REGISTRY["reactor"].make_test_params()
-PER_SPM = 2.0 * 10.0 / (60.0 * 228.0)  # action per step per step/min
-DT_HALF = float(P.P_thermal_ref) / (2.0 * float(P.m_dot_cp))  # 16.67 K
+PER_SPM = 2.0 * 30.0 / (60.0 * 228.0)  # action per step per step/min
 
 
 def _obs(error_F=0.0, n=0.8, target=0.8, rod=0.0):
     """An observation whose temperature error (Tref - Tavg) is ``error_F``."""
-    T_ref = float(P.T_inlet) + DT_HALF * target
+    T_ref = 570.0
     T_avg = T_ref - error_F / 1.8
-    T_hot = 2.0 * T_avg - float(P.T_inlet)
-    return np.array([n, T_hot, rod, target], np.float32)
+    return np.array([n, 590.0, rod, target, T_avg, T_ref], np.float32)
 
 
 def _speed(expert, obs):
@@ -68,26 +65,25 @@ def test_moving_rods_stop_only_inside_the_lockup():
 
 
 def test_a_demand_step_moves_the_rods_through_the_rate_lag():
-    """Demand (the load, 80 %) 5 % above power, Tavg on its program. The rate/lag
-    leaves 5 e^(-k/4) % after k steps of 10 s: 3.894, 3.033, 2.362, 1.839,
-    1.433, 1.116. Through the gains (0.3 + 1.5 (m - 1)) * 1.25 F: 5.80, 4.19,
-    2.93, 1.95, 1.19, 0.59. So 72, 8 + 32 * 1.19 = 45.96, 8, 8, 8 (still
-    above the 1.0 F lockup), then stop."""
+    """Load (80 %) 5 % above power, Tavg on its program. The rate/lag leaves
+    5 exp(-30 k / 40) % after k steps of 30 s: 2.362, 1.116, 0.527. Through the gains
+    (0.3 + 1.5 (m - 1)) * 1.25 F: 2.93, 0.59, 0.20. So 8 steps/min (under 3 F), then
+    below the 1.0 F lockup, stopped."""
     expert = _expert()
     _speed(expert, _obs(n=0.8, target=0.8))
-    speeds = [_speed(expert, _obs(n=0.75, target=0.80)) for _ in range(6)]
-    np.testing.assert_allclose(speeds, [72.0, 45.96, 8.0, 8.0, 8.0, 0.0], atol=0.05)
+    speeds = [_speed(expert, _obs(n=0.75, target=0.80)) for _ in range(3)]
+    np.testing.assert_allclose(speeds, [8.0, 0.0, 0.0], atol=0.05)
 
 
 def test_the_mismatch_gain_doubles_below_half_load():
-    """2 % of mismatch leaves 1.558 % after one step, 1.136 F through the
-    nonlinear gain: times 2 at 40 % load it moves the rods (2.27 F), times
-    1 / 0.8 at 80 % it does not (1.42 F)."""
+    """3 % of mismatch leaves 1.417 % after one 30 s step, 0.926 F through the
+    nonlinear gain: times 2 at 40 % load it moves the rods (1.85 F), times 1 / 0.8
+    at 80 % it does not (1.16 F)."""
     low, high = _expert(), _expert()
     _speed(low, _obs(n=0.40, target=0.40))
     _speed(high, _obs(n=0.80, target=0.80))
-    assert _speed(low, _obs(n=0.38, target=0.40)) == pytest.approx(8.0, abs=1e-2)
-    assert _speed(high, _obs(n=0.78, target=0.80)) == pytest.approx(0.0, abs=1e-2)
+    assert _speed(low, _obs(n=0.37, target=0.40)) == pytest.approx(8.0, abs=1e-2)
+    assert _speed(high, _obs(n=0.77, target=0.80)) == pytest.approx(0.0, abs=1e-2)
 
 
 def test_power_below_demand_withdraws_and_above_inserts():
@@ -124,7 +120,5 @@ def test_tavg_stays_inside_the_deadband_on_held_out_seeds():
             assert not bool(info["tripped"])
             if t >= burn:
                 o = np.asarray(obs)
-                T_avg = 0.5 * (float(p.T_inlet) + o[1])
-                T_ref = float(p.T_inlet) + DT_HALF * o[3]
-                inside.append(abs(T_ref - T_avg) * 1.8 <= 1.5)
+                inside.append(abs(o[5] - o[4]) * 1.8 <= 1.5)
         assert np.mean(inside) >= 0.9, f"seed {seed}: {np.mean(inside):.2f}"

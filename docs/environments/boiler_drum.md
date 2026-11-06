@@ -37,9 +37,9 @@ actuator range inside the environment.
 |---|---|
 | 0 | drum level relative to normal water level (m) |
 | 1 | drum pressure (bar) |
-| 2 | `q_steam`, steam flow to the turbine (kg/s), the disturbance |
-| 3 | fuel, percent of maximum |
-| 4 | feedwater, percent of maximum |
+| 2 | `q_steam`, steam flow to the turbine (kg/s), which follows the valve and drum pressure |
+| 3 | fuel actuator position, percent of maximum |
+| 4 | feedwater actuator position, percent of maximum |
 | 5 | target level, always 0 (m) |
 | 6 | target pressure (bar) |
 
@@ -59,7 +59,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 13 fields.
+`reset` samples the initial condition and the target; state has 15 fields.
 
 ## Episode end
 
@@ -74,7 +74,7 @@ Recorded over 10 seeds of the 400-step episode (see [Baseline results](../baseli
 | controller | mean return | cost per step |
 |---|---|---|
 | PID | -6.783e+04 | 169.6 |
-| MPC | -8847 | 22.12 |
+| MPC | -9075 | 22.69 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 

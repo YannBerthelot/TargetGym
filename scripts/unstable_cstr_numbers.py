@@ -34,6 +34,7 @@ from scipy.optimize import brentq, linprog  # noqa: E402
 from scipy.stats import spearmanr  # noqa: E402
 
 import target_gym.pc_gym.cstr.env as cstr_env  # noqa: E402
+from target_gym.base import actuate  # noqa: E402
 from target_gym.pc_gym.unstable_cstr.env import (  # noqa: E402
     N_BLOCKS,
     UnstableCSTRParams,
@@ -140,7 +141,8 @@ def _states(C_a, T, T_j, Ti_dev, levels=None, dtype=None):
     return UnstableCSTRState(
         time=jnp.zeros(n, jnp.int32),
         sensor_key=jnp.zeros((n, 2), jnp.uint32),
-        actuator_held=jnp.zeros((n, 1)),
+        sensor_history=jnp.tile(f(T)[:, None, None], (1, 1, 2)),
+        actuator_held=f(raw_from_coolant(T_j, P))[:, None],
         C_a=f(C_a),
         T=f(T),
         T_j=f(T_j),
@@ -243,13 +245,15 @@ def _folds(params=P):
 
 @functools.partial(jax.jit, static_argnames=("n",))
 def _hold_action(states, raw, params, n):
-    """``n`` steps of ``compute_next_state`` from each state at a constant raw
-    action, the drift held and no trip handling. Returns the C_a, T and T_j
-    paths and the trip check of each proposal, each shaped (batch, n)."""
+    """``n`` steps of the valve and ``compute_next_state`` from each state at a
+    constant raw action, the drift held and no trip handling. Returns the C_a, T
+    and T_j paths and the trip check of each proposal, each shaped (batch, n)."""
 
     def one(state, u):
         def body(s, _):
-            s2 = compute_next_state(u, s, params, KEY)[0].replace(Ti_dev=s.Ti_dev)
+            applied, s = actuate(ENV, s, jnp.reshape(u, (1,)), params)
+            s2 = compute_next_state(applied[0], s, params, KEY)[0]
+            s2 = s2.replace(Ti_dev=s.Ti_dev)
             return s2, (s2.C_a, s2.T, s2.T_j, check_is_terminal(s2, params)[0])
 
         return jax.lax.scan(body, state, None, length=n)[1]
@@ -331,7 +335,7 @@ def _runner(
     def one(state, key, ctrl, params, ext_T):
         run_params = params.replace(tau_j=jnp.inf) if lag0 else params
         v1_params = run_params.replace(reward_version=1)
-        obs0 = get_obs(state, params)
+        obs0 = env.get_obs(state, params)
         if cascade:
             cs = cascade_init(obs0, ctrl, params, xp=jnp)
             if sp_at_T_star:
@@ -345,7 +349,7 @@ def _runner(
 
         def body(carry, _):
             s, cs, acc = carry
-            obs = get_obs(s, params)
+            obs = env.get_obs(s, params)
             if cascade:
                 u, cs = cascade_step(ctrl, cs, obs, params, xp=jnp)
             else:

@@ -11,16 +11,24 @@ from target_gym.integration import (
     integrate_dynamics,
 )
 from target_gym.plane.dynamics import (
+    INNER_STEPS,
+    STICK_RESPONSE_RATE,
+    STICK_TRAVEL,
+    InnerLoop,
     advance_gust,
+    airspeed_scaler,
+    attitude_axis,
     compute_acceleration,
     compute_air_density_from_altitude,
     compute_alpha,
     compute_Mach_from_velocity_and_speed_of_sound,
     compute_next_power,
-    compute_next_stick,
+    compute_next_surface,
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
     compute_velocity_from_horizontal_and_vertical_speed,
+    outside_envelope,
+    scheduled_airspeed,
     step_key,
     total_wind_2d,
 )
@@ -63,6 +71,10 @@ class PlaneState(EnvState):
     # acting on the aircraft is params.wind_* + gust_*.  Default 0 => no gust.
     gust_x: float = 0.0
     gust_z: float = 0.0
+    # The inner loop's pitch integral, in surface units.
+    pitch_integ: float = 0.0
+    # The step's load factor furthest from 1 g, which the limits read.
+    load_factor: float = 1.0
 
     actuator_held: jax.Array = actuator_field(2)
 
@@ -136,10 +148,6 @@ class PlaneParams(EnvParams):
     k_shock_stall: float = 4.0
     shock_stall_floor: float = 0.25
 
-    # Actuator lags, as first-order rates per second. TUNED -- not sourced.
-    # The engine is deliberately far slower than the control surface: an
-    # airliner spools up over seconds, the stick responds immediately, and it
-    # is that separation the altitude controllers have to work around.
     # The altitude error below which "more precise" stops being meaningful, in
     # metres. It is a *resolution*, not a tolerance: the reward keeps paying for
     # every halving of the error down to this point, and only flattens beneath
@@ -151,8 +159,25 @@ class PlaneParams(EnvParams):
     # a band rewards reaching a tolerance and then stops caring, which cannot
     # show whether a learned policy holds altitude better than a PID.
     precision_floor: float = 1.0
-    power_response_rate: float = 0.05
-    stick_response_rate: float = 0.9
+    # A 1.7 s engine above 5% idle. 14 CFR 33.73(b) gives idle to 95% in 5 s, and
+    # a first-order lag takes ln 19 of its time constant to do that (5.006 s).
+    power_response_rate: float = 1.0 / 1.7
+    idle_power: float = 0.05
+    # The elevator's lag and rate limit, inside the inner loop (PHYSICS.md
+    # section 3 gives each figure's status).
+    stick_response_rate: float = STICK_RESPONSE_RATE
+    surface_rate_limit: float = jnp.pi / 6.0
+    # The fixed inner loop. Its gains are task constants, not tuned per task.
+    inner_loop: InnerLoop = InnerLoop()
+    # The envelope (PHYSICS.md section 3): the limit load factors of 14 CFR
+    # 25.337, the A320's VMO 350 kt and MMO 0.82, and the buffet line, CL_max
+    # falling from ``buffet_mach`` at ``buffet_slope`` per unit of Mach (ours).
+    load_factor_max: float = 2.5
+    load_factor_min: float = -1.0
+    vmo_eas: float = 350.0 * 1852.0 / 3600.0
+    mmo: float = 0.82
+    buffet_mach: float = 0.3
+    buffet_slope: float = 1.4
     k_drag: float = 5.0
 
     I: float = 9_000_000
@@ -234,7 +259,11 @@ class PlaneParams(EnvParams):
     # removes it: thrust is finite, so climbing and accelerating compete, and
     # the exchange between them is precisely the phugoid.
     speed_weight: float = 0.0
-    target_speed: float = 230.0  # m/s, the cruise the airspeed channel holds
+    # The airspeed channel's schedule (``plane.dynamics.scheduled_airspeed``):
+    # 290 kt CAS, then M 0.78, EUROCONTROL's A320 climb. A fixed 230 m/s was
+    # 385 KEAS at 3000 m, past VMO.
+    target_cas: float = 290.0 * 1852.0 / 3600.0  # m/s
+    target_mach: float = 0.78
     speed_precision_floor: float = 0.5  # m/s, air-data resolution
     speed_envelope: float = 60.0  # m/s, the error at which the term reaches zero
     target_pattern: int = 0
@@ -311,7 +340,15 @@ PARAM_UNITS = {
     "k_shock_stall": "-",
     "shock_stall_floor": "-",
     "power_response_rate": "1/s",
+    "idle_power": "-",
     "stick_response_rate": "1/s",
+    "surface_rate_limit": "rad/s",
+    "load_factor_max": "g",
+    "load_factor_min": "g",
+    "vmo_eas": "m/s",
+    "mmo": "-",
+    "buffet_mach": "-",
+    "buffet_slope": "-",
     "k_drag": "-",
     "I": "kg.m^2",
     "moment_arm_stabilizer": "m",
@@ -344,7 +381,8 @@ PARAM_UNITS = {
     "c_hold": "m/s",
     "running_weight": "-",
     "speed_weight": "-",
-    "target_speed": "m/s",
+    "target_cas": "m/s",
+    "target_mach": "-",
     "speed_precision_floor": "m/s",
     "speed_envelope": "m/s",
     "target_pattern": "-",
@@ -369,12 +407,21 @@ def check_mass_does_not_increase(old_mass, new_mass, xp=jnp):
 
 
 def check_is_terminal(state: PlaneState, params: PlaneParams, xp=jnp):
-    """The aircraft trips when its altitude leaves ``[min_alt, max_alt]``.
+    """The aircraft trips when its altitude leaves ``[min_alt, max_alt]`` or it
+    leaves the envelope (``plane.dynamics.outside_envelope``).
 
     Returns ``(tripped, truncated)``. A trip does not end the episode:
     ``base.failure_kernel`` charges it and restarts the aircraft.
     """
-    terminated = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
+    wind_x, wind_z = total_wind_2d(state.z, state.gust_x, state.gust_z, params)
+    air_speed = compute_velocity_from_horizontal_and_vertical_speed(
+        state.x_dot - wind_x, state.z_dot - wind_z
+    )
+    terminated = (
+        (state.z <= params.min_alt)
+        | (state.z >= params.max_alt)
+        | outside_envelope(state.load_factor, air_speed, state.z, params)
+    )
     truncated = state.time >= params.max_steps_in_episode
 
     # done = xp.logical_or(done_alt, done_steps)
@@ -395,6 +442,11 @@ def check_no_nan(x, id=None):
             raise AssertionError(f"NaN detected in {id}: {x}")
 
 
+def target_airspeed(state: PlaneState, params: PlaneParams):
+    """The airspeed demanded at the aircraft's altitude."""
+    return scheduled_airspeed(state.z, params.target_cas, params.target_mach)
+
+
 def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped=None):
     """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
 
@@ -410,7 +462,7 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped
             state.target_altitude - state.z, p.e_floor, p.e_tol, p.tracking_exponent, xp
         ),
         "running": R.running_cost(
-            xp.abs(speed - p.target_speed), p.c_hold, p.running_weight, xp
+            xp.abs(speed - target_airspeed(state, p)), p.c_hold, p.running_weight, xp
         ),
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
@@ -452,7 +504,7 @@ def compute_reward_v1(state: PlaneState, params: PlaneParams, xp=jnp):
     # unchanged.
     speed = xp.sqrt(state.x_dot**2 + state.z_dot**2)
     speed_term = log_scaled_reward(
-        xp.abs(params.target_speed - speed),
+        xp.abs(target_airspeed(state, params) - speed),
         params.speed_precision_floor,
         params.speed_envelope,
         xp,
@@ -473,11 +525,11 @@ def get_obs(state: PlaneState, params: PlaneParams = None, xp=jnp):
     """Applies observation function to state."""
     if params is None:
         raise ValueError(
-            "get_obs needs the episode's params: target_speed is a parameter, "
-            "so falling back to PlaneParams() would silently report the class "
-            "default instead of what this episode is actually commanding."
+            "get_obs needs the episode's params: the airspeed schedule is a "
+            "parameter, so falling back to PlaneParams() would silently report "
+            "the class default instead of what this episode is commanding."
         )
-    params_target_speed = jnp.asarray(params.target_speed, dtype=jnp.float32)
+    params_target_speed = jnp.asarray(target_airspeed(state, params), jnp.float32)
     return xp.stack(
         [
             state.x_dot,
@@ -547,16 +599,19 @@ def commanded_altitude(base: float, time, params: PlaneParams, xp=jnp):
     return xp.clip(target, params.min_alt + span * 0.2, params.max_alt - span * 0.2)
 
 
-@partial(jax.jit, static_argnames=["integration_method"])
+@partial(jax.jit, static_argnames=["integration_method", "inner_steps"])
 def compute_next_state(
     power_requested: float,
-    stick_requested: float,
+    pitch_demand: float,
     state: PlaneState,
     params: PlaneParams,
-    integration_method: str = "rk4_2",
+    integration_method: str = "rk4_1",
     key=None,
+    inner_steps: int = INNER_STEPS,
 ):
-    """Compute next state and metrics using multiple sub-steps with jax.lax.scan.
+    """One step: the demands held while the inner loop flies ``inner_steps``
+    sub-steps, each moving the elevator and the engine and integrating the
+    dynamics. The surfaces are the loop's, never the caller's.
 
     Wind is a physics-engine property: the total wind acting on the aircraft is
     the steady ``params.wind_*`` plus an Ornstein-Uhlenbeck turbulence gust
@@ -566,13 +621,7 @@ def compute_next_state(
     ``turbulence_sigma = 0`` the behaviour is unchanged; ``key=None`` freezes the
     gust (so callers that don't model turbulence keep a constant wind).
     """
-    dt = params.delta_t
-    power = compute_next_power(
-        power_requested, state.power, dt, params.power_response_rate
-    )
-    stick = compute_next_stick(
-        stick_requested, state.stick, dt, params.stick_response_rate
-    )
+    dt = params.delta_t / inner_steps
 
     # Total wind = steady mean + altitude shear + OU turbulence gust. `gust` is the
     # ADVANCED gust (stored for next step). With wind_lookahead we APPLY the gust
@@ -582,7 +631,7 @@ def compute_next_state(
         jnp.array([state.gust_x, state.gust_z]),
         params.turbulence_theta,
         params.turbulence_sigma,
-        dt,
+        params.delta_t,
         step_key(key, state.time),
         params.impulse_prob,
     )
@@ -598,47 +647,92 @@ def compute_next_state(
     eff_params = params.replace(
         wind_x=total_wind_x, wind_z=total_wind_z, initial_mass=mass_now
     )
+    gains = params.inner_loop
 
-    # Engine ram/Mach effects depend on airspeed, not ground speed.
-    air_speed = compute_velocity_from_horizontal_and_vertical_speed(
-        state.x_dot - total_wind_x, state.z_dot - total_wind_z
-    )
-    M_air = compute_Mach_from_velocity_and_speed_of_sound(
-        air_speed, state.speed_of_sound
-    )
-    thrust = compute_thrust_output(
-        power=power,
-        thrust_output_at_sea_level=params.thrust_output_at_sea_level,
-        rho=state.rho,
-        M=M_air,
-    )
-    positions = jnp.array([state.x, state.z, state.theta])
-    velocities = jnp.array([state.x_dot, state.z_dot, state.theta_dot])
-    _compute_acceleration = partial(
-        compute_acceleration,
-        action=(thrust, stick),
-        params=eff_params,
-        clip=True,
-        min_clip_boundaries=(-100, -100, -1.5),
-        max_clip_boundaries=(100, 100, 1.5),
-    )
+    def inner(carry, _):
+        velocities, positions, power, stick, integ, burned, peak = carry
+        x_dot, z_dot, theta_dot = velocities
+        _, z, theta = positions
+        # Air data and the engine's ram/Mach effects read airspeed.
+        air_speed = compute_velocity_from_horizontal_and_vertical_speed(
+            x_dot - total_wind_x, z_dot - total_wind_z
+        )
+        rho = compute_air_density_from_altitude(z)
+        eas = air_speed * jnp.sqrt(rho / params.air_density_at_sea_level)
+        surface, integ = attitude_axis(
+            gains.Kp_theta,
+            gains.Ki_theta,
+            gains.Kd_theta,
+            pitch_demand - theta,
+            theta_dot,
+            integ,
+            airspeed_scaler(eas, gains),
+            dt,
+        )
+        stick = compute_next_surface(
+            surface * STICK_TRAVEL,
+            stick,
+            dt,
+            params.stick_response_rate,
+            params.surface_rate_limit,
+        )
+        power = compute_next_power(
+            power_requested,
+            power,
+            dt,
+            params.power_response_rate,
+            params.idle_power,
+        )
+        thrust = compute_thrust_output(
+            power=power,
+            thrust_output_at_sea_level=params.thrust_output_at_sea_level,
+            rho=rho,
+            M=compute_Mach_from_velocity_and_speed_of_sound(
+                air_speed, compute_speed_of_sound_from_altitude(z)
+            ),
+        )
+        accelerate = partial(
+            compute_acceleration,
+            action=(thrust, stick),
+            params=eff_params,
+            clip=True,
+            min_clip_boundaries=(-100, -100, -1.5),
+            max_clip_boundaries=(100, 100, 1.5),
+        )
+        velocities, positions, metrics = integrate_dynamics(
+            velocities=velocities,
+            positions=positions,
+            delta_t=dt,
+            compute_acceleration=accelerate,
+            method=integration_method,
+        )
+        # Fuel burned over the sub-step. ``specific_fuel_consumption`` is
+        # thrust specific: kg per kilonewton-second, so 17.5/1000 is 1.75e-5
+        # kg/(N s), the right order for a modern high-bypass turbofan. Burn is
+        # charged against the thrust actually produced, which already carries
+        # the altitude lapse and the Mach terms.
+        burned = burned + params.specific_fuel_consumption * 1e-3 * thrust * dt
+        # Trips read the worst load inside the step, not the one it ends on.
+        load = metrics[1][-1] / (mass_now * params.gravity)
+        peak = jnp.where(jnp.abs(load - 1.0) > jnp.abs(peak - 1.0), load, peak)
+        return (velocities, positions, power, stick, integ, burned, peak), metrics
 
-    (x_dot, z_dot, theta_dot), (x, z, theta), metrics = integrate_dynamics(
-        velocities=velocities,
-        positions=positions,
-        delta_t=dt,
-        compute_acceleration=_compute_acceleration,
-        method=integration_method,
+    start = (
+        jnp.array([state.x_dot, state.z_dot, state.theta_dot]),
+        jnp.array([state.x, state.z, state.theta]),
+        state.power,
+        state.stick,
+        state.pitch_integ,
+        jnp.zeros_like(state.fuel),
+        jnp.ones_like(state.fuel),
     )
+    end, metrics = jax.lax.scan(inner, start, None, length=inner_steps)
+    (x_dot, z_dot, theta_dot), (x, z, theta) = end[0], end[1]
+    power, stick, pitch_integ, burned, load_factor = end[2:]
+    metrics = jax.tree_util.tree_map(lambda m: m[-1], metrics)
 
     alpha, gamma = compute_alpha(theta, x_dot, z_dot)
-    # Fuel burned over the step. ``specific_fuel_consumption`` is thrust
-    # specific: kg per kilonewton-second, so 17.5/1000 is 1.75e-5 kg/(N s),
-    # the right order for a modern high-bypass turbofan. Burn is charged
-    # against the thrust actually produced, which already carries the altitude
-    # lapse and the Mach terms.
-    burn = params.specific_fuel_consumption * 1e-3 * thrust * dt
-    fuel = jnp.clip(state.fuel - burn, 0.0, params.initial_fuel_quantity)
+    fuel = jnp.clip(state.fuel - burned, 0.0, params.initial_fuel_quantity)
     # Below the tanks running dry the engines cannot produce thrust; the mass
     # simply stops falling, and the aircraft is a glider from there.
     m = params.initial_mass - (params.initial_fuel_quantity - fuel)
@@ -665,5 +759,7 @@ def compute_next_state(
         base_target_altitude=state.base_target_altitude,
         gust_x=gust[0],
         gust_z=gust[1],
+        pitch_integ=pitch_integ,
+        load_factor=load_factor,
     )
     return new_state, metrics

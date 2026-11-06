@@ -31,6 +31,7 @@ import numpy as np
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym.base import actuate
 from target_gym.experts import pid as _pid_mod
 from target_gym.pc_gym.unstable_cstr.env import (
     N_BLOCKS,
@@ -42,6 +43,7 @@ from target_gym.pc_gym.unstable_cstr.env import (
     steady_coolant,
     steady_temperature,
 )
+from target_gym.pc_gym.unstable_cstr.env_jax import UnstableCSTR
 
 try:
     # Newer JAX; 0.10 removed the experimental one. The declared range starts
@@ -65,6 +67,9 @@ except ImportError:
 PNR_LINE = (354.9, -40.7)
 #: The concentration at which ``PNR_LINE[0]`` is given (mol/L), the band's hot end.
 PNR_LINE_C_A = 0.45
+
+#: Whose action box and step ``actuate`` reads.
+_ENV = UnstableCSTR()
 
 # Lower end of the bisection (K, ours). ``point_of_no_return`` returns NaN
 # where full cooling trips even from here.
@@ -105,12 +110,13 @@ def coolant_from_raw(u_raw, params: UnstableCSTRParams):
 def trips_under_full_cooling(
     C_a, T, T_j, Ti_dev, params: UnstableCSTRParams, horizon_steps: int = 200
 ):
-    """True where holding the coolant at ``T_c_min`` from ``(C_a, T, T_j)``
+    """True where commanding the coolant to ``T_c_min`` from ``(C_a, T, T_j)``
     still trips within ``horizon_steps``.
 
-    The env's own step (``compute_next_state``, the jacket lag included) with
-    the drift frozen at ``Ti_dev``, and the env's trip check at every step
-    end. Scalar inputs; vmap for arrays.
+    The env's own step (``actuate`` from a valve at the jacket's temperature,
+    then ``compute_next_state``, the jacket lag included) with the drift frozen
+    at ``Ti_dev``, and the env's trip check at every step end. Scalar inputs;
+    vmap for arrays.
     """
     state = UnstableCSTRState(
         time=0,
@@ -120,12 +126,15 @@ def trips_under_full_cooling(
         Ti_dev=Ti_dev,
         target_levels=jnp.zeros(N_BLOCKS),
         block_clock=0,
+        actuator_held=jnp.reshape(raw_from_coolant(T_j, params), (1,)),
     )
     key = jax.random.PRNGKey(0)
+    full_cooling = -jnp.ones(1)
 
     def body(carry, _):
         s, tripped = carry
-        s = compute_next_state(-1.0, s, params, key)[0].replace(Ti_dev=Ti_dev)
+        applied, s = actuate(_ENV, s, full_cooling, params)
+        s = compute_next_state(applied[0], s, params, key)[0].replace(Ti_dev=Ti_dev)
         return (s, tripped | check_is_terminal(s, params)[0]), None
 
     carry, _ = jax.lax.scan(

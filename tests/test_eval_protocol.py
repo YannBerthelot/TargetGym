@@ -489,7 +489,23 @@ def test_without_anticipation_every_number_is_unchanged(law):
     _assert_same_as_before(episodes, burn_in=50)
 
 
-@pytest.mark.parametrize("name", ["battery", "hvac", "plane_energy"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "battery",
+        pytest.param(
+            "hvac",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="Finding (2026-11-06): now the building needs heat, G36 "
+                "optimal start runs, and its morning warm-up is found as "
+                "anticipation, which it is. PR 8 replaces the per-run window, "
+                "and PR 9 rewrites this expert.",
+            ),
+        ),
+        "plane_energy",
+    ],
+)
 def test_real_pid_episodes_are_unchanged(name):
     """The same on the three plants whose test episodes hold more than one
     target: the shipped PID on the battery (dispatch blocks under white

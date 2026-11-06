@@ -50,10 +50,11 @@ class UnstableCSTR(
     tracked_names: tuple = ("C_a (mol/L)",)
     obs_target_index: int = 3  # live target
 
-    # Process photometer and two Pt100 RTDs (PHYSICS.md section on readings).
+    # Process photometer and two Pt100 RTDs, the reactor's in a thermowell with
+    # a 10 s lag, in minutes as ``delta_t`` is (PHYSICS.md section on readings).
     readings: tuple = (
         FieldReading("C_a", sigma=5e-4),
-        FieldReading("T", sigma=0.04),
+        FieldReading("T", sigma=0.04, lag=10.0 / 60.0),
         FieldReading("T_j", sigma=0.04),
     )
 
@@ -65,6 +66,11 @@ class UnstableCSTR(
     @property
     def default_params(self) -> UnstableCSTRParams:
         return UnstableCSTRParams()
+
+    def initial_action(self, state, params):
+        """The valve at rest where the jacket is (``base.canonical_reset``)."""
+        span = params.T_c_max - params.T_c_min
+        return jnp.reshape(2.0 * (state.T_j - params.T_c_min) / span - 1.0, (1,))
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)

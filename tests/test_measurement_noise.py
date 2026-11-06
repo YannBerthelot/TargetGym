@@ -54,6 +54,10 @@ noisy_tasks = pytest.mark.parametrize("spec", NOISY, ids=lambda s: s.name)
 
 #: Enough steps to see several draws and, on the pumps-off policy, a trip.
 STEPS = 40
+#: Four float32 steps. With and without instruments are two compiled programs,
+#: and JAX 0.11 can round a reward differently in each, by one step of about
+#: 1e-7 relative, though their states match exactly.
+TWO_PROGRAMS = 4 * float(np.finfo(np.float32).eps)
 
 
 def _bounds(env, params):
@@ -70,8 +74,12 @@ def _own_env(spec):
 
 
 def _unrounded(env):
-    """Rounding hides ``epsilon``, so read the draws with no digital step."""
-    env.readings = tuple(dataclasses.replace(r, step=0.0) for r in env.readings)
+    """Rounding hides ``epsilon``, and so does a late value, so read the draws
+    with no digital step and no age."""
+    env.readings = tuple(
+        dataclasses.replace(r, step=0.0, dead_time=0.0, sampled=False, lag=0.0)
+        for r in env.readings
+    )
     return env
 
 
@@ -218,9 +226,14 @@ def test_sensor_noise_is_on_by_default():
 
 @noisy_tasks
 def test_scale_zero_is_the_noise_free_task_exactly(spec):
-    """Rounding goes too: at 0 no instrument stands between task and policy."""
+    """Rounding goes too. An instrument's age stays: a reading with no scatter
+    and no step still reports late (tests/test_sensor_delay.py)."""
     noisy, free = _own_env(spec), _own_env(spec)
-    free.readings = ()
+    free.readings = tuple(
+        dataclasses.replace(r, sigma=0.0, step=0.0)
+        for r in free.readings
+        if r.dead_time > 0 or r.sampled or r.lag > 0
+    )
     params = spec.make_test_params()
     key = jax.random.PRNGKey(5)
     low, high = _bounds(noisy, params)
@@ -232,12 +245,15 @@ def test_scale_zero_is_the_noise_free_task_exactly(spec):
         np.testing.assert_array_equal(a[0], b[0])
         jax.tree_util.tree_map(np.testing.assert_array_equal, a[1], b[1])
         if a[2] is not None:
-            np.testing.assert_array_equal(a[2], b[2])
+            np.testing.assert_allclose(a[2], b[2], rtol=TWO_PROGRAMS)
             np.testing.assert_array_equal(a[3], b[3])
-            np.testing.assert_array_equal(
-                a[4]["measured_reward"], b[4]["measured_reward"]
+            np.testing.assert_allclose(
+                a[4]["measured_reward"], b[4]["measured_reward"], rtol=TWO_PROGRAMS
             )
-            np.testing.assert_array_equal(a[4]["measured_reward"], a[2])
+            if not free.readings:  # a late reading's measured cost is late too
+                np.testing.assert_allclose(
+                    a[4]["measured_reward"], a[2], rtol=TWO_PROGRAMS
+                )
 
 
 @noisy_tasks
@@ -259,8 +275,10 @@ def test_targets_stay_exact(spec):
     low, _ = _bounds(env, params)
     index = jnp.atleast_1d(jnp.array(env.obs_target_index))
     for obs, state, *_ in _rollout(env, params, key, low, steps=5):
-        np.testing.assert_array_equal(
-            obs[index], env.get_obs(state, _quiet(params))[index]
+        # In ulps: a ramped target is computed, and two compilations can round
+        # it differently. A reading's noise is thousands of them.
+        np.testing.assert_array_almost_equal_nulp(
+            obs[index], env.get_obs(state, _quiet(params))[index], nulp=2
         )
 
 

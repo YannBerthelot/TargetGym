@@ -9,11 +9,13 @@ from target_gym import reward as R
 from target_gym.base import (
     FieldReading,
     actuate,
+    applied_action,
     canonical_reset,
     charged_trip_cost,
     failure_kernel,
     measured_obs,
     measured_state,
+    remember,
 )
 from target_gym.expert_access import RegistryExperts
 from target_gym.reactor.env import (
@@ -24,8 +26,12 @@ from target_gym.reactor.env import (
     compute_reward,
     compute_reward_terms,
     get_obs,
+    rod_balance,
+    scheduled_load,
     steady_state_precursors,
+    steady_state_temperatures,
     steady_state_xenon,
+    tavg_program,
 )
 from target_gym.reactor.rendering import _render
 from target_gym.video import SavesVideo
@@ -33,7 +39,7 @@ from target_gym.video import SavesVideo
 # Number of physics sub-steps per control step. Constant so JIT can treat it
 # as static in `lax.scan(length=...)`. Change here only — `env.py` reads it
 # via ``Reactor.control_period``.
-CONTROL_PERIOD: int = 10
+CONTROL_PERIOD: int = 6
 
 
 class Reactor(
@@ -42,7 +48,7 @@ class Reactor(
     """
     Nuclear reactor (point kinetics + thermal feedback).
 
-    Observation (4,): [n, T_coolant, rho_ext_norm, target_n]
+    Observation (6,): [n, T_hot, rho_ext_norm, load, T_avg, T_ref]
     Action      (1,): [rho_ext_norm] in [-1, 1] (control rod position)
     """
 
@@ -57,38 +63,35 @@ class Reactor(
     # ``delta_t * control_period`` seconds).
     control_period: int = CONTROL_PERIOD
 
-    # obs = [n, T_coolant, rho_ext_norm, target_n]
-    obs_value_index: int = 0  # n (neutron density / normalised power)
-    tracked_names: tuple = ("neutron power (normalised)",)
-    obs_target_index: int = 3  # target_n
+    # obs = [n, T_hot, rho_ext_norm, load, T_avg, T_ref]
+    obs_value_index: int = 4  # Tavg (K)
+    tracked_names: tuple = ("Tavg (K)",)
+    obs_target_index: int = 5  # Tref, the program at this load (K)
 
-    # Ex-core ion chambers and a hot-leg RTD (PHYSICS.md, Readings). The flux
-    # figure is its upper bound at full power, held at every power.
+    # Ex-core ion chambers and hot- and cold-leg RTDs (PHYSICS.md, Readings). The
+    # flux figure is its upper bound at full power, held at every power.
     readings: tuple = (
         FieldReading("n", sigma=1.9e-4),
         FieldReading("T_coolant", sigma=0.045),
+        FieldReading("T_cold", sigma=0.045),
     )
 
-    def __init__(self, integration_method: str = "tr_bdf2_2"):
-        self.obs_shape = (4,)
+    def __init__(self, integration_method: str = "tr_bdf2_4"):
+        self.obs_shape = (6,)
         self.integration_method = integration_method
 
     @property
     def default_params(self) -> ReactorParams:
-        # The scored configuration. Env steps of 10 s (``control_period``
-        # physics sub-steps each): 2.4 h, 0.18 xenon time constants, enough
-        # that the poison moves materially while the controller works. Full
-        # pit dynamics would need about ten hours, which alone would cost
-        # more to record than the rest of the suite together.
-        return ReactorParams(max_steps_in_episode=864)
+        # The scored configuration: env steps of 30 s (``control_period``
+        # physics sub-steps each) over the 12 h of a load cycle.
+        return ReactorParams()
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
     def reward_terms(self, state, params, tripped=None):
-        """Cost terms at one physics sub-step ($ per second). ``step_env``
-        returns their exact sum over the control period in
-        ``info["reward_terms"]``; this is the instantaneous rate."""
+        """Cost terms at one physics sub-step. ``step_env`` returns their exact
+        sum over the control period in ``info["reward_terms"]``."""
         return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
@@ -154,6 +157,7 @@ class Reactor(
         )
         # One environment step has elapsed, whatever the physics clock did.
         new_state = new_state.replace(time=state.time + 1)
+        new_state = remember(self, state, new_state, params)
         # A SCRAM is part of the kernel: the step that leaves the envelope is
         # charged the trip cost and the plant restarts at once, or is lost
         # with ``params.continuing = False`` (``base.failure_kernel``). On that step the cost is the trip cost
@@ -178,8 +182,8 @@ class Reactor(
         # Terminating mid-period still costs: only the sub-steps before the stop
         # contribute to the sum, so the mean falls with them.
         #
-        # Version 2 sums instead: its terms are dollars per physics second, so
-        # the sum is the cost of the whole 10 s control step, the unit every
+        # Version 2 sums instead: its terms are dollars per physics sub-step, so
+        # the sum is the cost of the whole 30 s control step, the unit every
         # other plant's step reward is in.
         obs = self.get_obs(new_state, params)
         reward = jnp.where(params.reward_version == 1, reward / CONTROL_PERIOD, reward)
@@ -197,6 +201,7 @@ class Reactor(
                 "trip_cost": charged_trip_cost(tripped, params),
                 # Version 1 has no terms, so there it is the true reward.
                 "measured_reward": R.select(params.reward_version, reward, measured),
+                "applied_action": applied_action(self, state, params),
             },
         )
 
@@ -218,55 +223,55 @@ class Reactor(
         if params is None:
             params = self.default_params
 
-        key, n_key, target_key, demand_key = jax.random.split(key, 4)
+        key, down_key, hold_key, demand_key, history_key = jax.random.split(key, 5)
 
-        initial_n = jax.random.uniform(
-            n_key,
-            minval=params.initial_n_range[0],
-            maxval=params.initial_n_range[1],
+        # The day: when the load starts down, and how long it holds.
+        down_at = jax.random.uniform(
+            down_key,
+            minval=params.ramp_down_range[0],
+            maxval=params.ramp_down_range[1],
         )
-        # Initial demand drawn from target range; OU process evolves it from here.
-        initial_target = jax.random.uniform(
-            target_key,
-            minval=params.target_n_range[0],
-            maxval=params.target_n_range[1],
+        hold = jax.random.uniform(
+            hold_key, minval=params.hold_range[0], maxval=params.hold_range[1]
         )
-        # Precursors start at steady state for the initial neutron density;
-        # without that there is a large transient in the first few seconds.
-        initial_C = steady_state_precursors(initial_n, params)
+        up_at = down_at + (1.0 - params.load_min) / params.load_ramp_rate + hold
+        load = scheduled_load(0.0, down_at, up_at, params)
 
-        # Xenon and iodine start at the equilibrium for a *different*, recent
-        # power level, not the current one. A reactor that has been
-        # load-following is essentially never at xenon equilibrium, and starting
-        # it there made the poison a constant bias: with dXe/dt = 0 at t = 0 and
-        # a 13.2 h xenon time constant, the term the module docstring calls "the
-        # dominant control challenge" contributed nothing an operator would have
-        # to trim. Sampling the history instead makes it live from the first
-        # step. The range is deliberately narrow, so the offset is one a real
-        # unit would carry rather than an extreme.
-        key, history_key = jax.random.split(key)
+        # Xenon and iodine start at the equilibrium of a recent power level, and
+        # everything else is lined out for full load on the program, with the
+        # rods where that leaves the core critical.
         n_recent = jax.random.uniform(
             history_key,
             minval=params.initial_xenon_power_range[0],
             maxval=params.initial_xenon_power_range[1],
         )
-        initial_I_hat, initial_Xe_hat = steady_state_xenon(n_recent, params)
+        I_hat, Xe_hat = steady_state_xenon(n_recent, params)
+        T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, params)
+        rods = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, params)
 
         # The draw's precision: float32 as scored, float64 under enable_x64.
-        dtype = initial_n.dtype
+        dtype = down_at.dtype
+        as_state = lambda x: jnp.asarray(x, dtype=dtype)  # noqa: E731
         state = ReactorState(
             time=0,
             physics_time=0,
-            n=initial_n,
-            C=initial_C,
-            T_fuel=jnp.asarray(params.initial_T_fuel, dtype=dtype),
-            T_coolant=jnp.asarray(params.initial_T_coolant, dtype=dtype),
-            I_hat=jnp.asarray(initial_I_hat, dtype=dtype),
-            Xe_hat=jnp.asarray(initial_Xe_hat, dtype=dtype),
-            target_n=initial_target,
+            n=as_state(load),
+            C=steady_state_precursors(as_state(load), params),
+            T_fuel=as_state(T_fuel),
+            T_coolant=as_state(T_hot),
+            T_cold=as_state(T_cold),
+            T_sg=as_state(T_sg),
+            I_hat=as_state(I_hat),
+            Xe_hat=as_state(Xe_hat),
+            target_n=as_state(load),
+            T_ref=as_state(tavg_program(load, params)),
+            load_wobble=as_state(0.0),
+            ramp_down_at=down_at,
+            ramp_up_at=up_at,
             demand_key=demand_key,
-            rho_ext=jnp.zeros((), dtype=dtype),
-            rho_ext_cmd=jnp.asarray(0.0, dtype=dtype),
+            rho_ext=as_state(jnp.clip(rods, params.rho_ext_min, params.rho_ext_max)),
+            rho_ext_cmd=as_state(0.0),
+            rod_moved=as_state(0.0),
         )
 
         obs = self.get_obs(state)

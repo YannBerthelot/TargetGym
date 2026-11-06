@@ -377,12 +377,12 @@ def compute_next_state_formation(
     action: jnp.ndarray,
     state: FormationState,
     params: FormationParams,
-    integration_method: str = "rk4_2",
+    integration_method: str = "rk4_1",
     key=None,
 ):
-    """One step: every aircraft moves on its own three controls.
+    """One step: every aircraft moves on its own three demands.
 
-    ``action`` is ``[power, stick, aileron]`` for the lead, then for each
+    ``action`` is ``[throttle, pitch, bank]`` for the lead, then for each
     wingman, in [-1, 1]. One gust, advanced from the step clock as in the
     patrol, is folded into the wind every aircraft flies in; each still gets
     its own altitude-dependent shear. The lead's reference moves on along its

@@ -55,7 +55,8 @@ obs, state, rewards, dones, info = env.step(key, state, actions, params)
 
 ## What each aircraft controls and sees
 
-Every aircraft acts with `[power, stick, aileron]`, each in [-1, 1]. In the
+Every aircraft acts with `[throttle, pitch demand, bank demand]`, each in [-1, 1],
+which the plant's fixed inner loop flies, so a policy does not touch the surfaces. In the
 joint view the lead's three come first, then each wingman's.
 
 | seat | observation | what it contains |

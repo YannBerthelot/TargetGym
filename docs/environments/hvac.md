@@ -58,7 +58,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 12 fields.
+`reset` samples the initial condition and the target; state has 13 fields.
 
 ## Episode end
 
@@ -73,7 +73,7 @@ Recorded over 10 seeds of the 720-step episode (see [Baseline results](../baseli
 | controller | mean return | cost per step |
 |---|---|---|
 | PID | -16.28 | 0.02261 |
-| MPC | -7.958 | 0.01105 |
+| MPC | -7.831 | 0.01088 |
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
@@ -89,6 +89,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
 | `action_noise` | 0 | fraction of span |
+| `actuator_rate` | 0 | fraction of span per delta_t unit |
+| `actuator_lag` | 0 | delta_t units |
 | `A_floor` | 150 | m^2 |
 | `lambda_at` | 4.5 | - |
 | `f_class` | 2.5 | - |
@@ -109,7 +111,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `T_out_mean` | 5 | degC |
 | `T_out_amplitude` | 5 | K |
 | `T_out_noise_std` | 3 | K |
-| `solar_peak` | 350 | W/m^2 |
+| `solar_peak` | 175 | W/m^2 |
 | `gain_occupied` | 8 | W/m^2 |
 | `gain_unoccupied` | 2 | W/m^2 |
 | `occupied_start_h` | 7 | h |

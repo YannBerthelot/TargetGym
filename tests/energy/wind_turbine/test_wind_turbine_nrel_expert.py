@@ -146,13 +146,6 @@ HELD_OUT = range(200, 210)
 
 
 @pytest.mark.large
-@pytest.mark.xfail(
-    strict=True,
-    reason="Finding (2026-10-28): speed holds within 10 % on every hold step, "
-    "but the mean power error is 0.25-1.10 % of the target, 1.10 % on seed 200 "
-    "(the PID it replaces: 0.08-0.14 %). Region 3's torque divides by the "
-    "0.25 Hz filtered speed, so the power lags the rotor's speed swings.",
-)
 def test_speed_and_power_hold_on_held_out_seeds():
     from target_gym.eval import scored_burn_in
 

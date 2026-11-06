@@ -317,15 +317,20 @@ def test_relative_gain_array_demands_the_cross_pairing():
     assert abs(G[0, 1]) > 2 * abs(G[1, 1]), "v2 should move h1 far more than h2"
 
 
-def _voltages_for(t1, t2, p):
-    """Pump voltages that hold a target pair at steady state."""
+def _voltages_for(t1, t2, p, load=(0.0, 0.0)):
+    """Pump voltages that hold a target pair at steady state under a load."""
     A = _np.array(
         [
             [p.gamma1 * p.k1, (1 - p.gamma2) * p.k2],
             [(1 - p.gamma1) * p.k1, p.gamma2 * p.k2],
         ]
     )
-    b = _np.array([p.a1 * _np.sqrt(2 * p.g * t1), p.a2 * _np.sqrt(2 * p.g * t2)])
+    b = _np.array(
+        [
+            p.a1 * _np.sqrt(2 * p.g * t1) - load[0],
+            p.a2 * _np.sqrt(2 * p.g * t2) - load[1],
+        ]
+    )
     return _np.linalg.solve(A, b)
 
 
@@ -352,6 +357,34 @@ def test_upper_tanks_keep_margin_above_the_low_level_trip():
         f"worst-case steady h4 is {worst:.3f} m, only "
         f"{worst - p.h_min:.3f} m above the {p.h_min} m trip"
     )
+
+
+def test_every_load_leaves_each_target_held_and_the_upper_tanks_clear_of_the_trip():
+    """The same 30 mm with a load drawing on the pumps: at a corner of the box,
+    a load that needs less of pump 1 takes level out of tank 4."""
+    p = FourTankParams()
+    d = p.load_flow
+    worst = _np.inf
+    for t1 in p.target_h1_range:
+        for t2 in p.target_h2_range:
+            for load in ((-d, -d), (-d, d), (d, -d), (d, d)):
+                v1, v2 = _voltages_for(t1, t2, p, load)
+                assert p.v_min <= min(v1, v2) and max(v1, v2) <= p.v_max
+                h4 = ((1 - p.gamma1) * p.k1 * v1 / p.a4) ** 2 / (2 * p.g)
+                h3 = ((1 - p.gamma2) * p.k2 * v2 / p.a3) ** 2 / (2 * p.g)
+                worst = min(worst, h3, h4)
+    assert worst - p.h_min >= 0.030
+
+
+def test_a_load_is_a_flow_into_its_own_lower_tank():
+    """It adds ``load / A`` to that tank's balance and nothing to the others."""
+    p = FourTankParams()
+    h = jnp.array([0.15, 0.2, 0.3, 0.2])
+    u = jnp.array([6.0, 6.0])
+    quiet = compute_velocity(h, u, p)[0]
+    loaded = compute_velocity(h, u, p, load=jnp.array([2e-4, -1e-4]))[0]
+    expected = jnp.array([2e-4 / p.A1, -1e-4 / p.A2, 0.0, 0.0])
+    _np.testing.assert_allclose(loaded - quiet, expected, rtol=1e-3, atol=1e-9)
 
 
 def test_tracking_band_is_scaled_to_the_operating_range():

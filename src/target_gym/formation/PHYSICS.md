@@ -122,12 +122,9 @@ Virginia University's three-aircraft trials), not of a deployed product.
 
 The lead holds the route with the 3D heading task's autopilot: a course hold
 on the heading the route commands, with the leg's turn rate fed forward, and
-TECS's pitch on the altitude. Its throttle stays at a set power (0.8, trimmed
-by 0.005 per m/s off the speed it engaged at), since a formation lead flies
-smooth and predictable and leaves the speed changes to its wingmen. Under
-TECS's throttle the airliner's 20 s engine lag sets up a slow throttle cycle
-(power 0.2 to 0.7 over about 40 s), and wingmen feeding the lead's speed
-forward chase it.
+TECS on height and speed. With the engine's 1.7 s lag TECS's throttle flies as
+smooth and predictable as a formation lead should, so the set power the old 20 s
+lag called for is gone.
 
 The lead and the hold were tuned on training seeds 100-109 and checked once
 on held-out seeds 200-209 (`scripts/tune_formation_hold.py`,
@@ -202,7 +199,7 @@ have to be tuned on training seeds and checked on fresh held-out ones.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 27 |
+| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 28 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

@@ -145,14 +145,6 @@ HELD_OUT = range(200, 210)
 
 
 @pytest.mark.large
-@pytest.mark.xfail(
-    strict=True,
-    reason="Finding (2026-10-28): 59 of 70 held-out mornings (84 %). Every miss "
-    "(0.55-1.0 K cold) is a morning where the 04:00 sample found the zone less "
-    "than uHigh = 0.5 K short, so OptimalStart ran no warm-up and the zone kept "
-    "cooling until 07:00. That is the published block's single sample, not a "
-    "fault of this copy.",
-)
 def test_the_zone_is_comfortable_when_occupancy_begins_on_held_out_seeds():
     spec = REGISTRY["hvac"]
     env, p = spec.make_env(), spec.make_test_params()

@@ -101,7 +101,7 @@ class _PlanePatrolBase(
     screen_height = 400
     task_type: str = "patrol"
 
-    def __init__(self, integration_method: str = "rk4_2"):
+    def __init__(self, integration_method: str = "rk4_1"):
         self.integration_method = integration_method
         self.positions_history_xz = []
         self.positions_history_xy = []
@@ -287,7 +287,7 @@ class PlanePatrol(_PlanePatrolBase):
     """Close patrol with full relative-state observation (26 values).
 
     Observation layout — see :func:`target_gym.patrol.env.get_obs_full`.
-    Action (3,): [power, stick, aileron], each in [-1, 1].
+    Action (3,): [throttle, pitch demand, bank demand], each in [-1, 1].
     """
 
     obs_value_index: int = 24  # slot_error
@@ -304,7 +304,7 @@ class PlanePatrol(_PlanePatrolBase):
         *_LEAD_VELOCITY,
     )
 
-    def __init__(self, integration_method: str = "rk4_2"):
+    def __init__(self, integration_method: str = "rk4_1"):
         super().__init__(integration_method)
         self.obs_shape = (26,)
 
@@ -316,7 +316,7 @@ class PlanePatrolBearingOnly(_PlanePatrolBase):
     """Close patrol with partial (range + bearing) observation (21 values).
 
     Observation layout — see :func:`target_gym.patrol.env.get_obs_bearing_only`.
-    Action (3,): [power, stick, aileron], each in [-1, 1].
+    Action (3,): [throttle, pitch demand, bank demand], each in [-1, 1].
     """
 
     obs_value_index: int = 19  # measured range
@@ -337,7 +337,7 @@ class PlanePatrolBearingOnly(_PlanePatrolBase):
         ChannelReading(11, sigma=0.026),  # azimuth, rad
     )
 
-    def __init__(self, integration_method: str = "rk4_2"):
+    def __init__(self, integration_method: str = "rk4_1"):
         super().__init__(integration_method)
         self.obs_shape = (21,)
 

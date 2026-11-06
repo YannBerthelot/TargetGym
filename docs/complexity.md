@@ -41,13 +41,13 @@ are the observation and action lengths, and the episode is the scored one.
 
 | Task | Name | What it asks | Obs | Act | Episode |
 |---|---|---|---|---|---|
-| [Altitude hold](environments/plane.md) | `plane` | Hold an A320-class airliner at a target altitude in light-to-moderate turbulence with throttle and elevator. | 10 | 2 | 280 steps, 4.67 min |
+| [Altitude hold](environments/plane.md) | `plane` | Hold an A320-class airliner at a target altitude in light-to-moderate turbulence with throttle and a pitch demand. | 10 | 2 | 280 steps, 4.67 min |
 | [Altitude and airspeed](environments/plane_energy.md) | `plane_energy` | Walk a ladder of eight altitude levels while holding a commanded airspeed, with the same airliner as `plane`. | 10 | 2 | 1600 steps, 26.7 min |
-| [Altitude - sinusoid](environments/plane_sine.md) | `plane_sine` | Track an altitude that moves as a sinusoid, with the same airliner, throttle and elevator as `plane`. | 10 | 2 | 480 steps, 8 min |
+| [Altitude - sinusoid](environments/plane_sine.md) | `plane_sine` | Track an altitude that moves as a sinusoid, with the same airliner, throttle and pitch demand as `plane`. | 10 | 2 | 480 steps, 8 min |
 | [3D heading](environments/plane3d_heading.md) | `plane3d_heading` | Hold a target altitude and turn onto and hold a target heading with the 3D airliner, using throttle, elevator and aileron. | 15 | 3 | 300 steps, 5 min |
 | [3D circle](environments/plane3d_circle.md) | `plane3d_circle` | Hold altitude while orbiting a fixed circle kilometres across with the 3D airliner. | 17 | 3 | 300 steps, 5 min |
 | [3D holding pattern](environments/plane3d_racetrack.md) | `plane3d_racetrack` | Fly a holding pattern, two straight legs joined by half circles, at a target altitude with the 3D airliner. | 21 | 3 | 650 steps, 10.8 min |
-| [3D figure-8](environments/plane3d_figure8.md) | `plane3d_figure8` | Follow a twisted figure-8 that climbs and descends, with the 3D airliner. | 21 | 3 | 400 steps, 6.67 min |
+| [3D figure-8](environments/plane3d_figure8.md) | `plane3d_figure8` | Follow a twisted figure-8 that climbs and descends, with the 3D airliner. | 21 | 3 | 1000 steps, 16.7 min |
 | [Patrol - wingman](environments/patrol.md) | `patrol` | Fly as a wingman: reach and hold a slot fixed in the lead aircraft's frame, behind, beside and above or below it, while the lead flies a patrol route that turns onto a new rate every minute. | 26 | 3 | 200 steps, 3.33 min |
 | [Patrol - wingman, bearing-only](environments/patrol_bearing_only.md) | `patrol_bearing_only` | The `patrol` task flown from a passive sensor: the wingman sees range, azimuth and elevation to the lead instead of the lead's relative state. | 21 | 3 | 200 steps, 3.33 min |
 | [Formation](environments/formation.md) | `formation` | Fly a lead and two wingmen in a V, every aircraft controlled by the policy. | 74 | 9 | 200 steps, 3.33 min |
@@ -67,17 +67,17 @@ are the observation and action lengths, and the episode is the scored one.
 
 | Task | Name | What it asks | Obs | Act | Episode |
 |---|---|---|---|---|---|
-| [Glass Furnace](environments/glass_furnace.md) | `glass_furnace` | Hold the crown temperature of a regenerative float-glass furnace on a slowly walking setpoint by setting the fuel flow. | 5 | 1 | 1600 steps, 13.3 h |
-| [Reactor](environments/reactor.md) | `reactor` | Follow a drifting power demand on a 3 GW pressurised-water reactor with the control rods. | 4 | 1 | 864 steps, 2.4 h |
+| [Glass Furnace](environments/glass_furnace.md) | `glass_furnace` | Hold the crown temperature of a regenerative float-glass furnace on a slowly walking setpoint by setting the fuel flow. | 6 | 1 | 1600 steps, 13.3 h |
+| [Reactor](environments/reactor.md) | `reactor` | Hold a 3 GW pressurised-water reactor's average coolant temperature on its program through a day of load follow, using the control rods. | 6 | 1 | 1440 steps, 12 h |
 | [Building HVAC](environments/hvac.md) | `hvac` | Keep a heavyweight, well-insulated single-zone building at its comfort setpoint through occupied hours and a night setback, with hydronic heating, over a week of heating-season weather. | 7 | 1 | 720 steps, 7.5 days |
 | [Cement Kiln](environments/cement_kiln.md) | `cement_kiln` | Hold the free lime in the clinker leaving a 3000 t/day rotary kiln with fuel and kiln speed. | 8 | 2 | 700 steps, 5.83 h |
 | [Boiler Drum](environments/boiler_drum.md) | `boiler_drum` | Hold the drum level and the steam pressure of a 160 MW natural-circulation drum boiler with fuel and feedwater, while the turbine's steam draw moves. | 7 | 2 | 400 steps, 13.3 min |
-| [Compressor Surge](environments/compressor_surge.md) | `compressor_surge` | Hold the header pressure of a variable-speed compressor on a stepped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. | 7 | 2 | 1200 steps, 2 min |
+| [Compressor Surge](environments/compressor_surge.md) | `compressor_surge` | Hold the header pressure of a variable-speed compressor on a ramped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. | 7 | 2 | 1200 steps, 2 min |
 
 ### Renewable Energy
 
 | Task | Name | What it asks | Obs | Act | Episode |
 |---|---|---|---|---|---|
 | [Wind Turbine](environments/wind_turbine.md) | `wind_turbine` | Hold the electrical power of the NREL 5 MW reference turbine at a curtailed setpoint in turbulent, above-rated wind, with blade pitch and generator torque. | 5 | 2 | 400 steps, 100 s |
-| [Battery](environments/battery.md) | `battery` | Follow a grid dispatch schedule, one setpoint per 5-minute market block, with a 1 MW / 2 MWh lithium-ion battery. | 5 | 1 | 360 steps, 30 min |
+| [Battery](environments/battery.md) | `battery` | Follow a regulation signal for 4 hours with a 1 MW / 1.69 MWh lithium-ion battery. | 7 | 1 | 2880 steps, 4 h |
 <!-- END generated table -->

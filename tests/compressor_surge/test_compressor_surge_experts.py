@@ -423,8 +423,9 @@ def test_functional_core_matches_the_class(env, params, step):
     ps0 = pair_init(get_obs(state0, params), xp=jnp)
     _, obs_seq = jax.lax.scan(closed, (state0, ps0), None, length=1200)
     obs_seq = np.asarray(obs_seq)
-    # The same four setpoints were tracked, so neither run restarted.
-    np.testing.assert_array_equal(obs_seq[:, 6], seen[:, 6])
+    # The same four setpoints were tracked, so neither run restarted. Ramps are
+    # computed, so the two compilations can differ by an ulp.
+    np.testing.assert_allclose(obs_seq[:, 6], seen[:, 6], rtol=1e-6)
     gap = np.abs(obs_seq[:, 0] - seen[:, 0])
     assert gap.max() <= 0.01, (gap.max(), int(gap.argmax()))
 

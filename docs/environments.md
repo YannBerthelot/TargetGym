@@ -73,8 +73,8 @@ To pick one by what you want to test, see
 
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
-| `glass_furnace` | `glass_furnace-v3` | (5,) | (1,) | crown temperature (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
-| `reactor` | `reactor-v4` | (4,) | (1,) | neutron power (normalised) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
+| `glass_furnace` | `glass_furnace-v3` | (6,) | (1,) | crown temperature (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
+| `reactor` | `reactor-v4` | (6,) | (1,) | Tavg (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 | `hvac` | `hvac-v3` | (7,) | (1,) | zone air temperature (deg C) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
 | `cement_kiln` | `cement_kiln-v4` | (8,) | (2,) | discharge free lime (%) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |
 | `boiler_drum` | `boiler_drum-v3` | (7,) | (2,) | drum level (m), drum pressure (bar) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |
@@ -87,4 +87,4 @@ To pick one by what you want to test, see
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
 | `wind_turbine` | `wind_turbine-v3` | (5,) | (2,) | electrical power (MW) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/wind_turbine/PHYSICS.md) |
-| `battery` | `battery-v3` | (5,) | (1,) | delivered power (MW) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/battery/PHYSICS.md) |
+| `battery` | `battery-v3` | (7,) | (1,) | delivered power (MW) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/battery/PHYSICS.md) |

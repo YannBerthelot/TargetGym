@@ -222,12 +222,25 @@ class EnvSpec:
     def has_pid(self) -> bool:
         return self.make_pid is not None
 
-    def make_pid_controller(self):
+    def make_pid_controller(self, sensor_noise_scale: float | None = None):
         """The scored PID as a pure ``Controller``: ``.act`` traces under
-        ``jit``/``vmap``, ``.host()`` is what ``make_pid()`` returns."""
+        ``jit``/``vmap``, ``.host()`` is what ``make_pid()`` returns.
+
+        ``sensor_noise_scale`` takes the gains tuned at that noise level. None
+        and 1 mean the shipped gains, and a level with no stored gains raises
+        (``provenance.level_gains``)."""
         if not self.has_pid:
             raise NotImplementedError(self.baselines_note or "no PID ships")
-        return self.make_pid.controller()
+        from target_gym.provenance import level_gains
+
+        make: Any = self.make_pid  # ``_pid`` hangs ``controller`` on the function
+        stored = level_gains(self, sensor_noise_scale)
+        if stored is None:
+            return make.controller()
+        from target_gym.experts.pid import gains_from
+
+        with gains_from(stored):
+            return make.controller()
 
     @property
     def has_mpc(self) -> bool:
@@ -698,6 +711,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # third.
         tuned_gains_key="cstr",
         oracle_data=_shared_oracle("cstr"),
+        # The feed loads, frozen at the true one for the oracle, as any
+        # process noise is: no plan sees a later arrival.
+        noise_fields=("load_scale",),
         version=4,
     ),
     EnvSpec(
@@ -736,6 +752,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # loop near a 64 s time constant. At 500 steps it was still settling.
         tuned_gains_key="four_tank",
         oracle_data=_shared_oracle("four_tank"),
+        # The tank loads, frozen at the true one for the oracle, as any
+        # process noise is: no plan sees a later arrival.
+        noise_fields=("load_scale",),
         # 4: the levels are read through instruments (PHYSICS.md, Readings).
         version=4,
     ),
@@ -801,12 +820,12 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_glass_furnace_mpc", module="target_gym.glass_furnace.oracle"
         ),
         tuned_gains_key="glass_furnace",
-        disturbance_fields=("m_pull_disturbance",),
-        # The pull disturbance's AR(1) innovation, zeroed for the oracle, which
-        # rolls the simulator and so plans the pull's conditional mean from
+        disturbance_fields=("m_pull_disturbance", "lhv_deviation"),
+        # The AR(1) innovations of the pull and the gas, zeroed for the oracle,
+        # which rolls the simulator and so plans their conditional means from
         # the state.
         oracle_data=_shared_oracle("glass_furnace"),
-        noise_fields=("m_pull_noise_std",),
+        noise_fields=("m_pull_noise_std", "lhv_noise_std"),
         version=3,
     ),
     EnvSpec(
@@ -907,10 +926,9 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_battery_pid_controller", module="target_gym.energy.battery.experts"
         ),
         make_mpc=_mpc("make_battery_mpc", module="target_gym.energy.battery.oracle"),
-        # 360 steps = 30 min, a real fraction of the ~96 min it takes to
-        # traverse the usable state-of-charge range at full power.
+        # 2880 steps = 4 h, about three times the 75 min it takes to traverse
+        # the usable state-of-charge range at full power.
         tuned_gains_key="battery",
-        oracle_data=_shared_oracle("battery"),
         noise_fields=("dispatch_noise_std",),
         disturbance_fields=("target_power",),
         version=3,

@@ -1,48 +1,41 @@
 """
-Grid battery storage — equivalent-circuit Li-ion pack tracking a dispatch signal.
+Grid battery storage: an equivalent-circuit Li-ion pack following a regulation
+signal over a window long enough to run out of energy.
 
 See ``PHYSICS.md`` in this directory for provenance, the sourced parameter
 table and validation targets. Method: ``docs/PHYSICS_METHODOLOGY.md``.
 
 Model
 -----
-A 2 MWh / 1 MW grid battery (a 2-hour system, the common build) as a
-first-order equivalent circuit with one RC branch, a lumped thermal mass and
-a capacity-fade model::
+A 1 MW / 1.69 MWh grid battery as a first-order equivalent circuit with one RC
+branch, a lumped thermal mass and a capacity-fade model, behind an inverter and
+an auxiliary load::
 
-    V_term = OCV(soc) − I R0 − v_rc
-    dsoc/dt   = −I / Q                          (coulomb counting)
-    dv_rc/dt  = I / C1 − v_rc / (R1 C1)         (diffusion / polarisation)
-    C_th dT/dt = I² R0 + v_rc I − UA (T − T_amb)
-    dq_loss/dt = calendar(T) + cycle(|I|, T)    (capacity fade)
+    P_dc      = P_inv + pcs_loss P_inv^2 / power_max   (inverter)
+    P_meter   = P_inv - aux_load                       (revenue meter)
+    V_term    = OCV(soc) - I R0 - v_rc
+    dsoc/dt   = -I / Q                                 (coulomb counting)
+    dv_rc/dt  = I / C1 - v_rc / (R1 C1)                (diffusion)
+    C_th dT/dt = I^2 R0 + v_rc I - UA (T - T_amb)
+    dq_loss/dt = calendar(T) + ripple(|I|, T) + deep cycles
 
-The controller commands **power**, not current, so the current follows from
-``P = V_term I`` — a quadratic whose physical root is taken. That quadratic is
-what makes power a genuinely harder control variable than current: the
-deliverable power is bounded by ``(OCV − v_rc)² / 4R0``, and that bound moves
-with state of charge.
+The controller commands the inverter, so the current follows from
+``P_dc = V_term I``, a quadratic whose physical root is taken.
 
 Task
 ----
-Track a scheduled grid dispatch signal. Every MWh moved to follow it costs
-capacity fade, which the running cost prices at every step: within an
-episode, that wear is what tracking costs.
+Follow a regulation signal for 4 hours: an hourly dispatch level plus an AR(1)
+regulation movement, both in MW at the meter. Following it exactly leaves the
+charge window on most seeds, and leaving it trips the pack.
 
 Why it is a hard target MDP
 ---------------------------
-* **Tracking is paid for in wear.** Capacity fade is driven by throughput and
-  temperature. The accumulated fade is not observed; the running cost charges
-  its rate, above the hold-phase rate, at every step.
-* **Hard charge limits.** Leaving 0.05-0.95 state of charge is a terminal
-  state: the pack trips, and the reward charges an hour of downtime. A
-  dispatch held in one direction long enough would get there, but over the
-  scored 360-step (30 min) episode a controller that follows the schedule
-  exactly stays within 0.17-0.85 and never trips.
-  The limits are a hazard for a policy that strays, not a budget that exact
-  tracking runs down.
-* **Efficiency depends on where you are.** Losses scale with current squared,
-  and current for a given power depends on state of charge through the OCV
-  curve — so the same dispatch costs more when the pack is low.
+* **Energy binds.** Hourly levels of up to 0.8 MW against a 1.69 MWh pack.
+* **Depth has a convex price.** A half-cycle of depth ``d`` uses ``Phi(d) / 2`` of
+  the pack's life, so the next MWh of a deep swing can cost more in wear than in
+  imbalance. Whether to keep following is a real choice.
+* **The next block is known.** A policy can see the energy coming and the time
+  left, and a trim has real work: auxiliary loads sit behind the command.
 """
 
 from typing import Tuple
@@ -60,30 +53,27 @@ from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 GAS_CONSTANT = 8.314  # J/(mol K)
 KELVIN = 273.15
 
-#: Dispatch blocks in a schedule. A grid battery is not handed a random walk:
-#: it is handed a setpoint, holds it for a market interval, and is handed
-#: another. Twelve blocks cover 60 min at the 5 min interval below, twice the
-#: default 30 min episode, which spans the first six.
+#: Dispatch blocks in a schedule, hourly: the four the 4 h window scores, then
+#: the next one, so the last scored block has a next block to read too.
 #:
-#: The signal used to be an Ornstein-Uhlenbeck process, and it made the task
-#: unmeasurable. Its one-step innovation had a standard deviation of 63.6 kW
-#: against a 150 kW tracking band, which puts the *best possible* tracking
-#: reward at 0.429 -- and the shipped PID scored 0.447 while the MPC scored
-#: 0.430. Both controllers were sitting on an irreducible noise floor, so the
-#: environment could not tell a good controller from a mediocre one, and the
-#: only thing separating them was noise. A schedule is both more plausible and
-#: actually measures something: the error is now the transient after each step,
-#: which is what a controller is for.
-N_DISPATCH_BLOCKS = 12
+#: The signal was once an Ornstein-Uhlenbeck process of 63.6 kW innovations against
+#: a 150 kW tracking band, which pinned every controller on an irreducible noise
+#: floor. The held level plus a small-innovation regulation signal keeps the
+#: error a property of the controller.
+N_DISPATCH_BLOCKS = 5
 
 
 @struct.dataclass
 class BatteryParams(EnvParams):
     # ---- Pack ----
-    energy_nominal: float = 2.0e6 * 3600.0  # J (2 MWh)
-    power_max: float = 1.0e6  # W (0.5 C)
+    energy_nominal: float = 1692.0e3 * 3600.0  # J, 2500 Ah at the 677 V of 50 % charge
+    power_max: float = 1.0e6  # W, about 0.6 C
     n_series: float = 192.0  # cells in series
     capacity_As: float = 2500.0 * 3600.0  # A s (2500 Ah)
+
+    # ---- Between the pack and the meter (PHYSICS.md, section 3) ----
+    pcs_loss: float = 0.03  # of throughput at rated power, inverter
+    aux_load: float = 15e3  # W, cooling and controls, drawn behind the meter
 
     # ---- Equivalent circuit ----
     # R0 is sized for the published round-trip efficiency band; see PHYSICS.md.
@@ -108,10 +98,18 @@ class BatteryParams(EnvParams):
     T_ambient: float = 25.0  # degC
 
     # ---- Degradation ----
-    k_calendar: float = 3.0e-9  # 1/s at the reference temperature
+    k_calendar: float = 6.34e-10  # 1/s at the reference temperature, 2 %/yr
     E_activation: float = 20_000.0  # J/mol
     T_ref_aging: float = 298.15  # K
-    k_cycle: float = 1.5e-9  # fractional fade per unit throughput
+    # Ripple: throughput priced at the stress of a cycle as deep as the hysteresis
+    # below, Phi(0.05) / (2 * 0.05) of life per capacity of charge moved, over
+    # 9000 kA s, in fade. Anything deeper is a half-cycle, charged by depth.
+    k_cycle: float = 2.66e-10  # fractional fade per kA s of throughput
+    # Life lost to one cycle of depth u: stress_alpha u^stress_beta.
+    stress_alpha: float = 5.24e-4
+    stress_beta: float = 2.03
+    life_fade: float = 0.2  # fraction of capacity lost at end of life
+    cycle_hysteresis: float = 0.05  # state of charge, smaller swings are ripple
 
     # ---- Operating / termination bounds ----
     soc_min: float = 0.05
@@ -149,56 +147,48 @@ class BatteryParams(EnvParams):
     soc_comfort_weight: float = 0.10  # gentle pull toward mid charge
 
     # ---- Dispatch signal ----
-    # Held for a market interval, then stepped. 300 s is the dispatch interval
-    # of most wholesale real-time markets.
-    dispatch_block_seconds: float = 300.0
+    # An hourly level, the unit regulation markets clear in, plus an AR(1)
+    # regulation movement. The innovation sets the floor, and at 10 kW and 900 s
+    # the signal itself wanders about 95 kW: a movement to follow that stays out
+    # of the way of the energy the levels carry.
+    dispatch_block_seconds: float = 3600.0
     dispatch_range: float = 0.8e6  # W, half-range of a block's level
-    # Regulation jitter on top of the held setpoint. Deliberately small against
-    # the 150 kW band: it should stop the task being noise-free without
-    # becoming the thing that decides the score. At 2 kW the best attainable
-    # tracking reward is ~0.86 rather than the OU signal's 0.43.
-    dispatch_noise_std: float = 2.0e3  # W
+    dispatch_noise_std: float = 1.0e4  # W, innovation of the regulation signal
+    regulation_tau: float = 900.0  # s, correlation time of the regulation signal
     initial_soc_range: Tuple[float, float] = (0.35, 0.75)
 
     # ---- Time discretization ----
-    # 10-90 % state of charge at full power takes ~96 min. The default 360
-    # steps of 5 s is a 30 min episode, about a third of that traverse; a
-    # controller that follows the schedule exactly stays within 0.17-0.85
-    # state of charge over it.
+    # 10-90 % state of charge at full power takes about 75 min. 4 h at the 5 s
+    # of a regulation cycle, so following the signal runs out of energy.
     delta_t: float = 5.0
-    max_steps_in_episode: int = 360
+    max_steps_in_episode: int = 2880
 
     # ---- Reward (docs/reward-shaping.md; version 2), in dollars per step ----
-    # Tracking: dispatch imbalance at ``imbalance_price`` per MWh, linear in
-    # |error|. Floor: the dispatch target is a block level plus white noise of
-    # sd ``dispatch_noise_std`` drawn after the action is chosen, so no
-    # controller can hold the mean |error| below E|N(0, sd)| = sd * sqrt(2/pi)
-    # = 1596 W (closed form; the shipped PID holds 5.6 kW, and the oracle, a
-    # feedforward of the scheduled level, 1.58 kW: the floor itself,
-    # `scripts/measure_hold.py`). Degradation: capacity fade above the
-    # hold-phase rate (1.92e-8 of capacity per step, PID and oracle alike) at
-    # ``fade_price`` per kWh of the 1692 kWh pack -- the avoidable part of
-    # ageing, so the best achievable reward stays near zero. The SOC-comfort
-    # term of version 1 has no owner price and is dropped (provisional): a
-    # pack driven to the edge of its window pays through the dispatch it can
-    # then not follow. A trip costs, per step, twice the 1 MW envelope's
-    # imbalance.
+    # Tracking: imbalance at the meter at ``imbalance_price`` per MWh, linear in
+    # |error|. Floor: the regulation signal moves after the action by an
+    # innovation of sd ``dispatch_noise_std``, so no causal controller holds the
+    # mean |error| below E|N(0, sd)| = sd * sqrt(2/pi) = 7979 W (closed form).
+    # Wear: capacity fade above calendar ageing, which no controller avoids, at
+    # ``fade_price`` per kWh of the 1692 kWh pack. That price is the replacement
+    # cost spread over the fade that ends a pack's life: $300/kWh / 0.2. A trip
+    # costs, per step, twice the dearest step the pack can survive.
     reward_version: int = 2
-    e_floor: float = 1596.0  # W, E|noise|, closed form
+    e_floor: float = 7979.0  # W, E|innovation|, closed form
     e_tol: float = 0.0
     tracking_exponent: float = 1.0
     imbalance_price: float = 100.0  # $/MWh
-    c_hold: float = 1.92e-8  # fractional fade per step while holding
-    fade_price: float = 300.0  # $/kWh of lost capacity
+    c_hold: float = 3.17e-9  # k_calendar * delta_t, fade per step at rest
+    fade_price: float = 1500.0  # $/kWh of lost capacity: $300/kWh over 20 % fade
     pack_kWh: float = 1692.0  # capacity_As * OCV(50%) / 3.6e6
-    failure_cost: float = (
-        2.0 * 100.0 * 1.8 * 5.0 / 3600.0
-    )  # twice the imbalance of the reachable 1.8 MW (0.8 MW target vs 1 MW power), per 5 s step
+    # Twice the dearest step that survives, per 5 s step: the imbalance of the
+    # reachable 1.8 MW (0.8 MW target vs 1 MW power), $0.25, the wear of a full
+    # power step at the window's full depth, $0.20, and a half-cycle's turn, $0.30.
+    failure_cost: float = 2.0 * (0.25 + 0.20 + 0.30)
     #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 5 s steps: a protection trip's reset, provisional).
     restart_steps: int = 720
     #: Tracking cost per step at the floor, in the reward's units.
-    rho_floor_tracking: float = 100.0 / 1.0e6 * 5.0 / 3600.0 * 1596.0
-    rho_floor: float = 100.0 / 1.0e6 * 5.0 / 3600.0 * 1596.0
+    rho_floor_tracking: float = 100.0 / 1.0e6 * 5.0 / 3600.0 * 7979.0
+    rho_floor: float = 100.0 / 1.0e6 * 5.0 / 3600.0 * 7979.0
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 
@@ -209,6 +199,8 @@ PARAM_UNITS = {
     "power_max": "W",
     "n_series": "-",
     "capacity_As": "A s",
+    "pcs_loss": "-",
+    "aux_load": "W",
     "R0": "ohm",
     "R1": "ohm",
     "C1": "F",
@@ -226,6 +218,10 @@ PARAM_UNITS = {
     "E_activation": "J/mol",
     "T_ref_aging": "K",
     "k_cycle": "1/(kA s)",
+    "stress_alpha": "-",
+    "stress_beta": "-",
+    "life_fade": "-",
+    "cycle_hysteresis": "-",
     "soc_min": "-",
     "soc_max": "-",
     "T_max": "degC",
@@ -240,6 +236,7 @@ PARAM_UNITS = {
     "dispatch_block_seconds": "s",
     "dispatch_range": "W",
     "dispatch_noise_std": "W",
+    "regulation_tau": "s",
     "reward_version": "-",
     "e_floor": "W",
     "e_tol": "W",
@@ -263,12 +260,16 @@ class BatteryState(EnvState):
     q_loss: float  # cumulative fractional capacity fade -- HIDDEN
 
     current: float  # pack current (A), positive = discharge
-    power: float  # delivered electrical power (W)
-    target_power: float  # dispatch request (W)
-    # The whole schedule, so a predictive controller can see the next block
-    # coming. The observation exposes only the current request, which is what
-    # keeps the lookahead a genuine advantage rather than a free lunch.
+    power: float  # power at the meter (W)
+    target_power: float  # regulation signal (W)
+    regulation: float  # the signal's AR(1) part (W) -- HIDDEN
+    # The whole schedule. The observation shows the next block and how far off
+    # it is, so a controller reads what the oracle reads one block ahead.
     dispatch_schedule: jnp.ndarray
+    # The half-cycle under way: where it turned, and how far it has reached.
+    soc_anchor: float  # -- HIDDEN
+    soc_peak: float  # -- HIDDEN
+    deep_fade: float = 0.0  # fraction of capacity the last step's depth used
 
     actuator_held: jax.Array = actuator_field(1)
 
@@ -277,6 +278,19 @@ def dispatch_block(time, params: BatteryParams, xp=jnp):
     """Which block of the schedule is live at *time*."""
     per_block = xp.maximum(params.dispatch_block_seconds / params.delta_t, 1.0)
     return xp.clip((time / per_block).astype(int), 0, N_DISPATCH_BLOCKS - 1)
+
+
+def next_block_level(time, schedule, params: BatteryParams, xp=jnp):
+    """The level of the block after the one live at *time*."""
+    return schedule[
+        xp.minimum(dispatch_block(time, params, xp) + 1, N_DISPATCH_BLOCKS - 1)
+    ]
+
+
+def minutes_to_next_block(time, params: BatteryParams):
+    """Minutes until the next block goes live, seen at step *time*."""
+    per_block = jnp.round(params.dispatch_block_seconds / params.delta_t)
+    return (per_block - time % per_block) * params.delta_t / 60.0
 
 
 def open_circuit_voltage(soc, params: BatteryParams):
@@ -321,13 +335,48 @@ def terminal_voltage(current, soc, v_rc, params: BatteryParams):
     return open_circuit_voltage(soc, params) - current * params.R0 - v_rc
 
 
-def degradation_rate(current, T_cell, params: BatteryParams):
-    """Fractional capacity fade per second: calendar plus cycling.
+def inverter_input(power, params: BatteryParams):
+    """DC power the inverter needs for ``power`` W on its AC side. Its loss comes
+    from the pack on discharge and out of what reaches the pack on charge."""
+    return power + params.pcs_loss * power**2 / params.power_max
 
-    Calendar ageing follows an Arrhenius law in temperature; cycle ageing is
-    proportional to charge throughput. Both are small per step and only matter
-    cumulatively -- which is the point, since the controller pays for
-    aggressive tracking later rather than now.
+
+def inverter_output(dc_power, params: BatteryParams):
+    """AC power for ``dc_power`` W at the pack: the inverse of ``inverter_input``."""
+    k = params.pcs_loss / params.power_max
+    return 2.0 * dc_power / (1.0 + jnp.sqrt(1.0 + 4.0 * k * dc_power))
+
+
+def cycle_stress(depth, params: BatteryParams):
+    """Life lost to one cycle of ``depth``: convex, so deep cycles dominate."""
+    return params.stress_alpha * jnp.abs(depth) ** params.stress_beta
+
+
+def half_cycle(anchor, peak, soc, params: BatteryParams):
+    """The half-cycle after a move to ``soc``: ``(anchor, peak, life used)``.
+
+    A half-cycle of depth ``d`` costs ``Phi(d) / 2``, spread over its depth as it
+    grows. A swing back from the peak ends it once it passes ``cycle_hysteresis``,
+    a racetrack filter, and a new one starts from the peak. Smaller swings are
+    ripple, which ``degradation_rate`` charges by throughput.
+    """
+    heading = jnp.sign(peak - anchor)
+    extends = (soc - peak) * heading > 0.0
+    turns = jnp.logical_and(
+        jnp.logical_not(extends), jnp.abs(soc - peak) > params.cycle_hysteresis
+    )
+    new_anchor = jnp.where(turns, peak, anchor)
+    new_peak = jnp.where(jnp.logical_or(extends, turns), soc, peak)
+    spent = jnp.where(turns, 0.0, cycle_stress(peak - anchor, params))
+    life = 0.5 * (cycle_stress(new_peak - new_anchor, params) - spent)
+    return new_anchor, new_peak, life
+
+
+def degradation_rate(current, T_cell, params: BatteryParams):
+    """Fractional capacity fade per second, calendar plus ripple.
+
+    Calendar ageing follows an Arrhenius law in temperature, and ripple is
+    proportional to charge throughput. Deep half-cycles come from ``half_cycle``.
     """
     p = params
     T_kelvin = T_cell + KELVIN
@@ -340,10 +389,11 @@ def degradation_rate(current, T_cell, params: BatteryParams):
 
 
 def compute_velocity(position, action, params: BatteryParams):
-    """RHS for ``[soc, v_rc, T_cell, q_loss]``. ``action`` is power in W."""
+    """RHS for ``[soc, v_rc, T_cell, q_loss]``. ``action`` is the inverter's AC
+    power in W."""
     p = params
     soc, v_rc, T_cell = position[0], position[1], position[2]
-    current = current_for_power(action, soc, v_rc, p)
+    current = current_for_power(inverter_input(action, p), soc, v_rc, p)
 
     dsoc = -current / p.capacity_As
     dv_rc = current / p.C1 - v_rc / (p.R1 * p.C1)
@@ -361,7 +411,8 @@ def compute_next_state(
     key: jax.Array,
     integration_method: str = "rk4_2",
 ):
-    """``action_raw`` in [-1, 1] maps to power in [-power_max, +power_max].
+    """``action_raw`` in [-1, 1] maps to the inverter's AC power in
+    [-power_max, +power_max].
 
     Positive is discharge (delivering to the grid), negative is charge.
     """
@@ -380,26 +431,37 @@ def compute_next_state(
     soc = jnp.clip(new_positions[0], 0.0, 1.0)
     v_rc, T_cell, q_loss = new_positions[1], new_positions[2], new_positions[3]
 
-    current = current_for_power(power_cmd, soc, v_rc, p)
-    power = terminal_voltage(current, soc, v_rc, p) * current
+    current = current_for_power(inverter_input(power_cmd, p), soc, v_rc, p)
+    dc_power = terminal_voltage(current, soc, v_rc, p) * current
+    power = inverter_output(dc_power, p) - p.aux_load
 
-    # Scheduled dispatch: the level for the block that is live at the *next*
-    # step, plus regulation jitter. The jitter is drawn from a key folded with
-    # ``state.time`` so a caller passing a constant key still gets a genuine
-    # zero-mean process.
+    anchor, peak, life = half_cycle(state.soc_anchor, state.soc_peak, soc, p)
+    deep_fade = p.life_fade * life
+
+    # The signal for the *next* step: its block's level plus the AR(1) movement.
+    # The innovation is drawn from a key folded with ``state.time``, so a caller
+    # passing a constant key still gets a genuine zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
+    regulation = (
+        jnp.exp(-p.delta_t / p.regulation_tau) * state.regulation
+        + p.dispatch_noise_std * noise
+    )
     level = state.dispatch_schedule[dispatch_block(state.time + 1, p)]
-    target = jnp.clip(level + p.dispatch_noise_std * noise, -p.power_max, p.power_max)
+    target = jnp.clip(level + regulation, -p.power_max, p.power_max)
 
     return (
         state.replace(
             soc=soc,
             v_rc=v_rc,
             T_cell=T_cell,
-            q_loss=q_loss,
+            q_loss=q_loss + deep_fade,
             current=current,
             power=power,
             target_power=target,
+            regulation=regulation,
+            soc_anchor=anchor,
+            soc_peak=peak,
+            deep_fade=deep_fade,
             time=state.time + 1,
         ),
         None,
@@ -413,13 +475,12 @@ def compute_next_state(
 # cost of a cached call. Callers that want it fused already jit ``step_env``,
 # which traces this inline.
 def get_obs(state: BatteryState, params: BatteryParams):
-    """``[soc, V_cell, T_cell, P_MW, target_P_MW]``.
+    """``[soc, V_cell, T_cell, P_MW, target_P_MW, next_block_MW, minutes_to_it]``.
 
     A battery management system measures state of charge (estimated from
-    coulomb counting and voltage), terminal voltage, temperature and power.
-    The diffusion-branch voltage and the accumulated capacity fade are hidden:
-    neither is directly measurable, and the fade in particular is the cost the
-    controller is implicitly trading against.
+    coulomb counting and voltage), terminal voltage, temperature and meter power,
+    and the market publishes the next block. The diffusion-branch voltage and the
+    accumulated capacity fade are hidden: neither is directly measurable.
     """
     v_cell = (
         terminal_voltage(state.current, state.soc, state.v_rc, params) / params.n_series
@@ -431,6 +492,8 @@ def get_obs(state: BatteryState, params: BatteryParams):
             state.T_cell,
             state.power / 1.0e6,
             state.target_power / 1.0e6,
+            next_block_level(state.time, state.dispatch_schedule, params) / 1.0e6,
+            minutes_to_next_block(state.time, params),
         ]
     )
 
@@ -470,6 +533,7 @@ def compute_reward_terms(
         )
     )
     fade = degradation_rate(state.current, state.T_cell, p) * p.delta_t
+    fade = fade + state.deep_fade
     degradation = p.fade_price * p.pack_kWh * xp.maximum(fade - p.c_hold, 0.0)
     if tripped is None:
         tripped, _ = check_is_terminal(state, p, xp)
@@ -507,6 +571,7 @@ def compute_reward(state: BatteryState, params: BatteryParams, xp=jnp):
 
 def round_trip_efficiency(power, soc, params: BatteryParams):
     """One-way efficiency at a given power and state of charge; square for round trip."""
-    current = current_for_power(power, soc, 0.0, params)
-    loss = current**2 * params.R0
+    dc_power = inverter_input(power, params)
+    current = current_for_power(dc_power, soc, 0.0, params)
+    loss = current**2 * params.R0 + dc_power - power
     return 1.0 - loss / jnp.maximum(jnp.abs(power), 1.0)

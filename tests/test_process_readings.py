@@ -89,7 +89,8 @@ ON_TARGET = {
     "distillation": lambda s: s.replace(target_yD=s.x[-1], target_xB=s.x[0]),
     "ph_neutralization": lambda s: s.replace(target_pH=s.pH),
     "compressor_surge": lambda s: s.replace(
-        setpoint_levels=jnp.full_like(s.setpoint_levels, s.dp)
+        setpoint_levels=jnp.full_like(s.setpoint_levels, s.dp),
+        setpoint_lead=jnp.zeros_like(s.setpoint_lead),
     ),
 }
 #: The proposal's floor per step, with rounding's ``step^2 / 12`` on pH. The
@@ -204,14 +205,13 @@ def test_analysers_hold_their_noise_through_a_cycle_and_redraw_at_the_next():
         assert first[0] != second[0]
 
 
-def test_a_held_analyser_reports_the_current_value():
-    """Decided in the proposal: only the noise is held, so a change in the
-    product within a cycle reaches the reading in full."""
+def test_a_held_analyser_reports_no_change_within_a_cycle():
+    """A chromatograph reports once a cycle, so a change in the product within
+    it does not reach the reading. Reversed from the proposal's first form, which
+    held only the noise (docs/proposals/industrial-fixes.md)."""
     env, params, state = _reset("distillation")
     moved = state.replace(time=state.time + 1, x=state.x.at[-1].add(1e-3))
-    assert float(env.get_obs(moved, params)[0] - env.get_obs(state, params)[0]) == (
-        pytest.approx(1e-3, abs=1e-6)  # float32 near 1 has a 6e-8 step
-    )
+    assert float(env.get_obs(moved, params)[0]) == float(env.get_obs(state, params)[0])
 
 
 def test_the_tray_temperature_updates_every_step():
