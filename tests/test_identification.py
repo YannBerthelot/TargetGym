@@ -30,10 +30,10 @@ from target_gym.identification import (
     evidence,
     fit,
     identify,
-    quiet_fits,
     insignificant,
     judge,
     nrmse_fit,
+    quiet_fits,
 )
 from target_gym.registry import REGISTRY
 

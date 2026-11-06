@@ -777,8 +777,7 @@ horizons for rate-limited MVs.
 
 ## 13. Amendment 4, the rerun on the rebuilt plants
 
-Written with PR 9 for the owner's review. The recipe is unchanged, with two fixes to
-how it was run. Neither reads a horizon.
+The recipe is unchanged, with two fixes to how it was run and one owner decision.
 
 **The step.** `Plant` read `delta_t` as the step. On the reactor a control step is 6
 of those, so its fits were 6 times off. It now reads the control step.
@@ -789,30 +788,42 @@ pressure, 56726 on the glass crown. H21 says a gain needs a settled fit, so an
 integrating fit adds no ramp. The boiler's pressure and the glass crown are
 integrating, so neither gets one. No source gives a ramp for an integrating CV.
 
-| task | T_c before | P before | T_c now | P now | plans to the end | set by |
+**H22, a quiet fit counts toward P (owner decision, 2026-11-06).** A fit that fails
+V1 alone, with a fit of at least 95 %, still counts toward P, on every task. Every
+test of a pair is read, under its CV's class, since a retest can keep a fast valid
+fit over a slow quiet one. As in H21, an insignificant pair has none. The 95 % is
+V4's measure: N2's fit, 100 (1 - |dy - yhat| / |dy|), against the pre-step value.
+Only valid fits set T_c, and a task with no valid fit stays non-compliant (N3).
+
+**Provenance.** The rule was written after the failure, and after P = 932 had been
+seen to win on hvac. It takes H21's reasoning, that a gain needs a settled fit, not
+a quiet one. It uses only a fit's own checks, and no return enters it. It is ours.
+
+**What forced it.** hvac's building has two time constants, about 970 s (air and
+emitter) and 139,000 s (mass). The slow fit reaches 9.97 of V1's 10 bands, with a fit
+of 98 %, where 10.22 passed on the old plant. Without it P falls from 932 to 8, two
+hours, the oracle cannot see the morning, and it loses to the expert on 7 of 10
+seeds, -17.18 against -16.54. At P = 932 it wins 10 of 10, at -12.90.
+
+| task | T_c before | P before | T_c now | P without H22 | P with H22 | set by, fit, bands |
 | --- | --- | --- | --- | --- | --- | --- |
-| battery | 1 | 80 | 1 | 3023 | yes, 2880 samples | power to T_cell, seed 107 |
-| boiler_drum | 1 | 178 | 1 | 237 | no, 400 steps | fuel to pressure, seed 102 |
-| glass_furnace | 30 | 143 | 29 | 158 | yes, 56 samples | fuel to T_work, seed 108 |
-| hvac | 1 | 932 | 1 | 8 | no, 720 steps | heating to T_air, seed 101 |
-| wind_turbine | 1 | 290 | 1 | 159, ramp 5 | no, 400 steps | pitch to P, seed 103 |
-| reactor | none | none | 1 | 10, ramp 2 | no, 1440 steps | rod to T_avg, seed 100 |
+| battery | 1 | 80 | 1 | 3023 | 3023 | power to T_cell, seed 107, valid |
+| boiler_drum | 1 | 178 | 1 | 237 | 237 | fuel to pressure, seed 102, valid |
+| cement_kiln | 1 | 20 | 1 | 20 | **1048** | fuel to T_bz, seed 108, 96.4 %, 7.4 |
+| compressor_surge | 1 | 91 | 1 | 95 | **187** | speed to dp, seed 105, 96.8 %, 5.8 |
+| distillation | none | none | 1 | 165 | **336** | V to xB, seed 106, 98.3 %, 9.97 |
+| first_order | 1 | 62 | 1 | 62 | 62 | u to x, seed 104, valid |
+| four_tank | 4 | 252 | 3 | 384 | 384 | pump2 to h1, seed 106, valid |
+| glass_furnace | 30 | 143 | 29 | 158 | 158 | fuel to T_work, seed 108, valid |
+| hvac | 1 | 932 | 1 | 8 | **930** | heating to T_air, seed 102, 98.1 %, 9.97 |
+| reactor | none | none | 1 | 10 | 10 | rod to T_avg, seed 100, valid |
+| wind_turbine | 1 | 290 | 1 | 159 | **266** | pitch to P, seed 109, 97.8 %, 8.7 |
+
+P includes H21's ramp: 5 on the wind, 64 on the compressor, 2 on the reactor.
+
+`ph_neutralization` stays non-compliant. `cstr` and `unstable_cstr` have no valid fit
+on their changed plants, under experts PR 9 has yet to retune, so they keep their
+files and P until those experts land.
 
 **The reactor is compliant now.** It had no valid fit before. It has 20 of 40 now, on
-T_avg and T_hot. `n` and T_fuel have none. Its oracle stays on `NewtonMPC`: moving it
-is the owner's call.
-
-**hvac: the recipe's answer loses, an open decision.** The building has two time
-constants, about 970 s (air and emitter) and 139,000 s (mass). Which one a seed's
-FOPDT finds depends on the window, and only fits passing V1 count. The slow fit
-reaches 5.5 to 9.97 noise bands on the rebuilt plant, against the 10 of V1, with a fit
-of 96 to 98 %: 10.22 passed on the old plant, and 9.97 fails here. So P falls from
-932 to 8, two hours, and the oracle cannot see the morning.
-
-| P | seeds won of 10 | mean return | expert |
-| --- | --- | --- | --- |
-| 8, as measured | 3 | -17.18 | -16.54 |
-| 932, a diagnosis, not adopted | 10 | -12.90 | -16.54 |
-
-The file holds what the recipe gave. A rule that keeps the slow fit is for the owner,
-as H21's V1 exception was: nothing here chooses one.
+T_avg and T_hot. `n` and T_fuel have none.
