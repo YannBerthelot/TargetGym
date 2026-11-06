@@ -17,7 +17,7 @@ Two reasons this layer matters:
 Sign conventions (from ``Airplane2D.step_env``):
     action = [power_raw, stick_raw], both in [-1, 1]
     throttle = (power_raw + 1) / 2      in [0, 1]
-    elevator = stick_raw * 15 degrees   positive = nose up
+    pitch demand = stick_raw * 15 deg   positive = nose up, held by the inner loop
 """
 
 import jax
@@ -45,8 +45,16 @@ def env():
 @pytest.fixture(scope="module")
 def params():
     # Long horizon so scenarios end on physics, not on the step limit; still
-    # air, since these scenarios are about the aerodynamics.
-    return PlaneParams(max_steps_in_episode=100_000, turbulence_sigma=0.0)
+    # air, since these scenarios are about the aerodynamics. They fly past the
+    # envelope on purpose, so only the altitude band ends one.
+    return PlaneParams(
+        max_steps_in_episode=100_000,
+        turbulence_sigma=0.0,
+        vmo_eas=1_000.0,
+        mmo=5.0,
+        load_factor_max=100.0,
+        load_factor_min=-100.0,
+    )
 
 
 def make_state(
@@ -129,7 +137,7 @@ def test_full_power_causes_climb(env, params):
 
 def test_climb_costs_airspeed_at_fixed_power(env, params):
     """Trading potential for kinetic energy: a climb at fixed thrust bleeds speed."""
-    traj = fly(env, params, power_raw=0.2, stick_raw=0.0, steps=250)
+    traj = fly(env, params, power_raw=0.2, stick_raw=0.3, steps=250)
     assert traj["z"][-1] > CRUISE_ALT, "expected a climb"
     assert traj["v"][-1] < CRUISE_SPEED, "climbed without losing any airspeed"
 
@@ -241,10 +249,12 @@ def test_stall_recovery_by_lowering_the_nose(params):
 
 
 def test_deep_stall_sinks_in_a_rollout(env, params):
-    """Started beyond the stall angle, the aircraft must lose altitude."""
+    """Started beyond the stall angle with the nose held up and the power at
+    idle, the aircraft must end up losing altitude, whatever the zoom gave it."""
     state = make_state(params, theta_deg=params.aoa_stall + 8.0, speed=170.0)
-    traj = fly(env, params, power_raw=-0.5, stick_raw=0.0, steps=60, state=state)
-    assert traj["z"][-1] < CRUISE_ALT
+    traj = fly(env, params, power_raw=-1.0, stick_raw=1.0, steps=300, state=state)
+    assert traj["z"][-1] < traj["z"].max()
+    assert traj["z_dot"][-1] < 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +322,8 @@ def test_level_flight_oscillation_is_bounded(env, params):
     means level flight is never perfectly static. What matters is that the
     swings stay bounded rather than growing.
     """
-    traj = fly(env, params, power_raw=TRIM_POWER_RAW, stick_raw=0.0, steps=600)
+    # A level pitch for this speed, 1.85 deg, rather than a level elevator.
+    traj = fly(env, params, power_raw=TRIM_POWER_RAW, stick_raw=0.12, steps=600)
     excursion = np.abs(traj["z"] - CRUISE_ALT)
     first_half = excursion[: len(excursion) // 2].max()
     second_half = excursion[len(excursion) // 2 :].max()

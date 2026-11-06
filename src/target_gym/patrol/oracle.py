@@ -21,13 +21,11 @@ import jax.numpy as jnp
 import numpy as np
 
 from target_gym.experts.mpc import GradientMPC, _is_v1
-from target_gym.experts.pid import (
-    Plane3DPIDState,
-    plane3d_heading_pid_step,
-)
+from target_gym.experts.pid import Plane3DPIDState
 from target_gym.patrol.env import (
     _relative_velocity_lead_frame,
     get_obs_heading,
+    lead_autopilot_step,
     slot_error_vector,
     wrap_angle,
 )
@@ -96,7 +94,7 @@ def twin_law_step(lead_pid_params, gains, carry, state):
                           - k_ff slot_back omega_lead / V, +-k_y_max);
       altitude  the lead's target altitude plus the slot's height offset;
 
-    and adds power k_b e_back - k_bd rv_fwd + k_bi sum(e_back) and stick
+    and adds power k_b e_back - k_bd rv_fwd + k_bi sum(e_back) and pitch demand
     -(k_z e_up + k_zd rv_up). omega_lead is the lead's heading change over
     the last step (0 on the first). With the follower in the slot and no
     correction this is the lead's action exactly, so the shared gust moves
@@ -119,9 +117,7 @@ def twin_law_step(lead_pid_params, gains, carry, state):
         target_heading=wrap_angle(commanded + dpsi),
         target_altitude=lead.target_altitude + state.slot_up,
     )
-    a, pid = plane3d_heading_pid_step(
-        lead_pid_params, carry["pid"], get_obs_heading(cmd)
-    )
+    a, pid = lead_autopilot_step(lead_pid_params, carry["pid"], get_obs_heading(cmd))
     ib = carry["ib"] + eb
     dp = g["k_b"] * eb - g["k_bd"] * rvf + g["k_bi"] * ib
     ds = -(g["k_z"] * eu + g["k_zd"] * rvu)

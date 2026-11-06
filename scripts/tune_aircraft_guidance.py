@@ -1,18 +1,18 @@
 """Tune the aircraft experts the way an autopilot is tuned, off the scored seeds.
 
-The experts are what PX4 and ArduPilot fly: TECS for height and speed over a
-pitch loop (``plane.experts_tecs``), and on the 3D tasks a damped bank loop
-under a course hold or L1 guidance (``plane3d.experts``). This script
-reproduces how their numbers were set:
+The experts are what PX4 and ArduPilot fly: TECS for height and speed
+(``plane.experts_tecs``), and on the 3D tasks a course hold or L1 guidance
+(``plane3d.experts``), over the plant's fixed inner loop, which
+``scripts/tune_inner_loop.py`` tunes. This script reproduces how their numbers
+were set:
 
 1. Flight test: at 230 m/s with no turbulence, pitch holding the speed, the
    climb at full throttle, the sink at idle and the trim throttle and pitch,
    at 3500, 5500 and 7500 m. These are TECS's aircraft numbers, measured as
    ArduPilot's tuning guide has a pilot measure them.
-2. A bounded search on training seeds 100-109, inner loops first: the pitch
-   loop and TECS on ``plane3d_heading``; the roll loop and the L1 period on
-   ``plane3d_circle`` and ``plane3d_racetrack``, with L1's damping left at
-   ArduPilot's 0.75 as its guide tunes.
+2. A bounded search on training seeds 100-109: TECS on ``plane3d_heading``, and
+   the L1 period on ``plane3d_circle`` and ``plane3d_racetrack``, with L1's
+   damping left at ArduPilot's 0.75 as its guide tunes.
 3. The figure-8's own longitudinal loops and bank margin, against its
    flight-test spec (height within 2 m, path within 3 m where the lobes are
    flyable): the worst episode over the training patterns, each in a few
@@ -43,6 +43,7 @@ from jax import lax  # noqa: E402
 from target_gym import eval as E  # noqa: E402
 from target_gym.benchmark import episode_keys  # noqa: E402
 from target_gym.plane import experts as P2  # noqa: E402
+from target_gym.plane.dynamics import PITCH_DEMAND_MAX  # noqa: E402
 from target_gym.plane3d import experts as P3  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 
@@ -125,10 +126,8 @@ def flight_test():
                 v = float(jnp.sqrt(s.x_dot**2 + s.y_dot**2 + s.z_dot**2))
                 integ += 230.0 - v
                 cmd = np.clip(0.03 - 0.01 * (230.0 - v) - 2e-4 * integ, -0.26, 0.26)
-                stick = np.clip(
-                    4.0 * (cmd - float(s.theta)) - 3.0 * float(s.theta_dot), -1, 1
-                )
-                _, s, _, _, _ = step(key, s, jnp.array([thr, stick, 0.0]), p)
+                demand = jnp.array([thr, cmd / PITCH_DEMAND_MAX, 0.0])
+                _, s, _, _, _ = step(key, s, demand, p)
                 log.append((float(s.z_dot), float(s.theta)))
             rows.append(np.mean(log[-60:], axis=0))
         climb, theta = np.array(rows).T
@@ -248,32 +247,25 @@ def main() -> int:
     flight_test()
     base = P3.Plane3DGuidanceParams()
     search(
-        "pitch loop and TECS",
+        "TECS",
         ["plane3d_heading"],
         base,
         {
-            "Kp_theta": (6.0, 8.0, 10.0),
-            "Ki_theta": (2.0, 4.0, 8.0),
-            "Kd_theta": (0.0, 0.3),
             "tecs.time_const": (2.0, 3.0),
             "tecs.ptch_damp": (0.5, 1.0),
             "tecs.integ_gain": (0.1, 0.2),
         },
     )
     search(
-        "roll loop and L1 period",
+        "L1 period",
         ["plane3d_circle", "plane3d_racetrack"],
         base,
         {
-            "Kp_roll": (4.0, 6.0, 8.0),
-            "Kd_roll": (2.0, 3.0, 4.5),
             "period": (25.0, 30.0, 35.0),
         },
     )
     figure8_search(
         {
-            "Kp_theta": (8.0, 10.0),
-            "Kd_theta": (0.3, 4.0, 6.0, 8.0),
             "tecs.time_const": (1.25, 1.5, 2.0),
             "tecs.ptch_damp": (1.0, 1.5, 2.0),
             "turn_bank_margin": (0.75, 0.85),

@@ -33,10 +33,10 @@ from target_gym.plane3d.experts import (
 # Indices into the full patrol observation (patrol.env.get_obs_full).
 _PSI, _E_BACK, _E_RIGHT, _E_UP = 9, 10, 11, 12
 _RV_FWD, _RV_RIGHT, _SLOT_BACK, _SLOT_RIGHT = 13, 14, 16, 17
-_REL_HEADING, _POWER = 19, 21
+_REL_HEADING = 19
 # Indices into the bearing-only observation; 0-9 are as above.
 _RANGE, _AZ, _EL = 10, 11, 12
-_BO_SLOT_BACK, _BO_SLOT_RIGHT, _BO_SLOT_UP, _BO_POWER = 13, 14, 15, 16
+_BO_SLOT_BACK, _BO_SLOT_RIGHT, _BO_SLOT_UP = 13, 14, 15
 
 
 @struct.dataclass
@@ -75,7 +75,6 @@ class FormationHoldParams(Plane3DGuidanceParams):
     y_band: float = 30.0  # m [integrals and filter, with x_band]
     k_omega: float = 0.3  # per step [integrals and filter]
     k_ref: float = 0.3  # per step [engine and energy]
-    k_eng: float = 1.0  # [engine and energy]
     # Provisional: lowest mean RMS slot error of 15, 20, 30, 40 and 60 s on the
     # noisy training seeds, ahead of the expert protocol on noisy plants.
     t_rate: float = 20.0  # s
@@ -118,10 +117,9 @@ def _lead_axes(psi_lead, xp):
     return fwd, right
 
 
-def _hold(p, s, obs, xp, slot_err, v_lead, psi_lead, slot, power, **carry):
+def _hold(p, s, obs, xp, slot_err, v_lead, psi_lead, slot, **carry):
     """The formation hold on the slot error ``(back, right, up)``, given the
-    lead's velocity and heading, the slot's ``(back, right)`` offsets and the
-    engine's power state.
+    lead's velocity and heading and the slot's ``(back, right)`` offsets.
 
     In a turn at rate w the slot swings with the lead, so its velocity is the
     lead's plus ``w * right_offset`` along the lead's track and ``w * back``
@@ -129,9 +127,7 @@ def _hold(p, s, obs, xp, slot_err, v_lead, psi_lead, slot, power, **carry):
     and speed references are set each step so that its slew lands on them,
     with only their rates, filtered by ``k_ref``, fed forward. Unfiltered,
     every step-to-step wobble of the lead's track reaches the pitch loop as a
-    rate demand. The engine lags its lever by 20 s (``power_response_rate``),
-    so the lever leads the demanded power by ``k_eng`` times the gap to the
-    engine's state, as an autothrottle closes on N1, not on the lever.
+    rate demand.
     """
     e_back, e_right, e_up = slot_err
     started = s.started > 0.0
@@ -180,7 +176,7 @@ def _hold(p, s, obs, xp, slot_err, v_lead, psi_lead, slot, power, **carry):
         h_ref=xp.where(started, h_from, s.tecs.h_ref),
         v_ref=xp.where(started, v_from, s.tecs.v_ref),
     )
-    action, new = _fly(
+    return _fly(
         p,
         s.replace(tecs=tecs),
         obs,
@@ -199,10 +195,6 @@ def _hold(p, s, obs, xp, slot_err, v_lead, psi_lead, slot, power, **carry):
         started=xp.ones_like(e_up),
         **carry,
     )
-    demand = 0.5 * (action[0] + 1.0)
-    lever = demand + p.k_eng * (demand - power)
-    throttle = xp.clip(2.0 * lever - 1.0, -1.0, 1.0)
-    return xp.stack([throttle, action[1], action[2]]), new
 
 
 def patrol_hold_step(params, state, obs, xp=jnp):
@@ -220,7 +212,6 @@ def patrol_hold_step(params, state, obs, xp=jnp):
         v_lead,
         psi_lead,
         (obs[_SLOT_BACK], obs[_SLOT_RIGHT]),
-        obs[_POWER],
     )
 
 
@@ -274,7 +265,6 @@ def patrol_bearing_only_hold_step(params, state, obs, xp=jnp):
         v_lead,
         psi_lead,
         (slot_back, slot_right),
-        obs[_BO_POWER],
         dx_prev=filtered[0],
         dy_prev=filtered[1],
         vx_prev=obs[0],
@@ -289,12 +279,8 @@ def patrol_bearing_only_hold_step(params, state, obs, xp=jnp):
 #: with the lead. Every other autopilot value is the 3D tasks'
 #: (scripts/tune_aircraft_guidance.py). TECS weighs height and speed evenly in the pitch channel
 #: (``spd_weight`` 0.5, between the airliner's 0, which leaves the speed to
-#: the throttle alone, and ArduPilot's default 1), and damps the throttle on
-#: the energy rate harder (``thr_damp`` 6 against 0.5) against the engine's
-#: lag, both [engine and energy].
-HOLD = FormationHoldParams(
-    tau_hdg=3.0, tecs=AIRLINER.replace(spd_weight=0.5, thr_damp=6.0)
-)
+#: the throttle alone, and ArduPilot's default 1) [engine and energy].
+HOLD = FormationHoldParams(tau_hdg=3.0, tecs=AIRLINER.replace(spd_weight=0.5))
 
 
 def make_patrol_pid_controller() -> Controller:

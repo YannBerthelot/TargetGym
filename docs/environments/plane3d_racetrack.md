@@ -26,9 +26,9 @@ actuator range inside the environment.
 
 | # | meaning | min | max |
 |---|---|---|---|
-| 0 | power | -1 | 1 |
-| 1 | stick | -1 | 1 |
-| 2 | aileron | -1 | 1 |
+| 0 | throttle | -1 | 1 |
+| 1 | pitch demand | -1 | 1 |
+| 2 | bank demand | -1 | 1 |
 
 ## Observation space
 
@@ -65,7 +65,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 30 fields.
+`reset` samples the initial condition and the target; state has 33 fields.
 
 ## Episode end
 
@@ -108,9 +108,18 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `C_z0` | 0.9 | - |
 | `initial_fuel_quantity` | 19088 | kg |
 | `specific_fuel_consumption` | 0.0175 | kg/(kN.s) |
-| `power_response_rate` | 0.05 | 1/s |
-| `stick_response_rate` | 0.9 | 1/s |
-| `aileron_response_rate` | 0.9 | 1/s |
+| `power_response_rate` | 0.588235 | 1/s |
+| `idle_power` | 0.05 | - |
+| `stick_response_rate` | 16.6667 | 1/s |
+| `aileron_response_rate` | 16.6667 | 1/s |
+| `surface_rate_limit` | 0.523599 | rad/s |
+| `load_factor_max` | 2.5 | g |
+| `load_factor_min` | -1 | g |
+| `vmo_eas` | 180.056 | m/s |
+| `mmo` | 0.82 | - |
+| `buffet_mach` | 0.3 | - |
+| `buffet_slope` | 1.4 | - |
+| `bank_limit` | 1.0472 | rad |
 | `aspect_ratio` | 9.48 | - |
 | `aileron_effectiveness` | 0.4 | - |
 | `cl_alpha` | 0.08786 | 1/deg |
@@ -167,6 +176,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `wind_z` | 0 | m/s |
 | `turbulence_sigma` | 1.2 | m/s |
 | `turbulence_theta` | 0.2 | 1/s |
+| `turbulence_scale_length` | 533.4 | m |
+| `gust_roll_rate` | 0 | rad/s |
 | `wind_shear_x` | 0 | 1/s |
 | `wind_shear_y` | 0 | 1/s |
 | `shear_ref_alt` | 0 | m |

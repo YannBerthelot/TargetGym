@@ -18,14 +18,15 @@ team's cost.
 import jax
 import jax.numpy as jnp
 
-from target_gym.experts.pid import (
-    make_plane3d_heading_pid,
-    plane3d_heading_pid_step,
-)
+from target_gym.experts.pid import make_plane3d_heading_pid
 from target_gym.formation.env import (
     commanded_heading,
 )
-from target_gym.patrol.env import PatrolState, get_obs_heading
+from target_gym.patrol.env import (
+    PatrolState,
+    get_obs_heading,
+    lead_autopilot_step,
+)
 from target_gym.patrol.oracle import (
     TWIN_GAINS,
     PatrolTwinOracle,
@@ -95,7 +96,7 @@ class FormationOracle(PatrolTwinOracle):
         """Every seat's law: ``(lead action, wingmen actions (k, 3), carry)``."""
         lead_pid, seats = carry
         cmd = state.lead.replace(target_heading=commanded_heading(state))
-        lead, new_pid = plane3d_heading_pid_step(
+        lead, new_pid = lead_autopilot_step(
             self._lead_params, lead_pid, get_obs_heading(cmd)
         )
         # Keep the memory's types fixed, so the jitted step compiles once.

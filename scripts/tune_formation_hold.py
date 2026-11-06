@@ -202,7 +202,6 @@ def main() -> int:
         {
             "tecs.spd_weight": (0.0, 0.5, 1.0),
             "tecs.thr_damp": (0.5, 6.0),
-            "k_eng": (0.0, 1.0),
             "k_ref": (0.3, 1.0),
         },
         followers,
@@ -233,15 +232,9 @@ def main() -> int:
     search(
         "lead pitch",
         team.lead,
-        {"Kd_theta": (0.3, 1.0, 3.0), "tecs.time_const": (1.5, 2.0)},
+        {"tecs.time_const": (1.5, 2.0)},
         lead,
         measure="altitude",
-    )
-    search(
-        "lead power",
-        team.lead,
-        {"power_set": (0.75, 0.8, 0.85), "k_speed": (0.002, 0.005, 0.01)},
-        lead,
     )
     check()
     return 0

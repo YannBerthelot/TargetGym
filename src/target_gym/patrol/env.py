@@ -33,7 +33,14 @@ from flax import struct
 from target_gym import reward as R
 from target_gym.base import EnvState, actuator_field
 from target_gym.experts.pid import Plane3DPIDState, plane3d_heading_pid_step
-from target_gym.plane.dynamics import advance_gust, step_key
+from target_gym.plane.dynamics import (
+    BANK_DEMAND_MAX,
+    PITCH_DEMAND_MAX,
+    STICK_TRAVEL,
+    advance_gust,
+    step_key,
+    trim_stick,
+)
 from target_gym.plane3d.dynamics import compute_velocity_3d
 from target_gym.plane3d.env import (
     PlaneParams3D,
@@ -216,6 +223,7 @@ def make_cruise_state(
     x_dot = speed * jnp.cos(psi)
     y_dot = speed * jnp.sin(psi)
     theta = jnp.deg2rad(params.initial_theta)
+    trim = trim_stick(speed, z, theta, params)
     return PlaneState3D(
         x=x,
         x_dot=x_dot,
@@ -232,7 +240,7 @@ def make_cruise_state(
         gamma=0.0,
         m=params.initial_mass,  # fuel is a component of it, not an addition
         power=params.initial_power,
-        stick=jnp.deg2rad(params.initial_stick),
+        stick=trim + jnp.deg2rad(params.initial_stick),
         aileron=jnp.deg2rad(params.initial_aileron),
         fuel=params.initial_fuel_quantity,
         time=0,
@@ -241,6 +249,7 @@ def make_cruise_state(
         target_x=0.0,
         target_y=0.0,
         target_radius=0.0,
+        pitch_integ=trim / STICK_TRAVEL,
     )
 
 
@@ -539,16 +548,35 @@ def get_obs_bearing_only(state: PatrolState, xp=jnp):
 
 
 def decode_action(action: jnp.ndarray):
-    """Map a raw [-1, 1]^3 action to physical (power[0,1], stick[rad], aileron[rad]).
+    """Map a raw [-1, 1]^3 action to physical (lever[0,1], pitch[rad], bank[rad]).
 
     Not every learner squashes, so a raw action past the box acts as the bound
     rather than as a command the plant could never receive.
     """
-    power, stick, aileron = jnp.clip(jnp.asarray(action), -1.0, 1.0)
-    power = (power + 1) / 2
-    stick = jnp.deg2rad(stick * 15)
-    aileron = jnp.deg2rad(aileron * 25)
-    return power, stick, aileron
+    power, pitch, bank = jnp.clip(jnp.asarray(action), -1.0, 1.0)
+    return (power + 1) / 2, pitch * PITCH_DEMAND_MAX, bank * BANK_DEMAND_MAX
+
+
+#: The pitch that levels the lead (the 2D autopilot's cruise trim, 1.85 deg), as
+#: a raw demand. The heading PID's altitude loop is a slow trim about it.
+_LEAD_PITCH_TRIM = 0.032 / PITCH_DEMAND_MAX
+
+
+def lead_autopilot_step(params, memory, obs):
+    """The heading PID as the plant takes it, for the lead and its twins. The
+    throttle passes, the altitude loop's stick becomes a pitch demand about trim,
+    and the bank demand is the one the PID's heading loop computes for its own
+    bank loop, which the plant's inner loop now is."""
+    action, new_memory = plane3d_heading_pid_step(params, memory, obs)
+    error = wrap_angle(obs[11] - obs[9])
+    bank = (
+        params.Kp_hdg * error
+        + params.Ki_hdg * (memory.track_integral + error * params.dt)
+        + params.Kd_hdg * (error - memory.track_prev) / params.dt
+    )
+    bank = jnp.clip(bank, -params.max_bank_rad, params.max_bank_rad)
+    pitch = jnp.clip(action[1] + _LEAD_PITCH_TRIM, -1.0, 1.0)
+    return jnp.stack([action[0], pitch, bank / BANK_DEMAND_MAX]), new_memory
 
 
 # ─── Combined transition ────────────────────────────────
@@ -564,12 +592,12 @@ def step_lead(state: PatrolState, params: PatrolParams, lead_pid_params, method:
     commanded_heading = wrap_angle(state.lead.target_heading + state.lead_turn_rate)
     lead_cmd = state.lead.replace(target_heading=commanded_heading)
     lead_obs = get_obs_heading(lead_cmd)
-    lead_action, new_pid = plane3d_heading_pid_step(
+    lead_action, new_pid = lead_autopilot_step(
         lead_pid_params, state.lead_pid, lead_obs
     )
-    power, stick, aileron = decode_action(lead_action)
+    power, pitch, bank = decode_action(lead_action)
     new_lead, _ = compute_next_state_3d(
-        power, stick, aileron, lead_cmd, params, integration_method=method
+        power, pitch, bank, lead_cmd, params, integration_method=method
     )
     return new_lead, new_pid
 
@@ -579,7 +607,7 @@ def compute_next_state_patrol(
     state: PatrolState,
     params: PatrolParams,
     lead_pid_params,
-    integration_method: str = "rk4_2",
+    integration_method: str = "rk4_1",
     key=None,
 ):
     """One environment step: advance the follower (from ``action``) and the lead.
@@ -604,11 +632,11 @@ def compute_next_state_patrol(
 
     # Follower (the learner) — key=None so it does not advance its own per-plane
     # gust; the shared gust is already folded into eff_params.wind.
-    power, stick, aileron = decode_action(action)
+    power, pitch, bank = decode_action(action)
     new_follower, metrics = compute_next_state_3d(
         power,
-        stick,
-        aileron,
+        pitch,
+        bank,
         state.follower,
         eff_params,
         integration_method=integration_method,

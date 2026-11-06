@@ -714,9 +714,17 @@ EFFECTIVENESS_GAPS = {
 
 
 #: Experts a plant change left behind. Strict, so PR 9's retune removes the line.
+_STALE_TECS = "TECS's time_const 2 trips the new envelope; PR 9 retunes it"
 STALE_EXPERTS = {
     "cstr": "the cascade's gains predate the 1 min analyser; PR 9 retunes it",
     "ph_neutralization": "the expert's gains predate the probe; PR 9 retunes them",
+    "plane": _STALE_TECS,
+    "plane3d_circle": _STALE_TECS,
+    "plane3d_figure8": _STALE_TECS,
+    "plane3d_heading": _STALE_TECS,
+    "plane3d_racetrack": _STALE_TECS,
+    "plane_energy": _STALE_TECS,
+    "plane_sine": _STALE_TECS,
     "unstable_cstr": "the cascade's gains predate the thermowell; PR 9 retunes them",
 }
 
@@ -926,7 +934,9 @@ def test_no_new_write_only_state_fields():
 # coordinates the equations of motion genuinely do not depend on.
 KNOWN_DISCARDED_UNPACKS = {
     ("plane/dynamics.py", "_, z, theta = positions"),
+    ("plane/env.py", "_, z, theta = positions"),
     ("plane3d/dynamics.py", "_, _, z, theta, phi = positions"),
+    ("plane3d/env.py", "_, _, z, theta, phi = positions"),
 }
 
 

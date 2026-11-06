@@ -16,10 +16,10 @@ import pytest
 
 from target_gym import registry
 from target_gym.experts.mpc import plan_params
-from target_gym.experts.pid import make_plane3d_heading_pid, plane3d_heading_pid_step
+from target_gym.experts.pid import make_plane3d_heading_pid
 from target_gym.formation.env import slot_errors
 from target_gym.formation.experts import make_formation_pid_controller
-from target_gym.patrol.env import PatrolState
+from target_gym.patrol.env import PatrolState, lead_autopilot_step
 from target_gym.patrol.experts import make_patrol_pid_controller
 from target_gym.patrol.oracle import TWIN_GAINS, twin_law_init, twin_law_step
 
@@ -53,10 +53,9 @@ def test_every_wingman_seat_flies_the_patrol_expert():
     wing = make_patrol_pid_controller()
     for i in range(2):
         seat, _ = jax.jit(wing.act)(wing.init_state, _seat(env, obs, i))
-        # Two compiled graphs order float32 sums differently; the pitch loop's
-        # gains (Kp_theta 8 on a pitch error built from energy rates) carry
-        # that rounding to about 1e-5 of the stick, so 1e-4 is float32
-        # agreement, not a looser law.
+        # Two compiled graphs order float32 sums differently, and TECS builds
+        # its demands from energy rates, so 1e-4 is float32 agreement here, not
+        # a looser law.
         np.testing.assert_allclose(
             np.asarray(action[3 * (i + 1) : 3 * (i + 2)]), np.asarray(seat), atol=1e-4
         )
@@ -119,7 +118,7 @@ def test_without_a_plan_the_oracle_is_the_seat_laws():
 
     lead_params, lead_state = make_plane3d_heading_pid()
     true_obs = env.get_obs(state, params.replace(sensor_noise_scale=0.0))
-    lead, _ = plane3d_heading_pid_step(lead_params, lead_state, true_obs[:15])
+    lead, _ = lead_autopilot_step(lead_params, lead_state, true_obs[:15])
     np.testing.assert_allclose(action[:3], np.asarray(lead), atol=1e-6)
     for i in range(2):
         view = _patrol_view(state, i, lead_state)
