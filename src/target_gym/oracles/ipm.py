@@ -223,8 +223,8 @@ def interior_point(
             delta = jnp.where(i == 0, 0.0, jnp.where(i == 1, first, delta * grow))
             return i + 1, delta, direction(delta, c, mu)[-1]
 
-        _, delta, _ = jax.lax.while_loop(in_cond, in_next, (0, 0.0, False))
-        d_last = jnp.where(delta > 0, delta, d_last)
+        _, delta, usable = jax.lax.while_loop(in_cond, in_next, (0, 0.0, False))
+        d_last = jnp.where((delta > 0) & usable, delta, d_last)
         d_max = jnp.maximum(d_max, delta)
 
         if adaptive:

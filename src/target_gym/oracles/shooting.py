@@ -452,7 +452,8 @@ class Shooting:
             w = jnp.ones(N * mrow)
             gf, _, J, _ = scaled(zh, jnp.zeros(N * nxa), False)
             lam = stage_multipliers(J, gf - G.T @ w)
-            lam = jnp.where(jnp.max(jnp.abs(lam)) > 1e3, 0.0, lam)  # IPOPT's cap
+            # IPOPT's cap, written so that a NaN from a failed solve fails it.
+            lam = jnp.where(jnp.max(jnp.abs(lam)) <= 1e3, lam, 0.0)
             w0 = jnp.zeros(N * mrow)
         else:
             zh = zh.at[ei].set(jnp.maximum(zh[ei], WARM_PUSH))
