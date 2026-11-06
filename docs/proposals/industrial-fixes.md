@@ -80,8 +80,9 @@ Eight tasks still have no figure, so each takes the one class exception, in its
 `PHYSICS.md` and `EXCEPTIONS`: `compressor_surge`, `cstr`, `distillation`, `first_order`,
 `four_tank`, `hvac`, `ph_neutralization` and `reactor`. `distillation` and `reactor` have
 leads that could not be opened (Porru et al., ADCHEM 2015; Taipower's plant manual).
-`battery` has figures, but they are PJM scores, not comparable with a hold, so check 2
-stays open there. `cement_kiln` is set aside with its horizon and plant row.
+`battery`'s figures are PJM performance scores, so
+`scripts/pjm_regulation_score.py` computes Manual 12's score on its expert, at a mapping
+fixed before any score was seen: 85 on average against PJM's class 94. `cement_kiln` is set aside with its horizon and plant row.
 
 ## Order of work
 

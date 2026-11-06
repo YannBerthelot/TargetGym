@@ -106,8 +106,9 @@ EXPERT_FIGURES = {
         "value": 94.0,
         "unit": "PJM performance score, percent",
         "what": "average RegD score of PJM's battery class, Nov 2015; a fleet average "
-        "in a score, not a power error, so not comparable with a hold. A 1 MW battery "
-        "averaged 59 to 63 over a month (Watson et al., 2018); PJM certifies at 75",
+        "of Manual 12's score, which scripts/pjm_regulation_score.py computes on the "
+        "expert. A 1 MW battery averaged 59 to 63 over a month (Watson et al., 2018), "
+        "and PJM certifies at 75",
         "source": "PJM, Performance, Mileage and the Mileage Ratio, 2015, slide 10",
         "url": "https://www.pjm.com/-/media/DotCom/committees-groups/task-forces/rmistf/20151111/20151111-item-05-performance-based-regulation-concepts.ashx",
         "status": "read, primary",

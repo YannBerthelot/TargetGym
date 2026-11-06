@@ -154,9 +154,9 @@ def test_a_task_with_no_sourced_figure_says_so():
 
 def test_a_task_has_a_figure_or_a_written_exception():
     """The owner's rule, 2026-11-06: where no published figure could be found or
-    opened, one written class exception says so. Silence is never a pass, and
-    ``battery``, whose figures are scores, and ``cement_kiln``, set aside, stay
-    open rather than excepted."""
+    opened, one written class exception says so. Silence is never a pass.
+    ``battery`` answers to PJM's own score, and ``cement_kiln`` is set aside, so
+    neither is excepted."""
     for name in sorted(REGISTRY):
         row = credibility_row(name, {})
         has_a_figure = row["expert_figure"] != NO_FIGURE
