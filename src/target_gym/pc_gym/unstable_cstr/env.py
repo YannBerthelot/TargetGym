@@ -136,8 +136,10 @@ class UnstableCSTRParams(EnvParams):
     #: recorded; 6.29e-6 for the CasADi oracle before v3), under the analyser's
     #: scatter, so e_floor stays at the scatter and the reference is that
     #: finer hold in floor-widths, squared. PR 9 re-measures the hold.
-    rho_floor_tracking: float = (2.23e-6 / 5e-4) ** 2
-    rho_floor: float = (2.23e-6 / 5e-4) ** 2  # no running cost: rho_floor_tracking
+    #: A decimal, not ``(2.23e-6 / 5e-4) ** 2``: ``**`` rounds differently on macOS
+    #: and Linux, and the version stamp hashes the value.
+    rho_floor_tracking: float = 1.98916e-05
+    rho_floor: float = 1.98916e-05  # no running cost: rho_floor_tracking
     #: False: the plant is disturbed (docs/reward-shaping.md).
     floor_is_documented_minimum: bool = False
 

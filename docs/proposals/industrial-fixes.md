@@ -150,7 +150,8 @@ moving a recorded one.
 
 - **One hold window for all.** `hold_mask` removes a per-run anticipation today,
   so a policy's rising excursion leaves the hold. Replace it with a fixed count of
-  steps before each move, per task.
+  steps before each move, per task. A restart after a trip is not a move, or a
+  policy's own trips would cut its hold into new cycles.
 - **Linear consumption.** `running_cost` becomes `w * c / c_hold`. The clip gives
   no credit for saving, and it charges fluctuation that a fuel bill does not. This
   adds about `w` to every step's cost on the 6 tasks it covers, which compresses

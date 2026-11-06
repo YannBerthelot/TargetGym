@@ -121,7 +121,8 @@ tasks have a tolerance and how far each was sourced.
 
 **Reaching new targets: `transient_ratio`**, the expert's cost over the
 settle after each move divided by the policy's, per seed, with its own win
-rate. A move is the reset or a target change, so `first_order` and `cstr`,
+rate. A move is the reset or a target change, and a restart after a trip is
+neither, so a trip adds no move of its own. `first_order` and `cstr`,
 whose expert already holds within the resolution, are scored on reaching.
 `settling_ratio` says how much sooner the policy's tracking cost enters the
 plant's band and stays. Moves have no ceiling; the oracle's recorded ratio is

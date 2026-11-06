@@ -4,8 +4,8 @@
   "expert_figure": {
     "status": "no sourced figure"
   },
-  "expert_fingerprint": "bd0e108eb31fa842",
-  "generated": "2026-11-06T12:58:10+00:00",
+  "expert_fingerprint": "a97736478d92504d",
+  "generated": "2026-11-06T13:37:48+00:00",
   "null_wins": [
     "constant 0.0",
     "constant 0.5",
@@ -25,7 +25,7 @@
       "win_rate": 0.0
     },
     "table": {
-      "ratio": 101.20354702438974,
+      "ratio": 18.818007654751458,
       "win_rate": 1.0
     }
   }

@@ -18,7 +18,8 @@ pass them to ``evaluate``. ``target_gym.scoring`` compares a policy with the
 expert and the ceiling.
 
 How a cycle is split. A target cycle runs from one target change to the next
-(the first starts at the reset). ``cycle_segments`` splits each into
+(the first starts at the reset), and a restart after a trip starts none
+(``benchmark.target_changes``). ``cycle_segments`` splits each into
 
 1. the *settle* after its own change, measured on each cycle so every
    controller is scored against its own transient (``_settle_of``);
