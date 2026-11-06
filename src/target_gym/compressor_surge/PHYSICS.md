@@ -5,9 +5,9 @@ lumped duct and plenum (Greitzer's compression-system model) with the
 Moore-Greitzer cubic characteristic scaled by the fan laws. Gas leaves the
 header through the consumers' valve, against their static head, and through a
 recycle (anti-surge) valve back to suction. The header pressure follows a
-stepped setpoint while the consumers' demand ramps between levels, and the
-plant trips when the compressor's flow coefficient falls below the surge
-line.
+ramped setpoint while the consumers' demand ramps between levels, and the
+plant trips when the compressor's flow coefficient falls below the episode's
+surge line, a hidden offset right of the map's.
 
 Contract for `target_gym.compressor_surge`. Method:
 `docs/PHYSICS_METHODOLOGY.md`.
@@ -34,6 +34,12 @@ lowers each of those costs by at most its energy share at 49.6 kW. For the
 NMPC the run printed that share,
 0.39 and 0.41 % at its two candidate margins. Trip counts, margins, recycle
 power and valve travel do not depend on `c_hold`.
+
+**Figures that predate the ramps.** Setpoint ramps, the surge-line offset and the
+wear term landed on the integration branch in November 2026. Everything labelled
+measured in sections 4 to 8 was taken on stepped setpoints and the fixed line, with
+the pair and the NMPC as they stood, so it describes that plant and PR 9 measures
+again. Section 5's ramp figures are the exception, and say so.
 
 ---
 
@@ -233,10 +239,12 @@ at the end, with their sources.
 | `N_min`, `N_max` | 0.70, 1.05 | of rated | ours | speed command range; every schedule corner needs 78.6 to 101.8 % (derived, `test_every_block_is_feasible`) | ✅ |
 | `drive_rate` | 0.03 | of rated per s | TUNED | section 6, drive rate | ⚠️ |
 | `tau_N` | 1.0 | s | ours | speed lag behind the drive setpoint | ⚠️ |
-| `valve_open_rate` | 0.5 | per s | ours, read-consistent | full open in 2 s (Mirsky et al. p.23; Wilson and Sheldon Table 1, 2 s including dead time) | ✅ |
+| `valve_open_rate` | 0.5 | per s | read-consistent | full open in 2 s, opened and checked again in both sources: under 2 s with under 0.4 s of delay (Mirsky et al. p.23; 0.3 s on p.27), 2 s including dead time and 0.4 s of opening dead time (Wilson and Sheldon Table 1). The plant folds the dead time into the stroke (D6) | ✅ |
 | `valve_close_rate` | 0.1 | per s | TUNED | full close in 10 s, the slowest closing Mirsky et al. p.23 allow (no more than 8 to 10 s under positioner control); Wilson and Sheldon Table 1 ask for 3 s, where the shipped pair trips 341 times over 256 episodes and the pair at `DEFAULT_GAINS` does not trip (measured, `--sensitivity`, section 6); the shipped gains were tuned and validated at 10 s | ⚠️ |
-| `p_ref_range` | (20, 28) | kPa | TUNED | the hardness depends on the stepped setpoint (section 6) | ⚠️ |
+| `p_ref_range` | (20, 28) | kPa | TUNED | the hardness depends on the moving setpoint (section 6) | ⚠️ |
 | `setpoint_block_steps` | 300 (30 s) | steps | ours | four blocks per episode | ✅ |
+| `setpoint_ramp_s` | 10.0 | s | ours | linear ramp at the start of blocks 2 to 4: twice the 4.9 s the drive needs for a full 20 to 28 kPa move on the control line (section 4), and under half a block so that the scorer still reads each move | ⚠️ |
+| `surge_offset_max` | 0.05 | fraction of flow | ours | the episode's line sits uniformly 0 to 5 % right of the map's. Half the conventional 10 % margin (Mirsky et al. pp.11, 13). Mirsky et al. p.11 list the line's uncertainty among what the margin pays for, and give no figure, so this is ours for the owner to accept | ⚠️ |
 | `demand_range` | (0.35, 0.95) | opening | ours | six levels per episode | ⚠️ |
 | `demand_block_steps` | 200 (20 s) | steps | ours | | ✅ |
 | `demand_ramp_s` | 5.0 | s | ours | linear ramp at the start of blocks 2 to 6; section 6 rows at 2 and 10 s | ⚠️ |
@@ -287,7 +295,7 @@ All derived from the parameter table (`--section params` and
 
 ### Task: `compressor_surge`
 
-Hold the header pressure of a variable-speed compressor on a stepped setpoint
+Hold the header pressure of a variable-speed compressor on a ramped setpoint
 while the consumers' demand ramps between levels, with the drive speed and an
 anti-surge recycle valve. Flow below the surge line trips the plant, and
 neither the reward nor any observation reads the surge margin directly, so the
@@ -308,8 +316,9 @@ consumers' flow at the state's clock with the deviation the coming step
 integrates with, so the total opening can be inferred from it. Hidden: how
 that opening splits into block level and deviation, both schedules' future
 values, the clock and `phi_min`. The surge margin,
-`obs[1] / (12.25 obs[3] / 100) - 1`, has no channel of its own and is left
-for the agent to learn.
+`obs[1] / (12.25 obs[3] / 100) - 1` against the map, has no channel of its own and
+is left for the agent to learn. The true margin is up to `surge_offset_max` less,
+and nothing observed says how much.
 
 **Action** (2): speed command in [70, 105] % and recycle command in [0, 1],
 from raw [-1, 1]. Raw 0 is 87.5 % speed and a half-open recycle. A recycle
@@ -321,9 +330,14 @@ drawable first opening; a drop to the clip floor 0.2 straight after that
 reset reaches 0.568 (derived, `--section reach`).
 
 **Schedules.** Four header-pressure levels, iid uniform in 20 to 28 kPa, held
-30 s each; six demand levels, iid uniform in 0.35 to 0.95, 20 s each, with a
-5 s linear ramp into blocks 2 to 6. The setpoint is stepped because the
-hardness depends on it. With the setpoint held at 24 kPa the chaser at bias
+30 s each, with a 10 s linear ramp into blocks 2 to 4; six demand levels, iid
+uniform in 0.35 to 0.95, 20 s each, with a 5 s linear ramp into blocks 2 to 6.
+A step cost the pair 94.6 to 99.6 % of its tracking cost in the 10 s after it
+(mean 98.3 %, seeds 200 to 209, past the burn-in, measured), because a move the drive
+cannot follow is paid by everyone and the ranking read the slew. On the same
+schedules ramps take the pair's tracking cost past the burn-in from 5.8e5 to 2.6e4,
+and its hold stays about where it was, 22.6 and 26.7 per step (seeds 100 to 109,
+measured). The setpoint moves because the hardness depends on it. With the setpoint held at 24 kPa the chaser at bias
 0.3 trips in none of 256 episodes, against 11.3 % with the steps, and G10
 costs 1.76e5 per episode against 5.45e5 (measured, `--sensitivity`,
 section 6). The live setpoint and demand are functions of `block_clock`,
@@ -340,13 +354,20 @@ never trips, under zero action or full travel low (smallest phi_min 0.584,
 measured, `--section reach`).
 
 **Switch step.** The reward and the observation of one state use the same
-live setpoint, and the step that enters a block is scored against the new
-level (`test_live_target_follows_the_block_clock`).
+live setpoint, and a step on a ramp is scored against where the ramp has reached
+(`test_live_target_follows_the_block_clock`). The scorer counts each ramp step as a
+change, so a ramp's steps sit in one-step cycles with no hold, and the hold starts
+100 steps after the ramp ends. `test_each_step_of_a_compressor_ramp_starts_a_cycle`
+pins that, and PR 8 owns whether a ramp should count as one move.
 
 **Trip and restart.** The plant trips when the soft minimum of Phi over a
-step's substeps falls below 2W = 0.5, the peak at every speed; in (m, dp)
-terms the parabola dp = 215.51 m^2 (`test_trip_reads_the_substep_minimum`,
-`test_surge_line_is_a_parabola`). A dip between control samples trips. The
+step's substeps falls below the episode's line, 2W (1 + `surge_offset`). The map's
+line, offset 0, is 2W = 0.5, the peak at every speed; in (m, dp) terms the parabola
+dp = 215.51 m^2 (`test_trip_reads_the_substep_minimum`,
+`test_surge_line_is_a_parabola`). The offset is drawn per episode, uniform up to
+`surge_offset_max`, and hidden, so a controller has the map and a margin, as a real
+one does (D7, `test_the_trip_reads_the_episodes_line`). The oracle reads it, as it
+reads the rest of the true state. A dip between control samples trips. The
 step is charged the trip cost and the plant restarts at once from a fresh
 draw of the reset, schedule clock at 0 (`base.failure_kernel`,
 `test_a_trip_restarts_fresh_on_the_same_clock`); with `continuing = False`
@@ -470,8 +491,8 @@ same 256 seeds, version 2 ranks every safe policy above every tripping one
 from `restart_steps` = 429, and version 1 from 2771 (measured,
 `--sensitivity`). The shipped 9000 is above both.
 
-**Setpoint.** `p_ref_range` and the stepped setpoint are TUNED by the
-setpoint rows. Held at 24 kPa, the setpoint lets the margin-blind chaser
+**Setpoint.** `p_ref_range` and the moving setpoint are TUNED by the
+setpoint rows, which ran on steps. Held at 24 kPa, the setpoint lets the margin-blind chaser
 run without a trip and cuts G10's cost to a third; over 22 to 26 kPa the
 chaser trips in 3.1 % of episodes. The steps, and their size, are what make
 a policy that ignores the margin trip.
@@ -703,9 +724,9 @@ its measured value. The rewrites, by the smoothing protocol's inventory:
 
 - the commands' clips are replaced by bounds on the moves (T1);
 - the tracking term is written as (e / e_floor)^2, the reward itself since
-  e_tol is 0 and p is 2, and the running cost max(P_rc - c_hold, 0) / c_hold
-  through epigraph rows on every planned step, also exact (T2);
-- the trip, phi_min below 2W, is a hard limit on every planned step, elastic
+  e_tol is 0 and p is 2, and the running cost max(P_rc - c_hold, 0) / c_hold and
+  the wear term through epigraph rows on every planned step, also exact (T2);
+- the trip, phi_min below the episode's line, is a hard limit on every planned step, elastic
   at the trip cost per unit of Phi (T3), planned 0.0040 inside the line
   (K11): the smoothing's gap bound on phi_min, 6.7e-5, and the 1 % quantile of
   one innovation of the demand deviation, 0.0039, at the pair's states, plus
@@ -869,6 +890,18 @@ k_d sqrt(s ln 2) = 0.706 kg/s at zero drop and full opening (derived), where a
 real consumer valve passes nothing; `test_check_valve_is_tight` asks for
 under 1e-3 kg/s.
 
+**⚠️ D6. The valve has no dead time of its own.** Both sources allow up to 0.4 s, and
+Wilson and Sheldon count it inside their 2 s full opening, so the plant opens at a
+steady 50 %/s from the first substep. A small command therefore answers up to 0.4 s
+sooner than a real valve would. A first-order lag on the command would stand in for
+it, at the cost of a state in the oracle's model and a new reach bound there.
+
+**⚠️ D7. The offset moves the trip, not the characteristic, and only to the right.**
+A real line moves with the machine, and either way. Here the line stays at or right
+of the peak, so no continuing state sits on the unstable branch left of it, which the
+regime of validity needs. The price is that the map's line is the best case, so a
+controller knows which way the error runs.
+
 ---
 
 <!-- BEGIN GENERATED FACTS -->
@@ -892,7 +925,7 @@ which is what the recorded baselines use.
 
 ## Reward (version 2)
 
-`compute_reward = -(tracking + running + failure)`, see
+`compute_reward = -(tracking + running + wear + failure)`, see
 docs/reward-shaping.md. Tracking is the header-pressure error in kPa over
 `e_floor`, squared. Running is the ideal compression power spent on recycled
 gas, m_r dp / rho01, the avoidable part of the drive's consumption, charged
@@ -912,6 +945,8 @@ is forced pay a running cost no controller can avoid, and recycle below
 | `restart_steps` | 9000 (15 min, ours, provisional) | no source gives a restart time; a trip costs 9000 x 1.131e6 = 1.018e10 (derived, `--section params`, `test_restart_and_failure_cost_are_derived`) |
 | `c_hold` | 62 270 W (62.27 kW, measured) | the NMPC's mean recycle power over its hold, from `scripts/measure_hold.py --envs compressor_surge` (the pair's is 66.1 kW). It replaced a provisional 49.6 kW; the oracle reads `c_hold` through the reward |
 | `running_weight` | 1 (ours, provisional) | one floor-width of tracking error is worth once the hold-phase recycle power |
+| `travel_free` | 0.0025 per step | read: the least a real valve follows, a digital positioner's hysteresis plus dead band, 0.25 % of span (Fisher DVC6200, `docs/proposals/measurement-noise.md`, the same figure as `eval.REVERSAL_DEAD_BAND`). Wear is charged above it. Not a measured hold, since the pair's own valve travels 0.0073 per step in hold (measured, seeds 100 to 109), mostly flow-noise chatter through `kp_surge` |
+| `travel_weight` | 1 (ours, provisional) | twice the free travel in one step is worth one floor-width of tracking error. A full stroke at 0.05 per step costs 19 per step |
 | `precision_floor` | 0.0275 kPa (derived) | the header-pressure transmitter's reference accuracy, 0.055 % of calibrated span (read: Yokogawa EJA530E gauge transmitter, GS 01C31F01-01EN, p.1, capsule A at spans of 20 kPa or more, https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf; Siemens SITRANS P320, catalog FI 01 09/2026, p.1/14, 1 bar cell at a turn-down of 5 or less, https://support.industry.siemens.com/cs/attachments/109765052/sitransp_p320_p420_fi01_en.pdf), times a 0 to 50 kPa calibrated span (ours). It covers linearity, hysteresis and repeatability together, and the Yokogawa sheet states it as a 3-sigma bound, so an error below it is one the instrument cannot tell from a smaller one. Neither sheet gives a finer measuring resolution; the one resolution found, the current output's quantisation (Endress+Hauser Cerabar PMP71B, TI01509P, p.24, https://bdih-download.endress.com/file/11181feb66c9cd03e4256402f1eff641/TI01509PEN_1025-00.pdf), is finer than the repeatability and is not used. The value scales with the span. Version 1's floor and the clamp on `e_floor`, so while the clamp binds it sets the version-2 scale |
 | `rho_floor_tracking` | 1.40e-5 (derived from the measured hold) | (lowest per-seed MPC hold / `e_floor`)^2 = (1.03e-4 / 0.0275)^2, from `scripts/measure_hold.py`; below 1 because the clamp binds |
 | `rho_floor` | 1.40e-5 (derived from the measured hold) | equal to `rho_floor_tracking`, as on the suite's other plants with a running cost, since recycle power at `c_hold` costs nothing and `c_hold` is the NMPC's own hold |
@@ -1027,7 +1062,22 @@ readings, with any trip taken from the true state, and a learner can train on
 it.
 
 `phi_min` has no instrument, so the surge trip stays true. The surge margin the
-pair reads comes from `m_c` and `N`, so it carries their noise.
+pair reads comes from `m_c` and `N`, so it carries their noise, and it reads the map,
+so it also carries the episode's hidden offset.
+
+**Timing and actuators.** A status per figure, for the owner to accept the ones
+marked ours. The tracked readings the noise proposal left Provisional keep that
+status in the table above.
+
+| figure | value | status |
+| --- | --- | --- |
+| Recycle valve, full open | 2 s, dead time included | read, twice: Mirsky et al. p.23, Wilson and Sheldon Table 1 |
+| Recycle valve, full close | 10 s | TUNED, read: the limit of Mirsky et al. p.23. Wilson and Sheldon ask for 3 s and note 10 s is also specified (section 6) |
+| Recycle valve, dead time | none of its own | read and folded in, D6 |
+| Drive rate | 3 %/s | TUNED, section 6 |
+| `tau_N` | 1 s | **ours** |
+| Control step | 0.1 s | **ours** |
+| Sensor dead time and sampling | none | **ours.** No source gives one for these signals, so readings arrive within the step |
 
 A plant resting exactly on target pays 0.11 per step in measured tracking cost,
 `(9.17 Pa / 27.5 Pa)^2`.
