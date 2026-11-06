@@ -15,7 +15,7 @@ Global mass and energy balances over the whole water/steam circuit, plus two
 states saying **where** the steam is:
 
 ```
-q_s = q_d · p / p_nominal                           (fixed turbine valve)
+q_s = q_demand · p / p_nominal                      (fixed turbine valve)
 d/dt[ρ_s V_st + ρ_w V_wt]                          = q_f − q_s
 d/dt[ρ_s h_s V_st + ρ_w h_w V_wt − p V_t + m C t_s] = Q + q_f h_f − q_s h_s
 dm_sr/dt = q_ct + q_flash,r − m_sr/τ_sr        (steam in the risers)
@@ -43,7 +43,7 @@ flashes about 143 kg of water — 3.1 m³ of steam, roughly 16 cm of level.
 
 **Steam follows pressure.** At a fixed valve the turbine passes steam in
 proportion to drum pressure, Bell and Åström's `q_s = (1.1 u2 − 0.19) P` (1987,
-eq. 14). The hidden valve state `q_d` wanders, and the meter reads `q_s`. So
+eq. 14). The hidden valve state `q_demand` wanders, and the meter reads `q_s`. So
 pressure regulates itself: a 1 bar offset at fixed firing decays with a 227 s
 time constant, against about 400 s from the report's own `dP/dt` (eq. 3, `u2`
 0.7).
