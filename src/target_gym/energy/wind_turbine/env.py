@@ -14,16 +14,17 @@ torque as the two manipulated variables::
     P_elec   = eta N tau_gen w
 
 ``J`` is the drivetrain inertia referred to the rotor, ``N`` the gearbox ratio.
-Pitch and generator torque follow their demands through first-order actuators;
-pitch is additionally rate-limited, which is the binding constraint during
-gusts.
+Pitch and generator torque follow their demands through first-order actuators,
+both rate-limited: the pitch rate binds in gusts, the torque rate on a dispatch
+move.
 
 Task
 ----
 Track a **power setpoint** in above-rated wind -- the curtailed-operation
 problem a modern turbine actually faces when the grid dispatches it below its
-available power. The turbine must hold that setpoint while turbulence moves
-the available power around it, without overspeeding the rotor.
+available power. The turbine must follow that dispatch, which moves every 25 s,
+while turbulence moves the available power around it, without overspeeding the
+rotor.
 
 Why it is a hard target MDP
 ---------------------------
@@ -45,10 +46,17 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 from flax import struct
+from jax.scipy.ndimage import map_coordinates
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
+from target_gym.energy.wind_turbine.cp_table import (
+    CP_TABLE,
+    PITCH_STEP,
+    TSR_FIRST,
+    TSR_STEP,
+)
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -57,6 +65,8 @@ RPM_PER_RAD_S = 60.0 / (2.0 * jnp.pi)
 # Ornstein-Uhlenbeck turbulence: mean-reversion rate (1/s). 1/theta ~ 20 s, a
 # gust timescale rather than white noise.
 WIND_OU_THETA = 0.05
+#: Dispatch levels per episode (``target_block_steps`` each).
+N_TARGET_BLOCKS = 4
 
 
 @struct.dataclass
@@ -77,20 +87,13 @@ class WindTurbineParams(EnvParams):
     omega_rated_rpm: float = 12.1
     v_cut_out: float = 25.0  # m/s
 
-    # ---- Cp surface (analytic fit; see PHYSICS.md) ----
-    cp_c1: float = 0.5176
-    cp_c2: float = 116.0
-    cp_c3: float = 0.4
-    cp_c4: float = 5.0
-    cp_c5: float = 21.0
-    cp_c6: float = 0.0068
-
     # ---- Actuators ----
     pitch_min: float = 0.0  # deg
     pitch_max: float = 40.0  # deg
     pitch_rate_max: float = 8.0  # deg/s -- the binding constraint in gusts
     pitch_tau: float = 0.2  # s, actuator lag
     torque_max: float = 47_400.0  # N m, generator side (~110 % of rated)
+    torque_rate_max: float = 15_000.0  # N m/s (Jonkman et al. 2009, Table 7-2)
     torque_tau: float = 0.1  # s, power-electronics lag
 
     # ---- Wind ----
@@ -122,12 +125,17 @@ class WindTurbineParams(EnvParams):
     # audit (2026-10), does not read it either. The version-1 reward's envelope
     # is ``power_envelope`` below.
     power_band: float = 0.5e6  # W
-    precision_floor: float = 1e3  # W, revenue-grade power metering resolution
+    # The ceiling's resolution and version 1's floor: the 1 kW of the benchmark's
+    # assumed meter (PHYSICS.md, Readings), finer than the 1.7 kW a class 0.1S
+    # meter can certify at 5 MW. PR 8 decides the constant.
+    precision_floor: float = 1e3  # W
     power_envelope: float = 5e6  # W, rated electrical output
     pitch_activity_weight: float = 0.02  # fatigue proxy
 
     # ---- Targets ----
     target_power_range: Tuple[float, float] = (3.5e6, 5.0e6)
+    #: The dispatch's iid levels each hold this long, 25 s (ours).
+    target_block_steps: int = 100
 
     # ---- Time discretization ----
     # Rotor time constant J w^2 / P ~ 14 s, so dt = 0.25 s gives ~56 steps per
@@ -148,8 +156,8 @@ class WindTurbineParams(EnvParams):
     # 400 hold steps after a 300-step burn-in, 3 seeds). 1680 W is within
     # 1.5x of that best hold (1.16x), so the floor, and with it the reward,
     # was kept; only ``rho_floor`` below follows the new hold. Fatigue:
-    # pitch activity |cmd - achieved| / pitch_max above the PID's hold-phase level
-    # (0.0013 of pitch_max) is charged, per unit of avoidable fraction, at
+    # pitch travel per step / pitch_max above the expert's hold-phase level
+    # (``c_hold``) is charged, per unit of avoidable fraction, at
     # ``fatigue_weight`` times what tracking at the floor costs per step --
     # a documented stand-in for a maintenance model's price (provisional;
     # sweep 0.5 / 1 / 2). The $80/MWh imbalance price is the reactor's spot
@@ -165,10 +173,13 @@ class WindTurbineParams(EnvParams):
     imbalance_price: float = (
         100.0  # $/MWh, provisional; the one imbalance price of the priced plants
     )
-    c_hold: float = (
-        0.0013  # pitch activity fraction |cmd - pitch| / pitch_max while holding (PID)
-    )
+    c_hold: float = 0.0023  # pitch travel per step / pitch_max, the oracle's hold
     fatigue_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
+    #: Rotor speed, as a multiple of rated, above which every step pays (ours).
+    speed_band: float = 1.10
+    #: Floor-widths per step per unit of speed ratio above the band (ours,
+    #: provisional): 1.15 x rated costs ten floor-widths, like the planner's box.
+    speed_weight: float = 200.0
     failure_cost: float = 2.0 * 100.0 * 7.0 * 0.25 / 3600.0
     #: Restart time priced into a trip (``reward.trip_cost``; 10 min at 0.25 s steps: an overspeed trip's reset and re-synchronisation, provisional).
     restart_steps: int = 2400
@@ -193,18 +204,14 @@ PARAM_UNITS = {
     "v_rated": "m/s",
     "omega_rated_rpm": "rpm",
     "v_cut_out": "m/s",
-    "cp_c1": "-",
-    "cp_c2": "-",
-    "cp_c3": "1/deg",
-    "cp_c4": "-",
-    "cp_c5": "-",
-    "cp_c6": "-",
     "pitch_min": "deg",
     "pitch_max": "deg",
     "pitch_rate_max": "deg/s",
     "pitch_tau": "s",
     "torque_max": "N m",
+    "torque_rate_max": "N m/s",
     "torque_tau": "s",
+    "target_block_steps": "steps",
     "turbulence_std": "m/s",
     "v_min": "m/s",
     "v_max": "m/s",
@@ -221,6 +228,8 @@ PARAM_UNITS = {
     "imbalance_price": "$/MWh",
     "c_hold": "-",
     "fatigue_weight": "-",
+    "speed_band": "-",
+    "speed_weight": "-",
     "failure_cost": "reward",
     "restart_steps": "steps",
     "rho_floor_tracking": "reward",
@@ -243,6 +252,15 @@ class WindTurbineState(EnvState):
     #: Electrical output (W), always ``electrical_power(omega, torque)``. A field
     #: so the meter can be its own reading (PHYSICS.md, Readings).
     power: float
+    #: The dispatch's levels. Only the live one, ``target_power``, is observed.
+    target_levels: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(N_TARGET_BLOCKS)
+    )
+    #: Steps since the schedule started. ``reset_env`` sets it to 0, so a trip's
+    #: fresh draw restarts the schedule while ``time`` runs on.
+    block_clock: int = 0
+    #: How far the pitch moved over the last step (deg): the wear the reward reads.
+    pitch_travel: float = 0.0
 
     actuator_held: jax.Array = actuator_field(2)
 
@@ -256,22 +274,16 @@ def omega_rated(params: WindTurbineParams):
 
 
 def power_coefficient(tip_speed_ratio, pitch_deg, params: WindTurbineParams):
-    """Cp(lambda, beta) from the standard analytic fit.
-
-    Reproduces Cp_max = 0.480 at TSR 8.1, against the reference turbine's
-    0.482 at 7.55 -- the peak value matches closely, its location is ~7 %
-    high. Clipped at zero because the fit goes negative outside its valid
-    region, which is not physical for a turbine extracting power.
+    """Cp(lambda, beta) from the published table (``cp_table``), bilinear
+    between its nodes and held at its edges. Clipped at zero: the table goes
+    negative at high pitch, where the rotor brakes (PHYSICS.md, D1).
     """
-    p = params
-    lam = jnp.maximum(tip_speed_ratio, 1e-3)
-    inv_lam_i = 1.0 / (lam + 0.08 * pitch_deg) - 0.035 / (pitch_deg**3 + 1.0)
-    lam_i = 1.0 / jnp.where(jnp.abs(inv_lam_i) < 1e-6, 1e-6, inv_lam_i)
-    cp = (
-        p.cp_c1
-        * (p.cp_c2 / lam_i - p.cp_c3 * pitch_deg - p.cp_c4)
-        * jnp.exp(-p.cp_c5 / lam_i)
-        + p.cp_c6 * lam
+    lam, beta = jnp.broadcast_arrays(tip_speed_ratio, pitch_deg)
+    cp = map_coordinates(
+        jnp.asarray(CP_TABLE, lam.dtype),
+        [(lam - TSR_FIRST) / TSR_STEP, beta / PITCH_STEP],
+        order=1,
+        mode="nearest",
     )
     return jnp.clip(cp, 0.0, 0.593)  # Betz limit as a hard ceiling
 
@@ -283,6 +295,14 @@ def aerodynamic_torque(omega, v_wind, pitch_deg, params: WindTurbineParams):
     cp = power_coefficient(lam, pitch_deg, params)
     power = 0.5 * params.rho * rotor_area(params) * v_wind**3 * cp
     return power / w, power
+
+
+def balance_pitch(omega, v_wind, power, params: WindTurbineParams):
+    """The feather-side pitch leaving ``power`` (W) in the wind at this speed,
+    to 0.1 deg: scanning up from fine pitch, the first below it."""
+    grid = jnp.arange(301.0) * 0.1
+    _, available = aerodynamic_torque(omega, v_wind, grid, params)
+    return grid[jnp.argmax(available < power)]
 
 
 def electrical_power(omega, torque, params: WindTurbineParams):
@@ -314,7 +334,9 @@ def compute_velocity(position, action, v_wind, params: WindTurbineParams):
     dpitch = jnp.clip(
         (pitch_cmd - pitch) / p.pitch_tau, -p.pitch_rate_max, p.pitch_rate_max
     )
-    dtorque = (torque_cmd - torque) / p.torque_tau
+    dtorque = jnp.clip(
+        (torque_cmd - torque) / p.torque_tau, -p.torque_rate_max, p.torque_rate_max
+    )
     return jnp.array([domega, dpitch, dtorque]), None
 
 
@@ -360,6 +382,8 @@ def compute_next_state(
     omega = jnp.maximum(new_positions[0], 1e-3)
     pitch = jnp.clip(new_positions[1], p.pitch_min, p.pitch_max)
     torque = jnp.clip(new_positions[2], 0.0, p.torque_max)
+    clock = state.block_clock + 1
+    block = jnp.minimum(clock // p.target_block_steps, N_TARGET_BLOCKS - 1)
 
     return (
         state.replace(
@@ -370,6 +394,9 @@ def compute_next_state(
             pitch_cmd=pitch_cmd,
             torque_cmd=torque_cmd,
             power=electrical_power(omega, torque, p),
+            target_power=state.target_levels[block],
+            block_clock=clock,
+            pitch_travel=jnp.abs(pitch - state.pitch),
             time=state.time + 1,
         ),
         None,
@@ -435,15 +462,13 @@ def compute_reward_terms(
             state.target_power - power, p.e_floor, p.e_tol, p.tracking_exponent, xp
         )
     )
-    activity = xp.abs(state.pitch_cmd - state.pitch) / p.pitch_max
-    fatigue = (
-        per_W_step
-        * p.e_floor
-        * R.running_cost(activity, p.c_hold, p.fatigue_weight, xp)
+    fatigue = R.running_cost(
+        state.pitch_travel / p.pitch_max, p.c_hold, p.fatigue_weight, xp
     )
+    overspeed = xp.maximum(state.omega / omega_rated(p) - p.speed_band, 0.0)
     terms = {
         "tracking": tracking,
-        "running": fatigue,
+        "running": per_W_step * p.e_floor * (fatigue + p.speed_weight * overspeed),
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 

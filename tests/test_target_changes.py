@@ -72,9 +72,9 @@ def test_a_change_in_any_output_counts_from_the_target_at_reset():
 # ``time`` from i to i + 1, so level k becomes active at entry k block - 1.
 #   plane_energy (v4): target_steps = 8 treads over 1600 steps, 200 steps each
 #     (``plane.env.commanded_altitude``); the eighth starts on the last step.
-#   compressor_surge: N_SETPOINT_BLOCKS = 4 blocks of setpoint_block_steps 300.
+#   wind_turbine: N_TARGET_BLOCKS = 4 blocks of target_block_steps 100.
 #   glass_furnace: N_SETPOINTS = 5 slots over 1600 steps, 320 each.
-SCHEDULES = [("plane_energy", 200, 8), ("compressor_surge", 300, 3)]
+SCHEDULES = [("plane_energy", 200, 8), ("wind_turbine", 100, 3)]
 SCHEDULES += [("glass_furnace", 320, 4)]
 
 
@@ -88,6 +88,21 @@ def test_the_scorer_starts_a_cycle_at_every_scheduled_setpoint(name, block, n_ch
         ep = E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=seed)
         np.testing.assert_array_equal(
             np.flatnonzero(ep.target_change), expected, err_msg=f"seed {seed}"
+        )
+
+
+@pytest.mark.large
+def test_a_compressor_ramp_starts_one_cycle():
+    """N_SETPOINT_BLOCKS = 4 blocks of 300 steps, each opening on a 100-step
+    ramp. The target at ``time`` t + 1 first moves at t = 0, 300, 600 and 900."""
+    spec = REGISTRY["compressor_surge"]
+    p = spec.make_test_params()
+    for seed in (100, 101):
+        ep = E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=seed)
+        np.testing.assert_array_equal(
+            np.flatnonzero(ep.target_change),
+            [0, 300, 600, 900],
+            err_msg=f"seed {seed}",
         )
 
 

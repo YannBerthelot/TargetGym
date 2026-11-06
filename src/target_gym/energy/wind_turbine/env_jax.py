@@ -13,8 +13,10 @@ from target_gym.base import (
     measured_obs,
 )
 from target_gym.energy.wind_turbine.env import (
+    N_TARGET_BLOCKS,
     WindTurbineParams,
     WindTurbineState,
+    balance_pitch,
     check_is_terminal,
     compute_next_state,
     compute_reward,
@@ -85,16 +87,28 @@ class WindTurbine(
         action = jnp.atleast_1d(jnp.asarray(action)).reshape((2,))
         action, state = actuate(self, state, action, params)
 
-        new_state, _ = compute_next_state(
+        proposal, _ = compute_next_state(
             action, state, params, key, integration_method=self.integration_method
         )
         # A trip is part of the kernel: the step is charged the trip cost and
         # the plant restarts at once, or is lost (``terminated``) with
         # ``params.continuing = False`` (``base.finish_step``).
         new_state, reward, terminated, info = finish_step(
-            self, key, state, new_state, params
+            self, key, state, proposal, params
         )
+        # The plant's own actuators set the rates, so the applied action is
+        # where they went.
+        info["applied_action"] = self.initial_action(proposal, params)
         return self.get_obs(new_state, params), new_state, reward, terminated, info
+
+    def initial_action(self, state, params):
+        """The raw action that holds the pitch and torque where they are."""
+        return jnp.stack(
+            [
+                2.0 * state.pitch / params.pitch_max - 1.0,
+                2.0 * state.torque / params.torque_max - 1.0,
+            ]
+        )
 
     @measured_obs
     def get_obs(self, state, params: WindTurbineParams = None):
@@ -126,11 +140,13 @@ class WindTurbine(
             params.v_min,
             params.v_max,
         )
-        target_power = jax.random.uniform(
+        target_levels = jax.random.uniform(
             target_key,
+            (N_TARGET_BLOCKS,),
             minval=params.target_power_range[0],
             maxval=params.target_power_range[1],
         )
+        target_power = target_levels[0]
 
         # Start at rated speed producing the target power: a turbine in
         # above-rated wind is already regulating, so starting spun-down would
@@ -141,9 +157,9 @@ class WindTurbine(
             0.0,
             params.torque_max,
         )
-        # Pitch that roughly balances the rotor at this wind, from the same
-        # steady-state relation the controller has to find.
-        pitch0 = jnp.clip(2.0 * (v_wind - params.v_rated), params.pitch_min, 20.0)
+        # Pitch that balances the rotor at this wind, from the same steady-state
+        # relation the controller has to find.
+        pitch0 = balance_pitch(w0, v_wind, target_power / params.eta_gen, params)
 
         state = WindTurbineState(
             time=0,
@@ -156,6 +172,7 @@ class WindTurbine(
             torque_cmd=torque0,
             target_power=target_power,
             power=electrical_power(w0, torque0, params),
+            target_levels=target_levels,
         )
         return self.get_obs(state), state
 

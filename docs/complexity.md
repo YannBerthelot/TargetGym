@@ -72,7 +72,7 @@ are the observation and action lengths, and the episode is the scored one.
 | [Building HVAC](environments/hvac.md) | `hvac` | Keep a heavyweight, well-insulated single-zone building at its comfort setpoint through occupied hours and a night setback, with hydronic heating, over a week of heating-season weather. | 7 | 1 | 720 steps, 7.5 days |
 | [Cement Kiln](environments/cement_kiln.md) | `cement_kiln` | Hold the free lime in the clinker leaving a 3000 t/day rotary kiln with fuel and kiln speed. | 8 | 2 | 700 steps, 5.83 h |
 | [Boiler Drum](environments/boiler_drum.md) | `boiler_drum` | Hold the drum level and the steam pressure of a 160 MW natural-circulation drum boiler with fuel and feedwater, while the turbine's steam draw moves. | 7 | 2 | 400 steps, 13.3 min |
-| [Compressor Surge](environments/compressor_surge.md) | `compressor_surge` | Hold the header pressure of a variable-speed compressor on a stepped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. | 7 | 2 | 1200 steps, 2 min |
+| [Compressor Surge](environments/compressor_surge.md) | `compressor_surge` | Hold the header pressure of a variable-speed compressor on a ramped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. | 7 | 2 | 1200 steps, 2 min |
 
 ### Renewable Energy
 

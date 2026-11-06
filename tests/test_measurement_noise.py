@@ -275,8 +275,10 @@ def test_targets_stay_exact(spec):
     low, _ = _bounds(env, params)
     index = jnp.atleast_1d(jnp.array(env.obs_target_index))
     for obs, state, *_ in _rollout(env, params, key, low, steps=5):
-        np.testing.assert_array_equal(
-            obs[index], env.get_obs(state, _quiet(params))[index]
+        # In ulps: a ramped target is computed, and two compilations can round
+        # it differently. A reading's noise is thousands of them.
+        np.testing.assert_array_almost_equal_nulp(
+            obs[index], env.get_obs(state, _quiet(params))[index], nulp=2
         )
 
 

@@ -1,5 +1,5 @@
 {
-  "fingerprint": "f82df9842ed379ce",
-  "note": "Branch stamp on feat/sensor-noise: sensor lag and per-actuator rates, unused by any task yet. Redone at the 0.8.0 re-record.",
-  "stamped": "2026-11-06T00:05:54+00:00"
+  "fingerprint": "ac417b137fb09396",
+  "note": "Branch stamp on feat/sensor-noise: wind_turbine takes ROSCO's Cp table, a torque rate, a moving dispatch, a rotor-speed cost and travel fatigue; compressor_surge takes setpoint ramps from its reset pressure, a hidden surge-line offset and a valve wear term. Redone at the 0.8.0 re-record.",
+  "stamped": "2026-11-06T01:08:20+00:00"
 }

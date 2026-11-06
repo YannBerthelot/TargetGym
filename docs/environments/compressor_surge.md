@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/compressor_surge/pid_output.gif" width="480px"/></p>
 
-Hold the header pressure of a variable-speed compressor on a stepped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. Flow below the surge line trips the plant, and neither the reward nor any observation reads the surge margin directly, so the policy has to learn to keep it from the flows it does observe.
+Hold the header pressure of a variable-speed compressor on a ramped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. Flow below the surge line trips the plant, and neither the reward nor any observation reads the surge margin directly, so the policy has to learn to keep it from the flows it does observe.
 
 ```python
 import target_gym as tg
@@ -59,7 +59,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 14 fields.
+`reset` samples the initial condition and the target; state has 17 fields.
 
 ## Episode end
 
@@ -115,11 +115,13 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `valve_open_rate` | 0.5 | 1/s |
 | `valve_close_rate` | 0.1 | 1/s |
 | `setpoint_block_steps` | 300 | steps |
+| `setpoint_ramp_s` | 10 | s |
 | `demand_block_steps` | 200 | steps |
 | `demand_ramp_s` | 5 | s |
 | `demand_sigma` | 0.02 | - |
 | `demand_theta` | 0.2 | 1/s |
 | `demand_dev_reset_clip` | 3 | - |
+| `surge_offset_max` | 0.05 | - |
 | `N_reset` | 1 | - |
 | `x_reset` | 0.35 | - |
 | `reset_newton_iters` | 6 | - |
@@ -134,6 +136,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `restart_steps` | 9000 | steps |
 | `c_hold` | 62270 | W |
 | `running_weight` | 1 | - |
+| `travel_free` | 0.0025 | 1/step |
+| `travel_weight` | 1 | - |
 | `precision_floor` | 0.0275 | kPa |
 | `rho_floor_tracking` | 1.40284e-05 | reward |
 | `rho_floor` | 1.40284e-05 | reward |

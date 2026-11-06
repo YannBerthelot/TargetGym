@@ -89,7 +89,8 @@ ON_TARGET = {
     "distillation": lambda s: s.replace(target_yD=s.x[-1], target_xB=s.x[0]),
     "ph_neutralization": lambda s: s.replace(target_pH=s.pH),
     "compressor_surge": lambda s: s.replace(
-        setpoint_levels=jnp.full_like(s.setpoint_levels, s.dp)
+        setpoint_levels=jnp.full_like(s.setpoint_levels, s.dp),
+        setpoint_lead=jnp.zeros_like(s.setpoint_lead),
     ),
 }
 #: The proposal's floor per step, with rounding's ``step^2 / 12`` on pH. The

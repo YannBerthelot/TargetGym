@@ -267,7 +267,16 @@ def test_a_rate_limit_bounds_a_step_of_a_task_with_sub_steps():
     assert float(applied[0]) == pytest.approx(0.2, abs=1e-6)
 
 
-@pytest.mark.parametrize("spec", REGISTRY.values(), ids=lambda s: s.name)
+#: Their rate limits sit inside the plant, so one step does not reach the box and
+#: the report is where the actuators went (their ``_plant`` test files).
+RATES_IN_THE_PLANT = ("compressor_surge", "wind_turbine")
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [s for s in REGISTRY.values() if s.name not in RATES_IN_THE_PLANT],
+    ids=lambda s: s.name,
+)
 def test_a_step_reports_what_the_actuator_applied(spec):
     """Past the box a command does nothing more, so the report is the box. With
     the task's own rate and lag off, so that one step can reach it."""
@@ -350,4 +359,5 @@ def test_every_task_with_readings_runs_the_actuator_stage(spec):
         actuator_dead_band=0.01, actuator_rate=0.0, actuator_lag=0.0
     )
     new = env.step_env(key, state, action, params)[1]
-    np.testing.assert_array_equal(new.actuator_held, action)
+    # In ulps: a stage started where the plant is adds -0.3 and 1.3 in float32.
+    np.testing.assert_array_almost_equal_nulp(new.actuator_held, action, nulp=2)
