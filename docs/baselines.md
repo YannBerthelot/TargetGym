@@ -118,7 +118,7 @@ bound for the others. Each task's controller lives in its package's
 | `NewtonMPC` | ph_neutralization, reactor | Iterative LQR on the environment's own step: Newton's method on the action sequence |
 | `GradientMPC` | distillation, plane_energy, the four 3D aircraft tasks | Differentiates the JAX dynamics and descends the objective |
 | Two gradient planners with a handover | plane, plane_sine | Both actuators planned to capture the initial altitude, then the elevator only, with the throttle on the PID's airspeed loop |
-| Feedback law plus a residual planner | patrol, patrol_bearing_only, formation | Flies the lead's own autopilot on the follower's state, and a 30-step planner adds a correction; on formation one planner corrects every seat, the lead's too |
+| Feedback law plus a residual planner | patrol, patrol_range_bearing, formation | Flies the lead's own autopilot on the follower's state, and a 30-step planner adds a correction; on formation one planner corrects every seat, the lead's too |
 
 The MPC has no learned parameters. It solves its problem online at every step
 (the oracles on the shared solver once every Cooper sample time, four steps on the four-tank), and carries only a warm start and a few estimator or
@@ -131,7 +131,7 @@ memory leaks into the next one.
 column's interior profile and the turbine's rotor-effective wind, which are
 exactly what those environments hide. So part of every MPC lead is
 information rather than planning, and the results are not a comparison at equal
-information. On `patrol_bearing_only` the slot holds `patrol`'s oracle reading
+information. On `patrol_range_bearing` the slot holds `patrol`'s oracle reading
 the true state, so its score there measures what the hidden lead heading is worth
 plus what the PID leaves on the table.
 

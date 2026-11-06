@@ -50,6 +50,10 @@ _STALE_TECS = "PR 9: TECS's time_const 2 trips the new envelope; at 5 this passe
 KNOWN = {
     "cstr": "the expert was tuned on an instant analyser; PR 9 retunes it",
     "distillation": "the expert was tuned on instant analysers; PR 9 retunes it",
+    "formation": "the hold's gains predate the envelope and the 0.03 rad/s route; "
+    "PR 9 retunes it",
+    "patrol_range_bearing": "the estimator's filter predates the 0.03 rad/s route; "
+    "PR 9 replaces it",
     "ph_neutralization": "the expert's gains predate the probe, so it cycles; PR 9 "
     "retunes them",
     "plane": _STALE_TECS,

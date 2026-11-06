@@ -2,8 +2,8 @@
 
 The expert is a formation hold over the follower's own autopilot
 (:func:`make_patrol_pid_controller`), as flight-tested formation autopilots
-fly it; the bearing-only task's estimates the lead first
-(:func:`make_patrol_bearing_only_pid_controller`).
+fly it; the range-and-bearing task's estimates the lead first
+(:func:`make_patrol_range_bearing_pid_controller`).
 
 The oracle (the MPC slot) is in ``oracle.py``, so that the expert and
 the oracle each have a fingerprint of their own
@@ -34,9 +34,9 @@ from target_gym.plane3d.experts import (
 _PSI, _E_BACK, _E_RIGHT, _E_UP = 9, 10, 11, 12
 _RV_FWD, _RV_RIGHT, _SLOT_BACK, _SLOT_RIGHT = 13, 14, 16, 17
 _REL_HEADING = 19
-# Indices into the bearing-only observation; 0-9 are as above.
+# Indices into the range-and-bearing observation; 0-9 are as above.
 _RANGE, _AZ, _EL = 10, 11, 12
-_BO_SLOT_BACK, _BO_SLOT_RIGHT, _BO_SLOT_UP = 13, 14, 15
+_RB_SLOT_BACK, _RB_SLOT_RIGHT, _RB_SLOT_UP = 13, 14, 15
 
 
 @struct.dataclass
@@ -59,7 +59,7 @@ class FormationHoldParams(Plane3DGuidanceParams):
     ``y_band`` of the slot, and to at most ``int_max``. ``k_omega`` filters
     the lead's turn rate, ``k_ref`` the demands' rates the autopilot is fed
     forward, and ``k_eng`` closes the throttle on the engine's power state.
-    ``t_rate`` is the filter time on the bearing-only estimator's lead
+    ``t_rate`` is the filter time on the range-and-bearing estimator's lead
     velocity: differenced raw, 15 m of range noise is 21 m/s of lead speed.
     """
 
@@ -92,7 +92,7 @@ class FormationHoldParams(Plane3DGuidanceParams):
 class FormationHoldState(Plane3DGuidanceState):
     """The autopilot's memory, the two integrals, the lead's last heading and
     filtered turn rate, the last demands and their filtered rates, and for
-    the bearing-only estimator the filtered relative position and the last own
+    the range-and-bearing estimator the filtered relative position and the last own
     velocity (``started`` is set from the second step on)."""
 
     started: float = 0.0
@@ -215,12 +215,12 @@ def patrol_hold_step(params, state, obs, xp=jnp):
     )
 
 
-def patrol_bearing_only_hold_step(params, state, obs, xp=jnp):
+def patrol_range_bearing_hold_step(params, state, obs, xp=jnp):
     """The same hold behind an estimator of the lead from range and bearings.
 
     Range, azimuth and elevation fix where the lead is; its velocity is the
     filtered rate of that position, taken with the follower's own motion over
-    the last step added back. Both aircraft fly in the same air, so the lead's heading is its
+    the last step added back. Both aircraft fly in much the same air, so the lead's heading is its
     track less the crab the follower itself flies at. The slot error follows
     from the relative position in that lead frame.
     """
@@ -250,11 +250,11 @@ def patrol_bearing_only_hold_step(params, state, obs, xp=jnp):
     crab = _wrap_angle(xp.arctan2(obs[1], obs[0]) - psi, xp)
     psi_lead = xp.arctan2(v_lead[1], v_lead[0]) - crab
     fwd, right = _lead_axes(psi_lead, xp)
-    slot_back, slot_right = obs[_BO_SLOT_BACK], obs[_BO_SLOT_RIGHT]
+    slot_back, slot_right = obs[_RB_SLOT_BACK], obs[_RB_SLOT_RIGHT]
     slot_err = (
         dx * fwd[0] + dy * fwd[1] - slot_back,
         -(dx * right[0] + dy * right[1]) - slot_right,
-        -dz - obs[_BO_SLOT_UP],
+        -dz - obs[_RB_SLOT_UP],
     )
     return _hold(
         params,
@@ -288,6 +288,6 @@ def make_patrol_pid_controller() -> Controller:
     return Controller(HOLD, FormationHoldState(), patrol_hold_step)
 
 
-def make_patrol_bearing_only_pid_controller() -> Controller:
-    """The bearing-only patrol's expert: the same hold, behind the estimator."""
-    return Controller(HOLD, FormationHoldState(), patrol_bearing_only_hold_step)
+def make_patrol_range_bearing_pid_controller() -> Controller:
+    """The range-and-bearing patrol's expert: the same hold, behind the estimator."""
+    return Controller(HOLD, FormationHoldState(), patrol_range_bearing_hold_step)

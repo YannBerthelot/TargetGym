@@ -12,8 +12,8 @@ every MPC slot does (``runners.baseline_policy``), and does not read the step
 key: the planner's model has the turbulence zeroed, so it predicts the decay
 of the current gust and no innovation (certainty equivalence).
 
-The same controller fills ``patrol_bearing_only``'s slot, labelled a
-full-state bound (:func:`make_patrol_bearing_only_mpc`).
+The same controller fills ``patrol_range_bearing``'s slot, labelled a
+full-state bound (:func:`make_patrol_range_bearing_mpc`).
 """
 
 import jax
@@ -21,14 +21,18 @@ import jax.numpy as jnp
 import numpy as np
 
 from target_gym.experts.mpc import GradientMPC, _is_v1
-from target_gym.experts.pid import Plane3DPIDState
+from target_gym.experts.pid import (
+    Plane3DHeadingPIDParams,
+    Plane3DPIDState,
+    plane3d_heading_pid_step,
+)
 from target_gym.patrol.env import (
     _relative_velocity_lead_frame,
     get_obs_heading,
-    lead_autopilot_step,
     slot_error_vector,
     wrap_angle,
 )
+from target_gym.plane.dynamics import BANK_DEMAND_MAX, PITCH_DEMAND_MAX
 
 # ---------------------------------------------------------------------------
 # The twin-autopilot law
@@ -57,6 +61,47 @@ TWIN_GAINS = dict(
     k_z=7.392630787713048e-4,  # stick per m of vertical error
     k_zd=1.2955115290770135e-2,  # stick per (m/s) of vertical relative velocity
 )
+
+
+#: The heading PID the twin law flies, on the gains ``pid_gains.json`` held for it
+#: on 2026-11-03. It was the scripted lead until PR 7b, so the law no longer flies
+#: the lead's own autopilot; PR 9 rebuilds the oracle on the new lead.
+TWIN_AUTOPILOT = Plane3DHeadingPIDParams(
+    Kp_alt=0.00037733,
+    Ki_alt=9.45e-06,
+    Kd_alt=0.00478834,
+    Kp_hdg=4.65883,
+    Ki_hdg=0.228374,
+    Kd_hdg=1.886826,
+    Kp_bank=-3.235864,
+    power=0.6,
+    max_bank_rad=float(np.deg2rad(25.0)),
+    dt=1.0,
+    Kp_power=0.00029661,
+    Ki_power=4.33e-06,
+    Kd_power=0.00646023,
+)
+
+#: The pitch that levels the aircraft (the 2D autopilot's cruise trim, 1.85 deg),
+#: as a raw demand. The heading PID's altitude loop is a slow trim about it.
+_PITCH_TRIM = 0.032 / PITCH_DEMAND_MAX
+
+
+def lead_autopilot_step(params, memory, obs):
+    """The heading PID as the plant takes it. The throttle passes, the altitude
+    loop's stick becomes a pitch demand about trim, and the bank demand is the one
+    the PID's heading loop computes for its own bank loop, which the plant's inner
+    loop now is."""
+    action, new_memory = plane3d_heading_pid_step(params, memory, obs)
+    error = wrap_angle(obs[11] - obs[9])
+    bank = (
+        params.Kp_hdg * error
+        + params.Ki_hdg * (memory.track_integral + error * params.dt)
+        + params.Kd_hdg * (error - memory.track_prev) / params.dt
+    )
+    bank = jnp.clip(bank, -params.max_bank_rad, params.max_bank_rad)
+    pitch = jnp.clip(action[1] + _PITCH_TRIM, -1.0, 1.0)
+    return jnp.stack([action[0], pitch, bank / BANK_DEMAND_MAX]), new_memory
 
 
 def _zero_pid_state():
@@ -168,7 +213,7 @@ class PatrolTwinOracle:
     (0.003 rad/s, 300 m, 200 m/s).
 
     It reads ``state``, never ``obs``, so it runs unchanged on
-    ``patrol_bearing_only``, where it is a full-state bound.
+    ``patrol_range_bearing``, where it is a full-state bound.
     """
 
     action_dim = 3
@@ -200,11 +245,10 @@ class PatrolTwinOracle:
         # restart draw after a trip in a proposal, which is charged the trip
         # cost whatever the draw.
         self._key = jax.random.PRNGKey(0)
-        lead_pid_params = env._lead_pid_params
         gains_ = self.gains
 
         def law(carry, state):
-            return twin_law_step(lead_pid_params, gains_, carry, state)
+            return twin_law_step(TWIN_AUTOPILOT, gains_, carry, state)
 
         self._law = law
         self._jit_step = jax.jit(self._step_fn)
@@ -397,15 +441,15 @@ def make_patrol_mpc(
     )
 
 
-def make_patrol_bearing_only_mpc(env, params, **kwargs):
-    """``patrol_bearing_only``'s slot: the patrol oracle, reading the TRUE
-    state. A full-state bound, not a bearing-only controller.
+def make_patrol_range_bearing_mpc(env, params, **kwargs):
+    """``patrol_range_bearing``'s slot: the patrol oracle, reading the TRUE
+    state. A full-state bound, not a range-and-bearing controller.
 
     Every MPC slot reads the true state (``runners.baseline_policy``) and is
     presented as a full-state upper bound. This one does so on a task defined
     by what its observation withholds (the lead's heading, its autopilot and
     turn schedule), so its number bounds information and control together:
-    the gap between it and a bearing-only policy is what the hidden lead
+    the gap between it and a range-and-bearing policy is what the hidden lead
     state is worth plus what the policy leaves on the table. The controller
     never reads ``obs``, so its per-step costs equal patrol's seed for seed
     (both tasks share PatrolParams, step_env and the reward); the protocol

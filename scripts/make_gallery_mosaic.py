@@ -83,7 +83,7 @@ QUALITY = 72
 # the same formation.
 SPECIAL_VIDEOS = {
     "patrol": "videos/patrol/pid_formation_short.gif",
-    "patrol_bearing_only": "videos/patrol/pid_formation_short.gif",
+    "patrol_range_bearing": "videos/patrol/pid_formation_short.gif",
 }
 VIDEO_CANDIDATES = (
     "videos/{name}/pid_output_short.gif",

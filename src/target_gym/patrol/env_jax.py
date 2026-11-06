@@ -6,17 +6,16 @@ only in what the follower observes:
 
   - :class:`PlanePatrol`            — full relative state (position + velocity
                                        of the lead in its body frame);
-  - :class:`PlanePatrolBearingOnly` — partial: range + bearing to the lead only.
+  - :class:`PlanePatrolRangeBearing`: partial, range + bearing to the lead only.
 
-The lead is scripted (a tuned 3D heading autopilot flying straight-and-level or
-a gentle orbit); the follower is the learning agent.  See :mod:`.env` for the
+The lead is scripted (the 3D heading expert on a route of turns); the follower is
+the learning agent.  See :mod:`.env` for the
 transition, slot geometry, reward and observation functions.
 """
 
 import chex
 import jax
 import jax.numpy as jnp
-import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.base import (
@@ -28,7 +27,6 @@ from target_gym.base import (
     measured_obs,
 )
 from target_gym.expert_access import RegistryExperts
-from target_gym.experts.pid import Plane3DHeadingPIDParams, plane3d_pid_reset
 from target_gym.patrol.env import (
     N_LEAD_LEGS,
     PatrolParams,
@@ -38,13 +36,15 @@ from target_gym.patrol.env import (
     compute_reward_patrol,
     compute_reward_terms_patrol,
     desired_slot_position,
-    get_obs_bearing_only,
     get_obs_full,
+    get_obs_range_bearing,
+    lead_cruise_speed,
     make_cruise_state,
 )
 from target_gym.patrol.rendering import _render
 from target_gym.plane.dynamics import LATERAL, LONGITUDINAL, POSITION, instruments
 from target_gym.plane3d.dynamics import read_angles_3d
+from target_gym.plane3d.experts import Plane3DGuidanceState
 from target_gym.video import SavesVideo
 
 #: The follower's own instruments, and the lead's over the datalink. Their
@@ -57,26 +57,6 @@ _LEAD_FIX = instruments(POSITION, "lead.")
 #: altitude path behind ``lead.z`` and the elevation channel, whose scatter at
 #: 250 m is ``25 ft / sqrt(12) / 250 m``, 0.0088 rad, falling as 1/range.
 _LEAD_MODE_S_ALTITUDE = FieldReading("lead.z", sigma=0.2, step=25 * 0.3048)
-
-#: The scripted lead's heading autopilot: the 3D heading task's PID on the
-#: gains ``pid_gains.json`` held for it on 2026-11-03 (``plane3d_heading``).
-#: The lead is part of the plant, so its gains are task constants: a retune of
-#: the 3D heading expert rewrites that entry and must not change this task.
-LEAD_AUTOPILOT = Plane3DHeadingPIDParams(
-    Kp_alt=0.00037733,
-    Ki_alt=9.45e-06,
-    Kd_alt=0.00478834,
-    Kp_hdg=4.65883,
-    Ki_hdg=0.228374,
-    Kd_hdg=1.886826,
-    Kp_bank=-3.235864,
-    power=0.6,
-    max_bank_rad=float(np.deg2rad(25.0)),
-    dt=1.0,
-    Kp_power=0.00029661,
-    Ki_power=4.33e-06,
-    Kd_power=0.00646023,
-)
 
 
 def _read_angles(state: PatrolState, params: PatrolParams) -> PatrolState:
@@ -105,9 +85,10 @@ class _PlanePatrolBase(
         self.integration_method = integration_method
         self.positions_history_xz = []
         self.positions_history_xy = []
-        # Static gains for the scripted lead's heading autopilot.
-        self._lead_pid_params = LEAD_AUTOPILOT
-        self._lead_pid_zero = plane3d_pid_reset(LEAD_AUTOPILOT)
+        # The scripted lead's memory at reset, in the types it comes back with.
+        self._lead_memory = jax.tree.map(
+            lambda x: jnp.asarray(x, jnp.float32), Plane3DGuidanceState()
+        )
 
     @property
     def default_params(self) -> PatrolParams:
@@ -147,7 +128,6 @@ class _PlanePatrolBase(
             action,
             state,
             params,
-            self._lead_pid_params,
             integration_method=self.integration_method,
             key=key,
         )
@@ -214,7 +194,7 @@ class _PlanePatrolBase(
             up_key, minval=params.slot_up_range[0], maxval=params.slot_up_range[1]
         )
 
-        speed = params.initial_x_dot
+        speed = lead_cruise_speed(lead_alt)
         lead = make_cruise_state(
             x=0.0,
             y=0.0,
@@ -230,7 +210,7 @@ class _PlanePatrolBase(
         provisional = PatrolState(
             follower=lead,
             lead=lead,
-            lead_pid=self._lead_pid_zero,
+            lead_memory=self._lead_memory,
             slot_back=slot_back,
             slot_right=slot_right,
             slot_up=slot_up,
@@ -312,10 +292,10 @@ class PlanePatrol(_PlanePatrolBase):
         return get_obs_full(state, xp=jnp)
 
 
-class PlanePatrolBearingOnly(_PlanePatrolBase):
+class PlanePatrolRangeBearing(_PlanePatrolBase):
     """Close patrol with partial (range + bearing) observation (21 values).
 
-    Observation layout — see :func:`target_gym.patrol.env.get_obs_bearing_only`.
+    Observation layout: see :func:`target_gym.patrol.env.get_obs_range_bearing`.
     Action (3,): [throttle, pitch demand, bank demand], each in [-1, 1].
     """
 
@@ -323,7 +303,7 @@ class PlanePatrolBearingOnly(_PlanePatrolBase):
     tracked_names: tuple = ("measured range (m)",)
     obs_target_index: int = 20  # commanded slot range
     task_type: str = "patrol"
-    registry_name: str = "patrol_bearing_only"
+    registry_name: str = "patrol_range_bearing"
 
     # PHYSICS.md section on readings. Provisional, pending a real sensor.
     # Elevation is no channel of its own: it inherits ``lead.z``. The lead's
@@ -342,7 +322,7 @@ class PlanePatrolBearingOnly(_PlanePatrolBase):
         self.obs_shape = (21,)
 
     def _observe(self, state: PatrolState) -> jnp.ndarray:
-        return get_obs_bearing_only(state, xp=jnp)
+        return get_obs_range_bearing(state, xp=jnp)
 
     def get_obs(self, state: PatrolState, params: PatrolParams = None) -> jnp.ndarray:
         # The tracked value is that one range reading, not a second instrument.

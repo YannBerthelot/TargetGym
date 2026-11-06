@@ -26,7 +26,7 @@ from target_gym.glass_furnace.env_jax import GlassFurnace
 from target_gym.hvac.env import HVACParams
 from target_gym.hvac.env_jax import BuildingHVAC
 from target_gym.patrol.env import PatrolParams
-from target_gym.patrol.env_jax import PlanePatrol, PlanePatrolBearingOnly
+from target_gym.patrol.env_jax import PlanePatrol, PlanePatrolRangeBearing
 from target_gym.pc_gym.cstr.env_jax import CSTR, CSTRParams
 from target_gym.pc_gym.distillation.env import DistillationParams
 from target_gym.pc_gym.distillation.env_jax import DistillationColumn
@@ -105,7 +105,7 @@ __all__ = (
     "PlaneParams3D",
     # Close patrol (formation-keeping)
     "PlanePatrol",
-    "PlanePatrolBearingOnly",
+    "PlanePatrolRangeBearing",
     "PatrolParams",
     # Formation: a lead and its wingmen, every aircraft a learner
     "Formation",

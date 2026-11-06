@@ -27,7 +27,7 @@ env, params = tg.make("first_order")
 | A trip on a variable nothing scores | [`compressor_surge`](environments/compressor_surge.md) | |
 | An aircraft, from a level hold to paths | [`plane`](environments/plane.md) | [`plane3d_heading`](environments/plane3d_heading.md), then [`plane3d_circle`](environments/plane3d_circle.md), [`plane3d_racetrack`](environments/plane3d_racetrack.md), [`plane3d_figure8`](environments/plane3d_figure8.md) |
 | A reference that moves | [`plane_sine`](environments/plane_sine.md) | [`plane_energy`](environments/plane_energy.md), [`patrol`](environments/patrol.md) |
-| A reference you cannot see | [`patrol_bearing_only`](environments/patrol_bearing_only.md) | |
+| A reference you cannot see | [`patrol_range_bearing`](environments/patrol_range_bearing.md) | |
 | Several agents sharing one cost | [`formation`](environments/formation.md) | [Multi-agent formation](multi-agent.md) |
 
 ## Every task
@@ -49,7 +49,7 @@ are the observation and action lengths, and the episode is the scored one.
 | [3D holding pattern](environments/plane3d_racetrack.md) | `plane3d_racetrack` | Fly a holding pattern, two straight legs joined by half circles, at a target altitude with the 3D airliner. | 21 | 3 | 650 steps, 10.8 min |
 | [3D figure-8](environments/plane3d_figure8.md) | `plane3d_figure8` | Follow a twisted figure-8 that climbs and descends, with the 3D airliner. | 21 | 3 | 1000 steps, 16.7 min |
 | [Patrol - wingman](environments/patrol.md) | `patrol` | Fly as a wingman: reach and hold a slot fixed in the lead aircraft's frame, behind, beside and above or below it, while the lead flies a patrol route that turns onto a new rate every minute. | 26 | 3 | 200 steps, 3.33 min |
-| [Patrol - wingman, bearing-only](environments/patrol_bearing_only.md) | `patrol_bearing_only` | The `patrol` task flown from a passive sensor: the wingman sees range, azimuth and elevation to the lead instead of the lead's relative state. | 21 | 3 | 200 steps, 3.33 min |
+| [Patrol - wingman, range and bearing](environments/patrol_range_bearing.md) | `patrol_range_bearing` | The `patrol` task flown from a TCAS-style sensor: the wingman sees range, azimuth and elevation to the lead instead of the lead's relative state. | 21 | 3 | 200 steps, 3.33 min |
 | [Formation](environments/formation.md) | `formation` | Fly a lead and two wingmen in a V, every aircraft controlled by the policy. | 74 | 9 | 200 steps, 3.33 min |
 
 ### Process Control
