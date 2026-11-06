@@ -13,7 +13,7 @@ env, params = tg.make("glass_furnace")
 | | |
 |---|---|
 | Action space | `Box((1,))`, all actions in [-1, 1] |
-| Observation space | `Box((5,))` |
+| Observation space | `Box((6,))` |
 | Tracked variable(s) | crown temperature (K) |
 | Episode length | 1600 steps of 30 s (13.3 h) |
 | Cite as | `glass_furnace-v3` |
@@ -30,7 +30,7 @@ actuator range inside the environment.
 
 ## Observation space
 
-5 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[4]`.
+6 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[4]`.
 
 | # | meaning |
 |---|---|
@@ -39,6 +39,7 @@ actuator range inside the environment.
 | 2 | fuel flow, percent of maximum |
 | 3 | regenerator phase: 0 while regenerator A preheats the air, 1 while B does |
 | 4 | target crown temperature (°C) |
+| 5 | pull, the glass leaving the furnace (kg/s) |
 
 ## Rewards
 
@@ -56,7 +57,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 19 fields.
+`reset` samples the initial condition and the target; state has 20 fields.
 
 ## Episode end
 
@@ -87,7 +88,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
 | `action_noise` | 0 | fraction of span |
-| `actuator_rate` | 0 | fraction of span per delta_t unit |
+| `actuator_rate` | 0.000555556 | fraction of span per delta_t unit |
 | `actuator_lag` | 0 | delta_t units |
 | `LHV` | 5e+07 | J/kg |
 | `AFR` | 17 | - |
@@ -115,6 +116,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `m_batch_full` | 39000 | kg |
 | `batch_shield` | 0.85 | - |
 | `m_pull_noise_std` | 0.4 | kg/s |
+| `lhv_noise_std` | 0.01 | - |
 | `C_gas` | 240000 | J/K |
 | `C_crown` | 2.5e+08 | J/K |
 | `C_melt` | 7.8e+08 | J/K |
@@ -141,12 +143,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `fuel_cost_weight` | 0 | - |
 | `target_T_crown_trim` | 6 | K |
 | `initial_T_crown_offset` | 4 | K |
-| `initial_T_gas_offset` | 31 | K |
-| `initial_T_melt_offset` | -35 | K |
-| `initial_T_work_offset` | -151 | K |
-| `initial_T_regen_hot` | 1383 | degC |
-| `initial_T_regen_cold` | 544 | degC |
-| `initial_m_batch` | 10753 | kg |
+| `initial_T_gas_offset` | 33 | K |
+| `initial_T_meas_offset` | 1.35 | K |
 | `reward_version` | 2 | - |
 | `e_floor` | 1 | K |
 | `e_tol` | 0 | K |

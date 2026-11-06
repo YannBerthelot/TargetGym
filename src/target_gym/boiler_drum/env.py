@@ -43,9 +43,10 @@ else in this suite has that shape:
   instrument reads riser void fraction, and it is precisely the state driving
   the inverse response.
 
-The controller sets firing rate and feedwater flow; steam demand is the
-turbine's, and is a measured disturbance (as in three-element control) whose
-*future* is unknown.
+The controller sets firing rate and feedwater flow, through actuators that lag
+and slew. The turbine sets its valve, a hidden disturbance whose *future* is
+unknown. The steam flow it passes follows drum pressure and is measured, as in
+three-element control.
 """
 
 from typing import Tuple
@@ -150,6 +151,12 @@ class BoilerDrumParams(EnvParams):
     # -- disturbance ----------------------------------------------------------
     q_steam_noise_std: float = 8.0  # kg/s stationary std of the load swing
 
+    # -- actuators, fuel then feedwater (PHYSICS.md, Actuators) ----------------
+    # Rates are Bell & Astrom's for this unit, as fractions of the span per
+    # second. The feedwater's lag is theirs; the firing lag is ours.
+    actuator_rate: Tuple[float, float] = (0.007, 0.05)
+    actuator_lag: Tuple[float, float] = (20.0, 1.0)  # s
+
     # -- task -----------------------------------------------------------------
     target_pressure_range: Tuple[float, float] = (82.0, 88.0)
     initial_level_range: Tuple[float, float] = (-0.05, 0.05)
@@ -230,7 +237,8 @@ class BoilerDrumState(EnvState):
     m_sr: jnp.ndarray  # kg   steam held in the risers
     m_sd: jnp.ndarray  # kg   bubbles below the drum water level
     level: jnp.ndarray  # m    deviation from normal water level
-    q_steam: jnp.ndarray  # kg/s turbine draw (the disturbance)
+    q_steam: jnp.ndarray  # kg/s turbine draw, measured
+    q_demand: jnp.ndarray  # kg/s the turbine valve's draw at p_nominal, hidden
     Q_fuel: jnp.ndarray  # W
     q_feed: jnp.ndarray  # kg/s
     target_pressure: jnp.ndarray  # bar
@@ -319,16 +327,26 @@ def drum_level(V_wt, m_sr, m_sd, level_ref, p_bar, params: BoilerDrumParams):
     return (V_wd + m_sd / rho_s - level_ref) / params.A_d
 
 
-def compute_velocity(position, action, q_steam, params: BoilerDrumParams):
+def steam_draw(q_demand, p_bar, params: BoilerDrumParams):
+    """Steam through a fixed turbine valve, proportional to drum pressure.
+
+    Bell & Astrom's ``q_s = (1.1 u2 - 0.19) P``. ``q_demand`` is what the valve
+    passes at ``p_nominal``.
+    """
+    return q_demand * p_bar / params.p_nominal
+
+
+def compute_velocity(position, action, q_demand, params: BoilerDrumParams):
     """Time derivatives of ``[pressure, V_wt, m_sr, m_sd]``.
 
-    ``action`` is ``(Q_fuel [W], q_feed [kg/s])``.
+    ``action`` is ``(Q_fuel [W], q_feed [kg/s])``, ``q_demand`` as ``steam_draw``.
     """
     p_bar, V_wt, m_sr, m_sd = position[0], position[1], position[2], position[3]
     Q, q_f = action
     pr = params
 
     p_bar = jnp.clip(p_bar, 20.0, 200.0)
+    q_steam = steam_draw(q_demand, p_bar, pr)
     rho_w = water_density(p_bar, pr)
     rho_s = steam_density(p_bar, pr)
     h_w = water_enthalpy(p_bar, pr)
@@ -407,20 +425,20 @@ def compute_next_state(
         action_raw[1], min_action=0.0, max_action=pr.q_feed_max
     )
 
-    # OU steam demand. The innovation is drawn from a key folded with
+    # OU turbine valve. The innovation is drawn from a key folded with
     # ``state.time`` so a caller passing a constant key still gets a genuine
     # zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     sigma = pr.q_steam_noise_std * jnp.sqrt(2.0 * STEAM_OU_THETA * pr.delta_t)
-    q_steam = (
-        state.q_steam
-        - STEAM_OU_THETA * (state.q_steam - pr.q_steam_nominal) * pr.delta_t
+    q_demand = (
+        state.q_demand
+        - STEAM_OU_THETA * (state.q_demand - pr.q_steam_nominal) * pr.delta_t
         + sigma * noise
     )
-    q_steam = jnp.clip(q_steam, 0.0, 2.0 * pr.q_steam_nominal)
+    q_demand = jnp.clip(q_demand, 0.0, 2.0 * pr.q_steam_nominal)
 
     _compute_velocity = partial(
-        compute_velocity, action=(Q_fuel, q_feed), q_steam=q_steam, params=pr
+        compute_velocity, action=(Q_fuel, q_feed), q_demand=q_demand, params=pr
     )
     new_positions, _ = integrate_dynamics(
         positions=jnp.array([state.pressure, state.V_wt, state.m_sr, state.m_sd]),
@@ -441,7 +459,8 @@ def compute_next_state(
             m_sr=m_sr,
             m_sd=m_sd,
             level=level,
-            q_steam=q_steam,
+            q_steam=steam_draw(q_demand, pressure, pr),
+            q_demand=q_demand,
             Q_fuel=Q_fuel,
             q_feed=q_feed,
             time=state.time + 1,
@@ -463,9 +482,10 @@ def get_obs(state: BoilerDrumState, params: BoilerDrumParams):
 
     A boiler has a drum level gauge, a drum pressure transmitter and a steam
     flow meter -- the three measurements of classic three-element control --
-    and knows its own fuel and feedwater demands. It does **not** measure riser
-    void fraction or total water inventory, so ``m_sr``, ``m_sd`` and ``V_wt``
-    are hidden. The void distribution is exactly what drives the inverse
+    and reads its own fuel and feedwater actuators, which lag its demands. It
+    does **not** measure riser void fraction or total water inventory, so
+    ``m_sr``, ``m_sd`` and ``V_wt`` are hidden, and neither does it read the
+    turbine valve. The void distribution is exactly what drives the inverse
     response the controller has to anticipate.
 
     The level target is a constant zero (normal water level) and is carried in

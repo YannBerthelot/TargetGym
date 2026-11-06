@@ -67,7 +67,7 @@ are the observation and action lengths, and the episode is the scored one.
 
 | Task | Name | What it asks | Obs | Act | Episode |
 |---|---|---|---|---|---|
-| [Glass Furnace](environments/glass_furnace.md) | `glass_furnace` | Hold the crown temperature of a regenerative float-glass furnace on a slowly walking setpoint by setting the fuel flow. | 5 | 1 | 1600 steps, 13.3 h |
+| [Glass Furnace](environments/glass_furnace.md) | `glass_furnace` | Hold the crown temperature of a regenerative float-glass furnace on a slowly walking setpoint by setting the fuel flow. | 6 | 1 | 1600 steps, 13.3 h |
 | [Reactor](environments/reactor.md) | `reactor` | Follow a drifting power demand on a 3 GW pressurised-water reactor with the control rods. | 4 | 1 | 864 steps, 2.4 h |
 | [Building HVAC](environments/hvac.md) | `hvac` | Keep a heavyweight, well-insulated single-zone building at its comfort setpoint through occupied hours and a night setback, with hydronic heating, over a week of heating-season weather. | 7 | 1 | 720 steps, 7.5 days |
 | [Cement Kiln](environments/cement_kiln.md) | `cement_kiln` | Hold the free lime in the clinker leaving a 3000 t/day rotary kiln with fuel and kiln speed. | 8 | 2 | 700 steps, 5.83 h |

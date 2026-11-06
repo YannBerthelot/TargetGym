@@ -54,12 +54,12 @@ class BuildingHVAC(
 
     # Two temperature sensors, a heat meter and a pyranometer (PHYSICS.md,
     # Readings). Solar gain comes from the clock, which stays exact, so its
-    # reading goes on channel 3: 1 W/m2 of the 350 W/m2 peak.
+    # reading goes on channel 3: 1 W/m2 of the 175 W/m2 peak.
     readings: tuple = (
         FieldReading("T_air", sigma=0.023, step=0.1),
         FieldReading("T_out", sigma=0.023, step=0.1),
         FieldReading("Q_emitter", sigma=27.0),
-        ChannelReading(3, sigma=1.0 / 350.0),
+        ChannelReading(3, sigma=1.0 / 175.0),
     )
 
     def __init__(self, integration_method: str = "rk4_2"):

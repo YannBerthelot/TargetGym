@@ -1,5 +1,5 @@
 {
-  "fingerprint": "2fe4d914c658c83b",
-  "note": "Branch stamp on feat/sensor-noise: sensor lag and per-actuator rates, unused by any task yet. Redone at the 0.8.0 re-record.",
-  "stamped": "2026-11-06T00:05:54+00:00"
+  "fingerprint": "0bf2517fafa0eb0b",
+  "note": "Branch stamp on feat/sensor-noise: thermal plants (boiler_drum actuators and steam draw, glass_furnace slew, settled reset, pull and gas, hvac solar). Redone at the 0.8.0 re-record.",
+  "stamped": "2026-11-06T00:34:46+00:00"
 }

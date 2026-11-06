@@ -111,7 +111,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `T_out_mean` | 5 | degC |
 | `T_out_amplitude` | 5 | K |
 | `T_out_noise_std` | 3 | K |
-| `solar_peak` | 350 | W/m^2 |
+| `solar_peak` | 175 | W/m^2 |
 | `gain_occupied` | 8 | W/m^2 |
 | `gain_unoccupied` | 2 | W/m^2 |
 | `occupied_start_h` | 7 | h |

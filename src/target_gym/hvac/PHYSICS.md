@@ -66,7 +66,8 @@ well-insulated dwelling.
 | Heater sizing vs design load | 1.3–2.0× | 1.5× (7.2 kW vs 4.8 kW) | ✅ |
 | Overnight free-float drop (8 h, T_out 0 °C) | a few K for heavyweight | 20 → 16.6 °C | ✅ |
 | Steady 20 °C at T_out = 0 °C | — | 3.19 kW | ✅ |
-| Seasonal heating energy (PID) | — | ~106 Wh/(m²·day) | ⚠️ |
+| Free gains against losses, per day | gains below losses | 39.1 against 57.4 kWh | ✅ |
+| Heating energy (expert) | — | 21.3 kWh/day, 142 Wh/(m²·day) | ⚠️ |
 
 The time constant and design load are the load-bearing checks: together they
 pin both the envelope quality and the thermal mass, and they are what make the
@@ -103,13 +104,43 @@ control problem what it is — a building that responds over *hours*.
 | Symbol | Value | Unit | Source | |
 |---|---|---|---|---|
 | `Q_heat_max` | 7200 | W | 1.5× the 4.78 kW design load | ✅ |
-| `emitter_tau` | 900 | s | TUNED — radiator/water thermal lag | ⚠️ |
+| `emitter_tau` | 900 | s | **Ours, for the owner to accept**: radiator and water lag. No measured figure for a room's panel radiator was found | ⚠️ |
 | `gain_occupied` | 8.0 | W/m² | People + lighting + equipment | ✅ |
-| `solar_peak` | 350 | W/m² | Winter clear-sky on vertical glazing | ⚠️ |
+| `solar_peak` | 175 | W/m² | A heating season's mean over four facades, *Solar gain* below | ✅ |
 | `T_out_mean/amplitude` | 5 / 5 | °C | Heating-season daily cycle | ⚠️ |
 | `T_out_noise_std` | 3.0 | °C | OU weather deviation, ~12 h correlation | ⚠️ |
 
 ---
+
+### Solar gain
+
+`solar_peak` is the noon value of a half sine over 12 h, so a day delivers
+`175 * 12 * 2 / pi` = 1337 Wh/m² on the glazing. It is a seasonal mean with the
+cloud in it, not a clear-sky peak.
+
+It was 350 W/m², winter clear sky, every day. Then free gains matched losses, 57.45
+against 57.38 kWh/day, heating was never needed, and leaving the heater off beat
+the expert. 175 comes from what the glass receives over a heating season, not from
+any score. The zone's 25 m² of glazing has no stated orientation, so this takes the
+mean of four vertical facades, from [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/)
+5.2 (SARAH2, 2005 to 2020, `PVcalc` at slope 90 degrees), with the daily mean air
+temperature from its monthly tool (2010 to 2019):
+
+| site, season | mean air, °C | S / E / W / N, kWh/m²/day | four facades | as `solar_peak` |
+|---|---|---|---|---|
+| Frankfurt, Oct to Apr | 5.9 | 2.29 / 1.26 / 1.24 / 0.47 | 1.32 | **172** |
+| Paris, Nov to Mar | 5.9 | 2.31 / 1.05 / 1.05 / 0.40 | 1.20 | 157 |
+| London, Nov to Mar | 5.7 | 2.06 / 0.90 / 0.89 / 0.35 | 1.05 | 137 |
+| London, Oct to Apr | 7.1 | 2.29 / 1.19 / 1.17 / 0.47 | 1.28 | 167 |
+| Paris, Oct to Apr | 7.6 | 2.57 / 1.37 / 1.34 / 0.50 | 1.45 | 189 |
+
+The model's season is 5 °C. Frankfurt's seven months sit closest, with the whole of
+a heating season in them, and the plan's 175 is that figure, rounded. A building
+with all its glass facing south would see 260 to 340 and need far less heat.
+
+With it, 18.4 kWh of solar and 20.7 kWh of occupancy leave 18.3 kWh a day to the
+heater, a third of the 57.4 kWh lost at 20 °C. Over 212 days that is 26 kWh/m² a
+year, an ordinary figure for this envelope. Left off, the zone settles near 15 °C.
 
 ## 4. Task design
 
@@ -155,8 +186,9 @@ and a trip cost, described in *Reward (version 2)* below.
 **⚠️ D1 — synthetic weather.** Outdoor temperature is a daily sinusoid plus an
 OU deviation, not a real weather file. It has the right magnitude and
 correlation time but none of a real year's structure (fronts, multi-day cold
-spells, cloud). Consequence: an agent cannot learn genuine climate patterns,
-only the daily cycle plus noise.
+spells). Cloud is in `solar_peak` only as a mean, so every day has the same sun.
+Consequence: an agent cannot learn genuine climate patterns, only the daily
+cycle plus noise.
 
 **⚠️ D2 — no cooling.** Heating only, so summer operation and the
 cooling/heating changeover are out of scope. Over-heating is penalised but
@@ -164,12 +196,12 @@ cannot be corrected except by backing off the heat.
 
 **The 35 °C trip is still reachable only through the actuator**, which was
 worth checking, because a terminal state the controller has no authority over
-would be unlike every other trip in this suite. Peak free gain is 5.6 kW --
-4.8 kW of solar through the glazing plus 0.8 kW of occupancy -- against a heat
+would be unlike every other trip in this suite. Peak free gain is 3.6 kW --
+2.4 kW of solar through the glazing plus 1.2 kW of occupancy -- against a heat
 loss coefficient of 159.4 W/K, so the *steady* rise above outdoor would be
-35 K, which on a 10 °C afternoon points at 45 °C. It never gets there: solar is
+23 K, which on a 10 °C afternoon points at 33 °C. It never gets there: solar is
 zero for twelve hours a day and the 43 h thermal mass integrates, so with the
-heater held fully off the zone peaks at 21.6 to 24.2 °C across seeds. Reaching
+heater held fully off the zone peaks at 18.3 to 20.6 °C across seeds. Reaching
 the trip requires the heater, so it is the controller's to avoid.
 
 **⚠️ D3 — solar gain ignores orientation and shading.** A single glazing area
@@ -221,22 +253,26 @@ published, and nothing is tuned on seeds.
   design 21 C before the first. All are what a BMS is programmed with.
 - **Left out.** G36's loop-enable hysteresis and its zero-output hold.
 
-On the held-out seeds 200 to 209 the expert's hold is 0.0179 euro per step
-against a ceiling of 7.5e-5, 2.38 decades of room. The PI it replaces
-(in-code gains 0.4 per K and 1e-4 per K s) held 0.0172.
+On the held-out seeds 200 to 209, at the old `solar_peak` of 350, the expert's
+hold was 0.0179 euro per step against a ceiling of 7.5e-5, 2.38 decades of room.
+The PI it replaces (in-code gains 0.4 per K and 1e-4 per K s) held 0.0172.
 
-On the training seeds 100 to 109, optimal start makes the expert costlier:
-0.0241 euro per step against 0.0205 for the same PI without it. The plant only
-heats, and its cost is afternoon overheating from solar and internal gains,
-1 to 2.7 K above target. Warming the building before occupancy stores more
-heat, so the afternoons run warmer. Optimal start stays because it is what
-G36 buildings run; the task's room for anticipation is what it costs.
+On the training seeds 100 to 109, again at 350, optimal start made the expert
+costlier: 0.0241 euro per step against 0.0205 for the same PI without it. Then the
+plant's cost was afternoon overheating, 1 to 2.7 K above target, and warming the
+building before occupancy stored more heat. Optimal start stays because it is what
+G36 buildings run.
 
-Spec, a strict xfail in `tests/hvac/test_hvac_expert.py`. The zone is within
-the comfort tolerance at the start of occupancy on 59 of 70 held-out
-mornings, against the 90 % stated. Every miss, 0.55 to 1.0 K cold, is a
-morning where the zone was less than 0.5 K short at the 04:00 sample.
-OptimalStart then runs no warm-up, and the zone keeps cooling until 07:00.
+At 175 the expert heats on 44 % of steps, as the review found, costs 0.0223 euro a
+step and uses 21.3 kWh a day. Its zone still runs 1.0 K above target on average.
+No null policy comes near it: heater off scores a ratio of 0.21 and wins no seed.
+
+Spec, in `tests/hvac/test_hvac_expert.py`. The zone is within the comfort
+tolerance at the start of occupancy on 67 of 70 held-out mornings, against the
+90 % stated. At the old `solar_peak` it was 59 of 70, a strict xfail: the misses
+were mornings where the zone was less than 0.5 K short at the 04:00 sample, so
+OptimalStart ran no warm-up. A building that needs its heater keeps the loop
+warm overnight.
 
 **Cheap to step**: one differential state with closed-form algebraic nodes,
 which is what the 5R1C reduction buys. See
@@ -272,7 +308,7 @@ which is what the recorded baselines use.
 | parameter | value | source |
 | --- | --- | --- |
 | `comfort_tolerance` | 0.5 K | occupied comfort band about the setpoint (dead-zone) |
-| `setback_lower_bound_only` | True | **provisional design choice.** During the setback only the shortfall below 17 C is charged. This plant cannot cool: under its clear-sky gains the zone sits +4.3 K above the setback target every night and above the occupied band two thirds of the day whatever the controller does (`scripts/measure_hold.py`, signed errors for the shipped MPC over 720 hold steps after a 516-step burn-in), so a symmetric night target would score the weather. |
+| `setback_lower_bound_only` | True | **provisional design choice.** During the setback only the shortfall below 17 C is charged. This plant cannot cool, so a symmetric night target would score the weather: at the old clear-sky `solar_peak` the zone sat +4.3 K above the setback target every night (`scripts/measure_hold.py`, shipped MPC). Not remeasured at 175. |
 | `comfort_price` | 0.03 EUR per K^2 per hour | **provisional**: twice the gas it takes to remove 1 K for 1 h (H = 159 W/K at EUR 0.10/kWh = EUR 0.016), so comfort is worth fixing but not at any price; the earlier 0.2 was 12x the gas and the gas term never bound. Sweep 0.015 / 0.03 / 0.06 |
 | `gas_price` | 0.10 EUR/kWh | charged on the emitter's heat in full: the bill the plant trades against comfort |
 | `tracking_exponent` | 2 | quadratic outside the band |
@@ -326,14 +362,18 @@ still between steps.
 **Weak figures.**
 
 - `solar_gain` is a guess. The manual gives offsets under 10 W/m2 and no scatter
-  figure. It is 0.29 % of `solar_norm` at peak.
+  figure. It is 0.57 % of `solar_norm` at peak.
 - `Q_emitter` has no meter sheet behind it. It is the scatter of a Pt100 pair on
   an assumed 15 K loop difference, 0.38 % of reading, taken at `Q_heat_max`.
 - `T_out` assumes the zone sensor's class, and the refutation pass did not reach it.
 
 Solar gain is computed from the clock, which must stay exact, so it is a channel
-reading: channel 3 in `solar_norm` units, 1/350 of the 350 W/m2 peak. It reads
+reading: channel 3 in `solar_norm` units, 1/175 of the 175 W/m2 peak. It reads
 small values of either sign at night, as a real pyranometer's offset does.
+
+**Timing, all ours for the owner to accept.** The 15 min step is the standard
+building-simulation step and a plausible BMS trend interval, no source opened.
+The readings have no dead time.
 
 The expert reads these values, and so does every tuner. The oracle plans and acts
 on the true state, so it stays a full-state bound. `reward`, trips and the score

@@ -37,9 +37,9 @@ actuator range inside the environment.
 |---|---|
 | 0 | drum level relative to normal water level (m) |
 | 1 | drum pressure (bar) |
-| 2 | `q_steam`, steam flow to the turbine (kg/s), the disturbance |
-| 3 | fuel, percent of maximum |
-| 4 | feedwater, percent of maximum |
+| 2 | `q_steam`, steam flow to the turbine (kg/s), which follows the valve and drum pressure |
+| 3 | fuel actuator position, percent of maximum |
+| 4 | feedwater actuator position, percent of maximum |
 | 5 | target level, always 0 (m) |
 | 6 | target pressure (bar) |
 
@@ -59,7 +59,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 14 fields.
+`reset` samples the initial condition and the target; state has 15 fields.
 
 ## Episode end
 
@@ -90,8 +90,6 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
 | `action_noise` | 0 | fraction of span |
-| `actuator_rate` | 0 | fraction of span per delta_t unit |
-| `actuator_lag` | 0 | delta_t units |
 | `reward_version` | 2 | - |
 | `e_floor_level` | 0.00267 | m |
 | `e_floor_pressure` | 0.05 | bar |

@@ -224,7 +224,6 @@ def gate(name: str) -> dict:
 KNOWN = {
     "battery": "the plant delivers the command, so an echo of the target wins",
     "distillation": "the expert was tuned on instant analysers; PR 9 retunes it",
-    "hvac": "free gains match the losses, so a heater left off wins",
     "reactor": "no secondary side, so one rod integrator matches the oracle",
 }
 

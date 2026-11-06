@@ -73,7 +73,7 @@ To pick one by what you want to test, see
 
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
-| `glass_furnace` | `glass_furnace-v3` | (5,) | (1,) | crown temperature (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
+| `glass_furnace` | `glass_furnace-v3` | (6,) | (1,) | crown temperature (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
 | `reactor` | `reactor-v4` | (4,) | (1,) | neutron power (normalised) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 | `hvac` | `hvac-v3` | (7,) | (1,) | zone air temperature (deg C) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
 | `cement_kiln` | `cement_kiln-v4` | (8,) | (2,) | discharge free lime (%) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |

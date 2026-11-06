@@ -15,6 +15,7 @@ Global mass and energy balances over the whole water/steam circuit, plus two
 states saying **where** the steam is:
 
 ```
+q_s = q_d · p / p_nominal                           (fixed turbine valve)
 d/dt[ρ_s V_st + ρ_w V_wt]                          = q_f − q_s
 d/dt[ρ_s h_s V_st + ρ_w h_w V_wt − p V_t + m C t_s] = Q + q_f h_f − q_s h_s
 dm_sr/dt = q_ct + q_flash,r − m_sr/τ_sr        (steam in the risers)
@@ -40,6 +41,13 @@ temperature, leaving the entire water inventory superheated so that it boils:
 `q_flash = −(V ρ_w c_pw · dt_s/dp / h_c)·dp/dt`. For this boiler a 1 bar drop
 flashes about 143 kg of water — 3.1 m³ of steam, roughly 16 cm of level.
 
+**Steam follows pressure.** At a fixed valve the turbine passes steam in
+proportion to drum pressure, Bell and Åström's `q_s = (1.1 u2 − 0.19) P` (1987,
+eq. 14). The hidden valve state `q_d` wanders, and the meter reads `q_s`. So
+pressure regulates itself: a 1 bar offset at fixed firing decays with a 227 s
+time constant, against about 400 s from the report's own `dP/dt` (eq. 3, `u2`
+0.7).
+
 Saturated steam properties are quadratic fits to IAPWS values over 60–110 bar
 (residuals below 0.5 %, asserted in the tests). Fits rather than steam tables
 because the model must stay `jit`/`vmap`-friendly.
@@ -49,9 +57,9 @@ Deliberately **not** modelled:
 | Omitted | Rationale |
 |---|---|
 | Superheater and steam temperature | The drum is the control problem; steam temperature is a separate downstream loop. |
-| Furnace-side combustion dynamics and fuel transport lag | Heat release follows the fuel command directly. A real boiler has a burner lag of seconds and a fuel-mill lag of minutes. |
+| Furnace-side combustion detail | One lag and one rate limit stand for the burners, the furnace gas and the tube walls (see *Actuators*). |
 | Spatial distribution along the risers | One lumped riser; the void fraction is a volume mean. |
-| Feedwater valve and drum-level-gauge dynamics | Both are treated as instantaneous. |
+| Drum-level-gauge dynamics | Treated as instantaneous. |
 | Steam separator detail | Represented only by `f_carry`, the fraction of riser steam passing below the water level. |
 | Drum geometry | Level is linear in volume (`A_d` constant), valid for deviations around normal water level. |
 
@@ -74,9 +82,10 @@ pressure keeps episodes inside the fit range.
 | Mean riser void fraction | 0.3–0.6 | 0.467 | ✅ |
 | Drum volume closure | 40 m³ | **40.00** | ✅ |
 | Metal share of pressure inertia | dominant | **58.5 %** | ✅ |
-| Swell on a load step | 25–100 mm typical | 25 mm (5 %) → 106 mm (21 %) | ✅ |
+| Swell on a valve step | 25–100 mm typical | 21 mm (5 %) → 89 mm (21 %) | ✅ |
 | Shrink on a feedwater step | present, correct sign | −2.4 mm | ⚠️ |
-| Level self-regulates | it must **not** | +9.3 cm per 10 min at 2 % bias | ✅ |
+| Level self-regulates | it must **not** | +8.9 cm per 10 min at 2 % bias | ✅ |
+| Pressure self-regulates at a fixed valve | about 400 s (report, eq. 3) | 227 s | ✅ |
 
 The drum volume closure is the load-bearing check, because nothing in the
 model is fitted to it: the water, bubbles and steam space computed from the
@@ -103,7 +112,7 @@ the circulation loop.
 | `h_feedwater` | 1.037 MJ/kg | – | Feedwater at 240 °C (59 K subcooled) | ✅ |
 | `Q_nominal`, `q_steam_nominal` | 160 MW, 93.35 kg/s | – | `Q = q_s(h_s − h_f)`, self-consistent | ✅ |
 | `level_trip` | ±0.25 | m | Carryover / dryout; real trips are ±150–300 mm | ✅ |
-| `delta_t` | 2.0 | s | ~17 steps to the swell peak | ✅ |
+| `delta_t` | 2.0 | s | ~14 steps to the swell peak, ours as a control interval | ⚠️ |
 
 `f_carry` and `f_cd` are the two genuinely tuned numbers. They were chosen
 together against three targets at once — baseline bubble volume, swell
@@ -126,9 +135,9 @@ high and a low level trip the boiler.
 |---|---|
 | 0 | drum level relative to normal water level (m) |
 | 1 | drum pressure (bar) |
-| 2 | `q_steam`, steam flow to the turbine (kg/s), the disturbance |
-| 3 | fuel, percent of maximum |
-| 4 | feedwater, percent of maximum |
+| 2 | `q_steam`, steam flow to the turbine (kg/s), which follows the valve and drum pressure |
+| 3 | fuel actuator position, percent of maximum |
+| 4 | feedwater actuator position, percent of maximum |
 | 5 | target level, always 0 (m) |
 | 6 | target pressure (bar) |
 
@@ -150,8 +159,8 @@ problem, and nothing else in this suite has that shape.
    the inverse response.
 
 **Observation.** Drum level, drum pressure and steam flow are the three
-measurements of classic three-element control, plus the controller's own
-demands.
+measurements of classic three-element control, plus the positions of the two
+actuators. The turbine valve is hidden.
 
 **Two coupled targets.** Firing and feedwater are not independent: firing
 harder raises pressure, which *compresses* bubbles and lowers the level.
@@ -208,6 +217,15 @@ decades of room, and no seed dominates.
 Spec, a strict xfail in `tests/boiler_drum/test_boiler_drum_expert.py`. Mean
 level error under 25 mm (about an inch) on every held-out seed. Measured
 19 to 34 mm, 6 of 10 seeds above.
+
+**These gains predate the actuator limits,** and PR 9 of the industrial fixes
+retunes them. On the limited plant, held-out seeds 200 to 209, they trip nowhere
+and hold 75 mm and 1.03 bar, at 1624 a step. With no lag or rate limit, steam
+following pressure alone, the same gains hold 25 mm and 0.032 bar at 122 to 404.
+Most of the loss is the fuel rate: 20 s of lag alone holds 0.59 bar at 913 to
+1259. The review's figures, 0.65 bar and a cost of 1342 at 20 s, came from the
+plant before steam followed pressure. Its 0.6 trips per episode at 60 s do not
+carry over: at 60 s this plant does not trip, because pressure regulates itself.
 
 **MPC wins on horizon, not on tuning.** A 30-step horizon covers the ~35 s
 swell peak, so the optimiser sees the level reverse and keeps feeding through
@@ -272,7 +290,7 @@ cylindrical drum. Trips at ±25 cm keep the model inside the linear region.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `boiler_drum` | 400 | 2 | 13 min | 2 in [-1, 1] | 7 | 13 |
+| `boiler_drum` | 400 | 2 | 13 min | 2 in [-1, 1] | 7 | 14 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -317,11 +335,43 @@ false unless `continuing = False`, which ends the episode on that step instead; 
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
 
+## Actuators
+
+Fuel and feedwater reach the plant through the shared actuator stage (`actuate`),
+which is the block diagram of Bell and Åström's Fig. 1: a first-order lag, a rate
+limit, and the range. A reset starts both actuators where the plant is
+(`initial_action`).
+
+| figure | value | status | source |
+| --- | --- | --- | --- |
+| fuel rate | 0.007 of span per s, 143 s full stroke | Read, checked on the page and in the listing | [Bell and Åström 1987](https://lup.lub.lu.se/record/8602296), section 4, and appendix E (`UDH:0.007`) |
+| feedwater rate | 0.05 of span per s, 20 s full stroke | Read, checked the same way | same, section 4 and appendix E (`UDH:0.05`) |
+| feedwater lag | 1 s | Read in the listing | same, appendix E (`tc1:1`), the `Tc` of Fig. 1 |
+| firing lag | 20 s | **Ours, for the owner to accept** | see below |
+| control interval | 2 s | **Ours** | the unit's logs were sampled at 0.1 Hz ([Åström and Bell 2000](http://www.dei.unipd.it/~picci/Files/TEACHING/CONTROLLO_DEI_PROCESSI/DrumBoiler.pdf)), which says nothing of a controller's scan |
+| dead time of the three readings | none | **Ours** | transmitters with no modelled damping |
+
+These are the actuators of the plant this model takes its geometry from, a 160 MW
+oil-fired unit at Öresundsverket. Its fuel span, 0 to 14 kg/s, is about 1.5 times
+its nominal firing, as `Q_max` is here. Its feedwater span is 0 to 140 kg/s against
+200 kg/s here, so the same stroke moves about twice the share of nominal flow.
+
+**The firing lag is not sourced.** The report's model has no heat release lag, and
+`Tc` for fuel is 1 s, the actuator alone. On a plant log sampled every 10 s that
+leaves little room for a long lag on oil. A coal unit has one: General Signal's
+[US 4909037](https://patents.google.com/patent/US4909037) puts a mill at 100 to
+160 s before a change shows at the furnace, as a dead time and a lag. 20 s stands
+for burners, furnace gas and tube walls on oil or gas, well under a mill and well
+over the valve. No figure for it was found; the IEEE working group's papers
+(de Mello 1991) would be the place to look, and they are not open. It is the
+lower of the two lags the industrial review tried.
+
 ## Readings
 
 The observation reports drum level, drum pressure and steam flow through their
 instruments (`docs/proposals/measurement-noise.md`). `fuel_pct` and `feed_pct` are
-the controller's own commands, with no lag, and they stay exact with both targets.
+the actuators' positions, as a plant's drives report them, and they stay exact
+with both targets.
 `sensor_noise_scale = 0` gives the noise-free task.
 
 | reading | sigma | step | instrument | status | source |
