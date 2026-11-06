@@ -20,7 +20,8 @@ SPEC = registry.get("glass_furnace")
     reason="Finding (2026-11-06): planning by rate frees the fuel, 8.84 K down to "
     "0.44 K with no trip, against the 0.25 K bound. The protocol's T_c is 29 steps, "
     "one move per 14.5 min, so the plan cannot answer a 25 min reversal. 0.29 K was "
-    "a planner solving every step. Open for the owner: PR 9 has no rule to change.",
+    "a planner solving every step. A finding on the protocol's move rate: no PR "
+    "removes it, PR 10's review included.",
 )
 def test_the_oracle_holds_the_crown_on_protocol_seed_2():
     """The protocol's construction (``runners.baseline_policy``: the factory

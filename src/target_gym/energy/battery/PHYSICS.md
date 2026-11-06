@@ -227,13 +227,19 @@ which is 5 % inside the trips as the MESA-1 report advises. The integrator stops
 while the guard sheds. Its gains predate the rebuild, and PR 9 writes its protocol
 afresh.
 
-**The oracle is the shared solver (`oracle.py`).** The rerun horizon reaches the
-episode's end, through the pack's thermal time constant, so every solve plans the
-whole window, at one step of 5 s: 2880 solves of up to 2880 stages, about 0.8 s each.
-The peak of a half-cycle is an epigraph, and each turn and closed swing is fixed for
-the solve where a reference following the planned signal makes it, since a turn is a
-jump Newton cannot cross. That rule is ours. A plan that turns only there costs what
-the env charges, to rounding.
+**The oracle is a stand-in, labelled non-compliant for 0.8.0 (owner, 2026-11-07).** It
+reads the true state, commands the signal's next value, and stops following at the
+bound of Xu et al. 2017, Algorithm 1, a depth of 0.64 on these prices, or at the
+charge and voltage limits. On the rainflow plant it wins 9 of the 10 test seeds, not
+every seed, with no trip, -69.47 against the expert's -71.43, and loses seed 9, -143.5
+against -138.7. So it does not meet the oracle rule, and no oracle record check
+applies to it.
+
+`battery_model` in `oracles/battery.py` is the shared solver's plan of the whole window, kept
+for when its capped solves are understood. It won 5 of the 7 seeds finished, at 3 to
+9 h a seed. Seed 0 tripped after a capped solve at a KKT error of 220, and seed 5
+lost, its first cold solve capped at 1.45. Where it converged it matched this
+stand-in or beat it: $9 better on seed 1, to the cent on seeds 3, 4 and 8.
 
 ---
 

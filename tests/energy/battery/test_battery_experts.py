@@ -1,4 +1,4 @@
-"""The battery's oracle, on the shared solver.
+"""The battery's oracle: the signal's next value, inside the cycle-depth bound.
 
 Where the charge window does not bind, its claim is that it leaves only the
 regulation innovation. With the noise switched off it tracks the target to
@@ -6,7 +6,7 @@ float32 rounding, which pins the block it reads (the one the step is scored
 against, ``dispatch_block(t + 1)``). With the noise on, its mean error is the
 closed-form floor ``e_floor``. Levels of 0.1 MW keep the window out of the way.
 
-Its half-cycles, from the env's ``half_cycle``: a half-cycle turns where a
+The solver's model, kept for later (``battery_model``). Its half-cycles, from the env's ``half_cycle``: a half-cycle turns where a
 reference following the planned signal reverses, once it has swung past the
 hysteresis, and the heading after a turn points where the charge then goes. A
 swing closes where the reference runs back past it. A plan that turns only there
@@ -20,8 +20,9 @@ import pytest
 
 from target_gym import registry
 from target_gym.energy.battery.env import N_TURNS
-from target_gym.energy.battery.oracle import half_cycles
+from target_gym.energy.battery.oracle import ScheduleFeedforward
 from target_gym.experts.mpc import plan_params
+from target_gym.oracles.battery import battery_model, half_cycles
 from target_gym.oracles.controller import Oracle, enable_x64, float64
 
 
@@ -43,10 +44,11 @@ def _errors(params, seed):
     return np.array(errors)
 
 
-def test_the_registry_builds_the_shared_oracle():
+def test_the_registry_builds_the_feedforward():
     spec = registry.get("battery")
     oracle = spec.make_mpc(spec.make_env(), spec.make_test_params())
-    assert isinstance(oracle, Oracle)
+    assert isinstance(oracle, ScheduleFeedforward)
+    assert oracle.solver_report() == {}
 
 
 def _reference_signal(mw):
@@ -148,7 +150,7 @@ def test_a_plan_that_turns_where_the_reference_does_costs_what_the_env_charges(
     env = spec.make_env()
     params = spec.make_test_params().replace(max_steps_in_episode=2160)
     plan = plan_params(spec, params)
-    oracle = spec.make_mpc(env, plan)
+    oracle = Oracle(env, plan, "battery", battery_model)
     with enable_x64():
         _, state = env.reset_env(jax.random.PRNGKey(3), plan)
         st = float64(state).replace(
@@ -188,22 +190,13 @@ def _unbound(**fields):
     )
 
 
-@pytest.mark.large
 def test_it_never_trips_where_following_exactly_would():
-    """An hour from 0.10 to 0.15 of charge. On seeds 100, 101 and 103 the first
-    block discharges 0.72, 0.20 and 0.37 MW, which empties the 0.06 to 0.08 of charge
-    left above the floor inside the hour under exact following. The default window
-    is 2880 stages and hours a seed, past the large tier's limit."""
-    params = (
-        registry.get("battery")
-        .make_test_params()
-        .replace(max_steps_in_episode=720, initial_soc_range=(0.10, 0.15))
-    )
+    """The default window, on seeds where the pack runs out under exact following."""
+    params = registry.get("battery").make_test_params()
     for seed in range(100, 104):
         _errors(params, seed)  # asserts no trip
 
 
-@pytest.mark.large
 def test_without_noise_it_tracks_every_step_to_rounding():
     params = _unbound(dispatch_noise_std=0.0)
     # float32 rounding leaves a few W; reading the wrong block misses by the jump
@@ -213,7 +206,6 @@ def test_without_noise_it_tracks_every_step_to_rounding():
         assert _errors(params, seed).max() < tolerance
 
 
-@pytest.mark.large
 def test_with_noise_it_holds_the_closed_form_floor():
     params = _unbound()
     mean_error = np.mean([_errors(params, seed).mean() for seed in range(3)])

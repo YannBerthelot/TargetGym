@@ -930,7 +930,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 2880 steps = 4 h, about three times the 75 min it takes to traverse
         # the usable state-of-charge range at full power.
         tuned_gains_key="battery",
-        oracle_data=_shared_oracle("battery"),
         noise_fields=("dispatch_noise_std",),
         disturbance_fields=("target_power",),
         version=3,
