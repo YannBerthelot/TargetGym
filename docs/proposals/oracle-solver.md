@@ -548,3 +548,46 @@ its bound did not cure it. Failed solves apply the shifted plan (G11), and the
 oracle was recorded as it stands, on the owner's decision of 2026-11-05: it
 averages -406 against -110 for the previous oracle, and beats the expert by at
 least 11 to 1 on every seed. The cure belongs in the env.
+
+## 18. Amendment 5, 2026-11-06: the kiln's step, and two port corrections
+
+**The cure was in the env, as section 17 said.** The kiln's `rk4_1` step is the
+full 30 s, not the `rk4_2` that section 17 and `compute_next_state`'s default
+suggest, so RK4's limit on calcination falls at 1429 K. Just inside the clip one
+step has a gain of 231 and a curvature of 1e7. Its stage rates also overdrew the
+reaction's heat: 150 K for carbonate worth 11 K. Calcination now takes an exact
+step, exponential Euler (Hochbruck and Ostermann 2010, eq. 1.6), and lime stays
+on RK4, stable up to 1898 K (`cement_kiln/PHYSICS.md`). The gain falls to 0.70
+and the curvature to 166, and the planner runs the env's own step with no
+fraction clip. The solver did not change for this. The owner chose the scheme
+on 2026-11-05, over an implicit step, an exact step on lime as well, and 32
+substeps, on accuracy against a fine reference. No setting was picked by score.
+
+| | failed solves | capped | mean iterations | mean return |
+|---|---|---|---|---|
+| Explicit step | 234 of 7000 | 3 | 13 to 30 | -406 |
+| Exact step | 0 of 7000 | 0 | 9.5 to 11.2 | -29 |
+
+Ten test seeds with the draws unchanged. One warm solve, on seed 3, gave way to
+a cold retry (G11). The largest KKT error is 1e-8, the largest replay gap 2e-7,
+and no plan crossed a guard or tripped. The new oracle beats the expert on all
+ten seeds and in all 12 blocks of each, and is ahead of the old one or level
+with it (within 1e-3) in 111 of 120 blocks. In the other 9 the deficit is at
+most 0.21. The horizon, re-measured on the new step, falls from P = 22 to
+P = 20; on seed 0's first four steps either gives the same moves.
+
+Hochbruck and Ostermann (2010), Acta Numerica 19, 209-286,
+doi:10.1017/S0962492910000048: eq. 1.6 read in the open copy at KIT and
+confirmed by a second reader. That the step keeps the ODE's fixed points needs
+no source: put r = v s / lam into eq. 1.6.
+
+**Only a shift that worked is remembered.** Waechter and Biegler's Algorithm IC
+starts each search from the last shift that succeeded. The port stored the
+search's last value even when none had, so a failed search left 1e40, and the
+next 80 iterations took steps of zero while it came down by thirds.
+
+**A NaN does not pass the multipliers' cap.** IPOPT zeroes least-squares
+multipliers past its cap. `max(|lam|) > 1e3` is false for NaN, and a NaN is
+what they come to when an unstable mode no move can reach sits behind K = I,
+which prices it, with every derivative finite. That is the kiln's iteration-0
+failure in section 17. The test is written so that NaN fails it.

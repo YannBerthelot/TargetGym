@@ -554,6 +554,11 @@ all. Without it the replay gap was 7e-5, cold solves failed at their first
 iteration, and the first 11 steps of a seed applied held moves. With it the
 replay matches to rounding and solves converge in 10 to 30 iterations.
 
+Closed on 2026-11-06 (oracle-solver.md, Amendment 5): the env now steps
+calcination exactly, which removes that gain, so the fraction clip is a dropped
+guard (T4) again, as section 5.4 first had it. This paragraph records why it
+was kept in between.
+
 **The battery's fade.** Section 5.4 puts a slack on abs(current). One hinge per
 sign of the current is simpler and exact while the calendar rate stays under
 c_hold, which makes both hinges' sum max(calendar + cycling |I| - c_hold, 0).

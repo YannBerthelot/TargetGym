@@ -385,10 +385,58 @@ def _upwind(x, inlet):
     return jnp.concatenate([jnp.array([inlet]), x[:-1]]) - x
 
 
-def compute_velocity(position, action, raw_meal, params: CementKilnParams):
+def solid_flow(rpm, raw_meal, params: CementKilnParams):
+    """The holdup of a zone (kg) and the rate the solid crosses it (1/s)."""
+    feed = kiln_feed_rate(raw_meal, params)
+    m_zone = feed * residence_time(rpm, params) / params.n_zones
+    return m_zone, feed / jnp.maximum(m_zone, 1e-3)
+
+
+def calcination_step(alpha, T_solid, rpm, raw_meal, h, params: CementKilnParams):
+    """Calcination and its advection over ``h``, temperatures held.
+
+    Returns ``alpha`` at the end and the mean calcination rate of each zone
+    (1/s), which is what the step's reaction heat has to come from. The rate
+    constant at the burning zone is 40 times what an explicit step of 30 s can
+    follow, so the residual r = 1 - alpha takes the exponential Euler step
+    (Hochbruck and Ostermann 2010, eq. 1.6), exact for a decay with a constant
+    inflow s, at lam = k + v and phi = (1 - exp(-lam h)) / (lam h):
+
+        r_end = exp(-lam h) r + h phi v s
+        r_mean = phi r + (1 - phi) v s / lam
+
+    Each zone's inflow is the mean of the one before it, marched down the kiln
+    from the raw inlet as ``gas_sweep`` marches up it, so what a zone passes on
+    over the step is what the next receives. Every weight is positive and they
+    sum to at most 1, so a fraction stays a fraction at any ``h`` with no clip,
+    and the ODE's steady states are the step's.
+    """
+    p = params
+    v = solid_flow(rpm, raw_meal, p)[1]
+    T = jnp.clip(T_solid, 300.0, 2400.0)
+    k = p.A_calcination * jnp.exp(-p.E_calcination / (R_GAS * T))
+    lam = k + v
+    phi = -jnp.expm1(-lam * h) / (lam * h)
+
+    def march(inflow, zone):
+        r, k_i, lam_i, phi_i = zone
+        mean = phi_i * r + (1.0 - phi_i) * v * inflow / lam_i
+        return mean, (jnp.exp(-lam_i * h) * r + h * phi_i * v * inflow, k_i * mean)
+
+    _, (residual, rate) = jax.lax.scan(
+        march, jnp.ones_like(T[0]), (1.0 - alpha, k, lam, phi)
+    )
+    return 1.0 - residual, rate
+
+
+def compute_velocity(
+    position, action, raw_meal, params: CementKilnParams, calcination=None
+):
     """Time derivatives of the stacked ``[T_solid, T_wall, alpha, lime]``.
 
-    ``action`` is ``(fuel [kg/s], rpm)``.
+    ``action`` is ``(fuel [kg/s], rpm)``. ``calcination`` is the rate of each
+    zone (1/s) when a step has already worked it out; by default it is the
+    ODE's own, k (1 - alpha).
     """
     n = params.n_zones
     T_solid = position[0:n]
@@ -403,10 +451,7 @@ def compute_velocity(position, action, raw_meal, params: CementKilnParams):
     A_shell = jnp.pi * p.diameter * dz
     C_wall = A_shell * p.refractory_thickness * p.rho_refractory * p.cp_refractory
 
-    feed = kiln_feed_rate(raw_meal, p)
-    tau = residence_time(rpm, p)
-    m_zone = feed * tau / p.n_zones
-    v_adv = feed / jnp.maximum(m_zone, 1e-3)
+    m_zone, v_adv = solid_flow(rpm, raw_meal, p)
 
     T_solid = jnp.clip(T_solid, 300.0, 2400.0)
     T_wall = jnp.clip(T_wall, 300.0, 2400.0)
@@ -416,7 +461,7 @@ def compute_velocity(position, action, raw_meal, params: CementKilnParams):
     # -- reactions ------------------------------------------------------------
     k_calc = p.A_calcination * jnp.exp(-p.E_calcination / (R_GAS * T_solid))
     k_sint = p.A_clinker * jnp.exp(-p.E_clinker / (R_GAS * T_solid))
-    d_alpha = k_calc * (1.0 - alpha)
+    d_alpha = k_calc * (1.0 - alpha) if calcination is None else calcination
     d_lime = -k_sint * lime
 
     caco3_left = (1.0 - p.calcination_upstream) * p.caco3_fraction
@@ -432,6 +477,38 @@ def compute_velocity(position, action, raw_meal, params: CementKilnParams):
     dlime = d_lime + v_adv * _upwind(lime, 1.0)
 
     return jnp.concatenate([dT_solid, dT_wall, dalpha, dlime]), None
+
+
+def advance(position, action, raw_meal, params: CementKilnParams, method: str):
+    """One env step of ``[T_solid, T_wall, alpha, lime]`` under ``action``.
+
+    ``calcination_step`` takes alpha over each substep ``h``, and ``method``'s
+    integrator takes the other states with the mean rate that step found, held.
+    Handing RK4 the instantaneous rate instead overdraws the heat: past k h of
+    about 2 its stages charge a zone for far more carbonate than it holds. Lime
+    stays with RK4: it is stable up to 1898 K at 30 s, above the operating
+    range, and RK4 is what keeps the tracked output accurate.
+    """
+    order, substeps = method.split("_")
+    n, h = params.n_zones, params.delta_t / int(substeps)
+    for _ in range(int(substeps)):
+        alpha, rate = calcination_step(
+            position[2 * n : 3 * n], position[:n], action[1], raw_meal, h, params
+        )
+        position = integrate_dynamics(
+            positions=position,
+            delta_t=h,
+            method=f"{order}_1",
+            compute_velocity=partial(
+                compute_velocity,
+                action=action,
+                raw_meal=raw_meal,
+                params=params,
+                calcination=rate,
+            ),
+        )[0]
+        position = position.at[2 * n : 3 * n].set(alpha)
+    return position
 
 
 def compute_next_state(
@@ -463,16 +540,8 @@ def compute_next_state(
     )
     raw_meal = jnp.clip(raw_meal, 0.5 * p.raw_meal_nominal, 1.5 * p.raw_meal_nominal)
 
-    _compute_velocity = partial(
-        compute_velocity, action=(fuel, rpm), raw_meal=raw_meal, params=p
-    )
     packed = jnp.concatenate([state.T_solid, state.T_wall, state.alpha, state.lime])
-    new_packed, _ = integrate_dynamics(
-        positions=packed,
-        delta_t=p.delta_t,
-        compute_velocity=_compute_velocity,
-        method=integration_method,
-    )
+    new_packed = advance(packed, (fuel, rpm), raw_meal, p, integration_method)
     n = p.n_zones
     T_solid = jnp.clip(new_packed[0:n], 300.0, 2400.0)
     T_wall = jnp.clip(new_packed[n : 2 * n], 300.0, 2400.0)
@@ -650,12 +719,15 @@ def steady_profile(params: CementKilnParams, fuel=None, rpm=None, n_iter=4000, d
     )
 
     def body(_, y):
-        d, _ = compute_velocity(y, (fuel, rpm), p.raw_meal_nominal, p)
+        meal = p.raw_meal_nominal
+        alpha, rate = calcination_step(y[2 * n : 3 * n], y[:n], rpm, meal, dt, p)
+        d, _ = compute_velocity(y, (fuel, rpm), meal, p, calcination=rate)
         y = y + dt * d
         return jnp.concatenate(
             [
                 jnp.clip(y[0 : 2 * n], 300.0, 2400.0),
-                jnp.clip(y[2 * n :], 0.0, 1.0),
+                alpha,
+                jnp.clip(y[3 * n :], 0.0, 1.0),
             ]
         )
 
