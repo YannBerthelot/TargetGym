@@ -56,11 +56,14 @@ class TaskModel(NamedTuple):
     sites') and ``end`` (the steps the plan covers). ``move_rows(x, u,
     steps)``: rows >= 0 bounding each move from its stage's state over a
     hold of ``steps`` task steps (T1r, ``StageModel``), and
-    ``move_scale(steps)`` each move's reach over that hold. A reward not in
-    floors gives ``tie_budget``, ``TIE_BUDGET`` in its units. A plant with a
-    spare move (G12) gives ``rest(x)``, the state's distance from its resting
-    target, 1 at the edge of its limit: its square costs the plan the budget
-    over an episode spent there, and K8's replay never sees it."""
+    ``move_scale(steps)`` each move's reach over that hold, its range if not
+    given. A reward not in floors gives ``tie_budget``, ``TIE_BUDGET`` in its
+    units. A plant with a spare move (G12) gives ``rest(x)``, the state's
+    distance from its resting target, 1 at the edge of its limit: its square
+    costs the plan the budget over an episode spent there, and K8's replay
+    never sees it. ``action(state, u)`` is what the env is sent, each task step,
+    for a move that is not a raw command, such as a rate (``oracles.rates``):
+    the raw move itself if not given, and K8's replay sends the same."""
 
     nx: int
     nu: int
@@ -76,6 +79,7 @@ class TaskModel(NamedTuple):
     move_scale: Callable | None = None
     tie_budget: float = TIE_BUDGET
     rest: Callable | None = None
+    action: Callable | None = None
 
 
 def float64(tree):
@@ -141,7 +145,7 @@ class Oracle:
             # K11: each limit backed off by the planner's error on it (none
             # recorded where nothing is smoothed: the model is exact there).
             back = smoothing.get("limit_backoffs") or [0.0] * len(model.limits)
-            rows, rest = model.move_rows, model.rest
+            rows, rest, scale = model.move_rows, model.rest, model.move_scale
             resting = model.tie_budget / float(params.max_steps_in_episode)
 
             def planned(d, x, u, t):
@@ -155,7 +159,7 @@ class Oracle:
                     q._replace(backoff=float(b)) for q, b in zip(model.limits, back)
                 ),
                 move_rows=None if rows is None else lambda x, u: rows(x, u, self.tc),
-                move_scale=None if rows is None else model.move_scale(self.tc),
+                move_scale=None if scale is None else scale(self.tc),
                 tie=model.tie_budget / (model.nu * self.n_ep),
             )  # fmt: skip
             self.shooting = Shooting(stage, self.P, model.nx)
@@ -188,7 +192,11 @@ class Oracle:
             self._solve(state, t, cold)
         self._last = (t, clock)
         u = np.clip(np.asarray(self._move, float), -1.0, 1.0)
-        return float(u[0]) if self.model.nu == 1 else u
+        if self.model.action is not None:
+            with enable_x64():
+                u = self.model.action(float64(state), jnp.asarray(u))
+            u = np.clip(np.asarray(u, float), -1.0, 1.0)
+        return float(u[0]) if u.size == 1 else u
 
     def _solve(self, state, t: int, cold: bool):
         k = min(t // self.tc, self.n_ep - 1)
@@ -255,7 +263,8 @@ class Oracle:
         key = jax.random.PRNGKey(0)  # the noise is zeroed; only a trip draws
 
         def replayed(s, t):
-            _, s1, r, _, info = self.env.step_env(key, s, us[t], self.params)
+            sent = us[t] if m.action is None else m.action(s, us[t])
+            _, s1, r, _, info = self.env.step_env(key, s, sent, self.params)
             s1 = jax.tree_util.tree_map(lambda a, b: a.astype(b.dtype), s1, s)
             return s1, (r, jnp.asarray(m.tracked(s1)), info["tripped"])
 

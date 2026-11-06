@@ -134,6 +134,34 @@ def test_a_limit_priced_above_any_gain_holds_on_every_visited_state():
     np.testing.assert_allclose(float(plan.cost), 5.0, atol=1e-6)
 
 
+def _ramp(data, x, u, t):
+    """A position moving 0.1 u a step, charged for its distance from 1.5."""
+    x1 = x + 0.1 * u
+    return x1, jnp.sum((x1 - 1.5) ** 2), jnp.zeros(0)
+
+
+@pytest.mark.medium
+def test_a_moves_rows_do_not_bind_past_the_plan():
+    """x_{t+1} = x_t + 0.1 u from 0.6, |u| <= 1, x + 0.1 u <= 1 from each stage.
+    The cost falls with x up to 1.5, past the row, so by hand four stages at u = 1
+    reach 1.0 with the row active on the last: every planned move is 1. The stage
+    past the plan starts at 1.0, where the same row would ask for u <= 0, and its
+    move is held to the last planned one: a row left on it would drag that move
+    off 1, for a stage nothing is costed on."""
+    model = StageModel(
+        step=_ramp, block=1, lo=(-1.0,), hi=(1.0,),
+        move_rows=lambda x, u: 1.0 - x - 0.1 * u,
+    )  # fmt: skip
+    with enable_x64():
+        planner = Shooting(model, n_stages=4, nx=1)
+        plan = planner.solve(None, jnp.full(1, 0.6), jnp.zeros(1))
+        moves = np.asarray(planner.moves(plan))[:, 0]
+    assert not bool(plan.certificate.failed)
+    # Rows 1e-8 relaxed, and a barrier at a scaled error of 1e-8: 1e-5 is far
+    # over both and far under the 0.5 the row dragged the move by, unmasked.
+    np.testing.assert_allclose(moves, [1.0, 1.0, 1.0, 1.0], atol=1e-5)
+
+
 def _pendulum(v):
     """Five Euler steps of a forced pendulum from (v0, v1) under v2 held,
     and the steps' cost: smooth, through a scan as the integrators are."""

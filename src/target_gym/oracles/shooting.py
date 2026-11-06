@@ -95,7 +95,7 @@ class StageModel(NamedTuple):
     (T1: the model never clips it). ``move_rows(x, u)``, rows >= 0 affine in
     a stage's start x and its move u, bound each move from its state: an
     actuator's reach over the hold (T1r), stage 0's from the measured state;
-    ``move_scale`` is then each move's typical size, its reach, for the
+    ``move_scale`` is each move's typical size, its reach, for the
     variable scaling (default: its range). ``tie`` prices each planned move's
     squared change from the one before, in that scale, u_hold before the
     first: input move suppression at a size that only picks one plan among
@@ -247,13 +247,19 @@ class Shooting:
         Y = xa[self.nx :].reshape(b, self.ny)
         return Y[:, :nh], Y[:, nh:], e[: b * nh].reshape(b, nh), e[b * nh :]
 
-    def _rows(self, xa, u, e, a):
+    def _rows(self, xa, u, e, a, planned=1.0):
         """A stage's rows, each >= 0 and affine in (x_k, u_k, e_k); ``a`` is
-        0 on stage 0, whose rows then only bound its slacks."""
+        0 on stage 0, whose rows then only bound its slacks, and ``planned``
+        0 past the plan, whose held move no move row may bind: it would drag
+        the last planned move with it."""
         R, Q, t, el = self._split(xa, e)
         lo, hi = (np.flatnonzero(np.isfinite(v)) for v in (self.lim_lo, self.lim_hi))
         moves = self.model.move_rows
-        reach = [] if moves is None else [jnp.atleast_1d(moves(xa[: self.nx], u))]
+        reach = (
+            []
+            if moves is None
+            else [planned * jnp.atleast_1d(moves(xa[: self.nx], u)) + 1.0 - planned]
+        )
         return jnp.concatenate(reach + [
             u - jnp.asarray(self.model.lo), jnp.asarray(self.model.hi) - u,
             (t - a * (R - self.htol)).ravel(), t[:, self.floored].ravel(),
@@ -389,7 +395,7 @@ class Shooting:
         Rs, Dl = D[: N * nxa], jnp.concatenate([D, jnp.ones(1)])[loc]  # (N, nloc)
         Rk = Rs.reshape(N, nxa)
         zeros = [jnp.zeros((N, nxa)), jnp.zeros((N, nu)), jnp.zeros((N, ne))]
-        Gk = jax.vmap(jax.jacfwd(self._rows, argnums=(0, 1, 2)))(*zeros, act)
+        Gk = jax.vmap(jax.jacfwd(self._rows, argnums=(0, 1, 2)))(*zeros, act, wk)
         Gk = jnp.concatenate(Gk, axis=-1)  # (N, rows, nloc)
         Gh = Gk * Dl[:, None, :]
         big = jnp.max(jnp.abs(Gh), axis=-1)
@@ -403,7 +409,7 @@ class Shooting:
         starts = zeros[0].at[0].set(x0a)
         rs, g0k = (
             rs.ravel(),
-            (jax.vmap(self._rows)(starts, *zeros[1:], act) * rs).ravel(),
+            (jax.vmap(self._rows)(starts, *zeros[1:], act, wk) * rs).ravel(),
         )
         g0 = g0k + BOUND_RELAX * jnp.maximum(1.0, jnp.abs(g0k))
 

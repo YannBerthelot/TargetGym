@@ -563,3 +563,32 @@ That is a dropped guard (T4), and it is checked on every plan.
 takes the ladder's first rung, 28 K. K3's shift already keeps it conservative,
 by at most 28 ln 16 = 78 K against a burning zone 134 K above the limit, so it
 takes no K11 gap.
+
+## Amendment 3, 2026-11-06: planning by rate
+
+Written with PR 9 for the owner's review.
+
+The plant PRs put rate limits in `base.actuate`, between the action and the plant.
+Its clip has no slope past the limit, so a plan on commands stops seeing the
+actuator there: on `glass_furnace` the fuel stuck, 8.84 K off the crown (#158).
+
+**T1rr, a rate as the move.** On an actuator behind `actuate`, a plan's move is its
+rate, v in [-1, 1] of the limit, held over the T_c. Its position is a state of the
+plan, moved by exactly v of the limit each step, and each step the env is sent the
+command that does that, position plus v times the travel over the share of the gap
+the lag closes. Rows keep every command of the ramp in the action box (T1), which
+are affine in the stage's position and its move, as T1r's are. K8's replay sends the
+same commands. `oracles.rates` holds it, `TaskModel.action` applies it.
+
+No clip binds on these commands, so no corner is left for T5, and a site less is
+measured. A hold of one step loses nothing: every path `actuate` allows is such a
+plan, whatever the command (derived, and tested). Over a longer hold a plan reaches
+the same positions at each T_c, but by a ramp, where a held command would arrive and
+wait. T1r stays for a rate limit inside the plant's right-hand side, where no command
+gives a constant rate: the wind's pitch and torque, the compressor's drive and valve.
+This is ours: a rate is a move a velocity-form controller sends, and the sources read
+for T1r bound increments, not a held rate.
+
+A move's rows no longer bind past the plan. Its held move there is pinned to the last
+planned one, so a row left on it dragged that move off its bound, for a stage nothing
+is costed on: from 1 to 0.5 on a hand-derived ramp (`tests/oracles/test_shooting.py`).
