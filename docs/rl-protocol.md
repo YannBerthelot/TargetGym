@@ -97,11 +97,11 @@ working policy near 1.
 the ceiling. 0 means the expert already tracks within the resolution, and the
 task has nothing left to score.
 
-The hold starts after a settle fixed per plant, so every controller is scored
-over the same window. Beside the score, `consumption_ratio` compares the fuel,
-energy or wear, which no resolution bounds. Where the reward clips consumption at
-`c_hold`, it reads the quantity itself, so a saving shows. `s_max` is the most of
-the score the task's best known hold allows.
+The hold starts after a settle fixed per plant and, where a controller previews
+the schedule, stops a fixed lead before each move, so every controller is scored
+over the same steps. Beside the score, `consumption_ratio` compares the fuel,
+energy or wear, which no resolution bounds. `s_max` is the most of the score the
+task's best known hold allows.
 
 **What a win costs, and whether it matters:** three more numbers come for both
 sides, none of them part of the verdict.
@@ -444,6 +444,12 @@ they are what a learned policy is compared against.
 No random-policy floor is recorded: on a setpoint task it is a number everyone
 can predict. The conformance suite already asserts that every PID beats the
 best constant action.
+
+Null policies are the row below those: what does no real control, such as a
+constant action or a static table of the target. If one passes for the expert, the
+task has no control problem to learn. `target_gym.null_policies.null_policies(name)`
+returns them as policies for `benchmark.run_policy`, and each task's results on the
+held-out seeds are in `records.load("credibility")`.
 
 ## 12. How to read the result
 
