@@ -163,8 +163,10 @@ moving a recorded one.
 - **Settle counts that see ramps.** `FIXED_SETTLE["reactor"]` is 1, but a ramp is one
   move lasting 20 steps, so it needs at least 20. `wind_turbine`'s is 0, from when its
   target never moved; the expert settles in about 36 steps and the oracle in about 48.
-- **Ceilings from the rebuilt prices.** `ceiling("reactor")` must equal the 0.05 K
-  floor, and returns 0.0032 today. `wind_turbine`'s floor note says 1 kW where the
+- **Ceilings from the rebuilt prices.** `ceiling("reactor")` must be per control step,
+  $0.0958 at the 0.05 K floor, and returns 0.0032 today. `tests/test_scoring.py` reads
+  one sub-step, which is what hid this: it must read the step, and lose its strict
+  xfail. `wind_turbine`'s floor note says 1 kW where the
   branch's resolution is 1.7 kW, which moves its ceiling from 6.94e-6 to 1.18e-5.
 
 ## Shared plant stages (PR 3)
