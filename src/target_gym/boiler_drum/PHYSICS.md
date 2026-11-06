@@ -227,6 +227,12 @@ Most of the loss is the fuel rate: 20 s of lag alone holds 0.59 bar at 913 to
 plant before steam followed pressure. Its 0.6 trips per episode at 60 s do not
 carry over: at 60 s this plant does not trip, because pressure regulates itself.
 
+**The MPC figures below predate the actuator limits.** On the limited plant the
+oracle trips about once an episode and loses to the stored gains, on seeds 0 and
+1: a planner gets no gradient from `actuate` at `command == held` or past the rate
+limit. With the first patched it stops tripping, at 2766 and 3220 a step against
+the expert's 1479 and 1533. It has yet to plan by rate. PR 9 rebuilds it.
+
 **MPC wins on horizon, not on tuning.** A 30-step horizon covers the ~35 s
 swell peak, so the optimiser sees the level reverse and keeps feeding through
 a swell. It buys a 10× reduction in level error for a small pressure trade.

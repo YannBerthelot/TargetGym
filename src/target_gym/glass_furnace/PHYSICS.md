@@ -301,6 +301,11 @@ gains score the same (88.8 to 96.9 %, peaks 4.4 to 7.1 K): the misses are
 the firing interruptions at each reversal, which a PI on the crown meets only
 after the fact.
 
+**The figures below predate the fuel slew.** On the limited plant this oracle
+stalls at 8.84 K on seed 2 (strict xfail, PR 9): a planner gets no gradient from
+`actuate` at `command == held` or past the rate limit. With that patched and the
+plan made by rate, through `action_map`, it holds 0.29 K.
+
 **The MPC.** Since November 2026 the oracle is `NewtonMPC` (iterative LQR)
 on the plant itself: the environment's own `step_env` with the full state,
 all four checker nodes per chamber, the fuel pipeline and the reversal cycle,
