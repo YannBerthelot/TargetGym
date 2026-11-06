@@ -243,7 +243,7 @@ at the end, with their sources.
 | `valve_close_rate` | 0.1 | per s | TUNED | full close in 10 s, the slowest closing Mirsky et al. p.23 allow (no more than 8 to 10 s under positioner control); Wilson and Sheldon Table 1 ask for 3 s, where the shipped pair trips 341 times over 256 episodes and the pair at `DEFAULT_GAINS` does not trip (measured, `--sensitivity`, section 6); the shipped gains were tuned and validated at 10 s | ⚠️ |
 | `p_ref_range` | (20, 28) | kPa | TUNED | the hardness depends on the moving setpoint (section 6) | ⚠️ |
 | `setpoint_block_steps` | 300 (30 s) | steps | ours | four blocks per episode | ✅ |
-| `setpoint_ramp_s` | 10.0 | s | ours | linear ramp at the start of blocks 2 to 4: twice the 4.9 s the drive needs for a full 20 to 28 kPa move on the control line (section 4), and under half a block so that the scorer still reads each move | ⚠️ |
+| `setpoint_ramp_s` | 10.0 | s | ours | linear ramp at the start of every block, from the reset's own pressure in the first: twice the 4.9 s the drive needs for a full 20 to 28 kPa move on the control line (section 4), and under half a block so that the scorer still reads each move | ⚠️ |
 | `surge_offset_max` | 0.05 | fraction of flow | ours | the episode's line sits uniformly 0 to 5 % right of the map's. Half the conventional 10 % margin (Mirsky et al. pp.11, 13). Mirsky et al. p.11 list the line's uncertainty among what the margin pays for, and give no figure, so this is ours for the owner to accept | ⚠️ |
 | `demand_range` | (0.35, 0.95) | opening | ours | six levels per episode | ⚠️ |
 | `demand_block_steps` | 200 (20 s) | steps | ours | | ✅ |
@@ -330,14 +330,23 @@ drawable first opening; a drop to the clip floor 0.2 straight after that
 reset reaches 0.568 (derived, `--section reach`).
 
 **Schedules.** Four header-pressure levels, iid uniform in 20 to 28 kPa, held
-30 s each, with a 10 s linear ramp into blocks 2 to 4; six demand levels, iid
+30 s each, with a 10 s linear ramp into each; six demand levels, iid
 uniform in 0.35 to 0.95, 20 s each, with a 5 s linear ramp into blocks 2 to 6.
 A step cost the pair 94.6 to 99.6 % of its tracking cost in the 10 s after it
 (mean 98.3 %, seeds 200 to 209, past the burn-in, measured), because a move the drive
 cannot follow is paid by everyone and the ranking read the slew. On the same
 schedules ramps take the pair's tracking cost past the burn-in from 5.8e5 to 2.6e4,
 and leave its hold where it was, 22.6 and 22.1 per step (seeds 100 to 109, measured).
-The setpoint moves because the hardness depends on it. With the setpoint held at 24 kPa the chaser at bias
+The verdict reads the whole episode, so the opening move ramps too. The setpoint moves
+because the hardness depends on it.
+
+**The opening is now the pair's own.** A ramp from the reset's pressure asks nothing
+of the drive that it cannot do, and the pair's whole-episode tracking cost still falls
+mostly in the first 5 s: 5.1e5 of 5.3e5 on seed 200 (measured). The reset's margin is
+0.32 to 0.40 against the 15 % control line, so the anti-surge PI shuts the valve at
+its closing rate while the drive is still slowing, and the header rises 3 to 5 kPa
+over a target moving by under 2 kPa. That is coordination between the two loops, not
+slew, so it stays in the score. PR 9 sees it when it retunes the pair. With the setpoint held at 24 kPa the chaser at bias
 0.3 trips in none of 256 episodes, against 11.3 % with the steps, and G10
 costs 1.76e5 per episode against 5.45e5 (measured, `--sensitivity`,
 section 6). The live setpoint and demand are functions of `block_clock`,
@@ -346,10 +355,11 @@ which `reset_env` sets to 0.
 **Reset.** Equilibrium at 100 % speed and recycle 0.35 for the first
 opening, drifted by an initial deviation drawn from its stationary law and
 clipped at 3 sd. Every such equilibrium is right of the line (Phi 0.530 to
-0.728, `test_reset_is_surge_safe_and_converged`). The reset is off target.
-Its pressure spans 18.06 to 32.14 kPa against setpoints of 20 to 28 kPa
-(derived, `--section steady`), so every episode opens with an approach,
-which the hold measurement's burn-in excludes. Over 256 resets the first step
+0.728, `test_reset_is_surge_safe_and_converged`). The reset is off the first
+level. Its pressure spans 18.06 to 32.14 kPa against setpoints of 20 to 28 kPa
+(derived, `--section steady`), so the target opens on that pressure and ramps onto
+level 0 in 10 s, an approach the hold measurement's burn-in excludes
+(`test_the_first_move_ramps_from_the_resets_own_pressure`). Over 256 resets the first step
 never trips, under zero action or full travel low (smallest phi_min 0.584,
 measured, `--section reach`).
 
@@ -933,7 +943,7 @@ controller knows which way the error runs.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 7 | 22 |
+| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 7 | 23 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

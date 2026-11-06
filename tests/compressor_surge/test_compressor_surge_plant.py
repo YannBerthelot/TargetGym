@@ -48,6 +48,20 @@ def test_a_setpoint_ramps_linearly_between_its_levels(clock, kpa):
     assert float(live_target(s, P)) / 1e3 == pytest.approx(kpa, abs=1e-3)
 
 
+@pytest.mark.parametrize("seed", range(3))
+def test_the_first_move_ramps_from_the_resets_own_pressure(seed):
+    """The reset spans 18 to 32 kPa against levels of 20 to 28, so a target that
+    opened on level 0 made every episode start with a step. Halfway through the
+    10 s ramp it is halfway between them."""
+    s = _reset(seed)
+    level, dp = float(s.setpoint_levels[0]), float(s.dp)
+    assert float(live_target(s, P)) == pytest.approx(dp, rel=1e-5)
+    s50 = s.replace(block_clock=50)
+    assert float(live_target(s50, P)) == pytest.approx((level + dp) / 2, rel=1e-5)
+    s100 = s.replace(block_clock=100)
+    assert float(live_target(s100, P)) == pytest.approx(level, rel=1e-5)
+
+
 def test_the_largest_ramp_is_inside_what_the_drive_can_follow():
     """Speed at the control line for 20 and 28 kPa, a third of it recycled."""
     speed = [settled_point(p, 0.35, DEFAULT_GAINS, P)[2] for p in (20e3, 28e3)]
@@ -57,7 +71,8 @@ def test_the_largest_ramp_is_inside_what_the_drive_can_follow():
 @pytest.mark.large
 def test_ramps_take_the_cost_out_of_the_setpoint_moves():
     """97-99 % of the expert's cost fell in the 10 s after a step (review), so
-    the ranking read the slew. The same schedules ramped cost under a tenth."""
+    the ranking read the slew. Past the opening, the same schedules ramped cost
+    under a tenth."""
     cost = [
         sum(
             E.run_episode(SPEC, q, baseline_policy(SPEC, "pid", q), seed=s)
@@ -109,10 +124,11 @@ def test_the_applied_action_is_where_the_actuators_went():
     )
 
 
-def test_the_oracles_model_reads_the_ramp_the_line_and_the_travel():
+@pytest.mark.parametrize("clock", [50, 350])  # the opening ramp and a later one
+def test_the_oracles_model_reads_the_ramp_the_line_and_the_travel(clock):
     """Mid-ramp at the widest line, one exact model step from the reset is the
     env's: the same target, the same wear and the same distance to the trip."""
-    s = _reset().replace(block_clock=350, surge_offset=0.05)
+    s = _reset().replace(block_clock=clock, surge_offset=0.05)
     u, m = jnp.asarray(_raw(1.0, 0.8)), compressor_model(ENV, P)
     d = {"task": m.data(s), "widths": (0.0, 0.0)}
     _, cost, y, _, _ = m.step(d, m.state_x(s), u, 0)

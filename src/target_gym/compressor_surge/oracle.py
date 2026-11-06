@@ -78,7 +78,7 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
     ``u``: ``(x_next, phi_min, the substep Phis, the rate limits' arguments)``.
     ``widths`` are the drive's and the valve's (0.0 is the exact clip), and
     ``deltas[i, j]`` is added to site i's output at substep j (K5's probe)."""
-    _, demand, clock, drift, _ = task
+    _, demand, clock, drift, *_ = task
     n = _substeps(env.integration_method)
     h, rho = p.delta_t / n, suction_density(p)
     N_cmd, x_cmd = commands(p, u)
@@ -117,8 +117,8 @@ def compressor_model(env, p) -> TaskModel:
     def step(d, x, u, t):
         w = d["widths"]  # in name order: drive_rate, valve_rate
         x1, phi_min, phis, _ = compressor_step(env, p, x, u, t, d["task"], (w[0], w[1]))
-        setpoints, _, clock, _, offset = d["task"]
-        target = scheduled_setpoint(setpoints, (clock + t + 1) * p.delta_t, p)
+        setpoints, _, clock, _, offset, lead = d["task"]
+        target = scheduled_setpoint(setpoints, lead, (clock + t + 1) * p.delta_t, p)
         dp = x1[1]
         cost = ((target - dp) / KPA / p.e_floor) ** 2
         power = recycle_flow(dp, x1[4], p) * dp / suction_density(p)
@@ -134,7 +134,7 @@ def compressor_model(env, p) -> TaskModel:
         state_x=lambda s: jnp.stack([s.m_c, s.dp, s.N, s.N_ramp, s.x]),
         data=lambda s: (
             s.setpoint_levels, s.demand_levels, s.block_clock, s.demand_dev,
-            s.surge_offset,
+            s.surge_offset, s.setpoint_lead,
         ),
         hold=lambda s: jnp.stack([raw_of(s.N_ramp, p.N_min, p.N_max), raw_of(s.x, 0.0, 1.0)]),
         tracked=lambda s: (s.dp / KPA)[None],

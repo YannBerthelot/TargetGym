@@ -418,7 +418,7 @@ def _rollout_next(params, state, action, key, n):
 
 def test_schedule_draw(env, params):
     """Over 256 seeds every level lies in its range. The live setpoint moves
-    only in the 10 s ramps from 30, 60 and 90 s. The scheduled demand is level 0
+    only in the 10 s ramps from 0, 30, 60 and 90 s. The scheduled demand is level 0
     until 20 s and
     then moves only during the 5 s ramps that start at 20, 40, 60, 80 and
     100 s, linearly, reaching each block's level at the ramp's end."""
@@ -440,7 +440,7 @@ def test_schedule_draw(env, params):
     changes = (
         np.flatnonzero(np.any(np.diff(np.asarray(targets), axis=1) != 0, axis=0)) + 1
     )
-    assert list(changes) == [c + k for c in (300, 600, 900) for k in range(1, 101)]
+    assert list(changes) == [c + k for c in (0, 300, 600, 900) for k in range(1, 101)]
 
     tau = np.linspace(0.0, 125.0, 12501)  # 10 ms grid
     d = np.asarray(

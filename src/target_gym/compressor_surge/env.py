@@ -117,7 +117,7 @@ class CompressorSurgeParams(EnvParams):
     #: the moving setpoint (PHYSICS.md sensitivity table).
     p_ref_range: Tuple[float, float] = (20.0e3, 28.0e3)  # Pa
     setpoint_block_steps: int = 300  # 30 s
-    #: Linear ramp at the start of blocks 2 to 4 (ours): twice what the drive
+    #: Linear ramp at the start of every block (ours): twice what the drive
     #: needs for the largest move. Under half a block, so that the scorer still
     #: reads each move (``benchmark.target_changes``).
     setpoint_ramp_s: float = 10.0  # s
@@ -273,6 +273,9 @@ class CompressorSurgeState(EnvState):
     surge_offset: float = 0.0
     #: How far the valve moved over the last step: the wear the reward reads.
     valve_travel: float = 0.0
+    #: The reset's own pressure above level 0 (Pa), so that the first move ramps
+    #: like the others. 0 on a state built at its target.
+    setpoint_lead: float = 0.0
 
     actuator_held: jax.Array = actuator_field(2)
 
@@ -399,17 +402,22 @@ def ramped_levels(levels, tau, block_s, ramp_s, xp=jnp):
     return out
 
 
-def scheduled_setpoint(levels, tau, params: CompressorSurgeParams, xp=jnp):
-    """The header-pressure target (Pa) at ``tau`` seconds from the start."""
+def scheduled_setpoint(levels, lead, tau, params: CompressorSurgeParams, xp=jnp):
+    """The header-pressure target (Pa) at ``tau`` seconds from the start: the
+    blocks, opening ``lead`` above level 0 and ramping onto it."""
     block_s = params.setpoint_block_steps * params.delta_t
-    return ramped_levels(levels, tau, block_s, params.setpoint_ramp_s, xp)
+    ramp_s = params.setpoint_ramp_s
+    opening = lead * (1.0 - xp.clip(tau / ramp_s, 0.0, 1.0))
+    return ramped_levels(levels, tau, block_s, ramp_s, xp) + opening
 
 
 def live_target(state: CompressorSurgeState, params: CompressorSurgeParams, xp=jnp):
     """The header-pressure target (Pa) the state is scored against and
     observes."""
     tau = state.block_clock * params.delta_t
-    return scheduled_setpoint(state.setpoint_levels, tau, params, xp)
+    return scheduled_setpoint(
+        state.setpoint_levels, state.setpoint_lead, tau, params, xp
+    )
 
 
 def scheduled_demand(demand_levels, tau, params: CompressorSurgeParams, xp=jnp):
