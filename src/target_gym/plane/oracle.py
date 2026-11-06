@@ -20,7 +20,7 @@ from target_gym.experts.mpc import (
     _pid_rollout_plan,
     _v2_objective,
 )
-from target_gym.plane.dynamics import PITCH_DEMAND_MAX
+from target_gym.plane.dynamics import PITCH_DEMAND_MAX, scheduled_airspeed
 
 _PLANE_STALL_MARGIN = 1.3  # multiples of stall speed at which the barrier starts
 _PLANE_BARRIER_WEIGHT = 10.0
@@ -254,10 +254,9 @@ def _plane_stall_barrier(state, params):
     return jnp.maximum(1.0 - margin, 0.0) ** 2
 
 
-def _speed_loop_gains(pid) -> tuple[float, float, float, float, float]:
+def _speed_loop_gains(pid) -> tuple[float, float, float, float]:
     """The airspeed loop's constants, read off a live cascaded PID."""
     return (
-        float(pid.target_speed),
         float(pid.cruise_power),
         float(pid.Kp_speed),
         float(pid.Ki_speed),
@@ -265,11 +264,11 @@ def _speed_loop_gains(pid) -> tuple[float, float, float, float, float]:
     )
 
 
-def _speed_loop(integ, x_dot, gains):
+def _speed_loop(integ, x_dot, v_target, gains):
     """One step of the cascaded autopilot's throttle branch, in JAX:
     the PI on the airspeed error with its anti-windup (the step that
     saturates is not integrated). Returns the throttle and the integrator."""
-    v_target, cruise, kp, ki, dt = gains
+    cruise, kp, ki, dt = gains
     err = v_target - x_dot
     integ_n = integ + err * dt
     power = cruise + kp * err + ki * integ_n
@@ -278,7 +277,7 @@ def _speed_loop(integ, x_dot, gains):
     return power_c, integ_n
 
 
-def _bumpless_integral(throttle, x_dot, gains, tol=_BUMPLESS_TOL):
+def _bumpless_integral(throttle, x_dot, v_target, gains, tol=_BUMPLESS_TOL):
     """The speed loop's integrator to start from, so that its first command
     lands within ``tol`` of ``throttle``: the value closest to zero that does.
 
@@ -286,7 +285,7 @@ def _bumpless_integral(throttle, x_dot, gains, tol=_BUMPLESS_TOL):
     case whenever both sit at full throttle. Otherwise the integral term takes
     up the difference, so the throttle does not jump at the handover.
     """
-    v_target, cruise, kp, ki, dt = gains
+    cruise, kp, ki, dt = gains
     err = v_target - x_dot
     cold = cruise + kp * err + ki * err * dt  # the first command from zero
     if abs(float(np.clip(cold, -1.0, 1.0)) - throttle) <= tol:
@@ -360,7 +359,10 @@ class PlaneMPC(GradientMPC):
 
         def step_fn(carry, u):
             s, done, integ = carry
-            power_c, integ_n = _speed_loop(integ, s.x_dot, gains)
+            v_target = scheduled_airspeed(
+                s.z, self.params.target_cas, self.params.target_mach
+            )
+            power_c, integ_n = _speed_loop(integ, s.x_dot, v_target, gains)
             act = jnp.stack([power_c, u[1]])
             _, new_s, r, terminated, _ = self.env.step_env(key, s, act, self.params)
             if self.objective_fn is not None:
@@ -481,6 +483,11 @@ class PlaneHandoverMPC:
                 speed_integral=_bumpless_integral(
                     float(self._last[0]),
                     float(state.x_dot),
+                    float(
+                        scheduled_airspeed(
+                            state.z, self.params.target_cas, self.params.target_mach
+                        )
+                    ),
                     _speed_loop_gains(hold._pid),
                     self.bumpless_tol,
                 )
@@ -681,7 +688,6 @@ class PlaneCascadedPIDParams:
     theta_trim: float = 0.032  # rad, ~1.85 deg cruise trim
     theta_max: float = 0.26  # rad, ~15 deg pitch limit
     alpha_max: float = 0.19  # rad, ~11 deg, inside the 15 deg stall
-    target_speed: float = 230.0  # m/s, held by the throttle loop
     cruise_power: float = -0.65  # raw, ~0.175 throttle at cruise
     Kp_speed: float = 0.025
     Ki_speed: float = 3.0e-4
@@ -709,6 +715,7 @@ def plane_cascaded_pid_step(params, state, obs, xp=jnp):
     z_dot = obs[..., 2]
     gamma = obs[..., 5]
     target_altitude = obs[..., 6]
+    target_speed = obs[..., 9]
 
     # Outer loop: altitude -> commanded vertical speed.
     vs_cmd = xp.clip(p.Kp_alt * (target_altitude - z), -p.vs_max, p.vs_max)
@@ -731,7 +738,7 @@ def plane_cascaded_pid_step(params, state, obs, xp=jnp):
     pitch = xp.clip(theta_cmd / PITCH_DEMAND_MAX, -1.0, 1.0)
 
     # Throttle loop: hold airspeed.
-    speed_err = p.target_speed - x_dot
+    speed_err = target_speed - x_dot
     speed_integral = state.speed_integral + speed_err * p.dt
     power = p.cruise_power + p.Kp_speed * speed_err + p.Ki_speed * speed_integral
     power_clipped = xp.clip(power, -1.0, 1.0)

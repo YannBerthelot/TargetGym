@@ -23,8 +23,10 @@ from target_gym.plane.dynamics import (
     LONGITUDINAL,
     PITCH_DEMAND_MAX,
     POSITION,
+    STICK_TRAVEL,
     instruments,
     total_wind_3d,
+    trim_stick,
 )
 from target_gym.plane3d.dynamics import read_angles_3d
 from target_gym.plane3d.env import (
@@ -187,6 +189,8 @@ class _Airplane3DBase(
         )
         initial_alpha = initial_theta - initial_gamma
         initial_psi = jnp.arctan2(initial_y_dot, initial_x_dot)
+        # The autopilot engages in trim; ``initial_stick`` is an offset from it.
+        trim = trim_stick(V_horiz, initial_z, initial_theta, params)
 
         base_kwargs = dict(
             x=0.0,
@@ -204,11 +208,12 @@ class _Airplane3DBase(
             gamma=initial_gamma,
             m=params.initial_mass,  # fuel is a component of it, not an addition
             power=params.initial_power,
-            stick=jnp.deg2rad(params.initial_stick),
+            stick=trim + jnp.deg2rad(params.initial_stick),
             aileron=jnp.deg2rad(params.initial_aileron),
             fuel=params.initial_fuel_quantity,
             time=0,
             target_altitude=target_altitude,
+            pitch_integ=trim / STICK_TRAVEL,
         )
         return key, base_kwargs
 

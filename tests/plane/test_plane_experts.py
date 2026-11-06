@@ -383,7 +383,7 @@ def test_the_throttle_holds_cruise_on_plane():
         assert not bool(info["tripped"])
         if t >= 140:  # the protocol's burn-in on this task
             speed = float(np.hypot(state.x_dot, state.z_dot))
-            speed_err.append(abs(speed - float(params.target_speed)))
+            speed_err.append(abs(speed - float(obs[9])))
             alt_err.append(abs(float(state.target_altitude - state.z)))
             throttle.append(float(action[0]))
     assert oracle.handovers == [(15, "hold")]

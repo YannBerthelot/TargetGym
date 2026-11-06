@@ -31,6 +31,7 @@ from target_gym.plane.dynamics import (
     compute_next_surface,
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
+    outside_envelope,
     step_key,
     total_wind_3d,
 )
@@ -79,6 +80,8 @@ class PlaneState3D(EnvState):
     # The inner loop's integrals, in surface units.
     pitch_integ: float = 0.0
     roll_integ: float = 0.0
+    # The step's load factor furthest from 1 g, which the limits read.
+    load_factor: float = 1.0
 
     actuator_held: jax.Array = actuator_field(3)
 
@@ -123,6 +126,17 @@ class PlaneParams3D(EnvParams):
     aileron_response_rate: float = STICK_RESPONSE_RATE
     surface_rate_limit: float = jnp.pi / 6.0
     inner_loop: InnerLoop = InnerLoop()
+    # The envelope (PHYSICS.md section 3): the limit load factors of 14 CFR
+    # 25.337, the A320's VMO 350 kt and MMO 0.82, and the buffet line, CL_max
+    # falling from ``buffet_mach`` at ``buffet_slope`` per unit of Mach (ours).
+    load_factor_max: float = 2.5
+    load_factor_min: float = -1.0
+    vmo_eas: float = 350.0 * 1852.0 / 3600.0
+    mmo: float = 0.82
+    buffet_mach: float = 0.3
+    buffet_slope: float = 1.4
+    # 14 CFR 91.307(c)'s bank limit, 60 deg: the demand stops at 45.
+    bank_limit: float = jnp.pi / 3.0
 
     # span^2 / S for the A320. PlaneParams3D does not inherit from PlaneParams,
     # so the shared aerodynamics needs its own copy; the value matches.
@@ -311,6 +325,13 @@ PARAM_UNITS = {
     "idle_power": "-",
     "stick_response_rate": "1/s",
     "surface_rate_limit": "rad/s",
+    "load_factor_max": "g",
+    "load_factor_min": "g",
+    "vmo_eas": "m/s",
+    "mmo": "-",
+    "buffet_mach": "-",
+    "buffet_slope": "-",
+    "bank_limit": "rad",
     "k_drag": "-",
     "I": "kg.m^2",
     "moment_arm_stabilizer": "m",
@@ -368,8 +389,21 @@ PARAM_UNITS = {
 
 
 def check_is_terminal_3d(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
-    """Return (terminated, truncated) flags."""
-    terminated = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
+    """Return (terminated, truncated) flags. The aircraft trips when its altitude
+    leaves ``[min_alt, max_alt]``, past the bank limit, or out of the envelope
+    (``plane.dynamics.outside_envelope``)."""
+    wind_x, wind_y, wind_z = total_wind_3d(
+        state.z, state.gust_x, state.gust_y, state.gust_z, params
+    )
+    air_speed = compute_velocity_3d(
+        state.x_dot - wind_x, state.y_dot - wind_y, state.z_dot - wind_z
+    )
+    terminated = (
+        (state.z <= params.min_alt)
+        | (state.z >= params.max_alt)
+        | (jnp.abs(state.phi) > params.bank_limit)
+        | outside_envelope(state.load_factor, air_speed, state.z, params)
+    )
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
@@ -921,7 +955,7 @@ def compute_next_state_3d(
     gains = params.inner_loop
 
     def inner(carry, _):
-        velocities, positions, power, surfaces, integrals, burned = carry
+        velocities, positions, power, surfaces, integrals, burned, peak = carry
         x_dot, y_dot, z_dot, theta_dot, phi_dot = velocities
         _, _, z, theta, phi = positions
         stick, aileron = surfaces
@@ -999,6 +1033,9 @@ def compute_next_state_3d(
         )
         # Fuel burned over the sub-step, charged against the thrust produced.
         burned = burned + params.specific_fuel_consumption * 1e-3 * thrust * dt
+        # Trips read the worst load inside the step, not the one it ends on.
+        load = metrics[1][-1] / (mass_now * params.gravity)
+        peak = jnp.where(jnp.abs(load - 1.0) > jnp.abs(peak - 1.0), load, peak)
         return (
             velocities,
             positions,
@@ -1006,6 +1043,7 @@ def compute_next_state_3d(
             (stick, aileron),
             (pitch_integ, roll_integ),
             burned,
+            peak,
         ), metrics
 
     start = (
@@ -1017,11 +1055,12 @@ def compute_next_state_3d(
         (state.stick, state.aileron),
         (state.pitch_integ, state.roll_integ),
         jnp.zeros_like(state.fuel),
+        jnp.ones_like(state.fuel),
     )
     end, metrics = jax.lax.scan(inner, start, None, length=inner_steps)
     x_dot, y_dot, z_dot, theta_dot, phi_dot = end[0]
     x, y, z, theta, phi = end[1]
-    power, (stick, aileron), (pitch_integ, roll_integ), burned = end[2:]
+    power, (stick, aileron), (pitch_integ, roll_integ), burned, load_factor = end[2:]
     metrics = jax.tree_util.tree_map(lambda m: m[-1], metrics)
 
     alpha, gamma = compute_alpha_3d(theta, x_dot, y_dot, z_dot)
@@ -1062,6 +1101,7 @@ def compute_next_state_3d(
         gust_z=gust[2],
         pitch_integ=pitch_integ,
         roll_integ=roll_integ,
+        load_factor=load_factor,
     )
     return new_state, metrics
 

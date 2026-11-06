@@ -8,10 +8,12 @@ from target_gym.expert_access import RegistryExperts
 from target_gym.plane.dynamics import (
     LONGITUDINAL,
     PITCH_DEMAND_MAX,
+    STICK_TRAVEL,
     compute_gamma,
     instruments,
     read_angles,
     total_wind_2d,
+    trim_stick,
 )
 from target_gym.plane.env import (
     PlaneParams,
@@ -165,7 +167,9 @@ class Airplane2D(
         # ignored ``state.m`` and used ``params.initial_mass`` directly.
         initial_m = params.initial_mass
         initial_power = params.initial_power
-        initial_stick = jnp.deg2rad(params.initial_stick)
+        # The autopilot engages in trim; ``initial_stick`` is an offset from it.
+        trim = trim_stick(initial_x_dot, initial_z, initial_theta, params)
+        initial_stick = trim + jnp.deg2rad(params.initial_stick)
         initial_fuel = params.initial_fuel_quantity
 
         state = PlaneState(
@@ -186,6 +190,7 @@ class Airplane2D(
             # What the moving patterns oscillate about; identical to
             # target_altitude while the pattern is 'hold'.
             base_target_altitude=target_altitude,
+            pitch_integ=trim / STICK_TRAVEL,
         )
 
         obs = self.get_obs(state, params)

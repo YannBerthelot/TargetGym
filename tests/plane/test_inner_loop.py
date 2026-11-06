@@ -23,9 +23,11 @@ import pytest
 from target_gym.plane.dynamics import (
     BANK_DEMAND_MAX,
     PITCH_DEMAND_MAX,
+    STICK_TRAVEL,
     InnerLoop,
     airspeed_scaler,
     attitude_axis,
+    compute_acceleration,
     compute_next_surface,
 )
 from target_gym.plane.env import compute_next_state
@@ -194,3 +196,45 @@ def test_a_policy_does_not_touch_the_surface():
     new = env.step_env(KEY, level, jnp.array([0.2, 0.12, 1.0]), params)[1]
     # The old aileron would have gone to 25 deg within the step.
     assert abs(float(jnp.degrees(new.aileron))) < 5.0
+
+
+# -- Engaged in trim ----------------------------------------------------------
+#
+# An autopilot engages trimmed. So a reset aircraft has no pitching moment to shed:
+# its elevator, and the integral that holds it, already balance the pitching moment
+# at its reset attitude and speed, wherever in the envelope it starts.
+
+
+@pytest.mark.parametrize("env_cls", (Airplane2D, Plane3DHeading))
+@pytest.mark.parametrize("seed", range(4))
+def test_a_reset_aircraft_has_no_pitching_moment(env_cls, seed):
+    env = env_cls()
+    params = env.default_params.replace(turbulence_sigma=0.0)
+    _, state = env.reset_env(jax.random.PRNGKey(seed), params)
+    velocities = jnp.array([state.x_dot, state.z_dot, 0.0])
+    if env_cls is Plane3DHeading:
+        velocities = velocities.at[0].set(jnp.hypot(state.x_dot, state.y_dot))
+    positions = jnp.array([0.0, state.z, state.theta])
+    accel, _ = compute_acceleration(velocities, positions, (0.0, state.stick), params)
+    # The elevator moves the moment by about 2 rad/s^2 per rad: 0.01 rad/s^2 is a
+    # twentieth of a degree of stick, against the 5 deg it used to start from.
+    assert abs(float(accel[2])) < 0.01
+
+
+def test_the_integral_holds_the_trim_it_starts_from():
+    env = Airplane2D()
+    params = env.default_params.replace(turbulence_sigma=0.0)
+    _, state = env.reset_env(KEY, params)
+    assert float(state.pitch_integ) * STICK_TRAVEL == pytest.approx(float(state.stick))
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_a_small_demand_after_reset_does_not_jolt_the_aircraft(seed):
+    """The review's limit is 2.5 g; a 1.8 deg demand at reset used to pull 1.9 g
+    in its first second at 3800 m, which is an untrimmed elevator, not the demand.
+    A 1.8 deg change of incidence is worth Delta CL 0.16, about 0.5 g at most."""
+    env = Airplane2D()
+    params = env.default_params.replace(turbulence_sigma=0.0)
+    _, state = env.reset_env(jax.random.PRNGKey(seed), params)
+    new = env.step_env(KEY, state, jnp.array([0.0, 0.12]), params)[1]
+    assert float(new.load_factor) < 1.5

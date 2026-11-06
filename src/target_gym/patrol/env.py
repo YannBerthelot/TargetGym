@@ -36,8 +36,10 @@ from target_gym.experts.pid import Plane3DPIDState, plane3d_heading_pid_step
 from target_gym.plane.dynamics import (
     BANK_DEMAND_MAX,
     PITCH_DEMAND_MAX,
+    STICK_TRAVEL,
     advance_gust,
     step_key,
+    trim_stick,
 )
 from target_gym.plane3d.dynamics import compute_velocity_3d
 from target_gym.plane3d.env import (
@@ -221,6 +223,7 @@ def make_cruise_state(
     x_dot = speed * jnp.cos(psi)
     y_dot = speed * jnp.sin(psi)
     theta = jnp.deg2rad(params.initial_theta)
+    trim = trim_stick(speed, z, theta, params)
     return PlaneState3D(
         x=x,
         x_dot=x_dot,
@@ -237,7 +240,7 @@ def make_cruise_state(
         gamma=0.0,
         m=params.initial_mass,  # fuel is a component of it, not an addition
         power=params.initial_power,
-        stick=jnp.deg2rad(params.initial_stick),
+        stick=trim + jnp.deg2rad(params.initial_stick),
         aileron=jnp.deg2rad(params.initial_aileron),
         fuel=params.initial_fuel_quantity,
         time=0,
@@ -246,6 +249,7 @@ def make_cruise_state(
         target_x=0.0,
         target_y=0.0,
         target_radius=0.0,
+        pitch_integ=trim / STICK_TRAVEL,
     )
 
 

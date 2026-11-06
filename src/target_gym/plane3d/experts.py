@@ -15,7 +15,11 @@ from target_gym.experts.pid import (
     _wrap_angle,
     register_learnable_gains,
 )
-from target_gym.plane.dynamics import BANK_DEMAND_MAX, PITCH_DEMAND_MAX
+from target_gym.plane.dynamics import (
+    BANK_DEMAND_MAX,
+    PITCH_DEMAND_MAX,
+    scheduled_airspeed,
+)
 from target_gym.plane.experts_tecs import (
     AIRLINER,
     TECSParams,
@@ -53,7 +57,8 @@ class Plane3DGuidanceParams:
     ``NAVL1_DAMPING``. ``max_bank_rad`` is ArduPilot's default roll limit and
     the edge of the model's validity (PHYSICS.md). A curved path is flown at
     the speed whose steady bank in its tightest turn is ``turn_bank_margin``
-    of the limit, leaving the rest for L1's corrections. The figure-8, the
+    of the limit, leaving the rest for L1's corrections; otherwise at
+    ``cruise_cas`` and ``cruise_mach``, the 2D tasks' schedule. The figure-8, the
     only path whose curvature the observation does not give, reads it from
     the pattern it was given: ``figure8_altitude_amplitude``, the scored
     task's, and ``curvature_lead`` seconds ahead, the bank loop's lag. The
@@ -72,7 +77,9 @@ class Plane3DGuidanceParams:
     curvature_lead: float = 1.0
     alpha_max: float = 0.19
     k_bank_comp: float = 0.15
-    target_speed: float = 230.0
+    cruise_cas: float = 290.0 * 1852.0 / 3600.0
+    cruise_mach: float = 0.78
+    target_speed: float = 230.0  # the formation lead's, until PR 7b
     v_min_eas: float = 104.0
     gravity: float = 9.81
     dt: float = 1.0
@@ -95,12 +102,17 @@ def _ground_speed(obs, xp):
     return xp.sqrt(obs[..., 0] ** 2 + obs[..., 1] ** 2 + 1e-6)
 
 
-def _turn_speed(params, radius, xp):
+def _cruise_speed(params, obs, xp):
+    """The schedule's true airspeed at the observed height."""
+    return scheduled_airspeed(obs[..., 2], params.cruise_cas, params.cruise_mach, xp)
+
+
+def _turn_speed(params, radius, obs, xp):
     """Cruise speed, or slower where the tightest turn of radius ``radius``
     would otherwise need more bank than the limit leaves in hand."""
     usable = params.turn_bank_margin * params.max_bank_rad
     limit = xp.sqrt(params.gravity * xp.maximum(radius, 1.0) * xp.tan(usable))
-    return xp.minimum(params.target_speed, limit)
+    return xp.minimum(_cruise_speed(params, obs, xp), limit)
 
 
 def _v_min(params, z, xp):
@@ -153,7 +165,7 @@ def plane3d_heading_step(params, state, obs, xp=jnp):
     """Course hold: the turn rate that closes the heading error in ``tau_hdg``."""
     v = _ground_speed(obs, xp)
     turn_rate = _wrap_angle(obs[..., 11] - obs[..., 9], xp) / params.tau_hdg
-    target = params.target_speed
+    target = _cruise_speed(params, obs, xp)
     return _fly(params, state, obs, xp, obs[..., 10], v * turn_rate, target)
 
 
@@ -164,7 +176,7 @@ def plane3d_circle_step(params, state, obs, xp=jnp):
     cross = radius - xp.sqrt(rx**2 + ry**2 + 1e-6)
     tangent = xp.arctan2(ry, rx) + _HALF_PI
     accel = l1_lateral_accel(params, cross, tangent, 1.0 / radius, obs, xp)
-    target = _turn_speed(params, radius, xp)
+    target = _turn_speed(params, radius, obs, xp)
     return _fly(params, state, obs, xp, obs[..., 10], accel, target)
 
 
@@ -172,7 +184,7 @@ def plane3d_racetrack_step(params, state, obs, xp=jnp):
     """L1 on the holding pattern, whose guidance the observation gives."""
     cross, tangent, curvature = obs[..., 18], obs[..., 19], obs[..., 20]
     accel = l1_lateral_accel(params, cross, tangent, curvature, obs, xp)
-    target = _turn_speed(params, obs[..., 13], xp)
+    target = _turn_speed(params, obs[..., 13], obs, xp)
     return _fly(params, state, obs, xp, obs[..., 10], accel, target)
 
 
@@ -216,7 +228,7 @@ def plane3d_figure8_step(params, state, obs, xp=jnp):
     curvature = turn_sign * 3.0 * xp.cos(tau) / (a * xp.sqrt(1.0 + xp.sin(tau) ** 2))
 
     accel = l1_lateral_accel(params, cross, tangent, curvature, obs, xp)
-    target = _turn_speed(params, a / 3.0, xp)
+    target = _turn_speed(params, a / 3.0, obs, xp)
     return _fly(
         params,
         state,

@@ -27,6 +27,8 @@ from target_gym.plane.dynamics import (
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
     compute_velocity_from_horizontal_and_vertical_speed,
+    outside_envelope,
+    scheduled_airspeed,
     step_key,
     total_wind_2d,
 )
@@ -71,6 +73,8 @@ class PlaneState(EnvState):
     gust_z: float = 0.0
     # The inner loop's pitch integral, in surface units.
     pitch_integ: float = 0.0
+    # The step's load factor furthest from 1 g, which the limits read.
+    load_factor: float = 1.0
 
     actuator_held: jax.Array = actuator_field(2)
 
@@ -166,6 +170,15 @@ class PlaneParams(EnvParams):
     surface_rate_limit: float = jnp.pi / 6.0
     # The fixed inner loop. Its gains are task constants, not tuned per task.
     inner_loop: InnerLoop = InnerLoop()
+    # The envelope (PHYSICS.md section 3): the limit load factors of 14 CFR
+    # 25.337, the A320's VMO 350 kt and MMO 0.82, and the buffet line, CL_max
+    # falling from ``buffet_mach`` at ``buffet_slope`` per unit of Mach (ours).
+    load_factor_max: float = 2.5
+    load_factor_min: float = -1.0
+    vmo_eas: float = 350.0 * 1852.0 / 3600.0
+    mmo: float = 0.82
+    buffet_mach: float = 0.3
+    buffet_slope: float = 1.4
     k_drag: float = 5.0
 
     I: float = 9_000_000
@@ -247,7 +260,11 @@ class PlaneParams(EnvParams):
     # removes it: thrust is finite, so climbing and accelerating compete, and
     # the exchange between them is precisely the phugoid.
     speed_weight: float = 0.0
-    target_speed: float = 230.0  # m/s, the cruise the airspeed channel holds
+    # The airspeed channel's schedule (``plane.dynamics.scheduled_airspeed``):
+    # 290 kt CAS, then M 0.78, EUROCONTROL's A320 climb. A fixed 230 m/s was
+    # 385 KEAS at 3000 m, past VMO.
+    target_cas: float = 290.0 * 1852.0 / 3600.0  # m/s
+    target_mach: float = 0.78
     speed_precision_floor: float = 0.5  # m/s, air-data resolution
     speed_envelope: float = 60.0  # m/s, the error at which the term reaches zero
     target_pattern: int = 0
@@ -327,6 +344,12 @@ PARAM_UNITS = {
     "idle_power": "-",
     "stick_response_rate": "1/s",
     "surface_rate_limit": "rad/s",
+    "load_factor_max": "g",
+    "load_factor_min": "g",
+    "vmo_eas": "m/s",
+    "mmo": "-",
+    "buffet_mach": "-",
+    "buffet_slope": "-",
     "k_drag": "-",
     "I": "kg.m^2",
     "moment_arm_stabilizer": "m",
@@ -359,7 +382,8 @@ PARAM_UNITS = {
     "c_hold": "m/s",
     "running_weight": "-",
     "speed_weight": "-",
-    "target_speed": "m/s",
+    "target_cas": "m/s",
+    "target_mach": "-",
     "speed_precision_floor": "m/s",
     "speed_envelope": "m/s",
     "target_pattern": "-",
@@ -384,12 +408,21 @@ def check_mass_does_not_increase(old_mass, new_mass, xp=jnp):
 
 
 def check_is_terminal(state: PlaneState, params: PlaneParams, xp=jnp):
-    """The aircraft trips when its altitude leaves ``[min_alt, max_alt]``.
+    """The aircraft trips when its altitude leaves ``[min_alt, max_alt]`` or it
+    leaves the envelope (``plane.dynamics.outside_envelope``).
 
     Returns ``(tripped, truncated)``. A trip does not end the episode:
     ``base.failure_kernel`` charges it and restarts the aircraft.
     """
-    terminated = xp.logical_or(state.z <= params.min_alt, state.z >= params.max_alt)
+    wind_x, wind_z = total_wind_2d(state.z, state.gust_x, state.gust_z, params)
+    air_speed = compute_velocity_from_horizontal_and_vertical_speed(
+        state.x_dot - wind_x, state.z_dot - wind_z
+    )
+    terminated = (
+        (state.z <= params.min_alt)
+        | (state.z >= params.max_alt)
+        | outside_envelope(state.load_factor, air_speed, state.z, params)
+    )
     truncated = state.time >= params.max_steps_in_episode
 
     # done = xp.logical_or(done_alt, done_steps)
@@ -410,6 +443,11 @@ def check_no_nan(x, id=None):
             raise AssertionError(f"NaN detected in {id}: {x}")
 
 
+def target_airspeed(state: PlaneState, params: PlaneParams):
+    """The airspeed demanded at the aircraft's altitude."""
+    return scheduled_airspeed(state.z, params.target_cas, params.target_mach)
+
+
 def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped=None):
     """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
 
@@ -425,7 +463,7 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped
             state.target_altitude - state.z, p.e_floor, p.e_tol, p.tracking_exponent, xp
         ),
         "running": R.running_cost(
-            xp.abs(speed - p.target_speed), p.c_hold, p.running_weight, xp
+            xp.abs(speed - target_airspeed(state, p)), p.c_hold, p.running_weight, xp
         ),
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
@@ -467,7 +505,7 @@ def compute_reward_v1(state: PlaneState, params: PlaneParams, xp=jnp):
     # unchanged.
     speed = xp.sqrt(state.x_dot**2 + state.z_dot**2)
     speed_term = log_scaled_reward(
-        xp.abs(params.target_speed - speed),
+        xp.abs(target_airspeed(state, params) - speed),
         params.speed_precision_floor,
         params.speed_envelope,
         xp,
@@ -488,11 +526,11 @@ def get_obs(state: PlaneState, params: PlaneParams = None, xp=jnp):
     """Applies observation function to state."""
     if params is None:
         raise ValueError(
-            "get_obs needs the episode's params: target_speed is a parameter, "
-            "so falling back to PlaneParams() would silently report the class "
-            "default instead of what this episode is actually commanding."
+            "get_obs needs the episode's params: the airspeed schedule is a "
+            "parameter, so falling back to PlaneParams() would silently report "
+            "the class default instead of what this episode is commanding."
         )
-    params_target_speed = jnp.asarray(params.target_speed, dtype=jnp.float32)
+    params_target_speed = jnp.asarray(target_airspeed(state, params), jnp.float32)
     return xp.stack(
         [
             state.x_dot,
@@ -613,7 +651,7 @@ def compute_next_state(
     gains = params.inner_loop
 
     def inner(carry, _):
-        velocities, positions, power, stick, integ, burned = carry
+        velocities, positions, power, stick, integ, burned, peak = carry
         x_dot, z_dot, theta_dot = velocities
         _, z, theta = positions
         # Air data and the engine's ram/Mach effects read airspeed.
@@ -675,7 +713,10 @@ def compute_next_state(
         # charged against the thrust actually produced, which already carries
         # the altitude lapse and the Mach terms.
         burned = burned + params.specific_fuel_consumption * 1e-3 * thrust * dt
-        return (velocities, positions, power, stick, integ, burned), metrics
+        # Trips read the worst load inside the step, not the one it ends on.
+        load = metrics[1][-1] / (mass_now * params.gravity)
+        peak = jnp.where(jnp.abs(load - 1.0) > jnp.abs(peak - 1.0), load, peak)
+        return (velocities, positions, power, stick, integ, burned, peak), metrics
 
     start = (
         jnp.array([state.x_dot, state.z_dot, state.theta_dot]),
@@ -684,10 +725,11 @@ def compute_next_state(
         state.stick,
         state.pitch_integ,
         jnp.zeros_like(state.fuel),
+        jnp.ones_like(state.fuel),
     )
     end, metrics = jax.lax.scan(inner, start, None, length=inner_steps)
     (x_dot, z_dot, theta_dot), (x, z, theta) = end[0], end[1]
-    power, stick, pitch_integ, burned = end[2:]
+    power, stick, pitch_integ, burned, load_factor = end[2:]
     metrics = jax.tree_util.tree_map(lambda m: m[-1], metrics)
 
     alpha, gamma = compute_alpha(theta, x_dot, z_dot)
@@ -719,5 +761,6 @@ def compute_next_state(
         gust_x=gust[0],
         gust_z=gust[1],
         pitch_integ=pitch_integ,
+        load_factor=load_factor,
     )
     return new_state, metrics

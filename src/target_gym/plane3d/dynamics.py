@@ -16,6 +16,7 @@ from gymnax.environments import EnvParams
 
 from target_gym.plane.dynamics import (
     aero_coefficients,
+    buffet_line,
     compute_air_density_from_altitude,
     compute_drag,
     compute_Mach_from_velocity_and_speed_of_sound,
@@ -214,6 +215,7 @@ def compute_acceleration_3d(
     # WINGS
     # ====================================================
     C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M, params=params)
+    C_z_w = xp.minimum(C_z_w, buffet_line(M, params))
     lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
     drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
     # Body-normal component, not lift alone. Past the stall drag exceeds lift,

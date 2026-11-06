@@ -455,6 +455,39 @@ def aero_coefficients(aoa_deg, mach, params):
     return CL, CD
 
 
+def buffet_line(mach, params):
+    """The most lift the wing holds at ``mach`` before buffet (PHYSICS.md):
+    ``CL_max`` at low speed, falling linearly. Prandtl-Glauert raises the lift
+    slope with Mach but not this. The wing's only, since buffet is a wing's."""
+    return params.CL_max - params.buffet_slope * jnp.maximum(
+        mach - params.buffet_mach, 0.0
+    )
+
+
+def scheduled_airspeed(z, cas, mach, xp=jnp):
+    """The true airspeed of a schedule of ``cas`` (m/s) below the crossover and
+    ``mach`` above it, by the standard atmosphere and the compressible pitot
+    relation between CAS, impact pressure and Mach."""
+    temperature = xp.maximum(288.15 - 0.0065 * z, 216.65)
+    pressure = 101325.0 * (temperature / 288.15) ** 5.2559
+    sound = xp.sqrt(1.4 * 287.0 * temperature)
+    impact = 101325.0 * ((1.0 + 0.2 * (cas / 340.29) ** 2) ** 3.5 - 1.0)
+    mach_of_cas = xp.sqrt(5.0 * ((impact / pressure + 1.0) ** (2.0 / 7.0) - 1.0))
+    return xp.minimum(mach_of_cas, mach) * sound
+
+
+def outside_envelope(load_factor, air_speed, z, params):
+    """Whether a flight condition is past the limit load factors, VMO or MMO."""
+    rho = compute_air_density_from_altitude(z)
+    eas = air_speed * jnp.sqrt(rho / params.air_density_at_sea_level)
+    return (
+        (load_factor > params.load_factor_max)
+        | (load_factor < params.load_factor_min)
+        | (eas > params.vmo_eas)
+        | (air_speed / compute_speed_of_sound_from_altitude(z) > params.mmo)
+    )
+
+
 def compute_gamma(x_dot: float, z_dot: float) -> float:
     """Flight path angle from velocity vector."""
     return jnp.arctan2(z_dot, x_dot)  # handles negative x_dot safely
@@ -539,6 +572,7 @@ def compute_acceleration(
     # WINGS
     # ====================================================
     C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M, params=params)
+    C_z_w = xp.minimum(C_z_w, buffet_line(M, params))
     lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
     drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
     # Only the component normal to the body axis makes a pitching moment, and
@@ -631,6 +665,22 @@ def compute_acceleration(
             jnp.array(max_clip_boundaries),
         )
     return accelerations, metrics
+
+
+def trim_stick(speed, z, theta, params):
+    """The elevator that balances the pitching moment at this speed, height and
+    level attitude, clipped to its travel, so a reset aircraft engages in trim.
+    The moment is close to linear in the deflection, so one secant does."""
+
+    def moment(stick):
+        velocities = jnp.array([speed, 0.0, 0.0])
+        positions = jnp.array([0.0, z, theta])
+        return compute_acceleration(velocities, positions, (0.0, stick), params)[0][2]
+
+    probe = -0.1
+    at_zero, at_probe = moment(0.0), moment(probe)
+    stick = probe * at_zero / (at_zero - at_probe)
+    return jnp.clip(stick, -STICK_TRAVEL, STICK_TRAVEL)
 
 
 def clamp_altitude(z, z_dot):
