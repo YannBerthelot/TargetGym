@@ -1,9 +1,10 @@
-"""What ``scripts/tune_*.py`` share, on ``first_order``: the only recipe a test
-may run, since the others wait for their plants (industrial-fixes.md, PR 9).
+"""What ``scripts/tune_*.py`` share, and the process recipes' own rules.
 
 Contract, from docs/proposals/expert-protocols-noise.md: a bump is one run with
 its step in it (N1), a loop nobody holds stays closed through it and records
-its output, and a run at a level writes that level's file and no other.
+its output, and a run at a level writes that level's file and no other. From
+expert-protocols-process.md section 9: a test starts from no stored gain (R1),
+and a compressor line that fails the schedule check climbs the ladder.
 """
 
 import importlib
@@ -24,14 +25,19 @@ process = importlib.import_module("tune_process_experts")
 industrial = importlib.import_module("tune_industrial_experts")
 
 
-def test_a_process_bump_is_one_run_with_its_step_inside():
-    # From rest at 0, raw 0.1 is u = 0.2 and x settles at 0.2 with tau 0.5 s:
-    # after 60 steps of 0.05 s, 0.2 (1 - e^-6). Noise sd 1.1e-3, so 3 sd.
-    _, _, step, reset = process._plant("first_order")
-    state = reset(process.jax.random.PRNGKey(100))[1].replace(x=process.jnp.float32(0))
-    dy = process._bump(step, state, lambda _: 0.0, lambda _: 0.1, 60)[:, 0]
-    assert dy.shape == (60,)
-    assert dy[-1] == pytest.approx(0.2 * (1 - np.exp(-6.0)), abs=3 * 1.1e-3 + 1e-3)
+def test_a_recipe_reads_the_model_it_is_stepped_on():
+    # From rest at the target, k 2 and tau 0.5, with a half step of delay.
+    spec = REGISTRY["first_order"]
+    p = spec.make_test_params()
+    rest = process.manual(lambda o, xp: xp.reshape(o[1] / 2.0, (1,)))
+    plant = process.Plant(
+        spec, p, [lambda o, s, q: o[0]], [(None, None)], controller=rest
+    )
+    inst = process.Instrument.of(spec.make_env(), p, "x")
+    loop = process.read_loop(plant, "x", 0, 0, 0.1, 60, inst, room=plant.room(0))
+    assert loop["k"] == pytest.approx(2.0, rel=0.02)
+    assert loop["tau1"] == pytest.approx(0.5, rel=0.05)
+    assert loop["theta"] == pytest.approx(0.025, abs=0.05)
 
 
 def test_an_industrial_step_holds_through_the_baseline():
@@ -92,9 +98,85 @@ def test_the_first_order_recipe_answers_the_noise_level(monkeypatch):
     assert loud["Kp"] == pytest.approx(1.65, rel=0.1)
 
 
-def test_a_run_at_a_level_settles_on_the_shipped_expert(monkeypatch):
-    # Nothing is stored at 2 yet, which must not stop the run that stores it.
-    with pytest.raises(KeyError):
-        REGISTRY["first_order"].make_pid_controller(2)
-    monkeypatch.setattr(process, "LEVEL", 2.0)
+def test_a_bump_tests_length_is_the_recipes_and_not_the_tasks():
+    # The column's episode is 400 steps and its tests stay at the 200 they ran on.
+    assert REGISTRY["distillation"].make_test_params().max_steps_in_episode == 400
+    assert process._params("distillation").max_steps_in_episode == 200
+
+
+@pytest.mark.parametrize("name", sorted(process.TEST_STEPS))
+def test_every_recipe_fixes_its_own_tests_length(name):
+    assert process._params(name).max_steps_in_episode == process.TEST_STEPS[name]
+
+
+@pytest.mark.medium
+@pytest.mark.parametrize("name", sorted(process.TUNERS))
+def test_a_recipe_reproduces_what_is_stored(name):
+    # Fixed tests, no stored gain read: a run gives the entry it wrote, to the 6
+    # decimals ``write`` keeps.
+    stored = json.loads(provenance.GAINS_PATH.read_text())[name]
+    out = process.TUNERS[name]()
+    for key, value in out.items():
+        if not isinstance(value, dict):
+            assert float(value) == pytest.approx(stored[key], abs=1.5e-6), key
+
+
+def _no_store(*args, **kwargs):
+    raise AssertionError("a recipe read the gains it replaces")
+
+
+def test_a_run_reads_no_stored_gain(monkeypatch):
+    # R1: run at a level with nothing stored, and a run after --write, agree.
+    monkeypatch.setattr(
+        REGISTRY["first_order"].__class__, "make_pid_controller", _no_store
+    )
     assert process.tune_first_order()["noise_band"] > 0
+
+
+def test_the_inner_pd_is_simc_on_the_datasheet():
+    # Slope 50000 / (1000 x 0.239 x 100) = 2.092 K/min per K. Lag 1/6 + 0.05 =
+    # 0.2167 min. Delay 0.05 + 1/30 + 0.025 = 0.1083 min. Kp 1 / (2.092 x 0.2167),
+    # Kd Kp x 0.2167: 2.206 and 0.478.
+    Kp, Kd = process._datasheet_pd(REGISTRY["unstable_cstr"].make_test_params())
+    assert Kp == pytest.approx(2.206, abs=0.002)
+    assert Kd == pytest.approx(0.478, abs=0.001)
+
+
+def _ladder(monkeypatch, verdicts):
+    """A recipe whose line passes or fails the schedule as told."""
+    from target_gym.compressor_surge.experts import DEFAULT_GAINS
+
+    seen = []
+
+    def pair(line):
+        seen.append(line)
+        return {
+            **DEFAULT_GAINS,
+            "surge_line": line,
+            "override_line": line / 2,
+            "model": {},
+        }
+
+    monkeypatch.setattr(process, "_compressor_pair", pair)
+    monkeypatch.setattr(process, "_compressor_rga", lambda line: 1.0)
+    monkeypatch.setattr(process, "_schedule_check", lambda g: verdicts[len(seen) - 1])
+    return seen
+
+
+def test_a_line_that_trips_on_the_schedule_climbs_the_ladder(monkeypatch):
+    seen = _ladder(monkeypatch, [(0.09, 2), (0.09, 0)])
+    assert process.tune_compressor_surge()["surge_line"] == 0.125
+    assert seen == [0.10, 0.125]
+
+
+def test_a_margin_under_the_override_line_climbs_the_ladder(monkeypatch):
+    _ladder(monkeypatch, [(0.049, 0), (0.0626, 0)])
+    assert process.tune_compressor_surge()["surge_line"] == 0.125
+
+
+def test_a_ladder_that_runs_out_ships_its_last_rung(monkeypatch):
+    # C9: a poor result ships, and the record says so.
+    _ladder(monkeypatch, [(0.0, 3)] * 3)
+    out = process.tune_compressor_surge()
+    assert out["surge_line"] == 0.15
+    assert out["model"]["schedule"] == {"least margin": 0.0, "trips": 3}

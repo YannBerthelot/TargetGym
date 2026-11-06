@@ -189,17 +189,6 @@ error on the manipulated stream.
 
 ## 7. Expert
 
-**The shipped gains do not survive the probe.** Their tuning saw a dead time of
-2.5 s, and the probe adds about 15 s. On it the expert cycles on 6 of the 8 seeds
-checked, at about 75 s a cycle and up to 1.3 pH RMS, with a held-out hold of 4,690
-per step against a ceiling of 1. pH cannot trip, so it shows only in the hold. It is
-not the plant: a SIMC-shaped Kp 1.1 and Ti 117 s holds all 8 with almost no cycling,
-at 0.05 to 0.16 pH RMS. That sets no gain and only shows a hold exists. PR 9 retunes
-the expert. Without the probe the shipped gains cycle on seeds 4 and 5 (RMS 0.37
-and 0.25 pH over the second half), where the buffer flow averages 0.25 and 0.21
-mL/s and reaches 0, which is the low-buffer cycling the review reports. Its seed 3
-does not cycle in that window. Everything below was measured without the probe.
-
 pH loops in practice use the titration curve to linearise the loop
 ([Shinskey and Gerry, "Optimize your pH system", 2006](https://www.plantservices.com/articles/2006/026)).
 The expert does that with what a commissioning engineer has: the streams'
@@ -217,18 +206,18 @@ and the gains come from `scripts/tune_process_experts.py --envs ph_neutralizatio
 - **Bias.** The PI's output is added to the target's demand, the valve
   position the curve says the target needs. This is ours: q1 is constant and
   q2 unmeasured, so there is no inflow to feed forward from.
-- **Tuning.** A step of 0.1 mL/s from the reset state of each training seed
-  (100 to 109), taken against an unstepped run on the same buffer noise and
-  read in demand units. The median fit is k = 1.34, tau1 = 117 s and
-  theta = 2.5 s, half the 5 s sample (measured). SIMC with tau_c = theta
-  cycles on the low-buffer seeds, whose demand gain is about twice the median:
-  the training cost per step is 140 at tau_c = theta, 4.2 at 2 theta and 0.99
-  at 3 theta, so tau_c = 3 theta, Kp = 8.79 and Ti = 40 s.
-- **Held-out check** (seeds 200 to 209). It holds 0.94 per step (worst seed
-  2.87) against a ceiling of 1, settles in 12 steps and never trips
-  (`tests/pc_gym/test_expert_specs.py`). The plain PI it replaced held 43.6.
-  What is left is the buffer's drift, which moves the curve the
-  linearisation assumes; the oracle reads the buffer flow and holds about 0.09.
+- **Tuning.** With the buffer stream off, q2 = 0, the plant's lower limit and the
+  steepest curve there is, as the plan asks. In manual at the rest the true curve
+  gives there, +0.1 mL/s, 120 steps, read in the expert's demand units on the
+  nominal curve. The median fit is k = 19.7, tau1 = 95.3 s and theta = 17.5 s, with
+  the probe's dead time and half the 5 s sample. At the nominal buffer the same test
+  reads k = 1.0, so the steep end has 20 times the gain. SIMC with tau_c = theta
+  gives Kp = 0.138 and Ti = 95.3 s. The band is 0.104 mL/s, which the valve's dead
+  band absorbs, so no filter. Kp is 0.199 and 0.100 at levels 0.5 and 2.
+- **Held-out check** (seeds 200 to 209). It holds 230 per step (worst seed 619)
+  against a ceiling of 1, from 4,690 on the gains tuned without the probe, and no
+  longer cycles. pH cannot trip. The best null is the table, ratio 0.48, 0 of 10
+  wins. The miss is a finding: `tests/pc_gym/test_expert_specs.py`.
 
 ---
 

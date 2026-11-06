@@ -701,11 +701,6 @@ def _episode_return(spec, policy, seed, params=None):
 # it exists to detect (a mis-indexed setpoint) is not a marginal one.
 CONSTANT_ACTIONS = (-0.5, 0.0, 0.5)
 EFFECTIVENESS_SEEDS = 2
-# Experts awaiting a retune. Strict, so a task that starts passing says so.
-EFFECTIVENESS_GAPS = {
-    "distillation": "the gains predate the analyser delay and the tray hydraulics, "
-    "so the expert loses the column; PR 9 retunes it",
-}
 # No extra episode cap: the scored configuration already sizes each episode to
 # that environment's own dynamics. A flat cap is meaningless across envs whose
 # characteristic times differ by orders of magnitude -- 150 steps is 25 min
@@ -718,10 +713,8 @@ _STALE_TECS = "TECS's time_const 2 trips the new envelope; PR 9 retunes it"
 _STALE_HOLD = "the hold's gains predate the envelope, the 0.03 rad/s route and the "
 _STALE_HOLD += "decorrelated gust; PR 9 retunes it"
 STALE_EXPERTS = {
-    "cstr": "the cascade's gains predate the 1 min analyser; PR 9 retunes it",
     "formation": _STALE_HOLD,
     "patrol_range_bearing": _STALE_HOLD,
-    "ph_neutralization": "the expert's gains predate the probe; PR 9 retunes them",
     "plane": _STALE_TECS,
     "plane3d_circle": _STALE_TECS,
     "plane3d_figure8": _STALE_TECS,
@@ -729,7 +722,6 @@ STALE_EXPERTS = {
     "plane3d_racetrack": _STALE_TECS,
     "plane_energy": _STALE_TECS,
     "plane_sine": _STALE_TECS,
-    "unstable_cstr": "the cascade's gains predate the thermowell; PR 9 retunes them",
 }
 
 
@@ -745,9 +737,10 @@ def test_pid_outperforms_the_best_constant_action(spec, request):
         pytest.skip(f"{spec.name}: {spec.baselines_note}")
     if spec.expert_degraded:
         pytest.xfail(f"{spec.name}: {spec.expert_degraded}")
-    if spec.name in EFFECTIVENESS_GAPS or spec.name in STALE_EXPERTS:
-        reason = EFFECTIVENESS_GAPS.get(spec.name) or STALE_EXPERTS[spec.name]
-        request.applymarker(pytest.mark.xfail(strict=True, reason=reason))
+    if spec.name in STALE_EXPERTS:
+        request.applymarker(
+            pytest.mark.xfail(strict=True, reason=STALE_EXPERTS[spec.name])
+        )
 
     env, eff_params, _ = _effectiveness_env(spec)
     action_shape = env.action_space(eff_params).shape

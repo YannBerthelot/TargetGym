@@ -218,7 +218,7 @@ point of no return at dTi +6 K over C_a 0.40 to 0.70. **The valve has moved that
 curve, and the frozen line now sits above it** by up to 0.254 K at +6 K, near
 C_a 0.57, and stays 0.390 K below it at dTi 0 and 0.818 K at −6 K. The refit is
 354.808 − 42.195 (C_a − 0.45) (derived, `--section pnr`). The line belongs to the
-tuning, so PR 9 redoes it (`test_pnr_line_is_conservative`, a strict xfail until
+tuning, so PR 9 redid it (`test_pnr_line_is_conservative`, a strict xfail until
 then). The PID's setpoint ceiling at 0.45 is the line less 0.3 K, 354.600 K or
 T* + 1.767 K, and the line is the binding ceiling for targets up to 0.464 mol/L.
 
@@ -475,14 +475,34 @@ P-only gain stabilises it at all.
 
 ## 7. Experts
 
-**The shipped gains do not survive this plant.** On 20 episodes the cascade trips
-in every one, 27 to 53 times an episode, which is the review's finding of 6 trips in
-6 with a 10 s lag on T. Its gains were tuned on an instant T. It is not the plant:
-a rough scan of the inner gains ran 16 scheduled episodes with no trip at
-`Kp_T` 2 and `Kd_T` 0.8 to 1.2, against 8.49 and 0.95 shipped. That scan
-was a feasibility check and sets no gain. PR 9 retunes the cascade by its protocol.
-The oracle reads the true state and runs seed 200 with no trip. Everything below
-in this section was measured on the plant without the instruments.
+**The recipe on this plant** (section 9 of
+`docs/proposals/expert-protocols-process.md`, run by
+`scripts/tune_process_experts.py --envs unstable_cstr`). Figures from here to the
+next heading are measured on the plant with its instruments. Older figures below
+this block predate them.
+
+- **Pairing.** One coolant, so there is no pairing to choose, and the RGA has
+  nothing to say. The check is which reading closes the inner loop: the unstable
+  mode, 2.42 /min at 0.55 mol/L, reads 4.2 noise bands per unit on T and 2.6 on C_a,
+  so T closes it, as the cascade does.
+- **Inner PD.** SIMC on the datasheet: slope UA / (rho C V) = 2.09 K/min per K, lag
+  0.217 min (the thermowell and half the jacket), delay 0.108 min (the other half of
+  the jacket, the valve and half a step). Kp_T = 2.21, Kd_T = 0.478. A closed test
+  over 36 s read 12 K/min/K at a fit of 60 %, since a gain and a lag draw one curve
+  there, so the datasheet stands. No P gain tried holds this plant: it needs the D.
+- **Outer PI.** C_a on the setpoint, inner loop closed: k = -0.0195 mol/L per K,
+  tau1 = 0.234 min, theta = 0.30 min. Kc_Ca = 26.6, Ti_Ca = 0.345 min, Tf_Ca = 0.033
+  min. The spread of 1.47 stays under C5's limit, so the median stands.
+- **Limits.** Tc_bias 300.9 K, window 4.73 K each side, line margin 2.07 K, ramp 9.7
+  K/min. `PNR_LINE` is refit below the exact point of no return with the valve in.
+- **Held-out check** (seeds 200 to 209). It holds 1.3e4 per step (worst seed 4.7e4),
+  with 8 trips on 4 seeds, from 4.1e5 and 407 trips on the gains that predate the
+  instruments. The best null is constant 0, ratio 0.008, 4 of 10 wins, so it passes
+  the gate.
+- **Findings.** `check_cascade_gains`, which now sees the thermowell and the valve,
+  reports the closed loop growing at +0.36 /min at 0.45 mol/L and three equilibrium
+  setpoints outside the window. D2 makes that a report. Trips restart cycles, so the
+  cycle and doubling rules also fail (`tests/test_episode_length.py`).
 
 **Cascade PID** (`make_unstable_cstr_pid`). An outer PI on C_a sets a
 rate-limited temperature setpoint around the feedforward T*(L), clipped
@@ -494,7 +514,7 @@ an inner PD on T sets the coolant. The setpoint starts at the measured T
 are held, since their right value is set by the distance to the point of no
 return, which the return sees only once a trip happens.
 
-A stability guard (`check_cascade_gains`) refuses gains whose linearised
+A stability guard (`check_cascade_gains`) reports gains whose linearised
 closed loop decays slower than `GUARD_MIN_DECAY` (0.5 /min, ours) at any of
 the five targets, or whose equilibrium setpoint falls outside the setpoint
 window at a drift of −6, 0 or +6 K

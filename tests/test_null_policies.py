@@ -240,14 +240,10 @@ _STALE_TECS = "PR 9: TECS's time_const 2 trips the new envelope; at 5 this passe
 #: The tasks a null policy beats today, each a finding of the industrial review.
 #: The PR that fixes one removes its line.
 KNOWN = {
-    "cstr": "the expert was tuned on an instant analyser; PR 9 retunes it",
-    "distillation": "the expert was tuned on instant analysers; PR 9 retunes it",
     "formation": "the hold's gains predate the envelope and the 0.03 rad/s route; "
     "PR 9 retunes it",
     "patrol_range_bearing": "the estimator's filter predates the 0.03 rad/s route; "
     "PR 9 replaces it",
-    "ph_neutralization": "the expert's gains predate the probe, so it cycles; PR 9 "
-    "retunes them",
     "plane": _STALE_TECS,
     "plane3d_circle": _STALE_TECS,
     "plane3d_figure8": _STALE_TECS,
@@ -256,8 +252,6 @@ KNOWN = {
     "plane_energy": _STALE_TECS,
     "plane_sine": _STALE_TECS,
     "reactor": "PR 9: an integrator on Tavg beats the rod program's dead band",
-    "unstable_cstr": "the expert's gains predate the thermowell and the valve, so it "
-    "trips; PR 9 retunes them",
 }
 
 

@@ -557,11 +557,6 @@ def test_point_of_no_return_at_the_hottest_target(params):
     assert hi == pytest.approx(4.576, abs=0.01)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="PR 9: PNR_LINE is frozen with the tuning and predates the valve, which "
-    "moves the point of no return up to 0.25 K below it at a +6 K drift",
-)
 def test_pnr_line_is_conservative(params):
     """``pnr_line``, which caps the PID's setpoint and bounds the MPC's T, lies
     at or below the exact point of no return (jacket at the steady coolant)

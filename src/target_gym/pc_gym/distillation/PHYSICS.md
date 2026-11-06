@@ -96,7 +96,7 @@ not from this column. Eq. 31's own rounded entries give 36.07 and 146.0.
 | nominal `L`, `V` | 2.706, 3.206 | kmol/min | Operating point A | ✅ |
 | `L_min/max`, `V_min/max` | 2.20–3.40, 2.70–3.90 | kmol/min | Ours, to hold the target box (below) | ⚠️ |
 | `zF_noise_std` | 0.03 | – | TUNED — feed disturbance amplitude | ⚠️ |
-| `delta_t` | 1.0 | min | 600 steps ≈ 3 dominant time constants | ✅ |
+| `delta_t` | 1.0 | min | 400 steps ≈ 2 dominant time constants | ✅ |
 
 **The flow limits are ours, for the owner to accept.** The reference gives no
 limits, and these come from the target box, not from a column design. At the
@@ -271,36 +271,42 @@ the bottoms (`make_distillation_pid_controller`, `base_layer_step`). It starts
 bumplessly from the observed flows and temperature. The observation-only MPC
 that practice adds on top is PR 2 of the experts refactor.
 
-SIMC (Skogestad and Grimholt 2012), from step tests on training seeds 100 to
-109 against unstepped runs on the same feed noise, by
-`scripts/tune_process_experts.py --envs distillation`:
+The tests hold a steady feed, on training seeds 100 to 109, by
+`scripts/tune_process_experts.py --envs distillation`, section 9 of
+`docs/proposals/expert-protocols-process.md`. Nobody leaves a column in manual, so a
+P loop of 0.16 kmol/min per K on the tray holds it (ours).
 
-- **Temperature loop.** Boilup stepped 0.005 kmol/min. Over the first 20 min
-  the stage-15 temperature rises at k' = 1.19 K/min per kmol/min with no lag
-  beyond the 1 min sample, theta = 0.5 min; its time constant, about 160 min,
-  is over 300 delays, so the loop is lag-dominant and takes the integrating
-  rule. Tight SIMC would move boilup by its whole range on the setpoint
-  moves the bottoms loop makes (up to 2.5 K on the training seeds), and the
-  column then runs off, so tau_c is the smallest that keeps the first move
-  within boilup's room from the nominal point, 0.39 kmol/min (SIMC's input
-  usage rule, eq. 5.35): tau_c = 4.8 min, Kp_T = 0.160 kmol/min per K,
-  Ti_T = 21 min.
-- **Distillate loop**, yD on reflux with the temperature loop closed: a
-  0.005 kmol/min step. Median fit k = 0.0209, tau1 = 1.98 min,
-  theta = 1.31 min; the input bound does not bind, so tau_c = theta:
-  Kp_D = 36.2, Ti_D = 1.98 min.
-- **Bottoms loop**, xB on the temperature setpoint: a 0.2 K step. Median fit
-  k = -0.00526 per K, tau1 = 2.18 min, theta = 0.93 min; tau_c = theta:
-  Kp_B = -223 K, Ti_B = 2.18 min.
-- **Interaction.** With the temperature loop closed the steady-state relative
-  gain of the remaining pairing is about 0.85, against 36 for LV
-  without it, the reduction the dos and don'ts describe (measured on the
-  nominal profile).
-- **Held-out check** (seeds 200 to 209). It holds 0.155 per step (worst seed
-  0.29) against a ceiling of 2, settles in 46 steps and never trips
-  (`tests/pc_gym/test_expert_specs.py`). The two diagonal composition loops
-  it replaced held 391 on the protocol seeds. Over 600-step episodes they
-  also tripped 3 of the 10 training seeds.
+- **Pairing.** RGA(1,1) from the steady gains in float64: 35.9 for yD and xB on L and
+  V, and 0.83 for yD and xB on L and the tray's setpoint with the tray closed, the
+  pairing the expert runs. The tray alone with V keeps 43 at steady state, so the
+  tray loop has to be tight and the composition loops slower.
+- **Temperature loop.** Integrating, k' = 1.15 K/min per kmol/min, no lag beyond the 1
+  min sample, theta = 0.5 min. The filter reaches its cap, Tf_T = 0.4 min, and Kp_T =
+  0.360 kmol/min per K, Ti_T = 9.7 min.
+- **Setpoint ramp.** 0.70 K/min, the steepest the tray loop follows on boilup's room
+  from the published point, so a composition move never steps it.
+- **Distillate loop**, yD on reflux, tray closed, on the chromatograph. A step of
+  0.25 kmol/min moves 1.5 bands. k = 0.0144, tau1 = 1.4 min, theta = 10.5 min, so
+  Kp_D = 16.1, Ti_D = 4.9 min.
+- **Bottoms loop**, xB on the tray's setpoint. A step of 1.05 K moves 2.6 bands. k =
+  -0.00624 per K, tau1 = 0.87 min, theta = 7.5 min, so Kp_B = -36.0 K, Ti_B = 3.4 min.
+- **Gate.** Each analyser loop acts on an update whose reading has moved past its band
+  (0.0024) from the one it held, or sits past it from the target, then waits 2
+  updates, 10 min. That is N8. The loops are slower than the tray, so the cascade is
+  no longer inverted.
+- **Held-out check** (seeds 200 to 209, 400 steps). It holds 7,636 per step (worst
+  seed 24,880) against a ceiling of 2, with 170 trips on 3 of the 10 seeds. The best
+  null is a constant, ratio 0.04, 2 of 10 wins.
+- **Episode.** 400 steps, doubled from 200 on 2026-11-06, since the hold at 200 was
+  2.81 times a doubled run's. The ratio at 400 is 0.57 on training seeds and 0.65
+  held out, so the rule passes, but only because the longer run does worse: 298 trips
+  on 5 seeds at 800 steps. At 200 steps it held 3,942 with no trips, so these gains
+  lose the column past step 200. That is a finding, not a settled loop.
+- **Scatter.** The recipe reproduces exactly at a fixed test length, which is why that
+  length is now the recipe's, 200 steps (section 9, R7). A new noise path moves it a
+  lot: over test lengths of 195 to 500 steps, `Kp_T` runs 0.12 to 0.36.
+- **Levels.** 8,466 with 43 trips on 7 seeds at level 0.5, and 4,725 with none at
+  level 2.
 
 ---
 
@@ -314,7 +320,7 @@ SIMC (Skogestad and Grimholt 2012), from step tests on training seeds 100 to
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `distillation` | 200 | 60 | 3.3 h | 2 in [-1, 1] | 7 | 107 |
+| `distillation` | 400 | 60 | 6.7 h | 2 in [-1, 1] | 7 | 107 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

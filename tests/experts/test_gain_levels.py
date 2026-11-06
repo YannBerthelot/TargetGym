@@ -50,6 +50,11 @@ def _scaled(entry):
     return SCALE * entry if isinstance(entry, (int, float)) else entry
 
 
+def _p_loop(store):
+    """``first_order``'s entry as a P loop of 0.1 with no filter."""
+    return {**store.shipped["first_order"], "Kp": 0.1, "Ki": 0.0, "Kd": 0.0, "Tf": 0.0}
+
+
 def _leaves(controller):
     return [float(x) for x in jax.tree_util.tree_leaves(controller.params)]
 
@@ -79,9 +84,28 @@ def test_a_stored_level_gives_that_levels_gains(store, task, field, key):
     )
 
 
+@pytest.mark.parametrize(
+    "task",
+    [
+        "first_order",
+        "cstr",
+        "four_tank",
+        "ph_neutralization",
+        "distillation",
+        "unstable_cstr",
+        "compressor_surge",
+    ],
+)
+@pytest.mark.parametrize("level", [0.5, 2])
+def test_the_process_experts_have_gains_at_the_studys_levels(task, level):
+    # ExpertBench's harness builds these, so a missing level stops a study.
+    shipped = _leaves(REGISTRY[task].make_pid_controller())
+    assert _leaves(REGISTRY[task].make_pid_controller(level)) != shipped
+
+
 def test_make_expert_acts_on_the_level_it_was_given(store):
     # A pure P loop: action = Kp (target - x) = 0.1 (1 - 0).
-    store(0.5, {"first_order": {"Kp": 0.1, "Ki": 0.0, "Kd": 0.0}})
+    store(0.5, {"first_order": _p_loop(store)})
     expert = tg.make_expert("first_order", sensor_noise_scale=0.5)
     action, _ = expert.step(expert.reset(), np.array([0.0, 1.0], np.float32))
     assert float(np.ravel(action)[0]) == pytest.approx(0.1, rel=1e-6)
@@ -90,7 +114,7 @@ def test_make_expert_acts_on_the_level_it_was_given(store):
 def test_the_batched_form_ajax_calls_keeps_working_with_and_without_a_level(store):
     # The P loop's action, 0.1 (1 - 0), once per batch row; the shipped form
     # keeps the shape it has always had.
-    store(2, {"first_order": {"Kp": 0.1, "Ki": 0.0, "Kd": 0.0}})
+    store(2, {"first_order": _p_loop(store)})
     spec = REGISTRY["first_order"]
     obs = np.array([[0.0, 1.0], [0.0, 1.0]], np.float32)
     policy = spec.make_pid_controller(2).batched()
@@ -103,7 +127,7 @@ def test_the_batched_form_ajax_calls_keeps_working_with_and_without_a_level(stor
 
 
 def test_the_shipped_gains_come_back_after_a_level(store):
-    store(2, {"first_order": {"Kp": 0.1, "Ki": 0.0, "Kd": 0.0}})
+    store(2, {"first_order": _p_loop(store)})
     before = _leaves(REGISTRY["first_order"].make_pid_controller())
     REGISTRY["first_order"].make_pid_controller(2)
     assert _leaves(REGISTRY["first_order"].make_pid_controller()) == before
@@ -112,7 +136,7 @@ def test_the_shipped_gains_come_back_after_a_level(store):
 
 def test_a_failed_build_at_a_level_leaves_the_shipped_gains_in_place(store):
     # The entry passes the key check, and its value then fails to convert.
-    store(2, {"first_order": {"Kp": "not a number", "Ki": 0.0, "Kd": 0.0}})
+    store(2, {"first_order": {**_p_loop(store), "Kp": "not a number"}})
     with pytest.raises(ValueError):
         REGISTRY["first_order"].make_pid_controller(2)
     assert pid.load_gains()["first_order"] == store.shipped["first_order"]
@@ -131,8 +155,8 @@ def test_a_stray_file_does_not_add_a_level(store):
         REGISTRY["first_order"].make_pid_controller(3)
 
 
-def test_a_level_with_no_file_raises_for_every_task_form():
-    # Nothing is stored at 2 yet, so no task may answer from the shipped gains.
+def test_a_level_with_no_file_raises_for_every_task_form(store):
+    # Nothing is stored at 2 here, so no task may answer from the shipped gains.
     with pytest.raises(KeyError, match=r"first_order.*2"):
         REGISTRY["first_order"].make_pid_controller(2)
     with pytest.raises(KeyError, match=r"first_order.*2"):
@@ -165,12 +189,12 @@ def test_a_level_needs_the_other_entries_the_task_reads(store):
 def test_a_level_has_its_own_fingerprint(store):
     spec = REGISTRY["first_order"]
     shipped = provenance.expert_fingerprint(spec)
-    store(2, {"first_order": {"Kp": 0.1, "Ki": 0.0, "Kd": 0.0}})
+    store(2, {"first_order": _p_loop(store)})
     first = provenance.expert_fingerprint(spec, 2)
     assert provenance.expert_fingerprint(spec) == shipped, "level 2 moved level 1"
     assert first != shipped
 
-    store(2, {"first_order": {"Kp": 0.2, "Ki": 0.0, "Kd": 0.0}})
+    store(2, {"first_order": {**_p_loop(store), "Kp": 0.2}})
     assert provenance.expert_fingerprint(spec, 2) != first
     assert provenance.expert_fingerprint(spec) == shipped
 
@@ -186,7 +210,7 @@ def test_equal_gains_at_two_levels_are_still_two_fingerprints(store):
     )
 
 
-def test_a_level_with_no_gains_has_no_fingerprint():
+def test_a_level_with_no_gains_has_no_fingerprint(store):
     with pytest.raises(KeyError):
         provenance.expert_fingerprint(REGISTRY["first_order"], 2)
 

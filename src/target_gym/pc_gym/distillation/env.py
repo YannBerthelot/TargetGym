@@ -131,13 +131,14 @@ class DistillationParams(EnvParams):
     initial_L_range: Tuple[float, float] = (2.65, 2.76)
 
     # ---- Time discretization ----
-    # Minutes. Dominant time constant ~194 min, so 600 steps ~ 3 tau. The
-    # integrator needs 16 substeps at this step size for stability; see
+    # Minutes. Dominant time constant ~194 min, so 400 steps ~ 2 tau: at 200 the
+    # expert's hold was 2.8 times a doubled run's, against the episode-length
+    # rule. The integrator needs 16 substeps at this step size for stability; see
     # ``compute_next_state``.
     delta_t: float = 1.0
     #: ``delta_t`` is in minutes (Skogestad's model unit); seconds per unit.
     time_unit_seconds: float = 60.0
-    max_steps_in_episode: int = 200
+    max_steps_in_episode: int = 400
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # Two tracked compositions, one term each, summed. The shipped MPC's

@@ -40,7 +40,7 @@ from scipy.signal import fftconvolve
 __all__ = ["MODELS", "TRAIN_SEEDS", "Loop", "Plant", "Run", "class_of", "evidence"]
 __all__ += ["fit", "identify", "insignificant", "judge", "nrmse_fit"]
 __all__ += ["DEAD_BAND", "Bump", "Instrument", "Read", "band_exit", "noise_band"]
-__all__ += ["noise_tune", "pick_fit", "simc", "single_run", "sized_step"]
+__all__ += ["noise_tune", "pick_fit", "rga", "simc", "single_run", "sized_step"]
 
 #: The training seeds every protocol identifies on; 200-209 are held out.
 TRAIN_SEEDS = tuple(range(100, 110))
@@ -397,6 +397,15 @@ def simc(k: float, tau1, theta: float, tau_c: float):
     return tau1 / (k * (tau_c + theta)), min(tau1, 4 * (tau_c + theta))
 
 
+def rga(G) -> np.ndarray:
+    """Bristol's relative gain array of a square gain matrix, ``G * inv(G)^T``:
+    each element is a pairing's gain with the other loops open over its gain
+    with them closed, so rows and columns sum to 1 and a pairing wants it near 1
+    and never negative."""
+    G = np.asarray(G, float)
+    return G * np.linalg.inv(G).T
+
+
 def _attenuation(tf: float, h: float) -> float:
     """What a first-order filter of ``tf`` leaves of white noise read every
     ``h``: sqrt(a / (2 - a)), a = 1 - exp(-h / tf)."""
@@ -611,8 +620,12 @@ class Plant:
     ``cvs`` are ``f(obs, state, params)`` and ``limits`` their trip limits
     ``(lo, hi)``, either may be None. The expert settles one episode; the
     moves then hold ``start(actions, memories)``, by default the mean of its
-    last ``window`` commands. ``actuate(u, y, memory) -> (action, memory)``
-    maps the test's MVs to the env's action (by default the raw action).
+    last ``window`` commands. ``controller`` settles it in the expert's place,
+    since a recipe's test must not start from the gains it replaces.
+    ``actuate(u, y, memory) -> (action, memory)`` maps the test's MVs to the
+    env's action (by default the raw action), and ``applied(u, action)`` is
+    what a test records as its input (by default ``u``), for a loop closed
+    inside ``actuate`` whose MV is not all that moves the plant.
     """
 
     def __init__(
@@ -629,6 +642,8 @@ class Plant:
         mv_range=(-1.0, 1.0),
         expert_mv=None,
         direction=away_from_nearer_limit,
+        controller=None,
+        applied=None,
     ):
         self.n_ep, self.dt = int(params.max_steps_in_episode), float(params.delta_t)
         # Long enough for any retest; continuing off, so a trip leaves the
@@ -639,7 +654,7 @@ class Plant:
             if hasattr(params, "continuing")
             else params
         )
-        env, ctrl = spec.make_env(), spec.make_pid_controller()
+        env, ctrl = spec.make_env(), controller or spec.make_pid_controller()
         self.n_mv, self.n_cv, self.n_seeds = (
             env.action_space(params).shape[0],
             len(cvs),
@@ -649,6 +664,7 @@ class Plant:
         self.expert_mv, self._actuate = expert_mv or {}, actuate or (
             lambda u, y, m: (u, m)
         )
+        self._applied = applied or (lambda u, a: u)
         self._keys = jax.vmap(jax.random.PRNGKey)(jnp.asarray(seeds))
         n = self.n_ep
 
@@ -724,7 +740,7 @@ class Plant:
                 trip = (max(t - n_pre, 0), self._which(y))
                 break
             (Y if t >= n_pre else Y0).append(y)
-            (U if t >= n_pre else U0).append(u.copy())
+            (U if t >= n_pre else U0).append(np.array(self._applied(u, a), float))
         shape = (-1, self.n_cv), (-1, self.n_mv)
         pre = np.reshape(Y0, shape[0]), np.reshape(U0, shape[1])
         return np.reshape(Y, shape[0]), np.reshape(U, shape[1]), trip, y_at, pre

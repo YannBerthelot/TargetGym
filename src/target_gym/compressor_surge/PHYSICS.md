@@ -603,20 +603,35 @@ The memory starts at the observed drive setpoint and valve (`pair_init`), so
 the speed loop takes over bumplessly from any state and the valve loop from
 its control line. It persists through a trip (the suite's convention).
 
-| gain | shipped | `DEFAULT_GAINS` | tuned or held | label and source |
-|---|---|---|---|---|
-| `kp_speed` | 0.112 of rated per kPa | 0.08 | tuned | TUNED by the search (below); the default is ours |
-| `ki_speed` | 0.04 of rated per kPa s | 0.04 | tuned | TUNED, left at the default (ours) |
-| `kp_surge` | 2.0 per unit margin | 2.0 | tuned | TUNED, left at the default; the default is ours, above the nominal gain below 1 that Mirsky et al. p.13 call typical, which relies on open-loop steps that the override stands in for here; at 3.0 the valve rings in a limit cycle that the guard's travel check refuses (measured, `--section guard`) |
-| `ki_surge` | 0.75 per unit margin s | 3.0 | tuned | TUNED; the default is ours; at 0.3 the linearised loop keeps a mode decaying at 0.083 /s (derived, `--section guard`) |
-| `surge_line` | 0.15 | 0.15 | held | ours; wider than the control lines about 10 % in flow from the surge line that Mirsky et al. pp.11 and 13 describe; the shipped pair keeps a margin of at least 0.0951 over 4096 episodes (measured, `--pid-validation`) |
-| `override_line` | 0.075 | 0.075 | held | ours, read-consistent: half the control margin, near where Mirsky et al. p.13 place the open-loop line |
-| `override_hold` | 2 s | 2 s | held | ours |
-| `reset_band` | 0.05 of opening | 0.05 | held | ours |
+The stored values come from section 9 of
+`docs/proposals/expert-protocols-process.md`, run by
+`scripts/tune_process_experts.py --envs compressor_surge`. Each test starts at the
+pair's rest at the levels the schedule ends on, with no stored gain in the way.
 
-The held gains are set by the distance to the surge line, which the return
-sees only once a trip happens, so the tuner holds them (`HELD_GAINS`). The
-tests in `tests/compressor_surge/test_compressor_surge_experts.py` hold the
+| value | stored | label and source |
+|---|---|---|
+| `kp_speed`, `ki_speed` | 0.0289, 0.0164 | SIMC on speed to pressure: k = 47 kPa per unit speed, tau1 = 1.77 s, theta = 0.65 s. A drive, so no dead band. 8 of 10 tests: two seeds trip in the hold, on a hidden line right of 0.04 |
+| `kp_surge`, `ki_surge` | 1.0, 4.68 | SIMC on recycle to margin: k = 1.16, tau1 = 0.214 s, theta = 0.05 s, 1.02 capped at Mirsky's 1. N7 stops at Kc,min. 6 of the 8 points with the valve open |
+| `Tf_surge` | 0.021 s | N5's cap. Under the 0.1 s step, so it barely filters |
+| `surge_line` | 0.10 | read, Mirsky's 10 %. The schedule check passes it: worst margin 0.061, no trips on seeds 100 to 109 |
+| `override_line` | 0.05 | read, half the control margin |
+| `override_hold` | 2 s | derived, the valve's full-open stroke |
+| `reset_band` | 0.014 of opening | derived, C8 |
+
+**Pairing.** RGA(dp on N) is 0.91 at the median rest with the valve open, so speed
+holds pressure and the valve holds the margin, as shipped.
+
+**Held-out check** (seeds 200 to 209). It holds 12.8 per step (worst seed 24.9)
+against a ceiling of 1, with no trips. The best null is constant 0.5, ratio 0.011,
+0 of 10 wins. The valve travels about 0.3 % per step in hold, from 0.71 %, still over
+the positioner's 0.25 %, since the filter's cap is under one step. The true margin
+over each episode's hidden line falls to 0.014 at worst. The opening still costs 57
+to 92 % of an episode: the anti-surge PI shuts the valve while the slower speed loop
+catches up. That is the recipe's result, and the structure has no term to coordinate
+them. Over 1024 validation seeds it does not trip, and its margin reaches 0.0496,
+under the override line: a finding, `test_the_pair_holds_the_validation_seeds`.
+
+The tests in `tests/compressor_surge/test_compressor_surge_experts.py` hold the
 pair. `test_default_gains_are_finite_and_tuned_ones_nonzero` and
 `test_gains_are_read_under_the_task_key` check the gains and where they are
 read from. `test_shipped_gains_pass_the_guard` and
@@ -629,7 +644,8 @@ the stateful controller.
 
 ### The guard
 
-`make_compressor_surge_pid` refuses gains that fail any of three checks
+`check_pair_gains` reports gains that fail any of three checks, and since D2 of the
+process protocols the factory does not call it
 (`check_pair_gains`, which raises `UnsafePairGains`):
 
 1. **Linear decay.** At five points where the anti-surge loop is active

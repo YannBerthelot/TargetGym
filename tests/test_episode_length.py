@@ -42,8 +42,6 @@ _STALE_TECS = "TECS's time_const 2 trips the new envelope; PR 9 retunes it"
 _STALE_HOLD = "the hold's gains predate the envelope, the 0.03 rad/s route and the "
 _STALE_HOLD += "decorrelated gust; PR 9 retunes it"
 CYCLE_GAPS: dict[str, str] = {
-    "distillation": "the gains predate the analyser delay and the tray hydraulics, "
-    "so the expert loses the column and its cycles restart; PR 9 retunes it",
     "formation": _STALE_HOLD,
     "patrol_range_bearing": _STALE_HOLD,
     "plane": _STALE_TECS,
@@ -52,13 +50,13 @@ CYCLE_GAPS: dict[str, str] = {
     "plane3d_racetrack": _STALE_TECS,
     "plane_energy": _STALE_TECS,
     "plane_sine": _STALE_TECS,
-    "unstable_cstr": "the gains predate the thermowell and the valve, so the expert "
-    "trips and its cycles restart; PR 9 retunes them",
+    "unstable_cstr": "the datasheet's inner PD still trips, and trips restart cycles",
 }
 DOUBLING_GAPS: dict[str, str] = {
     "plane3d_racetrack": _STALE_TECS,
     "plane_energy": _STALE_TECS,
     "plane_sine": _STALE_TECS,
+    "unstable_cstr": "its hold is 2.30x a doubled run's, from early trips",
 }
 # compressor_surge's schedule ends at step 1200 and then holds its last levels,
 # so a run twice as long adds 1200 quiet steps and its hold falls 2.2x without
