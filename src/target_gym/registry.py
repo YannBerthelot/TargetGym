@@ -698,6 +698,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # third.
         tuned_gains_key="cstr",
         oracle_data=_shared_oracle("cstr"),
+        # The feed loads, frozen at the true one for the oracle, as any
+        # process noise is: no plan sees a later arrival.
+        noise_fields=("load_scale",),
         version=4,
     ),
     EnvSpec(
@@ -736,6 +739,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # loop near a 64 s time constant. At 500 steps it was still settling.
         tuned_gains_key="four_tank",
         oracle_data=_shared_oracle("four_tank"),
+        # The tank loads, frozen at the true one for the oracle, as any
+        # process noise is: no plan sees a later arrival.
+        noise_fields=("load_scale",),
         # 4: the levels are read through instruments (PHYSICS.md, Readings).
         version=4,
     ),
