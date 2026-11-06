@@ -172,8 +172,12 @@ track on a speed demand, across it on a course and vertically on a height, each
 a PI with the lead's speed, heading and turn rate fed forward. In a turn the
 slot swings with the lead, so its velocity includes omega x slot offset. The
 autopilot underneath is the 3D tasks' (`plane3d.experts`): TECS on height and
-speed, a pitch loop, a damped bank loop limited to 45 deg and stall
-prevention, as ArduPilot flies them. The height and speed demands go to TECS as
+speed, a bank demand limited to 45 deg and stall prevention, as ArduPilot flies
+them, over the plant's fixed inner loop (`plane/PHYSICS.md`). A policy, the
+scripted lead and the twin law all send it demands, so nothing here touches the
+surfaces. The lead's heading PID sends its bank and pitch as demands until PR 7b
+replaces it. The patrol tasks do not read the 3D tasks' envelope trips or rolling
+gust yet, which is PR 7b too. The height and speed demands go to TECS as
 they are, with only their rates filtered. Unfiltered, every step-to-step wobble
 of the lead's track reaches the pitch loop.
 

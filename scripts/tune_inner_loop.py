@@ -16,7 +16,6 @@ are in still air, so nothing here reads a result. It prints the values typed int
 from __future__ import annotations
 
 import json
-import sys
 
 import jax
 import jax.numpy as jnp
@@ -221,38 +220,34 @@ def tune(axis, run, gains):
     return with_(p, i, d), log
 
 
-def main() -> int:
+GAINS = ("Kp_theta", "Ki_theta", "Kd_theta", "Kp_roll", "Ki_roll", "Kd_roll")
+
+
+def tuned_gains(report=None):
+    """The recipe, roll first on the pitch loop's defaults: an ``InnerLoop``.
+    ``report``, a dict, collects each axis's tests."""
     params = PlaneParams3D(turbulence_sigma=0.0)
     trimmed = trim(params)
     theta0 = trimmed[0]
-    print(
-        f"trim: pitch {np.rad2deg(theta0):.3f} deg, stick {trimmed[1]:.4f} rad, "
-        f"lever {trimmed[2]:.3f}",
-        file=sys.stderr,
-    )
     fly = make_flight(params, trimmed)
+
+    def demands(pitches, banks):
+        return jnp.asarray(pitches, jnp.float32), jnp.asarray(banks, jnp.float32)
 
     bank_levels = np.deg2rad(ROLL_TEST)
     banks = schedule(bank_levels, ROLL_HOLD)
 
     def run_roll(gains):
-        pitches = np.full_like(banks, theta0)
-        _, phi = fly(
-            gains, jnp.asarray(pitches, jnp.float32), jnp.asarray(banks, jnp.float32)
-        )
+        _, phi = fly(gains, *demands(np.full_like(banks, theta0), banks))
         return reads(np.asarray(phi), bank_levels, ROLL_HOLD)
 
     pitch_levels = theta0 + np.deg2rad(PITCH_TEST)
     pitches = schedule(pitch_levels, PITCH_HOLD)
 
     def run_pitch(gains):
-        banks0 = np.zeros_like(pitches)
-        theta, _ = fly(
-            gains, jnp.asarray(pitches, jnp.float32), jnp.asarray(banks0, jnp.float32)
-        )
+        theta, _ = fly(gains, *demands(pitches, np.zeros_like(pitches)))
         return reads(np.asarray(theta), pitch_levels, PITCH_HOLD)
 
-    # Roll is tuned first, on the pitch loop's defaults.
     start = InnerLoop(
         Kp_theta=P_START * UNIT,
         Ki_theta=0.0,
@@ -263,28 +258,19 @@ def main() -> int:
     )
     gains, roll_log = tune("roll", run_roll, start)
     gains, pitch_log = tune("pitch", run_pitch, gains)
-    print(
-        json.dumps(
-            dict(
-                gains={
-                    k: round(float(getattr(gains, k)), 4)
-                    for k in (
-                        "Kp_theta",
-                        "Ki_theta",
-                        "Kd_theta",
-                        "Kp_roll",
-                        "Ki_roll",
-                        "Kd_roll",
-                    )
-                },
-                roll_tests=len(roll_log),
-                pitch_tests=len(pitch_log),
-                roll_end=roll_log[-3:],
-                pitch_end=pitch_log[-3:],
-            ),
-            indent=1,
-        )
-    )
+    if report is not None:
+        report.update(trim=trimmed, roll=roll_log, pitch=pitch_log)
+    return gains
+
+
+def main() -> int:
+    report = {}
+    gains = tuned_gains(report)
+    theta, stick, lever = report["trim"]
+    print(f"trim: pitch {np.rad2deg(theta):.3f} deg, stick {stick:.4f} rad, ", end="")
+    print(f"lever {lever:.3f}")
+    print(f"tests: {len(report['roll'])} roll, {len(report['pitch'])} pitch")
+    print(json.dumps({k: round(float(getattr(gains, k)), 4) for k in GAINS}, indent=1))
     return 0
 
 

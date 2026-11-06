@@ -27,7 +27,7 @@ import pytest
 from target_gym import records, registry
 from target_gym.experts import pid as pid_mod
 from target_gym.experts.mpc import plan_params
-from target_gym.plane.env import PlaneParams
+from target_gym.plane.env import PlaneParams, get_obs
 from target_gym.plane.oracle import (
     PlaneHandoverMPC,
     PlaneMPC,
@@ -334,7 +334,9 @@ def test_the_plant_gets_the_pids_throttle_and_the_plan_moves_the_elevator():
     pid.reset()
     action = oracle.step(obs, state)
     assert action.shape == (2,)
-    assert action[0] == np.float32(pid.step(np.asarray(obs))[0])
+    # The oracle's speed loop reads the true state, not the instruments.
+    true_obs = np.asarray(get_obs(state, params))
+    assert action[0] == np.float32(pid.step(true_obs)[0])
     assert oracle._pid.state.speed_integral == pid.state.speed_integral
     plan = jnp.zeros((3, 2), dtype=jnp.float32)
     grad = jax.grad(lambda a: oracle._rollout(a, (state, jnp.float32(0.0))))(plan)

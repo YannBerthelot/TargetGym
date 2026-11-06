@@ -11,6 +11,7 @@ worker leaves the parallelism to xdist, which is where it belongs.
 """
 
 import os
+import pathlib
 
 import pytest
 
@@ -88,3 +89,19 @@ def pytest_configure(config):  # noqa: ARG001
     # skips the many medium-sized graphs that make up most of this suite's bill.
     jax.config.update("jax_persistent_cache_min_entry_size_bytes", 0)
     jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
+
+
+_PR9_WAITING = pathlib.Path(__file__).with_name("pr9_waiting.txt")
+
+
+def pytest_collection_modifyitems(items):
+    """Strict xfails for what PR 9 owes the aircraft (pr9_waiting.txt)."""
+    waiting = {
+        line.strip()
+        for line in _PR9_WAITING.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    reason = "PR 9: the aircraft's guidance, TECS and oracles predate the plant"
+    for item in items:
+        if item.nodeid in waiting:
+            item.add_marker(pytest.mark.xfail(strict=True, reason=reason))

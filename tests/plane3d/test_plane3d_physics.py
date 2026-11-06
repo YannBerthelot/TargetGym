@@ -47,13 +47,8 @@ def test_aileron_moment_arm_is_inside_the_semi_span(params):
 # ---------------------------------------------------------------------------
 
 
-def _fly_bank(target_deg, steps=2500, tail=500):
-    """Hold a bank angle, then measure the resulting turn.
-
-    The aileron commands a roll *rate*, so holding an angle needs a loop --
-    a constant deflection just keeps rolling. That is the physics, not a
-    limitation of the test.
-    """
+def _fly_bank(target_deg, steps=900, tail=500):
+    """Demand a bank angle, then measure the resulting turn."""
     spec = REGISTRY["plane3d_heading"]
     env = spec.make_env()
     params = spec.params_cls().replace(max_steps_in_episode=steps + 10)
@@ -61,19 +56,10 @@ def _fly_bank(target_deg, steps=2500, tail=500):
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
 
-    target = np.deg2rad(target_deg)
+    demand = jnp.array([0.2, 0.2, target_deg / 45.0])
     phis, psis, speeds = [], [], []
     for _ in range(steps):
-        aileron = float(
-            np.clip(
-                2.5 * (target - float(state.phi)) - 0.9 * float(state.phi_dot),
-                -1.0,
-                1.0,
-            )
-        )
-        _, next_state, _, _, info = step(
-            key, state, jnp.array([-0.55, 0.0, aileron]), params
-        )
+        _, next_state, _, _, info = step(key, state, demand, params)
         # A trip no longer ends the episode: base.failure_kernel restarts the
         # aircraft from a fresh draw, with a new heading. Stop at the trip, as
         # the terminated flag used to, so the measured turn is one flight.
@@ -136,30 +122,27 @@ def test_load_factor_grows_with_bank():
 def test_a_constant_aileron_commands_a_rate_not_an_angle():
     """Real roll behaviour: hold the stick over and the aircraft keeps rolling.
 
-    This is why every 3D controller in the suite is a cascade with an inner
-    bank loop, and it is worth pinning: a model that settled at a bank angle
-    for constant aileron would make those controllers pointless.
+    This is why the plant carries a bank loop, and it is worth pinning: a model
+    that settled at a bank angle for constant aileron would need none. The roll
+    moment does not depend on the bank, so the rate where aileron meets damping is
+    a steady one at every bank angle.
     """
-    spec = REGISTRY["plane3d_heading"]
-    env = spec.make_env()
-    params = spec.params_cls().replace(max_steps_in_episode=1200)
-    step = jax.jit(env.step_env)
-    key = jax.random.PRNGKey(0)
-    _, state = env.reset_env(key, params)
+    from target_gym.plane3d.dynamics import compute_acceleration_3d
 
-    phis = []
-    for _ in range(900):
-        _, next_state, _, _, info = step(
-            key, state, jnp.array([-0.55, 0.0, 0.15]), params
+    params = PlaneParams3D()
+    action = (40_000.0, 0.0, 0.05)
+
+    def roll_accel(phi, rate):
+        velocities = jnp.array([200.0, 0.0, 0.0, 0.0, rate])
+        positions = jnp.array([0.0, 0.0, 5500.0, 0.02, phi])
+        return float(
+            compute_acceleration_3d(velocities, positions, action, params)[0][4]
         )
-        if bool(info["tripped"]):  # a restart would splice in a fresh roll angle
-            break
-        state = next_state
-        phis.append(float(state.phi))
-    phis = np.unwrap(np.array(phis))
-    first = phis[len(phis) // 3] - phis[0]
-    second = phis[-1] - phis[2 * len(phis) // 3]
-    assert abs(second) > 0.25 * abs(first), "roll stopped -- aileron held an angle"
+
+    steady = 0.1 * roll_accel(0.0, 0.0) / (roll_accel(0.0, 0.0) - roll_accel(0.0, 0.1))
+    assert steady > 0.0
+    for phi in (0.0, 0.5, 1.0):
+        assert abs(roll_accel(phi, steady)) < 1e-3
 
 
 def test_wings_level_reproduces_the_two_dimensional_model(params):

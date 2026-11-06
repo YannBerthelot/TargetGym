@@ -60,7 +60,9 @@ def _state_3d(z, speed, phi_deg=0.0, load_factor=1.0):
 
 
 def _trips(params, state):
-    check = check_is_terminal if isinstance(params, PlaneParams) else check_is_terminal_3d
+    check = (
+        check_is_terminal if isinstance(params, PlaneParams) else check_is_terminal_3d
+    )
     return bool(check(state, params)[0])
 
 
