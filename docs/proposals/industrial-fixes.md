@@ -77,16 +77,17 @@ because the noise work stales all 24 stamps and has to land at one re-record.
 That branch is local only, and its version stamps are branch stamps, to be redone
 at the end.
 
-CI runs on pull requests into the integration branch too. Branch protection covers
-only `main`, so these have no required checks and no auto-merge, and are merged by
-hand. The large tier does not run on them, so each plant PR runs the null-policy
-gate locally.
+Pull requests into the integration branch run lint and docs only, and merge by
+hand, so resolving a conflict costs a minute of CI and sessions rerun nothing. The
+full run, the large tier and the null-policy gate included, is one draft pull
+request from that branch into `main`, which never merges by hand and runs after each
+batch. A new push cancels the last run, so batches are the unit of checking.
 
 `records` stays red there until the re-record. These exceptions in `python-app.yml`
-apply to these pull requests only, and all come out when the branch lands: tests run
-past a failing `records`, the small tier uses 2 workers, its timeout is 60 minutes,
-compiled programs are freed after each module, memory and disk are logged, and two
-examples in `docs/using-the-pids.md` that compare with stale records are deselected.
+come out when the branch lands: tests run past a failing `records`, the small tier
+uses 2 workers, its timeout is 60 minutes, compiled programs are freed after each
+module, memory and disk are logged, and two examples in `docs/using-the-pids.md` that
+compare with stale records are deselected.
 
 | PR | What | Target | Budget (code + tests) |
 |---|---|---|---|
@@ -105,7 +106,8 @@ examples in `docs/using-the-pids.md` that compare with stale records are deselec
 
 Then the benchmark rechecks its task list and opens its GPU window.
 
-PRs 4 to 7 can run in parallel, one session each, once PRs 3 and 3b are in. PR 3b
+The owner asked for parallel sessions, one per plant group, plus one for the expert
+machinery of PR 9, which does not depend on the plants. PRs 4 to 7 run that way. PR 3b
 needs PR 3's applied action, and PRs 6, 7 and 9 rework experts on top of it. PR 7b
 follows PR 7, whose dynamics it shares. C2 and D hold until their plants are done.
 
@@ -211,8 +213,8 @@ under its decision 4, so each `PHYSICS.md` must keep their status.
 
 | Task | Change |
 |---|---|
-| `battery` | Rebuild: a regulation signal over a multi-hour, energy-limited window, so state of charge is the problem; next block in the observation |
-| `reactor` | Rebuild: steam generator node so turbine load drives `T_cold`; 100-50-100 ramps at 5%/min over 12 h at 60 s steps, so xenon and the rods bind; correct rod speeds |
+| `battery` | Rebuild: a regulation signal over a 4 h, energy-limited window, 2880 steps at 5 s, so state of charge is the problem; next block in the observation |
+| `reactor` | Rebuild: steam generator node so turbine load drives `T_cold`; tracks Tavg against Tref(load), not neutron power, which the turbine now sets, with a kelvin price labelled ours; 100-50-100 ramps at 5%/min over 12 h at 30 s steps, 1440 steps, because 60 s breaks the rod program; correct rod speeds |
 | `wind_turbine` | Published NREL 5 MW `Cp` surface; torque rate limit; setpoint moves; a rotor-speed cost |
 | `compressor_surge` | Ramp setpoints; per-episode surge-line offset, so the margin is not known exactly |
 

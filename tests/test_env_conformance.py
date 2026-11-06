@@ -701,6 +701,11 @@ def _episode_return(spec, policy, seed, params=None):
 # it exists to detect (a mis-indexed setpoint) is not a marginal one.
 CONSTANT_ACTIONS = (-0.5, 0.0, 0.5)
 EFFECTIVENESS_SEEDS = 2
+# Experts awaiting a retune. Strict, so a task that starts passing says so.
+EFFECTIVENESS_GAPS = {
+    "distillation": "the gains predate the analyser delay and the tray hydraulics, "
+    "so the expert loses the column; PR 9 retunes it",
+}
 # No extra episode cap: the scored configuration already sizes each episode to
 # that environment's own dynamics. A flat cap is meaningless across envs whose
 # characteristic times differ by orders of magnitude -- 150 steps is 25 min
@@ -726,8 +731,8 @@ def test_pid_outperforms_the_best_constant_action(spec, request):
         pytest.skip(f"{spec.name}: {spec.baselines_note}")
     if spec.expert_degraded:
         pytest.xfail(f"{spec.name}: {spec.expert_degraded}")
-    if spec.name in STALE_EXPERTS:
-        reason = STALE_EXPERTS[spec.name]
+    if spec.name in EFFECTIVENESS_GAPS or spec.name in STALE_EXPERTS:
+        reason = EFFECTIVENESS_GAPS.get(spec.name) or STALE_EXPERTS[spec.name]
         request.applymarker(pytest.mark.xfail(strict=True, reason=reason))
 
     env, eff_params, _ = _effectiveness_env(spec)

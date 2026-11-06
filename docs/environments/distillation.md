@@ -59,7 +59,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 10 fields.
+`reset` samples the initial condition and the target; state has 11 fields.
 
 ## Episode end
 
@@ -95,16 +95,18 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `alpha` | 1.5 | - |
 | `M_tray` | 0.5 | kmol |
 | `M_drum` | 0.5 | kmol |
+| `tau_L` | 0.063 | min |
+| `L_nominal` | 2.706 | kmol/min |
 | `F` | 1 | kmol/min |
 | `zF_nominal` | 0.5 | - |
 | `qF` | 1 | - |
 | `zF_noise_std` | 0.03 | - |
 | `zF_min` | 0.4 | - |
 | `zF_max` | 0.6 | - |
-| `L_min` | 2.3 | kmol/min |
-| `L_max` | 3.1 | kmol/min |
-| `V_min` | 2.8 | kmol/min |
-| `V_max` | 3.6 | kmol/min |
+| `L_min` | 2.2 | kmol/min |
+| `L_max` | 3.4 | kmol/min |
+| `V_min` | 2.7 | kmol/min |
+| `V_max` | 3.9 | kmol/min |
 | `D_min` | 0.1 | kmol/min |
 | `D_max` | 0.9 | kmol/min |
 | `yD_floor` | 0.9 | - |
