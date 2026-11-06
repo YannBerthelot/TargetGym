@@ -269,8 +269,10 @@ def test_a_rate_limit_bounds_a_step_of_a_task_with_sub_steps():
 
 @pytest.mark.parametrize("spec", REGISTRY.values(), ids=lambda s: s.name)
 def test_a_step_reports_what_the_actuator_applied(spec):
-    """Past the box a command does nothing more, so the report is the box."""
-    env, params = spec.make_env(), spec.make_test_params()
+    """Past the box a command does nothing more, so the report is the box. With
+    the task's own rate and lag off, so that one step can reach it."""
+    env = spec.make_env()
+    params = spec.make_test_params().replace(actuator_rate=0.0, actuator_lag=0.0)
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
     shape = env.action_space(params).shape
@@ -344,6 +346,8 @@ def test_every_task_with_readings_runs_the_actuator_stage(spec):
     _, state = env.reset_env(key, params)
     space = env.action_space(params)
     action = jnp.broadcast_to(space.high, space.shape).astype(jnp.float32)
-    params = params.replace(actuator_dead_band=0.01)
+    params = params.replace(
+        actuator_dead_band=0.01, actuator_rate=0.0, actuator_lag=0.0
+    )
     new = env.step_env(key, state, action, params)[1]
     np.testing.assert_array_equal(new.actuator_held, action)

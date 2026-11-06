@@ -105,9 +105,10 @@ jobs:
     # minutes but no wall-clock. Like them, it waits for the records job.
     name: agent
     needs: records
-    # Records stay stale on the integration branch until its one re-record, so
-    # there the tests run anyway. Drop this line when that branch lands.
-    if: ${{ !cancelled() && (needs.records.result == 'success' || github.base_ref == 'feat/sensor-noise') }}
+    # Pull requests into the integration branch run lint and docs only. The full
+    # run is its one draft pull request into main, past a stale `records` until
+    # the re-record. Drop this condition when that branch lands.
+    if: ${{ !cancelled() && github.base_ref != 'feat/sensor-noise' && (needs.records.result == 'success' || github.head_ref == 'feat/sensor-noise') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -138,9 +139,10 @@ jobs:
     # and fails the job.
     name: learning
     needs: records
-    # Records stay stale on the integration branch until its one re-record, so
-    # there the tests run anyway. Drop this line when that branch lands.
-    if: ${{ !cancelled() && (needs.records.result == 'success' || github.base_ref == 'feat/sensor-noise') }}
+    # Pull requests into the integration branch run lint and docs only. The full
+    # run is its one draft pull request into main, past a stale `records` until
+    # the re-record. Drop this condition when that branch lands.
+    if: ${{ !cancelled() && github.base_ref != 'feat/sensor-noise' && (needs.records.result == 'success' || github.head_ref == 'feat/sensor-noise') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -173,11 +175,12 @@ jobs:
     # three interpreters spend their runner minutes on a tree that needs a
     # re-record first.
     needs: records
-    # Records stay stale on the integration branch until its one re-record, so
-    # there the tests run anyway. Drop this line when that branch lands.
-    if: ${{ !cancelled() && (needs.records.result == 'success' || github.base_ref == 'feat/sensor-noise') }}
+    # Pull requests into the integration branch run lint and docs only. The full
+    # run is its one draft pull request into main, past a stale `records` until
+    # the re-record. Drop this condition when that branch lands.
+    if: ${{ !cancelled() && github.base_ref != 'feat/sensor-noise' && (needs.records.result == 'success' || github.head_ref == 'feat/sensor-noise') }}
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ github.base_ref == 'feat/sensor-noise' && 60 || 30 }}
+    timeout-minutes: ${{ github.head_ref == 'feat/sensor-noise' && 60 || 30 }}
     strategy:
       fail-fast: false
       matrix:
@@ -193,8 +196,8 @@ jobs:
       # records that are stale until then, so they would stop the medium tier
       # and the cache. Drop all of this when that branch lands, with the timeout
       # above and the job's `if`.
-      FREE_COMPILED_PROGRAMS: ${{ github.base_ref == 'feat/sensor-noise' && '1' || '' }}
-      INTEGRATION_ARGS: ${{ github.base_ref == 'feat/sensor-noise' && '-n 2 --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:2] --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:6]' || '' }}
+      FREE_COMPILED_PROGRAMS: ${{ github.head_ref == 'feat/sensor-noise' && '1' || '' }}
+      INTEGRATION_ARGS: ${{ github.head_ref == 'feat/sensor-noise' && '-n 2 --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:2] --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:6]' || '' }}
 
     steps:
     - uses: actions/checkout@v4
@@ -306,7 +309,7 @@ jobs:
     # a merge, so the limit never holds up a pull request.
     name: large tests
     needs: records
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && ((github.event_name == 'push' && needs.records.result == 'success') || github.head_ref == 'feat/sensor-noise') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -356,6 +359,7 @@ jobs:
     # They read committed JSON: one interpreter is enough, and the one slow
     # check re-runs the protocol on the pH plant in seconds.
     name: records
+    if: ${{ github.base_ref != 'feat/sensor-noise' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

@@ -99,3 +99,21 @@ def test_a_drifting_or_smooth_target_starts_no_cycle_in_the_scorer(name):
     p = spec.make_test_params()
     ep = E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=100)
     assert not ep.target_change.any()
+
+
+def test_a_ramp_that_moves_on_under_half_the_steps_is_one_move():
+    """Its median step is 0, so each ramp step would look like a new target,
+    and a task would get hundreds of cycles from a few moves. A ramp is one move,
+    counted where it starts. Here 20 steps from step 40, in 100."""
+    targets = np.concatenate([np.zeros(40), np.linspace(0.05, 1.0, 20), np.ones(40)])[
+        :, None
+    ]
+    assert list(_changes(targets, 0.0)) == [40]
+
+
+def test_two_ramps_are_two_moves():
+    up = np.linspace(0.1, 1.0, 10)
+    targets = np.concatenate(
+        [np.zeros(30), up, np.ones(30), up[::-1] - 0.1, np.zeros(20)]
+    )[:, None]
+    assert list(_changes(targets, 0.0)) == [30, 70]

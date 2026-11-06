@@ -1,5 +1,5 @@
 {
-  "fingerprint": "5dc70263df8aa380",
-  "note": "Branch stamp on feat/sensor-noise: sensor lag and per-actuator rates, unused by any task yet. Redone at the 0.8.0 re-record.",
-  "stamped": "2026-11-05T23:42:02+00:00"
+  "fingerprint": "806741e8442da358",
+  "note": "Branch stamp on feat/sensor-noise: cstr gains a 1 min analyser dead time, unmeasured feed loads and a narrower target band; four_tank gains unmeasured load steps. unstable_cstr's plant is unchanged: it only reads cstr/env.py's balances and ten values. Redone at the 0.8.0 re-record.",
+  "stamped": "2026-11-06T00:17:33+00:00"
 }

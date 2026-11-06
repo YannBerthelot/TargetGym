@@ -235,6 +235,7 @@ def gate(name: str) -> dict:
 #: The tasks a null policy beats today, each a finding of the industrial review.
 #: The PR that fixes one removes its line.
 KNOWN = {
+    "cstr": "the expert was tuned on an instant analyser; PR 9 retunes it",
     "distillation": "the expert was tuned on instant analysers; PR 9 retunes it",
     "hvac": "free gains match the losses, so a heater left off wins",
     "reactor": "PR 9: an integrator on Tavg beats the rod program's dead band",

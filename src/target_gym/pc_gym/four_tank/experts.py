@@ -23,8 +23,8 @@ class DecoupledPIParams:
     ``D = G(0)^-1 diag(G12, G21)``, so at steady state ``w1`` moves h1 alone
     as pump 2 alone would and ``w2`` moves h2 as pump 1 would. ``v*`` is the
     pair of voltages that holds the targets, from the steady-state balances
-    and the rig's datasheet constants (orifice areas, pump constants, valve
-    splits).
+    and the task's constants (orifice areas, pump constants, valve splits),
+    PC-gym's and not the Johansson rig's (PHYSICS.md).
     """
 
     Kp_1: float
