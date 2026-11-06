@@ -22,6 +22,7 @@ from target_gym.energy.battery.env import (
     degradation_rate,
     max_deliverable_power,
     open_circuit_voltage,
+    inverter_input,
     round_trip_efficiency,
     terminal_voltage,
 )
@@ -39,9 +40,10 @@ def params():
 
 
 def test_round_trip_efficiency_is_in_the_published_band(params):
-    """88-95 % for a Li-ion grid battery. This is what sizes R0."""
+    """At the AC side, inverter included: 83 to 88 % (Xu et al. simulate 85 %,
+    PNNL's cost assessment gives 83 % for LFP). This is what sizes R0."""
     one_way = float(round_trip_efficiency(params.power_max, 0.5, params))
-    assert 0.88 < one_way**2 < 0.95
+    assert 0.83 < one_way**2 < 0.88
 
 
 def test_cell_voltage_window_is_realistic(params):
@@ -74,10 +76,13 @@ def test_thermal_time_constant_is_tens_of_minutes(params):
     assert 20.0 < tau_min < 120.0
 
 
-def test_energy_budget_matches_a_two_hour_system(params):
-    """10->90 % at rated power should take ~96 min for a 2 h system."""
-    minutes = 0.8 * params.energy_nominal / params.power_max / 60.0
-    assert 80.0 < minutes < 120.0
+def test_nominal_energy_is_what_the_cells_hold(params):
+    """2500 Ah at the 677 V of 50 % charge: 1692 kWh, not the 2 MWh the docs had."""
+    ocv = float(open_circuit_voltage(0.5, params))
+    assert ocv == pytest.approx(677.0, abs=1.0)
+    joules = float(params.capacity_As) * ocv
+    assert float(params.energy_nominal) == pytest.approx(joules, rel=2e-3)
+    assert float(params.pack_kWh) == pytest.approx(joules / 3.6e6, rel=2e-3)
 
 
 def test_coulomb_counting_conserves_charge(params):
@@ -88,7 +93,8 @@ def test_coulomb_counting_conserves_charge(params):
         action=params.power_max,
         params=params,
     )
-    current = float(current_for_power(params.power_max, soc0, 0.0, params))
+    dc_power = inverter_input(params.power_max, params)
+    current = float(current_for_power(dc_power, soc0, 0.0, params))
     assert float(v[0]) == pytest.approx(-current / params.capacity_As, rel=1e-6)
 
 
@@ -169,11 +175,11 @@ def test_degradation_is_positive_and_grows_with_use(params):
 
 
 def test_degradation_is_slow_enough_to_be_a_running_cost(params):
-    """Fade over one episode should be small -- a cost, not a cliff."""
+    """Fade over one episode should be small: a cost, not a cliff."""
     fade = float(degradation_rate(1500.0, 30.0, params)) * (
         params.delta_t * params.max_steps_in_episode
     )
-    assert 0.0 < fade < 0.01  # under 1 % capacity in an hour of hard use
+    assert 0.0 < fade < 0.01  # under 1 % capacity in four hours of hard use
 
 
 # ---------------------------------------------------------------------------

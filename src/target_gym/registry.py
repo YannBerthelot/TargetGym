@@ -904,8 +904,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_battery_pid_controller", module="target_gym.energy.battery.experts"
         ),
         make_mpc=_mpc("make_battery_mpc", module="target_gym.energy.battery.oracle"),
-        # 360 steps = 30 min, a real fraction of the ~96 min it takes to
-        # traverse the usable state-of-charge range at full power.
+        # 2880 steps = 4 h, about three times the 75 min it takes to traverse
+        # the usable state-of-charge range at full power.
         tuned_gains_key="battery",
         noise_fields=("dispatch_noise_std",),
         disturbance_fields=("target_power",),

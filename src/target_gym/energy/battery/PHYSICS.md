@@ -1,8 +1,8 @@
-# Grid battery — physics model, provenance and validation
+# Grid battery: physics model, provenance and validation
 
-Reference system: a **2 MWh / 1 MW lithium-ion grid battery** — a 2-hour
-system, the common utility build — modelled as a first-order equivalent
-circuit with lumped thermal and capacity-fade dynamics.
+Reference system: a **1 MW / 1.69 MWh lithium-ion grid battery**, modelled as a
+first-order equivalent circuit with lumped thermal and capacity-fade dynamics,
+behind an inverter and an auxiliary load.
 
 Contract for `target_gym.energy.battery`. Method:
 `docs/PHYSICS_METHODOLOGY.md`.
@@ -41,25 +41,33 @@ Every figure is sourced in section 3, or labelled ours for the owner to accept.
 
 ## 1. Model
 
-No single published benchmark defines a grid BESS the way NREL defines a
-turbine, so this is a **first-principles equivalent-circuit model** with
-parameters sized to reproduce published *behaviour* — round-trip efficiency,
-cell voltage window, thermal rise. Per the project's standard, that is
-physically defensible rather than citation-backed, and §2 is where it earns
-its keep.
+No single published benchmark defines a grid BESS the way NREL defines a turbine,
+so this is a **first-principles equivalent-circuit model** with parameters sized to
+reproduce published *behaviour*: round-trip efficiency, cell voltage window, thermal
+rise. Its ageing and its losses behind the inverter come from published fits and a
+measured system.
 
 ```
-V_term     = OCV(soc) − I R0 − v_rc
-dsoc/dt    = −I / Q
-dv_rc/dt   = I / C1 − v_rc / (R1 C1)
-C_th dT/dt = I² R0 + v_rc I − UA (T − T_amb)
-dq_loss/dt = calendar(T) + cycle(|I|, T)
+P_dc       = P_inv + pcs_loss P_inv^2 / P_max
+P_meter    = P_inv - aux_load
+V_term     = OCV(soc) - I R0 - v_rc
+dsoc/dt    = -I / Q
+dv_rc/dt   = I / C1 - v_rc / (R1 C1)
+C_th dT/dt = I^2 R0 + v_rc I - UA (T - T_amb)
+dq_loss/dt = calendar(T) + ripple(|I|, T) + deep half-cycles
 ```
 
-The controller commands **power**, so current follows from `P = V_term·I` — a
-quadratic whose physical (smaller) root is taken. That is not a detail: it
-means deliverable power is bounded by `(OCV − v_rc)² / 4R0`, a limit that
-tightens as the pack empties.
+The controller commands the **inverter**, and the meter is behind the auxiliary load,
+so a command does not arrive whole. Current follows from `P_dc = V_term I`, a
+quadratic whose physical (smaller) root is taken.
+
+**Ageing has two parts.** A cycle of depth `u` costs `Phi(u) = 5.24e-4 u^2.03` of the
+pack's life. A half-cycle costs `Phi(d) / 2`, charged as its depth grows, so the
+marginal wear of a deep swing is high and that of a shallow one low. Swings smaller
+than `cycle_hysteresis` are not turning points (a racetrack filter), and count as
+ripple, charged by throughput at the stress of a cycle that deep. Full rain-flow
+counting needs an unbounded stack, so this keeps two states: where the half-cycle
+turned, and how far it has reached.
 
 Deliberately **not** modelled:
 
@@ -68,12 +76,13 @@ Deliberately **not** modelled:
 | Cell-to-cell imbalance, balancing circuits | Single lumped pack. |
 | Electrochemical (P2D/SPM) dynamics | An equivalent circuit is the standard reduction for control work and is orders of magnitude cheaper. |
 | Voltage hysteresis, multiple RC branches | One RC branch; adequate for minute-scale dispatch. |
-| Power-electronics switching, converter efficiency curve | Losses are ohmic only. |
-| Calendar life beyond the episode | Fade accumulates but never fully depletes the pack in one episode. |
+| Inverter dynamics and transformer | The inverter settles in under 40 ms, inside the 5 s step. |
+| Auxiliary load that moves with weather or load | Constant. MESA-1 saw it nearly flat up to 1C, and 5 to 7 kW lower in winter. |
+| Calendar life beyond the episode | Fade accumulates but never depletes the pack in one episode. |
 
-**Regime of validity.** Dispatch operation at up to ~1 C, 10–90 % state of
-charge, near ambient temperature. Not valid for fast charging, deep discharge
-or thermal-runaway conditions.
+**Regime of validity.** Dispatch operation at up to about 1C, 10 to 90 % state of
+charge, near ambient temperature. Not valid for fast charging, deep discharge or
+thermal-runaway conditions.
 
 ---
 
@@ -81,35 +90,61 @@ or thermal-runaway conditions.
 
 | Quantity | Target | Model | |
 |---|---|---|---|
-| Round-trip efficiency at rated power | 88–95 % (Li-ion grid BESS) | **90.6 %** | ✅ |
-| Cell voltage window | 2.7–4.2 V | **2.84–4.19 V** | ✅ |
+| AC round-trip efficiency at rated power | 83 to 88 % | **84.4 %** | ✅ |
+| Cell voltage window | 2.7 to 4.2 V | **2.84 to 4.19 V** open circuit | ✅ |
 | OCV monotone in state of charge | required | yes | ✅ |
-| Steady thermal rise at rated power | ~10–20 K (actively cooled) | **14.6 K** | ✅ |
+| Steady thermal rise at rated power | about 10 to 20 K (actively cooled) | **17.0 K** | ✅ |
 | Thermal time constant | tens of minutes | 50 min | ✅ |
-| 10→90 % traverse at rated power | ≈ 96 min for a 2 h system | 96 min | ✅ |
-| Coulomb counting: ∫I dt = ΔSoC·Q | exact | closes | ✅ |
+| 10 to 90 % traverse at rated power | closes on the cells | **75 min** | ✅ |
+| Cycles to end of life at 80 % depth | 3000 | **3002** | ✅ |
+| Calendar fade at rest | 2 %/yr | **2.0 %/yr** | ✅ |
+| Coulomb counting: integral of I dt = delta SoC Q | exact | closes | ✅ |
 
-Round-trip efficiency is the load-bearing check — it is what sizes `R0`, and
-it is jointly constrained by pack voltage, capacity and rated power. Two
-sizing errors were caught by these targets before any model code ran: an `R0`
-of 0.05 Ω gives 79 % round-trip (far below the band), and a passive `UA` of
-250 W/K implies a **438 K** temperature rise, which is absurd — grid packs are
-actively cooled.
+Round-trip efficiency is the load-bearing check. It is what sizes `R0`, and it is
+jointly constrained by pack voltage, capacity and rated power. Two sizing errors
+were caught by these targets before any model code ran: an `R0` of 0.05 ohm falls
+far below the band, and a passive `UA` of 250 W/K implies a **438 K** temperature
+rise, which is absurd for an actively cooled pack.
+
+The pack is **1.69 MWh at 677 V** (2500 Ah at the OCV of 50 % charge), and the
+traverse **75 min**. Earlier versions of this page said 2 MWh, about 800 V and a
+validated 96 min, read off the rating rather than the cells, and the 96 min test
+passed by reading that same rating.
 
 ---
 
 ## 3. Parameter table
 
+Status of each source: **read** means the page was opened and the value found there,
+and **ours** means a choice for the owner to accept.
+
 | Symbol | Value | Unit | Source | |
 |---|---|---|---|---|
-| `energy_nominal`, `power_max` | 2 MWh, 1 MW | – | 2-hour system, 0.5 C | ✅ |
-| `n_series`, `capacity_As` | 192, 2500 Ah | – | Gives ~800 V nominal | ✅ |
-| `R0` | 0.02 | Ω | Sized for 90.6 % round-trip | ✅ |
-| `R1`, `C1` | 0.01 Ω, 20 kF | – | TUNED — diffusion time constant ~200 s | ⚠️ |
+| `power_max`, `energy_nominal` | 1 MW, 1.69 MWh | – | Closes on the cells | ✅ |
+| `n_series`, `capacity_As` | 192, 2500 Ah | – | 677 V at 50 % charge | ✅ |
+| `R0` | 0.02 | ohm | Sized for the round-trip band | ✅ |
+| `pcs_loss` | 3 % at rated | – | Read: [Delta PCS125](https://filecenter.deltaww.com/Products/download/18/Products-202209012212374228.pdf) datasheet, CEC-weighted 97.0 % | ✅ |
+| `aux_load` | 15 kW | W | Read: [MESA-1 test report](https://www.pnnl.gov/main/publications/external/technical_reports/PNNL-27237.pdf), 30 kW on a 2 MW system, nearly constant up to 1C | ✅ |
+| `R1`, `C1` | 0.01 ohm, 20 kF | – | TUNED: diffusion time constant about 200 s | ⚠️ |
 | OCV coefficients | see params | – | NMC-like fit; validated on window and monotonicity | ⚠️ |
-| `C_thermal`, `UA_thermal` | 9e6 J/K, 3000 W/K | – | ~10 t pack; active cooling | ⚠️ |
-| `k_calendar`, `k_cycle`, `E_activation` | 3e−9, 1.5e−9, 20 kJ/mol | – | TUNED — Arrhenius calendar plus throughput cycling | ⚠️ |
-| `delta_t` | 5.0 | s | 360 steps = 30 min | ✅ |
+| `C_thermal`, `UA_thermal` | 9e6 J/K, 3000 W/K | – | About 10 t pack; active cooling | ⚠️ |
+| `stress_alpha`, `stress_beta` | 5.24e-4, 2.03 | – | Read: [Xu et al. 2017](https://arxiv.org/abs/1703.07824) and [Xu et al. 2018](https://arxiv.org/abs/1707.04567), NMC cells, 3000 cycles at 80 % depth | ✅ |
+| `life_fade` | 0.2 | – | The usual end of life at 80 % of capacity | ✅ |
+| `cycle_hysteresis` | 0.05 | – | Ours: the depth below which a swing is ripple | ⚠️ |
+| `k_cycle` | 2.66e-10 | 1/(kA s) | `Phi(0.05) / (2 * 0.05)` of life per capacity moved, in fade: $3.77/MWh, the order of the $2/MWh handbook figure Xu et al. 2018 quote | ⚠️ |
+| `k_calendar` | 6.34e-10 | 1/s | Read: Xu et al. 2018, 10 years of shelf life, so 20 % over 10 years | ✅ |
+| `E_activation` | 20 | kJ/mol | TUNED: Arrhenius | ⚠️ |
+| `fade_price` | 1500 | $/kWh | Read: Xu et al. 2017 and 2018, $300/kWh to replace the cells, over the 20 % fade that ends a pack's life. That is a 2017 price; today's cells are cheaper, which would make following deeper worthwhile | ✅ |
+| `dispatch_block_seconds` | 3600 | s | Ours: the hour regulation markets clear in | ⚠️ |
+| `dispatch_range` | +-0.8 MW | W | Ours: leaves the regulation movement room inside 1 MW | ⚠️ |
+| `dispatch_noise_std`, `regulation_tau` | 10 kW, 900 s | – | Ours: a movement of about 95 kW sd and a small innovation. A real signal comes every 2 to 6 s (Xu et al. 2017), so the 5 s step is one instruction | ⚠️ |
+| `max_steps_in_episode` | 2880 | steps | Ours: 4 h, chosen so exact following leaves the window on most seeds (3 h: 51 %, 4 h: 62 %) | ⚠️ |
+| `delta_t` | 5.0 | s | One regulation instruction | ✅ |
+
+**Actuator and timing figures.** The inverter has no rate limit or lag here, because
+its response is under 40 ms (Delta PCS125 datasheet) against a 5 s step, and MESA-1's
+was faster than its 10 s logging. The meter has no dead time, because telemetry runs
+on the same 2 to 6 s cycle as the signal.
 
 ---
 
@@ -117,144 +152,106 @@ actively cooled.
 
 ### Task: `battery`
 
-Follow a grid dispatch schedule, one setpoint per 5-minute market block, with a
-1 MW / 2 MWh lithium-ion battery. Every MWh moved wears the pack, and the
-running cost prices that wear in dollars at every step, so tracking is a trade
-against capacity fade. Leaving the 5 to 95 % charge window trips the pack,
-though exact tracking stays inside it over a scored episode.
+Follow a regulation signal for 4 hours with a 1 MW / 1.69 MWh lithium-ion battery.
+The signal is an hourly level plus a regulation movement, and following it exactly
+runs out of energy on most seeds. Leaving the charge or cell-voltage window trips the
+pack, and deep cycles cost more wear per MWh than shallow ones, so how far to follow
+is a real decision.
 
 | obs | meaning |
 |---|---|
 | 0 | `soc`, state of charge (0 to 1) |
 | 1 | cell voltage (V) |
 | 2 | pack temperature (°C) |
-| 3 | delivered power (MW), positive when discharging |
+| 3 | power at the meter (MW), positive when discharging |
 | 4 | target power (MW) |
+| 5 | the next block's level (MW) |
+| 6 | minutes until it goes live |
 
-**Dispatch tracking, paid for in wear.** Following the grid's request moves
-charge in and out of the pack, and every MWh moved costs capacity fade, which
-the running cost prices at every step. The charge window is real: leaving
-0.05-0.95 state of charge trips the pack, and a dispatch held in one direction
-long enough would get there. Over a scored episode, though, the window does
-not bind on a controller that tracks exactly. The episode is 360 steps of 5 s
-(30 minutes, six 300 s dispatch blocks) from an initial state of charge drawn
-uniformly in 0.35-0.75. A feedforward that follows the schedule exactly keeps
-the state of charge within 0.17-0.85 over 2000 seeds and never trips; over a
-60-minute schedule, twice the scored length, it stays within 0.10-0.92, still
-with no trip (oracle audit, 2026-10-01). So within a scored episode, tracking
-now does not cost the ability to track later. What it costs is wear.
+**The window binds.** From a state of charge drawn in 0.35 to 0.75, four hourly
+levels of up to 0.8 MW move up to 2.8 times the pack's capacity. Following them
+exactly left the charge window on 62 % of seeds in calibration, and the cell's
+voltage limit comes sooner: at rated current it trips near 8 to 10 % charge, and near
+85 % on charge.
 
-**The dispatch signal is a schedule, not a random walk.** Twelve blocks, each
-held for a 300 s market interval, drawn uniformly in ±0.8 MW, with 2 kW of
-regulation jitter on top; the scored 30-minute episode spans the first six.
-That is what a grid battery is actually handed: a setpoint for a dispatch
-interval, then another.
+**The signal.** Each hourly level is drawn uniformly in +-0.8 MW. On top goes an
+AR(1) movement with an innovation of 10 kW and a correlation time of 900 s, drawn
+after the action. Levels are published ahead, so a controller reads the next one and
+how far off it is. That took away most of the oracle's old lead, which came from
+reading the next level from the hidden state.
 
-It used to be an Ornstein-Uhlenbeck process, and that made the task
-unmeasurable rather than merely unrealistic. Its one-step innovation had a
-standard deviation of 63.6 kW against a 150 kW tracking band, so the best
-attainable tracking reward was **0.429** — and the shipped PID scored 0.447
-while the MPC scored 0.430. Both controllers were pinned on an irreducible
-noise floor, and nothing that could be plugged into the environment would have
-scored meaningfully better. The error is now the transient after each scheduled
-step, which is a property of the controller rather than of the dice.
+**Observation.** What a battery management system and a market feed report. The
+diffusion voltage, the accumulated fade and the half-cycle under way are hidden.
 
-The whole schedule is in the state, so a predictive controller can see the next
-block coming; the observation exposes only the current request, which is what
-keeps that a real advantage rather than a free lunch.
-
-**Observation.** What a battery management system actually reports. The diffusion voltage `v_rc` and the
-accumulated capacity fade `q_loss` are hidden: neither is directly measurable,
-and the fade in particular is the cost the controller is implicitly trading
-against.
-
-**Efficiency depends on state.** Losses scale with current squared, and the
-current needed for a given power depends on state of charge through the OCV
-curve, so the same dispatch costs more when the pack is low.
-
-**Reward** = −(dispatch imbalance + degradation + trip cost), in dollars per
-step (version 2, below). Version 1 also had a weak pull toward mid charge, to
-keep headroom in both directions; version 2 drops it, and over a scored
-episode a controller that tracks exactly does not need that headroom.
+**Reward** = -(imbalance + wear + trip cost), in dollars per step (version 2, below).
+The whole-episode cost of following is mostly wear. A half-cycle's next MWh costs
+`R dPhi/dd / 2`, which passes the $100/MWh imbalance at a depth of 0.64: there,
+giving up the imbalance is cheaper than the wear. Calendar ageing is left out of the
+charge because no controller avoids it.
 
 ---
 
 ## 5. Baselines
 
-Version-2 reward, over the ten recorded seeds of the scored 360-step episode.
-The reward is a cost, so a return closer to zero is better.
+Measured on the held-out seeds 200 to 209 (2026-11-06), before any re-record.
 
-| controller | return | mean power error | trips |
-|---|---|---|---|
-| PID + charge guard | recorded, see below | 0.020 MW | 0 |
-| constant −0.5 / 0 / +0.5 | −29.9 / −18.3 / −25.3 | 0.59 / 0.37 / 0.50 MW | 0 |
+| controller | cost per episode | imbalance | wear | trips |
+|---|---|---|---|---|
+| expert | $80.8 | $42.4 | $38.4 | 0 |
+| stand-in oracle | $79.5 | $38.1 | $41.4 | 0 |
 
-The PID's return is the recorded baseline, on the
-[environment page](../../../../docs/environments/battery.md#baselines), which
-also carries the oracle's; it is generated from the records rather than copied
-here. The other numbers were measured on the same seeds (2026-10-01), with a
-replay of the PID that reproduced its recorded returns to within 5e-6.
+The null policies, on the same seeds (`tests/test_null_policies.py`), as the expert's
+cost over theirs:
 
-The charge guard fades the demand out *only in the direction that would
-breach a limit*: discharge is throttled below 0.17 state of charge and charge
-above 0.83, within 0.12 of each limit, and the middle is untouched. Within a
-scored episode it is insurance that is almost never called on. Over 2000
-seeds it acts on 4 of them, 111 of 720,000 steps, and a copy of the PID with
-the guard removed never trips either, staying within 0.17-0.85 state of
-charge. On those four seeds the guard changes the return by between −0.041
-and +0.0005: it can only move the command away from the target, which costs
-imbalance and saves a little wear. It stays because the limits are real and a
-trip is priced as an hour of downtime, and nothing else in the PID would keep
-it off them.
+| policy | ratio | seeds won |
+|---|---|---|
+| echo of the target | 0.68 | 2 of 10 |
+| table of the target | 0.61 | 0 of 10 |
+| table with an I-only trim | 0.16 | 0 of 10 |
+| constant, middle of the range | 0.47 | 0 of 10 |
+| constant, either bound | 0.03 | 0 of 10 |
 
-**The expert, checked against practice (2026-10-28).** A grid battery
-follows a scheduled dispatch setpoint, inside state-of-charge limits, with an
-inner loop on the delivered power. The PID is that: the dispatch target as a
-feedforward, a PI trim for the conversion losses, and the guard above. It
-stays as it is. `tests/energy/battery/test_battery_pid.py` checks each part
-against hand-derived values (on target the command is the dispatch; a
-shortfall commands more; the guard halves a discharge halfway into its margin
-and leaves a charge alone), and that it never trips on the held-out seeds 200
-to 209. There it holds 1.33e-3 dollars per step against a ceiling of
-1.39e-4: 0.98 decades of room.
+These nulls have no idea of the pack's energy, so they trip. That is the finding the
+rebuild was for: the echo used to win 10 of 10.
 
-**The oracle is a feedforward, not a planner.** Delivered power equals the
-command within the step, and the target is the scheduled level plus white
-noise drawn after the action. So the best causal command is the level of the
-block the step is scored against, `dispatch_block(t + 1)`, and what is left is
-the noise, whose expected absolute value is `e_floor`. The oracle commands
-exactly that (`experts.py`, `ScheduleFeedforward`). Measured on the protocol
-seeds, its mean error is 1577 W against the closed-form 1596 W, and its
-protocol cost is 7.82e-4 $/step against 1.115e-3 for the gradient MPC it
-replaced (oracle audit, 2026-10). A controller that knew the noise would
-remove only the noise, and shading the command toward zero to save
-degradation gains about 0.03% on the protocol seeds. It does not guard the
-state of charge. Over 2000 seeds of the scored 30-minute episode the state of
-charge stays within 0.17-0.85 and never trips; over the full 60-minute
-schedule, within 0.10-0.92, still with no trip. So within a scored episode
-the energy budget does not bind on a controller that tracks exactly; what
-tracking costs it is degradation, which the running cost prices.
+**The expert** is what a commercial controller does (`experts.py`): a feedforward of
+the signal, a PI trim on the meter, and hard limits on state of charge. On a block's
+last step the feedforward is the next block. The guard fades the demand to zero in
+the direction that would breach a limit, over 0.12 of charge, at 0.10 and 0.90,
+which is 5 % inside the trips as the MESA-1 report advises. The integrator stops
+while the guard sheds. Its gains predate the rebuild, and PR 9 writes its protocol
+afresh.
+
+**The oracle is a stand-in** until the shared solver replaces it (#141, PR 9). It
+reads the true state, commands the signal's next value, and stops following at the
+bound of Xu et al. 2017, Algorithm 1, a depth of 0.64 on these prices, or at the
+charge and voltage limits. That is an online policy, so it leads by only 2 % and wins
+8 of 10 seeds. It does not yet meet the oracle rule's win on every seed.
 
 ---
 
 ## 6. Known deviations
 
-**⚠️ D1 — no published reference system.** Unlike the wind turbine, the
-parameters are sized to reproduce published *behaviour* rather than taken from
-a specific documented machine. The efficiency, voltage window and thermal rise
-are right; the particular cell chemistry is generic NMC-like.
+**⚠️ D1: no published reference system.** Unlike the wind turbine, the parameters
+are sized to reproduce published *behaviour* rather than taken from a specific
+documented machine. The efficiency, voltage window and thermal rise are right; the
+particular cell chemistry is generic NMC-like.
 
-**⚠️ D2 — single RC branch.** Real packs show relaxation over several
-timescales. One branch captures the dominant minute-scale polarisation and
-misses both faster and slower components.
+**⚠️ D2: single RC branch.** Real packs show relaxation over several timescales. One
+branch captures the dominant minute-scale polarisation and misses both faster and
+slower components.
 
-**⚠️ D3 — simplified ageing.** Calendar plus throughput with an Arrhenius
-temperature factor. Real fade depends on depth of discharge, C-rate history and
-state-of-charge dwell in ways this does not represent, so the degradation cost
-is directionally right but not quantitatively trustworthy.
+**⚠️ D3: depth counts a half-cycle at a time.** The racetrack filter is not full
+rain-flow counting: a large cycle broken by a swing of more than 0.05 counts as
+two shallower ones, which understates it. The ripple term also runs on the deep
+half-cycles' throughput, which overstates a 0.8 half-cycle by about 6 %.
 
-**⚠️ D4 — no cell imbalance.** A lumped pack cannot represent the
-weakest-cell behaviour that actually determines real pack limits.
+**⚠️ D4: no cell imbalance.** A lumped pack cannot represent the weakest-cell
+behaviour that actually determines real pack limits.
+
+**⚠️ D5: the signal is synthetic.** Its structure is real and its numbers are ours.
+A published regulation trace is not energy-limited by design: PJM's RegD integrated
+to zero to protect storage. This task's hourly levels are what make it energy-limited.
 
 ---
 
@@ -283,19 +280,17 @@ which is what the recorded baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1596 W | closed form: the dispatch target is a block level plus white noise of sd 2 kW drawn after the action, so no controller holds E\|error\| below sd * sqrt(2/pi). The shipped PID holds 5.6 kW within blocks, and the oracle, a feedforward of the scheduled level, 1.58 kW: the floor itself (`scripts/measure_hold.py`, per dispatch block after settling, 3 seeds). |
+| `e_floor` | 7979 W | closed form: the signal moves after the action by an innovation of sd 10 kW, so no causal controller holds E\|error\| below sd * sqrt(2/pi) |
 | `e_tol` | 0 | none |
 | `tracking_exponent` | 1 | linear imbalance |
-| `imbalance_price` | 100 $/MWh | dispatch imbalance tariff (as in the audit) |
-| `c_hold` | 1.92e-8 | fractional capacity fade per step while holding, PID and oracle alike (`scripts/measure_hold.py`); mostly calendar ageing, which no controller avoids, hence charged only above it |
-| `fade_price` | 300 $/kWh | replacement cost of lost capacity |
+| `imbalance_price` | 100 $/MWh | ours: the one imbalance price of the priced plants, and inside the $10 to $200/MWh mismatch prices of Xu et al. 2017 |
+| `c_hold` | 3.17e-9 | `k_calendar * delta_t`: a step's calendar fade, which no controller avoids, hence charged only above it |
+| `fade_price` | 1500 $/kWh | $300/kWh of cells over the 20 % fade that ends a pack's life (section 3) |
 | `pack_kWh` | 1692 | capacity_As x OCV at 50% SOC / 3.6e6 |
-| `failure_cost` | 2 x the imbalance of the reachable 1.8 MW (a 0.8 MW target against the 1 MW power limit) per step | SOC / thermal trip |
+| `failure_cost` | $1.50 per step | twice the dearest step that survives: $0.25 of imbalance at the reachable 1.8 MW, $0.20 of wear at full depth and full power, $0.30 for a half-cycle's turn |
 | `restart_steps` | 720 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a protection trip's reset; provisional); where a plant engineer would get it: the plant's restart procedure |
 
-The version-1 SOC-comfort term is dropped (**provisional**): it has no owner
-price, and a pack driven to the edge of its window pays through the dispatch
-it can then not follow.
+The version-1 SOC-comfort term stays dropped: depth now carries that price.
 
 `rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
@@ -317,9 +312,9 @@ old weights are read only by it).
 
 ## Readings
 
-The observation reports state of charge, cell voltage, temperature and delivered
-power through their instruments (`docs/proposals/measurement-noise.md`). The
-dispatch request stays exact. `sensor_noise_scale = 0` gives the noise-free task,
+The observation reports state of charge, cell voltage, temperature and meter power
+through their instruments (`docs/proposals/measurement-noise.md`). The signal, the
+next block and the time to it stay exact. `sensor_noise_scale = 0` gives the noise-free task,
 rounding included.
 
 | reading | sigma | step | instrument | status | source |
