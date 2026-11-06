@@ -173,15 +173,9 @@ a PI with the lead's speed, heading and turn rate fed forward. In a turn the
 slot swings with the lead, so its velocity includes omega x slot offset. The
 autopilot underneath is the 3D tasks' (`plane3d.experts`): TECS on height and
 speed, a pitch loop, a damped bank loop limited to 45 deg and stall
-prevention, as ArduPilot flies them. Two things this plant needs beyond the
-textbook hold:
-
-- The engine lags its lever by 20 s (`power_response_rate` 0.05), so the
-  throttle leads the demanded power by its gap to the engine's state, as an
-  airliner's autothrottle closes on N1 rather than on the lever.
-- The height and speed demands go to TECS as they are, with only their rates
-  filtered. Unfiltered, every step-to-step wobble of the lead's track reaches
-  the pitch loop.
+prevention, as ArduPilot flies them. The height and speed demands go to TECS as
+they are, with only their rates filtered. Unfiltered, every step-to-step wobble
+of the lead's track reaches the pitch loop.
 
 On `patrol_bearing_only` an estimator feeds the same hold. Range, azimuth and
 elevation fix the relative position. The lead's velocity is the filtered rate of

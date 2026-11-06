@@ -151,7 +151,11 @@ class PlaneParams(EnvParams):
     # a band rewards reaching a tolerance and then stops caring, which cannot
     # show whether a learned policy holds altitude better than a PID.
     precision_floor: float = 1.0
-    power_response_rate: float = 0.05
+    # A 3 s engine above 5% idle, both the plan's choice and labelled ours in
+    # PHYSICS.md: 14 CFR 33.73(b) gives idle to 95% in 5 s, which a first-order
+    # lag meets at 1.7 s, so this one is slower than the certified limit.
+    power_response_rate: float = 1.0 / 3.0
+    idle_power: float = 0.05
     stick_response_rate: float = 0.9
     k_drag: float = 5.0
 
@@ -311,6 +315,7 @@ PARAM_UNITS = {
     "k_shock_stall": "-",
     "shock_stall_floor": "-",
     "power_response_rate": "1/s",
+    "idle_power": "-",
     "stick_response_rate": "1/s",
     "k_drag": "-",
     "I": "kg.m^2",
@@ -568,7 +573,11 @@ def compute_next_state(
     """
     dt = params.delta_t
     power = compute_next_power(
-        power_requested, state.power, dt, params.power_response_rate
+        power_requested,
+        state.power,
+        dt,
+        params.power_response_rate,
+        params.idle_power,
     )
     stick = compute_next_stick(
         stick_requested, state.stick, dt, params.stick_response_rate

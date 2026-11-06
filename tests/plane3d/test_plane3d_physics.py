@@ -252,3 +252,16 @@ def test_scored_turbulence_reaches_the_bank():
     banks = jax.jit(jax.vmap(bank_after))(jnp.arange(16))
     rms = float(jnp.degrees(jnp.sqrt(jnp.mean(banks**2))))
     assert 4.0 < rms < 25.0
+
+
+def test_the_3d_engine_shares_the_lag_and_the_idle():
+    # As tests/plane/test_plane_physics.py: 0.05 + 0.95 (1 - e^-1) = 0.6505.
+    spec = REGISTRY["plane3d_heading"]
+    env = spec.make_env()
+    params = spec.params_cls().replace(turbulence_sigma=0.0)
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, params)
+    state = state.replace(power=jnp.float32(0.05))
+    for _ in range(3):
+        _, state, _, _, _ = env.step_env(key, state, jnp.array([1.0, 0, 0]), params)
+    assert float(state.power) == pytest.approx(0.6505, abs=2e-3)

@@ -183,21 +183,27 @@ def check_power(power):
 EPS = 1e-8
 
 
-# First-order actuator lags. The defaults reproduce the behaviour these had as
-# literals; they are parameters so that a slower engine or a stiffer control
-# system is expressible, and so that they appear in the parameter table rather
-# than sitting unsourced in the code.
-POWER_RESPONSE_RATE = 0.05
+# First-order actuator lags. They are parameters so that a slower engine or a
+# stiffer control system is expressible, and so that they appear in the parameter
+# table rather than sitting unsourced in the code.
+POWER_RESPONSE_RATE = 1.0 / 3.0
+IDLE_POWER = 0.05
 STICK_RESPONSE_RATE = 0.9
 
 
 def compute_next_power(
-    requested_power, current_power, delta_t, rate: float = POWER_RESPONSE_RATE
+    lever,
+    current_power,
+    delta_t,
+    rate: float = POWER_RESPONSE_RATE,
+    idle: float = IDLE_POWER,
 ):
-    """First-order spool-up toward the requested throttle setting."""
-    requested_power = jnp.clip(requested_power, 0.0 + EPS, 1.0)
-    power_diff = requested_power - current_power
-    return current_power + rate * delta_t * power_diff
+    """The engine after ``delta_t``: a first-order lag, solved exactly, toward
+    the power the lever in [0, 1] asks for, its range mapped onto idle to full."""
+    requested_power = idle + (1.0 - idle) * jnp.clip(lever, 0.0, 1.0)
+    return requested_power + (current_power - requested_power) * jnp.exp(
+        -rate * delta_t
+    )
 
 
 def compute_next_stick(

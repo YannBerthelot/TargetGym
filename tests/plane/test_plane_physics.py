@@ -11,6 +11,8 @@ own expression), which is why none of the deviations in §5 were caught.
 Reference aircraft: Airbus A320-200, clean, cruise.
 """
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 from scipy.optimize import brentq
@@ -848,3 +850,43 @@ def test_burning_fuel_lightens_the_aircraft():
     np.testing.assert_allclose(masses[0] - masses, fuels[0] - fuels, atol=0.1)
     # and no step change, which a reset/dynamics disagreement would produce
     assert np.abs(np.diff(masses)).max() < 50.0, "mass jumped between steps"
+
+
+# ---------------------------------------------------------------------------
+# The engine: a 3 s lag above 5% idle (PHYSICS.md section 3)
+# ---------------------------------------------------------------------------
+#
+# Contract: the engine state follows the lever as a first-order lag with a 3 s
+# time constant, so a lever step closes 1 - 1/e of the gap in 3 s, and the lever's
+# range maps onto idle to full, so the bottom stop is 5% and the top 100%.
+
+
+def _engine_after(action, seconds, start):
+    from target_gym.plane.env_jax import Airplane2D
+
+    env = Airplane2D()
+    params = env.default_params.replace(turbulence_sigma=0.0)
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, params)
+    state = state.replace(power=jnp.float32(start))
+    for _ in range(seconds):
+        _, state, _, _, _ = env.step_env(key, state, jnp.array(action), params)
+    return float(state.power)
+
+
+def test_the_engine_closes_63_percent_of_a_lever_step_in_3_s():
+    # Idle 0.05 to full 1.0, so 0.05 + 0.95 (1 - e^-1) = 0.6505.
+    assert _engine_after([1.0, 0.0], 3, 0.05) == pytest.approx(0.6505, abs=2e-3)
+
+
+def test_the_engine_is_past_95_percent_of_a_full_lever_step_by_9_s():
+    # 0.05 + 0.95 (1 - e^-3) = 0.9527, the slowest the 3 s lag allows.
+    assert _engine_after([1.0, 0.0], 9, 0.05) == pytest.approx(0.9527, abs=2e-3)
+
+
+def test_the_lever_at_its_stop_settles_at_idle_not_at_zero():
+    assert _engine_after([-1.0, 0.0], 40, 1.0) == pytest.approx(0.05, abs=2e-3)
+
+
+def test_the_top_of_the_lever_is_full_power():
+    assert _engine_after([1.0, 0.0], 40, 0.05) == pytest.approx(1.0, abs=2e-3)

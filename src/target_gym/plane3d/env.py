@@ -105,7 +105,11 @@ class PlaneParams3D(EnvParams):
     # Actuator lags, as first-order rates per second. TUNED -- not sourced.
     # PlaneParams3D does not inherit from PlaneParams, so these are declared
     # here as well; the values match the 2D aircraft's.
-    power_response_rate: float = 0.05
+    # A 3 s engine above 5% idle, both the plan's choice and labelled ours in
+    # PHYSICS.md: 14 CFR 33.73(b) gives idle to 95% in 5 s, which a first-order
+    # lag meets at 1.7 s, so this one is slower than the certified limit.
+    power_response_rate: float = 1.0 / 3.0
+    idle_power: float = 0.05
     stick_response_rate: float = 0.9
     aileron_response_rate: float = 0.9
 
@@ -293,6 +297,7 @@ PARAM_UNITS = {
     "k_shock_stall": "-",
     "shock_stall_floor": "-",
     "power_response_rate": "1/s",
+    "idle_power": "-",
     "stick_response_rate": "1/s",
     "k_drag": "-",
     "I": "kg.m^2",
@@ -866,7 +871,11 @@ def compute_next_state_3d(
     """
     dt = params.delta_t
     power = compute_next_power(
-        power_requested, state.power, dt, params.power_response_rate
+        power_requested,
+        state.power,
+        dt,
+        params.power_response_rate,
+        params.idle_power,
     )
     stick = compute_next_stick(
         stick_requested, state.stick, dt, params.stick_response_rate
