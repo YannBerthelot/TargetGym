@@ -741,7 +741,7 @@ and one that still fails applies the last plan's next move.
 
 P is Cooper's 123 plus the 64 samples the drive's rate limit takes to carry the
 header pressure across its 8 kPa target range (H21): a bump test is too small
-to reach that limit, and at 2.6 s the plan saw a large setpoint step too late
+to reach that limit, and at a short horizon the plan saw a large setpoint step too late
 to start the drive.
 
 **Problem.** The plan maximises the episode reward over the horizon. The
