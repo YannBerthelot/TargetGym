@@ -91,11 +91,15 @@ def test_the_kiln_solves_seed_zeros_reset():
 @pytest.mark.parametrize(
     "name, load",
     [
-        pytest.param(n, None, marks=_STALE_MODEL)
-        if n in STALE_MODELS
-        else pytest.param(n, None, marks=_CLIPPED_MODEL)
-        if n in CLIPPED_MODELS
-        else (n, None)
+        (
+            pytest.param(n, None, marks=_STALE_MODEL)
+            if n in STALE_MODELS
+            else (
+                pytest.param(n, None, marks=_CLIPPED_MODEL)
+                if n in CLIPPED_MODELS
+                else (n, None)
+            )
+        )
         for n in ON_SOLVER
     ]
     + [("cstr", (0.7, -0.015)), ("four_tank", (2e-4, -1e-4))],
