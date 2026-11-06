@@ -407,3 +407,10 @@ it.
 A plant resting exactly on target pays 2 per step in measured reward,
 `2 (4e-4 / 4e-4)^2`. `e_floor_top`, `e_floor_bottom` and `precision_floor` are the
 analyser's scatter, so the ceiling is what this analyser can verify.
+
+## Written exception to check 2
+
+The credibility check on a sourced real figure has nothing to read here. The owner
+accepted a class exception on 2026-11-06: no published figure could be found or opened
+after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
+says what was tried.

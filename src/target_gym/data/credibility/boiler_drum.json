@@ -2,7 +2,13 @@
   "cpu": "Apple M4 Pro",
   "exception": null,
   "expert_figure": {
-    "status": "no sourced figure"
+    "kind": "measured",
+    "source": "Swayne, MS thesis, University of Tennessee, 1992, abstract only",
+    "status": "read, abstract only",
+    "unit": "mm",
+    "url": "https://trace.tennessee.edu/utk_gradthes/12293",
+    "value": 25.4,
+    "what": "level variation of +-1 inch during load upsets after a feedforward-feedback upgrade, from +-4 inches, on an 80,000 pph industrial boiler, far smaller than the task's. Whether it is field or simulated is not stated. Pressure has no figure"
   },
   "expert_fingerprint": "6d47071ab21500e1",
   "generated": "2026-11-06T12:56:08+00:00",

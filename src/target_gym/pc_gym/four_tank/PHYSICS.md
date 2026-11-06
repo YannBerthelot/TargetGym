@@ -332,3 +332,10 @@ from the true state, and a learner can train on it.
 A plant resting exactly on target pays about 0.67 per step in measured reward.
 The proposal's floor of 0.5 is the scatter alone, `(0.5 mm / 1 mm)^2` per tank.
 Rounding to 1 mm adds `step^2 / 12` to each reading's variance, 1/12 per tank.
+
+## Written exception to check 2
+
+The credibility check on a sourced real figure has nothing to read here. The owner
+accepted a class exception on 2026-11-06: no published figure could be found or opened
+after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
+says what was tried.

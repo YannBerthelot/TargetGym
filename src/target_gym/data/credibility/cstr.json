@@ -1,6 +1,6 @@
 {
   "cpu": "Apple M4 Pro",
-  "exception": null,
+  "exception": "check 2: no published figure could be found or opened, after two searches with a re-fetch check (accepted 2026-11-06)",
   "expert_figure": {
     "status": "no sourced figure"
   },

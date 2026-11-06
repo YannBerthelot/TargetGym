@@ -403,3 +403,10 @@ sub-steps as it does `reward`. Each sub-step's true error is shifted by the draw
 in the observation that step returns, because a controller gets one reading per
 step, and any trip comes from the true state. The cost is linear, so noise has no
 floor of the proposal's quadratic form here.
+
+## Written exception to check 2
+
+The credibility check on a sourced real figure has nothing to read here. The owner
+accepted a class exception on 2026-11-06: no published figure could be found or opened
+after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
+says what was tried.

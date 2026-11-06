@@ -2,6 +2,7 @@
   "cpu": "Apple M4 Pro",
   "exception": null,
   "expert_figure": {
+    "kind": "target",
     "source": "a maintenance-software vendor's page, naming no original",
     "status": "read, secondary",
     "unit": "percent free lime",

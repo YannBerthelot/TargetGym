@@ -2,7 +2,13 @@
   "cpu": "Apple M4 Pro",
   "exception": "check 2: tau_j of 6 s is synthetic, and PHYSICS.md says so (accepted 2026-11-06)",
   "expert_figure": {
-    "status": "no sourced figure"
+    "kind": "measured",
+    "source": "Go, Gobaco and Ha, BS thesis, De La Salle University, 1995, abstract only",
+    "status": "read, abstract only",
+    "unit": "K",
+    "url": "https://animorepository.dlsu.edu.ph/etd_bachelors/9284",
+    "value": 3.0,
+    "what": "+2 and -3 C deviations under PID at the unstable region of a laboratory CSTR, sodium thiosulfate and hydrogen peroxide; a rig, not a plant"
   },
   "expert_fingerprint": "a97736478d92504d",
   "generated": "2026-11-06T13:37:48+00:00",

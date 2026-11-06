@@ -70,6 +70,20 @@ The owner has decided what these checks decide: a task enters the benchmark only
 if it passes all three or has a written exception the owner accepted. The harness
 reads the list from PR 8's credibility record at the freeze.
 
+**Check 2's class exception, accepted by the owner on 2026-11-06.** A second source pass
+downloaded PJM Manual 12, a PJM slide deck, Energinet TR 3.2.5 and FAA AC 90-105A;
+ASHRAE Guideline 36 is sold, so it was not read. Each figure was re-opened by a second
+route, and each now says what kind of number it is: `measured`, `requirement`, `band` or
+`target`. A requirement is never read as a hold some plant achieved.
+
+Eight tasks still have no figure, so each takes the one class exception, in its
+`PHYSICS.md` and `EXCEPTIONS`: `compressor_surge`, `cstr`, `distillation`, `first_order`,
+`four_tank`, `hvac`, `ph_neutralization` and `reactor`. `distillation` and `reactor` have
+leads that could not be opened (Porru et al., ADCHEM 2015; Taipower's plant manual).
+`battery`'s figures are PJM performance scores, so
+`scripts/pjm_regulation_score.py` computes Manual 12's score on its expert, at a mapping
+fixed before any score was seen: 85 on average against PJM's class 94. `cement_kiln` is set aside with its horizon and plant row.
+
 ## Order of work
 
 PRs 3 to 9 target `feat/sensor-noise` from 509fd5b, the integration branch,
@@ -326,6 +340,8 @@ Chosen by the owner on 2026-11-06.
    and the buffet line.
 7. **`unstable_cstr`'s `tau_j` of 6 s is a written exception under check 2.** It is
    synthetic, and its `PHYSICS.md` says so.
+8. **One class exception to check 2** for tasks with no published figure, after a
+   second search that could download named documents. See "What credible will mean".
 8. **Consumption is linear: `running_cost` becomes `w * c / c_hold`,** on the 6 tasks
    that charge it. Dead bands that are tolerances stay clipped, as `excess_cost`.
 

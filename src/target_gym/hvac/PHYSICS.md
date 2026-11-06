@@ -388,3 +388,10 @@ The expert reads these values, and so does every tuner. The oracle plans and act
 on the true state, so it stays a full-state bound. `reward`, trips and the score
 read the true state. `info["measured_reward"]` is the same cost on the readings,
 with any trip taken from the true state.
+
+## Written exception to check 2
+
+The credibility check on a sourced real figure has nothing to read here. The owner
+accepted a class exception on 2026-11-06: no published figure could be found or opened
+after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
+says what was tried.

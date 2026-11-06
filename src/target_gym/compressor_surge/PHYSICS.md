@@ -1125,3 +1125,10 @@ status in the table above.
 
 A plant resting exactly on target pays 0.11 per step in measured tracking cost,
 `(9.17 Pa / 27.5 Pa)^2`.
+
+## Written exception to check 2
+
+The credibility check on a sourced real figure has nothing to read here. The owner
+accepted a class exception on 2026-11-06: no published figure could be found or opened
+after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
+says what was tried.
