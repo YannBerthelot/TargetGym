@@ -17,10 +17,10 @@ SPEC = registry.get("glass_furnace")
 @pytest.mark.large
 @pytest.mark.xfail(
     strict=True,
-    reason="Finding (2026-11-06): under the fuel slew the oracle holds 8.84 K, no "
-    "trips, against 0.25 K. A planner gets no gradient from ``actuate`` at "
-    "command == held or past the rate limit, so its plan stalls. With that "
-    "patched and the plan made by rate it holds 0.29 K. PR 9 rebuilds it.",
+    reason="Finding (2026-11-06): planning by rate frees the fuel, 8.84 K down to "
+    "0.44 K with no trip, against the 0.25 K bound. The protocol's T_c is 29 steps, "
+    "one move per 14.5 min, so the plan cannot answer a 25 min reversal. 0.29 K was "
+    "a planner solving every step. Open for the owner: PR 9 has no rule to change.",
 )
 def test_the_oracle_holds_the_crown_on_protocol_seed_2():
     """The protocol's construction (``runners.baseline_policy``: the factory
