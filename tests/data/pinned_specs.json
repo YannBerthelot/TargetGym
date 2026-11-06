@@ -457,7 +457,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "load_scale"
+    ]
   },
   {
     "name": "first_order",
@@ -527,7 +529,9 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "load_scale"
+    ]
   },
   {
     "name": "ph_neutralization",

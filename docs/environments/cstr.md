@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/cstr/pid_output.gif" width="480px"/></p>
 
-Hold the concentration of reactant A in a cooled, exothermic stirred-tank reactor at a target drawn at reset, by setting the coolant temperature. The coolant reaches the concentration only through the reactor temperature and an exponential reaction rate, so the authority is narrow and nonlinear. Nothing is hidden and nothing is random after reset, which makes this the first step up from `first_order`.
+Hold the concentration of reactant A in a cooled, exothermic stirred-tank reactor at a target drawn at reset, by setting the coolant temperature. The coolant reaches the concentration only through the reactor temperature and an exponential reaction rate, so the authority is narrow and nonlinear. The analyser reads a minute late, and after the settle the feed moves in steps nothing measures.
 
 ```python
 import target_gym as tg
@@ -54,7 +54,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 8 fields.
+`reset` samples the initial condition and the target; state has 9 fields.
 
 ## Episode end
 
@@ -106,6 +106,11 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `C_a_max` | 1 | mol/L |
 | `initial_T` | 330 | K |
 | `time_unit_seconds` | 60 | s |
+| `Ti_load` | 1 | K |
+| `Caf_load` | 0.02 | mol/L |
+| `load_start` | 67 | steps |
+| `load_period` | 40 | steps |
+| `load_scale` | 1 | - |
 | `reward_version` | 2 | - |
 | `e_floor` | 0.0001 | mol/L |
 | `e_tol` | 0 | mol/L |

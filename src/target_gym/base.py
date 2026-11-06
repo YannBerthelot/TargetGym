@@ -196,11 +196,15 @@ def _delayed(env):
 
 def _history_steps(env) -> int:
     """How far back a late reading reaches. From the default step, because the
-    history's shape cannot depend on a traced ``delta_t``."""
+    history's shape cannot depend on a traced ``delta_t``. At least 2, so a
+    history is never the shape of the placeholder on a state built by hand."""
     dt = float(_control_step(env, env.default_params))
     return 1 + max(
-        round(r.dead_time / dt) + max(round(r.interval / dt) - 1, 0)
-        for r in _delayed(env)
+        1,
+        *(
+            round(r.dead_time / dt) + max(round(r.interval / dt) - 1, 0)
+            for r in _delayed(env)
+        ),
     )
 
 

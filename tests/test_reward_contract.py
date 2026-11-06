@@ -175,7 +175,20 @@ def test_reward_version_1_is_still_the_shipped_reward(spec):
     assert v2 <= 0.0
 
 
-@pytest.mark.parametrize("name", ["first_order", "cstr"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "first_order",
+        pytest.param(
+            "cstr",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="recorded on the plant before the analyser, loads and "
+                "narrower band; needs PR 9's gains and a new v1 baseline",
+            ),
+        ),
+    ],
+)
 def test_version_1_reproduces_its_recorded_baseline(name):
     """The v1 baseline file is kept, and the v1 reward reproduces it on the
     noise-free plant it was recorded on."""

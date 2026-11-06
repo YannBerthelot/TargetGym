@@ -49,17 +49,23 @@ def _oracle(name, **overrides):
 
 
 @pytest.mark.medium
-@pytest.mark.parametrize("name", FIVE)
-def test_the_exact_rewrites_replay_on_the_env(name):
+@pytest.mark.parametrize(
+    "name, load",
+    [(n, None) for n in FIVE] + [("cstr", (0.7, -0.015)), ("four_tank", (2e-4, -1e-4))],
+)
+def test_the_exact_rewrites_replay_on_the_env(name, load):
     """Ten stages from training seed 100's reset, under the moves that hold
     the actuators (raw 0 where the reset holds none in the box) plus a
     0.05 sine. The two runs differ only in the order of a few float64
     operations a step (2.2e-16 each), so the relative reward gap and the
     output gap, in resolutions, sit many decades under 1e-10 and 1e-6 unless
-    a rewrite is not exact. The compressor's sites run exact (width 0)."""
+    a rewrite is not exact. The compressor's sites run exact (width 0). With
+    a ``load`` in force at the solve, the plan and the env both hold it."""
     env, params, oracle = _oracle(name)
     with enable_x64():
         _, state = env.reset_env(jax.random.PRNGKey(100), params)
+        if load is not None:
+            state = state.replace(load=jnp.array(load, state.load.dtype))
         st, m = float64(state), oracle.model
         hold = jnp.where(jnp.abs(m.hold(st)) < 1.0, m.hold(st), 0.0)
         wave = 0.05 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]

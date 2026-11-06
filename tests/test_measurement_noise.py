@@ -77,7 +77,7 @@ def _unrounded(env):
     """Rounding hides ``epsilon``, and so does a late value, so read the draws
     with no digital step and no age."""
     env.readings = tuple(
-        dataclasses.replace(r, step=0.0, dead_time=0.0, sampled=False)
+        dataclasses.replace(r, step=0.0, dead_time=0.0, sampled=False, lag=0.0)
         for r in env.readings
     )
     return env
@@ -232,7 +232,7 @@ def test_scale_zero_is_the_noise_free_task_exactly(spec):
     free.readings = tuple(
         dataclasses.replace(r, sigma=0.0, step=0.0)
         for r in free.readings
-        if r.dead_time > 0 or r.sampled
+        if r.dead_time > 0 or r.sampled or r.lag > 0
     )
     params = spec.make_test_params()
     key = jax.random.PRNGKey(5)
