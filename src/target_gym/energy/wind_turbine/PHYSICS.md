@@ -231,11 +231,10 @@ the plan rests the speed at rated, as the reference turbine does in region 3,
 with a term that costs at most the tie-break's budget over an episode (G12 in
 `docs/proposals/oracle-solver.md`). The reward never sees that term.
 
-That term only settles a tie, so it cannot hold the rotor against a real cost.
-Seed 9 asks for 4.96 MW, close to what the torque limit can deliver, and a long
-lull takes the speed to 0.91 of rated, where the torque reaches its ceiling and
-the dips return: -0.064 against -0.0071 for the oracle this one replaced, and
--0.070 for the expert. The other nine seeds beat that oracle by about 7 %.
+That term only settles a tie, so it cannot hold the rotor against a real cost. On
+the ten test seeds the oracle costs -0.0093 to -0.0187 against the expert's -0.050
+to -0.084, about 5 times better, with no trip and no failed or capped solve. Its
+replay stays within 7.5e-4 and 1.4 resolutions: the table's smoothing is not exact.
 
 The oracle it replaces, a one-step Newton on the torque under the PID's pitch
 PI (`WindTurbineNewtonPI`), went with it, along with the version-1 gradient

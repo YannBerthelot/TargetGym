@@ -227,24 +227,19 @@ Most of the loss is the fuel rate: 20 s of lag alone holds 0.59 bar at 913 to
 plant before steam followed pressure. Its 0.6 trips per episode at 60 s do not
 carry over: at 60 s this plant does not trip, because pressure regulates itself.
 
-**The MPC figures below predate the actuator limits.** On the limited plant the
-`GradientMPC` before the shared solver trips about once an episode and loses to the stored gains, on seeds 0 and
-1: a planner gets no gradient from `actuate` at `command == held` or past the rate
-limit. With the first patched it stops tripping, at 2766 and 3220 a step against
-the expert's 1479 and 1533. It has yet to plan by rate. PR 9 rebuilds it.
-
 **The oracle is the shared solver, on the reward itself (`oracle.py`).** Cooper's
-recipe gives P = 178 steps (356 s), which covers the ~35 s swell peak several
+recipe gives P = 237 steps (474 s), which covers the ~35 s swell peak several
 times over, so the plan sees the level reverse and keeps feeding through a
-swell. The reward has been squared errors in floor units since version 2, so
-no surrogate is needed; the fuel's kink at `c_hold` is an epigraph row, and
-the level and pressure trips are hard limits, backed off by what one
-steam-demand innovation can move them (K11). Every solve converges, in about
-20 iterations, where the `GradientMPC` before it ran 1280 descent steps and
-was still improving. Against that planner the rebuilt oracle is better in the
-quiet blocks and about 5 % worse on seeds 0 and 1 and 5 % better on seed 2
-overall: the gap sits in the blocks where the steam demand swings, and the
-plan assumes that swing decays on its mean path.
+swell. Each move is an actuator's rate, sent as the command that makes it, so
+neither rate limit nor lag hides a move from the plan (`oracles/rates.py`). The
+steam follows the planned pressure, with the turbine valve on its mean path. The
+reward has been squared errors in floor units since version 2, so no surrogate
+is needed; the fuel's kink at `c_hold` is an epigraph row, and the level and
+pressure trips are hard limits, backed off by what one steam-demand innovation
+can move them (K11). On the ten test seeds it beats the stored gains by 12 to 67
+times, with no trip, no failed or capped solve and a replay gap under 1e-7, in
+about 23 iterations a solve. What cost remains sits where the steam demand swings,
+since the plan assumes a swing decays on its mean path.
 
 ---
 

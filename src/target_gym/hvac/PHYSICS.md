@@ -230,10 +230,11 @@ is exactly the trade the reward asks for. (The table predates the version-2
 reward and the expert below.)
 
 The oracle is now the shared solver (`oracle.py`): the episode reward on the
-5R1C model, the comfort hinge as epigraph rows, and a plan that runs to the
-episode's end, since Cooper's recipe gives P = 932 steps on this building's
-mass. Its comfort and gas bill sit within 1 % of the 24-step `NewtonMPC` it
-replaced, on either side, at about half the expert's cost.
+5R1C model and the comfort hinge as epigraph rows. On this building Cooper's
+recipe gives P = 8 steps, 2 hours, because the mass's slow response falls short of
+the noise test (`docs/proposals/oracle-horizon-protocol.md`, Amendment 4). So the
+plan cannot see the morning, and it loses to the expert's optimal start on 7 of 10
+test seeds, -17.18 against -16.54 on the mean. Which horizon stands is open.
 
 ### The expert: Guideline 36 zone heating with optimal start
 
