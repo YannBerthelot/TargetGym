@@ -10,8 +10,7 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   Arrhenius terms' derivatives finite; the raw-meal feed on its noise-free
   mean path, updated before the step as the env does;
 - objective: the free-lime tracking term as (e / e_floor)^2, exact since
-  e_tol = 0 and p = 2, and the running cost max(fuel - c_hold, 0) through
-  epigraph rows on every visited state (T2);
+  e_tol = 0 and p = 2, and the running cost, linear in the fuel (T2);
 - limits, elastic at the trip cost per unit (T3) and backed off by the
   noise's reach (K11, in the widths file): each cell below T_bz_max; the
   burning zone above T_bz_min, its max over the cells a conservative soft max
@@ -31,7 +30,7 @@ from jax.scipy.special import logsumexp
 
 from target_gym.cement_kiln.env import FEED_OU_THETA, advance
 from target_gym.oracles.controller import Oracle, TaskModel, raw_of
-from target_gym.oracles.shooting import Hinge, Limit
+from target_gym.oracles.shooting import Limit
 from target_gym.reward import trip_cost
 
 
@@ -56,9 +55,9 @@ def kiln_model(env, p) -> TaskModel:
         x1 = advance(x, (fuel, rpm), meal, p, env.integration_method)
         lime, T_solid = x1[-1], x1[:n]
         cost = ((lime - target) / p.e_floor) ** 2
+        cost = cost + p.running_weight * fuel / p.c_hold
         y = jnp.concatenate([
-            jnp.stack([p.running_weight * (fuel - p.c_hold) / p.c_hold]), T_solid,
-            jnp.stack([soft_max(T_solid, d["widths"][0]), lime]),
+            T_solid, jnp.stack([soft_max(T_solid, d["widths"][0]), lime]),
         ])  # fmt: skip
         return x1, cost, y, lime[None], ()
 
@@ -73,7 +72,6 @@ def kiln_model(env, p) -> TaskModel:
         ]),
         tracked=lambda s: s.lime[-1:],
         resolution=(float(p.precision_floor),),
-        hinges=(Hinge(weight=1.0),),
         limits=(Limit(hi=p.T_bz_max, price=price),) * n
         + (Limit(lo=p.T_bz_min, price=price), Limit(hi=p.lime_max, price=price)),
     )  # fmt: skip

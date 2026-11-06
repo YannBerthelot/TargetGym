@@ -16,7 +16,7 @@ section 5.4, and decision S10), run by
   ``data/oracle_widths/compressor_surge.json``); the consumers' deviation
   on its noise-free mean path, a^t times its measured value;
 - objective: the header pressure's tracking term as (e / e_floor)^2, exact
-  since e_tol = 0 and p = 2, and the running costs max(q - c_hold, 0) and
+  since e_tol = 0 and p = 2, the running cost, linear in the recycle power, and
   max(|dx| - travel_free, 0) through epigraph rows on every visited state (T2);
 - limit: the env's trip variable, the soft minimum of Phi over the step, at
   least the episode's surge line on every visited state, which the oracle reads
@@ -122,8 +122,8 @@ def compressor_model(env, p) -> TaskModel:
         dp = x1[1]
         cost = ((target - dp) / KPA / p.e_floor) ** 2
         power = recycle_flow(dp, x1[4], p) * dp / suction_density(p)
+        cost = cost + p.running_weight * power / p.c_hold
         y = jnp.stack([
-            p.running_weight * (power - p.c_hold) / p.c_hold,
             (x1[4] - x[4]) / p.travel_free,
             phi_min - 2.0 * p.W * offset,
         ])  # fmt: skip
@@ -140,7 +140,6 @@ def compressor_model(env, p) -> TaskModel:
         tracked=lambda s: (s.dp / KPA)[None],
         resolution=(float(p.precision_floor),),
         hinges=(
-            Hinge(weight=1.0),
             Hinge(weight=float(p.travel_weight), absolute=True, tol=1.0),
         ),
         limits=(Limit(lo=2.0 * p.W, price=float(trip_cost(p))),),

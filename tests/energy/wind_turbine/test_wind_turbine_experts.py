@@ -1,11 +1,13 @@
 """The wind turbine's oracle, on the shared solver.
 
 Its claims, each checked below. With the turbulence off the model is the
-plant, so the power after every step lands on the target to float32 rounding:
-the torque's reach makes that free. A command past the pitch's reach moves
-the actuator as a command at it does (T1r, env.py:309). The rotor speed is the
-one spare degree of freedom, so it rests at rated, inside the tie's budget (G12
-in docs/proposals/oracle-solver.md), and a lull no longer runs it down.
+plant but for the table's smoothing, so the power after every step lands on the
+target within half a resolution: the torque's reach makes that free. A command past either actuator's reach moves
+it as a command at it does (T1r). The rotor speed is the one spare degree of
+freedom, so it rests at rated, inside the tie's budget (G12 in
+docs/proposals/oracle-solver.md), and a lull no longer runs it down. ROSCO's
+table is read cell by cell through K2's clip, which at width 0 is its bilinear
+lookup, held at its edges, and within w log 2 of the slope's jump above it.
 """
 
 import jax
@@ -14,17 +16,14 @@ import numpy as np
 import pytest
 
 from target_gym import registry
+from target_gym.energy.wind_turbine.cp_table import CP_TABLE
 from target_gym.energy.wind_turbine.env import electrical_power, omega_rated
-from target_gym.energy.wind_turbine.oracle import pitch_reach
+from target_gym.energy.wind_turbine.oracle import pitch_reach, table_cp, torque_reach
 from target_gym.experts.mpc import plan_params
 from target_gym.oracles.controller import Oracle, enable_x64, float64
 from target_gym.runners.runners import mpc_policy, one_episode
 
 SPEC = registry.get("wind_turbine")
-#: PR 9 rewrites the solver's model, which still reads the analytic Cp surface.
-_STALE_MODEL = pytest.mark.xfail(
-    strict=True, reason="PR 9: the oracle's model predates ROSCO's Cp table"
-)
 
 
 def _episode(params, seed, steps=None):
@@ -52,43 +51,49 @@ def test_the_registry_builds_the_shared_oracle():
     assert isinstance(SPEC.make_mpc(env, SPEC.make_test_params()), Oracle)
 
 
-@_STALE_MODEL
 @pytest.mark.medium
 def test_without_turbulence_the_power_lands_on_the_target():
-    """With the wind on its mean path the model is the plant, so the power
-    after every step equals the target to float32 rounding (about 0.5 W at
-    4-5 MW), within the rows' tolerance. A plan that missed would leave
-    kilowatts."""
+    """With the wind on its mean path the model is the plant but for ROSCO's
+    table, smoothed at its nodes, which K5 holds to half the 1 kW resolution a
+    step. So the power after every step lands on the target within 500 W, plus
+    float32 rounding (about 0.5 W at 4-5 MW) and the rows' tolerance. A plan that
+    missed would leave kilowatts."""
     params = SPEC.make_test_params().replace(turbulence_std=0.0)
     _, error, trips = _episode(params, 0, steps=20)
     assert trips == 0
-    assert error.max() <= 2.0
+    assert error.max() <= 502.0
 
 
-@_STALE_MODEL
 @pytest.mark.medium
 def test_a_lull_does_not_run_the_rotor_down_to_a_power_dip():
     """On seed 1 the wind falls to 14.7 m/s at step 202. A plan that leaves the
     speed free rides it down to about 0.82 of rated and pays there with
     one-step torque dips of 625 to 825 kW, 0.004 to 0.006 dollars a step.
-    Resting at rated, the rotor keeps its energy and no step costs a quarter
-    of the smaller dip."""
+    Resting at rated, the rotor keeps its energy through the lull. The dispatch
+    now moves every 100 steps, and a step of 0.99 MW costs what the torque's rate
+    takes to cross it, so dips are read away from those moves: no step there
+    costs a quarter of the smaller dip."""
     params = SPEC.make_test_params()
     policy = mpc_policy(SPEC, SPEC.make_env(), params)
-    speeds = []
+    speeds, targets = [], []
 
     def spy(obs, state):
         speeds.append(float(state.omega))
+        targets.append(float(state.target_power))
         return policy(obs, state)
 
     spy.controller = policy.controller
     out = one_episode(SPEC, params, spy, 1)
     assert int(np.asarray(out["tripped"]).sum()) == 0
-    assert min(speeds) / float(omega_rated(params)) >= 0.9
-    assert np.asarray(out["reward"][0, : int(out["length"][0])]).min() >= -0.001
+    in_the_lull = np.array(speeds[190:260]) / float(omega_rated(params))
+    assert in_the_lull.min() >= 0.9
+    rewards = np.asarray(out["reward"][0, : int(out["length"][0])])
+    quiet = np.ones(rewards.size, bool)
+    for move in np.flatnonzero(np.diff(targets)):
+        quiet[move : move + 12] = False  # the 12 steps a move takes to settle
+    assert rewards[quiet].min() >= -0.001
 
 
-@_STALE_MODEL
 @pytest.mark.medium
 def test_the_report_certifies_the_plan_that_applies_not_the_wide_rungs():
     """K7's first rung is smoothed wide on purpose and only starts the next
@@ -112,7 +117,6 @@ def test_the_resting_target_is_rated_speed_and_one_at_the_bands_edge():
     assert abs(float(rest(jnp.array([edge, 0.0, 0.0])))) == pytest.approx(1.0)
 
 
-@_STALE_MODEL
 def test_the_resting_target_spends_the_tie_budget_over_an_episode_at_the_edge():
     """The planned stage costs the budget over the 400 steps at the band's edge,
     and K8's replay, which runs ``model.step``, never sees it."""
@@ -163,3 +167,73 @@ def test_a_command_past_the_pitch_reach_moves_it_as_one_at_the_reach(sign):
         np.testing.assert_allclose(
             getattr(past, field), getattr(reached, field), rtol=1e-6, err_msg=field
         )
+
+
+@pytest.mark.parametrize("sign", [1.0, -1.0])
+def test_a_command_past_the_torque_reach_moves_it_as_one_at_the_reach(sign):
+    """From 20 kN m: at 15 kN m/s over a 0.25 s step the torque moves 3750 N m,
+    and a command 15000 x (0.25 + 0.1) away keeps it at full rate for the step,
+    as one 15 kN m away does."""
+    env, p = SPEC.make_env(), SPEC.make_test_params()
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, p)
+    state = state.replace(torque=jnp.float32(20e3), torque_cmd=jnp.float32(20e3))
+
+    def raw(torque):
+        span = p.pitch_max - p.pitch_min
+        pitch = 2.0 * (float(state.pitch) - p.pitch_min) / span - 1.0
+        return jnp.asarray([pitch, 2.0 * torque / p.torque_max - 1.0])
+
+    at = 20e3 + sign * float(torque_reach(p, 1))
+    reached = env.step_env(key, state, raw(at), p)[1]
+    past = env.step_env(key, state, raw(20e3 + sign * 15e3), p)[1]
+    assert float(reached.torque) - 20e3 == pytest.approx(sign * 3750.0, rel=1e-5)
+    for field in ("pitch", "omega", "torque"):
+        np.testing.assert_allclose(
+            getattr(past, field), getattr(reached, field), rtol=1e-6, err_msg=field
+        )
+
+
+@pytest.mark.parametrize(
+    "row, column",
+    [(0.0, 0.0), (10.0, 5.0), (10.5, 5.0), (10.0, 5.5), (10.25, 5.75), (25.0, 30.0)],
+)
+def test_at_width_zero_the_table_is_read_bilinearly(row, column):
+    """By hand from the table's nodes: the node itself, then the mean of two or
+    four, or a bilinear share of the four around a point."""
+    i, j = int(row), int(column)
+    a, b = row - i, column - j
+    i2, j2 = min(i + 1, 25), min(j + 1, 30)
+    expected = (
+        (1 - a) * (1 - b) * CP_TABLE[i, j]
+        + (1 - a) * b * CP_TABLE[i, j2]
+        + a * (1 - b) * CP_TABLE[i2, j]
+        + a * b * CP_TABLE[i2, j2]
+    )
+    with enable_x64():
+        lam, pitch = jnp.float64(2.0 + 0.5 * row), jnp.float64(column)
+        assert float(table_cp(lam, pitch, 0.0, 0.0)) == pytest.approx(
+            expected, abs=1e-12
+        )
+
+
+def test_past_its_edges_the_table_holds_its_last_nodes():
+    with enable_x64():
+        low = table_cp(jnp.float64(1.0), jnp.float64(-3.0), 0.0, 0.0)
+        high = table_cp(jnp.float64(20.0), jnp.float64(40.0), 0.0, 0.0)
+    assert float(low) == pytest.approx(CP_TABLE[0, 0], abs=1e-12)
+    assert float(high) == pytest.approx(CP_TABLE[25, 30], abs=1e-12)
+
+
+def test_the_smoothed_table_stays_within_its_gap_of_the_lookup():
+    """K2: a softplus on a cell's clip misses by at most w log 2, in cells, times
+    the jump in the slope at the node. At a node of the tip-speed axis at 9 deg
+    the jump is |C[i+1, 9] - 2 C[i, 9] + C[i-1, 9]|. Between nodes both are the
+    same bilinear value to well under that. The neighbouring nodes' softplus
+    tails add exp(-1 / 0.05) = 2e-9 of their jumps, so the bound carries 1e-7."""
+    width, i, j = 0.05, 10, 9
+    jump = abs(CP_TABLE[i + 1, j] - 2 * CP_TABLE[i, j] + CP_TABLE[i - 1, j])
+    with enable_x64():
+        lam, pitch = jnp.float64(2.0 + 0.5 * i), jnp.float64(j)
+        gap = abs(float(table_cp(lam, pitch, width, 0.0)) - CP_TABLE[i, j])
+    assert 0.0 < gap <= width * np.log(2.0) * jump * (1.0 + 1e-7)

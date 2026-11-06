@@ -774,3 +774,64 @@ seen to close the gap. It derives from Cooper's definition of N, and it uses
 only the task's range, its rate limit and a fitted gain. No return enters it,
 and 91 is not the value that was tried. It is ours: no source read covers
 horizons for rate-limited MVs.
+
+## 13. Amendment 4, the rerun on the rebuilt plants
+
+The recipe is unchanged, with two fixes to how it was run and one owner decision.
+
+**The step.** `Plant` read `delta_t` as the step. On the reactor a control step is 6
+of those, so its fits were 6 times off. It now reads the control step.
+
+**H21 needs a settled gain.** It divides by the fit's gain, and an integrating fit
+has a slope, per second, so the result is no time at all: 973 samples on the boiler's
+pressure, 56726 on the glass crown. H21 says a gain needs a settled fit, so an
+integrating fit adds no ramp. The boiler's pressure and the glass crown are
+integrating, so neither gets one. No source gives a ramp for an integrating CV.
+
+**H22, a quiet fit counts toward P (owner decision, 2026-11-06).** A fit that fails
+V1 alone, with a fit of at least 95 %, still counts toward P, on every task. Every
+test of a pair is read, under its CV's class, since a retest can keep a fast valid
+fit over a slow quiet one. As in H21, an insignificant pair has none. The 95 % is
+V4's measure: N2's fit, 100 (1 - |dy - yhat| / |dy|), against the pre-step value.
+Only valid fits set T_c, and a task with no valid fit stays non-compliant (N3).
+
+**Provenance.** The rule was written after the failure, and after P = 932 had been
+seen to win on hvac. It takes H21's reasoning, that a gain needs a settled fit, not
+a quiet one. It uses only a fit's own checks, and no return enters it. It is ours.
+
+**What forced it.** hvac's building has two time constants, about 970 s (air and
+emitter) and 139,000 s (mass). The slow fit reaches 9.97 of V1's 10 bands, with a fit
+of 98 %, where 10.22 passed on the old plant. Without it P falls from 932 to 8, two
+hours, the oracle cannot see the morning, and it loses to the expert on 7 of 10
+seeds, -17.18 against -16.54. At P = 932 it wins 10 of 10, at -12.90.
+
+| task | T_c before | P before | T_c now | P without H22 | P with H22 | set by, fit, bands |
+| --- | --- | --- | --- | --- | --- | --- |
+| battery | 1 | 80 | 1 | 3023 | 3023 | power to T_cell, seed 107, valid |
+| boiler_drum | 1 | 178 | 1 | 237 | 237 | fuel to pressure, seed 102, valid |
+| cement_kiln | 1 | 20 | 1 | 20 | deferred, see below | |
+| compressor_surge | 1 | 91 | 1 | 95 | **187** | speed to dp, seed 105, 96.8 %, 5.8 |
+| distillation | none | none | 1 | 165 | **336** | V to xB, seed 106, 98.3 %, 9.97 |
+| first_order | 1 | 62 | 1 | 62 | 62 | u to x, seed 104, valid |
+| four_tank | 4 | 252 | 3 | 384 | 384 | pump2 to h1, seed 106, valid |
+| glass_furnace | 30 | 143 | 29 | 158 | 158 | fuel to T_work, seed 108, valid |
+| hvac | 1 | 932 | 1 | 8 | **930** | heating to T_air, seed 102, 98.1 %, 9.97 |
+| reactor | none | none | 1 | 10 | 10 | rod to T_avg, seed 100, valid |
+| wind_turbine | 1 | 290 | 1 | 159 | **266** | pitch to P, seed 109, 97.8 %, 8.7 |
+
+P includes H21's ramp: 5 on the wind, 64 on the compressor, 2 on the reactor.
+
+**The kiln is open, deferred by the owner on 2026-11-06.** H22 gives it P = 1048, set
+by fuel to T_bz on seed 108: tau 5220 s, a fit of 96.4 %, 7.4 bands, on a limit CV, and
+4084 to 4458 s on the other seeds, which reads as the refractory's slow mode, not a
+bad fit. That plans all 700 steps, and is impractical: about 37 h a seed at 170 to
+330 s a solve, 10.7 GB a process, which CI cannot record. Its file stays at #160's
+P = 20 and no ten-seed run was made at 1048. No exception is granted, so the kiln's
+horizon is open, not compliant, until this is settled.
+
+`ph_neutralization` stays non-compliant. `cstr` and `unstable_cstr` have no valid fit
+on their changed plants, under experts PR 9 has yet to retune, so they keep their
+files and P until those experts land.
+
+**The reactor is compliant now.** It had no valid fit before. It has 20 of 40 now, on
+T_avg and T_hot. `n` and T_fuel have none.

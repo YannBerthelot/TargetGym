@@ -22,8 +22,9 @@ Per training seed 100-109 (``target_gym.identification``):
    (H15, H18), and each pair-seed ends valid, insignificant or invalid under
    its CV's class (H16, H17, H19).
 
-Only valid fits enter T_c and P (``target_gym.oracles.horizon``). A task with
-none is non-compliant: no protocol horizon is written, and it keeps its
+Only valid fits enter T_c. P also reads a fit that failed V1 alone at a fit of
+at least 95 % (``target_gym.oracles.horizon``, Amendment 4). A task with no
+valid fit is non-compliant: no protocol horizon is written, and it keeps its
 current oracle (Amendment 2, N3). unstable_cstr is measured
 on its stabilised plant (section 4.4): the cascade's outer loop in manual,
 the inner PD closed, its setpoint stepped 0.5 K down as in the expert test.
@@ -40,7 +41,13 @@ import jax.numpy as jnp
 import numpy as np
 
 from target_gym import records
-from target_gym.identification import TRAIN_SEEDS, Plant, evidence, identify
+from target_gym.identification import (
+    TRAIN_SEEDS,
+    Plant,
+    evidence,
+    identify,
+    quiet_fits,
+)
 from target_gym.oracles.horizon import (
     episode_samples,
     sample_time,
@@ -54,8 +61,7 @@ EVIDENCE = pathlib.Path(__file__).resolve().parent.parent / "evidence"
 SUMMARY = ("protocol", "compliant", "T_c_steps", "N", "M", "ramp", "P")
 SUMMARY += ("T_c_set_by", "P_set_by", "ramp_set_by", "counts", "cpu", "generated")
 #: H21: a task's tracked CV with a target range, and each rate-limited MV's
-#: slower rate, in raw action units per second as the steps and gains are. The
-#: wind pitch joins with C2's rebuild; the reactor's rod has no compliant horizon.
+#: slower rate, in raw action units per second as the steps and gains are.
 RATE_LIMITS = {
     "compressor_surge": (
         "dp",
@@ -68,9 +74,34 @@ RATE_LIMITS = {
     "wind_turbine": (
         "P",
         lambda p: (p.target_power_range[1] - p.target_power_range[0]) / 1.0e6,
-        lambda p: {"pitch": 2 * p.pitch_rate_max / (p.pitch_max - p.pitch_min)},
+        lambda p: {
+            "pitch": 2 * p.pitch_rate_max / (p.pitch_max - p.pitch_min),
+            "torque": 2 * p.torque_rate_max / p.torque_max,
+        },
+    ),
+    "glass_furnace": (
+        "T_crown",
+        lambda p: p.target_T_crown_range[1] - p.target_T_crown_range[0],
+        lambda p: {"fuel": 2 * p.actuator_rate},
+    ),
+    "boiler_drum": (
+        "pressure",
+        lambda p: p.target_pressure_range[1] - p.target_pressure_range[0],
+        lambda p: {"fuel": 2 * p.actuator_rate[0], "feedwater": 2 * p.actuator_rate[1]},
+    ),
+    "reactor": (
+        "T_avg",
+        lambda p: _tref_span(p),
+        lambda p: {"rod": 2 * p.rod_speed / (p.rho_ext_max - p.rho_ext_min)},
     ),
 }
+
+
+def _tref_span(p):
+    """What the 100-50-100 day moves Tref by."""
+    from target_gym.reactor.env import tavg_program
+
+    return tavg_program(1.0, p) - tavg_program(p.load_min, p)
 
 
 def write(name: str, row: dict) -> None:
@@ -131,9 +162,14 @@ TASKS = {
     "reactor": (
         {"rod": 0.1},
         {
+            "T_avg": (
+                (lambda o, s, p: 0.5 * (s.T_coolant + s.T_cold)),
+                "T_avg_min",
+                None,
+            ),
             "n": _s("n", "n_min", "n_max"),
             "T_fuel": _s("T_fuel", "T_fuel_min", "T_fuel_max"),
-            "T_coolant": _s("T_coolant", "T_coolant_min", "T_coolant_max"),
+            "T_hot": _s("T_coolant", None, "T_coolant_max"),
         },
         {},
     ),
@@ -271,13 +307,15 @@ def measure(name: str) -> dict:
     dt, n_ep = plant.dt, plant.n_ep
     key = {(j, i, s): (mvs[j], cvs[i], TRAIN_SEEDS[s]) for j, i, s in pairs}
     valid = {key[k]: r["fit"] for k, r in pairs.items() if r["label"] == "valid"}
-    tc, rows, top = task_horizon(valid, dt)
-    at = ("mv", "cv", "seed")
+    quiet = {(*key[k[:3]], k[3]): f for k, f in quiet_fits(pairs, classes).items()}
+    tc, rows, top = task_horizon(valid, dt, quiet)
+    at = ("mv", "cv", "seed", "test")
     horizon = {}
     if top is not None:  # else non-compliant: no protocol horizon (N3)
         (N, M, P), n_samples = rows[top], episode_samples(n_ep, tc)
         fastest = min(valid, key=lambda k: sample_time(valid[k]))
         ramp, ramp_key = 0, None
+        without = max(v[2] for k, v in rows.items() if len(k) == 3)
         if name in RATE_LIMITS:
             # A gain needs a settled fit, not a quiet one: V1, the noise test
             # alone failing, leaves it usable (H21).
@@ -299,6 +337,7 @@ def measure(name: str) -> dict:
             "M": M,
             "ramp": ramp,
             "P": P,
+            "P_without_quiet_fits": without + ramp,
             "P_steps": P * tc,
             "P_set_by": dict(zip(at, top)),
             **({"ramp_set_by": dict(zip(at, ramp_key))} if ramp_key else {}),
@@ -316,7 +355,7 @@ def measure(name: str) -> dict:
         )
     )
     row = {
-        "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 3",
+        "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 4",
         "dt": dt,
         "episode_steps": n_ep,
         "compliant": bool(horizon),
@@ -327,7 +366,14 @@ def measure(name: str) -> dict:
             "keeps its current oracle, and C1 and C2 leave it as it is (N3)"
         ),
         **horizon,
-        "counts": {k: labels.count(k) for k in ("valid", "invalid", "insignificant")},
+        "counts": {
+            **{k: labels.count(k) for k in ("valid", "invalid", "insignificant")},
+            "quiet": len(quiet),
+        },
+        "quiet_fits": [
+            {**dict(zip(at, k)), "fit": f, "P": rows.get(k, (None,) * 3)[2]}
+            for k, f in quiet.items()
+        ],
         "retests": sum(len(r["tests"]) - 1 for (j, i, s), r in pairs.items() if i == 0),
         "zero_models": zero,
         "cvs_without_valid_pair": [c for c in cvs if not any(k[1] == c for k in valid)],

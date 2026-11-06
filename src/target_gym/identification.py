@@ -38,7 +38,8 @@ from scipy.optimize import least_squares
 from scipy.signal import fftconvolve
 
 __all__ = ["MODELS", "TRAIN_SEEDS", "Loop", "Plant", "Run", "class_of", "evidence"]
-__all__ += ["fit", "identify", "insignificant", "judge", "nrmse_fit"]
+__all__ += ["FIT_QUIET", "fit", "identify", "insignificant", "judge", "nrmse_fit"]
+__all__ += ["quiet_fits"]
 __all__ += ["DEAD_BAND", "Bump", "Instrument", "Read", "band_exit", "noise_band"]
 __all__ += ["noise_tune", "pick_fit", "rga", "simc", "single_run", "sized_step"]
 
@@ -46,6 +47,9 @@ __all__ += ["noise_tune", "pick_fit", "rga", "simc", "single_run", "sized_step"]
 TRAIN_SEEDS = tuple(range(100, 110))
 MODELS = ("fopdt", "integrating_lag")
 SNR_MIN, FIT_MIN = 10.0, 80.0  # V1 in noise bands (D8), V4 in percent (D10)
+#: What a fit failing V1 alone needs to count toward P (Amendment 4), on V4's
+#: measure, ``nrmse_fit`` (N2).
+FIT_QUIET = 95.0
 RETESTS, GROWTH = 2, 4  # D11: two retests, step and window up to 4 times
 _LAG = {"fopdt": "tau", "integrating_lag": "tau2"}
 # N1 to N7: 5 bands, a filter under 10 % of Ti, a spread of 1.5 (C5) and a dead
@@ -608,6 +612,24 @@ def identify(plant, sizes):
     return pairs, classes
 
 
+def quiet_fits(pairs, classes) -> dict:
+    """The fits that fail V1 alone at a fit of at least ``FIT_QUIET`` (horizon
+    protocol, Amendment 4), keyed ``(mv, cv, seed index, test)``. A gain needs a
+    settled fit, not a quiet one, as in H21, so these count toward P, though
+    they set no T_c. Every test of a pair is read, under its CV's class: a retest
+    can keep a fast valid fit over a slow quiet one. As in H21, an insignificant
+    pair has none."""
+    out = {}
+    for (j, i, s), pair in pairs.items():
+        cls = classes[i]["class"]
+        if cls is None or pair["label"] == "insignificant":
+            continue
+        for n, (_, a) in enumerate(pair["tests"]):
+            if _fails(a, cls) == {"V1"} and a["fits"][cls]["fit"] >= FIT_QUIET:
+                out[j, i, s, n] = a["fits"][cls]
+    return out
+
+
 def away_from_nearer_limit(u: float, size: float) -> float:
     """C2's direction for a raw MV in [-1, 1]: down from the upper half."""
     return -size if u > 0 else size
@@ -645,7 +667,9 @@ class Plant:
         controller=None,
         applied=None,
     ):
-        self.n_ep, self.dt = int(params.max_steps_in_episode), float(params.delta_t)
+        env = spec.make_env()
+        self.n_ep = int(params.max_steps_in_episode)
+        self.dt = getattr(env, "control_period", 1) * float(params.delta_t)
         # Long enough for any retest; continuing off, so a trip leaves the
         # out-of-limit state to read which CV tripped.
         params = params.replace(max_steps_in_episode=1000 * self.n_ep)
@@ -654,7 +678,7 @@ class Plant:
             if hasattr(params, "continuing")
             else params
         )
-        env, ctrl = spec.make_env(), controller or spec.make_pid_controller()
+        ctrl = controller or spec.make_pid_controller()
         self.n_mv, self.n_cv, self.n_seeds = (
             env.action_space(params).shape[0],
             len(cvs),

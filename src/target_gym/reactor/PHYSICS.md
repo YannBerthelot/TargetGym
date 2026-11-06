@@ -298,8 +298,14 @@ Measured on the held-out seeds 200 to 209 (2026-11-06), before any re-record.
 
 The review's law stopped winning because of the plant: it holds energy, which keeps
 Tavg near its starting value and off program at part load. The oracle's row is the
-shipped `NewtonMPC` on the true state, xenon and the day's schedule included, on seeds
-200 to 203 with its protocol still to come in PR 9.
+`NewtonMPC` that held this slot, on seeds 200 to 203.
+
+The oracle is now the shared solver (`oracle.py`): the env's own stiff step, sub-step
+by sub-step, over the 5 minutes the horizon protocol gives, P = 10 steps with a ramp
+of 2. The rod demand stays within the rods' reach, the corner left inside it is
+smoothed at the K5 width, each sub-step's Tavg error and a step's rod travel are
+epigraph terms, and the trips are hard limits on every sub-step's state. It reads the
+true state, xenon and the day's schedule included, and plans the load's mean path.
 
 **An integrator on Tavg beats the rod program.** The dead band costs $365 of Tavg
 error to save $119 of rod travel, at the $1 a step labelled ours above. The two break

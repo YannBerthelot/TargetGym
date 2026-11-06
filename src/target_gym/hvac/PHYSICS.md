@@ -231,9 +231,12 @@ reward and the expert below.)
 
 The oracle is now the shared solver (`oracle.py`): the episode reward on the
 5R1C model, the comfort hinge as epigraph rows, and a plan that runs to the
-episode's end, since Cooper's recipe gives P = 932 steps on this building's
-mass. Its comfort and gas bill sit within 1 % of the 24-step `NewtonMPC` it
-replaced, on either side, at about half the expert's cost.
+episode's end, since Cooper's recipe gives P = 930 steps on this building's mass.
+That fit falls just short of the noise test, at 9.97 of its 10 bands with a fit of
+98 %, and counts under the owner's rule of 2026-11-06 (`docs/proposals/
+oracle-horizon-protocol.md`, Amendment 4). On the ten test seeds it beats the expert
+on every seed, -12.90 against -16.54, with no trip. Without the mass in the horizon
+it plans 2 hours, cannot see the morning, and wins only 3 of 10.
 
 ### The expert: Guideline 36 zone heating with optimal start
 

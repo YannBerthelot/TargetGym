@@ -1,10 +1,9 @@
 """The oracle (the MPC slot) for the battery task.
 
 Kept apart from the expert (``experts.py``) so that each has a fingerprint of
-its own (``provenance.oracle_fingerprint``): changing the oracle re-records
-only the oracle rows of this package's tasks. The shared machinery
-(GradientMPC, NewtonMPC, SamplingMPC and the v2 objective helpers) stays in
-``target_gym.experts.mpc``, which is in every oracle fingerprint.
+its own (``provenance.oracle_fingerprint``). The slot holds a stand-in for 0.8.0,
+labelled non-compliant by the owner on 2026-11-07: it wins 9 of 10 seeds, not every
+seed (PHYSICS.md). The solver's planner is in ``oracles/battery.py``, out of the slot.
 """
 
 import numpy as np
@@ -37,9 +36,10 @@ class ScheduleFeedforward:
     following once their distance reaches ``depth_bound``, or at the charge
     window. They prove the gap to an offline optimum does not grow with time.
 
-    This is a stand-in until the shared solver replaces it (#141, PR 9). It reads
-    the true state, so it has no planning horizon, and
-    scripts/audit_mpc_horizons.py reports n/a.
+    It holds the slot for 0.8.0, labelled non-compliant: it wins 9 of 10 seeds, not
+    every seed, so it does not meet the oracle rule (PHYSICS.md). It reads the true
+    state, so it has no planning horizon, and scripts/audit_mpc_horizons.py reports
+    n/a.
     """
 
     #: How far inside the charge window it stops: the guard against the trip.

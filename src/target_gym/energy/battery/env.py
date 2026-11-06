@@ -61,6 +61,9 @@ KELVIN = 273.15
 #: floor. The held level plus a small-innovation regulation signal keeps the
 #: error a property of the controller.
 N_DISPATCH_BLOCKS = 5
+#: Open turns a half-cycle's stack holds. One past the hysteresis takes at least 61
+#: steps at full power, so 2880 steps hold at most 47.
+N_TURNS = 48
 
 
 @struct.dataclass
@@ -270,6 +273,11 @@ class BatteryState(EnvState):
     soc_anchor: float  # -- HIDDEN
     soc_peak: float  # -- HIDDEN
     deep_fade: float = 0.0  # fraction of capacity the last step's depth used
+    # The turns still open below it, oldest first -- HIDDEN.
+    soc_turns: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(N_TURNS), kw_only=True
+    )
+    n_turns: int = struct.field(default=0, kw_only=True)
 
     actuator_held: jax.Array = actuator_field(1)
 
@@ -352,24 +360,61 @@ def cycle_stress(depth, params: BatteryParams):
     return params.stress_alpha * jnp.abs(depth) ** params.stress_beta
 
 
-def half_cycle(anchor, peak, soc, params: BatteryParams):
-    """The half-cycle after a move to ``soc``: ``(anchor, peak, life used)``.
+def cycle_events(anchor, peak, turns, count, soc, params: BatteryParams):
+    """What a move to ``soc`` does to the half-cycle: ``(extends, turned, closes)``.
 
-    A half-cycle of depth ``d`` costs ``Phi(d) / 2``, spread over its depth as it
-    grows. A swing back from the peak ends it once it passes ``cycle_hysteresis``,
-    a racetrack filter, and a new one starts from the peak. Smaller swings are
-    ripple, which ``degradation_rate`` charges by throughput.
+    It extends past its peak, or turns once it has swung back past
+    ``cycle_hysteresis``. It closes once it has run back as far as the half-cycle
+    before it, ``turns[count - 1]`` to ``anchor``, which it then contains.
     """
-    heading = jnp.sign(peak - anchor)
-    extends = (soc - peak) * heading > 0.0
-    turns = jnp.logical_and(
+    extends = (soc - peak) * jnp.sign(peak - anchor) > 0.0
+    turned = jnp.logical_and(
         jnp.logical_not(extends), jnp.abs(soc - peak) > params.cycle_hysteresis
     )
-    new_anchor = jnp.where(turns, peak, anchor)
-    new_peak = jnp.where(jnp.logical_or(extends, turns), soc, peak)
-    spent = jnp.where(turns, 0.0, cycle_stress(peak - anchor, params))
-    life = 0.5 * (cycle_stress(new_peak - new_anchor, params) - spent)
-    return new_anchor, new_peak, life
+    reaches = jnp.abs(soc - anchor) >= jnp.abs(turns[count - 1] - anchor)
+    return extends, turned, jnp.logical_and(extends, (count > 0) & reaches)
+
+
+def half_cycle(anchor, peak, turns, count, soc, params: BatteryParams):
+    """The half-cycle after a move to ``soc``, by rainflow counting (ASTM E1049):
+    ``(anchor, peak, turns, count, life used)``.
+
+    A half-cycle of depth ``d`` costs ``Phi(d) / 2``, spread over its depth as it
+    grows. A swing back past ``cycle_hysteresis`` starts a new one from the peak,
+    and the old anchor waits on the stack ``turns``. Smaller swings are ripple,
+    which ``degradation_rate`` charges by throughput.
+
+    A swing that comes back as far as the half-cycle before it has closed a cycle
+    of that range: each of its two half-cycles pays ``Phi / 2``, and the outer
+    half-cycle takes up where it stopped, at its old depth. So a swing costs its own
+    cycle and cannot restart the larger range around it. With nothing outer left,
+    the half-cycle it has outgrown simply stands, as a half-cycle counted.
+
+    Past ``N_TURNS`` open turns the oldest is dropped.
+    """
+    p = params
+    extends, turned, closes = cycle_events(anchor, peak, turns, count, soc, p)
+    last, outer = turns[count - 1], turns[count - 2]
+    folds = jnp.logical_and(closes, count > 1)
+
+    # The run back to ``last`` finishes the closed cycle, and past it the outer
+    # half-cycle grows.
+    closing = 0.5 * (cycle_stress(last - anchor, p) - cycle_stress(peak - anchor, p))
+    resumed = cycle_stress(soc - outer, p) - cycle_stress(last - outer, p)
+    new_peak = jnp.where(jnp.logical_or(extends, turned), soc, peak)
+    spent = jnp.where(turned, 0.0, cycle_stress(peak - anchor, p))
+    grown = cycle_stress(new_peak - jnp.where(turned, peak, anchor), p) - spent
+    life = jnp.where(folds, closing + 0.5 * resumed, 0.5 * grown)
+
+    new_anchor = jnp.where(folds, outer, jnp.where(turned, peak, anchor))
+    pushed = jnp.logical_and(turned, peak != anchor)  # from rest there is no half-cycle
+    full = count >= N_TURNS
+    stack = jnp.where(full, jnp.roll(turns, -1), turns)
+    stack = stack.at[jnp.minimum(count, N_TURNS - 1)].set(anchor)
+    new_turns = jnp.where(pushed, stack, turns)
+    new_count = jnp.minimum(count + pushed.astype(jnp.int32), N_TURNS)
+    new_count = jnp.where(folds, count - 2, jnp.where(closes, 0, new_count))
+    return new_anchor, new_peak, new_turns, new_count, life
 
 
 def degradation_rate(current, T_cell, params: BatteryParams):
@@ -435,7 +480,9 @@ def compute_next_state(
     dc_power = terminal_voltage(current, soc, v_rc, p) * current
     power = inverter_output(dc_power, p) - p.aux_load
 
-    anchor, peak, life = half_cycle(state.soc_anchor, state.soc_peak, soc, p)
+    anchor, peak, turns, count, life = half_cycle(
+        state.soc_anchor, state.soc_peak, state.soc_turns, state.n_turns, soc, p
+    )
     deep_fade = p.life_fade * life
 
     # The signal for the *next* step: its block's level plus the AR(1) movement.
@@ -461,6 +508,8 @@ def compute_next_state(
             regulation=regulation,
             soc_anchor=anchor,
             soc_peak=peak,
+            soc_turns=turns,
+            n_turns=count,
             deep_fade=deep_fade,
             time=state.time + 1,
         ),

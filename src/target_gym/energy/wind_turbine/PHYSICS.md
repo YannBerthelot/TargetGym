@@ -215,12 +215,13 @@ divides by the filtered speed, so the power lags the rotor's speed swings.
 **The oracle plans on the shared solver.** Since the oracle rule (2026-11) the
 MPC slot holds the planner of `oracle.py`, run by
 `target_gym.oracles.controller.Oracle`: the episode's reward on the plant with
-the turbulence at its mean, solved once a step over the 290 steps the horizon
-protocol measured (`data/oracle_horizons/wind_turbine.json`). The imbalance
-and the pitch activity are epigraph terms, the rotor speed a hard limit inside
-the trips, the pitch command stays within the actuator's reach over the step,
-and the two kinks left, Cp's floor and the corner of the pitch rate, are
-smoothed at the widths in `data/oracle_widths/wind_turbine.json`.
+the turbulence at its mean, solved once a step over the 266 steps the horizon
+protocol measured (`data/oracle_horizons/wind_turbine.json`). The imbalance, the
+pitch's travel and the speed above its band are epigraph terms, the rotor speed a
+hard limit inside the trips, and both commands stay within their actuator's reach
+over the step. The kinks left, Cp's floor, the table's nodes on either axis and
+the corners of the two rate limits, are smoothed at the widths in
+`data/oracle_widths/wind_turbine.json`.
 
 The rotor is an energy store, so the reward alone leaves the plan loose: any
 speed path inside the band that delivers the target costs the same. Left free,
@@ -230,11 +231,10 @@ the plan rests the speed at rated, as the reference turbine does in region 3,
 with a term that costs at most the tie-break's budget over an episode (G12 in
 `docs/proposals/oracle-solver.md`). The reward never sees that term.
 
-That term only settles a tie, so it cannot hold the rotor against a real cost.
-Seed 9 asks for 4.96 MW, close to what the torque limit can deliver, and a long
-lull takes the speed to 0.91 of rated, where the torque reaches its ceiling and
-the dips return: -0.064 against -0.0071 for the oracle this one replaced, and
--0.070 for the expert. The other nine seeds beat that oracle by about 7 %.
+That term only settles a tie, so it cannot hold the rotor against a real cost. On
+the ten test seeds the oracle costs -0.0093 to -0.0187 against the expert's -0.050
+to -0.084, about 5 times better, with no trip and no failed or capped solve. Its
+replay stays within 7.5e-4 and 1.4 resolutions: the table's smoothing is not exact.
 
 The oracle it replaces, a one-step Newton on the torque under the PID's pitch
 PI (`WindTurbineNewtonPI`), went with it, along with the version-1 gradient
