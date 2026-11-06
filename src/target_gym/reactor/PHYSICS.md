@@ -285,6 +285,7 @@ Measured on the held-out seeds 200 to 209 (2026-11-06), before any re-record.
 | policy | ratio to the expert | seeds won | trips | Tavg cost | rod cost |
 |---|---|---|---|---|---|
 | expert | 1 | | 0 | $1219 | $479 |
+| oracle, 4 seeds | 2.0 | 4 of 4 | 0 | $172 | $692 |
 | table of the target | 0.09 | 0 of 10 | 0 | | |
 | the review's rod integrator, as written | 0.16 | 0 of 10 | 0 | $10,499 | $619 |
 | the same, at its per-second gain | 0.05 | 0 of 10 | 1 | | |
@@ -293,7 +294,9 @@ Measured on the held-out seeds 200 to 209 (2026-11-06), before any re-record.
 | a plain integrator on Tavg, the gate's witness | **1.29** | **10 of 10** | 0 | | |
 
 The review's law stopped winning because of the plant: it holds energy, which keeps
-Tavg near its starting value and off program at part load.
+Tavg near its starting value and off program at part load. The oracle's row is the
+shipped `NewtonMPC` on the true state, xenon and the day's schedule included, on seeds
+200 to 203 with its protocol still to come in PR 9.
 
 **An integrator on Tavg beats the rod program.** The dead band costs $799 of Tavg
 error to save $466 of rod travel, at the $1 a step labelled ours above. The two break
@@ -329,7 +332,7 @@ which is what the recorded baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 0.05 K | the RTD reading's resolution, about its 0.045 K scatter. A resolution, not a certified floor |
+| `e_floor` | 0.05 K | the RTD reading's resolution, about its 0.045 K scatter: a documented minimum, not a certified floor |
 | `e_tol` | 0 | none. The rod program's dead band is the controller's, not the reward's |
 | `tracking_exponent` | 1 | linear, as lost output is |
 | `imbalance_multiple` | 1.25 x 0.0023 per K of `spot_price_per_MWh` on `P_electric_GW` | **ours.** Off program, steam conditions cost output. The Carnot slope at 547 K steam and 305 K condenser is 0.23 %/K, and at the one imbalance price of the priced plants, $100/MWh on 1 GWe, that is $230/h per K. It prices a hot plant as a cold one, which the slope does not say |
