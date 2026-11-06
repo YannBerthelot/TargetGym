@@ -1,10 +1,11 @@
 """Tune the aircraft's fixed inner loop once, by the accepted manual procedure.
 
 Runs section 3.2 of ``docs/proposals/expert-protocols-aircraft.md`` (ArduPlane
-4.0.9, G-MAN Method 2): still air, 5500 m, 230 m/s, throttle at trim. Roll first,
-bank demand 0, +45, -45, 0 deg, 30 s each. Then pitch, trim +5, -5, trim deg,
-20 s each, wings level. Steps 1 to 4 of the recipe, and the readings of its
-section 2, as they stand. Steps 5 and 6 set guidance values and belong to PR 9.
+4.0.9, G-MAN Method 2) with its amendment of 2026-11-06: still air, 5500 m, 230 m/s,
+with the throttle holding the speed. Roll first, bank demand 0, +45, -45, 0 deg,
+30 s each. Then pitch, trim +5, -5, trim deg, 20 s each, wings level. Steps 1 to 4
+of the recipe, and the readings of its section 2, as they stand. Steps 5 and 6 set
+guidance values and belong to PR 9.
 
 The result ships whatever it is. No scored or held-out seed is flown: the tests
 are in still air, so nothing here reads a result. It prints the values typed into
@@ -42,12 +43,24 @@ ROLL_HOLD, PITCH_HOLD = 30.0, 20.0
 P_START, P_STEP, P_MAX = 1.0, 0.1, 5.0
 D_START = {"roll": 0.08, "pitch": 0.04}
 D_STEP, D_MAX, I_STEP = 0.01, 0.1, 0.05
+#: The speed hold's sample, the plant's action rate, and the engine's lag it works
+#: through (the amendment).
+SPEED_HOLD_SAMPLE, ENGINE_LAG = 1.0, 3.0
 #: Band of the readings: 5% of the step (section 2).
 BAND = 0.05
 
 
+def speed_hold_gains(slope):
+    """The speed hold's PI, ``(gain, integral time)``, by the amendment's SIMC rule:
+    the lever moves the speed as ``slope / (s (3 s + 1))``, so at 1 s samples
+    theta_e = 0.5 + 3 / 2 = 2 s and tau_c = theta_e gives 1 / (4 slope) and 16 s."""
+    delay = 0.5 * SPEED_HOLD_SAMPLE + 0.5 * ENGINE_LAG
+    return 1.0 / (2.0 * slope * delay), 8.0 * delay
+
+
 def trim(params):
-    """``(pitch, stick, lever)`` of level flight at the test's point."""
+    """``(pitch, stick, lever, slope)`` of level flight at the test's point, with
+    ``slope`` the acceleration a unit of lever gives."""
 
     def residual(x):
         theta, stick, thrust = float(x[0]), float(x[1]), float(x[2]) * 1e5
@@ -67,7 +80,8 @@ def trim(params):
     )
     power = float(thrust * 1e5 / unit)
     idle = params.idle_power
-    return float(theta), float(stick), (power - idle) / (1.0 - idle)
+    slope = float(unit) * (1.0 - idle) / params.initial_mass
+    return float(theta), float(stick), (power - idle) / (1.0 - idle), slope
 
 
 def _level(params, theta, stick, power, integ):
@@ -102,9 +116,12 @@ def _level(params, theta, stick, power, integ):
 
 def make_flight(params, trimmed):
     """A jitted flight of ``(pitches, banks)`` held at the 4 Hz sub-step, logging
-    pitch and bank at each. The plant's own step, one sub-step at a time."""
-    theta, stick, lever = trimmed
+    pitch and bank at each, with the throttle holding the speed at 1 Hz. The
+    plant's own step, one sub-step at a time."""
+    theta, stick, lever, slope = trimmed
     idle = params.idle_power
+    gain, integral_time = speed_hold_gains(slope)
+    per_sample = int(SPEED_HOLD_SAMPLE / SUBSTEP)
     power = idle + (1.0 - idle) * lever
     start = _level(params, theta, stick, power, stick / STICK_TRAVEL)
     start = jax.tree_util.tree_map(lambda x: jnp.asarray(x, jnp.float32), start)
@@ -113,13 +130,23 @@ def make_flight(params, trimmed):
     def fly(gains, pitches, banks):
         p = params.replace(inner_loop=gains, delta_t=SUBSTEP)
 
-        def body(state, demand):
-            state, _ = compute_next_state_3d(
-                lever, demand[0], demand[1], state, p, inner_steps=1
-            )
-            return state, (state.theta, state.phi)
+        def body(carry, demand):
+            state, held, integral = carry
+            pitch, bank, step = demand
+            sample = step % per_sample == 0
+            speed = jnp.sqrt(state.x_dot**2 + state.y_dot**2 + state.z_dot**2)
+            error = SPEED - speed
+            wanted = lever + gain * (error + integral / integral_time)
+            clipped = jnp.clip(wanted, 0.0, 1.0)
+            grown = jnp.where(wanted == clipped, integral + error, integral)
+            held = jnp.where(sample, clipped, held)
+            integral = jnp.where(sample, grown, integral)
+            state, _ = compute_next_state_3d(held, pitch, bank, state, p, inner_steps=1)
+            return (state, held, integral), (state.theta, state.phi, speed)
 
-        return jax.lax.scan(body, start, (pitches, banks))[1]
+        steps = jnp.arange(len(pitches))
+        carry = (start, jnp.float32(lever), jnp.float32(0.0))
+        return jax.lax.scan(body, carry, (pitches, banks, steps))[1]
 
     return jax.jit(fly)
 
@@ -143,10 +170,7 @@ def excursions(log, target, step):
 def reads(log, levels, hold):
     """``(overshoots, oscillates)`` over a test's segments (section 2).
 
-    Overshoots: the peak passes the target by more than 5% of the step. It is
-    read on the first half of each hold. That reading is a step response's, and
-    with the throttle fixed the speed mode then carries the attitude past the
-    target at any gain, peaking 15 to 20 s after the step (ours, for the owner).
+    Overshoots: the peak passes the target by more than 5% of the step.
     Oscillates: after the first peak the error changes sign at least twice, each
     excursion leaving the 5% band. The approach and the first peak are the first
     two excursions, so that is four or more.
@@ -156,7 +180,7 @@ def reads(log, levels, hold):
     for i in range(1, len(levels)):
         step = levels[i] - levels[i - 1]
         segment = log[i * per : (i + 1) * per]
-        err = (levels[i] - segment[: per // 2]) * np.sign(step)
+        err = (levels[i] - segment) * np.sign(step)
         over |= bool(err.min() < -BAND * abs(step))
         osc |= len(excursions(segment, levels[i], step)) >= 4
     return over, osc
@@ -197,9 +221,8 @@ def tune(axis, run, gains):
         while p + P_STEP <= P_MAX + 1e-9 and not any(test(p + P_STEP, 0.0, d)):
             p += P_STEP
 
-    # 3. D up until a test oscillates, then halve; at the guide's limit, ships
-    # there. The proposal drops that limit because a sampled loop always reaches
-    # oscillation. Here it does not: past it the loop only slows down.
+    # 3. D up until a test oscillates, then halve; at the guide's limit it ships
+    # there (the amendment), since past it this loop only slows down.
     while True:
         if test(p, 0.0, d)[1]:
             d /= 2.0
@@ -238,14 +261,14 @@ def tuned_gains(report=None):
     banks = schedule(bank_levels, ROLL_HOLD)
 
     def run_roll(gains):
-        _, phi = fly(gains, *demands(np.full_like(banks, theta0), banks))
+        _, phi, _ = fly(gains, *demands(np.full_like(banks, theta0), banks))
         return reads(np.asarray(phi), bank_levels, ROLL_HOLD)
 
     pitch_levels = theta0 + np.deg2rad(PITCH_TEST)
     pitches = schedule(pitch_levels, PITCH_HOLD)
 
     def run_pitch(gains):
-        theta, _ = fly(gains, *demands(pitches, np.zeros_like(pitches)))
+        theta, _, _ = fly(gains, *demands(pitches, np.zeros_like(pitches)))
         return reads(np.asarray(theta), pitch_levels, PITCH_HOLD)
 
     start = InnerLoop(
@@ -266,7 +289,7 @@ def tuned_gains(report=None):
 def main() -> int:
     report = {}
     gains = tuned_gains(report)
-    theta, stick, lever = report["trim"]
+    theta, stick, lever, _ = report["trim"]
     print(f"trim: pitch {np.rad2deg(theta):.3f} deg, stick {stick:.4f} rad, ", end="")
     print(f"lever {lever:.3f}")
     print(f"tests: {len(report['roll'])} roll, {len(report['pitch'])} pitch")

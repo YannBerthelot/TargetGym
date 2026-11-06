@@ -137,6 +137,26 @@ gives no size; 5 deg keeps the speed within about 10 m/s). Roll is tuned first.
 
 Sets `Kp_roll`, `Kd_roll`, `Kp_theta`, `Ki_theta`, `Kd_theta`, `k_bank_comp`, `curvature_lead`.
 
+**Amendment, 2026-11-06, the owner's decision.** A first run on the plant of
+`industrial-fixes.md` PR 7, with the throttle fixed, showed two gaps. The speed mode carried pitch
+past its target 15 to 20 s after a step, which the overshoot reading took for a loop that was too
+strong. And D did not reach oscillation: past about 10 the roll loop only slows down. So, fixed
+before the rerun and replacing what is above where they differ:
+
+- **Speed is held through both tests,** as a real flight test does with the throttle managed, so
+  the phugoid is not excited. The throttle is a PI on the error from 230 m/s, about the trim lever,
+  read and updated at 1 Hz, the plant's action rate. The signal is airspeed, which in still air is
+  the true velocity's magnitude. The integral runs only while the lever is off its stops. Ours: G-MAN
+  sets a cruise throttle before the tests and says nothing of it during them, and G-TECS has TECS
+  hold energy with the throttle but gives no hold for a test.
+- **The hold's gains follow SIMC,** by the rule section 3.5 uses, from the plant's known numbers and
+  no bump test. Lever to speed is k' / (s (3 s + 1)), k' the thrust slope over the mass at the test
+  point. A 1 s sample adds 0.5 s of delay, and the half rule folds the 3 s lag in: theta_e = 2 s.
+  The tight setting tau_c = theta_e gives a gain of 1 / (4 k') and an integral time of 16 s.
+- **The overshoot reading stays as section 2 writes it,** on the whole hold.
+- **D stops at the guide's limit,** 0.1 [0.127], and ships there if no test oscillates (section 4's
+  rule for a cap). This replaces step 3's "no cap", whose reason did not hold.
+
 ### 3.3 TECS (G-TECS Parts C and D)
 
 Start at 4.0.9's defaults (TIME_CONST 5, PTCH_DAMP 0.0, INTEG_GAIN 0.1, THR_DAMP 0.5, RLL2THR 10),

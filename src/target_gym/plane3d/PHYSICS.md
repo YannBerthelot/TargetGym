@@ -264,7 +264,7 @@ meets a rolling gust `p_g` (`rolling_gust`). MIL-F-8785C's Dryden spectrum for i
 about 20 rad/s, far above the step, so a step holds a white draw, sized to keep the
 spectrum's level at low frequency: 0.0136 rad/s at 230 m/s and 2 m/s of gust. It
 adds to the roll rate in the damping moment. Left alone it walks the bank by 9 deg
-in 2 minutes; the inner loop holds it to about 0.7 deg. On the patrol tasks the
+in 2 minutes; the inner loop holds it to about 0.8 deg RMS. On the patrol tasks the
 caller owns the air, so it is not there yet: that is PR 7b.
 
 ### Integration order

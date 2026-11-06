@@ -275,30 +275,35 @@ frozen while the surface is saturated. `s` is ArduPilot's airspeed scaler, tunin
 EAS over EAS, clamped to [0.3, 2].
 
 The gains are task constants, one tune for every task, from the attitude procedure
-of `docs/proposals/expert-protocols-aircraft.md` (ArduPlane 4.0.9's manual P, D, I)
-run once in still air by `scripts/tune_inner_loop.py`.
+of `docs/proposals/expert-protocols-aircraft.md` (ArduPlane 4.0.9's manual P, D, I),
+with its amendment of 2026-11-06, run once in still air by
+`scripts/tune_inner_loop.py`. The throttle holds 230 m/s through both tests, by a PI
+at 1 Hz whose gains follow from the plant's numbers by SIMC. That hold is ours: the
+guides give none. It keeps the speed within 223 to 236 m/s, so the speed mode no
+longer reads as overshoot.
 
 | axis | P (ArduPilot, ours) | D | I | how the recipe ended |
 |---|---|---|---|---|
-| pitch | 5.0, 6.366 | 0.1, 0.1273 | 0.025, 0.0318 | P at its cap, D at the guide's limit, I halved at the first overshoot |
-| roll | 0.7, 0.8913 | 0.1, 0.1273 | 0.025, 0.0318 | P walked down from 1.0, D at the guide's limit, I as pitch |
+| pitch | 5.0, 6.366 | 0.1, 0.1273 | 0.2, 0.2546 | **P at its cap**, D at the guide's limit, I halved from the first test that overshot, 0.4 |
+| roll | 0.7, 0.8913 | 0.1, 0.1273 | 0.025, 0.0318 | P walked down from 1.0, D at the guide's limit, I halved from 0.05, its first test |
 
-**⚠️ For the owner: the recipe needed three readings its text does not give.**
+**⚠️ For the owner.**
 
-1. D has no stop here. The proposal drops the guide's limit of 0.1 because "a
-   sampled loop always reaches oscillation", but roll only slows down, up to D 100,
-   and never leaves the 5 % band. So D stops at the guide's 0.1.
-2. With the throttle fixed, the speed mode carries the pitch past its target 15 to
-   20 s after a step, at any gain. Read literally that is an overshoot, and the
-   recipe ends at P 0.9. Overshoot is read on the first half of each hold instead.
-3. Roll's defaults already overshoot, and one step back does not clear them (8 % at
-   P 0.9), so P walks down to the last clean step.
+- **Pitch P is the cap's, not the recipe's choice.** No test overshoots at any P up
+  to the 5.0 of `AUTOTUNE_MAX_P`, so the number says the recipe found no limit below
+  it.
+- **D stops at the guide's 0.1,** by the amendment. No test oscillated on either axis:
+  past about 10 the roll loop only slows down.
+- **Roll's P is a reading of ours.** The defaults already overshoot, and the recipe's
+  "back one step" gives 0.9, which still overshoots by 8 %. P walks down to 0.7, the
+  last clean step.
+- **Step 4 halves I and does not fly the result,** so the shipped roll loop overshoots
+  a 45 deg step by 12 %, past the 5 % reading and inside the 22 % that reads as
+  oscillation. It reaches the step in 4 s at 14.5 deg/s, near the 15 deg/s of the
+  A320's normal law, and the integral takes until 20 s to bring it back inside 5 %.
 
-Step 4 halves I and does not fly the result, so the shipped roll loop overshoots a
-45 deg step by 12 %, past the 5 % reading and inside the 22 % that reads as
-oscillation. It reaches the step in 4 s at 14.5 deg/s, near the 15 deg/s of the
-A320's normal law, and the integral takes until about 20 s to bring it back inside
-5 %. Pitch reaches 63 % of a step in about 1 s, and overshoots by under 5 %.
+Pitch reaches 63 % of a step in about 1 s, overshoots by 3.3 % at most, and is inside
+5 % by 5 s.
 
 A reset aircraft engages in trim (`trim_stick`): its elevator started 5 deg from
 trim, so a 1.8 deg demand pulled 1.9 g in the first second.

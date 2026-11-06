@@ -714,8 +714,16 @@ EFFECTIVENESS_GAPS = {
 
 
 #: Experts a plant change left behind. Strict, so PR 9's retune removes the line.
+_STALE_TECS = "TECS's time_const 2 trips the new envelope; PR 9 retunes it"
 STALE_EXPERTS = {
     "cstr": "the cascade's gains predate the 1 min analyser; PR 9 retunes it",
+    "plane": _STALE_TECS,
+    "plane3d_circle": _STALE_TECS,
+    "plane3d_figure8": _STALE_TECS,
+    "plane3d_heading": _STALE_TECS,
+    "plane3d_racetrack": _STALE_TECS,
+    "plane_energy": _STALE_TECS,
+    "plane_sine": _STALE_TECS,
 }
 
 

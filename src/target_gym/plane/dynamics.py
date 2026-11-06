@@ -239,7 +239,7 @@ class InnerLoop:
     scaler about the tuning test's EAS, 230 m/s at 5500 m."""
 
     Kp_theta: float = 6.3662
-    Ki_theta: float = 0.0318
+    Ki_theta: float = 0.2546
     Kd_theta: float = 0.1273
     Kp_roll: float = 0.8913
     Ki_roll: float = 0.0318

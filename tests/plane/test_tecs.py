@@ -85,8 +85,15 @@ def _finding(reason):
     return pytest.mark.xfail(strict=True, reason=f"finding: {reason}")
 
 
+_STALE = _finding("PR 9: TECS's time_const 2 trips the new envelope")
 _MISSES = {
-    ("plane_sine", 200): _finding("plane_sine altitude 2.19 m on seed 200"),
+    ("plane", 200): _STALE,
+    ("plane", 201): _STALE,
+    ("plane_energy", 200): _STALE,
+    ("plane_energy", 201): _STALE,
+    ("plane_energy", 202): _STALE,
+    ("plane_sine", 200): _STALE,
+    ("plane_sine", 201): _STALE,
 }
 
 
