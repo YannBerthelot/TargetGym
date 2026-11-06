@@ -635,8 +635,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
         make_pid=_pid("make_patrol_pid_controller", module="target_gym.patrol.experts"),
         make_mpc=_mpc("make_patrol_mpc", module="target_gym.patrol.oracle"),
-        # The oracle's twin law flies the 3D heading PID, on the lead's gains
-        # (task constants, patrol/env_jax.py). The expert's gains are in its
+        # The oracle's twin law flies the 3D heading PID, on the old lead's gains
+        # (task constants, patrol/oracle.py). The expert's gains are in its
         # experts.py, as the 3D aircraft's are.
         oracle_reads=("experts/pid.py",),
         noise_fields=("turbulence_sigma",),

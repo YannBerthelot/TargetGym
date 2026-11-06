@@ -56,6 +56,7 @@ CYCLE_GAPS: dict[str, str] = {
     "trips and its cycles restart; PR 9 retunes them",
 }
 DOUBLING_GAPS: dict[str, str] = {
+    "formation": _STALE_HOLD,
     "plane3d_racetrack": _STALE_TECS,
     "plane_energy": _STALE_TECS,
     "plane_sine": _STALE_TECS,
