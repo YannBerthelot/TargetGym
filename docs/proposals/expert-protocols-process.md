@@ -193,19 +193,27 @@ the plants of PRs 3 to 7, for the seven process tasks. Each step below is fixed;
 a poor result ships (C9). `scripts/tune_process_experts.py` runs them. Bump tests
 have been looked at to set these rules up: scores have not.
 
-**Owner decisions, 2026-11-06.** R1 to R6 below are accepted. So are three readings
-in the recipes below: "near `q2 = 0`" read as `q2 = 0`, the compressor schedule check
-as D3's ladder (0.10, 0.125, 0.15), and `unstable_cstr`'s inner PD from the datasheet.
-R7 came after them, from doubling `distillation`'s episode. A bump test belongs to the recipe, so its length
-should never have followed the task's, and every recipe here read it: `Plant` holds
-one episode before the baseline and keys its noise on the episode's length. That is
-the design reason. It was also chosen with the doubling check's result in hand: stored
-gains passed it at 0.56, and gains rerun at 400 steps failed at 2.99. R7 moves no gain:
-all seven recipes reproduce their stored gains at all three levels.
+**Owner decisions, 2026-11-06.** R1 to R7 below are accepted, R7 for all seven tasks.
+So are three readings in the recipes below: "near `q2 = 0`" read as `q2 = 0`, the
+compressor schedule check as D3's ladder (0.10, 0.125, 0.15), and `unstable_cstr`'s
+inner PD from the datasheet. `unstable_cstr` and `distillation` ship as findings: the
+recipes' results stand and their trips stay reported.
+
+R7 came from doubling `distillation`'s episode. A bump test belongs to the recipe, so
+its length should never have followed the task's, and every recipe here read it:
+`Plant` holds one episode before the baseline and keys its noise on the episode's
+length. That is the design reason. It was also chosen with the doubling check's result
+in hand: stored gains passed it at 0.56, and gains rerun at 400 steps failed at 2.99.
+R7 moves no gain: all seven recipes reproduce their stored gains at all three levels.
 
 **A finding R1 to R7 do not address.** R7 hides the recipe's scatter and does not
 remove it. On `distillation` a new noise path moves `Kp_T` from 0.12 to 0.36 across
 test lengths of 195 to 500 steps, and a single step's change of length moves it 25 %.
+
+**A finding on the episode-length rule.** `distillation` passes it at 0.65 on held-out
+seeds while tripping 170 times on 3 of 10 seeds. The rule's one-sided check cannot see
+a hold that decays, since a longer run that does worse also passes. PR 8 or the plan
+can consider a two-sided check. This is a note: the rule is unchanged.
 
 **Shared.**
 
