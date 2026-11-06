@@ -173,3 +173,82 @@ def test_wings_level_reproduces_the_two_dimensional_model(params):
     p2 = PlaneParams()
     for attr in ("cl0", "cl_alpha", "aoa_stall", "CL_max", "wings_surface"):
         assert getattr(params, attr) == pytest.approx(getattr(p2, attr)), attr
+
+
+# ---------------------------------------------------------------------------
+# 3. The rolling gust (PHYSICS.md section on turbulence)
+# ---------------------------------------------------------------------------
+#
+# Contract, from MIL-F-8785C's Dryden model: turbulence varies across the span,
+# so the wing meets it as a roll rate p_g. It adds to the aircraft's own rate in
+# the damping moment, which is C_lp (p - p_g) b / 2V q S b. Above 2000 ft the
+# scale length is 533.4 m, and p_g's one-sided spectrum starts at
+# Phi_0 = sigma_w^2 / (V L) 0.8 (pi L / 4b)^(1/3), rolling off at pi V / 4b,
+# 20 rad/s here, well past the 1 s step. So a 1 s step holds white draws, sized
+# to keep Phi_0: a held draw of std s has Phi_0 = s^2 T / pi.
+
+
+def test_a_rolling_gust_rolls_a_wings_level_aircraft(params):
+    from target_gym.plane3d.dynamics import compute_acceleration_3d
+
+    p_g = 0.02  # rad/s
+    gusty = params.replace(gust_roll_rate=p_g)
+    velocities = jnp.array([230.0, 0.0, 0.0, 0.0, 0.0])
+    positions = jnp.array([0.0, 0.0, 5500.0, 0.02, 0.0])
+    action = (40_000.0, 0.0, 0.0)
+
+    accel, _ = compute_acceleration_3d(velocities, positions, action, gusty)
+
+    # At 5500 m, rho = 0.6972: q = 18 441 Pa. L_p = C_lp b^2 q S / (2 V I_x)
+    # = -0.4 * 35.8^2 * 18 441 * 122.6 / (2 * 230 * 2.5e6) = -1.008 /s, so a
+    # gust of 0.02 rad/s on a still aircraft rolls it at +0.0202 rad/s^2.
+    np.testing.assert_allclose(accel[4], 0.0202, rtol=0.01)
+
+
+def test_the_rolling_gust_keeps_drydens_low_frequency_level(params):
+    from target_gym.plane3d.dynamics import rolling_gust
+
+    keys = jax.random.split(jax.random.PRNGKey(0), 20_000)
+    draws = jax.vmap(lambda k: rolling_gust(k, 230.0, params))(keys)
+
+    # sigma_w 2 m/s (the OU gust's own std), V 230, L 533.4, b 35.8:
+    # Phi_0 = 4 / (230 * 533.4) * 0.8 * (pi * 533.4 / (4 * 35.8))^(1/3)
+    #       = 3.261e-5 * 0.8 * 11.70^(1/3) = 3.261e-5 * 0.8 * 2.270
+    #       = 5.92e-5 (rad/s)^2 per rad/s,
+    # and s = sqrt(pi Phi_0 / 1 s) = 0.01364 rad/s. Sampling error of a std
+    # over 20 000 draws is 1 / sqrt(2 * 20 000) = 0.35%, so 1.5% is 4 sigma.
+    assert float(jnp.std(draws)) == pytest.approx(0.01364, rel=0.015)
+    assert abs(float(jnp.mean(draws))) < 4 * 0.01364 / np.sqrt(20_000)
+
+
+def test_still_air_has_no_rolling_gust(params):
+    from target_gym.plane3d.dynamics import rolling_gust
+
+    still = params.replace(turbulence_sigma=0.0)
+    assert float(rolling_gust(jax.random.PRNGKey(0), 230.0, still)) == 0.0
+
+
+def test_scored_turbulence_reaches_the_bank():
+    """The review's finding: with no aileron in the scored turbulence the bank
+    stayed 0. A held white p_g of std s walks the bank as s sqrt(t), since the
+    1 s roll mode passes it and nothing else acts on the bank. At 200 m/s,
+    s = 0.0146 rad/s, so 120 s gives 0.16 rad, 9 deg. Over 16 seeds that RMS
+    scatters by 18%, and speed moves s by a little, so 4 to 25 deg is wide."""
+    spec = REGISTRY["plane3d_heading"]
+    env = spec.make_env()
+    params = spec.make_test_params().replace(max_steps_in_episode=200)
+
+    def bank_after(seed):
+        key = jax.random.PRNGKey(seed)
+        _, state = env.reset_env(key, params)
+
+        def body(state, k):
+            action = jnp.array([0.0, -0.3, 0.0])
+            return env.step_env(k, state, action, params)[1], None
+
+        state, _ = jax.lax.scan(body, state, jax.random.split(key, 120))
+        return state.phi
+
+    banks = jax.jit(jax.vmap(bank_after))(jnp.arange(16))
+    rms = float(jnp.degrees(jnp.sqrt(jnp.mean(banks**2))))
+    assert 4.0 < rms < 25.0

@@ -33,6 +33,7 @@ from target_gym.plane3d.dynamics import (
     compute_next_aileron,
     compute_psi,
     compute_velocity_3d,
+    rolling_gust,
 )
 from target_gym.utils import log_scaled_reward
 
@@ -253,6 +254,11 @@ class PlaneParams3D(EnvParams):
     # light-to-moderate turbulence (provisional; see PHYSICS.md).
     turbulence_sigma: float = 1.2
     turbulence_theta: float = 0.2
+    # MIL-F-8785C's scale length above 2000 ft, 1750 ft, which sizes the rolling
+    # gust (``plane3d.dynamics.rolling_gust``); ``gust_roll_rate`` is that gust,
+    # set per step as ``wind_x`` is, and 0 in still air.
+    turbulence_scale_length: float = 533.4
+    gust_roll_rate: float = 0.0
     # Linear wind shear: horizontal wind gains ``wind_shear_x``/``wind_shear_y``
     # m/s per metre of altitude above ``shear_ref_alt`` (0 => no shear).
     wind_shear_x: float = 0.0
@@ -313,6 +319,8 @@ PARAM_UNITS = {
     "wind_z": "m/s",
     "turbulence_sigma": "m/s",
     "turbulence_theta": "1/s",
+    "turbulence_scale_length": "m",
+    "gust_roll_rate": "rad/s",
     "wind_shear_x": "1/s",
     "shear_ref_alt": "m",
     "aileron_response_rate": "1/s",
@@ -833,6 +841,9 @@ def get_obs_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
 
 # ─── Shared state transition ────────────────────────────
 
+#: Salt for the rolling gust's key, apart from the three gust axes' draws.
+_ROLLING_GUST = 0x524F4C4C
+
 
 @partial(jax.jit, static_argnames=["integration_method"])
 def compute_next_state_3d(
@@ -873,6 +884,17 @@ def compute_next_state_3d(
     total_wind_x, total_wind_y, total_wind_z = total_wind_3d(
         state.z, gust[0], gust[1], gust[2], params
     )
+    # Engine ram/Mach effects depend on airspeed, not ground speed.
+    air_speed = compute_velocity_3d(
+        state.x_dot - total_wind_x,
+        state.y_dot - total_wind_y,
+        state.z_dot - total_wind_z,
+    )
+    # With no key the caller owns the air (a patrol's shared gust), as above.
+    gust_roll_rate = params.gust_roll_rate
+    if key is not None:
+        roll_key = jax.random.fold_in(step_key(key, state.time), _ROLLING_GUST)
+        gust_roll_rate = gust_roll_rate + rolling_gust(roll_key, air_speed, params)
     # All-up mass for this step: fuel is a component of ``initial_mass``, so
     # burning it subtracts. Threaded through ``eff_params`` because the
     # dynamics read ``params.initial_mass``.
@@ -881,15 +903,10 @@ def compute_next_state_3d(
         wind_x=total_wind_x,
         wind_y=total_wind_y,
         wind_z=total_wind_z,
+        gust_roll_rate=gust_roll_rate,
         initial_mass=mass_now,
     )
 
-    # Engine ram/Mach effects depend on airspeed, not ground speed.
-    air_speed = compute_velocity_3d(
-        state.x_dot - total_wind_x,
-        state.y_dot - total_wind_y,
-        state.z_dot - total_wind_z,
-    )
     M_air = compute_Mach_from_velocity_and_speed_of_sound(
         air_speed, state.speed_of_sound
     )

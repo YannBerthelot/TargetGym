@@ -3,7 +3,7 @@
 
 Reuses aerodynamic functions from the 2D plane module. Adds:
 - 3D force decomposition (lift tilted by bank angle)
-- Roll moment from ailerons + roll damping
+- Roll moment from ailerons + roll damping, which a rolling gust drives
 - Heading derived from 3D velocity vector
 """
 
@@ -26,6 +26,26 @@ from target_gym.plane.dynamics import (
 from target_gym.utils import compute_norm_from_coordinates
 
 AILERON_RESPONSE_RATE = 0.9
+
+
+def rolling_gust(key, speed, params):
+    """The roll rate turbulence puts on the wing this step, in rad/s (PHYSICS.md).
+
+    MIL-F-8785C's Dryden spectrum of ``p_g`` starts at
+    ``Phi_0 = sigma_w^2 / (V L) 0.8 (pi L / 4b)^(1/3)`` and rolls off at
+    ``pi V / 4b``, about 20 rad/s, far above the step. So a step holds a white
+    draw, and its size keeps ``Phi_0``: a held draw of std s has
+    ``Phi_0 = s^2 dt / pi``. ``sigma_w`` is the stationary std of the gust the
+    step advances, so a task's turbulence scales both axes together.
+    """
+    dt, theta = params.delta_t, params.turbulence_theta
+    retained = (1.0 - theta * dt) ** 2
+    sigma_w2 = params.turbulence_sigma**2 * dt / (1.0 - retained)
+    span = params.wingspan
+    length = params.turbulence_scale_length
+    level = sigma_w2 / (speed * length)
+    level = level * 0.8 * (jnp.pi * length / (4.0 * span)) ** (1.0 / 3.0)
+    return jnp.sqrt(jnp.pi * level / dt) * jax.random.normal(key)
 
 
 def compute_next_aileron(
@@ -263,12 +283,13 @@ def compute_acceleration_3d(
         * params.moment_arm_aileron
     )
 
-    # Roll damping: opposes roll rate
-    # M_damp = C_lp * (p * b / (2V)) * q * S * b
+    # Roll damping: opposes the roll rate relative to the air, which a rolling
+    # gust moves, so it is the term through which turbulence reaches the bank.
+    # M_damp = C_lp * ((p - p_g) * b / (2V)) * q * S * b
     V_safe = jnp.maximum(V, 1.0)  # avoid division by zero
     M_roll_damping = (
         params.C_lp
-        * (phi_dot * params.wingspan / (2.0 * V_safe))
+        * ((phi_dot - params.gust_roll_rate) * params.wingspan / (2.0 * V_safe))
         * q
         * params.wings_surface
         * params.wingspan
