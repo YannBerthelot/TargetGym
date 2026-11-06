@@ -60,7 +60,7 @@ are the observation and action lengths, and the episode is the scored one.
 | [First order](environments/first_order.md) | `first_order` | Drive a single first-order lag to a target drawn at reset. | 2 | 1 | 150 steps, 7.5 s |
 | [Four-tank](environments/four_tank.md) | `four_tank` | Hold the levels of the two lower tanks of Johansson's quadruple-tank process with two pumps. | 6 | 2 | 1200 steps, 20 min |
 | [pH neutralisation](environments/ph_neutralization.md) | `ph_neutralization` | Hold the pH of a stirred tank, where strong acid meets strong base in a carbonate buffer, at a target by setting the base flow. | 3 | 1 | 300 steps, 25 min |
-| [Distillation](environments/distillation.md) | `distillation` | Hold both product purities of a 40-tray binary distillation column (Skogestad's Column A) with reflux and boilup. | 7 | 2 | 200 steps, 3.33 h |
+| [Distillation](environments/distillation.md) | `distillation` | Hold both product purities of a 40-tray binary distillation column (Skogestad's Column A) with reflux and boilup. | 7 | 2 | 400 steps, 6.67 h |
 | [Unstable CSTR](environments/unstable_cstr.md) | `unstable_cstr` | Hold the concentration of A in a jacketed exothermic reactor on its open-loop unstable middle steady state, commanding the coolant through a lagging jacket while the feed temperature drifts unmeasured. | 4 | 1 | 1200 steps, 60 min |
 
 ### Industrial / Energy

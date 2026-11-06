@@ -193,7 +193,17 @@ the plants of PRs 3 to 7, for the seven process tasks. Each step below is fixed;
 a poor result ships (C9). `scripts/tune_process_experts.py` runs them. Bump tests
 have been looked at to set these rules up: scores have not.
 
-**Owner decision, 2026-11-06.** R1 to R6 below are accepted.
+**Owner decisions, 2026-11-06.** R1 to R6 below are accepted. R7 came after them, from
+doubling `distillation`'s episode. A bump test belongs to the recipe, so its length
+should never have followed the task's, and every recipe here read it: `Plant` holds
+one episode before the baseline and keys its noise on the episode's length. That is
+the design reason. It was also chosen with the doubling check's result in hand: stored
+gains passed it at 0.56, and gains rerun at 400 steps failed at 2.99. R7 moves no gain:
+all seven recipes reproduce their stored gains at all three levels.
+
+**A finding R1 to R7 do not address.** R7 hides the recipe's scatter and does not
+remove it. On `distillation` a new noise path moves `Kp_T` from 0.12 to 0.36 across
+test lengths of 195 to 500 steps, and a single step's change of length moves it 25 %.
 
 **Shared.**
 
@@ -205,6 +215,7 @@ have been looked at to set these rules up: scores have not.
 | R4 | N8 on an update | The loop acts if the reading has moved past `NB` from the one it holds, or sits past `NB` from the target, since a target move is a move. Integrates over its own cycle, `wait` updates | derived |
 | R5 | An analyser loop's noise rules | The gate takes noise out, so N5 and N7 do not apply | derived |
 | R6 | Tests a trip cuts | Dropped from the pool, and the count prints | ours |
+| R7 | A test's length | Fixed per task at the length the recipe first ran on, not the task's episode: 150 on `first_order` and `cstr`, 300 on `ph_neutralization`, 200 on `distillation`, 1200 on `four_tank`, `unstable_cstr` and `compressor_surge` | ours |
 
 **`cstr`.** Rest from both balances. Inner: T on the coolant, 0.1 raw grown by N3,
 60 steps, valve. Outer: C_a on the inner loop's setpoint, 0.5 K grown by N3 up to

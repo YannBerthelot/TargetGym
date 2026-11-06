@@ -53,8 +53,6 @@ CYCLE_GAPS: dict[str, str] = {
     "unstable_cstr": "the datasheet's inner PD still trips, and trips restart cycles",
 }
 DOUBLING_GAPS: dict[str, str] = {
-    "distillation": "its hold is 2.81x a doubled run's: the analyser loops are still "
-    "closing on the column at step 200, so the episode may need to grow (owner)",
     "plane3d_racetrack": _STALE_TECS,
     "plane_energy": _STALE_TECS,
     "plane_sine": _STALE_TECS,

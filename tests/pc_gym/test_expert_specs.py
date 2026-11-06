@@ -52,7 +52,13 @@ PLANTS = [
     "ph_neutralization",
     pytest.param("unstable_cstr", marks=_finding(THERMOWELL)),
     "four_tank",
-    "distillation",
+    pytest.param(
+        "distillation",
+        marks=_finding(
+            "the doubled episode shows it: 170 trips on 3 of 10 seeds, all past step "
+            "200, where it held. Its gains stand by the owner's choice of 2026-11-06"
+        ),
+    ),
 ]
 
 
@@ -94,8 +100,8 @@ def test_the_expert_never_trips_the_plant(name):
         pytest.param(
             "distillation",
             marks=_finding(
-                "the recipe holds 3,942 against a ceiling of 2, on chromatographs "
-                "5 min late, and PR 8 moves this floor"
+                "the recipe holds 7,636 against a ceiling of 2, with its trips, on "
+                "chromatographs 5 min late, and PR 8 moves this floor"
             ),
         ),
     ],

@@ -74,7 +74,7 @@ have met.
 
 | Value | Set to | Label |
 |---|---|---|
-| Hold before the baseline | One episode, the time the expert had to settle | ours |
+| Hold before the baseline | One episode of the test's own fixed length (process protocols, R7), the time the expert had to settle | ours |
 | Baseline | 60 samples, the first measurement's window, and at least 8 updates | ours |
 | Persistence count | 3 updates | ours |
 | Pass count in N6 | 3 | ours |

@@ -98,6 +98,29 @@ def test_the_first_order_recipe_answers_the_noise_level(monkeypatch):
     assert loud["Kp"] == pytest.approx(1.65, rel=0.1)
 
 
+def test_a_bump_tests_length_is_the_recipes_and_not_the_tasks():
+    # The column's episode is 400 steps and its tests stay at the 200 they ran on.
+    assert REGISTRY["distillation"].make_test_params().max_steps_in_episode == 400
+    assert process._params("distillation").max_steps_in_episode == 200
+
+
+@pytest.mark.parametrize("name", sorted(process.TEST_STEPS))
+def test_every_recipe_fixes_its_own_tests_length(name):
+    assert process._params(name).max_steps_in_episode == process.TEST_STEPS[name]
+
+
+@pytest.mark.medium
+@pytest.mark.parametrize("name", sorted(process.TUNERS))
+def test_a_recipe_reproduces_what_is_stored(name):
+    # Fixed tests, no stored gain read: a run gives the entry it wrote, to the 6
+    # decimals ``write`` keeps.
+    stored = json.loads(provenance.GAINS_PATH.read_text())[name]
+    out = process.TUNERS[name]()
+    for key, value in out.items():
+        if not isinstance(value, dict):
+            assert float(value) == pytest.approx(stored[key], abs=1.5e-6), key
+
+
 def _no_store(*args, **kwargs):
     raise AssertionError("a recipe read the gains it replaces")
 

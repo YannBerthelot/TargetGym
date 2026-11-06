@@ -96,7 +96,7 @@ not from this column. Eq. 31's own rounded entries give 36.07 and 146.0.
 | nominal `L`, `V` | 2.706, 3.206 | kmol/min | Operating point A | ✅ |
 | `L_min/max`, `V_min/max` | 2.20–3.40, 2.70–3.90 | kmol/min | Ours, to hold the target box (below) | ⚠️ |
 | `zF_noise_std` | 0.03 | – | TUNED — feed disturbance amplitude | ⚠️ |
-| `delta_t` | 1.0 | min | 600 steps ≈ 3 dominant time constants | ✅ |
+| `delta_t` | 1.0 | min | 400 steps ≈ 2 dominant time constants | ✅ |
 
 **The flow limits are ours, for the owner to accept.** The reference gives no
 limits, and these come from the target box, not from a column design. At the
@@ -294,12 +294,19 @@ P loop of 0.16 kmol/min per K on the tray holds it (ours).
   (0.0024) from the one it held, or sits past it from the target, then waits 2
   updates, 10 min. That is N8. The loops are slower than the tray, so the cascade is
   no longer inverted.
-- **Held-out check** (seeds 200 to 209). It holds 3,942 per step (worst seed 9,600)
-  against a ceiling of 2, and never trips. The best null is constant 1.0, ratio 0.06,
-  0 of 10 wins. Two misses are findings: the hold, and a hold 2.81 times a doubled
-  run's, so the analyser loops are still closing at step 200
-  (`tests/test_episode_length.py`). At level 0.5 the narrower gate and higher gains
-  trip 30 times on 5 seeds, where levels 1 and 2 do not trip.
+- **Held-out check** (seeds 200 to 209, 400 steps). It holds 7,636 per step (worst
+  seed 24,880) against a ceiling of 2, with 170 trips on 3 of the 10 seeds. The best
+  null is a constant, ratio 0.04, 2 of 10 wins.
+- **Episode.** 400 steps, doubled from 200 on 2026-11-06, since the hold at 200 was
+  2.81 times a doubled run's. The ratio at 400 is 0.57 on training seeds and 0.65
+  held out, so the rule passes, but only because the longer run does worse: 298 trips
+  on 5 seeds at 800 steps. At 200 steps it held 3,942 with no trips, so these gains
+  lose the column past step 200. That is a finding, not a settled loop.
+- **Scatter.** The recipe reproduces exactly at a fixed test length, which is why that
+  length is now the recipe's, 200 steps (section 9, R7). A new noise path moves it a
+  lot: over test lengths of 195 to 500 steps, `Kp_T` runs 0.12 to 0.36.
+- **Levels.** 8,466 with 43 trips on 7 seeds at level 0.5, and 4,725 with none at
+  level 2.
 
 ---
 
@@ -313,7 +320,7 @@ P loop of 0.16 kmol/min per K on the tray holds it (ours).
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `distillation` | 200 | 60 | 3.3 h | 2 in [-1, 1] | 7 | 107 |
+| `distillation` | 400 | 60 | 6.7 h | 2 in [-1, 1] | 7 | 107 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

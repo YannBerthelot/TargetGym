@@ -68,6 +68,18 @@ SOURCE = (
 LEVEL = 1.0
 #: Valve dead band on a raw action, which spans 2.
 RAW_BAND = DEAD_BAND * 2.0
+#: The steps of a test's hold before its baseline, and the length ``Plant`` keys
+#: its noise on (section 9, R7). A bump test belongs to the recipe, so these do not
+#: follow the task's episode. They are the lengths the recipes first ran on.
+TEST_STEPS = {
+    "first_order": 150,
+    "cstr": 150,
+    "ph_neutralization": 300,
+    "four_tank": 1200,
+    "distillation": 200,
+    "unstable_cstr": 1200,
+    "compressor_surge": 1200,
+}
 FREE = (-np.inf, np.inf)
 
 
@@ -77,7 +89,9 @@ FREE = (-np.inf, np.inf)
 
 
 def _params(name, **changes):
-    return REGISTRY[name].make_test_params(sensor_noise_scale=LEVEL, **changes)
+    return REGISTRY[name].make_test_params(
+        sensor_noise_scale=LEVEL, max_steps_in_episode=TEST_STEPS[name], **changes
+    )
 
 
 def manual(hold):
@@ -655,8 +669,11 @@ def _compressor_rga(line: float) -> float:
 
     name = "compressor_surge"
     spec = REGISTRY[name]
-    env, p = spec.make_env(), spec.make_test_params(
-        sensor_noise_scale=0.0, demand_sigma=0.0
+    env = spec.make_env()
+    p = spec.make_test_params(
+        sensor_noise_scale=0.0,
+        demand_sigma=0.0,
+        max_steps_in_episode=TEST_STEPS[name],
     )
     rests = []
     for seed in TRAIN:
