@@ -214,7 +214,9 @@ def target_changes(targets: np.ndarray, first: np.ndarray) -> np.ndarray:
     since the previous step by more than ``_CHANGE_OVER_MEDIAN_STEP`` times
     its median step over the episode, and by more than rounding. Every step of
     a schedule counts however small next to the target's value; a drifting or
-    smooth target, which moves about as much every step, never does.
+    smooth target, which moves about as much every step, never does. A run of
+    such steps is one move, counted where it starts, so a ramp is not a change
+    per step.
     ``targets`` ``(T, n_out)``, ``first`` the targets at reset."""
     targets = np.asarray(targets, float)
     prev = np.vstack([np.asarray(first, float)[None], targets[:-1]])
@@ -223,7 +225,8 @@ def target_changes(targets: np.ndarray, first: np.ndarray) -> np.ndarray:
     floor = np.maximum(
         _CHANGE_OVER_MEDIAN_STEP * np.median(step, axis=0), _ROUNDING * scale
     )
-    return (step > floor).any(axis=1)
+    moved = (step > floor).any(axis=1)
+    return moved & ~np.concatenate([[False], moved[:-1]])
 
 
 def episode_keys(key, n: int, n_steps: int):
