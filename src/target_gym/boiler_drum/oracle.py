@@ -1,116 +1,98 @@
-"""The oracle (the MPC slot) for the boiler drum task.
+"""The oracle (the MPC slot) for the boiler drum task, on the shared solver.
 
 Kept apart from the expert (``experts.py``) so that each has a fingerprint of
-its own (``provenance.oracle_fingerprint``): changing the oracle re-records
-only the oracle rows of this package's tasks. The shared machinery
-(GradientMPC, NewtonMPC, SamplingMPC and the v2 objective helpers) stays in
-``target_gym.experts.mpc``, which is in every oracle fingerprint.
+its own (``provenance.oracle_fingerprint``). The planner problem, by the
+smoothing protocol's inventory (docs/proposals/oracle-smoothing-protocol.md,
+section 5.4), run by ``target_gym.oracles.controller.Oracle``:
+
+- model: the env's own ``compute_velocity`` and integrator, with the raw
+  moves' clips removed and the moves bounded instead (T1); the steam demand
+  on its noise-free mean path, updated before the step as the env does;
+- objective: the level's and the pressure's tracking terms as (e / e_floor)^2,
+  exact since e_tol = 0 and p = 2, and the running cost max(Q - c_hold, 0)
+  through epigraph rows on every visited state (T2);
+- limits: the level and the pressure, abs(level) < level_trip and
+  pressure_min < pressure < pressure_max on every visited state, elastic at
+  the trip cost per unit (T3), backed off by the noise's reach (K11, in the
+  widths file);
+- dropped guards (T4): the void, circulation, pressure, enthalpy, determinant,
+  volume and mass guards, which the limits keep off their edges, and the
+  condensation flow's max(Q - q_dc subcool, 0), whose reach is not known, so
+  every plan's argument is checked against it (K9).
+
+The cold start holds the firing rate and the feedwater where they are.
 """
 
-import jax
 import jax.numpy as jnp
+from jax.tree_util import Partial as partial
 
-from target_gym.experts.mpc import (
-    GradientMPC,
-    _floor_units,
-    _is_v1,
+from target_gym.boiler_drum.env import (
+    STEAM_OU_THETA,
+    circulation_flow,
+    compute_velocity,
+    drum_level,
+    void_fraction,
+    water_enthalpy,
 )
+from target_gym.integration import integrate_dynamics
+from target_gym.oracles.controller import Oracle, TaskModel, raw_of
+from target_gym.oracles.shooting import Hinge, Limit
+from target_gym.reward import trip_cost
 
 
-class BoilerDrumGradientMPC(GradientMPC):
-    """Gradient MPC for the drum boiler, on a quadratic objective.
-
-    The environment's reward uses clipped tracking bands, which go flat once
-    the level is more than ``level_band`` from normal -- precisely the
-    situation the controller is called on to fix. Optimising it directly leaves
-    no gradient exactly when one is needed, so the objective here is a
-    quadratic sharing the reward's *minimiser* (level at normal, pressure on
-    target, fuel low) while staying informative far from it.
-
-    Horizon is what earns MPC its keep here. Drum level is non-minimum phase:
-    the level's first move after a load change is the wrong way. A controller
-    optimising over 30 steps (60 s at dt = 2 s, covering the ~35 s swell peak)
-    sees the reversal coming and keeps adding feedwater through a swell, where
-    a reactive loop cuts it.
-    """
-
-    def __init__(
-        self,
-        env,
-        params,
-        level_weight: float = 1.0,
-        pressure_weight: float = 0.3,
-        **kwargs,
-    ):
-        super().__init__(env, params, **kwargs)
-        self.level_weight = level_weight
-        self.pressure_weight = pressure_weight
-
-    def _rollout(self, actions: jnp.ndarray, state) -> jnp.ndarray:
-        key = jax.random.PRNGKey(0)
-        pr = self.params
-
-        v1 = _is_v1(pr)
-        floor = _floor_units(pr)
-        fail = float(getattr(pr, "failure_cost", 0.0)) / floor
-
-        def step_fn(carry, u):
-            s, done = carry
-            _, new_s, r, terminated, _ = self.env.step_env(
-                key, s, self._env_action(u), pr
-            )
-            if v1:
-                level_err = new_s.level / pr.level_band
-                press_err = (new_s.pressure - new_s.target_pressure) / pr.pressure_band
-                fuel = new_s.Q_fuel / pr.Q_max
-                cost = (
-                    self.level_weight * level_err**2
-                    + self.pressure_weight * press_err**2
-                    + pr.fuel_weight * fuel
-                )
-                return (new_s, done), -cost
-            # Version 2: the plant's own cost, in floor units, with a trip
-            # charged for the rest of the horizon.
-            obj = jnp.where(done, -fail, r / floor)
-            return (new_s, jnp.logical_or(done, terminated)), obj
-
-        (_, _), rewards = jax.lax.scan(step_fn, (state, jnp.zeros((), bool)), actions)
-        return jnp.sum(rewards)
+def boiling_margin(x, Q, q_feed, p):
+    """The argument of the condensation flow's max, env.py:379, at ``x``."""
+    alpha = void_fraction(x[2], x[0], p)
+    q_dc = circulation_flow(alpha, x[0], p)
+    subcool = (1.0 - p.f_cd) * q_feed / q_dc * (
+        water_enthalpy(x[0], p) - p.h_feedwater
+    )  # fmt: skip
+    return Q - q_dc * subcool
 
 
-def make_boiler_drum_mpc(
-    env,
-    params,
-    horizon: int = 30,
-    n_iter: int = 1280,
-    lr: float = 0.15,
-    lr_end: float = 0.005,
-):
-    """Gradient MPC for the drum boiler.
+def boiler_model(env, p) -> TaskModel:
+    assert float(p.e_tol) == 0.0 and float(p.tracking_exponent) == 2.0
+    decay = 1.0 - STEAM_OU_THETA * p.delta_t  # the deviation's mean per step
 
-    Gradient-based rather than CasADi: the plant is already differentiable JAX
-    and its steam-property fits and voidage algebra would have to be duplicated
-    symbolically for no gain. Optimises firing and feedwater jointly, which
-    matters because they are coupled through pressure -- firing harder raises
-    pressure, which collapses bubbles and *lowers* the level.
+    def step(d, x, u, t):
+        target, level_ref, deviation = d["task"]
+        Q, q_feed = 0.5 * (u[0] + 1.0) * p.Q_max, 0.5 * (u[1] + 1.0) * p.q_feed_max
+        q_steam = p.q_steam_nominal + deviation * decay ** (t + 1)
+        x1, _ = integrate_dynamics(
+            positions=x, delta_t=p.delta_t, method=env.integration_method,
+            compute_velocity=partial(
+                compute_velocity, action=(Q, q_feed), q_steam=q_steam, params=p
+            ),
+        )  # fmt: skip
+        level = drum_level(x1[1], x1[2], x1[3], level_ref, x1[0], p)
+        e_p = x1[0] - target
+        cost = (level / p.e_floor_level) ** 2 + (e_p / p.e_floor_pressure) ** 2
+        y = jnp.stack([p.running_weight * (Q - p.c_hold) / p.c_hold, level, x1[0]])
+        guard = boiling_margin(x1, Q, q_feed, p) / p.Q_max
+        return x1, cost, y, jnp.stack([level, x1[0]]), (guard,)
 
-    The descent budget is large because the objective is ill-conditioned and
-    the normalised steps make slow progress on it. Measured in the oracle
-    audit (2026-10-01) on the protocol seeds, planning on the mean steam
-    demand: 40 iterations scored 19.2, 160 with a decaying step 8.2, 640 5.3
-    and 1280 4.7, each doubling gaining about half what the one before did,
-    at 160 s per protocol seed. A longer horizon (45) and a PID-rollout guide
-    did worse or nothing. A better-conditioned optimiser would likely beat
-    more iterations.
-    """
-    return BoilerDrumGradientMPC(
-        env,
-        params,
-        action_dim=2,
-        action_lb=-1.0,
-        action_ub=1.0,
-        horizon=horizon,
-        n_iter=n_iter,
-        lr=lr,
-        lr_end=lr_end,
-    )
+    price = float(trip_cost(p))
+    return TaskModel(
+        nx=4, nu=2, step=step,
+        state_x=lambda s: jnp.stack([s.pressure, s.V_wt, s.m_sr, s.m_sd]),
+        data=lambda s: (
+            s.target_pressure, s.level_ref, s.q_steam - p.q_steam_nominal
+        ),
+        hold=lambda s: jnp.stack([
+            raw_of(s.Q_fuel, 0.0, p.Q_max), raw_of(s.q_feed, 0.0, p.q_feed_max),
+        ]),
+        tracked=lambda s: jnp.stack([s.level, s.pressure]),
+        resolution=(
+            float(p.level_precision_floor), float(p.pressure_precision_floor)
+        ),
+        hinges=(Hinge(weight=1.0),),
+        limits=(
+            Limit(-p.level_trip, p.level_trip, price),
+            Limit(p.pressure_min, p.pressure_max, price),
+        ),
+    )  # fmt: skip
+
+
+def make_boiler_drum_mpc(env, params) -> Oracle:
+    """Registry factory: the shared solver's oracle on ``boiler_model``."""
+    return Oracle(env, params, "boiler_drum", boiler_model)

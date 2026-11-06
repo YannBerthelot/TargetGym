@@ -301,31 +301,29 @@ gains score the same (88.8 to 96.9 %, peaks 4.4 to 7.1 K): the misses are
 the firing interruptions at each reversal, which a PI on the crown meets only
 after the fact.
 
-**The figures below predate the fuel slew.** On the limited plant this oracle
-stalls at 8.84 K on seed 2 (strict xfail, PR 9): a planner gets no gradient from
+**The figures below predate the fuel slew.** On the limited plant the `NewtonMPC`
+before the shared solver stalled at 8.84 K on seed 2 (strict xfail, PR 9): a planner gets no gradient from
 `actuate` at `command == held` or past the rate limit. With that patched and the
 plan made by rate, through `action_map`, it holds 0.29 K.
 
-**The MPC.** Since November 2026 the oracle is `NewtonMPC` (iterative LQR)
-on the plant itself: the environment's own `step_env` with the full state,
-all four checker nodes per chamber, the fuel pipeline and the reversal cycle,
-over a 120-step (one hour) horizon, with the pull planned on its mean path
-(`plan_params`). It plans what the plant does, so it needs no disturbance
-estimate and no rule for which input reaches the plant first.
+**The oracle.** It is the shared solver on the plant itself (`oracle.py`):
+all four checker nodes per chamber, the fuel pipeline, the flame's algebraic
+solve and the reversal cycle, with the pull planned on its mean path. Cooper's
+recipe sets one move per 15 minutes (T_c = 30 steps, from the working end's
+fits; the crown's own fits fail the noise test, H16), and the plan runs to the
+episode's end. The move is held for those 15 minutes, as DMC executes it, so
+the oracle cannot answer a single 25-minute reversal, and it scores about 2
+times worse than the `NewtonMPC` that held this slot, which re-solved every
+step, while beating the expert about 2 to 1 (mean of the ten test seeds, -903
+against -451 and -1878).
 
-It replaced a CasADi model of the plant (oracle audit, 2026-10-03): two
-checker nodes per chamber against the plant's four and the flame solved
-algebraically. That reduced model ran 0.14 to 0.19 K a step colder than the
-plant, so it corrected itself with a crown heat-rate estimate from the
-one-step prediction error, and it had to apply the first input its plan could
-move, since the first two intervals burn the pipeline. On the protocol seeds
-0-2 it scored 0.168 / 0.845 / 0.167 per step, against 0.300 / 1.783 / 0.326
-for the controller before it, and over the ten baseline seeds it cost 2638 s
-to record, with IPOPT stopped at its iteration cap 4 times. What is left is
-mostly authority: on seed 1 a -5.5 K trim meets a low pull, and the fuel
-spends much of the window at its minimum with the crown still above target.
+Before that the oracle was `NewtonMPC` (iterative LQR) on `step_env`, over a
+120-step horizon, and before it a CasADi model of the plant (oracle audit,
+2026-10-03) with two checker nodes per chamber against the plant's four. That
+reduced model ran 0.14 to 0.19 K a step colder than the plant, so it corrected
+itself with a crown heat-rate estimate from the one-step prediction error.
 
-The long-run hold that oracle measured, 0.061 / 0.077 / 0.088 K per seed,
+The long-run hold `NewtonMPC` measured, 0.061 / 0.077 / 0.088 K per seed,
 against 0.192 / 0.175 / 0.228 K before it, set `rho_floor`:
 `rho_floor = rho_floor_tracking = (0.0614 / 1)^2`, from `(0.175 / 1)^2` (see
 the reward table below; `e_floor` stays the 1 K thermocouple resolution).

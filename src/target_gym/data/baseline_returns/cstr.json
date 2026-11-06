@@ -1,7 +1,7 @@
 {
-  "cpu": "AMD EPYC 7763 64-Core Processor",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
   "expert_fingerprint": "c650f5e3b8748406",
-  "generated": "2026-11-04T20:43:12+00:00",
+  "generated": "2026-11-05T20:26:36+00:00",
   "mpc_returns": [
     -141690.461299,
     -667808.062958,
@@ -15,7 +15,7 @@
     -231778.43609
   ],
   "mpc_trips": 0,
-  "oracle_fingerprint": "543b4b66a11976d6",
+  "oracle_fingerprint": "1e59a99b31ef6d8e",
   "pid_returns": [
     -229365.215612,
     -693951.202266,
@@ -28,13 +28,13 @@
     -373548.22796,
     -241195.460512
   ],
-  "seconds": 137.4,
+  "seconds": 107.6,
   "seeds": 10,
   "solver_calls": 1500,
   "solver_capped": 0,
   "solver_failures": 0,
   "solver_guard_flags": 0,
-  "solver_max_error": 6.518333138874621e-08,
+  "solver_max_error": 7.422211835172116e-08,
   "solver_max_output_gap": 6.214827541484169e-06,
   "solver_max_replay_gap": 3.112289279627589e-07,
   "solver_max_violation": 9.999896688484e-09,

@@ -469,3 +469,82 @@ heat-then-brake around the target's step stays aggressive by design: it is the
 noise-free optimum. T reached 357 K against a 365 K trip with the jacket at
 its minimum on seed 8, and this CPU did not trip where CI's did. The gate on
 the recorded seeds remains the check on that margin.
+
+## 17. Amendment 4, 2026-11-05: a resting target, and C2's other finds
+
+C2 put six more tasks on the builder. Three of them price their reward in
+money, about 1e-5 per step, and one has a spare move. That exposed what the
+process tasks could not.
+
+**G12. A spare move gets a resting target.** Count a plant's moves and the
+outputs its reward prices at a steady state, running cost included. With more
+moves than priced outputs the plant is fat, in Qin and Badgwell's word (2003,
+Fig. 3): its steady states form a family the reward cannot tell apart. Their
+survey lists driving the inputs to steady-state targets with the remaining
+degrees of freedom as an objective above move suppression (section 3.4), and
+says all the surveyed algorithms do it (section 3.4.7). So the output the
+reward leaves free gets a squared target at the plant's design point, scaled
+to 1 at the edge of its limit, weighted so that it costs G10's budget over an
+episode spent at that edge. It lives in the plan only: K8's replay and the
+reward never see it. The survey's targets sit on the inputs. On a wind turbine
+the wind moves the inputs a steady state needs, so the target sits on the speed
+they hold.
+
+Wind is the one task this reaches: two moves, and only power priced, since its
+fatigue term prices the pitch command's gap, which a steady state closes. Its
+target is rated speed, where the reference turbine's region 3 holds the rotor
+(Jonkman et al. 2009, ch. 7). `tests/oracles/test_process_oracles.py` keeps the
+count for every task on the builder, so a new task has to state its own.
+
+The need showed on seed 1. With the speed free, the plan knows only the wind's
+mean, rides the speed down to about 0.82 of rated in a lull, and pays there
+with one-step torque dips of 625 and 825 kW, the same plan warm or cold: a
+converged plan, not a stalled one. With the target the speed stays between 0.96
+and 1.22 of rated on seeds 0 and 1, the worst step falls from -0.006 to -1e-4
+dollars, and the return on seed 1 goes from -0.016 to -0.0053. The weight is
+the first and only value tried, and the score chose nothing.
+
+It does not cure every seed. The term settles a tie, so it cannot hold the rotor
+against a real cost. Seed 9 asks for 4.96 MW, close to the torque limit, and a
+long lull takes the speed to 0.91 of rated, where the torque reaches its ceiling
+and the plan pays with dips again: -0.064 against -0.0071 for the previous
+oracle and -0.070 for the expert. The ten seeds' mean is -0.011 against -0.0059.
+Nine seeds beat the previous oracle. The gate passes, and the weight stayed as
+written.
+
+The count has one soft spot. A running cost above `c_hold` prices a level only
+above it, and the compressor's was active on 36 % of the steps of seed 0. Below
+it the spare move is free. Nothing has gone wrong there, and the count stands
+as written.
+
+**The solve stays in the reward's units.** The tolerance is absolute and the
+scaling only scales down (MAX_GRADIENT), so on a reward in dollars 1e-8 leaves
+about three digits of the gradient. Solving in floors, as IPOPT's scaling
+advice suggests, was tried and dropped: wind then hit the cap on about 70 % of
+its solves at about 140 iterations, two hours a seed against 100 s, for a
+return 0.8 % better on seed 0 and equal on seed 1, and hvac and battery came out
+identical. G10's budget still follows the reward: `tie_budget` is what half a
+resolution costs in one step, in the reward's units.
+
+**A hinge's redundant row.** On an absolute hinge with no tolerance, t >= r and
+t >= -r already give t >= 0, and at t = r = 0, where a p = 1 tracking term sits
+when it tracks exactly, the third row is active too. Three active rows on two
+variables break LICQ, the condition an interior-point step relies on. The row
+is left out there.
+
+**P stops at the episode.** H12 shrinks the plan to N_ep - k, so a P past the
+episode only ever adds dead stages. hvac's P is 932 against 720 samples. The
+builder is sized to min(P, N_ep), which changes no plan.
+
+**What stays open: the kiln.** About 3 % of its solves fail (234 of 7000 on the
+ten test seeds). The env's explicit 30 s step amplifies the hot cells'
+calcination about 3000 times a step, and only the clip at 1 holds it. A plan's
+free states can sit just off that clip,
+where the exact Hessian reaches 1e18. No Hessian shift then gives a usable step
+at step 0 of seed 0, nor at steps 587 to 602 once the start's multipliers are
+guarded (there the solve dies at iteration 0 on non-finite multipliers). Keeping
+only shifts that worked, retrying in the warm mode and a clip with no slope at
+its bound did not cure it. Failed solves apply the shifted plan (G11), and the
+oracle was recorded as it stands, on the owner's decision of 2026-11-05: it
+averages -406 against -110 for the previous oracle, and beats the expert by at
+least 11 to 1 on every seed. The cure belongs in the env.

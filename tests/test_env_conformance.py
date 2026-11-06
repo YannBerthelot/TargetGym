@@ -930,13 +930,17 @@ def test_no_new_write_only_state_fields():
     )
 
 
-# Check 4. Tuple unpacks that discard a component. Both discard position
-# coordinates the equations of motion genuinely do not depend on.
+# Check 4. Tuple unpacks that discard a component. The two dynamics discard
+# position coordinates the equations of motion genuinely do not depend on. The
+# two oracles' steps discard the target from their task data: no plant depends
+# on its target, and the cost reads it from ``task[0]`` itself.
 KNOWN_DISCARDED_UNPACKS = {
     ("plane/dynamics.py", "_, z, theta = positions"),
     ("plane/env.py", "_, z, theta = positions"),
     ("plane3d/dynamics.py", "_, _, z, theta, phi = positions"),
     ("plane3d/env.py", "_, _, z, theta, phi = positions"),
+    ("energy/wind_turbine/oracle.py", "_, v_mean, deviation = task"),
+    ("glass_furnace/oracle.py", "_, start, disturbance = task"),
 }
 
 

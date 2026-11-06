@@ -229,6 +229,12 @@ slightly looser comfort (1.72 vs 1.38 °C MAE) for a large energy saving, which
 is exactly the trade the reward asks for. (The table predates the version-2
 reward and the expert below.)
 
+The oracle is now the shared solver (`oracle.py`): the episode reward on the
+5R1C model, the comfort hinge as epigraph rows, and a plan that runs to the
+episode's end, since Cooper's recipe gives P = 932 steps on this building's
+mass. Its comfort and gas bill sit within 1 % of the 24-step `NewtonMPC` it
+replaced, on either side, at about half the expert's cost.
+
 ### The expert: Guideline 36 zone heating with optimal start
 
 The expert is what a building automation system running ASHRAE Guideline 36

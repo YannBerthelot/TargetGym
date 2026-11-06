@@ -121,9 +121,9 @@ class WindTurbineParams(EnvParams):
     # ---- Reward shaping ----
     # Error scale for the version-1 gradient planner's tracking term, not read
     # by ``compute_reward``. See "Why the MPC does not minimise the reward" in
-    # docs/baselines.md. The version-2 oracle, a feedback law since the oracle
-    # audit (2026-10), does not read it either. The version-1 reward's envelope
-    # is ``power_envelope`` below.
+    # docs/baselines.md. The version-2 oracle, on the shared solver, does not
+    # read it either. The version-1 reward's envelope is ``power_envelope``
+    # below.
     power_band: float = 0.5e6  # W
     # The ceiling's resolution and version 1's floor: the 1 kW of the benchmark's
     # assumed meter (PHYSICS.md, Readings), finer than the 1.7 kW a class 0.1S
