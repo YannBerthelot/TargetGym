@@ -190,8 +190,15 @@ def _unbound(**fields):
 
 @pytest.mark.large
 def test_it_never_trips_where_following_exactly_would():
-    """The default window, on seeds where the pack runs out under exact following."""
-    params = registry.get("battery").make_test_params()
+    """An hour from 0.10 to 0.15 of charge. On seeds 100, 101 and 103 the first
+    block discharges 0.72, 0.20 and 0.37 MW, which empties the 0.06 to 0.08 of charge
+    left above the floor inside the hour under exact following. The default window
+    is 2880 stages and hours a seed, past the large tier's limit."""
+    params = (
+        registry.get("battery")
+        .make_test_params()
+        .replace(max_steps_in_episode=720, initial_soc_range=(0.10, 0.15))
+    )
     for seed in range(100, 104):
         _errors(params, seed)  # asserts no trip
 

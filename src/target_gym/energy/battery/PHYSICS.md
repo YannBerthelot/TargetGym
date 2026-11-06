@@ -274,7 +274,7 @@ This task's hourly levels are what make it energy-limited.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `battery` | 2880 | 5 | 4.0 h | 1 in [-1, 1] | 7 | 18 |
+| `battery` | 2880 | 5 | 4.0 h | 1 in [-1, 1] | 7 | 66 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
