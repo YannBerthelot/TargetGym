@@ -239,6 +239,29 @@ def test_a_cold_solve_plans_an_unstable_plant_whose_held_move_overflows():
     np.testing.assert_allclose(planner.states(plan), 0.0, atol=1e-6)
 
 
+def _hidden(data, x, u, t):
+    """x[0] multiplies by 100 a step, out of any move's reach and free of any
+    cost; x[1] moves by u and pays (x[1] - 3)^2."""
+    x1 = jnp.stack([100.0 * x[0], x[1] + u[0]])
+    return x1, (x1[1] - 3.0) ** 2, jnp.zeros(0)
+
+
+@pytest.mark.medium
+def test_multipliers_that_overflow_do_not_end_a_cold_solve():
+    """From x = 0 the first state stays at 0, unpriced, so the solve is plain.
+    The cold start's least-squares multipliers solve the same rows with K = I,
+    which does price it: their Riccati term grows 1e4 a stage, past float64 in
+    80 stages, so they come out NaN with every derivative finite. IPOPT zeroes
+    multipliers past its cap, and a NaN has to count as past it. By hand: the
+    first move takes x[1] to 3, and 0 holds it."""
+    model = StageModel(step=_hidden, block=1, lo=(-100.0,), hi=(100.0,))
+    with enable_x64():
+        planner = Shooting(model, n_stages=80, nx=2)
+        plan = planner.solve(0.0, jnp.zeros(2), jnp.zeros(1))
+    assert not bool(plan.certificate.failed)
+    np.testing.assert_allclose(planner.moves(plan)[0], [3.0], atol=1e-6)
+
+
 @pytest.mark.medium
 def test_stages_past_the_active_horizon_do_not_run_the_plant_away():
     """Five live stages of 160, as at an episode's end (H_k = N_ep - k): the
