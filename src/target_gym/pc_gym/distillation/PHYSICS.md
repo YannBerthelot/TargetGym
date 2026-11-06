@@ -18,24 +18,28 @@ Per-stage component balance with vapour–liquid equilibrium
 `y = αx / (1 + (α−1)x)`:
 
 ```
-tray i  :  M dx_i/dt = L_{i+1} x_{i+1} + V y_{i-1} − L_i x_i − V y_i
+tray i  :  d(M_i x_i)/dt = L_{i+1} x_{i+1} + V y_{i-1} − L_i x_i − V y_i
+           dM_i/dt = L_{i+1} − L_i
+           L_i = L0_i + (M_i − M0) / tau_L
 reboiler:  M dx_1/dt = L_2 x_2 − V y_1 − B x_1
 condenser: M dx_N/dt = V y_{N-1} − (L + D) x_N
 ```
 
-Constant molar flows with a saturated-liquid feed, so the liquid rate below the
-feed is `L + F` while vapour is constant throughout; `D = V − L` and
-`B = L + F − V` follow from the overall balance.
+Constant molar overflow with a saturated-liquid feed, so steady liquid below the
+feed is `L + F` while vapour is constant throughout. The feed adds to stage 21's
+balances. `D = V − L` and `B = L_2 − V` follow from the two level loops, taken as
+perfect, so bottoms follows the liquid that reaches the reboiler.
 
 Assumptions, all from the reference model: binary mixture, constant pressure,
 constant relative volatility, equilibrium on every stage, total condenser, no
-vapour holdup.
+vapour holdup, linearised tray hydraulics.
 
 Deliberately **not** modelled:
 
 | Omitted | Rationale |
 |---|---|
-| Liquid flow (hydraulic) dynamics | The reference adds a linearised tray hydraulic lag; omitted here, so flow changes propagate down the column instantly. See D1. |
+| Vapour effect on liquid flow (K2) | The reference's `lambda` is 0 for column A, and in all its examples. |
+| Reboiler and condenser level dynamics | The reference's P loops have gain 10 /min. With them the RGA below is the same to two decimals, so they are taken as perfect, and the two drums stay at fixed holdup. |
 | Energy balance / varying molar flows | Constant molar overflow is the standard simplification and is what makes the model tractable. |
 | Pressure dynamics, tray efficiency < 1 | Constant pressure, ideal stages. |
 | Multicomponent separation | Binary only. |
@@ -55,15 +59,27 @@ volatility assumption degrades.
 | D/F at nominal | 0.500 (published) | **0.500** | ✅ |
 | Overall component balance `D·yD + B·xB = F·zF` | exact | closes to 5 dp | ✅ |
 | Composition monotone increasing up the column | required | yes | ✅ |
-| RGA(1,1) at nominal | ≫ 1 (Skogestad reports ~35) | **≈ 52** | ✅ |
-| Condition number of the gain matrix | ≫ 1 (reference ~142) | **≈ 200** | ✅ |
-| `dyD/dL + dxB/dL` | 1.96 from the mass balance | **1.94** | ✅ |
+| Steady gain matrix `d[yD, xB]/d[L, V]` | [[0.8754, −0.8618], [1.0846, −1.0982]] ([tutorial](https://skoge.folk.ntnu.no/publications/1997/dist_plenary/submitted_version/dist_plenary.pdf), eq. 31) | matches to 4 dp | ✅ |
+| RGA(1,1) at nominal | 35.94 (eq. 31) | **35.94** | ✅ |
+| Condition number of the gain matrix | no published figure for this model | **145.5** | ✅ |
+| `dyD/dL + dxB/dL` | 1.960 from the mass balance | **1.960** | ✅ |
+| Dominant time constant | 194 min (tutorial, section 4) | **194.0 min** | ✅ |
+| Reflux change reaching the reboiler | 39 × 0.063 = 2.46 min (section 4.1) | step response of 39 lags, figure 4's shape | ✅ |
+| RGA(1,1) magnitude at high frequency | approaches 1 above 0.41 rad/min (section 4.7.3) | **1.30** at 0.41, **0.57** at 1, **1.00** at 10 rad/min | ✅ |
 
 Reproducing yD = 0.99 / xB = 0.01 *simultaneously* from the published flows is
 the load-bearing check: it pins α, the stage count, the feed location and the
 flows jointly. The mass-balance identity is an independent cross-check on the
 gains — and it is how a first, badly-converged gain computation was caught,
 since it gave 0 rather than 1.96.
+
+These figures are a float64 Newton solve and the Jacobian, reproduced by a separate
+NumPy model written from `colamod.m`. The 52, 200 and 1.94 ticked here until
+0.8.0 were central differences at ±0.01 kmol/min, too wide on a plant this
+nonlinear: ±0.003 gives 38, 153 and 1.953. The ~35 and ~142 the table once quoted
+are 35.1 and 141.7, from the rounded two-by-two model in
+[Skogestad and Morari (1987)](https://skoge.folk.ntnu.no/publications/1987/ifac87/old/ifac87.text.pdf),
+not from this column. Eq. 31's own rounded entries give 36.07 and 146.0.
 
 ---
 
@@ -76,29 +92,57 @@ since it gave 0 rather than 1.96.
 | `alpha` | 1.5 | – | Relative volatility, Column A | ✅ |
 | `F`, `zF_nominal`, `qF` | 1.0, 0.5, 1.0 | kmol/min, –, – | Saturated liquid feed | ✅ |
 | `M_tray`, `M_drum` | 0.5, 0.5 | kmol | Stage holdup | ✅ |
+| `tau_L` | 0.063 | min | Per tray, tutorial table and `colamod.m`'s `taul` | ✅ |
 | nominal `L`, `V` | 2.706, 3.206 | kmol/min | Operating point A | ✅ |
-| `L_min/max`, `V_min/max` | 2.30–3.10, 2.80–3.60 | kmol/min | ±~0.4 around nominal | ⚠️ |
+| `L_min/max`, `V_min/max` | 2.20–3.40, 2.70–3.90 | kmol/min | Ours, to hold the target box (below) | ⚠️ |
 | `zF_noise_std` | 0.03 | – | TUNED — feed disturbance amplitude | ⚠️ |
 | `delta_t` | 1.0 | min | 600 steps ≈ 3 dominant time constants | ✅ |
+
+**The flow limits are ours, for the owner to accept.** The reference gives no
+limits, and these come from the target box, not from a column design. At the
+nominal feed (0.995, 0.005) needs L 3.353 and V 3.853, and (0.98, 0.02) needs
+L 2.286 and V 2.786. At feeds two sigma either side the extremes are L 2.27 and
+3.36, V 2.73 and 3.90.
+
+| limits | nominal feed | over the reset feed | at feed 0.41 |
+| --- | --- | --- | --- |
+| 2.30–3.10, 2.80–3.60, before | 2.1% unreachable | 3.0% | 12.7% |
+| maximums raised only | 0.3% | 1.0% | 10.9% |
+| 2.20–3.40, 2.70–3.90 | 0% | 0% | 0.1% |
+
+So raising the maximums alone leaves the low corner out, and both ends move. Trimming
+the box instead would change what the task asks for, and would not help a drifting
+feed. The price is an action span 1.5 times wider, so a raw action moves the flows
+further, and `D` clips over more of the action box, 44% against 25% (D1 below).
+V 3.9 is 1.22 times nominal; a column built to run at about 80% of flood has about
+that much room, which is our reading and not a sourced figure.
 
 ---
 
 ## 4. Numerics
 
-**16 RK4 substeps are a stability requirement, not a refinement.** Tray holdup
-0.5 against flows of ~3 gives a tray time constant of ~0.17 min, so the fastest
-eigenvalue is `|λ| ≈ (L+V)/M ≈ 11.8 min⁻¹`. RK4 is stable only for
-`h·|λ| < 2.78`, needing `h ≤ 0.235 min`:
+**16 RK4 substeps are a stability requirement, not a refinement.** The stiffest
+mode comes from the Jacobian: `|λ|` is 32.5 min⁻¹ at the nominal point, near
+`(√L + √(V K))² / M` with `L + F` below the feed and `K = dy/dx = 1.5` at the
+bottom. Across the corners of the flow box it reaches 37.6 min⁻¹, at `L_min` and
+`V_max`. RK4 is stable only for `h·|λ| < 2.78`. The ~11.8 min⁻¹ quoted here until
+0.8.0 was the diagonal alone, which could not explain why 8 substeps fail.
 
-| substeps | h·λ | result |
-|---|---|---|
-| 2 | 5.91 | profile saturates to 0/1 in one step |
-| 4 | 2.96 | diverges |
-| 8 | 1.48 | xB collapses to 0 |
-| **16** | **0.74** | yD = 0.99000, xB = 0.01001 ✅ |
+| substeps | h·\|λ\|, nominal | h·\|λ\|, worst corner | result at nominal |
+|---|---|---|---|
+| 2 | 16.3 | 18.8 | profile saturates to 0/1 |
+| 4 | 8.1 | 9.4 | profile saturates to 0/1 |
+| 8 | 4.1 | 4.7 | xB runs to 0.5 |
+| 12 | 2.7 | 3.1 | holds, but a corner is past the limit |
+| **16** | **2.03** | **2.35** | yD = 0.99000, xB = 0.01001 ✅ |
+
+The tray flows add no new limit. Each lags at `1/tau_L = 15.9 min⁻¹`, so
+`h/tau_L = 0.99`, well inside the stiffest composition mode. The margin at the worst
+corner is 15%. The step costs about 1.75 times what it did (3.4 to 5.9 µs per env
+step at batch 256 on the owner's Mac), for 80 states against 41.
 
 The reference implementations use adaptive implicit solvers, which hides this.
-It costs throughput -- 41 states by 64 RHS evaluations per step makes this one
+It costs throughput -- 80 states by 64 RHS evaluations per step makes this one
 of the two or three most expensive environments here, and which one is *the*
 most expensive depends on the batch size, so see
 [docs/performance.md](../../../docs/performance.md) rather than a claim here. The fast modes are
@@ -146,6 +190,7 @@ does not excuse losing the other.
 **Reset** starts from the converged nominal profile, computed once at import
 from the same dynamics rather than hard-coded. With a ~194 min dominant time
 constant an arbitrary initial profile would spend the whole episode relaxing.
+The tray flows start at the sampled reflux, so a reset has no hydraulic transient.
 
 ---
 
@@ -182,10 +227,27 @@ resolution. (The table above predates the version-2 reward and this change.)
 
 ## 7. Known deviations
 
-**⚠️ D1 — no liquid hydraulic lag.** The reference model adds a linearised tray
-flow dynamic (and the K2 vapour effect). Without it a reflux change reaches
-every tray instantly, so the column responds faster to L than a real one and
-the L→composition path is missing a lag of order a minute per tray.
+**D1: liquid hydraulics, closed.** Each of the 39 trays carries its own flow
+state, the reference's `L_i = L0_i + (M_i − M0) / tau_L` with `tau_L = 0.063 min`
+and `lambda = 0` (tutorial eq. 47, `colamod.m`). That is 0.063 min per tray, not
+the minute per tray this entry used to say, and 2.46 min to the reboiler.
+
+A single lag on `L` was the simpler choice, and it cannot work. It delays the top
+as much as the bottom, and that only multiplies a column of the transfer matrix,
+which leaves the RGA unchanged at every frequency. It would stay at 3.2 to 3.7
+above 0.1 rad/min. What decouples the two ends is that liquid reaches the bottom
+later than the top, so the delay has to be spread down the column. The cascade is
+the reference's own model, and adds no new stiffness (section 4).
+
+With it the RGA magnitude falls from 3.4 to 3.7 to 1.30 at 0.41 rad/min, and stays
+between 0.52 and 1.30 up to 10 rad/min. It is still 3.10 at 0.1 and 2.39 at 0.2
+rad/min, so the review's 0.7 to 1.4 above 0.1 rad/min did not reproduce, on this
+model or with the reference's level loops. The tutorial's figure, about 1 above
+1/θ_L = 0.41 rad/min, does. The steady state is unchanged.
+
+`D` stays clipped to `D_min` and `D_max`, which breaks the balance where it binds.
+At `L_max` and `V_min` the column settles on a profile that is not monotone, and it
+trips long before that.
 
 **D2 — analyser dead time, closed.** Product analysers report a sample one
 5-minute cycle old, held until the next (section Readings). On a plant this
@@ -231,7 +293,7 @@ SIMC (Skogestad and Grimholt 2012), from step tests on training seeds 100 to
   k = -0.00526 per K, tau1 = 2.18 min, theta = 0.93 min; tau_c = theta:
   Kp_B = -223 K, Ti_B = 2.18 min.
 - **Interaction.** With the temperature loop closed the steady-state relative
-  gain of the remaining pairing is about 0.85, against about 50 for LV
+  gain of the remaining pairing is about 0.85, against 36 for LV
   without it, the reduction the dos and don'ts describe (measured on the
   nominal profile).
 - **Held-out check** (seeds 200 to 209). It holds 0.155 per step (worst seed
@@ -252,7 +314,7 @@ SIMC (Skogestad and Grimholt 2012), from step tests on training seeds 100 to
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `distillation` | 200 | 60 | 3.3 h | 2 in [-1, 1] | 7 | 68 |
+| `distillation` | 200 | 60 | 3.3 h | 2 in [-1, 1] | 7 | 107 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

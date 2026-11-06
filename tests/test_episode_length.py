@@ -37,9 +37,12 @@ SEEDS = (100, 101, 102)
 
 # Known gaps, each owned by the session rebuilding that task's expert, whose
 # PR lengthens the episode to its new expert and removes the mark. Strict, so a
-# task that starts passing says so. None is open.
-CYCLE_GAPS: dict[str, str] = {}
-DOUBLING_GAPS = dict(CYCLE_GAPS)
+# task that starts passing says so.
+CYCLE_GAPS: dict[str, str] = {
+    "distillation": "the gains predate the analyser delay and the tray hydraulics, "
+    "so the expert loses the column and its cycles restart; PR 9 retunes it",
+}
+DOUBLING_GAPS: dict[str, str] = {}
 # compressor_surge's schedule ends at step 1200 and then holds its last levels,
 # so a run twice as long adds 1200 quiet steps and its hold falls 2.2x without
 # any settling (3.6x with its blocks stretched instead). Its expert is at 0.1x

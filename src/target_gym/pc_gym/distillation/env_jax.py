@@ -23,6 +23,7 @@ from target_gym.pc_gym.distillation.env import (
     compute_reward,
     compute_reward_terms,
     get_obs,
+    steady_liquid,
 )
 from target_gym.pc_gym.distillation.rendering import _render
 from target_gym.video import SavesVideo
@@ -156,14 +157,22 @@ class DistillationColumn(
         # It is the steady state for the *nominal* reflux, 2.706, not for the L
         # sampled just above, so the derivative at t = 0 is not quite zero. That
         # is deliberate: converging a profile per episode would cost 4000
-        # integration steps at reset, and on a plant with RGA around 50 a two
+        # integration steps at reset, and on a plant with RGA around 36 a two
         # percent reflux offset is a meaningful and cheap initial-condition
         # spread. It does mean the column starts near, rather than at, its own
-        # steady state.
+        # steady state. The trays do start at the sampled reflux: their flows
+        # settle in minutes, so they carry no spread worth having.
         x = _NOMINAL_PROFILE
 
         state = DistillationState(
-            time=0, x=x, zF=zF, L=L, V=V, target_yD=target_yD, target_xB=target_xB
+            time=0,
+            x=x,
+            liquid=steady_liquid(L, params),
+            zF=zF,
+            L=L,
+            V=V,
+            target_yD=target_yD,
+            target_xB=target_xB,
         )
         return self.get_obs(state), state
 
