@@ -123,5 +123,13 @@ def test_a_task_ramp_is_the_longest_over_its_rate_limited_fits():
     assert task_ramp(fits, "y", 12.0, rates, 0.5) == (8, ("slow", "y", 100))
 
 
+def test_an_integrating_fit_gives_no_ramp():
+    """H21 divides by a settled gain. An integrating fit's k' is a slope, per
+    second, so span / (|k'| rate) is no time at all: on the boiler's pressure it
+    read as 973 samples, on the glass crown as 56726."""
+    fits = {("u", "y", 100): {"k": 0.22, "model": "integrating_lag"}}
+    assert task_ramp(fits, "y", 6.0, {"u": 0.014}, 2.0) == (0, None)
+
+
 def test_a_task_with_no_rate_limited_fit_has_no_ramp():
     assert task_ramp({("u", "y", 100): {"k": 1.0}}, "y", 1.0, {}, 0.5) == (0, None)

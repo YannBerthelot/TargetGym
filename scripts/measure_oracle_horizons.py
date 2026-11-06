@@ -54,8 +54,7 @@ EVIDENCE = pathlib.Path(__file__).resolve().parent.parent / "evidence"
 SUMMARY = ("protocol", "compliant", "T_c_steps", "N", "M", "ramp", "P")
 SUMMARY += ("T_c_set_by", "P_set_by", "ramp_set_by", "counts", "cpu", "generated")
 #: H21: a task's tracked CV with a target range, and each rate-limited MV's
-#: slower rate, in raw action units per second as the steps and gains are. The
-#: wind pitch joins with C2's rebuild; the reactor's rod has no compliant horizon.
+#: slower rate, in raw action units per second as the steps and gains are.
 RATE_LIMITS = {
     "compressor_surge": (
         "dp",
@@ -68,9 +67,34 @@ RATE_LIMITS = {
     "wind_turbine": (
         "P",
         lambda p: (p.target_power_range[1] - p.target_power_range[0]) / 1.0e6,
-        lambda p: {"pitch": 2 * p.pitch_rate_max / (p.pitch_max - p.pitch_min)},
+        lambda p: {
+            "pitch": 2 * p.pitch_rate_max / (p.pitch_max - p.pitch_min),
+            "torque": 2 * p.torque_rate_max / p.torque_max,
+        },
+    ),
+    "glass_furnace": (
+        "T_crown",
+        lambda p: p.target_T_crown_range[1] - p.target_T_crown_range[0],
+        lambda p: {"fuel": 2 * p.actuator_rate},
+    ),
+    "boiler_drum": (
+        "pressure",
+        lambda p: p.target_pressure_range[1] - p.target_pressure_range[0],
+        lambda p: {"fuel": 2 * p.actuator_rate[0], "feedwater": 2 * p.actuator_rate[1]},
+    ),
+    "reactor": (
+        "T_avg",
+        lambda p: _tref_span(p),
+        lambda p: {"rod": 2 * p.rod_speed / (p.rho_ext_max - p.rho_ext_min)},
     ),
 }
+
+
+def _tref_span(p):
+    """What the 100-50-100 day moves Tref by."""
+    from target_gym.reactor.env import tavg_program
+
+    return tavg_program(1.0, p) - tavg_program(p.load_min, p)
 
 
 def write(name: str, row: dict) -> None:
@@ -131,9 +155,14 @@ TASKS = {
     "reactor": (
         {"rod": 0.1},
         {
+            "T_avg": (
+                (lambda o, s, p: 0.5 * (s.T_coolant + s.T_cold)),
+                "T_avg_min",
+                None,
+            ),
             "n": _s("n", "n_min", "n_max"),
             "T_fuel": _s("T_fuel", "T_fuel_min", "T_fuel_max"),
-            "T_coolant": _s("T_coolant", "T_coolant_min", "T_coolant_max"),
+            "T_hot": _s("T_coolant", None, "T_coolant_max"),
         },
         {},
     ),

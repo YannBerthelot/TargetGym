@@ -774,3 +774,45 @@ seen to close the gap. It derives from Cooper's definition of N, and it uses
 only the task's range, its rate limit and a fitted gain. No return enters it,
 and 91 is not the value that was tried. It is ours: no source read covers
 horizons for rate-limited MVs.
+
+## 13. Amendment 4, the rerun on the rebuilt plants
+
+Written with PR 9 for the owner's review. The recipe is unchanged, with two fixes to
+how it was run. Neither reads a horizon.
+
+**The step.** `Plant` read `delta_t` as the step. On the reactor a control step is 6
+of those, so its fits were 6 times off. It now reads the control step.
+
+**H21 needs a settled gain.** It divides by the fit's gain, and an integrating fit
+has a slope, per second, so the result is no time at all: 973 samples on the boiler's
+pressure, 56726 on the glass crown. H21 says a gain needs a settled fit, so an
+integrating fit adds no ramp. The boiler's pressure and the glass crown are
+integrating, so neither gets one. No source gives a ramp for an integrating CV.
+
+| task | T_c before | P before | T_c now | P now | plans to the end | set by |
+| --- | --- | --- | --- | --- | --- | --- |
+| battery | 1 | 80 | 1 | 3023 | yes, 2880 samples | power to T_cell, seed 107 |
+| boiler_drum | 1 | 178 | 1 | 237 | no, 400 steps | fuel to pressure, seed 102 |
+| glass_furnace | 30 | 143 | 29 | 158 | yes, 56 samples | fuel to T_work, seed 108 |
+| hvac | 1 | 932 | 1 | 8 | no, 720 steps | heating to T_air, seed 101 |
+| wind_turbine | 1 | 290 | 1 | 159, ramp 5 | no, 400 steps | pitch to P, seed 103 |
+| reactor | none | none | 1 | 10, ramp 2 | no, 1440 steps | rod to T_avg, seed 100 |
+
+**The reactor is compliant now.** It had no valid fit before. It has 20 of 40 now, on
+T_avg and T_hot. `n` and T_fuel have none. Its oracle stays on `NewtonMPC`: moving it
+is the owner's call.
+
+**hvac: the recipe's answer loses, an open decision.** The building has two time
+constants, about 970 s (air and emitter) and 139,000 s (mass). Which one a seed's
+FOPDT finds depends on the window, and only fits passing V1 count. The slow fit
+reaches 5.5 to 9.97 noise bands on the rebuilt plant, against the 10 of V1, with a fit
+of 96 to 98 %: 10.22 passed on the old plant, and 9.97 fails here. So P falls from
+932 to 8, two hours, and the oracle cannot see the morning.
+
+| P | seeds won of 10 | mean return | expert |
+| --- | --- | --- | --- |
+| 8, as measured | 3 | -17.18 | -16.54 |
+| 932, a diagnosis, not adopted | 10 | -12.90 | -16.54 |
+
+The file holds what the recipe gave. A rule that keeps the slow fit is for the owner,
+as H21's V1 exception was: nothing here chooses one.

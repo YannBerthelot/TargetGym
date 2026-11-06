@@ -83,11 +83,12 @@ def task_ramp(fits: dict, cv: str, span: float, rates: dict, T: float):
     seed): fit}`` of tracked ``cv`` and the rate-limited MVs in ``rates``, the
     longest ramp and the key that sets it, ``(0, None)`` with none. A bump
     test is too small to reach a rate limit, so a large move's ramp is added
-    to the horizon Cooper's recipe gives."""
+    to the horizon Cooper's recipe gives. An integrating fit has no settled
+    gain, only a slope, so H21 says nothing of it."""
     rows = {
         key: ramp_samples(span, fit["k"], rates[key[0]], T)
         for key, fit in fits.items()
-        if key[1] == cv and key[0] in rates
+        if key[1] == cv and key[0] in rates and fit.get("model") != "integrating_lag"
     }
     if not rows:
         return 0, None

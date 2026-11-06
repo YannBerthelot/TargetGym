@@ -42,19 +42,8 @@ from target_gym.runners.runners import pid_policy
 FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
 #: A clock 5 steps before a switch, so the ten stages below cross a target's ramp.
 START_CLOCK = {"unstable_cstr": 195}
-C2 = (
-    "hvac",
-    "boiler_drum",
-    "wind_turbine",
-    "glass_furnace",
-    "cement_kiln",
-)  # fmt: skip  (battery's rebuilt plant keeps a stand-in until PR 9)
+C2 = ("hvac", "battery", "boiler_drum", "wind_turbine", "glass_furnace", "cement_kiln")
 ON_SOLVER = FIVE + C2
-#: PR 9 rewrites these: their solver models predate the fixes of PRs 5 and 6.
-STALE_MODELS = ("boiler_drum", "glass_furnace", "wind_turbine")
-_STALE_MODEL = pytest.mark.xfail(
-    strict=True, reason="PR 9: the solver's model predates this plant's fixes"
-)
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -68,10 +57,7 @@ def _oracle(name, **overrides):
 @pytest.mark.medium
 @pytest.mark.parametrize(
     "name, load",
-    [
-        pytest.param(n, None, marks=_STALE_MODEL) if n in STALE_MODELS else (n, None)
-        for n in ON_SOLVER
-    ]
+    [(n, None) for n in ON_SOLVER]
     + [("cstr", (0.7, -0.015)), ("four_tank", (2e-4, -1e-4))],
 )
 def test_the_exact_rewrites_replay_on_the_env(name, load):
@@ -205,6 +191,22 @@ def test_a_warm_solve_that_fails_is_solved_again_cold():
     assert report["solver_failures"] == 1  # the broken step's own cold solve
 
 
+@pytest.mark.medium
+def test_a_moves_action_is_what_the_env_and_the_replay_are_sent():
+    """A model's ``action`` maps a planned move to what the env gets (a rate to
+    its command, ``oracles.rates``). Halved here, so the step sends half the
+    planned move, and K8's replay, which runs the env on the same map, parts from
+    a plan that assumed the whole of it. first_order's first move is order 1, so
+    its replay misses by far more than 1e-6."""
+    env, params, oracle = _oracle("first_order")
+    oracle.model = oracle.model._replace(action=lambda state, u: 0.5 * u)
+    _, state = env.reset_env(jax.random.PRNGKey(100), params)
+    applied = oracle.step(None, state)
+    planned = np.asarray(oracle.shooting.moves(oracle._plan))[0, 0]
+    assert applied == pytest.approx(0.5 * float(np.clip(planned, -1.0, 1.0)))
+    assert oracle.certificates[-1]["output_gap"] > 1e-6
+
+
 def _imports(path: pathlib.Path) -> set[pathlib.Path]:
     found = set()
     for node in ast.walk(ast.parse(path.read_text())):
@@ -291,13 +293,7 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
     + [
         # p = 1, in dollars: 500 W, half the 1 kW resolution, for one step of
         # delta_t s at the imbalance price in $/MWh.
-        pytest.param(
-            "battery",
-            500.0e-6 * 100.0 * 5.0 / 3600.0,
-            marks=pytest.mark.xfail(
-                strict=True, reason="PR 9: the rebuilt battery's oracle is a stand-in"
-            ),
-        ),
+        ("battery", 500.0e-6 * 100.0 * 5.0 / 3600.0),
         ("wind_turbine", 500.0e-6 * 100.0 * 0.25 / 3600.0),
         # 0.03 EUR/(K^2 h) for 0.25 h at (0.1 K / 2)^2.
         ("hvac", 0.03 * 0.25 * 0.05**2),

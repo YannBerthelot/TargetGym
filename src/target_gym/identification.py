@@ -630,7 +630,9 @@ class Plant:
         expert_mv=None,
         direction=away_from_nearer_limit,
     ):
-        self.n_ep, self.dt = int(params.max_steps_in_episode), float(params.delta_t)
+        env = spec.make_env()
+        self.n_ep = int(params.max_steps_in_episode)
+        self.dt = getattr(env, "control_period", 1) * float(params.delta_t)
         # Long enough for any retest; continuing off, so a trip leaves the
         # out-of-limit state to read which CV tripped.
         params = params.replace(max_steps_in_episode=1000 * self.n_ep)
@@ -639,7 +641,7 @@ class Plant:
             if hasattr(params, "continuing")
             else params
         )
-        env, ctrl = spec.make_env(), spec.make_pid_controller()
+        ctrl = spec.make_pid_controller()
         self.n_mv, self.n_cv, self.n_seeds = (
             env.action_space(params).shape[0],
             len(cvs),
