@@ -11,6 +11,34 @@ Status: ✅ validated · ⚠️ defensible but approximate · ❌ known deviatio
 
 ---
 
+## 0. The rebuilt control problem
+
+A rebuild, written down before its code (`docs/proposals/industrial-fixes.md`, PR 6).
+
+The task asked whether a controller can follow a dispatch signal, and any policy
+that copied the target could: delivered power equalled the command, the pack could
+not run out inside 30 minutes, and wear cost $4.24/MWh against a $100/MWh imbalance,
+so no choice ever arose. An echo of the target beat the expert on 10 of 10 seeds.
+
+The rebuilt task asks **how far to follow a regulation signal from a finite, ageing
+pack.** Over a 4 h window of hourly blocks, exact following leaves the charge window
+on most seeds, and deep swings cost more wear per MWh than the imbalance they avoid.
+Three things make that a decision:
+
+1. **Energy is the limit.** Hourly levels of up to 0.8 MW against a 1.69 MWh pack.
+2. **Cycle depth has a convex price.** A half-cycle of depth `d` costs half of
+   `Phi(d)` of the pack's life, so the wear on the next MWh grows with `d`. Past a
+   depth of about 0.64 the next MWh costs more in wear than in imbalance
+   (Xu, Shi, Kirschen and Zhang, 2017).
+3. **Delivered power is not the command.** Auxiliary loads sit between the inverter
+   and the meter, so a trim has work to do.
+
+The next block is in the observation, so the oracle no longer owns the lookahead.
+
+Every figure is sourced in section 3, or labelled ours for the owner to accept.
+
+---
+
 ## 1. Model
 
 No single published benchmark defines a grid BESS the way NREL defines a
