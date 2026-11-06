@@ -274,6 +274,18 @@ The next release is 0.8.0, because these changes break code written for
     past track and sinks. It reaches the follower as lift, side force and rolling
     moment, and the drag saving of the sweet spot follows from the upwash.
     wake_strength=0 turns it off.
+  - `scripts/pjm_regulation_score.py` computes PJM's regulation performance score on
+    the `battery` expert.
+  - Check 2's credibility records now say what kind of number each figure is, and
+    carry more of them: `battery`, `boiler_drum`, `plane3d_figure8`,
+    `unstable_cstr`, `wind_turbine` and the patrol family. Eight tasks with no
+    published figure carry a written exception.
+  - `battery`: cycle wear is counted by rainflow, with a stack of open turns in the
+    state, so a swing no longer restarts a half-cycle. Recorded numbers for
+    `battery` no longer apply. The `reactor` oracle moves to the shared solver.
+    Oracle horizons are rerun under a new rule: a fit failing V1 alone at a fit of
+    at least 95 % counts toward P, so `hvac`, `wind_turbine`, `compressor_surge` and
+    `distillation` change.
 
 ### Changed
 
