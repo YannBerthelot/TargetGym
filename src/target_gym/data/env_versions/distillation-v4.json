@@ -1,5 +1,5 @@
 {
-  "fingerprint": "3f1189dc27e9af42",
-  "note": "Branch stamp on feat/sensor-noise: tray hydraulics, wider flow limits. Redone at the 0.8.0 re-record.",
-  "stamped": "2026-11-06T00:07:10+00:00"
+  "fingerprint": "f32fe41a1c3a2136",
+  "note": "Branch stamp on feat/sensor-noise: tray hydraulics, wider flow limits, on the shared lag fixes. Redone at the 0.8.0 re-record.",
+  "stamped": "2026-11-06T00:22:33+00:00"
 }
