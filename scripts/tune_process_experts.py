@@ -1,18 +1,22 @@
 """Tune the process-plant experts by SIMC, from step tests on the simulator.
 
 Run with ``uv run python scripts/tune_process_experts.py [--envs ...]
-[--write] [--check]``. Without ``--write`` it prints the step-test models and
-the settings; ``--write`` stores the settings in
-``src/target_gym/data/pid_gains.json``; ``--check`` scores the stored expert
-on the held-out seeds against the ceiling.
+[--level 2] [--write] [--check]``. Without ``--write`` it prints the step-test
+models and the settings; ``--write`` stores the settings in
+``src/target_gym/data/pid_gains.json``, or that level's file (``--level``, the
+sensor noise it tunes on); ``--check`` scores the stored expert on the
+held-out seeds against the ceiling.
 
 The recipe is SIMC (Skogestad and Grimholt, "The SIMC method for smooth PID
 controller tuning", chapter 5 of *PID Control in the Third Millennium*,
 Springer 2012; equation numbers below are theirs):
 
 1. A step test at the operating point of each training seed (100-109), from
-   the steady state there. Where the plant has a disturbance the response is
-   taken against an unstepped run on the same noise, so only the step is fitted.
+   the steady state there, in one run: hold, record a baseline, step
+   (docs/proposals/expert-protocols-noise.md, N1). The response is the reading
+   less the baseline's mean, noise and disturbances included, as a plant gives
+   it. ``first_order`` runs the rest of that protocol; the other recipes take
+   it when PR 9 rewrites them on the fixed plants.
 2. A first-order-plus-delay fit (k, tau1, theta), or for a lag-dominant
    unstable loop (tau1 > 8 theta) the integrating-with-lag model read from
    the start of the response. The digital loop adds half a sample to the
@@ -32,6 +36,7 @@ Seeds 0-9 are scored and are never run here.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import pathlib
 import sys
@@ -48,13 +53,26 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from target_gym import eval as E  # noqa: E402
-from target_gym.provenance import GAINS_PATH  # noqa: E402
+from target_gym.base import measured_state  # noqa: E402
+from target_gym.identification import (  # noqa: E402
+    BASELINE,
+    DEAD_BAND,
+    Instrument,
+    Plant,
+    fit,
+    noise_tune,
+    pick_fit,
+    single_run,
+)
+from target_gym.provenance import GAIN_LEVELS, GAINS_PATH, gains_path  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 from target_gym.scoring import ceiling  # noqa: E402
 
 TRAIN = range(100, 110)
 HELD_OUT = range(200, 210)
 SOURCE = "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
+#: The sensor noise a run tunes on and the level it writes, set by ``--level``.
+LEVEL = 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -64,21 +82,40 @@ SOURCE = "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
 
 def _plant(name):
     spec = REGISTRY[name]
-    env, p = spec.make_env(), spec.make_test_params()
+    env, p = spec.make_env(), spec.make_test_params(sensor_noise_scale=LEVEL)
     step = jax.jit(lambda k, s, a: env.step_env(k, s, a, p))
     reset = jax.jit(lambda k: env.reset_env(k, p))
     return env, p, step, reset
 
 
-def _run(step, state, act, n, key=0):
-    """Observations of ``n`` steps from ``state``, ``act(obs, state) -> raw``."""
+def _run(step, state, act, n, key=0, read=lambda s: s):
+    """Observations of ``n`` steps from ``state``, ``act(read(state)) -> raw``.
+    A loop closed in the test passes ``read=_instruments(env, p)``, so it sees
+    the readings its expert will have."""
     k = jax.random.PRNGKey(key)
     out, s = [], state
     for _ in range(n):
-        obs, s, *_ = step(k, s, jnp.asarray(np.atleast_1d(act(s)), jnp.float32))
+        u = np.atleast_1d(act(read(s)))
+        obs, s, *_ = step(k, s, jnp.asarray(u, jnp.float32))
         out.append(np.asarray(obs))
         k = jax.random.split(k)[0]
     return np.array(out)
+
+
+def _instruments(env, p):
+    return jax.jit(lambda s: measured_state(env, s, p))
+
+
+def _then(hold, moved):
+    """``hold`` through the baseline, then ``moved``: a run with its step in it."""
+    t = itertools.count()
+    return lambda s: (moved if next(t) >= BASELINE else hold)(s)
+
+
+def _bump(step, st, hold, moved, n, key=0, read=lambda s: s):
+    """N1: the ``n`` observations after the step, less the baseline's mean."""
+    y = _run(step, st, _then(hold, moved), BASELINE + n, key, read)
+    return y[BASELINE:] - y[:BASELINE].mean(axis=0)
 
 
 def fit_fopdt(t, dy, du, guess):
@@ -89,28 +126,6 @@ def fit_fopdt(t, dy, du, guess):
         return k * du * (1 - np.exp(-np.maximum(t - theta, 0.0) / tau)) - dy
 
     lo, hi = [-np.inf, 1e-6, 0.0], [np.inf, np.inf, np.inf]
-    return least_squares(residual, guess, bounds=(lo, hi)).x
-
-
-def fit_unstable_lag(t, dy, du, guess):
-    """``k' e^(-theta s) / ((s - a)(tau2 s + 1))`` fit; ``k'`` is the slope a
-    lag-dominant loop is tuned on, whatever the sign of its pole."""
-
-    def residual(q):
-        kp, a, tau2, theta = q
-        tt, b = np.maximum(t - theta, 0.0), 1.0 / tau2
-        y = (
-            kp
-            / tau2
-            * (
-                -1 / (a * b)
-                + np.exp(a * tt) / (a * (a + b))
-                + np.exp(-b * tt) / (b * (a + b))
-            )
-        )
-        return y * du - dy
-
-    lo, hi = [0.0, 1e-3, 1e-3, 0.0], [np.inf, 20.0, 2.0, 0.2]
     return least_squares(residual, guess, bounds=(lo, hi)).x
 
 
@@ -150,7 +165,7 @@ def _median_model(models, dt):
 
 def _train_cost(name, make):
     spec = REGISTRY[name]
-    p = spec.make_test_params()
+    p = spec.make_test_params(sensor_noise_scale=LEVEL)
     eps = [E.run_episode(spec, p, make().host(), seed=s) for s in TRAIN]
     return E.gain(eps, E.scored_burn_in(name, p))[0]
 
@@ -174,27 +189,37 @@ def _pick_tau_c(name, theta, build):
 
 
 def tune_first_order() -> dict:
-    from target_gym.experts.pid import siso_pid
-
-    env, p, step, reset = _plant("first_order")
-    dt = float(p.delta_t)
-    models = []
-    for s in TRAIN:
-        target = float(reset(jax.random.PRNGKey(s))[0][1])
-        raw0 = 2 * (target / p.K - p.u_min) / (p.u_max - p.u_min) - 1
-        st = reset(jax.random.PRNGKey(s))[1].replace(x=jnp.float32(target))
-        y = _run(step, st, lambda _s: raw0 + 0.1, 60)[:, 0]
-        t = np.arange(1, len(y) + 1) * dt
-        models.append(fit_fopdt(t, y - target, 0.1, (2.0, 0.5, 0.0)))
-    k, tau1, theta = _median_model(models, dt)
-    print(f"  model k {k:.4g} per raw, tau1 {tau1:.4g} s, theta {theta:.4g} s")
-
-    def build(tau_c):
-        Kc, Ti = simc_pi(k, tau1, theta, tau_c)
-        return siso_pid(Kc, Kc / Ti, 0.0, dt, 0, 1)
-
-    Kc, Ti = simc_pi(k, tau1, theta, _pick_tau_c("first_order", theta, build))
-    return {"Kp": Kc, "Ki": Kc / Ti, "Kd": 0.0}
+    """The whole noise protocol (N1 to N7), which the other recipes take in
+    PR 9. The record of the fit goes in the entry; no expert reads ``Tf`` yet."""
+    spec = REGISTRY["first_order"]
+    env, p, *_ = _plant("first_order")
+    inst = Instrument.of(env, p, "x")
+    plant = Plant(spec, p, [lambda o, s, q: o[0]], [(None, None)])
+    read = single_run(
+        lambda du: [plant.bump(s, 0, 0, du, 60, inst) for s in range(plant.n_seeds)],
+        0.1,
+        plant.room(0),
+        inst,
+    )
+    model, spread, explained = pick_fit(read.fits)
+    theta = model["theta"] + inst.half_sample
+    # The raw action spans 2, so a dead band of 1 % of span is 0.02.
+    out = noise_tune(model["k"], model["tau"], theta, read.nb, inst.h, DEAD_BAND * 2)
+    print(
+        f"  band {read.nb:.3g}, step {read.step:.3g} moves {read.ratio:.1f} bands;"
+        f" spread {spread:.3g}, noise explains {explained:.3g}; k {model['k']:.4g}"
+        f" per raw, tau1 {model['tau']:.4g} s, theta {theta:.4g} s, Tf {out['Tf']:.3g}"
+    )
+    return {
+        "Kp": out["Kc"],
+        "Ki": out["Kc"] / out["Ti"],
+        "Kd": 0.0,
+        "Tf": out["Tf"],
+        "noise_band": read.nb,
+        "k": model["k"],
+        "tau1": model["tau"],
+        "theta": out["theta"],
+    }
 
 
 def _cstr_steady(p, C_a):
@@ -223,22 +248,22 @@ def tune_cstr() -> dict:
     inner = []
     for _, T, raw, st in points:
         du = -0.1 if raw > 0 else 0.1
-        y = _run(step, st, lambda _s, u=raw + du: u, 60)[:, 1]
-        t = np.arange(1, len(y) + 1) * dt
-        inner.append(fit_fopdt(t, y - T, du, (6.0, 0.7, 0.05)))
+        dy = _bump(step, st, lambda _s, u=raw: u, lambda _s, u=raw + du: u, 60)[:, 1]
+        t = np.arange(1, len(dy) + 1) * dt
+        inner.append(fit_fopdt(t, dy, du, (6.0, 0.7, 0.05)))
     k, tau1, theta = _median_model(inner, dt)
     Kp_T, Ti_T = simc_pi(k, tau1, theta, theta)
     print(f"  inner model k {k:.4g} K/raw, tau1 {tau1:.4g}, theta {theta:.4g} min")
 
     # Outer loop: C_a against the temperature setpoint, inner loop closed.
-    outer = []
+    outer, read = [], _instruments(env, p)
     for C_a, T, raw, st in points:
         dT = -0.5 if raw > 0.5 else 0.5
         inner_pi = cstr_cascade(0.0, 1.0, Kp_T, Ti_T, p).params
-        loop = _InnerLoop(inner_pi, T + dT, raw * Ti_T / Kp_T)
-        y = _run(step, st, loop, 80)[:, 0]
-        t = np.arange(1, len(y) + 1) * dt
-        outer.append(fit_fopdt(t, y - C_a, dT, (-0.01, 1.0, 0.3)))
+        loop = _InnerLoop(inner_pi, T, T + dT, raw * Ti_T / Kp_T)
+        dy = _bump(step, st, loop, loop, 80, read=read)[:, 0]
+        t = np.arange(1, len(dy) + 1) * dt
+        outer.append(fit_fopdt(t, dy, dT, (-0.01, 1.0, 0.3)))
     k, tau1, theta = _median_model(outer, dt)
     print(f"  outer model k {k:.4g} mol/L/K, tau1 {tau1:.4g}, theta {theta:.4g} min")
 
@@ -251,14 +276,17 @@ def tune_cstr() -> dict:
 
 
 class _InnerLoop:
-    """The cascade's inner PI on its own, holding ``T_sp``, from an integral
-    preset to the steady coolant so the test starts at rest."""
+    """The cascade's inner PI on its own, holding ``T_sp`` through the baseline
+    and ``T_moved`` after it, from an integral preset to the steady coolant so
+    the test starts at rest."""
 
-    def __init__(self, prm, T_sp, integral):
-        self.prm, self.T_sp, self.integral = prm, T_sp, integral
+    def __init__(self, prm, T_sp, T_moved, integral):
+        self.prm, self.integral = prm, integral
+        self.T_sp, self.T_moved, self.t = T_sp, T_moved, 0
 
     def __call__(self, state):
-        e = self.T_sp - float(state.T)
+        e = (self.T_moved if self.t >= BASELINE else self.T_sp) - float(state.T)
+        self.t += 1
         integral = self.integral + e * self.prm.dt
         u = self.prm.Kp_T * (e + integral / self.prm.Ti_T)
         if -1.0 <= u <= 1.0:
@@ -280,11 +308,10 @@ def tune_ph_neutralization() -> dict:
     for s in TRAIN:
         st = reset(jax.random.PRNGKey(s))[1]
         raw0 = 2 * (float(st.q3) - p.q3_min) / span - 1
-        base = _run(step, st, lambda _s: raw0, 120, key=s)[:, 0]
-        moved = _run(step, st, lambda _s: raw0 + 2 * 0.1 / span, 120, key=s)[:, 0]
-        dy = np.asarray(reagent_demand(moved, curve, np)) - np.asarray(
-            reagent_demand(base, curve, np)
-        )
+        act = _then(lambda _s: raw0, lambda _s: raw0 + 2 * 0.1 / span)
+        y = _run(step, st, act, BASELINE + 120, key=s)[:, 0]
+        demand = np.asarray(reagent_demand(y, curve, np))
+        dy = demand[BASELINE:] - demand[:BASELINE].mean()
         t = np.arange(1, len(dy) + 1) * dt
         models.append(fit_fopdt(t, dy, 0.1, (1.0, 90.0, 0.0)))
     k, tau1, theta = _median_model(models, dt)
@@ -324,20 +351,31 @@ def tune_unstable_cstr() -> dict:
             ),
         )
 
-    # Inner loop: T against the coolant, 1 K step, the first 12 steps.
-    inner = []
+    # Inner loop: T against the coolant. Nobody holds this output, which runs
+    # away (N1), so the stored P gain stays closed, 1 K lands on the coolant
+    # and the fit reads the coolant it recorded, for the first 12 steps.
+    read, inner = _instruments(env, p), []
+    Kp_held = X.load_gains()["Kp_T"]
     for L in levels:
         T, T_c, st = at_rest(L)
-        base = _run(step, st, lambda _s: X.raw_from_coolant(T_c, p), 12)[:, 1]
-        moved = _run(step, st, lambda _s: X.raw_from_coolant(T_c + 1.0, p), 12)[:, 1]
-        t = np.arange(1, 13) * dt
-        inner.append(fit_unstable_lag(t, moved - base, 1.0, (5.0, 2.0, 0.1, 0.0)))
-    kp, a, tau2, theta = np.median(np.asarray(inner), axis=0)
-    theta += dt / 2
-    print(
-        f"  inner model k' {kp:.4g} K/min/K, pole {a:.4g} /min, tau2 {tau2:.4g},"
-        f" theta {theta:.4g} min; tau1/theta {1 / a / theta:.3g} (> 8: lag-dominant)"
+        sent = []
+
+        def loop(extra, T=T, T_c=T_c, sent=sent):
+            def act(state):
+                u = T_c + extra + Kp_held * (T - float(state.T))
+                sent.append(np.clip(u, p.T_c_min, p.T_c_max))
+                return X.raw_from_coolant(sent[-1], p)
+
+            return act
+
+        dy = _bump(step, st, loop(0.0), loop(1.0), 12, read=read)[:, 1]
+        u = np.array(sent, float)
+        inner.append(fit("integrating_lag", dt, dy, u[BASELINE:] - u[:BASELINE].mean()))
+    kp, tau2, theta = (
+        float(np.median([f[q] for f in inner])) for q in ("k", "tau2", "theta")
     )
+    theta += dt / 2
+    print(f"  inner model k' {kp:.4g} K/min/K, tau2 {tau2:.4g}, theta {theta:.4g} min")
     Kp_T = 1.0 / (kp * 2 * theta)
     Kd_T = Kp_T * tau2
 
@@ -345,20 +383,20 @@ def tune_unstable_cstr() -> dict:
     outer = []
     for L in levels[::3]:
         T, T_c, st = at_rest(L)
-        T_sp = T + (T_c - bias) / Kp_T
-        runs = []
-        for sp in (T_sp, T_sp - 0.5):
-            prev = [T]
+        T_sp, prev = T + (T_c - bias) / Kp_T, [T]
 
-            def pd(state, sp=sp, prev=prev):
+        def pd(sp, prev=prev):
+            def act(state):
                 T_now = float(state.T)
                 T_c = bias + Kp_T * (sp - T_now) - Kd_T * (T_now - prev[0]) / dt
                 prev[0] = T_now
                 return X.raw_from_coolant(np.clip(T_c, p.T_c_min, p.T_c_max), p)
 
-            runs.append(_run(step, st, pd, 80)[:, 0])
+            return act
+
+        dy = _bump(step, st, pd(T_sp), pd(T_sp - 0.5), 80, read=read)[:, 0]
         t = np.arange(1, 81) * dt
-        outer.append(fit_fopdt(t, runs[1] - runs[0], -0.5, (-0.02, 0.5, 0.05)))
+        outer.append(fit_fopdt(t, dy, -0.5, (-0.02, 0.5, 0.05)))
     k, tau1, theta = _median_model(outer, dt)
     print(f"  outer model k {k:.4g} mol/L/K, tau1 {tau1:.4g}, theta {theta:.4g} min")
 
@@ -417,8 +455,8 @@ def tune_four_tank() -> dict:
         G = np.zeros((2, 2))
         for j in range(2):
             dv = np.eye(2)[j] * 0.3
-            y = _run(step, st, lambda _s, u=raw(v + dv): u, 2000)[-1, :2]
-            G[:, j] = (y - [t1, t2]) / 0.3
+            hold, moved = (lambda _s, u=raw(x): u for x in (v, v + dv))
+            G[:, j] = _bump(step, st, hold, moved, 2000)[-1, :2] / 0.3
         gains.append(G)
     G = np.median(np.asarray(gains), axis=0)
     D = np.linalg.solve(G, np.diag([G[0, 1], G[1, 0]]))
@@ -428,10 +466,12 @@ def tune_four_tank() -> dict:
     models = {0: [], 1: []}
     for t1, t2, v, st in rests:
         for j in range(2):
-            u = raw(v + D @ (np.eye(2)[j] * 0.3))
-            y = _run(step, st, lambda _s, u=u: u, 1500)[:, j]
-            t = np.arange(1, len(y) + 1) * dt
-            models[j].append(fit_fopdt(t, y - (t1, t2)[j], 0.3, (0.04, 100.0, 10.0)))
+            hold, moved = (
+                lambda _s, u=raw(x): u for x in (v, v + D @ (np.eye(2)[j] * 0.3))
+            )
+            dy = _bump(step, st, hold, moved, 1500)[:, j]
+            t = np.arange(1, len(dy) + 1) * dt
+            models[j].append(fit_fopdt(t, dy, 0.3, (0.04, 100.0, 10.0)))
     loops = [_median_model(models[j], dt) for j in range(2)]
     for j, (k, tau1, theta) in enumerate(loops):
         print(
@@ -478,23 +518,18 @@ def tune_distillation() -> dict:
     ys_D = max(abs(float(o[4] - o[0])) for o, _ in starts)
     ys_B = max(abs(float(o[5] - o[1])) for o, _ in starts)
 
-    def run(st, act, n, key):
-        return _run(step, st, act, n, key=key)
-
-    # Temperature loop: boilup stepped 0.005 kmol/min, against an unstepped
-    # run on the same feed noise; the first 20 min for the slope, 400 for the
-    # steady gains that size the setpoint moves.
+    # Temperature loop: boilup stepped 0.005 kmol/min; the first 20 min for the
+    # slope, 400 for the steady gains that size the setpoint moves.
     inner, gain_T, gain_B = [], [], []
     for s, (o, st) in zip(TRAIN, starts):
         L, V = float(st.L), float(st.V)
-        base = run(st, lambda _s: [rL(L), rV(V)], 400, s)
-        moved = run(st, lambda _s: [rL(L), rV(V + 0.005)], 400, s)
+        hold = lambda _s, L=L, V=V: [rL(L), rV(V)]  # noqa: E731
+        moved = lambda _s, L=L, V=V: [rL(L), rV(V + 0.005)]  # noqa: E731
+        dy = _bump(step, st, hold, moved, 400, key=s)
         t = np.arange(1, 401) * dt
-        inner.append(
-            fit_integrating_lag(t[:20], (moved - base)[:20, 6], 0.005, (1.0, 1.0, 0.0))
-        )
-        gain_T.append((moved - base)[-1, 6] / 0.005)
-        gain_B.append((moved - base)[-1, 1] / 0.005)
+        inner.append(fit_integrating_lag(t[:20], dy[:20, 6], 0.005, (1.0, 1.0, 0.0)))
+        gain_T.append(dy[-1, 6] / 0.005)
+        gain_B.append(dy[-1, 1] / 0.005)
     kp, tau2, theta = np.median(np.asarray(inner), axis=0)
     theta += dt / 2
     dT_dxB = abs(np.median(gain_T) / np.median(gain_B))
@@ -507,31 +542,41 @@ def tune_distillation() -> dict:
         f" tau_c {tau_c:.3g} min"
     )
 
-    # Composition loops, the temperature loop closed at the reset temperature.
-    def closed(st, L_of, T_sp, n, key):
-        mem = {"I": 0.0}
-        V0 = float(st.V)
+    # Composition loops, the temperature loop closed at the reset temperature
+    # and moved, with the reflux, after the baseline.
+    read = _instruments(env, p)
+
+    def closed(st, L_moved, T_moved, n, key):
+        L0, T0, V0 = float(st.L), float(tray_temperature(st)), float(st.V)
+        mem = {"I": 0.0, "t": 0}
 
         def act(state):
-            T = float(tray_temperature(state))
-            e = T_sp - T
+            late = mem["t"] >= BASELINE
+            mem["t"] += 1
+            e = (T_moved if late else T0) - float(tray_temperature(state))
             I = mem["I"] + e * dt
             V = V0 + Kp_T * (e + I / Ti_T)
             if p.V_min <= V <= p.V_max:
                 mem["I"] = I
-            return [rL(L_of), rV(np.clip(V, p.V_min, p.V_max))]
+            return [rL(L_moved if late else L0), rV(np.clip(V, p.V_min, p.V_max))]
 
-        return run(st, act, n, key)
+        y = _run(step, st, act, BASELINE + n, key, read)
+        return y[BASELINE:] - y[:BASELINE].mean(axis=0)
 
     top, bottom = [], []
     for s, (o, st) in zip(TRAIN, starts):
         L, T0 = float(st.L), float(tray_temperature(st))
-        base = closed(st, L, T0, 600, s)
         t = np.arange(1, 601) * dt
-        y = closed(st, L + 0.005, T0, 600, s)
-        top.append(fit_fopdt(t, (y - base)[:, 0], 0.005, (0.02, 10.0, 1.0)))
-        y = closed(st, L, T0 - 0.2, 600, s)
-        bottom.append(fit_fopdt(t, (y - base)[:, 1], -0.2, (-0.005, 3.0, 1.0)))
+        top.append(
+            fit_fopdt(
+                t, closed(st, L + 0.005, T0, 600, s)[:, 0], 0.005, (0.02, 10.0, 1.0)
+            )
+        )
+        bottom.append(
+            fit_fopdt(
+                t, closed(st, L, T0 - 0.2, 600, s)[:, 1], -0.2, (-0.005, 3.0, 1.0)
+            )
+        )
     out = {"Kp_T": Kp_T, "Ti_T": Ti_T}
     for name, models, ys, room in (("D", top, ys_D, room_L), ("B", bottom, ys_B, ys_T)):
         k, tau1, th = _median_model(models, dt)
@@ -560,26 +605,26 @@ TUNERS = {
 
 
 def write(name: str, settings: dict) -> None:
-    """Replace ``name``'s entry in pid_gains.json with ``settings``. The
-    unstable CSTR's entry also holds its setpoint limits (``HELD_GAINS``),
-    which SIMC does not set, so those stay."""
-    gains = json.loads(GAINS_PATH.read_text())
-    kept = gains.get(name, {}) if name == "unstable_cstr" else {}
+    """Replace ``name``'s entry in this level's gains file with ``settings``.
+    The unstable CSTR's entry also holds its setpoint limits (``HELD_GAINS``),
+    which SIMC does not set, so those stay, as shipped."""
+    path = gains_path(LEVEL)
+    gains = json.loads(path.read_text()) if path.exists() else {}
+    shipped = json.loads(GAINS_PATH.read_text())
+    kept = shipped.get(name, {}) if name == "unstable_cstr" else {}
     entry = {k: v for k, v in kept.items() if k not in ("note", "tuning_rule")}
     entry.update({k: round(float(v), 6) for k, v in settings.items()})
     entry["tuning_rule"] = SOURCE
     gains[name] = entry
-    GAINS_PATH.write_text(json.dumps(gains, indent=2) + "\n")
-    print(f"  wrote {name}: {entry}")
+    path.write_text(json.dumps(gains, indent=2) + "\n")
+    print(f"  wrote {name} to {path.name}: {entry}")
 
 
 def check(name: str) -> None:
-    from target_gym.runners.runners import baseline_policy
-
     spec = REGISTRY[name]
-    p = spec.make_test_params()
+    p = spec.make_test_params(sensor_noise_scale=LEVEL)
     eps = [
-        E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=s)
+        E.run_episode(spec, p, spec.make_pid_controller(LEVEL).host(), seed=s)
         for s in HELD_OUT
     ]
     burn_in, settle = E.scored_burn_in(name, p), E.fixed_settle(name)
@@ -593,11 +638,14 @@ def check(name: str) -> None:
 
 
 def main() -> None:
+    global LEVEL
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--envs", nargs="+", default=list(TUNERS), choices=TUNERS)
+    parser.add_argument("--level", type=float, default=LEVEL, choices=GAIN_LEVELS)
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
+    LEVEL = args.level
     for name in args.envs:
         print(name)
         if not args.check or args.write:

@@ -222,12 +222,24 @@ class EnvSpec:
     def has_pid(self) -> bool:
         return self.make_pid is not None
 
-    def make_pid_controller(self):
+    def make_pid_controller(self, sensor_noise_scale: float | None = None):
         """The scored PID as a pure ``Controller``: ``.act`` traces under
-        ``jit``/``vmap``, ``.host()`` is what ``make_pid()`` returns."""
+        ``jit``/``vmap``, ``.host()`` is what ``make_pid()`` returns.
+
+        ``sensor_noise_scale`` takes the gains tuned at that noise level. None
+        and 1 mean the shipped gains, and a level with no stored gains raises
+        (``provenance.level_gains``)."""
         if not self.has_pid:
             raise NotImplementedError(self.baselines_note or "no PID ships")
-        return self.make_pid.controller()
+        from target_gym.provenance import level_gains
+
+        stored = level_gains(self, sensor_noise_scale)
+        if stored is None:
+            return self.make_pid.controller()
+        from target_gym.experts.pid import gains_from
+
+        with gains_from(stored):
+            return self.make_pid.controller()
 
     @property
     def has_mpc(self) -> bool:

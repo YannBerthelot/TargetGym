@@ -15,6 +15,7 @@ tuned by ``scripts/tune_pid.py`` (relay autotuning, AMIGO rule by default) and
 read from ``src/target_gym/data/pid_gains.json``.
 """
 
+import contextlib
 import json
 import pathlib
 
@@ -51,9 +52,26 @@ def load_gains() -> dict:
     return _gains_cache
 
 
-def gain(env: str, key: str, default: float) -> float:
-    """Gain ``key`` of task ``env`` from the tuned gains, or ``default``."""
-    return float(load_gains().get(env, {}).get(key, default))
+def gain(env: str, key: str, default: float | None = None) -> float:
+    """Gain ``key`` of task ``env`` from the tuned gains. A missing key raises
+    (expert-protocols-process.md, D8): ``default`` is read by nothing, and the
+    literals call sites still pass leave with the protocols' rewrite."""
+    stored = load_gains().get(env, {})
+    if key not in stored:
+        raise KeyError(f"no gain {key!r} for {env!r} in the gains store")
+    return float(stored[key])
+
+
+@contextlib.contextmanager
+def gains_from(stored: dict):
+    """``load_gains()`` returns ``stored`` inside the block, for building a
+    controller on one noise level's gains (``provenance.level_gains``)."""
+    global _gains_cache
+    kept, _gains_cache = _gains_cache, stored
+    try:
+        yield
+    finally:
+        _gains_cache = kept
 
 
 # ---------------------------------------------------------------------------

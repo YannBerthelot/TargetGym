@@ -11,8 +11,13 @@ The owner made the design choices on 2026-11-05, listed under
 [Decided](#decided). The recipes are accepted only after the
 [measurement](#measure-first) has been read on the fixed plants.
 [industrial-fixes.md](industrial-fixes.md) reversed noise decisions 1, 5 and 7 after
-this was written: analysers now go stale, so N8 must allow for dead time and true
-sampling, and PR 9 of that plan applies these amendments with its own.
+this was written, so analysers now go stale. N8 below allows for that, and
+[What dead time changed](#what-dead-time-changed) says what moved. PR 9 of that plan
+applies these amendments with its own.
+
+The machinery is built: `target_gym.identification` holds N1 to N8, and gains are
+stored by level. `first_order` runs all of it. The other recipes have lost the twin
+run and take the rest in PR 9, once their plants are fixed.
 
 ## Why
 
@@ -53,13 +58,57 @@ The research data is in `docs/research/noise_tuning_practice.json` in ExpertBenc
 | N5 | New | PV filter sized so noise-driven output stays inside the actuator's dead band: `Kc NB sqrt(a/(2-a)) <= DB`, capped at 10% of `Ti` | derived | Until the cap |
 | N6 | C4, C7 | `theta_eff = theta + Tf`, then recompute. Fixed pass count | read | Through N5 |
 | N7 | C6 | If output noise still exceeds `DB` at the cap, lower `Kc` to `DB / NB_f`, never below Skogestad's `Kc,min` | derived | Yes: `Kc` scales as 1/noise |
-| N8 | New | Analyser loops count updates, not steps, and act only on moves past `NB` | derived | Yes |
+| N8 | New | Analyser loops count updates, not steps. The delay is read on the update grid and is never under the dead time, and the half sample is the analyser's cycle. They act only on moves past `NB`, and after a move wait for the first update that can show it | derived | Yes |
 | N9 | Aircraft 3.5 | The bearing-only estimator becomes a real two-state filter, set from measurement and process noise | derived | Yes: lag about 9, 16, 28 s |
 
 Fixed lengths that no source gives, such as the baseline, the persistence count
 and the pass count, are set here before any run and labelled ours. N3 cancels
 part of N1 and N4 wherever it binds, because the step grows with noise. That is
 what an engineer does, so it stays.
+
+## Fixed values
+
+Set before any run. `first_order` and a synthetic analyser are the only plants these
+have met.
+
+| Value | Set to | Label |
+|---|---|---|
+| Hold before the baseline | One episode, the time the expert had to settle | ours |
+| Baseline | 60 samples, the first measurement's window, and at least 8 updates | ours |
+| Persistence count | 3 updates | ours |
+| Pass count in N6 | 3 | ours |
+| Filter cap in N5 | 10% of the first pass's `Ti` | read |
+| Pooling in N2 | Every loop, not only slow analysers | ours |
+| Delay on an update grid | The middle of what one update can tell, at least the dead time | ours |
+| C5's noise test | Median unless spread > 1.5 (m + s) / (m - s), with `m` the median gain and `s` its median 3 sigma | ours |
+
+N4's integrating term is read as a correction: the delay is the band exit, less the
+`NB / (2 |k'| du)` a ramp spends inside the band. The source states that figure as
+how much noise lengthens the read, and gives the first-order form the same way
+without correcting it, so a first-order delay stays as read.
+
+## What dead time changed
+
+R12 in the sourcing said to add no analyser delay, because readings stayed current.
+That no longer holds. Now that a reading reports `h (t // h) - D`:
+
+- **The delay needs both figures.** A test on an update grid brackets the delay
+  within one update, and it can read `D` only if the step lands just before an
+  update. The bump test places it there. With `D` equal to the cycle `h`, the loop
+  sees `D + h / 2`, the 1.5 cycles of analyser practice. Using the plant step as
+  C4's `h` would lose half a cycle.
+- **N8's threshold alone stacks moves.** A move made now cannot show for `D` plus
+  up to one update, so updates in between still report the old error. `gate` gives
+  the update to wait for: the second one, on a chromatograph with `D = h`.
+- **Windows are in updates.** The kiln's supervisory test is 2 h. With hourly lime
+  60 minutes old, it would see one update that can show anything, so it needs its
+  window set in updates in PR 9.
+- **An expert may not settle.** On a stale reading the shipped expert can cycle, so
+  holding its last command starts a transient that a baseline would read as noise.
+  This is why the bump test holds for an episode first. The expert it settles on is
+  still the shipped one, so PR 9 should look at where each late task's test starts.
+- **Sensor lag needs no term.** It is dynamics the step shows, and the fit takes it
+  into the model's lag.
 
 ## Rejected
 
@@ -102,13 +151,23 @@ The plants change under [industrial-fixes.md](industrial-fixes.md), so measure a
 after its plant PRs. Step, filter and gain tables wait for that. Accept the recipes
 only after reading them.
 
+The measurement stays in ExpertBench, at `analysis/noise_band/measure.py`, because it
+is a study, and the recipes read their own band through `identification.noise_band`.
+It imports only `jax`, `numpy` and `target_gym`, so PR 9 runs it from a TargetGym
+checkout. It has three limits now: held noise needs pooled seeds, a held
+`unstable_cstr` runs away, and it records straight after the hold, so it reads a
+cycling expert's transient as noise. For those tasks, read `Read.nb` from
+`single_run`, or `Plant.bump` with a loop closed, at each level instead.
+
 ## Gains per noise level
 
 - Each level's recipe output is stored separately, so the scored gains at 1× are
   not touched by a study at another level.
 - `make_expert(name)` keeps its meaning, and takes the level when one is asked
-  for.
+  for. Level 1 is `pid_gains.json`, and a level with no stored gains raises.
 - A level's gains are part of the expert fingerprint for that level.
+- Each other level has its own file, `pid_gains_2x.json` for level 2, and must name
+  every task it serves, even one whose gains stay in code or do not change.
 
 ## Known limits
 
@@ -117,6 +176,12 @@ only after reading them.
 - The dead band comes from valve practice. Non-valve actuators (pumps, kiln
   feeder, converter, compressor drive) have no sourced figure, so N5 and N7 do not
   apply to them.
+- R4's pulse test did not enter this amendment. The twin removed load drift on the
+  kiln, boiler and distillation tests, and one step does not, so those fits carry it.
+- A level's gains pass the expert's own build guard. `unstable_cstr` and
+  `compressor_surge` raise on gains their guard refuses, until D2 makes the guards
+  reports.
+- No expert reads `Tf` or a gate yet. The recipes size them and PR 9 wires them in.
 - Sources were read through automated fetches, and several core references could
   not be opened: Seborg, Shinskey's book, Cooper's book, Astrom and Hagglund's
   books, ISA-TR5.9, the NREL report and the full G36 text.
