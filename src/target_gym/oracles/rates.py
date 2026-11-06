@@ -62,6 +62,11 @@ class RateLimit(NamedTuple):
         """The raw action that moves ``held`` by ``v`` of the limit in one step."""
         return held + v * self.travel / self.closes
 
+    def move(self, held, command):
+        """The rate the env gives ``command`` from ``held``: the plan's move for
+        a step someone else commanded, such as the expert's at a K5 probe."""
+        return jnp.clip(self.closes * (command - held) / self.travel, -1.0, 1.0)
+
     def rows(self, held, v, steps):
         """Rows >= 0, affine in ``held`` and ``v``: the last command of a ramp
         held ``steps`` steps, the furthest out, stays in the box."""

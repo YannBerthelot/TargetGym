@@ -121,6 +121,20 @@ def test_the_rows_hold_exactly_while_every_command_of_the_ramp_is_in_the_box(
 
 
 @pytest.mark.parametrize("name", FIGURES)
+def test_any_command_has_the_move_that_lands_where_the_env_lands(name):
+    with enable_x64():
+        env, params, rate = _plant(name)
+        rng = np.random.default_rng(2)
+        for _ in range(50):
+            held = jnp.asarray(rng.uniform(-1.0, 1.0, rate.travel.shape))
+            command = jnp.asarray(rng.uniform(-1.0, 1.0, rate.travel.shape))
+            landed = rate.reached(held, rate.move(held, command))
+            np.testing.assert_allclose(
+                landed, _actuate(env, params, held, command), atol=1e-12
+            )
+
+
+@pytest.mark.parametrize("name", FIGURES)
 def test_every_path_the_actuator_can_take_in_a_step_is_a_rate_plan(name):
     """Any command in the box, from any position in it: the move that lands
     where the env lands is in [-1, 1] and its rows hold, so a hold of one step

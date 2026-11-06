@@ -592,3 +592,34 @@ for T1r bound increments, not a held rate.
 A move's rows no longer bind past the plan. Its held move there is pinned to the last
 planned one, so a row left on it dragged that move off its bound, for a stage nothing
 is costed on: from 1 to 0.5 on a hand-derived ramp (`tests/oracles/test_shooting.py`).
+
+**ROSCO's table.** #157 replaced the analytic Cp with a bilinear lookup, which kinks
+at every node. A cell's interpolation is a clip of the coordinate to that cell, so the
+planner reads the table through one K2 clip per cell, one site per axis, K4's scale
+being a cell. At width 0 that is the lookup, held at its edges. A clip's gap at a node
+is w log 2 in cells, which moves Cp by that times the jump in the slope there, so K5's
+delta is on Cp in units of that jump. K5 gives 0.1 cell on pitch and 0.01 cell on
+tip-speed ratio.
+
+**The wind's torque** joins its pitch: its rate limit is inside the right-hand side,
+so it takes T1r and a T5 site, at 30 N m/s on a scale of 30 kN m/s.
+
+**The battery's half-cycles (`half_cycle`, #156).** Section 5.4 has no row for them,
+and no class fits. A half-cycle's peak is a running max, and its turn is a jump, in
+what it charges and in its anchor. Written for the owner's review:
+
+- the peak's growth is a second move, >= 0, and a row keeps the peak past the charge
+  on every visited state, so a plateau at the peak costs what the env charges (T2:
+  an epigraph). A softplus would add its gap every step, as on the glass blanket;
+- a turn cannot be crossed by Newton, so each is fixed for the solve where the planned
+  signal reverses, once a reference following it has swung past the hysteresis (X, by
+  the solve's start). This is the one part with no source or class behind it. A plan
+  that turns only there costs what the env charges, to rounding (tested through a
+  turn). A plan that turns elsewhere has a gap, which K8 reports;
+- what a new half-cycle jumps to at the hysteresis blends by K2's logistic, though its
+  two pieces do not join. K4's scale is the hysteresis, and K5 takes the first rung,
+  since no tracked output moves.
+
+The plan cannot find a sawtooth that restarts a half-cycle by swinging back past the
+hysteresis, because it cannot place a turn. Whether the env pays for one is a separate
+question for the plant.

@@ -1,19 +1,26 @@
-"""The battery's oracle: the signal's next value, inside the cycle-depth bound.
+"""The battery's oracle, on the shared solver.
 
 Where the charge window does not bind, its claim is that it leaves only the
 regulation innovation. With the noise switched off it tracks the target to
 float32 rounding, which pins the block it reads (the one the step is scored
 against, ``dispatch_block(t + 1)``). With the noise on, its mean error is the
 closed-form floor ``e_floor``. Levels of 0.1 MW keep the window out of the way.
+
+Its half-cycles, from the env's ``half_cycle``: a half-cycle turns where a
+reference following the planned signal reverses, once it has swung past the
+hysteresis, and the heading after a turn points where the charge then goes. A
+plan that turns only there costs what the env charges, to rounding.
 """
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from target_gym import registry
-from target_gym.energy.battery.oracle import ScheduleFeedforward
+from target_gym.energy.battery.oracle import half_cycles
 from target_gym.experts.mpc import plan_params
+from target_gym.oracles.controller import Oracle, enable_x64, float64
 
 
 def _errors(params, seed):
@@ -34,11 +41,110 @@ def _errors(params, seed):
     return np.array(errors)
 
 
-def test_the_registry_builds_the_feedforward():
+def test_the_registry_builds_the_shared_oracle():
     spec = registry.get("battery")
     oracle = spec.make_mpc(spec.make_env(), spec.make_test_params())
-    assert isinstance(oracle, ScheduleFeedforward)
-    assert oracle.solver_report() == {}
+    assert isinstance(oracle, Oracle)
+
+
+def _reference_signal(mw):
+    """A signal at each block's level, ``mw`` MW for 720 steps a block."""
+    return jnp.concatenate([jnp.full(720, level * 1e6) for level in mw])
+
+
+def _cycles(mw, soc=0.5, anchor=0.5, peak=0.5):
+    p = registry.get("battery").make_test_params()
+    with enable_x64():
+        signal = _reference_signal(mw).astype(jnp.float64)
+        turns, heading = half_cycles(
+            float64(p), *(jnp.float64(v) for v in (soc, anchor, peak)), signal
+        )
+    return np.asarray(turns), np.asarray(heading)
+
+
+def test_a_half_cycle_from_rest_starts_at_once_and_heads_with_the_charge():
+    """Discharging at 0.5 MW from rest: charge falls, so the first half-cycle
+    heads down from step 0 and never turns."""
+    turns, heading = _cycles([0.5, 0.5])
+    assert np.flatnonzero(turns).tolist() == [0]
+    assert (heading == -1.0).all()
+
+
+def test_a_half_cycle_turns_where_the_signal_reverses():
+    """Down for an hour, up for the next: 0.515 MW x 1 h on 1692 kWh moves the
+    charge 0.30, far past the hysteresis, so the turn is at step 720, leaving
+    the first at the new level, which leaves the peak that 720 steps at the old
+    one reached, and the heading is up from there."""
+    turns, heading = _cycles([0.5, -0.5])
+    assert np.flatnonzero(turns).tolist() == [0, 720]
+    assert (heading[:720] == -1.0).all() and (heading[720:] == 1.0).all()
+
+
+def test_a_swing_inside_the_hysteresis_is_not_a_turn():
+    """Down, up by 0.0002 MW-h short of 5 % of the charge, down again: the
+    hysteresis is 0.05, 84.6 kWh. An hour at -0.07 MW with the 15 kW load is
+    55 kWh, 0.033 of charge, so the half-cycle runs on through it."""
+    turns, heading = _cycles([0.3, -0.07, 0.3])
+    assert np.flatnonzero(turns).tolist() == [0]
+    assert (heading == -1.0).all()
+
+
+def test_a_reference_resting_at_the_window_turns_as_it_leaves():
+    """Down at 0.8 MW from 0.2: the charge reaches 0.05 in under 16 min and rests
+    there until the signal reverses at step 720. The turn is there, not where it
+    first reached the window."""
+    turns, _ = _cycles([0.8, -0.8], soc=0.2, anchor=0.2, peak=0.2)
+    assert np.flatnonzero(turns).tolist() == [0, 720]
+
+
+def test_a_retreat_under_way_turns_at_the_first_step():
+    """Peak 0.6, anchor 0.3, charge already 0.02 back from the peak and still
+    falling: the half-cycle that rose to 0.6 is over, heading down from step 0."""
+    turns, heading = _cycles([0.5], soc=0.58, anchor=0.3, peak=0.6)
+    assert np.flatnonzero(turns).tolist() == [0]
+    assert heading[0] == -1.0
+
+
+@pytest.mark.medium
+def test_a_plan_that_turns_where_the_reference_does_costs_what_the_env_charges():
+    """Levels +0.5 and -0.5 MW over 1440 steps, the signal followed with the
+    noise off, the peak grown exactly to the charge. Env and model then run the
+    same half-cycles, so K8's replay matches to float64 rounding, turn included.
+    The gap is relative to a reward of order 10: 1e-10 is many decades under
+    what one missed half-cycle would leave, about 133 d^2.03 dollars."""
+    spec = registry.get("battery")
+    env = spec.make_env()
+    params = spec.make_test_params().replace(max_steps_in_episode=1440)
+    plan = plan_params(spec, params)
+    oracle = spec.make_mpc(env, plan)
+    with enable_x64():
+        _, state = env.reset_env(jax.random.PRNGKey(3), plan)
+        st = float64(state).replace(
+            soc=jnp.float64(0.6),
+            soc_anchor=jnp.float64(0.6),
+            soc_peak=jnp.float64(0.6),
+            regulation=jnp.float64(0.0),
+            dispatch_schedule=jnp.array([0.5e6, -0.5e6, 0.0, 0.0, 0.0]),
+        )
+        m, p = oracle.model, oracle.params
+        d = {
+            "task": m.data(st),
+            "end": 1440,
+            "widths": jnp.zeros_like(jnp.asarray(oracle.widths)),
+        }
+        signal, turns, heading = d["task"]
+        grows = 2.0 * p.power_max * p.delta_t / (p.pack_kWh * 3.6e6)
+        ahead = jax.jit(lambda x, u, t: m.step(d, x, u, t)[0])
+        x, moves = m.state_x(st), []
+        for t in range(1440):
+            u = jnp.array([(signal[t] + p.aux_load) / p.power_max, -1.0])
+            base = x[0] if bool(turns[t] > 0) else x[4]
+            growth = max(float(heading[t] * (ahead(x, u, t)[0] - base)), 0.0)
+            u = u.at[1].set(2.0 * growth / float(grows) - 1.0)
+            x, _ = ahead(x, u, t), moves.append(u)
+        cert = oracle._certify(d, st, m.state_x(st), jnp.stack(moves), 1440)
+    assert not bool(cert["replay_trip"])
+    assert float(cert["replay_gap"]) <= 1e-10
 
 
 def _unbound(**fields):
@@ -49,6 +155,7 @@ def _unbound(**fields):
     )
 
 
+@pytest.mark.large
 def test_it_never_trips_where_following_exactly_would():
     """The default window, on seeds where the pack runs out under exact following."""
     params = registry.get("battery").make_test_params()
@@ -56,6 +163,7 @@ def test_it_never_trips_where_following_exactly_would():
         _errors(params, seed)  # asserts no trip
 
 
+@pytest.mark.large
 def test_without_noise_it_tracks_every_step_to_rounding():
     params = _unbound(dispatch_noise_std=0.0)
     # float32 rounding leaves a few W; reading the wrong block misses by the jump
@@ -65,6 +173,7 @@ def test_without_noise_it_tracks_every_step_to_rounding():
         assert _errors(params, seed).max() < tolerance
 
 
+@pytest.mark.large
 def test_with_noise_it_holds_the_closed_form_floor():
     params = _unbound()
     mean_error = np.mean([_errors(params, seed).mean() for seed in range(3)])
