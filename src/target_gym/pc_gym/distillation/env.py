@@ -8,25 +8,26 @@ Model
 -----
 A 40-tray binary column with a total condenser and a reboiler, 41 equilibrium
 stages in all, indexed 1 = reboiler ... 41 = condenser, feed on stage 21.
-Constant molar flows, constant relative volatility, equilibrium on every
-stage, no vapour holdup.
+Constant molar overflow, constant relative volatility, equilibrium on every
+stage, no vapour holdup, and tight level loops on the reboiler and condenser.
 
 Per-stage component balance, with vapour-liquid equilibrium
 ``y = alpha x / (1 + (alpha-1) x)``::
 
-    tray i :  M dx_i/dt = L_{i+1} x_{i+1} + V y_{i-1} - L_i x_i - V y_i
+    tray i :  d(M_i x_i)/dt = L_{i+1} x_{i+1} + V y_{i-1} - L_i x_i - V y_i
     reboiler: M dx_1/dt = L_2 x_2 - V y_1 - B x_1
     condenser:M dx_N/dt = V y_{N-1} - (L + D) x_N
 
-Saturated liquid feed, so the liquid rate below the feed is ``L + F`` while the
-vapour rate is constant throughout. ``D = V - L`` and ``B = L + F - V`` follow
-from the overall balance.
+Tray holdup moves with the liquid through it, ``L_i = L0_i + (M_i - M0) / tau_L``,
+so a reflux change takes 39 lags to reach the reboiler. Saturated liquid feed, so
+steady liquid below the feed is ``L + F``, while vapour is constant throughout.
+``D = V - L`` and ``B = L_2 - V`` follow from the level loops.
 
 Why this is a hard target MDP
 -----------------------------
 * **Severe input interaction.** At the nominal high-purity operating point the
-  steady-state gain matrix has an RGA around 50 and a condition number around
-  200: reflux and boilup push both compositions almost the same way, so the
+  steady-state gain matrix has an RGA of 36 and a condition number of 145:
+  reflux and boilup push both compositions almost the same way, so the
   useful direction is a small difference between two large, nearly-cancelling
   effects. This is the textbook example of an ill-conditioned plant.
 * **Slow and high-order.** 41 states with a dominant time constant of hours,
@@ -51,6 +52,7 @@ from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
 N_STAGES = 41  # 40 trays + reboiler + condenser, minus shared indexing
 N_FEED = 21  # feed stage, counting the reboiler as stage 1
+TRAYS = jnp.arange(2, N_STAGES)  # stage numbers of the 39 trays, bottom first
 
 # Ornstein-Uhlenbeck feed-composition disturbance: mean-reversion rate (1/min).
 # 1/theta ~ 500 min, a few dominant time constants, so the feed drifts as a
@@ -75,6 +77,8 @@ class DistillationParams(EnvParams):
     alpha: float = 1.5  # relative volatility
     M_tray: float = 0.5  # kmol tray holdup
     M_drum: float = 0.5  # kmol condenser / reboiler holdup
+    tau_L: float = 0.063  # min, liquid lag per tray (Skogestad's taul)
+    L_nominal: float = 2.706  # kmol/min, the reflux at which M_i = M_tray
 
     # ---- Feed ----
     F: float = 1.0  # kmol/min
@@ -85,10 +89,12 @@ class DistillationParams(EnvParams):
     zF_max: float = 0.60
 
     # ---- Manipulated variables (LV configuration) ----
-    L_min: float = 2.30
-    L_max: float = 3.10
-    V_min: float = 2.80
-    V_max: float = 3.60
+    # Wide enough to hold every target in the box at reset feeds within two sigma:
+    # (0.995, 0.005) needs L 3.35 and V 3.85, (0.98, 0.02) L 2.27 and V 2.73.
+    L_min: float = 2.20
+    L_max: float = 3.40
+    V_min: float = 2.70
+    V_max: float = 3.90
     # Distillate is D = V - L; clipped so the overall balance stays physical at
     # the corners of the action box, where V - L could otherwise go negative.
     D_min: float = 0.10
@@ -174,6 +180,8 @@ PARAM_UNITS = {
     "alpha": "-",
     "M_tray": "kmol",
     "M_drum": "kmol",
+    "tau_L": "min",
+    "L_nominal": "kmol/min",
     "F": "kmol/min",
     "zF_nominal": "-",
     "qF": "-",
@@ -207,6 +215,22 @@ PARAM_UNITS = {
 }
 
 
+def steady_liquid(L, params: DistillationParams):
+    """Liquid leaving each tray, bottom tray first, at a steady reflux ``L``."""
+    return jnp.where(TRAYS > N_FEED, L, L + params.qF * params.F)
+
+
+def tray_holdup(liquid, params: DistillationParams):
+    """Tray holdups from their liquid flows, Skogestad's eq. 47 with lambda = 0."""
+    nominal = steady_liquid(params.L_nominal, params)
+    return params.M_tray + params.tau_L * (liquid - nominal)
+
+
+def _nominal_liquid():
+    p = DistillationParams()
+    return steady_liquid(p.L_nominal, p)
+
+
 @struct.dataclass
 class DistillationState(EnvState):
     x: jnp.ndarray  # (N_STAGES,) liquid composition -- interior stages HIDDEN
@@ -218,6 +242,8 @@ class DistillationState(EnvState):
     target_xB: float
 
     actuator_held: jax.Array = actuator_field(2)
+    # Liquid leaving each tray, ordered as ``steady_liquid`` (HIDDEN).
+    liquid: jax.Array = struct.field(default_factory=_nominal_liquid, kw_only=True)
 
 
 def vle(x, params: DistillationParams):
@@ -233,34 +259,39 @@ def flows(L, V, params: DistillationParams):
 
 
 def compute_velocity(position, action, zF, params: DistillationParams):
-    """Stage-wise component balances. ``action`` is ``(L, V)`` in physical units."""
+    """Stage balances and tray hydraulics, as Skogestad's ``colamod.m``.
+
+    ``position`` is the 41 compositions, then the 39 tray flows in the order of
+    ``steady_liquid``. ``action`` is ``(L, V)`` in physical units.
+    """
     p = params
-    x = position
+    x, liquid = position[:N_STAGES], position[N_STAGES:]
     L, V = action
-    D, B = flows(L, V, p)
+    D, _ = flows(L, V, p)
+    # The reboiler's level loop passes on what arrives, so bottoms follows the
+    # cascade, within the range ``flows`` keeps D in.
+    B = jnp.clip(liquid[0] - V, p.F - p.D_max, p.F - p.D_min)
     y = vle(x, p)
 
-    # Constant molar flows: a saturated-liquid feed adds F to the liquid below
-    # the feed stage, while the vapour rate is the same throughout.
-    stage = jnp.arange(1, N_STAGES + 1)
-    L_stage = jnp.where(stage > N_FEED, L, L + p.qF * p.F)
+    # Interior trays: liquid down from above, vapour up from below, and the
+    # feed into the liquid on stage N_FEED. Vapour is the same throughout.
+    liquid_in = jnp.append(liquid[1:], L)
+    feed = TRAYS == N_FEED
+    dM = liquid_in - liquid + feed * p.qF * p.F
+    dMx = (
+        liquid_in * x[2:]
+        + V * y[:-2]
+        - liquid * x[1:-1]
+        - V * y[1:-1]
+        + feed * p.F * zF
+    )
+    dx_trays = (dMx - x[1:-1] * dM) / tray_holdup(liquid, p)
 
-    # Interior trays: liquid down from above, vapour up from below.
-    liquid_in = L_stage[2:] * x[2:]
-    vapour_in = V * y[:-2]
-    liquid_out = L_stage[1:-1] * x[1:-1]
-    vapour_out = V * y[1:-1]
-    dx_trays = (liquid_in + vapour_in - liquid_out - vapour_out) / p.M_tray
-
-    dx_reboiler = (L_stage[1] * x[1] - V * y[0] - B * x[0]) / p.M_drum
+    dx_reboiler = (liquid[0] * x[1] - V * y[0] - B * x[0]) / p.M_drum
     dx_condenser = (V * y[-2] - (L + D) * x[-1]) / p.M_drum
 
-    dx = jnp.concatenate(
-        [jnp.array([dx_reboiler]), dx_trays, jnp.array([dx_condenser])]
-    )
-    # Feed enters the liquid on stage N_FEED.
-    dx = dx.at[N_FEED - 1].add(p.F * zF / p.M_tray)
-    return dx, None
+    velocity = [jnp.array([dx_reboiler]), dx_trays, jnp.array([dx_condenser])]
+    return jnp.concatenate(velocity + [dM / p.tau_L]), None
 
 
 @partial(jax.jit, static_argnames=["integration_method"])
@@ -273,12 +304,12 @@ def compute_next_state(
 ):
     """``action_raw`` is ``[L_raw, V_raw]`` in [-1, 1].
 
-    The default 16 substeps are a stability requirement, not a refinement.
-    Tray holdup M = 0.5 against flows of ~3 gives a tray time constant of
-    ~0.17 min, so the fastest eigenvalue is |lambda| ~ (L+V)/M ~ 11.8 /min.
-    RK4 is stable only for h*|lambda| < 2.78, and at delta_t = 1 min that
-    needs h <= 0.235 min. Fewer substeps do not merely lose accuracy -- the
-    profile saturates to 0/1 within a single step.
+    The default 16 substeps are a stability requirement, not a refinement. The
+    stiffest composition mode is |lambda| = 32.5 /min at the nominal point and
+    37.6 /min across the flow box, and the tray flows lag at 1 / tau_L = 15.9
+    /min, inside that. RK4 is stable only for h*|lambda| < 2.78, and 16 substeps
+    give 2.35 at worst. Fewer substeps do not merely lose accuracy -- the
+    profile saturates to 0/1 within a few steps.
     """
     p = params
     L = convert_raw_action_to_range(
@@ -302,18 +333,19 @@ def compute_next_state(
     )
 
     _compute_velocity = partial(compute_velocity, action=(L, V), zF=zF, params=params)
-    new_x, _ = integrate_dynamics(
-        positions=state.x,
+    new_position, _ = integrate_dynamics(
+        positions=jnp.concatenate([state.x, state.liquid]),
         delta_t=p.delta_t,
         compute_velocity=_compute_velocity,
         method=integration_method,
     )
     # Compositions are mole fractions; clip guards the integrator, not the
     # physics (a converged solution never leaves [0, 1]).
-    new_x = jnp.clip(new_x, 0.0, 1.0)
+    new_x = jnp.clip(new_position[:N_STAGES], 0.0, 1.0)
+    liquid = new_position[N_STAGES:]
 
     return (
-        state.replace(x=new_x, zF=zF, L=L, V=V, time=state.time + 1),
+        state.replace(x=new_x, liquid=liquid, zF=zF, L=L, V=V, time=state.time + 1),
         None,
     )
 
