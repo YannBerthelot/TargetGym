@@ -92,15 +92,16 @@ def test_the_scorer_starts_a_cycle_at_every_scheduled_setpoint(name, block, n_ch
 
 
 @pytest.mark.large
-def test_each_step_of_a_compressor_ramp_starts_a_cycle():
-    """N_SETPOINT_BLOCKS = 4 blocks of 300 steps, each after the first opening
-    with a 100-step ramp. The target at ``time`` t + 1 first differs at t = 300,
-    and a cycle holding scored steps starts only as a ramp ends."""
+def test_a_compressor_ramp_starts_one_cycle():
+    """N_SETPOINT_BLOCKS = 4 blocks of 300 steps, the last three opening on a
+    100-step ramp. The target at ``time`` t + 1 first moves at t = 300."""
     spec = REGISTRY["compressor_surge"]
     p = spec.make_test_params()
-    ep = E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=100)
-    expected = [c + k for c in (300, 600, 900) for k in range(100)]
-    np.testing.assert_array_equal(np.flatnonzero(ep.target_change), expected)
+    for seed in (100, 101):
+        ep = E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=seed)
+        np.testing.assert_array_equal(
+            np.flatnonzero(ep.target_change), [300, 600, 900], err_msg=f"seed {seed}"
+        )
 
 
 @pytest.mark.large

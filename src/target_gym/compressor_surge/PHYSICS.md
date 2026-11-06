@@ -336,8 +336,8 @@ A step cost the pair 94.6 to 99.6 % of its tracking cost in the 10 s after it
 (mean 98.3 %, seeds 200 to 209, past the burn-in, measured), because a move the drive
 cannot follow is paid by everyone and the ranking read the slew. On the same
 schedules ramps take the pair's tracking cost past the burn-in from 5.8e5 to 2.6e4,
-and its hold stays about where it was, 22.6 and 26.7 per step (seeds 100 to 109,
-measured). The setpoint moves because the hardness depends on it. With the setpoint held at 24 kPa the chaser at bias
+and leave its hold where it was, 22.6 and 22.1 per step (seeds 100 to 109, measured).
+The setpoint moves because the hardness depends on it. With the setpoint held at 24 kPa the chaser at bias
 0.3 trips in none of 256 episodes, against 11.3 % with the steps, and G10
 costs 1.76e5 per episode against 5.45e5 (measured, `--sensitivity`,
 section 6). The live setpoint and demand are functions of `block_clock`,
@@ -355,10 +355,9 @@ measured, `--section reach`).
 
 **Switch step.** The reward and the observation of one state use the same
 live setpoint, and a step on a ramp is scored against where the ramp has reached
-(`test_live_target_follows_the_block_clock`). The scorer counts each ramp step as a
-change, so a ramp's steps sit in one-step cycles with no hold, and the hold starts
-100 steps after the ramp ends. `test_each_step_of_a_compressor_ramp_starts_a_cycle`
-pins that, and PR 8 owns whether a ramp should count as one move.
+(`test_live_target_follows_the_block_clock`). The scorer reads a ramp as one move, at
+its start (`test_a_compressor_ramp_starts_one_cycle`), so the 100-step fixed settle
+is the ramp itself and the hold opens as the ramp ends.
 
 **Trip and restart.** The plant trips when the soft minimum of Phi over a
 step's substeps falls below the episode's line, 2W (1 + `surge_offset`). The map's
@@ -914,7 +913,7 @@ controller knows which way the error runs.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 7 | 20 |
+| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 7 | 22 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

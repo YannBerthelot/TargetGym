@@ -130,7 +130,11 @@ without losing rotor-speed regulation.
 (ours), so the target steps three times per episode. The levels ahead are hidden.
 It steps rather than ramps because the turbine's own torque rate is the ramp: 15 kN
 m/s at rated speed is 1.74 MW/s (derived), so the largest move, 1.5 MW, takes 0.86 s.
-A trip's restart draws a fresh schedule from its first level.
+A trip's restart draws a fresh schedule from its first level. The scorer's fixed
+settle is still 0, from when the target never moved, so a move's transient counts as
+hold until PR 8 sets it. The expert settles about 36 steps after a move and the
+oracle about 48, on training seeds 100 to 109, inside the rule of twice the settle
+per 100-step cycle.
 
 **The rotor-effective wind is hidden.** A nacelle anemometer sits in the
 rotor's own wake and is unreliable, so the controller must infer the wind from
@@ -280,7 +284,7 @@ loading and individual pitch control has nothing to act on.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `wind_turbine` | 400 | 0.25 | 100 s | 2 in [-1, 1] | 5 | 12 |
+| `wind_turbine` | 400 | 0.25 | 100 s | 2 in [-1, 1] | 5 | 17 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
