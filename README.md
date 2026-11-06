@@ -240,14 +240,12 @@ Controller structure is chosen per plant:
   is the pairing industrial anti-surge systems use, and the recycle valve gets
   a loop of its own because the margin it protects is not a tracked output.
 
-The MPC slot holds the best controller each task allows: on nine process and
-industrial plants a second-order planner (iterative LQR) through the JAX
-dynamics, on the aircraft, the distillation column and the boiler drum
-gradient-based planning through them,
-cross-entropy sampling for the cement kiln, on the battery a feedforward of the
-scheduled dispatch level, which is the best causal action there, on the wind
-turbine a feedback law (generator torque solved so that the next step's power
-meets the target, and pitch from the PID with its command slew capped), and on
+The MPC slot holds the best controller each task allows: on eleven process and
+industrial plants a shared interior-point planner (`target_gym.oracles`), which
+plans the episode's reward on the plant with its noise zeroed, on the pH plant
+and the reactor a second-order planner (iterative LQR) through the JAX
+dynamics, on the aircraft and the distillation column gradient-based planning
+through them, and on
 the patrol tasks the lead's own autopilot flown on the follower's state with a
 short residual planner on top. Solver convergence is recorded alongside every
 result.

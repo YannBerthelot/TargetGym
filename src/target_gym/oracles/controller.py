@@ -56,7 +56,11 @@ class TaskModel(NamedTuple):
     sites') and ``end`` (the steps the plan covers). ``move_rows(x, u,
     steps)``: rows >= 0 bounding each move from its stage's state over a
     hold of ``steps`` task steps (T1r, ``StageModel``), and
-    ``move_scale(steps)`` each move's reach over that hold."""
+    ``move_scale(steps)`` each move's reach over that hold. A reward not in
+    floors gives ``tie_budget``, ``TIE_BUDGET`` in its units. A plant with a
+    spare move (G12) gives ``rest(x)``, the state's distance from its resting
+    target, 1 at the edge of its limit: its square costs the plan the budget
+    over an episode spent there, and K8's replay never sees it."""
 
     nx: int
     nu: int
@@ -70,6 +74,8 @@ class TaskModel(NamedTuple):
     limits: tuple = ()
     move_rows: Callable | None = None
     move_scale: Callable | None = None
+    tie_budget: float = TIE_BUDGET
+    rest: Callable | None = None
 
 
 def float64(tree):
@@ -122,8 +128,9 @@ class Oracle:
     def __init__(self, env, params, name: str, build: Callable):
         self.env = env
         horizon = records.load_row("oracle_horizons", name)
-        self.tc, self.P = int(horizon["T_c_steps"]), int(horizon["P"])
+        self.tc = int(horizon["T_c_steps"])
         self.n_ep = episode_samples(int(params.max_steps_in_episode), self.tc)
+        self.P = min(int(horizon["P"]), self.n_ep)  # H12: never past the episode
         smoothing = records.load_row("oracle_widths", name)
         sites = smoothing["sites"].values()
         self.widths = np.array([s["width"] for s in sites], float)
@@ -134,16 +141,22 @@ class Oracle:
             # K11: each limit backed off by the planner's error on it (none
             # recorded where nothing is smoothed: the model is exact there).
             back = smoothing.get("limit_backoffs") or [0.0] * len(model.limits)
-            rows = model.move_rows
+            rows, rest = model.move_rows, model.rest
+            resting = model.tie_budget / float(params.max_steps_in_episode)
+
+            def planned(d, x, u, t):
+                x1, cost, y = model.step(d, x, u, t)[:3]
+                return x1, cost if rest is None else cost + resting * rest(x1) ** 2, y
+
             stage = StageModel(
-                step=lambda d, x, u, t: model.step(d, x, u, t)[:3], block=self.tc,
+                step=planned, block=self.tc,
                 lo=(-1.0,) * model.nu, hi=(1.0,) * model.nu, hinges=model.hinges,
                 limits=tuple(
                     q._replace(backoff=float(b)) for q, b in zip(model.limits, back)
                 ),
                 move_rows=None if rows is None else lambda x, u: rows(x, u, self.tc),
                 move_scale=None if rows is None else model.move_scale(self.tc),
-                tie=TIE_BUDGET / (model.nu * self.n_ep),
+                tie=model.tie_budget / (model.nu * self.n_ep),
             )  # fmt: skip
             self.shooting = Shooting(stage, self.P, model.nx)
         self._certify = jax.jit(self._replay)
@@ -199,8 +212,8 @@ class Oracle:
 
     def _attempt(self, d, st, x0, hold, active: int, cold: bool):
         """One solve, through K7's rungs when cold; its last plan."""
-        plans = []
-        for i, widths in enumerate(self._rungs() if cold else [self.widths]):
+        plans, rungs = [], self._rungs() if cold else [self.widths]
+        for i, widths in enumerate(rungs):
             d["widths"] = jnp.asarray(widths)
             t0 = time.perf_counter()
             if i == 0:
@@ -210,10 +223,11 @@ class Oracle:
                 plan = self.shooting.resolve(d, x0, hold, plans[-1], active=active)
             jax.block_until_ready(plan.z)
             plans.append(plan)
-            self._record(plan, time.perf_counter() - t0, d, st, x0, active)
+            seconds = time.perf_counter() - t0
+            self._record(plan, seconds, d, st, x0, active, i == len(rungs) - 1)
         return plans[-1]
 
-    def _record(self, plan, seconds, d, st, x0, active):
+    def _record(self, plan, seconds, d, st, x0, active, applies):
         c = plan.certificate
         moves = self.shooting.moves(plan)
         replay = {
@@ -223,7 +237,7 @@ class Oracle:
             "seconds": seconds, "iterations": int(c.iterations),
             "error": float(c.error), "capped": bool(c.capped),
             "failed": bool(c.failed), "violation": float(c.violation),
-            "shift": float(c.shift), "retried": False, **replay,
+            "shift": float(c.shift), "retried": False, "applies": applies, **replay,
         })  # fmt: skip
 
     def _replay(self, d, st, x0, moves, active):
@@ -265,12 +279,14 @@ class Oracle:
     def solver_report(self) -> dict:
         """The certificates summed for the record: the solves, those a cold
         retry superseded (G11), and over the rest the failed and capped ones,
-        the worst KKT error, row violation and replay gaps over the finite
-        values (a failed solve's start may hold none: -1 then), and the
-        solves whose replay tripped or whose plan crossed a dropped guard
-        (K9's flag). Mean iterations are over every solve."""
+        the worst KKT error and row violation over the finite values (a failed
+        solve's start may hold none: -1 then). Over the plans that applied,
+        K7's wider rungs left out: the worst replay gaps, and the solves whose
+        replay tripped or whose plan crossed a dropped guard (K9's flag). Mean
+        iterations are over every solve."""
         every = self.certificates
         c = [x for x in every if not x["retried"]]
+        applied = [x for x in c if x["applies"]]  # K7's wider rungs only start it
         calls = max(len(every), 1)
 
         def worst(key, solves=c):
@@ -284,8 +300,8 @@ class Oracle:
             "solver_mean_iters": round(sum(x["iterations"] for x in every) / calls, 1),
             "solver_max_error": worst("error", [x for x in c if not x["failed"]]),
             "solver_max_violation": worst("violation"),
-            "solver_max_replay_gap": worst("replay_gap"),
-            "solver_max_output_gap": worst("output_gap"),
-            "solver_replay_trips": sum(x["replay_trip"] for x in c),
-            "solver_guard_flags": sum(x["guard_crossed"] for x in c),
+            "solver_max_replay_gap": worst("replay_gap", applied),
+            "solver_max_output_gap": worst("output_gap", applied),
+            "solver_replay_trips": sum(x["replay_trip"] for x in applied),
+            "solver_guard_flags": sum(x["guard_crossed"] for x in applied),
         }

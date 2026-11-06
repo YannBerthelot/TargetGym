@@ -1,78 +1,94 @@
-"""The oracle (the MPC slot) for the cement kiln task.
+"""The oracle (the MPC slot) for the cement kiln task, on the shared solver.
 
 Kept apart from the expert (``experts.py``) so that each has a fingerprint of
-its own (``provenance.oracle_fingerprint``): changing the oracle re-records
-only the oracle rows of this package's tasks. The shared machinery
-(GradientMPC, NewtonMPC, SamplingMPC and the v2 objective helpers) stays in
-``target_gym.experts.mpc``, which is in every oracle fingerprint.
+its own (``provenance.oracle_fingerprint``). The planner problem, by the
+smoothing protocol's inventory (docs/proposals/oracle-smoothing-protocol.md,
+section 5.4), run by ``target_gym.oracles.controller.Oracle``:
+
+- model: the env's own ``compute_velocity`` and integrator, with the raw
+  moves' clips removed and the moves bounded instead (T1), run in float64,
+  which keeps the Arrhenius terms' derivatives finite; the raw-meal feed on
+  its noise-free mean path, updated before the step as the env does;
+- objective: the free-lime tracking term as (e / e_floor)^2, exact since
+  e_tol = 0 and p = 2, and the running cost max(fuel - c_hold, 0) through
+  epigraph rows on every visited state (T2);
+- limits, elastic at the trip cost per unit (T3) and backed off by the
+  noise's reach (K11, in the widths file): each cell below T_bz_max; the
+  burning zone above T_bz_min, its max over the cells a conservative soft max
+  (K2, K3; K5's width, in the widths file); and the discharge's free lime
+  below lime_max;
+- kept: the env's clip of the two fractions after the step (env.py:477,
+  :478), exact: the hot cells sit on it, where the explicit step amplifies a
+  fraction's error a millionfold and only the clip bounds it, so it is no
+  guard to drop;
+- dropped guards (T4): the speed, gas-march and temperature guards.
+
+The trip's reset, which ``step_env`` evaluates on every step (the kiln's
+4000-step profile march), drops out of a feasible plan with the trip. The
+cold start holds the fuel and the speed where they are.
 """
 
-from target_gym.experts.mpc import (
-    SamplingMPC,
-    _is_v1,
-    _v2_objective,
-)
+import jax.numpy as jnp
+from jax.scipy.special import logsumexp
+from jax.tree_util import Partial as partial
+
+from target_gym.cement_kiln.env import FEED_OU_THETA, compute_velocity
+from target_gym.integration import integrate_dynamics
+from target_gym.oracles.controller import Oracle, TaskModel, raw_of
+from target_gym.oracles.shooting import Hinge, Limit
+from target_gym.reward import trip_cost
 
 
-def _cement_kiln_objective(state, params):
-    """Quadratic in the free-lime error, sharing the reward's minimiser.
-
-    The environment's reward clips flat once free lime is more than
-    ``lime_band`` from target -- exactly the situation the controller is called
-    on to fix -- so a quadratic that stays informative far from target is what
-    the optimiser needs.
-    """
-    err = (state.lime[-1] - state.target_lime) / params.lime_band
-    fuel = (state.fuel - params.fuel_min) / (params.fuel_max - params.fuel_min)
-    return -(err**2 + 0.02 * fuel)
+def soft_max(values, width):
+    """K2's max over a set, shifted by K3 so that it never overstates: the
+    exact max at ``width`` = 0, with the width guarded (JAX FAQ)."""
+    w = jnp.where(width > 0.0, width, 1.0)
+    smooth = w * (logsumexp(values / w) - jnp.log(values.size))
+    return jnp.where(width > 0.0, smooth, jnp.max(values))
 
 
-def make_cement_kiln_mpc(
-    env,
-    params,
-    horizon: int = 40,
-    n_samples: int = 96,
-    n_elite: int = 12,
-    n_iter: int = 32,
-    init_std: float = 0.1,
-    return_best: bool = True,
-    **kwargs,
-):
-    """Sampling (CEM) MPC for the rotary kiln.
+def kiln_model(env, p) -> TaskModel:
+    assert float(p.e_tol) == 0.0 and float(p.tracking_exponent) == 2.0
+    n = int(p.n_zones)
+    decay = 1.0 - FEED_OU_THETA * p.delta_t  # the deviation's mean per step
 
-    Gradient-free by necessity, not preference -- see ``SamplingMPC`` for the
-    measured reason.
+    def step(d, x, u, t):
+        target, deviation = d["task"]
+        fuel = p.fuel_min + 0.5 * (u[0] + 1.0) * (p.fuel_max - p.fuel_min)  # T1
+        rpm = p.rpm_min + 0.5 * (u[1] + 1.0) * (p.rpm_max - p.rpm_min)
+        meal = p.raw_meal_nominal + deviation * decay ** (t + 1)
+        x1, _ = integrate_dynamics(
+            positions=x, delta_t=p.delta_t, method=env.integration_method,
+            compute_velocity=partial(
+                compute_velocity, action=(fuel, rpm), raw_meal=meal, params=p
+            ),
+        )  # fmt: skip
+        x1 = x1.at[2 * n :].set(jnp.clip(x1[2 * n :], 0.0, 1.0))
+        lime, T_solid = x1[-1], x1[:n]
+        cost = ((lime - target) / p.e_floor) ** 2
+        y = jnp.concatenate([
+            jnp.stack([p.running_weight * (fuel - p.c_hold) / p.c_hold]), T_solid,
+            jnp.stack([soft_max(T_solid, d["widths"][0]), lime]),
+        ])  # fmt: skip
+        return x1, cost, y, lime[None], ()
 
-    A 40-step horizon is 20 minutes at dt = 30 s, most of the ~25 minute
-    transport delay. That is the point: a controller whose horizon is shorter
-    than the delay is choosing fuel whose consequences it cannot see.
+    price = float(trip_cost(p))
+    return TaskModel(
+        nx=4 * n, nu=2, step=step,
+        state_x=lambda s: jnp.concatenate([s.T_solid, s.T_wall, s.alpha, s.lime]),
+        data=lambda s: (s.target_lime, s.raw_meal - p.raw_meal_nominal),
+        hold=lambda s: jnp.stack([
+            raw_of(s.fuel, p.fuel_min, p.fuel_max),
+            raw_of(s.rpm, p.rpm_min, p.rpm_max),
+        ]),
+        tracked=lambda s: s.lime[-1:],
+        resolution=(float(p.precision_floor),),
+        hinges=(Hinge(weight=1.0),),
+        limits=(Limit(hi=p.T_bz_max, price=price),) * n
+        + (Limit(lo=p.T_bz_min, price=price), Limit(hi=p.lime_max, price=price)),
+    )  # fmt: skip
 
-    Each solve starts from the shifted previous plan, so it searches near it
-    (``init_std`` 0.1) and runs enough iterations for the smoothed CEM spread
-    to contract; it returns the best sequence it evaluated. Measured on the
-    protocol seeds, planning on the mean
-    feed: the earlier budget (4 iterations from a 0.5 spread, smoothed mean)
-    scored 1.26; 384 samples and 8 iterations 0.264; this 96 x 32 setting
-    0.0705 at the same cost per step, and 64 iterations 0.0699. What is left
-    is mostly fuel above the hold rate, which the raw-meal swings drive.
-    """
-    objective = _cement_kiln_objective
-    if not _is_v1(params):
-        from target_gym.cement_kiln.env import compute_reward
 
-        objective = _v2_objective(compute_reward)
-    return SamplingMPC(
-        env,
-        params,
-        objective=objective,
-        action_dim=2,
-        action_lb=-1.0,
-        action_ub=1.0,
-        horizon=horizon,
-        n_samples=n_samples,
-        n_elite=n_elite,
-        n_iter=n_iter,
-        init_std=init_std,
-        return_best=return_best,
-        **kwargs,
-    )
+def make_cement_kiln_mpc(env, params) -> Oracle:
+    """Registry factory: the shared solver's oracle on ``kiln_model``."""
+    return Oracle(env, params, "cement_kiln", kiln_model)

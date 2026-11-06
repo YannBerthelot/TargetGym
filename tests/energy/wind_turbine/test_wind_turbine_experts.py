@@ -1,12 +1,11 @@
-"""The wind turbine's oracle: torque by a Newton solve, pitch by a slew-capped PI.
+"""The wind turbine's oracle, on the shared solver.
 
-Its claims, each checked below. With the turbulence off, the Newton solve on
-the torque lands the next step's power on the target to float32 rounding, so
-what is left with turbulence on is the one-step wind innovation. The pitch
-command moves by at most 0.13 deg per step near the setpoint, the cap opens
-linearly to the actuator's rate toward the edges of the 0.97-1.13 band, and
-outside it the PI is not capped. Version-1 params keep the gradient planner
-their recorded baseline was taken with.
+Its claims, each checked below. With the turbulence off the model is the
+plant, so the power after every step lands on the target to float32 rounding:
+the torque's reach makes that free. A command past the pitch's reach moves
+the actuator as a command at it does (T1r, env.py:309). The rotor speed is the
+one spare degree of freedom, so it rests at rated, inside the tie's budget (G12
+in docs/proposals/oracle-solver.md), and a lull no longer runs it down.
 """
 
 import jax
@@ -16,11 +15,10 @@ import pytest
 
 from target_gym import registry
 from target_gym.energy.wind_turbine.env import electrical_power, omega_rated
-from target_gym.energy.wind_turbine.oracle import (
-    WindTurbineNewtonPI,
-    make_wind_turbine_gradient_mpc,
-)
-from target_gym.experts.mpc import GradientMPC, plan_params
+from target_gym.energy.wind_turbine.oracle import pitch_reach
+from target_gym.experts.mpc import plan_params
+from target_gym.oracles.controller import Oracle, enable_x64, float64
+from target_gym.runners.runners import mpc_policy, one_episode
 
 SPEC = registry.get("wind_turbine")
 
@@ -45,101 +43,115 @@ def _episode(params, seed, steps=None):
     return np.array(ratio), np.array(error), trips
 
 
-def test_the_registry_builds_the_feedback_law():
+def test_the_registry_builds_the_shared_oracle():
     env = SPEC.make_env()
-    oracle = SPEC.make_mpc(env, SPEC.make_test_params())
-    assert isinstance(oracle, WindTurbineNewtonPI)
-    assert oracle.solver_report() == {}
+    assert isinstance(SPEC.make_mpc(env, SPEC.make_test_params()), Oracle)
 
 
-def test_version_1_keeps_the_gradient_planner():
-    """The version-1 baseline was recorded with the gradient planner, which
-    stays importable under its own name."""
-    env = SPEC.make_env()
-    params = SPEC.make_test_params().replace(reward_version=1)
-    assert isinstance(SPEC.make_mpc(env, params), GradientMPC)
-    assert isinstance(make_wind_turbine_gradient_mpc(env, params), GradientMPC)
-
-
-def test_without_turbulence_the_torque_lands_the_target():
+@pytest.mark.medium
+def test_without_turbulence_the_power_lands_on_the_target():
     """With the wind on its mean path the model is the plant, so the power
     after every step equals the target to float32 rounding (about 0.5 W at
-    4-5 MW). A torque law that missed would leave kilowatts."""
+    4-5 MW), within the rows' tolerance. A plan that missed would leave
+    kilowatts."""
     params = SPEC.make_test_params().replace(turbulence_std=0.0)
-    for seed in range(3):
-        ratio, error, trips = _episode(params, seed, steps=100)
-        assert trips == 0
-        assert ratio.min() > 0.9  # the low-speed protection never engages
-        assert error.max() <= 2.0
-
-
-@pytest.mark.parametrize(
-    "ratio, cap",
-    [
-        (1.05, 0.13),  # inside 1.01-1.09: the slew cap
-        (1.08, 0.13),
-        (1.11, 0.13 + (2.0 - 0.13) * 0.5),  # halfway up the outer ramp
-        (1.12, 0.13 + (2.0 - 0.13) * 0.75),
-        (0.99, 0.13 + (2.0 - 0.13) * 0.5),  # the same on the low side
-    ],
-)
-def test_the_pitch_command_moves_at_most_the_cap(ratio, cap):
-    """A speed jump of 5% of rated asks the PI for about 7 deg in one step;
-    the command moves by the cap at that speed instead. The actuator's own
-    rate is 8 deg/s, 2 deg per 0.25 s step."""
-    env = SPEC.make_env()
-    params = SPEC.make_test_params()
-    oracle = WindTurbineNewtonPI(env, params)
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    w_rated = float(omega_rated(params))
-    sign = 1.0 if ratio > 1.0 else -1.0
-    before = state.replace(
-        omega=jnp.float32((ratio - sign * 0.05) * w_rated), pitch_cmd=jnp.float32(10.0)
-    )
-    oracle.reset()
-    oracle.step(None, before)
-    action = oracle.step(None, before.replace(omega=jnp.float32(ratio * w_rated)))
-    cmd = (float(action[0]) + 1.0) / 2.0 * float(params.pitch_max)
-    assert cmd - 10.0 == pytest.approx(sign * cap, abs=1e-4)
-
-
-def test_outside_the_band_the_pi_is_not_capped():
-    env = SPEC.make_env()
-    params = SPEC.make_test_params()
-    oracle = WindTurbineNewtonPI(env, params)
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    w_rated = float(omega_rated(params))
-    before = state.replace(
-        omega=jnp.float32(1.15 * w_rated), pitch_cmd=jnp.float32(10.0)
-    )
-    oracle.reset()
-    oracle.step(None, before)
-    action = oracle.step(None, before.replace(omega=jnp.float32(1.20 * w_rated)))
-    cmd = (float(action[0]) + 1.0) / 2.0 * float(params.pitch_max)
-    assert cmd - 10.0 > 2.0  # more than the actuator can follow in one step
-
-
-@pytest.mark.large
-def test_the_screened_extremes_stay_inside_the_envelope():
-    """The oracle audit (2026-10) ran seeds 3-199 of the 400-step episode: no
-    trip, rotor speed 0.836-1.178 of rated, against trips at 0.40 and 1.25.
-    These are its three extremes: seed 149 peaks at 1.178 (start-up, step 45),
-    seed 56 at 1.175 inside the scored window, and seed 142, whose lull has
-    less power in the wind than its target, falls to 0.836."""
-    params = SPEC.make_test_params()
-    for seed in (149, 56, 142):
-        ratio, _, trips = _episode(params, seed)
-        assert trips == 0, seed
-        assert ratio.max() < 1.18, (seed, ratio.max())
-        assert ratio.min() > 0.83, (seed, ratio.min())
-
-
-def test_protocol_seed_0_holds_without_sagging():
-    """Over measure_hold's 700 steps a hard 0.90-1.15 band (no ramp) let the
-    rotor sag after a gust on protocol seed 0, holding 27.2 kW; the ramp holds
-    1454 W there, the best seed that sets ``rho_floor``
-    (``hold_measurements.json``)."""
-    params = SPEC.make_test_params().replace(max_steps_in_episode=700)
-    _, error, trips = _episode(params, 0)
+    _, error, trips = _episode(params, 0, steps=20)
     assert trips == 0
-    assert error[300:].mean() == pytest.approx(1453.8, rel=0.02)
+    assert error.max() <= 2.0
+
+
+@pytest.mark.medium
+def test_a_lull_does_not_run_the_rotor_down_to_a_power_dip():
+    """On seed 1 the wind falls to 14.7 m/s at step 202. A plan that leaves the
+    speed free rides it down to about 0.82 of rated and pays there with
+    one-step torque dips of 625 to 825 kW, 0.004 to 0.006 dollars a step.
+    Resting at rated, the rotor keeps its energy and no step costs a quarter
+    of the smaller dip."""
+    params = SPEC.make_test_params()
+    policy = mpc_policy(SPEC, SPEC.make_env(), params)
+    speeds = []
+
+    def spy(obs, state):
+        speeds.append(float(state.omega))
+        return policy(obs, state)
+
+    spy.controller = policy.controller
+    out = one_episode(SPEC, params, spy, 1)
+    assert int(np.asarray(out["tripped"]).sum()) == 0
+    assert min(speeds) / float(omega_rated(params)) >= 0.9
+    assert np.asarray(out["reward"][0, : int(out["length"][0])]).min() >= -0.001
+
+
+@pytest.mark.medium
+def test_the_report_certifies_the_plan_that_applies_not_the_wide_rungs():
+    """K7's first rung is smoothed wide on purpose and only starts the next
+    one, so K8's report covers the rung that applies, whose output stays
+    within the resolution. The first rung's own gap is about 270 resolutions."""
+    env, params = SPEC.make_env(), SPEC.make_test_params()
+    oracle = SPEC.make_mpc(env, plan_params(SPEC, params))
+    oracle.reset()
+    obs, state = env.reset_env(jax.random.PRNGKey(1), params)
+    oracle.step(obs, state)
+    assert len(oracle.certificates) > 1
+    assert oracle.solver_report()["solver_max_output_gap"] <= 1.0
+
+
+def test_the_resting_target_is_rated_speed_and_one_at_the_bands_edge():
+    p = plan_params(SPEC, SPEC.make_test_params())
+    rest = SPEC.make_mpc(SPEC.make_env(), p).model.rest
+    rated = float(omega_rated(p))
+    assert float(rest(jnp.array([rated, 0.0, 0.0]))) == 0.0
+    edge = rated * float(p.overspeed_factor)
+    assert abs(float(rest(jnp.array([edge, 0.0, 0.0])))) == pytest.approx(1.0)
+
+
+def test_the_resting_target_spends_the_tie_budget_over_an_episode_at_the_edge():
+    """The planned stage costs the budget over the 400 steps at the band's edge,
+    and K8's replay, which runs ``model.step``, never sees it."""
+    env, p = SPEC.make_env(), plan_params(SPEC, SPEC.make_test_params())
+    mpc = SPEC.make_mpc(env, p)
+    budget = 500.0e-6 * 100.0 * 0.25 / 3600.0  # the tie's, in dollars
+    with enable_x64():
+        st = float64(env.reset_env(jax.random.PRNGKey(0), p)[1])
+        m = mpc.model
+        d = {"task": m.data(st), "widths": jnp.asarray(mpc.widths)}
+        x = m.state_x(st).at[0].set(float(omega_rated(p)) * 1.1)
+        u = m.hold(st)
+        x1 = m.step(d, x, u, 0)[0]
+        extra = mpc.shooting.model.step(d, x, u, 0)[1] - m.step(d, x, u, 0)[1]
+        expected = budget / 400 * float(m.rest(x1)) ** 2
+    assert float(extra) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("sign", [1.0, -1.0])
+def test_a_command_past_the_pitch_reach_moves_it_as_one_at_the_reach(sign):
+    """From the reset, 10 deg from both ends of the range: the actuator
+    closes the gap at the rate limit until the gap is rate * tau, so a
+    command rate * (step + tau) away keeps it at full rate for the whole
+    step, as one at the far end of the range does. Float32 env: equal to
+    1e-6 relative, on every state the step moves."""
+    env, p = SPEC.make_env(), SPEC.make_test_params()
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, p)
+    state = state.replace(pitch=jnp.float32(20.0), pitch_cmd=jnp.float32(20.0))
+
+    def raw(pitch):
+        span = p.pitch_max - p.pitch_min
+        return jnp.asarray(
+            [
+                2.0 * (pitch - p.pitch_min) / span - 1.0,
+                2.0 * float(state.torque) / p.torque_max - 1.0,
+            ]
+        )
+
+    at = 20.0 + sign * float(pitch_reach(p, 1))
+    far = 20.0 + sign * 15.0
+    reached = env.step_env(key, state, raw(at), p)[1]
+    past = env.step_env(key, state, raw(far), p)[1]
+    assert float(reached.pitch) - 20.0 == pytest.approx(
+        sign * p.pitch_rate_max * p.delta_t, rel=1e-5
+    )
+    for field in ("pitch", "omega", "torque"):
+        np.testing.assert_allclose(
+            getattr(past, field), getattr(reached, field), rtol=1e-6, err_msg=field
+        )

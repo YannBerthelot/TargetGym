@@ -764,8 +764,10 @@ alone counts here, as an exception to H16 for H21 only; it still does not set
 T_c, N or M.
 
 Compressor: 8000 Pa / (7206 Pa per unit x 0.171 units/s) = 6.5 s, or 65
-samples, so P = 26 + 65 = 91 (9.1 s). The reactor's rod and the wind pitch take
-the same rule when their rebuilds reach them.
+samples, so P = 26 + 65 = 91 (9.1 s). The reactor's rod takes the same rule
+when its rebuild reaches it. Wind turbine, pitch to power (C2): the largest
+over its fits is 1.5 MW / (1.75 MW per unit x 0.4 units/s) = 0.86 s, or 4
+samples, so P = 286 + 4 = 290.
 
 **Provenance.** H21 was written after the failure, and after P = 60 had been
 seen to close the gap. It derives from Cooper's definition of N, and it uses

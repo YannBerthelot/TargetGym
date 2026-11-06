@@ -515,3 +515,51 @@ failed solves down to 52 and 0, seed 100, with median iterations 28 to 7.
 iterate, as before. Keeping the shifted plan instead was tried and rejected
 on evidence: it froze the valve through a run of capped solves as demand
 fell, and the plant tripped.
+
+## Amendment 2, 2026-11-05: what C2 found
+
+C2 rebuilt hvac, the battery, the boiler, the wind turbine, the glass furnace
+and the kiln under this protocol. Each change below was forced by something
+measured, and each is exact or derived; none was chosen by score.
+
+**T1r on the wind pitch.** A rate limit inside the right-hand side acts on
+(cmd - pitch) / tau, so the actuator closes the gap at the rate limit until the
+gap is rate x tau. A command rate x (hold + tau) from the pitch keeps it at
+full rate over the whole hold, as any command past it does. At the 0.25 s step
+that reach is 3.6 deg.
+
+**K5 on a site inside the right-hand side.** The wind's two sites and the
+glass blanket are evaluated at every RK stage. Their delta enters all of a
+step's evaluations at once, with evaluations = 1. It bounds the sum by the
+step's total sensitivity, which equals K5's sum where the sensitivities share
+their sign over one step, as they do here (derived).
+
+**The glass blanket is one site.** Sections 5.3 and 5.5 count four. The
+right-hand side and the flame read the blanket through its floor and its
+coverage clip (env.py:543, :562, :758), so one softplus on the mass they read
+smooths all three: a mass inside (0, m_batch_full) passes the env's guards
+exactly. The fourth, the stored floor at env.py:806, stays a dropped guard
+(T4), checked on every plan: a softplus on the state would add its gap every
+step, where in the right-hand side it costs it once. K5 gives width 3900 kg,
+the ladder's first rung. The expert's blanket stays at 0.22 to 0.34 of full.
+
+**The kiln's fractions keep their clip.** Section 5.4 dropped the clip of alpha
+and lime after the step (env.py:477, :478) as T4. It is active in every hot
+cell: there the reaction's rate times the step is far past RK4's stability, one
+step multiplies a fraction's error by about 1.3e6, and only the clip bounds it.
+K9 would move it to T5, but no softplus can stand in for a clip that holds the
+state on its bound against that gain: K5's perturbation measures a first-order
+effect the clip removes. So the model keeps the env's clip, exact, kink and
+all. Without it the replay gap was 7e-5, cold solves failed at their first
+iteration, and the first 11 steps of a seed applied held moves. With it the
+replay matches to rounding and solves converge in 10 to 30 iterations.
+
+**The battery's fade.** Section 5.4 puts a slack on abs(current). One hinge per
+sign of the current is simpler and exact while the calendar rate stays under
+c_hold, which makes both hinges' sum max(calendar + cycling |I| - c_hold, 0).
+That is a dropped guard (T4), and it is checked on every plan.
+
+**The kiln's soft max.** The cold limit's site moves no tracked output, so K5
+takes the ladder's first rung, 28 K. K3's shift already keeps it conservative,
+by at most 28 ln 16 = 78 K against a burning zone 134 K above the limit, so it
+takes no K11 gap.
