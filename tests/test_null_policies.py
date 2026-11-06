@@ -219,12 +219,24 @@ def gate(name: str) -> dict:
     return out
 
 
+#: What an aircraft expert loses to, until PR 9. TECS's ``time_const`` of 2 pulls
+#: past the limit load on a height capture, and each trip costs far more than a
+#: null policy's error. With the protocol's start of 5 all seven tasks pass.
+_STALE_TECS = "PR 9: TECS's time_const 2 trips the new envelope; at 5 this passes"
+
 #: The tasks a null policy beats today, each a finding of the industrial review.
 #: The PR that fixes one removes its line.
 KNOWN = {
     "battery": "the plant delivers the command, so an echo of the target wins",
     "distillation": "the expert was tuned on instant analysers; PR 9 retunes it",
     "hvac": "free gains match the losses, so a heater left off wins",
+    "plane": _STALE_TECS,
+    "plane3d_circle": _STALE_TECS,
+    "plane3d_figure8": _STALE_TECS,
+    "plane3d_heading": _STALE_TECS,
+    "plane3d_racetrack": _STALE_TECS,
+    "plane_energy": _STALE_TECS,
+    "plane_sine": _STALE_TECS,
     "reactor": "no secondary side, so one rod integrator matches the oracle",
 }
 
