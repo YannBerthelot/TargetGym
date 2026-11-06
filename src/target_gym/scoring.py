@@ -125,9 +125,9 @@ def _recycle_power(state, params, tripped):
     return recycle_power(state, params, jnp)
 
 
-#: Per environment, what its reward's ``running_cost`` clips at ``c_hold``, as
-#: ``fn(state, params, tripped)``, so ``consumption_ratio`` can show a saving.
-#: The other running terms charge in full, or are not consumption.
+#: Per environment, what its reward's ``running_cost`` charges, as ``fn(state,
+#: params, tripped)``, so ``consumption_ratio`` reads the quantity itself. The
+#: other running terms are not consumption.
 CONSUMPTION = {
     "glass_furnace": lambda state, params, tripped: state.fuel_flow,
     "cement_kiln": lambda state, params, tripped: state.fuel,
