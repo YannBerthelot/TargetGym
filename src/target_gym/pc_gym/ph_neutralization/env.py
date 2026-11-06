@@ -144,9 +144,9 @@ class PHParams(EnvParams):
     # floor (no reduced-model optimum exists for this plant).
     # e_tol = 0 provisionally: the discharge permit band a plant would use
     # here is a regulatory number to be supplied (typically pH 6-9 on the
-    # outfall). Reagent above the hold-phase flow (16.24 mL/s, the same for
-    # PID and MPC) is charged at weight 1: one floor-width of pH error is
-    # worth the whole hold-phase reagent flow again. The failure cost was set
+    # outfall). Reagent is charged as a share of the hold-phase flow (16.24
+    # mL/s, the same for PID and MPC), at weight 1: one floor-width of pH error
+    # is worth the whole hold-phase reagent flow again. The failure cost was set
     # at twice the span's cost in units of the earlier 0.0080 pH hold,
     # (10 / 0.0080)^2 = 1.6e6 per step. It is never charged (see PHYSICS.md),
     # so it was left as it is when the hold improved.

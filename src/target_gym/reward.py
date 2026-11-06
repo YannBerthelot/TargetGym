@@ -9,15 +9,17 @@ module is the arithmetic.
   the plant, never finer than its instrument resolves), so an error at the
   floor costs 1 per step. ``e_tol`` is a specification tolerance where the plant
   has one; ``p`` is 1 where the owner's cost is linear in the error, else 2.
-- **Running**: consumption above ``c_hold``, what the best shipped controller
-  consumes while holding: ``w * max(c - c_hold, 0) / c_hold``, or
-  ``price * quantity`` where the owner's tariff is known.
+- **Running**: consumption as a share of ``c_hold``, what the best shipped
+  controller consumes while holding: ``w * c / c_hold``, or ``price *
+  quantity`` where the owner's tariff is known. Activity with a dead band, such
+  as actuator travel, pays only past it (``excess_cost``).
 - **Failure**: the step that leaves the operating envelope is charged
   ``restart_steps * failure_cost`` and the plant restarts at once
   (``base.failure_kernel``). By default no episode ends at a trip.
 
-The best per-step reward is about -1 (tracking at the floor, nothing
-avoidable consumed). Compare across plants with ``target_gym.scoring``.
+The best per-step reward is about -1, or -(1 + w) on a plant with a running
+cost (tracking at the floor, consuming ``c_hold``). Compare across plants with
+``target_gym.scoring``.
 """
 
 from __future__ import annotations
@@ -32,13 +34,22 @@ def tracking_cost(error, e_floor, e_tol=0.0, p=2.0, xp=jnp):
 
 
 def running_cost(quantity, c_hold, weight=1.0, xp=jnp):
-    """Avoidable consumption as a fraction of the hold-phase consumption.
+    """Consumption as a fraction of the hold-phase consumption, all of it, as a
+    bill charges it: a saving below ``c_hold`` pays, and swinging around it
+    costs nothing extra.
 
     ``c_hold`` must be positive: it is a measured MPC consumption, and a plant
     whose controller consumes nothing while holding has no running cost to
     charge.
     """
-    return weight * xp.maximum(quantity - c_hold, 0.0) / c_hold
+    return weight * quantity / c_hold
+
+
+def excess_cost(quantity, free, weight=1.0, xp=jnp):
+    """What passes a dead band, as a fraction of it: ``free`` of the quantity
+    costs nothing, for activity that is only charged past a tolerance (a speed
+    band, actuator travel past a positioner's dead band)."""
+    return weight * xp.maximum(quantity - free, 0.0) / free
 
 
 def priced_cost(quantity, price, xp=jnp):

@@ -133,6 +133,42 @@ def test_tracking_cost_is_convex_in_the_error(p_exp, e_tol):
     assert second.min() >= -1e-9
 
 
+def test_running_cost_charges_all_of_the_consumption():
+    """``w * c / c_hold`` (decided 2026-11-06): w at the hold, half that at half
+    the consumption, so a saving shows, and two steps either side of ``c_hold``
+    cost what two steps at it do, as a fuel bill does."""
+    assert float(R.running_cost(10.0, 10.0, 2.0)) == pytest.approx(2.0)
+    assert float(R.running_cost(5.0, 10.0, 2.0)) == pytest.approx(1.0)
+    assert float(R.running_cost(0.0, 10.0, 2.0)) == 0.0
+    steady = 2 * float(R.running_cost(10.0, 10.0))
+    swinging = float(R.running_cost(7.0, 10.0)) + float(R.running_cost(13.0, 10.0))
+    assert swinging == pytest.approx(steady)
+
+
+def test_the_aircraft_speed_band_pays_only_past_its_tolerance():
+    """``c_hold`` on the aircraft is a tolerance on speed, not a consumption: a
+    deviation inside it costs nothing, and twice it costs one ``w``."""
+    from target_gym.plane.env import target_airspeed
+
+    env, p, state = _a_state(REGISTRY["plane"], steps=0)
+    state = state.replace(z_dot=jnp.float32(0.0))
+    target = float(target_airspeed(state, p))
+
+    def running(deviation):
+        flying = state.replace(x_dot=jnp.float32(target + deviation))
+        return float(env.reward_terms(flying, p)["running"])
+
+    assert running(0.5 * p.c_hold) == 0.0
+    assert running(2.0 * p.c_hold) == pytest.approx(p.running_weight, rel=1e-4)
+
+
+def test_a_dead_band_charges_only_what_passes_it():
+    """``w * max(q - free, 0) / free``: free inside, one ``w`` at twice the band."""
+    assert float(R.excess_cost(5.0, 10.0, 2.0)) == 0.0
+    assert float(R.excess_cost(10.0, 10.0, 2.0)) == 0.0
+    assert float(R.excess_cost(20.0, 10.0, 2.0)) == pytest.approx(2.0)
+
+
 def test_version2_reward_has_no_log_shape_and_no_precision_floor(spec):
     """The terms function must not call the log-scaled shape or read the
     version-1 resolution floor."""
@@ -178,13 +214,20 @@ def test_reward_version_1_is_still_the_shipped_reward(spec):
 @pytest.mark.parametrize(
     "name",
     [
-        "first_order",
+        pytest.param(
+            "first_order",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="recorded on the gains PR 9 replaced; needs a new v1 baseline",
+            ),
+        ),
         pytest.param(
             "cstr",
             marks=pytest.mark.xfail(
                 strict=True,
                 reason="recorded on the plant before the analyser, loads and "
-                "narrower band; needs PR 9's gains and a new v1 baseline",
+                "narrower band, and on the gains PR 9 replaced; needs a new v1 "
+                "baseline",
             ),
         ),
     ],

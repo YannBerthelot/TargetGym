@@ -82,8 +82,8 @@ class BoilerDrumParams(EnvParams):
     # best seed (`scripts/measure_hold.py`, 1200 hold steps after a 60-step
     # burn-in; PID 37-70 mm, 0.035-0.050 bar). Both are within 1.5x of the
     # floors, so the floors stay the scale. Upper bounds on the achievable
-    # floors. Fuel above the hold-phase firing rate (1.566e8 W, MPC) is
-    # charged at weight 1. The level trip (0.25 m) costs (0.25 / 0.00267)^2 =
+    # floors. Fuel is charged as a share of the hold-phase firing rate
+    # (1.566e8 W, MPC), at weight 1. The level trip (0.25 m) costs (0.25 / 0.00267)^2 =
     # 8.8e3 and the reachable 23 bar pressure error (23 / 0.05)^2 = 2.1e5; a
     # trip twice the sum.
     reward_version: int = 2

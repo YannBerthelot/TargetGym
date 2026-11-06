@@ -218,7 +218,7 @@ point of no return at dTi +6 K over C_a 0.40 to 0.70. **The valve has moved that
 curve, and the frozen line now sits above it** by up to 0.254 K at +6 K, near
 C_a 0.57, and stays 0.390 K below it at dTi 0 and 0.818 K at −6 K. The refit is
 354.808 − 42.195 (C_a − 0.45) (derived, `--section pnr`). The line belongs to the
-tuning, so PR 9 redoes it (`test_pnr_line_is_conservative`, a strict xfail until
+tuning, so PR 9 redid it (`test_pnr_line_is_conservative`, a strict xfail until
 then). The PID's setpoint ceiling at 0.45 is the line less 0.3 K, 354.600 K or
 T* + 1.767 K, and the line is the binding ceiling for targets up to 0.464 mol/L.
 
@@ -244,7 +244,7 @@ reward table at the end, with their sources.
 | `k0` | 7.2e10 | 1/min | read | same | ✅ |
 | `UA` | 5.0e4 | J/(min K) | read | same | ✅ |
 | `Ti`, `Caf` | 350 K, 1.0 mol/L | | read | same | ✅ |
-| `precision_floor` | 1e-4 | mol/L | read | cstr's online-analyser resolution; version 1 only | ✅ |
+| `precision_floor` | 5e-4 | mol/L | read | cstr's online-analyser scatter, the ceiling's resolution | ✅ |
 | `time_unit_seconds` | 60 | s per min | read | cstr's convention: `delta_t` in minutes | ✅ |
 | `T_c_min` | 290 | K | read | PC-gym's CSTR action-space lower bound | ✅ |
 | `T_c_max` | 310 | K | ours | spans both folds, with at least 4.63 K headroom at \|dTi\| 6 K (derived, `--section targets`) | ⚠️ |
@@ -475,14 +475,34 @@ P-only gain stabilises it at all.
 
 ## 7. Experts
 
-**The shipped gains do not survive this plant.** On 20 episodes the cascade trips
-in every one, 27 to 53 times an episode, which is the review's finding of 6 trips in
-6 with a 10 s lag on T. Its gains were tuned on an instant T. It is not the plant:
-a rough scan of the inner gains ran 16 scheduled episodes with no trip at
-`Kp_T` 2 and `Kd_T` 0.8 to 1.2, against 8.49 and 0.95 shipped. That scan
-was a feasibility check and sets no gain. PR 9 retunes the cascade by its protocol.
-The oracle reads the true state and runs seed 200 with no trip. Everything below
-in this section was measured on the plant without the instruments.
+**The recipe on this plant** (section 9 of
+`docs/proposals/expert-protocols-process.md`, run by
+`scripts/tune_process_experts.py --envs unstable_cstr`). Figures from here to the
+next heading are measured on the plant with its instruments. Older figures below
+this block predate them.
+
+- **Pairing.** One coolant, so there is no pairing to choose, and the RGA has
+  nothing to say. The check is which reading closes the inner loop: the unstable
+  mode, 2.42 /min at 0.55 mol/L, reads 4.2 noise bands per unit on T and 2.6 on C_a,
+  so T closes it, as the cascade does.
+- **Inner PD.** SIMC on the datasheet: slope UA / (rho C V) = 2.09 K/min per K, lag
+  0.217 min (the thermowell and half the jacket), delay 0.108 min (the other half of
+  the jacket, the valve and half a step). Kp_T = 2.21, Kd_T = 0.478. A closed test
+  over 36 s read 12 K/min/K at a fit of 60 %, since a gain and a lag draw one curve
+  there, so the datasheet stands. No P gain tried holds this plant: it needs the D.
+- **Outer PI.** C_a on the setpoint, inner loop closed: k = -0.0195 mol/L per K,
+  tau1 = 0.234 min, theta = 0.30 min. Kc_Ca = 26.6, Ti_Ca = 0.345 min, Tf_Ca = 0.033
+  min. The spread of 1.47 stays under C5's limit, so the median stands.
+- **Limits.** Tc_bias 300.9 K, window 4.73 K each side, line margin 2.07 K, ramp 9.7
+  K/min. `PNR_LINE` is refit below the exact point of no return with the valve in.
+- **Held-out check** (seeds 200 to 209). It holds 1.3e4 per step (worst seed 4.7e4),
+  with 8 trips on 4 seeds, from 4.1e5 and 407 trips on the gains that predate the
+  instruments. The best null is constant 0, ratio 0.008, 4 of 10 wins, so it passes
+  the gate.
+- **Findings.** `check_cascade_gains`, which now sees the thermowell and the valve,
+  reports the closed loop growing at +0.36 /min at 0.45 mol/L and three equilibrium
+  setpoints outside the window. D2 makes that a report. Trips restart cycles, so the
+  cycle and doubling rules also fail (`tests/test_episode_length.py`).
 
 **Cascade PID** (`make_unstable_cstr_pid`). An outer PI on C_a sets a
 rate-limited temperature setpoint around the feedforward T*(L), clipped
@@ -494,7 +514,7 @@ an inner PD on T sets the coolant. The setpoint starts at the measured T
 are held, since their right value is set by the distance to the point of no
 return, which the return sees only once a trip happens.
 
-A stability guard (`check_cascade_gains`) refuses gains whose linearised
+A stability guard (`check_cascade_gains`) reports gains whose linearised
 closed loop decays slower than `GUARD_MIN_DECAY` (0.5 /min, ours) at any of
 the five targets, or whose equilibrium setpoint falls outside the setpoint
 window at a drift of −6, 0 or +6 K
@@ -722,13 +742,13 @@ tariff.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1e-4 mol/L | the online analyser's resolution (read, cstr's `precision_floor`), kept because the MPC holds finer. A measured upper bound clamped at the instrument resolution (docs/reward-shaping.md, "How each floor was obtained"). `scripts/measure_hold.py --envs unstable_cstr` records the MPC's mean absolute C_a error over the hold of each block (the hold window below), and the floor is max(1e-4, the lowest per-seed hold). That hold is 6.29e-6 mol/L (measured; the PID's lowest is 1.23e-4), so the clamp binds. |
+| `e_floor` | 5e-4 mol/L | the online analyser's scatter (read, cstr's `precision_floor`), kept because the MPC holds finer. A measured upper bound clamped at the instrument (docs/reward-shaping.md, "How each floor was obtained"). `scripts/measure_hold.py --envs unstable_cstr` records the MPC's mean absolute C_a error over the hold of each block (the hold window below), and the floor is max(5e-4, the lowest per-seed hold). That hold is 6.29e-6 mol/L (measured; the PID's lowest is 1.23e-4), so the clamp binds. |
 | `e_tol` | 0 | no product specification for the concentration has been supplied |
 | `tracking_exponent` | 2 | quadratic: the owner's cost is off-spec product |
-| `failure_cost` | 6.05e7, twice (0.55 / 1e-4)^2 | twice the largest tracking cost an untripped state reaches, with 0.55 mol/L the closed-form `CA_error_max` (derived, `--section params`) |
-| `restart_steps` | 1200 (1 h) | cstr's one-hour restart (240 steps of 15 s, marked provisional in cstr) at 3 s steps; a trip costs 1200 x 6.05e7 = 7.26e10 (derived, `test_restart_time_is_cstrs_hour`) |
-| `rho_floor_tracking` | 0.000497 | (lowest per-seed MPC hold / `e_floor`)^2 = (2.23e-6 / 1e-4)^2, from `scripts/measure_hold.py` (measured; 0.00396 from the CasADi oracle's 6.29e-6 before v3); below 1 because the clamp binds |
-| `rho_floor` | 0.000497 | equal to `rho_floor_tracking`, since there is no running cost |
+| `failure_cost` | 2.42e6, twice (0.55 / 5e-4)^2 | twice the largest tracking cost an untripped state reaches, with 0.55 mol/L the closed-form `CA_error_max` (derived, `--section params`) |
+| `restart_steps` | 1200 (1 h) | cstr's one-hour restart (240 steps of 15 s, marked provisional in cstr) at 3 s steps; a trip costs 1200 x 2.42e6 = 2.90e9 (derived, `test_restart_time_is_cstrs_hour`) |
+| `rho_floor_tracking` | 1.99e-5 | (lowest per-seed MPC hold / `e_floor`)^2 = (2.23e-6 / 5e-4)^2, from `scripts/measure_hold.py` (measured; 0.00396 from the CasADi oracle's 6.29e-6 before v3); below 1 because the clamp binds |
+| `rho_floor` | 1.99e-5 | equal to `rho_floor_tracking`, since there is no running cost |
 | `floor_is_documented_minimum` | False | the plant is disturbed; documented minima are for plants with no disturbance at all |
 
 **The hold window.** `scripts/measure_hold.py` scores this plant's hold
@@ -750,7 +770,7 @@ hold cost (6.9e-4, measured) is at least 0.98 of the reference.
 `rho_floor_tracking` is the oracle's best hold for tracking. It is the lowest
 per-seed hold the reference controller demonstrated, divided by `e_floor`
 and squared, as the tracking term squares an error. It would be 1 if the
-floor were that hold. It is 0.000497 here because the floor is clamped at the
+floor were that hold. It is 1.99e-5 here because the floor is clamped at the
 analyser resolution, about 45 times the MPC's lowest hold of 2.23e-6 mol/L
 (the table above). `rho_floor` is the same with consumption charged in full.
 `floor_is_documented_minimum` records whether `e_floor` is a measured or
@@ -794,7 +814,7 @@ selects the version-1 reward of section 8 (`precision_floor` and
 - **The shared floor check cannot fail here.**
   `test_mpc_does_not_beat_a_measured_floor` in `tests/test_reward_contract.py`
   compares the protocol's whole-episode MPC tracking cost, 3.2e3 (measured),
-  with `rho_floor_tracking`, 0.000497. Tracking is the mean over every step (the
+  with `rho_floor_tracking`, 1.99e-5. Tracking is the mean over every step (the
   task has no burn-in), and the five switches cost up to (0.1 / 1e-4)^2 = 1e6
   per step while settling, so it sits far above a reference of at most 1.
   The task's own test, `test_floor_is_the_recorded_mpc_hold` in
@@ -838,9 +858,9 @@ score read the true state. `info["measured_reward"]` is the same cost on the
 readings, with any trip taken from the true state, and a learner can train on
 it.
 
-A plant resting exactly on target pays 25 per step in measured reward,
-`(5e-4 / 1e-4)^2`. `e_floor` and `precision_floor` stay at 1e-4, so the ceiling
-sits below anything this analyser could verify.
+A plant resting exactly on target pays 1 per step in measured reward,
+`(5e-4 / 5e-4)^2`. `e_floor` and `precision_floor` are the analyser's scatter, so
+the ceiling is what this analyser can verify.
 
 The cascade's inner derivative now reads `T` through the shared filter
 (`pid.filtered_derivative`), with a filter time of one-tenth of the derivative

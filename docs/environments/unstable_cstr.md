@@ -98,7 +98,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `UA` | 50000 | J/(min*K) |
 | `Ti` | 350 | K |
 | `Caf` | 1 | mol/L |
-| `precision_floor` | 0.0001 | mol/L |
+| `precision_floor` | 0.0005 | mol/L |
 | `time_unit_seconds` | 60 | s |
 | `T_c_min` | 290 | K |
 | `T_c_max` | 310 | K |
@@ -113,12 +113,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `initial_CA_offset` | 0.01 | mol/L |
 | `initial_T_offset` | 1.5 | K |
 | `reward_version` | 2 | - |
-| `e_floor` | 0.0001 | mol/L |
+| `e_floor` | 0.0005 | mol/L |
 | `e_tol` | 0 | mol/L |
 | `tracking_exponent` | 2 | - |
 | `CA_error_max` | 0.55 | mol/L |
-| `failure_cost` | 6.05e+07 | reward |
+| `failure_cost` | 2.42e+06 | reward |
 | `restart_steps` | 1200 | steps |
-| `rho_floor_tracking` | 0.00049729 | reward |
-| `rho_floor` | 0.00049729 | reward |
+| `rho_floor_tracking` | 1.98916e-05 | reward |
+| `rho_floor` | 1.98916e-05 | reward |
 

@@ -34,6 +34,7 @@ from target_gym.identification import (
     judge,
     nrmse_fit,
     quiet_fits,
+    rga,
 )
 from target_gym.registry import REGISTRY
 
@@ -314,3 +315,14 @@ def test_every_test_of_a_pair_is_read_not_only_the_kept_one():
         }
     }
     assert list(quiet_fits(pairs, FOPDT)) == [(0, 0, 0, 0)]
+
+
+def test_the_relative_gain_array_of_a_two_by_two():
+    # lambda_11 = 1 / (1 - G12 G21 / (G11 G22)) = 1 / (1 - 6 / 4) = -2, and each
+    # row and column sums to 1.
+    out = rga([[1.0, 2.0], [3.0, 4.0]])
+    np.testing.assert_allclose(out, [[-2.0, 3.0], [3.0, -2.0]])
+
+
+def test_a_diagonal_plant_has_nothing_to_pair_against():
+    np.testing.assert_allclose(rga([[2.0, 0.0], [0.0, 5.0]]), np.eye(2))

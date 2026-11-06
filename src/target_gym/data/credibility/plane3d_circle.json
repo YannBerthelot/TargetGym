@@ -1,0 +1,38 @@
+{
+  "cpu": "Apple M4 Pro",
+  "exception": null,
+  "expert_figure": {
+    "source": "14 CFR 91 Appendix G, section 2(c)(2)(i)",
+    "status": "read, primary",
+    "unit": "m",
+    "url": "https://www.law.cornell.edu/cfr/text/14/appendix-G_to_part_91",
+    "value": 19.812,
+    "what": "automatic altitude control band, +-65 ft, straight and level in still air; a requirement, not a measured hold"
+  },
+  "expert_fingerprint": "bda3f6cbcf0ed968",
+  "generated": "2026-11-06T12:57:26+00:00",
+  "null_wins": [
+    "constant 0.0",
+    "constant 0.5",
+    "constant 1.0",
+    "table"
+  ],
+  "nulls": {
+    "constant 0.0": {
+      "ratio": 1.4350271431077968,
+      "win_rate": 0.7
+    },
+    "constant 0.5": {
+      "ratio": 526.3176212545002,
+      "win_rate": 0.8
+    },
+    "constant 1.0": {
+      "ratio": 5.2024369076739285,
+      "win_rate": 0.8
+    },
+    "table": {
+      "ratio": 23034.1766723498,
+      "win_rate": 0.8
+    }
+  }
+}

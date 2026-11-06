@@ -19,9 +19,6 @@ seeds against the ceiling.
   two time scales and is still rising hours after a firing step, so it is
   lag-dominant and SIMC tunes it on the integrating approximation of its
   first hour: ``Kc = 1 / (k' (tau_c + theta))``, ``tau_I = 4 (tau_c + theta)``.
-* ``compressor_surge``: the vendor anti-surge pair keeps its structure and its
-  held gains; the guarded coordinate search of ``scripts/tune_pid.py`` runs
-  on the training seeds, from the package's ``DEFAULT_GAINS``.
 
 A step test runs from the steady state each training seed (100-109) reaches
 under the shipped expert, in one run: hold, record a baseline, step
@@ -304,26 +301,6 @@ def tune_glass_furnace() -> dict:
     return out
 
 
-def tune_compressor_surge() -> dict:
-    """The guarded coordinate search of ``scripts/tune_pid.py``, on the
-    training seeds, keeping the held gains (the surge and override lines, the
-    override hold and the reset band)."""
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import tune_pid
-
-    from target_gym.compressor_surge.experts import DEFAULT_GAINS
-
-    # Start from the package's documented starting point, not from the gains
-    # stored before, which were tuned on seeds 0-23 (scored ones included).
-    stored = dict(pid_mod.load_gains())
-    pid_mod._gains_cache = {**stored, "compressor_surge": dict(DEFAULT_GAINS)}
-    try:
-        tuner, _ = tune_pid.TUNERS["compressor_surge"]
-        return tuner()
-    finally:
-        pid_mod._gains_cache = stored
-
-
 def tune_cement_kiln() -> dict:
     """The burning-zone loop by SIMC from a fuel step (the supervisor's
     setpoint frozen), tight as the inner loop of a cascade; then the rule
@@ -378,7 +355,6 @@ def tune_cement_kiln() -> dict:
 TUNERS = {
     "boiler_drum": tune_boiler_drum,
     "glass_furnace": tune_glass_furnace,
-    "compressor_surge": tune_compressor_surge,
     "cement_kiln": tune_cement_kiln,
 }
 

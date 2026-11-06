@@ -1,5 +1,5 @@
 {
-  "fingerprint": "ead5760437fe28d4",
-  "note": "branch stamp, feat/sensor-noise: half_cycle counts by rainflow, redone at the re-record",
-  "stamped": "2026-11-06T12:55:08+00:00"
+  "fingerprint": "987b297ce2589fee",
+  "note": "Branch stamp on feat/sensor-noise, redone at the 0.8.0 re-record: PR 9's rainflow count on the battery",
+  "stamped": "2026-11-06T23:16:53+00:00"
 }

@@ -12,8 +12,7 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   its noise-free mean path, updated before the step as the env does, so the
   steam it passes follows the planned pressure;
 - objective: the level's and the pressure's tracking terms as (e / e_floor)^2,
-  exact since e_tol = 0 and p = 2, and the running cost max(Q - c_hold, 0)
-  through epigraph rows on every visited state (T2);
+  exact since e_tol = 0 and p = 2, and the running cost, linear in the firing (T2);
 - limits: the level and the pressure, abs(level) < level_trip and
   pressure_min < pressure < pressure_max on every visited state, elastic at
   the trip cost per unit (T3), backed off by the noise's reach (K11, in the
@@ -40,7 +39,7 @@ from target_gym.boiler_drum.env import (
 from target_gym.integration import integrate_dynamics
 from target_gym.oracles.controller import Oracle, TaskModel
 from target_gym.oracles.rates import RateLimit
-from target_gym.oracles.shooting import Hinge, Limit
+from target_gym.oracles.shooting import Limit
 from target_gym.reward import trip_cost
 
 
@@ -75,7 +74,8 @@ def boiler_model(env, p) -> TaskModel:
         level = drum_level(x1[1], x1[2], x1[3], level_ref, x1[0], p)
         e_p = x1[0] - target
         cost = (level / p.e_floor_level) ** 2 + (e_p / p.e_floor_pressure) ** 2
-        y = jnp.stack([p.running_weight * (Q - p.c_hold) / p.c_hold, level, x1[0]])
+        cost = cost + p.running_weight * Q / p.c_hold
+        y = jnp.stack([level, x1[0]])
         guard = boiling_margin(x1, Q, q_feed, p) / p.Q_max
         return jnp.concatenate([x1, held]), cost, y, jnp.stack([level, x1[0]]), (guard,)
 
@@ -93,7 +93,6 @@ def boiler_model(env, p) -> TaskModel:
         resolution=(
             float(p.level_precision_floor), float(p.pressure_precision_floor)
         ),
-        hinges=(Hinge(weight=1.0),),
         limits=(
             Limit(-p.level_trip, p.level_trip, price),
             Limit(p.pressure_min, p.pressure_max, price),

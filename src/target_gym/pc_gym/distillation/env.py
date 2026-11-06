@@ -112,7 +112,7 @@ class DistillationParams(EnvParams):
     # and the controller steers by is worth watching: the glass furnace had one
     # inherited from a deleted reward and it cost 16% against its own PID.
     tracking_band: float = 0.02
-    precision_floor: float = 1e-4  # mole fraction, online analyser resolution
+    precision_floor: float = 4e-4  # mole fraction, online analyser scatter
     # Zeroed for the 0.6 line: this phase scores setpoint tracking alone.
     # A running cost is a real part of every one of these plants, but its
     # weight against tracking accuracy is a design decision this library has
@@ -131,13 +131,14 @@ class DistillationParams(EnvParams):
     initial_L_range: Tuple[float, float] = (2.65, 2.76)
 
     # ---- Time discretization ----
-    # Minutes. Dominant time constant ~194 min, so 600 steps ~ 3 tau. The
-    # integrator needs 16 substeps at this step size for stability; see
+    # Minutes. Dominant time constant ~194 min, so 400 steps ~ 2 tau: at 200 the
+    # expert's hold was 2.8 times a doubled run's, against the episode-length
+    # rule. The integrator needs 16 substeps at this step size for stability; see
     # ``compute_next_state``.
     delta_t: float = 1.0
     #: ``delta_t`` is in minutes (Skogestad's model unit); seconds per unit.
     time_unit_seconds: float = 60.0
-    max_steps_in_episode: int = 200
+    max_steps_in_episode: int = 400
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # Two tracked compositions, one term each, summed. The shipped MPC's
@@ -149,28 +150,28 @@ class DistillationParams(EnvParams):
     # 1.35e-5 and 3.3e-5 before. Upper bounds on the achievable floors.
     # e_tol = 0 provisionally: the product purity specifications a column is
     # run against come from the sales contract and are to be supplied. Boilup
-    # above the hold-phase rate (3.282 kmol/min, PID; MPC 3.292) is charged at
-    # weight 1. A trip is charged at twice the reachable 0.095 error on each
+    # is charged as a share of the hold-phase rate (3.282 kmol/min, PID; MPC
+    # 3.292), at weight 1. A trip is charged at twice the reachable 0.095 error on each
     # product, in floor units (`failure_cost`).
     reward_version: int = 2
-    # The MPC holds 7.6e-7 / 5.2e-7 in the shipped disturbance, below the 1e-4
-    # composition-analyser resolution: the instrument sets both scales.
-    e_floor_top: float = 1e-4  # mole fraction
-    e_floor_bottom: float = 1e-4
+    # The MPC holds 7.6e-7 / 5.2e-7 in the shipped disturbance, below the 4e-4
+    # scatter of the composition analyser: the instrument sets both scales.
+    e_floor_top: float = 4e-4  # mole fraction
+    e_floor_bottom: float = 4e-4
     e_tol: float = 0.0  # provisional; purity specs to be supplied
     tracking_exponent: float = 2.0
     c_hold: float = 3.282  # boilup while holding (PID)
     running_weight: float = 1.0
     failure_cost: float = (
-        2.0 * 2.0 * (0.095 / 1e-4) ** 2
+        2.0 * 2.0 * (0.095 / 4e-4) ** 2
     )  # reachable 0.095 on each product (0.98 -> 0.90 trip; 0.02 -> 0.10)
     #: Restart time priced into a trip (``reward.trip_cost``; 4 h at 1 min steps: column shutdown and re-establishment of the profile, provisional).
     restart_steps: int = 240
     #: Tracking cost per step at the floor, in the reward's units.
     #: The oracle's best hold: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (the MPC's 7.64e-7 / 5.19e-7 holds in 1e-4 units).
-    rho_floor_tracking: float = (7.64e-7 / 1e-4) ** 2 + (5.19e-7 / 1e-4) ** 2
-    rho_floor: float = (7.64e-7 / 1e-4) ** 2 + (5.19e-7 / 1e-4) ** 2
+    #: demonstrated, in the reward's units (the MPC's 7.64e-7 / 5.19e-7 holds in 4e-4 units).
+    rho_floor_tracking: float = (7.64e-7 / 4e-4) ** 2 + (5.19e-7 / 4e-4) ** 2
+    rho_floor: float = (7.64e-7 / 4e-4) ** 2 + (5.19e-7 / 4e-4) ** 2
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
 

@@ -635,8 +635,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
         make_pid=_pid("make_patrol_pid_controller", module="target_gym.patrol.experts"),
         make_mpc=_mpc("make_patrol_mpc", module="target_gym.patrol.oracle"),
-        # The oracle's twin law flies the 3D heading PID, on the lead's gains
-        # (task constants, patrol/env_jax.py). The expert's gains are in its
+        # The oracle's twin law flies the 3D heading PID, on the old lead's gains
+        # (task constants, patrol/oracle.py). The expert's gains are in its
         # experts.py, as the 3D aircraft's are.
         oracle_reads=("experts/pid.py",),
         noise_fields=("turbulence_sigma",),
@@ -793,9 +793,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_distillation_mpc", module="target_gym.pc_gym.distillation.oracle"
         ),
-        # 200 min ~ one dominant time constant. The column is the slowest
-        # environment per step (41 states, 16 substeps for stability), so the
-        # test episode is kept short.
+        # 400 min ~ two dominant time constants, the length the episode rule asks
+        # of the analyser-fed expert. The column is the slowest environment per
+        # step (80 states, 16 substeps for stability).
         tuned_gains_key="distillation",
         # v3 observes the stage-15 temperature, the thermocouple the base
         # layer's temperature loop holds.

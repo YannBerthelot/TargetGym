@@ -18,9 +18,10 @@ target MDPs*).
 it is in, as in the patrol (`../patrol/PHYSICS.md`, *The air*). The lead draws the
 gust from the step clock. Each wingman meets it a slot depth later, shares what
 its offset from the lead's path leaves shared, and draws the rest, with its own
-rolling gust. Each still gets its own altitude-dependent shear. Wake is left out,
-for the same reason as the patrol, and the V's lateral spacing of at least 60 m
-keeps every slot clear of the lead's vortex pair.
+rolling gust. Each still gets its own altitude-dependent shear. The lead's wake
+reaches the wingmen as in the patrol (`wake_air`). The V's lateral spacing of at
+least 60 m keeps every wingman outboard of the vortex pair, in its upwash. A
+wingman's own wake is left out: only the unscored ranks behind it would meet it.
 
 **The slot geometry and each wingman's observation are the patrol's**
 (`slot_error_vector`, `get_obs_full`), applied to each wingman against the
@@ -67,6 +68,7 @@ aircraft, in the JaxMARL style; every agent receives the team reward and
 | The V is symmetric, drawn per episode, and starts clear of a collision | 64 draws | `test_the_v_is_drawn_per_episode_within_the_ranges`, `test_the_formation_starts_clear_of_a_collision` |
 | The gust comes from the step clock and reaches any size of formation | distinct draws under a constant key | `test_the_gust_comes_from_the_step_clock_and_any_size_of_formation_flies_in_it` |
 | Each wingman flies in its own air | gusts differ | `test_formation_wingmen_are_in_their_own_air` |
+| Each wingman meets the lead's wake on its own side | one upwash in still air | `test_each_wingman_meets_the_wake_on_its_own_side` |
 | The expert's lead seat flies the schedule | 2 m/s of it at 3000 m, no trip | `test_the_formation_lead_seat_flies_the_schedule` |
 | The multi-agent view is the joint task split by seat | same observations, same reward | `tests/formation/test_formation_marl.py` |
 | The expert's lead holds the route on held-out seeds | mean altitude error at most 2 m, heading at most 0.5 deg, seeds 200-209 (all strict expected failures until PR 9, D3) | `test_the_formation_lead_holds_altitude_and_heading` |
@@ -202,7 +204,7 @@ was already the expert's weakness on the old plant.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 46 |
+| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 81 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

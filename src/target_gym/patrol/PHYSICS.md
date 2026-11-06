@@ -80,14 +80,42 @@ and dropped out of the relative position the reward scores, so turbulence cost a
 follower nothing. Each aircraft now holds the gust it flies in, and the trips read
 it. `key=None` keeps a steady wind.
 
-**Wake is left out.** The lead's vortex pair is not modelled, and no slot feels
-it. Its size is known: `Gamma = 4 M g / (pi rho V b)` is about 190 m^2/s here, and
-the pair sinks at `Gamma / (2 pi b0)` with `b0 = pi b / 4`, about 1.1 m/s, so 1 to
-2 s behind the lead it is barely below the lead's path. What is missing is a model
-of what it does to a follower that this plant can use: NASA's Autonomous Formation
-Flight trials measured the drag benefit near the vortex by hand-flown test points,
-and held their station-keeping figure outside it, so nothing validates a rolling
-moment and lift change at a 1 Hz demand on this airframe. D3 says what that costs.
+**The wake.** The lead's lift leaves a vortex pair, and a follower flies in it
+(`wake_air`). This is Blake and Multhopp's horseshoe vortex, the model close
+formation work starts from, with Dogan's way of handing it to a flight model.
+
+- **The pair.** Two legs `b0 = pi b / 4` apart at circulation `Gamma = L / (rho V
+  b0)`, from the lead's lift, density and airspeed as it passed. Burnham's core,
+  0.0582 of the span, keeps the centre finite and differentiable. These slots sit
+  4.4 to 8.8 spans back, so the legs read as straight lines in the cross-plane.
+- **Where it is.** Where the lead was `slot_back / V` ago, the gust's delay, tilted
+  as it was banked, so in a turn it stays on the lead's past track. By then it has
+  sunk along its lift at `w0 = Gamma / (2 pi b0)`, about 1.1 m/s here, and lost
+  `exp(-0.2 t / t0)` of its strength, on `t0 = 2 pi b0^2 / Gamma`. At these ages
+  `t / t0` stays under 0.15, so that is at most 3%, and the sink does the work:
+  alone, it gives the fall with distance NASA measured.
+- **How it reaches the follower.** Upwash and sidewash go in as a gust, and their
+  spanwise gradient as a rolling gust, weighted by an elliptic lift across the
+  follower's wing. That gradient is the plant's own `p_g`: a wing rolling at `p`
+  sees `w = p y`, and `16 / b^2` of the first moment gives `p` back.
+- **The sweet-spot drag saving is modelled, with no term of its own.** Upwash `w`
+  rotates the lift forward by `w / V`, which is the saving, and the plant's lift
+  already lies across the air-relative velocity. So a follower in upwash needs less
+  thrust, and in downwash more.
+
+It reproduces NASA's Autonomous Formation Flight data for two F/A-18s, read off the
+charts: induced drag 40 to 52% lower near a 13% tip overlap, a rolling moment that
+peaks near 0.01 away from the lead and reverses near a 27% overlap, and a saving
+that falls by about a quarter from 2.75 to 9.5 spans aft. On this plant at 5000 m
+and 190 m/s, 200 m back, the peak upwash is 1.5 m/s near that overlap, the downwash
+dead astern 4.1 m/s, and the sweet spot saves 6 kN of a 52 kN drag, 12%. The peak
+rolling moment, on a leg, is 0.012 against full aileron's 0.0168, so a slot in the
+wake can be flown, as NASA's pilots flew it.
+
+What it leaves out: the tail and fin (no yaw or pitch moment), the follower's
+effect on the vortex, the roll-up itself, the gust carrying the pair, and a
+wingman's own wake, which only the unscored ranks behind it would meet.
+`wake_strength` 0 turns it off.
 
 ### The range-and-bearing variant
 
@@ -125,6 +153,12 @@ definition depends on.
 | Offset air decorrelates and keeps its variance | correlation `exp(-r / L)`, 2 m/s, 4000 chains | `test_offset_air_decorrelates_and_keeps_its_variance` |
 | Turbulence rolls a follower held wings level | a bank, 0 in still air | `test_turbulence_rolls_a_follower_held_wings_level` |
 | Each wing has its own rolling gust | banks differ across seats | `test_each_wing_has_its_own_rolling_gust` |
+| The induced drag saving peaks where NASA measured it | 40 to 52% at 8 to 20% tip overlap | `test_the_induced_drag_saving_peaks_where_nasa_measured_it` |
+| The rolling moment has NASA's shape | peak, reversal, far field | `test_the_rolling_moment_has_nasas_shape` |
+| The saving falls with distance as NASA measured | about 0.75 from 2.75 to 9.5 spans | `test_the_saving_falls_with_distance_as_nasa_measured` |
+| Upwash saves the drag the rotated lift gives back | `L w / V`, within 2% | `test_upwash_saves_the_drag_the_rotated_lift_gives_back` |
+| The aileron can hold the worst of the wake | under 0.0168 | `test_the_aileron_can_hold_the_worst_of_the_wake` |
+| The expert flies a slot in the wake | a strict expected failure until PR 9, D3 | `test_the_expert_flies_a_slot_in_the_wake` |
 | The shipped expert holds formation through a turn | across sampled turn rates | `test_expert_holds_formation` |
 | The expert never collides | separation > `min_separation` | `test_expert_never_collides` |
 | The expert holds its slot on held-out seeds, both variants | RMS slot error after the burn-in at most 8.5 m on seeds 200-209, no trip | `test_the_follower_holds_its_slot` |
@@ -150,6 +184,9 @@ Flight parameters are inherited from `PlaneParams3D`; see the
 | `max_slot_error` | 1500 m | Formation lost, a trip |
 | `lead_turn_rate_range` | (−0.03, 0.03) rad/step | Range each route leg's turn rate is drawn from; 0 is straight and level |
 | `lead_leg_seconds` | 60 s | Length of each leg of the lead's route |
+| `wake_strength` | 1 | Scales the lead's wake; 0 turns it off |
+| `wake_core_ratio` | 0.0582 | Burnham core radius over the span |
+| `wake_decay_rate` | 0.2 | The wake's decay per `t0` |
 | `follower_spawn_noise` | 40 m | Isotropic spawn offset, so the episode starts solvable but untrimmed |
 | `delta_t` | 1.0 s | Step size |
 
@@ -167,7 +204,14 @@ lead's schedule.
 | Gust delay | `slot_back / V` | ours: Taylor's frozen turbulence, as the plan's row asks |
 | Correlation | `exp(-r / L)` | read: Dryden's longitudinal form ([Antonova et al. 2014](https://jrnl.kai.edu.ua/index.php/visnik/article/download/6790/7602/16811), equation 1). Across the path and on all axes: ours |
 | Scale `L` | 533.4 m | MIL-F-8785C, as `plane3d/PHYSICS.md` |
-| Wake circulation and sink | about 190 m^2/s, 1.1 m/s | `b0` read ([NASA review](https://ntrs.nasa.gov/api/citations/20140003974/downloads/20140003974.pdf)), sink read ([DLR](https://elib.dlr.de/67327/1/2011-Aerospace-Engineering.pdf)), circulation from lift `= rho V Gamma b0`; values ours at 5000 m and 190 m/s |
+| Horseshoe pair, Burnham's profile, `Gamma`, lift rotated by `w / V` | `b0 = pi b / 4`, `L / (rho V b0)` | read ([Blake and Multhopp, AIAA-98-4343](https://ocw.mit.edu/courses/16-886-air-transportation-systems-architecting-spring-2004/ab208a8f2d9631cd6acb5f2d8e29d713_01_blakemulthopp.pdf), appendix) |
+| Core radius | 0.0582 of the span | read, for a 747 ([NASA review](https://ntrs.nasa.gov/api/citations/20140003974/downloads/20140003974.pdf), table). On this airframe: ours |
+| Effective wind and gradient | Dogan's method | abstract read (J. Aircraft 42(4), 2005); the full paper was not opened |
+| Elliptic weight, `p_g` as `16 / b^2` of the first moment | | ours |
+| Sink and time scale | `w0 = Gamma / (2 pi b0)`, `t0 = 2 pi b0^2 / Gamma` | read ([Holzapfel and Steen, AIAA J. 2007](https://elib.dlr.de/47183/1/AIAA-23917-368.pdf)) |
+| Decay | `exp(-0.2 t / t0)` | ours, fitted by eye to that paper's figure 3 lidar median |
+| Drag, roll and distance targets | as above | read off NASA's charts ([AFF overview](https://ntrs.nasa.gov/api/citations/20080009703/downloads/20080009703.pdf), pages 5, 15, 17) |
+| The test's F/A-18 | 16 t, span efficiency 0.7, `C_lp` -0.25 | ours, the usual size for that wing |
 | Lead schedule | 290 kt, M 0.78 | as `plane/PHYSICS.md` |
 | Lead's gains | `LEAD_AUTOPILOT` | the 3D heading expert's on 2026-11-06, stale until PR 9 |
 
@@ -268,8 +312,9 @@ draws, with a peak load of 1.65 g, 36 deg of bank and 17 m of height.
 
 **The 8.5 m limit, re-read for the 40 m separation.** The number stays, and the
 trip does not touch it: the nearest slot is 150 m from the lead, 110 m from the
-trip, which is 13 limits. What moves is what it can be said to mean, because this
-route is not the flight it came from:
+trip, which is 13 limits. The owner kept it on the whole route on 2026-11-06, turns
+included, which makes it stricter than NASA's requirement, because this route is
+not the flight it came from:
 
 - **It is a requirement for steady flight.** The 10 ft is NASA's design requirement
   for steady-state tracking, 1 standard deviation, and the gain sets beat it,
@@ -331,12 +376,14 @@ the follower, including through a collision. Formation flight against a lead
 that reacts (a break turn, a station change) is a different and harder task,
 and is not modelled.
 
-**D3: a slot can sit in a wake the plant does not have.** Wake is left out
-(section 1), and the slot draws are not shaped around it. A slot within a span of
-the lead's path, `|slot_right|` and `|slot_up|` under about 35 m, would be in or
-beside the vortex pair, and about 14% of draws are. The 8.5 m limit comes from
-station-keeping held outside the vortex, so it does not speak for those slots
-either. The formation's V is clear of this: its lateral spacing is at least 60 m.
+**D3: the expert cannot fly a slot in the wake yet.** The slot draws are not shaped
+around the wake, so about 20% of them sit within 60 m of the lead's path and 30 m of
+its height, and 14% within a span of the pair. There the expert holds 54 to 119 m RMS
+against 17 to 25 m with the wake off, and banks to the 60 deg trip. Held-out seed
+208, a slot 16 m off the path, goes from no trips to 9. At 100 m off the path nothing
+changes. The aileron has the authority, so this is the hold's, and PR 9's. The 8.5 m
+limit comes from station-keeping held outside the vortex, so it does not speak for
+those slots: it is stricter than NASA's requirement there too.
 
 ---
 
@@ -350,8 +397,8 @@ either. The formation's V is clear of this: its lateral spacing is at least 60 m
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `patrol` | 200 | 1 | 3 min | 3 in [-1, 1] | 26 | 34 |
-| `patrol_range_bearing` | 200 | 1 | 3 min | 3 in [-1, 1] | 21 | 34 |
+| `patrol` | 200 | 1 | 3 min | 3 in [-1, 1] | 26 | 69 |
+| `patrol_range_bearing` | 200 | 1 | 3 min | 3 in [-1, 1] | 21 | 69 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

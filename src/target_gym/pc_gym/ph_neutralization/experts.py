@@ -13,6 +13,8 @@ SIMC-tuned from step tests (``scripts/tune_process_experts.py``, PHYSICS.md
 section 7).
 """
 
+import math
+
 import jax.numpy as jnp
 from flax import struct
 
@@ -70,10 +72,12 @@ def reagent_demand(pH, curve: TitrationCurve, xp=jnp):
 @struct.dataclass
 class LinearisedPIParams:
     """The PI on reagent demand: ``Kp`` in mL/s per mL/s, ``Ti`` and ``dt`` in
-    s, and the base valve's range in mL/s."""
+    s, ``alpha`` how far the reading's filter moves per step, and the base
+    valve's range in mL/s."""
 
     Kp: float
     Ti: float
+    alpha: float
     dt: float
     q3_min: float
     q3_max: float
@@ -83,6 +87,8 @@ class LinearisedPIParams:
 @struct.dataclass
 class LinearisedPIState:
     integral: float
+    demand: float
+    started: float
 
 
 def linearised_pi_step(params: LinearisedPIParams, state, obs, xp=jnp):
@@ -91,38 +97,47 @@ def linearised_pi_step(params: LinearisedPIParams, state, obs, xp=jnp):
     The error is in reagent demand, the target's minus the measured pH's, so
     the loop gain is about 1 across the titration curve instead of varying
     45 times. The bias is the target's demand. The integral holds while the
-    valve is saturated.
+    valve is saturated. The filter runs on the linearised reading, which starts
+    it at the first.
     """
     demand_sp = reagent_demand(obs[2], params.curve, xp)
-    demand = xp.clip(reagent_demand(obs[0], params.curve, xp), 0.0, 2 * params.q3_max)
+    read = xp.clip(reagent_demand(obs[0], params.curve, xp), 0.0, 2 * params.q3_max)
+    demand = xp.where(
+        state.started > 0, state.demand + params.alpha * (read - state.demand), read
+    )
     e = demand_sp - demand
     integral = state.integral + e * params.dt
     q3 = demand_sp + params.Kp * (e + integral / params.Ti)
     u = 2.0 * (q3 - params.q3_min) / (params.q3_max - params.q3_min) - 1.0
     u_clipped = xp.clip(u, -1.0, 1.0)
     return xp.array([u_clipped]), LinearisedPIState(
-        integral=xp.where(u == u_clipped, integral, state.integral)
+        integral=xp.where(u == u_clipped, integral, state.integral),
+        demand=demand,
+        started=xp.ones_like(demand),
     )
 
 
-def ph_linearised_pi(Kp: float, Ti: float, params=None):
+def ph_linearised_pi(Kp: float, Ti: float, params=None, Tf: float = 0.0):
     """The expert with these gains on ``params``' streams (the scored
     configuration's by default), as a pure
-    :class:`~target_gym.experts.pid.Controller`."""
+    :class:`~target_gym.experts.pid.Controller`. ``Tf`` is the filter on the
+    linearised reading, in seconds."""
     from target_gym.experts.pid import Controller
     from target_gym.pc_gym.ph_neutralization.env import PHParams
 
     p = params if params is not None else PHParams()
+    dt = float(p.delta_t)
     return Controller(
         LinearisedPIParams(
             Kp=Kp,
             Ti=Ti,
-            dt=float(p.delta_t),
+            alpha=-math.expm1(-dt / Tf) if Tf else 1.0,
+            dt=dt,
             q3_min=float(p.q3_min),
             q3_max=float(p.q3_max),
             curve=TitrationCurve.of(p),
         ),
-        LinearisedPIState(integral=0.0),
+        LinearisedPIState(integral=0.0, demand=0.0, started=0.0),
         linearised_pi_step,
     )
 
@@ -135,6 +150,7 @@ def make_ph_pid_controller():
     from target_gym.experts.pid import gain
 
     return ph_linearised_pi(
-        Kp=gain("ph_neutralization", "Kp", 7.14),
-        Ti=gain("ph_neutralization", "Ti", 48.9),
+        Kp=gain("ph_neutralization", "Kp"),
+        Ti=gain("ph_neutralization", "Ti"),
+        Tf=gain("ph_neutralization", "Tf"),
     )

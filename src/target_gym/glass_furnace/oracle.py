@@ -15,8 +15,7 @@ section 5.3), run by ``target_gym.oracles.controller.Oracle``:
   the gas's heating value on their noise-free mean paths, updated before the step
   as the env does;
 - objective: the crown's tracking term as (e / e_floor)^2, exact since
-  e_tol = 0 and p = 2, and the running cost max(fuel - c_hold, 0) through
-  epigraph rows on every visited state (T2);
+  e_tol = 0 and p = 2, and the running cost, linear in the fuel (T2);
 - limits: the crown, melt and working-end bands on every visited state,
   elastic at the trip cost per unit (T3), backed off by the planner's error
   on them (K11, in the widths file);
@@ -47,7 +46,7 @@ from target_gym.glass_furnace.env import (
 from target_gym.integration import integrate_dynamics
 from target_gym.oracles.controller import Oracle, TaskModel, softplus_clip
 from target_gym.oracles.rates import RateLimit
-from target_gym.oracles.shooting import Hinge, Limit
+from target_gym.oracles.shooting import Limit
 from target_gym.reward import trip_cost
 
 #: x = (T_crown, T_melt, T_work, m_batch, T_rA, T_rB, T_gas, fuel_pipeline,
@@ -100,10 +99,8 @@ def glass_model(env, p) -> TaskModel:
         x1, fuel = glass_step(env, p, rate, x, u, t, task, d["widths"][0])
         target = get_target_from_schedule(task[0], task[1] + t + 1, p)
         cost = ((target - x1[0]) / p.e_floor) ** 2
-        y = jnp.stack([
-            p.running_weight * (fuel - p.c_hold) / p.c_hold, x1[0], x1[1], x1[2],
-        ])  # fmt: skip
-        return x1, cost, y, x1[:1], (x1[BATCH],)
+        cost = cost + p.running_weight * fuel / p.c_hold
+        return x1, cost, x1[:3], x1[:1], (x1[BATCH],)
 
     price = float(trip_cost(p))
     glass = Limit(p.T_glass_min, p.T_glass_max, price)
@@ -121,7 +118,6 @@ def glass_model(env, p) -> TaskModel:
         move_rows=lambda x, u, steps: rate.rows(x[VALVE:], u, steps),
         tracked=lambda s: s.T_crown[None],
         resolution=(float(p.precision_floor),),
-        hinges=(Hinge(weight=1.0),),
         limits=(Limit(p.T_crown_min, p.T_crown_max, price), glass, glass),
     )  # fmt: skip
 

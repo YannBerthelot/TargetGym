@@ -65,7 +65,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 13 fields.
+`reset` samples the initial condition and the target; state has 14 fields.
 
 ## Episode end
 
@@ -191,6 +191,9 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `e_floor_slot` | 3 | m |
 | `e_tol_slot` | 0 | m |
 | `lead_leg_seconds` | 60 | s |
+| `wake_strength` | 1 | - |
+| `wake_core_ratio` | 0.0582 | - |
+| `wake_decay_rate` | 0.2 | - |
 | `follower_spawn_noise` | 40 | m |
 | `w_track` | 0.6 | - |
 | `w_lead` | 0.4 | - |

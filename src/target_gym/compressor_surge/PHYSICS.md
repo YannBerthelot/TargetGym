@@ -603,20 +603,35 @@ The memory starts at the observed drive setpoint and valve (`pair_init`), so
 the speed loop takes over bumplessly from any state and the valve loop from
 its control line. It persists through a trip (the suite's convention).
 
-| gain | shipped | `DEFAULT_GAINS` | tuned or held | label and source |
-|---|---|---|---|---|
-| `kp_speed` | 0.112 of rated per kPa | 0.08 | tuned | TUNED by the search (below); the default is ours |
-| `ki_speed` | 0.04 of rated per kPa s | 0.04 | tuned | TUNED, left at the default (ours) |
-| `kp_surge` | 2.0 per unit margin | 2.0 | tuned | TUNED, left at the default; the default is ours, above the nominal gain below 1 that Mirsky et al. p.13 call typical, which relies on open-loop steps that the override stands in for here; at 3.0 the valve rings in a limit cycle that the guard's travel check refuses (measured, `--section guard`) |
-| `ki_surge` | 0.75 per unit margin s | 3.0 | tuned | TUNED; the default is ours; at 0.3 the linearised loop keeps a mode decaying at 0.083 /s (derived, `--section guard`) |
-| `surge_line` | 0.15 | 0.15 | held | ours; wider than the control lines about 10 % in flow from the surge line that Mirsky et al. pp.11 and 13 describe; the shipped pair keeps a margin of at least 0.0951 over 4096 episodes (measured, `--pid-validation`) |
-| `override_line` | 0.075 | 0.075 | held | ours, read-consistent: half the control margin, near where Mirsky et al. p.13 place the open-loop line |
-| `override_hold` | 2 s | 2 s | held | ours |
-| `reset_band` | 0.05 of opening | 0.05 | held | ours |
+The stored values come from section 9 of
+`docs/proposals/expert-protocols-process.md`, run by
+`scripts/tune_process_experts.py --envs compressor_surge`. Each test starts at the
+pair's rest at the levels the schedule ends on, with no stored gain in the way.
 
-The held gains are set by the distance to the surge line, which the return
-sees only once a trip happens, so the tuner holds them (`HELD_GAINS`). The
-tests in `tests/compressor_surge/test_compressor_surge_experts.py` hold the
+| value | stored | label and source |
+|---|---|---|
+| `kp_speed`, `ki_speed` | 0.0289, 0.0164 | SIMC on speed to pressure: k = 47 kPa per unit speed, tau1 = 1.77 s, theta = 0.65 s. A drive, so no dead band. 8 of 10 tests: two seeds trip in the hold, on a hidden line right of 0.04 |
+| `kp_surge`, `ki_surge` | 1.0, 4.68 | SIMC on recycle to margin: k = 1.16, tau1 = 0.214 s, theta = 0.05 s, 1.02 capped at Mirsky's 1. N7 stops at Kc,min. 6 of the 8 points with the valve open |
+| `Tf_surge` | 0.021 s | N5's cap. Under the 0.1 s step, so it barely filters |
+| `surge_line` | 0.10 | read, Mirsky's 10 %. The schedule check passes it: worst margin 0.061, no trips on seeds 100 to 109 |
+| `override_line` | 0.05 | read, half the control margin |
+| `override_hold` | 2 s | derived, the valve's full-open stroke |
+| `reset_band` | 0.014 of opening | derived, C8 |
+
+**Pairing.** RGA(dp on N) is 0.91 at the median rest with the valve open, so speed
+holds pressure and the valve holds the margin, as shipped.
+
+**Held-out check** (seeds 200 to 209). It holds 12.8 per step (worst seed 24.9)
+against a ceiling of 1, with no trips. The best null is constant 0.5, ratio 0.011,
+0 of 10 wins. The valve travels about 0.3 % per step in hold, from 0.71 %, still over
+the positioner's 0.25 %, since the filter's cap is under one step. The true margin
+over each episode's hidden line falls to 0.014 at worst. The opening still costs 57
+to 92 % of an episode: the anti-surge PI shuts the valve while the slower speed loop
+catches up. That is the recipe's result, and the structure has no term to coordinate
+them. Over 1024 validation seeds it does not trip, and its margin reaches 0.0496,
+under the override line: a finding, `test_the_pair_holds_the_validation_seeds`.
+
+The tests in `tests/compressor_surge/test_compressor_surge_experts.py` hold the
 pair. `test_default_gains_are_finite_and_tuned_ones_nonzero` and
 `test_gains_are_read_under_the_task_key` check the gains and where they are
 read from. `test_shipped_gains_pass_the_guard` and
@@ -629,7 +644,8 @@ the stateful controller.
 
 ### The guard
 
-`make_compressor_surge_pid` refuses gains that fail any of three checks
+`check_pair_gains` reports gains that fail any of three checks, and since D2 of the
+process protocols the factory does not call it
 (`check_pair_gains`, which raises `UnsafePairGains`):
 
 1. **Linear decay.** At five points where the anti-surge loop is active
@@ -957,12 +973,11 @@ which is what the recorded baselines use.
 `compute_reward = -(tracking + running + wear + failure)`, see
 docs/reward-shaping.md. Tracking is the header-pressure error in kPa over
 `e_floor`, squared. Running is the ideal compression power spent on recycled
-gas, m_r dp / rho01, the avoidable part of the drive's consumption, charged
-above `c_hold` in the contract's dimensionless form. It is not priced, since
-a header-pressure deviation has no tariff that would put tracking in the same
-currency. With a scalar `c_hold` under a moving schedule, blocks where recycle
-is forced pay a running cost no controller can avoid, and recycle below
-`c_hold` is free in the other blocks.
+gas, m_r dp / rho01, the avoidable part of the drive's consumption, charged in
+full as a share of `c_hold`, in the contract's dimensionless form. It is not
+priced, since a header-pressure deviation has no tariff that would put tracking in
+the same currency. With a scalar `c_hold` under a moving schedule, blocks where
+recycle is forced pay a running cost no controller can avoid.
 
 | parameter | value | source |
 | --- | --- | --- |
@@ -978,7 +993,7 @@ is forced pay a running cost no controller can avoid, and recycle below
 | `travel_weight` | 1 (ours, provisional) | twice the free travel in one step is worth one floor-width of tracking error. A full stroke at 0.05 per step costs 19 per step |
 | `precision_floor` | 0.0275 kPa (derived) | the header-pressure transmitter's reference accuracy, 0.055 % of calibrated span (read: Yokogawa EJA530E gauge transmitter, GS 01C31F01-01EN, p.1, capsule A at spans of 20 kPa or more, https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf; Siemens SITRANS P320, catalog FI 01 09/2026, p.1/14, 1 bar cell at a turn-down of 5 or less, https://support.industry.siemens.com/cs/attachments/109765052/sitransp_p320_p420_fi01_en.pdf), times a 0 to 50 kPa calibrated span (ours). It covers linearity, hysteresis and repeatability together, and the Yokogawa sheet states it as a 3-sigma bound, so an error below it is one the instrument cannot tell from a smaller one. Neither sheet gives a finer measuring resolution; the one resolution found, the current output's quantisation (Endress+Hauser Cerabar PMP71B, TI01509P, p.24, https://bdih-download.endress.com/file/11181feb66c9cd03e4256402f1eff641/TI01509PEN_1025-00.pdf), is finer than the repeatability and is not used. The value scales with the span. Version 1's floor and the clamp on `e_floor`, so while the clamp binds it sets the version-2 scale |
 | `rho_floor_tracking` | 1.40e-5 (derived from the measured hold) | (lowest per-seed MPC hold / `e_floor`)^2 = (1.03e-4 / 0.0275)^2, from `scripts/measure_hold.py`; below 1 because the clamp binds |
-| `rho_floor` | 1.40e-5 (derived from the measured hold) | equal to `rho_floor_tracking`, as on the suite's other plants with a running cost, since recycle power at `c_hold` costs nothing and `c_hold` is the NMPC's own hold |
+| `rho_floor` | 1.40e-5 (derived from the measured hold) | equal to `rho_floor_tracking`, from when recycle power at `c_hold` cost nothing. It gains the running term, about `running_weight`, when PR 9 re-measures the hold |
 | `floor_is_documented_minimum` | False | the plant is disturbed |
 
 **The hold window.** `scripts/measure_hold.py` scores this plant's hold

@@ -15,7 +15,7 @@ env, params = tg.make("distillation")
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | yD (mole fraction), xB (mole fraction) |
-| Episode length | 200 steps of 60 s (3.33 h) |
+| Episode length | 400 steps of 60 s (6.67 h) |
 | Cite as | `distillation-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
 
@@ -65,7 +65,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 200 steps.
+**Truncation.** After 400 steps.
 
 ## Baselines
 
@@ -85,7 +85,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | min |
-| `max_steps_in_episode` | 200 | steps |
+| `max_steps_in_episode` | 400 | steps |
 | `sensor_noise_scale` | 1 | - |
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
@@ -112,18 +112,18 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `yD_floor` | 0.9 | - |
 | `xB_ceiling` | 0.1 | - |
 | `tracking_band` | 0.02 | - |
-| `precision_floor` | 0.0001 | - |
+| `precision_floor` | 0.0004 | - |
 | `boilup_cost_weight` | 0 | - |
 | `time_unit_seconds` | 60 | s |
 | `reward_version` | 2 | - |
-| `e_floor_top` | 0.0001 | - |
-| `e_floor_bottom` | 0.0001 | - |
+| `e_floor_top` | 0.0004 | - |
+| `e_floor_bottom` | 0.0004 | - |
 | `e_tol` | 0 | - |
 | `tracking_exponent` | 2 | - |
 | `c_hold` | 3.282 | kmol/min |
 | `running_weight` | 1 | - |
-| `failure_cost` | 3.61e+06 | reward |
+| `failure_cost` | 225625 | reward |
 | `restart_steps` | 240 | steps |
-| `rho_floor_tracking` | 8.53057e-05 | reward |
-| `rho_floor` | 8.53057e-05 | reward |
+| `rho_floor_tracking` | 5.33161e-06 | reward |
+| `rho_floor` | 5.33161e-06 | reward |
 

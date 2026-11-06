@@ -28,6 +28,7 @@ from typing import Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from flax import struct
 
 from target_gym import reward as R
@@ -37,6 +38,7 @@ from target_gym.plane.dynamics import (
     PITCH_DEMAND_MAX,
     STICK_TRAVEL,
     advance_gust,
+    compute_air_density_from_altitude,
     scheduled_airspeed,
     step_key,
     total_wind_3d,
@@ -121,11 +123,27 @@ LEAD_AUTOPILOT = Plane3DGuidanceParams(
 #: rank sits 600 m back, 3.5 steps at the schedule's slowest 170 m/s.
 GUST_MEMORY = 5
 
+#: What the lead leaves in the air each step: x, y, z, its right wing's horizontal
+#: direction (2), its bank and its circulation (``wake_sample``).
+WAKE_CHANNELS = 7
+#: Stations across a follower's wing and their elliptic lift weights, Gauss-Chebyshev
+#: of the second kind. 31 keep a span-wise core inside 0.2% of a fine integral.
+_ANGLE = np.pi * np.arange(1, 32) / 32.0
+_STATION = np.cos(_ANGLE) / 2.0
+_LOAD = 2.0 / 32.0 * np.sin(_ANGLE) ** 2
+
 
 def gust_memory_field():
     """The state field holding the lead's recent gust, ``(GUST_MEMORY, 3)``."""
     return struct.field(
         default_factory=lambda: jnp.zeros((GUST_MEMORY, 3)), kw_only=True
+    )
+
+
+def wake_memory_field():
+    """The state field holding the lead's wake, ``(GUST_MEMORY, WAKE_CHANNELS)``."""
+    return struct.field(
+        default_factory=lambda: jnp.zeros((GUST_MEMORY, WAKE_CHANNELS)), kw_only=True
     )
 
 
@@ -167,6 +185,7 @@ class PatrolState(EnvState):
     # (``advance_air``). Each aircraft holds the gust it flies in.
     gust_history: jax.Array = gust_memory_field()
     gust_own: jax.Array = own_gust_field(1)
+    wake_history: jax.Array = wake_memory_field()
 
     actuator_held: jax.Array = actuator_field(3)
 
@@ -238,6 +257,15 @@ class PatrolParams(PlaneParams3D):
     #: every minute rather than once per episode.
     lead_leg_seconds: float = 60.0
 
+    # The lead's wake on its followers (``wake_air``, PHYSICS.md section 1).
+    #: Scales the wake: 0 is the plant without it, how a run measures what it costs.
+    wake_strength: float = 1.0
+    #: Burnham core radius over the span, the 0.0582 of NASA's wake model review.
+    wake_core_ratio: float = 0.0582
+    #: The circulation's decay per ``t0 = 2 pi b0^2 / Gamma``: our fit, ``exp(-0.2 t /
+    #: t0)``, to the lidar median of Holzapfel and Steen (2007), figure 3.
+    wake_decay_rate: float = 0.2
+
     # Follower is spawned near the slot with this much isotropic position noise
     # (m) so the episode starts solvable but not perfectly trimmed.
     follower_spawn_noise: float = 40.0
@@ -259,6 +287,9 @@ PARAM_UNITS = {
     "rho_floor_tracking": "reward",
     "rho_floor": "reward",
     "lead_leg_seconds": "s",
+    "wake_strength": "-",
+    "wake_core_ratio": "-",
+    "wake_decay_rate": "-",
     "follower_spawn_noise": "m",
     "delta_t": "s",
 }
@@ -628,6 +659,18 @@ def air_speed(aircraft, gust, params):
     )
 
 
+def slot_delay(back, speed, params):
+    """Steps a follower ``back`` metres behind lags the lead's air by."""
+    return jnp.maximum(back, 0.0) / (jnp.maximum(speed, 1.0) * params.delta_t)
+
+
+def at_delay(history, delay):
+    """``history``, newest first, read ``delay`` steps ago between its samples."""
+    sample = jnp.clip(jnp.floor(delay).astype(int), 0, GUST_MEMORY - 2)
+    part = jnp.clip(delay - sample, 0.0, 1.0)[:, None]
+    return (1.0 - part) * history[sample] + part * history[sample + 1]
+
+
 def advance_air(history, own, back, right, up, speed, params, key, time):
     """One step of the air around the lead and its ``n`` followers.
 
@@ -656,13 +699,75 @@ def advance_air(history, own, back, right, up, speed, params, key, time):
     seats = jnp.arange(own.shape[0] + 1)
     drawn, rolls = jax.vmap(draw)(jnp.concatenate([history[:1], own]), seats)
     history = jnp.concatenate([drawn[:1], history[:-1]])
-    delay = jnp.maximum(back, 0.0) / (jnp.maximum(speed, 1.0) * params.delta_t)
-    sample = jnp.clip(jnp.floor(delay).astype(int), 0, GUST_MEMORY - 2)
-    part = jnp.clip(delay - sample, 0.0, 1.0)[:, None]
-    delayed = (1.0 - part) * history[sample] + part * history[sample + 1]
+    delayed = at_delay(history, slot_delay(back, speed, params))
     rho = jnp.exp(-jnp.hypot(right, up) / params.turbulence_scale_length)[:, None]
     gusts = rho * delayed + jnp.sqrt(1.0 - rho**2) * drawn[1:]
     return history, drawn[1:], jnp.concatenate([drawn[:1], gusts]), rolls
+
+
+def wake_sample(lead, lift, speed, params):
+    """What the lead leaves in the air: where it is, which way its wing lies, and the
+    circulation of a pair ``b0 = pi b / 4`` apart that carries its ``lift``."""
+    rho = compute_air_density_from_altitude(lead.z)
+    gamma = lift / (rho * speed * jnp.pi / 4.0 * params.wingspan)
+    right = (jnp.sin(lead.psi), -jnp.cos(lead.psi))
+    wake = (lead.x, lead.y, lead.z, *right, lead.phi, params.wake_strength * gamma)
+    return jnp.stack(wake)
+
+
+def shed_wake(history, sample):
+    """``history`` with ``sample`` as its newest entry."""
+    return jnp.concatenate([sample[None], history[:-1]])
+
+
+def initial_wake(lead, params):
+    """The wake of a lead already in steady level flight, laid out behind it."""
+    speed = compute_velocity_3d(lead.x_dot, lead.y_dot, lead.z_dot)
+    sample = wake_sample(lead, lead.m * params.gravity, speed, params)
+    velocity = jnp.zeros(WAKE_CHANNELS).at[:2].set(jnp.stack([lead.x_dot, lead.y_dot]))
+    steps = jnp.arange(GUST_MEMORY, dtype=jnp.float32)[:, None]
+    return sample - steps * params.delta_t * velocity
+
+
+def wake_air(history, x, y, z, delay, params):
+    """The lead's wake on ``n`` followers: ``(gusts of shape (n, 3), rolling gusts)``.
+
+    Blake and Multhopp's horseshoe vortex: two legs ``b0`` apart with Burnham's core,
+    far enough back to read as straight lines in the follower's cross-plane. The
+    wake lies where the lead was ``delay`` steps ago, tilted as it was banked, and has
+    sunk along its lift at ``w0 = Gamma / (2 pi b0)`` by then, with its circulation
+    decayed on ``t0 = b0 / w0``.
+
+    Dogan's effective wind and gradient, weighted by a follower's elliptic lift: the
+    upwash and sidewash go in as a gust, so the lift rotates forward by ``w / V`` and
+    the drag saving needs no term of its own. The gradient goes in as the plant's
+    ``p_g``: ``16 / b^2`` of the first moment, which gives back ``p`` from ``w = p y``.
+    Each is read across a wing lying along the pair. A follower past the lead is clear.
+    """
+    px, py, pz, rx, ry, phi, gamma = jnp.moveaxis(at_delay(history, delay), -1, 0)
+    span = params.wingspan
+    b0 = jnp.pi / 4.0 * span
+    sink = gamma / (2.0 * jnp.pi * b0) * delay * params.delta_t
+    gamma = gamma * jnp.exp(-params.wake_decay_rate * sink / b0)
+    across, height = (x - px) * rx + (y - py) * ry, z - pz
+    cos, sin = jnp.cos(phi), jnp.sin(phi)
+    lateral = (across * cos + height * sin)[:, None] + span * _STATION
+    normal = (height * cos - across * sin + sink)[:, None]
+    upwash, sidewash = 0.0, 0.0
+    for leg, turn in ((b0 / 2.0, 1.0), (-b0 / 2.0, -1.0)):
+        offset = lateral - leg
+        radius2 = offset**2 + normal**2 + (params.wake_core_ratio * span) ** 2
+        upwash = upwash + turn * offset / radius2
+        sidewash = sidewash - turn * normal / radius2
+    strength = gamma / (2.0 * jnp.pi)
+    w = strength * jnp.sum(_LOAD * upwash, axis=-1)
+    v = strength * jnp.sum(_LOAD * sidewash, axis=-1)
+    roll = strength * 16.0 / span * jnp.sum(_LOAD * _STATION * upwash, axis=-1)
+    side = v * cos - w * sin
+    gusts = jnp.stack([side * rx, side * ry, v * sin + w * cos], axis=-1)
+    now = history[0]
+    ahead = (x - now[0]) * -now[4] + (y - now[1]) * now[3] > 0.0
+    return jnp.where(ahead[:, None], 0.0, gusts), jnp.where(ahead, 0.0, roll)
 
 
 def in_air(aircraft, gust):
@@ -681,7 +786,7 @@ def step_lead(state: PatrolState, params: PatrolParams, method: str = "rk4_1"):
 
     The lead's commanded heading is stored in ``lead.target_heading`` and
     advanced by ``lead_turn_rate`` each step, producing straight-and-level
-    flight (rate 0) or a turn. Returns (new_lead, new_lead_memory).
+    flight (rate 0) or a turn. Returns (new_lead, new_lead_memory, its lift).
     """
     commanded_heading = wrap_angle(state.lead.target_heading + state.lead_turn_rate)
     lead_cmd = state.lead.replace(target_heading=commanded_heading)
@@ -689,10 +794,10 @@ def step_lead(state: PatrolState, params: PatrolParams, method: str = "rk4_1"):
         LEAD_AUTOPILOT, state.lead_memory, get_obs_heading(lead_cmd)
     )
     power, pitch, bank = decode_action(lead_action)
-    new_lead, _ = compute_next_state_3d(
+    new_lead, metrics = compute_next_state_3d(
         power, pitch, bank, lead_cmd, params, integration_method=method
     )
-    return new_lead, memory
+    return new_lead, memory, metrics[1][-1]
 
 
 def compute_next_state_patrol(
@@ -705,19 +810,30 @@ def compute_next_state_patrol(
     """One environment step: advance the follower (from ``action``) and the lead.
 
     Each aircraft flies in its own gust and rolling gust (:func:`advance_air`) and
-    its own altitude-dependent wind shear inside :func:`compute_next_state_3d`.
-    ``key=None`` keeps a constant (steady) wind.
+    its own altitude-dependent wind shear inside :func:`compute_next_state_3d`, and
+    the follower in the lead's wake (:func:`wake_air`). ``key=None`` keeps a constant
+    (steady) wind.
     """
+    speed = air_speed(state.lead, state.gust_history[0], params)
+    back = jnp.atleast_1d(state.slot_back)
     history, own, gusts, rolls = advance_air(
         state.gust_history,
         state.gust_own,
-        jnp.atleast_1d(state.slot_back),
+        back,
         jnp.atleast_1d(state.slot_right),
         jnp.atleast_1d(state.slot_up),
-        air_speed(state.lead, state.gust_history[0], params),
+        speed,
         params,
         key,
         state.time,
+    )
+    wake, wake_rolls = wake_air(
+        state.wake_history,
+        jnp.atleast_1d(state.follower.x),
+        jnp.atleast_1d(state.follower.y),
+        jnp.atleast_1d(state.follower.z),
+        slot_delay(back, speed, params),
+        params,
     )
 
     power, pitch, bank = decode_action(action)
@@ -725,11 +841,11 @@ def compute_next_state_patrol(
         power,
         pitch,
         bank,
-        in_air(state.follower, gusts[1]),
-        params.replace(gust_roll_rate=params.gust_roll_rate + rolls[1]),
+        in_air(state.follower, gusts[1] + wake[0]),
+        params.replace(gust_roll_rate=params.gust_roll_rate + rolls[1] + wake_rolls[0]),
         integration_method=integration_method,
     )
-    new_lead, memory = step_lead(
+    new_lead, memory, lift = step_lead(
         state.replace(lead=in_air(state.lead, gusts[0])),
         params.replace(gust_roll_rate=params.gust_roll_rate + rolls[0]),
         integration_method,
@@ -745,5 +861,8 @@ def compute_next_state_patrol(
         time=state.time + 1,
         gust_history=history,
         gust_own=own,
+        wake_history=shed_wake(
+            state.wake_history, wake_sample(new_lead, lift, speed, params)
+        ),
     )
     return new_state, metrics

@@ -109,6 +109,7 @@ def _patrol_view(state, i, lead_memory):
         time=state.time,
         gust_history=state.gust_history,
         gust_own=state.gust_own[i : i + 1],
+        wake_history=state.wake_history,
     )
 
 

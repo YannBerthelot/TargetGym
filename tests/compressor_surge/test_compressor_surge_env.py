@@ -790,9 +790,9 @@ def _exact_state(params, dp, x=0.0, phi_min=0.6, target=24.0e3):
 
 def test_v2_reward_units(params):
     """Version 2 is minus the floor-normalised squared error plus the
-    recycle power above ``c_hold``: tracking is 0 at the setpoint and 1 one
-    ``e_floor`` (0.0275 kPa) away; running is 0 at or below ``c_hold`` and 1 at
-    twice it. A tripped state pays the trip cost alone."""
+    recycle power as a share of ``c_hold``: tracking is 0 at the setpoint and 1
+    one ``e_floor`` (0.0275 kPa) away; running is 1 at ``c_hold`` and 2 at twice
+    it. A tripped state pays the trip cost alone."""
     dp = 24.0e3
     per_x = float(recycle_power(_exact_state(params, dp, x=1.0), params, np))
     x_hold = params.c_hold / per_x
@@ -805,7 +805,7 @@ def test_v2_reward_units(params):
         assert float(compute_reward_terms(s, params, np)["tracking"]) == pytest.approx(
             1.0, rel=1e-9
         )
-    for scale, running in ((0.5, 0.0), (1.0, 0.0), (2.0, 1.0), (3.0, 2.0)):
+    for scale, running in ((0.5, 0.5), (1.0, 1.0), (2.0, 2.0), (3.0, 3.0)):
         s = _exact_state(params, dp, x=scale * x_hold)
         assert float(recycle_power(s, params, np)) == pytest.approx(
             scale * params.c_hold, rel=1e-12

@@ -150,9 +150,10 @@ where the best analyser found scatters at 5e-4, and `distillation` has 1e-4
 against 4e-4. `boiler_drum` at 0.05 bar and `glass_furnace` at 1 K sit near
 accuracy bands.
 
-`precision_floor`, `e_floor` and `rho_floor` stay as they are, so scores stay on
-today's scale. On the tasks above, the ceiling therefore sits below anything the
-instrument could verify, and a policy cannot reach a score of 1 there.
+This proposal left `precision_floor`, `e_floor` and `rho_floor` as they were, so
+that scores stayed on the same scale. Decision 7 reversed that: PR 8 of the
+[industrial fixes](industrial-fixes.md) moves `cstr`, `unstable_cstr` and
+`distillation` to the analyser's scatter, so the ceiling is what it can verify.
 
 `H` still moves, because noise and the expert protocols change the expert's hold
 cost, so the benchmark's task list has to be rechecked afterwards. `FIXED_SETTLE`

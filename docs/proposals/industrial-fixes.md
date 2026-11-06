@@ -150,11 +150,12 @@ moving a recorded one.
 
 - **One hold window for all.** `hold_mask` removes a per-run anticipation today,
   so a policy's rising excursion leaves the hold. Replace it with a fixed count of
-  steps before each move, per task.
+  steps before each move, per task. A restart after a trip is not a move, or a
+  policy's own trips would cut its hold into new cycles.
 - **Linear consumption.** `running_cost` becomes `w * c / c_hold`. The clip gives
   no credit for saving, and it charges fluctuation that a fuel bill does not. This
   adds about `w` to every step's cost on the 6 tasks it covers, which compresses
-  `seed_scores` there. That needs the owner's decision before PR 8.
+  `seed_scores` there. The owner decided this on 2026-11-06.
 - **Constants, once.** See [Constants](#constants).
 - **Null policies in the package.** They move out of `tests/`, with their tables
   and gains stored in records, because the bump-test evidence is outside the wheel.
@@ -290,9 +291,12 @@ Floors, `c_hold`, `rho_floor` and the fixed settle change once, in PR 8, as a
 task change under CONTRIBUTING's rule, and freeze again. Instrument floors stay
 where the instrument did not change.
 
-Where a floor is finer than the instrument scatter, which the noise proposal
-lists for `cstr`, `distillation`, `boiler_drum` and `glass_furnace`, it moves to
-the instrument's figure.
+Where a floor is finer than the instrument scatter, it moves to the instrument's
+figure. That is `cstr`, `unstable_cstr`, which reads the same analyser, and
+`distillation`. This section first named `boiler_drum` and `glass_furnace` too, but
+their floors are coarser than the scatter, 0.05 bar against 0.022 bar and 1 K against
+0.36 K. The noise proposal says they sit near accuracy bands, not that they are too
+fine, so they stay.
 
 ## Deferred past 0.8.0
 
@@ -322,6 +326,8 @@ Chosen by the owner on 2026-11-06.
    and the buffet line.
 7. **`unstable_cstr`'s `tau_j` of 6 s is a written exception under check 2.** It is
    synthetic, and its `PHYSICS.md` says so.
+8. **Consumption is linear: `running_cost` becomes `w * c / c_hold`,** on the 6 tasks
+   that charge it. Dead bands that are tolerances stay clipped, as `excess_cost`.
 
 ## Cost
 

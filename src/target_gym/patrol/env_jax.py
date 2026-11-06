@@ -38,6 +38,7 @@ from target_gym.patrol.env import (
     desired_slot_position,
     get_obs_full,
     get_obs_range_bearing,
+    initial_wake,
     lead_cruise_speed,
     make_cruise_state,
 )
@@ -211,6 +212,7 @@ class _PlanePatrolBase(
             follower=lead,
             lead=lead,
             lead_memory=self._lead_memory,
+            wake_history=initial_wake(lead, params),
             slot_back=slot_back,
             slot_right=slot_right,
             slot_up=slot_up,

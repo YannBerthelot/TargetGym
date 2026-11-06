@@ -132,7 +132,8 @@ def _fly_lead(params, state, steps):
 
     @jax.jit
     def step(lead, memory):
-        lead, memory = step_lead(state.replace(lead=lead, lead_memory=memory), params)
+        view = state.replace(lead=lead, lead_memory=memory)
+        lead, memory, _ = step_lead(view, params)
         return lead, memory, check_is_terminal_3d(lead, params)[0]
 
     lead, memory, rows = state.lead, state.lead_memory, []
@@ -222,6 +223,7 @@ def test_the_follower_meets_the_leads_gust_a_slot_distance_later(steps_back, wei
         follower_spawn_noise=0.0,
         lead_turn_rate_range=(0.0, 0.0),
         target_altitude_range=(5000.0, 5000.0),
+        wake_strength=0.0,  # dead astern, the wake would be the larger term
     )
     back = steps_back * float(_speed(state.lead)) * float(params.delta_t)
     state = state.replace(slot_back=back, slot_right=0.0, slot_up=0.0)
@@ -329,7 +331,10 @@ def test_turbulence_rolls_a_follower_held_wings_level(name):
     """Zero aileron gives zero bank in still air (plane3d's test), so a bank in
     turbulence under wings-level demands is the rolling gust."""
     env, params, _, state = _reset(
-        name, lead_turn_rate_range=(0.0, 0.0), follower_spawn_noise=0.0
+        name,
+        lead_turn_rate_range=(0.0, 0.0),
+        follower_spawn_noise=0.0,
+        wake_strength=0.0,  # the wake rolls a wing too, in still air
     )
     still = params.replace(turbulence_sigma=0.0)
     np.testing.assert_array_equal(_banks(name, still, env, state)[:, 1:], 0.0)

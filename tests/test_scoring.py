@@ -176,18 +176,31 @@ def test_without_recorded_moves_the_best_known_is_unknown():
 # ``reward.tracking_cost`` and has its own test below.
 _VIA_TRACKING_COST = sorted(n for n in REGISTRY if n != "hvac")
 
-#: PR 8: the rebuilt reactor's reward sums 6 sub-steps of 5 s, and ``ceiling`` still
-#: prices one second. These tests read one sub-step, so PR 8 changes both.
-_PRICED_PER_SECOND = pytest.mark.xfail(
-    strict=True, reason="PR 8: ceiling prices the reactor per second, not per step"
-)
-_BY_TRACKING_COST = [
-    pytest.param(n, marks=_PRICED_PER_SECOND) if n == "reactor" else n
-    for n in _VIA_TRACKING_COST
-]
+
+def _control_step_tracking(env, state, params) -> float:
+    """The tracking charge of one control step: a task that sums physics
+    sub-steps into its reward charges a sub-step that many times, and a
+    sub-step's terms alone hide that (the reactor sums 6)."""
+    period = int(getattr(env, "control_period", 1))
+    return period * float(np.sum(env.reward_terms(state, params)["tracking"]))
 
 
-@pytest.mark.parametrize("name", _BY_TRACKING_COST)
+def test_a_reactor_step_sums_its_sub_steps_at_the_ceilings_price():
+    """Hand-worked, independent of ``scoring``: 0.05 K off program for one 30 s
+    step, at 1.25 x $80/MWh x 0.23 %/K of 1000 MW, is 2.3 $/(K h) x 1000 x 0.05
+    K x 30 / 3600 h = $0.0958."""
+    params = REGISTRY["reactor"].make_test_params()
+    assert scoring.ceiling("reactor", params) == pytest.approx(0.09583, rel=1e-3)
+
+
+def test_the_wind_ceiling_is_the_class_01s_meter_at_rated_power():
+    """A class 0.1S meter at 5 MW resolves 1.7 kW, and tracking is linear at
+    $100/MWh over 0.25 s: 1700 W x 100 / 1e6 x 0.25 / 3600 = $1.18e-5."""
+    params = REGISTRY["wind_turbine"].make_test_params()
+    assert scoring.ceiling("wind_turbine", params) == pytest.approx(1.18e-5, rel=2e-3)
+
+
+@pytest.mark.parametrize("name", _VIA_TRACKING_COST)
 def test_the_ceiling_is_the_rewards_tracking_cost_at_one_resolution(name, monkeypatch):
     """Every ``tracking_cost`` the reward calls, at an error one resolution
     beyond its tolerance, sums to the ceiling: a missed term, a wrong count
@@ -206,7 +219,7 @@ def test_the_ceiling_is_the_rewards_tracking_cost_at_one_resolution(name, monkey
 
     monkeypatch.setattr(R, "tracking_cost", at_one_resolution)
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    tracking = float(np.sum(env.reward_terms(state, params)["tracking"]))
+    tracking = _control_step_tracking(env, state, params)
     assert tracking == pytest.approx(scoring.ceiling(name, params), rel=1e-5)
 
 
@@ -227,7 +240,7 @@ def test_the_building_ceiling_is_the_comfort_price_of_one_resolution():
     assert tracking == pytest.approx(scoring.ceiling("hvac", params), rel=1e-5)
 
 
-@pytest.mark.parametrize("name", _BY_TRACKING_COST)
+@pytest.mark.parametrize("name", _VIA_TRACKING_COST)
 def test_the_settle_band_is_the_rewards_tracking_cost_at_the_floor(name, monkeypatch):
     """Every ``tracking_cost`` the reward calls, at an error at its floor
     beyond its tolerance, sums to the band: 1 per tracked term, in the plant's
@@ -241,7 +254,7 @@ def test_the_settle_band_is_the_rewards_tracking_cost_at_the_floor(name, monkeyp
 
     monkeypatch.setattr(R, "tracking_cost", at_the_floor)
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    tracking = float(np.sum(env.reward_terms(state, params)["tracking"]))
+    tracking = _control_step_tracking(env, state, params)
     assert tracking == pytest.approx(scoring.settle_band(name, params), rel=1e-5)
 
 
@@ -252,14 +265,54 @@ def test_the_building_settles_within_its_ceiling():
     assert scoring.settle_band("hvac", params) == scoring.ceiling("hvac", params)
 
 
-def test_every_environment_is_scored_with_the_settle_its_rows_were():
+@pytest.mark.parametrize(
+    "name, floor, reading",
+    [
+        ("cstr", "e_floor", "C_a"),
+        ("unstable_cstr", "e_floor", "C_a"),
+        ("distillation", "e_floor_top", "x"),
+        ("distillation", "e_floor_bottom", "x"),
+        ("boiler_drum", "e_floor_pressure", "pressure"),
+        ("glass_furnace", "e_floor", "T_crown_meas"),
+        ("wind_turbine", "e_floor", "power"),
+    ],
+)
+def test_no_floor_is_finer_than_its_instruments_scatter(name, floor, reading):
+    """A hold finer than the best reading's scatter is one the plant cannot
+    verify (docs/proposals/industrial-fixes.md, Constants)."""
+    spec = REGISTRY[name]
+    sigmas = [r.sigma for r in spec.make_env().readings if r.field == reading]
+    assert float(getattr(spec.make_test_params(), floor)) >= min(sigmas)
+
+
+def test_a_settle_outlasts_the_move_it_follows():
+    """A ramp is one move lasting its whole length, and a settle shorter than
+    that scores the ramp as hold. The reactor ramps 50 % at 5 %/min in 20 steps
+    of 30 s. The wind expert settles in about 36 steps and its oracle in about
+    48 (#157). The compressor's ramp takes 10 s, 100 steps."""
+    assert scoring.fixed_settle("reactor") >= 20
+    assert scoring.fixed_settle("wind_turbine") >= 48
+    assert scoring.fixed_settle("compressor_surge") >= 100
+
+
+_RESCORED = pytest.mark.xfail(
+    strict=True, reason="PR 10: this S moved in PR 8, and the row re-records there"
+)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(n, marks=_RESCORED) if n in ("reactor", "wind_turbine") else n
+        for n in sorted(REGISTRY)
+    ],
+)
+def test_every_environment_is_scored_with_the_settle_its_rows_were(name):
     """S is a per-task constant, frozen at the slower of the shipped
-    controllers' measured settles as they stood on 2026-11-03, so every
-    recorded protocol row was scored with it (CONTRIBUTING.md, "Frozen
-    scoring constants")."""
-    rows = records.load("protocol_results")
-    for name in REGISTRY:
-        assert scoring.fixed_settle(name) == rows[name]["settle"], name
+    controllers' measured settles, so every recorded protocol row was scored
+    with it (CONTRIBUTING.md, "Frozen scoring constants")."""
+    row = records.load_row("protocol_results", name)
+    assert scoring.fixed_settle(name) == row["settle"]
 
 
 def test_a_re_measured_hold_does_not_move_the_settle(tmp_path, monkeypatch):
@@ -600,9 +653,9 @@ def test_an_episode_records_actions_as_fractions_of_the_span_after_the_box():
     assert E.reversals(ep.actions) == 148
 
 
-def test_a_saving_shows_where_the_rewards_clip_hides_it():
-    """Both sides sit below ``c_hold``, so the reward charges neither, but the
-    policy burns 9 per step against the expert's 10."""
+def test_the_consumption_ratio_reads_the_quantity_not_the_reward_term():
+    """The ratio reads the plant's quantity whatever the running term did with
+    it: the policy burns 9 per step against the expert's 10."""
     expert = [
         _episode(np.ones(200), running=np.zeros(200), consumption=np.full(200, 10.0))
     ] * 3
@@ -614,10 +667,10 @@ def test_a_saving_shows_where_the_rewards_clip_hides_it():
 
 
 @pytest.mark.parametrize("name", sorted(scoring.CONSUMPTION))
-def test_the_consumption_is_the_quantity_the_reward_clips(name):
-    """With ``c_hold`` at half of it the clip is off, so the reward's running
-    term is ``w * (c - c / 2) / (c / 2) = w``. A table entry that read another
-    quantity would give another number."""
+def test_the_consumption_is_the_quantity_the_reward_charges(name):
+    """The running term is ``w * c / c_hold``, so with ``c_hold`` at twice the
+    quantity it is ``w / 2``. A table entry that read another quantity would
+    give another number, and a clip at ``c_hold`` would charge nothing."""
     spec = REGISTRY[name]
     env, p = spec.make_env(), spec.make_test_params()
     key = jax.random.PRNGKey(0)
@@ -627,8 +680,10 @@ def test_the_consumption_is_the_quantity_the_reward_clips(name):
         _, state, *_ = env.step(key, state, action, p)
     c = float(scoring.CONSUMPTION[name](state, p, False))
     assert c > 0.0
-    terms = env.reward_terms(state, p.replace(c_hold=c / 2.0))
-    assert float(terms["running"]) == pytest.approx(float(p.running_weight), rel=1e-5)
+    terms = env.reward_terms(state, p.replace(c_hold=2.0 * c))
+    assert float(terms["running"]) == pytest.approx(
+        0.5 * float(p.running_weight), rel=1e-5
+    )
 
 
 @pytest.mark.parametrize("name", sorted(REGISTRY))
@@ -645,11 +700,12 @@ def test_every_task_states_a_band_per_tracked_output_or_none(name):
 @pytest.mark.parametrize(
     "name, band",
     [
-        ("plane", [20.0]),  # the autopilot's +-20 m, plane/PHYSICS.md
-        ("plane3d_racetrack", [20.0]),
+        ("plane", [65.0 * 0.3048]),  # +-65 ft, 14 CFR 91 Appendix G
+        ("plane3d_racetrack", [65.0 * 0.3048]),
         ("patrol", [8.5]),  # the slot's 8.5 m, patrol/PHYSICS.md
         ("formation", [20.0, 8.5, 8.5]),  # the lead, then each wingman
         ("ph_neutralization", [0.5]),  # pH 6 to 9, from a target as low as 6.5
+        ("glass_furnace", [10.0]),  # +-10 C, a vendor's melting-section figure
     ],
 )
 def test_a_published_tolerance_is_the_band(name, band):
@@ -660,13 +716,21 @@ def test_a_published_tolerance_is_the_band(name, band):
 @pytest.mark.parametrize(
     "name, band",
     [
-        ("distillation", [1e-3, 1e-3]),  # floors of 1e-4 mole fraction
+        ("distillation", [4e-3, 4e-3]),  # floors of 4e-4 mole fraction
         ("cement_kiln", [0.5]),  # a 5e-4 fraction is 0.05 pp of the observed %
     ],
 )
 def test_a_task_with_no_published_tolerance_gets_ten_floors(name, band):
     np.testing.assert_allclose(scoring.spec_band(name), band)
     assert name not in scoring.SPEC_BAND
+
+
+def test_a_tolerance_says_how_far_it_was_sourced():
+    """A secondary source says so, and a figure no second pass could re-open is
+    labelled ours: the rods' +-1.5 F, 1.5 / 1.8 K."""
+    assert scoring.SPEC_BAND["glass_furnace"][1].startswith("secondary")
+    assert scoring.SPEC_BAND["reactor"][1].startswith("ours")
+    np.testing.assert_allclose(scoring.spec_band("reactor"), [1.5 / 1.8])
 
 
 def test_off_spec_reads_the_steps_outside_the_band_during_the_hold():
@@ -705,6 +769,20 @@ def test_score_policy_reports_the_owners_numbers_for_both_sides():
     assert m["policy_reversals"] == m["expert_reversals"]
     assert m["policy_off_spec"] == m["expert_off_spec"] == 0.0
     assert m["s_max"] != m["s_max"]  # no room, so no s_max
+
+
+def test_s_max_reads_the_tracking_bound_not_the_total(monkeypatch):
+    """The hold it is read against is tracking alone, and a plant's ``rho_floor``
+    also holds consumption. Expert 100, ceiling 1, tracking bound 10: 0.5."""
+    row = {"rho_floor_tracking": 10.0, "rho_floor": 1e3}
+    monkeypatch.setattr(scoring, "recorded", lambda name: row)
+    monkeypatch.setattr(
+        scoring,
+        "compare",
+        lambda *a, **k: dict(expert_hold=100.0, ceiling=1.0, policy_hold=100.0),
+    )
+    m = scoring.score_policy("first_order", tg.make_expert("first_order"), seeds=1)
+    assert m["s_max"] == pytest.approx(0.5)
 
 
 def _protocol_script():
