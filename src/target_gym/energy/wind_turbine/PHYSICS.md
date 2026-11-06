@@ -249,7 +249,7 @@ predates the version-2 reward and this change.)
 
 ## 6. Known deviations
 
-**⚠️ D1 — a steady Cp table.** The surface is ROSCO's. It peaks at 0.466 at λ = 7.5
+**⚠️ D1. A steady Cp table.** The surface is ROSCO's. It peaks at 0.466 at λ = 7.5
 against Jonkman's 0.482 at 7.55, so rated power arrives slightly above 11.4 m/s, and
 its pitch schedule lands within 0.7° of Table 7-1. A steady surface has no dynamic
 inflow: Table 7-1 holds the wake frozen, so a real blade answers a pitch move at
