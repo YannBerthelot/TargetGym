@@ -504,6 +504,14 @@ and 1.22 of rated on seeds 0 and 1, the worst step falls from -0.006 to -1e-4
 dollars, and the return on seed 1 goes from -0.016 to -0.0053. The weight is
 the first and only value tried, and the score chose nothing.
 
+It does not cure every seed. The term settles a tie, so it cannot hold the rotor
+against a real cost. Seed 9 asks for 4.96 MW, close to the torque limit, and a
+long lull takes the speed to 0.91 of rated, where the torque reaches its ceiling
+and the plan pays with dips again: -0.064 against -0.0071 for the previous
+oracle and -0.070 for the expert. The ten seeds' mean is -0.011 against -0.0059.
+Nine seeds beat the previous oracle. The gate passes, and the weight stayed as
+written.
+
 The count has one soft spot. A running cost above `c_hold` prices a level only
 above it, and the compressor's was active on 36 % of the steps of seed 0. Below
 it the spare move is free. Nothing has gone wrong there, and the count stands
@@ -528,13 +536,15 @@ is left out there.
 episode only ever adds dead stages. hvac's P is 932 against 720 samples. The
 builder is sized to min(P, N_ep), which changes no plan.
 
-**What stays open: the kiln.** About 2 % of its solves fail. The env's explicit
-30 s step amplifies the hot cells' calcination about 3000 times a step, and
-only the clip at 1 holds it. A plan's free states can sit just off that clip,
+**What stays open: the kiln.** About 3 % of its solves fail (234 of 7000 on the
+ten test seeds). The env's explicit 30 s step amplifies the hot cells'
+calcination about 3000 times a step, and only the clip at 1 holds it. A plan's
+free states can sit just off that clip,
 where the exact Hessian reaches 1e18. No Hessian shift then gives a usable step
 at step 0 of seed 0, nor at steps 587 to 602 once the start's multipliers are
 guarded (there the solve dies at iteration 0 on non-finite multipliers). Keeping
 only shifts that worked, retrying in the warm mode and a clip with no slope at
 its bound did not cure it. Failed solves apply the shifted plan (G11), and the
-oracle was recorded as it stands, on the owner's decision of 2026-11-05. The
-cure belongs in the env.
+oracle was recorded as it stands, on the owner's decision of 2026-11-05: it
+averages -406 against -110 for the previous oracle, and beats the expert by at
+least 11 to 1 on every seed. The cure belongs in the env.

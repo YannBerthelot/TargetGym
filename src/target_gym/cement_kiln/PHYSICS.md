@@ -192,15 +192,14 @@ below `lime_max`. Cooper's recipe gives P = 22 steps (11 minutes) from the
 speed-to-lime pair, well short of the 25-minute transport delay, because the
 kiln's speed moves discharge lime at once.
 
-**Where it falls short.** About 2 % of the solves fail, for the reason above:
+**Where it falls short.** About 3 % of the solves fail, for the reason above:
 a plan's free states can sit just off the clip, where the exact Hessian
 reaches 1e18 and no shift gives a usable step. A failed solve applies the
 previous plan's next move, or the held actuators at the start of an episode,
-where there is no previous plan. On seed 0 that costs about 147 at step 0 and
-about 35 over 16 failed solves at steps 587 to 602. So the oracle scores -474
-against -320 for the `NewtonMPC` that held this slot, though it beats that
-planner in 9 of 12 blocks of the episode and beats the expert about 25 to 1.
-Integrating calcination stably in the env would remove the cause.
+where there is no previous plan. Over the ten test seeds the oracle averages
+-406 against -110 for the `NewtonMPC` that held this slot, and on every seed it
+beats the expert by at least 11 to 1. Integrating calcination stably in the env
+would remove the cause.
 
 ---
 

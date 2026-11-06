@@ -278,10 +278,10 @@ solve and the reversal cycle, with the pull planned on its mean path. Cooper's
 recipe sets one move per 15 minutes (T_c = 30 steps, from the working end's
 fits; the crown's own fits fail the noise test, H16), and the plan runs to the
 episode's end. The move is held for those 15 minutes, as DMC executes it, so
-the oracle cannot answer a single 25-minute reversal, and it scores about 1.85
+the oracle cannot answer a single 25-minute reversal, and it scores about 2
 times worse than the `NewtonMPC` that held this slot, which re-solved every
-step, while beating the expert about 2 to 1 (seed 0, -1109 against -600 and
--2183).
+step, while beating the expert about 2 to 1 (mean of the ten test seeds, -903
+against -451 and -1878).
 
 Before that the oracle was `NewtonMPC` (iterative LQR) on `step_env`, over a
 120-step horizon, and before it a CasADi model of the plant (oracle audit,

@@ -90,10 +90,12 @@ The next release is 0.8.0, because these changes break code written for
   oracle. Their expert rows did not change. The reactor keeps its planner for
   now, since it cannot meet the horizon protocol. The glass furnace's protocol
   gives one move per 15 minutes, too slow to answer a 25-minute reversal, so
-  its oracle scores about 1.85 times worse than the old one, though it still
-  beats the expert about 2 to 1. The cement kiln's oracle fails about 2 % of
-  its solves on the env's stiff calcination, so it scores 1.5 to 2 times worse
-  than the old one, though it beats the expert 25 to 100 times over.
+  its oracle scores about 2 times worse than the old one, though it still beats
+  the expert about 2 to 1. The cement kiln's oracle fails about 3 % of its
+  solves on the env's stiff calcination, so it averages -406 against -110 for
+  the old one, though it beats the expert by at least 11 to 1. The wind
+  turbine's oracle beats the old one on nine of its ten seeds, and on seed 9
+  falls to -0.064 against -0.0071, just ahead of the expert.
 - **`unstable_cstr` is version 3.** Its floor `rho_floor_tracking` is
   re-derived from the new oracle's hold, which is tighter than the old
   floor.
