@@ -7,9 +7,11 @@ The two balances and the ten physical parameter values are the shipped
 ``cstr``'s, imported from ``target_gym.pc_gym.cstr.env`` and never retyped, so
 an edit there moves this task too (its spec declares that file in
 ``fingerprint_sources``). This module adds a first-order jacket lag between
-the coolant command and the jacket temperature the balances see, a drifting
-feed temperature, a stratified schedule of six concentration targets on the
-middle branch, where every target is a saddle, and a high-temperature trip.
+the coolant command and the jacket temperature the balances see, a valve with
+its own lag and slew limit in front of that (``actuator_lag``, ``actuator_rate``),
+a drifting feed temperature, a stratified schedule of six concentration targets
+on the middle branch, where every target is a saddle, reached by a ramp, and a
+high-temperature trip.
 
 State (three ODEs, one stochastic disturbance, the schedule)
 ------------------------------------------------------------
@@ -69,9 +71,13 @@ class UnstableCSTRParams(EnvParams):
     # (derived).
     T_c_min: float = 290.0  # K
     T_c_max: float = 310.0  # K
-    #: Jacket time constant. TUNED: not sourced, justified by PHYSICS.md's
-    #: jacket-lag sensitivity table.
+    #: Jacket time constant. Synthetic: the longest lag the cascade survives,
+    #: not a hardware figure (PHYSICS.md, section 6).
     tau_j: float = 0.1  # min (6 s)
+    #: The coolant valve: a 2 s lag and 8 % of its span per second, 4.8 per
+    #: minute (PHYSICS.md, section 3).
+    actuator_lag: float = 2.0 / 60.0  # min
+    actuator_rate: float = 0.08 * 60.0  # fraction of the span per min
     #: High-high interlock (ours), 4.49 K above the extinction fold and
     #: 12.17 K above the hottest target (derived).
     T_trip: float = 365.0  # K
@@ -98,6 +104,9 @@ class UnstableCSTRParams(EnvParams):
     # cascade on DEFAULT_GAINS (derived, scripts/unstable_cstr_numbers.py
     # --section settle).
     block_steps: int = 200
+    # The largest switch takes three residence times, when a mixed tank has
+    # gone 95 % of the way to a new steady state (ours, set before any result).
+    target_ramp: float = 0.10 / 3.0  # mol/L per min
     initial_CA_offset: float = 0.01  # mol/L, reset box half-width
     initial_T_offset: float = 1.5  # K, reset box half-width
     delta_t: float = _DT  # min (3 s)
@@ -156,6 +165,7 @@ PARAM_UNITS = {
     "Ti_tau": "min",
     "Ti_dev_reset_clip": "-",
     "block_steps": "steps",
+    "target_ramp": "mol/L per min",
     "initial_CA_offset": "mol/L",
     "initial_T_offset": "K",
     "delta_t": "min",
@@ -213,14 +223,24 @@ def steady_coolant(level, Ti_dev, params: UnstableCSTRParams, xp=jnp):
     return T + (qV * (T - params.Ti - Ti_dev) - A * qV * (params.Caf - level)) / beta
 
 
-def live_target(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):
-    """The level the state is scored against and observes.
+def scheduled_level(levels, clock, params: UnstableCSTRParams, xp=jnp):
+    """The target at step ``clock`` of the schedule ``levels``: it leaves the
+    last level on the step that enters a block, and moves at ``target_ramp``
+    until it reaches the block's own.
 
-    The clamp holds the last level past block six. ``block_clock`` is traced
-    under ``jit``, so the clamp uses ``xp.minimum``.
+    The clamp holds the last level past block six. ``clock`` is traced under
+    ``jit``, so the clamp uses ``xp.minimum``.
     """
-    block = xp.minimum(state.block_clock // params.block_steps, N_BLOCKS - 1)
-    return state.target_levels[block]
+    block = xp.minimum(clock // params.block_steps, N_BLOCKS - 1)
+    steps = clock - block * params.block_steps + 1
+    moved = params.target_ramp * params.delta_t * steps
+    last = levels[xp.maximum(block - 1, 0)]
+    return last + xp.clip(levels[block] - last, -moved, moved)
+
+
+def live_target(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):
+    """The target the state is scored against and observes."""
+    return scheduled_level(state.target_levels, state.block_clock, params, xp)
 
 
 def draw_schedule(key, params: UnstableCSTRParams) -> jnp.ndarray:

@@ -41,6 +41,8 @@ SEEDS = (100, 101, 102)
 CYCLE_GAPS: dict[str, str] = {
     "distillation": "the gains predate the analyser delay and the tray hydraulics, "
     "so the expert loses the column and its cycles restart; PR 9 retunes it",
+    "unstable_cstr": "the gains predate the thermowell and the valve, so the expert "
+    "trips and its cycles restart; PR 9 retunes them",
 }
 DOUBLING_GAPS: dict[str, str] = {}
 # compressor_surge's schedule ends at step 1200 and then holds its last levels,

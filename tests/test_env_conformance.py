@@ -716,6 +716,8 @@ EFFECTIVENESS_GAPS = {
 #: Experts a plant change left behind. Strict, so PR 9's retune removes the line.
 STALE_EXPERTS = {
     "cstr": "the cascade's gains predate the 1 min analyser; PR 9 retunes it",
+    "ph_neutralization": "the expert's gains predate the probe; PR 9 retunes them",
+    "unstable_cstr": "the cascade's gains predate the thermowell; PR 9 retunes them",
 }
 
 

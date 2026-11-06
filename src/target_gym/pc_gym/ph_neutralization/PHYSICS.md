@@ -46,7 +46,7 @@ Deliberately **not** modelled:
 |---|---|
 | Temperature dependence of pK1/pK2 | Isothermal operation, as in the benchmark. |
 | Mixing dynamics / imperfect stirring | Perfect mixing is the standard assumption; a real tank adds a transport lag. |
-| Electrode dynamics and drift | The pH probe is instantaneous, with noise (section Readings). Real probes lag seconds and drift. |
+| Electrode drift and fouling | The probe lags and reports late, with noise (section Readings). Real probes also drift and foul. |
 | Acid/base concentration variation | Feed concentrations are fixed; only flows vary. |
 
 **Regime of validity.** Near-neutral operation (pH 4–10) with the carbonate
@@ -125,7 +125,8 @@ pH reading can call for very different moves.
    genuinely partially observed rather than merely noisy.
 
 **Observation.** A plant has a pH electrode and knows its own valve position. It does not have an on-line assay of carbonate
-speciation, so `Wa`, `Wb` and the buffer flow are hidden.
+speciation, so `Wa`, `Wb` and the buffer flow are hidden. The electrode reads through
+a 10 s lag and reports what it saw 10 s ago (section Readings).
 
 **Reward** — the floor-normalised cost described in *Reward (version 2)*
 below.
@@ -172,10 +173,10 @@ table above predates the version-2 reward and this change.)
 
 ## 6. Known deviations
 
-**⚠️ D1 — instantaneous pH measurement.** The probe is instantaneous, with the
-noise of section Readings. Real electrodes have a seconds-scale lag, drift, and
-fouling — all of which
-matter for pH control specifically, since the measurement is the whole game.
+**⚠️ D1. Electrode drift and fouling.** The probe has a lag and a dead time, with
+the noise of section Readings, and stays that fast. Real electrodes also drift and
+foul, and a 1 mm coating can take the response from seconds to minutes
+([McMillan](https://www.controlglobal.com/articles/2013/mcmillan-ph-response-accuracy-reliability)).
 
 **⚠️ D2 — single buffer species.** Carbonate only. Real effluents carry several
 weak acid/base pairs, giving a titration curve with multiple inflections
@@ -187,6 +188,17 @@ error on the manipulated stream.
 ---
 
 ## 7. Expert
+
+**The shipped gains do not survive the probe.** Their tuning saw a dead time of
+2.5 s, and the probe adds about 15 s. On it the expert cycles on 6 of the 8 seeds
+checked, at about 75 s a cycle and up to 1.3 pH RMS, with a held-out hold of 4,690
+per step against a ceiling of 1. pH cannot trip, so it shows only in the hold. It is
+not the plant: a SIMC-shaped Kp 1.1 and Ti 117 s holds all 8 with almost no cycling,
+at 0.05 to 0.16 pH RMS. That sets no gain and only shows a hold exists. PR 9 retunes
+the expert. Without the probe the shipped gains cycle on seeds 4 and 5 (RMS 0.37
+and 0.25 pH over the second half), where the buffer flow averages 0.25 and 0.21
+mL/s and reaches 0, which is the low-buffer cycling the review reports. Its seed 3
+does not cycle in that window. Everything below was measured without the probe.
 
 pH loops in practice use the titration curve to linearise the loop
 ([Shinskey and Gerry, "Optimize your pH system", 2006](https://www.plantservices.com/articles/2006/026)).
@@ -230,7 +242,7 @@ and the gains come from `scripts/tune_process_experts.py --envs ph_neutralizatio
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ph_neutralization` | 300 | 5 | 25 min | 1 in [-1, 1] | 3 | 8 |
+| `ph_neutralization` | 300 | 5 | 25 min | 1 in [-1, 1] | 3 | 10 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -277,15 +289,35 @@ The observation reports pH through its electrode, and the operator's own base
 flow and the setpoint exactly (`docs/proposals/measurement-noise.md`).
 `sensor_noise_scale = 0` gives the noise-free task, rounding included.
 
-| reading | sigma | step | instrument | status | source |
-| --- | --- | --- | --- | --- | --- |
-| `pH` | 0.01 pH | 0.01 pH | Glass electrode with industrial pH transmitter | Provisional | [McMillan](https://www.controlglobal.com/articles/2013/mcmillan-ph-response-accuracy-reliability) |
+| reading | sigma | step | lag | dead time | instrument | status | source |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `pH` | 0.01 pH | 0.01 pH | 10 s | 10 s | Glass electrode with industrial pH transmitter | Provisional | [McMillan](https://www.controlglobal.com/articles/2013/mcmillan-ph-response-accuracy-reliability) |
 
 **This figure is weak, and it is the tracked quantity.** No noise source was
 found. McMillan gives 0.02 pH only as an accuracy target that needs best
 practice, with no coverage factor, so 0.01 as 2 sigma is ours. A transmitter's
 ±0.01 pH on simulated input, with no electrode, would be a lower bound. The
 0.01 step is this project's `precision_floor`, which cites nothing.
+
+**The lag is 10 s, for the owner to accept.** [McMillan's Tip 86](https://www.automation.com/article/tip-86-test-the-ph-response-time-to-determine-the-health-of-a-glass-electrode)
+gives time constants for a clean electrode in a buffered solution: 0.75 and 1.5 s at
+4 ft/s, 3 and 12 s at 0.5 ft/s, for a rising and a falling pH. 10 s sits inside the
+0.5 ft/s pair, which is the speed here: this tank's 33 mL/s runs at 0.5 ft/s through
+a 17 mm line (derived). The line is ours, and the tank is a fast place for it: a
+probe in the mixed volume would see a different speed. It is not fouling, which is
+D1. The same tip warns that electrodes approach their final value more slowly than a
+first-order lag above 90 %, which this lag leaves out.
+
+**The dead time is 10 s, for the owner to accept.** The tip calls the electrode's own
+dead time usually negligible, so this is not the electrode's. It stands for mixing
+and transport to the probe, which the tank here does not model. Faanes and Skogestad
+([Comput. Chem. Eng. 28, 2004](https://skoge.folk.ntnu.no/publications/2004/faanes_cce_ph/ph.pdf))
+take 10 s as "typical" and write that the mixing and measurement delay is "about 10
+s or larger", with an example of 5 s of transport and 5 s of measurement. Their tanks
+are industrial, and their figure lumps in measurement and valve dynamics, so the lag
+and this delay together sit above it. At 33 mL/s, 10 s is also 330 mL of line, about
+1 m of 20 mm pipe (derived). The step is 5 s, so this is exactly 2 steps. pH keeps
+its Provisional status, which covers the noise.
 
 The expert reads these readings, and so does every tuner. The oracle plans and
 acts on the true state, so it stays a full-state bound. `reward`, trips and the

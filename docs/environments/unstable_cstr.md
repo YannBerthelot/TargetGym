@@ -37,7 +37,7 @@ actuator range inside the environment.
 | 0 | `C_a`, concentration of A (mol/L) |
 | 1 | `T`, reactor temperature (K) |
 | 2 | `T_j`, jacket temperature (K) |
-| 3 | target `C_a`, the current block's level (mol/L) |
+| 3 | target `C_a`, on its ramp to the current block's level (mol/L) |
 
 ## Rewards
 
@@ -86,8 +86,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
 | `action_noise` | 0 | fraction of span |
-| `actuator_rate` | 0 | fraction of span per delta_t unit |
-| `actuator_lag` | 0 | delta_t units |
+| `actuator_rate` | 4.8 | fraction of span per delta_t unit |
+| `actuator_lag` | 0.0333333 | delta_t units |
 | `q` | 100 | L/min |
 | `V` | 100 | L |
 | `rho` | 1000 | g/L |
@@ -109,6 +109,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `Ti_tau` | 10 | min |
 | `Ti_dev_reset_clip` | 3 | - |
 | `block_steps` | 200 | steps |
+| `target_ramp` | 0.0333333 | mol/L per min |
 | `initial_CA_offset` | 0.01 | mol/L |
 | `initial_T_offset` | 1.5 | K |
 | `reward_version` | 2 | - |

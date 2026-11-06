@@ -47,8 +47,11 @@ class PHNeutralization(
     tracked_names: tuple = ("pH",)
     obs_target_index: int = 2  # target_pH
 
-    # Glass electrode, provisional (PHYSICS.md section on readings).
-    readings: tuple = (FieldReading("pH", sigma=0.01, step=0.01),)
+    # Glass electrode, provisional, 10 s lag and 10 s dead time, in seconds as
+    # ``delta_t`` is (PHYSICS.md section on readings).
+    readings: tuple = (
+        FieldReading("pH", sigma=0.01, step=0.01, lag=10.0, dead_time=10.0),
+    )
 
     def __init__(self, integration_method: str = "rk4_2"):
         self.obs_shape = (3,)
