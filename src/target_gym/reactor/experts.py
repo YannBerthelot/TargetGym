@@ -18,21 +18,17 @@ from target_gym.experts.pid import Controller
 
 @struct.dataclass
 class RodControlParams:
-    """The Westinghouse rod control program and the plant's heat balance.
+    """The Westinghouse rod control program.
 
     The program is the NRC's (Westinghouse Technology training manual,
     HRTD 8.1 and 5.0): a +-1.5 F deadband with a 1.0 F lockup, 8 steps/min to
     3 F, 32 steps/min per F to 72 steps/min at 5 F; the power mismatch through
     a 40 s rate/lag, a nonlinear gain (0.3 F per % to 1 %, 1.5 F per %
-    beyond) and a variable gain (2 to 50 % load, 1 / load above). The heat
-    balance gives the Tavg program: the cold leg is the inlet, so Tavg rises
-    ``P / (2 m cp)`` from no load to full power. Ours: a speed in steps/min
-    moves the rods over their range as a 228-step stroke would.
+    beyond) and a variable gain (2 to 50 % load, 1 / load above). A speed in
+    steps/min moves the rods over the plant's 228-step stroke.
     """
 
-    T_inlet: float
-    dT_full_load: float
-    dt: float = 10.0
+    dt: float = 30.0
     deadband_F: float = 1.5
     lockup_F: float = 1.0
     tau_rate: float = 40.0
@@ -56,21 +52,19 @@ def _mismatch_gain(m, xp):
 
 
 def rod_control_step(params, state, obs, xp=jnp):
-    """One 10 s step of Westinghouse rod control.
+    """One 30 s step of Westinghouse rod control.
 
-    obs: ``[n, T_coolant, rho_ext_norm, target_n]``; the action is the
+    obs: ``[n, T_hot, rho_ext_norm, load, T_avg, T_ref]``; the action is the
     desired rod position on the same [-1, 1] scale.
     """
     p = params
-    n, T_hot, rod, load = obs[..., 0], obs[..., 1], obs[..., 2], obs[..., 3]
+    n, rod, load = obs[..., 0], obs[..., 2], obs[..., 3]
 
     # Temperature channel: Tref (programmed on load) minus Tavg, in deg F.
-    T_ref = p.T_inlet + p.dT_full_load * load
-    T_avg = 0.5 * (p.T_inlet + T_hot)
-    error = 1.8 * (T_ref - T_avg)
+    error = 1.8 * (obs[..., 5] - obs[..., 4])
 
     # Power-mismatch channel: tau s / (1 + tau s) on (turbine - nuclear), the
-    # lag sampled exactly at the 10 s step and started on the first reading.
+    # lag sampled exactly at the control step and started on the first reading.
     x = 100.0 * (load - n)
     alpha = np.exp(-p.dt / p.tau_rate)
     lagged = xp.where(
@@ -95,11 +89,4 @@ def make_reactor_pid_controller() -> Controller:
     """The expert: Westinghouse rod control as a
     :class:`~target_gym.experts.pid.Controller`. The program is published
     (:class:`RodControlParams`); nothing is tuned on seeds."""
-    from target_gym.reactor.env import ReactorParams
-
-    pr = ReactorParams()
-    params = RodControlParams(
-        T_inlet=float(pr.T_inlet),
-        dT_full_load=float(pr.P_thermal_ref) / (2.0 * float(pr.m_dot_cp)),
-    )
-    return Controller(params, RodControlState(), rod_control_step)
+    return Controller(RodControlParams(), RodControlState(), rod_control_step)

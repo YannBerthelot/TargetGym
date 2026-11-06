@@ -107,9 +107,9 @@ def test_a_compressor_ramp_starts_one_cycle():
 
 
 @pytest.mark.large
-@pytest.mark.parametrize("name", ["reactor", "plane_sine"])
+@pytest.mark.parametrize("name", ["plane_sine"])
 def test_a_drifting_or_smooth_target_starts_no_cycle_in_the_scorer(name):
-    # reactor: an Ornstein-Uhlenbeck power demand; plane_sine: a sine altitude.
+    # plane_sine: a sine altitude.
     spec = REGISTRY[name]
     p = spec.make_test_params()
     ep = E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=100)

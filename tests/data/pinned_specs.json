@@ -670,9 +670,7 @@
       "target_gym.reactor.oracle",
       "make_reactor_mpc"
     ],
-    "scored_overrides": {
-      "max_steps_in_episode": 864
-    },
+    "scored_overrides": {},
     "tuned_gains_key": "reactor",
     "gains_keys": [],
     "baselines_note": null,

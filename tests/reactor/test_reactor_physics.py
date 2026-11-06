@@ -18,6 +18,8 @@ from target_gym.reactor.env import (
     LAMBDA_XENON,
     N_GROUPS,
     ReactorParams,
+    rod_balance,
+    steady_state_temperatures,
     steady_state_xenon,
 )
 
@@ -68,14 +70,9 @@ def test_feedback_coefficients_are_negative_and_doppler_is_in_range(params):
     assert -4e-5 <= params.alpha_fuel <= -2e-5, "Doppler outside the PWR range"
 
 
-def test_moderator_coefficient_is_weaker_than_a_real_pwr(params):
-    """Documented deviation D1, asserted so it cannot drift unnoticed.
-
-    A real PWR sits at -10 to -50 pcm/K. This model uses -5, which makes it
-    less self-regulating against coolant swings than the real machine.
-    """
-    assert params.alpha_coolant == pytest.approx(-5e-5, rel=0.01)
-    assert abs(params.alpha_coolant) < 10e-5
+def test_moderator_coefficient_is_in_the_pwr_range(params):
+    """-10 to -50 pcm/K, and it is what lets the plant follow its turbine."""
+    assert -50e-5 <= params.alpha_coolant <= -10e-5
 
 
 # ---------------------------------------------------------------------------
@@ -133,12 +130,10 @@ def test_rod_worth_never_reaches_prompt_critical(params):
     assert params.rho_ext_max / BETA_TOT < 0.85
 
 
-def test_rods_insert_faster_than_they_withdraw(params):
-    """Insertion is the safety direction, so it is the fast one."""
-    assert params.rod_speed_insert > params.rod_speed_withdraw
-    assert params.rod_speed_insert / params.rod_speed_withdraw == pytest.approx(
-        2.0, rel=0.1
-    )
+def test_rod_speed_is_the_jacks_speed_over_the_bank(params):
+    """72 steps/min of a 228-step, 1500 pcm stroke: 7.89 pcm/s. The old 40 and 20
+    pcm/s were 5 and 2.5 times that, and a jack has one speed."""
+    assert params.rod_speed == pytest.approx(7.89e-5, rel=1e-3)
 
 
 # ---------------------------------------------------------------------------
@@ -153,11 +148,18 @@ def test_coolant_rise_across_the_core(params):
 
 def test_fuel_runs_hot_but_below_the_trip(params):
     """Full-power fuel temperature must sit under the trip, far under melting."""
-    T_c = params.T_inlet + params.P_thermal_ref / params.m_dot_cp
-    T_f = T_c + params.P_thermal_ref / params.UA
-    assert T_f < params.T_fuel_max
-    assert T_f < 3120.0 * 0.5, "UO2 melts near 3120 K"
-    assert T_f > T_c, "fuel must be hotter than the coolant it heats"
+    T_f, T_h, _, _ = steady_state_temperatures(1.0, params)
+    assert float(T_f) < params.T_fuel_max
+    assert float(T_f) < 3120.0 * 0.5, "UO2 melts near 3120 K"
+    assert float(T_f) > float(T_h), "fuel must be hotter than the coolant it heats"
+
+
+def test_the_primary_is_sluggish_and_the_coolant_no_longer_algebraic(params):
+    """About 250 t at 5.6 kJ/kg/K is 1.4e9 J/K, and a loop transit of 15 s."""
+    assert params.C_coolant + params.C_cold == pytest.approx(1.4e9, rel=0.01)
+    assert (params.C_coolant + params.C_cold) / params.m_dot_cp == pytest.approx(
+        15.6, rel=0.05
+    )
 
 
 def test_fuel_time_constant_is_seconds_not_minutes(params):
@@ -167,14 +169,7 @@ def test_fuel_time_constant_is_seconds_not_minutes(params):
 
 def test_thermal_feedback_opposes_power(params):
     """A hotter core is a less reactive core, at every power level."""
-    rho = []
-    for n in (0.3, 0.6, 1.0):
-        T_c = params.T_inlet + n * params.P_thermal_ref / params.m_dot_cp
-        T_f = T_c + n * params.P_thermal_ref / params.UA
-        rho.append(
-            params.alpha_fuel * (T_f - params.T_fuel_ref)
-            + params.alpha_coolant * (T_c - params.T_coolant_ref)
-        )
+    rho = [-_rod_worth_needed(n, params) for n in (0.3, 0.6, 1.0)]
     assert rho[0] > rho[1] > rho[2]
 
 
@@ -184,31 +179,56 @@ def test_thermal_feedback_opposes_power(params):
 
 
 def _rod_worth_needed(n, params):
-    T_c = params.T_inlet + n * params.P_thermal_ref / params.m_dot_cp
-    T_f = T_c + n * params.P_thermal_ref / params.UA
-    return -(
-        params.alpha_fuel * (T_f - params.T_fuel_ref)
-        + params.alpha_coolant * (T_c - params.T_coolant_ref)
-    )
+    """Rods balancing the feedback on program, at full-power equilibrium xenon."""
+    T_f, T_h, T_c, _ = steady_state_temperatures(n, params)
+    return float(rod_balance(T_f, 0.5 * (T_h + T_c), 1.0, params))
 
 
-def test_rods_can_hold_every_power_in_the_target_range(params):
+def _return_need(hold_hours, params, dt=30.0):
+    """Rods needed the moment the load is back at full, after a 5 %/min cut to 50 %
+    held ``hold_hours``, from full-power equilibrium: the full-power balance plus
+    the xenon still above its equilibrium."""
+    lam_I, lam_X, sph = LAMBDA_IODINE, LAMBDA_XENON, params.sigma_phi0
+    g = params.gamma_ratio
+    a = g * (lam_X + sph) / (1 + g)
+    b = (lam_X + sph) / (1 + g)
+    I = Xe = 1.0
+    ramp = 600.0
+    total = 2.0 * ramp + hold_hours * 3600.0
+    for k in range(int(total / dt)):
+        t = k * dt
+        n = (
+            1.0
+            - 0.5 * min(t, ramp) / ramp
+            + 0.5 * max(t - ramp - hold_hours * 3600, 0) / ramp
+        )
+        I += dt * lam_I * (n - I)
+        Xe += dt * (a * n + b * I - (lam_X + sph * n) * Xe)
+    return _rod_worth_needed(1.0, params) + params.rho_Xe_full * (Xe - 1.0)
+
+
+def test_rods_can_hold_every_load_of_the_day_at_equilibrium_xenon_of_full_power(params):
     """The required worth is an output of the model, not something tuned."""
-    for n in np.linspace(params.target_n_range[0], params.target_n_range[1], 9):
+    for n in np.linspace(params.load_min, 1.0, 9):
         need = _rod_worth_needed(float(n), params)
         assert (
             params.rho_ext_min <= need <= params.rho_ext_max
         ), f"n={n:.2f} needs {need * 1e5:.0f} pcm, outside the rod range"
 
 
-def test_full_power_leaves_almost_no_rod_margin(params):
-    """Deliberate, and it is what gives the xenon pit its teeth.
-
-    Holding full power consumes nearly all available worth, so a xenon
-    overshoot makes returning to full power impossible for hours.
-    """
+def test_full_power_leaves_540_pcm_of_rods_above(params):
+    """Rods-only load follow keeps them in at power, as mechanical shim does."""
     margin = params.rho_ext_max - _rod_worth_needed(1.0, params)
-    assert 0.0 < margin < 100e-5, f"margin {margin * 1e5:.0f} pcm"
+    assert margin == pytest.approx(540e-5, rel=0.01)
+
+
+def test_the_rods_run_out_after_a_mid_length_hold_only(params):
+    """Xenon peaks about 5 h after the cut, so a return then asks for more than the
+    bank has, and a short or long hold does not. By hand from the chain: +647 pcm
+    above the full-power balance at 5 h, +473 at 2 h."""
+    assert _return_need(5.0, params) > params.rho_ext_max
+    assert _return_need(2.0, params) < params.rho_ext_max
+    assert _return_need(10.0, params) < params.rho_ext_max
 
 
 # ---------------------------------------------------------------------------
@@ -275,11 +295,11 @@ def test_deeper_power_cuts_make_bigger_and_later_pits(params):
 def test_xenon_overshoot_exceeds_the_rod_margin(params):
     """Why the pit is a trap rather than an inconvenience.
 
-    Even a modest power reduction builds more negative reactivity than the
-    rods have spare at full power, so full power becomes unreachable.
+    A cut to half power builds more negative reactivity than the rods have spare
+    at full power, so a return at the peak cannot reach program.
     """
     margin = params.rho_ext_max - _rod_worth_needed(1.0, params)
-    _, peak_x = _xenon_after_power_drop(0.8, params)
+    _, peak_x = _xenon_after_power_drop(0.5, params)
     overshoot = params.rho_Xe_full * (peak_x - 1.0)
     assert overshoot > margin
 

@@ -257,14 +257,14 @@ def test_an_actuator_with_no_lag_beside_one_with_a_lag_moves_at_once():
 
 
 def test_a_rate_limit_bounds_a_step_of_a_task_with_sub_steps():
-    """``reactor`` runs 10 s per step, so 0.01 of the span of 2 per second moves
-    0.2 per step, not 0.02."""
+    """``reactor`` runs 30 s per step, so 0.01 of the span of 2 per second moves
+    0.6 per step, not 0.02."""
     spec = REGISTRY["reactor"]
     env = spec.make_env()
     params = spec.make_test_params().replace(actuator_rate=0.01)
     state = _state(env, params)
     applied, _ = actuate(env, state, jnp.array([1.0]), params)
-    assert float(applied[0]) == pytest.approx(0.2, abs=1e-6)
+    assert float(applied[0]) == pytest.approx(0.6, abs=1e-6)
 
 
 #: Their rate limits sit inside the plant, so one step does not reach the box and
