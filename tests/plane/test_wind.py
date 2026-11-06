@@ -213,6 +213,7 @@ class TestFormationTurbulence:
                 max_steps_in_episode=250,
                 lead_turn_rate_range=(0.0, 0.0),
                 turbulence_sigma=sigma,
+                wake_strength=0.0,  # the wake is the follower's gust too
             )
             obs, state = env.reset_env(jax.random.PRNGKey(0), params)
 

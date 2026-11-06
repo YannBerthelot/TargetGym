@@ -43,6 +43,7 @@ CYCLE_GAPS: dict[str, str] = {
     "unstable_cstr": "the datasheet's inner PD still trips, and trips restart cycles",
 }
 DOUBLING_GAPS: dict[str, str] = {
+    "formation": _STALE_HOLD,
     "plane3d_racetrack": _STALE_TECS,
     "unstable_cstr": "its hold is 2.30x a doubled run's, from early trips",
 }

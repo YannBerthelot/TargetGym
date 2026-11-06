@@ -1,5 +1,5 @@
 {
-  "fingerprint": "125f9f956de400f9",
-  "note": "Branch stamp for PR 8: running_cost goes linear on the 6 consumption tasks, and cstr, unstable_cstr, distillation and wind_turbine move their floors. All stamps redone at the re-record.",
-  "stamped": "2026-11-06T12:55:23+00:00"
+  "fingerprint": "8034dc1de09b6409",
+  "note": "Branch stamp on feat/sensor-noise, redone at the 0.8.0 re-record: the lead's wake on the patrol family.",
+  "stamped": "2026-11-06T13:36:20+00:00"
 }

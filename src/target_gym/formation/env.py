@@ -40,8 +40,13 @@ from target_gym.patrol.env import (
     in_air,
     lead_leg,
     own_gust_field,
+    shed_wake,
+    slot_delay,
     slot_error,
     slot_error_vector,
+    wake_air,
+    wake_memory_field,
+    wake_sample,
 )
 from target_gym.plane3d.env import (
     PlaneState3D,
@@ -84,6 +89,7 @@ class FormationState(EnvState):
     # The lead's gust over the last steps and each wingman's own draw
     # (``advance_air``). Each aircraft holds the gust it flies in.
     gust_history: jax.Array = gust_memory_field()
+    wake_history: jax.Array = wake_memory_field()
     # These two are sized for the scored two wingmen; ``reset_env`` sizes them
     # for the rest.
     gust_own: jax.Array = own_gust_field(2)
@@ -406,22 +412,32 @@ def compute_next_state_formation(
     """One step: every aircraft moves on its own three demands.
 
     ``action`` is ``[throttle, pitch, bank]`` for the lead, then for each
-    wingman, in [-1, 1]. The air moves as in the patrol (``advance_air``), and
-    each aircraft still gets its own altitude-dependent shear. The lead's
-    reference moves on along its route whatever the lead does. Returns
-    ``(new_state, lead_metrics)``.
+    wingman, in [-1, 1]. The air moves as in the patrol (``advance_air``), the
+    wingmen meet the lead's wake (``wake_air``), and each aircraft still gets its
+    own altitude-dependent shear. The lead's reference moves on along its route
+    whatever the lead does. Returns ``(new_state, lead_metrics)``.
     """
+    speed = air_speed(state.lead, state.gust_history[0], params)
     history, own, gusts, rolls = advance_air(
         state.gust_history,
         state.gust_own,
         state.slot_back,
         state.slot_right,
         state.slot_up,
-        air_speed(state.lead, state.gust_history[0], params),
+        speed,
         params,
         key,
         state.time,
     )
+    wake, wake_rolls = wake_air(
+        state.wake_history,
+        state.wingmen.x,
+        state.wingmen.y,
+        state.wingmen.z,
+        slot_delay(state.slot_back, speed, params),
+        params,
+    )
+    gusts, rolls = gusts.at[1:].add(wake), rolls.at[1:].add(wake_rolls)
     controls = jnp.reshape(action, (-1, 3))
 
     # The lead and its wingmen in one batch, so the dynamics are traced once:
@@ -455,5 +471,8 @@ def compute_next_state_formation(
         time=state.time + 1,
         gust_history=history,
         gust_own=own,
+        wake_history=shed_wake(
+            state.wake_history, wake_sample(new_lead, metrics[1][-1], speed, params)
+        ),
     )
     return new_state, metrics
