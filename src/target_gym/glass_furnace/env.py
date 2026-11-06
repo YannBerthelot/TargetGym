@@ -302,9 +302,8 @@ class GlassFurnaceParams(EnvParams):
     # burn-in, about stationary across the window (0.086 / 0.065 K halves),
     # `scripts/measure_hold.py`. That is the current oracle; the one
     # before it held 0.175 K. An upper bound on the
-    # achievable floor. Fuel above the hold-phase flow (0.590 kg/s, the same
-    # for PID and MPC) is charged at weight 1 (provisional: no fuel price
-    # supplied). A trip costs twice the reachable crown excursion's cost per
+    # achievable floor. Fuel is charged as a share of the hold-phase flow (0.590 kg/s, the
+    # same for PID and MPC), at weight 1 (provisional: no fuel price supplied). A trip costs twice the reachable crown excursion's cost per
     # step, 2 x (183 / 1)^2.
     reward_version: int = 2
     # The MPC holds 0.0614 K in the shipped disturbance, below the 1 K thermocouple

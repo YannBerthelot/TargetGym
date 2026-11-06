@@ -255,10 +255,10 @@ which is what the recorded baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1e-4 mol/L | documented minimum: the online composition analyser's resolution. Measured with no load, before PR 8 re-measures it: the MPC before the oracle audit (2026-10) held 1e-6 mol/L after settling (`scripts/measure_hold.py`, 283 hold steps after a 12-step burn-in; PID 7e-5), and the NLP that replaced it holds the target to float32 resolution (protocol hold cost 0). |
+| `e_floor` | 5e-4 mol/L | documented minimum: the online composition analyser's scatter, the figure in the readings table. It was 1e-4 until 2026-11-06, finer than one reading. Measured with no load, before PR 9 re-measures it: the MPC before the oracle audit (2026-10) held 1e-6 mol/L after settling (`scripts/measure_hold.py`, 283 hold steps after a 12-step burn-in; PID 7e-5), and the NLP that replaced it holds the target to float32 resolution (protocol hold cost 0). |
 | `e_tol` | 0 | no product specification band was supplied for the reactor concentration |
 | `tracking_exponent` | 2 | quadratic |
-| `failure_cost` | 1.8e7 | twice the span's cost, (0.3 / 1e-4)^2. **Never charged**: the plant cannot trip -- across the coolant's range and every load it settles between 317 and 332 K with C_a >= 0.81, inside the 300 / 350 K and 0.7 limits, which are documentation of the envelope |
+| `failure_cost` | 7.2e5 | twice the span's cost, (0.3 / 5e-4)^2. **Never charged**: the plant cannot trip -- across the coolant's range and every load it settles between 317 and 332 K with C_a >= 0.81, inside the 300 / 350 K and 0.7 limits, which are documentation of the envelope |
 | `restart_steps` | 240 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (cool, purge and re-feed after a runaway; provisional; never exercised, see `failure_cost`); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
@@ -311,6 +311,6 @@ score read the true state. `info["measured_reward"]` is the same cost on the
 readings, with any trip taken from the true state, and a learner can train on
 it.
 
-A plant resting exactly on target pays 25 per step in measured reward,
-`(5e-4 / 1e-4)^2`. `e_floor` and `precision_floor` stay at 1e-4, so the ceiling
-sits below anything this analyser could verify.
+A plant resting exactly on target pays 1 per step in measured reward,
+`(5e-4 / 5e-4)^2`. `e_floor` and `precision_floor` are the analyser's scatter, so
+the ceiling is what this analyser can verify.

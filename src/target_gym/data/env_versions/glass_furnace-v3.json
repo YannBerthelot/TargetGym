@@ -1,5 +1,5 @@
 {
-  "fingerprint": "31c841f979aca2fc",
-  "note": "Branch stamp on feat/sensor-noise, redone at the 0.8.0 re-record: the batch of PRs 4 to 7 and the expert tools, with actuate keeping its slope at a held command.",
-  "stamped": "2026-11-06T10:48:55+00:00"
+  "fingerprint": "7cc3a457ed9eddd9",
+  "note": "Branch stamp for PR 8: running_cost goes linear on the 6 consumption tasks, and cstr, unstable_cstr, distillation and wind_turbine move their floors. All stamps redone at the re-record.",
+  "stamped": "2026-11-06T11:50:31+00:00"
 }

@@ -549,7 +549,7 @@ def test_restart_time_is_cstrs_hour(params):
         shipped.restart_steps * shipped.delta_t / params.delta_t
     )
     assert params.failure_cost == 2.0 * (params.CA_error_max / params.e_floor) ** 2
-    assert R.trip_cost(params) == pytest.approx(7.26e10)
+    assert R.trip_cost(params) == pytest.approx(1200 * 2.0 * (0.55 / 5e-4) ** 2)
 
     qV = params.q / params.V
     k_trip = params.k0 * np.exp(-params.EA_over_R / params.T_trip)
@@ -597,8 +597,8 @@ def test_v2_reward_units(params):
 
 def test_v1_is_log_scaled_and_charges_downtime(params):
     """Version 1 is 1 at zero error and 0 at ``CA_error_max``, pays an equal
-    increment for each halving of the error above the floor, and is exactly
-    ``-restart_steps`` on a tripped step."""
+    increment for each halving of the error at least 100 floors up, and is
+    exactly ``-restart_steps`` on a tripped step."""
     v1 = params.replace(reward_version=1)
 
     def score(error, T=350.0):
@@ -606,7 +606,7 @@ def test_v1_is_log_scaled_and_charges_downtime(params):
 
     assert score(0.0) == 1.0
     assert score(-v1.CA_error_max) == pytest.approx(0.0, abs=1e-12)
-    errors = [0.4, 0.2, 0.1, 0.05, 0.025]
+    errors = [0.4, 0.2, 0.1, 0.05]
     gains = np.diff([score(e) for e in errors])
     assert np.all(gains > 0.0)
     np.testing.assert_allclose(gains, gains[0], rtol=0.01)

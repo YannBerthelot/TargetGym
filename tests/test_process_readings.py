@@ -96,10 +96,10 @@ ON_TARGET = {
 #: The proposal's floor per step, with rounding's ``step^2 / 12`` on pH. The
 #: table's 0.11 and 0.034 are (9.17 Pa / 27.5 Pa)^2 and (1.1e-3 / 6e-3)^2.
 FLOOR = {
-    "cstr": 25.0,
+    "cstr": (5e-4 / 5e-4) ** 2,
     "first_order": (1.1e-3 / 6e-3) ** 2,
-    "unstable_cstr": 25.0,
-    "distillation": 32.0,
+    "unstable_cstr": (5e-4 / 5e-4) ** 2,
+    "distillation": 2.0 * (4e-4 / 4e-4) ** 2,
     "ph_neutralization": 1.0 + 1.0 / 12.0,
     "compressor_surge": (9.17 / 27.5) ** 2,
 }

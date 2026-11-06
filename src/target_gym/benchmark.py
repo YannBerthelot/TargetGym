@@ -64,7 +64,7 @@ from typing import (
 
 import numpy as np
 
-from target_gym.eval import Episode, evaluate, fixed_settle, hold_settings
+from target_gym.eval import Episode, evaluate, fixed_lead, fixed_settle, hold_settings
 
 
 class Unsupported(Exception):
@@ -208,7 +208,9 @@ _CHANGE_OVER_MEDIAN_STEP = 10.0
 _ROUNDING = 1e-6
 
 
-def target_changes(targets: np.ndarray, first: np.ndarray) -> np.ndarray:
+def target_changes(
+    targets: np.ndarray, first: np.ndarray, restarts: np.ndarray | None = None
+) -> np.ndarray:
     """``(T,)`` bool: a new target became active at the step, the rule
     :func:`target_gym.eval.run_episode` splits cycles by. Some target moved
     since the previous step by more than ``_CHANGE_OVER_MEDIAN_STEP`` times
@@ -217,16 +219,32 @@ def target_changes(targets: np.ndarray, first: np.ndarray) -> np.ndarray:
     smooth target, which moves about as much every step, never does. A run of
     such steps is one move, counted where it starts, so a ramp is not a change
     per step.
-    ``targets`` ``(T, n_out)``, ``first`` the targets at reset."""
+
+    A restart after a trip is a fresh draw of the plant, not a move: the target
+    jumps because of the run, not the schedule. It shows for two steps, the
+    reset's own target on the step of the trip, then the schedule's level at the
+    clock on the next. ``restarts`` ``(T,)`` marks the trips, and both steps are
+    left out, so a policy that trips is held over the same steps as one that does
+    not. A scheduled move landing on either step cannot be told from the restart,
+    and is not counted. ``targets`` ``(T, n_out)``, ``first`` the targets at reset.
+    """
     targets = np.asarray(targets, float)
+    kept = np.ones(len(targets), bool)
+    if restarts is not None:
+        tripped = np.asarray(restarts, bool)
+        kept = ~(tripped | np.concatenate([[False], tripped[:-1]]))
+    changes = np.zeros(len(targets), bool)
+    if not kept.any():
+        return changes
     prev = np.vstack([np.asarray(first, float)[None], targets[:-1]])
     step = np.abs(targets - prev)
     scale = np.abs(np.vstack([prev, targets])).max(axis=0)
     floor = np.maximum(
-        _CHANGE_OVER_MEDIAN_STEP * np.median(step, axis=0), _ROUNDING * scale
+        _CHANGE_OVER_MEDIAN_STEP * np.median(step[kept], axis=0), _ROUNDING * scale
     )
-    moved = (step > floor).any(axis=1)
-    return moved & ~np.concatenate([[False], moved[:-1]])
+    moved = (step[kept] > floor).any(axis=1)
+    changes[kept] = moved & ~np.concatenate([[False], moved[:-1]])
+    return changes
 
 
 def episode_keys(key, n: int, n_steps: int):
@@ -389,7 +407,10 @@ def run_policy(
     out: dict[str, Any] = {k: np.stack(v, axis=1) for k, v in rec.items()}
     out["in_band"] = np.stack(band_rec, axis=1)
     out["target_change"] = np.stack(
-        [target_changes(out["target"][i], first_target[i]) for i in range(n)]
+        [
+            target_changes(out["target"][i], first_target[i], out["tripped"][i])
+            for i in range(n)
+        ]
     )
     if err_rec:
         out["info_error"] = np.stack(err_rec, axis=1)
@@ -398,6 +419,7 @@ def run_policy(
     out["value0"], out["target0"] = first_value, first_target
     out["action_low"], out["action_high"] = task.action_low, task.action_high
     out["length"] = length
+    out["lead"] = fixed_lead(task.name)
     out["carry"] = carry  # the policy's final carry, for its own diagnostics
     out["wall_s"] = time.perf_counter() - t0
     return out
@@ -422,6 +444,7 @@ def episodes_of(rollout: Mapping[str, Any]) -> list[Episode]:
                 failed=np.asarray(rollout["tripped"][i, :L], bool),
                 terms={k: np.asarray(v[i, :L], float) for k, v in named.items()},
                 actions=np.clip((actions - low) / span, 0.0, 1.0),
+                lead=rollout.get("lead", 0),
             )
         )
     return out

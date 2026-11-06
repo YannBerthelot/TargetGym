@@ -113,7 +113,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `overspeed_factor` | 1.25 | - |
 | `underspeed_factor` | 0.4 | - |
 | `power_band` | 500000 | W |
-| `precision_floor` | 1000 | W |
+| `precision_floor` | 1700 | W |
 | `power_envelope` | 5e+06 | W |
 | `pitch_activity_weight` | 0.02 | - |
 | `target_block_steps` | 100 | steps |

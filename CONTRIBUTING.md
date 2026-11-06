@@ -307,13 +307,15 @@ changes invalidate records, so tune first, record second.
 ### Frozen scoring constants
 
 What a score is measured against does not move with the controllers. Each
-task's `e_floor`, `c_hold` and `rho_floor` are literals in its parameters,
-and its fixed settle S, the window every controller's hold is scored after, is
-a constant in `target_gym.eval.FIXED_SETTLE`, taken on 2026-11-03 from the
-slower of the shipped expert's and oracle's measured settles. None of them is
+task's `e_floor`, `c_hold` and `rho_floor` are literals in its parameters. Its
+fixed settle S, the window every controller's hold is scored after, is a constant
+in `target_gym.eval.FIXED_SETTLE`, taken on 2026-11-03 from the slower of the
+shipped expert's and oracle's measured settles. Its lead, the steps before each
+move left out of every hold, is a constant in `target_gym.eval.FIXED_LEAD`. None
+of them is
 re-derived when an expert is retuned or an oracle rebuilt: a new controller is
 scored against the same floors and in the same window as the one it replaces.
-`scripts/measure_hold.py` still measures each controller's settle and hold,
+`scripts/measure_hold.py` still measures each controller's settle, lead and hold,
 and `hold_measurements/` reports them; they are no longer read for S. Changing
 one of these constants is a change to the task, made on its own and reviewed
 as one.

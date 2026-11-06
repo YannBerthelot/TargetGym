@@ -112,18 +112,18 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `yD_floor` | 0.9 | - |
 | `xB_ceiling` | 0.1 | - |
 | `tracking_band` | 0.02 | - |
-| `precision_floor` | 0.0001 | - |
+| `precision_floor` | 0.0004 | - |
 | `boilup_cost_weight` | 0 | - |
 | `time_unit_seconds` | 60 | s |
 | `reward_version` | 2 | - |
-| `e_floor_top` | 0.0001 | - |
-| `e_floor_bottom` | 0.0001 | - |
+| `e_floor_top` | 0.0004 | - |
+| `e_floor_bottom` | 0.0004 | - |
 | `e_tol` | 0 | - |
 | `tracking_exponent` | 2 | - |
 | `c_hold` | 3.282 | kmol/min |
 | `running_weight` | 1 | - |
-| `failure_cost` | 3.61e+06 | reward |
+| `failure_cost` | 225625 | reward |
 | `restart_steps` | 240 | steps |
-| `rho_floor_tracking` | 8.53057e-05 | reward |
-| `rho_floor` | 8.53057e-05 | reward |
+| `rho_floor_tracking` | 5.33161e-06 | reward |
+| `rho_floor` | 5.33161e-06 | reward |
 

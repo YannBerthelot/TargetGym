@@ -102,7 +102,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `T_max` | 350 | K |
 | `T_min` | 300 | K |
 | `C_a_min` | 0.7 | mol/L |
-| `precision_floor` | 0.0001 | mol/L |
+| `precision_floor` | 0.0005 | mol/L |
 | `C_a_max` | 1 | mol/L |
 | `initial_T` | 330 | K |
 | `time_unit_seconds` | 60 | s |
@@ -112,10 +112,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `load_period` | 40 | steps |
 | `load_scale` | 1 | - |
 | `reward_version` | 2 | - |
-| `e_floor` | 0.0001 | mol/L |
+| `e_floor` | 0.0005 | mol/L |
 | `e_tol` | 0 | mol/L |
 | `tracking_exponent` | 2 | - |
-| `failure_cost` | 1.8e+07 | reward |
+| `failure_cost` | 720000 | reward |
 | `restart_steps` | 240 | steps |
 | `rho_floor_tracking` | 0 | reward |
 | `rho_floor` | 0 | reward |

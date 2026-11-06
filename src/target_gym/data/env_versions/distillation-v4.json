@@ -1,5 +1,5 @@
 {
-  "fingerprint": "a6461f7607f5ce80",
-  "note": "branch stamp: the episode doubles to 400 steps, a task change; versions are redone at the re-record",
-  "stamped": "2026-11-06T13:06:18+00:00"
+  "fingerprint": "065e7a99eff00546",
+  "note": "Branch stamp for PR 8: running_cost goes linear on the 6 consumption tasks, and cstr, unstable_cstr, distillation and wind_turbine move their floors. All stamps redone at the re-record.",
+  "stamped": "2026-11-06T11:50:31+00:00"
 }

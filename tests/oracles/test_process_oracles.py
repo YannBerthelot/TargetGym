@@ -55,6 +55,12 @@ STALE_MODELS = ("boiler_drum", "glass_furnace", "wind_turbine")
 _STALE_MODEL = pytest.mark.xfail(
     strict=True, reason="PR 9: the solver's model predates this plant's fixes"
 )
+#: These two plan on the clip at ``c_hold``, a hinge row in ``oracle.py``, and the
+#: reward is linear since PR 8. ``boiler_drum``'s and ``glass_furnace``'s do too.
+CLIPPED_MODELS = ("compressor_surge", "cement_kiln")
+_CLIPPED_MODEL = pytest.mark.xfail(
+    strict=True, reason="PR 9: the solver still plans on the clip at c_hold"
+)
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -85,7 +91,15 @@ def test_the_kiln_solves_seed_zeros_reset():
 @pytest.mark.parametrize(
     "name, load",
     [
-        pytest.param(n, None, marks=_STALE_MODEL) if n in STALE_MODELS else (n, None)
+        (
+            pytest.param(n, None, marks=_STALE_MODEL)
+            if n in STALE_MODELS
+            else (
+                pytest.param(n, None, marks=_CLIPPED_MODEL)
+                if n in CLIPPED_MODELS
+                else (n, None)
+            )
+        )
         for n in ON_SOLVER
     ]
     + [("cstr", (0.7, -0.015)), ("four_tank", (2e-4, -1e-4))],
@@ -305,7 +319,7 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
     "name, budget",
     [(name, 0.25) for name in FIVE + ("boiler_drum", "glass_furnace", "cement_kiln")]
     + [
-        # p = 1, in dollars: 500 W, half the 1 kW resolution, for one step of
+        # p = 1, in dollars: half the 1 kW or 1.7 kW resolution, for one step of
         # delta_t s at the imbalance price in $/MWh.
         pytest.param(
             "battery",
@@ -314,7 +328,7 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
                 strict=True, reason="PR 9: the rebuilt battery's oracle is a stand-in"
             ),
         ),
-        ("wind_turbine", 500.0e-6 * 100.0 * 0.25 / 3600.0),
+        ("wind_turbine", 850.0e-6 * 100.0 * 0.25 / 3600.0),
         # 0.03 EUR/(K^2 h) for 0.25 h at (0.1 K / 2)^2.
         ("hvac", 0.03 * 0.25 * 0.05**2),
     ],

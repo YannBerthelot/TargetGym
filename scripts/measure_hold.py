@@ -459,11 +459,12 @@ def measure(name, seeds, controllers=("pid", "mpc")):
     kinds = [k for k in kinds if k in controllers]
     for kind in kinds:
         t0 = time.time()
-        E, C, B, term, half1, half2 = [], [], [], 0, [], []
+        E, C, B, term, half1, half2, leads = [], [], [], 0, [], [], []
         for seed in range(seeds):
             e, c, tg, ended = _episode(spec, env, params, kind, seed, err_fn, cons_fn)
             term += int(ended)
-            m, settle, bounds, _antic = split_seed(e, tg, burn_in, settle=fixed_settle)
+            m, settle, bounds, antic = split_seed(e, tg, burn_in, settle=fixed_settle)
+            leads.extend(antic[:-1])
             E.append(e[m])
             C.append(c[m])
             B.append(settle)
@@ -485,6 +486,10 @@ def measure(name, seeds, controllers=("pid", "mpc")):
             "e_hold_second_half": np.mean(half2, axis=0).tolist(),
             "c_hold": None if np.isnan(C).all() else float(np.nanmean(C)),
             "settle": float(np.median(B)),
+            # What ``FIXED_LEAD`` is taken from: the longest early start, and
+            # the share of the cycles a change follows that show one.
+            "anticipation": int(max(leads, default=0)),
+            "anticipation_share": float(np.mean(np.array(leads) > 0)) if leads else 0.0,
             "cycles_per_episode": len(bounds) - 1,
             "trips": term,
             "hold_steps_scored": int(len(E)),

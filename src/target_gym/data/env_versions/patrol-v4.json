@@ -1,5 +1,5 @@
 {
-  "fingerprint": "06abaacf76dd0cc3",
-  "note": "Branch stamp on feat/sensor-noise, redone at the 0.8.0 re-record: PR 7b, the patrol family on the fixed inner loop's plant, with the delayed and decorrelated gust, 40 m separation, the 0.03 rad/s route, the 3D expert as lead and the envelope trips. patrol_range_bearing was patrol_bearing_only.",
-  "stamped": "2026-11-06T12:14:29+00:00"
+  "fingerprint": "3748f2a32397dc40",
+  "note": "Branch stamp for PR 8: running_cost goes linear on the 6 consumption tasks, and cstr, unstable_cstr, distillation and wind_turbine move their floors. All stamps redone at the re-record.",
+  "stamped": "2026-11-06T12:55:23+00:00"
 }

@@ -690,7 +690,7 @@ def compute_reward_terms(
             params.running_weight,
             xp,
         ),
-        "wear": R.running_cost(
+        "wear": R.excess_cost(
             state.valve_travel, params.travel_free, params.travel_weight, xp
         ),
     }

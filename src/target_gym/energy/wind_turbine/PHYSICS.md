@@ -346,10 +346,9 @@ assumed simulation inputs of a published 4.8 MW benchmark, not measurements. The
 90 N m was sized for about 30 kN m, so scaled to this turbine it would be about
 130 N m. `omega` divides the benchmark's generator-shaft figure by the gear ratio.
 Power has an independent cross-check: the IEC class 0.1S bound over three gives
-1.7 kW at 5 MW. The ceiling is built on this figure (`precision_floor`, 1 kW over
-`e_floor`, 1.68 kW), so it sits 1.7 times finer than a class 0.1S meter can certify,
-and it is not that meter's resolution. The value stays until PR 8, which changes the
-constants once: at 1.7 kW the ceiling would rise from 6.94e-6 to 1.18e-5 $ per step.
+1.7 kW at 5 MW. The ceiling is built on that bound, not on the assumed 1 kW:
+`precision_floor` is 1.7 kW, which puts it at 1.18e-5 $ per step. `e_floor`, 1.68 kW,
+stays an earlier oracle's hold until PR 9 re-measures it.
 
 Electrical power is its own instrument. Speed times torque through their own
 sensors would scatter about 10.6 kW against the 1 kW meter and the 1.68 kW
