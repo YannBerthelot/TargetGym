@@ -25,11 +25,11 @@ from target_gym.formation.env import (
 from target_gym.patrol.env import (
     PatrolState,
     get_obs_heading,
-    lead_autopilot_step,
 )
 from target_gym.patrol.oracle import (
     TWIN_GAINS,
     PatrolTwinOracle,
+    lead_autopilot_step,
     twin_law_init,
     twin_law_step,
 )
@@ -107,16 +107,13 @@ class FormationOracle(PatrolTwinOracle):
             view = PatrolState(
                 follower=wingman,
                 lead=state.lead,
-                lead_pid=lead_pid,
+                lead_memory=None,
                 slot_back=back,
                 slot_right=right,
                 slot_up=up,
                 lead_turn_rate=state.lead_turn_rate,
                 lead_turn_schedule=state.lead_turn_schedule,
                 time=state.time,
-                gust_x=state.gust_x,
-                gust_y=state.gust_y,
-                gust_z=state.gust_z,
             )
             return twin_law_step(lead_params, gains, memory, view)
 

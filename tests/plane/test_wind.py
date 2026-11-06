@@ -205,7 +205,7 @@ class TestWindShear:
 
 
 class TestFormationTurbulence:
-    def test_patrol_shared_gust(self):
+    def test_turbulence_reaches_both_aircraft_of_a_patrol(self):
         env = PlanePatrol()
 
         def gust_std(sigma):
@@ -220,18 +220,16 @@ class TestFormationTurbulence:
                 s, k = carry
                 k, ks = jax.random.split(k)
                 _, ns, _, _, _ = env.step_env(ks, s, jnp.zeros(3), params)
-                # per-plane gusts stay 0; the shared formation gust carries it
-                return (ns, k), (ns.gust_x, ns.follower.gust_x)
+                return (ns, k), (ns.lead.gust_x, ns.follower.gust_x)
 
             (s, _), (g, fg) = jax.lax.scan(
                 step, (state, jax.random.PRNGKey(0)), None, length=250
             )
             return float(np.std(np.array(g))), float(np.std(np.array(fg)))
 
-        shared, per_plane = gust_std(4.0)
-        assert shared > 1.0  # turbulence reaches the formation
-        assert per_plane == 0.0  # shared, not per-aircraft
-        assert gust_std(0.0)[0] == 0.0  # sigma=0 -> no turbulence
+        lead, follower = gust_std(4.0)
+        assert lead > 1.0 and follower > 1.0  # each aircraft holds the gust it flies in
+        assert gust_std(0.0) == (0.0, 0.0)  # sigma=0 -> no turbulence
 
     def test_formation_turbulence(self):
         env = Formation(num_wingmen=4)

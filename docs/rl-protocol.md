@@ -227,7 +227,7 @@ before reading any result from it.
 | plane3d_figure8 | 1000 | 38 | 190 | 0.99900 |
 | plane3d_racetrack | 650 | 14 | 70 | 0.99846 |
 | patrol | 200 | 13 | 65 | 0.99500 |
-| patrol_bearing_only | 200 | 12 | 60 | 0.99500 |
+| patrol_range_bearing | 200 | 12 | 60 | 0.99500 |
 | distillation | 200 | 8 | 40 | 0.99500 |
 | glass_furnace | 1600 | 132 | 660 | 0.99938 |
 | cement_kiln | 700 | 58 | 290 | 0.99857 |

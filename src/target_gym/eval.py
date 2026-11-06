@@ -502,7 +502,7 @@ FIXED_SETTLE = {
     "plane3d_racetrack": 42,
     "plane3d_figure8": 17,
     "patrol": 84,
-    "patrol_bearing_only": 84,
+    "patrol_range_bearing": 84,
     "cstr": 67,
     "first_order": 63,
     "four_tank": 581,

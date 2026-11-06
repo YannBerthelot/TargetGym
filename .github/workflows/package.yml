@@ -70,7 +70,7 @@ jobs:
     - name: Check the wheel and the sdist
       env:
         VERSION: ${{ inputs.version }}
-      # W002 (duplicate files) is expected: patrol and patrol_bearing_only
+      # W002 (duplicate files) is expected: patrol and patrol_range_bearing
       # share their physics, so their version stamps are the same file.
       run: |
         wheel=$(ls dist/target_gym-*-py3-none-any.whl)

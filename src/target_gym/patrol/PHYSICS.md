@@ -14,10 +14,10 @@ agent must stay inside is itself in motion.
 **The flight physics is not this module's.** Both aircraft are advanced by
 `compute_next_state_3d`, reused verbatim from
 [the 3D aircraft](../plane3d/PHYSICS.md) — the same aerodynamics,
-Prandtl–Glauert compressibility correction, shock-stall lift limit and
-coordinated-turn kinematics, with the same sources and the same validation
-targets. Nothing about the aerodynamic model is re-derived here, and any
-correction to it applies to this environment automatically.
+Prandtl–Glauert compressibility correction, shock-stall lift limit,
+coordinated-turn kinematics and fixed inner loop, with the same sources and the
+same validation targets. Nothing about the aerodynamic model is re-derived here,
+and any correction to it applies to this environment automatically.
 
 What this module adds is composition and geometry:
 
@@ -34,8 +34,11 @@ beside the squared slot error, each in units of its floor, so occupying the
 slot while pointing the wrong way still costs.
 
 **Collision is a trip.** Separation below `min_separation` trips the plant, as
-do either aircraft leaving the altitude envelope and the follower ending up
-`max_slot_error` from its slot. The step is charged the trip cost and both
+do either aircraft leaving the 3D tasks' envelope (altitude, 60 deg of bank, the
+load limits, VMO and MMO) and the follower ending up `max_slot_error` from its
+slot. `min_separation` is 40 m between centres, over the A320's 34.1 to 35.8 m
+span: at the 25 m it replaced, two aircraft abeam had overlapping wings and no
+trip. The step is charged the trip cost and both
 aircraft restart as `reset_env` would, while the episode clock keeps running
 (with `continuing = False` the episode ends there instead). This is the
 qualitative addition over the single-aircraft tasks: the follower is scored
@@ -44,19 +47,56 @@ stops short.
 
 **The lead's motion.** The lead flies a route of eight legs, cycled. Each leg
 lasts `lead_leg_seconds` (60 s) at a turn rate drawn at reset from
-`lead_turn_rate_range`, 0 being straight and level, and the tuned 3D heading
-autopilot flies it. The schedule is part of the state, so a planner rolling
-the environment forward sees the next turn coming, while a policy sees only
-the current leg. It is scripted, not adversarial: the difficulty is tracking a
-reference that changes its turn every minute, not fighting an opponent. A
-single turn rate held for the whole episode was too easy, since feedforward of
-a constant, observable rate cancels it.
+`lead_turn_rate_range`, 0 being straight and level. The 3D heading expert flies
+it, on the 3D tasks' 290 kt CAS then M 0.78 schedule, from a spawn on that
+schedule (`LEAD_AUTOPILOT`, task constants, so a retune of that expert does not
+change this plant). The hardest leg, 0.03 rad/s, is 1.7 deg/s, under a
+standard-rate turn's 3 deg/s, and takes 28 to 34 deg of bank at the flown 171 to
+219 m/s. The 0.003 rad/s it replaced took 4 deg, which no wingman would notice.
+The schedule is part of the state, so a planner rolling the environment forward
+sees the next turn coming, while a policy sees only the current leg. It is
+scripted, not adversarial: the difficulty is tracking a reference that changes
+its turn every minute, not fighting an opponent. A single turn rate held for the
+whole episode was too easy, since feedforward of a constant, observable rate
+cancels it.
 
-### The bearing-only variant
+**The air.** The two aircraft are in the same air, not in the same gust, because
+they are in different places in it (`advance_air`). Three things follow:
 
-`PlanePatrolBearingOnly` replaces the full relative state with what a passive
+- **Delay.** The field is taken as frozen as it passes (Taylor's hypothesis), so a
+  follower `slot_back` behind the lead meets the lead's gust `slot_back / V` later,
+  0.7 to 1.8 s on these slots, read between step samples.
+- **Decorrelation.** The follower's offset from the lead's path, `r =
+  hypot(slot_right, slot_up)`, leaves `rho = exp(-r / L)` of that gust shared, the
+  Dryden longitudinal correlation on MIL-F-8785C's `L` of 533.4 m (0.74 at the
+  widest slot). The rest is the follower's own OU draw, weighted by
+  `sqrt(1 - rho^2)`, so its gust keeps the lead's 2 m/s. Dryden's form is read;
+  using it across the path and on all three axes is ours.
+- **Rolling gust.** Its scale is the span, far under any slot, so each wing draws
+  its own (`plane3d/PHYSICS.md`).
+
+When the gust was one shared value it was common-mode, moved both aircraft alike
+and dropped out of the relative position the reward scores, so turbulence cost a
+follower nothing. Each aircraft now holds the gust it flies in, and the trips read
+it. `key=None` keeps a steady wind.
+
+**Wake is left out.** The lead's vortex pair is not modelled, and no slot feels
+it. Its size is known: `Gamma = 4 M g / (pi rho V b)` is about 190 m^2/s here, and
+the pair sinks at `Gamma / (2 pi b0)` with `b0 = pi b / 4`, about 1.1 m/s, so 1 to
+2 s behind the lead it is barely below the lead's path. What is missing is a model
+of what it does to a follower that this plant can use: NASA's Autonomous Formation
+Flight trials measured the drag benefit near the vortex by hand-flown test points,
+and held their station-keeping figure outside it, so nothing validates a rolling
+moment and lift change at a 1 Hz demand on this airframe. D3 says what that costs.
+
+### The range-and-bearing variant
+
+`PlanePatrolRangeBearing` replaces the full relative state with what a TCAS-style
 sensor gives: **range, azimuth and elevation** to the lead, measured in the
-follower's body frame, plus the follower's own state and the commanded slot.
+follower's body frame, plus the follower's own state and the commanded slot. It
+was `patrol_bearing_only` until 0.8.0. A bearings-only tracker is passive and must
+work out range from its own manoeuvres; this one measures range, by interrogating
+the lead, so that name claimed a problem the task does not pose.
 
 Range with azimuth and elevation is a *complete relative-position*
 measurement, so the follower always knows where the lead is. The genuinely
@@ -76,6 +116,15 @@ definition depends on.
 | The version-1 reward approaches 1 in the slot and aligned | ≈ 1 | `test_reward_near_one_in_slot` |
 | Collision trips the plant | the version-2 reward is at most minus the trip cost | `test_collision_terminates_with_penalty` |
 | Losing formation trips the plant | at `max_slot_error` | `test_lost_formation_terminates` |
+| Separation trips before the wingtips meet | span + 0.5 m trips, 41 m does not | `test_separation_trips_before_the_wingtips_meet` |
+| Either aircraft past the envelope trips | load, bank, VMO, MMO, on each seat | `test_any_aircraft_past_the_envelope_trips` |
+| Both aircraft spawn on the schedule, inside the envelope | the schedule's speed at the drawn height | `test_every_aircraft_spawns_on_the_schedule_inside_the_envelope` |
+| The lead holds its level on the schedule at any mass | 2 m and 1 m/s in still air, 73.5 and 62 t | `test_the_scripted_lead_holds_its_level_on_the_schedule` |
+| The hard turn is coordinated | 0.03 rad/s, `tan(bank) = V w / g` | `test_the_hard_turn_is_a_coordinated_30_deg_bank` |
+| The follower meets the lead's gust a slot distance later | dead astern, the delayed gust | `test_the_follower_meets_the_leads_gust_a_slot_distance_later` |
+| Offset air decorrelates and keeps its variance | correlation `exp(-r / L)`, 2 m/s, 4000 chains | `test_offset_air_decorrelates_and_keeps_its_variance` |
+| Turbulence rolls a follower held wings level | a bank, 0 in still air | `test_turbulence_rolls_a_follower_held_wings_level` |
+| Each wing has its own rolling gust | banks differ across seats | `test_each_wing_has_its_own_rolling_gust` |
 | The shipped expert holds formation through a turn | across sampled turn rates | `test_expert_holds_formation` |
 | The expert never collides | separation > `min_separation` | `test_expert_never_collides` |
 | The expert holds its slot on held-out seeds, both variants | RMS slot error after the burn-in at most 8.5 m on seeds 200-209, no trip | `test_the_follower_holds_its_slot` |
@@ -97,16 +146,30 @@ Flight parameters are inherited from `PlaneParams3D`; see the
 | `slot_up_range` | (−60, 60) m | Vertical offset |
 | `slot_tolerance` | 60 m | Version-1 reward only: σ of its slot term |
 | `heading_tolerance` | 0.5236 rad (30°) | Version-1 reward only: σ of its heading-alignment factor |
-| `min_separation` | 25 m | Collision distance, a trip |
+| `min_separation` | 40 m | Collision distance between centres, a trip |
 | `max_slot_error` | 1500 m | Formation lost, a trip |
-| `lead_turn_rate_range` | (−0.003, 0.003) rad/step | Range each route leg's turn rate is drawn from; 0 is straight and level |
+| `lead_turn_rate_range` | (−0.03, 0.03) rad/step | Range each route leg's turn rate is drawn from; 0 is straight and level |
 | `lead_leg_seconds` | 60 s | Length of each leg of the lead's route |
 | `follower_spawn_noise` | 40 m | Isotropic spawn offset, so the episode starts solvable but untrimmed |
 | `delta_t` | 1.0 s | Step size |
 
 The defaults place the follower in a trailing echelon roughly 200 m back and
-120 m to one side. At `delta_t = 1 s`, the turn-rate bound of 0.003 rad/step is
-about 0.17 °/s — a gentle orbit, not an aerobatic one.
+120 m to one side. `initial_x_dot` is not read here: both aircraft spawn on the
+lead's schedule.
+
+### What each figure rests on
+
+| figure | value | status |
+| --- | --- | --- |
+| Turn rate | +-0.03 rad/s | the review's; 4 deg of bank before |
+| Standard-rate turn | 3 deg/s | common knowledge, for scale only |
+| Collision distance | 40 m | ours, over the A320's 34.1 m span and 35.8 m with sharklets |
+| Gust delay | `slot_back / V` | ours: Taylor's frozen turbulence, as the plan's row asks |
+| Correlation | `exp(-r / L)` | read: Dryden's longitudinal form ([Antonova et al. 2014](https://jrnl.kai.edu.ua/index.php/visnik/article/download/6790/7602/16811), equation 1). Across the path and on all axes: ours |
+| Scale `L` | 533.4 m | MIL-F-8785C, as `plane3d/PHYSICS.md` |
+| Wake circulation and sink | about 190 m^2/s, 1.1 m/s | `b0` read ([NASA review](https://ntrs.nasa.gov/api/citations/20140003974/downloads/20140003974.pdf)), sink read ([DLR](https://elib.dlr.de/67327/1/2011-Aerospace-Engineering.pdf)), circulation from lift `= rho V Gamma b0`; values ours at 5000 m and 190 m/s |
+| Lead schedule | 290 kt, M 0.78 | as `plane/PHYSICS.md` |
+| Lead's gains | `LEAD_AUTOPILOT` | the 3D heading expert's on 2026-11-06, stale until PR 9 |
 
 ## 4. Task design
 
@@ -132,9 +195,9 @@ is charged too, and coming too close to the lead trips the plant.
 | 24 | slot error, the distance to the slot (m) |
 | 25 | target slot error, always 0 |
 
-### Task: `patrol_bearing_only`
+### Task: `patrol_range_bearing`
 
-The `patrol` task flown from a passive sensor: the wingman sees range,
+The `patrol` task flown from a TCAS-style sensor: the wingman sees range,
 azimuth and elevation to the lead instead of the lead's relative state. The
 lead's heading, which places the slot, is not measured and has to be inferred
 from how the bearing changes. The tracked value is the measured range,
@@ -156,7 +219,7 @@ against the distance at which the slot sits from the lead.
 ### Scoring
 
 The tracked scalar is the **slot error** for the full-observation variant and
-the **measured range** for the bearing-only one, each against its commanded
+the **measured range** for the range-and-bearing one, each against its commanded
 value. The version-2 reward charges the squared slot error and the squared
 heading misalignment with the lead, each in units of its floor, plus the trip
 cost on a step that trips (see *Reward (version 2)* below).
@@ -175,13 +238,11 @@ autopilot underneath is the 3D tasks' (`plane3d.experts`): TECS on height and
 speed, a bank demand limited to 45 deg and stall prevention, as ArduPilot flies
 them, over the plant's fixed inner loop (`plane/PHYSICS.md`). A policy, the
 scripted lead and the twin law all send it demands, so nothing here touches the
-surfaces. The lead's heading PID sends its bank and pitch as demands until PR 7b
-replaces it. The patrol tasks do not read the 3D tasks' envelope trips or rolling
-gust yet, which is PR 7b too. The height and speed demands go to TECS as
+surfaces. The height and speed demands go to TECS as
 they are, with only their rates filtered. Unfiltered, every step-to-step wobble
 of the lead's track reaches the pitch loop.
 
-On `patrol_bearing_only` an estimator feeds the same hold. Range, azimuth and
+On `patrol_range_bearing` an estimator feeds the same hold. Range, azimuth and
 elevation fix the relative position. The lead's velocity is the filtered rate of
 that position, with the follower's own motion added back, and its heading is
 that track less the crab the follower flies in the same air.
@@ -192,12 +253,42 @@ seeds 200-209 (`scripts/tune_formation_hold.py`,
 scaled by span: 10 ft one-sigma on a 12.3 m span is 8.5 m on the A320's
 34.1 m. Over the scored part of the episode, on exact readings and with a raw
 difference in the estimator, the full-observation expert held an RMS slot error
-of 3.4 to 5.2 m (median 4.0) and the bearing-only one 3.8 to 5.7 m (median 4.4),
+of 3.4 to 5.2 m (median 4.0) and the range-and-bearing one 3.8 to 5.7 m (median 4.4),
 with no trip. The pursuit-guidance PID it replaced
 (2026-10) held 44 to 68 m and 40 to 57 m.
 
+**Those figures are the old plant's**: a 4 deg route, one common gust and no
+envelope. On this plant, before PR 9 retunes it, the full-observation expert
+holds 14.5 to 25.6 m RMS on seeds 200-209 (median 19.2) with one trip, a 2.3 g
+pull on seed 206's first step from a spawn 27 m below the slot. The
+range-and-bearing expert loses the lead, tripping 12 to 33 times an episode: its
+20 s filter lags a 0.03 rad/s turn by far more than the slot. The scripted lead
+does not trip, in 256 episodes of 200 steps and 64 of 1500 on these seeds' route
+draws, with a peak load of 1.65 g, 36 deg of bank and 17 m of height.
+
+**The 8.5 m limit, re-read for the 40 m separation.** The number stays, and the
+trip does not touch it: the nearest slot is 150 m from the lead, 110 m from the
+trip, which is 13 limits. What moves is what it can be said to mean, because this
+route is not the flight it came from:
+
+- **It is a requirement for steady flight.** The 10 ft is NASA's design requirement
+  for steady-state tracking, 1 standard deviation, and the gain sets beat it,
+  typically under +-5 ft. The autopilot "was designed strictly for nonmaneuvering
+  flight", and in the lead's heading sweeps all four gain sets fell short of the
+  goal ([TM-2002-210729](https://ntrs.nasa.gov/api/citations/20030005820/downloads/20030005820.pdf)).
+  The route turns on most legs at up to 30 deg of bank, so this limit is asked of
+  flight its source says it did not cover.
+- **The span is not settled.** The plant's `wingspan` is 35.8 m, on which the same
+  ratio gives 8.9 m. NASA gives the F/A-18's as 37.5 ft, 11.4 m, not 12.3 m, which
+  gives 9.1 m on 34.1 m ([TM-2003-210734](https://ntrs.nasa.gov/api/citations/20030075684/downloads/20030075684.pdf)).
+- **Its geometry fits.** NASA's trail positions run 2 to 6.6 spans, and these
+  slots 4.4 to 8.8.
+
 **The oracle** in the MPC slot is `PatrolTwinOracle` (`oracle.py`), a
-feedback law with a short planner on top. The law flies the lead's own heading
+feedback law with a short planner on top. **It predates this plant, and PR 9
+rebuilds it.** Its law still flies the old lead's heading PID
+(`TWIN_AUTOPILOT`), the gust is no longer common-mode, and the figures below
+are the old plant's. The law flies the lead's own heading
 autopilot on the follower's state, aimed at the lead's commanded heading and
 altitude plus the slot offset, and adds small corrections on the slot error
 and a turn feedforward. In the slot with nothing to correct it commands
@@ -222,8 +313,8 @@ turn a slot behind the lead moves sideways at omega x slot_back, so holding it
 exactly needs a heading offset of about omega slot_back / V, 4.5e-3 rad at the
 largest turn rate and slot (0.003 rad/s, 300 m, 200 m/s).
 
-On `patrol_bearing_only` the same oracle reads the true state. It is a
-full-state bound, not a bearing-only controller: on a task defined by what the
+On `patrol_range_bearing` the same oracle reads the true state. It is a
+full-state bound, not a range-and-bearing controller: on a task defined by what the
 observation withholds, its score measures information and control together.
 
 ## 6. Known deviations
@@ -236,12 +327,16 @@ was a pursuit-guidance PID that departed on some geometries; the hold
 replaced it.
 
 **D2 — the lead is scripted, not reactive.** It flies its pattern regardless of
-the follower, including through a collision. From the untrimmed start its
-heading autopilot climbs about 600 m at full power in the first 30 s; a
-follower that idles its engine meanwhile cannot regain the energy on the same
-airframe, which is why the expert's throttle closes on the engine's state. Formation flight against a lead
+the follower, including through a collision. Formation flight against a lead
 that reacts (a break turn, a station change) is a different and harder task,
 and is not modelled.
+
+**D3: a slot can sit in a wake the plant does not have.** Wake is left out
+(section 1), and the slot draws are not shaped around it. A slot within a span of
+the lead's path, `|slot_right|` and `|slot_up|` under about 35 m, would be in or
+beside the vortex pair, and about 14% of draws are. The 8.5 m limit comes from
+station-keeping held outside the vortex, so it does not speak for those slots
+either. The formation's V is clear of this: its lateral spacing is at least 60 m.
 
 ---
 
@@ -255,8 +350,8 @@ and is not modelled.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `patrol` | 200 | 1 | 3 min | 3 in [-1, 1] | 26 | 19 |
-| `patrol_bearing_only` | 200 | 1 | 3 min | 3 in [-1, 1] | 21 | 19 |
+| `patrol` | 200 | 1 | 3 min | 3 in [-1, 1] | 26 | 34 |
+| `patrol_range_bearing` | 200 | 1 | 3 min | 3 in [-1, 1] | 21 | 34 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -340,7 +435,7 @@ The lead's readings on `patrol`:
 | `lead.z_dot` | 0.03 m/s | 1 ft/min | Lead IRS vertical speed over the datalink | No source: a placeholder | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
 | `lead.psi` | 1.3e-4 rad at 230 m/s, as 0.03 / V | from the lead's velocities | Lead true track over the datalink | Confirmed | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
 
-On `patrol_bearing_only` the follower has no datalink, so a TCAS-style sensor
+On `patrol_range_bearing` the follower has no datalink, so a TCAS-style sensor
 reports the lead instead. **These figures are provisional, marked pending a real
 sensor.** None has been sourced for a wingman at 150 to 300 m:
 
@@ -374,7 +469,7 @@ its scatter, so 0.2 m comes from a ground test set, and the benchmark runs at
 ground velocity figure is a receiver's accuracy, so true scatter is smaller, and
 the vertical speed figure is a placeholder.
 
-The expert reads these values, and so does every tuner. The bearing-only
+The expert reads these values, and so does every tuner. The range-and-bearing
 estimator takes the lead's velocity as the filtered rate of the lead's position
 (`t_rate`, 20 s), since a raw difference turns 15 m of range noise into 21 m/s of
 speed noise and trips on every training seed. The filter's lag sets a steady
@@ -384,4 +479,4 @@ replace this estimator. The oracle plans and acts on the true state, so it stays
 a full-state bound. `reward`, trips and the score read the true state.
 `info["measured_reward"]` is the same cost on the field readings, with any trip
 taken from the true state. A channel reading stays out of it, so on
-`patrol_bearing_only` it does not see the 15 m of range noise.
+`patrol_range_bearing` it does not see the 15 m of range noise.

@@ -48,7 +48,7 @@ PINNED_21 = [
     "plane3d_racetrack",
     "plane3d_figure8",
     "patrol",
-    "patrol_bearing_only",
+    "patrol_range_bearing",
     "cstr",
     "first_order",
     "four_tank",
@@ -373,7 +373,7 @@ DECLARED_BY_THE_21 = {
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         )
-        for name in ("patrol", "patrol_bearing_only")
+        for name in ("patrol", "patrol_range_bearing")
     },
 }
 
@@ -593,7 +593,7 @@ def test_the_expert_fingerprint_covers_the_gains_a_task_reads():
                 f"{s.name}: hashes {sorted(entries)}, reads {sorted(wanted)}"
             )
     assert not problems, "\n".join(problems)
-    for name in ("patrol", "patrol_bearing_only"):
+    for name in ("patrol", "patrol_range_bearing"):
         spec = registry.REGISTRY[name]
         assert "plane3d_heading" not in (*spec.gains_keys, *spec.oracle_gains_keys)
 
