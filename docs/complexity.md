@@ -68,7 +68,7 @@ are the observation and action lengths, and the episode is the scored one.
 | Task | Name | What it asks | Obs | Act | Episode |
 |---|---|---|---|---|---|
 | [Glass Furnace](environments/glass_furnace.md) | `glass_furnace` | Hold the crown temperature of a regenerative float-glass furnace on a slowly walking setpoint by setting the fuel flow. | 5 | 1 | 1600 steps, 13.3 h |
-| [Reactor](environments/reactor.md) | `reactor` | Follow a drifting power demand on a 3 GW pressurised-water reactor with the control rods. | 4 | 1 | 864 steps, 2.4 h |
+| [Reactor](environments/reactor.md) | `reactor` | Hold a 3 GW pressurised-water reactor's average coolant temperature on its program through a day of load follow, using the control rods. | 6 | 1 | 1440 steps, 12 h |
 | [Building HVAC](environments/hvac.md) | `hvac` | Keep a heavyweight, well-insulated single-zone building at its comfort setpoint through occupied hours and a night setback, with hydronic heating, over a week of heating-season weather. | 7 | 1 | 720 steps, 7.5 days |
 | [Cement Kiln](environments/cement_kiln.md) | `cement_kiln` | Hold the free lime in the clinker leaving a 3000 t/day rotary kiln with fuel and kiln speed. | 8 | 2 | 700 steps, 5.83 h |
 | [Boiler Drum](environments/boiler_drum.md) | `boiler_drum` | Hold the drum level and the steam pressure of a 160 MW natural-circulation drum boiler with fuel and feedwater, while the turbine's steam draw moves. | 7 | 2 | 400 steps, 13.3 min |
@@ -79,5 +79,5 @@ are the observation and action lengths, and the episode is the scored one.
 | Task | Name | What it asks | Obs | Act | Episode |
 |---|---|---|---|---|---|
 | [Wind Turbine](environments/wind_turbine.md) | `wind_turbine` | Hold the electrical power of the NREL 5 MW reference turbine at a curtailed setpoint in turbulent, above-rated wind, with blade pitch and generator torque. | 5 | 2 | 400 steps, 100 s |
-| [Battery](environments/battery.md) | `battery` | Follow a grid dispatch schedule, one setpoint per 5-minute market block, with a 1 MW / 2 MWh lithium-ion battery. | 5 | 1 | 360 steps, 30 min |
+| [Battery](environments/battery.md) | `battery` | Follow a regulation signal for 4 hours with a 1 MW / 1.69 MWh lithium-ion battery. | 7 | 1 | 2880 steps, 4 h |
 <!-- END generated table -->

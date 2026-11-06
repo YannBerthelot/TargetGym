@@ -126,8 +126,22 @@ def _rod_integrator(obs):
     return obs[:, [2]] + 2.0 / 0.015 * 0.0163 * (obs[:, [3]] - obs[:, [0]])
 
 
-#: Per task, the policies a review found to beat the expert.
-WITNESSES = {"reactor": ("rod integrator", _rod_integrator)}
+def _tavg_integrator(obs):
+    """A plain integrator on what the rods control, moving the rod from where it is
+    read. SIMC's gain on a hand bump test of the rebuilt plant: 19 K per unit of
+    action, a lag of one 30 s step and a step of delay, so 1 / (2 * 19 * 2)."""
+    return obs[:, [2]] + 0.0132 * (obs[:, [5]] - obs[:, [4]])
+
+
+#: Per task, the policies a review found to beat the expert. The rebuild's
+#: secondary side ended the first of these: power follows the turbine, and
+#: holding it says nothing about Tavg.
+WITNESSES = {
+    "reactor": (
+        ("rod integrator", _rod_integrator),
+        ("Tavg integrator", _tavg_integrator),
+    )
+}
 
 
 class Null:
@@ -197,8 +211,7 @@ def null_policies(name: str) -> list[Null]:
     gains = i_gains(name, info.n_act, len(targets), step)
     if gains is not None:
         out.append(Null("I-only", lambda o: table(o[:, targets]), gains))
-    if name in WITNESSES:
-        out.append(Null(*WITNESSES[name]))
+    out.extend(Null(*witness) for witness in WITNESSES.get(name, ()))
     return out
 
 
@@ -224,7 +237,7 @@ def gate(name: str) -> dict:
 KNOWN = {
     "distillation": "the expert was tuned on instant analysers; PR 9 retunes it",
     "hvac": "free gains match the losses, so a heater left off wins",
-    "reactor": "no secondary side, so one rod integrator matches the oracle",
+    "reactor": "PR 9: an integrator on Tavg beats the rod program's dead band",
 }
 
 
@@ -260,7 +273,8 @@ def test_the_i_gain_is_simcs_with_the_lag_counted_as_delay():
 
 
 def test_an_invalid_bump_test_tunes_no_loop():
-    """All 10 of ``reactor``'s fits are invalid, ``cstr``'s are all valid."""
+    """All 10 of ``reactor``'s fits are invalid, ``cstr``'s are all valid. Those
+    fits read ``n``, from before the rebuild; PR 9 measures Tavg's."""
     assert i_gains("reactor", 1, 1, 1.0) is None
     assert i_gains("cstr", 1, 1, 0.25)[0, 0] != 0.0
 

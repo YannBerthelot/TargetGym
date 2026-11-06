@@ -76,7 +76,7 @@ Deliberately **not** modelled:
 | Cell-to-cell imbalance, balancing circuits | Single lumped pack. |
 | Electrochemical (P2D/SPM) dynamics | An equivalent circuit is the standard reduction for control work and is orders of magnitude cheaper. |
 | Voltage hysteresis, multiple RC branches | One RC branch; adequate for minute-scale dispatch. |
-| Inverter dynamics and transformer | The inverter settles in under 40 ms, inside the 5 s step. |
+| Inverter dynamics and transformer | Assumed to settle inside the 5 s step (section 3). |
 | Auxiliary load that moves with weather or load | Constant. MESA-1 saw it nearly flat up to 1C, and 5 to 7 kW lower in winter. |
 | Calendar life beyond the episode | Fade accumulates but never depletes the pack in one episode. |
 
@@ -90,7 +90,7 @@ thermal-runaway conditions.
 
 | Quantity | Target | Model | |
 |---|---|---|---|
-| AC round-trip efficiency at rated power | 83 to 88 % | **84.4 %** | ✅ |
+| AC round-trip efficiency at rated power | 83 to 88 %, around the 85 % Xu et al. 2017 simulate | **84.4 %** | ✅ |
 | Cell voltage window | 2.7 to 4.2 V | **2.84 to 4.19 V** open circuit | ✅ |
 | OCV monotone in state of charge | required | yes | ✅ |
 | Steady thermal rise at rated power | about 10 to 20 K (actively cooled) | **17.0 K** | ✅ |
@@ -115,16 +115,16 @@ passed by reading that same rating.
 
 ## 3. Parameter table
 
-Status of each source: **read** means the page was opened and the value found there,
-and **ours** means a choice for the owner to accept.
+Status of each source: **read** means the page was opened and the value found there
+by two readers, and **ours** means a choice for the owner to accept.
 
 | Symbol | Value | Unit | Source | |
 |---|---|---|---|---|
 | `power_max`, `energy_nominal` | 1 MW, 1.69 MWh | – | Closes on the cells | ✅ |
 | `n_series`, `capacity_As` | 192, 2500 Ah | – | 677 V at 50 % charge | ✅ |
 | `R0` | 0.02 | ohm | Sized for the round-trip band | ✅ |
-| `pcs_loss` | 3 % at rated | – | Read: [Delta PCS125](https://filecenter.deltaww.com/Products/download/18/Products-202209012212374228.pdf) datasheet, CEC-weighted 97.0 % | ✅ |
-| `aux_load` | 15 kW | W | Read: [MESA-1 test report](https://www.pnnl.gov/main/publications/external/technical_reports/PNNL-27237.pdf), 30 kW on a 2 MW system, nearly constant up to 1C | ✅ |
+| `pcs_loss` | 3 % at rated | – | Ours: a search result gave 97.0 % CEC-weighted for a Delta 125 kW inverter, but the datasheet sits behind a terms page and neither reader opened it | ⚠️ |
+| `aux_load` | 15 kW | W | Read: [MESA-1 test report](https://www.pnnl.gov/main/publications/external/technical_reports/PNNL-27237.pdf), 30 kW on a 2 x 1 MW system, nearly constant up to 1C, scaled by power | ✅ |
 | `R1`, `C1` | 0.01 ohm, 20 kF | – | TUNED: diffusion time constant about 200 s | ⚠️ |
 | OCV coefficients | see params | – | NMC-like fit; validated on window and monotonicity | ⚠️ |
 | `C_thermal`, `UA_thermal` | 9e6 J/K, 3000 W/K | – | About 10 t pack; active cooling | ⚠️ |
@@ -141,10 +141,11 @@ and **ours** means a choice for the owner to accept.
 | `max_steps_in_episode` | 2880 | steps | Ours: 4 h, chosen so exact following leaves the window on most seeds (3 h: 51 %, 4 h: 62 %) | ⚠️ |
 | `delta_t` | 5.0 | s | One regulation instruction | ✅ |
 
-**Actuator and timing figures.** The inverter has no rate limit or lag here, because
-its response is under 40 ms (Delta PCS125 datasheet) against a 5 s step, and MESA-1's
-was faster than its 10 s logging. The meter has no dead time, because telemetry runs
-on the same 2 to 6 s cycle as the signal.
+**Actuator and timing figures.** The inverter has no rate limit or lag here, labelled
+ours. MESA-1's response was faster than its 10 s logging could resolve, which is the
+only figure read, and an inverter response inside the 5 s step is the assumption. The
+meter has no dead time, on the same assumption, because telemetry runs on the signal's
+2 to 6 s cycle.
 
 ---
 
@@ -250,8 +251,9 @@ half-cycles' throughput, which overstates a 0.8 half-cycle by about 6 %.
 behaviour that actually determines real pack limits.
 
 **⚠️ D5: the signal is synthetic.** Its structure is real and its numbers are ours.
-A published regulation trace is not energy-limited by design: PJM's RegD integrated
-to zero to protect storage. This task's hourly levels are what make it energy-limited.
+A published regulation signal may not be energy-limited: PJM designed RegD to be
+energy neutral ([FERC, ER19-1651](https://ferc.gov/sites/default/files/2020-06/20200326134642-ER19-1651-000.pdf)).
+This task's hourly levels are what make it energy-limited.
 
 ---
 
@@ -265,7 +267,7 @@ to zero to protect storage. This task's hourly levels are what make it energy-li
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `battery` | 360 | 5 | 30 min | 1 in [-1, 1] | 5 | 21 |
+| `battery` | 2880 | 5 | 4.0 h | 1 in [-1, 1] | 7 | 18 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

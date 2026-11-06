@@ -1,5 +1,5 @@
 {
-  "fingerprint": "588204ca4ff80129",
-  "note": "Branch stamp on feat/sensor-noise: sensor lag and per-actuator rates, unused by any task yet. Redone at the 0.8.0 re-record.",
-  "stamped": "2026-11-05T23:42:02+00:00"
+  "fingerprint": "451c93aa7de7c9dd",
+  "note": "Branch stamp for the battery and reactor rebuild, PR 6 on feat/sensor-noise; redone at the re-record.",
+  "stamped": "2026-11-06T01:02:37+00:00"
 }

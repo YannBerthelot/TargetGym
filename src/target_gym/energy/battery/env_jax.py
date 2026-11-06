@@ -126,7 +126,8 @@ class GridBattery(
             maxval=params.initial_soc_range[1],
         )
         # A schedule of hourly levels, drawn once, and the regulation signal at
-        # its stationary spread.
+        # its stationary spread, in whole watts, so that the sum below rounds the
+        # same under jit, which may fuse a product into it, and outside it.
         schedule = jax.random.uniform(
             dispatch_key,
             shape=(N_DISPATCH_BLOCKS,),
@@ -134,7 +135,7 @@ class GridBattery(
             maxval=params.dispatch_range,
         )
         phi = jnp.exp(-params.delta_t / params.regulation_tau)
-        regulation = (
+        regulation = jnp.round(
             params.dispatch_noise_std
             / jnp.sqrt(1.0 - phi**2)
             * jax.random.normal(signal_key)

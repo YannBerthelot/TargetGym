@@ -22,7 +22,7 @@ Assumptions the proposal leaves open, stated here and in each ``PHYSICS.md``:
   most, proportional to ``n``, and a reading's sigma is a constant, so this is
   an upper bound over the operating range.
 - A free-lime sample is hourly. No standard or handbook gives this.
-- The measured reward of ``reactor``, summed over its ten sub-steps, carries
+- The measured reward of ``reactor``, summed over its six sub-steps, carries
   the one draw of the step's observation: a controller gets one reading a step.
 
 ``tests/test_measurement_noise.py`` holds these tasks to the shared contract:
@@ -46,7 +46,8 @@ from target_gym.registry import REGISTRY
 #: not listed stay exact, apart from the held ones in ``HELD``.
 SCATTER = {
     "glass_furnace": {0: 0.36, 1: 0.32, 2: 100.0 * 3e-4 / 0.698},  # fuel_max
-    "reactor": {0: 1.9e-4, 1: 0.045},
+    # Tavg is the mean of two RTDs, so 0.045 over sqrt(2).
+    "reactor": {0: 1.9e-4, 1: 0.045, 4: 0.045 / math.sqrt(2.0)},
     "hvac": {
         0: 0.023,
         1: 0.023,
@@ -64,6 +65,9 @@ SCATTER = {
     "battery": {0: 4.7e-5, 1: 5.5e-5, 2: 0.03, 3: 3.3e-4},
 }
 TASKS = list(SCATTER)
+#: Channels computed from one instrument share its draw: Tavg is half the hot-leg
+#: RTD, so it correlates with that channel at 1 / sqrt(2).
+SHARED_INSTRUMENT = {("reactor", 1, 4): 1.0 / math.sqrt(2.0)}
 #: Free lime in percent: sigma, and steps of 30 s in one hourly sample.
 HELD = {"cement_kiln": {0: (100.0 * 1.8e-4, 120)}}
 
@@ -150,7 +154,9 @@ def test_each_reading_is_its_own_draw(name):
     channels = sorted(SCATTER[name])
     for i, a in enumerate(channels):
         for b in channels[i + 1 :]:
-            assert abs(np.corrcoef(noise[:, a], noise[:, b])[0, 1]) < 0.1, (a, b)
+            correlation = np.corrcoef(noise[:, a], noise[:, b])[0, 1]
+            shared = SHARED_INSTRUMENT.get((name, a, b), 0.0)
+            assert abs(correlation - shared) < 0.1, (a, b)
 
 
 @pytest.mark.parametrize("task, channel", sorted(STEPS), ids=str)
@@ -347,18 +353,17 @@ def test_measured_power_is_the_meters(name, sigma_W):
 
 
 def test_reactor_measured_reward_carries_the_steps_one_reading():
-    """Tracking is linear at 100 $/MWh on 1 GW, ``1e5 / 3600 = 27.78`` $ per
-    second per unit of ``n``, over ten sub-steps. With the plant well above its
-    target, a reading ``d`` above the plant adds ``277.8 * d`` to the step's
-    cost, and ``d`` is what the observation of that step shows."""
+    """Tracking is linear at $230/h per K, so 30 s of it is $1.917 per K. With Tavg
+    well above program, a reading ``d`` above the plant adds ``1.917 * d`` to the
+    step's cost, and ``d`` is what the observation of that step shows."""
     env, params, state = _setup("reactor")
-    state = state.replace(target_n=jnp.float32(0.3))
+    hot = state.replace(T_coolant=state.T_coolant + 8.0, T_cold=state.T_cold + 8.0)
     key = jax.random.PRNGKey(3)
     for t in range(5):
-        obs, state, reward, _, info = env.step_env(
-            jax.random.fold_in(key, t), state, jnp.zeros(1), params
+        obs, new, reward, _, info = env.step_env(
+            jax.random.fold_in(key, t), hot.replace(time=t), jnp.array([0.2]), params
         )
-        d = float(obs[0]) - float(state.n)
+        d = float(obs[4]) - 0.5 * float(new.T_coolant + new.T_cold)
         assert abs(d) > 0.0
         cost = float(reward) - float(info["measured_reward"])
-        assert cost == pytest.approx(1e6 / 3600.0 * d, abs=5e-4)
+        assert cost == pytest.approx(230.0 * 30.0 / 3600.0 * d, abs=5e-4)

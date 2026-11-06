@@ -20,9 +20,9 @@ from target_gym.energy.battery.env import (
     compute_velocity,
     current_for_power,
     degradation_rate,
+    inverter_input,
     max_deliverable_power,
     open_circuit_voltage,
-    inverter_input,
     round_trip_efficiency,
     terminal_voltage,
 )
@@ -40,8 +40,8 @@ def params():
 
 
 def test_round_trip_efficiency_is_in_the_published_band(params):
-    """At the AC side, inverter included: 83 to 88 % (Xu et al. simulate 85 %,
-    PNNL's cost assessment gives 83 % for LFP). This is what sizes R0."""
+    """At the AC side, inverter included: 83 to 88 %, around the 85 % Xu et al.
+    simulate. This is what sizes R0."""
     one_way = float(round_trip_efficiency(params.power_max, 0.5, params))
     assert 0.83 < one_way**2 < 0.88
 

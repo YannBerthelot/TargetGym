@@ -13,8 +13,11 @@ from target_gym.reactor.env import (
     compute_next_state,
     compute_reward,
     compute_velocity,
+    rod_balance,
     steady_state_precursors,
+    steady_state_temperatures,
     steady_state_xenon,
+    tavg_program,
 )
 
 
@@ -22,18 +25,27 @@ def _default_state(
     params: ReactorParams, target: float = 1.0, n: float = 1.0
 ) -> ReactorState:
     I_hat, Xe_hat = steady_state_xenon(n, params)
+    T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(n, params)
     return ReactorState(
         time=0,
         physics_time=0,
         n=n,
         C=steady_state_precursors(n, params),
-        T_fuel=params.initial_T_fuel,
-        T_coolant=params.initial_T_coolant,
+        T_fuel=T_fuel,
+        T_coolant=T_hot,
+        T_cold=T_cold,
+        T_sg=T_sg,
         I_hat=I_hat,
         Xe_hat=Xe_hat,
         target_n=target,
+        T_ref=tavg_program(target, params),
+        load_wobble=0.0,
+        ramp_down_at=1e9,
+        ramp_up_at=2e9,
         demand_key=jax.random.PRNGKey(42),
-        rho_ext=jnp.zeros(()),
+        rho_ext=jnp.asarray(
+            rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, params)
+        ),
         rho_ext_cmd=0.0,
     )
 
@@ -43,7 +55,16 @@ def _position_from_state(state: ReactorState) -> jnp.ndarray:
         [
             jnp.array([state.n]),
             state.C,
-            jnp.array([state.T_fuel, state.T_coolant, state.I_hat, state.Xe_hat]),
+            jnp.array(
+                [
+                    state.T_fuel,
+                    state.T_coolant,
+                    state.T_cold,
+                    state.T_sg,
+                    state.I_hat,
+                    state.Xe_hat,
+                ]
+            ),
         ]
     )
 
@@ -60,13 +81,12 @@ def test_steady_state_neutron_balance_at_zero_reactivity():
     At rho_ext=0 and zero thermal feedback (T at reference), dn/dt should be
     (approximately) zero when precursors are at their steady-state values.
     """
-    params = ReactorParams(
-        initial_T_fuel=900.0,
-        initial_T_coolant=580.0,  # match T_*_ref exactly
-        T_fuel_ref=900.0,
-        T_coolant_ref=580.0,
+    params = ReactorParams()
+    state = _default_state(params, n=1.0).replace(
+        T_fuel=params.T_fuel_ref,
+        T_coolant=params.T_coolant_ref,
+        T_cold=params.T_coolant_ref,
     )
-    state = _default_state(params, n=1.0)
     position = _position_from_state(state)
     v, _ = compute_velocity(position, action=0.0, params=params)
     # dn/dt should be effectively zero: precursor source exactly balances prompt loss.
@@ -77,22 +97,13 @@ def test_steady_state_neutron_balance_at_zero_reactivity():
 
 def test_positive_reactivity_increases_power():
     """Withdrawing rods (positive rho_ext) must make dn/dt > 0."""
-    params = ReactorParams(
-        initial_T_fuel=900.0,
-        T_fuel_ref=900.0,
-        initial_T_coolant=580.0,
-        T_coolant_ref=580.0,
-    )
+    params = ReactorParams()
     state = _default_state(params, n=1.0)
     position = _position_from_state(state)
 
     # Positive rod reactivity (within prompt-safe range)
-    v_pos, _ = compute_velocity(
-        position, action=0.5 * params.rho_ext_max, params=params
-    )
-    v_neg, _ = compute_velocity(
-        position, action=0.5 * params.rho_ext_min, params=params
-    )
+    v_pos, _ = compute_velocity(position, action=state.rho_ext + 1e-3, params=params)
+    v_neg, _ = compute_velocity(position, action=state.rho_ext - 1e-3, params=params)
 
     assert float(v_pos[0]) > 0.0
     assert float(v_neg[0]) < 0.0
@@ -103,14 +114,9 @@ def test_doppler_feedback_is_stabilising():
     Raising fuel temperature above T_fuel_ref must *decrease* dn/dt
     (alpha_fuel is negative — this is what makes the reactor passively safe).
     """
-    params = ReactorParams(
-        initial_T_fuel=900.0,
-        T_fuel_ref=900.0,
-        initial_T_coolant=580.0,
-        T_coolant_ref=580.0,
-    )
+    params = ReactorParams()
     state_cold = _default_state(params, n=1.0)
-    state_hot = state_cold.replace(T_fuel=1100.0)  # +200 K over reference
+    state_hot = state_cold.replace(T_fuel=state_cold.T_fuel + 200.0)
 
     v_cold, _ = compute_velocity(
         _position_from_state(state_cold), action=0.0, params=params
@@ -157,16 +163,15 @@ def test_action_rate_limiting():
     params = ReactorParams()
     state = _default_state(params)  # starts with rho_ext=0
 
-    # One step toward max withdrawal: should move by rod_speed_withdraw * delta_t
-    new_state, _ = compute_next_state(rho_raw=1.0, state=state, params=params)
-    expected_step = params.rod_speed_withdraw * params.delta_t
-    assert float(new_state.rho_ext) == pytest.approx(expected_step, rel=1e-4)
-    assert float(new_state.rho_ext) < params.rho_ext_max  # not at max yet
+    step = params.rod_speed * params.delta_t
+    start = float(state.rho_ext)
 
-    # One step toward max insertion: should move by rod_speed_insert * delta_t
+    # One step toward max withdrawal, and one toward max insertion, at one speed.
+    new_state, _ = compute_next_state(rho_raw=1.0, state=state, params=params)
+    assert float(new_state.rho_ext) - start == pytest.approx(step, rel=1e-4)
+    assert float(new_state.rho_ext) < params.rho_ext_max  # not at max yet
     new_state, _ = compute_next_state(rho_raw=-1.0, state=state, params=params)
-    expected_step = -params.rod_speed_insert * params.delta_t
-    assert float(new_state.rho_ext) == pytest.approx(expected_step, rel=1e-4)
+    assert float(new_state.rho_ext) - start == pytest.approx(-step, rel=1e-4)
 
     # After many steps, should reach the limit
     st = state
@@ -178,7 +183,7 @@ def test_action_rate_limiting():
 def test_reward_peaks_on_target():
     """Reward is maximal when n matches target_n (and zero rod reactivity)."""
     params = ReactorParams(reward_version=1)
-    state_on = _default_state(params, target=1.0, n=1.0)
+    state_on = _default_state(params, target=1.0, n=1.0).replace(rho_ext=jnp.zeros(()))
     state_off = state_on.replace(n=0.3)
 
     r_on = float(compute_reward(state_on, params))
@@ -192,7 +197,7 @@ def test_reward_peaks_on_target():
 def test_rod_motion_penalty_applied():
     """Non-zero rod reactivity reduces the reward even at perfect tracking."""
     params = ReactorParams(reward_version=1)
-    state = _default_state(params, target=1.0, n=1.0)
+    state = _default_state(params, target=1.0, n=1.0).replace(rho_ext=jnp.zeros(()))
     state_with_rods = state.replace(rho_ext=jnp.asarray(params.rho_ext_max))
     r_neutral = float(compute_reward(state, params))
     r_rodded = float(compute_reward(state_with_rods, params))

@@ -1,6 +1,6 @@
 """
-Nuclear reactor — point-kinetics with delayed neutrons, xenon poisoning,
-thermal feedback, and rate-limited control rods.
+Nuclear reactor: point kinetics with delayed neutrons, xenon poisoning, thermal
+feedback, a steam generator driven by the turbine, and rate-limited control rods.
 
 Physics
 -------
@@ -17,12 +17,12 @@ Reactivity has an external part (control rod), thermal feedback, and xenon::
 
     rho = rho_ext
         + alpha_fuel * (T_fuel - T_fuel_ref)
-        + alpha_coolant * (T_coolant - T_coolant_ref)
+        + alpha_coolant * (T_avg - T_coolant_ref)
         - rho_Xe_full * (Xe_hat - 1)
 
-Both temperature coefficients are *negative* (Doppler + moderator) — this is
-what makes a PWR passively self-regulating. The xenon term adds a slow,
-history-dependent reactivity swing that is the dominant control challenge.
+Both temperature coefficients are *negative* (Doppler + moderator), which is
+what makes a PWR follow its turbine. The xenon term adds a slow, history-dependent
+reactivity swing.
 
 Xenon-135 / Iodine-135 fission product chain
 ---------------------------------------------
@@ -44,47 +44,46 @@ the equilibrium at full power n=1)::
 
 At equilibrium (n=1): I_hat=1, Xe_hat=1, rho_Xe=0 (absorbed into reference).
 
-Rod speed limits
-----------------
-Real control rods have asymmetric travel speed: insertion (safety) is fast,
-withdrawal is slow. The action is the *desired* rod position; the actual rod
-reactivity is rate-limited toward it each timestep::
+Rod speed
+---------
+The jacks have one speed: 72 steps/min over a 228-step stroke, both ways. The
+action is the *desired* rod position, and the actual rod reactivity moves toward
+it at that speed::
 
-    max_increase = rod_speed_withdraw * delta_t  (withdrawal, positive direction)
-    max_decrease = rod_speed_insert * delta_t     (insertion, negative direction)
-    rho_ext = clamp(rho_ext + clip(desired - rho_ext, -max_decrease, max_increase))
+    rho_ext = clamp(rho_ext + clip(desired - rho_ext, -step, +step))
 
-A lumped two-node thermal model closes the feedback loop::
+Thermal model, with the secondary side::
 
-    C_fuel    * dT_fuel/dt    = P_ref * n  -  UA * (T_fuel - T_coolant)
-    C_coolant * dT_coolant/dt = UA * (T_fuel - T_coolant)
-                              - m_dot_cp * (T_coolant - T_inlet)
+    C_fuel    dT_fuel/dt = P_ref n - UA (T_fuel - T_hot)
+    C_coolant dT_hot/dt  = UA (T_fuel - T_hot) - m_dot_cp (T_hot - T_cold)
+    C_cold    dT_cold/dt = m_dot_cp (T_hot - T_cold) - UA_sg (T_avg - T_sg)
+    C_sg      dT_sg/dt   = UA_sg (T_avg - T_sg) - P_ref load
+
+The turbine sets ``load``. Energy balance then fixes the steady power at the load
+whatever the rods do, so what the rods set is ``T_avg``, and that is the task: hold
+it on its program while the turbine goes 100-50-100.
 
 Why this is interesting for RL
 ------------------------------
-* **Xenon creates a multi-hour memory.** After a power change, iodine decays
-  into xenon over 6–9 hours, causing a large delayed reactivity swing. The
-  agent must anticipate this — reacting only when it arrives is too late.
-* **Rod authority is limited.** Maximum positive reactivity (+500 pcm) is far
-  less than equilibrium xenon worth (~2500 pcm). A 20 % xenon overshoot
-  exhausts all available rod authority → "xenon deadtime" where power cannot
-  be raised. The agent must learn smooth power transitions to avoid this.
-* **Asymmetric rod speed.** Insertion is 2× faster than withdrawal — the
-  controller can shut down quickly but recovering power is slow.
-* **Hidden states.** Precursors (6), fuel temperature, iodine, and xenon are
-  all unobserved. The agent sees only n, T_coolant, rod position, and target.
-* **Stiff + slow coupling.** Prompt neutronics (~ms), precursors (~s to min),
-  thermal (~min), xenon (~hours) — four timescales the agent must handle.
+* **Xenon is a multi-hour disturbance nobody measures.** It moves the rods' balance
+  by hundreds of pcm through the day, and the load schedule decides how much.
+* **The rods have a stop.** Their 1500 pcm cannot cover the whole swing after a
+  mid-length hold, so Tavg sags at the return.
+* **Rod travel wears the mechanism.** Holding tighter costs steps, which is why a
+  real rod program has a dead band.
+* **Hidden states.** Precursors, fuel temperature, iodine, xenon and the steam
+  generator are unobserved.
+* **Stiff + slow coupling.** Prompt neutronics (ms), precursors (s to min), thermal
+  (min), xenon (hours).
 
 Observation (partially observable)
 ----------------------------------
-``[n, T_coolant, rho_ext_norm, target_n]`` — precursors, fuel temperature,
-iodine, and xenon are hidden.
+``[n, T_hot, rho_ext_norm, load, T_avg, T_ref]``.
 
 Action
 ------
-Scalar in ``[-1, 1]`` → *desired* control-rod reactivity. Actual rod position
-is rate-limited toward this value each step.
+Scalar in ``[-1, 1]``: the *desired* control-rod reactivity. The rods move toward
+it at their one speed.
 """
 
 from typing import Tuple
@@ -121,16 +120,6 @@ LAMBDA_IODINE = 2.93e-5  # 1/s  (ln2 / (6.57 * 3600))
 # Xe-135 half-life: 9.14 hours → decay constant
 LAMBDA_XENON = 2.11e-5  # 1/s  (ln2 / (9.14 * 3600))
 
-# The demand is an Ornstein-Uhlenbeck process, not a schedule.
-#
-# A ``N_SETPOINTS = 4`` constant used to live here, with a paragraph describing
-# piecewise-constant setpoints of equal duration sampled at reset. The
-# environment never did that: ``compute_next_state`` evolves ``target_n`` as an
-# OU process, which is continuous load-following and a better model of what a
-# grid asks a reactor for than four 70% steps in twenty minutes would be. The
-# constant, the schedule array and ``get_target_from_schedule`` are all gone;
-# the state field went with them.
-
 
 @struct.dataclass
 class ReactorParams(EnvParams):
@@ -139,31 +128,35 @@ class ReactorParams(EnvParams):
 
     # Thermal feedback coefficients (1/K). Both negative (stabilising).
     alpha_fuel: float = -3.0e-5  # Doppler (prompt, on fuel temperature)
-    alpha_coolant: float = -5.0e-5  # Moderator temperature coefficient
-    T_fuel_ref: float = 900.0  # K
-    T_coolant_ref: float = 580.0  # K
+    alpha_coolant: float = -30.0e-5  # Moderator temperature coefficient, on Tavg
+    # Zero feedback at full power on program but for 40 pcm: rods sit 40 pcm in
+    # there, with +540 pcm above them (PHYSICS.md, section 2).
+    T_fuel_ref: float = 1064.0  # K
+    T_coolant_ref: float = 580.2  # K, Tavg at full load
 
     # ---- External (control rod) reactivity range ----
-    # rho_ext_max raised to 0.005 (500 pcm) to give enough authority to
-    # partially compensate xenon swings. Still safely below prompt-critical
-    # (beta ≈ 0.0065 = 650 pcm).
+    # A 1500 pcm bank, safely below prompt-critical (beta = 650 pcm) at the top.
     rho_ext_min: float = -0.010  # rods fully inserted
     rho_ext_max: float = 0.005  # rods fully withdrawn
 
-    # ---- Rod speed limits (reactivity per second) ----
-    # Typical PWR: insertion ~40 pcm/s (safety, fast), withdrawal ~20 pcm/s.
-    # This creates an asymmetry: the controller can reduce power quickly but
-    # must raise it slowly — matching real operational constraints.
-    rod_speed_insert: float = 4.0e-4  # 1/s — max insertion rate (negative direction)
-    rod_speed_withdraw: float = 2.0e-4  # 1/s — max withdrawal rate (positive direction)
+    # ---- Rod speed ----
+    # 72 steps/min over the 228-step stroke of that bank, in either direction:
+    # a magnetic jack has one speed. That is 7.89 pcm/s.
+    rod_speed: float = 72.0 / 60.0 / 228.0 * 0.015  # 1/s
+    rod_stroke_steps: float = 228.0
 
-    # ---- Two-node thermal model ----
-    P_thermal_ref: float = 3.0e9  # W — nominal thermal power (3 GW PWR)
-    C_fuel: float = 3.3e7  # J/K  (~100 t UO2 × c_p)
-    C_coolant: float = 7.0e7  # J/K  (~14 t primary coolant inventory)
-    UA: float = 6.6e6  # W/K  (fuel → coolant heat transfer)
-    m_dot_cp: float = 9.0e7  # W/K  (mass flow × c_p of primary loop)
-    T_inlet: float = 555.0  # K  (coolant inlet / cold-leg temperature)
+    # ---- Thermal model: fuel, hot leg, cold leg, steam generator ----
+    P_thermal_ref: float = 3.0e9  # W, nominal thermal power (3 GW PWR)
+    C_fuel: float = 3.3e7  # J/K  (~100 t UO2 x c_p)
+    C_coolant: float = 4.7e8  # J/K, a third of the primary, the core and hot leg
+    C_cold: float = 9.3e8  # J/K, the rest, the steam generator tubes and cold leg
+    UA: float = 6.6e6  # W/K  (fuel to coolant heat transfer)
+    m_dot_cp: float = 9.0e7  # W/K  (mass flow x c_p of primary loop)
+    UA_sg: float = 3.0e9 / 22.0  # W/K, 22 K from Tavg to the steam at full load
+    C_sg: float = 1.0e9  # J/K, secondary water and tube metal
+    # The Tavg program, 557 F to 584.7 F from no load to full load.
+    T_avg_no_load: float = 564.8  # K
+    T_avg_full_load: float = 580.2  # K
 
     # ---- Xenon / Iodine ----
     # sigma_phi0: Xe-135 neutron absorption rate at full power (sigma_a_Xe × Phi_0).
@@ -179,12 +172,12 @@ class ReactorParams(EnvParams):
 
     # ---- Termination / safety bounds ----
     n_min: float = 0.01  # near-shutdown — SCRAM
-    precision_floor: float = 1e-4  # relative flux, ex-core detector resolution
-    n_max: float = 1.5  # 150 % overpower — SCRAM
-    T_fuel_max: float = 1473.0  # K — well below UO2 melting (~3120 K)
+    precision_floor: float = 0.05  # K, the RTD reading's resolution
+    n_max: float = 1.09  # the high-flux trip, 109 % of rated
+    T_fuel_max: float = 1473.0  # K, well below UO2 melting (~3120 K)
     T_fuel_min: float = 500.0
-    T_coolant_max: float = 620.0  # K — saturation margin
-    T_coolant_min: float = 500.0
+    T_coolant_max: float = 620.0  # K, the hot leg's saturation margin
+    T_avg_min: float = 556.0  # K, 541 F, the minimum temperature for criticality
 
     # ---- Reward shaping ----
     rod_motion_weight: float = 0.02
@@ -193,14 +186,16 @@ class ReactorParams(EnvParams):
     # has not been a Gaussian for some time; this is the planner's scale.
     reward_band: float = 0.03  # relative flux (3% = tight)
 
-    # ---- Demand (Ornstein-Uhlenbeck process) ----
-    # Grid demand evolves as a mean-reverting random walk — the plant must
-    # follow without advance notice. OU parameters:
-    #   dx = theta * (mu - x) * dt + sigma * sqrt(dt) * dW
-    # theta: mean-reversion rate (1/s). 1/theta ≈ 2 h correlation time.
-    # sigma: volatility.  Steady-state std ≈ sigma / sqrt(2*theta) ≈ 0.14 (14%).
-    demand_theta: float = 1.5e-4
-    demand_sigma: float = 2.5e-3
+    # ---- Load: a daily 100-50-100, plus a small frequency-control wobble ----
+    # Ramps at 5 %/min, the rapid daily manoeuvre of the EPRI URD, with the ramp
+    # and the hold drawn at reset inside its 2 to 10 h hold.
+    load_min: float = 0.5
+    load_ramp_rate: float = 0.05 / 60.0  # 1/s
+    ramp_down_range: Tuple[float, float] = (1800.0, 7200.0)  # s
+    hold_range: Tuple[float, float] = (3.0 * 3600.0, 8.0 * 3600.0)  # s
+    # The wobble is an OU process on the load: 5 min correlation, 0.5 % sd.
+    demand_theta: float = 1.0 / 300.0
+    demand_sigma: float = 4.08e-4
 
     # ---- Revenue model (visualisation only — not in reward) ----
     # 1 GWe plant at spot price. Imbalance penalty = factor × spot.
@@ -208,75 +203,47 @@ class ReactorParams(EnvParams):
     spot_price_per_MWh: float = 80.0
     imbalance_factor: float = 3.0
 
-    # ---- Initial / target ranges ----
-    target_n_range: Tuple[float, float] = (0.3, 1.0)
-    initial_n_range: Tuple[float, float] = (0.7, 1.0)
-    #: Recent power level the xenon inventory is in equilibrium with at reset.
-    #: Drawn independently of ``initial_n``, so the reactor starts with a poison
-    #: offset it has to trim rather than at equilibrium with itself.
-    initial_xenon_power_range: Tuple[float, float] = (0.6, 1.0)
-    initial_T_fuel: float = 900.0
-    initial_T_coolant: float = 580.0
+    # ---- Initial state ----
+    #: Recent power level the xenon inventory is in equilibrium with at reset:
+    #: narrow, because a unit that load-follows daily is never quite at rest.
+    initial_xenon_power_range: Tuple[float, float] = (0.9, 1.0)
 
     # ---- Time discretization ----
-    # Physics integrates at delta_t=1.0 s for numerical stability. One control
-    # step applies the action for Reactor.control_period physics sub-steps
-    # (a class-level constant on the Env, not a param, so JIT treats it as
-    # static). Effective control period = delta_t * control_period seconds.
-    #
-    # ``max_steps_in_episode`` counts *environment* steps, as it does on every
-    # other plant and as gymnax's ``is_truncated`` assumes. ``state.time``
-    # advances by 1 per ``step_env`` call; the physics clock lives in
-    # ``state.physics_time`` (sub-steps since reset), so that the OU demand's
-    # per-sub-step noise draws stay distinct.
-    #
-    # It used to count physics steps (86400 = 24 h) while ``state.time`` also
-    # advanced per sub-step. gymnax was then consistent, but every loop that
-    # iterated ``range(max_steps_in_episode)`` in env steps -- the shipped
-    # ``runners.rollout`` included -- ran ten times past the time limit, and
-    # ``step_env`` kept returning a frozen state scored at a tenth of the
-    # reward for the remaining nine tenths. The recorded reactor baselines
-    # were understated about fivefold by this.
-    # 24 h of simulated time = 8640 env steps × 10 s.
-    delta_t: float = 1.0
-    max_steps_in_episode: int = 8640  # env steps of 10 s: 24 h
+    # One control step applies the action for Reactor.control_period physics
+    # sub-steps (a class-level constant on the Env, not a param, so JIT treats it
+    # as static): 6 of 5 s, so 30 s. At 60 s the rod program's slowest speed
+    # overshoots its dead band and the rods limit-cycle. Each sub-step takes 4
+    # inner solves: past about 1.25 s a solve misses the prompt jump, and at 2.5 s
+    # inserting rods raises power. ``max_steps_in_episode``
+    # counts *environment* steps, as on every other plant; ``state.time`` advances
+    # by 1 per ``step_env`` call, and the physics clock lives in
+    # ``state.physics_time`` (sub-steps since reset).
+    delta_t: float = 5.0
+    max_steps_in_episode: int = 1440  # env steps of 30 s: 12 h
 
-    # ---- Reward (docs/reward-shaping.md; version 2), in dollars per second ----
-    # Tracking: the power imbalance against demand settled at $100/MWh (1.25
-    # x spot, the one imbalance price of the priced plants) on the 1 GWe
-    # output, ``imbalance_multiple * spot_price_per_MWh * P_electric_GW *
-    # 1000`` $/h per unit of |error| = 100 000 $/h, linear (p = 1). Each physics sub-step charges one second; ``step_env`` sums the
-    # ten sub-steps of a control period, so the env-step reward is $ per
-    # 10 s step. Floor: 0.00451 of rated, the mean sub-step |error| no
-    # controller can beat because the demand random-walks by 7.9e-3 (sd)
-    # within one control period (`scripts/floor_reactor_hold.py`, certified
-    # on the one-state hold model); at the floor tracking costs $1.25 per step.
-    # The shipped MPC holds 0.0069 at period boundaries against a 0.0063
-    # boundary floor (`scripts/measure_hold.py`). Rod wear: the reactivity the
-    # controller asks for beyond what the rods can deliver, as a fraction of
-    # the rod range, charged per unit at ``rod_wear_weight`` times what
-    # tracking at the floor costs -- a documented stand-in for a maintenance
-    # price (provisional; the audit found the optimum insensitive to it below
-    # ten times the floor). A trip is charged the restart time at twice the
-    # imbalance of the reachable 1.2 of rated (``reward.trip_cost``).
+    # ---- Reward (docs/reward-shaping.md; version 2), in dollars per 30 s step ----
+    # Tracking: Tavg against its program. Off program, steam conditions cost
+    # output: ``imbalance_multiple`` is 1.25 x spot x 0.23 %/K, the Carnot slope at
+    # 547 K steam and 305 K condenser, so $100/MWh on 0.23 % of 1 GWe per K is
+    # $230/h per K, linear (p = 1). Rod wear: the steps the rods actually moved at
+    # ``rod_step_price``. A trip is charged the restart time at twice the dearest
+    # surviving step.
     reward_version: int = 2
-    e_floor: float = 0.00451  # fraction of rated, certified hold floor
+    e_floor: float = 0.05  # K, the RTD reading's resolution
     e_tol: float = 0.0
     tracking_exponent: float = 1.0
-    imbalance_multiple: float = (
-        1.25  # of spot: $100/MWh, the one imbalance price of the priced plants
-    )
-    rod_wear_weight: float = 1.0  # provisional; sweep 0.5 / 1 / 2
-    failure_cost: float = (
-        2.0 * 100.0 * 1000.0 * 1.2 * 10.0 / 3600.0
-    )  # twice the imbalance of the reachable 1.2 of rated (0.3 target vs 1.5 n_max), per 10 s step
-    #: Restart time priced into a trip (``reward.trip_cost``; 48 h at 10 s steps: a SCRAM's xenon-limited restart, provisional).
-    restart_steps: int = 17280
+    imbalance_multiple: float = 1.25 * 0.0023  # of spot, per K
+    rod_step_price: float = 1.0  # $ per rod step, ours
+    # Twice the dearest step that survives: 40 K off program, $7.67, and 36 rod
+    # steps, $36, per 30 s.
+    failure_cost: float = 2.0 * (7.67 + 36.0)
+    #: Restart time priced into a trip (``reward.trip_cost``; 48 h at 30 s steps: a SCRAM's xenon-limited restart, provisional).
+    restart_steps: int = 5760
     #: Tracking cost per step at the floor, in the reward's units.
-    rho_floor_tracking: float = 100.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
-    rho_floor: float = 100.0 * 1000.0 / 3600.0 * 0.00451 * 10.0
+    rho_floor_tracking: float = 100.0 * 1000.0 * 0.0023 / 3600.0 * 0.05 * 30.0
+    rho_floor: float = 100.0 * 1000.0 * 0.0023 / 3600.0 * 0.05 * 30.0
     #: True where e_floor is a resolution, not a measured or certified floor.
-    floor_is_documented_minimum: bool = False
+    floor_is_documented_minimum: bool = True
 
 
 #: Units of the ReactorParams fields, for the generated environment pages.
@@ -288,39 +255,43 @@ PARAM_UNITS = {
     "T_coolant_ref": "K",
     "rho_ext_min": "-",
     "rho_ext_max": "-",
-    "rod_speed_insert": "1/s",
-    "rod_speed_withdraw": "1/s",
+    "rod_speed": "1/s",
+    "rod_stroke_steps": "steps",
     "P_thermal_ref": "W",
     "C_fuel": "J/K",
     "C_coolant": "J/K",
+    "C_cold": "J/K",
     "UA": "W/K",
     "m_dot_cp": "W/K",
-    "T_inlet": "K",
+    "UA_sg": "W/K",
+    "C_sg": "J/K",
+    "T_avg_no_load": "K",
+    "T_avg_full_load": "K",
     "sigma_phi0": "1/s",
     "gamma_ratio": "-",
     "rho_Xe_full": "-",
     "n_min": "-",
-    "precision_floor": "-",
+    "precision_floor": "K",
     "n_max": "-",
     "T_fuel_max": "K",
     "T_fuel_min": "K",
     "T_coolant_max": "K",
-    "T_coolant_min": "K",
+    "T_avg_min": "K",
     "rod_motion_weight": "-",
     "reward_band": "-",
+    "load_min": "-",
+    "load_ramp_rate": "1/s",
     "demand_theta": "1/s",
     "demand_sigma": "1/s^0.5",
     "P_electric_GW": "GW",
     "spot_price_per_MWh": "$/MWh",
     "imbalance_factor": "-",
-    "initial_T_fuel": "K",
-    "initial_T_coolant": "K",
     "reward_version": "-",
-    "e_floor": "-",
-    "e_tol": "-",
+    "e_floor": "K",
+    "e_tol": "K",
     "tracking_exponent": "-",
-    "imbalance_multiple": "-",
-    "rod_wear_weight": "-",
+    "imbalance_multiple": "1/K",
+    "rod_step_price": "$/step",
     "failure_cost": "reward",
     "restart_steps": "steps",
     "rho_floor_tracking": "reward",
@@ -334,17 +305,23 @@ class ReactorState(EnvState):
     C: jnp.ndarray  # (6,) delayed-neutron precursors
 
     T_fuel: float
-    T_coolant: float
+    T_coolant: float  # hot leg
+    T_cold: float  # cold leg
+    T_sg: float  # steam generator secondary
 
     # Xenon / Iodine (normalised: 1.0 = equilibrium at full power)
     I_hat: float  # normalised I-135 concentration
     Xe_hat: float  # normalised Xe-135 concentration
 
-    target_n: float
+    target_n: float  # the turbine's load
+    T_ref: float  # Tref, the program at that load (K)
+    load_wobble: float  # its frequency-control part
+    ramp_down_at: float  # s, when the load starts down
+    ramp_up_at: float  # s, when it starts back
     demand_key: jnp.ndarray  # PRNGKey for reproducible OU noise
     #: Physics sub-steps since reset (``delta_t`` seconds each). ``time`` counts
-    #: environment steps; this is the clock the integrator and the OU demand
-    #: noise are keyed on, so it runs ``control_period`` times faster.
+    #: environment steps; this is the clock the load schedule and its noise are
+    #: keyed on, so it runs ``control_period`` times faster.
     physics_time: int
 
     rho_ext: float  # current (actual, rate-limited) rod reactivity
@@ -352,6 +329,7 @@ class ReactorState(EnvState):
     #: limit. Carried so the reward can charge for demanding motion the rods
     #: cannot deliver; see ``compute_reward``.
     rho_ext_cmd: float
+    rod_moved: float = 0.0  # reactivity the rods travelled on the last sub-step
 
     actuator_held: jax.Array = actuator_field(1)
 
@@ -377,56 +355,81 @@ def steady_state_xenon(n_0: float, params: ReactorParams) -> tuple[float, float]
     return I_hat_eq, Xe_hat_eq
 
 
-def compute_velocity(position, action, params: ReactorParams):
+def tavg_program(load, params: ReactorParams):
+    """Tref: the Tavg the program asks for at ``load``."""
+    span = params.T_avg_full_load - params.T_avg_no_load
+    return params.T_avg_no_load + span * load
+
+
+def scheduled_load(t, ramp_down_at, ramp_up_at, params: ReactorParams, xp=jnp):
+    """The day's load at ``t`` seconds: full, down a ramp, held, back up a ramp."""
+    depth = 1.0 - params.load_min
+    down = xp.minimum(params.load_ramp_rate * xp.maximum(t - ramp_down_at, 0.0), depth)
+    up = xp.minimum(params.load_ramp_rate * xp.maximum(t - ramp_up_at, 0.0), depth)
+    return 1.0 - down + up
+
+
+def steady_state_temperatures(load, params: ReactorParams):
+    """``(T_fuel, T_hot, T_cold, T_sg)`` lined out at ``load`` on the program."""
+    p = params
+    power = p.P_thermal_ref * load
+    T_avg = tavg_program(load, p)
+    T_hot = T_avg + 0.5 * power / p.m_dot_cp
+    T_cold = T_avg - 0.5 * power / p.m_dot_cp
+    return T_hot + power / p.UA, T_hot, T_cold, T_avg - power / p.UA_sg
+
+
+def rod_balance(T_fuel, T_avg, Xe_hat, params: ReactorParams):
+    """The rod reactivity that leaves the core critical at these temperatures."""
+    return -(
+        params.alpha_fuel * (T_fuel - params.T_fuel_ref)
+        + params.alpha_coolant * (T_avg - params.T_coolant_ref)
+        - params.rho_Xe_full * (Xe_hat - 1.0)
+    )
+
+
+def _reactivity(rho_ext, T_fuel, T_hot, T_cold, Xe_hat, p: ReactorParams):
+    return rho_ext - rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, p)
+
+
+def _slow_rates(slow, n, load, p: ReactorParams):
+    """Rates of ``[T_fuel, T_hot, T_cold, T_sg, I_hat, Xe_hat]``."""
+    T_f, T_h, T_c, T_s, I_h, Xe = slow
+    to_coolant = p.UA * (T_f - T_h)
+    around_loop = p.m_dot_cp * (T_h - T_c)
+    to_steam = p.UA_sg * (0.5 * (T_h + T_c) - T_s)
+    lam_sum = LAMBDA_XENON + p.sigma_phi0
+    feeds = lam_sum * (p.gamma_ratio * n + I_h) / (1.0 + p.gamma_ratio)
+    return jnp.array(
+        [
+            (p.P_thermal_ref * n - to_coolant) / p.C_fuel,
+            (to_coolant - around_loop) / p.C_coolant,
+            (around_loop - to_steam) / p.C_cold,
+            (to_steam - p.P_thermal_ref * load) / p.C_sg,
+            LAMBDA_IODINE * (n - I_h),
+            feeds - (LAMBDA_XENON + p.sigma_phi0 * n) * Xe,
+        ]
+    )
+
+
+def compute_velocity(position, action, params: ReactorParams, load=1.0):
     """
     Right-hand side of the coupled ODE system.
 
-    ``position = [n, C_1..6, T_fuel, T_coolant, I_hat, Xe_hat]`` (shape (11,)).
-    ``action   = rho_ext`` (rate-limited rod reactivity, physical units).
+    ``position = [n, C_1..6, T_fuel, T_hot, T_cold, T_sg, I_hat, Xe_hat]`` (shape
+    (13,)). ``action = rho_ext`` (rate-limited rod reactivity, physical units).
     """
     n = position[0]
     C = position[1 : 1 + N_GROUPS]
-    T_fuel = position[1 + N_GROUPS]
-    T_coolant = position[2 + N_GROUPS]
-    I_hat = position[3 + N_GROUPS]
-    Xe_hat = position[4 + N_GROUPS]
+    slow = position[1 + N_GROUPS :]
+    T_f, T_h, T_c, _, _, Xe = slow
 
-    rho_ext = action
-
-    # ── Reactivity ──
-    rho_feedback = params.alpha_fuel * (
-        T_fuel - params.T_fuel_ref
-    ) + params.alpha_coolant * (T_coolant - params.T_coolant_ref)
-    rho_xenon = -params.rho_Xe_full * (Xe_hat - 1.0)
-    rho = rho_ext + rho_feedback + rho_xenon
-
-    # ── Point kinetics ──
+    rho = _reactivity(action, T_f, T_h, T_c, Xe, params)
     dn_dt = ((rho - BETA_TOT) / params.Lambda_gen) * n + jnp.sum(LAMBDA_I * C)
     dC_dt = (BETA_I / params.Lambda_gen) * n - LAMBDA_I * C
 
-    # ── Thermal hydraulics (two-node) ──
-    P_thermal = params.P_thermal_ref * n
-    Q_fuel_to_cool = params.UA * (T_fuel - T_coolant)
-    Q_flow_out = params.m_dot_cp * (T_coolant - params.T_inlet)
-    dT_fuel_dt = (P_thermal - Q_fuel_to_cool) / params.C_fuel
-    dT_coolant_dt = (Q_fuel_to_cool - Q_flow_out) / params.C_coolant
-
-    # ── Xenon / Iodine kinetics ──
-    dI_hat_dt = LAMBDA_IODINE * (n - I_hat)
-
-    lam_sum = LAMBDA_XENON + params.sigma_phi0
-    a_coeff = params.gamma_ratio * lam_sum / (1.0 + params.gamma_ratio)
-    b_coeff = lam_sum / (1.0 + params.gamma_ratio)
-    dXe_hat_dt = (
-        a_coeff * n + b_coeff * I_hat - (LAMBDA_XENON + params.sigma_phi0 * n) * Xe_hat
-    )
-
     dposition = jnp.concatenate(
-        [
-            jnp.array([dn_dt]),
-            dC_dt,
-            jnp.array([dT_fuel_dt, dT_coolant_dt, dI_hat_dt, dXe_hat_dt]),
-        ]
+        [jnp.array([dn_dt]), dC_dt, _slow_rates(slow, n, load, params)]
     )
     return dposition, None
 
@@ -500,64 +503,41 @@ def _fast_block_trbdf2(n, C, rho, params: ReactorParams, h):
     return n_new, C_new, n_g
 
 
-def _reactor_stiff_step(positions, rho_ext, params: ReactorParams, n_substeps: int):
+def _reactor_stiff_step(
+    positions, rho_ext, params: ReactorParams, n_substeps: int, load=1.0
+):
     """Operator-split stiff integrator for one ``params.delta_t`` step.
 
-    The 11-state system has a stiffness ratio of ~10**6 (prompt neutrons
-    ~15 ms vs xenon ~9 h), which is why explicit RK4 needs ~50 substeps just
-    to stay numerically stable. This integrator splits it:
+    The system has a stiffness ratio of ~10**6 (prompt neutrons ~15 ms vs xenon
+    ~9 h), which is why explicit RK4 needs ~50 substeps just to stay numerically
+    stable. This integrator splits it:
 
-    * **Fast block** ``[n, C_1..6]`` — linear in itself given the reactivity
-      ``rho`` — is advanced with TR-BDF2, an L-stable 2nd-order method, solved
+    * **Fast block** ``[n, C_1..6]``, linear in itself given the reactivity
+      ``rho``, is advanced with TR-BDF2, an L-stable 2nd-order method, solved
       in O(n) via the arrowhead structure of the point-kinetics matrix. It is
       unconditionally stable, so ``n_substeps`` sets *accuracy*, not stability.
-    * **Slow block** ``[T_fuel, T_coolant, I_hat, Xe_hat]`` — non-stiff (time
-      constants ~1 s to hours) — is advanced with RK4, driven by the neutron
-      density from the fast solve.
+    * **Slow block**: temperatures, iodine and xenon, non-stiff (time constants
+      ~1 s to hours), advanced with RK4, driven by the neutron density from the
+      fast solve.
 
     ``rho`` depends only on the slow variables, so it is refreshed once per
-    substep — cheap, and it removes the within-step reactivity-freezing error.
+    substep: cheap, and it removes the within-step reactivity-freezing error.
     """
     h = params.delta_t / n_substeps
     n = positions[0]
     C = positions[1 : 1 + N_GROUPS]
-    slow0 = positions[1 + N_GROUPS :]  # [T_fuel, T_coolant, I_hat, Xe_hat]
-
-    # ── Slow block RHS (linear in the slow state given neutron density) ──
-    lam_sum = LAMBDA_XENON + params.sigma_phi0
-    a_coeff = params.gamma_ratio * lam_sum / (1.0 + params.gamma_ratio)
-    b_coeff = lam_sum / (1.0 + params.gamma_ratio)
-
-    def slow_rhs(slow, n_val):
-        T_f, T_c, I_h, Xe = slow
-        dT_f = (params.P_thermal_ref * n_val - params.UA * (T_f - T_c)) / params.C_fuel
-        dT_c = (
-            params.UA * (T_f - T_c) - params.m_dot_cp * (T_c - params.T_inlet)
-        ) / params.C_coolant
-        dI = LAMBDA_IODINE * (n_val - I_h)
-        dXe = (
-            a_coeff * n_val
-            + b_coeff * I_h
-            - (LAMBDA_XENON + params.sigma_phi0 * n_val) * Xe
-        )
-        return jnp.array([dT_f, dT_c, dI, dXe])
+    slow0 = positions[1 + N_GROUPS :]
 
     def body(carry, _):
         n_, C_, slow = carry
-        T_f, T_c, _I, Xe = slow
-        # Reactivity from the current slow state (refreshed every substep).
-        rho = (
-            rho_ext
-            + params.alpha_fuel * (T_f - params.T_fuel_ref)
-            + params.alpha_coolant * (T_c - params.T_coolant_ref)
-            - params.rho_Xe_full * (Xe - 1.0)
-        )
+        T_f, T_h, T_c, _T_s, _I, Xe = slow
+        rho = _reactivity(rho_ext, T_f, T_h, T_c, Xe, params)
         n_new, C_new, n_g = _fast_block_trbdf2(n_, C_, rho, params, h)
         # RK4 on the non-stiff slow block; n sampled from the fast solve.
-        k1 = slow_rhs(slow, n_)
-        k2 = slow_rhs(slow + 0.5 * h * k1, n_g)
-        k3 = slow_rhs(slow + 0.5 * h * k2, n_g)
-        k4 = slow_rhs(slow + h * k3, n_new)
+        k1 = _slow_rates(slow, n_, load, params)
+        k2 = _slow_rates(slow + 0.5 * h * k1, n_g, load, params)
+        k3 = _slow_rates(slow + 0.5 * h * k2, n_g, load, params)
+        k4 = _slow_rates(slow + h * k3, n_new, load, params)
         slow_next = slow + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
         return (n_new, C_new, slow_next), None
 
@@ -572,32 +552,38 @@ def compute_next_state(
     rho_raw: float,
     state: ReactorState,
     params: ReactorParams,
-    integration_method: str = "tr_bdf2_2",
+    integration_method: str = "tr_bdf2_4",
 ):
     """
     ``rho_raw`` : raw action in [-1, 1] = *desired* rod position.
-    Actual rod position is rate-limited toward this value.
+    Actual rod position moves toward it at the rods' one speed.
     """
-    # ── Rate-limited rod movement ──
+    p = params
     desired_rho = convert_raw_action_to_range(
-        rho_raw, min_action=params.rho_ext_min, max_action=params.rho_ext_max
+        rho_raw, min_action=p.rho_ext_min, max_action=p.rho_ext_max
     )
-    delta_rho = desired_rho - state.rho_ext
-    max_withdraw = params.rod_speed_withdraw * params.delta_t  # positive
-    max_insert = params.rod_speed_insert * params.delta_t  # magnitude
-    delta_rho = jnp.clip(delta_rho, -max_insert, max_withdraw)
-    rho_ext = jnp.clip(
-        state.rho_ext + delta_rho, params.rho_ext_min, params.rho_ext_max
-    )
+    most = p.rod_speed * p.delta_t
+    delta_rho = jnp.clip(desired_rho - state.rho_ext, -most, most)
+    rho_ext = jnp.clip(state.rho_ext + delta_rho, p.rho_ext_min, p.rho_ext_max)
 
     # ── Integrate coupled ODEs ──
     positions = jnp.concatenate(
         [
             jnp.array([state.n]),
             state.C,
-            jnp.array([state.T_fuel, state.T_coolant, state.I_hat, state.Xe_hat]),
+            jnp.array(
+                [
+                    state.T_fuel,
+                    state.T_coolant,
+                    state.T_cold,
+                    state.T_sg,
+                    state.I_hat,
+                    state.Xe_hat,
+                ]
+            ),
         ]
     )
+    load = state.target_n
     if integration_method.startswith("tr_bdf2"):
         # Stiff operator-split integrator (arrowhead TR-BDF2 + RK4). Accepts
         # "tr_bdf2" (default substeps) or "tr_bdf2_<N>" to set the substep
@@ -605,51 +591,56 @@ def compute_next_state(
         tail = integration_method.split("_")[-1]
         n_substeps = int(tail) if tail.isdigit() else 4
         new_positions, metrics = _reactor_stiff_step(
-            positions, rho_ext, params, n_substeps
+            positions, rho_ext, p, n_substeps, load
         )
     else:
-        _compute_velocity = partial(compute_velocity, action=rho_ext, params=params)
+        _compute_velocity = partial(
+            compute_velocity, action=rho_ext, params=p, load=load
+        )
         new_positions, metrics = integrate_dynamics(
             positions=positions,
-            delta_t=params.delta_t,
+            delta_t=p.delta_t,
             compute_velocity=_compute_velocity,
             method=integration_method,
         )
 
     new_n = new_positions[0]
     new_C = new_positions[1 : 1 + N_GROUPS]
-    new_T_fuel = new_positions[1 + N_GROUPS]
-    new_T_coolant = new_positions[2 + N_GROUPS]
-    new_I_hat = new_positions[3 + N_GROUPS]
-    new_Xe_hat = new_positions[4 + N_GROUPS]
+    T_fuel, T_hot, T_cold, T_sg, I_hat, Xe_hat = new_positions[1 + N_GROUPS :]
 
     # One physics sub-step. The env-step clock ``state.time`` is advanced by
     # ``Reactor.step_env`` once per control period, not here.
     new_physics_time = state.physics_time + 1
 
-    # ── Ornstein-Uhlenbeck demand process ──
-    demand_mu = 0.5 * (params.target_n_range[0] + params.target_n_range[1])
+    # ── The load: the day's schedule, plus the OU wobble on top ──
     key_t = jax.random.fold_in(state.demand_key, new_physics_time)
     noise = jax.random.normal(key_t, dtype=jnp.float32)
-    drift = params.demand_theta * (demand_mu - state.target_n) * params.delta_t
-    diffusion = params.demand_sigma * jnp.sqrt(params.delta_t) * noise
-    new_target = jnp.clip(
-        state.target_n + drift + diffusion,
-        params.target_n_range[0],
-        params.target_n_range[1],
+    wobble = (
+        state.load_wobble
+        - p.demand_theta * state.load_wobble * p.delta_t
+        + p.demand_sigma * jnp.sqrt(p.delta_t) * noise
     )
+    day = scheduled_load(
+        new_physics_time * p.delta_t, state.ramp_down_at, state.ramp_up_at, p
+    )
+    new_load = jnp.clip(day + wobble, 0.0, 1.0)
 
     return (
         state.replace(
             n=new_n,
             C=new_C,
-            T_fuel=new_T_fuel,
-            T_coolant=new_T_coolant,
-            I_hat=new_I_hat,
-            Xe_hat=new_Xe_hat,
-            target_n=new_target,
+            T_fuel=T_fuel,
+            T_coolant=T_hot,
+            T_cold=T_cold,
+            T_sg=T_sg,
+            I_hat=I_hat,
+            Xe_hat=Xe_hat,
+            target_n=new_load,
+            T_ref=tavg_program(new_load, p),
+            load_wobble=wobble,
             rho_ext=rho_ext,
             rho_ext_cmd=desired_rho,
+            rod_moved=jnp.abs(rho_ext - state.rho_ext),
             physics_time=new_physics_time,
         ),
         metrics,
@@ -666,22 +657,36 @@ def get_obs(state: ReactorState, params: ReactorParams):
     """
     Partially observable: the agent sees only measurable quantities.
 
-    ``obs = [n, T_coolant, rho_ext_norm, target_n]``
+    ``obs = [n, T_hot, rho_ext_norm, load, T_avg, T_ref]``
 
-    Hidden: C_i (6 precursors), T_fuel, I_hat, Xe_hat — 9 hidden dimensions.
+    Hidden: C_i (6 precursors), T_fuel, T_sg, I_hat, Xe_hat.
     """
     span = params.rho_ext_max - params.rho_ext_min
     rho_norm = 2.0 * (state.rho_ext - params.rho_ext_min) / span - 1.0
-    return jnp.array([state.n, state.T_coolant, rho_norm, state.target_n])
+    T_avg = 0.5 * (state.T_coolant + state.T_cold)
+    return jnp.array(
+        [
+            state.n,
+            state.T_coolant,
+            rho_norm,
+            state.target_n,
+            T_avg,
+            state.T_ref,
+        ]
+    )
 
 
 def check_is_terminal(state: ReactorState, params: ReactorParams, xp=jnp):
-    n_out = xp.logical_or(state.n <= params.n_min, state.n >= params.n_max)
+    # Written so a non-finite power is outside too: a coarse explicit solve can
+    # overflow in a sub-step, and that is a lost plant, not a live one.
+    n_out = xp.logical_not(
+        xp.logical_and(state.n > params.n_min, state.n < params.n_max)
+    )
     T_fuel_out = xp.logical_or(
         state.T_fuel <= params.T_fuel_min, state.T_fuel >= params.T_fuel_max
     )
     T_coolant_out = xp.logical_or(
-        state.T_coolant <= params.T_coolant_min,
+        0.5 * (state.T_coolant + state.T_cold) <= params.T_avg_min,
         state.T_coolant >= params.T_coolant_max,
     )
     terminated = xp.logical_or(xp.logical_or(n_out, T_fuel_out), T_coolant_out)
@@ -693,24 +698,25 @@ def check_is_terminal(state: ReactorState, params: ReactorParams, xp=jnp):
 def compute_reward_terms(
     state: ReactorState, params: ReactorParams, xp=jnp, tripped=None
 ):
-    """The reward's additive cost terms in $ per physics second (``target_gym.reward``).
+    """The reward's additive cost terms in $ per physics sub-step
+    (``target_gym.reward``).
 
     ``tripped`` overrides the trip check on ``state``, for a measured copy,
     whose noise must not fire or hide a trip (``base.measured_reward``).
     """
     p = params
-    per_unit_s = (
+    per_K_s = (
         p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW * 1000.0 / 3600.0
-    )  # $ per second per unit of |error|
-    error = state.target_n - state.n
+    )  # $ per second per K off program
+    error = state.T_ref - 0.5 * (state.T_coolant + state.T_cold)
     tracking = (
-        per_unit_s
+        per_K_s
+        * p.delta_t
         * p.e_floor
         * R.tracking_cost(error, p.e_floor, p.e_tol, p.tracking_exponent, xp)
     )
-    rho_scale = xp.maximum(xp.abs(p.rho_ext_min), xp.abs(p.rho_ext_max))
-    excess = xp.abs(state.rho_ext_cmd - state.rho_ext) / rho_scale
-    rod_wear = p.rod_wear_weight * per_unit_s * p.e_floor * excess
+    span = p.rho_ext_max - p.rho_ext_min
+    rod_wear = p.rod_step_price * p.rod_stroke_steps * state.rod_moved / span
     if tripped is None:
         tripped, _ = check_is_terminal(state, p, xp)
     terms = {
