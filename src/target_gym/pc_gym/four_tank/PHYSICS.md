@@ -157,7 +157,7 @@ below.
 controller (docs/proposals/oracle-audit.md): the shared solver's oracle
 (`target_gym.oracles`). Once every T_c, Cooper's sample time from the
 horizon protocol (4 steps, `data/oracle_horizons/four_tank.json`), it plans
-P = 252 moves of 4 steps each from the true state, fewer near the episode's
+P = 384 moves of 3 steps each from the true state, fewer near the episode's
 end, and holds the first for those 4 steps. The plan maximises the episode
 reward over the horizon on the environment's own dynamics, with the true load,
 read at each solve and held over the plan, so it never sees an arrival coming.
