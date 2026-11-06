@@ -9,6 +9,8 @@ file per task (``env_versions`` one per version, ``<task>-vN.json``)::
     data/env_versions/<task>-vN.json     scripts/stamp_env_versions.py
     data/oracle_horizons/<task>.json     scripts/measure_oracle_horizons.py (summary;
                                          the evidence is in evidence/oracle_horizons/)
+    data/null_policies/<task>.json       scripts/record_credibility.py
+    data/credibility/<task>.json         scripts/record_credibility.py
 
 They used to be one file per kind, which every recording PR rewrote, so each
 merge broke every other open one. One file per task means re-recording a task
@@ -54,6 +56,8 @@ KINDS = (
     "env_versions",
     "oracle_horizons",
     "oracle_widths",
+    "null_policies",
+    "credibility",
 )
 
 #: The worst of an oracle's per-solve certificates (``oracles.controller``):

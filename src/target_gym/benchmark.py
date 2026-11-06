@@ -64,7 +64,7 @@ from typing import (
 
 import numpy as np
 
-from target_gym.eval import Episode, evaluate, fixed_settle, hold_settings
+from target_gym.eval import Episode, evaluate, fixed_lead, fixed_settle, hold_settings
 
 
 class Unsupported(Exception):
@@ -398,6 +398,7 @@ def run_policy(
     out["value0"], out["target0"] = first_value, first_target
     out["action_low"], out["action_high"] = task.action_low, task.action_high
     out["length"] = length
+    out["lead"] = fixed_lead(task.name)
     out["carry"] = carry  # the policy's final carry, for its own diagnostics
     out["wall_s"] = time.perf_counter() - t0
     return out
@@ -422,6 +423,7 @@ def episodes_of(rollout: Mapping[str, Any]) -> list[Episode]:
                 failed=np.asarray(rollout["tripped"][i, :L], bool),
                 terms={k: np.asarray(v[i, :L], float) for k, v in named.items()},
                 actions=np.clip((actions - low) / span, 0.0, 1.0),
+                lead=rollout.get("lead", 0),
             )
         )
     return out

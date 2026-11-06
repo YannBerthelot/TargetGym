@@ -268,8 +268,8 @@ def _floor(env, params, state, times):
 
 def test_glass_furnace_measured_reward_has_the_proposals_floor():
     """``(0.36 / 1)^2`` per step, on a chi-squared of one degree of freedom:
-    sd ``sqrt(2) * 0.1296`` per draw. Fuel sits below the hold, so the running
-    term is 0 whatever its meter says."""
+    sd ``sqrt(2) * 0.1296`` per draw, on top of the fuel's ``w * c / c_hold``,
+    whose meter scatters by 0.05 % of it."""
     env, params, state = _setup("glass_furnace")
     resting = state.replace(
         T_crown=state.target_T_crown,
@@ -277,12 +277,15 @@ def test_glass_furnace_measured_reward_has_the_proposals_floor():
         fuel_flow=jnp.float32(params.fuel_min),
     )
     floor = _floor(env, params, resting, jnp.arange(DRAWS))
-    assert floor == pytest.approx(0.1296, abs=4 * 1.414 * 0.1296 / math.sqrt(DRAWS))
+    running = params.running_weight * params.fuel_min / params.c_hold
+    assert floor == pytest.approx(
+        0.1296 + running, abs=4 * 1.414 * 0.1296 / math.sqrt(DRAWS)
+    )
 
 
 def test_cement_kiln_measured_reward_has_the_proposals_floor():
     """``(1.8e-4 / 5e-4)^2`` per step. One draw per sample, so the steps are an
-    hour apart. Zero fuel sits below the hold."""
+    hour apart. Zero fuel costs nothing."""
     env, params, state = _setup("cement_kiln")
     resting = state.replace(
         lime=state.lime.at[-1].set(state.target_lime), fuel=jnp.float32(0.0)
@@ -294,7 +297,7 @@ def test_cement_kiln_measured_reward_has_the_proposals_floor():
 
 def test_boiler_drum_measured_reward_has_the_proposals_floor():
     """Pressure ``(0.022 / 0.05)^2 = 0.1936``, the table's 0.19, plus level
-    ``(5e-4 / 2.67e-3)^2 = 0.0351``. Zero firing sits below the hold."""
+    ``(5e-4 / 2.67e-3)^2 = 0.0351``. Zero firing costs nothing."""
     env, params, state = _setup("boiler_drum")
     resting = state.replace(
         level=jnp.float32(0.0), pressure=state.target_pressure, Q_fuel=jnp.float32(0.0)
@@ -307,7 +310,7 @@ def test_boiler_drum_measured_reward_has_the_proposals_floor():
 def test_glass_furnace_measured_reward_is_the_cost_of_the_reading_received():
     """A plant knows its crown only through the thermocouple, so the measured
     cost is the observation's, lag and noise together, while ``reward`` scores
-    the true crown. In K, at ``e_floor`` 1, plus fuel above the hold."""
+    the true crown. In K, at ``e_floor`` 1, plus fuel as a share of the hold."""
     env, params, state = _setup("glass_furnace", unrounded=False)
     key = jax.random.PRNGKey(2)
     for t in range(5):
@@ -315,13 +318,12 @@ def test_glass_furnace_measured_reward_is_the_cost_of_the_reading_received():
             jax.random.fold_in(key, t), state, jnp.zeros(1), params
         )
         crown, _, fuel_pct, _, target, _ = np.asarray(obs, np.float64)
-        running = max(fuel_pct * params.fuel_max / 100.0 - params.c_hold, 0.0)
+        running = fuel_pct * params.fuel_max / 100.0
         running *= params.running_weight / params.c_hold
         expected = (target - crown) ** 2 + running
         assert float(-info["measured_reward"]) == pytest.approx(expected, abs=2e-2)
-        true_fuel = max(float(state.fuel_flow) - params.c_hold, 0.0)
         true_cost = float(state.target_T_crown - state.T_crown) ** 2 + (
-            true_fuel * params.running_weight / params.c_hold
+            float(state.fuel_flow) * params.running_weight / params.c_hold
         )
         assert float(-reward) == pytest.approx(true_cost, abs=2e-2)
 

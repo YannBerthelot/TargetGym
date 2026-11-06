@@ -1,0 +1,36 @@
+{
+  "cpu": "Apple M4 Pro",
+  "exception": null,
+  "expert_figure": {
+    "source": "14 CFR 91 Appendix G (RVSM), docs/proposals/scoring-and-experts.md",
+    "unit": "m",
+    "value": 19.8,
+    "what": "altitude-keeping tolerance, +-65 ft, not a measured hold"
+  },
+  "expert_fingerprint": "3a235f18e6765ea1",
+  "generated": "2026-11-06T12:00:14+00:00",
+  "null_wins": [
+    "constant 0.0",
+    "constant 0.5",
+    "constant 1.0",
+    "table"
+  ],
+  "nulls": {
+    "constant 0.0": {
+      "ratio": 1.0124267733511796,
+      "win_rate": 0.6
+    },
+    "constant 0.5": {
+      "ratio": 299889.7070196126,
+      "win_rate": 0.8
+    },
+    "constant 1.0": {
+      "ratio": 4.225867509452884,
+      "win_rate": 0.7
+    },
+    "table": {
+      "ratio": 8.797481522825535,
+      "win_rate": 0.8
+    }
+  }
+}

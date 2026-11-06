@@ -1,0 +1,30 @@
+{
+  "cpu": "Apple M4 Pro",
+  "exception": null,
+  "expert_figure": null,
+  "expert_fingerprint": "231e23e5096d03cd",
+  "generated": "2026-11-06T11:59:36+00:00",
+  "null_wins": [],
+  "nulls": {
+    "I-only": {
+      "ratio": 0.00012614924377469971,
+      "win_rate": 0.0
+    },
+    "constant 0.0": {
+      "ratio": 3.459103597409896e-05,
+      "win_rate": 0.0
+    },
+    "constant 0.5": {
+      "ratio": 0.016325466324471554,
+      "win_rate": 0.0
+    },
+    "constant 1.0": {
+      "ratio": 0.0035768846828938424,
+      "win_rate": 0.0
+    },
+    "table": {
+      "ratio": 0.3918732168521601,
+      "win_rate": 0.0
+    }
+  }
+}

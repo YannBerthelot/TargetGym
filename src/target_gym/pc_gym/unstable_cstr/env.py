@@ -114,30 +114,30 @@ class UnstableCSTRParams(EnvParams):
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     reward_version: int = 2
-    # The analyser resolution, provisional. scripts/measure_hold.py records the
+    # The analyser's scatter, as on cstr. scripts/measure_hold.py records the
     # MPC's hold from minute 6 of each block to the switch, less the steps in
     # which it already moves toward the next level (target_gym.eval finds
     # them), and e_floor is raised only if that hold is coarser. The v2
     # ranking and the PID tuning do not depend on it: every cost term scales by
     # 1/e_floor^2.
-    e_floor: float = 1e-4  # mol/L
+    e_floor: float = 5e-4  # mol/L
     e_tol: float = 0.0  # no product specification supplied (provisional)
     tracking_exponent: float = 2.0
     #: The largest |target - C_a| an untripped state reaches (derived, closed
     #: form): max(Caf - 0.45, 0.65 - C_a at 365 K on the steady-state curve)
     #: = max(0.55, 0.386). The v1 envelope and the base of ``failure_cost``.
     CA_error_max: float = 0.55  # mol/L
-    failure_cost: float = 2.0 * (0.55 / 1e-4) ** 2  # twice the largest tracking cost
+    failure_cost: float = 2.0 * (0.55 / 5e-4) ** 2  # twice the largest tracking cost
     #: Restart time priced into a trip (``reward.trip_cost``): cstr's
     #: provisional 1 h restart (240 steps of 15 s) at 3 s steps.
     restart_steps: int = round(_CSTR.restart_steps * _CSTR.delta_t / _DT)
     #: The oracle's best hold, (e_hold_min / e_floor) ** 2. The MPC holds C_a to
     #: 2.23e-6 mol/L (measured, the lowest per-seed hold scripts/measure_hold.py
-    #: recorded; 6.29e-6 for the CasADi oracle before v3), under the analyser
-    #: resolution, so e_floor stays at the resolution and the reference is that
-    #: finer hold in floor-widths, squared.
-    rho_floor_tracking: float = (2.23e-6 / 1e-4) ** 2
-    rho_floor: float = (2.23e-6 / 1e-4) ** 2  # no running cost: rho_floor_tracking
+    #: recorded; 6.29e-6 for the CasADi oracle before v3), under the analyser's
+    #: scatter, so e_floor stays at the scatter and the reference is that
+    #: finer hold in floor-widths, squared. PR 9 re-measures the hold.
+    rho_floor_tracking: float = (2.23e-6 / 5e-4) ** 2
+    rho_floor: float = (2.23e-6 / 5e-4) ** 2  # no running cost: rho_floor_tracking
     #: False: the plant is disturbed (docs/reward-shaping.md).
     floor_is_documented_minimum: bool = False
 

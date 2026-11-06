@@ -153,7 +153,7 @@ moving a recorded one.
 - **Linear consumption.** `running_cost` becomes `w * c / c_hold`. The clip gives
   no credit for saving, and it charges fluctuation that a fuel bill does not. This
   adds about `w` to every step's cost on the 6 tasks it covers, which compresses
-  `seed_scores` there. That needs the owner's decision before PR 8.
+  `seed_scores` there. The owner decided this on 2026-11-06.
 - **Constants, once.** See [Constants](#constants).
 - **Null policies in the package.** They move out of `tests/`, with their tables
   and gains stored in records, because the bump-test evidence is outside the wheel.
@@ -321,6 +321,8 @@ Chosen by the owner on 2026-11-06.
    and the buffet line.
 7. **`unstable_cstr`'s `tau_j` of 6 s is a written exception under check 2.** It is
    synthetic, and its `PHYSICS.md` says so.
+8. **Consumption is linear: `running_cost` becomes `w * c / c_hold`,** on the 6 tasks
+   that charge it. Dead bands that are tolerances stay clipped, as `excess_cost`.
 
 ## Cost
 

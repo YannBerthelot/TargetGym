@@ -33,9 +33,9 @@ class CSTRParams(EnvParams):
     T_max: float = 350.0
     T_min: float = 300.0
     C_a_min: float = 0.7
-    # Composition analyser resolution. Below this the reward would be paying
-    # for differences an online GC cannot report.
-    precision_floor: float = 1e-4  # mol/L
+    # The composition analyser's scatter. Below this the reward would be paying
+    # for differences an online analyser cannot report.
+    precision_floor: float = 5e-4  # mol/L
     C_a_max: float = 1.0
 
     # Every target holds under every load with 0.5 K of coolant to spare at each
@@ -62,20 +62,20 @@ class CSTRParams(EnvParams):
     load_scale: float = 1.0
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
-    # Measured with no load on the plant, before PR 8 re-measures the floors:
+    # Measured with no load on the plant, before PR 9 re-measures the hold:
     # the shipped MPC held the concentration to 1e-6 mol/L after settling
     # (`scripts/measure_hold.py`), so the normalisation uses a documented
-    # minimum, the online analyser's resolution. The span costs
-    # (0.3 / 1e-4)^2 = 9e6 per step; a trip, which no state reaches, twice that.
+    # minimum, the online analyser's scatter. The span costs
+    # (0.3 / 5e-4)^2 = 3.6e5 per step; a trip, which no state reaches, twice that.
     reward_version: int = 2
-    e_floor: float = 1e-4  # mol/L, composition analyser resolution
+    e_floor: float = 5e-4  # mol/L, composition analyser scatter
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
-    failure_cost: float = 1.8e7
+    failure_cost: float = 7.2e5
     #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 15 s steps: cool, purge and re-feed, provisional; never charged).
     restart_steps: int = 240
     #: The oracle's best hold. Zero from the plant with no load, where exact
-    #: hold is achievable and ``e_floor`` is a scale, not a floor; PR 8 redoes it.
+    #: hold is achievable and ``e_floor`` is a scale, not a floor; PR 9 redoes it.
     rho_floor_tracking: float = 0.0
     rho_floor: float = 0.0
     #: True where e_floor is a resolution, not a measured or certified floor.

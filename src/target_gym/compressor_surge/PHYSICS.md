@@ -957,12 +957,11 @@ which is what the recorded baselines use.
 `compute_reward = -(tracking + running + wear + failure)`, see
 docs/reward-shaping.md. Tracking is the header-pressure error in kPa over
 `e_floor`, squared. Running is the ideal compression power spent on recycled
-gas, m_r dp / rho01, the avoidable part of the drive's consumption, charged
-above `c_hold` in the contract's dimensionless form. It is not priced, since
-a header-pressure deviation has no tariff that would put tracking in the same
-currency. With a scalar `c_hold` under a moving schedule, blocks where recycle
-is forced pay a running cost no controller can avoid, and recycle below
-`c_hold` is free in the other blocks.
+gas, m_r dp / rho01, the avoidable part of the drive's consumption, charged in
+full as a share of `c_hold`, in the contract's dimensionless form. It is not
+priced, since a header-pressure deviation has no tariff that would put tracking in
+the same currency. With a scalar `c_hold` under a moving schedule, blocks where
+recycle is forced pay a running cost no controller can avoid.
 
 | parameter | value | source |
 | --- | --- | --- |
@@ -978,7 +977,7 @@ is forced pay a running cost no controller can avoid, and recycle below
 | `travel_weight` | 1 (ours, provisional) | twice the free travel in one step is worth one floor-width of tracking error. A full stroke at 0.05 per step costs 19 per step |
 | `precision_floor` | 0.0275 kPa (derived) | the header-pressure transmitter's reference accuracy, 0.055 % of calibrated span (read: Yokogawa EJA530E gauge transmitter, GS 01C31F01-01EN, p.1, capsule A at spans of 20 kPa or more, https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf; Siemens SITRANS P320, catalog FI 01 09/2026, p.1/14, 1 bar cell at a turn-down of 5 or less, https://support.industry.siemens.com/cs/attachments/109765052/sitransp_p320_p420_fi01_en.pdf), times a 0 to 50 kPa calibrated span (ours). It covers linearity, hysteresis and repeatability together, and the Yokogawa sheet states it as a 3-sigma bound, so an error below it is one the instrument cannot tell from a smaller one. Neither sheet gives a finer measuring resolution; the one resolution found, the current output's quantisation (Endress+Hauser Cerabar PMP71B, TI01509P, p.24, https://bdih-download.endress.com/file/11181feb66c9cd03e4256402f1eff641/TI01509PEN_1025-00.pdf), is finer than the repeatability and is not used. The value scales with the span. Version 1's floor and the clamp on `e_floor`, so while the clamp binds it sets the version-2 scale |
 | `rho_floor_tracking` | 1.40e-5 (derived from the measured hold) | (lowest per-seed MPC hold / `e_floor`)^2 = (1.03e-4 / 0.0275)^2, from `scripts/measure_hold.py`; below 1 because the clamp binds |
-| `rho_floor` | 1.40e-5 (derived from the measured hold) | equal to `rho_floor_tracking`, as on the suite's other plants with a running cost, since recycle power at `c_hold` costs nothing and `c_hold` is the NMPC's own hold |
+| `rho_floor` | 1.40e-5 (derived from the measured hold) | equal to `rho_floor_tracking`, from when recycle power at `c_hold` cost nothing. It gains the running term, about `running_weight`, when PR 9 re-measures the hold |
 | `floor_is_documented_minimum` | False | the plant is disturbed |
 
 **The hold window.** `scripts/measure_hold.py` scores this plant's hold

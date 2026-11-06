@@ -144,7 +144,7 @@ _SLOT_BAND = "the expert's 8.5 m slot, patrol/PHYSICS.md"
 #: observation's units, with where it comes from. It is a report: it does not
 #: enter the reward. ``None`` is a task with no two-sided band to report.
 #: Any other task gets ``SPEC_RULE_FLOORS`` floors, which is ours and no plant's
-#: figure. Each plant PR replaces its rule with a sourced number
+#: figure, until a sourced number replaces it
 #: (docs/proposals/industrial-fixes.md).
 SPEC_BAND = {
     "plane": ((20.0,), _ALTITUDE_BAND),
@@ -160,6 +160,10 @@ SPEC_BAND = {
         (0.5,),
         "a pH 6 to 9 permit, from the lowest target of 6.5, "
         "ph_neutralization/PHYSICS.md",
+    ),
+    "reactor": (
+        (1.5 / 1.8,),
+        "the rod controller's +-1.5 F dead band, NRC HRTD 8.1, reactor/PHYSICS.md",
     ),
     "hvac": None,  # one-sided at night, and the reward prices comfort itself
 }
@@ -181,26 +185,28 @@ def spec_band(name: str, params=None, env=None) -> np.ndarray | None:
     return SPEC_RULE_FLOORS * task_info(name, e, p, 1).e_floor[0]
 
 
-def _currency_per_floor(name: str, p) -> float:
-    """What one floor-width of tracking error costs on the plants that price
-    it (``compute_reward_terms`` of each); 1 on the others."""
+def _currency_per_floor(name: str, p, step_seconds: float) -> float:
+    """What one floor-width of tracking error costs per control step on the
+    plants that price it (``compute_reward_terms`` of each, summed over the
+    step's sub-steps); 1 on the others."""
     if name == "reactor":
         per_unit_s = (
             p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW * 1000.0
         ) / 3600.0
-        return per_unit_s * p.e_floor
+        return per_unit_s * step_seconds * p.e_floor
     if name in ("battery", "wind_turbine"):
-        return p.imbalance_price / 1.0e6 * p.delta_t / 3600.0 * p.e_floor
+        return p.imbalance_price / 1.0e6 * step_seconds / 3600.0 * p.e_floor
     return 1.0
 
 
 def _per_step(name: str, params, env, at_resolution: bool) -> float:
     """The reward's tracking charge per step with every tracked error one
     resolution (or one floor) beyond its tolerance."""
-    from target_gym.registry import REGISTRY
+    from target_gym.registry import REGISTRY, control_step_seconds
 
     spec = REGISTRY[name]
     p = params if params is not None else spec.make_test_params()
+    env = env if env is not None else spec.make_env()
     exponent = float(p.tracking_exponent)
     if name == "hvac":
         hours = p.delta_t / 3600.0
@@ -208,10 +214,10 @@ def _per_step(name: str, params, env, at_resolution: bool) -> float:
     total = 0.0
     for res, floor, count in TRACKED_TERMS[name]:
         if count == "wingmen":
-            count = (env if env is not None else spec.make_env()).num_wingmen
+            count = env.num_wingmen
         ratio = float(getattr(p, res)) / float(getattr(p, floor))
         total += count * (ratio**exponent if at_resolution else 1.0)
-    return float(_currency_per_floor(name, p) * total)
+    return float(_currency_per_floor(name, p, control_step_seconds(env, p)) * total)
 
 
 def ceiling(name: str, params=None, env=None) -> float:
@@ -491,7 +497,9 @@ def _score(name: str, make_policy, seeds: int, params) -> dict:
         share = E.off_spec_fraction(episodes, burn_in, settle)
         m[f"{side}_off_spec"] = float("nan") if tolerance is None else share
     row = recorded(name)
-    bound = row.get("rho_floor", float("nan"))
+    # The best known tracking hold, since the bound the hold is read against
+    # must leave out consumption; rows from before 0.8.0 have only ``rho_floor``.
+    bound = row.get("rho_floor_tracking", row.get("rho_floor", float("nan")))
     bound = float("nan") if bound is None else bound
     return {
         **m,

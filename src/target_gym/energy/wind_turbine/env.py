@@ -125,10 +125,10 @@ class WindTurbineParams(EnvParams):
     # read it either. The version-1 reward's envelope is ``power_envelope``
     # below.
     power_band: float = 0.5e6  # W
-    # The ceiling's resolution and version 1's floor: the 1 kW of the benchmark's
-    # assumed meter (PHYSICS.md, Readings), finer than the 1.7 kW a class 0.1S
-    # meter can certify at 5 MW. PR 8 decides the constant.
-    precision_floor: float = 1e3  # W
+    # The ceiling's resolution and version 1's floor: the 1.7 kW a class 0.1S
+    # meter can certify at 5 MW (PHYSICS.md, Readings). The reading's own scatter
+    # is the benchmark's assumed 1 kW.
+    precision_floor: float = 1.7e3  # W
     power_envelope: float = 5e6  # W, rated electrical output
     pitch_activity_weight: float = 0.02  # fatigue proxy
 
@@ -462,7 +462,7 @@ def compute_reward_terms(
             state.target_power - power, p.e_floor, p.e_tol, p.tracking_exponent, xp
         )
     )
-    fatigue = R.running_cost(
+    fatigue = R.excess_cost(
         state.pitch_travel / p.pitch_max, p.c_hold, p.fatigue_weight, xp
     )
     overspeed = xp.maximum(state.omega / omega_rated(p) - p.speed_band, 0.0)

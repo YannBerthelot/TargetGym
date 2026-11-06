@@ -1,0 +1,30 @@
+{
+  "cpu": "Apple M4 Pro",
+  "exception": "check 2: tau_j of 6 s is synthetic, and PHYSICS.md says so (accepted 2026-11-06)",
+  "expert_figure": null,
+  "expert_fingerprint": "bd0e108eb31fa842",
+  "generated": "2026-11-06T12:01:28+00:00",
+  "null_wins": [
+    "constant 0.0",
+    "constant 0.5",
+    "table"
+  ],
+  "nulls": {
+    "constant 0.0": {
+      "ratio": 147.05359666845635,
+      "win_rate": 1.0
+    },
+    "constant 0.5": {
+      "ratio": 60.95087732182972,
+      "win_rate": 1.0
+    },
+    "constant 1.0": {
+      "ratio": 0.3387980096770976,
+      "win_rate": 0.0
+    },
+    "table": {
+      "ratio": 101.20354702438974,
+      "win_rate": 1.0
+    }
+  }
+}

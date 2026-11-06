@@ -329,12 +329,12 @@ which is what the recorded baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_top`, `e_floor_bottom` | 1e-4, 1e-4 mole fraction (the MPC holds 7.6e-7 / 5.2e-7) | the lowest per-seed long-run mean \|error\| the shipped MPC held on each product under the shipped feed-composition disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in, 3 seeds; PID down to 5.7e-5 and 1.3e-4; before the oracle audit it held 1.35e-5 / 3.3e-5). Per-seed minima; upper bounds Below the instrument resolution the plant's own table cites, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
+| `e_floor_top`, `e_floor_bottom` | 4e-4, 4e-4 mole fraction, the analyser's scatter (the MPC holds 7.6e-7 / 5.2e-7) | the lowest per-seed long-run mean \|error\| the shipped MPC held on each product under the shipped feed-composition disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in, 3 seeds; PID down to 5.7e-5 and 1.3e-4; before the oracle audit it held 1.35e-5 / 3.3e-5). Per-seed minima; upper bounds Below the instrument resolution the plant's own table cites, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
 | `e_tol` | 0 | **provisional.** The purity specifications a column is run against come from the sales contract. |
 | `tracking_exponent` | 2 | quadratic |
 | `c_hold` | 3.282 kmol/min | boilup while holding, PID (MPC 3.292) (`scripts/measure_hold.py`) |
 | `running_weight` | 1 | sweep 0.5 / 1 / 2 |
-| `failure_cost` | 3.61e6 | twice the reachable two-product excursion's cost, 2 x 2 x (0.095 / 1e-4)^2: a 0.98 top target to the 0.90 trip, a 0.02 bottom target to the 0.10 trip, per trip step |
+| `failure_cost` | 2.26e5 | twice the reachable two-product excursion's cost, 2 x 2 x (0.095 / 4e-4)^2: a 0.98 top target to the 0.90 trip, a 0.02 bottom target to the 0.10 trip, per trip step |
 | `restart_steps` | 240 (4 h) | restart time priced into a trip, `restart_steps x failure_cost` (column shutdown and re-establishment of the profile; provisional); where a plant engineer would get it: the plant's restart procedure |
 
 `rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
@@ -398,6 +398,6 @@ score read the true state. `info["measured_reward"]` is the same cost on the
 readings, with any trip taken from the true state, and a learner can train on
 it.
 
-A plant resting exactly on target pays 32 per step in measured reward,
-`2 (4e-4 / 1e-4)^2`. `e_floor_top`, `e_floor_bottom` and `precision_floor` stay
-at 1e-4, so the ceiling sits below anything this analyser could verify.
+A plant resting exactly on target pays 2 per step in measured reward,
+`2 (4e-4 / 4e-4)^2`. `e_floor_top`, `e_floor_bottom` and `precision_floor` are the
+analyser's scatter, so the ceiling is what this analyser can verify.

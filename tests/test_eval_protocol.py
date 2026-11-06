@@ -1,9 +1,11 @@
 """The reach-and-hold protocol on synthetic cost series: the renewal
 decomposition of Theorem 4, what the reach columns mean, and the split of each
-target cycle into settle, hold and the anticipation of the next change."""
+target cycle into settle, hold and the fixed lead before the next change, and
+the anticipation rule that measures that lead."""
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import pathlib
 
@@ -15,7 +17,7 @@ from target_gym import eval as E
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
-def _episode(cost, target_change, terms=None):
+def _episode(cost, target_change, terms=None, lead=0):
     n = len(cost)
     return E.Episode(
         cost=np.asarray(cost, float),
@@ -23,6 +25,7 @@ def _episode(cost, target_change, terms=None):
         target_change=np.asarray(target_change, bool),
         failed=np.zeros(n, bool),
         terms=terms or {},
+        lead=lead,
     )
 
 
@@ -151,9 +154,7 @@ def _old_protocol(episodes, burn_in):
 
 def _n_anticipating(episodes):
     return sum(
-        s.hold_end < s.end
-        for ep in episodes
-        for s in E.cycle_segments(ep.cost, E._cycles(ep))
+        j > 0 for ep in episodes for j in E.anticipations(ep.cost, E._cycles(ep))
     )
 
 
@@ -167,7 +168,7 @@ def _assert_same_as_before(episodes, burn_in):
             assert new[key] == value, (key, new[key], value)
 
 
-def _anticipating_episode(n_cycles=20, length=100, ramp=None, hold=0.1):
+def _anticipating_episode(n_cycles=20, length=100, ramp=None, hold=0.1, lead=0):
     """Hold cost ``hold``, a +1 excursion over the 5 steps after each change,
     and a rise over the last steps of every cycle a change follows."""
     ramp = np.linspace(0.5, 4.0, 8) if ramp is None else np.asarray(ramp, float)
@@ -180,19 +181,20 @@ def _anticipating_episode(n_cycles=20, length=100, ramp=None, hold=0.1):
         cost[a : a + 5] += 1.0
         if i < n_cycles - 1:
             cost[a + length - len(ramp) : a + length] = ramp
-    return _episode(cost, tc)
+    return _episode(cost, tc, lead=lead)
 
 
 def test_a_rise_before_each_change_is_moved_to_that_changes_transient():
     """A controller that previews the schedule starts toward the next target
-    before the change. Those steps leave the hold of the cycle they sit in and
-    join the reach and transient cost of the change they prepare. The gain,
-    which counts every step, does not move; the hold drops back to the level
-    actually held; and the cycles no longer read as unsettled."""
+    before the change. Steps inside the task's lead leave the hold of the cycle
+    they sit in and join the reach and transient cost of the change they
+    prepare. The gain, which counts every step, does not move; the hold drops
+    back to the level actually held; and the cycles no longer read as
+    unsettled."""
     ramp = np.linspace(0.5, 4.0, 8)
-    ep = _anticipating_episode(ramp=ramp)
+    ep = _anticipating_episode(ramp=ramp, lead=8)
     burn_in = 10
-    segs = E.cycle_segments(ep.cost, E._cycles(ep))
+    segs = E.cycle_segments(ep.cost, E._cycles(ep), lead=8)
     assert [s.end - s.hold_end for s in segs] == [8] * 19 + [0]
     assert all(s.hold_start - s.start == 5 for s in segs)
 
@@ -224,12 +226,11 @@ def _hold_without(cost, cycles, antic):
 
 def test_a_noisy_hold_with_a_rise_before_each_change():
     """The same on a noisy hold (cost ``0.1 * e**2``, Gaussian ``e``) with the
-    error ramping to eight standard deviations over the last ten steps. Every
-    rise is found, from its last six steps to at most four steps more than the
-    rise, since a noise spike just before it can open the run. Its first steps
-    cost no more than the noise does and may stay in the hold. The hold comes
-    back to the noise level from three times it, and within 2% of the hold
-    with exactly the rise left out."""
+    error ramping to eight standard deviations over the last ten steps. The
+    rule finds every rise, from its last six steps to at most four steps more
+    than the rise, since a noise spike just before it can open the run. A lead
+    of that measured length brings the hold back to the noise level from three
+    times it."""
     rng = np.random.default_rng(3)
     n_cycles, length, H = 40, 120, 10
     e = rng.standard_normal(n_cycles * length)
@@ -238,14 +239,12 @@ def test_a_noisy_hold_with_a_rise_before_each_change():
     for i in range(n_cycles - 1):
         b = (i + 1) * length
         e[b - H : b] += 8.0 * np.arange(1, H + 1) / H
-    ep = _episode(0.1 * e**2, tc)
+    ep = _episode(0.1 * e**2, tc, lead=H)
     cycles = E._cycles(ep)
-    found = [s.end - s.hold_end for s in E.cycle_segments(ep.cost, cycles)]
+    found = E.anticipations(ep.cost, cycles)
     assert found[-1] == 0
     assert all(6 <= j <= H + 4 for j in found[:-1]), found
     m = E.evaluate([ep], burn_in=0)
-    exact = _hold_without(ep.cost, cycles, [H] * (n_cycles - 1) + [0])
-    assert m["hold"] == pytest.approx(exact, rel=0.02)
     assert m["hold"] == pytest.approx(0.1, rel=0.1)
     assert _old_protocol([ep], 0)["hold"] > 3.0 * m["hold"]
 
@@ -259,7 +258,7 @@ def _ramp_with_dips(dips, H=20):
     return ramp
 
 
-def _dip_episode(ramp, n_cycles=10, length=200, seed=4):
+def _dip_episode(ramp, n_cycles=10, length=200, seed=4, lead=0):
     rng = np.random.default_rng(seed)
     parts, tc = [], np.zeros(n_cycles * length, bool)
     for i in range(n_cycles):
@@ -269,7 +268,7 @@ def _dip_episode(ramp, n_cycles=10, length=200, seed=4):
             c[-len(ramp) :] = ramp
         parts.append(c)
         tc[i * length] = True
-    return _episode(np.concatenate(parts), tc)
+    return _episode(np.concatenate(parts), tc, lead=lead)
 
 
 def test_a_dip_inside_the_rise_does_not_cut_it_short():
@@ -285,7 +284,7 @@ def test_a_dip_inside_the_rise_does_not_cut_it_short():
     the rise left out. A dip of three steps ends the run there, the one limit
     of the bridge."""
     for dips in ((6,), (6, 7), (6, 15)):
-        ep = _dip_episode(_ramp_with_dips(dips))
+        ep = _dip_episode(_ramp_with_dips(dips), lead=20)
         cycles = E._cycles(ep)
         found = E.anticipations(ep.cost, cycles)
         assert all(20 <= j <= 24 for j in found[:-1]), (dips, found)
@@ -304,7 +303,7 @@ def test_a_one_or_two_step_jump_before_the_change_is_found_when_huge():
     a cycle (the rates below include it). A jump of 50 or 80 times the level
     stays in the hold."""
     for ramp, j in (([1e3], 1), ([1e3, 2e3], 2), ([5.0], 0), ([5.0, 8.0], 0)):
-        ep = _anticipating_episode(ramp=ramp)
+        ep = _anticipating_episode(ramp=ramp, lead=j)
         found = E.anticipations(ep.cost, E._cycles(ep))
         assert found == [j] * 19 + [0], (ramp, found)
         if j:
@@ -489,32 +488,16 @@ def test_without_anticipation_every_number_is_unchanged(law):
     _assert_same_as_before(episodes, burn_in=50)
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        "battery",
-        pytest.param(
-            "hvac",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="Finding (2026-11-06): now the building needs heat, G36 "
-                "optimal start runs, and its morning warm-up is found as "
-                "anticipation, which it is. PR 8 replaces the per-run window, "
-                "and PR 9 rewrites this expert.",
-            ),
-        ),
-        "plane_energy",
-    ],
-)
+@pytest.mark.parametrize("name", ["battery", "hvac", "plane_energy"])
 def test_real_pid_episodes_are_unchanged(name):
     """The same on the three plants whose test episodes hold more than one
     target: the shipped PID on the battery (dispatch blocks under white
     dispatch noise), the building (occupancy switches under weather, with a
     dead band at night) and the energy-managed aircraft (a ladder of speed
-    and altitude targets), on the seeds ``evaluate_controller`` runs. The
-    PIDs do not preview the schedule, no anticipation is found, and every
-    protocol number is what the protocol gave before. The building's seeds 1
-    and 2 are the ones where a rule without the floor found some."""
+    and altitude targets), on the seeds ``evaluate_controller`` runs. Nothing
+    in the protocol reads a run's cost to find its window any more, so with no
+    lead every number is what the protocol gave before the rule. The
+    building's lead has its own test."""
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
 
@@ -525,18 +508,19 @@ def test_real_pid_episodes_are_unchanged(name):
         for s in range(3)
     ]
     assert all(len(E._cycles(ep)) > 3 for ep in episodes)
-    assert _n_anticipating(episodes) == 0
     burn_in = min(E.hold_settings(name)["burn_in"], int(p.max_steps_in_episode) // 2)
-    _assert_same_as_before(episodes, burn_in)
+    _assert_same_as_before(
+        [dataclasses.replace(ep, lead=0) for ep in episodes], burn_in
+    )
 
 
 def test_the_last_cycle_never_loses_steps():
-    """No change follows the last cycle of an episode, so nothing at its end is
-    anticipation, however it looks. Here both cycles end on the same rise; the
-    first loses it to the change, the last keeps it as hold."""
-    ep = _anticipating_episode(n_cycles=2)
+    """No change follows the last cycle of an episode, so the lead takes
+    nothing from it. Here both cycles end on the same rise; the first loses it
+    to the change, the last keeps it as hold."""
+    ep = _anticipating_episode(n_cycles=2, lead=8)
     ep.cost[-8:] = np.linspace(0.5, 4.0, 8)
-    first, last = E.cycle_segments(ep.cost, E._cycles(ep))
+    first, last = E.cycle_segments(ep.cost, E._cycles(ep), lead=8)
     assert first.end - first.hold_end == 8
     assert last.hold_end == last.end == len(ep.cost)
     assert E.hold_mask(ep, burn_in=0)[-8:].all()
@@ -575,40 +559,81 @@ def test_a_cycle_still_settling_at_its_end_is_not_anticipation():
     assert E.unsettled_fraction([drifting]) == 1.0
 
 
-def test_a_cycle_that_runs_away_at_its_end_is_charged_to_the_next_change():
-    """What the rule cannot tell apart. A cost that blows up over the last
-    steps before a change looks, from the cost alone, exactly like a
-    controller leaving early for the next target, and it is treated as one.
-    The blow-up leaves the hold and is charged to the next change's reach and
-    transient cost, and a cycle that was unsettled only because of it no
-    longer reads as unsettled. That is acceptable because those steps are not
-    a hold under either reading, and the gain counts them in full whatever the
-    split. The run takes at most half the cycle, so a run-away that started
-    earlier keeps its first part in the hold of the cycle."""
+def test_a_cycle_that_runs_away_at_its_end_stays_in_the_hold():
+    """A cost that blows up before a change looks, from the cost alone, like a
+    controller leaving early, and the rule, reading the cost, finds it as one.
+    Leaving it out per run is what let a policy's own excursion escape its hold.
+    With a fixed window it stays in the hold and the cycle reads as unsettled,
+    whoever the controller is. The rule itself takes at most half the cycle."""
     late = _anticipating_episode(n_cycles=2, ramp=0.25 * np.exp(np.arange(1, 13) / 2.0))
-    first, _ = E.cycle_segments(late.cost, E._cycles(late))
-    assert first.end - first.hold_end == 12
-    assert E.hold([late], burn_in=0)[0] == pytest.approx(0.1, rel=1e-12)
-    assert _old_protocol([late], 0)["unsettled_fraction"] == 0.5
-    assert E.unsettled_fraction([late]) == 0.0
+    assert E.anticipations(late.cost, E._cycles(late)) == [12, 0]
+    assert E.hold([late], burn_in=0)[0] > 10 * 0.1
+    assert E.unsettled_fraction([late]) == 0.5
 
     early = _anticipating_episode(
         n_cycles=2, ramp=0.1 * np.exp(np.arange(1, 71) / 12.0)
     )
-    first, _ = E.cycle_segments(early.cost, E._cycles(early))
-    assert first.end - first.hold_end == 50  # capped at half the cycle
-    assert E.hold_mask(early, burn_in=0)[30:50].all()
+    assert E.anticipations(early.cost, E._cycles(early)) == [50, 0]
     for ep in (late, early):
         assert E.gain([ep], 0)[0] == ep.cost.mean()
 
 
+def test_every_controller_is_held_over_the_same_steps():
+    """Contract: the hold is the same steps for everyone on a schedule. A flat
+    controller and one that rises before each change have one mask, and it
+    drops the settle after each move and the lead before each change that
+    follows. Moves at 0, 100 and 200 of 300, settle 5, lead 8: 95 - 8 + 95 - 8
+    + 95 = 269 steps."""
+    tc = np.zeros(300, bool)
+    tc[[0, 100, 200]] = True
+    flat = _episode(np.full(300, 0.1), tc, lead=8)
+    rising = _anticipating_episode(n_cycles=3, ramp=np.geomspace(1.0, 1e3, 20), lead=8)
+    a, b = E.hold_mask(flat, 0, settle=5), E.hold_mask(rising, 0, settle=5)
+    assert (a == b).all()
+    assert a.sum() == 269
+    assert not a[92:105].any() and not a[192:205].any()
+    assert a[91] and a[105] and a[299]
+
+
+def test_a_rise_longer_than_the_lead_pays_in_the_hold():
+    """A rise of 20 steps at 10 per step against a lead of 8: its first 12
+    steps stay in the hold. Each of the two cycles a change follows holds 95 -
+    8 = 87 steps, 12 of them at 10 and 75 at 0.1, and the last holds 95 at 0.1,
+    so the mean over 269 steps is (2 * (120 + 7.5) + 9.5) / 269 = 0.9833."""
+    ep = _anticipating_episode(n_cycles=3, ramp=np.full(20, 10.0), lead=8)
+    assert E.hold([ep], 0, settle=5)[0] == pytest.approx(264.5 / 269)
+
+
+def test_the_lead_takes_at_most_half_a_cycle():
+    """Moves 10 steps apart with a lead of 8 leave a hold, as the settle does:
+    the lead stops at 5, and of those 5 steps the settle takes its capped 2."""
+    tc = np.zeros(30, bool)
+    tc[::10] = True
+    ep = _episode(np.ones(30), tc, lead=8)
+    first = E.cycle_segments(ep.cost, E._cycles(ep), settle=4, lead=8)[0]
+    assert first == E.Segment(0, 2, 5, 10)
+
+
+def test_a_run_carries_the_tasks_lead():
+    """The window comes with the episode, so nothing scoring it can forget it:
+    the building's optimal start is left out, and a task with none keeps every
+    step."""
+    from target_gym.registry import REGISTRY
+
+    for name in REGISTRY:
+        assert E.fixed_lead(name) >= 0
+    spec = REGISTRY["hvac"]
+    ep = E.run_episode(spec, spec.make_test_params(), lambda obs: obs[:1] * 0.0)
+    assert ep.lead == E.fixed_lead("hvac") > 0
+
+
 def test_the_transient_window_reaches_as_far_before_the_change_as_after():
     """``transient_cost`` counts ``window`` steps after the change and at most
-    ``window`` anticipation steps before it. With the whole anticipation
-    counted, a plant without a burn-in (a one-step window) charged an MPC that
-    moves 20 steps early for all 20 and the PID for its first step alone."""
+    ``window`` steps of the lead before it. With the whole lead counted, a
+    plant without a burn-in (a one-step window) would charge 20 steps before
+    the change against one after it."""
     ramp = np.linspace(0.5, 4.0, 8)
-    ep = _anticipating_episode(ramp=ramp)
+    ep = _anticipating_episode(ramp=ramp, lead=8)
     for window, before in ((1, ramp[-1:]), (3, ramp[-3:]), (10, ramp), (50, ramp)):
         after = 1.1 * min(window, 5) + 0.1 * max(min(window, 92) - 5, 0)
         t, _ = E.transient_cost([ep], window)

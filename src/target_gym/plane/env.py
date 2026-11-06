@@ -461,7 +461,7 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped
         "tracking": R.tracking_cost(
             state.target_altitude - state.z, p.e_floor, p.e_tol, p.tracking_exponent, xp
         ),
-        "running": R.running_cost(
+        "running": R.excess_cost(
             xp.abs(speed - target_airspeed(state, p)), p.c_hold, p.running_weight, xp
         ),
     }

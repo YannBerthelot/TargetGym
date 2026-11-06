@@ -244,7 +244,7 @@ reward table at the end, with their sources.
 | `k0` | 7.2e10 | 1/min | read | same | ✅ |
 | `UA` | 5.0e4 | J/(min K) | read | same | ✅ |
 | `Ti`, `Caf` | 350 K, 1.0 mol/L | | read | same | ✅ |
-| `precision_floor` | 1e-4 | mol/L | read | cstr's online-analyser resolution; version 1 only | ✅ |
+| `precision_floor` | 5e-4 | mol/L | read | cstr's online-analyser scatter, the ceiling's resolution | ✅ |
 | `time_unit_seconds` | 60 | s per min | read | cstr's convention: `delta_t` in minutes | ✅ |
 | `T_c_min` | 290 | K | read | PC-gym's CSTR action-space lower bound | ✅ |
 | `T_c_max` | 310 | K | ours | spans both folds, with at least 4.63 K headroom at \|dTi\| 6 K (derived, `--section targets`) | ⚠️ |
@@ -722,13 +722,13 @@ tariff.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1e-4 mol/L | the online analyser's resolution (read, cstr's `precision_floor`), kept because the MPC holds finer. A measured upper bound clamped at the instrument resolution (docs/reward-shaping.md, "How each floor was obtained"). `scripts/measure_hold.py --envs unstable_cstr` records the MPC's mean absolute C_a error over the hold of each block (the hold window below), and the floor is max(1e-4, the lowest per-seed hold). That hold is 6.29e-6 mol/L (measured; the PID's lowest is 1.23e-4), so the clamp binds. |
+| `e_floor` | 5e-4 mol/L | the online analyser's scatter (read, cstr's `precision_floor`), kept because the MPC holds finer. A measured upper bound clamped at the instrument (docs/reward-shaping.md, "How each floor was obtained"). `scripts/measure_hold.py --envs unstable_cstr` records the MPC's mean absolute C_a error over the hold of each block (the hold window below), and the floor is max(5e-4, the lowest per-seed hold). That hold is 6.29e-6 mol/L (measured; the PID's lowest is 1.23e-4), so the clamp binds. |
 | `e_tol` | 0 | no product specification for the concentration has been supplied |
 | `tracking_exponent` | 2 | quadratic: the owner's cost is off-spec product |
-| `failure_cost` | 6.05e7, twice (0.55 / 1e-4)^2 | twice the largest tracking cost an untripped state reaches, with 0.55 mol/L the closed-form `CA_error_max` (derived, `--section params`) |
-| `restart_steps` | 1200 (1 h) | cstr's one-hour restart (240 steps of 15 s, marked provisional in cstr) at 3 s steps; a trip costs 1200 x 6.05e7 = 7.26e10 (derived, `test_restart_time_is_cstrs_hour`) |
-| `rho_floor_tracking` | 0.000497 | (lowest per-seed MPC hold / `e_floor`)^2 = (2.23e-6 / 1e-4)^2, from `scripts/measure_hold.py` (measured; 0.00396 from the CasADi oracle's 6.29e-6 before v3); below 1 because the clamp binds |
-| `rho_floor` | 0.000497 | equal to `rho_floor_tracking`, since there is no running cost |
+| `failure_cost` | 2.42e6, twice (0.55 / 5e-4)^2 | twice the largest tracking cost an untripped state reaches, with 0.55 mol/L the closed-form `CA_error_max` (derived, `--section params`) |
+| `restart_steps` | 1200 (1 h) | cstr's one-hour restart (240 steps of 15 s, marked provisional in cstr) at 3 s steps; a trip costs 1200 x 2.42e6 = 2.90e9 (derived, `test_restart_time_is_cstrs_hour`) |
+| `rho_floor_tracking` | 1.99e-5 | (lowest per-seed MPC hold / `e_floor`)^2 = (2.23e-6 / 5e-4)^2, from `scripts/measure_hold.py` (measured; 0.00396 from the CasADi oracle's 6.29e-6 before v3); below 1 because the clamp binds |
+| `rho_floor` | 1.99e-5 | equal to `rho_floor_tracking`, since there is no running cost |
 | `floor_is_documented_minimum` | False | the plant is disturbed; documented minima are for plants with no disturbance at all |
 
 **The hold window.** `scripts/measure_hold.py` scores this plant's hold
@@ -750,7 +750,7 @@ hold cost (6.9e-4, measured) is at least 0.98 of the reference.
 `rho_floor_tracking` is the oracle's best hold for tracking. It is the lowest
 per-seed hold the reference controller demonstrated, divided by `e_floor`
 and squared, as the tracking term squares an error. It would be 1 if the
-floor were that hold. It is 0.000497 here because the floor is clamped at the
+floor were that hold. It is 1.99e-5 here because the floor is clamped at the
 analyser resolution, about 45 times the MPC's lowest hold of 2.23e-6 mol/L
 (the table above). `rho_floor` is the same with consumption charged in full.
 `floor_is_documented_minimum` records whether `e_floor` is a measured or
@@ -794,7 +794,7 @@ selects the version-1 reward of section 8 (`precision_floor` and
 - **The shared floor check cannot fail here.**
   `test_mpc_does_not_beat_a_measured_floor` in `tests/test_reward_contract.py`
   compares the protocol's whole-episode MPC tracking cost, 3.2e3 (measured),
-  with `rho_floor_tracking`, 0.000497. Tracking is the mean over every step (the
+  with `rho_floor_tracking`, 1.99e-5. Tracking is the mean over every step (the
   task has no burn-in), and the five switches cost up to (0.1 / 1e-4)^2 = 1e6
   per step while settling, so it sits far above a reference of at most 1.
   The task's own test, `test_floor_is_the_recorded_mpc_hold` in
@@ -838,9 +838,9 @@ score read the true state. `info["measured_reward"]` is the same cost on the
 readings, with any trip taken from the true state, and a learner can train on
 it.
 
-A plant resting exactly on target pays 25 per step in measured reward,
-`(5e-4 / 1e-4)^2`. `e_floor` and `precision_floor` stay at 1e-4, so the ceiling
-sits below anything this analyser could verify.
+A plant resting exactly on target pays 1 per step in measured reward,
+`(5e-4 / 5e-4)^2`. `e_floor` and `precision_floor` are the analyser's scatter, so
+the ceiling is what this analyser can verify.
 
 The cascade's inner derivative now reads `T` through the shared filter
 (`pid.filtered_derivative`), with a filter time of one-tenth of the derivative
