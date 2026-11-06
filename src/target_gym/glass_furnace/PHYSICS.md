@@ -304,7 +304,7 @@ after the fact.
 **The figures below predate the fuel slew.** On the limited plant the `NewtonMPC`
 before the shared solver stalled at 8.84 K on seed 2 (strict xfail, PR 9): a planner gets no gradient from
 `actuate` at `command == held` or past the rate limit. With that patched and the
-plan made by rate, through `action_map`, it holds 0.29 K.
+plan made by rate, it holds 0.29 K.
 
 **The oracle.** It is the shared solver on the plant itself (`oracle.py`):
 all four checker nodes per chamber, the fuel pipeline, the flame's algebraic
