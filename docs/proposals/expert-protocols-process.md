@@ -193,6 +193,8 @@ the plants of PRs 3 to 7, for the seven process tasks. Each step below is fixed;
 a poor result ships (C9). `scripts/tune_process_experts.py` runs them. Bump tests
 have been looked at to set these rules up: scores have not.
 
+**Owner decision, 2026-11-06.** R1 to R6 below are accepted.
+
 **Shared.**
 
 | # | Choice | Value | Label |
