@@ -287,7 +287,7 @@ class PlanePatrol(_PlanePatrolBase):
     """Close patrol with full relative-state observation (26 values).
 
     Observation layout — see :func:`target_gym.patrol.env.get_obs_full`.
-    Action (3,): [power, stick, aileron], each in [-1, 1].
+    Action (3,): [throttle, pitch demand, bank demand], each in [-1, 1].
     """
 
     obs_value_index: int = 24  # slot_error
@@ -316,7 +316,7 @@ class PlanePatrolBearingOnly(_PlanePatrolBase):
     """Close patrol with partial (range + bearing) observation (21 values).
 
     Observation layout — see :func:`target_gym.patrol.env.get_obs_bearing_only`.
-    Action (3,): [power, stick, aileron], each in [-1, 1].
+    Action (3,): [throttle, pitch demand, bank demand], each in [-1, 1].
     """
 
     obs_value_index: int = 19  # measured range

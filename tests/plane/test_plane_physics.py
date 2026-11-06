@@ -832,7 +832,7 @@ def test_burning_fuel_lightens_the_aircraft():
 
     masses, fuels = [float(state.m)], [float(state.fuel)]
     for _ in range(600):
-        _, state, _, terminated, _ = step(key, state, jnp.array([0.8, 0.0]), p)
+        _, state, _, terminated, _ = step(key, state, jnp.array([0.2, 0.12]), p)
         masses.append(float(state.m))
         fuels.append(float(state.fuel))
         if bool(terminated):

@@ -52,10 +52,10 @@ class Formation(
 ):
     """A lead and ``num_wingmen`` wingmen (1 to 4; 2 is the scored task).
 
-    Action (9,): [lead power, lead stick, lead aileron, wingman 0 power, wingman 0 stick, wingman 0 aileron, wingman 1 power, wingman 1 stick, wingman 1 aileron] each in [-1, 1]
+    Action (9,): [lead throttle, lead pitch, lead bank, wingman 0 throttle, wingman 0 pitch, wingman 0 bank, wingman 1 throttle, wingman 1 pitch, wingman 1 bank] each in [-1, 1]
 
-    In general ``3 * (num_wingmen + 1)`` values: ``[power, stick, aileron]``
-    for the lead, then for each wingman.
+    In general ``3 * (num_wingmen + 1)`` values: ``[throttle, pitch, bank]``
+    demands for the lead, then for each wingman.
 
     Observation: the lead's (``16 + 3 * num_wingmen`` values, see
     :func:`target_gym.formation.env.get_obs_lead`), then each wingman's, the

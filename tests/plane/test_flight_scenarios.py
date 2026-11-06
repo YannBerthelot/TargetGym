@@ -45,8 +45,16 @@ def env():
 @pytest.fixture(scope="module")
 def params():
     # Long horizon so scenarios end on physics, not on the step limit; still
-    # air, since these scenarios are about the aerodynamics.
-    return PlaneParams(max_steps_in_episode=100_000, turbulence_sigma=0.0)
+    # air, since these scenarios are about the aerodynamics. They fly past the
+    # envelope on purpose, so only the altitude band ends one.
+    return PlaneParams(
+        max_steps_in_episode=100_000,
+        turbulence_sigma=0.0,
+        vmo_eas=1_000.0,
+        mmo=5.0,
+        load_factor_max=100.0,
+        load_factor_min=-100.0,
+    )
 
 
 def make_state(
@@ -241,10 +249,12 @@ def test_stall_recovery_by_lowering_the_nose(params):
 
 
 def test_deep_stall_sinks_in_a_rollout(env, params):
-    """Started beyond the stall angle, the aircraft must lose altitude."""
+    """Started beyond the stall angle with the nose held up and the power at
+    idle, the aircraft must end up losing altitude, whatever the zoom gave it."""
     state = make_state(params, theta_deg=params.aoa_stall + 8.0, speed=170.0)
-    traj = fly(env, params, power_raw=-0.5, stick_raw=0.0, steps=60, state=state)
-    assert traj["z"][-1] < CRUISE_ALT
+    traj = fly(env, params, power_raw=-1.0, stick_raw=1.0, steps=300, state=state)
+    assert traj["z"][-1] < traj["z"].max()
+    assert traj["z_dot"][-1] < 0.0
 
 
 # ---------------------------------------------------------------------------
