@@ -54,6 +54,7 @@ WINS_TO_FAIL = 6
 ECHO = ("battery",)
 
 _RVSM = {
+    "kind": "requirement",
     "value": 65.0 * 0.3048,
     "unit": "m",
     "what": "automatic altitude control band, +-65 ft, straight and level in still "
@@ -70,6 +71,18 @@ NO_FIGURE = {"status": "no sourced figure"}
 #: Per task, the sourced real-world figure its expert's hold answers to
 #: (check 2), with what it is and where it comes from. A task not listed has
 #: none.
+_SLOT_FLOWN = {
+    "kind": "measured",
+    "value": 1.52,
+    "unit": "m",
+    "what": "F/A-18 trail aircraft, relative position within 2 ft in straight and "
+    "level flight, plus up to 3 ft of GPS error; light turbulence at most, no "
+    "manoeuvring, and not scaled by span. The design requirement was 10 ft",
+    "source": "NASA Tech Briefs, Autonomous Formation Flight, February 2004",
+    "url": "https://www.techbriefs.com/component/content/article/29246-drc0146",
+    "status": "read, secondary",
+}
+
 EXPERT_FIGURES = {
     "plane": _RVSM,
     "plane_energy": _RVSM,
@@ -78,6 +91,7 @@ EXPERT_FIGURES = {
     "plane3d_circle": _RVSM,
     "plane3d_racetrack": _RVSM,
     "glass_furnace": {
+        "kind": "band",
         "value": 10.0,
         "unit": "K",
         "what": "melting-section band of a float furnace, 1550 C +-10 C; not the "
@@ -87,7 +101,67 @@ EXPERT_FIGURES = {
         "control-solutions-from-lorentzzi",
         "status": "read, secondary",
     },
+    "battery": {
+        "kind": "measured",
+        "value": 94.0,
+        "unit": "PJM performance score, percent",
+        "what": "average RegD score of PJM's battery class, Nov 2015; a fleet average "
+        "in a score, not a power error, so not comparable with a hold. A 1 MW battery "
+        "averaged 59 to 63 over a month (Watson et al., 2018); PJM certifies at 75",
+        "source": "PJM, Performance, Mileage and the Mileage Ratio, 2015, slide 10",
+        "url": "https://www.pjm.com/-/media/DotCom/committees-groups/task-forces/rmistf/20151111/20151111-item-05-performance-based-regulation-concepts.ashx",
+        "status": "read, primary",
+    },
+    "boiler_drum": {
+        "kind": "measured",
+        "value": 25.4,
+        "unit": "mm",
+        "what": "level variation of +-1 inch during load upsets after a "
+        "feedforward-feedback upgrade, from +-4 inches, on an 80,000 pph industrial "
+        "boiler, far smaller than the task's. Whether it is field or simulated is "
+        "not stated. Pressure has no figure",
+        "source": "Swayne, MS thesis, University of Tennessee, 1992, abstract only",
+        "url": "https://trace.tennessee.edu/utk_gradthes/12293",
+        "status": "read, abstract only",
+    },
+    "formation": _SLOT_FLOWN,
+    "patrol": _SLOT_FLOWN,
+    "patrol_range_bearing": _SLOT_FLOWN,
+    "plane3d_figure8": {
+        "kind": "requirement",
+        "value": 926.0,
+        "unit": "m",
+        "what": "flight technical error budget for RNP 1 with autopilot or flight "
+        "director, 0.5 NM; a budget, not a hold",
+        "source": "FAA AC 90-105A, Appendix C, C.3.1, page C-3",
+        "url": "https://www.faa.gov/documentLibrary/media/Advisory_Circular/"
+        "AC_90-105A.pdf",
+        "status": "read, primary",
+    },
+    "unstable_cstr": {
+        "kind": "measured",
+        "value": 3.0,
+        "unit": "K",
+        "what": "+2 and -3 C deviations under PID at the unstable region of a "
+        "laboratory CSTR, sodium thiosulfate and hydrogen peroxide; a rig, not a plant",
+        "source": "Go, Gobaco and Ha, BS thesis, De La Salle University, 1995, "
+        "abstract only",
+        "url": "https://animorepository.dlsu.edu.ph/etd_bachelors/9284",
+        "status": "read, abstract only",
+    },
+    "wind_turbine": {
+        "kind": "requirement",
+        "value": 2.0,
+        "unit": "percent of rated power",
+        "what": "accuracy of a completed active power control, over 1 minute, at a "
+        "plant's point of connection, not one turbine; an expired revision",
+        "source": "Energinet, Technical regulation 3.2.5, revision 4, section 5.1",
+        "url": "https://en.energinet.dk/media/5pbflmly/technical-regulation-325-"
+        "wind-power-plants-above-11-kw-rev-4_expired.pdf",
+        "status": "read, primary",
+    },
     "cement_kiln": {
+        "kind": "target",
         "value": 0.3,
         "unit": "percent free lime",
         "what": "target on free lime variability, sigma under 0.3 %; a target, not "
@@ -99,8 +173,22 @@ EXPERT_FIGURES = {
     },
 }
 
+#: The class exception to check 2 (docs/proposals/industrial-fixes.md).
+_NO_FIGURE_FOUND = (
+    "check 2: no published figure could be found or opened, after two searches "
+    "with a re-fetch check (accepted 2026-11-06)"
+)
+
 #: Per task, the written exception the owner accepted.
 EXCEPTIONS = {
+    "compressor_surge": _NO_FIGURE_FOUND,
+    "cstr": _NO_FIGURE_FOUND,
+    "distillation": _NO_FIGURE_FOUND,
+    "first_order": _NO_FIGURE_FOUND,
+    "four_tank": _NO_FIGURE_FOUND,
+    "hvac": _NO_FIGURE_FOUND,
+    "ph_neutralization": _NO_FIGURE_FOUND,
+    "reactor": _NO_FIGURE_FOUND,
     "unstable_cstr": "check 2: tau_j of 6 s is synthetic, and PHYSICS.md says so "
     "(accepted 2026-11-06)",
 }

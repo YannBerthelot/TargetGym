@@ -2,7 +2,13 @@
   "cpu": "Apple M4 Pro",
   "exception": null,
   "expert_figure": {
-    "status": "no sourced figure"
+    "kind": "requirement",
+    "source": "Energinet, Technical regulation 3.2.5, revision 4, section 5.1",
+    "status": "read, primary",
+    "unit": "percent of rated power",
+    "url": "https://en.energinet.dk/media/5pbflmly/technical-regulation-325-wind-power-plants-above-11-kw-rev-4_expired.pdf",
+    "value": 2.0,
+    "what": "accuracy of a completed active power control, over 1 minute, at a plant's point of connection, not one turbine; an expired revision"
   },
   "expert_fingerprint": "e5d7907633d0d8c4",
   "generated": "2026-11-06T12:58:12+00:00",

@@ -152,6 +152,27 @@ def test_a_task_with_no_sourced_figure_says_so():
         assert row["expert_figure"] == {"status": "no sourced figure"}
 
 
+def test_a_task_has_a_figure_or_a_written_exception():
+    """The owner's rule, 2026-11-06: where no published figure could be found or
+    opened, one written class exception says so. Silence is never a pass, and
+    ``battery``, whose figures are scores, and ``cement_kiln``, set aside, stay
+    open rather than excepted."""
+    for name in sorted(REGISTRY):
+        row = credibility_row(name, {})
+        has_a_figure = row["expert_figure"] != NO_FIGURE
+        assert has_a_figure or "no published figure" in (row["exception"] or ""), name
+    for name in ("battery", "cement_kiln"):
+        assert credibility_row(name, {})["exception"] is None
+
+
+def test_a_figure_says_what_kind_of_number_it_is():
+    """A requirement must never read as a hold some plant achieved."""
+    for figure in EXPERT_FIGURES.values():
+        assert figure["kind"] in {"measured", "requirement", "band", "target"}
+    assert EXPERT_FIGURES["plane3d_figure8"]["kind"] == "requirement"
+    assert EXPERT_FIGURES["boiler_drum"]["kind"] == "measured"
+
+
 def test_a_sourced_figure_says_where_it_was_read_and_how():
     row = credibility_row("plane", {})
     assert row["expert_figure"]["status"] == "read, primary"
@@ -168,7 +189,7 @@ def test_the_record_names_each_null_that_wins_and_the_exception():
     assert row["null_wins"] == ["table"]
     assert row["nulls"]["constant 0.5"] == {"ratio": 1.2, "win_rate": 0.5}
     assert "tau_j" in row["exception"]
-    assert credibility_row("cstr", results)["exception"] is None
+    assert credibility_row("plane", results)["exception"] is None
 
 
 def test_the_trim_removes_the_error_a_table_leaves():

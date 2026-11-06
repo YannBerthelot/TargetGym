@@ -2,6 +2,7 @@
   "cpu": "Apple M4 Pro",
   "exception": null,
   "expert_figure": {
+    "kind": "requirement",
     "source": "14 CFR 91 Appendix G, section 2(c)(2)(i)",
     "status": "read, primary",
     "unit": "m",

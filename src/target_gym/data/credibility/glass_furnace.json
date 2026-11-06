@@ -2,6 +2,7 @@
   "cpu": "Apple M4 Pro",
   "exception": null,
   "expert_figure": {
+    "kind": "band",
     "source": "a temperature-control vendor's blog, naming no original",
     "status": "read, secondary",
     "unit": "K",
