@@ -134,10 +134,10 @@ class GridBattery(
             minval=-params.dispatch_range,
             maxval=params.dispatch_range,
         )
-        phi = jnp.exp(-params.delta_t / params.regulation_tau)
+        decorrelated = -jnp.expm1(-2.0 * params.delta_t / params.regulation_tau)
         regulation = jnp.round(
             params.dispatch_noise_std
-            / jnp.sqrt(1.0 - phi**2)
+            / jnp.sqrt(decorrelated)
             * jax.random.normal(signal_key)
         )
         target = jnp.clip(schedule[0] + regulation, -params.power_max, params.power_max)

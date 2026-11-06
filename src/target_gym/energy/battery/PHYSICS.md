@@ -206,11 +206,11 @@ cost over theirs:
 
 | policy | ratio | seeds won |
 |---|---|---|
-| echo of the target | 0.68 | 2 of 10 |
-| table of the target | 0.61 | 0 of 10 |
+| echo of the target | 0.49 | 2 of 10 |
+| table of the target | 0.52 | 0 of 10 |
 | table with an I-only trim | 0.16 | 0 of 10 |
 | constant, middle of the range | 0.47 | 0 of 10 |
-| constant, either bound | 0.03 | 0 of 10 |
+| constant, either bound | 0.01 | 0 of 10 |
 
 These nulls have no idea of the pack's energy, so they trip. That is the finding the
 rebuild was for: the echo used to win 10 of 10.

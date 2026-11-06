@@ -290,6 +290,7 @@ Measured on the held-out seeds 200 to 209 (2026-11-06), before any re-record.
 | the same, at its per-second gain | 0.05 | 0 of 10 | 1 | | |
 | constant, middle of the range | 0.04 | 0 of 10 | 0 | | |
 | table with an I-only trim on Tavg, SIMC gain | **1.26** | **10 of 10** | 0 | $420 | $945 |
+| a plain integrator on Tavg, the gate's witness | **1.29** | **10 of 10** | 0 | | |
 
 The review's law stopped winning because of the plant: it holds energy, which keeps
 Tavg near its starting value and off program at part load.
