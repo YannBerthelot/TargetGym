@@ -41,10 +41,10 @@ def _episodes(name):
     return eps, p
 
 
-#: 10 s of probe lag and 10 s of dead time make the shipped gains cycle.
-PROBE = "the gains predate the probe, and cycle at 4,690 against a ceiling of 1; PR 9"
-#: A trip on every held-out seed, with 32 to 51 trips an episode.
-THERMOWELL = "the gains predate the thermowell and the valve, so it trips; PR 9"
+#: Tuned at the steepest curve, the loop no longer cycles, and it is slow.
+PROBE = "it holds 230 against a ceiling of 1, tuned at q2 = 0 as the plan says"
+#: 8 trips on 4 of 10 seeds.
+THERMOWELL = "the datasheet's inner PD trips 8 times on 4 of the 10 seeds"
 
 PLANTS = [
     "first_order",
@@ -52,13 +52,7 @@ PLANTS = [
     "ph_neutralization",
     pytest.param("unstable_cstr", marks=_finding(THERMOWELL)),
     "four_tank",
-    pytest.param(
-        "distillation",
-        marks=_finding(
-            "the gains predate the analyser delay and the tray hydraulics, so the "
-            "expert loses the column; PR 9 retunes it"
-        ),
-    ),
+    "distillation",
 ]
 
 
@@ -78,30 +72,30 @@ def test_the_expert_never_trips_the_plant(name):
         pytest.param(
             "cstr",
             marks=_finding(
-                "the cascade's gains predate the 1 min analyser, and it cycles, "
-                "at 1.5e4 against a ceiling of 1; PR 9 retunes it"
+                "the recipe holds 4,509 against a ceiling of 1; the 1 min analyser "
+                "keeps the outer loop slow, and PR 8 moves this floor"
             ),
         ),
         pytest.param("ph_neutralization", marks=_finding(PROBE)),
         pytest.param(
             "unstable_cstr",
             marks=_finding(
-                "the SIMC cascade holds 6.0 on average (worst seed 9.0) against "
-                "a ceiling of 1, through the unmeasured feed-temperature drift"
+                "the recipe holds 1.3e4 on average (worst seed 4.7e4) against a "
+                "ceiling of 1, mostly the cost of its trips"
             ),
         ),
         pytest.param(
             "four_tank",
             marks=_finding(
-                "the gains predate the load steps, which it holds at 27.9 "
-                "against a ceiling of 2; PR 9 retunes them"
+                "the recipe holds 35.8 against a ceiling of 2 under the load "
+                "steps, and PR 8 looks at this ceiling"
             ),
         ),
         pytest.param(
             "distillation",
             marks=_finding(
-                "the gains predate the analyser delay and the tray hydraulics, so "
-                "it holds about 69,000 against a ceiling of 2; PR 9 retunes it"
+                "the recipe holds 3,942 against a ceiling of 2, on chromatographs "
+                "5 min late, and PR 8 moves this floor"
             ),
         ),
     ],

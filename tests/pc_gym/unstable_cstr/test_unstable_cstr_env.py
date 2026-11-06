@@ -619,7 +619,7 @@ def test_v1_is_log_scaled_and_charges_downtime(params):
 @pytest.mark.large
 @pytest.mark.xfail(
     strict=True,
-    reason="PR 9: this ranks the shipped PID, whose gains predate the thermowell, so it trips",
+    reason="finding: this ranks the shipped PID, and the datasheet's inner PD still trips",
 )
 def test_v1_ranks_tripping_below_safe(env, params):
     """The exploit version 1 is fixed against, measured on 32 seeds. Full
@@ -832,7 +832,7 @@ def test_states_stay_physical_on_the_reachable_set(env, params):
 
 @pytest.mark.xfail(
     strict=True,
-    reason="PR 9: the cascade's gains predate the thermowell, so it trips this episode",
+    reason="finding: the datasheet's inner PD trips this episode",
 )
 def test_rk4_1_matches_rk4_16(params):
     """One RK4 step per 3 s env step is converged. Over a whole episode of the

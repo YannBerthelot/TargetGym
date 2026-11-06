@@ -231,10 +231,6 @@ the episode's key, not the step's, which is why the registry declares no
 
 ## 6. Expert
 
-**Stale until PR 9.** The gains predate the loads and every figure below was
-measured with none. On the new plant the expert holds 27.9 per step (worst seed
-67.3) on seeds 200 to 209 and never trips. PR 9 reruns the tuning.
-
 The quadruple-tank rig is controlled with multi-loop PI, on the crossed
 pairing in the non-minimum-phase setting: pump 1 on tank 2 and pump 2 on
 tank 1 (Johansson's design, as applied by Saeed, Uddin and Katebi,
@@ -245,37 +241,24 @@ one at a time. The expert is that pair (`make_four_tank_pid_controller`,
 `decoupled_pi_step`), SIMC-tuned (Skogestad and Grimholt 2012) from step
 tests by `scripts/tune_process_experts.py --envs four_tank`.
 
-- **Steady-state gains.** Each pump stepped 0.3 V from rest at each training
-  seed's targets (seeds 100 to 109) and run 2000 s to rest. At the median,
-  G(0) = [[0.0085, 0.0387], [0.0462, 0.0127]] m/V, so the relative gain of the
-  straight pairing is -0.065 and the crossed pairing is the one to close
-  (measured).
-- **Decoupler.** `D = G(0)^-1 diag(G12, G21)`, about [[-0.294, 1.065],
-  [1.065, -0.235]] V per V. A step in one loop's output leaves the other
-  level within 2 mm on the way and about 0.05 mm at rest (measured).
+- **Steady-state gains.** With the loads off, each pump stepped 0.3 V from rest at
+  each training seed's targets and run 2000 s. At the median, G(0) = [[0.00836,
+  0.03728], [0.04443, 0.01249]] m/V, so the relative gain of the straight pairing
+  is -0.067 and of the crossed pairing 1.067, as the closed form says.
+- **Decoupler.** `D = G(0)^-1 diag(G12, G21)`, about [[-0.300, 1.067], [1.067,
+  -0.239]] V per V.
 - **Bias.** The PIs' outputs are added to the voltages that hold the
   targets, from the lower tanks' steady balances and this task's constants,
   PC-gym's and not the rig's (`steady_voltages`).
-- **Loops.** Each decoupled loop stepped 0.3 V. The median first-order fits
-  are k = 0.0388 m/V, tau1 = 146 s, theta = 41.9 s on h1 and k = 0.0463 m/V,
-  tau1 = 118 s, theta = 39.4 s on h2; the delay carries the inverse
-  response. Tight SIMC (tau_c = theta): Kp_1 = 45.1 V/m, Ti_1 = 146 s,
-  Kp_2 = 32.4 V/m, Ti_2 = 118 s; 2 theta and 3 theta cost more on the training
-  seeds (20.1 per step against 46.6 and 76.9).
-- **Against the zero.** The plant's transmission zero sits at
-  z = 0.031 rad/s in the right half-plane at the median operating point
-  (derived from the linearised tank time constants), which caps the
-  closed-loop bandwidth near z / 2, a time constant of about 64 s. The SIMC
-  loops' tau_c + theta, 79 to 84 s, is within 1.3 times that limit. Their
-  integral time is tau1, so the last millimetres take long: the expert is
-  inside the transmitter's resolution about 570 s after the reset, which is
-  why the episode is 1200 steps. Johansson's own non-minimum-phase tuning
-  settles in about 2450 s in that source's simulation.
-- **Held-out check** (seeds 200 to 209). It holds 1.33 per step (worst seed
-  3.67) against a ceiling of 2 after the fixed settle of 581 steps, and never
-  trips (`tests/pc_gym/test_expert_specs.py`). The crossed PIs it replaced,
-  grid-searched on the scored reward, held 22.7 on the protocol seeds at 500
-  steps.
+- **Loops.** Each decoupled loop stepped in its own `w`, one run, N3 sizing it. The
+  median fits are k = 0.0368 m/V, tau1 = 120 s, theta = 52 s on h1 and k = 0.0443
+  m/V, tau1 = 102 s, theta = 48 s on h2; the delay carries the inverse response.
+  Pumps have no sourced dead band, so SIMC stands: Kp_1 = 31.4 V/m, Ti_1 = 120 s,
+  Kp_2 = 24.0 V/m, Ti_2 = 102 s.
+- **Held-out check** (seeds 200 to 209). It holds 35.8 per step (worst seed 90.1)
+  against a ceiling of 2 after the fixed settle of 581 steps, and never trips. The
+  best null is the table, ratio 0.47, 0 of 10 wins. The miss is a finding, and PR 8
+  looks at this ceiling: `tests/pc_gym/test_expert_specs.py`.
 
 ---
 

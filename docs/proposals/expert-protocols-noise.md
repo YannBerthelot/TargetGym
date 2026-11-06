@@ -16,8 +16,9 @@ this was written, so analysers now go stale. N8 below allows for that, and
 applies these amendments with its own.
 
 The machinery is built: `target_gym.identification` holds N1 to N8, and gains are
-stored by level. `first_order` runs all of it. The other recipes have lost the twin
-run and take the rest in PR 9, once their plants are fixed.
+stored by level. The seven process tasks run all of it, by the rules in
+[section 9 of the process protocols](expert-protocols-process.md). The others have
+lost the twin run and take the rest in PR 9, once their plants are fixed.
 
 ## Why
 
@@ -178,10 +179,7 @@ cycling expert's transient as noise. For those tasks, read `Read.nb` from
   apply to them.
 - R4's pulse test did not enter this amendment. The twin removed load drift on the
   kiln, boiler and distillation tests, and one step does not, so those fits carry it.
-- A level's gains pass the expert's own build guard. `unstable_cstr` and
-  `compressor_surge` raise on gains their guard refuses, until D2 makes the guards
-  reports.
-- No expert reads `Tf` or a gate yet. The recipes size them and PR 9 wires them in.
+- No expert outside the seven process tasks reads `Tf` or a gate yet.
 - Sources were read through automated fetches, and several core references could
   not be opened: Seborg, Shinskey's book, Cooper's book, Astrom and Hagglund's
   books, ISA-TR5.9, the NREL report and the full G36 text.

@@ -183,7 +183,6 @@
     "D12": 1.067265,
     "D21": 1.067265,
     "D22": -0.239264,
-    "rga": -0.0673,
     "model": {
       "h1": {
         "k": 0.0368,
@@ -206,7 +205,8 @@
         "spread": 1.388398,
         "tests": 10.0,
         "tau_c": 48.0
-      }
+      },
+      "rga": -0.0673
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
@@ -235,7 +235,6 @@
     "every": 5.0,
     "wait": 2.0,
     "sp_rate": 0.695695,
-    "rga": 43.341803,
     "model": {
       "T": {
         "k": 1.147159,
@@ -269,6 +268,11 @@
         "spread": 1.087406,
         "tests": 10.0,
         "tau_c": 7.500001
+      },
+      "rga": {
+        "yD, xB on L, V": 35.94454039116139,
+        "yD, T on L, V": 43.341802692091996,
+        "yD, xB on L, T_sp": 0.8293273043236771
       }
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
@@ -422,6 +426,11 @@
         "spread": 1.466375,
         "tests": 10.0,
         "tau_c": 0.33337
+      },
+      "pole": {
+        "rate": 2.4224279711911776,
+        "on C_a": 2.5672246091719226,
+        "on T": 4.166543090292996
       }
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
@@ -458,10 +467,13 @@
         "spread": 1.312376,
         "tests": 6.0,
         "tau_c": 0.108266
+      },
+      "rga": 0.9122689943866417,
+      "schedule": {
+        "least margin": 0.06097376346588135,
+        "trips": 0
       }
     },
-    "schedule_margin": 0.060974,
-    "schedule_trips": 0.0,
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "first_order": {

@@ -225,8 +225,8 @@ class CascadeState(NamedTuple):
     T_prev: float
     #: Temperature setpoint at the previous step (K), for the rate limit.
     T_sp_prev: float
-    #: The filtered C_a reading (mol/L).
-    C_a: float
+    #: The filtered C_a reading (mol/L), NaN until the first.
+    C_a: float = float("nan")
 
 
 def setpoint_window(level, gains, params: UnstableCSTRParams, xp=np):
@@ -276,7 +276,8 @@ def cascade_step(gains, cs: CascadeState, obs, params: UnstableCSTRParams, xp=np
         1.0 - xp.exp(-dt / xp.where(gains["Tf_Ca"] > 0, gains["Tf_Ca"], 1.0)),
         1.0,
     )
-    C_a = cs.C_a + moves * (obs[0] - cs.C_a)
+    last = xp.where(xp.isnan(cs.C_a), obs[0], cs.C_a)
+    C_a = last + moves * (obs[0] - last)
     e = level - C_a
 
     # Outer PI on C_a around the steady-state feedforward. A C_a below its

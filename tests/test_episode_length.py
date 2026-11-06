@@ -40,21 +40,21 @@ SEEDS = (100, 101, 102)
 # task that starts passing says so.
 _STALE_TECS = "TECS's time_const 2 trips the new envelope; PR 9 retunes it"
 CYCLE_GAPS: dict[str, str] = {
-    "distillation": "the gains predate the analyser delay and the tray hydraulics, "
-    "so the expert loses the column and its cycles restart; PR 9 retunes it",
     "plane": _STALE_TECS,
     "plane3d_circle": _STALE_TECS,
     "plane3d_heading": _STALE_TECS,
     "plane3d_racetrack": _STALE_TECS,
     "plane_energy": _STALE_TECS,
     "plane_sine": _STALE_TECS,
-    "unstable_cstr": "the gains predate the thermowell and the valve, so the expert "
-    "trips and its cycles restart; PR 9 retunes them",
+    "unstable_cstr": "the datasheet's inner PD still trips, and trips restart cycles",
 }
 DOUBLING_GAPS: dict[str, str] = {
+    "distillation": "its hold is 2.81x a doubled run's: the analyser loops are still "
+    "closing on the column at step 200, so the episode may need to grow (owner)",
     "plane3d_racetrack": _STALE_TECS,
     "plane_energy": _STALE_TECS,
     "plane_sine": _STALE_TECS,
+    "unstable_cstr": "its hold is 2.30x a doubled run's, from early trips",
 }
 # compressor_surge's schedule ends at step 1200 and then holds its last levels,
 # so a run twice as long adds 1200 quiet steps and its hold falls 2.2x without

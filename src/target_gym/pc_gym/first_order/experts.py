@@ -32,9 +32,7 @@ class FilteredPIState:
 def filtered_pi_step(params: FilteredPIParams, state, obs, xp=jnp):
     """One update on ``obs = [x, target]``. The filter starts at the first
     reading, and the integral holds while the output is saturated."""
-    x = xp.where(
-        state.started > 0, state.x + params.alpha * (obs[0] - state.x), obs[0]
-    )
+    x = xp.where(state.started > 0, state.x + params.alpha * (obs[0] - state.x), obs[0])
     e = obs[1] - x
     integral = state.integral + e * params.dt
     u = params.Kp * e + params.Ki * integral

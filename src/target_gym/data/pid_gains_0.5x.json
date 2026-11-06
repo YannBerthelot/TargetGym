@@ -1,0 +1,238 @@
+{
+  "first_order": {
+    "Kp": 4.993866,
+    "Ki": 24.969325,
+    "Kd": 0.0,
+    "Tf": 0.0,
+    "noise_band": 0.003338,
+    "model": {
+      "x": {
+        "k": 2.000116,
+        "tau1": 0.499416,
+        "theta": 0.025,
+        "band": 0.003338,
+        "step": 0.1,
+        "bands": 59.923693,
+        "spread": 1.000963,
+        "tests": 10.0,
+        "tau_c": 0.025
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+  },
+  "cstr": {
+    "Kp": -48.483068,
+    "Ti": 1.460899,
+    "Kp_T": 0.315283,
+    "Ti_T": 0.663788,
+    "Tf_C": 0.141377,
+    "Tf_T": 0.066379,
+    "model": {
+      "T": {
+        "k": 5.500536,
+        "tau1": 0.663788,
+        "theta": 0.125,
+        "band": 0.123497,
+        "step": 0.111958,
+        "bands": 4.986573,
+        "spread": 1.262347,
+        "tests": 10.0,
+        "tau_c": 0.191379
+      },
+      "C_a": {
+        "k": -0.008332,
+        "tau1": 0.997106,
+        "theta": 1.25,
+        "band": 0.001554,
+        "step": 0.925928,
+        "bands": 4.962867,
+        "spread": 1.183326,
+        "tests": 10.0,
+        "tau_c": 2.225254
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+  },
+  "ph_neutralization": {
+    "Kp": 0.199303,
+    "Ti": 98.547178,
+    "Tf": 0.0,
+    "model": {
+      "demand": {
+        "k": 19.778344,
+        "tau1": 98.547178,
+        "theta": 12.500001,
+        "band": 0.057769,
+        "step": 0.016667,
+        "bands": 34.236953,
+        "spread": 1.073746,
+        "tests": 10.0,
+        "tau_c": 12.500001
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+  },
+  "four_tank": {
+    "Kp_1": 30.719665,
+    "Ti_1": 120.877691,
+    "Kp_2": 31.241291,
+    "Ti_2": 113.445389,
+    "D11": -0.304525,
+    "D12": 1.066902,
+    "D21": 1.066902,
+    "D22": -0.234389,
+    "model": {
+      "h1": {
+        "k": 0.036774,
+        "tau1": 120.877691,
+        "theta": 53.5,
+        "band": 0.002159,
+        "step": 0.06,
+        "bands": 5.108858,
+        "spread": 1.289652,
+        "tests": 10.0,
+        "tau_c": 53.5
+      },
+      "h2": {
+        "k": 0.04483,
+        "tau1": 113.445389,
+        "theta": 40.5,
+        "band": 0.00236,
+        "step": 0.06,
+        "bands": 5.698034,
+        "spread": 1.379602,
+        "tests": 10.0,
+        "tau_c": 40.5
+      },
+      "rga": -0.0669
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+  },
+  "distillation": {
+    "Kp_T": 0.472612,
+    "Ti_T": 7.314076,
+    "Tf_T": 0.406338,
+    "Kp_D": 31.87136,
+    "Ti_D": 6.917956,
+    "Kp_B": -31.764781,
+    "Ti_B": 2.97356,
+    "band_D": 0.001188,
+    "band_B": 0.001316,
+    "every": 5.0,
+    "wait": 2.0,
+    "sp_rate": 0.753251,
+    "model": {
+      "T": {
+        "k": 1.157167,
+        "tau1": 0.0,
+        "theta": 0.507922,
+        "band": 0.125025,
+        "step": 0.047699,
+        "bands": 5.297748,
+        "spread": 1.254543,
+        "tests": 10.0,
+        "tau_c": 0.914259
+      },
+      "yD": {
+        "k": 0.014471,
+        "tau1": 4.417956,
+        "theta": 7.5,
+        "band": 0.001188,
+        "step": 0.24755,
+        "bands": 3.014056,
+        "spread": 1.335908,
+        "tests": 10.0,
+        "tau_c": 7.5
+      },
+      "xB": {
+        "k": -0.006241,
+        "tau1": 0.47356,
+        "theta": 7.5,
+        "band": 0.001316,
+        "step": -1.052993,
+        "bands": 4.993522,
+        "spread": 1.061879,
+        "tests": 10.0,
+        "tau_c": 7.5
+      },
+      "rga": {
+        "yD, xB on L, V": 35.94454039116139,
+        "yD, T on L, V": 43.341802692091996,
+        "yD, xB on L, T_sp": 0.8293273043236771
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+  },
+  "unstable_cstr": {
+    "Kp_T": 2.206154,
+    "Kd_T": 0.478,
+    "Kc_Ca": 29.729977,
+    "Ti_Ca": 0.358137,
+    "Tf_Ca": 0.034658,
+    "sp_rate": 9.686836,
+    "sp_below": 5.041241,
+    "sp_above": 5.041241,
+    "sp_line_margin": 2.068244,
+    "Tc_bias": 300.882172,
+    "model": {
+      "C_a": {
+        "k": -0.019451,
+        "tau1": 0.254917,
+        "theta": 0.275,
+        "band": 0.011334,
+        "step": -2.098814,
+        "bands": 3.601844,
+        "spread": 1.466718,
+        "tests": 10.0,
+        "tau_c": 0.309658
+      },
+      "pole": {
+        "rate": 2.4224279711911776,
+        "on C_a": 2.5672246091719226,
+        "on T": 4.166543090292996
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+  },
+  "compressor_surge": {
+    "kp_speed": 0.027575,
+    "ki_speed": 0.016393,
+    "kp_surge": 1.0,
+    "ki_surge": 4.784078,
+    "Tf_surge": 0.020903,
+    "surge_line": 0.1,
+    "override_line": 0.05,
+    "override_hold": 2.0,
+    "reset_band": 0.016473,
+    "model": {
+      "speed": {
+        "k": 46.924354,
+        "tau1": 1.682121,
+        "theta": 0.65,
+        "band": 0.379132,
+        "step": 0.265321,
+        "bands": 5.746673,
+        "spread": 1.346047,
+        "tests": 8.0,
+        "tau_c": 0.65
+      },
+      "valve": {
+        "k": 1.176016,
+        "tau1": 0.209027,
+        "theta": 0.05,
+        "band": 0.034878,
+        "step": 0.253843,
+        "bands": 4.279516,
+        "spread": 1.324266,
+        "tests": 6.0,
+        "tau_c": 0.095831
+      },
+      "rga": 0.9122689943866417,
+      "schedule": {
+        "least margin": 0.057349562644958496,
+        "trips": 0
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+  }
+}

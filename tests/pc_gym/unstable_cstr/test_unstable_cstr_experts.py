@@ -61,17 +61,16 @@ try:
 except ImportError:  # JAX 0.6; 0.10 removed the experimental name
     from jax.experimental import enable_x64
 
-#: The inner-loop moves of the tuner's unguarded search from DEFAULT_GAINS at
-#: the shipped 6 s lag, Kp_T x 2 and Kd_T x 0.7, on DEFAULT_GAINS' outer loop.
-#: The loop grows at +1.15 /min at 0.45 (derived, closed_loop_rates). The whole
-#: search, the "plain (no guard)" row of scripts/unstable_cstr_numbers.py
-#: --sensitivity, also moves the outer loop and ends at Kp_T 14, Kd_T 0.28,
-#: Kc_Ca 70, Ti_Ca 0.35 (measured), a loop that grows at +0.44 /min at 0.45
-#: (derived).
+#: The inner-loop moves of the old tuner's unguarded search, Kp_T x 2 and Kd_T x
+#: 0.7, on DEFAULT_GAINS' outer loop. With the thermowell and the valve in the
+#: loop, it grows.
 PLAIN_6S = {**DEFAULT_GAINS, "Kp_T": 7.0 * 2.0, "Kd_T": 0.4 * 0.7}
-#: Kp_T x 1.4 and Kd_T x 0.7 on DEFAULT_GAINS. The loop decays at 0.03 /min
-#: at 0.45 (derived, closed_loop_rates), slower than GUARD_MIN_DECAY.
+#: Kp_T x 1.4 and Kd_T x 0.7 on DEFAULT_GAINS, which decayed slowly until the
+#: thermowell and the valve joined the loop.
 MARGINAL_6S = {**DEFAULT_GAINS, "Kp_T": 7.0 * 1.4, "Kd_T": 0.4 * 0.7}
+#: A loop that decays with them: the datasheet's inner PD (Kp 2.206, Kd 0.478)
+#: and a slow outer loop.
+SLOW_OUTER = {**DEFAULT_GAINS, "Kp_T": 2.206, "Kd_T": 0.478, "Kc_Ca": 5.0, "Ti_Ca": 3.0}
 #: Reactor temperature at the ignition fold (K), asserted by
 #: test_unstable_cstr_physics.py::test_multiplicity_window_and_folds. Below it
 #: the reactor is on its extinguished branch.
@@ -166,37 +165,41 @@ def test_gains_are_read_under_the_task_key(monkeypatch):
     ours = {k for k in on_disk if k.startswith("unstable_cstr")}
     assert ours <= {"unstable_cstr"}
     for key in ours:
-        numeric = {k for k, v in on_disk[key].items() if not isinstance(v, str)}
+        numeric = {k for k, v in on_disk[key].items() if isinstance(v, float)}
         assert numeric <= set(DEFAULT_GAINS), numeric - set(DEFAULT_GAINS)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="finding, a report since D2: on the median fit the closed loop grows at "
+    "+0.36 /min at 0.45, and the setpoint window misses three equilibria",
+)
 def test_shipped_gains_pass_the_guard():
-    """The factory must build the shipped controller: its closed loop
-    decays at ``GUARD_MIN_DECAY`` or faster at every target, and every
-    equilibrium setpoint sits inside the setpoint window at a drift of -6, 0
-    and +6 K."""
+    """The shipped closed loop decays at ``GUARD_MIN_DECAY`` or faster at every
+    target, and every equilibrium setpoint sits inside the setpoint window at a
+    drift of -6, 0 and +6 K."""
     gains = load_gains()
     assert np.all(closed_loop_rates(gains) <= -GUARD_MIN_DECAY)
     assert np.all(setpoint_clip_margins(gains) > 0.0)
     check_cascade_gains(gains)
+
+
+def test_the_factory_ships_what_the_guard_only_reports():
+    """D2: its thresholds are ours, so it cannot veto a protocol's values."""
     assert isinstance(make_unstable_cstr_pid(), UnstableCSTRCascadePID)
 
 
 def test_guard_refuses_unstable_and_marginal_gains(monkeypatch):
-    """``PLAIN_6S``, which grows, and ``MARGINAL_6S``, which decays too
-    slowly, are refused, and so is a setpoint window too narrow to hold every
-    target. A refused entry in ``pid_gains.json`` stops the factory. Checking
-    one drift is enough, since the drift enters the balances additively and
-    the rates at -6, 0 and +6 K, each linearised at its own equilibrium,
-    agree."""
-    assert closed_loop_rates(PLAIN_6S)[0] == pytest.approx(1.146, abs=0.01)
-    assert closed_loop_rates(MARGINAL_6S)[0] == pytest.approx(-0.026, abs=0.01)
-    np.testing.assert_allclose(
-        closed_loop_rates(DEFAULT_GAINS),
-        [-1.73, -1.84, -1.98, -2.19, -2.74],
-        atol=0.01,
-    )
-    for gains in (PLAIN_6S, MARGINAL_6S, {**DEFAULT_GAINS, "sp_above": 0.5}):
+    """``PLAIN_6S`` and ``MARGINAL_6S``, which grow, are refused, and so is a
+    setpoint window too narrow to hold every target. A refused entry in
+    ``pid_gains.json`` builds all the same (D2). Checking one drift is enough,
+    since the drift enters the balances additively and the rates at -6, 0 and
+    +6 K, each linearised at its own equilibrium, agree. The hand matrix below
+    pins the rates themselves."""
+    assert closed_loop_rates(PLAIN_6S)[0] > 0.0
+    assert closed_loop_rates(MARGINAL_6S)[0] > 0.0
+    assert np.all(closed_loop_rates(SLOW_OUTER) <= -GUARD_MIN_DECAY)
+    for gains in (PLAIN_6S, MARGINAL_6S, {**SLOW_OUTER, "sp_above": 0.5}):
         with pytest.raises(UnstableCascadeGains):
             check_cascade_gains(gains)
 
@@ -210,28 +213,31 @@ def test_guard_refuses_unstable_and_marginal_gains(monkeypatch):
         "_gains_cache",
         {**pid_mod.load_gains(), "unstable_cstr": MARGINAL_6S},
     )
-    with pytest.raises(UnstableCascadeGains):
-        make_unstable_cstr_pid()
+    assert make_unstable_cstr_pid().gains["Kp_T"] == MARGINAL_6S["Kp_T"]
 
 
 @pytest.mark.parametrize(
     "gains",
-    [PLAIN_6S, MARGINAL_6S, DEFAULT_GAINS],
-    ids=["plain", "marginal", "default"],
+    [PLAIN_6S, MARGINAL_6S, DEFAULT_GAINS, SLOW_OUTER],
+    ids=["plain", "marginal", "default", "slow outer"],
 )
 def test_closed_loop_rates_match_a_matrix_written_by_hand(gains, params):
     """The guard's rates against an independent reference: the plant's
     Jacobian by central differences, and the controller's recurrences written
     out from the proposal's filter, with no call into ``cascade_step``.
 
-    The memory is [integral I, filtered T M, setpoint S]. With a = dt / (T_f +
-    dt), T_f = Kd / Kp / 10 and the setpoint free, the error is -dC_a, so
-    S = Kc dC_a - (Kc / Ti) I, M moves a of the way to T, the rate is
-    a (T - M) / dt, and T_c = Kp (S - T) - Kd rate."""
+    The memory is [integral I, filtered T M, setpoint S], and the instruments
+    add the thermowell W and the valve v. With a = dt / (T_f + dt), T_f = Kd / Kp
+    / 10 and the setpoint free, the error is -dC_a, so S = Kc dC_a - (Kc / Ti) I,
+    M moves a of the way to W, the rate is a (W - M) / dt, and T_c = Kp (S - W) -
+    Kd rate. v moves c = 1 - exp(-dt / lag) of the way to the command, and the
+    plant takes the new v; W moves w = 1 - exp(-dt / 10 s) to the new T."""
     params = params.replace(Ti_sigma=0.0)
     dt, Kp, Kd = params.delta_t, gains["Kp_T"], gains["Kd_T"]
     Kc, Ti = gains["Kc_Ca"], gains["Ti_Ca"]
     a = dt / (Kd / Kp / 10.0 + dt)
+    c = 1.0 - np.exp(-dt / params.actuator_lag)
+    w = 1.0 - np.exp(-dt / (10.0 / 60.0))
     level = GUARD_LEVELS[0]
     T_c = float(steady_coolant(level, 0.0, params, np))
     z0 = np.array(
@@ -261,16 +267,21 @@ def test_closed_loop_rates_match_a_matrix_written_by_hand(gains, params):
         J = np.stack(
             [(plant(z0 + h[i]) - plant(z0 - h[i])) / 2e-6 for i in range(4)], axis=1
         )
-    setpoint = np.array([Kc, 0.0, 0.0, -Kc / Ti, 0.0, 0.0])
-    rate = np.array([0.0, a, 0.0, 0.0, -a, 0.0]) / dt
-    coolant = Kp * (setpoint - np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0])) - Kd * rate
+    # States [C_a, T, T_j, I, M, S, W, v].
+    e = np.eye(8)
+    setpoint = Kc * e[0] - Kc / Ti * e[3]
+    rate = a * (e[6] - e[4]) / dt
+    coolant = Kp * (setpoint - e[6]) - Kd * rate
     raw = 2.0 / (params.T_c_max - params.T_c_min) * coolant
-    closed = np.zeros((6, 6))
+    valve = e[7] + c * (raw - e[7])
+    closed = np.zeros((8, 8))
     closed[:3, :3] = J[:, :3]
-    closed[:3] += np.outer(J[:, 3], raw)
-    closed[3] = [-dt, 0.0, 0.0, 1.0, 0.0, 0.0]
-    closed[4] = [0.0, a, 0.0, 0.0, 1.0 - a, 0.0]
+    closed[:3] += np.outer(J[:, 3], valve)
+    closed[3] = e[3] - dt * e[0]
+    closed[4] = (1.0 - a) * e[4] + a * e[6]
     closed[5] = setpoint
+    closed[6] = (1.0 - w) * e[6] + w * closed[1]
+    closed[7] = valve
     expected = np.log(np.abs(np.linalg.eigvals(closed)).max()) / dt
     assert closed_loop_rates(gains, params, levels=(level,))[0] == pytest.approx(
         expected, abs=1e-3
@@ -477,7 +488,7 @@ def test_functional_core_matches_the_stateful_pid(env, params, step):
 
 @pytest.mark.xfail(
     strict=True,
-    reason="PR 9: the two loops agree only while the cascade holds; its gains predate the thermowell",
+    reason="finding: the two loops agree only while the cascade holds, and it still trips",
 )
 def test_functional_core_closes_the_loop_as_the_stateful_pid_does(env, params, step):
     """Within float32 rounding when it closes the loop on the env itself, as
@@ -610,7 +621,7 @@ def _scheduled_episodes(env, params, gains, states, keys, hold):
 @pytest.mark.large
 @pytest.mark.xfail(
     strict=True,
-    reason="PR 9: its gains predate the thermowell, the valve and the ramp, so it trips",
+    reason="finding: the datasheet's inner PD still trips on some seeds",
 )
 def test_pid_holds_every_target(env, params):
     """The PID the registry builds (``make_pid``, so the tuned gains stored

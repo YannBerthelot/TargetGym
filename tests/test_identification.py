@@ -33,6 +33,7 @@ from target_gym.identification import (
     insignificant,
     judge,
     nrmse_fit,
+    rga,
 )
 from target_gym.registry import REGISTRY
 
@@ -259,3 +260,14 @@ def test_bump_test_on_first_order_returns_its_documented_lag():
         f = fit("fopdt", plant.dt, run.dy[:, 0], run.U[:, :1])
         np.testing.assert_allclose([f["k"], f["tau"]], [2.0, 0.5], rtol=1e-3)
         assert f["theta"] == pytest.approx(0.0, abs=1e-3) and math.isfinite(f["fit"])
+
+
+def test_the_relative_gain_array_of_a_two_by_two():
+    # lambda_11 = 1 / (1 - G12 G21 / (G11 G22)) = 1 / (1 - 6 / 4) = -2, and each
+    # row and column sums to 1.
+    out = rga([[1.0, 2.0], [3.0, 4.0]])
+    np.testing.assert_allclose(out, [[-2.0, 3.0], [3.0, -2.0]])
+
+
+def test_a_diagonal_plant_has_nothing_to_pair_against():
+    np.testing.assert_allclose(rga([[2.0, 0.0], [0.0, 5.0]]), np.eye(2))

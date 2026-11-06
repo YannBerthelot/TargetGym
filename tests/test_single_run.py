@@ -25,6 +25,7 @@ environments, never the module.
 
 import math
 
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -550,3 +551,43 @@ def test_room_is_the_longest_step_every_seed_can_take_away_from_its_limit():
     u = plant.u0[:, 0]
     # Raw range [-1, 1], a step away from the nearer limit.
     assert plant.room(0) == pytest.approx(min(1.0 + np.abs(u)))
+
+
+# --- Where a test starts, and what it records -------------------------------
+
+
+def _manual(raw):
+    from target_gym.experts.pid import Controller
+
+    return Controller(None, 0.0, lambda _p, m, obs, xp=None: (jnp.full((1,), raw), m))
+
+
+def test_a_plant_settles_on_the_controller_it_is_given():
+    # In manual at raw 0.25 the action is u = 0.5, and x rests at 0.5 on a unit
+    # gain, whatever the shipped expert would do.
+    spec = REGISTRY["first_order"]
+    p = spec.make_test_params()
+    plant = Plant(
+        spec, p, [lambda o, s, q: o[0]], [(None, None)], controller=_manual(0.25)
+    )
+    np.testing.assert_allclose(plant.u0, 0.25, rtol=1e-6)
+    np.testing.assert_allclose(plant._y, 0.5, atol=6 * 1.1e-3)
+
+
+def test_a_loop_closed_inside_a_test_records_what_it_sent():
+    # The test's MV stays 0.25, and the action it sends is 0.1 above that, so a
+    # plant told to record the action records 0.35.
+    spec = REGISTRY["first_order"]
+    p = spec.make_test_params()
+    plant = Plant(
+        spec,
+        p,
+        [lambda o, s, q: o[0]],
+        [(None, None)],
+        controller=_manual(0.25),
+        actuate=lambda u, y, m: (u + 0.1, m),
+        applied=lambda u, a: a,
+    )
+    bump = plant.bump(0, 0, 0, 0.1, 10, Instrument(float(p.delta_t)))
+    # 0.25 + 0.1 = 0.35 before, and the step lands on it: the deviation is 0.1.
+    np.testing.assert_allclose(bump.U[:, 0], 0.1 * np.sign(bump.step), rtol=1e-6)

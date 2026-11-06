@@ -283,7 +283,9 @@ def tune_ph_neutralization() -> dict:
     span = float(p.q3_max - p.q3_min)
 
     def rest(o, xp):
-        return xp.reshape(2 * (reagent_demand(o[2], lab, xp) - p.q3_min) / span - 1, (1,))
+        return xp.reshape(
+            2 * (reagent_demand(o[2], lab, xp) - p.q3_min) / span - 1, (1,)
+        )
 
     def demand(o, s, q):
         return reagent_demand(o[0], curve, jnp)
@@ -325,7 +327,10 @@ def tune_four_tank() -> dict:
     raw_per_volt = 2 / float(p.v_max - p.v_min)
 
     def rest(o, xp):
-        return raw_per_volt * (xp.stack(steady_voltages(o[4], o[5], prm, xp)) - p.v_min) - 1
+        return (
+            raw_per_volt * (xp.stack(steady_voltages(o[4], o[5], prm, xp)) - p.v_min)
+            - 1
+        )
 
     cvs = [lambda o, s, q: o[0], lambda o, s, q: o[1]]
     limits = [(None, None)] * 2
@@ -364,7 +369,14 @@ def tune_four_tank() -> dict:
     out, loops = {}, {}
     for j, key in enumerate("12"):
         loop = read_loop(
-            decoupled, f"h{key} on w{key}", j, j, 0.3 * raw_per_volt, 1500, inst, room=room
+            decoupled,
+            f"h{key} on w{key}",
+            j,
+            j,
+            0.3 * raw_per_volt,
+            1500,
+            inst,
+            room=room,
         )
         loop = rescaled(loop, raw_per_volt)
         res = tuned(loop, inst.h)
@@ -376,8 +388,7 @@ def tune_four_tank() -> dict:
         "D12": D[0, 1],
         "D21": D[1, 0],
         "D22": D[1, 1],
-        "rga": round(float(pairing[0, 0]), 4),
-        "model": loops,
+        "model": {**loops, "rga": round(float(pairing[0, 0]), 4)},
     }
 
 
@@ -407,9 +418,12 @@ def _column_gains(p, n=3000):
             lambda x: x.astype(float) if jnp.issubdtype(x.dtype, jnp.floating) else x,
             state.replace(zF=jnp.float32(quiet.zF_nominal)),
         )
-        a = 2 * (jnp.array([L, V]) - jnp.array([p.L_min, p.V_min])) / (
-            jnp.array([p.L_max - p.L_min, p.V_max - p.V_min])
-        ) - 1
+        a = (
+            2
+            * (jnp.array([L, V]) - jnp.array([p.L_min, p.V_min]))
+            / (jnp.array([p.L_max - p.L_min, p.V_max - p.V_min]))
+            - 1
+        )
 
         def body(s, _):
             return env.step_env(jax.random.PRNGKey(0), s, a, quiet)[1], None
@@ -448,10 +462,7 @@ def tune_distillation() -> dict:
     GT = G[[0, 2]]  # yD and the tray on L and V
     # With the tray closed, V follows L and the setpoint: dV = (dT - G_TL dL) / G_TV.
     closed_G = np.array(
-        [
-            [G[i, 0] - G[i, 1] * G[2, 0] / G[2, 1], G[i, 1] / G[2, 1]]
-            for i in (0, 1)
-        ]
+        [[G[i, 0] - G[i, 1] * G[2, 0] / G[2, 1], G[i, 1] / G[2, 1]] for i in (0, 1)]
     )
     pairing = {
         "yD, xB on L, V": float(rga(G[:2])[0, 0]),
@@ -503,7 +514,10 @@ def tune_distillation() -> dict:
         V = u[2] + Kp_T * (e + (integral + e * dt) / Ti_T)
         if p.V_min <= V <= p.V_max:
             integral += e * dt
-        return np.array([raw_L(u[0]), raw_V(np.clip(V, p.V_min, p.V_max))]), (T_f, integral)
+        return np.array([raw_L(u[0]), raw_V(np.clip(V, p.V_min, p.V_max))]), (
+            T_f,
+            integral,
+        )
 
     def at_rest(acts, _):
         raw = acts[:, -20:].mean(axis=1)
@@ -557,11 +571,11 @@ def tune_distillation() -> dict:
         "every": inst.every,
         "wait": wait,
         "sp_rate": sp_rate,
-        "rga": pairing["yD, T on L, V"],
         "model": {
             "T": record(T_loop, T_out),
             "yD": record(top, top_out),
             "xB": record(bottom, bottom_out),
+            "rga": pairing,
         },
     }
 
@@ -634,6 +648,43 @@ def _compressor_pair(line: float) -> dict:
     }
 
 
+def _compressor_rga(line: float) -> float:
+    """lambda(dp, N), the median over the rests with the valve open: both loops
+    stepped small, the demand and the sensors quiet."""
+    from target_gym.compressor_surge import experts as X
+
+    name = "compressor_surge"
+    spec = REGISTRY[name]
+    env, p = spec.make_env(), spec.make_test_params(
+        sensor_noise_scale=0.0, demand_sigma=0.0
+    )
+    rests = []
+    for seed in TRAIN:
+        st = env.reset_env(jax.random.PRNGKey(seed), p)[1]
+        rests.append((float(st.setpoint_levels[-1]), float(st.demand_levels[-1])))
+    points = [X.settled_point(*r, {"surge_line": line}, p) for r in rests]
+    held = np.stack([X.raw_from_commands(r[2], r[4], p) for r in points])
+    plant = Plant(
+        spec,
+        p,
+        [lambda o, s, q: o[0], lambda o, s, q: X.surge_margin_from_obs(o, p)],
+        [(None, None)] * 2,
+        controller=manual(
+            lambda o, xp: xp.asarray(X.raw_from_commands(p.N_reset, p.x_reset, p))
+        ),
+        start=lambda a, m: held,
+    )
+    inst, lambdas = Instrument(float(p.delta_t)), []
+    for s in (i for i, r in enumerate(points) if r[4] > 0.02):
+        G = np.zeros((2, 2))
+        for j in range(2):
+            for i in range(2):
+                b = plant.bump(s, j, i, 0.02, 400, inst)
+                G[i, j] = b.dy[-50:].mean() / b.step
+        lambdas.append(rga(G)[0, 0])
+    return float(np.median(lambdas))
+
+
 def _schedule_check(gains) -> tuple:
     """The worst margin over the map's line on the training schedules, and the
     trips: what a commissioning run of the task's own moves shows."""
@@ -673,11 +724,16 @@ def tune_compressor_surge() -> dict:
         print(f"  schedule: worst margin {worst:.4f}, {trips} trips, passed {passed}")
         if passed:
             break
+    gains["model"]["rga"] = _compressor_rga(gains["surge_line"])
+    print(f"  RGA(dp on N) {gains['model']['rga']:.3f}")
     numeric = {k: float(gains[k]) for k in X.DEFAULT_GAINS}
     margins, tripped, travel = X.battery_report(numeric)
     print(f"  battery: least margin {margins.min():.4f}, {int(tripped.sum())} trips,")
-    print(f"  worst end travel {travel.max():.4f}; decay {X.closed_loop_decay(numeric)}")
-    return {**gains, "schedule_margin": worst, "schedule_trips": trips}
+    print(
+        f"  worst end travel {travel.max():.4f}; decay {X.closed_loop_decay(numeric)}"
+    )
+    gains["model"]["schedule"] = {"least margin": worst, "trips": trips}
+    return gains
 
 
 def _datasheet_pd(p):
@@ -696,6 +752,28 @@ def _datasheet_pd(p):
     return Kp, Kp * lag
 
 
+def _pole_vector(p, level=0.55) -> tuple:
+    """One coolant, so no pairing to choose: the check is which reading closes
+    the inner loop. The unstable mode's size on C_a and T, in noise bands."""
+    from target_gym.pc_gym.unstable_cstr.env import steady_temperature
+
+    T = float(steady_temperature(level, p, np))
+    r = float(p.k0 * np.exp(-p.EA_over_R / T))
+    slope = level * r * p.EA_over_R / T**2  # of the rate, per K
+    heat = -p.deltaHr / (p.rho * p.C)
+    qV, ua = p.q / p.V, p.UA / (p.rho * p.C * p.V)
+    A = np.array([[-qV - r, -slope], [heat * r, heat * slope - qV - ua]])
+    values, vectors = np.linalg.eig(A)
+    mode = vectors[:, int(np.argmax(values.real))]
+    env = REGISTRY["unstable_cstr"].make_env()
+    sd = float(env.readings[0].sigma), float(env.readings[1].sigma)
+    return (
+        float(values.real.max()),
+        abs(mode[0]) / (6 * sd[0]),
+        abs(mode[1]) / (6 * sd[1]),
+    )
+
+
 def tune_unstable_cstr() -> dict:
     """Inner PD closed from the datasheet's, outer PI with it closed, and the
     limits from the steady map (expert-protocols-process.md section 4)."""
@@ -709,6 +787,8 @@ def tune_unstable_cstr() -> dict:
     per_K = 2 / span
     Kp_T, Kd_T = _datasheet_pd(p)
     print(f"  inner PD from the datasheet: Kp {Kp_T:.4g}, Kd {Kd_T:.4g}")
+    pole, on_C, on_T = _pole_vector(p)
+    print(f"  pole {pole:.3g} /min; its mode reads {on_C:.3g} on C_a, {on_T:.3g} on T")
 
     def raw(T_c):
         return per_K * (T_c - p.T_c_min) - 1
@@ -782,7 +862,13 @@ def tune_unstable_cstr() -> dict:
     except X.UnstableCascadeGains as finding:
         print(f"  guard, a report (D2): {finding}")
     print(f"  slowest rates {X.closed_loop_rates({**X.DEFAULT_GAINS, **settings})}")
-    return {**settings, "model": {"C_a": record(C_loop, C_out)}}
+    return {
+        **settings,
+        "model": {
+            "C_a": record(C_loop, C_out),
+            "pole": {"rate": pole, "on C_a": on_C, "on T": on_T},
+        },
+    }
 
 
 TUNERS = {

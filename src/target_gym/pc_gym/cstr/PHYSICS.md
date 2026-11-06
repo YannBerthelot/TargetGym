@@ -203,13 +203,6 @@ would need a real trip at the same time.
 
 ## 6. Expert
 
-**Stale until PR 9.** The gains and figures below predate the 1 min analyser and
-the loads. On the new plant the outer loop's phase margin is negative, and the
-cascade cycles: it holds 1.5e4 per step on seeds 200 to 209, and a constant
-action beats it. The same outer loop tuned by SIMC for the longer delay,
-Kp = -34.6 K per mol/L, loses to no null policy (measured, not shipped). PR 9
-reruns the tuning.
-
 Reactor practice closes a temperature loop on the coolant and lets the
 concentration trim its setpoint, because composition analysers are too slow
 to close on directly. The expert is that cascade (`make_cstr_pid_controller`,
@@ -217,33 +210,23 @@ to close on directly. The expert is that cascade (`make_cstr_pid_controller`,
 smooth PID controller tuning", 2012) from step tests, and stored by
 `scripts/tune_process_experts.py --envs cstr`.
 
-- **Inner loop**, T on the raw coolant command. A step of 0.1 toward mid-range
-  from the steady state at each training seed's target (seeds 100 to 109).
-  The median first-order fit is k = 6.10 K per unit raw action,
-  tau1 = 0.635 min and, with half the 0.25 min sample, theta = 0.194 min
-  (measured). Tight SIMC (tau_c = theta) gives Kp_T = 0.268 per K and
-  Ti_T = 0.635 min.
-- **Outer loop**, C_a on the temperature setpoint, tested with the inner loop
-  closed: a 0.5 K setpoint step from the same steady states. The median fit
-  is k = -0.00918 mol/L per K, tau1 = 0.861 min and theta = 0.354 min, which
-  carries the inner loop's own response. Tight SIMC gives Kp = -132 K per
-  mol/L and Ti = 0.861 min; 2 theta and 3 theta cost more on the training
-  seeds (36.7 per step against 60.6 and 124, measured).
+The recipe is section 9 of `docs/proposals/expert-protocols-process.md`, with the
+loads off and the plant in manual at the rest each seed's target needs.
+
+- **Inner loop**, T on the raw coolant. Band 0.247 K, step 0.224 raw. The median fit
+  is k = 5.38 K per raw, tau1 = 0.648 min and, with half the 0.25 min sample,
+  theta = 0.125 min. The coolant is a valve, so the filter reaches its cap: Tf_T =
+  0.065 min, Kp_T = 0.317 per K, Ti_T = 0.648 min.
+- **Outer loop**, C_a on the temperature setpoint, the inner loop closed as run. Band
+  0.0031 mol/L, step 1.88 K. The median fit is k = -0.00811 mol/L per K, tau1 = 1.11
+  min, theta = 1.125 min, with the analyser's 1 min read as a floor. Tf_C = 0.148 min,
+  and N7 stops at Kc,min, so Kp = -24.4 K per mol/L and Ti = 1.53 min.
 - **Bias.** The outer PI's output is added to the target's steady temperature,
-  from the concentration balance and the design kinetics
-  (`steady_temperature`), as the unstable CSTR's cascade does. The reset puts
-  the reactor at 330 K, off every steady state on the operating branch.
-- **Behaviour.** The first approach overshoots: on training seed 100 the
-  concentration error reaches 17 % of its initial value the other way. The
-  cascade is inside the analyser's band to stay after 20 to 40 steps on the
-  training seeds, 26.5 at the median (measured). The protocol's
-  fixed settle, 67 steps, is where it comes within twice the level it holds:
-  the plant has no noise, so that level is float32 rounding. The episode is 150
-  steps (100 in v2), over twice that settle.
-  At the bottom of the target band (D1) the inner loop runs against the
-  coolant stop.
-- **Held-out check** (seeds 200 to 209). It holds 9.7e-8 per step against a
-  ceiling of 1 and never trips (`tests/pc_gym/test_expert_specs.py`).
+  from the concentration balance and the design kinetics (`steady_temperature`).
+- **Levels.** Kp is -48.5, -24.4 and -11.7 at levels 0.5, 1 and 2.
+- **Held-out check** (seeds 200 to 209). It holds 4,509 per step (worst seed 16,780)
+  against a ceiling of 1 and never trips. The best null is the table, ratio 0.73, 0
+  of 10 wins. The miss is a finding: `tests/pc_gym/test_expert_specs.py`.
 
 ---
 

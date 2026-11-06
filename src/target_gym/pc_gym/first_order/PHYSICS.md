@@ -132,23 +132,18 @@ with. `scripts/tune_process_experts.py --envs first_order` derives the gains
 and stores them in `src/target_gym/data/pid_gains.json`; the factory is
 `make_first_order_pid_controller`.
 
-- **Step test.** From the steady state at each training seed's target (seeds
-  100 to 109), a step of 0.1 in the raw action. The fit is k = 2.0 per unit
-  raw action, tau1 = 0.50 s and no delay (measured), which is the plant's own
-  K (u_max - u_min) / 2 and tau. The 0.05 s sample adds half a step,
-  theta = 0.025 s (the half rule).
-- **Settings.** The tight choice tau_c = theta gives
-  Kc = tau1 / (k (tau_c + theta)) = 5.0 per unit error and
-  tau_I = min(tau1, 4 (tau_c + theta)) = 0.20 s, so Ki = 25 /s. tau_c = 2 theta
-  and 3 theta cost more on the training seeds (1.3e-4 per step against 0.0084
-  and 0.10, measured).
-- **Held-out check** (seeds 200 to 209). It holds 1.4e-12 per step against a
-  ceiling of 1 and never trips (`tests/pc_gym/test_expert_specs.py`). It
-  replaced a PID grid-searched on the scored reward, which was also far
-  inside the resolution.
+- **Step test.** One run per training seed (100 to 109): in manual at the
+  target, a baseline, then 0.1 in the raw action. The fit is k = 2.0 per unit raw
+  action, tau1 = 0.50 s and no delay (measured). The band is 0.0067 and the step
+  moves it 30 times. The 0.05 s sample adds half a step, theta = 0.025 s.
+- **Settings.** SIMC with tau_c = theta, then N5 to N7 of
+  `docs/proposals/expert-protocols-noise.md` on a dead band of 1 % of span. The
+  filter reaches its cap, 0.02 s, so Kp = 2.77, Ki = 7.70 /s at level 1, and 4.99
+  and 1.63 at levels 0.5 and 2.
+- **Held-out check** (seeds 200 to 209). It holds 0.013 per step against a ceiling
+  of 1 and never trips (`tests/pc_gym/test_expert_specs.py`).
 - **Episode.** 150 steps (100 in v2), twice the 63 steps the PI takes to come
-  within twice the level it holds. The plant has no noise, so that level is
-  float32 rounding.
+  within twice the level it holds.
 
 ---
 
