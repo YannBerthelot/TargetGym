@@ -29,6 +29,7 @@ from target_gym.plane.experts_tecs import AIRLINER
 from target_gym.plane3d.experts import (
     Plane3DGuidanceParams,
     Plane3DGuidanceState,
+    _cruise_speed,
     _fly,
 )
 
@@ -40,8 +41,8 @@ from target_gym.plane3d.experts import (
 @struct.dataclass
 class FormationLeadParams(Plane3DGuidanceParams):
     """The lead's autopilot: the heading task's course hold and TECS on
-    height and speed. A formation lead flies smooth and predictable, and with
-    the engine's 1.7 s lag TECS's throttle does."""
+    height and the 3D tasks' speed schedule. A formation lead flies smooth and
+    predictable, and with the engine's 1.7 s lag TECS's throttle does."""
 
 
 @struct.dataclass
@@ -54,7 +55,8 @@ def formation_lead_step(params, state, obs, xp=jnp):
     turn rate (``obs[15]``, rad per step) fed forward, and TECS."""
     v_ground = xp.sqrt(obs[0] ** 2 + obs[1] ** 2 + 1e-6)
     turn = obs[15] / params.dt + _wrap_angle(obs[11] - obs[9], xp) / params.tau_hdg
-    return _fly(params, state, obs, xp, obs[10], v_ground * turn, params.target_speed)
+    target = _cruise_speed(params, obs, xp)
+    return _fly(params, state, obs, xp, obs[10], v_ground * turn, target)
 
 
 @struct.dataclass

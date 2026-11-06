@@ -29,7 +29,7 @@ from target_gym.formation.env import (
     get_obs_formation,
 )
 from target_gym.formation.rendering import _render
-from target_gym.patrol.env import N_LEAD_LEGS, make_cruise_state
+from target_gym.patrol.env import N_LEAD_LEGS, lead_cruise_speed, make_cruise_state
 from target_gym.plane.dynamics import LATERAL, LONGITUDINAL, POSITION, instruments
 from target_gym.plane3d.dynamics import read_angles_3d
 from target_gym.video import SavesVideo
@@ -182,7 +182,7 @@ class Formation(
             k,
         )
 
-        speed = params.initial_x_dot
+        speed = lead_cruise_speed(lead_alt)
         lead = make_cruise_state(
             x=0.0,
             y=0.0,
@@ -222,6 +222,7 @@ class Formation(
             lead_turn_rate=schedule[0],
             lead_turn_schedule=schedule,
             time=0,
+            gust_own=jnp.zeros((k, 3)),
             actuator_held=jnp.zeros(3 * (k + 1)),
         )
         return self.get_obs(state, params), state

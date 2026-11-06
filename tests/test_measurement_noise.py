@@ -146,8 +146,10 @@ def test_two_policies_on_one_episode_key_see_identical_noise_draws(spec):
     # Different step keys too: the noise belongs to the episode key alone.
     a, true_a = draws(low, 1)
     b, true_b = draws(high, 2)
-    # Four float32 steps of the larger value: the subtraction's rounding.
-    tol = 4 * np.spacing(np.maximum(np.abs(true_a), np.abs(true_b)).astype(np.float32))
+    # Four float32 steps of the largest value: the subtraction's rounding, which
+    # is the draw's own where a restart leaves the true value near zero.
+    largest = np.maximum(np.maximum(np.abs(true_a), np.abs(true_b)), np.abs(a))
+    tol = 4 * np.spacing(largest.astype(np.float32))
     assert np.all(np.abs(a - b) <= tol)
     assert np.any(a != 0.0), "no reading carried any noise"
     assert np.any(a[1:] != a[:-1]), "the draws never changed"
@@ -183,7 +185,11 @@ def test_a_reading_is_a_pure_function_of_the_state(spec):
     obs, state, *_ = jax.jit(env.step_env)(key, state, low, params)
     # Compiled into the step, a derived channel rounds a float32 step or so
     # apart: 1e-3 m on the racetrack's 15 km coordinates, or 1 part in 1.6e7.
-    np.testing.assert_allclose(obs, env.get_obs(state, params), rtol=1e-6, atol=2e-3)
+    # Compiled here too, since eager code can round a reading that lands on a
+    # digital step's tie the other way, a whole step apart (1 key in 200 on
+    # the formation's altitudes).
+    read = jax.jit(env.get_obs)(state, params)
+    np.testing.assert_allclose(obs, read, rtol=1e-6, atol=2e-3)
     np.testing.assert_array_equal(
         env.get_obs(state, params), env.get_obs(state, params)
     )

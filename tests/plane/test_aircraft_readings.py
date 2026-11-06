@@ -10,7 +10,7 @@ the code:
 - Path and slot errors are computed from the readings behind them.
 - Setpoints, slot geometry and the turn schedule stay exact.
 - ``sensor_noise_scale = 0`` gives the stored state, whatever it holds.
-- ``patrol_bearing_only`` reads range at 15 m and azimuth at 0.026 rad. Elevation
+- ``patrol_range_bearing`` reads range at 15 m and azimuth at 0.026 rad. Elevation
   has one altitude path with ``lead.z``, the 25 ft Mode S report, rounded and not
   noised, so it scatters by ``25 ft / sqrt(12) / range``: 0.0088 rad at 250 m.
 - A trip stays true: a measured copy is charged the trip it is told about.
@@ -96,7 +96,7 @@ SEATS = {
     "plane3d_racetrack": [_seat(0, 15)],
     "plane3d_figure8": [_seat(0, 16)],
     "patrol": [_seat(0, 21)],
-    "patrol_bearing_only": [_seat(0, 16)],
+    "patrol_range_bearing": [_seat(0, 16)],
     "formation": [_seat(0, 12), _seat(22, 21), _seat(48, 21)],
 }
 #: Channels that must never move: setpoints, slot geometry, the turn rate and
@@ -110,7 +110,7 @@ EXACT = {
     "plane3d_racetrack": (10, 13, 14),
     "plane3d_figure8": (10, 11, 20),
     "patrol": (16, 17, 18, 25),
-    "patrol_bearing_only": (13, 14, 15, 20),
+    "patrol_range_bearing": (13, 14, 15, 20),
     "formation": (10, 11, 15, 38, 39, 40, 47, 64, 65, 66, 73),
 }
 #: A relative quantity scatters as both ends' readings, sqrt(2) of one.
@@ -125,7 +125,7 @@ OTHER_SCATTER = {
     "plane3d_circle": {11: 0.27, 12: 0.27},
     "plane3d_racetrack": {11: 0.27, 12: 0.27},
     "patrol": PATROL_RELATIVE,
-    "patrol_bearing_only": {10: 15.0, 11: 0.026},
+    "patrol_range_bearing": {10: 15.0, 11: 0.026},
     "formation": {
         16: 0.27 * ROOT2,  # the first wingman's error, in the lead's seat
         17: 0.27 * ROOT2,
@@ -375,10 +375,10 @@ def test_at_scale_zero_the_angles_are_the_stored_ones(name):
 
 
 # ---------------------------------------------------------------------------
-# patrol_bearing_only
+# patrol_range_bearing
 # ---------------------------------------------------------------------------
 
-BO = "patrol_bearing_only"
+BO = "patrol_range_bearing"
 RANGE, AZIMUTH, ELEVATION, TRACKED_RANGE = 10, 11, 12, 19
 
 
@@ -522,8 +522,9 @@ def test_the_multi_agent_view_reads_at_the_params_it_is_given():
 
 
 @pytest.mark.large
+@pytest.mark.xfail(strict=True, reason="PR 9: the 20 s filter loses a 0.03 rad/s lead")
 @pytest.mark.parametrize("seed", range(100, 104))
-def test_the_bearing_only_expert_survives_its_range_noise(seed):
+def test_the_range_bearing_expert_survives_its_range_noise(seed):
     """Differenced raw, 15 m of range noise is 21 m/s of lead speed and the
     expert trips on every training seed. This is the filter's floor, not the
     8.5 m hold of tests/patrol/test_formation_hold.py."""

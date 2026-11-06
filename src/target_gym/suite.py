@@ -94,7 +94,7 @@ CAPABILITIES = {
     "plane3d_racetrack": ("moving_target",),
     "plane3d_figure8": ("moving_target",),
     "patrol": ("moving_target",),
-    "patrol_bearing_only": ("moving_target", "partial_observability"),
+    "patrol_range_bearing": ("moving_target", "partial_observability"),
     "formation": ("multi_agent", "moving_target"),
 }
 

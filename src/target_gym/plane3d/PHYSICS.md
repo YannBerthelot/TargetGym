@@ -204,7 +204,7 @@ rather than a bank angle, so heading control is a cascade through two
 integrators; the turn radius at cruise is kilometres, so the reference is large
 compared with what the aircraft can do about it; and the lift the wing can make
 bounds how tight a turn is available at all. For genuinely hidden references,
-see `patrol_bearing_only`, where the lead's heading is not measured and must be
+see `patrol_range_bearing`, where the lead's heading is not measured and must be
 reconstructed.
 
 ### The tracking reward
@@ -406,7 +406,7 @@ independent of all three.
 
 **⚠️ D3 — patrol formation quality.** The physics documented here is shared and
 validated. Both patrol variants now ship a PID baseline, including
-`patrol_bearing_only`, which had none when this deviation was written; what
+`patrol_range_bearing`, which had none when this deviation was written; what
 remains is quality rather than absence. The follower settles roughly 139 m from
 its slot against a 60 m tolerance, so six formation scenarios are `strict`
 xfail. That is a controller gap, not a physics gap; it is tracked in

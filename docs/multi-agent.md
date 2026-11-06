@@ -89,9 +89,9 @@ to minus the reward on every step without a trip.
 
 ## Trips and restarts
 
-The formation trips when any aircraft leaves the altitude band, any two
-aircraft come within 25 m of each other, or a wingman ends up 1500 m from its
-slot. The step that trips is charged the trip cost and sets `info["tripped"]`
+The formation trips when any aircraft leaves its flight envelope (altitude,
+bank, load factor, airspeed, Mach), any two aircraft come within 40 m of each
+other, or a wingman ends up 1500 m from its slot. The step that trips is charged the trip cost and sets `info["tripped"]`
 and `info["trip_cost"]`, and the whole formation restarts on the same episode
 clock. The episode does not end.
 

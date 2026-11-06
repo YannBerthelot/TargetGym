@@ -176,7 +176,7 @@ checks each one, and checks the tuner row only for a task that ships a PID.
   checks that every declared key exists. The version stamp hashes
   `pid_gains.json` not at all, so a new task's physics should not read it.
   Freeze such gains inside the package instead, as patrol's scripted lead
-  holds the `plane3d_heading` gains it flies (`patrol/env_jax.py`).
+  holds the 3D heading expert's values it flies (`patrol/env.py`).
 - **A name that is no prefix of another.** Gains keys are collected by name
   prefix, and names starting with `plane` or `patrol` are treated as aircraft.
   A new name must not start another registered name or start with one, and
