@@ -69,21 +69,29 @@ def test_a_lull_does_not_run_the_rotor_down_to_a_power_dip():
     """On seed 1 the wind falls to 14.7 m/s at step 202. A plan that leaves the
     speed free rides it down to about 0.82 of rated and pays there with
     one-step torque dips of 625 to 825 kW, 0.004 to 0.006 dollars a step.
-    Resting at rated, the rotor keeps its energy and no step costs a quarter
-    of the smaller dip."""
+    Resting at rated, the rotor keeps its energy through the lull. The dispatch
+    now moves every 100 steps, and a step of 0.99 MW costs what the torque's rate
+    takes to cross it, so dips are read away from those moves: no step there
+    costs a quarter of the smaller dip."""
     params = SPEC.make_test_params()
     policy = mpc_policy(SPEC, SPEC.make_env(), params)
-    speeds = []
+    speeds, targets = [], []
 
     def spy(obs, state):
         speeds.append(float(state.omega))
+        targets.append(float(state.target_power))
         return policy(obs, state)
 
     spy.controller = policy.controller
     out = one_episode(SPEC, params, spy, 1)
     assert int(np.asarray(out["tripped"]).sum()) == 0
-    assert min(speeds) / float(omega_rated(params)) >= 0.9
-    assert np.asarray(out["reward"][0, : int(out["length"][0])]).min() >= -0.001
+    in_the_lull = np.array(speeds[190:260]) / float(omega_rated(params))
+    assert in_the_lull.min() >= 0.9
+    rewards = np.asarray(out["reward"][0, : int(out["length"][0])])
+    quiet = np.ones(rewards.size, bool)
+    for move in np.flatnonzero(np.diff(targets)):
+        quiet[move : move + 12] = False  # the 12 steps a move takes to settle
+    assert rewards[quiet].min() >= -0.001
 
 
 @pytest.mark.medium
