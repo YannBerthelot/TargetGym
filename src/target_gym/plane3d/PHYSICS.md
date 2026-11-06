@@ -315,7 +315,7 @@ envelope, so the figures that used to stand here no longer hold. **TECS's
 `time_const` of 2 pulls past 2.5 g on height captures**, stepping the pitch demand
 by about 10 deg in a second, and PR 9 retunes it by the accepted procedure. On
 training seeds, the procedure's starting value of 5 flew `plane` with no trip on
-10 of 10 seeds, where 2 trips on 5 of them.
+10 of 10 seeds, where 2 trips on 6 of them.
 
 It replaced, in 2026-10, cascades tuned on the scored seeds: the heading and
 circle ones fed roll rate back with the wrong sign and held 44 m and 1 rad

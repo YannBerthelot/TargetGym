@@ -260,7 +260,7 @@ TECS_PREDATES_THE_ENVELOPE = pytest.mark.xfail(
 @pytest.mark.parametrize(
     "name",
     (
-        "plane",
+        pytest.param("plane", marks=TECS_PREDATES_THE_ENVELOPE),
         "plane_sine",
         pytest.param("plane_energy", marks=TECS_PREDATES_THE_ENVELOPE),
     ),

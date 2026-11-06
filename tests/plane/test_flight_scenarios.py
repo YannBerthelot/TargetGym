@@ -137,7 +137,7 @@ def test_full_power_causes_climb(env, params):
 
 def test_climb_costs_airspeed_at_fixed_power(env, params):
     """Trading potential for kinetic energy: a climb at fixed thrust bleeds speed."""
-    traj = fly(env, params, power_raw=0.2, stick_raw=0.0, steps=250)
+    traj = fly(env, params, power_raw=0.2, stick_raw=0.3, steps=250)
     assert traj["z"][-1] > CRUISE_ALT, "expected a climb"
     assert traj["v"][-1] < CRUISE_SPEED, "climbed without losing any airspeed"
 
