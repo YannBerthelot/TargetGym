@@ -1,8 +1,8 @@
 """The wind turbine's oracle, on the shared solver.
 
 Its claims, each checked below. With the turbulence off the model is the
-plant, so the power after every step lands on the target to float32 rounding:
-the torque's reach makes that free. A command past either actuator's reach moves
+plant but for the table's smoothing, so the power after every step lands on the
+target within half a resolution: the torque's reach makes that free. A command past either actuator's reach moves
 it as a command at it does (T1r). The rotor speed is the one spare degree of
 freedom, so it rests at rated, inside the tie's budget (G12 in
 docs/proposals/oracle-solver.md), and a lull no longer runs it down. ROSCO's
@@ -53,14 +53,15 @@ def test_the_registry_builds_the_shared_oracle():
 
 @pytest.mark.medium
 def test_without_turbulence_the_power_lands_on_the_target():
-    """With the wind on its mean path the model is the plant, so the power
-    after every step equals the target to float32 rounding (about 0.5 W at
-    4-5 MW), within the rows' tolerance. A plan that missed would leave
-    kilowatts."""
+    """With the wind on its mean path the model is the plant but for ROSCO's
+    table, smoothed at its nodes, which K5 holds to half the 1 kW resolution a
+    step. So the power after every step lands on the target within 500 W, plus
+    float32 rounding (about 0.5 W at 4-5 MW) and the rows' tolerance. A plan that
+    missed would leave kilowatts."""
     params = SPEC.make_test_params().replace(turbulence_std=0.0)
     _, error, trips = _episode(params, 0, steps=20)
     assert trips == 0
-    assert error.max() <= 2.0
+    assert error.max() <= 502.0
 
 
 @pytest.mark.medium
