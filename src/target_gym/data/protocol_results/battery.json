@@ -1,8 +1,8 @@
 {
   "ceiling": 0.00013888888888888886,
-  "cpu": "AMD EPYC 7763 64-Core Processor",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
   "expert_fingerprint": "42cb048e9df1da9b",
-  "generated": "2026-11-03T02:56:50+00:00",
+  "generated": "2026-11-05T20:30:53+00:00",
   "mpc": {
     "failure": 0.0,
     "failure_rate": 0.0,
@@ -19,7 +19,7 @@
     "reach_cost_ci": 0.0002608931862118165,
     "reach_fraction": 0.012037037037037037,
     "running": 0.0006952164070820867,
-    "seconds": 2.2,
+    "seconds": 118.8,
     "settling_time": 52.8,
     "settling_time_ci": 11.563737731191827,
     "time_in_band": 0.562962962962963,
@@ -28,7 +28,7 @@
     "transient_cost_ci": 0.00040644522603784726,
     "unsettled_fraction": 0.7058823529411765
   },
-  "oracle_fingerprint": "67a48d43d44abc1b",
+  "oracle_fingerprint": "1d1f5b55fe57fb69",
   "pid": {
     "failure": 0.0,
     "failure_rate": 0.0,
