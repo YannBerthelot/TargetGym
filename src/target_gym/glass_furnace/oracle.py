@@ -7,11 +7,13 @@ section 5.3), run by ``target_gym.oracles.controller.Oracle``:
 
 - model: the env's step restated (``glass_step``) with its own functions,
   all four regenerator nodes, the fuel pipeline and the reversal cycle
-  included: the raw move's clip removed and the move bounded instead (T1);
-  the batch blanket's guards on what the right-hand side and the flame read
-  smoothed by one softplus at the K5 width (T5,
-  ``data/oracle_widths/glass_furnace.json``); the pull disturbance on its
-  noise-free mean path, updated before the step as the env does;
+  included; the move is the fuel valve's slew, a fraction of its limit held over
+  the T_c, sent as the command that makes it (T1rr, ``oracles.rates``), with
+  each command of the ramp inside the box (T1); the batch blanket's guards on
+  what the right-hand side and the flame read smoothed by one softplus at the K5
+  width (T5, ``data/oracle_widths/glass_furnace.json``); the pull disturbance and
+  the gas's heating value on their noise-free mean paths, updated before the step
+  as the env does;
 - objective: the crown's tracking term as (e / e_floor)^2, exact since
   e_tol = 0 and p = 2, and the running cost max(fuel - c_hold, 0) through
   epigraph rows on every visited state (T2);
@@ -19,33 +21,39 @@ section 5.3), run by ``target_gym.oracles.controller.Oracle``:
   elastic at the trip cost per unit (T3), backed off by the planner's error
   on them (K11, in the widths file);
 - dropped guards (T4): the flame's clip; the heat to the batch, which the
-  bands keep positive; and the stored blanket's floor at 0 (env.py:806),
+  bands keep positive; and the stored blanket's floor at 0 (env.py:850),
   checked on every plan: a softplus there would add its gap to the state
   every step, where in the right-hand side it costs it once.
 
-The cold start holds the last fuel command.
+The cold start holds the valve where it stands.
 """
 
 import jax.numpy as jnp
 from jax.tree_util import Partial as partial
 
 from target_gym.glass_furnace.env import (
+    FUEL_DEAD_TIME_STEPS,
+    LHV_AR_RHO,
     M_PULL_AR_RHO,
     N_REGEN_NODES,
     compute_velocity,
     firing_fraction,
     get_target_from_schedule,
+    pull_rate,
     regenerator_diagnostics,
     reversal_phase,
     solve_T_gas,
 )
 from target_gym.integration import integrate_dynamics
-from target_gym.oracles.controller import Oracle, TaskModel, raw_of, softplus_clip
+from target_gym.oracles.controller import Oracle, TaskModel, softplus_clip
+from target_gym.oracles.rates import RateLimit
 from target_gym.oracles.shooting import Hinge, Limit
 from target_gym.reward import trip_cost
 
-#: x = (T_crown, T_melt, T_work, m_batch, T_rA, T_rB, T_gas, fuel_pipeline).
+#: x = (T_crown, T_melt, T_work, m_batch, T_rA, T_rB, T_gas, fuel_pipeline,
+#: the valve's position).
 BATCH, GAS, PIPE = 3, 4 + 2 * N_REGEN_NODES, 5 + 2 * N_REGEN_NODES
+VALVE = PIPE + FUEL_DEAD_TIME_STEPS
 
 
 def velocity(position, width, delta, p, **plant):
@@ -55,21 +63,23 @@ def velocity(position, width, delta, p, **plant):
     return compute_velocity(position.at[BATCH].set(blanket), params=p, **plant)
 
 
-def glass_step(env, p, x, u, t, task, width, delta=0.0):
-    """One env step from ``x`` under the raw move ``u``: ``(x_next, the fuel
+def glass_step(env, p, rate, x, u, t, task, width, delta=0.0):
+    """One env step from ``x`` under the slew ``u``: ``(x_next, the fuel
     burnt)``. ``width`` is the blanket's (0.0 is the exact clip) and ``delta``
     is added to its output at every evaluation in the step (K5's probe)."""
-    _, start, disturbance = task
+    _, start, lhv, disturbance = task
     now = start + t
-    command = p.fuel_min + 0.5 * (u[0] + 1.0) * (p.fuel_max - p.fuel_min)  # T1
+    valve = rate.reached(x[VALVE:], u)
+    command = p.fuel_min + 0.5 * (valve[0] + 1.0) * (p.fuel_max - p.fuel_min)  # T1
     fuel = x[PIPE] * firing_fraction(now, p)
-    pull = jnp.maximum(p.m_pull + disturbance * M_PULL_AR_RHO ** (t + 1), 0.1)
+    pull = pull_rate(disturbance * M_PULL_AR_RHO ** (t + 1), p)
+    gas = p.replace(LHV=p.LHV * (1.0 + lhv * LHV_AR_RHO ** (t + 1)))
     phase = reversal_phase(now, p)
     plant = x[:GAS]
     cover = softplus_clip(x[BATCH], 0.0, p.m_batch_full, width) + delta
     melt_open = 1.0 - p.batch_shield * cover / p.m_batch_full
     T_air, _ = regenerator_diagnostics(plant, x[GAS], fuel, phase, p)
-    T_gas = solve_T_gas(x[GAS], x[0], x[1], x[2], T_air, fuel, melt_open, p)
+    T_gas = solve_T_gas(x[GAS], x[0], x[1], x[2], T_air, fuel, melt_open, gas)
     new, _ = integrate_dynamics(
         positions=plant, delta_t=p.delta_t, method=env.integration_method,
         compute_velocity=partial(
@@ -78,15 +88,16 @@ def glass_step(env, p, x, u, t, task, width, delta=0.0):
         ),
     )  # fmt: skip
     pipeline = jnp.stack([x[PIPE + 1], command])
-    return jnp.concatenate([new, T_gas[None], pipeline]), fuel
+    return jnp.concatenate([new, T_gas[None], pipeline, valve]), fuel
 
 
 def glass_model(env, p) -> TaskModel:
     assert float(p.e_tol) == 0.0 and float(p.tracking_exponent) == 2.0
+    rate = RateLimit.of(env, p)
 
     def step(d, x, u, t):
         task = d["task"]
-        x1, fuel = glass_step(env, p, x, u, t, task, d["widths"][0])
+        x1, fuel = glass_step(env, p, rate, x, u, t, task, d["widths"][0])
         target = get_target_from_schedule(task[0], task[1] + t + 1, p)
         cost = ((target - x1[0]) / p.e_floor) ** 2
         y = jnp.stack([
@@ -97,13 +108,17 @@ def glass_model(env, p) -> TaskModel:
     price = float(trip_cost(p))
     glass = Limit(p.T_glass_min, p.T_glass_max, price)
     return TaskModel(
-        nx=PIPE + 2, nu=1, step=step,
+        nx=VALVE + 1, nu=1, step=step,
         state_x=lambda s: jnp.concatenate([
             jnp.stack([s.T_crown, s.T_melt, s.T_work, s.m_batch]),
-            s.T_rA, s.T_rB, s.T_gas[None], s.fuel_pipeline,
+            s.T_rA, s.T_rB, s.T_gas[None], s.fuel_pipeline, s.actuator_held,
         ]),
-        data=lambda s: (s.target_schedule, s.time, s.m_pull_disturbance),
-        hold=lambda s: raw_of(s.fuel_pipeline[-1], p.fuel_min, p.fuel_max)[None],
+        data=lambda s: (
+            s.target_schedule, s.time, s.lhv_deviation, s.m_pull_disturbance,
+        ),
+        hold=lambda s: jnp.zeros(1, s.actuator_held.dtype),
+        action=lambda s, u: rate.command(s.actuator_held, u),
+        move_rows=lambda x, u, steps: rate.rows(x[VALVE:], u, steps),
         tracked=lambda s: s.T_crown[None],
         resolution=(float(p.precision_floor),),
         hinges=(Hinge(weight=1.0),),
