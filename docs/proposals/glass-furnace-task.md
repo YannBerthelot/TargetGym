@@ -561,3 +561,42 @@ and the time scale.
 | Environment: crown, floors, air, stack, fuel, pull observed. No upsets | Keeps A1 to A3 true | A1 to A3 |
 
 Then re-measure this table, run the switch-off test, and stop before any oracle.
+
+### The score, adopted
+
+The owner chose this on 2026-11-07: each reading does the job it does in a plant, instead of a
+weighted sum of three errors. Rewards are money per step, as HVAC's already are.
+
+| Reading | Job | In the reward |
+|---|---|---|
+| Canal | The product | Glass made while the canal is below its target is lost to cullet, at its price. Nothing above the target: the refiner cools it |
+| Fuel | The cost | Its price per kg. Overheating is paid for here, so it isn't charged twice |
+| Crown | The roof's limit | A trip above the silica crown's limit |
+| Floor | Early warning | Observed, not scored, unless the canal turns out too fast |
+
+The refiner's cooling is an automatic local loop, as in plants, holding the canal 1 K above its
+target (`ours`, a loop's accuracy). The canal falls below target only once the cooling has nothing
+left to take out. **Margin** is what the cooling takes out, in kelvin of the glass leaving: zero
+means the next shortfall is lost glass. The agent sees the cooling effort, as an operator would.
+
+The twelve tests stay as written, read on the margin instead of the floor. A3 and C3 are also
+reported in money: the fuel a controller spends on margin because it can't see ahead.
+
+**Needs sources before it is built:** the refiner's cooling capacity, the price of glass lost to
+cullet, the crown's limit, a gas price, the size of gas quality swings, and the floor block's
+thickness and conductivity. Anything not found is labelled `ours` or left to the owner.
+
+### Build plan and budget
+
+| Part | Change | Budget |
+|---|---|---|
+| Time step | 180 s. Regenerators averaged over the reversal: each node takes half its flue duty and half its air duty, the first-order average of the same equations. The firing gap goes in as its mean | Plant ceiling 850 lines, from 726 |
+| Refiner | A cooling sink on the refiner's glass, set by the local loop, up to its capacity | In the plant |
+| Canal | The glass leaving, flow-weighted, through the canal's own short lag | In the plant |
+| Floor | Refractory cells under the melt in the same depth solve, the couple at a depth in them | In the plant |
+| Drifts | Gas quality, cullet, blanket, sulfate and pull as random walks fed to the plant | Environment, 250 lines |
+| Environment | Reset, step, reward terms, observation. Not registered | Environment |
+| Tests | From the equations, before the code, red first | 350 lines |
+
+The step is set by the surface current: 24 m/h over a 1.8 m column allows about 270 s. Stops: if
+energy doesn't close within 0.5 %, if the step cost breaks rule 7, and before any oracle.

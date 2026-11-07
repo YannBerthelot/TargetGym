@@ -166,15 +166,17 @@ def test_a_step_keeps_its_books():
     p = P.PhysicalParams()
 
     def run(s, t):
-        new, b = P.plant_step(s, 0.46, 5.79, 0.25, 0.2, t, g, p)
+        new, b = P.plant_step(s, 0.46, 5.79, 0.25, 0.2, 0.0, g, p)
         return new, b["in"] - b["out"]
 
     # Over a stretch past the start: a foam's top is carried one step, so single
     # steps carry a small lag term that sums out. The tolerance is 0.5 % of the firing.
+    # Attempt 3 changed the step from 30 s to delta_t and dropped the clock argument.
+    day = int(86400 / p.delta_t)
     start = P.initial_fields(g, p)
-    s = jax.jit(lambda: jax.lax.scan(run, start, jnp.arange(2880))[0])()
-    new, flows = jax.jit(lambda: jax.lax.scan(run, s, 2880 + jnp.arange(100)))()
+    s = jax.jit(lambda: jax.lax.scan(run, start, jnp.arange(day))[0])()
+    new, flows = jax.jit(lambda: jax.lax.scan(run, s, day + jnp.arange(100)))()
     change = float(P.stored_energy(new, g, p) - P.stored_energy(s, g, p))
     assert change == pytest.approx(
-        30.0 * float(jnp.sum(flows)), abs=0.005 * 100 * 30.0 * 0.46 * p.LHV
+        p.delta_t * float(jnp.sum(flows)), abs=0.005 * 100 * p.delta_t * 0.46 * p.LHV
     )

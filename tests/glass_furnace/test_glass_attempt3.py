@@ -1,0 +1,174 @@
+"""Attempt 3's new physics and its environment, from the equations, written before the code.
+
+Contract, from conservation, the sources and the owner's score, not from any code:
+- the reversal, averaged: each checker node takes half its flue duty and half its air duty,
+  the first-order average of the half-cycle equations. Air from ambient T_a through N nodes
+  of effectiveness e, all at T_n, leaves at T_n - (1 - e)^N (T_n - T_a);
+- the firing gap, averaged: 1 - (dead / period) (1 - floor), the time mean of the clock;
+- the canal reads the leaving glass, weighted by its flow, and the glass leaves evenly
+  over depth;
+- the refiner's cooling is a flow out of the books, and colder glass reaches the canal;
+- fining: glass releases the share of its sulfate that its temperature allows over the
+  sourced band, 1420 to 1500 C, keeps what it released, and carries it with the flow;
+  batch glass arrives with none. The canal reads the leaving glass's share by its flow;
+- reward in money: fuel at the gas price; the glass made while the canal is under its
+  target or under-fined is lost at its price; a trip outside the silica crown's limits,
+  1400 C (sodium silicate) to 1620 C (degradation);
+- the observation carries readings only: the hidden walks don't enter it;
+- each walk is stationary with its stated spread and correlation time.
+"""
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+
+from target_gym.glass_furnace import physical as P
+from target_gym.glass_furnace import physical_env as E
+from target_gym.glass_furnace.env import N_REGEN_NODES, firing_fraction
+
+
+@pytest.fixture(scope="module")
+def plant():
+    g, p = P.Grid(), P.PhysicalParams()
+    return g, p, P.initial_fields(g, p)
+
+
+def test_uniform_checkers_preheat_by_the_node_cascade(plant):
+    _, p, _ = plant
+    T_n, m_air, m_gas = 1200.0, 8.0, 8.5
+    nodes = jnp.full((N_REGEN_NODES,), T_n)
+    Q, air, flue = P.averaged_stack(nodes, T_n, m_air, m_gas, p)
+    e, Ta = p.eps_regen_node, p.T_ambient
+    expected = T_n - (1.0 - e) ** N_REGEN_NODES * (T_n - Ta)
+    assert float(air) == pytest.approx(expected, rel=1e-5)
+    assert float(flue) == pytest.approx(
+        T_n, rel=1e-6
+    )  # flue at the nodes gives nothing
+    # Half the cycle on air: the nodes give half the air's heat.
+    assert float(jnp.sum(Q)) == pytest.approx(
+        -0.5 * m_air * p.c_p_air * (expected - Ta), rel=1e-5
+    )
+
+
+def test_averaged_checkers_keep_their_books(plant):
+    _, p, _ = plant
+    nodes = jnp.array([1250.0, 1000.0, 800.0, 500.0])
+    m_air, m_gas, T_in = 8.0, 8.5, 1500.0
+    Q, air, flue = P.averaged_stack(nodes, T_in, m_air, m_gas, p)
+    given = 0.5 * m_gas * p.c_p_gas * (T_in - flue)
+    taken = 0.5 * m_air * p.c_p_air * (air - p.T_ambient)
+    assert float(jnp.sum(Q)) == pytest.approx(float(given - taken), rel=1e-5)
+
+
+def test_mean_firing_is_the_clocks_average(plant):
+    _, p, _ = plant
+    hand = 1.0 - p.reversal_dead_time / p.reversal_period * (
+        1 - p.reversal_firing_floor
+    )
+    assert float(P.mean_firing(p)) == pytest.approx(hand, rel=1e-6)
+    # The shipped clock, sampled each second over a whole double cycle.
+    fine = p.replace(delta_t=1.0)
+    n = int(2 * p.reversal_period)
+    clock = np.mean(np.asarray(firing_fraction(jnp.arange(n), fine)))
+    assert clock == pytest.approx(hand, rel=1e-4)
+
+
+def test_canal_reads_the_leaving_glass_by_its_flow(plant):
+    g, p, s = plant
+    a = P.layout(g)
+    profile = jnp.linspace(1500.0, 1300.0, g.n_depth)
+    share = jnp.linspace(1.0, 0.2, g.n_depth)
+    s = s.replace(T=s.T.at[:, -1].set(profile), fining=s.fining.at[:, -1].set(share))
+    weigh = lambda x: float(jnp.sum(x * a.dz) / jnp.sum(a.dz))
+    read = P.sensors(s, g, p)
+    assert float(read["canal"]) == pytest.approx(weigh(profile), rel=1e-6)
+    assert float(read["fining"]) == pytest.approx(weigh(share), rel=1e-6)
+
+
+def _run(s, g, p, steps, cooling=0.0):
+    def f(s, _):
+        new, b = P.plant_step(s, 0.46, 5.79, 0.25, 0.2, cooling, g, p)
+        return new, (b["in"] - b["out"], P.sensors(new, g, p)["canal"])
+
+    return jax.lax.scan(f, s, None, length=steps)
+
+
+def test_a_step_keeps_its_books_with_cooling(plant):
+    # Without cooling, test_glass_physical.py's books test covers it.
+    g, p, start = plant
+    cooling = 2.0e6
+    day = int(86400 / p.delta_t)
+    # Past the start, where a foam's top carried one step sums out. 0.5 % of the firing.
+    s = jax.jit(lambda: _run(start, g, p, day, cooling)[0])()
+    new, (flows, _) = jax.jit(lambda: _run(s, g, p, 100, cooling))()
+    change = float(P.stored_energy(new, g, p) - P.stored_energy(s, g, p))
+    assert change == pytest.approx(
+        p.delta_t * float(jnp.sum(flows)),
+        abs=0.005 * 100 * p.delta_t * 0.46 * p.LHV,
+    )
+
+
+def test_cooling_the_refiner_cools_the_canal(plant):
+    g, p, start = plant
+    hours = int(6 * 3600 / p.delta_t)
+    warm = jax.jit(lambda: _run(start, g, p, hours, 0.0)[1][1])()
+    cool = jax.jit(lambda: _run(start, g, p, hours, 2.0e6)[1][1])()
+    assert float(cool[-1]) < float(warm[-1]) - 1.0
+
+
+def test_glass_past_the_band_has_finished_fining(plant):
+    g, p, s = plant
+    hot = s.replace(T=jnp.full_like(s.T, p.T_fine_high + 100.0))
+    new, _ = P.plant_step(hot, 0.46, 5.79, 0.25, 0.2, 0.0, g, p)
+    assert float(P.sensors(new, g, p)["fining"]) == pytest.approx(1.0, abs=1e-3)
+
+
+def test_glass_under_the_band_brings_no_fining_to_the_canal(plant):
+    g, p, s = plant
+    cold = s.replace(
+        T=jnp.full_like(s.T, p.T_fine_low - 100.0), fining=jnp.zeros_like(s.T)
+    )
+    new, _ = P.plant_step(cold, 0.46, 5.79, 0.25, 0.2, 0.0, g, p)
+    assert float(P.sensors(new, g, p)["fining"]) == 0.0
+
+
+def test_reward_prices_fuel_lost_glass_and_the_crown_trip():
+    ep = E.EnvParams()
+    dt = ep.plant.delta_t
+    fuel_cost = 0.45 * dt * ep.plant.LHV / 3.6e9 * ep.gas_price  # EUR/MWh on energy
+    glass = ep.pull * dt / 1000.0 * ep.lost_glass_price  # EUR/t on tonnes
+    good = dict(canal=ep.canal_target + 0.5, fining=ep.fining_pass + 0.01)
+    crown = 0.5 * (ep.crown_low + ep.crown_high)
+    ok = E.reward_terms(0.45, crown=crown, **good, ep=ep)
+    assert float(ok["fuel"]) == pytest.approx(fuel_cost, rel=1e-6)
+    assert float(ok["lost_glass"]) == 0.0 and float(ok["trip"]) == 0.0
+    for bad in (dict(canal=ep.canal_target - 0.5), dict(fining=ep.fining_pass - 0.01)):
+        cost = E.reward_terms(0.45, crown=crown, **{**good, **bad}, ep=ep)
+        assert float(cost["lost_glass"]) == pytest.approx(glass, rel=1e-6)
+    for c in (ep.crown_low - 1.0, ep.crown_high + 1.0):
+        cost = E.reward_terms(0.45, crown=c, **good, ep=ep)
+        assert float(cost["trip"]) == pytest.approx(ep.trip_cost, rel=1e-6)
+
+
+def test_observation_carries_readings_not_the_hidden_walks(plant):
+    _, _, s = plant
+    ep = E.EnvParams()
+    _, state = E.reset(jax.random.PRNGKey(0), s, ep)
+    other = state.replace(walk=state.walk + 0.03)
+    np.testing.assert_array_equal(E.observe(state, ep), E.observe(other, ep))
+    assert len(E.OBS_NAMES) == E.observe(state, ep).shape[0]
+
+
+def test_walks_have_their_stated_spread_and_memory():
+    ep = E.EnvParams()
+    steps = int(2000 * 86400 / ep.plant.delta_t)
+    w = np.asarray(E.walks(jax.random.PRNGKey(3), steps, ep))
+    # Each column: sd as stated, and correlation e^-1 one correlation time apart. About
+    # 1000 independent stretches, so the sd is good to about 3 %; 10 % is the bound.
+    for i, (sd, hours) in enumerate(zip(ep.walk_sd, ep.walk_hours)):
+        lag = int(hours * 3600 / ep.plant.delta_t)
+        x = w[:, i]
+        assert x.std() == pytest.approx(sd, rel=0.1)
+        r = np.corrcoef(x[:-lag], x[lag:])[0, 1]
+        assert r == pytest.approx(np.exp(-1.0), abs=0.06)

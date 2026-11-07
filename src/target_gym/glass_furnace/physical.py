@@ -1,9 +1,12 @@
-"""Attempt 2: the glass furnace from its equations, unregistered.
+"""Attempts 2 and 3: the glass furnace from its equations, unregistered.
 
 Every term is a conservation law or a sourced relation. Citations are in
 ``PHYSICS.md`` under "Physical plant". Temperatures are in K here unless a name says
-otherwise; the shipped clocks and regenerator constants are reused through
-``GlassFurnaceParams``.
+otherwise; the shipped regenerator constants are reused through ``GlassFurnaceParams``.
+
+Attempt 3 steps at 180 s with the reversal averaged out: each checker node takes half its
+flue duty and half its air duty, and the firing gap enters as its mean. The refiner takes a
+cooling sink, and each cell of melt carries the share of its sulfate fining it has done.
 
 Layers count down from the surface, columns along the tank from the charger.
 """
@@ -21,7 +24,6 @@ from target_gym.glass_furnace.env import (
     KELVIN_OFFSET,
     N_REGEN_NODES,
     GlassFurnaceParams,
-    reversal_phase,
 )
 
 SIGMA = 5.670374e-8
@@ -410,7 +412,8 @@ class PhysicalParams(GlassFurnaceParams):
     sigma_glass: float = 0.3  # N/m, Table 1 of JCIS2001
     bubble_radius: float = 8.3e-3  # m, top of the lab range in Ch16
     foam_half_life: float = 50.0  # s at 1200 C, soda-lime, Kappel Table 3
-    max_steps_in_episode: int = 8640
+    delta_t: float = 180.0  # s: 24 m/h over a 1.8 m column allows about 270
+    max_steps_in_episode: int = 3360  # seven days
 
 
 @struct.dataclass
@@ -419,12 +422,12 @@ class Fields:
     T_top: jnp.ndarray  # radiating top of each melter column, K
     T_roof: jnp.ndarray  # (cells, bays), K
     T_gas: jnp.ndarray  # bays, K
-    T_rA: jnp.ndarray  # regenerators, C, as shipped
-    T_rB: jnp.ndarray
+    T_r: jnp.ndarray  # each chamber's checker nodes, averaged over a reversal, C
     m: jnp.ndarray  # blanket, kg/m^2, melter columns
     c: jnp.ndarray  # cullet ratio in the blanket
     q_under: jnp.ndarray  # W/m^2 already taken from the melt into the blanket
     foam: jnp.ndarray  # thickness, melter columns, m
+    fining: jnp.ndarray  # share of its sulfate fining each cell's glass has done
 
 
 def initial_fields(g, p):
@@ -444,10 +447,9 @@ def initial_fields(g, p):
         T=jnp.asarray(T), T_top=jnp.asarray(T[0, : a.nm]),
         T_roof=jnp.tile(jnp.asarray(roof)[:, None], (1, g.n_bays)),
         T_gas=jnp.full((g.n_bays,), 2000.0),
-        T_rA=jnp.linspace(1300.0, 500.0, N_REGEN_NODES),
-        T_rB=jnp.linspace(1300.0, 500.0, N_REGEN_NODES),
+        T_r=jnp.linspace(1300.0, 500.0, N_REGEN_NODES),
         m=jnp.asarray(m), c=jnp.full((a.nm,), 0.25), q_under=jnp.zeros((a.nc,)),
-        foam=jnp.zeros((a.nm,)),
+        foam=jnp.zeros((a.nm,)), fining=jnp.zeros_like(jnp.asarray(T)),
     )  # fmt: skip
 
 
@@ -465,6 +467,25 @@ def _stack(nodes, T_in, m_air, m_gas, is_air, p):
         Qa.append(-m_air * p.c_p_air * (out - T_a))
         T_a = out
     return jnp.where(is_air, jnp.stack(Qa[::-1]), jnp.stack(Qe)), T_a, T_e
+
+
+def averaged_stack(nodes, T_flue, m_air, m_gas, p):
+    """A chamber over a reversal: half its flue duty and half its air duty on each node.
+    ``(Q per node, air out, flue out)``, C, the first-order average of ``_stack``."""
+    Qe, _, T_e = _stack(nodes, T_flue, m_air, m_gas, False, p)
+    Qa, T_a, _ = _stack(nodes, T_flue, m_air, m_gas, True, p)
+    return 0.5 * (Qe + Qa), T_a, T_e
+
+
+def mean_firing(p):
+    """The firing clock's time mean: ``reversal_dead_time`` per half cycle at the floor."""
+    off = p.reversal_dead_time / p.reversal_period
+    return 1.0 - off * (1.0 - p.reversal_firing_floor)
+
+
+def fining_done(T, p):
+    """Share of the sulfate's fining gas glass at ``T`` has released, over the band."""
+    return jnp.clip((T - p.T_fine_low) / (p.T_fine_high - p.T_fine_low), 0.0, 1.0)
 
 
 def _gas_balance(s, E_load, T_load, fuel_heat, m_gas, H_air, a, g, p):
@@ -528,22 +549,22 @@ def _refiner_loss(T, p):
     return p.U_refiner * (R - Ta)
 
 
-def plant_step(s, fuel, charge, cullet, thickness, time, g, p, lhv=0.0):
-    """One step of the physics: ``(fields, books)``. ``fuel`` kg/s actually fired,
-    ``charge`` kg/s, ``cullet`` and ``thickness`` as the charger lays them."""
+def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
+    """One step of the physics: ``(fields, books)``. ``fuel`` kg/s on the valve, of which
+    the reversal's mean is fired; ``charge`` kg/s, ``cullet`` and ``thickness`` as the
+    charger lays them; ``cooling`` W taken from the refiner's glass; ``lhv`` the gas's
+    heating value off its nominal, as a fraction."""
     a = layout(g)
     dt = p.delta_t
     Ta = p.T_ambient + KELVIN_OFFSET
     rc = p.rho_glass * p.c_glass
-    A_is_air = reversal_phase(time, p) < 0.5
+    fuel = fuel * mean_firing(p)
     m_air = p.AFR * (1.0 + p.excess_air) * fuel
     m_gas = fuel + m_air
     fuel_heat = fuel * p.LHV * (1.0 + lhv)
 
     # ---- Combustion space
-    _, air_A, _ = _stack(s.T_rA, 0.0, m_air, m_gas, True, p)
-    _, air_B, _ = _stack(s.T_rB, 0.0, m_air, m_gas, True, p)
-    T_air = jnp.where(A_is_air, air_A, air_B)
+    _, T_air, _ = averaged_stack(s.T_r, 0.0, m_air, m_gas, p)
     H_air = m_air * p.c_p_air * (T_air - p.T_ambient)
     f = cover(s.m)
     bay = a.bay
@@ -613,7 +634,9 @@ def plant_step(s, fuel, charge, cullet, thickness, time, g, p, lhv=0.0):
     R = R - 2.0 * p.U_side / a.width * (T - Ta) / rc * dz_
     R = R.at[-1].add(-p.U_bottom * (T[-1] - Ta) / rc)
 
-    loss_ref = _refiner_loss(T[0, a.nm :], p)
+    loss_ref = _refiner_loss(T[0, a.nm :], p) + cooling / jnp.sum(
+        a.dx[a.nm :] * a.width
+    )
     q_all = jnp.concatenate([(1.0 - f) * q + spare, -loss_ref])
     R = R + a.deposit[:, None] * q_all / rc
     Tt0 = T[0]
@@ -639,6 +662,16 @@ def plant_step(s, fuel, charge, cullet, thickness, time, g, p, lhv=0.0):
     Tn = thomas(aa, bb, cc, rhs)
     q_under = under * (Tn[0] - p.T_melt_K)
 
+    # ---- Fining share: carried as the heat is, batch glass arriving with none; glass
+    # keeps what it released, and releases what its new temperature allows.
+    X = s.fining
+    carry = jnp.concatenate([zero, Fp * X[:, :-1] + Fm * X[:, 1:], out * X[:, -1:]], 1)
+    aa_x = jnp.concatenate([pad, -Wp[1:-1]], 0)
+    cc_x = jnp.concatenate([-Wm[1:-1], pad], 0)
+    bb_x = dz_ / dt + Wm[:-1] + Wp[1:]
+    rhs_x = dz_ / dt * X + (carry[:, :-1] - carry[:, 1:]) / a.dx
+    Xn = jnp.maximum(thomas(aa_x, bb_x, cc_x, rhs_x), fining_done(Tn, p))
+
     # ---- Crown: conduction, the face linearised
     ep = p.eps_surface
     Tr = s.T_roof
@@ -658,34 +691,30 @@ def plant_step(s, fuel, charge, cullet, thickness, time, g, p, lhv=0.0):
     rhs_r = rhs_r.at[0].add((q_face + h_face * Tr[0]) / rb).at[-1].add(back_U * Ta / rb)
     Trn = thomas(aa_r, bb_r, cc_r, rhs_r)
 
-    # ---- Regenerators
+    # ---- Regenerators: two chambers, each on the average of its two halves
     T_flue_K = jnp.mean(T_g)
     T_flue = T_flue_K - KELVIN_OFFSET
-    QA, _, st_A = _stack(s.T_rA, T_flue, m_air, m_gas, A_is_air, p)
-    QB, _, st_B = _stack(s.T_rB, T_flue, m_air, m_gas, ~A_is_air, p)
-    T_stack = jnp.where(A_is_air, st_B, st_A)
+    Q_r, _, T_stack = averaged_stack(s.T_r, T_flue, m_air, m_gas, p)
     UA = p.U_regen * p.A_regen / N_REGEN_NODES
-    loss_A = UA * (s.T_rA - p.T_ambient)
-    loss_B = UA * (s.T_rB - p.T_ambient)
+    loss_r = UA * (s.T_r - p.T_ambient)
     rate = dt / p.C_regen_node
     new = Fields(
-        T=Tn, T_top=top, T_roof=Trn, T_gas=T_g,
-        T_rA=s.T_rA + rate * (QA - loss_A), T_rB=s.T_rB + rate * (QB - loss_B),
-        m=m_new, c=c_new, q_under=q_under, foam=foam,
+        T=Tn, T_top=top, T_roof=Trn, T_gas=T_g, T_r=s.T_r + rate * (Q_r - loss_r),
+        m=m_new, c=c_new, q_under=q_under, foam=foam, fining=Xn,
     )  # fmt: skip
 
     w_area = a.dx * a.width
     books = dict(
         **{"in": fuel_heat + rc * jnp.sum(W[0] * w_area) * p.T_melt_K},
         out=m_gas * p.c_p_gas * (T_stack - p.T_ambient)
-        + jnp.sum(loss_A + loss_B)
+        + 2.0 * jnp.sum(loss_r)
         + jnp.sum(a.A_crown * back_U * (Trn[-1] - Ta))
         + jnp.sum(2.0 * p.U_side * (T - Ta) * dz_ * a.dx)
         + jnp.sum(p.U_bottom * (T[-1] - Ta) * w_area)
         + jnp.sum(loss_ref * w_area[a.nm :])
         + rc * jnp.sum(out[:, 0] * T[:, -1]) * a.width
         + used,
-        T_stack=T_stack, T_air=T_air, foam=foam, melt=melt, q=q_all, v=v,
+        T_stack=T_stack, T_air=T_air, foam=foam, melt=melt, q=q_all, v=v, fuel=fuel,
         in_blanket=in_blanket, u=u, H_load=H_load, H_crown=H_crown,
         to_crown=jnp.sum(a.A_crown * q_face),
         to_load=jnp.sum(dA * ((1.0 - f) * q + f * q_batch)),
@@ -699,7 +728,7 @@ def stored_energy(s, g, p):
     rc = p.rho_glass * p.c_glass
     melt = rc * jnp.sum(s.T * a.dz[:, None] * a.dx * a.width)
     roof = p.rho_brick * p.cp_brick * jnp.sum(s.T_roof * a.dr[:, None] * a.A_crown)
-    regen = p.C_regen_node * (jnp.sum(s.T_rA) + jnp.sum(s.T_rB))
+    regen = 2.0 * p.C_regen_node * jnp.sum(s.T_r)
     held = p.delta_t * jnp.sum(s.q_under * a.dx * a.width)
     return melt + roof + regen + held
 
@@ -712,15 +741,22 @@ def reading_cell(depth, g):
     return i, (depth - r[i]) / (r[i + 1] - r[i])
 
 
-def sensors(s, depth, bay, g):
-    """What instruments could see: the crown's hot face and its couple at ``depth`` in
-    ``bay``, the glass bottom under that bay, the refiner's end surface. K, unfiltered.
-    """
-    i, w = reading_cell(depth, g)
-    col = bay * g.cols_per_bay + g.cols_per_bay // 2
-    return (
-        s.T_roof[0, bay],
-        (1.0 - w) * s.T_roof[i, bay] + w * s.T_roof[i + 1, bay],
-        s.T[-1, col],
-        s.T[0, -1],
+COUPLE_DEPTH, COUPLE_BAY = 0.036, 3  # the crown couple, ours; W2000b's peak at 14 m
+
+
+def sensors(s, g, p):
+    """What instruments could see, K: the crown's hottest face and its couple in
+    ``COUPLE_BAY``; the glass at the floor under that bay and at the melter's end; the
+    canal, which reads the leaving glass by its flow, as does the fining share."""
+    a = layout(g)
+    i, w = reading_cell(COUPLE_DEPTH, g)
+    col = COUPLE_BAY * g.cols_per_bay + g.cols_per_bay // 2
+    by_flow = lambda x: jnp.sum(x[:, -1] * a.dz) / jnp.sum(a.dz)
+    return dict(
+        hot=jnp.max(s.T_roof[0]),
+        crown=(1.0 - w) * s.T_roof[i, COUPLE_BAY] + w * s.T_roof[i + 1, COUPLE_BAY],
+        floor_bay=s.T[-1, col],
+        floor=s.T[-1, a.nm - 1],
+        canal=by_flow(s.T),
+        fining=by_flow(s.fining),
     )
