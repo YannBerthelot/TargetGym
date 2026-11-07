@@ -4,7 +4,7 @@ Specification of 2026-11-03, for owner review. Nothing here has been run or
 implemented. It replaces the audit's rule B, max(expert settle, 5 x tau_63),
 which had no source (`oracle-audit.md`, section 5, Horizon).
 
-> Amendment 5, 2026-11-07 (section 14): the aircraft's test, H23 and H24.
+> Amendment 5, 2026-11-07 (section 14): the aircraft's test, H23 to H25.
 >
 > Amendment 3, 2026-11-04 (section 12): a rate limit's ramp joins P (H21).
 >
@@ -842,7 +842,7 @@ T_avg and T_hot. `n` and T_fuel have none.
 ## 14. Amendment 5, the aircraft's test
 
 The recipe is unchanged. This section corrects how the first aircraft test was run,
-and adds two rules, H23 and H24, both written after the failures they answer.
+and adds three rules, H23 to H25, each written after what it answers.
 
 **What settles an aircraft.** The expert is stale until part F of the build plan: it
 trips 14 to 20 times an episode on `plane`. D6 says the tests fly through ArduPlane
@@ -897,19 +897,38 @@ it. A test on `plane_energy`'s own 1600 steps gave 0 valid: a fit on the first 2
 tracks the same run within about 2 % at 420 s, and drifts by 8 to 13 % at 800 s and by 31
 to 45 % at 1600 s. The evidence file records this.
 
+**H25, an aircraft's values come from section 4.5's rows (owner's reading,
+2026-11-07).** Section 4.5's table names each CV's test MV, and section 5 says every test
+reads every CV, so a test also read throttle to heading and pitch to heading. These
+two lines disagree on what sets P, and on the 3D tasks the second set it: P 1575, from
+throttle to heading on seed 100, an integrating fit of gain 0.00263 rad/s per raw unit,
+tau2 165 s, a fit of 98.9 %, an SNR of 28.3 and all of V1 to V4 passed. The fit is sound
+and the plant does this, but it is not a way of steering. The test holds the settled
+bank, and a turn rate at a held bank moves with speed, so the fitted gain follows
+tan(held bank) over the ten seeds, k / tan(bank) of -0.010 to -0.025, changes sign with it,
+and goes to zero on a level hold. Its lag is airspeed's own. Pitch to heading has the same
+mechanism.
+
+So the table reads as written: heading is set by bank. An aircraft's T_c and P come from
+its rows and from every MV on a limit CV, as H6 and the correction above have it; the
+altitude band is covered by the altitude rows. The other pairs stay in the evidence, under
+`outside_section_4_5`, and set nothing.
+
+**Provenance of H25.** It is the owner's, made after the cost was seen: planning to
+the end of each episode at T_c 1 grows with the square of the episode's length, which
+this session reported with the numbers above. No return enters it. It moves only the 3D
+family, 16 fits on each, largest P 1575, 1470 and 1234. `plane`, its two sharers and the
+patrol tasks have no valid or quiet fit outside the table, so nothing moves there.
+
 **Results.**
 
-| task | T_c | P | samples in the episode | planned |
-|---|---|---|---|---|
-| `plane` | 3 | 221 | 94 | to the end |
-| `plane_sine` | 3 | 221 | 160 | to the end |
-| `plane_energy` | 3 | 221 | 534 | 221 |
-| `plane3d_heading`, `plane3d_circle` | 1 | 1575 | 300 | to the end |
-| `plane3d_racetrack` | 1 | 1575 | 650 | to the end |
-| `plane3d_figure8` | 1 | 1575 | 1000 | to the end |
-| `patrol`, `patrol_range_bearing` | 1 | 103 | 200 | 103 |
-| `formation` | 1 | 1575 | 200 | to the end |
+| task | T_c | P | set by | samples in the episode | planned |
+|---|---|---|---|---|---|
+| `plane`, `plane_energy`, `plane_sine` | 3 | 221 | throttle to Mach, seed 102, quiet | 94, 534, 160 | 94, 221, 160 |
+| `plane3d_heading`, `plane3d_circle` | 1 | 374 | throttle to altitude, seed 100 | 300 | to the end |
+| `plane3d_racetrack` | 1 | 439 | course to path, seed 104 | 650 | 439 |
+| `plane3d_figure8` | 1 | 484 | course to path, seed 109 | 1000 | 484 |
+| `patrol`, `patrol_range_bearing` | 1 | 103 | speed to along-track, seed 100 | 200 | 103 |
+| `formation` | 1 | 374 | throttle to altitude, seed 100 | 200 | to the end |
 
-On the 3D tasks T_c comes from bank to heading, seed 101, and P from throttle to heading,
-seed 100, an integrating fit with a lag of 162 s. Every one of them plans to the episode's
-end once a step, so its cost grows with the square of the episode's length.
+T_c on the 3D tasks comes from bank to heading, seed 101.

@@ -62,7 +62,7 @@
   "dt": 1.0,
   "episode_samples": 160,
   "episode_steps": 480,
-  "generated": "2026-11-07T10:21:50+00:00",
+  "generated": "2026-11-07T11:00:25+00:00",
   "own_window": "takes plane's test: the same dynamics, on the shortest window",
   "pairs": [],
   "plans_to_episode_end": true,

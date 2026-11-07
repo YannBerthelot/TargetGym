@@ -62,7 +62,7 @@
   "dt": 1.0,
   "episode_samples": 534,
   "episode_steps": 1600,
-  "generated": "2026-11-07T10:21:50+00:00",
+  "generated": "2026-11-07T11:00:25+00:00",
   "own_window": "a test on this task's own 1600-step window gave 0 valid of 20: a fit on the first 280 steps tracks the same run within about 2 % at 420 s, and drifts by 8 to 13 % at 800 s and 31 to 45 % at 1600 s, as the climb moves the air",
   "pairs": [],
   "plans_to_episode_end": false,

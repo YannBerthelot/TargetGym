@@ -49,6 +49,7 @@ from target_gym.identification import (
     quiet_fits,
 )
 from target_gym.oracles.horizon import (
+    cooper_horizons,
     episode_samples,
     sample_time,
     task_horizon,
@@ -379,6 +380,22 @@ TEST_ROWS = {
     "plane3d_figure8": (("course",), ("path",)),
     "patrol_slots": (("speed", "course"), ("along", "across")),
 }
+#: H25, the owner's reading of 2026-11-07: an aircraft's T_c and P come from section
+#: 4.5's rows and from every MV on a limit CV (H6). The altitude band is covered by
+#: the altitude rows. The other pairs stay in the evidence and set nothing.
+ROWS_4_5 = {
+    ("pitch", "altitude"), ("throttle", "altitude"), ("bank", "heading"),
+    ("course", "path"), ("speed", "along"), ("course", "across"),
+}  # fmt: skip
+LIMIT_CVS = {"eas", "mach", "load", "bank", "separation", "slot"}
+
+
+def sets_a_value(aircraft: bool, mv: str, cv: str) -> bool:
+    """Whether a pair may set T_c or P: every pair off the aircraft."""
+    mv, cv = mv.split(":")[-1], cv.split(":")[-1]
+    return not aircraft or cv in LIMIT_CVS or (mv, cv) in ROWS_4_5
+
+
 #: Why a task does not read its own window (Amendment 5, H24).
 OWN_WINDOW = {
     "plane_energy": (
@@ -613,8 +630,17 @@ def measure(name: str) -> dict:
             key[at] = (mvs[j + n_m], cvs[i + n_c], TRAIN_SEEDS[s])
             test_of[at] = t
         classes.update({i + n_c: c for i, c in run["classes"].items()})
+    aircraft = REGISTRY[name].group == "aircraft"
     valid = {key[k]: r["fit"] for k, r in pairs.items() if r["label"] == "valid"}
     quiet = {(*key[k[:3]], k[3]): f for k, f in quiet_fits(pairs, classes).items()}
+    # H25: read outside the table, reported in the evidence, setting nothing.
+    outside = {
+        k: f
+        for k, f in {**quiet, **valid}.items()
+        if not sets_a_value(aircraft, k[0], k[1])
+    }
+    valid = {k: f for k, f in valid.items() if k not in outside}
+    quiet = {k: f for k, f in quiet.items() if k not in outside}
     tc, rows, top = task_horizon(valid, dt, quiet)
     at = ("mv", "cv", "seed", "test")
     horizon = {}
@@ -714,6 +740,12 @@ def measure(name: str) -> dict:
     }
     if name in OWN_WINDOW:
         row["own_window"] = OWN_WINDOW[name]
+    if outside and horizon:
+        extra_rows = {k: cooper_horizons(f, tc * dt)[2] for k, f in outside.items()}
+        row["outside_section_4_5"] = [
+            {**dict(zip(at, k)), "fit": outside[k], "P": p_}
+            for k, p_ in extra_rows.items()
+        ]
     return _clean(row, dt)
 
 
