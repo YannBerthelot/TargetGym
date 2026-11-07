@@ -286,6 +286,24 @@ The next release is 0.8.0, because these changes break code written for
     Oracle horizons are rerun under a new rule: a fit failing V1 alone at a fit of
     at least 95 % counts toward P, so `hvac`, `wind_turbine`, `compressor_surge` and
     `distillation` change.
+  - **`hvac`:** the expert is an outdoor reset with indoor feedback, as a hot-water
+    system in a dwelling runs, in place of ASHRAE Guideline 36's zone loop. Optimal
+    start stays.
+  - **`wind_turbine`:** the pitch PI uses Jonkman's gain schedule on the ROSCO
+    surface, held on the region-3 curve.
+  - **`battery`:** the expert is retuned on the rebuilt plant, and its integral no
+    longer acts under the state-of-charge guard.
+  - **`boiler_drum`:** the expert is retuned on the rate-limited plant. The level
+    trim's own limit is gone, and its integral stops at the feedwater's limits.
+  - **`glass_furnace`:** the crown PI is retuned on the slew-limited plant, with a
+    filter on the reading. `Kp` falls from 12 to 0.3.
+  - **`reactor`:** the stale relay gains leave the store. The rod program is
+    unchanged.
+  - Gains for all six are stored at noise levels 0.5, 1 and 2.
+  - `scripts/tune_pid.py` no longer tunes `glass_furnace` or `reactor`.
+  - `plane`, `plane_sine` and `plane_energy`: the oracles move to the shared solver.
+    Recorded oracle numbers for these tasks no longer apply. Oracle horizons for all
+    ten aircraft tasks are new.
 
 ### Changed
 

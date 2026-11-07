@@ -936,6 +936,7 @@ def test_no_new_write_only_state_fields():
 KNOWN_DISCARDED_UNPACKS = {
     ("plane/dynamics.py", "_, z, theta = positions"),
     ("plane/env.py", "_, z, theta = positions"),
+    ("plane/oracle.py", "_, z, theta = positions"),
     ("plane3d/dynamics.py", "_, _, z, theta, phi = positions"),
     ("plane3d/env.py", "_, _, z, theta, phi = positions"),
     ("energy/wind_turbine/oracle.py", "_, _, v_mean, deviation = task"),
