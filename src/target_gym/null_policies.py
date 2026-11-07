@@ -189,7 +189,9 @@ EXCEPTIONS = {
     "four_tank": _NO_FIGURE_FOUND,
     "hvac": _NO_FIGURE_FOUND,
     "ph_neutralization": _NO_FIGURE_FOUND,
-    "reactor": _NO_FIGURE_FOUND,
+    "reactor": f"{_NO_FIGURE_FOUND}; check 1: a plain integrator on Tavg beats the "
+    "rod program at the $1 rod step, ours, and no source settles a better price "
+    "(accepted 2026-11-07)",
     "unstable_cstr": "check 2: tau_j of 6 s is synthetic, and PHYSICS.md says so "
     "(accepted 2026-11-06)",
 }

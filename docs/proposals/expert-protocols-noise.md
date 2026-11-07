@@ -179,7 +179,9 @@ cycling expert's transient as noise. For those tasks, read `Read.nb` from
   apply to them.
 - R4's pulse test did not enter this amendment. The twin removed load drift on the
   kiln, boiler and distillation tests, and one step does not, so those fits carry it.
-- No expert outside the seven process tasks reads `Tf` or a gate yet.
+- `boiler_drum` and `glass_furnace` read `Tf` too, since section 10 of the process
+  protocols. Neither `battery` nor `hvac` has a valve, so neither has one. No expert
+  outside `distillation` reads a gate.
 - Sources were read through automated fetches, and several core references could
   not be opened: Seborg, Shinskey's book, Cooper's book, Astrom and Hagglund's
   books, ISA-TR5.9, the NREL report and the full G36 text.

@@ -202,7 +202,7 @@ Measured on the held-out seeds 200 to 209 (2026-11-06), before any re-record.
 
 | controller | cost per episode | imbalance | wear | trips |
 |---|---|---|---|---|
-| expert | $80.8 | $42.4 | $38.4 | 0 |
+| expert | $82.8 | $44.9 | $37.9 | 0 |
 | stand-in oracle | $79.5 | $38.1 | $41.4 | 0 |
 
 The null policies, on the same seeds (`tests/test_null_policies.py`), as the expert's
@@ -222,10 +222,26 @@ rebuild was for: the echo used to win 10 of 10.
 **The expert** is what a commercial controller does (`experts.py`): a feedforward of
 the signal, a PI trim on the meter, and hard limits on state of charge. On a block's
 last step the feedforward is the next block. The guard fades the demand to zero in
-the direction that would breach a limit, over 0.12 of charge, at 0.10 and 0.90,
-which is 5 % inside the trips as the MESA-1 report advises. The integrator stops
-while the guard sheds. Its gains predate the rebuild, and PR 9 writes its protocol
-afresh.
+the direction that would breach a limit, at 0.10 and 0.90, which is 5 % inside the
+trips as the MESA-1 report advises. The integrator stops while the guard sheds, this
+step's share included, since a guard is not a clip and that share would reach the
+pack.
+
+Its recipe is section 10 of `docs/proposals/expert-protocols-process.md`. A +0.1 raw
+bump in manual reads k 1.00, a lag of 0.74 s and half a 5 s sample as delay, so C7
+gives Kp 0.315 and Ki 0.200, an integral that is deadbeat on one step. The guard's
+width is what rated power draws over one correlation time of the signal, 0.148 of
+charge (ours).
+
+**The trim chases the signal, as the protocol warned.** From innovation to error it
+is `(1 - z^-1) / (1 + (Kp + Ki dt - 1) z^-1 - Kp z^-2)`: an RMS error of 2.03 times
+the floor, against 1.22 at the old 0.5 and 0.02. The echo, which has no trim, wins the 6
+held-out seeds where it never trips, by $0.3 to $5, and trips on the other 4, so its
+ratio is 0.51 and the gate passes. It ships as a finding.
+
+**PJM's score** on held-out seeds, by `scripts/pjm_regulation_score.py`, is 84 on
+average, 44 to 96, against PJM's class 94 and its certification line of 75. Six seeds
+score 95 to 96, and the rest shed demand at a charge limit.
 
 **The oracle is a stand-in, labelled non-compliant for 0.8.0 (owner, 2026-11-07).** It
 reads the true state, commands the signal's next value, and stops following at the

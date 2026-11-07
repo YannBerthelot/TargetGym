@@ -112,17 +112,22 @@ def read_loop(
     model="fopdt",
     seeds=None,
     loops=(),
+    at=None,
+    delay=None,
 ):
     """N1 to N4 and C4, C5 on one loop: a dict with the model and how it read.
-    ``seeds`` are the plant's seed indices to test, by default all, and
-    ``loops`` hold through the test where nobody holds the output (N1)."""
+    ``seeds`` are the plant's seed indices to test, by default all, ``loops``
+    hold through the test where nobody holds the output (N1), ``at`` places the
+    step in a plant's own cycle (``Plant.bump``) and ``delay`` is a datasheet's,
+    held in place of the band's read."""
     seeds = range(plant.n_seeds) if seeds is None else seeds
     read = single_run(
-        lambda d: [plant.bump(s, mv, cv, d, window, inst, loops) for s in seeds],
+        lambda d: [plant.bump(s, mv, cv, d, window, inst, loops, at) for s in seeds],
         du,
         room,
         inst,
         model,
+        delay,
     )
     best, spread, explained = pick_fit(read.fits)
     out = {
@@ -152,11 +157,11 @@ def rescaled(loop, per_unit):
     return {**loop, "k": loop["k"] * per_unit}
 
 
-def tuned(loop, h, db=None, u_d=0.0):
+def tuned(loop, h, db=None, u_d=0.0, rule=None):
     """N5 to N7 on C6 and C7. ``db`` is the valve's dead band in the output's
     units, None on a pump or a drive. ``u_d`` is the move the largest load takes
     in those units, so Kc,min is ``u_d`` over the band. ``tau1`` None is an
-    integrating loop."""
+    integrating loop. ``rule`` replaces C7 (``noise_tune``)."""
     out = noise_tune(
         loop["k"],
         None if loop["integrating"] else loop["tau1"],
@@ -165,6 +170,7 @@ def tuned(loop, h, db=None, u_d=0.0):
         h,
         db,
         u_d / loop["band"] if loop["band"] else 0.0,
+        rule,
     )
     print(
         f"    Kc {out['Kc']:.4g}, Ti {out['Ti']:.4g}, Tf {out['Tf']:.3g},"

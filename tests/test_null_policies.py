@@ -46,7 +46,8 @@ fit_table, i_gains, simc_i_gain = FIT.fit_table, FIT.i_gains, FIT.simc_i_gain
 _STALE_TECS = "PR 9: TECS's time_const 2 trips the new envelope; at 5 this passes"
 
 #: The tasks a null policy beats today, each a finding of the industrial review.
-#: The PR that fixes one removes its line.
+#: The PR that fixes one removes its line. ``reactor``'s stays, with no PR to remove
+#: it: its win is an exception the owner accepted, so the mark shows if it ever stops.
 KNOWN = {
     "formation": "the hold's gains predate the envelope and the 0.03 rad/s route; "
     "PR 9 retunes it",
@@ -59,7 +60,8 @@ KNOWN = {
     "plane3d_racetrack": _STALE_TECS,
     "plane_energy": _STALE_TECS,
     "plane_sine": _STALE_TECS,
-    "reactor": "PR 9: an integrator on Tavg beats the rod program's dead band",
+    "reactor": "Accepted exception, 2026-11-07: an integrator on Tavg beats the rod "
+    "program's dead band at the $1 rod step, which the owner kept",
 }
 
 
@@ -95,10 +97,16 @@ def test_the_i_gain_is_simcs_with_the_lag_counted_as_delay():
 
 
 def test_an_invalid_bump_test_tunes_no_loop():
-    """All 10 of ``reactor``'s fits are invalid, ``cstr``'s are all valid. Those
-    fits read ``n``, from before the rebuild; PR 9 measures Tavg's."""
-    assert i_gains("reactor", 1, 1, 1.0) is None
+    """All 10 of ``glass_furnace``'s crown fits are invalid, ``cstr``'s are all
+    valid."""
+    assert i_gains("glass_furnace", 1, 1, 30.0) is None
     assert i_gains("cstr", 1, 1, 0.25)[0, 0] != 0.0
+
+
+def test_the_reactors_i_only_null_reads_tavg_on_its_control_step():
+    """k 22.7 K per raw, lag 35 s and delay 1 s at 30 s a step: 1 / (2 x 22.7 x
+    (35 + 1) / 30) = 0.018 raw per K per step."""
+    assert i_gains("reactor", 1, 1, 30.0)[0, 0] == pytest.approx(0.018, rel=0.1)
 
 
 def test_a_task_with_no_bump_test_has_no_i_only_null():
@@ -163,6 +171,18 @@ def test_a_task_has_a_figure_or_a_written_exception():
         assert has_a_figure or "no published figure" in (row["exception"] or ""), name
     for name in ("battery", "cement_kiln"):
         assert credibility_row(name, {})["exception"] is None
+
+
+def test_the_reactors_winning_null_has_a_written_exception():
+    """The plan lets a task in with a null winning only on an exception the owner
+    accepted, written in its ``PHYSICS.md``. The owner kept the $1 rod step on
+    2026-11-07. Its check 2 exception stands beside the new one."""
+    exception = credibility_row("reactor", {})["exception"]
+    assert "check 1" in exception and "2026-11-07" in exception
+    assert "no published figure" in exception
+    root = pathlib.Path(__file__).parent.parent
+    physics = root / "src" / "target_gym" / "reactor" / "PHYSICS.md"
+    assert "## Written exception to check 1" in physics.read_text()
 
 
 def test_a_figure_says_what_kind_of_number_it_is():

@@ -279,7 +279,9 @@ and its program is published, so nothing is tuned on seeds.
   moving rods stop only at 1.0 F (lockup); 8 steps/min to 3 F, then 32 steps/min per F
   up to 72 steps/min from 5 F. A positive error withdraws.
 
-Its protocol is PR 9's, written afresh on this plant.
+Every constant is read, so the recipe has nothing to tune, at any noise level
+(`docs/proposals/expert-protocols-process.md`, section 10). The store's old relay
+gains are gone, and each level's file holds an entry with no gain in it.
 
 ### Results
 
@@ -308,11 +310,11 @@ epigraph terms, and the trips are hard limits on every sub-step's state. It read
 true state, xenon and the day's schedule included, and plans the load's mean path.
 
 **An integrator on Tavg beats the rod program.** The dead band costs $365 of Tavg
-error to save $119 of rod travel, at the $1 a step labelled ours above. The two break
-even at about $3 a step, between $1.9 and $5.8 by seed. Either the rod price is too
-low, or a controller tighter than the Westinghouse program is simply better on this
-reward. That is for the owner and PR 9, and the gate shows it as a strict xfail with
-this witness in place. The price was not moved to make it pass.
+error to save $119 of rod travel, at the $1 a step labelled ours above. The expert
+moves 480 steps in a day and the integrator 598. The owner kept that price on
+2026-11-07, so the integrator is the better controller on this reward, and the
+written exception at the end of this page holds the evidence. The gate shows the win
+as a strict xfail with this witness in place. The price was not moved to make it pass.
 
 ---
 
@@ -403,6 +405,41 @@ sub-steps as it does `reward`. Each sub-step's true error is shifted by the draw
 in the observation that step returns, because a controller gets one reading per
 step, and any trip comes from the true state. The cost is linear, so noise has no
 floor of the proposal's quadratic form here.
+
+## Written exception to check 1
+
+A null policy wins here. A plain integrator on Tavg beats the rod program on 10 of 10
+held-out seeds, at a ratio of 1.17, with the rod step at $1. The owner accepted that
+on 2026-11-07 and kept the price, labelled ours. The integrator is the better
+controller on this reward, and that is the result. Passing a gate is no reason to move
+a price.
+
+**What the price would have to be.** The two tie at $3.07 on the means, between $1.91
+and $5.84 by seed. The gate's rule, 6 wins with a ratio above 1, fails up to $2.50 and
+passes from $3.
+
+| rod price | ratio | seeds the integrator wins | gate |
+|---|---|---|---|
+| $1, kept | 1.18 | 10 | fails |
+| $2 | 1.06 | 9 | fails |
+| $2.50 | 1.03 | 7 | fails |
+| $3 | 1.00 | 5 | passes |
+| $4 | 0.97 | 2 | passes |
+
+**What the sources can and cannot say.** Whole-head replacement projects ran from $20
+million to $150 million (NEI Magazine, both read twice), and those heads were replaced
+for nozzle cracking, not for wear. A vendor's 8 million steps of mechanism life was
+only seen in a search summary, so it is not a read figure. At 480 steps a day, 40
+years is 7 million steps, which fits it. All of a head over 8 million steps is $2.50 to
+$19 a step, and a tenth of a head's mechanisms, roughly one bank (ours), is $0.25 to
+$1.90. The whole-head reading charges a mechanism's wear with a cost it did not cause,
+and the bank's share rests on two figures nobody opened, so nothing here settles a
+price. Both $1 and $3 sit inside the range.
+
+The expert stays the published program, and a policy can beat it by holding Tavg
+tighter than its dead band and paying for the rod travel. The witness stays in the
+gate as a strict xfail, with no PR to remove it, so a change that stops it winning
+shows up.
 
 ## Written exception to check 2
 

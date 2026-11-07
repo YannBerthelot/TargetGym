@@ -240,10 +240,10 @@ PLANTS = {
     ),
     "reactor": (
         None,
-        lambda o, s, p: abs(float(s.rho_ext_cmd - s.rho_ext)),
+        lambda o, s, p: abs(float(s.rod_moved)),
         667,
-        "OU demand 1/theta = 6667 s at 10 s steps (xenon constrains reach only)",
-        2000,
+        "xenon's hours through the hold, at 30 s steps; the day's ramps are moves",
+        1440,
     ),
     "hvac": (
         None,
@@ -268,7 +268,7 @@ PLANTS = {
     ),
     "wind_turbine": (
         _wind_errors,
-        lambda o, s, p: abs(float(s.pitch_cmd - s.pitch)) / float(p.pitch_max),
+        lambda o, s, p: float(s.pitch_travel) / float(p.pitch_max),
         100,
         "rotor inertia, tens of seconds at 0.25 s steps",
         400,

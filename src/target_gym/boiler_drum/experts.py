@@ -5,10 +5,12 @@ the oracle each have a fingerprint of their own
 (``provenance.expert_fingerprint``, ``provenance.oracle_fingerprint``).
 """
 
+import math
+
 import jax.numpy as jnp
 from flax import struct
 
-from target_gym.experts.pid import Controller, load_gains
+from target_gym.experts.pid import Controller, gain
 
 # ---------------------------------------------------------------------------
 # Three-element PID as one pure step (host NumPy and jit/vmap alike)
@@ -33,41 +35,54 @@ class BoilerDrumPIDParams:
     Q_max: float
     h_feedwater: float
     dt: float = 2.0
-    # The level trim is bounded so the feedforward always dominates.
-    trim_max: float = 25.0
+    #: What each reading's filter passes of a step in one sample, 1 for none.
+    alpha_level: float = 1.0
+    alpha_pressure: float = 1.0
 
 
 @struct.dataclass
 class BoilerDrumPIDState:
-    """Level and pressure integrators, and the last pressure error."""
+    """Level and pressure integrators, the last pressure error, the filtered
+    readings, and whether the filters have seen a first reading."""
 
     level_int: float = 0.0
     press_int: float = 0.0
     prev_press_err: float = 0.0
+    level_f: float = 0.0
+    press_f: float = 0.0
+    started: float = 0.0
 
 
 def boiler_drum_pid_step(params, state, obs, xp=jnp):
     """One step of the boiler drum's level and pressure PIDs, against ``xp``.
 
-    Keep the arithmetic order: under ``numpy`` it reproduces the scored
-    baseline bit for bit.
-
     obs: [level, pressure, q_steam, fuel_pct, feed_pct, target_level, target_pressure]
     """
     p = params
-    level = obs[..., 0]
-    pressure = obs[..., 1]
+    first = state.started < 0.5
+    level = xp.where(
+        first,
+        obs[..., 0],
+        state.level_f + p.alpha_level * (obs[..., 0] - state.level_f),
+    )
+    pressure = xp.where(
+        first,
+        obs[..., 1],
+        state.press_f + p.alpha_pressure * (obs[..., 1] - state.press_f),
+    )
     q_steam = obs[..., 2]
     target_level = obs[..., 5]
     target_pressure = obs[..., 6]
 
-    # --- Feedwater: steam-flow feedforward, trimmed by a slow level PI ---
+    # --- Feedwater: steam-flow feedforward, trimmed by a level PI. The integral
+    # stops only at the actuator's limits, while the error pushes past them
+    # (conditional integration, Astrom and Hagglund 2006, 3.5). ---
     err_l = target_level - level
-    level_int = state.level_int + err_l * p.dt
-    trim = p.Kp_level * err_l + p.Ki_level * level_int
-    trim_clipped = xp.clip(trim, -p.trim_max, p.trim_max)
-    level_int = xp.where(trim != trim_clipped, level_int - err_l * p.dt, level_int)
-    q_feed = xp.clip(q_steam + trim_clipped, 0.0, p.q_feed_max)
+    grown = state.level_int + err_l * p.dt
+    q_raw = q_steam + p.Kp_level * err_l + p.Ki_level * grown
+    q_feed = xp.clip(q_raw, 0.0, p.q_feed_max)
+    pushing = ((q_raw > p.q_feed_max) & (err_l > 0.0)) | ((q_raw < 0.0) & (err_l < 0.0))
+    level_int = xp.where(pushing, state.level_int, grown)
     feed_raw = 2.0 * (q_feed / p.q_feed_max) - 1.0
 
     # --- Firing: enthalpy feedforward plus a PI on pressure ---
@@ -83,30 +98,38 @@ def boiler_drum_pid_step(params, state, obs, xp=jnp):
     fuel_raw = 2.0 * (Q_clipped / p.Q_max) - 1.0
 
     new_state = BoilerDrumPIDState(
-        level_int=level_int, press_int=press_int, prev_press_err=err_p
+        level_int=level_int,
+        press_int=press_int,
+        prev_press_err=err_p,
+        level_f=level,
+        press_f=pressure,
+        started=1.0 + 0.0 * q_steam,
     )
     return xp.stack([fuel_raw, feed_raw], axis=-1), new_state
 
 
-def make_boiler_drum_pid_controller() -> Controller:
-    """The three-element controller as a :class:`Controller`.
+def _passed(tf: float, dt: float) -> float:
+    """What a first-order filter of ``tf`` passes of a step in one sample."""
+    return -math.expm1(-dt / tf) if tf else 1.0
 
-    Reads the same tuned gains, with the same defaults, as
-    ``make_boiler_drum_stateful_pid``.
-    """
+
+def make_boiler_drum_pid_controller() -> Controller:
+    """The three-element controller as a :class:`Controller`. Gains and filters
+    from the recipe in ``scripts/tune_industrial_experts.py``."""
     from target_gym.boiler_drum.env import BoilerDrumParams
 
     pr = BoilerDrumParams()
-    _p = load_gains().get("boiler_drum", {})
     params = BoilerDrumPIDParams(
-        Kp_level=float(_p.get("Kp_level", 60.0)),
-        Ki_level=float(_p.get("Ki_level", 0.6)),
-        Kp_pressure=float(_p.get("Kp_pressure", 0.05)),
-        Ki_pressure=float(_p.get("Ki_pressure", 0.002)),
-        Kd_pressure=float(_p.get("Kd_pressure", 0.0)),
+        Kp_level=gain("boiler_drum", "Kp_level"),
+        Ki_level=gain("boiler_drum", "Ki_level"),
+        Kp_pressure=gain("boiler_drum", "Kp_pressure"),
+        Ki_pressure=gain("boiler_drum", "Ki_pressure"),
+        Kd_pressure=gain("boiler_drum", "Kd_pressure"),
         q_feed_max=pr.q_feed_max,
         Q_max=pr.Q_max,
         h_feedwater=pr.h_feedwater,
         dt=pr.delta_t,
+        alpha_level=_passed(gain("boiler_drum", "Tf_level"), pr.delta_t),
+        alpha_pressure=_passed(gain("boiler_drum", "Tf_pressure"), pr.delta_t),
     )
     return Controller(params, BoilerDrumPIDState(), boiler_drum_pid_step)

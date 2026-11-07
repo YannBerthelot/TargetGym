@@ -159,13 +159,7 @@ not a control problem, it is an ill-posed one.
 The constants all trip on over- or under-speed, which is the point: rotor-speed
 regulation is not optional, and the reward cannot buy back a trip.
 
-**This section predates the Cp table.** Its gains, holds and screens were measured
-on the analytic surface, and PR 9 rewrites both controllers on the new plant. On the
-held-out seeds, for this branch's plant with both controllers unchanged: the expert
-never trips, its rotor stays within 0.97 to 1.03 x rated (1.07 to 1.09 at its peaks
-before) and it holds 11.5 to 19.9 kW. The oracle never trips, peaks at 1.05 to 1.11 x
-rated (1.12 to 1.16 before) and holds 2.8 to 3.7 kW. The sensitivity now grows with
-pitch as Jonkman's does, so the fixed gains' flat-line argument below no longer holds.
+The constants' row and the return above predate the Cp table.
 
 **The expert: the NREL 5 MW baseline controller.** The controller published
 with the reference turbine (Jonkman et al. 2009, NREL/TP-500-38060,
@@ -178,39 +172,42 @@ chapter 7), on the observation only (`experts.py`, `nrel_baseline_step`):
   line ending at 1161.963 rpm, and region 3, constant power `P / w`, whenever
   the previous pitch command is at least 1 deg or the filtered speed at least
   1161.963 rpm. Limited to 47,402.91 N m and 15,000 N m/s.
-- **Pitch.** A PI on the filtered speed error against 1173.7 rpm, saturated
-  at the pitch limits, moving at most 8 deg/s, started bumpless from the
-  measured pitch.
+- **Pitch.** A PI on the filtered speed error against 1173.7 rpm, scheduled on
+  the last pitch command, saturated at the pitch limits, moving at most 8 deg/s,
+  started bumpless from the measured pitch. The integral is in pitch units and
+  adds `dt GK Ki e`, as ROSCO's `PIController` does, so the poles sit where they
+  were placed at every pitch.
 - **Ours, for the curtailed task.** `P` is the dispatched target over the
   generator efficiency (Jonkman's 5.296610 MW is 5 MW / 0.944), and the
   below-rated table is capped at region 3's torque, so a curtailed turbine
   never exceeds its target. The pitch limit is the plant's 40 deg.
-- **Gains, fixed.** Jonkman's pole placement (`wn` 0.6 rad/s, `zeta` 0.7)
-  on the best-fit `dP/dtheta` along the region-3 curve
-  (`scripts/wind_turbine_gains.py`, wind 12 to 25 m/s in 0.5 m/s steps):
-  Kp 0.01514 s and Ki 0.00649 on generator rad/s, at -31.7 MW/rad. The
-  published 0.01882681 and 0.008068634 assume the real blade. On this
-  plant's analytic Cp (D1) the sensitivity is not monotone in pitch: about
-  -66 MW/rad near 1 deg, -4 at 9 deg and -58 at 33 deg. Its best-fit line is
-  flat (theta_K 512 deg), so Jonkman's schedule `1 / (1 + theta / theta_K)`
-  is 1. A schedule read off the exact sensitivity instead multiplies the
-  gains where the surface is almost flat, and tripped the turbine 48 times
-  over the ten training seeds.
+- **Gains, scheduled.** Jonkman's pole placement (`wn` 0.6 rad/s, `zeta` 0.7)
+  on the best-fit line of `dP/dtheta` along the region-3 curve
+  (`scripts/wind_turbine_gains.py`, wind 12 to 25 m/s in 0.5 m/s steps), with his
+  schedule `GK = 1 / (1 + theta / theta_K)`. The published 0.01882681 s,
+  0.008068634 and 6.3 deg linearise with the wake frozen. On the steady table the
+  sensitivity runs almost through the origin, -17 MW/rad at 3.6 deg to -98 at 22
+  deg, so the line reads -0.07 MW/rad at 0 deg and `theta_K` 0.015 deg, and Kp(0)
+  is 7.05. Only `GK` times that is flown: 0.0107 at 10 deg and 0.0054 at 20. Since
+  the line says nothing off the curve, the schedule holds at the curve's ends, 3.6
+  and 22.8 deg (`docs/proposals/expert-protocols-process.md`, section 10). The
+  speed filter and the limits are fixed, and the noise sits inside them, so all
+  three noise levels fly these values.
 
-It replaces a PID that held power by the same constant-power torque but on
-the unfiltered speed, backed off linearly between 0.6 and 0.9 of rated speed,
-under a grid-searched pitch PI (Kp 12 deg/rpm, Ki 0.6). The proposal's change,
-Region 2's `k w^2` below rated, does not apply here: the task runs only above rated wind with a curtailed target, and
-capping the torque at that law under-brakes at rated speed.
+The RGA of pitch and torque on rotor speed and power, from the balances: lambda 11
+is 0.53, 0.76 and 0.82 at 3.5 MW and 13.5, 16.75 and 20 m/s; 0.34, 0.69 and 0.77 at
+4.25 MW; 0.07, 0.60 and 0.71 at 5 MW. It stays positive, so the pairing stands, but
+near rated in the lightest wind the loops interact hard: at 5 MW and 13.5 m/s the
+power loop's negative damping nearly cancels the rotor's own, and pitch on speed has
+about 14 times its open-loop gain.
 
-On the held-out seeds 200 to 209 the expert holds 1.10e-4 $ per step, the PID
-it replaces 2.81e-5, against a ceiling of 6.94e-6: 1.20 decades of room,
-against 0.61. Spec, a strict xfail in
-`tests/energy/wind_turbine/test_wind_turbine_nrel_expert.py`: rotor speed
-within 10 % of rated on 99 % of hold steps (met on every step of every
-seed) and a mean power error under 1 % of the target. Measured 0.25 to
-1.10 %, 1.10 % on seed 200, against 0.08 to 0.14 % for the PID: region 3
-divides by the filtered speed, so the power lags the rotor's speed swings.
+On the held-out seeds 200 to 209 the expert holds 1.26e-4 $ per step (worst 1.63e-4)
+against a ceiling of 1.18e-5, with no trip. Its rotor stays within 0.95 and 1.03 x
+rated, its mean power error is 21 to 33 kW a seed, and its RMS 1.4 % of rated, inside
+Energinet's 2 % over a minute at 0.27 % for its worst minute. Pitch travels 0.0026 of
+its range per step. Spec, in `tests/energy/wind_turbine/test_wind_turbine_nrel_expert.py`:
+rotor speed within 10 % of rated on 99 % of hold steps and a mean power error under
+1 % of the target, on every seed.
 
 **The oracle plans on the shared solver.** Since the oracle rule (2026-11) the
 MPC slot holds the planner of `oracle.py`, run by

@@ -238,50 +238,51 @@ oracle-horizon-protocol.md`, Amendment 4). On the ten test seeds it beats the ex
 on every seed, -12.90 against -16.54, with no trip. Without the mass in the horizon
 it plans 2 hours, cannot see the morning, and wins only 3 of 10.
 
-### The expert: Guideline 36 zone heating with optimal start
+### The expert: outdoor reset with indoor feedback and optimal start
 
-The expert is what a building automation system running ASHRAE Guideline 36
-does, on the observation only (`experts.py`, `g36_step`). Every constant is
-published, and nothing is tuned on seeds.
+Guideline 36 targets commercial VAV, so the expert is what a hot-water system in a
+dwelling runs: an outdoor reset with a room sensor, as the tekmar House Control 352
+runs one zone (data brochure D 352, 06/00), on the observation only (`experts.py`,
+`reset_step`). Its recipe is section 10 of
+`docs/proposals/expert-protocols-process.md`.
 
-- **Heating loop.** A PI on the zone air temperature, gain 0.1 per K and
-  integral time 900 s, output 0 to 1 (G36 as LBL's Modelica Buildings library
-  implements it, `G36/ThermalZones/ControlLoops.mo`: `kHeaCon`, `TiHeaCon`).
-  The action maps that signal onto [-1, 1], so 0 is no heat. The integral
-  stops while the output is saturated.
-- **Optimal start.** LBL's `OBC/Utilities/OptimalStart` with its defaults.
-  Three hours before occupancy it samples the zone; if the zone is more than
-  0.5 K under the occupied setpoint, the warm-up lasts the deficit over the
-  learned heating rate, capped at 3 h. The rate is the mean of the last three
-  learned rates, floored at 1 K/h (so it is 1 K/h on the first morning). Each
-  warm-up learns one: the temperature gained over the time taken to reach the
-  setpoint, pushed at midnight. During the warm-up the heating setpoint is the
-  occupied one (G36 5.3.2.3).
-- **What it knows.** The clock (from the time-of-day channels), the
-  occupancy schedule (07:00 to 22:00) and the occupied setpoint last seen, the
-  design 21 C before the first. All are what a BMS is programmed with.
-- **Left out.** G36's loop-enable hysteresis and its zero-output hold.
+- **The heating curve.** Heat supplied must equal heat lost, so the curve starts at
+  the setpoint in force and falls with the outdoor temperature. On this linear emitter
+  it is `Q = H (T_s - T_out)`, with `H` the building's 159.4 W/K. The heat stops when
+  the outdoor temperature reaches the starting point, which is warm weather shutdown.
+- **Indoor feedback.** The 352 shifts the starting point up when the zone is cold and
+  down when it is warm, and gives no number. Here that is a PI on the zone reading,
+  on a 0-1 heating signal: kp 0.236 per K and Ti 1309 s, from a bump on a quiet
+  building over five emitter lags. Its integral finds the free gains, and stops while
+  the signal is saturated.
+- **Optimal start.** LBL's `OBC/Utilities/OptimalStart` with its defaults. Nothing in
+  it is VAV-specific, and weather-compensated controllers carry their own: the
+  Siemens RVL470 calculates its changeover time up to a maximum heating-up period.
+  Three hours before occupancy it
+  samples the zone; if the zone is more than 0.5 K under the occupied setpoint, the
+  warm-up lasts the deficit over the learned heating rate, capped at 3 h. The rate is
+  the mean of the last three learned rates, floored at 1 K/h. Each warm-up learns one:
+  the temperature gained over the time taken to reach the setpoint, pushed at
+  midnight. During the warm-up the setpoint in force is the occupied one.
+- **What it knows.** The clock (from the time-of-day channels), the occupancy schedule
+  (07:00 to 22:00), the occupied setpoint last seen, the design 21 C before the first,
+  and the building's heat-loss figure. All are what a controller is commissioned with.
 
-On the held-out seeds 200 to 209, at the old `solar_peak` of 350, the expert's
-hold was 0.0179 euro per step against a ceiling of 7.5e-5, 2.38 decades of room.
-The PI it replaces (in-code gains 0.4 per K and 1e-4 per K s) held 0.0172.
+The bump reads k 3.08 K per unit action and a lag of 1309 s, with half a sample as
+delay. SIMC at those values lands near the G36 PI it replaces, 0.1 per K and 900 s.
 
-On the training seeds 100 to 109, again at 350, optimal start made the expert
-costlier: 0.0241 euro per step against 0.0205 for the same PI without it. Then the
-plant's cost was afternoon overheating, 1 to 2.7 K above target, and warming the
-building before occupancy stored more heat. Optimal start stays because it is what
-G36 buildings run.
+On the held-out seeds 200 to 209 it costs EUR 15.65 an episode (worst 19.91), with no
+trip, and uses 22.9 kWh a day. Its zone is within the comfort tolerance on 83 % of
+occupied steps, 0.2 K above target on average, where the G36 loop ran 1.0 K above.
+No null policy passes for it: the table reaches 0.81 and wins no seed.
 
-At 175 the expert heats on 44 % of steps, as the review found, costs 0.0223 euro a
-step and uses 21.3 kWh a day. Its zone still runs 1.0 K above target on average.
-No null policy comes near it: heater off scores a ratio of 0.21 and wins no seed.
-
-Spec, in `tests/hvac/test_hvac_expert.py`. The zone is within the comfort
-tolerance at the start of occupancy on 67 of 70 held-out mornings, against the
-90 % stated. At the old `solar_peak` it was 59 of 70, a strict xfail: the misses
-were mornings where the zone was less than 0.5 K short at the 04:00 sample, so
-OptimalStart ran no warm-up. A building that needs its heater keeps the loop
-warm overnight.
+Spec, a strict xfail in `tests/hvac/test_hvac_expert.py`: the zone within the comfort
+tolerance at the start of occupancy on 90 % of held-out mornings. It holds 46 of 70,
+where the G36 loop held 67. This is what the stronger loop does to optimal start. The
+zone now reaches its setpoint fast, on the air's quick rise, so the module learns
+about 5 K/h, starts 0.7 h before occupancy, and the mass pulls the air back: the
+median morning is 0.16 K short, and the worst 2.9 K. G36's warm-ups ran to the 3 h
+cap. It ships as a finding, and the morning's cost is small next to the day's.
 
 **Cheap to step**: one differential state with closed-form algebraic nodes,
 which is what the 5R1C reduction buys. See

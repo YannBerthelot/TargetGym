@@ -34,7 +34,7 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 import numpy as np
-from scipy.optimize import least_squares
+from scipy.optimize import brentq, least_squares
 from scipy.signal import fftconvolve
 
 __all__ = ["MODELS", "TRAIN_SEEDS", "Loop", "Plant", "Run", "class_of", "evidence"]
@@ -285,13 +285,15 @@ class Instrument:
 class Bump:
     """One single run: ``base`` the reading once per update before the step,
     ``dy`` after it less the baseline's mean, ``U`` the (m, 1) input deviation
-    over the same updates, and ``step`` the size. ``trip`` is where one cut it."""
+    over the same updates, and ``step`` the size. ``trip`` is where one cut it,
+    and ``clock`` the plant's step count when the step landed."""
 
     base: np.ndarray
     dy: np.ndarray
     U: np.ndarray
     step: float
     trip: tuple | None = None
+    clock: int = 0
 
 
 @dataclass
@@ -337,12 +339,16 @@ def sized_step(du: float, k: float, nb: float, room: float, record=None):
     return math.copysign(step, du), step * reach / nb if nb else math.inf
 
 
-def _read(bump, nb, instrument, model):
+def _read(bump, nb, instrument, model, delay=None):
     """One test's model, its delay read at the band exit and held (N4). The
-    ramp of an integrating loop spends ``nb / (2 |k' du|)`` inside the band."""
+    ramp of an integrating loop spends ``nb / (2 |k' du|)`` inside the band.
+    ``delay`` holds a datasheet's figure instead, where no step can clear the
+    band."""
     if len(bump.dy) < 4:
         return None
     h, first = instrument.h, instrument.dt
+    if delay is not None:
+        return fit(model, h, bump.dy, bump.U, delay, first)
     exit_index = band_exit(bump.dy, nb)
     delay = instrument.delay(exit_index)
     if model != "fopdt" and exit_index is not None:
@@ -352,15 +358,16 @@ def _read(bump, nb, instrument, model):
     return fit(model, h, bump.dy, bump.U, delay, first)
 
 
-def single_run(run, du, room, instrument, model="fopdt") -> Read:
+def single_run(run, du, room, instrument, model="fopdt", delay=None) -> Read:
     """N1 to N4 on one loop: ``run(step)`` gives a :class:`Bump` per seed. The
     band sizes the step, rerun once if that is larger. ``room`` is what the
-    actuator allows; a limit that blocks the step is not an error."""
+    actuator allows; a limit that blocks the step is not an error. ``delay`` is
+    held in the fit in place of the band's read (``_read``)."""
 
     def fits_at(step):
         bumps = run(step)
         nb = noise_band([b.base for b in bumps], instrument.rounding)
-        fits = [f for b in bumps if (f := _read(b, nb, instrument, model))]
+        fits = [f for b in bumps if (f := _read(b, nb, instrument, model, delay))]
         record = None
         if model != "fopdt":
             record = instrument.h * max(len(b.dy) for b in bumps)
@@ -423,23 +430,32 @@ def _filter_time(kc: float, nb: float, h: float, db: float) -> float:
     return 0.0 if r >= 1 else -h / math.log1p(-2 * r**2 / (1 + r**2))
 
 
-def noise_tune(k, tau1, theta, nb, h, db=None, kc_min=0.0) -> dict:
+def noise_tune(k, tau1, theta, nb, h, db=None, kc_min=0.0, rule=None) -> dict:
     """N5 to N7 on C6 and C7. ``theta`` has C4's half sample, ``h`` is the
     reading's update time. ``db`` is the dead band in the output's units,
     ``DEAD_BAND`` of its span, multiplied through any inner loop's gain; None on
-    an actuator with no sourced figure, which N5 and N7 leave alone."""
-    kc, ti = simc(k, tau1, theta, theta)
+    an actuator with no sourced figure, which N5 and N7 leave alone. ``rule(theta,
+    tau_c) -> (Kc, Ti)`` replaces C7, for a loop on another tuning rule."""
+    law = rule or (lambda th, tc: simc(k, tau1, th, tc))
+    kc, ti = law(theta, theta)
     tf, cap, tau_c = 0.0, FILTER_CAP * ti, theta
     if db is not None and nb > 0:
         for _ in range(PASSES):
             tf = min(_filter_time(kc, nb, h, db), cap)
-            kc, ti = simc(k, tau1, theta + tf, theta + tf)
+            kc, ti = law(theta + tf, theta + tf)
         tau_c = theta + tf
         most = db / (nb * _attenuation(tf, h))
         if abs(kc) > most:
             lowered = max(most, min(kc_min, abs(kc)))
-            tau_c = 2 * (theta + tf) * abs(kc) / lowered - (theta + tf)
-            kc, ti = simc(k, tau1, theta + tf, tau_c)
+            if rule is None:
+                tau_c = 2 * (theta + tf) * abs(kc) / lowered - (theta + tf)
+            else:
+                tau_c = brentq(
+                    lambda tc: abs(law(theta + tf, tc)[0]) - lowered,
+                    theta + tf,
+                    (theta + tf) * (1.0 + 2.0 * abs(kc) / lowered) ** 2,
+                )
+            kc, ti = law(theta + tf, tau_c)
     return {"Kc": kc, "Ti": ti, "Tf": tf, "theta": theta + tf, "tau_c": tau_c}
 
 
@@ -788,7 +804,7 @@ class Plant:
         lo, hi = self.mv_range
         return float(np.min(np.maximum(hi - self.u0[:, j], self.u0[:, j] - lo)))
 
-    def bump(self, s, j, cv, size, window, instrument, loops=()) -> Bump:
+    def bump(self, s, j, cv, size, window, instrument, loops=(), at=None) -> Bump:
         """N1 on seed index ``s``: one run holds for an episode, as long as the
         expert had to settle, since a stale reading can leave it cycling (ours).
         It then records ``instrument``'s baseline, steps MV ``j`` by ``size``
@@ -799,17 +815,26 @@ class Plant:
 
         The step lands one step before an update, so the first reading after
         it is the first that can show it. ``fit`` takes ``first=instrument.dt``
-        on this grid, which a fast reading does not need."""
-        every = instrument.every
-        lead = self.n_ep + (-(int(self._states[s].time) + self.n_ep + 1) % every)
-        n_pre = lead + math.ceil(instrument.baseline / every) * every
+        on this grid, which a fast reading does not need. ``at=(period, phase)``
+        is for a plant with a cycle of its own: the hold runs on until its clock
+        reads ``phase`` modulo ``period``, and the response is read against the
+        same phase of the cycle before, as an engineer lays one trace on another,
+        so the cycle's own swing stays out of it. ``window`` must fit in a cycle."""
+        every, now = instrument.every, int(self._states[s].time)
+        hold = self.n_ep + (-(now + self.n_ep + 1) % every)
+        base_steps = math.ceil(instrument.baseline / every) * every
+        if at is not None:
+            hold += (at[1] - (now + hold + base_steps)) % at[0]
+        n_pre = hold + base_steps
         step = self.direction(self.u0[s][j], size)
         Y, U, trip, _, (Y0, U0) = self._run(s, j, step, window, loops, n_pre)
-        base = Y0[lead::every, cv]
+        base = Y0[hold::every, cv]
+        before = np.mean(base) if at is None else Y0[-at[0] :, cv][: len(Y)]
         return Bump(
             base,
-            Y[::every, cv] - np.mean(base),
-            U[::every, [j]] - np.mean(U0[lead::every, j]),
+            Y[::every, cv] - before,
+            U[::every, [j]] - np.mean(U0[hold::every, j]),
             step,
             trip,
+            now + n_pre,
         )
