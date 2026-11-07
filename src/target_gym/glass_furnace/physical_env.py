@@ -41,7 +41,7 @@ class EnvParams:
     thickness: float = 0.2  # m, blanket as laid
     sulfate: float = 0.01  # Na2SO4 per kg batch, Laimbock
     canal_target: float = 1373.15  # K: "minimum 1100 C before entering the bath"
-    fining_pass: float = 0.474  # the owner's: the settled design point's own share
+    fining_pass: float = 0.507  # the owner's: the settled design point's own share
     crown_low: float = 1673.15  # K, 1400 C: sodium silicate forms below, SEFPRO
     crown_high: float = 1893.15  # K, 1620 C: silica degrades above, SEFPRO
     fuel_min: float = 0.25  # kg/s, the valve's range
@@ -53,9 +53,9 @@ class EnvParams:
     override_ti: float = 7200.0  # s
     # No capacity was found. Ours: twice what holds the canal at the design point, so
     # the coolers bind only far from it. Set from the settle script's output.
-    cooling_max: float = 10.5e6
+    cooling_max: float = 2.04e6
     cooling_above: float = 1.0  # K over the target the loop holds, ours
-    cooling_gain: float = 3.134e5  # W/K, SIMC on a 5 % cooling step (scripts)
+    cooling_gain: float = 2.796e5  # W/K, SIMC on a 5 % cooling step (scripts)
     cooling_ti: float = 7680.0  # s, same recipe
     # gas: ENTSOG's 4 to 6 MJ/m3 swings on about 50, read as four spreads, daily;
     # pull: +-2 % wander (US11261117B2) as two spreads; cullet, blanket: the owner's

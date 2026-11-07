@@ -324,7 +324,9 @@ def thomas(a, b, c, d):
 class Grid:
     n_bays: int = 6  # six ports, W2000b
     cols_per_bay: int = 2
-    n_refiner: int = 4
+    n_refiner: int = 4  # the unfired zone past the last port, at the melter's width
+    n_waist: int = 2
+    n_end: int = 2  # the working end, where the cooling air blows
     n_depth: int = 10
     skin: float = 0.006  # m, the top layer
     n_roof: int = 8
@@ -340,12 +342,14 @@ def layout(g):
 @functools.lru_cache(maxsize=8)
 def _layout(
     g, length=21.5, refiner=20.5, width=11.0, height=2.4, depth=1.2, crown=0.45,
-    waist=7.5, waist_share=4.5 / 14.0, end_share=10.0 / 14.0,
+    waist=7.5, end=20.0, waist_share=4.5 / 14.0, end_share=10.0 / 14.0,
 ):  # fmt: skip
-    """Geometry. The waist and working end follow a 1300 t/d float furnace (Materials 17
-    (2024) 4989, Table 1: melter 14 m wide, waist 7.5 m long and 4.5 m wide, working end
-    10 m wide), their widths scaled to this melter's; half the refiner's columns are
-    waist."""
+    """Geometry, in the order Saint-Gobain's float line shows it: the fired melter, an
+    unfired zone at the same width, the waist, then the working end that feeds the canal.
+    Melter and unfired zone are W2000b's 21.5 and 20.5 m at 11 m. The waist and working end
+    follow a 1300 t/d float furnace (Materials 17 (2024) 4989, Table 1: melter 14 m wide,
+    waist 7.5 m long and 4.5 m wide, working end 20 m long and 10 m wide), their widths
+    scaled to this melter's."""
 
     def graded(total, first, n):
         lo, hi = 1.0001, 4.0
@@ -357,22 +361,17 @@ def _layout(
     dz = graded(depth, g.skin, g.n_depth)
     dr = graded(crown, g.roof_skin, g.n_roof)
     nm = g.n_bays * g.cols_per_bay
-    nw = g.n_refiner // 2
-    dx = np.concatenate(
-        [
-            np.full(nm, length / nm),
-            np.full(nw, waist / nw),
-            np.full(g.n_refiner - nw, (refiner - waist) / (g.n_refiner - nw)),
-        ]
+    zones = (
+        (nm, length, width),
+        (g.n_refiner, refiner, width),
+        (g.n_waist, waist, width * waist_share),
+        (g.n_end, end, width * end_share),
     )
-    wc = np.concatenate(
-        [
-            np.full(nm, width),
-            np.full(nw, width * waist_share),
-            np.full(g.n_refiner - nw, width * end_share),
-        ]
-    )
+    dx = np.concatenate([np.full(n, size / n) for n, size, _ in zones])
+    wc = np.concatenate([np.full(n, w) for n, _, w in zones])
     wf = np.concatenate([[width], np.minimum(wc[1:], wc[:-1]), wc[-1:]])
+    cooled = np.zeros(len(dx) - nm)
+    cooled[-g.n_end :] = 1.0
     z = np.concatenate([[0.0], np.cumsum(dz)])
     F1 = float(band_fraction(2.8 * 1900.0))  # the crown and flame's own spectrum
     F2 = float(band_fraction(5.0 * 1900.0)) - F1
@@ -383,7 +382,8 @@ def _layout(
     D = D / D.sum()
     ex = exchange(g.n_bays, length, width, height, 0.08, (0.8, 0.8))
     return SimpleNamespace(
-        nc=nm + g.n_refiner, nm=nm, dz=jnp.asarray(dz), dx=jnp.asarray(dx),
+        nc=len(dx), nm=nm, dz=jnp.asarray(dz), dx=jnp.asarray(dx),
+        cooled=jnp.asarray(cooled),
         dzc=jnp.asarray(0.5 * (dz[1:] + dz[:-1])),
         dxc=jnp.asarray(0.5 * (dx[1:] + dx[:-1])),
         dr=jnp.asarray(dr), drc=jnp.asarray(0.5 * (dr[1:] + dr[:-1])),
@@ -630,9 +630,10 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
     # are untouched, and the filter's weight goes with the grid.
     wide = jnp.concatenate([grad[:, :1], grad, grad[:, -1:]], 1)
     drive = 0.25 * wide[:, :-2] + 0.5 * grad + 0.25 * wide[:, 2:]
-    source = jnp.concatenate([melt * a.dx[: a.nm], jnp.zeros(g.n_refiner)])
+    nr = a.nc - a.nm
+    source = jnp.concatenate([melt * a.dx[: a.nm], jnp.zeros(nr)])
     Q = jnp.cumsum(source * a.wc) / p.rho_glass  # m^3/s through each cell's far face
-    cover_f = jnp.concatenate([f, jnp.zeros(g.n_refiner)])
+    cover_f = jnp.concatenate([f, jnp.zeros(nr)])
     cover_face = 0.5 * (cover_f[1:] + cover_f[:-1])
     u = column_flow(
         drive, jnp.maximum(viscosity(Tf), MU_GUARD), a.dz, Q[:-1] / a.wf[1:-1],
@@ -662,13 +663,16 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
     R = R - 2.0 * p.U_side / a.wc * (T - Ta) / rc * dz_
     R = R.at[-1].add(-p.U_bottom * (T[-1] - Ta) / rc)
 
-    loss_ref = _refiner_loss(T[0, a.nm :], p) + cooling / jnp.sum(plan[a.nm :])
+    # Cooling air blows across the working end only (a float patent: no burners in the
+    # neck, the working end blows air across the glass), evenly over its surface.
+    blown = a.cooled * cooling / jnp.sum(a.cooled * plan[a.nm :])
+    loss_ref = _refiner_loss(T[0, a.nm :], p) + blown
     q_all = jnp.concatenate([(1.0 - f) * q + spare, -loss_ref])
     R = R + a.deposit[:, None] * q_all / rc
     Tt0 = T[0]
     ht = 4.0 * p.eps_surface * SIGMA * Tt0**3 + p.h_gas
     hl = a.deposit[0] * jnp.concatenate(
-        [(1.0 - f) * jnp.where(s.foam > 1e-3, 0.0, ht[: a.nm]), jnp.zeros(g.n_refiner)]
+        [(1.0 - f) * jnp.where(s.foam > 1e-3, 0.0, ht[: a.nm]), jnp.zeros(nr)]
     )
     k0 = melt_conductivity(Tt0)
     under = cover_f * k0 / (0.5 * a.dz[0])

@@ -62,12 +62,12 @@ def settle(days=30):
             state["s"], state["y"] = s, y
             return float(y[1])
 
-        q, _ = secant(f, 2.0e6, 3.0e6, CANAL, 0.2, 0.0, 2.0e7)
+        q, _ = secant(f, 0.8e6, 1.2e6, CANAL, 0.2, 0.0, 2.0e7)
         print(f"  fuel {fuel:.4f}: cooling {q / 1e6:.3f} MW", flush=True)
         state["q"] = q
         return float(state["y"][0])
 
-    fuel, crown = secant(canal_at, 0.42, 0.45, CROWN, 0.3, 0.3, 0.8)
+    fuel, crown = secant(canal_at, 0.47, 0.48, CROWN, 0.3, 0.3, 0.8)
     return fuel, state["q"], state["s"], crown, float(state["y"][1])
 
 
