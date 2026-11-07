@@ -298,3 +298,66 @@ Three limits on these numbers:
 - **Batch.** The dimension was removed. The owner said to re-discuss it if the properties suffer.
   They didn't, but it was the one term that would have scored the bath directly.
 - **Charter.** The rebuild passes rule 7. It isn't registered, so the task table is unchanged.
+
+## Attempt 2: from the equations
+
+The owner, after attempt 1: "Please re-visit the model from scratch, again, in order to achieve
+the desired properties of the system, using only physical equations." Every term is a conservation
+law or a sourced relation. There are no calibration factors, and a property physics doesn't
+produce is reported as not produced. New sources are in `glass-sources-3a.md` and
+`glass-sources-3b.md` in the session notes.
+
+### Desired properties, set before any code
+
+Each is measured with no controller, fuel held unless the row moves it. "Attempt 1" is the rebuilt
+plant as judged above. The desired numbers come from the sources where one exists, and otherwise
+from what makes the property matter against the 1 K floor and a 3 minute loop. These are aims, and
+none of them sets a parameter.
+
+| Property | Measure | Attempt 1 | Desired | Equation expected to supply it |
+|---|---|---|---|---|
+| Bath event to the reading | Time for the reading to reach half its peak after a surface upset, and the peak | Peak 0.4 K, about 1 h | Half peak within 15 min, peak over 1 K | Radiating skin: Beer's law in 2 to 23 mm of melt under the zone exchange |
+| Upset speed | Largest reading rate from a physical event, against 20 K/h, the rate at which a 3 min loop leaves 1 K | 3.7 K/h, blanket | Over 20 K/h | Batch tip and foam moving over the skin, at their own speeds, no imposed ramp |
+| Delay against lag | Time to the event's first visible move over its settling time | 0.001 for fuel | Over 0.05 for a bath event | Transport along the surface current, 7 to 25 m/h in the sources |
+| Lookalike upsets | Worst gap between paths at 1, 6, 24, 96 h, each scaled to its 24 h value | Gas, pull and cullet within about 0.1 of each other | Under 0.2 for a pair of which one harms the glass | Mass and energy balances on the blanket and the bulk |
+| Hidden state in the reading | Change in the melt at the throat against what the crown reading shows at 1 h | Whole bath +5 K shows 2.3 K | A glass change over 5 K that shows under 0.36 K | Hot glass under a resistive foam, and the deep return current |
+| Gain change in an episode | Spread of fuel-to-reading gain across states one episode reaches | Not measured, 4 % across operating points | Over 20 % | Foam and blanket cover change what the crown sees |
+| Wrong way | After a foam change at held fuel, sign of the reading against the heat entering the glass | Not possible, no foam | Reading up 1 K or more while heat into the glass falls | Foam's radiative resistance, from Fedorov and Pilon, gas from the sulfate balance |
+
+### Published figures to check
+
+Surface temperature range along the melter 170 to 205 K, vertical 300 to 340 K, crown profile in
+W2000b (1710, 1850, 1890, 1915, 1910, 1805 K at 4 to 20.5 m), surface current 7 to 25 m/h, first
+loop 600 % of pull, foam a few centimetres over about a third of the surface, foam's flux cut 50
+to 60 %, gas emissivity about 0.2, specific energy 4 to 6 GJ/t, batch line 3 to 6.5 m, forming
+temperature around 1100 C.
+
+### Design
+
+Each row is a conservation law or a sourced relation. Worked out from the equations, not from
+`rebuilt.py`.
+
+| Part | Equations | Source |
+|---|---|---|
+| Geometry | Melter 21.5 m, refiner 20.5 m, 11 m wide, six ports | W2000b |
+| Radiation | Zones along the tank: crown, gas, load. Gray gas k = 0.08 /m. Direct exchange areas, reflections by the net radiation method, computed once | Hoogendoorn; Feischl eqs 5 to 11 |
+| Gas | Energy balance per firing zone; each cross-fired port goes straight to its regenerator | Conservation |
+| Crown | 1D conduction per bay, implicit, graded cells, the cell size set by a convergence check | Fourier, W2000a |
+| Melt | Along-tank and depth finite volumes, graded to the skin. Implicit in depth, upwind | Conservation |
+| Melt conduction | k = kc + kr, Rosseland, bands 0 to 2.8 and 2.8 to 5 um | Liu 2016 eqs 5 to 7 |
+| Melt radiation | Net surface flux deposited by Beer's law in those bands, Planck band fractions | Liu 2016 |
+| Flow | Long-tank momentum: hydrostatic in depth, d/dz (mu du/dz) = dp/dx with free top and no-slip floor, the pressure gradient set by the pull. No scale factor | Stokes at aspect ratio about 10 |
+| Viscosity | VFT | DGG X, already in `rebuilt.py` |
+| Batch | Advected at the charging speed, melted by radiation on top and the melt below; the melt's face sits at the 1450 K clear-melt point | UV1986, Pilon II |
+| Foam | Thickness from Pilon's correlation on gas from the sulfate balance, opposing flux through a radiative resistance from the 20 % transmittance at 2 cm | JCIS2001, JNCS2002, Rudolph |
+
+Kept from attempt 1 on their merits: the regenerator stacks, the reversal and charger clocks, the
+viscosity table. Everything else is new.
+
+**Known limits, stated now.** Long-tank flow has no vertical instability, so the roll cells under
+the batch are absent (Pilon II: up to 20 % of the melt-to-batch heat). The sulfate rate has no
+source, so the gas is the mass balance's amount over the band 1420 to 1500 C. No surface
+emissivities were found, and they are labelled `ours`, as are firing shares, and refiner cooling
+has no sourced duty, so the forming temperature may not be reached.
+
+**Size budget.** 800 lines of plant, ceiling 900. Rule 7 is measured as soon as the melt runs.
