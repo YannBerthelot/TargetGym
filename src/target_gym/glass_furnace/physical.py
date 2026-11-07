@@ -4,7 +4,7 @@ Every term is a conservation law or a sourced relation. Citations are in
 ``PHYSICS.md`` under "Physical plant". Temperatures are in K here unless a name says
 otherwise; the shipped regenerator constants are reused through ``GlassFurnaceParams``.
 
-Attempt 3 steps at 180 s with the reversal averaged out: each checker node takes half its
+Attempt 3 steps at 120 s with the reversal averaged out: each checker node takes half its
 flue duty and half its air duty, and the firing gap enters as its mean. The refiner takes a
 cooling sink, and each cell of melt carries the share of its sulfate fining it has done.
 
@@ -412,8 +412,10 @@ class PhysicalParams(GlassFurnaceParams):
     sigma_glass: float = 0.3  # N/m, Table 1 of JCIS2001
     bubble_radius: float = 8.3e-3  # m, top of the lab range in Ch16
     foam_half_life: float = 50.0  # s at 1200 C, soda-lime, Kappel Table 3
-    delta_t: float = 180.0  # s: 24 m/h over a 1.8 m column allows about 270
-    max_steps_in_episode: int = 3360  # seven days
+    # s: the surface current's Courant number reached 1 at 180 s near the batch tip
+    # when firing hard, so 120 s, good to about 34 m/h over a 1.8 m column.
+    delta_t: float = 120.0
+    max_steps_in_episode: int = 5040  # seven days
 
 
 @struct.dataclass

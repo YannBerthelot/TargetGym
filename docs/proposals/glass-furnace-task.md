@@ -600,3 +600,40 @@ thickness and conductivity. Anything not found is labelled `ours` or left to the
 
 The step is set by the surface current: 24 m/h over a 1.8 m column allows about 270 s. Stops: if
 energy doesn't close within 0.5 %, if the step cost breaks rule 7, and before any oracle.
+
+### Build so far, before any property table
+
+Built and tested: the averaged reversal, the refiner's cooling and its loop, the fining share,
+the environment and its money reward. Nine deliberate breaks of the new code each turned the new
+tests red. Owner's picks on 2026-11-07: fining carried to the canal guards quality, since the
+canal alone would pay for unrefined glass (at 16 % less fuel the canal still reached 1100 C while
+the melt peaked about 100 K under the fining band); lost glass at 600 EUR/t, `ours`.
+
+Changed on the way, each for a stated reason:
+
+- **Step 120 s, not 180.** At 180 s the surface current's Courant number reached 1 near the batch
+  tip when firing hard. Day-mean currents stay at 16 to 22 m/h, inside the published 7 to 25.
+- **No floor block.** No conductivity or heat capacity for AZS paving was found, and bottom couples
+  sit in pockets with platinum thimbles touching the glass. The floor reading stays the glass at
+  the floor.
+- **Cooling capacity `ours`.** No source; set to twice the design's need.
+
+**The design point:** fuel 0.561 kg/s with 6.05 MW of refiner cooling holds the crown's face at
+1589 C in bay 3 and the canal at 1103 C, drifting 0.001 K over 5 days. The refiner loop, by its
+recipe: 4.45e5 W/K, integral 2.1 h. Specific energy 4.7 GJ/t, inside 4 to 6.
+
+**What it shows, plainly:**
+
+| Finding | Number | Published |
+|---|---|---|
+| Cooling to hold the canal | 6.05 MW, 22 % of the firing | Not found |
+| Forward flow into the refiner over pull | 4.3, and 3.05 with no cooling | 1.2 to 2.5, US4798616 |
+| Hottest crown face at the design point | 1633 C, with firing even across ports (`ours`) | Silica degrades above 1620 C. W2000b's own modelled profile peaks at 1642 C |
+| Fining share of the glass leaving | 0.52 | No pass mark found |
+| Fuel +1 %: margin's dead time and t63 | 0.6 h and 5.5 h, little coast | The melter's 1 to 16 h |
+| Fuel +1 %: fining's t63, and its size | 24 h, +0.026 | |
+
+The refiner has no waist, so most of its cooling falls on glass going back to the melter, which
+is why the cooling is so large and why the canal answers the cooling within minutes. The delay
+then sits in the fining, not in the canal. Measuring the twelve tests on this refiner would
+measure the missing waist.

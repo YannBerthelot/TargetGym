@@ -1,0 +1,255 @@
+"""Attempt 3 against the twelve tests, read on the margin: what the refiner's cooling takes
+out, in kelvin of the glass leaving. Zero margin means the next shortfall is lost glass.
+
+    python glass_slow_props.py SETTLED.npz step|settle|lookalike|haste|walks|gain
+
+Paths are differences from a base run with the same walks. Controllers come from step
+tests with no search. Nothing here feeds back into a parameter of the plant.
+"""
+
+import sys
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+from target_gym.glass_furnace import physical as P
+from target_gym.glass_furnace import physical_env as E
+
+EP = E.EnvParams()
+QUIET = EP.replace(walk_sd=(0.0,) * len(E.WALKS))
+H = int(3600 / EP.plant.delta_t)  # steps per hour
+DAY = 24 * H
+d = np.load(sys.argv[1])
+F0, Q0 = float(d["fuel"]), float(d["cooling"])
+S0 = P.Fields(**{k: jnp.asarray(d[k]) for k in d if k not in ("fuel", "cooling")})
+KEY = jax.random.PRNGKey(0)
+NAMES = ("margin", "fining", "floor", "couple", "canal", "hot", "cooling share")
+
+
+def margin(state, ep):
+    """Cooling in kelvin of the leaving glass, and below zero the canal's shortfall."""
+    canal = P.sensors(state.fields, ep.grid, ep.plant)["canal"]
+    short = jnp.minimum(canal - ep.canal_target - ep.cooling_above, 0.0)
+    return state.cooling / (ep.pull * ep.plant.c_glass) + short
+
+
+def trace(state, ep):
+    r = P.sensors(state.fields, ep.grid, ep.plant)
+    return jnp.stack(
+        [margin(state, ep), r["fining"], r["floor"], r["crown"], r["canal"], r["hot"],
+         state.cooling / ep.cooling_max]
+    )  # fmt: skip
+
+
+def run(fuel, ep, n, key=KEY, s0=S0, policy=None):
+    """``(traces, costs, obs)`` over ``n`` steps; ``fuel`` a number, a path, or None with
+    ``policy(carry, obs, walk) -> (carry, fuel)``."""
+    _, st = E.reset(key, s0, ep, fuel=F0, cooling=Q0)
+    us = jnp.broadcast_to(F0 if fuel is None else fuel, (n,))
+
+    def f(c, x):
+        st, pc, obs = c
+        k, u = x
+        if policy is not None:
+            pc, u = policy(pc, obs, st.walk)
+        obs, st, _, costs = E.step(k, st, u, ep)
+        return (st, pc, obs), (trace(st, ep), jnp.stack(list(costs.values())), obs)
+
+    obs0 = E.observe(st, ep)
+    pc0 = jnp.zeros(2)
+    return jax.lax.scan(f, (st, pc0, obs0), (jax.random.split(key, n), us))[1]
+
+
+def fopdt(y):
+    f = y[-H:].mean()
+    t = lambda q: np.argmax(np.abs(y) > q * abs(f)) / H
+    tau = 1.5 * (t(0.632) - t(0.283))
+    return f, t(0.01), t(0.632), tau, t(0.632) - tau
+
+
+def run_step():
+    n = DAY * 7
+    base = np.asarray(jax.jit(lambda: run(F0, QUIET, n)[0])())
+    up = np.asarray(jax.jit(lambda: run(F0 * 1.01, QUIET, n)[0])())
+    pulse = jnp.where(jnp.arange(n) < 4 * H, 1.04, 1.0) * F0
+    pl = np.asarray(jax.jit(lambda: run(pulse, QUIET, n)[0])())
+    print(f"design: fuel {F0:.4f}, margin {base[0, 0]:.1f} K, fining {base[0, 1]:.3f}")
+    print("fuel +1 % | settled, t1 %, t63, lag, fitted dead time (h)")
+    for i, name in enumerate(NAMES[:6]):
+        print(f"  {name:8s}", np.round(fopdt(up[:, i] - base[:, i]), 3))
+    print("fuel +4 % for 4 h: peak, hours after the end, value at the end")
+    for i, name in enumerate(NAMES[:5]):
+        y = pl[:, i] - base[:, i]
+        k = np.argmax(np.abs(y))
+        print(f"  {name:8s} {y[k]:8.3f} {k / H - 4:6.1f} {y[4 * H - 1]:8.3f}")
+
+
+def run_settle():
+    n = DAY * 25
+    for rise in (-20.0, 20.0):
+        s0 = S0.replace(T=S0.T + rise)
+        y = np.asarray(jax.jit(lambda: run(F0, QUIET, n, s0=s0)[0])())
+        day = y[-DAY:].mean(0)
+        drift = (day - y[-6 * DAY : -5 * DAY].mean(0)) / 5
+        print(
+            f"{rise:+.0f} K start: last day",
+            np.round(day[:5], 3),
+            "drift/day",
+            np.round(drift[:5], 4),
+        )
+
+
+def run_lookalike():
+    n = DAY
+
+    def with_walk(i, size):
+        ep = QUIET
+
+        def policy(c, obs, walk):
+            return c, F0
+
+        _, st = E.reset(KEY, S0, ep, fuel=F0, cooling=Q0)
+
+        def f(st, k):
+            st = st.replace(walk=st.walk.at[i].set(size))  # held, not walking
+            obs, st, _, _ = E.step(k, st, F0, ep)
+            return st, (trace(st, ep), obs)
+
+        return jax.lax.scan(f, st, jax.random.split(KEY, n))[1]
+
+    base = [np.asarray(x) for x in jax.jit(lambda: with_walk(0, 0.0))()]
+    foam = [np.asarray(x) for x in jax.jit(lambda: with_walk(4, 0.5))()]
+    gas1 = [np.asarray(x) for x in jax.jit(lambda: with_walk(0, 0.01))()]
+    at = lambda y, h: y[int(h * H) - H // 2 : int(h * H)].mean(0)
+    x = (
+        0.01
+        * (at(foam[1], 2) - at(base[1], 2))[0]
+        / (at(gas1[1], 2) - at(base[1], 2))[0]
+    )
+    gas = [np.asarray(v) for v in jax.jit(lambda: with_walk(0, x))()]
+    print(
+        f"gas +{100 * x:.2f} % matches sulfate +50 % on the couple at 2 h (noise-free obs)"
+    )
+    print("  h | sulfate: couple, air, stack, cooling, margin K | gas: same")
+    for h in (1, 2, 3, 4, 6, 8, 12, 24):
+        o = lambda r: np.round((at(r[1], h) - at(base[1], h))[[0, 6, 7, 5]], 2)
+        mg = lambda r: round(float(at(r[0], h)[0] - at(base[0], h)[0]), 2)
+        print(f"  {h:3d}", o(foam), mg(foam), "|", o(gas), mg(gas))
+
+
+def simc_margin():
+    """PI from the fuel step on the margin: closed-loop time equal to the dead time."""
+    n = DAY * 7
+    base = np.asarray(run(F0, QUIET, n)[0][:, 0])
+    up = np.asarray(run(F0 * 1.01, QUIET, n)[0][:, 0])
+    f, _, _, tau, theta = fopdt(up - base)
+    k = f / (0.01 * F0)  # K of margin per kg/s
+    theta = max(theta, 1.0 / H)
+    return k, tau / (k * 2 * theta), min(tau, 8 * theta) * 3600
+
+
+def pi_policy(kc, ti, target, ff=None):
+    """Valve from the observed cooling share, read as margin; ``ff`` sees the walks."""
+    scale = EP.cooling_max / (EP.pull * EP.plant.c_glass)
+
+    def policy(c, obs, walk):
+        e = target - obs[5] * scale
+        integ = c[0] + kc * e * EP.plant.delta_t / ti
+        u = F0 + kc * e + integ
+        if ff is not None:
+            u = (u - ff @ walk[1:]) / (1.0 + walk[0])
+        return c.at[0].set(integ), jnp.clip(u, 0.25, 0.75)
+
+    return policy
+
+
+def run_haste():
+    k, kc, ti = simc_margin()
+    print(
+        f"margin gain {k:.0f} K per kg/s; PI {kc:.5f} kg/s per K, integral {ti / 3600:.1f} h"
+    )
+    n = DAY * 14
+    m0 = Q0 / (EP.pull * EP.plant.c_glass)
+    for mult in (1.0, 3.0, 6.0):
+        y = np.asarray(
+            jax.jit(
+                lambda: run(None, QUIET, n, policy=pi_policy(kc * mult, ti, m0 + 5.0))[
+                    0
+                ]
+            )()
+        )
+        e = y[:, 0] - m0
+        out = np.nonzero(np.abs(e - 5.0) > 1.0)[0]
+        settle = (out[-1] + 1) / H if out.size else 0.0
+        print(f"  gain x{mult:3.0f}: peak {e.max():6.2f} K, overshoot {20 * (e.max() - 5):5.0f} %,"
+              f" into +-1 K for good {settle:6.1f} h, lost-glass steps {int((y[:, 0] <= 0).sum())}")  # fmt: skip
+
+
+def run_walks():
+    n = DAY * 10
+    keys = jax.random.split(jax.random.PRNGKey(7), 6)
+    k, kc, ti = simc_margin()
+    m0 = Q0 / (EP.pull * EP.plant.c_glass)
+    # Settled sensitivities of the margin to each hidden walk, in fuel.
+    sens = []
+    for i, size in ((1, 0.02), (2, 0.05), (3, -0.2), (4, 0.5)):
+        _, st = E.reset(KEY, S0, QUIET, fuel=F0, cooling=Q0)
+
+        def f(st, kk, i=i, size=size):
+            st = st.replace(walk=st.walk.at[i].set(size))
+            _, st, _, _ = E.step(kk, st, F0, QUIET)
+            return st, margin(st, QUIET)
+
+        y = np.asarray(
+            jax.jit(lambda: jax.lax.scan(f, st, jax.random.split(KEY, DAY * 7))[1])()
+        )
+        sens.append((y[-1] - m0) / size / k)
+    ff = jnp.asarray(sens)
+    print("margin per walk unit, in fuel kg/s:", np.round(sens, 4))
+    for label, fuel, pol in (
+        ("valve held", F0, None),
+        ("PI on margin", None, pi_policy(kc, ti, m0)),
+        ("PI, told the walks", None, pi_policy(kc, ti, m0, ff)),
+    ):
+        tr, costs, _ = jax.jit(
+            jax.vmap(lambda kk: run(fuel, EP, n, key=kk, policy=pol))
+        )(keys)
+        tr, costs = np.asarray(tr), np.asarray(costs)
+        day = costs[:, 2 * DAY :].sum(1) / 8.0  # EUR per day after two days
+        lost_h = (costs[:, 2 * DAY :, 1] > 0).sum(1) / H
+        trip_h = (costs[:, 2 * DAY :, 2] > 0).sum(1) / H
+        print(f"{label:20s} EUR/day {np.round(day.sum(1)):}, fuel {np.round(day[:, 0])}, lost glass h"
+              f" {lost_h}, trip h {trip_h}, margin sd {tr[:, 2 * DAY :, 0].std():.1f} K")  # fmt: skip
+
+
+def run_gain():
+    states = {
+        "design": {},
+        "pull -2 %": {"pull": EP.pull * 0.98},
+        "pull +2 %": {"pull": EP.pull * 1.02},
+        "cullet 15": {"cullet": 0.15},
+        "cullet 35": {"cullet": 0.35},
+        "blanket -20 %": {"thickness": 0.16},
+        "blanket +20 %": {"thickness": 0.24},
+    }
+    n0, n1 = DAY * 20, DAY * 27
+    steps = jnp.where(jnp.arange(n1) < n0, F0, F0 * 1.01)
+    for name, kw in states.items():
+        ep = QUIET.replace(**kw)
+        base = np.asarray(jax.jit(lambda: run(F0, ep, n1)[0][:, 0])())
+        up = np.asarray(jax.jit(lambda: run(steps, ep, n1)[0][:, 0])())
+        y = (up - base)[n0:]
+        r = fopdt(y)
+        print(f"{name:14s} margin gain at 24 h {y[DAY - 1] / (0.01 * F0):6.0f}, 7 d"
+              f" {r[0] / (0.01 * F0):6.0f} K per kg/s, dead time {r[4]:5.1f} h, t63 {r[2]:5.1f} h")  # fmt: skip
+
+
+{
+    "step": run_step,
+    "settle": run_settle,
+    "lookalike": run_lookalike,
+    "haste": run_haste,
+    "walks": run_walks,
+    "gain": run_gain,
+}[sys.argv[2]]()

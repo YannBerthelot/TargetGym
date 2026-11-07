@@ -34,7 +34,7 @@ class EnvParams:
     grid: P.Grid = struct.field(pytree_node=False, default=P.Grid())
     gas_price: float = 60.5  # EUR/MWh, Eurostat, EU non-household, H2 2025
     lost_glass_price: float = 600.0  # EUR/t, ours (owner's pick); no source found
-    trip_cost: float = 6253.0  # EUR per step, ours: ten steps of glass at that price
+    trip_cost: float = 4169.0  # EUR per step, ours: ten steps of glass at that price
     pull: float = 5.79  # kg/s, 500 t/d, W2000b
     cullet: float = 0.25
     thickness: float = 0.2  # m, blanket as laid
@@ -43,12 +43,12 @@ class EnvParams:
     fining_pass: float = 0.9  # provisional, ours: the owner's to set
     crown_low: float = 1673.15  # K, 1400 C: sodium silicate forms below, SEFPRO
     crown_high: float = 1893.15  # K, 1620 C: silica degrades above, SEFPRO
-    # Cooling to take 300 K off the pull, the top of the 200 to 300 C a refiner and
-    # feeders must take (Hubert, Lehigh), at the plant's c_glass.
-    cooling_max: float = 5.79 * 1300.0 * 300.0
+    # No capacity was found. Ours: twice what holds the canal at the design point, so
+    # the coolers bind only far from it. Set from the settle script's output.
+    cooling_max: float = 12.1e6
     cooling_above: float = 1.0  # K over the target the loop holds, ours
-    cooling_gain: float = 2.0e5  # W/K, from a step test (scripts), not searched
-    cooling_ti: float = 1800.0  # s
+    cooling_gain: float = 4.448e5  # W/K, SIMC on a 5 % cooling step (scripts)
+    cooling_ti: float = 7680.0  # s, same recipe
     # gas: ENTSOG's 4 to 6 MJ/m3 swings on about 50, read as four spreads, daily;
     # pull: +-2 % wander (US11261117B2) as two spreads; cullet, blanket: the owner's
     # +-10 points and +-20 % as two spreads; sulfate: ours.
