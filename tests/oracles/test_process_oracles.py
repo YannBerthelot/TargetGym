@@ -51,7 +51,11 @@ C2 = (
     "reactor",
 )  # fmt: skip  (battery holds a stand-in, labelled non-compliant, for 0.8.0)
 AIRCRAFT = ("plane", "plane_sine", "plane_energy")
-ON_SOLVER = FIVE + C2 + AIRCRAFT
+FLOWN = ("plane3d_heading", "plane3d_circle", "patrol", "patrol_range_bearing")
+#: A path parameter is a move, so these replay exactly only at the best one: its
+#: own test is in test_aircraft_oracles.py.
+ON_A_PATH = ("plane3d_racetrack", "plane3d_figure8")
+ON_SOLVER = FIVE + C2 + AIRCRAFT + FLOWN + ON_A_PATH
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -81,7 +85,7 @@ def test_the_kiln_solves_seed_zeros_reset():
 @pytest.mark.medium
 @pytest.mark.parametrize(
     "name, load",
-    [(n, None) for n in ON_SOLVER]
+    [(n, None) for n in ON_SOLVER if n not in ON_A_PATH]
     + [("cstr", (0.7, -0.015)), ("four_tank", (2e-4, -1e-4))],
 )
 def test_the_exact_rewrites_replay_on_the_env(name, load):
@@ -231,6 +235,26 @@ def test_a_moves_action_is_what_the_env_and_the_replay_are_sent():
     assert oracle.certificates[-1]["output_gap"] > 1e-6
 
 
+@pytest.mark.medium
+def test_a_warm_solve_starts_from_the_branch_of_the_last_plan():
+    """``align`` puts a wrapping state on the branch the last plan reached, on warm
+    solves only, since a cold one has no plan to agree with."""
+    env, params, oracle = _oracle("first_order")
+    calls = []
+
+    def align(x, planned):
+        calls.append(float(planned[0]))
+        return x
+
+    oracle.model = oracle.model._replace(align=align)
+    _, state = env.reset_env(jax.random.PRNGKey(100), params)
+    oracle.step(None, state)
+    assert calls == []
+    predicted = float(np.asarray(oracle.shooting.states(oracle._plan))[0, 0])
+    oracle.step(None, state.replace(time=state.time + oracle.tc))
+    assert calls == pytest.approx([predicted])
+
+
 def _imports(path: pathlib.Path) -> set[pathlib.Path]:
     found = set()
     for node in ast.walk(ast.parse(path.read_text())):
@@ -270,10 +294,14 @@ def test_the_oracle_reads_no_expert_code(name):
         path = todo.pop()
         if path not in seen:
             seen.add(path)
-            todo.extend(_imports(path))
+            # The patrol's scripted lead flies an autopilot from the experts'
+            # package. That is the plant, not the oracle's reading of the expert.
+            if path != SRC / "patrol" / "env.py":
+                todo.extend(_imports(path))
     expert = sorted(str(p.relative_to(SRC)) for p in seen if p.parent.name == "experts" or p.name.startswith("experts"))  # fmt: skip
     assert expert == []
-    assert spec.oracle_reads == () and spec.oracle_gains_keys == ()
+    assert not [r for r in spec.oracle_reads if "expert" in r]
+    assert spec.oracle_gains_keys == ()
 
 
 @pytest.mark.parametrize("actuator, sign", [(0, 1.0), (0, -1.0), (1, 1.0), (1, -1.0)])
@@ -313,7 +341,7 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
 
 @pytest.mark.parametrize(
     "name, budget",
-    [(name, 0.25) for name in FIVE + AIRCRAFT]
+    [(name, 0.25) for name in FIVE + AIRCRAFT + FLOWN + ON_A_PATH]
     + [(name, 0.25) for name in ("boiler_drum", "glass_furnace", "cement_kiln")]
     + [
         # p = 1, in dollars: half the 1 kW or 1.7 kW resolution, for one step of
@@ -343,6 +371,10 @@ PRICED = {
     "cement_kiln": 2,  # free lime, fuel
     "reactor": 1,  # Tavg: the rods' travel stops at a steady state
     "plane": 2, "plane_sine": 2, "plane_energy": 2,  # altitude, speed
+    "plane3d_heading": 2,  # altitude, heading: the speed is free
+    "plane3d_circle": 2, "plane3d_racetrack": 2,  # altitude, path
+    "plane3d_figure8": 2,  # the path's two cross directions
+    "patrol": 3, "patrol_range_bearing": 3,  # the slot's three axes
 }  # fmt: skip
 
 

@@ -560,6 +560,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_plane3d_heading_pid_controller", module="target_gym.plane3d.experts"
         ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
+        oracle_data=_shared_oracle("plane3d_heading"),
+        oracle_reads=("plane/oracle_model.py",),
         tuned_gains_key="plane3d_heading",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
@@ -579,6 +581,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_plane3d_circle_pid_controller", module="target_gym.plane3d.experts"
         ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
+        oracle_data=_shared_oracle("plane3d_circle"),
+        oracle_reads=("plane/oracle_model.py",),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -597,6 +601,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_plane3d_racetrack_pid_controller", module="target_gym.plane3d.experts"
         ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
+        oracle_data=_shared_oracle("plane3d_racetrack"),
+        oracle_reads=("plane/oracle_model.py",),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -615,6 +621,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_plane3d_figure8_pid_controller", module="target_gym.plane3d.experts"
         ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
+        oracle_data=_shared_oracle("plane3d_figure8"),
+        oracle_reads=("plane/oracle_model.py",),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
@@ -632,10 +640,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
         make_pid=_pid("make_patrol_pid_controller", module="target_gym.patrol.experts"),
         make_mpc=_mpc("make_patrol_mpc", module="target_gym.patrol.oracle"),
-        # The oracle's twin law flies the 3D heading PID, on the old lead's gains
-        # (task constants, patrol/oracle.py). The expert's gains are in its
-        # experts.py, as the 3D aircraft's are.
-        oracle_reads=("experts/pid.py",),
+        oracle_data=_shared_oracle("patrol"),
+        oracle_reads=("plane/oracle_model.py",),
         noise_fields=("turbulence_sigma",),
         # The 3D aircraft it flies; the PID its oracle's twin law flies (physics
         # here, so declared for the version stamp too); the autopilot and TECS
@@ -663,7 +669,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_patrol_range_bearing_mpc", module="target_gym.patrol.oracle"
         ),
-        oracle_reads=("experts/pid.py",),
+        oracle_data=_shared_oracle("patrol_range_bearing"),
+        oracle_reads=("plane/oracle_model.py",),
         baselines_note=(
             "The PID is a lead-state estimator feeding the same formation "
             "hold the full-observation variant uses. Range with azimuth and "

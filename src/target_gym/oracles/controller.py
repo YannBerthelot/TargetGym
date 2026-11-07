@@ -63,7 +63,10 @@ class TaskModel(NamedTuple):
     costs the plan the budget over an episode spent there, and K8's replay
     never sees it. ``action(state, u)`` is what the env is sent, each task step,
     for a move that is not a raw command, such as a rate (``oracles.rates``):
-    the raw move itself if not given, and K8's replay sends the same."""
+    the raw move itself if not given, and K8's replay sends the same.
+    ``align(x, planned)`` puts a measured state on the branch of the state the
+    last plan reached, for a state that is an angle, so a warm start stays
+    consistent when the plant's own angle wraps."""
 
     nx: int
     nu: int
@@ -80,6 +83,7 @@ class TaskModel(NamedTuple):
     tie_budget: float = TIE_BUDGET
     rest: Callable | None = None
     action: Callable | None = None
+    align: Callable | None = None
 
 
 def float64(tree):
@@ -204,6 +208,8 @@ class Oracle:
         with enable_x64():
             st = float64(state)
             x0, task = self.model.state_x(st), self.model.data(st)
+            if not cold and self.model.align is not None:
+                x0 = self.model.align(x0, self.shooting.states(self._plan)[0])
             d = {"task": task, "end": active * self.tc}
             hold = self.model.hold(st)
             plan = self._attempt(d, st, x0, hold, active, cold)

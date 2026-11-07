@@ -18,7 +18,7 @@ The sites smoothed by K2's softplus (T5), in the order of ``Sites``:
   surface's whole travel, so any command is inside it (``surface_reach``);
 - ``tropopause``, the switch of the sound speed at 11 km.
 
-Dropped guards (T4), which each task's step checks along every plan: the Mach
+Dropped guards (T4), which ``Flown.guards`` checks along every plan: the Mach
 switches past ``M_crit`` (shock stall, drag rise), the section's lift and drag
 caps, the incidence wrap, the angular acceleration clip, the scaler's clip and
 the tanks. The altitude clip of the density and the Mach branch of the speed
@@ -31,12 +31,26 @@ from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
+from jax.tree_util import Partial as partial
 
-from target_gym.oracles.controller import softplus_clip
+from target_gym.integration import integrate_dynamics
+from target_gym.oracles.controller import TaskModel, raw_of, softplus_clip
+from target_gym.oracles.shooting import Limit
 from target_gym.plane.dynamics import (
+    AILERON_TRAVEL,
+    BANK_DEMAND_MAX,
+    INNER_STEPS,
+    PITCH_DEMAND_MAX,
+    STICK_TRAVEL,
+    airspeed_scaler,
     buffet_line,
+    compute_air_density_from_altitude,
     compute_drag,
+    compute_thrust_output,
+    scheduled_airspeed,
+    total_wind_3d,
 )
+from target_gym.reward import trip_cost
 
 #: The smoothed sites, name order, as in ``data/oracle_widths``.
 SITE_NAMES = ("buffet", "cl_stall", "separation", "surface_clip", "surface_rate")
@@ -175,3 +189,297 @@ def engine(lever, power, dt, p):
     """``compute_next_power`` with the lever's clip removed (T1)."""
     requested = p.idle_power + (1.0 - p.idle_power) * lever
     return requested + (power - requested) * jnp.exp(-p.power_response_rate * dt)
+
+
+#: The track's place in a plan's state with the position kept.
+TRACK = 4
+#: The speed schedule of the 2D tasks and of the 3D autopilot's cruise, which is
+#: the design point of a task that does not price its speed (G12).
+DESIGN_CAS, DESIGN_MACH = 290.0 * 1852.0 / 3600.0, 0.78
+#: The 3D flight state, in the order of ``flight_step``'s ``x``.
+FLIGHT_FIELDS = ("x", "y", "z", "x_dot", "y_dot", "z_dot", "theta", "phi")
+FLIGHT_FIELDS += ("theta_dot", "phi_dot", "power", "stick", "aileron")
+FLIGHT_FIELDS += ("pitch_integ", "roll_integ", "fuel")
+
+
+def flight_x(state):
+    """The planner's 3D state of an aircraft's env state."""
+    return jnp.stack([getattr(state, f) for f in FLIGHT_FIELDS])
+
+
+def to_polar(x):
+    """``x`` with its horizontal velocity as (speed, track): a plan's states are its
+    variables, and one that reverses course in Cartesian velocity passes a cold
+    start's Newton steps through zero speed, where nothing in the model holds."""
+    return x.at[3].set(jnp.hypot(x[3], x[4])).at[4].set(jnp.arctan2(x[4], x[3]))
+
+
+def to_cartesian(x):
+    """The inverse of ``to_polar``, for any branch of the track."""
+    return x.at[3].set(x[3] * jnp.cos(x[4])).at[4].set(x[3] * jnp.sin(x[4]))
+
+
+def polar_step(x1, track):
+    """``x1`` in ``to_polar``'s form, its track on the branch of ``track``, a step
+    earlier, by the turn over that step, which never reaches the half-turn."""
+    sin_t, cos_t = jnp.sin(track), jnp.cos(track)
+    turned = jnp.arctan2(x1[4] * cos_t - x1[3] * sin_t, x1[3] * cos_t + x1[4] * sin_t)
+    return x1.at[3].set(jnp.sqrt(x1[3] ** 2 + x1[4] ** 2)).at[4].set(track + turned)
+
+
+def on_branch(angle, reference):
+    """``angle`` plus the whole turns that put it nearest ``reference``."""
+    return angle + 2.0 * jnp.pi * jnp.round((reference - angle) / (2.0 * jnp.pi))
+
+
+def decayed(gust, t, p):
+    """The noise-free gust ``t + 1`` steps on from the measured ``gust``."""
+    return gust * (1.0 - p.turbulence_theta * p.delta_t) ** (t + 1)
+
+
+class Flown(NamedTuple):
+    """A task step's outputs for the limits and the guards: the loads at the inner
+    sub-steps, EAS and Mach on the state reached, each guard's smallest argument."""
+
+    loads: jnp.ndarray
+    eas: jnp.ndarray
+    mach: jnp.ndarray
+    guards: jnp.ndarray
+
+
+def accelerate_3d(velocities, positions, thrust, stick, aileron, air, mass, p, w, d):
+    """``compute_acceleration_3d``, its guards dropped. ``air`` is the wind and the
+    gust's roll rate. The flight-path and track angles enter by their sines and
+    cosines, formed from the velocity, so no cut of an arctan2 is met."""
+    vx, vy, vz, q, roll_rate = velocities
+    _, _, z, theta, phi = positions
+    ax, ay, az = vx - air[0], vy - air[1], vz - air[2]
+    horizontal = jnp.sqrt(ax**2 + ay**2)
+    speed = jnp.sqrt(ax**2 + ay**2 + az**2)
+    sin_g, cos_g, sin_t, cos_t = (
+        az / speed,
+        horizontal / speed,
+        ay / horizontal,
+        ax / horizontal,
+    )
+    alpha = theta - jnp.arctan2(az, horizontal)
+    mach = speed / sound_speed(z, w, d)
+    rho = compute_air_density_from_altitude(z)
+    a = airframe(alpha, speed, mach, rho, q, stick, p, w, d)
+    dynamic = 0.5 * rho * speed**2
+    roll_moment = (
+        dynamic * p.aileron_surface * p.cl_alpha * p.aileron_effectiveness
+        * jnp.rad2deg(aileron) * p.moment_arm_aileron
+    )  # fmt: skip
+    roll_moment = roll_moment + (
+        p.C_lp * ((roll_rate - air[3]) * p.wingspan / (2.0 * speed))
+        * dynamic * p.wings_surface * p.wingspan
+    )  # fmt: skip
+    sin_b, cos_b = jnp.sin(phi), jnp.cos(phi)
+    sin_p, cos_p = jnp.sin(theta), jnp.cos(theta)
+    up = jnp.stack([-sin_g * cos_t, -sin_g * sin_t, cos_g])
+    right = jnp.stack([-sin_t, cos_t, jnp.zeros_like(cos_t)])
+    along = jnp.stack([cos_g * cos_t, cos_g * sin_t, sin_g])
+    body = jnp.stack([cos_p * cos_t, cos_p * sin_t, sin_p])
+    force = thrust * body - a.drag * along + a.lift * (cos_b * up + sin_b * right)
+    force = force.at[2].add(-mass * p.gravity)
+    accel = jnp.concatenate(
+        [force / mass, jnp.stack([a.moment / p.I, roll_moment / p.I_x])]
+    )
+    return accel, (a.lift, mach, a.cl_peak, accel[3:], alpha)
+
+
+def flight_step(p, x, u, t, gust, method, widths, deltas=NO_DELTA, roll_gust=None):
+    """One task step of a 3D aircraft: ``(x_next, Flown)``, ``x`` in the order of
+    ``FLIGHT_FIELDS``, ``u`` (throttle, pitch demand, bank demand) raw, unclipped
+    (T1), ``gust`` the air it flies in this step, and ``roll_gust`` added to the
+    gust's roll rate, as a wake's is."""
+    dt = p.delta_t / INNER_STEPS
+    wind = total_wind_3d(x[2], gust[0], gust[1], gust[2], p)
+    roll = p.gust_roll_rate if roll_gust is None else p.gust_roll_rate + roll_gust
+    air = jnp.stack([*wind, jnp.asarray(roll, x.dtype)])
+    mass = p.initial_mass - (p.initial_fuel_quantity - x[15])
+    lever = 0.5 * (u[0] + 1.0)
+    pitch_demand, bank_demand = u[1] * PITCH_DEMAND_MAX, u[2] * BANK_DEMAND_MAX
+    g = p.inner_loop
+    w = sites(widths)
+
+    def inner(carry, _):
+        velocities, positions, rest = carry
+        power, stick, aileron, pitch_integ, roll_integ, burned = rest
+        vx, vy, vz, q, roll_rate = velocities
+        z, theta, phi = positions[2], positions[3], positions[4]
+        air_speed = jnp.sqrt(
+            (vx - wind[0]) ** 2 + (vy - wind[1]) ** 2 + (vz - wind[2]) ** 2
+        )
+        rho = compute_air_density_from_altitude(z)
+        eas = air_speed * jnp.sqrt(rho / p.air_density_at_sea_level)
+        scaler = airspeed_scaler(eas, g)
+        stick_out, pitch_integ = attitude(
+            g.Kp_theta, g.Ki_theta, g.Kd_theta, pitch_demand - theta, q, pitch_integ,
+            scaler, dt, w.surface_clip, deltas.surface_clip,
+        )  # fmt: skip
+        aileron_out, roll_integ = attitude(
+            g.Kp_roll, g.Ki_roll, g.Kd_roll, bank_demand - phi, roll_rate, roll_integ,
+            scaler, dt, w.surface_clip, deltas.surface_clip,
+        )  # fmt: skip
+        stick = surface_step(
+            stick_out * STICK_TRAVEL, stick, dt, p.stick_response_rate,
+            p.surface_rate_limit, w.surface_rate, deltas.surface_rate,
+        )  # fmt: skip
+        aileron = surface_step(
+            aileron_out * AILERON_TRAVEL, aileron, dt, p.aileron_response_rate,
+            p.surface_rate_limit, w.surface_rate, deltas.surface_rate,
+        )  # fmt: skip
+        power = engine(lever, power, dt, p)
+        thrust = compute_thrust_output(
+            power=power,
+            thrust_output_at_sea_level=p.thrust_output_at_sea_level,
+            rho=rho,
+            M=air_speed / sound_speed(z, w, deltas),
+        )
+        velocities, positions, metrics = integrate_dynamics(
+            velocities=velocities,
+            positions=positions,
+            delta_t=dt,
+            compute_acceleration=partial(
+                accelerate_3d,
+                thrust=thrust,
+                stick=stick,
+                aileron=aileron,
+                air=air,
+                mass=mass,
+                p=p,
+                w=w,
+                d=deltas,
+            ),
+            method=method,
+        )
+        burned = burned + p.specific_fuel_consumption * 1e-3 * thrust * dt
+        lift, mach, peak, angular, alpha = jax.tree_util.tree_map(
+            lambda m: m[-1], metrics
+        )
+        guards = jnp.stack([
+            p.M_crit - mach,
+            SECTION_CAP - peak,
+            ANGULAR_CLIP - jnp.max(jnp.abs(angular)),
+            jnp.pi - jnp.abs(alpha),
+            eas - g.scaling_speed / g.scale_max,
+        ])  # fmt: skip
+        rest = (power, stick, aileron, pitch_integ, roll_integ, burned)
+        return (velocities, positions, rest), (lift / (mass * p.gravity), guards)
+
+    start = (
+        jnp.stack([x[3], x[4], x[5], x[8], x[9]]),
+        jnp.stack([x[0], x[1], x[2], x[6], x[7]]),
+        (x[10], x[11], x[12], x[13], x[14], jnp.zeros_like(x[0])),
+    )
+    end, (loads, guards) = jax.lax.scan(inner, start, None, length=INNER_STEPS)
+    (vx, vy, vz, q, roll_rate), (px, py, z, theta, phi) = end[0], end[1]
+    power, stick, aileron, pitch_integ, roll_integ, burned = end[2]
+    fuel = x[15] - burned
+    x1 = jnp.stack([
+        px, py, z, vx, vy, vz, theta, phi, q, roll_rate, power, stick, aileron,
+        pitch_integ, roll_integ, fuel,
+    ])  # fmt: skip
+    wind1 = total_wind_3d(z, gust[0], gust[1], gust[2], p)
+    air_speed = jnp.sqrt(
+        (vx - wind1[0]) ** 2 + (vy - wind1[1]) ** 2 + (vz - wind1[2]) ** 2
+    )
+    rho = compute_air_density_from_altitude(z)
+    eas = air_speed * jnp.sqrt(rho / p.air_density_at_sea_level)
+    mach = air_speed / sound_speed(z, w, deltas)
+    return x1, Flown(loads, eas, mach, jnp.append(jnp.min(guards, axis=0), fuel))
+
+
+def turn_distance(sin_e, cos_e, width, delta=0.0):
+    """How far the track is from a target, over the shorter turn (S4): the min of
+    the two turn directions, ``l`` left and ``2 pi - l`` right, by K2's softplus,
+    from the error's sine and cosine. ``l``'s cut falls where the two swap, so the
+    value is smooth there, and it is ``abs(wrapped error)`` at width 0."""
+    left = jnp.pi - jnp.arctan2(-sin_e, -cos_e)
+    right = 2.0 * jnp.pi - left
+    return left - plus(left - right, width) + delta
+
+
+def flight_limits(p, price):
+    """T3: the band, the load at each sub-step, the bank, VMO and MMO, in the order
+    of ``flight_outputs``."""
+    return (
+        Limit(float(p.min_alt), float(p.max_alt), price),
+        *(
+            Limit(float(p.load_factor_min), float(p.load_factor_max), price)
+            for _ in range(INNER_STEPS)
+        ),
+        Limit(-float(p.bank_limit), float(p.bank_limit), price),
+        Limit(hi=float(p.vmo_eas), price=price),
+        Limit(hi=float(p.mmo), price=price),
+    )
+
+
+def flight_outputs(x1, flown):
+    """The limited quantities of ``flight_limits`` on a step's outputs."""
+    return jnp.concatenate(
+        [x1[2:3], flown.loads, x1[7:8], flown.eas[None], flown.mach[None]]
+    )
+
+
+def hold_flight(state, p):
+    """The raw moves that hold an aircraft's throttle and attitude."""
+    lever = (state.power - p.idle_power) / (1.0 - p.idle_power)
+    return jnp.stack([
+        raw_of(lever, 0.0, 1.0),
+        raw_of(state.theta, -PITCH_DEMAND_MAX, PITCH_DEMAND_MAX),
+        raw_of(state.phi, -BANK_DEMAND_MAX, BANK_DEMAND_MAX),
+    ])  # fmt: skip
+
+
+def speed_rest(x1, p):
+    """G12's distance from the design speed, the schedule's, 1 at VMO, for a task
+    whose reward leaves the speed free."""
+    speed = jnp.sqrt(x1[3] ** 2 + x1[4] ** 2 + x1[5] ** 2)
+    design = scheduled_airspeed(x1[2], DESIGN_CAS, DESIGN_MACH)
+    rho = compute_air_density_from_altitude(x1[2])
+    edge = p.vmo_eas * jnp.sqrt(p.air_density_at_sea_level / rho)
+    return (speed - design) / (edge - design)
+
+
+def flight_model(env, p, tracking, *, data, tracked, resolution, drop=0, **fields):
+    """The ``TaskModel`` of a task flown by one 3D aircraft, its velocity in polar
+    form. ``tracking(d, x1, u, t, widths)`` is the reward on the state reached:
+    ``(cost, tracked outputs, further limited quantities)``. ``drop`` leading
+    position fields stay out of the plan, where nothing depends on them. ``air(d, x,
+    t)`` is the step's ``(gust, roll gust)``, the last field of the task's data
+    decaying if not given. Further ``limits`` follow the aircraft's own."""
+    method = env.integration_method
+    track = TRACK - drop
+    air = fields.pop("air", lambda d, x, t: (decayed(d["task"][-1], t, p), None))
+    limits = fields.pop("limits", ())
+    rest = fields.pop("rest", True)
+
+    def full(x):
+        return to_cartesian(jnp.concatenate([jnp.zeros(drop, x.dtype), x]))
+
+    def step(d, x, u, t):
+        widths = d["widths"]
+        gust, roll = air(d, x, t)
+        x1, flown = flight_step(
+            p, full(x), u[:3], t, gust, method, widths[: len(SITE_NAMES)],
+            roll_gust=roll,
+        )  # fmt: skip
+        x1 = polar_step(x1, x[track])
+        cost, outputs, more = tracking(d, x1, u, t, widths)
+        y = jnp.concatenate([flight_outputs(x1, flown), jnp.asarray(more, x.dtype)])
+        return x1[drop:], cost, y, outputs, flown.guards
+
+    def align(x, planned):
+        return x.at[track].set(on_branch(x[track], planned[track]))
+
+    return TaskModel(
+        nx=16 - drop, step=step, data=data, tracked=tracked, resolution=resolution,
+        state_x=fields.pop("state_x", lambda s: to_polar(flight_x(s))[drop:]),
+        limits=(*flight_limits(p, float(trip_cost(p))), *limits),
+        rest=(lambda x1: speed_rest(full(x1), p)) if rest else None,
+        align=align,
+        **{"nu": 3, "hold": lambda s: hold_flight(s, p), **fields},
+    )  # fmt: skip

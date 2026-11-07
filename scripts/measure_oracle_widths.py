@@ -50,9 +50,11 @@ RISK, RECORDED_SEEDS = 0.01, 10
 #: Tasks whose moves are rates (``oracles.rates``).
 BY_RATE = ("boiler_drum", "glass_furnace")
 AIRCRAFT_2D = ("plane", "plane_energy", "plane_sine")
+PATROL = ("patrol", "patrol_range_bearing")
 #: The tasks whose reward prices a heading, a min over turn directions (S4).
-TURNS = ()
+TURNS = ("plane3d_heading",) + PATROL
 AIRCRAFT = AIRCRAFT_2D + TURNS
+AIRCRAFT += ("plane3d_circle", "plane3d_racetrack", "plane3d_figure8")
 #: The dropped guards (T4) of the aircraft (section 5.2).
 _AIRFRAME = {
     "mach": "plane/dynamics.py, the shock stall, the drag rise and the caps past "
@@ -380,8 +382,10 @@ def reactor_sites(points) -> tuple[dict, list]:
 
 
 def _aircraft(name, points):
-    """A flight task's params, probes and ``run(probe, deltas, gust, roll)``, one
-    planned step at width 0 giving its tracked outputs and limited quantities."""
+    """A flight task's params, probes, each probe's gust, and ``run(probe, deltas,
+    gust, roll)``, one planned step at width 0 giving its tracked outputs and its
+    limited quantities. A path's position is read by axis, each at the path's
+    resolution, which bounds the distance's."""
     from target_gym.plane import oracle_model as om
 
     spec = REGISTRY[name]
@@ -400,21 +404,56 @@ def _aircraft(name, points):
             limited = jnp.concatenate([x1[:1], loads, eas[None], mach[None]])
             return x1[:1], limited
 
-        return p, pts, run, ("gust_x", "gust_z")
+        def gust_of(probe):
+            return jnp.stack([probe[0].gust_x, probe[0].gust_z])
+
+        return p, pts, run, gust_of, 2
+
+    follows = name in PATROL
+
+    def craft(probe):
+        return probe[0].follower if follows else probe[0]
+
+    def gust_of(probe):
+        return jnp.stack([getattr(craft(probe), f"gust_{a}") for a in "xyz"])
 
     def run(probe, deltas, gust, roll):
-        state, u = probe
         x1, flown = om.flight_step(
-            p, om.flight_x(state), u, 0, gust, method, zero, deltas, roll
+            p, om.flight_x(craft(probe)), probe[1], 0, gust, method, zero, deltas, roll
         )
-        tracked = jnp.stack([x1[2], jnp.arctan2(x1[4], x1[3])])
-        return tracked, om.flight_outputs(x1, flown)
+        track = jnp.arctan2(x1[4], x1[3])
+        tracked = {
+            "plane3d_heading": lambda: jnp.stack([x1[2], track]),
+            "plane3d_figure8": lambda: x1[:3],
+        }.get(name, lambda: jnp.stack([x1[2], x1[0], x1[1]]))()
+        limited = om.flight_outputs(x1, flown)
+        if follows:
+            from target_gym.patrol.oracle import slot_terms
 
-    return p, pts, run, ("gust_x", "gust_y", "gust_z")
+            s = probe[0]
+            lead = jnp.stack([s.lead.x, s.lead.y, s.lead.z, s.lead.psi])
+            slot = jnp.stack([s.slot_back, s.slot_right, s.slot_up])
+            squared, separation = slot_terms(x1, lead, slot, p)
+            tracked = jnp.stack([x1[0], x1[1], x1[2], track])
+            limited = jnp.concatenate(
+                [limited, jnp.stack([separation, jnp.sqrt(squared)])]
+            )
+        return tracked, limited
+
+    return p, pts, run, gust_of, 3
 
 
-def _gust(state, fields):
-    return jnp.stack([getattr(state, f) for f in fields])
+def _resolutions(name, p):
+    """The tracked outputs' resolutions, in ``_aircraft``'s order."""
+    if name in AIRCRAFT_2D:
+        return [p.precision_floor]
+    if name == "plane3d_heading":
+        return [p.precision_floor, p.heading_precision_floor]
+    if name == "plane3d_figure8":
+        return [p.position_precision_floor] * 3
+    if name in PATROL:
+        return [p.slot_precision_floor] * 3 + [p.heading_precision_floor]
+    return [p.precision_floor, p.position_precision_floor, p.position_precision_floor]
 
 
 def aircraft_sites(name, points) -> tuple[dict, list]:
@@ -422,7 +461,7 @@ def aircraft_sites(name, points) -> tuple[dict, list]:
     against its tracked outputs, and the back-off of each limit."""
     from target_gym.plane import oracle_model as om
 
-    p, pts, run, fields = _aircraft(name, points)
+    p, pts, run, gust_of, _ = _aircraft(name, points)
     sites = {
         "buffet": ("plane/dynamics.py, the buffet line's cap", p.CL_max - p.CL_min),
         "cl_stall": ("plane/dynamics.py, the stall clip", p.CL_max - p.CL_min),
@@ -434,15 +473,13 @@ def aircraft_sites(name, points) -> tuple[dict, list]:
         ),
         "tropopause": ("plane/dynamics.py, the sound speed's switch", 288.15 - om.T11),
     }
-    resolutions = [p.precision_floor]
-    if name not in AIRCRAFT_2D:
-        resolutions.append(p.heading_precision_floor)
+    resolutions = _resolutions(name, p)
     n = len(om.SITE_NAMES)
     zero = jnp.zeros(n)
     no_roll = jnp.zeros(())
 
     def tracked(probe, deltas):
-        return run(probe, om.sites(deltas), _gust(probe[0], fields), no_roll)[0]
+        return run(probe, om.sites(deltas), gust_of(probe), no_roll)[0]
 
     out = {}
     for i, site_name in enumerate(om.SITE_NAMES):
@@ -462,7 +499,7 @@ def aircraft_sites(name, points) -> tuple[dict, list]:
     @jax.jit
     def limited(probe, deltas):
         deltas = om.sites(deltas.sum(axis=-1))
-        return run(probe, deltas, _gust(probe[0], fields), no_roll)[1]
+        return run(probe, deltas, gust_of(probe), no_roll)[1]
 
     widths = [out[n_]["width"] or 0.0 for n_ in om.SITE_NAMES]
     return out, [float(b) for b in limit_backoff(limited, widths, pts, 1)]
@@ -483,20 +520,20 @@ def turn_site() -> dict:
 def aircraft_noise(name, points) -> list:
     """K11's noise term of each limit: one innovation of the gust, the axes
     independent, so their terms add in quadrature (derived), and on a 3D aircraft
-    the rolling gust's held white draw at the slowest probe, its largest."""
+    the rolling gust's held white draw at a slow cruise, its largest."""
     from target_gym.plane import oracle_model as om
     from target_gym.plane3d.dynamics import rolling_gust
 
-    p, pts, run, fields = _aircraft(name, points)
+    p, pts, run, gust_of, axes = _aircraft(name, points)
     std = float(p.turbulence_sigma) * float(np.sqrt(p.delta_t))
     steps = RECORDED_SEEDS * int(p.max_steps_in_episode)
     no_roll = jnp.zeros(())
     terms = []
-    for axis, _ in enumerate(fields):
+    for axis in range(axes):
 
         @jax.jit
         def by_gust(probe, d, axis=axis):
-            gust = _gust(probe[0], fields).at[axis].add(d)
+            gust = gust_of(probe).at[axis].add(d)
             return run(probe, om.NO_DELTA, gust, no_roll)[1]
 
         terms.append(noise_backoff(by_gust, std, pts, RISK, steps))
@@ -504,9 +541,9 @@ def aircraft_noise(name, points) -> list:
 
         @jax.jit
         def by_roll(probe, d):
-            return run(probe, om.NO_DELTA, _gust(probe[0], fields), d)[1]
+            return run(probe, om.NO_DELTA, gust_of(probe), d)[1]
 
-        slowest = min(float(jnp.hypot(s.x_dot, s.y_dot)) for s, _ in pts)
+        slowest = 150.0  # m/s, under any cruise here: the largest draw
         one = jax.vmap(lambda k: rolling_gust(k, slowest, p), axis_size=20000)(
             jax.random.split(jax.random.PRNGKey(0), 20000)
         )
