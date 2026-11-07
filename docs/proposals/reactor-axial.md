@@ -11,10 +11,12 @@ holds the measurements, under the rules of `task-charter.md`.
 The property appeared. With no controller, the plant has a slow axial xenon mode close to
 the published one, rods move the offset hard and at once, and boron moves it almost not at
 all and arrives late. A textbook controller holds the plant with no trip on the ten
-nominal seeds, and the foresight plan is at least 1.75 times cheaper on every seed.
+nominal seeds, and the foresight plan is at least 1.75 times cheaper on every seed, 2.7
+times on the four seeds solved to convergence.
 
-Three things are not clean. The ceiling did not converge, so room here is a lower bound.
-Rule 4 and a learning check were not run. Three tests fail, kept failing on purpose.
+Three things are not clean. The ceiling is an interior-point solve on four corner seeds,
+converged but local, and Adam's on the other six is about a third too high. Rule 4 and a
+learning check were not run. Three tests fail, kept failing on purpose.
 
 ## What changed in the plant
 
@@ -156,12 +158,48 @@ cosine decay, ten seeds on bob's CPU.
 At 3000 iterations the mean ceiling is $4,977, the median room 2.36 and the range 1.75 to
 9.82.
 
-**This is not converged.** Doubling the iterations cut the cost by 21 and 25 %. Each run
-flattens near its end only because the learning rate decays. Rule 9 asks for room shown
-converged, and this is not. Every ceiling here is an upper bound on the best cost, so every
-room is a lower bound. A whole-day IPOPT polish on a few seeds could certify the gap, and
-was not run. Seed 100's large room says more about the reference chattering than about the
-plant.
+**Adam did not converge.** Doubling the iterations cut the cost by 21 and 25 %. Each
+run flattens near its end only because the learning rate decays.
+
+### Interior-point check
+
+`scripts/reactor_ipopt.py` solves the same problem by Newton steps: the shared oracle's
+multiple-shooting NLP and IPOPT port, exact Hessian, stretched to the whole day, with
+the seed's true load wobble, cold from the held state, then replayed through
+`step_env`. The seeds are the ones nearest each corner of hold length and boron delay,
+picked from those draws, not from any cost.
+
+| Seed | Hold, delay | Reference | Adam, 3000 | Interior point, replayed | Room |
+|---:|---|---:|---:|---:|---:|
+| 109 | short, short | $9,157 | $4,654 | $3,352 | 2.73 |
+| 102 | short, long | $14,716 | $5,369 | $3,488 | 4.22 |
+| 108 | long, short | $12,403 | $4,391 | $3,220 | 3.85 |
+| 100 | long, long | $51,951 | $5,289 | $3,265 | 15.9 |
+
+Every solve converged at the final width: KKT error about 5e-9, under the solver's
+1e-8, in 113 to 276 iterations, with no trip on replay. The first, wider rung hit its
+300-iteration cap on every seed and only served as a start. Each seed took 4.5 to 5.7
+hours on 8 CPU threads.
+
+The interior point is 27 to 38 % cheaper than Adam at 3000 iterations, and 22 % cheaper
+on seed 100 than Adam at 6000. So Adam's ceilings are too high by about a third, and
+its rooms too low by as much. On these four seeds the room is 2.7 to 16.
+
+Two limits on these numbers:
+
+- The replayed cost is 20 to 30 % above the solver's own (about $2,600 a seed). Sensor
+  noise is not the cause, since replaying without it gives the same cost. The likely
+  causes are the planner's model of the wobble inside each 30 s step, and the
+  smoothing of the boron corner. That gap was not traced further. The replayed cost is
+  the one charged, so it is the one used.
+- A converged solve is a local optimum of a nonconvex problem. It is a better upper
+  bound on the best cost, not a proof of it.
+
+Two fixes to the reactor's oracle came out of this, both in the shared slot. The boron
+move had no scale of its own, which would have crashed the oracle's solve. The planner
+also now smooths the corner between dilution and boration, where a resting plan sits
+and the solver otherwise jammed (KKT error stuck at 0.22 on a 20 minute test, 1e-10
+after). At no width it is the env's exact mixing, which a test checks.
 
 None of this says what an agent could reach. The plan knows the future and the noise.
 
