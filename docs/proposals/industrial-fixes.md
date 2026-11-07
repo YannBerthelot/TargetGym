@@ -345,6 +345,13 @@ Chosen by the owner on 2026-11-06.
 8. **Consumption is linear: `running_cost` becomes `w * c / c_hold`,** on the 6 tasks
    that charge it. Dead bands that are tolerances stay clipped, as `excess_cost`.
 
+Chosen by the owner on 2026-11-07.
+
+9. **`reactor` keeps its $1 rod step, with a written exception to check 1.** An
+   integrator on Tavg beats the rod program at that price, at 1.17 on 10 of 10 seeds,
+   and the gate would pass from $3. No source settles the price, so it stays ours, and
+   the exception is in the task's `PHYSICS.md` and `EXCEPTIONS`.
+
 ## Cost
 
 New work, on top of what remains of the build plan (C2 to G). Ranges are rough.

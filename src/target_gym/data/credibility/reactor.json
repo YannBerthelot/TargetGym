@@ -1,6 +1,6 @@
 {
   "cpu": "Apple M4 Pro",
-  "exception": "check 2: no published figure could be found or opened, after two searches with a re-fetch check (accepted 2026-11-06)",
+  "exception": "check 2: no published figure could be found or opened, after two searches with a re-fetch check (accepted 2026-11-06); check 1: a plain integrator on Tavg beats the rod program at the $1 rod step, ours, and no source settles a better price (accepted 2026-11-07)",
   "expert_figure": {
     "status": "no sourced figure"
   },

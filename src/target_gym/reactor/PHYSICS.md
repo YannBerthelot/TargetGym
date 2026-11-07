@@ -324,9 +324,9 @@ above 1) fails to $2.50 and passes from $3.
 | $4 | 0.97 | 2 |
 
 Either the rod price is too low, or a controller tighter than the Westinghouse
-program is simply better on this reward. That is the owner's to settle, and the gate
-shows it as a strict xfail with this witness in place. The price was not moved to
-make it pass.
+program is simply better on this reward. The owner kept $1 on 2026-11-07, with the
+written exception at the end of this page, and the gate shows the win as a strict
+xfail with this witness in place. The price was not moved to make it pass.
 
 What the sources give is thin. Whole-head replacement projects ran from $20 million to
 $150 million (NEI Magazine, both read), for nozzle cracking rather than wear. A
@@ -425,6 +425,18 @@ sub-steps as it does `reward`. Each sub-step's true error is shifted by the draw
 in the observation that step returns, because a controller gets one reading per
 step, and any trip comes from the true state. The cost is linear, so noise has no
 floor of the proposal's quadratic form here.
+
+## Written exception to check 1
+
+A null policy wins here. A plain integrator on Tavg beats the rod program on 10 of 10
+held-out seeds, at a ratio of 1.17, with the rod step at $1. The owner accepted that
+on 2026-11-07 and kept the price, because no source settles a better one: the evidence
+in section 6 holds both $1 and the $3 at which the gate would pass, and passing a gate
+is no reason to move a price.
+
+So the expert stays the published program, and a policy can beat it by holding Tavg
+tighter than its dead band and paying for the rod travel. The witness stays in the
+gate as a strict xfail, so a change that stops it winning shows up.
 
 ## Written exception to check 2
 

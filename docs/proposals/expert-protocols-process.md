@@ -339,8 +339,8 @@ and 0.02. It ships, and the PR says so.
 (HRTD 8.1 and 5.0). A recipe has nothing to tune, so it stays, and all three levels
 carry a `reactor` entry that holds no gain. The stale relay gains leave the store
 (section 7). The gate's I-only null moves to Tavg, from the bump test `evidence/`
-already holds on the rebuilt plant. The rod price stays at $1, ours, and the PR puts
-the evidence to the coordinator.
+already holds on the rebuilt plant. The rod price stays at $1, ours: the owner kept it
+on 2026-11-07, with a written exception to check 1 in `reactor`'s `PHYSICS.md`.
 
 **`boiler_drum`.** Section 6, with D7's lambda rule.
 1. Quiet steam demand (R2), rest by R12, hold 400 steps (R8).
