@@ -761,3 +761,49 @@ still needs heat. Being told the walks cuts that loss by about a third, not by h
 **One finding to note.** At the design point the crown face over the charger runs at 1383 C,
 under the 1400 C where sodium silicate forms. The override watches the hottest face, as the trip
 did, so this goes unpoliced; a real furnace would watch each port.
+
+### The float line's order of zones (owner's images, 2026-11-08)
+
+The owner shared Saint-Gobain's float process video and three stills. They show what attempt 3
+had wrong: past the last of six ports the tank keeps its full width for a long unfired stretch,
+and only then narrows to the waist, the working end and the canal onto the tin. I had put the
+waist right after the last port, so the refiner's cooling acted at the melter's door. The tank is
+now, in order: fired melter 21.5 m and unfired zone 20.5 m, both 11 m wide (W2000b); waist 7.5 m
+at 3.5 m wide and working end 20 m at 7.9 m wide (the 1300 t/d furnace, scaled). The cooling air
+blows on the working end only. The stills set the order, not the sizes.
+
+**Design point:** fuel 0.481 kg/s, working-end cooling 1.02 MW (4.3 % of the firing, from 21 %),
+crown face 1590 C in bay 3, canal 1101 C, 4.05 GJ/t. Refiner loop by its recipe: 2.80e5 W/K.
+Pass mark at the design point's share, 0.507, by the owner's rule.
+
+**How far the refiner reaches into the bath now,** fuel held, cooling +0.2 MW: the melter's
+floor moves -3.5 K, first after 3.5 h; the glass leaving the melter -1.8 K, first after 2.4 h.
+A 1 % fuel step moves the floor +6.0 K. Before the re-layout, 0.5 MW moved the floor -19 K.
+
+**The twelve tests, re-measured,** read on the fining share with the refiner loop working:
+
+| Test | Aim | Re-laid tank | Met |
+|---|---|---|---|
+| A1. Readings can mislead | One real pair | Sulfate +50 % against gas +4 %: couple +10.3 and +11.1 K at 2 h, air and stack up in both, the cooling share the same sign at 1 h. Fining at 24 h -0.040 and +0.061, opposite remedies | Yes |
+| A2. The truth arrives late | Over 2 h | Fining past 0.002 at 2.8 and 3.5 h | Yes |
+| A3. Seeing would pay | 2 times | Lost glass 294 h to 164 h over six seeds, 1.8 times; spread 1.7 times; cost per day 110,700 to 76,800 EUR | Partly |
+| B1. Dead time | Over 2 h | Fining's first move 3.5 h. With cooling held: the canal 3.4 h, fitted 7.1 h | Yes |
+| B2. Slow to finish | t63 over 10 h | 40 h | Yes |
+| B3. Keeps going after you stop | Over 2 h and 2 times | Peaks 6.2 h after a 4 h pulse ends, at 6 times its value then | Yes |
+| B4. Haste is punished | Under 10 %, then over 30 % | 23 % at the step test's gain; 93 % and 120 % at 3 and 6 times, never settling in 14 days | Yes, though the tuned gain overshoots |
+| B5. Patience costs too | Over 12 h | 14.4 h | Yes |
+| C1. Stable if left alone | Within 0.1 K | Starts 40 K apart within 0.08 K | Yes |
+| C2. Moves on its own | Out of bounds within 48 h | Valve held: glass lost in all six seeds, 6 to 190 h of 192 | Yes, at sizes of ours |
+| C3. Feedback can't clear it | Still out | PI on fining: 26 to 71 h of lost glass | Yes |
+| C4. The plant itself shifts | 1.5 times | Fining gain 4.8 to 10.0 per kg/s, 2.1 times; first move 3.1 to 4.1 h | Yes |
+
+**Published figures:** forward flow over pull 2.64 into the waist and 2.03 into the working end,
+against 1.2 to 2.5; currents up to 23 m/h, inside 7 to 25; hottest crown 1593 C, under 1620; the
+shortest path through the tank 7.1 h on an 84 h mean, 0.08 against the published 0.15 to 0.20,
+and the coarse grid shortens it, as the refined-grid check showed before. The crown over the
+charger still sits at 1383 C, under 1400, and nothing watches it.
+
+**Rule 7 is now at the edge.** With 20 columns instead of 16, timed beside the shipped step:
+263,456 against 1,621,572 steps/s, 6.2 times slower; scaled, about 3.0 times the median, at the
+limit. Eight depth layers instead of ten is the first thing to try; the earlier grid check put
+that at a few kelvin.
