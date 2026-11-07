@@ -458,6 +458,29 @@ proposal's "Results of the judging".
 | Switch-off | Firing gap and reading lag shrink the gap. Every bath factor leaves the claim |
 | Rule 7 | 1.18 times the median step |
 
+## Physical plant
+
+`physical.py` is attempt 2, unregistered, written from the equations. Its design, results and
+every open label are in `docs/proposals/glass-furnace-task.md`, section "Attempt 2", and the new
+sources with their second-fetch status are in `glass-sources-3a.md` and `glass-sources-3b.md` in
+the session notes.
+
+| Quantity | Value | Source |
+|---|---|---|
+| Geometry | 21.5 + 20.5 m, 11 m wide, six ports | W2000b |
+| Glass depth | 1.2 m | Materials 17 (2024) 4989 |
+| Gas absorption | 0.08 /m | Hoogendoorn, side-fired |
+| Melt conductivity | 1.31 + 5.90e-4 T plus Rosseland; bands 42.8 and 459.2 /m | Liu 2016 eqs 5 to 7, Table III |
+| Foam thickness | Eq 19, K = 2905 | Pilon, Fedorov, Viskanta 2001 |
+| Foam lifetime | 50 s half life at 1200 C, 58 kJ/mol | Kappel 1987 Tables 2, 3 |
+| Foam extinction | 267 /m, 20 % through 2 cm by two-flux | Fedorov and Pilon 2002 |
+| Fining band | 1420 to 1500 C | Beerkens review |
+| Sulfate | 1 wt % batch, 0.27 wt % SO3 retained | Laimbock via Pilon; Rudolph 1990 |
+| Batch | 2.2 MJ/kg to 1450 K, speed from the charger | Pilon II; UV1986 |
+| Regenerator casing | 1.4 W/(m^2 K), from 1726 W/m^2 | ICG slides 12 to 14 |
+| Refiner crown | 6.8 W/(m^2 K), four times insulated | Ford float, seen once |
+| Emissivity, firing shares, couple depth, height | `ours` | None found |
+
 ## Reward (version 2)
 
 `compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.

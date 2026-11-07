@@ -361,3 +361,92 @@ emissivities were found, and they are labelled `ours`, as are firing shares, and
 has no sourced duty, so the forming temperature may not be reached.
 
 **Size budget.** 800 lines of plant, ceiling 900. Rule 7 is measured as soon as the melt runs.
+
+### Results before any oracle
+
+Measured on `physical.py`, unregistered. **Physics produced** the gain change and the wrong way.
+**Partly:** bath event to the reading, upset speed, lookalikes. **Not produced:** delay against
+lag, and hidden state as the row defined it. The valve stayed the action. No environment wrapper
+is built yet, so nothing here has a reward or an observation, and the sensors are functions.
+
+| Property | Desired | Attempt 1 | Attempt 2 | Verdict |
+|---|---|---|---|---|
+| Bath event to the reading | Half peak within 15 min, peak over 1 K | Peak 0.4 K, about 1 h | Whole bath +5 K: 12 min, 1.6 K. Blanket -20 %: 28 min, 3.2 K. Sulfate +50 %: 33 min, 17 K | Partly. Only an imposed kick makes 15 min; real events take about 30 min, with far larger peaks |
+| Upset speed | Over 20 K/h | 3.7 K/h | Sulfate +50 %: 23 K/h. Blanket -20 %: 4.6. Cullet +10 points: 2.2. Gas +1 %: 2.1. Pull: 1.0 | Partly. It needs foam, and the sulfate size is mine |
+| Delay against lag | Over 0.05 for a bath event | 0.001 for fuel | Fuel 3 min over 29 h, 0.002. Blanket first seen 12 min, then a long tail, about 0.03 | Not produced |
+| Lookalike upsets | Under 0.2 for a pair where one harms the glass | About 0.1 | Pull -2 % against cullet +5 points: 0.14 at worst, and the cullet path has an inverse start. Gas +1 % against cullet +5: 0.29 to 24 h, 0.47 at 96 h | Partly. The pair under 0.2 includes pull, which is measured |
+| Hidden state in the reading | A glass change over 5 K showing under 0.36 K | Whole bath +5 K shows 2.3 K | Cullet +5 points crosses zero on the reading at 2.6 h with glass at 0.5 K; skin +5 K shows 0.15 K. Larger: glass -4.5 K while the reading says +17 K | Not as defined. The foam case is stronger, and of the opposite sign |
+| Gain change in an episode | Over 20 % | Not measured, 4 % across operating points | Settled gain 2219 to 4078 K per kg/s, 1.8 times. At 24 h, 1290 to 2286. At 1 h, 476 to 587. Driven by blanket length | Produced |
+| Wrong way | Reading up 1 K while heat into the glass falls | Not possible | Sulfate +50 %, foam 1.05 to 1.49 cm: reading +4.7 K at 15 min, +10.6 K at 1 h, +17 K. Heat into the tank -5 % at 6 min, -2.4 % at 15 min, back to level by 1 h. Glass -1.4 K at 1 h, -4.5 K at 24 h | Produced |
+
+**Inverse response, not asked for.** More cullet needs less melting heat, and the reading first
+falls, -1.4 K at 1 h for +10 points, then rises past zero and on to +13 K at 24 h. A controller
+reading the first hour adds fuel, and the glass is already heading up. The reason is in the
+equations: the charger's batch keeps arriving at the old rate of surface cover until the blanket
+shortens.
+
+**The bottom and canal readings tell the cases apart.** After sulfate +50 % the crown reads +17 K
+while the bottom reads -2.5 K and the canal -5.4 K at 24 h. After gas +1 % all three rise. They
+respond in hours, and their swing at reversal is under 0.02 K. So a bottom or canal reading now
+carries real information about the case the crown gets wrong.
+
+**Rule 7.** 2.5 times slower than attempt 1's whole environment step, both timed together on a
+loaded machine. Scaled to the 729,529 steps/s of the judged run, that is about 290,000 steps/s or
+2.9 times the median, under the 3. An environment wrapper is not in that number, so the margin
+is thin. If it fails, depth from 10 to 8 layers is the first thing to try, and grid checks below
+say what that would cost. The full 2D flow survived, because the long-tank form needs no linear
+solve.
+
+**Published figures.**
+
+| Figure | Source | Attempt 1 | Attempt 2 |
+|---|---|---|---|
+| Surface current | 7 to 25 m/h | Not resolved | 7 to 24 m/h, no calibration |
+| First loop, back over pull | About 6 | 6.6, by `current_scale` | 7.2, from the equations |
+| Conditioning return over pull | 2.6 | 2.6, set | 3.3 |
+| Surface difference along the melter | 170 to 205 K | 40 K | 144 K from the blanket's edge, 312 K from the batch's foot |
+| Surface to bottom | 300 to 340 K in one model, over 100 K in another | 40 to 75 K | 185 K |
+| Hot spot | 13 m in a 21.5 m melter | Zone edge | 15.7 m |
+| Crown profile, K | 1710, 1850, 1890, 1915, 1910, 1805 | One crown | 1618, 1715, 1799, 1845, 1868, 1880. Same rise, 35 to 70 K low, no fall at the end, since firing is uniform |
+| Blanket's share of net heat | 80 to 90 % | 87 % | 82 % |
+| Batch line | 3 to 6.5 m | 3.5 m | 3.1 m |
+| Foam | A few cm, a third of the surface | None | 0.7 to 1.6 cm, 37 % of the surface |
+| Specific energy | 4 to 6 GJ/t | 5.13 | 3.89, just under |
+| Air, stack | 1200 to 1400, 400 to 600 C | 1229, 522 | 1246, 407 |
+| Forming end | About 1100 C | 1475 C | 1296 C. Not reached: no cooling duty was found |
+| Energy balance | Closed | 1.2 % | Under 0.5 % over 100 steps |
+
+**Grid convergence, at crown 1590 C.**
+
+| Doubled | Firing | Bottom | Canal | Foam peak | Hot face swing | Reading swing |
+|---|---|---|---|---|---|---|
+| Base | 0.4508 | 1306 | 1296 | 1.64 cm | 21.3 K | 2.00 K |
+| Depth layers | 0.4487 | 1293 | 1288 | 1.85 cm | 21.4 K | 2.05 K |
+| Columns | 0.4530 | 1316 | 1304 | 1.67 cm | 21.8 K | 2.14 K |
+| Roof cells | 0.4508 | 1306 | 1296 | 1.64 cm | 21.8 K | 1.81 K |
+| Step 15 s | 0.4510 | 1306 | 1296 | 1.64 cm | 33.4 K | 2.49 K |
+| Step 7.5 s | 0.4509 | 1306 | 1296 | 1.63 cm | 45.7 K | 2.83 K |
+
+Firing moves 0.5 %, and temperatures by 13 K at most. One thing doesn't converge: **the hot face's
+swing grows as the step shrinks, 21, 33, 46 K.** The firing gap lasts 40 s, against a 30 s step.
+The reading's swing is far steadier. So the hot face, as a score, depends on the step, and that
+weighs on the owner's choice of score.
+
+**Numerics I had to add, all stated.** The current's drive is filtered over three faces, because
+a long-tank current driven by one face feeds a two-cell wiggle; this was a real instability, seen
+as a saw-tooth in the current, and it went at this filter with the long waves unchanged. A
+viscosity floor of 3 Pa s keeps a run-away finite until it trips. A cold start on the doubled
+column grid still fails; that grid was run from the settled orbit.
+
+**What is still `ours`.** Surface emissivities 0.8, no source found. Firing even across ports. Fining
+gas formed in the top 10 cm. Bubble radius 8.3 mm, and foam goes as its power -2.6. No foam onset
+velocity. Refiner crown taken as uninsulated. Glass leaves uniformly over depth. Couple depth 36 mm.
+Combustion height 2.4 m from a side-fired chamber, not a float. Sulfate moves have no sourced size.
+The roll cells under the batch are absent, and the sulfate rate is a band, not a rate.
+
+**Gone from attempt 1:** `current_scale`, `gas_view`, the imposed 1 h ramp, the 15 mm cell's hold on
+the swing. Kept on merit: the regenerator stacks' equations, the clocks, the viscosity table,
+batch figures. 726 lines of plant against the 800 budget.
+
+**Decision for the owner, before any oracle.** Whether to spend on room, and which score: the hot
+face as decided, or crown plus a bottom or canal reading.
