@@ -19,6 +19,7 @@ from target_gym.base import (
 )
 from target_gym.expert_access import RegistryExperts
 from target_gym.reactor.env import (
+    BORON_QUEUE,
     ReactorParams,
     ReactorState,
     check_is_terminal,
@@ -27,6 +28,7 @@ from target_gym.reactor.env import (
     compute_reward_terms,
     get_obs,
     rod_balance,
+    rod_worth,
     scheduled_load,
     steady_state_precursors,
     steady_state_temperatures,
@@ -46,10 +48,10 @@ class Reactor(
     RegistryExperts, SavesVideo, environment.Environment[ReactorState, ReactorParams]
 ):
     """
-    Nuclear reactor (point kinetics + thermal feedback).
+    Nuclear reactor: a two-point core with rods and boron.
 
-    Observation (6,): [n, T_hot, rho_ext_norm, load, T_avg, T_ref]
-    Action      (1,): [rho_ext_norm] in [-1, 1] (control rod position)
+    Observation (8,): [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron]
+    Action      (2,): [rod demand, boron flow] in [-1, 1]
     """
 
     registry_name: str = "reactor"
@@ -63,7 +65,7 @@ class Reactor(
     # ``delta_t * control_period`` seconds).
     control_period: int = CONTROL_PERIOD
 
-    # obs = [n, T_hot, rho_ext_norm, load, T_avg, T_ref]
+    # obs = [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron]
     obs_value_index: int = 4  # Tavg (K)
     tracked_names: tuple = ("Tavg (K)",)
     obs_target_index: int = 5  # Tref, the program at this load (K)
@@ -74,10 +76,12 @@ class Reactor(
         FieldReading("n", sigma=1.9e-4),
         FieldReading("T_coolant", sigma=0.045),
         FieldReading("T_cold", sigma=0.045),
+        # Two ex-core sections, each as noisy as the flux reading.
+        FieldReading("delta_I", sigma=2.7e-4),
     )
 
     def __init__(self, integration_method: str = "tr_bdf2_4"):
-        self.obs_shape = (6,)
+        self.obs_shape = (8,)
         self.integration_method = integration_method
 
     @property
@@ -104,8 +108,11 @@ class Reactor(
         if params is None:
             params = self.default_params
 
-        action, state = actuate(self, state, jnp.reshape(action, (1,)), params)
-        rho_raw = action.reshape(())
+        action, state = actuate(self, state, jnp.reshape(action, (2,)), params)
+        # The boron command joins the queue once a control step.
+        state = state.replace(
+            boron_queue=jnp.concatenate([action[1:], state.boron_queue[:-1]])
+        )
         # A controller gets one reading a step, so every sub-step's measured
         # cost carries the draw of the observation this step returns.
         read_at = state.time + 1
@@ -122,7 +129,7 @@ class Reactor(
         def sub_step(carry, _):
             state, cum_reward, cum_measured, cum_terms, terminated = carry
             candidate, _metrics = compute_next_state(
-                rho_raw, state, params, integration_method=self.integration_method
+                action, state, params, integration_method=self.integration_method
             )
             r = compute_reward(candidate, params, xp=jnp)
             terms = compute_reward_terms(candidate, params, xp=jnp)
@@ -223,7 +230,8 @@ class Reactor(
         if params is None:
             params = self.default_params
 
-        key, down_key, hold_key, demand_key, history_key = jax.random.split(key, 5)
+        keys = jax.random.split(key, 6)
+        key, down_key, hold_key, demand_key, history_key, delay_key = keys
 
         # The day: when the load starts down, and how long it holds.
         down_at = jax.random.uniform(
@@ -247,7 +255,15 @@ class Reactor(
         )
         I_hat, Xe_hat = steady_state_xenon(n_recent, params)
         T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, params)
-        rods = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, params)
+        # Critical on boron: the rods stay parked, whatever xenon asks for.
+        needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, params)
+        boron = params.boron_ref + needed / params.boron_worth
+        delay = jax.random.randint(
+            delay_key,
+            (),
+            params.boron_delay_range[0],
+            params.boron_delay_range[1] + 1,
+        )
 
         # The draw's precision: float32 as scored, float64 under enable_x64.
         dtype = down_at.dtype
@@ -263,15 +279,23 @@ class Reactor(
             T_sg=as_state(T_sg),
             I_hat=as_state(I_hat),
             Xe_hat=as_state(Xe_hat),
+            I_tilt=as_state(0.0),
+            Xe_tilt=as_state(0.0),
             target_n=as_state(load),
             T_ref=as_state(tavg_program(load, params)),
             load_wobble=as_state(0.0),
             ramp_down_at=down_at,
             ramp_up_at=up_at,
             demand_key=demand_key,
-            rho_ext=as_state(jnp.clip(rods, params.rho_ext_min, params.rho_ext_max)),
+            rod_in=as_state(params.rod_park),
+            rho_ext=as_state(rod_worth(params.rod_park, params)),
             rho_ext_cmd=as_state(0.0),
+            boron=as_state(boron),
+            delta_I=as_state(0.0),
+            boron_queue=jnp.zeros(BORON_QUEUE, dtype),
+            boron_delay=delay,
             rod_moved=as_state(0.0),
+            effluent=as_state(0.0),
         )
 
         obs = self.get_obs(state)
@@ -279,9 +303,9 @@ class Reactor(
 
     def action_space(self, params: ReactorParams | None = None) -> spaces.Box:
         return spaces.Box(
-            low=jnp.array([-1.0]),
-            high=jnp.array([1.0]),
-            shape=(1,),
+            low=-jnp.ones(2),
+            high=jnp.ones(2),
+            shape=(2,),
             dtype=jnp.float32,
         )
 
