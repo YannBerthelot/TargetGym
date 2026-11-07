@@ -18,6 +18,7 @@ from target_gym import eval as E
 from target_gym.compressor_surge.env import (
     check_is_terminal,
     compute_next_state,
+    compute_reward_terms,
     live_target,
 )
 from target_gym.compressor_surge.experts import DEFAULT_GAINS, settled_point
@@ -127,15 +128,18 @@ def test_the_applied_action_is_where_the_actuators_went():
 @pytest.mark.parametrize("clock", [50, 350])  # the opening ramp and a later one
 def test_the_oracles_model_reads_the_ramp_the_line_and_the_travel(clock):
     """Mid-ramp at the widest line, one exact model step from the reset is the
-    env's: the same target, the same wear and the same distance to the trip."""
+    env's: the same target and running cost, the same wear and the same distance
+    to the trip. The running cost is a smooth term since PR 8, about 4 in 12,000
+    here, so the cost is held to 1e-5, which it would miss without it."""
     s = _reset().replace(block_clock=clock, surge_offset=0.05)
     u, m = jnp.asarray(_raw(1.0, 0.8)), compressor_model(ENV, P)
     d = {"task": m.data(s), "widths": (0.0, 0.0)}
     _, cost, y, _, _ = m.step(d, m.state_x(s), u, 0)
     new = compute_next_state(u, s, P, KEY)[0]
     target = (float(live_target(new, P)) - float(new.dp)) / 1e3 / P.e_floor
-    assert float(cost) == pytest.approx(target**2, rel=1e-3)
-    assert float(y[1]) * P.travel_free == pytest.approx(
+    running = float(compute_reward_terms(new, P)["running"])
+    assert float(cost) == pytest.approx(target**2 + running, rel=1e-5)
+    assert float(y[0]) * P.travel_free == pytest.approx(
         float(new.valve_travel), rel=1e-3
     )
-    assert float(y[2]) - 0.5 == pytest.approx(float(new.phi_min) - 0.525, abs=1e-5)
+    assert float(y[1]) - 0.5 == pytest.approx(float(new.phi_min) - 0.525, abs=1e-5)
