@@ -292,9 +292,9 @@ protocol's derivative (D6) is left out: at this Kc, 100 s of derivative on a 0.3
 reading at 30 s scatters about 0.5 raw a step.
 
 Kp has fallen from 12 to 0.3, and the action no longer saturates. On the held-out
-seeds 200 to 209 it holds 1.15 K a step (worst 1.82) against a ceiling of 1, about
-what the old gains' relay did at 1.12, with no trip: crown RMS 1.3 to 1.9 K, p99 4 to
-6 K, and 100 % of steps within the +-10 K of check 2. Spec, a strict xfail in
+seeds 200 to 209 it holds 1.15 a step (worst 1.82) against a ceiling of 1, where the
+old gains' relay held 1.87, with no trip: crown RMS 1.3 to 1.9 K, p99 4 to 6 K, and
+100 % of steps within the +-10 K of check 2. Spec, a strict xfail in
 `tests/glass_furnace/test_glass_furnace_pid.py`: the true crown within 2 K on at least
 95 % of hold steps. Measured 78 to 91 %. The misses are the firing interruptions at
 each reversal, which a PI on the crown meets only after the fact.

@@ -594,14 +594,14 @@ def test_a_loop_closed_inside_a_test_records_what_it_sent():
 
 
 def test_a_step_can_land_at_a_phase_of_a_cycle():
-    # A firing interruption every 7 steps: the step lands 2 past one, whatever
-    # the hold's length, on the same baseline, and the plant is the same plant.
+    # A cycle of 50 steps: the step lands 2 past one, whatever the hold's length,
+    # on the same baseline, and a plant at rest reads the same against itself.
     plant = _plant(REGISTRY["first_order"], 0.0)
     inst = Instrument.of(REGISTRY["first_order"].make_env(), plant_params(0.0), "x")
     run = plant.bump(0, 0, 0, 0.1, 40, inst)
-    held = plant.bump(0, 0, 0, 0.1, 40, inst, at=(7, 2))
-    assert held.clock % 7 == 2
-    assert run.clock <= held.clock < run.clock + 7
+    held = plant.bump(0, 0, 0, 0.1, 40, inst, at=(50, 2))
+    assert held.clock % 50 == 2
+    assert run.clock <= held.clock < run.clock + 50
     assert len(held.base) == len(run.base)
     np.testing.assert_allclose(held.dy, run.dy, atol=1e-3)
 

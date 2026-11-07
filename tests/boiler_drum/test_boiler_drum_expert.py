@@ -145,10 +145,9 @@ HELD_OUT = range(200, 210)
 @pytest.mark.large
 @pytest.mark.xfail(
     strict=True,
-    reason="Finding (2026-10-28): mean level error 19-34 mm over the held-out "
-    "seeds, 6 of 10 above 25 mm. The lambda-tuned trim (tight, lam = theta) "
-    "still lets steam-demand swings move the level; the shipped hand tuning "
-    "left 28-79 mm on the protocol seeds.",
+    reason="Finding (PR 9, 2026-11-07): mean level error 26-52 mm over the held-out "
+    "seeds, every seed above 25 mm, on the recipe's gains and the firing lag and "
+    "rate limit. The old gains left 75 mm on this plant.",
 )
 def test_the_drum_level_holds_within_an_inch_on_held_out_seeds():
     from target_gym.eval import scored_burn_in
