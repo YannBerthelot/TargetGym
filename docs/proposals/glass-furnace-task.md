@@ -1,7 +1,14 @@
 # Glass furnace task
 
-Proposal for the owner, 2026-11-07. Measured at `a9c8ea8`. Nothing here is built, and no
-plant, reward or expert changed.
+Proposal for the owner, 2026-11-07. The table of properties was measured on the shipped plant
+at `a9c8ea8`. The rebuilt plant now exists beside it, unregistered, in
+`src/target_gym/glass_furnace/rebuilt.py`. Nothing registered changed, and nothing was
+re-recorded.
+
+**Result, plainly.** The task has room of 1.61 on the foresight ceiling, and that room is not
+in the bath. Half the gap is the reversal, which the oracle times from a clock the agent also
+reads, and the bath factors can all be switched off without shrinking it. See
+[Results of the judging](#results-of-the-judging).
 
 ## The outcome
 
@@ -140,17 +147,13 @@ term or unsourced gain goes in to reach a property.
 
 | Lever | Proposal |
 |---|---|
-| Scored | Crown against its target, plus fuel, on the existing reward form, with the 1 K floor. Plus a charge for unmelted batch past a limit (owner's decision), the one term that scores the bath directly. Vendors tie excess batch at the throat to defects, seen once. The limit and its price have no source yet, so they are `ours` until sized |
-| Observed | Roof reading, air preheat, fuel, reversal phase, target, pull. A slow, coarse batch-line reading, as an operator has. No glass or bath state |
-| The agent's role | Operator plus controller: operators watch the batch line and trim the controller |
+| Scored | The crown's hot face against its target, plus fuel, on the existing reward form, with the 1 K floor (owner's choice). The batch charge first proposed here was removed by the owner, since neither its limit nor its price could be sized |
+| Observed | Roof reading, air preheat, fuel, reversal phase, target, pull. No glass or bath state. The batch-line reading went with the charge |
+| The agent's role | The controller. With the batch reading gone, there is no operator trim to do |
 | Operating range | As shipped until a reason appears |
-| Disturbances | Batch and cullet changes and blanket moves (the owner's two main upsets), gas drift, pull at the sourced +-2 % wander, reversals, charger pulses |
+| Disturbances | Cullet moves of +-10 points and blanket moves of +-20 %, each over 1 h (sizes the owner's), gas drift, pull at the sourced +-2 % wander, reversals, charger pulses |
 | Episode | 3 days, 8640 steps of 30 s, so slow bath heat can return. 5.4 times today's episode cost |
-| Reference controller | The ladder: PI on the reading, pull feedforward, a lead on the reading, and a slow operator-style crown trim from the batch-line reading, since the agent has it. No glass outer loop, no search |
-
-The batch-line reading's pace has no source, so it is labelled `ours` and tested at about hourly
-and each shift. It may let the reference close the room. That risk comes with giving the agent
-what an operator has.
+| Reference controller | The ladder: PI on the reading, pull feedforward, a lead on the reading. No cascade rung, because no reading of the bath exists. No search |
 
 ### The rebuild
 
@@ -190,10 +193,108 @@ numbers bath events are slow next to the loop, so a PI may reject them all on a 
 Then the rebuild buys realism and little room, and the ceiling's gap would be mostly the reversal
 and foresight. That number is still reported as it stands.
 
+## Results of the judging
+
+One attempt, on the rebuilt plant, in the page's order. Numbers and sources are in `PHYSICS.md`
+under "Rebuilt plant". Scripts are `scripts/glass_rebuilt_*.py`.
+
+**1. Properties.** Measured with no controller, noise off, like phases compared.
+
+| Property | Shipped | Rebuilt | Moved? |
+|---|---|---|---|
+| Delay against lag | About 0.001 | 189 s over 40 h on the reading, about 0.001 | No |
+| Gain spread | 2 % over crown, 4 % with pull +10 % | 2 % over crown 1570 to 1605, 4 % across pull -10 to +10 % | No |
+| Slow mode | 32 h against about 15 min | 37 h on the hot face, 40 h on the reading, with t10 at 0.6 h and 1.5 h. 9 % of the settling comes in 30 min | A little, and now the start is slow too |
+| Hidden state seen in the reading, at 1 h | Melt +5 K shows 3.3 K, working end 0.8 K, batch +10 % 0.43 K | Hot spot surface 0.40 K, whole bath 2.3 K, working end 0.36 K, batch -1.75 K | Yes. Single zones now hide below the 0.36 K noise |
+| Lookalike upsets, at 1, 6, 24, 96 h | Gas +1 %: 1.1, 3.3, 7.9, 13.5 K. Pull -2 %: 0.8, 3.8, 9.4, 16.1 K | Gas +1 %: 1.6, 4.0, 9.0, 16.9 K. Pull -2 %: 1.4, 4.8, 11.3, 21.1 K. Cullet +5 points: 1.0, 3.4, 8.2, 15.5 K | Yes. Cullet is a third lookalike, and it is not measured |
+| Upset speed | 1 K/h times 3 min, 0.05 K | Gas 1.4, pull 1.1, cullet 0.8, blanket 3.7 K/h. Blanket times 3 min is 0.19 K | Four times faster, and still far under the 1 K floor |
+| Change during an episode | 0 | Melting heat and blanket thickness move hidden in the episode. How far the gain moves within one was not measured separately | Yes |
+
+The blanket's move fades instead of holding: its reading goes 3.5, 2.0, 1.1, 0.3 K at 1, 6, 24,
+96 h, so a slowly thinning blanket doesn't move the crown at steady state. One move of 10 points
+of cullet shifts the batch line only about 0.1 m. Reversal swing is 38 K peak to peak on the hot
+face and 2.2 K on the reading.
+
+**2. Realism.** Plain PI by SIMC, bath untuned, 12 seeds: reading spread 1.56 K against the real
+2.2 K. The ladder ranges 1.44 to 1.57 K, no trips. It lands near, and a little under.
+
+| Rung | Cost | Hot face rms | Reading sd |
+|---|---|---|---|
+| PI | 50.22 | 7.02 K | 1.56 K |
+| + pull feedforward | 50.20 | 7.01 K | 1.56 K |
+| + lead on the reading, 10 min | 47.98 | 6.85 K | 1.44 K |
+
+**3. Room.** Best rung over the foresight oracle, whole episode, same draws on both sides.
+
+| Seed | Ladder | Oracle | Room |
+|---|---|---|---|
+| 100 | 47.47 | 29.41 | 1.61 |
+| 101 | 48.13 | 29.77 | 1.62 |
+| 102 | 46.93 | 29.04 | 1.62 |
+| 103 | 46.58 | 29.05 | 1.60 |
+
+**Room is 1.61**, spread 1.60 to 1.62. The oracle is converged: taking knots from 150 s to 60 s
+to 30 s moves its cost 0.5 % and then 0.1 %, and a plan from a flat valve reaches 29.4376 at
+150 s against 29.4367 from the ladder. Fuel is 1.0 of either cost, so nearly all of this is
+tracking. The oracle's own hot face still has 5.3 K rms, and the ladder's 6.8 K, against a 1 K
+floor. So most of the score is a swing no controller removes, and in decades above the floor the
+gap is 0.11, smaller than the shipped plant's 0.26.
+
+**4. Switch-off.** Seed 100, 150 s knots, gains fixed at the full plant's recipe, first 2 h
+dropped on both sides. One seed, so small differences mean nothing. The full plant's room on
+this window is 1.62.
+
+| Removed | Ladder | Oracle | Gap in cost | Room | Claim |
+|---|---|---|---|---|---|
+| Nothing | 47.55 | 29.44 | 18.1 | 1.62 | |
+| Firing gap at reversal | 11.30 | 2.31 | 9.0 | 4.90 | Stays. It halves the gap |
+| Roof reading at 5 min | 42.50 | 29.44 | 13.1 | 1.44 | Stays |
+| Sheath lag | 43.26 | 29.44 | 13.8 | 1.47 | Stays |
+| Charger pulses | 47.80 | 31.95 | 15.9 | 1.50 | Unclear. The gap shrinks only because the oracle gets worse, which I can't explain |
+| Roof reading at 20 min | 46.56 | 29.44 | 17.1 | 1.58 | Inside one seed's noise; the delay isn't monotonic here |
+| Cullet moves | 46.94 | 29.12 | 17.8 | 1.61 | Leaves |
+| Blanket moves | 47.35 | 29.41 | 17.9 | 1.61 | Leaves |
+| Gas drift | 47.54 | 29.53 | 18.0 | 1.61 | Leaves |
+| Pull wander | 47.71 | 29.55 | 18.2 | 1.61 | Leaves |
+| Bath currents, well mixed | 48.25 | 29.47 | 18.8 | 1.64 | Leaves |
+| Sensor noise | 49.66 | 29.44 | 20.2 | 1.69 | Leaves. The ladder gets worse without noise, unexplained |
+| Fuel slew limit | 55.06 | 23.74 | 31.3 | 2.32 | Leaves. It keeps the oracle back more than the ladder |
+
+Every bath factor leaves the claim. The firing gap and the reading's lag carry it. Without the
+firing gap, room is larger but small in cost: the ladder is left at 3.2 K and the oracle at
+1.1 K.
+
+**How much is the clock.** A note, not a rung and not a claim about any agent. Adding one fixed
+reversal pattern to the ladder, averaged from the oracle's valve on seed 100 and played on seeds
+101 to 103, takes the cost from about 47.3 to 38.2, first 2 h dropped. That needs no foresight,
+because the reversal phase is observed. So about half of the gap is timing a known clock, and the
+room left after it is about 1.3. A phase-locked feedforward isn't on the ladder, so it doesn't
+change the reference.
+
+**5. Cost.** 729,529 steps/s at batch 256 against a median of 858,616, so 1.18 times the median,
+under rule 7's 3. The shipped plant runs 1,739,554. The episode is 5.4 times longer as well.
+
+**Does the task have room?** Yes on the charter's number, 1.61, and no in the sense this rebuild
+was after. The risk named above came true: bath events are slow next to the loop, so the PI takes
+them, and the gap is the reversal plus foresight. The rebuild did make the plant more real, with
+slow starts, a third lookalike and hidden moves, but none of that reaches the score.
+
+Three limits on these numbers:
+
+- **The hot face's swing rests on a choice of mine.** The 38 K sits in a 15 mm cell, a thinner
+  cell would swing more, and no source gives the figure. The owner's scored variable is the one
+  most exposed to this. Room's size follows it.
+- **Four seeds for room, one for switch-off,** and gains that weren't retuned per row, as the
+  page asked.
+- **A learner's `measured_reward` scores the reading,** while the true score is the hot face, so
+  training and scoring differ by the reading's lag and offset.
+
 ## Open for the owner
 
-- **Sizes.** How far and how fast do blanket moves and batch changes go? No source gives them.
-- **Batch limit.** Where is the limit, and what does crossing it cost? Charging it is decided,
-  but neither number has a source.
-- **Charter.** The rebuild needs its row in the task table changed, and a plant of this size must
-  still pass rule 7.
+- **Join the flagship?** By the charter this is read from the table. The table says the room is
+  the reversal.
+- **Sensor to score.** If the score moved from the hot face to the reading, the real 2.2 K would
+  be measured on the same footing. That is a new attempt, not done here.
+- **Batch.** The dimension was removed. The owner said to re-discuss it if the properties suffer.
+  They didn't, but it was the one term that would have scored the bath directly.
+- **Charter.** The rebuild passes rule 7. It isn't registered, so the task table is unchanged.

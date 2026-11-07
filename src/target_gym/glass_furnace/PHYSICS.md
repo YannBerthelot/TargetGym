@@ -446,6 +446,18 @@ owner could not size them. They return if the control properties need them.
 - **Hot face swing.** 38 K in the 15 mm cell at each reversal. No source gives it; thermocouple
   figures do not see it. A thinner cell would swing more.
 
+**Judging, 2026-11-07.** One attempt, in the proposal's order; the full tables are in the
+proposal's "Results of the judging".
+
+| Step | Result |
+|---|---|
+| Plain PI, 12 seeds | Reading sd 1.56 K against the real 2.2 K, hot face rms 7.02 K, no trips |
+| Recipe | k' 0.00842 K/s per raw, theta 189 s, Kc 0.314, Ti 1513 s, pull feedforward 0.916 raw per kg/s |
+| Best rung | Lead of 10 min on the reading, cost 47.98, reading sd 1.44 K |
+| Room, 4 seeds, whole episode | 1.61, spread 1.60 to 1.62. Oracle cost 29.0 to 29.8, converged by knots and by start |
+| Switch-off | Firing gap and reading lag shrink the gap. Every bath factor leaves the claim |
+| Rule 7 | 1.18 times the median step |
+
 ## Reward (version 2)
 
 `compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.
