@@ -7,6 +7,8 @@ Contract, from conservation, the sources and the owner's score, not from any cod
 - the firing gap, averaged: 1 - (dead / period) (1 - floor), the time mean of the clock;
 - the canal reads the leaving glass, weighted by its flow, and the glass leaves evenly
   over depth;
+- what the current carries along the tank keeps its bounds: a share stays in [0, 1] past
+  a sharp front, as a total-variation-diminishing scheme guarantees (Sweby);
 - the refiner's cooling is a flow out of the books, and colder glass reaches the canal;
 - fining: glass releases the share of its sulfate that its temperature allows over the
   sourced band, 1420 to 1500 C, keeps what it released, and carries it with the flow;
@@ -85,6 +87,20 @@ def test_canal_reads_the_leaving_glass_by_its_flow(plant):
     read = P.sensors(s, g, p)
     assert float(read["canal"]) == pytest.approx(weigh(profile), rel=1e-6)
     assert float(read["fining"]) == pytest.approx(weigh(share), rel=1e-6)
+
+
+def test_a_carried_share_stays_bounded_past_a_sharp_front(plant):
+    g, p, s = plant
+    a = P.layout(g)
+    front = (jnp.arange(a.nc) < a.nm // 2).astype(float)
+    s = s.replace(fining=jnp.broadcast_to(front, s.T.shape))
+
+    def f(s, _):
+        s, _ = P.plant_step(s, 0.46, 5.79, 0.25, 0.2, 0.0, g, p)
+        return s, (s.fining.min(), s.fining.max())
+
+    lo, hi = jax.jit(lambda: jax.lax.scan(f, s, None, length=200)[1])()
+    assert float(lo.min()) >= -1e-6 and float(hi.max()) <= 1.0 + 1e-6
 
 
 def _run(s, g, p, steps, cooling=0.0):

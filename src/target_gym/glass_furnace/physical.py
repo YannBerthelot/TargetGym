@@ -303,6 +303,24 @@ def advance_blanket(m, c, melt, m_in, c_in, v, dx, dt):
     )
 
 
+def carried(X, u, dt, dx):
+    """What each interior face carries along the tank, per layer: the upwind value
+    corrected toward the downwind cell by a van Leer limiter, Sweby's flux-limited scheme,
+    total-variation-diminishing up to a Courant number of 1. Plain upwind smears a front
+    ahead of the flow; this keeps it sharp without overshoot."""
+    d = X[:, 1:] - X[:, :-1]
+    pad = jnp.zeros((X.shape[0], 1))
+    pos = u > 0
+    behind = jnp.where(pos, jnp.concatenate([pad, d[:, :-1]], 1), 0.0)
+    ahead = jnp.where(pos, 0.0, jnp.concatenate([d[:, 1:], pad], 1))
+    safe = jnp.where(jnp.abs(d) > 1e-12, d, 1e-12)
+    r = (behind + ahead) / safe
+    phi = (r + jnp.abs(r)) / (1.0 + jnp.abs(r))
+    courant = jnp.abs(u) * dt / jnp.where(pos, dx[:-1], dx[1:])
+    step = 0.5 * (1.0 - jnp.clip(courant, 0.0, 1.0)) * phi * d
+    return jnp.where(pos, X[:, :-1] + step, X[:, 1:] - step)
+
+
 def thomas(a, b, c, d):
     """Tridiagonal solve along axis 0: ``a`` below, ``b`` on, ``c`` above the diagonal."""
     n = b.shape[0]
@@ -327,7 +345,7 @@ class Grid:
     n_refiner: int = 4  # the unfired zone past the last port, at the melter's width
     n_waist: int = 2
     n_end: int = 2  # the working end, where the cooling air blows
-    n_depth: int = 10
+    n_depth: int = 8
     skin: float = 0.006  # m, the top layer
     n_roof: int = 8
     roof_skin: float = 0.003  # m, the hot-face cell
@@ -652,8 +670,7 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
     Wp, Wm = jnp.maximum(W, 0.0), jnp.maximum(-W, 0.0)
 
     # ---- Melt: energy, explicit along the tank and implicit in depth
-    Fp, Fm = jnp.maximum(F[:, 1:-1], 0.0), jnp.minimum(F[:, 1:-1], 0.0)
-    carry = Fp * T[:, :-1] + Fm * T[:, 1:]
+    carry = F[:, 1:-1] * carried(T, u, dt, a.dx)
     zero = jnp.zeros((g.n_depth, 1))
     carry = jnp.concatenate([zero, carry, out * T[:, -1:]], 1)
     kf = melt_conductivity(Tf)
@@ -695,7 +712,9 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
     # ---- Fining share: carried as the heat is, batch glass arriving with none; glass
     # keeps what it released, and releases what its new temperature allows.
     X = s.fining
-    carry = jnp.concatenate([zero, Fp * X[:, :-1] + Fm * X[:, 1:], out * X[:, -1:]], 1)
+    carry = jnp.concatenate(
+        [zero, F[:, 1:-1] * carried(X, u, dt, a.dx), out * X[:, -1:]], 1
+    )
     aa_x = jnp.concatenate([pad, -Wp[1:-1]], 0)
     cc_x = jnp.concatenate([-Wm[1:-1], pad], 0)
     bb_x = dz_ / dt + Wm[:-1] + Wp[1:]

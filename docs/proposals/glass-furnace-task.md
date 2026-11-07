@@ -807,3 +807,41 @@ charger still sits at 1383 C, under 1400, and nothing watches it.
 263,456 against 1,621,572 steps/s, 6.2 times slower; scaled, about 3.0 times the median, at the
 limit. Eight depth layers instead of ten is the first thing to try; the earlier grid check put
 that at a few kelvin.
+
+### Sharper advection, eight layers (owner's go, 2026-11-08)
+
+Along the tank, heat and the fining share are now carried by Sweby's flux-limited scheme with a
+van Leer limiter, total-variation-diminishing up to a Courant number of 1, instead of plain
+upwind; the depth grid has eight layers instead of ten. A new test holds a carried share inside
+[0, 1] past a sharp front, and turns red if the limiter is removed.
+
+**Rule 7:** 275,255 against the shipped 1,610,692 steps/s, timed together; about 2.9 times the
+median, back under the 3.
+
+**Shortest path through the tank:** 8.9 h on an 84 h mean, 0.11, up from 7.1 h; the grid
+refinement had pointed to about 9 h. Published: 0.15 to 0.20. What remains is the model's shape:
+averaged across the width, it has no cross-tank circulation.
+
+**Design point:** fuel 0.477 kg/s, working-end cooling 0.77 MW (3.3 % of the firing), crown face
+1590 C, canal 1101 C, 4.02 GJ/t. The leaving glass's fining share rose to 0.603 with the sharper
+scheme, and the pass mark follows it, by the owner's rule. Refiner loop: 2.62e5 W/K.
+
+| Test | Aim | First-order scheme | Sharper, eight layers | Met |
+|---|---|---|---|---|
+| A1. Readings can mislead | One pair | Yes | Sulfate +50 % against gas +3.2 %: couple +9.4 and +9.2 K at 2 h, opposite remedies | Yes |
+| A2. The truth arrives late | Over 2 h | 2.8 to 3.5 h | 3.4 to 3.6 h | Yes |
+| A3. Seeing would pay | 2 times | 1.8 times | Lost glass 362 h to 114 h, 3.2 times; cost per day 128,100 to 63,400 EUR, 2.0 times | Yes |
+| B1. Dead time | Over 2 h | 3.5 h first move | 3.8 h first move, fitted 3.0 h | Yes |
+| B2. Slow to finish | Over 10 h | 40 h | 45 h | Yes |
+| B3. Keeps going after you stop | 2 h and 2 times | 6.2 h, 6 times | 6.3 h, 7 times | Yes |
+| B4. Haste is punished | Under 10 %, then over 30 % | 23 %, 93 % | 17 %, 120 %, never settling at 3 times | Yes, the tuned gain overshoots |
+| B5. Patience costs too | Over 12 h | 14.4 h | 9.9 h | No, just |
+| C1. Stable if left alone | 0.1 K | 0.08 K | 0.05 K | Yes |
+| C2. Moves on its own | Out within 48 h | All six seeds | Five of six seeds lose glass, valve held | Yes |
+| C3. Feedback can't clear it | Still out | 26 to 71 h | PI on fining: 33 to 94 h lost | Yes |
+| C4. The plant itself shifts | 1.5 times | 2.1 times | 1.24 times; t63 38 to 48 h | No |
+
+**Read plainly:** ten of twelve. The sharper scheme is the more accurate numerics, so where the
+two columns differ, trust the second. Part of the earlier gain spread was numerical smearing,
+which varied with the operating state; the seeing-would-pay result grew because a controller
+told the walks now acts on a sharper plant.
