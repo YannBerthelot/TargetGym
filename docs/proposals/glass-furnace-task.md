@@ -10,6 +10,9 @@ in the bath. Half the gap is the reversal, which the oracle times from a clock t
 reads, and the bath factors can all be switched off without shrinking it. See
 [Results of the judging](#results-of-the-judging).
 
+**Latest.** Attempt 3 starts from what makes a furnace hard to control, and scores the floor reading
+instead of the crown. See [Attempt 3](#attempt-3-what-makes-a-furnace-hard-to-control).
+
 ## The outcome
 
 The shipped plant has little room, and rescoring it cannot create more. The owner chose to
@@ -450,3 +453,111 @@ batch figures. 726 lines of plant against the 800 budget.
 
 **Decision for the owner, before any oracle.** Whether to spend on room, and which score: the hot
 face as decided, or crown plus a bottom or canal reading.
+
+## Attempt 3: what makes a furnace hard to control
+
+The owner, after attempt 2: "We want to model what makes a glass furnace hard to control in the
+first place." Three things were named: partial observability that has an impact; delay, inertia and
+momentum that make operators move slowly for fear of overshooting; and non-stationarity, where the
+system moves in a stable phase with no action change, yet reaches a stable state under a constant
+action if nothing perturbs it. This section defines those as tests. Nothing has been built for it.
+
+**The main finding.** Attempt 2's plant already has nearly all of this. Its report said delay was
+not produced, and that was the wrong conclusion: I measured delay at the crown, which radiation
+reaches in seconds. No physics can put a delay there. At the floor of the tank, the same plant has
+a dead time of about 5 h.
+
+### The scored reading
+
+A delay only exists between the valve and whatever is scored, so the score decides whether the task
+can be hard at all. Measured on `physical.py` with `scripts/glass_floor_props.py`:
+
+| Reading | Fuel +1 %, first move (1 %) | Fuel +1 %, t63 | Crown held, fitted dead time | Crown held, t63 |
+|---|---|---|---|---|
+| Crown couple | 0.1 h | 35 h | Held | Held |
+| Canal end | 1.0 h | 42 h | 0 | 5.2 h |
+| Floor, bay 3 | 2.6 h | 45 h | 2.0 h | 6.7 h |
+| Floor, end of the melter | 3.7 h | 46 h | 3.7 h | 10.6 h |
+
+**Proposal: score the floor thermocouple at the end of the melter, against its target, plus fuel.**
+It is a real instrument, not the true glass temperature the owner ruled out, and the sources put
+bottom couples along the tank. The crown stays observed, as a fast and sometimes misleading hint.
+The canal is not a good choice: in this plant it has no dead time, because the surface current
+carries heat straight to it, and its level is 200 K too hot.
+
+### The properties
+
+Each row is one test. "Attempt 2" means the floor reading above on the plant as it stands. Aims come
+from the sources in `glass-sources-4.md` in the session notes. They are aims, and none of them sets
+a parameter. The step and pulse were measured before the aims were written, so B1 to B3 are not
+blind tests; the rest were set before their runs. The walks in C2, C3 and A3 have standard
+deviations of 1 % on gas over 24 h, and 5 points on cullet, 10 % on blanket and 17 % on sulfate over
+12 h. These sizes are `ours`, inside the owner's +-10 points and +-20 %.
+
+**A. Partial observability has an impact**
+
+| Property | Test | Aim | Attempt 2 | Met |
+|---|---|---|---|---|
+| A1. Readings can mislead | Two real upsets where the fast readings agree in sign and the right fuel move does not | One such pair | Foam, and gas +6.2 %: couple +12.2 and +12.1 K at 2 h, air +4.5 and +7.0, stack +0.5 and +1.5. Floor at 24 h -4.4 and +22 K | Yes. The 2.5 K gap on air is a clue a good estimator could use |
+| A2. The truth arrives late | Time until the floor shows which way to move, past 0.36 K | Over 2 h | 2.9 h after foam, 3.1 h after gas | Yes |
+| A3. Seeing would pay | Same PI on the same walks, told the hidden upsets through settled gains only | Error at least 2 times smaller | 2.99 K to 0.99 K rms, 3.0 times. If cullet counts as known from the recipe, 2.05 K to 0.99 K, 2.1 times | Yes, at sizes of ours |
+
+**B. Delay, inertia, momentum**
+
+| Property | Test | Aim | Attempt 2 | Met |
+|---|---|---|---|---|
+| B1. Dead time | Fuel step, time before the floor moves | Over 2 h. Sources say 1 to 16 h, and about 5 h | 3.7 h to the first 1 %, 4.9 h fitted | Yes |
+| B2. Slow to finish | Same step, t63 | Over 10 h. Source: "ten-odd hours" | 46 h with the valve held, 10.6 h with the crown held | Yes |
+| B3. Keeps going after you stop | Fuel +4 % for 4 h, then back | Moves on for over 2 h, and ends over 2 times what it showed at the stop. Aim is `ours` | Peaks 8.8 h after the fuel came back, at 3.2 K, against 0.5 K at that moment | Yes |
+| B4. Haste is punished | Target +5 K with a PI from the step test, then at 3 and 6 times its gain | Under 10 % overshoot, then over 30 %. A real PID cycled for over 8 h after a pull change | 6 %, then 61 %, then 312 % with no settling in 14 days | Yes |
+| B5. Patience costs too | Time for the safe PI to stay within +-1 K | Over 12 h. Sources: 4 to 6 h in a forehearth, and a melter is slower | 14.1 h | Yes |
+
+**C. Non-stationarity**
+
+| Property | Test | Aim | Attempt 2 | Met |
+|---|---|---|---|---|
+| C1. Stable if left alone | Valve held, nothing else moves, two starts 40 K apart | Same steady state, within 0.1 K | Same to 0.001 K in double precision | Yes, with two notes below |
+| C2. Moves on its own | Valve held, walks on | Leaves +-3 K within 48 h on most seeds | 5 of 6 seeds by 42 h. 8.2 K rms, worst 26 K | Yes, at sizes of ours. The +-3 K is from one vendor slide, seen only as a snippet |
+| C3. Feedback can't clear it | Safe PI on the same walks | Worst error still outside +-3 K | 2.99 K rms, worst 7.0 K. A cascade through the crown gives 2.89 K rms, worst 9.1 K | Yes |
+| C4. The plant itself shifts | Fuel-to-floor gain and dead time across operating states | Over 1.5 times. Source: production rate changes "gain and lag time" | Gain 1789 to 2679 K per kg/s, 1.5 times. Dead time 4.2 to 7.1 h | Just. Nearly all from pull +-5 %, beyond the sourced +-2 % wander. Cullet and blanket hardly move it |
+
+**What these rows found.**
+
+- **The crown cascade barely helps.** It is the rung real plants would reach for, and it gives 2.89 K
+  against 2.99 K. So a fast reading does not stand in for the bath.
+- **Gas and cullet carry the cost of hiding, not foam.** Told cullet alone, 2.05 K. Told gas alone,
+  2.30 K. Told sulfate alone, no change. Foam is the striking case in A1, but at these sizes it is
+  not what hurts.
+- **None of this is room.** The told controller is not an oracle, and no oracle has run.
+
+### What is still not right
+
+1. **The drifts are pushed in by hand.** They are not part of a plant yet, and their sizes are mine.
+   No source gives a typical gas swing in percent. Gas changes "weekly and sometimes even daily".
+2. **The floor reading is the last melt cell.** A real couple sits in the floor block, so conduction
+   through it would add a real lag that this plant lacks.
+3. **C1, note 1: single precision stalls.** In float32 the same two starts end 0.36 K apart with no
+   drift, since a 30 s step's change is smaller than the rounding. A longer step or double precision
+   fixes it.
+4. **C1, note 2: the reversal is not a stable state.** Under a constant valve it leaves a 2 K ripple on
+   the couple and under 0.02 K on the floor. The owner's rule may need it averaged out.
+5. **A 30 s step spends its budget on what the score can't see.** A seven-day episode is 20,160 steps.
+6. **C4 is the weakest row,** and redox may be the missing physics: iron changes how far heat gets
+   into the melt. The sources disagree on the direction of the effect on the floor, and none gives a
+   size, so it stays out unless sources are found.
+
+### What attempt 3 would be
+
+The melt, flow, foam, blanket and radiation equations produced the rows above, so they stay on
+merit. Starting from scratch would mean rewriting the part that works. What changes is the task
+and the time scale.
+
+| Change | Why | Rows |
+|---|---|---|
+| Score the floor at the melter's end | Puts the delay in the task | B1 to B5 |
+| Step of about 5 min, regenerators averaged over a reversal | True steady state, no float32 stall, far fewer steps | C1 |
+| Floor block conduction in the reading | The real instrument is slower than the melt | B1, A2 |
+| Drifts as part of the plant: gas, cullet, sulfate, pull | Non-stationarity from named sources, with sourced sizes where they exist | C2, C3 |
+| Environment: crown, floors, air, stack, fuel, pull observed. No upsets | Keeps A1 to A3 true | A1 to A3 |
+
+Then re-measure this table, run the switch-off test, and stop before any oracle.
