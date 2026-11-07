@@ -4,6 +4,8 @@ Specification of 2026-11-03, for owner review. Nothing here has been run or
 implemented. It replaces the audit's rule B, max(expert settle, 5 x tau_63),
 which had no source (`oracle-audit.md`, section 5, Horizon).
 
+> Amendment 5, 2026-11-07 (section 14): the aircraft's test, H23 and H24.
+>
 > Amendment 3, 2026-11-04 (section 12): a rate limit's ramp joins P (H21).
 >
 > Amendment 1, 2026-11-03: after the first run (8 of 14 identifications
@@ -278,16 +280,16 @@ rule B, for comparison.
 
 | task | class | MVs -> tracked CVs; limit CVs | test | inputs to measure | provisional P (steps) | today | B | N_ep |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| plane | aircraft | throttle, stick -> altitude; altitude band | 4.5 altitude rows | k', theta, tau2 | none | 20 | 115 | 280 |
-| plane_energy | aircraft | as plane | as plane | as plane | none | 20 | 115 | 1600 |
-| plane_sine | aircraft | as plane | as plane | as plane | none | 20 | 115 | 480 |
-| plane3d_heading | aircraft | throttle, stick, aileron -> altitude, heading; band | altitude, heading rows | per row | none | 30 | 136 | 300 |
-| plane3d_circle | aircraft | -> altitude, path distance; band | altitude, path rows | per row | none | 30 | 70 | 300 |
+| plane | aircraft | throttle, pitch demand -> altitude; altitude band, EAS, Mach, load factor | 4.5 altitude rows | k', theta, tau2 | none | 20 | 115 | 280 |
+| plane_energy | aircraft | as plane | plane's test (H24) | as plane | none | 20 | 115 | 1600 |
+| plane_sine | aircraft | as plane | plane's test (H24) | as plane | none | 20 | 115 | 480 |
+| plane3d_heading | aircraft | throttle, pitch demand, bank demand -> altitude, heading; band, EAS, Mach, load factor, bank | altitude, heading rows | per row | none | 30 | 136 | 300 |
+| plane3d_circle | aircraft | -> altitude, path distance; as plane3d_heading | plane3d_heading's test, its own path row (H24) | per row | none | 30 | 70 | 300 |
 | plane3d_racetrack | aircraft | as circle | as circle | per row | none | 30 | 70 | 650 |
-| plane3d_figure8 | aircraft | -> path distance; band | altitude, path rows | per row | none | 30 | 190 | 400 |
-| patrol | aircraft | -> slot error; band, separation, slot limit | slot, altitude rows | per row | none | 30 | 84 | 200 |
-| patrol_bearing_only | aircraft | -> measured range; as patrol | as patrol | per row | none | 30 | 84 | 200 |
-| formation | aircraft, 3 seats | 9 -> lead altitude, 2 slot errors; bands, 3 separations | lead as heading, wingmen as patrol | per row | none | 30 | 180 | 200 |
+| plane3d_figure8 | aircraft | -> path distance; as plane3d_heading | as circle | per row | none | 30 | 190 | 1000 |
+| patrol | aircraft | -> slot error; band, EAS, Mach, load factor, bank, separation, slot limit | slot, altitude rows | per row | none | 30 | 84 | 200 |
+| patrol_range_bearing | aircraft | -> measured range; as patrol | patrol's test (H24) | per row | none | 30 | 84 | 200 |
+| formation | aircraft, 3 seats | 9 -> lead altitude, 2 slot errors; as patrol, 3 separations | lead as plane3d_heading, wingmen as patrol | per row | none | 30 | 180 | 200 |
 | cstr | SR SISO | coolant -> C_a | coolant 5 % | k, tau, theta | 32 (tau63 5) | 150 (episode) | 67 | 150 |
 | first_order | SR SISO | u -> x; abs(x) < 3 | existing 0.1 | k, tau, theta | 62 (fit: tau 10 steps, theta 0) | 5 | 63 | 150 |
 | four_tank | SR MIMO 2x2 | 2 pumps -> h1, h2; all 4 levels | each pump 5 % | 8 pairs | 960 (fit, decoupled loop h1: tau 146 s, theta 41.4 s) | 1200 (episode) | 581 | 1200 |
@@ -836,3 +838,78 @@ its file at P = 32 (N3).
 
 **The reactor is compliant now.** It had no valid fit before. It has 20 of 40 now, on
 T_avg and T_hot. `n` and T_fuel have none.
+
+## 14. Amendment 5, the aircraft's test
+
+The recipe is unchanged. This section corrects how the first aircraft test was run,
+and adds two rules, H23 and H24, both written after the failures they answer.
+
+**What settles an aircraft.** The expert is stale until part F of the build plan: it
+trips 14 to 20 times an episode on `plane`. D6 says the tests fly through ArduPlane
+4.0.9's default loops, so the settling controller is TECS and L1 at those defaults on
+this aircraft's measured numbers: `TIME_CONST` 5, `PTCH_DAMP` 0, `INTEG_GAIN` 0.1,
+`THR_DAMP` 0.5, `SPDWEIGHT` 1, `RLL2THR` 10, `NAVL1_PERIOD` 17 and `NAVL1_DAMPING`
+0.75. The plant's inner loop stands in for the pitch and roll loops of section 4.5,
+since PR 7 moved them into the plant.
+
+**A correction: the envelope trips are limit CVs.** H6 reads every variable with a
+trip limit in `check_is_terminal`. Section 6's altitude-band column predates the
+envelope, and the first run read altitude alone. The owner ruled on 2026-11-07, before
+any return was seen, that EAS, Mach and the load factor count, and on the 3D aircraft
+the bank. Section 6 now says so. It also makes H9 hold: the record must name the CV that
+tripped, and `plane_energy`'s first test had 9 trips with no CV named, so those rows
+had no H18 retest. On `plane` it moves P from 138 to 221, set by throttle to Mach, seed
+102, a quiet fit of 97.7 %, with T_c unchanged at 3.
+
+**H23, a test with no samples is not the last test (owner's ruling, 2026-11-07).** H17
+reads a pair's last test when none passes, and H18's retest can trip before its step.
+All ten pitch seeds on `plane` and seven on `plane3d_heading` closed a P-only EAS loop
+on pitch, with kc -0.60 to -0.98, and base and step both tripped the load factor at index
+0, so the test held 0 samples and its rows ended "short", with no vote. Tests 0 and 1
+of those rows had fitted, at 94.7 to 99.5 %. A pair now keeps the last test that has
+samples, and H16 reads that test. It applies to every task, and is fits only.
+
+**Provenance of H23.** It is ours, written after the failure, by the session that had
+already read `plane`'s ten-seed returns at P = 138. The rule reads no return. On the
+non-aircraft tasks only four had an empty last test. `boiler_drum`, `distillation` and
+`unstable_cstr` keep T_c, N, M and P, with row counts moving on the first two, and the
+kiln's open recipe P goes from 1048 to 1046, with its file left at the deferred 20.
+
+**H24, one test per plant (owner's ruling, 2026-11-07).** Tasks sharing a plant run its
+test once, on the shortest episode's window, since a time constant does not depend on
+episode length. The reasoning is that of the process protocols' R7. A shared plant means
+identical dynamics, which each family below was checked for on its test params:
+
+| family | fields | differ | window, steps | what differs |
+|---|---|---|---|---|
+| `plane`, `plane_energy`, `plane_sine` | 89 | 10 and 8 | 280 | episode, floors, `c_hold`, failure cost, target pattern; none physical |
+| `plane3d_heading`, `circle`, `racetrack`, `figure8` | 100 | 2 to 6 | 300 | episode, rho floors; the figure-8's radius range, altitude floor and failure cost; none physical |
+| `patrol`, `patrol_range_bearing` | 116 | 0 | 200 | nothing; only the observation differs |
+
+A path's distance belongs to the task's geometry, not the plant, so each path task also
+runs its own row, course to path, at 300 steps. `formation` runs no test of its own: by
+section 4.5 it reads its lead's rows from `plane3d_heading`'s test and its wingmen's from
+`patrol`'s, the smallest T_c and the largest P over them.
+
+**Provenance of H24.** It is ours, written after 0 of 20 pairs came out valid on
+`plane_energy`, and after a 280-step window was seen to give valid fits. No return enters
+it. A test on `plane_energy`'s own 1600 steps gave 0 valid: a fit on the first 280 steps
+tracks the same run within about 2 % at 420 s, and drifts by 8 to 13 % at 800 s and by 31
+to 45 % at 1600 s. The evidence file records this.
+
+**Results.**
+
+| task | T_c | P | samples in the episode | planned |
+|---|---|---|---|---|
+| `plane` | 3 | 221 | 94 | to the end |
+| `plane_sine` | 3 | 221 | 160 | to the end |
+| `plane_energy` | 3 | 221 | 534 | 221 |
+| `plane3d_heading`, `plane3d_circle` | 1 | 1575 | 300 | to the end |
+| `plane3d_racetrack` | 1 | 1575 | 650 | to the end |
+| `plane3d_figure8` | 1 | 1575 | 1000 | to the end |
+| `patrol`, `patrol_range_bearing` | 1 | 103 | 200 | 103 |
+| `formation` | 1 | 1575 | 200 | to the end |
+
+On the 3D tasks T_c comes from bank to heading, seed 101, and P from throttle to heading,
+seed 100, an integrating fit with a lag of 162 s. Every one of them plans to the episode's
+end once a step, so its cost grows with the square of the episode's length.

@@ -7,8 +7,8 @@ It runs docs/proposals/oracle-horizon-protocol.md, with Amendments 1 and 2, on t
 ships in the wheel, and ``evidence/oracle_horizons/<task>.json`` at the
 repository root, every test, retest and fit, in git but not in the wheel
 (H13, H19). The 10
-aircraft tasks are skipped: their tests fly through ArduPlane 4.0.9's default
-loops (decision D6), which PR D builds.
+aircraft tasks' tests fly through ArduPlane 4.0.9's default loops (decision D6),
+and tasks sharing a plant run its test once (Amendment 5, H24).
 
 Per training seed 100-109 (``target_gym.identification``):
 
@@ -109,7 +109,10 @@ def write(name: str, row: dict) -> None:
     repository's sources (H13)."""
     evidence = EVIDENCE / "oracle_horizons" / f"{name}.json"
     summary = {k: row[k] for k in SUMMARY if k in row}
-    summary["classes"] = {c: v["class"] for c, v in row["classes"].items()}
+    # The evidence keeps which test each class came from.
+    summary["classes"] = {
+        c.split(":")[-1]: v["class"] for c, v in row["classes"].items()
+    }
     summary["evidence"] = evidence.relative_to(EVIDENCE.parent).as_posix()
     records.write("oracle_horizons", name, summary, compact=True)
     evidence.parent.mkdir(parents=True, exist_ok=True)
@@ -135,6 +138,106 @@ def _omega(factor):
 
 _H = {f"h{i}": _s(f"h{i}", "h_min", "h_max") for i in range(1, 5)}
 _GLASS = {c: _s(c, "T_glass_min", "T_glass_max") for c in ("T_melt", "T_work")}
+
+
+def _air_speed(s, p):
+    """The airspeed the trips read, in the wind the state is left in."""
+    from target_gym.plane.dynamics import total_wind_2d, total_wind_3d
+
+    if hasattr(s, "y_dot"):
+        wind = total_wind_3d(s.z, s.gust_x, s.gust_y, s.gust_z, p)
+        v = jnp.stack([s.x_dot - wind[0], s.y_dot - wind[1], s.z_dot - wind[2]])
+    else:
+        wind = total_wind_2d(s.z, s.gust_x, s.gust_z, p)
+        v = jnp.stack([s.x_dot - wind[0], s.z_dot - wind[1]])
+    return jnp.sqrt(jnp.sum(v**2))
+
+
+def _eas(o, s, p):
+    from target_gym.plane.dynamics import compute_air_density_from_altitude as rho
+
+    return _air_speed(s, p) * jnp.sqrt(rho(s.z) / p.air_density_at_sea_level)
+
+
+def _mach(o, s, p):
+    from target_gym.plane.dynamics import compute_speed_of_sound_from_altitude as a
+
+    return _air_speed(s, p) / a(s.z)
+
+
+_ALTITUDE = _s("z", "min_alt", "max_alt")
+#: H6: every variable with a trip limit in ``check_is_terminal``.
+_ENVELOPE = {
+    "eas": (_eas, None, "vmo_eas"),
+    "mach": (_mach, None, "mmo"),
+    "load": _s("load_factor", "load_factor_min", "load_factor_max"),
+}
+_LIMITS_2D = {"altitude": _ALTITUDE, **_ENVELOPE}
+_LIMITS_3D = {**_LIMITS_2D, "bank": _s("phi", lambda p: -p.bank_limit, "bank_limit")}
+_LONGITUDINAL = ({"throttle": 0.1, "pitch": 0.1}, _LIMITS_2D, {})
+#: Section 4.5: a path task's bank demand comes from a course hold, stepped 2 deg.
+_COURSE_STEP = math.radians(2.0)
+
+
+def _path(distance):
+    """A path task's own row: the course step, read on its distance. The limit CVs
+    are read only so that a trip names its CV (H9)."""
+    steps = {"throttle": 0.1, "pitch": 0.1, "course": _COURSE_STEP}
+    cvs = {"path": ((lambda o, s, p: distance(s, p)), None, None), **_LIMITS_3D}
+    return steps, cvs, {}
+
+
+def _follower(cv):
+    """A CV of an aircraft, read on a patrol's follower."""
+    read, lo, hi = cv
+    return (lambda o, s, p: read(o, s.follower, p)), lo, hi
+
+
+def _slot_axis(axis):
+    def read(o, s, p):
+        from target_gym.patrol.env import slot_error_vector
+
+        return slot_error_vector(s)[axis]
+
+    return read
+
+
+def _separation(o, s, p):
+    from target_gym.patrol.env import separation
+
+    return separation(s)
+
+
+def _slot_error(o, s, p):
+    from target_gym.patrol.env import slot_error
+
+    return slot_error(s)
+
+
+_PATROL_LIMITS = {
+    **{k: _follower(v) for k, v in _LIMITS_3D.items()},
+    "separation": (_separation, "min_separation", None),
+    "slot": (_slot_error, None, "max_slot_error"),
+}
+
+
+def _lemniscate_distance(s, p):
+    from target_gym.plane3d.env import nearest_point_on_twisted_lemniscate
+
+    return nearest_point_on_twisted_lemniscate(s, p)[3]
+
+
+def _circle_distance(s, p):
+    from target_gym.plane3d.env import distance_to_circle
+
+    return distance_to_circle(s)
+
+
+def _racetrack_distance(s, p):
+    from target_gym.plane3d.env import racetrack_guidance
+
+    return racetrack_guidance(s)[0]
+
 
 # Per task: the MVs with their C2 steps in raw units (existing steps stay, a
 # new one is 0.1, 5 % of [-1, 1]); the CVs of H6 (tracked outputs, then every
@@ -222,7 +325,71 @@ TASKS = {
         {"C_a": _s("C_a", lambda p: 0.0, None), "T": _s("T", "T_valid_min", "T_trip")},
         {},
     ),
+    # Section 4.5: the plant's inner loop holds the pitch demand, 5 % of its
+    # range, or the throttle moves 5 %.
+    "plane": _LONGITUDINAL,
+    # Bank demand, 5 % of +-45 deg, read on the track.
+    "plane3d_heading": (
+        {"throttle": 0.1, "pitch": 0.1, "bank": 0.1},
+        {"heading": _s("psi"), **_LIMITS_3D},
+        {},
+    ),
+    "plane3d_circle": _path(_circle_distance),
+    "plane3d_racetrack": _path(_racetrack_distance),
+    "plane3d_figure8": _path(_lemniscate_distance),
+    # Section 4.5's altitude rows on a follower, whose air the lead's wake moves.
+    "patrol": ({"throttle": 0.1, "pitch": 0.1, "bank": 0.1}, _PATROL_LIMITS, {}),
+    # Section 4.5's slot rows: speed +5 m/s and course 2 deg, through TECS and a
+    # course hold. The height demand holds.
+    "patrol_slots": (
+        {"speed": 5.0, "height": 0.0, "course": _COURSE_STEP},
+        {
+            "along": (_slot_axis(0), None, None),
+            "across": (_slot_axis(1), None, None),
+            **_PATROL_LIMITS,
+        },
+        {},
+    ),
 }
+
+#: Amendment 5, H24: tasks sharing a plant run its test once, on the shortest
+#: episode's window. Each task's fits come from these tests.
+PLANT_TESTS = {
+    "plane": ("plane",),
+    "plane_energy": ("plane",),
+    "plane_sine": ("plane",),
+    "plane3d_heading": ("plane3d_heading",),
+    "plane3d_circle": ("plane3d_heading", "plane3d_circle"),
+    "plane3d_racetrack": ("plane3d_heading", "plane3d_racetrack"),
+    "plane3d_figure8": ("plane3d_heading", "plane3d_figure8"),
+    "patrol": ("patrol", "patrol_slots"),
+    "patrol_range_bearing": ("patrol", "patrol_slots"),
+    # Section 4.5: its lead's rows as plane3d_heading, its wingmen's as patrol.
+    "formation": ("plane3d_heading", "patrol", "patrol_slots"),
+}
+#: The window of a family's test, the shortest episode among its tasks, and what a
+#: test's own row reads: ``(MVs, CVs)``, every one if not listed.
+TEST_WINDOW = {
+    "plane3d_circle": 300, "plane3d_racetrack": 300, "plane3d_figure8": 300,
+    "patrol": 200, "patrol_slots": 200,
+}  # fmt: skip
+TEST_ROWS = {
+    "plane3d_circle": (("course",), ("path",)),
+    "plane3d_racetrack": (("course",), ("path",)),
+    "plane3d_figure8": (("course",), ("path",)),
+    "patrol_slots": (("speed", "course"), ("along", "across")),
+}
+#: Why a task does not read its own window (Amendment 5, H24).
+OWN_WINDOW = {
+    "plane_energy": (
+        "a test on this task's own 1600-step window gave 0 valid of 20: a fit on the "
+        "first 280 steps tracks the same run within about 2 % at 420 s, and drifts by "
+        "8 to 13 % at 800 s and 31 to 45 % at 1600 s, as the climb moves the air"
+    ),
+    "plane_sine": "takes plane's test: the same dynamics, on the shortest window",
+}
+#: The registered task a test runs on.
+TEST_TASK = {"patrol_slots": "patrol"}
 
 
 def _stabilised(p):
@@ -247,6 +414,99 @@ def _stabilised(p):
         "mv_range": (-math.inf, math.inf),
         "direction": lambda u, size: size,
     }
+
+
+#: NAVL1_PERIOD and NAVL1_DAMPING at ArduPlane 4.0.9's defaults.
+_L1_PERIOD, _L1_DAMPING = 17.0, 0.75
+
+
+def _default_loops(spec):
+    """What settles an aircraft (decision D6): TECS and L1 at ArduPlane 4.0.9's
+    defaults on this aircraft's measured numbers, not the expert's gains, so the
+    horizon stays fixed when the expert is retuned. A course hold's time constant
+    is the period over 8.9 (aircraft protocol, 3.4)."""
+    ctrl = spec.make_pid_controller()
+    p = ctrl.params
+    tecs = p.tecs.replace(
+        time_const=5.0, ptch_damp=0.0, integ_gain=0.1, thr_damp=0.5,
+        spd_weight=1.0, roll_comp=10.0,
+    )  # fmt: skip
+    nav = {}
+    if hasattr(p, "period"):
+        nav = dict(period=_L1_PERIOD, damping=_L1_DAMPING, tau_hdg=_L1_PERIOD / 8.9)
+    return ctrl.replace(params=p.replace(tecs=tecs, **nav))
+
+
+def _course_hold():
+    """Section 4.5's course demand through ``update_heading_hold``: lateral
+    acceleration 2 V w sin(Nu), w = sqrt(2) pi / NAVL1_PERIOD, Nu clipped to +-90
+    deg, as a coordinated turn's bank. The MV starts on the settled track."""
+    from target_gym.plane.dynamics import BANK_DEMAND_MAX
+
+    w = math.sqrt(2.0) * math.pi / _L1_PERIOD
+
+    def track(obs, state, p):
+        return state.psi
+
+    def speed(obs, state, p):
+        return jnp.sqrt(state.x_dot**2 + state.y_dot**2 + state.z_dot**2)
+
+    def actuate(u, y, memory):
+        psi, v = y[-2], y[-1]
+        nu = math.atan2(math.sin(u[2] - psi), math.cos(u[2] - psi))
+        nu = float(np.clip(nu, -math.pi / 2.0, math.pi / 2.0))
+        bank = math.atan(2.0 * v * w * math.sin(nu) / 9.81)
+        raw = np.clip([u[0], u[1], bank / BANK_DEMAND_MAX], -1.0, 1.0)
+        return raw, memory
+
+    def settled(u0, y):
+        u0 = np.array(u0)
+        u0[:, 2] = y[:, -2]
+        return u0
+
+    return {
+        "actuate": actuate, "mv_range": (-math.inf, math.inf), "settled": settled,
+        "reads": (track, speed),
+        "direction": lambda u, size: size,
+    }  # fmt: skip
+
+
+def _slot_hold(spec):
+    """Section 4.5's slot rows: the speed and height demands through TECS at its
+    defaults, the course through ``update_heading_hold``, on the follower."""
+    from target_gym.plane.dynamics import BANK_DEMAND_MAX, PITCH_DEMAND_MAX
+    from target_gym.plane.experts_tecs import TECSState, tecs_step
+
+    tecs = _default_loops(spec).params.tecs
+    w = math.sqrt(2.0) * math.pi / _L1_PERIOD
+
+    def follower(field):
+        return lambda o, s, p: getattr(s.follower, field)
+
+    def speed(o, s, p):
+        a = s.follower
+        return jnp.sqrt(a.x_dot**2 + a.y_dot**2 + a.z_dot**2)
+
+    def actuate(u, y, memory):
+        psi, v, z, z_dot, phi = y[-5:]
+        memory = TECSState() if memory is None else memory
+        power, pitch, memory = tecs_step(tecs, memory, z, z_dot, v, u[1], u[0], phi, np)
+        nu = math.atan2(math.sin(u[2] - psi), math.cos(u[2] - psi))
+        nu = float(np.clip(nu, -math.pi / 2.0, math.pi / 2.0))
+        bank = math.atan(2.0 * v * w * math.sin(nu) / 9.81)
+        raw = [power, pitch / PITCH_DEMAND_MAX, bank / BANK_DEMAND_MAX]
+        return np.clip(raw, -1.0, 1.0), memory
+
+    def settled(u0, y):
+        return np.stack([y[:, -4], y[:, -3], y[:, -5]], axis=1)
+
+    return {
+        "actuate": actuate, "mv_range": (-math.inf, math.inf), "settled": settled,
+        "reads": (
+            follower("psi"), speed, follower("z"), follower("z_dot"), follower("phi"),
+        ),
+        "direction": lambda u, size: size,
+    }  # fmt: skip
 
 
 def _clean(x, dt):
@@ -283,18 +543,34 @@ def _test_record(run, a, mvs, cvs):
     return {**head, "samples": a["samples"], **a["fits"]}
 
 
-def measure(name: str) -> dict:
-    spec = REGISTRY[name]
-    p = spec.make_test_params()
-    steps, cv_defs, expert = TASKS[name]
+_RUNS: dict = {}
+
+
+def run_test(test: str) -> dict:
+    """One bump test, once a process: its pairs under the protocol's keys, its
+    classes, and its plant's step and episode."""
+    if test in _RUNS:
+        return _RUNS[test]
+    spec = REGISTRY[TEST_TASK.get(test, test)]
+    window = TEST_WINDOW.get(test)
+    p = spec.make_test_params(**({"max_steps_in_episode": window} if window else {}))
+    steps, cv_defs, expert = TASKS[test]
     mvs, cvs = list(steps), list(cv_defs)
 
     def limit(b):
         return None if b is None else float(b(p) if callable(b) else getattr(p, b))
 
-    extra = _stabilised(p) if name == "unstable_cstr" else {}
-    if name == "glass_furnace":
+    extra = _stabilised(p) if test == "unstable_cstr" else {}
+    if test == "glass_furnace":
         extra["window"] = int(round(float(p.reversal_period) / float(p.delta_t)))
+    if spec.group == "aircraft":
+        extra["controller"] = _default_loops(spec)
+    if "speed" in steps:
+        extra.update(_slot_hold(spec))
+    elif "course" in steps:
+        extra.update(_course_hold())
+    if "heading" in cvs:
+        extra["angles"] = (cvs.index("heading"),)
     plant = Plant(
         spec,
         p,
@@ -303,9 +579,40 @@ def measure(name: str) -> dict:
         expert_mv={cvs.index(c): mvs.index(m) for c, m in expert.items()},
         **extra,
     )
-    pairs, classes = identify(plant, list(steps.values()))
-    dt, n_ep = plant.dt, plant.n_ep
-    key = {(j, i, s): (mvs[j], cvs[i], TRAIN_SEEDS[s]) for j, i, s in pairs}
+    row_mvs, row_cvs = TEST_ROWS.get(test, (mvs, cvs))
+    tested = [mvs.index(m) for m in row_mvs]
+    sizes = list(steps.values())
+    pairs, classes = identify(plant, sizes, tested)
+    read = {cvs.index(c) for c in row_cvs}
+    pairs = {k: v for k, v in pairs.items() if k[1] in read}
+    for r in pairs.values():
+        r["names"] = (mvs, cvs)
+    run = dict(
+        pairs=pairs, classes=classes, mvs=mvs, cvs=cvs, p=p, dt=plant.dt,
+        n_ep=plant.n_ep, steps=steps, extra=extra,
+    )  # fmt: skip
+    _RUNS[test] = run
+    return run
+
+
+def measure(name: str) -> dict:
+    tests = PLANT_TESTS.get(name, (name,))
+    runs = [run_test(t) for t in tests]
+    p = REGISTRY[name].make_test_params()
+    first = runs[0]
+    dt, n_ep = first["dt"], int(p.max_steps_in_episode)
+    steps, extra = first["steps"], first["extra"]
+    key, pairs, classes, mvs, cvs, test_of = {}, {}, {}, [], [], {}
+    for t, run in zip(tests, runs):
+        n_m, n_c = len(mvs), len(cvs)
+        mvs += [f"{t}:{m}" if len(tests) > 1 else m for m in run["mvs"]]
+        cvs += [f"{t}:{c}" if len(tests) > 1 else c for c in run["cvs"]]
+        for (j, i, s), r in run["pairs"].items():
+            at = (j + n_m, i + n_c, s)
+            pairs[at] = r
+            key[at] = (mvs[j + n_m], cvs[i + n_c], TRAIN_SEEDS[s])
+            test_of[at] = t
+        classes.update({i + n_c: c for i, c in run["classes"].items()})
     valid = {key[k]: r["fit"] for k, r in pairs.items() if r["label"] == "valid"}
     quiet = {(*key[k[:3]], k[3]): f for k, f in quiet_fits(pairs, classes).items()}
     tc, rows, top = task_horizon(valid, dt, quiet)
@@ -344,18 +651,19 @@ def measure(name: str) -> dict:
             "plans_to_episode_end": P >= n_samples,
         }
     labels = [r["label"] for r in pairs.values()]
+    read = {key[k][:2] for k in pairs}
     zero = sorted(
         f"{m} -> {c}"
-        for m in mvs
-        for c in cvs
+        for m, c in read
         if all(
             r["label"] == "insignificant"
             for k, r in pairs.items()
             if key[k][:2] == (m, c)
         )
     )
+    first_cv = {j: min(i for jj, i, _ in pairs if jj == j) for j, _, _ in pairs}
     row = {
-        "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 4",
+        "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 5",
         "dt": dt,
         "episode_steps": n_ep,
         "compliant": bool(horizon),
@@ -374,14 +682,17 @@ def measure(name: str) -> dict:
             {**dict(zip(at, k)), "fit": f, "P": rows.get(k, (None,) * 3)[2]}
             for k, f in quiet.items()
         ],
-        "retests": sum(len(r["tests"]) - 1 for (j, i, s), r in pairs.items() if i == 0),
+        "retests": sum(
+            len(r["tests"]) - 1 for (j, i, s), r in pairs.items() if i == first_cv[j]
+        ),
         "zero_models": zero,
-        "cvs_without_valid_pair": [c for c in cvs if not any(k[1] == c for k in valid)],
+        "cvs_without_valid_pair": sorted({c for _, c in read} - {k[1] for k in valid}),
         "classes": {cvs[i]: c for i, c in classes.items()},
+        "tests": list(tests),
         "test": {
             "seeds": list(TRAIN_SEEDS),
-            "settle_steps": n_ep,
-            "window_steps": n_ep,
+            "settle_steps": first["n_ep"],
+            "window_steps": first["n_ep"],
             "steps": steps,
             "hold_window": extra.get("window", 20),
             "noise": "residual of each fitted model over its fit window (N1)",
@@ -395,24 +706,24 @@ def measure(name: str) -> dict:
                 "evidence": evidence(r["tests"][r["kept"]][1]),
                 "fit": r.get("fit"),
                 **dict(zip(("N", "M", "P"), rows.get(key[k], (None,) * 3))),
-                "tests": [_test_record(run, a, mvs, cvs) for run, a in r["tests"]],
+                "tests": [_test_record(run, a, *r["names"]) for run, a in r["tests"]],
             }
             for k, r in pairs.items()
+            if test_of[k] == name
         ],
     }
+    if name in OWN_WINDOW:
+        row["own_window"] = OWN_WINDOW[name]
     return _clean(row, dt)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--envs", nargs="*", default=list(TASKS))
+    ap.add_argument("--envs", nargs="*", default=list(TASKS) + list(PLANT_TESTS))
     args = ap.parse_args()
-    skipped = sorted(set(REGISTRY) - set(TASKS))
-    print(
-        f"skipped, {', '.join(skipped)}: their tests fly through ArduPlane "
-        "4.0.9's default loops (decision D6), which PR D builds"
-    )
-    for name in (n for n in args.envs if n in TASKS):
+    known = [n for n in TASKS if n in REGISTRY and n not in PLANT_TESTS]
+    known += list(PLANT_TESTS)
+    for name in (n for n in args.envs if n in known):
         row = measure(name)
         write(name, row := records.stamped(row))
         if row["compliant"]:
