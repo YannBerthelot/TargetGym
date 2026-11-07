@@ -674,3 +674,52 @@ cooling itself steepens the gradient that drives the exchange. With 5.25 MW of m
 can't fall below target unless the fuel is cut by far more than any walk moves it, so in the score
 the canal stays in place and the fining pass mark is what binds. The fining is slow, 20 h, but
 moves little with fuel, and the delays measured on this plant sit near 1 h, under the 2 h aim.
+
+### The twelve tests on the adopted score, before any oracle
+
+Pass mark at the design point's own fining share, 0.474 (owner's pick). Read on the fining share
+reaching the canal, which decides lost glass. "Attempt 2" is the floor reading above, on the
+plant without waist, cooling or money. The walks are the sizes listed in the environment, six
+seeds of 10 days, the first 2 dropped. Script: `scripts/glass_slow_props.py`.
+
+| Test | Aim | Attempt 2, floor | Attempt 3, fining share | Met |
+|---|---|---|---|---|
+| A1. Readings can mislead | One real pair | Foam against gas | Sulfate +50 % against gas +5.5 %: couple +13.1 and +13.0 K at 2 h, air +4.9 and +7.8, stack +0.6 and +1.0. Fining -0.012 and +0.006, opposite remedies. But the cooling share already reads -0.011 against +0.006 at 1 h | Partly: the cooling gives it away |
+| A2. The truth arrives late | Over 2 h | 2.9 to 3.1 h | Fining past 0.002 at 0.8 and 1.2 h; the cooling share by 1 h | No |
+| A3. Seeing would pay | 2 times smaller error | 3.0 times | Lost glass 62 h to 24 h over the six seeds, 2.6 times. Fining spread 0.0064 to 0.0049, 1.3 times. Cost per day barely moves, since crown trips dominate it | Partly |
+| B1. Dead time | Over 2 h | 4.9 h | First move 1.1 h, no fitted dead time | No |
+| B2. Slow to finish | t63 over 10 h | 46 h | 20 h | Yes |
+| B3. Keeps going after you stop | Over 2 h and 2 times | 8.8 h, 6 times | Peaks 1.4 h after, 1.4 times | No |
+| B4. Haste is punished | Under 10 %, then over 30 % | 6 %, 61 % | 35 % at the step test's gain; at 3 times, 290 % and no settling in 14 days, the crown swinging 1431 to 1625 C | Yes, though the tuned gain overshoots |
+| B5. Patience costs too | Over 12 h | 14 h | 5.6 h within 20 % | No |
+| C1. Stable if left alone | Within 0.1 K | 0.001 K | Starts 40 K apart end within 0.03 K, drift under 0.002 K a day | Yes |
+| C2. Moves on its own | Out of bounds within 48 h | 5 of 6 seeds by 42 h | Valve held: glass lost in 5 of 6 seeds, 59 to 170 h of 192; crown trips in 4 | Yes, at sizes of ours |
+| C3. Feedback can't clear it | Still out of bounds | 7.0 K worst | PI on fining: 5 to 16 h of lost glass, 0 to 23 h of trips | Yes |
+| C4. The plant itself shifts | 1.5 times | 1.5 times | Fining gain 3.96 to 4.65 per kg/s, 1.17 times; t63 20 to 21 h | No |
+
+**Produced:** B2, B4, C1, C2, C3. **Partly:** A1, A3. **Not produced:** A2, B1, B3, B5, C4.
+
+**Why the delay went.** Three things changed between the two columns, and all three are real
+plant features the owner chose. The refiner's own loop holds the canal within minutes, so the
+canal carries no delay. With 5.25 MW of margin the canal can't bind, so the fining share decides,
+and it reaches the canal within about an hour along the surface current through the waist, then
+finishes over 20 h. And the floor at the melter's end now sits on the cooled return flow, so its
+dead time fell from 4.9 h to 0.7 h. What a real melter shows as lags of 1 to 16 h appears here as
+the 20 h tail, not as a dead time.
+
+**The one check that could move this.** The first arrival rides a waist current of 41 m/h, over
+the 7 to 25 m/h published for melters, and the waist has no side-wall drag and no coolers acting
+as a barrier. A published minimum residence time from the hot spot to the canal would say whether
+an hour is real. It wasn't looked for yet.
+
+**The money is mostly the trip cost, which is `ours`.** Fuel runs about 36,500 EUR a day. A lost
+hour of glass costs 12,500 EUR; an hour of crown trip at ten steps of glass per step costs about
+125,000. So the crown limit, which answers in minutes, dominates the score. That price is the
+owner's to set before any oracle.
+
+**Rule 7.** Timed beside the shipped step at batch 256 on a loaded machine: 48,782 against
+245,207 steps/s, 5.0 times slower. Scaled to the shipped 1,739,554, about 346,000 steps/s, 2.5
+times the median, under the 3.
+
+**Attempt 2's scripts.** `glass_physical_*.py` and `glass_floor_props.py` call the old
+`plant_step`; their numbers stand at commit 6206f0d.

@@ -40,7 +40,7 @@ class EnvParams:
     thickness: float = 0.2  # m, blanket as laid
     sulfate: float = 0.01  # Na2SO4 per kg batch, Laimbock
     canal_target: float = 1373.15  # K: "minimum 1100 C before entering the bath"
-    fining_pass: float = 0.9  # provisional, ours: the owner's to set
+    fining_pass: float = 0.474  # the owner's: the settled design point's own share
     crown_low: float = 1673.15  # K, 1400 C: sodium silicate forms below, SEFPRO
     crown_high: float = 1893.15  # K, 1620 C: silica degrades above, SEFPRO
     # No capacity was found. Ours: twice what holds the canal at the design point, so
