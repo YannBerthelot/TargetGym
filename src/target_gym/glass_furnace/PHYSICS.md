@@ -359,6 +359,93 @@ which is what the recorded baselines use.
 
 <!-- END GENERATED FACTS -->
 
+## Rebuilt plant
+
+`rebuilt.py` is the plant the proposal `docs/proposals/glass-furnace-task.md` asked for. It
+sits beside the shipped plant, unregistered, and reuses its firing, regenerators, clocks and
+readings. Nothing above changes until the owner reads the judging. The sourced tables and
+their second-fetch status are in `glass-sources-2.md` in the session notes.
+
+**Roof.** Five brick cells, 15, 30, 60, 120 and 225 mm, hot face first, by conduction. The
+score reads the first cell, the owner's choice, so the score is the hot face to 15 mm. The
+back loses through an equivalent U on its cold face.
+
+**Bath.** Three zones along the melter, blanket, hot spot and throat side, each a surface
+and a deep layer, then the working end. The pull runs through them with two buoyant cells
+and the conditioning return. A cell whose far end is hotter runs backward. A floor sees
+half flame and half crown.
+
+**Blanket.** Mass from the charger, melted by radiation and convection from above and by the
+melt from below, over an area of mass / (density x thickness). Melting heat and thickness
+are moved by hidden ramps. There is no runaway, and none was sought.
+
+**Removed by the owner on 2026-11-07:** the batch charge and the batch-line reading. The
+owner could not size them. They return if the control properties need them.
+
+| Symbol | Value | Unit | Status | Source |
+|---|---|---|---|---|
+| crown thickness | 450 | mm | Read | ICG TC11 deck 2022, slide 3; 457 mm on a float brick, Wereszczak et al. 2000 |
+| `k_brick` | 2.48 | W/(m K) | Read, a bound | Wereszczak et al. 2000, p. 173: as new 1.24 doubled for service temperature; vendor sheets give 1.44 to 1.74 at 1000 C |
+| `rho_brick` | 1870 | kg/m3 | Read | Wereszczak et al. 2000, p. 166 |
+| `cp_brick` | 1245 | J/(kg K) | **Ours** | not found; 3R per atom on SiO2 (74.8 J/(mol K) at 60.08 g/mol), the high-temperature limit |
+| `U_roof_back` | 1.70 | W/(m2 K) | Derived | 2 kW/m2 (Beerkens 2011 p. 41; Wang et al. 2000 p. 303) at the 1195 to 1210 C cold face (Wereszczak) |
+| `tc_depth` | 36 | mm | **Ours** | not found; 10 min by d^2 / 2 alpha, the middle of the proposal's 5, 10, 20 min. A pocket, per the Tempsens catalogue |
+| `tc_offset` | see code | K | Derived | the orbit's mean of hot face less thermocouple, so the reading sits on the target's scale. No source; a real plant's setpoint is in thermocouple units |
+| `glass_mass` | 625 | t | As shipped | 30 h residence |
+| `tank_depth` | 1.35 | m | Derived | 625 t over 200 m2 at 2319 kg/m3; float tanks run 1.2 to 1.5 m |
+| `tank_width` | 11 | m | Read | Wang et al. 2000, 455 t/d float |
+| three equal zones | 1/3 | | **Ours** | the hot spot's centre at 1/2 of the length, the near end of the 1/2 to 2/3 rule (Materials 17 (2024) 4989) |
+| `surface_fraction` | 0.422 | | Read | Poles 1997: the current reverses at z = 0.578 |
+| `rho_glass` | 2319 | kg/m3 | Read | Pilon et al. 2002, eq. 10, at 1400 C |
+| `beta_glass` | 5.95e-5 | 1/K | Read | Wang and Zhou 1992, Table 1, cubical, float |
+| viscosity | VFT | Pa s | Read | DGG X standard glass, eq. 1 |
+| k_eff | Pilon | W/(m K) | Read, weak | Pilon et al. 2002, eq. 14. Sources differ threefold; this is the middle one |
+| cell flow | 0.00542 g beta (dT/l) h^4 / nu | kg/(s m) | Read, form only | Poles 1997, eq. 2.3.7, integrated to the reversal height. Constant-viscosity, low-Rayleigh solution; a melt is far outside it |
+| `current_scale` | 0.05 | | Derived | set once, so the first loop carries the 600 % of pull in Beerkens 2011 p. 12 and Hubert slide 48. The raw formula gave 38 times the pull |
+| `back_flow_ratio` | 2.6 | | Read | Wang and Zhou 1992, Fig. 8, float, 1.5 m, no weir |
+| `gas_view` | 0.5 | | **Ours** | a flame neither black nor clear. Needed because the shipped form sent a floor both full views and doubled the flux |
+| `U_bottom` | 1.0 | W/(m2 K) | Read | as shipped; 1.4 kW/m2, inside Beerkens's 2 kW/m2 |
+| `rho_batch` | 1400 | kg/m3 | Read | Pilon et al. 2002 |
+| `blanket_thickness` | 0.20 | m | Read, model | Pilon et al. 2002, assumed there. No float measurement was found |
+| `blanket_solid` | 0.85 | | Read | Wang et al. 2000, the best match to plant data, as the shipped `batch_shield` |
+| `T_batch_top` | 1200 | C | Read | Wang et al. 2000, p. 302, reactions complete at 1473 K |
+| `H_melt` | 2.2e6 | J/kg batch | Read | Pilon et al. 2002, at 1450 K |
+| `cullet_gain` | 0.352 | per unit ratio | Derived | 2.5 % less fuel per 10 points at held crown (DOE 2017, AGC), through this plant's balance; `scripts/glass_rebuilt_settle.py` |
+| `cullet_move`, band | 10, +-5 | points | Band read, size the owner's | 20 to 30 % on float lines (Guardian, Wang et al. 2000, DOE 2017); up to 10 points in 1 h, six per episode |
+| `thickness_move`, band | 20, +-20 | % | The owner's | no source; 12.5 to 20 cm across model papers |
+| `m_pull_noise_std` | 0.058 | kg/s | Read | +-2 % (US11261117B2) as two sigma; the shipped 0.4 was flagged weak |
+| `tc` delay, `tau_thermocouple` | 120 | s | **Ours**, as shipped | the sheath |
+
+**Checks on the settled orbit, crown 1590 C.** No number was moved to reach these.
+
+| Quantity | Published | Model |
+|---|---|---|
+| Specific energy | 4 to 6 GJ/t | 5.13 |
+| Preheated air | 1200 to 1400 C | 1229 |
+| Stack | 400 to 600 C | 522 |
+| Crown cold face | 1195 to 1210 C | about 1225 |
+| Crown loss | under 2 kW/m2 | 2.0 |
+| Share of net heat into the blanket | 80 to 90 % | 87 % |
+| Hot spot passes | 6 to 8 | 7.6 |
+| Batch line | 3 to 6.5 m | 3.5 m |
+| Energy balance, fuel against all outflows | closed | 1.2 % |
+
+**Deviations of the rebuilt plant.**
+
+- **Blanket.** Coverage 19.5 % against the 25 to 40 % optimum, and 22 min of residence against
+  30 to 60 min. The batch line is inside its band, so sources disagree more than the model does.
+- **Longitudinal surface difference.** About 40 K against the 170 to 205 K that sources give
+  between a batch point and the peak. A zone is a mean over 6 m, and the zones can't hold a peak.
+- **Vertical difference.** 40 to 75 K against the 300 to 340 K of the 1992 model. Two layers can't
+  hold a stagnant bottom, so the deep layer is the return current and not the floor. Viscosity in
+  the cell flow is therefore read too hot, which `current_scale` absorbs.
+- **Hot spot.** It sits between the hot and throat zones, at about 2/3 of the length, the far end
+  of the rule. Cell 2 settles near zero. The source's second loop of 200 % does not appear.
+- **Working end.** 1475 C against about 1250 C at the end of conditioning. The shipped cooling is
+  unchanged, and 1 zone is the whole conditioning end.
+- **Hot face swing.** 38 K in the 15 mm cell at each reversal. No source gives it; thermocouple
+  figures do not see it. A thinner cell would swing more.
+
 ## Reward (version 2)
 
 `compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.
