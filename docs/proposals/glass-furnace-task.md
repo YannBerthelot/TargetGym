@@ -140,7 +140,7 @@ term or unsourced gain goes in to reach a property.
 
 | Lever | Proposal |
 |---|---|
-| Scored | Crown against its target, plus fuel, on the existing reward form, with the 1 K floor. A charge for unmelted batch past a limit is open, below |
+| Scored | Crown against its target, plus fuel, on the existing reward form, with the 1 K floor. Plus a charge for unmelted batch past a limit (owner's decision), the one term that scores the bath directly. Vendors tie excess batch at the throat to defects, seen once. The limit and its price have no source yet, so they are `ours` until sized |
 | Observed | Roof reading, air preheat, fuel, reversal phase, target, pull. A slow, coarse batch-line reading, as an operator has. No glass or bath state |
 | The agent's role | Operator plus controller: operators watch the batch line and trim the controller |
 | Operating range | As shipped until a reason appears |
@@ -191,7 +191,7 @@ hidden-state problem of keeping the glass right with no reading.
 ## Open for the owner
 
 - **Sizes.** How far and how fast do blanket moves and batch changes go? No source gives them.
-- **Batch limit.** Should unmelted batch past a limit be charged? Vendors tie excess batch at the
-  throat to defects, seen once, and it is the only term that scores the bath directly.
+- **Batch limit.** Where is the limit, and what does crossing it cost? Charging it is decided,
+  but neither number has a source.
 - **Charter.** The rebuild needs its row in the task table changed, and a plant of this size must
   still pass rule 7.
