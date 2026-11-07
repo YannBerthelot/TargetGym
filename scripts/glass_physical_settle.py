@@ -23,7 +23,9 @@ def advance(s, fuel, g, p, steps, charge=5.79, cullet=0.25, thick=0.2, t0=0):
     """(fields, hot-face path) of ``steps`` held steps; ``fuel`` before the gaps."""
 
     def f(s, t):
-        n, _ = P.plant_step(s, fuel * firing_fraction(t, p), charge, cullet, thick, t, g, p)
+        n, _ = P.plant_step(
+            s, fuel * firing_fraction(t, p), charge, cullet, thick, t, g, p
+        )
         return n, n.T_roof[0, BAY]
 
     return jax.lax.scan(f, s, t0 + jnp.arange(steps))
@@ -67,5 +69,9 @@ if __name__ == "__main__":
     if len(a) > 7:
         p = p.replace(delta_t=float(a[7]))
     fuel, s = settle(1590.0, g, p)
-    np.savez(a[1], fuel=fuel, **{k: np.asarray(getattr(s, k)) for k in s.__dataclass_fields__})
+    np.savez(
+        a[1],
+        fuel=fuel,
+        **{k: np.asarray(getattr(s, k)) for k in s.__dataclass_fields__},
+    )
     print(f"fuel {fuel:.4f}  SEC {fuel * p.LHV / 5.79 / 1e6:.2f} GJ/t", flush=True)

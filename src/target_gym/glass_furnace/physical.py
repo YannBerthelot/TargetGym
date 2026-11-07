@@ -109,7 +109,11 @@ def _surface_patches(n_bays, length, width, height, walls, n=6):
     def rect(origin, u, v, normal, index):
         a = (np.arange(n) + 0.5) / n
         s, t = np.meshgrid(a, a, indexing="ij")
-        p = np.asarray(origin) + s[..., None] * np.asarray(u) + t[..., None] * np.asarray(v)
+        p = (
+            np.asarray(origin)
+            + s[..., None] * np.asarray(u)
+            + t[..., None] * np.asarray(v)
+        )
         pts.append(p.reshape(-1, 3))
         nor.append(np.tile(normal, (n * n, 1)))
         wts.append(np.full(n * n, np.linalg.norm(np.cross(u, v)) / n**2))
@@ -256,6 +260,7 @@ def foam_thickness(j, mu, sigma, r0, rho, g):
 #: the bound in Fedorov and Pilon 2002. Its gas fraction: 0.82, the same paper's chapter.
 FOAM_BETA = 4.0 / (0.75 * 0.02)
 FOAM_POROSITY = 0.82
+N_FINE = 5  # layers, about 10 cm: where the fining gas is taken to form
 
 
 def foam_conductivity(T):
@@ -331,7 +336,9 @@ def layout(g):
 
 
 @functools.lru_cache(maxsize=8)
-def _layout(g, length=21.5, refiner=20.5, width=11.0, height=2.4, depth=1.2, crown=0.45):
+def _layout(
+    g, length=21.5, refiner=20.5, width=11.0, height=2.4, depth=1.2, crown=0.45
+):
 
     def graded(total, first, n):
         lo, hi = 1.0001, 4.0
@@ -343,7 +350,9 @@ def _layout(g, length=21.5, refiner=20.5, width=11.0, height=2.4, depth=1.2, cro
     dz = graded(depth, g.skin, g.n_depth)
     dr = graded(crown, g.roof_skin, g.n_roof)
     nm = g.n_bays * g.cols_per_bay
-    dx = np.concatenate([np.full(nm, length / nm), np.full(g.n_refiner, refiner / g.n_refiner)])
+    dx = np.concatenate(
+        [np.full(nm, length / nm), np.full(g.n_refiner, refiner / g.n_refiner)]
+    )
     z = np.concatenate([[0.0], np.cumsum(dz)])
     F1 = float(band_fraction(2.8 * 1900.0))  # the crown and flame's own spectrum
     F2 = float(band_fraction(5.0 * 1900.0)) - F1
@@ -360,6 +369,10 @@ def _layout(g, length=21.5, refiner=20.5, width=11.0, height=2.4, depth=1.2, cro
         dr=jnp.asarray(dr), drc=jnp.asarray(0.5 * (dr[1:] + dr[:-1])),
         width=width, depth=depth, deposit=jnp.asarray(D),
         bay=jnp.repeat(jnp.arange(g.n_bays), g.cols_per_bay),
+        offset=jnp.tile(
+            (np.arange(g.cols_per_bay) + 0.5 - 0.5 * g.cols_per_bay) * length / nm,
+            g.n_bays,
+        ),
         Hs=jnp.asarray(ex["Hs"]), Hg=jnp.asarray(ex["Hg"]),
         Ugg=jnp.asarray(ex["Ugg"]), Ugs=jnp.asarray(ex["Ugs"]),
         A_crown=jnp.asarray(ex["area"][: g.n_bays]),
@@ -396,6 +409,7 @@ class PhysicalParams(GlassFurnaceParams):
     T_fine_high: float = 1773.15  # K, 1500 C
     sigma_glass: float = 0.3  # N/m, Table 1 of JCIS2001
     bubble_radius: float = 8.3e-3  # m, top of the lab range in Ch16
+    foam_half_life: float = 50.0  # s at 1200 C, soda-lime, Kappel Table 3
     max_steps_in_episode: int = 8640
 
 
@@ -410,6 +424,7 @@ class Fields:
     m: jnp.ndarray  # blanket, kg/m^2, melter columns
     c: jnp.ndarray  # cullet ratio in the blanket
     q_under: jnp.ndarray  # W/m^2 already taken from the melt into the blanket
+    foam: jnp.ndarray  # thickness, melter columns, m
 
 
 def initial_fields(g, p):
@@ -432,6 +447,7 @@ def initial_fields(g, p):
         T_rA=jnp.linspace(1300.0, 500.0, N_REGEN_NODES),
         T_rB=jnp.linspace(1300.0, 500.0, N_REGEN_NODES),
         m=jnp.asarray(m), c=jnp.full((a.nm,), 0.25), q_under=jnp.zeros((a.nc,)),
+        foam=jnp.zeros((a.nm,)),
     )  # fmt: skip
 
 
@@ -469,28 +485,36 @@ def _gas_balance(s, E_load, T_load, fuel_heat, m_gas, H_air, a, g, p):
     return T, E
 
 
-def _melt_column_fluxes(s, H, T_g, f, c_mean, charge_melt, a, g, p):
-    """Surface fluxes of the melter's columns: (into melt, into blanket, top, foam)."""
+def _foam_step(s, f, c_mean, charge, a, g, p):
+    """Next foam thickness. The melt within ``N_FINE`` layers of the surface releases
+    what its temperature allows of the sulfate balance, over the sourced band; foam then
+    relaxes to Pilon's thickness at its lifetime, Kappel: half life 50 s at 1200 C, 58
+    kJ/mol. The gas is released in the melt, not at the skin, hence the mean."""
     nm = a.nm
-    Ts = s.T[0, :nm]
-    w = jnp.clip((Ts - p.T_fine_low) / (p.T_fine_high - p.T_fine_low), 0.0, 1.0) * (1 - f)
-    dA = a.dx[:nm] * a.width
-    mol = (
-        (p.sulfate_batch * 80.06 / 142.04 / p.glass_per_batch - p.so3_glass)
-        / 0.08006 * 1.5
-    )  # fmt: skip
-    gas = charge_melt * (1.0 - c_mean) * mol * 8.314 * p.T_fine_high / 101325.0
-    j = gas * w / jnp.maximum(jnp.sum(w * dA), 1.0)
-    foam = foam_thickness(
-        j, viscosity(Ts), p.sigma_glass, p.bubble_radius, p.rho_glass, p.g_accel
+    near = a.dz[:N_FINE]
+    T_fine = jnp.sum(s.T[:N_FINE, :nm] * near[:, None], 0) / jnp.sum(near)
+    w = jnp.clip((T_fine - p.T_fine_low) / (p.T_fine_high - p.T_fine_low), 0.0, 1.0)
+    w = w * (1.0 - f)
+    so3 = p.sulfate_batch * 80.06 / 142.04 / p.glass_per_batch - p.so3_glass
+    mol = so3 / 0.08006 * 1.5  # SO2 + 1/2 O2 per SO3
+    volume = charge * (1.0 - c_mean) * mol * 8.314 * p.T_fine_high / 101325.0
+    j = volume / jnp.sum(a.dx[:nm] * a.width * (1.0 - f)) * w
+    target = foam_thickness(
+        j, viscosity(T_fine), p.sigma_glass, p.bubble_radius, p.rho_glass, p.g_accel
     )
-    q_foam, T_foam = foam_flux(H, Ts, foam, p.eps_surface, p.h_gas, T_g)
+    half = p.foam_half_life * jnp.exp(6976.0 * (1.0 / T_fine - 1.0 / 1473.15))
+    rate = p.delta_t * jnp.log(2.0) / half
+    return (s.foam + rate * target) / (1.0 + rate)
+
+
+def _melt_column_fluxes(s, H, T_g, a, p):
+    """Surface fluxes of the melter's columns: (into melt, into blanket, top)."""
+    Ts = s.T[0, : a.nm]
+    q_foam, T_foam = foam_flux(H, Ts, s.foam, p.eps_surface, p.h_gas, T_g)
     q_bare = bare_flux(H, Ts, p.eps_surface, p.h_gas, T_g)
-    has = foam > 1e-3
-    q = jnp.where(has, q_foam, q_bare)
-    top = jnp.where(has, T_foam, Ts)
+    has = s.foam > 1e-3
     q_batch = bare_flux(H, p.T_melt_K, p.eps_surface, p.h_gas, T_g)
-    return q, q_batch, top, foam
+    return jnp.where(has, q_foam, q_bare), q_batch, jnp.where(has, T_foam, Ts)
 
 
 def _refiner_loss(T, p):
@@ -535,9 +559,11 @@ def plant_step(s, fuel, charge, cullet, thickness, time, g, p, lhv=0.0):
     # ---- Surfaces and the blanket
     dA = a.dx[: a.nm] * a.width
     H_melt = p.H_melt * (1.0 - p.cullet_gain * s.c)
-    q, q_batch, top, foam = _melt_column_fluxes(
-        s, H_load[bay], T_g[bay], f, jnp.mean(s.c[:2]), charge, a, g, p
-    )
+    # Irradiation within a bay: its neighbours' slope, keeping the bay's mean exactly.
+    slope = jnp.gradient(H_load) / (a.A_roof / a.width)
+    H_col = H_load[bay] + slope[bay] * a.offset
+    q, q_batch, top = _melt_column_fluxes(s, H_col, T_g[bay], a, p)
+    foam = _foam_step(s, f, jnp.mean(s.c[:2]), charge, a, g, p)
     taken = f * q_batch + s.q_under[: a.nm]
     melt = jnp.minimum(jnp.maximum(taken, 0.0) / H_melt, s.m / dt)
     spare = taken - melt * H_melt  # a tip with no mass left hands its heat back
@@ -588,7 +614,7 @@ def plant_step(s, fuel, charge, cullet, thickness, time, g, p, lhv=0.0):
     Tt0 = T[0]
     ht = 4.0 * p.eps_surface * SIGMA * Tt0**3 + p.h_gas
     hl = a.deposit[0] * jnp.concatenate(
-        [(1.0 - f) * jnp.where(foam > 1e-3, 0.0, ht[: a.nm]), jnp.zeros(g.n_refiner)]
+        [(1.0 - f) * jnp.where(s.foam > 1e-3, 0.0, ht[: a.nm]), jnp.zeros(g.n_refiner)]
     )
     k0 = melt_conductivity(Tt0)
     under = cover_f * k0 / (0.5 * a.dz[0])
@@ -640,7 +666,7 @@ def plant_step(s, fuel, charge, cullet, thickness, time, g, p, lhv=0.0):
     new = Fields(
         T=Tn, T_top=top, T_roof=Trn, T_gas=T_g,
         T_rA=s.T_rA + rate * (QA - loss_A), T_rB=s.T_rB + rate * (QB - loss_B),
-        m=m_new, c=c_new, q_under=q_under,
+        m=m_new, c=c_new, q_under=q_under, foam=foam,
     )  # fmt: skip
 
     w_area = a.dx * a.width
@@ -683,7 +709,8 @@ def reading_cell(depth, g):
 
 def sensors(s, depth, bay, g):
     """What instruments could see: the crown's hot face and its couple at ``depth`` in
-    ``bay``, the glass bottom under that bay, the refiner's end surface. K, unfiltered."""
+    ``bay``, the glass bottom under that bay, the refiner's end surface. K, unfiltered.
+    """
     i, w = reading_cell(depth, g)
     col = bay * g.cols_per_bay + g.cols_per_bay // 2
     return (

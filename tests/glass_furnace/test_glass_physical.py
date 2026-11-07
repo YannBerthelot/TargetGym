@@ -33,6 +33,8 @@ def test_rosseland_limit_of_one_gray_band():
     kr = P.radiative_conductivity(T, 100.0, 100.0, 1.5)
     limit = 16 * 1.5**2 * P.SIGMA * T**3 / (3 * 100.0)
     assert 0.5 * limit < kr < limit
+    # kr goes as n^2, eq 6.
+    assert kr / P.radiative_conductivity(T, 100.0, 100.0, 1.0) == pytest.approx(2.25)
 
 
 def test_conductivity_is_liu_at_1400_c():
@@ -50,17 +52,23 @@ def test_viscosity_lookup_stays_on_the_vft():
 
 def test_parallel_squares_view_factor():
     # Unit squares a unit apart, no gas: F = 0.1998 (Incropera, aligned plates).
-    ex = P.direct_areas(n_bays=1, length=1.0, width=1.0, height=1.0, kappa=0.0, walls=False)
+    ex = P.direct_areas(
+        n_bays=1, length=1.0, width=1.0, height=1.0, kappa=0.0, walls=False
+    )
     assert ex["ss"][0, 1] == pytest.approx(0.1998, abs=2e-3)
 
 
 @pytest.fixture(scope="module")
 def zones():
-    return P.exchange(n_bays=3, length=12.0, width=6.0, height=2.0, kappa=0.08, eps=(0.8, 0.8))
+    return P.exchange(
+        n_bays=3, length=12.0, width=6.0, height=2.0, kappa=0.08, eps=(0.8, 0.8)
+    )
 
 
 def test_exchange_areas_close_and_are_reciprocal():
-    ex = P.direct_areas(n_bays=3, length=12.0, width=6.0, height=2.0, kappa=0.08, walls=True)
+    ex = P.direct_areas(
+        n_bays=3, length=12.0, width=6.0, height=2.0, kappa=0.08, walls=True
+    )
     np.testing.assert_allclose(ex["ss"], ex["ss"].T, rtol=1e-9)
     leaving = ex["ss"].sum(1) + ex["sg"].sum(1)
     np.testing.assert_allclose(leaving, ex["area"], rtol=1e-6)
@@ -98,7 +106,9 @@ def test_long_tank_flow_is_birikh_for_uniform_viscosity():
     expected = -9.81 * 2319 * 6e-5 * a * H**3 / (48 * mu)
     assert float(u[0, 0]) == pytest.approx(expected, rel=1e-2)
     # float32: the sum of 400 terms carries about 1e-6 of the scale u H
-    assert float(jnp.sum(u[:, 0] * dz)) == pytest.approx(0.0, abs=1e-5 * abs(expected) * H)
+    assert float(jnp.sum(u[:, 0] * dz)) == pytest.approx(
+        0.0, abs=1e-5 * abs(expected) * H
+    )
     assert float(u[-1, 0]) * expected < 0  # the return runs the other way
 
 
@@ -139,6 +149,7 @@ def test_blanket_moves_at_its_speed_and_loses_what_melted():
     assert float(m[0]) == pytest.approx(280.0, rel=1e-3)
     front = int(jnp.sum(m > 140.0))
     assert 19 <= front <= 20
+    assert float(c[0]) == pytest.approx(0.25, rel=1e-3)  # what the charger lays travels
     m2, _ = P.advance_blanket(m, c, jnp.full((20,), 0.1), 280.0, 0.25, 0.0, dx, 30.0)
     np.testing.assert_allclose(m - m2, 3.0, rtol=1e-6)
 

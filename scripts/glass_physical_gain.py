@@ -1,6 +1,6 @@
 """Fuel-to-reading gain across states an episode reaches, each settled at held fuel.
 
-    python glass_physical_gain.py ORBIT.npz
+python glass_physical_gain.py ORBIT.npz
 """
 
 import sys

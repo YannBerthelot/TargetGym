@@ -30,11 +30,22 @@ def run(s, fuel, charge, cullet, thick, sulfate):
     q = p.replace(sulfate_batch=sulfate)
 
     def f(s, t):
-        n, b = P.plant_step(s, fuel * firing_fraction(t, q), charge, cullet, thick, t, g, q)
+        n, b = P.plant_step(
+            s, fuel * firing_fraction(t, q), charge, cullet, thick, t, g, q
+        )
         hot, tc, bottom, canal = P.sensors(n, Z.DEPTH, Z.BAY, g)
         glass = jnp.sum(a.dz * n.T[:, nm - 1]) / a.depth
         into = jnp.sum(b["q"] * a.dx * a.width) + b["in_blanket"]
-        return n, (hot, tc, bottom, canal, glass, into, b["foam"].mean(), jnp.sum(P.cover(n.m)))
+        return n, (
+            hot,
+            tc,
+            bottom,
+            canal,
+            glass,
+            into,
+            b["foam"].mean(),
+            jnp.sum(P.cover(n.m)),
+        )
 
     return jax.lax.scan(f, s, jnp.arange(N))[1]
 
@@ -49,7 +60,7 @@ def lag(y, tau):
 
 
 def kick(s, skin=0.0, bath=0.0, refiner=0.0, batch=1.0):
-    T = s.T.at[:3, 6:10].add(skin).at[:, : nm].add(bath).at[:, nm:].add(refiner)
+    T = s.T.at[:3, 6:10].add(skin).at[:, :nm].add(bath).at[:, nm:].add(refiner)
     return s.replace(T=T, T_top=s.T_top + 0 * skin, m=s.m * batch)
 
 
@@ -75,13 +86,15 @@ ss = jax.tree_util.tree_map(lambda *x: jnp.stack(x), *[c[0] for c in CASES.value
 args = [jnp.array([c[1][i] for c in CASES.values()]) for i in range(5)]
 out = [np.asarray(v) for v in batch(ss, *args)]
 tc0 = lag(base[1], 120.0)
-print("reading, K, at", HOURS, "| peak | rate K/h | first over 0.36 K, h | half peak, h")
+print(
+    "reading, K, at", HOURS, "| peak | rate K/h | first over 0.36 K, h | half peak, h"
+)
 for i, name in enumerate(CASES):
     y = lag(out[1][i], 120.0) - tc0
     at = [y[int(h * 120) - 1] for h in HOURS]
     w = 30  # 15 min
     rate = np.abs(y[w:] - y[:-w]).max() * 4.0
-    pk = np.abs(y[: 2880]).max()
+    pk = np.abs(y[:2880]).max()
     over = np.argmax(np.abs(y) > 0.36) / 120.0 if (np.abs(y) > 0.36).any() else np.inf
     half = np.argmax(np.abs(y) > 0.5 * pk) / 120.0
     print(
@@ -112,14 +125,25 @@ final = y[-1]
 print("fuel step +1 %: first 8 steps", np.round(y[:8], 3), "t10", np.argmax(y > 0.1 * final) / 120,
       "t63", np.argmax(y > 0.63 * final) / 120, "96 h", final)  # fmt: skip
 hot = out[0][0] - base[0]
-print("hot face: t10", np.argmax(hot > 0.1 * hot[-1]) / 120, "t63", np.argmax(hot > 0.63 * hot[-1]) / 120)
+print(
+    "hot face: t10",
+    np.argmax(hot > 0.1 * hot[-1]) / 120,
+    "t63",
+    np.argmax(hot > 0.63 * hot[-1]) / 120,
+)
 tail = base[0][-200:]
 print("swing hot face p-p", tail.max() - tail.min(), "reading p-p", np.ptp(tc0[-200:]))
 tb = np.ptp(base[2][-200:]), np.ptp(base[3][-200:])
 print("bottom, canal swing", tb)
 
 # Wrong way: the reading against the heat entering the glass, and the glass against it.
-for n in ("sulfate +50 %", "cullet +5 pts", "cullet +10 pts", "blanket -20 %", "gas +1 %"):
+for n in (
+    "sulfate +50 %",
+    "cullet +5 pts",
+    "cullet +10 pts",
+    "blanket -20 %",
+    "gas +1 %",
+):
     i = list(CASES).index(n)
     y = lag(out[1][i], 120.0) - tc0
     at = [int(h * 120) - 1 for h in (0.1, 0.25, 0.5, 1, 3, 6, 12)]
@@ -130,7 +154,12 @@ for n in ("sulfate +50 %", "cullet +5 pts", "cullet +10 pts", "blanket -20 %", "
 i = list(CASES).index("cullet +5 pts")
 y = lag(out[1][i], 120.0) - tc0
 c = int(np.argmax((y[240:] > 0))) + 240
-print("cullet +5: reading crosses zero at", c / 120, "h, glass then", (out[4][i] - base[4])[c])
+print(
+    "cullet +5: reading crosses zero at",
+    c / 120,
+    "h, glass then",
+    (out[4][i] - base[4])[c],
+)
 for a_, b_ in (("cullet +10 pts", "blanket -20 %"), ("gas +1 %", "pull -2 %")):
     u_ = [lag(out[1][list(CASES).index(n)], 120.0) - tc0 for n in (a_, b_)]
     k = int(6 * 120) - 1
