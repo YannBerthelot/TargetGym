@@ -108,6 +108,21 @@ def test_the_setpoint_in_force_is_the_curves_starting_point():
     assert night == pytest.approx(12.0 * H_PER_Q, abs=1e-5)
 
 
+def test_during_a_warm_up_the_curve_starts_at_the_occupied_setpoint():
+    """Zone at 19.9 C all night, 5 C outside: 1.1 K short at 1 K/h, so the warm-up
+    starts at 06:00 (3600 s left of 3960). The signal below the setback's 17 C is
+    0, so the integral is empty, and at 06:00 the curve is the 21 C one's 16 K plus
+    the PI's first step on 1.1 K."""
+    expert = _expert()
+    p = expert.controller.params
+    hour = 0.0
+    while hour < 6.0:
+        assert _on_curve(expert, hour, 19.9, 5.0) == 0.0
+        hour += DT_H
+    expected = 16.0 * H_PER_Q + p.kp * 1.1 * (1.0 + p.dt / p.Ti)
+    assert _on_curve(expert, 6.0, 19.9, 5.0) == pytest.approx(expected, abs=1e-4)
+
+
 def test_a_cold_zone_shifts_the_curve_up_and_a_warm_one_down():
     params = _expert().controller.params
     base = _on_curve(_expert(), 12.0, OCCUPIED, 5.0)

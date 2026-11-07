@@ -620,15 +620,15 @@ def test_a_read_delay_can_be_a_datasheets():
 
 
 def test_noise_rules_run_on_another_tuning_rule():
-    # Lambda on a first-order loop, k 2, tau 10: Kc = 10 / (2 (lam + theta)),
-    # Ti = 10. Past the dead band's most it stops where N7 says, through ``lam``.
+    # A rule nothing like SIMC's: Kc = 3 / (lam + theta), Ti = 7. Past the dead
+    # band's most, N7 stops at kc_min 0.5 through ``lam``, so lam + theta = 6.
     def rule(theta, lam):
-        return 10.0 / (2.0 * (lam + theta)), 10.0
+        return 3.0 / (lam + theta), 7.0
 
     out = noise_tune(2.0, 10.0, 1.0, 1.0, 1.0, 0.02, kc_min=0.5, rule=rule)
     assert out["Kc"] == pytest.approx(0.5, rel=1e-6)
-    assert out["Ti"] == 10.0
-    assert out["tau_c"] == pytest.approx(10.0 - out["theta"], rel=1e-6)
+    assert out["Ti"] == 7.0
+    assert out["tau_c"] + out["theta"] == pytest.approx(6.0, rel=1e-6)
 
 
 def test_the_default_rule_is_simc_unchanged():

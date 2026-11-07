@@ -115,13 +115,18 @@ def test_the_level_integral_stops_at_the_feed_limit():
 
 
 def test_the_level_integral_runs_off_a_limit_the_error_is_leaving():
-    """At the upper limit a falling error may still integrate: conditional
-    integration stops the update that would saturate further, not this one."""
-    expert = _expert(Kp_level=30000.0, Ki_level=10.0)
-    assert _feed(expert, _obs(level=-0.01)) == pytest.approx(200.0, rel=1e-5)
-    # Past the limit, from 80 + 300 - 0.4 at a high level: 2 s of +0.01 m error.
-    high = _feed(expert, _obs(level=0.001))
-    assert high == pytest.approx(80.0 - 30.0 - 10.0 * 0.002, rel=1e-3)
+    """Six steps of 1 m low at Ki 10 and 2 s build an integral of 12, 200 kg/s at
+    80 of steam, exactly the limit. A steam swing to 100 then holds the feed past
+    its limit, and a 0.01 m high level takes 0.02 off the integral: the update
+    leaves the limit, so conditional integration lets it. Back at 80 of steam,
+    the feed is 80 + 10 x 11.98, 199.8 and not 200."""
+    expert = _expert(Kp_level=0.0, Ki_level=10.0)
+    for _ in range(6):
+        _feed(expert, _obs(level=-1.0))
+    assert _feed(expert, _obs(level=0.01, q_steam=100.0)) == pytest.approx(
+        200.0, rel=1e-5
+    )
+    assert _feed(expert, _obs(level=0.0)) == pytest.approx(199.8, rel=1e-5)
 
 
 def test_a_reading_passes_its_filter():
@@ -129,6 +134,15 @@ def test_a_reading_passes_its_filter():
     expert = _expert(Kp_level=100.0, Ki_level=0.0, alpha_level=0.632)
     assert _feed(expert, _obs(level=0.0)) == pytest.approx(80.0, rel=1e-5)
     assert _feed(expert, _obs(level=0.1)) == pytest.approx(80.0 - 6.32, rel=1e-4)
+
+
+def test_the_pressure_reading_passes_its_filter():
+    """A 1 bar drop through a filter that passes half moves the PV 0.5 bar, and
+    Kp 0.1 of the heat on that is 0.05 of Q_max, 0.1 on the [-1, 1] action."""
+    expert = _expert(Kp_pressure=0.1, Ki_pressure=0.0, alpha_pressure=0.5)
+    steady = float(np.asarray(expert(_obs(pressure=85.0)))[0])
+    dropped = float(np.asarray(expert(_obs(pressure=84.0)))[0])
+    assert dropped - steady == pytest.approx(0.1, rel=1e-3)
 
 
 def test_the_filter_starts_on_the_first_reading():
