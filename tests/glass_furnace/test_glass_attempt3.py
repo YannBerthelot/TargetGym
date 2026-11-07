@@ -12,8 +12,9 @@ Contract, from conservation, the sources and the owner's score, not from any cod
   sourced band, 1420 to 1500 C, keeps what it released, and carries it with the flow;
   batch glass arrives with none. The canal reads the leaving glass's share by its flow;
 - reward in money: fuel at the gas price; the glass made while the canal is under its
-  target or under-fined is lost at its price; a trip outside the silica crown's limits,
-  1400 C (sodium silicate) to 1620 C (degradation);
+  target or under-fined is lost at its price. The silica crown's limits, 1400 C (sodium
+  silicate) to 1620 C (degradation), are the plant's own override, not a price (owner,
+  2026-11-08): whatever the valve asks, the hottest face stays inside them;
 - the observation carries readings only: the hidden walks don't enter it;
 - each walk is stationary with its stated spread and correlation time.
 """
@@ -133,22 +134,48 @@ def test_glass_under_the_band_brings_no_fining_to_the_canal(plant):
     assert float(P.sensors(new, g, p)["fining"]) == 0.0
 
 
-def test_reward_prices_fuel_lost_glass_and_the_crown_trip():
+def test_reward_prices_fuel_and_lost_glass():
     ep = E.EnvParams()
     dt = ep.plant.delta_t
     fuel_cost = 0.45 * dt * ep.plant.LHV / 3.6e9 * ep.gas_price  # EUR/MWh on energy
     glass = ep.pull * dt / 1000.0 * ep.lost_glass_price  # EUR/t on tonnes
     good = dict(canal=ep.canal_target + 0.5, fining=ep.fining_pass + 0.01)
-    crown = 0.5 * (ep.crown_low + ep.crown_high)
-    ok = E.reward_terms(0.45, crown=crown, **good, ep=ep)
+    ok = E.reward_terms(0.45, **good, ep=ep)
+    assert set(ok) == {"fuel", "lost_glass"}
     assert float(ok["fuel"]) == pytest.approx(fuel_cost, rel=1e-6)
-    assert float(ok["lost_glass"]) == 0.0 and float(ok["trip"]) == 0.0
+    assert float(ok["lost_glass"]) == 0.0
     for bad in (dict(canal=ep.canal_target - 0.5), dict(fining=ep.fining_pass - 0.01)):
-        cost = E.reward_terms(0.45, crown=crown, **{**good, **bad}, ep=ep)
+        cost = E.reward_terms(0.45, **{**good, **bad}, ep=ep)
         assert float(cost["lost_glass"]) == pytest.approx(glass, rel=1e-6)
-    for c in (ep.crown_low - 1.0, ep.crown_high + 1.0):
-        cost = E.reward_terms(0.45, crown=c, **good, ep=ep)
-        assert float(cost["trip"]) == pytest.approx(ep.trip_cost, rel=1e-6)
+
+
+@pytest.mark.parametrize("asked", ["fuel_max", "fuel_min"])
+def test_crown_override_keeps_the_hottest_face_inside_the_silica_limits(plant, asked):
+    g, p, s = plant
+    ep = E.EnvParams()
+    _, state = E.reset(jax.random.PRNGKey(0), s, ep.replace(walk_sd=(0.0,) * 5))
+    quiet = ep.replace(walk_sd=(0.0,) * 5)
+    valve = getattr(ep, asked)
+
+    def f(st, k):
+        _, st, _, _ = E.step(k, st, valve, quiet)
+        return st, P.sensors(st.fields, g, p)["hot"]
+
+    keys = jax.random.split(jax.random.PRNGKey(1), int(2 * 86400 / p.delta_t))
+    hot = np.asarray(jax.jit(lambda: jax.lax.scan(f, state, keys)[1])())
+    later = hot[int(6 * 3600 / p.delta_t) :]  # past the start's own transient
+    assert later.max() <= ep.crown_high + 2.0
+    assert later.min() >= ep.crown_low - 2.0
+
+
+def test_override_leaves_the_valve_alone_inside_the_limits(plant):
+    _, _, s = plant
+    ep = E.EnvParams().replace(walk_sd=(0.0,) * 5)
+    _, state = E.reset(jax.random.PRNGKey(0), s, ep)
+    # One step from a crown well inside the band: the valve is what was asked.
+    inside = state.fields.replace(T_roof=state.fields.T_roof.at[0].set(1773.15))
+    _, new, _, _ = E.step(jax.random.PRNGKey(2), state.replace(fields=inside), 0.47, ep)
+    assert float(new.fuel) == pytest.approx(0.47, rel=1e-6)
 
 
 def test_observation_carries_readings_not_the_hidden_walks(plant):

@@ -2,9 +2,11 @@
 move the plant with the valve held, and a reward in money. Functional and unregistered.
 
 The score is the owner's, 2026-11-07: fuel at its price; glass reaching the canal under
-its target, or not fined, is lost to cullet at its price; a trip outside the silica crown's
-limits. The refiner's cooling loop holds the canal just above its target, as a plant's
-local loop does, and the agent sees how hard it works.
+its target, or not fined, is lost to cullet at its price. The silica crown's limits are the
+plant's own override (owner, 2026-11-08): a limit control trims the valve so the hottest
+face stays inside them, and the agent sees the valve it got. The refiner's cooling loop
+holds the canal just above its target, as a plant's local loop does, and the agent sees
+how hard it works.
 """
 
 import jax
@@ -34,7 +36,6 @@ class EnvParams:
     grid: P.Grid = struct.field(pytree_node=False, default=P.Grid())
     gas_price: float = 60.5  # EUR/MWh, Eurostat, EU non-household, H2 2025
     lost_glass_price: float = 600.0  # EUR/t, ours (owner's pick); no source found
-    trip_cost: float = 4169.0  # EUR per step, ours: ten steps of glass at that price
     pull: float = 5.79  # kg/s, 500 t/d, W2000b
     cullet: float = 0.25
     thickness: float = 0.2  # m, blanket as laid
@@ -43,6 +44,13 @@ class EnvParams:
     fining_pass: float = 0.474  # the owner's: the settled design point's own share
     crown_low: float = 1673.15  # K, 1400 C: sodium silicate forms below, SEFPRO
     crown_high: float = 1893.15  # K, 1620 C: silica degrades above, SEFPRO
+    fuel_min: float = 0.25  # kg/s, the valve's range
+    fuel_max: float = 0.75
+    # The crown override: PI on the hottest face held 5 K inside each limit (ours), by
+    # SIMC on the fuel step's 808 K per kg/s and 4.1 h lag, closed loop in 30 min.
+    override_margin: float = 5.0
+    override_gain: float = 0.0101  # kg/s per K
+    override_ti: float = 7200.0  # s
     # No capacity was found. Ours: twice what holds the canal at the design point, so
     # the coolers bind only far from it. Set from the settle script's output.
     cooling_max: float = 10.5e6
@@ -63,7 +71,8 @@ class EnvState:
     walk: jnp.ndarray  # deviations, in WALKS order: hidden
     cooling: jnp.ndarray  # W, the refiner loop's output
     integral: jnp.ndarray  # W, its integral
-    fuel: jnp.ndarray  # kg/s on the valve, last step
+    fuel: jnp.ndarray  # kg/s on the valve after the override, last step
+    limits: jnp.ndarray  # the override's two integrals, kg/s, reset to the valve
     pull: jnp.ndarray  # kg/s charged, last step: measured
     time: jnp.ndarray
 
@@ -88,17 +97,27 @@ def walks(key, n, ep):
     return jax.lax.scan(lambda w, k: (walk_step(w, k, ep),) * 2, start, keys)[1]
 
 
-def reward_terms(fuel, canal, fining, crown, ep):
-    """Costs of one step, EUR: ``fuel`` kg/s burnt at nominal heating value; the step's
-    glass if the canal is under its target or the glass under-fined; the crown trip."""
+def reward_terms(fuel, canal, fining, ep):
+    """Costs of one step, EUR: ``fuel`` kg/s burnt at nominal heating value, and the
+    step's glass if the canal is under its target or the glass under-fined."""
     dt = ep.plant.delta_t
     lost = (canal < ep.canal_target) | (fining < ep.fining_pass)
-    tripped = (crown < ep.crown_low) | (crown > ep.crown_high)
     return dict(
         fuel=fuel * dt * ep.plant.LHV / 3.6e9 * ep.gas_price,
         lost_glass=jnp.where(lost, ep.pull * dt / 1000.0 * ep.lost_glass_price, 0.0),
-        trip=jnp.where(tripped, ep.trip_cost, 0.0),
     )
+
+
+def override(asked, hot, limits, ep):
+    """The plant's crown protection: ``(valve, integrals)``. Two PI loops on the hottest
+    face, one held under the top limit and one over the bottom, select against the asked
+    valve; each integral is reset toward the valve chosen, so neither winds up."""
+    lo = ep.crown_low + ep.override_margin
+    hi = ep.crown_high - ep.override_margin
+    cap = limits[0] + ep.override_gain * (hi - hot)
+    floor = limits[1] + ep.override_gain * (lo - hot)
+    u = jnp.clip(jnp.maximum(floor, jnp.minimum(asked, cap)), ep.fuel_min, ep.fuel_max)
+    return u, limits + ep.plant.delta_t / ep.override_ti * (u - limits)
 
 
 def observe(state, ep):
@@ -135,6 +154,7 @@ def reset(key, fields, ep, fuel=0.45, cooling=0.0):
         cooling=c,
         integral=c,
         fuel=jnp.asarray(fuel, float),
+        limits=jnp.full((2,), fuel, float),
         pull=jnp.asarray(ep.pull, float),
         time=jnp.asarray(0),
     )
@@ -142,8 +162,10 @@ def reset(key, fields, ep, fuel=0.45, cooling=0.0):
 
 
 def step(key, state, fuel, ep):
-    """One step: ``(obs, state, reward, costs)``. ``fuel`` kg/s on the valve."""
+    """One step: ``(obs, state, reward, costs)``. ``fuel`` kg/s asked of the valve."""
     k_walk, k_noise = jax.random.split(key)
+    hot = P.sensors(state.fields, ep.grid, ep.plant)["hot"]
+    fuel, limits = override(jnp.asarray(fuel, float), hot, state.limits, ep)
     walk = walk_step(state.walk, k_walk, ep)
     gas, pull, cullet, thick, sulfate = (walk[i] for i in range(len(WALKS)))
     charge = ep.pull * (1.0 + pull)
@@ -163,12 +185,10 @@ def step(key, state, fuel, ep):
     )
     cooling = jnp.clip(ep.cooling_gain * e + integral, 0.0, ep.cooling_max)
 
-    costs = reward_terms(
-        books["fuel"] * (1.0 + gas), read["canal"], read["fining"], read["hot"], ep
-    )
+    costs = reward_terms(books["fuel"] * (1.0 + gas), read["canal"], read["fining"], ep)
     new = EnvState(
         fields=fields, walk=walk, cooling=cooling, integral=integral,
-        fuel=jnp.asarray(fuel, float), pull=charge, time=state.time + 1,
+        fuel=fuel, limits=limits, pull=charge, time=state.time + 1,
     )  # fmt: skip
     obs = observe(new, ep)
     noise = ep.noise_sd * jax.random.normal(k_noise, obs.shape)

@@ -734,3 +734,30 @@ times the median, under the 3.
 
 **Attempt 2's scripts.** `glass_physical_*.py` and `glass_floor_props.py` call the old
 `plant_step`; their numbers stand at commit 6206f0d.
+
+### The crown as the plant's override (owner's pick, 2026-11-08)
+
+No source prices crown damage per hour; the one cost found is a 35 MEUR float repair, seen once.
+So the crown limits left the reward and became the plant's own protection: two PI loops on the
+hottest face, held 5 K inside 1400 and 1620 C (`ours`), select against the valve the agent asks
+for, each integral reset toward the chosen valve so neither winds up. Tuned by SIMC on the fuel
+step: 0.0101 kg/s per K, integral 2 h. The agent observes the valve it got. Three deliberate
+breaks of the override each turned its tests red. The reward is now fuel and lost glass only.
+
+**Rows that moved,** same six seeds:
+
+| Test | Before, with the trip price | With the override |
+|---|---|---|
+| A3. Seeing would pay | Lost glass 62 h to 24 h | Lost glass 118 h to 82 h, 1.44 times; cost per day 67,300 to 57,800 EUR, 1.16 times. Not met |
+| B4. Haste is punished | 3 times the gain: 290 %, no settling, crown to 1625 C | 3 times: 67 %, 6 times: 76 %, neither settles in 14 days; the crown stays in band. Still met |
+| C2. Moves on its own | Lost glass in 5 of 6 seeds | Valve held: lost glass in all 6, 7 to 170 h of 192; the override at work 1 to 29 h |
+| C3. Feedback can't clear it | 5 to 16 h lost, trips | PI on fining: 12 to 46 h lost, the crown on its override 3 to 49 h |
+
+**The squeeze is real now.** Fuel runs about 36,500 EUR a day for every controller. Under the
+walks the PI on fining loses about 31,000 EUR a day of glass, and its crown sits on the override
+for up to two days of eight: when gas swings rich the override trims the valve while the fining
+still needs heat. Being told the walks cuts that loss by about a third, not by half.
+
+**One finding to note.** At the design point the crown face over the charger runs at 1383 C,
+under the 1400 C where sodium silicate forms. The override watches the hottest face, as the trip
+did, so this goes unpoliced; a real furnace would watch each port.

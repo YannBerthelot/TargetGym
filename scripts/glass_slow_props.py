@@ -220,10 +220,11 @@ def run_walks():
         tr, costs, _ = [np.asarray(x) for x in go(keys)]
         day = costs[:, 2 * DAY :].sum(1) / 8.0  # EUR per day after two days
         lost_h = (costs[:, 2 * DAY :, 1] > 0).sum(1) / H
-        trip_h = (costs[:, 2 * DAY :, 2] > 0).sum(1) / H
+        near = EP.crown_high - EP.override_margin - 1.0  # the override at work
+        held_h = (tr[:, 2 * DAY :, 5] > near).sum(1) / H
         print(
             f"{label:20s} EUR/day {np.round(day.sum(1))}, fuel {np.round(day[:, 0])},"
-            f" lost glass h {lost_h}, trip h {trip_h},"
+            f" lost glass h {lost_h}, crown on its override h {held_h},"
             f" fining sd {tr[:, 2 * DAY :, 1].std():.4f}"
         )
 
