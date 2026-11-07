@@ -31,7 +31,7 @@ import pathlib
 from target_gym import records
 
 #: The kinds of record a re-record writes.
-KINDS = ("baseline_returns", "protocol_results")
+KINDS = ("baseline_returns", "protocol_results", "null_policies", "credibility")
 
 
 def stale(baselines: dict, protocol: dict, current: dict) -> list[tuple[str, str]]:

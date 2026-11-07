@@ -30,6 +30,39 @@ def test_the_gains_follow_simc_for_the_stored_step_test():
     assert params.Kd == 0.0
 
 
+def _pi(**changes):
+    expert = REGISTRY["glass_furnace"].make_pid_controller()
+    expert = expert.replace(params=expert.params.replace(**changes)).host()
+    expert.reset()
+    return expert
+
+
+def _obs(crown, target=1590.0):
+    return np.array([crown, 1200.0, 80.0, 1.0, target, 5.79], np.float32)
+
+
+def test_the_filter_starts_on_the_first_reading():
+    """No integral: 1 K of error at Kp 0.3 is 0.3, not a filter's fraction."""
+    pi = _pi(Kp=0.3, Ki=0.0, alpha=0.1)
+    assert float(pi(_obs(1589.0))[0]) == pytest.approx(0.3, rel=1e-4)
+
+
+def test_a_reading_passes_its_filter():
+    """A step of 2 K on a filter that passes 0.4 moves the PV 0.8 K."""
+    pi = _pi(Kp=0.3, Ki=0.0, alpha=0.4)
+    pi(_obs(1590.0))
+    assert float(pi(_obs(1588.0))[0]) == pytest.approx(0.3 * 0.8, rel=1e-3)
+
+
+def test_the_integral_stops_while_the_fuel_is_at_its_limit():
+    """Ten steps pinned at +1, then 1 K high: only P acts on the way back."""
+    pi = _pi(Kp=0.3, Ki=1e-4, alpha=1.0)
+    for _ in range(10):
+        assert float(pi(_obs(1570.0))[0]) == 1.0
+    out = float(pi(_obs(1591.0))[0])
+    assert out == pytest.approx(-0.3 - 1e-4 * 30.0, rel=1e-3)
+
+
 # Spec, stated before measuring the crown error: a furnace's crown PID holds
 # its temperature within 2 K. On held-out seeds, over the scored hold, the
 # true crown is within 2 K of its target on at least 95 % of steps, and

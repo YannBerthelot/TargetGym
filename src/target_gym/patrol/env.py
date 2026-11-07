@@ -3,8 +3,8 @@ Close-patrol (formation-keeping) environment: state, parameters and transition.
 
 Two aircraft share the exact 3D physics of :mod:`target_gym.plane3d`:
 
-  - the **lead** flies a scripted patrol pattern (straight-and-level, or a
-    constant-rate turn) driven by the tuned 3D heading autopilot;
+  - the **lead** flies a scripted patrol route (a turn rate per leg) under the
+    3D heading expert, on the speed schedule the 3D tasks fly;
   - the **follower** is the learning agent and must reach and hold a *slot* —
     a target position expressed in the lead's body frame (so many metres
     behind, to one side and above/below the lead).
@@ -26,20 +26,38 @@ jit/vmap/scan-able function over structs.
 
 from typing import Tuple
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 from flax import struct
 
 from target_gym import reward as R
-from target_gym.base import EnvState
-from target_gym.experts.pid import Plane3DPIDState, plane3d_heading_pid_step
-from target_gym.plane.dynamics import advance_gust, step_key
-from target_gym.plane3d.dynamics import compute_velocity_3d
+from target_gym.base import EnvState, actuator_field
+from target_gym.plane.dynamics import (
+    BANK_DEMAND_MAX,
+    PITCH_DEMAND_MAX,
+    STICK_TRAVEL,
+    advance_gust,
+    compute_air_density_from_altitude,
+    scheduled_airspeed,
+    step_key,
+    total_wind_3d,
+    trim_stick,
+)
+from target_gym.plane.experts_tecs import TECSParams
+from target_gym.plane3d.dynamics import compute_velocity_3d, rolling_gust
 from target_gym.plane3d.env import (
     PlaneParams3D,
     PlaneState3D,
+    check_is_terminal_3d,
     compute_next_state_3d,
     get_obs_heading,
     wrap_angle,
+)
+from target_gym.plane3d.experts import (
+    Plane3DGuidanceParams,
+    Plane3DGuidanceState,
+    plane3d_heading_step,
 )
 from target_gym.utils import log_scaled_reward
 
@@ -57,15 +75,81 @@ from target_gym.utils import log_scaled_reward
 #: outright by feedforward -- with one added, the follower's settled error went
 #: from 77.8 m at the hardest turn to 2.4 m, against a 3 m reward precision
 #: floor -- and a planner has nothing to anticipate, because the future is a
-#: linear extrapolation of the present at every instant. The shared turbulence
-#: gust does not help either: both aircraft are in the same air mass, so it is
-#: common-mode and cancels in the relative position the reward scores.
+#: linear extrapolation of the present at every instant.
 #:
 #: A route puts the difficulty back where the task says it is. Feedforward is
 #: momentarily wrong at every turn onset, which is exactly the lag a follower
 #: should have to work for, and a planner rolling ``step_env`` forward sees the
 #: next turn coming because the schedule is in the state.
 N_LEAD_LEGS = 8
+
+#: The scripted lead: the 3D heading expert on its 2026-11-06 values, the values
+#: ``plane3d.experts`` and ``plane.experts_tecs`` shipped when the lead moved onto
+#: it. The lead is part of the plant, so they are task constants: a retune of that
+#: expert does not reach this task, and moving them is a task change.
+LEAD_AUTOPILOT = Plane3DGuidanceParams(
+    max_bank_rad=45.0 * jnp.pi / 180.0,
+    tau_hdg=10.0,
+    alpha_max=0.19,
+    k_bank_comp=0.15,
+    cruise_cas=290.0 * 1852.0 / 3600.0,
+    cruise_mach=0.78,
+    v_min_eas=104.0,
+    gravity=9.81,
+    dt=1.0,
+    tecs=TECSParams(
+        climb_max=8.0,
+        sink_min=23.0,
+        sink_max=10.0,
+        thr_trim=0.2,
+        time_const=2.0,
+        thr_damp=0.5,
+        ptch_damp=1.0,
+        integ_gain=0.1,
+        spd_weight=0.0,
+        roll_comp=10.0,
+        thr_min=-1.0,
+        thr_max=1.0,
+        pitch_trim=0.0,
+        pitch_max=0.26,
+        accel_max=2.0,
+        k_vdot=0.3,
+        gravity=9.81,
+        dt=1.0,
+    ),
+)
+
+#: Samples of the lead's gust the air keeps, newest first. The largest V's last
+#: rank sits 600 m back, 3.5 steps at the schedule's slowest 170 m/s.
+GUST_MEMORY = 5
+
+#: What the lead leaves in the air each step: x, y, z, its right wing's horizontal
+#: direction (2), its bank and its circulation (``wake_sample``).
+WAKE_CHANNELS = 7
+#: Stations across a follower's wing and their elliptic lift weights, Gauss-Chebyshev
+#: of the second kind. 31 keep a span-wise core inside 0.2% of a fine integral.
+_ANGLE = np.pi * np.arange(1, 32) / 32.0
+_STATION = np.cos(_ANGLE) / 2.0
+_LOAD = 2.0 / 32.0 * np.sin(_ANGLE) ** 2
+
+
+def gust_memory_field():
+    """The state field holding the lead's recent gust, ``(GUST_MEMORY, 3)``."""
+    return struct.field(
+        default_factory=lambda: jnp.zeros((GUST_MEMORY, 3)), kw_only=True
+    )
+
+
+def wake_memory_field():
+    """The state field holding the lead's wake, ``(GUST_MEMORY, WAKE_CHANNELS)``."""
+    return struct.field(
+        default_factory=lambda: jnp.zeros((GUST_MEMORY, WAKE_CHANNELS)), kw_only=True
+    )
+
+
+def own_gust_field(aircraft: int):
+    """The state field holding each follower's own gust draw, ``(aircraft, 3)``."""
+    return struct.field(default_factory=lambda: jnp.zeros((aircraft, 3)), kw_only=True)
 
 
 def lead_leg(time, params, xp=jnp):
@@ -78,9 +162,9 @@ def lead_leg(time, params, xp=jnp):
 class PatrolState(EnvState):
     """Combined state of the two aircraft plus the slot definition.
 
-    ``follower`` is the learner; ``lead`` is scripted.  ``lead_pid`` carries
-    the lead autopilot's integrator state so the scripted lead tracks its
-    (possibly moving) heading/altitude setpoints without steady-state drift.
+    ``follower`` is the learner; ``lead`` is scripted.  ``lead_memory`` carries
+    the lead autopilot's integrators, so it tracks its moving heading and its
+    level without steady-state drift.
     The slot offsets are constant over an episode (sampled at reset) and are
     expressed in the lead body frame: *back* = metres behind the lead along
     its velocity, *right* = metres to the lead's right, *up* = metres above.
@@ -88,7 +172,7 @@ class PatrolState(EnvState):
 
     follower: PlaneState3D
     lead: PlaneState3D
-    lead_pid: Plane3DPIDState
+    lead_memory: Plane3DGuidanceState
     slot_back: float
     slot_right: float
     slot_up: float
@@ -97,11 +181,13 @@ class PatrolState(EnvState):
     #: derived from a key, so a planner that rolls the environment forward can
     #: read the lead's future out of the state it is handed.
     lead_turn_schedule: jnp.ndarray
-    # Shared formation turbulence gust (m/s): all aircraft are in the same air
-    # mass, so they feel one common OU gust on top of the steady params.wind.
-    gust_x: float = 0.0
-    gust_y: float = 0.0
-    gust_z: float = 0.0
+    # The lead's OU gust over the last steps and the follower's own draw
+    # (``advance_air``). Each aircraft holds the gust it flies in.
+    gust_history: jax.Array = gust_memory_field()
+    gust_own: jax.Array = own_gust_field(1)
+    wake_history: jax.Array = wake_memory_field()
+
+    actuator_held: jax.Array = actuator_field(3)
 
 
 @struct.dataclass
@@ -124,7 +210,9 @@ class PatrolParams(PlaneParams3D):
     # parallel to the lead (like a real wingman), not merely occupy the slot
     # position.  30 deg sigma nudges toward parallel flight without dominating.
     heading_tolerance: float = 0.5236
-    min_separation: float = 25.0  # collision distance (m) -> terminal
+    #: Collision distance between centres, in metres, a trip. Over the A320's
+    #: 34.1 to 35.8 m span: at 25 m the wingtips of two aircraft abeam overlapped.
+    min_separation: float = 40.0
     max_slot_error: float = 1500.0  # follower lost the formation (m) -> terminal
     #: Slot error below which the reward stops paying, in metres. Relative
     #: position between two aircraft comes from differencing GPS fixes, so a
@@ -161,13 +249,22 @@ class PatrolParams(PlaneParams3D):
     rho_floor: float = (0.1021 / 3.0) ** 2 + (1.631e-3 / 0.0087) ** 2
 
     # Lead behaviour.  Turn rate is sampled in [-r, r] rad/step; 0 => straight
-    # and level.  At delta_t = 1 s, 0.003 rad/step ~ 0.17 deg/s ~ a very gentle
-    # standard-rate-ish orbit for an airliner.
-    lead_turn_rate_range: Tuple[float, float] = (-0.003, 0.003)
+    # and level.  At delta_t = 1 s, 0.03 rad/step is 1.7 deg/s, under the 3 deg/s
+    # of a standard-rate turn: 28 deg of bank at 171 m/s and 34 deg at 219 m/s.
+    lead_turn_rate_range: Tuple[float, float] = (-0.03, 0.03)
     #: Seconds the lead holds each leg of its route before turning onto the
     #: next. 60 s at the 1 s step, so the follower meets a turn onset roughly
     #: every minute rather than once per episode.
     lead_leg_seconds: float = 60.0
+
+    # The lead's wake on its followers (``wake_air``, PHYSICS.md section 1).
+    #: Scales the wake: 0 is the plant without it, how a run measures what it costs.
+    wake_strength: float = 1.0
+    #: Burnham core radius over the span, the 0.0582 of NASA's wake model review.
+    wake_core_ratio: float = 0.0582
+    #: The circulation's decay per ``t0 = 2 pi b0^2 / Gamma``: our fit, ``exp(-0.2 t /
+    #: t0)``, to the lidar median of Holzapfel and Steen (2007), figure 3.
+    wake_decay_rate: float = 0.2
 
     # Follower is spawned near the slot with this much isotropic position noise
     # (m) so the episode starts solvable but not perfectly trimmed.
@@ -190,6 +287,9 @@ PARAM_UNITS = {
     "rho_floor_tracking": "reward",
     "rho_floor": "reward",
     "lead_leg_seconds": "s",
+    "wake_strength": "-",
+    "wake_core_ratio": "-",
+    "wake_decay_rate": "-",
     "follower_spawn_noise": "m",
     "delta_t": "s",
 }
@@ -213,6 +313,7 @@ def make_cruise_state(
     x_dot = speed * jnp.cos(psi)
     y_dot = speed * jnp.sin(psi)
     theta = jnp.deg2rad(params.initial_theta)
+    trim = trim_stick(speed, z, theta, params)
     return PlaneState3D(
         x=x,
         x_dot=x_dot,
@@ -229,7 +330,7 @@ def make_cruise_state(
         gamma=0.0,
         m=params.initial_mass,  # fuel is a component of it, not an addition
         power=params.initial_power,
-        stick=jnp.deg2rad(params.initial_stick),
+        stick=trim + jnp.deg2rad(params.initial_stick),
         aileron=jnp.deg2rad(params.initial_aileron),
         fuel=params.initial_fuel_quantity,
         time=0,
@@ -238,6 +339,7 @@ def make_cruise_state(
         target_x=0.0,
         target_y=0.0,
         target_radius=0.0,
+        pitch_integ=trim / STICK_TRAVEL,
     )
 
 
@@ -300,16 +402,12 @@ def separation(state: PatrolState):
 def check_is_terminal_patrol(state: PatrolState, params: PatrolParams, xp=jnp):
     """Return (terminated, truncated).
 
-    Terminal (irrecoverable) if either aircraft leaves the altitude envelope,
-    the two collide, or the follower falls out of formation past
-    ``max_slot_error``.
+    Terminal (irrecoverable) if either aircraft leaves the 3D tasks' envelope
+    (altitude, bank, load factor, EAS, Mach), the two collide, or the follower
+    falls out of formation past ``max_slot_error``.
     """
-    follower_crash = xp.logical_or(
-        state.follower.z <= params.min_alt, state.follower.z >= params.max_alt
-    )
-    lead_crash = xp.logical_or(
-        state.lead.z <= params.min_alt, state.lead.z >= params.max_alt
-    )
+    follower_crash, _ = check_is_terminal_3d(state.follower, params, xp)
+    lead_crash, _ = check_is_terminal_3d(state.lead, params, xp)
     collision = separation(state) <= params.min_separation
     lost = slot_error(state) >= params.max_slot_error
     terminated = follower_crash | lead_crash | collision | lost
@@ -327,8 +425,14 @@ def heading_alignment(state: PatrolState, params: PatrolParams, xp=jnp):
     return xp.exp(-0.5 * (dpsi / params.heading_tolerance) ** 2)
 
 
-def compute_reward_terms_patrol(state: PatrolState, params: PatrolParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+def compute_reward_terms_patrol(
+    state: PatrolState, params: PatrolParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
     p = params
     slot = R.tracking_cost(
         slot_error(state), p.e_floor_slot, p.e_tol_slot, p.tracking_exponent, xp
@@ -340,11 +444,12 @@ def compute_reward_terms_patrol(state: PatrolState, params: PatrolParams, xp=jnp
         p.tracking_exponent,
         xp,
     )
-    terminated, _ = check_is_terminal_patrol(state, p, xp)
+    if tripped is None:
+        tripped, _ = check_is_terminal_patrol(state, p, xp)
     terms = {
         "tracking": slot + heading,
     }
-    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
 def compute_reward_patrol_v1(state: PatrolState, params: PatrolParams, xp=jnp):
@@ -466,10 +571,10 @@ def get_obs_full(state: PatrolState, xp=jnp):
     )
 
 
-def get_obs_bearing_only(state: PatrolState, xp=jnp):
+def get_obs_range_bearing(state: PatrolState, xp=jnp):
     """Partial (bearing + range) observation (21 values).
 
-    A passive sensor on the follower yields only the range and the
+    A TCAS-style sensor on the follower yields only the range and the
     azimuth/elevation *bearing* to the lead — no lead velocity, heading or the
     decomposed slot error.  Recovering the slot then requires the follower to
     infer the lead's motion.  The tracked scalar is measured range against the
@@ -529,96 +634,235 @@ def get_obs_bearing_only(state: PatrolState, xp=jnp):
 
 
 def decode_action(action: jnp.ndarray):
-    """Map a raw [-1, 1]^3 action to physical (power[0,1], stick[rad], aileron[rad]).
+    """Map a raw [-1, 1]^3 action to physical (lever[0,1], pitch[rad], bank[rad]).
 
     Not every learner squashes, so a raw action past the box acts as the bound
     rather than as a command the plant could never receive.
     """
-    power, stick, aileron = jnp.clip(jnp.asarray(action), -1.0, 1.0)
-    power = (power + 1) / 2
-    stick = jnp.deg2rad(stick * 15)
-    aileron = jnp.deg2rad(aileron * 25)
-    return power, stick, aileron
+    power, pitch, bank = jnp.clip(jnp.asarray(action), -1.0, 1.0)
+    return (power + 1) / 2, pitch * PITCH_DEMAND_MAX, bank * BANK_DEMAND_MAX
+
+
+# ─── The air ────────────────────────────────────────────
+
+
+def lead_cruise_speed(z):
+    """The true airspeed of the lead's schedule at height ``z``, m/s."""
+    return scheduled_airspeed(z, LEAD_AUTOPILOT.cruise_cas, LEAD_AUTOPILOT.cruise_mach)
+
+
+def air_speed(aircraft, gust, params):
+    """An aircraft's speed through the air, in the gust ``gust``."""
+    wind = total_wind_3d(aircraft.z, gust[0], gust[1], gust[2], params)
+    return compute_velocity_3d(
+        aircraft.x_dot - wind[0], aircraft.y_dot - wind[1], aircraft.z_dot - wind[2]
+    )
+
+
+def slot_delay(back, speed, params):
+    """Steps a follower ``back`` metres behind lags the lead's air by."""
+    return jnp.maximum(back, 0.0) / (jnp.maximum(speed, 1.0) * params.delta_t)
+
+
+def at_delay(history, delay):
+    """``history``, newest first, read ``delay`` steps ago between its samples."""
+    sample = jnp.clip(jnp.floor(delay).astype(int), 0, GUST_MEMORY - 2)
+    part = jnp.clip(delay - sample, 0.0, 1.0)[:, None]
+    return (1.0 - part) * history[sample] + part * history[sample + 1]
+
+
+def advance_air(history, own, back, right, up, speed, params, key, time):
+    """One step of the air around the lead and its ``n`` followers.
+
+    The lead draws an OU gust, ``history`` being its last ``GUST_MEMORY`` values,
+    newest first. The field is frozen as it passes (Taylor), so a follower
+    ``back`` metres behind meets that gust ``back / speed`` later, read between
+    step samples. Dryden's correlation over its offset ``r = hypot(right, up)``
+    from the lead's path leaves ``rho = exp(-r / L)`` of it shared, on MIL-F-8785C's
+    scale ``L``; the rest is the follower's own OU draw, ``own`` of shape ``(n, 3)``,
+    weighted so its gust keeps the lead's variance. The rolling gust's scale is the
+    span, so every wing draws its own.
+
+    ``key=None`` keeps a constant wind. Returns ``(history, own, gusts, rolls)``,
+    ``gusts`` of shape ``(n + 1, 3)`` and ``rolls`` of shape ``(n + 1,)``, lead first.
+    """
+    step = step_key(key, time)
+
+    def draw(gust, seat):
+        if step is None:
+            return gust, jnp.zeros(())
+        gust_key, roll_key = jax.random.split(jax.random.fold_in(step, seat))
+        theta, sigma = params.turbulence_theta, params.turbulence_sigma
+        new = advance_gust(gust, theta, sigma, params.delta_t, gust_key)
+        return new, rolling_gust(roll_key, speed, params)
+
+    seats = jnp.arange(own.shape[0] + 1)
+    drawn, rolls = jax.vmap(draw)(jnp.concatenate([history[:1], own]), seats)
+    history = jnp.concatenate([drawn[:1], history[:-1]])
+    delayed = at_delay(history, slot_delay(back, speed, params))
+    rho = jnp.exp(-jnp.hypot(right, up) / params.turbulence_scale_length)[:, None]
+    gusts = rho * delayed + jnp.sqrt(1.0 - rho**2) * drawn[1:]
+    return history, drawn[1:], jnp.concatenate([drawn[:1], gusts]), rolls
+
+
+def wake_sample(lead, lift, speed, params):
+    """What the lead leaves in the air: where it is, which way its wing lies, and the
+    circulation of a pair ``b0 = pi b / 4`` apart that carries its ``lift``."""
+    rho = compute_air_density_from_altitude(lead.z)
+    gamma = lift / (rho * speed * jnp.pi / 4.0 * params.wingspan)
+    right = (jnp.sin(lead.psi), -jnp.cos(lead.psi))
+    wake = (lead.x, lead.y, lead.z, *right, lead.phi, params.wake_strength * gamma)
+    return jnp.stack(wake)
+
+
+def shed_wake(history, sample):
+    """``history`` with ``sample`` as its newest entry."""
+    return jnp.concatenate([sample[None], history[:-1]])
+
+
+def initial_wake(lead, params):
+    """The wake of a lead already in steady level flight, laid out behind it."""
+    speed = compute_velocity_3d(lead.x_dot, lead.y_dot, lead.z_dot)
+    sample = wake_sample(lead, lead.m * params.gravity, speed, params)
+    velocity = jnp.zeros(WAKE_CHANNELS).at[:2].set(jnp.stack([lead.x_dot, lead.y_dot]))
+    steps = jnp.arange(GUST_MEMORY, dtype=jnp.float32)[:, None]
+    return sample - steps * params.delta_t * velocity
+
+
+def wake_air(history, x, y, z, delay, params):
+    """The lead's wake on ``n`` followers: ``(gusts of shape (n, 3), rolling gusts)``.
+
+    Blake and Multhopp's horseshoe vortex: two legs ``b0`` apart with Burnham's core,
+    far enough back to read as straight lines in the follower's cross-plane. The
+    wake lies where the lead was ``delay`` steps ago, tilted as it was banked, and has
+    sunk along its lift at ``w0 = Gamma / (2 pi b0)`` by then, with its circulation
+    decayed on ``t0 = b0 / w0``.
+
+    Dogan's effective wind and gradient, weighted by a follower's elliptic lift: the
+    upwash and sidewash go in as a gust, so the lift rotates forward by ``w / V`` and
+    the drag saving needs no term of its own. The gradient goes in as the plant's
+    ``p_g``: ``16 / b^2`` of the first moment, which gives back ``p`` from ``w = p y``.
+    Each is read across a wing lying along the pair. A follower past the lead is clear.
+    """
+    px, py, pz, rx, ry, phi, gamma = jnp.moveaxis(at_delay(history, delay), -1, 0)
+    span = params.wingspan
+    b0 = jnp.pi / 4.0 * span
+    sink = gamma / (2.0 * jnp.pi * b0) * delay * params.delta_t
+    gamma = gamma * jnp.exp(-params.wake_decay_rate * sink / b0)
+    across, height = (x - px) * rx + (y - py) * ry, z - pz
+    cos, sin = jnp.cos(phi), jnp.sin(phi)
+    lateral = (across * cos + height * sin)[:, None] + span * _STATION
+    normal = (height * cos - across * sin + sink)[:, None]
+    upwash, sidewash = 0.0, 0.0
+    for leg, turn in ((b0 / 2.0, 1.0), (-b0 / 2.0, -1.0)):
+        offset = lateral - leg
+        radius2 = offset**2 + normal**2 + (params.wake_core_ratio * span) ** 2
+        upwash = upwash + turn * offset / radius2
+        sidewash = sidewash - turn * normal / radius2
+    strength = gamma / (2.0 * jnp.pi)
+    w = strength * jnp.sum(_LOAD * upwash, axis=-1)
+    v = strength * jnp.sum(_LOAD * sidewash, axis=-1)
+    roll = strength * 16.0 / span * jnp.sum(_LOAD * _STATION * upwash, axis=-1)
+    side = v * cos - w * sin
+    gusts = jnp.stack([side * rx, side * ry, v * sin + w * cos], axis=-1)
+    now = history[0]
+    ahead = (x - now[0]) * -now[4] + (y - now[1]) * now[3] > 0.0
+    return jnp.where(ahead[:, None], 0.0, gusts), jnp.where(ahead, 0.0, roll)
+
+
+def in_air(aircraft, gust):
+    """``aircraft`` holding ``gust``. :func:`compute_next_state_3d` with no key
+    flies in the gust it is given, and the trips read it."""
+    return aircraft.replace(
+        gust_x=gust[..., 0], gust_y=gust[..., 1], gust_z=gust[..., 2]
+    )
 
 
 # ─── Combined transition ────────────────────────────────
 
 
-def step_lead(state: PatrolState, params: PatrolParams, lead_pid_params, method: str):
-    """Advance the scripted lead one step with its heading autopilot.
+def step_lead(state: PatrolState, params: PatrolParams, method: str = "rk4_1"):
+    """Advance the scripted lead one step under the 3D heading expert.
 
     The lead's commanded heading is stored in ``lead.target_heading`` and
     advanced by ``lead_turn_rate`` each step, producing straight-and-level
-    flight (rate 0) or a constant-rate orbit.  Returns (new_lead, new_lead_pid).
+    flight (rate 0) or a turn. Returns (new_lead, new_lead_memory, its lift).
     """
     commanded_heading = wrap_angle(state.lead.target_heading + state.lead_turn_rate)
     lead_cmd = state.lead.replace(target_heading=commanded_heading)
-    lead_obs = get_obs_heading(lead_cmd)
-    lead_action, new_pid = plane3d_heading_pid_step(
-        lead_pid_params, state.lead_pid, lead_obs
+    lead_action, memory = plane3d_heading_step(
+        LEAD_AUTOPILOT, state.lead_memory, get_obs_heading(lead_cmd)
     )
-    power, stick, aileron = decode_action(lead_action)
-    new_lead, _ = compute_next_state_3d(
-        power, stick, aileron, lead_cmd, params, integration_method=method
+    power, pitch, bank = decode_action(lead_action)
+    new_lead, metrics = compute_next_state_3d(
+        power, pitch, bank, lead_cmd, params, integration_method=method
     )
-    return new_lead, new_pid
+    return new_lead, memory, metrics[1][-1]
 
 
 def compute_next_state_patrol(
     action: jnp.ndarray,
     state: PatrolState,
     params: PatrolParams,
-    lead_pid_params,
-    integration_method: str = "rk4_2",
+    integration_method: str = "rk4_1",
     key=None,
 ):
     """One environment step: advance the follower (from ``action``) and the lead.
 
-    A single **shared** turbulence gust (advanced with ``key``) is applied to
-    every aircraft through ``eff_params`` — all planes are in the same air mass —
-    while each still gets its own altitude-dependent wind shear inside
-    :func:`compute_next_state_3d`.  ``key=None`` keeps a constant (steady) wind.
+    Each aircraft flies in its own gust and rolling gust (:func:`advance_air`) and
+    its own altitude-dependent wind shear inside :func:`compute_next_state_3d`, and
+    the follower in the lead's wake (:func:`wake_air`). ``key=None`` keeps a constant
+    (steady) wind.
     """
-    gust = advance_gust(
-        jnp.array([state.gust_x, state.gust_y, state.gust_z]),
-        params.turbulence_theta,
-        params.turbulence_sigma,
-        params.delta_t,
-        step_key(key, state.time),
+    speed = air_speed(state.lead, state.gust_history[0], params)
+    back = jnp.atleast_1d(state.slot_back)
+    history, own, gusts, rolls = advance_air(
+        state.gust_history,
+        state.gust_own,
+        back,
+        jnp.atleast_1d(state.slot_right),
+        jnp.atleast_1d(state.slot_up),
+        speed,
+        params,
+        key,
+        state.time,
     )
-    eff_params = params.replace(
-        wind_x=params.wind_x + gust[0],
-        wind_y=params.wind_y + gust[1],
-        wind_z=params.wind_z + gust[2],
+    wake, wake_rolls = wake_air(
+        state.wake_history,
+        jnp.atleast_1d(state.follower.x),
+        jnp.atleast_1d(state.follower.y),
+        jnp.atleast_1d(state.follower.z),
+        slot_delay(back, speed, params),
+        params,
     )
 
-    # Follower (the learner) — key=None so it does not advance its own per-plane
-    # gust; the shared gust is already folded into eff_params.wind.
-    power, stick, aileron = decode_action(action)
+    power, pitch, bank = decode_action(action)
     new_follower, metrics = compute_next_state_3d(
         power,
-        stick,
-        aileron,
-        state.follower,
-        eff_params,
+        pitch,
+        bank,
+        in_air(state.follower, gusts[1] + wake[0]),
+        params.replace(gust_roll_rate=params.gust_roll_rate + rolls[1] + wake_rolls[0]),
         integration_method=integration_method,
     )
-
-    # Lead (scripted autopilot), same shared wind.
-    new_lead, new_pid = step_lead(
-        state, eff_params, lead_pid_params, integration_method
+    new_lead, memory, lift = step_lead(
+        state.replace(lead=in_air(state.lead, gusts[0])),
+        params.replace(gust_roll_rate=params.gust_roll_rate + rolls[0]),
+        integration_method,
     )
 
     new_state = state.replace(
         follower=new_follower,
         lead=new_lead,
-        lead_pid=new_pid,
+        lead_memory=memory,
         # The leg live at the *next* step, so the rate the lead is commanded
         # with and the time it is commanded at stay in step.
         lead_turn_rate=state.lead_turn_schedule[lead_leg(state.time + 1, params)],
         time=state.time + 1,
-        gust_x=gust[0],
-        gust_y=gust[1],
-        gust_z=gust[2],
+        gust_history=history,
+        gust_own=own,
+        wake_history=shed_wake(
+            state.wake_history, wake_sample(new_lead, lift, speed, params)
+        ),
     )
     return new_state, metrics

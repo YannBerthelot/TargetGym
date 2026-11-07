@@ -7,8 +7,8 @@ The patrol (``target_gym.patrol``) scripts its lead. Here the lead is flown by
 the policy too: it must fly the patrol's route (an altitude and a heading that
 turns onto a new rate every leg) while ``num_wingmen`` wingmen (two in the
 scored task) hold their slots on it, in a V spread evenly over both sides. Every aircraft is the patrol's
-3D airframe (:func:`compute_next_state_3d`), all in one air mass, so one
-turbulence gust moves the whole formation.
+3D airframe (:func:`compute_next_state_3d`), each in the part of the air it is
+flying through (``patrol.env.advance_air``).
 
 The task is cooperative: one team cost, the lead's tracking cost plus each
 wingman's slot and heading-alignment cost, each in the units of its own
@@ -28,19 +28,29 @@ import jax.numpy as jnp
 from flax import struct
 
 from target_gym import reward as R
-from target_gym.base import EnvState
+from target_gym.base import EnvState, actuator_field
 from target_gym.patrol.env import (
     PatrolParams,
+    advance_air,
+    air_speed,
     decode_action,
     get_obs_full,
+    gust_memory_field,
     heading_alignment,
+    in_air,
     lead_leg,
+    own_gust_field,
+    shed_wake,
+    slot_delay,
     slot_error,
     slot_error_vector,
+    wake_air,
+    wake_memory_field,
+    wake_sample,
 )
-from target_gym.plane.dynamics import advance_gust, step_key
 from target_gym.plane3d.env import (
     PlaneState3D,
+    check_is_terminal_3d,
     compute_next_state_3d,
     get_obs_heading,
     wrap_angle,
@@ -76,10 +86,27 @@ class FormationState(EnvState):
     slot_up: jnp.ndarray
     lead_turn_rate: float
     lead_turn_schedule: jnp.ndarray
-    # One turbulence gust for the whole formation (m/s): same air mass.
-    gust_x: float = 0.0
-    gust_y: float = 0.0
-    gust_z: float = 0.0
+    # The lead's gust over the last steps and each wingman's own draw
+    # (``advance_air``). Each aircraft holds the gust it flies in.
+    gust_history: jax.Array = gust_memory_field()
+    wake_history: jax.Array = wake_memory_field()
+    # These two are sized for the scored two wingmen; ``reset_env`` sizes them
+    # for the rest.
+    gust_own: jax.Array = own_gust_field(2)
+    actuator_held: jax.Array = actuator_field(9)
+
+    # The air at the lead, which is the task's declared disturbance.
+    @property
+    def gust_x(self):
+        return self.gust_history[0, 0]
+
+    @property
+    def gust_y(self):
+        return self.gust_history[0, 1]
+
+    @property
+    def gust_z(self):
+        return self.gust_history[0, 2]
 
 
 @struct.dataclass
@@ -210,14 +237,18 @@ def min_separation(state: FormationState):
 
 
 def check_is_terminal(state: FormationState, params: FormationParams, xp=jnp):
-    """The formation trips when any aircraft leaves the altitude band, any two
-    aircraft come within ``min_separation`` (25 m), or any wingman is
-    ``max_slot_error`` (1500 m) from its slot. The whole formation restarts.
+    """The formation trips when any aircraft leaves the 3D tasks' envelope
+    (altitude, bank, load factor, EAS, Mach), any two aircraft come within
+    ``min_separation`` (40 m), or any wingman is ``max_slot_error`` (1500 m) from
+    its slot. The whole formation restarts.
 
     Returns (terminated, truncated).
     """
-    z = xp.concatenate([xp.reshape(state.lead.z, (1,)), state.wingmen.z])
-    crash = xp.any((z <= params.min_alt) | (z >= params.max_alt))
+    lead_out, _ = check_is_terminal_3d(state.lead, params, xp)
+    wingmen_out, _ = jax.vmap(lambda w: check_is_terminal_3d(w, params, xp))(
+        state.wingmen
+    )
+    crash = lead_out | xp.any(wingmen_out)
     collision = min_separation(state) <= params.min_separation
     lost = xp.max(slot_errors(state)) >= params.max_slot_error
     terminated = crash | collision | lost
@@ -258,12 +289,19 @@ def aircraft_costs(state: FormationState, params: FormationParams, xp=jnp):
     return {"lead": lead_cost, "wingmen": wingmen}
 
 
-def compute_reward_terms(state: FormationState, params: FormationParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+def compute_reward_terms(
+    state: FormationState, params: FormationParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
     costs = aircraft_costs(state, params, xp)
-    terminated, _ = check_is_terminal(state, params, xp)
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, params, xp)
     terms = {"tracking": costs["lead"] + xp.sum(costs["wingmen"])}
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: FormationState, params: FormationParams, xp=jnp):
@@ -368,29 +406,38 @@ def compute_next_state_formation(
     action: jnp.ndarray,
     state: FormationState,
     params: FormationParams,
-    integration_method: str = "rk4_2",
+    integration_method: str = "rk4_1",
     key=None,
 ):
-    """One step: every aircraft moves on its own three controls.
+    """One step: every aircraft moves on its own three demands.
 
-    ``action`` is ``[power, stick, aileron]`` for the lead, then for each
-    wingman, in [-1, 1]. One gust, advanced from the step clock as in the
-    patrol, is folded into the wind every aircraft flies in; each still gets
-    its own altitude-dependent shear. The lead's reference moves on along its
-    route whatever the lead does. Returns ``(new_state, lead_metrics)``.
+    ``action`` is ``[throttle, pitch, bank]`` for the lead, then for each
+    wingman, in [-1, 1]. The air moves as in the patrol (``advance_air``), the
+    wingmen meet the lead's wake (``wake_air``), and each aircraft still gets its
+    own altitude-dependent shear. The lead's reference moves on along its route
+    whatever the lead does. Returns ``(new_state, lead_metrics)``.
     """
-    gust = advance_gust(
-        jnp.array([state.gust_x, state.gust_y, state.gust_z]),
-        params.turbulence_theta,
-        params.turbulence_sigma,
-        params.delta_t,
-        step_key(key, state.time),
+    speed = air_speed(state.lead, state.gust_history[0], params)
+    history, own, gusts, rolls = advance_air(
+        state.gust_history,
+        state.gust_own,
+        state.slot_back,
+        state.slot_right,
+        state.slot_up,
+        speed,
+        params,
+        key,
+        state.time,
     )
-    eff_params = params.replace(
-        wind_x=params.wind_x + gust[0],
-        wind_y=params.wind_y + gust[1],
-        wind_z=params.wind_z + gust[2],
+    wake, wake_rolls = wake_air(
+        state.wake_history,
+        state.wingmen.x,
+        state.wingmen.y,
+        state.wingmen.z,
+        slot_delay(state.slot_back, speed, params),
+        params,
     )
+    gusts, rolls = gusts.at[1:].add(wake), rolls.at[1:].add(wake_rolls)
     controls = jnp.reshape(action, (-1, 3))
 
     # The lead and its wingmen in one batch, so the dynamics are traced once:
@@ -403,15 +450,15 @@ def compute_next_state_formation(
         state.wingmen,
     )
 
-    def fly(control, aircraft):
+    def fly(control, aircraft, roll):
         return compute_next_state_3d(
             *decode_action(control),
             aircraft,
-            eff_params,
+            params.replace(gust_roll_rate=params.gust_roll_rate + roll),
             integration_method=integration_method,
         )
 
-    new_fleet, fleet_metrics = jax.vmap(fly)(controls, fleet)
+    new_fleet, fleet_metrics = jax.vmap(fly)(controls, in_air(fleet, gusts), rolls)
     new_lead = jax.tree.map(lambda x: x[0], new_fleet)
     new_wingmen = jax.tree.map(lambda x: x[1:], new_fleet)
     metrics = jax.tree.map(lambda x: x[0], fleet_metrics)
@@ -422,8 +469,10 @@ def compute_next_state_formation(
         # The leg live at the next step, as in the patrol.
         lead_turn_rate=state.lead_turn_schedule[lead_leg(state.time + 1, params)],
         time=state.time + 1,
-        gust_x=gust[0],
-        gust_y=gust[1],
-        gust_z=gust[2],
+        gust_history=history,
+        gust_own=own,
+        wake_history=shed_wake(
+            state.wake_history, wake_sample(new_lead, metrics[1][-1], speed, params)
+        ),
     )
     return new_state, metrics

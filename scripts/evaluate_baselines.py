@@ -131,6 +131,7 @@ def main() -> int:
         fp = fingerprints(spec)
         row = {
             "rho_floor": float(getattr(p, "rho_floor", float("nan"))),
+            "rho_floor_tracking": float(getattr(p, "rho_floor_tracking", float("nan"))),
             "ceiling": ceiling(name, p),
             "settle": fixed_settle(name),
             "seeds": args.seeds,

@@ -60,7 +60,7 @@ DISPLAY_NAMES: dict[str, str] = {
     "plane_energy": "Altitude and airspeed",
     "plane": "Altitude hold",
     "patrol": "Patrol - wingman",
-    "patrol_bearing_only": "Patrol - wingman, bearing-only",
+    "patrol_range_bearing": "Patrol - wingman, range and bearing",
     "unstable_cstr": "Unstable CSTR",
 }
 
@@ -136,7 +136,7 @@ class EnvSpec:
         Set when ``make_pid``/``make_mpc`` are ``None``: a short explanation
         of why, surfaced by the baseline-coverage test so a missing expert is
         a documented gap rather than a silent one. Also set where both ship
-        but one needs saying what it is (``patrol_bearing_only``'s MPC is a
+        but one needs saying what it is (``patrol_range_bearing``'s MPC is a
         full-state bound); the environment pages print it beside the numbers.
     disturbance_fields:
         State fields holding a *zero-mean stochastic disturbance* (gusts, load
@@ -222,12 +222,25 @@ class EnvSpec:
     def has_pid(self) -> bool:
         return self.make_pid is not None
 
-    def make_pid_controller(self):
+    def make_pid_controller(self, sensor_noise_scale: float | None = None):
         """The scored PID as a pure ``Controller``: ``.act`` traces under
-        ``jit``/``vmap``, ``.host()`` is what ``make_pid()`` returns."""
+        ``jit``/``vmap``, ``.host()`` is what ``make_pid()`` returns.
+
+        ``sensor_noise_scale`` takes the gains tuned at that noise level. None
+        and 1 mean the shipped gains, and a level with no stored gains raises
+        (``provenance.level_gains``)."""
         if not self.has_pid:
             raise NotImplementedError(self.baselines_note or "no PID ships")
-        return self.make_pid.controller()
+        from target_gym.provenance import level_gains
+
+        make: Any = self.make_pid  # ``_pid`` hangs ``controller`` on the function
+        stored = level_gains(self, sensor_noise_scale)
+        if stored is None:
+            return make.controller()
+        from target_gym.experts.pid import gains_from
+
+        with gains_from(stored):
+            return make.controller()
 
     @property
     def has_mpc(self) -> bool:
@@ -310,10 +323,10 @@ def _patrol():
     return PlanePatrol()
 
 
-def _patrol_bearing_only():
-    from target_gym.patrol.env_jax import PlanePatrolBearingOnly
+def _patrol_range_bearing():
+    from target_gym.patrol.env_jax import PlanePatrolRangeBearing
 
-    return PlanePatrolBearingOnly()
+    return PlanePatrolRangeBearing()
 
 
 def _cstr():
@@ -499,11 +512,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
         make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.oracle"),
         tuned_gains_key="plane",
-        oracle_reads=("experts/pid.py",),
-        oracle_gains_keys=("plane_cascaded",),
+        oracle_data=_shared_oracle("plane"),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        version=3,
     ),
     # Two moving-setpoint variants of the same aircraft: same plant, same
     # controllers, a different commanded altitude. Steps expose the transient
@@ -518,12 +531,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # Gains are the altitude-hold task's, deliberately not re-tuned here,
         # so the PID stays an honest reference for whether the trade pays.
         tuned_gains_key="plane",
-        oracle_reads=("experts/pid.py",),
-        oracle_gains_keys=("plane_energy_cascaded",),
+        oracle_data=_shared_oracle("plane_energy"),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
-        version=4,
+        version=5,
     ),
     EnvSpec(
         name="plane_sine",
@@ -533,11 +545,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
         make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.oracle"),
         tuned_gains_key="plane",
-        oracle_reads=("experts/pid.py",),
-        oracle_gains_keys=("plane_sine_cascaded",),
+        oracle_data=_shared_oracle("plane_sine"),
         disturbance_fields=("gust_x", "gust_z"),
         disturbance_overrides={"turbulence_sigma": 3.0},
         noise_fields=("turbulence_sigma",),
+        version=3,
     ),
     EnvSpec(
         name="plane3d_heading",
@@ -556,7 +568,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=4,
+        version=5,
     ),
     EnvSpec(
         name="plane3d_circle",
@@ -574,7 +586,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=3,
+        version=4,
     ),
     EnvSpec(
         name="plane3d_racetrack",
@@ -592,7 +604,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=4,
+        version=5,
     ),
     EnvSpec(
         name="plane3d_figure8",
@@ -611,7 +623,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
         # v4: the distance to the curve observed as the tracked output.
-        version=4,
+        version=5,
     ),
     EnvSpec(
         name="patrol",
@@ -620,15 +632,15 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
         make_pid=_pid("make_patrol_pid_controller", module="target_gym.patrol.experts"),
         make_mpc=_mpc("make_patrol_mpc", module="target_gym.patrol.oracle"),
-        # The oracle's twin law flies the 3D heading PID, on the lead's gains
-        # (task constants, patrol/env_jax.py). The expert's gains are in its
+        # The oracle's twin law flies the 3D heading PID, on the old lead's gains
+        # (task constants, patrol/oracle.py). The expert's gains are in its
         # experts.py, as the 3D aircraft's are.
         oracle_reads=("experts/pid.py",),
         noise_fields=("turbulence_sigma",),
-        # The 3D aircraft it flies, and the heading PID its lead flies on
-        # (physics here, so declared for the version stamp too); the
-        # autopilot and TECS its expert flies under the formation hold (experts
-        # files, so in the expert fingerprint only).
+        # The 3D aircraft it flies; the PID its oracle's twin law flies (physics
+        # here, so declared for the version stamp too); the autopilot and TECS
+        # its lead and its expert fly (experts files, so in the expert
+        # fingerprint only: the lead's values are constants in patrol/env.py).
         fingerprint_sources=(
             "plane/dynamics.py",
             "plane3d/dynamics.py",
@@ -637,19 +649,19 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
-        version=3,
+        version=4,
     ),
     EnvSpec(
-        name="patrol_bearing_only",
+        name="patrol_range_bearing",
         group="aircraft",
-        env_factory=_patrol_bearing_only,
+        env_factory=_patrol_range_bearing,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
         make_pid=_pid(
-            "make_patrol_bearing_only_pid_controller",
+            "make_patrol_range_bearing_pid_controller",
             module="target_gym.patrol.experts",
         ),
         make_mpc=_mpc(
-            "make_patrol_bearing_only_mpc", module="target_gym.patrol.oracle"
+            "make_patrol_range_bearing_mpc", module="target_gym.patrol.oracle"
         ),
         oracle_reads=("experts/pid.py",),
         baselines_note=(
@@ -658,10 +670,11 @@ _SPECS: tuple[EnvSpec, ...] = (
             "elevation is a complete relative-position measurement, so the "
             "only unobservable quantity is the lead's heading, which the slot "
             "needs because it is expressed in the lead's frame; the estimator "
-            "takes the lead's velocity from the follower's own and the change "
-            "in the relative position, and its heading from that track less "
+            "takes the lead's velocity as the filtered rate of its position, "
+            "with the follower's own motion added back, and its heading from "
+            "that track less "
             "the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true "
-            "state, so it is a full-state bound, not a bearing-only "
+            "state, so it is a full-state bound, not a range-and-bearing "
             "controller. On a task defined by what the observation withholds, "
             "its score measures information and control together: what the "
             "hidden lead state is worth plus what a policy leaves on the "
@@ -678,7 +691,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
-        version=3,
+        version=4,
     ),
     # -- Process control ----------------------------------------------------
     EnvSpec(
@@ -695,7 +708,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # third.
         tuned_gains_key="cstr",
         oracle_data=_shared_oracle("cstr"),
-        version=3,
+        # The feed loads, frozen at the true one for the oracle, as any
+        # process noise is: no plan sees a later arrival.
+        noise_fields=("load_scale",),
+        version=4,
     ),
     EnvSpec(
         name="first_order",
@@ -713,7 +729,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # the level it holds. At 100 the scored hold was the last 37 steps.
         tuned_gains_key="first_order",
         oracle_data=_shared_oracle("first_order"),
-        version=3,
+        version=4,
     ),
     EnvSpec(
         name="four_tank",
@@ -733,7 +749,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # loop near a 64 s time constant. At 500 steps it was still settling.
         tuned_gains_key="four_tank",
         oracle_data=_shared_oracle("four_tank"),
-        version=3,
+        # The tank loads, frozen at the true one for the oracle, as any
+        # process noise is: no plan sees a later arrival.
+        noise_fields=("load_scale",),
+        # 4: the levels are read through instruments (PHYSICS.md, Readings).
+        version=4,
     ),
     EnvSpec(
         name="ph_neutralization",
@@ -754,6 +774,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # The buffer flow's OU innovation, zeroed for the oracle, which rolls
         # the simulator and would otherwise plan on one seed's draws.
         noise_fields=("q2_noise_std",),
+        version=3,
     ),
     EnvSpec(
         name="distillation",
@@ -769,13 +790,13 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_distillation_mpc", module="target_gym.pc_gym.distillation.oracle"
         ),
-        # 200 min ~ one dominant time constant. The column is the slowest
-        # environment per step (41 states, 16 substeps for stability), so the
-        # test episode is kept short.
+        # 400 min ~ two dominant time constants, the length the episode rule asks
+        # of the analyser-fed expert. The column is the slowest environment per
+        # step (80 states, 16 substeps for stability).
         tuned_gains_key="distillation",
         # v3 observes the stage-15 temperature, the thermocouple the base
         # layer's temperature loop holds.
-        version=3,
+        version=4,
         disturbance_fields=("zF",),
         # The feed composition's OU innovation. Declared so the planner plans on the
         # mean (``plan_params``) rather than on one fixed noise path.
@@ -796,12 +817,13 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_glass_furnace_mpc", module="target_gym.glass_furnace.oracle"
         ),
         tuned_gains_key="glass_furnace",
-        disturbance_fields=("m_pull_disturbance",),
-        # The pull disturbance's AR(1) innovation, zeroed for the oracle, which
-        # rolls the simulator and so plans the pull's conditional mean from
+        disturbance_fields=("m_pull_disturbance", "lhv_deviation"),
+        # The AR(1) innovations of the pull and the gas, zeroed for the oracle,
+        # which rolls the simulator and so plans their conditional means from
         # the state.
         oracle_data=_shared_oracle("glass_furnace"),
-        noise_fields=("m_pull_noise_std",),
+        noise_fields=("m_pull_noise_std", "lhv_noise_std"),
+        version=3,
     ),
     EnvSpec(
         name="reactor",
@@ -813,7 +835,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.oracle"),
         tuned_gains_key="reactor",
-        version=3,
+        oracle_data=_shared_oracle("reactor"),
+        version=4,
         noise_fields=("demand_sigma",),
     ),
     EnvSpec(
@@ -830,11 +853,12 @@ _SPECS: tuple[EnvSpec, ...] = (
         oracle_data=_shared_oracle("hvac"),
         disturbance_fields=("weather_dev",),
         noise_fields=("T_out_noise_std",),
+        version=3,
     ),
     EnvSpec(
         name="cement_kiln",
         group="industrial",
-        version=3,
+        version=4,
         env_factory=_cement_kiln,
         params_cls=_LazyParams("target_gym.cement_kiln.env", "CementKilnParams"),
         make_pid=_pid(
@@ -868,6 +892,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # mean (``plan_params``) rather than on one fixed noise path.
         oracle_data=_shared_oracle("boiler_drum"),
         noise_fields=("q_steam_noise_std",),
+        version=3,
     ),
     EnvSpec(
         name="wind_turbine",
@@ -888,6 +913,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         oracle_data=_shared_oracle("wind_turbine"),
         noise_fields=("turbulence_std",),
         disturbance_fields=("v_wind",),
+        version=3,
     ),
     EnvSpec(
         name="battery",
@@ -898,12 +924,12 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_battery_pid_controller", module="target_gym.energy.battery.experts"
         ),
         make_mpc=_mpc("make_battery_mpc", module="target_gym.energy.battery.oracle"),
-        # 360 steps = 30 min, a real fraction of the ~96 min it takes to
-        # traverse the usable state-of-charge range at full power.
+        # 2880 steps = 4 h, about three times the 75 min it takes to traverse
+        # the usable state-of-charge range at full power.
         tuned_gains_key="battery",
-        oracle_data=_shared_oracle("battery"),
         noise_fields=("dispatch_noise_std",),
         disturbance_fields=("target_power",),
+        version=3,
     ),
     # Append new tasks here, never insert: a task's position in REGISTRY is its
     # benchmark seed index, and TargetFoundation derives seeds the same way.
@@ -925,7 +951,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         # v3: the oracle's best hold, rho_floor_tracking and rho_floor, re-measured
         # for the JAX oracle (2.23e-6 mol/L against the CasADi one's 6.29e-6).
-        version=3,
+        version=4,
         # 1200 steps = 60 min at 3 s: six 10-minute blocks, with no
         # effectiveness_overrides.
         tuned_gains_key="unstable_cstr",
@@ -960,6 +986,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("demand_sigma",),
         # No fingerprint_sources: the package imports only itself and the
         # shared plumbing.
+        version=3,
     ),
     EnvSpec(
         name="formation",
@@ -1000,6 +1027,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
+        version=3,
     ),
 )
 
@@ -1018,11 +1046,17 @@ def specs_in_group(group: str) -> Iterator[EnvSpec]:
     return (spec for spec in _SPECS if spec.group == group)
 
 
+#: Names that changed, so an old script is told where its task went.
+RENAMED = {"patrol_bearing_only": "patrol_range_bearing"}
+
+
 def get(name: str) -> EnvSpec:
     """Look up one spec by registry name."""
     try:
         return REGISTRY[name]
     except KeyError:
+        if name in RENAMED:
+            raise KeyError(f"{name!r} is now {RENAMED[name]!r}") from None
         raise KeyError(
             f"Unknown environment {name!r}; registered: {sorted(REGISTRY)}"
         ) from None

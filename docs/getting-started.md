@@ -173,7 +173,9 @@ obs, state, rewards, dones, info = env.step(key, state, actions, params)
 Every plane-based env (`Plane`, `Plane3D`, `PlanePatrol`, `Formation`)
 inherits a wind model applied to the air-relative aerodynamics. It is an
 **unobservable** disturbance by default; pass `observe_wind=True` for a
-fully-observable baseline. Formations feel a single shared gust field.
+fully-observable baseline. A follower meets the lead's gust a slot distance later, and what its offset
+leaves unshared is its own. It also flies in the lead's wake, which `wake_strength=0`
+turns off.
 
 ```python
 from target_gym import Plane, PlaneParams

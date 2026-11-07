@@ -5,10 +5,17 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.distillation.env import (
     N_STAGES,
+    TEMPERATURE_STAGE,
     DistillationParams,
     DistillationState,
     check_is_terminal,
@@ -16,9 +23,12 @@ from target_gym.pc_gym.distillation.env import (
     compute_reward,
     compute_reward_terms,
     get_obs,
+    steady_liquid,
 )
 from target_gym.pc_gym.distillation.rendering import _render
 from target_gym.video import SavesVideo
+
+_CHROMATOGRAPH = dict(interval=5.0, dead_time=5.0, sampled=True)
 
 
 class DistillationColumn(
@@ -42,6 +52,15 @@ class DistillationColumn(
     tracked_names: tuple = ("yD (mole fraction)", "xB (mole fraction)")
     obs_target_index: tuple = (4, 5)  # target_yD, target_xB
 
+    # A chromatograph on each product and an RTD on the tray (PHYSICS.md section
+    # on readings). ``interval`` and ``dead_time`` are in ``delta_t``'s unit, so
+    # 5 is 5 minutes: a cycle reports what was sampled one cycle earlier.
+    readings: tuple = (
+        FieldReading("x", index=0, sigma=4e-4, **_CHROMATOGRAPH),
+        FieldReading("x", index=TEMPERATURE_STAGE - 1, sigma=3e-3),
+        FieldReading("x", index=-1, sigma=4e-4, **_CHROMATOGRAPH),
+    )
+
     def __init__(self, integration_method: str = "rk4_16"):
         self.obs_shape = (7,)
         self.integration_method = integration_method
@@ -53,8 +72,8 @@ class DistillationColumn(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -66,6 +85,7 @@ class DistillationColumn(
         if params is None:
             params = self.default_params
         action = jnp.atleast_1d(jnp.asarray(action)).reshape(-1)
+        action, state = actuate(self, state, action, params)
 
         new_state, _ = compute_next_state(
             action, state, params, key, integration_method=self.integration_method
@@ -76,8 +96,18 @@ class DistillationColumn(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    def initial_action(self, state, params):
+        """The raw action that holds the reset plant's own flows."""
+        return jnp.stack(
+            [
+                2.0 * (state.L - params.L_min) / (params.L_max - params.L_min) - 1.0,
+                2.0 * (state.V - params.V_min) / (params.V_max - params.V_min) - 1.0,
+            ]
+        )
+
+    @measured_obs
     def get_obs(self, state: DistillationState, params: DistillationParams = None):
         if params is None:
             params = self.default_params
@@ -127,14 +157,22 @@ class DistillationColumn(
         # It is the steady state for the *nominal* reflux, 2.706, not for the L
         # sampled just above, so the derivative at t = 0 is not quite zero. That
         # is deliberate: converging a profile per episode would cost 4000
-        # integration steps at reset, and on a plant with RGA around 50 a two
+        # integration steps at reset, and on a plant with RGA around 36 a two
         # percent reflux offset is a meaningful and cheap initial-condition
         # spread. It does mean the column starts near, rather than at, its own
-        # steady state.
+        # steady state. The trays do start at the sampled reflux: their flows
+        # settle in minutes, so they carry no spread worth having.
         x = _NOMINAL_PROFILE
 
         state = DistillationState(
-            time=0, x=x, zF=zF, L=L, V=V, target_yD=target_yD, target_xB=target_xB
+            time=0,
+            x=x,
+            liquid=steady_liquid(L, params),
+            zF=zF,
+            L=L,
+            V=V,
+            target_yD=target_yD,
+            target_xB=target_xB,
         )
         return self.get_obs(state), state
 

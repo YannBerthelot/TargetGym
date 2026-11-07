@@ -105,7 +105,7 @@ $G$ is the diagonal where the plant's output equals it.
 current observation: the agent can compute its own reward at every step from
 what it sees. In the weak form, $e$ is a function of the observation history: a
 short memory recovers it. Every environment in this suite satisfies the strong
-form except `patrol_bearing_only`, which is the weak case by design and is
+form except `patrol_range_bearing`, which is the weak case by design and is
 labelled as such on its page. What is excluded in both forms is a target the
 agent can never recover from its observations, because that turns the task into
 inference of the objective, which is a different research question.
@@ -180,7 +180,7 @@ and the table below records it, because it determines the ceiling.
 | `plane_sine` | sinusoid, 300 m amplitude, 240 s period | deterministic exosystem of order two, phase not observed |
 | `reactor` | flux demand | Ornstein-Uhlenbeck, stochastic |
 | `battery` | dispatch request | scheduled 300 s blocks, next level and switching times not observed, plus white jitter: stochastic |
-| `patrol`, `patrol_bearing_only` | slot on a manoeuvring lead | exogenous aircraft on a route: scheduled turn rates, in the state and observed one leg at a time |
+| `patrol`, `patrol_range_bearing` | slot on a manoeuvring lead | exogenous aircraft on a route: scheduled turn rates, in the state and observed one leg at a time |
 | `formation` | lead: the patrol's route; wingmen: slots on the lead | lead: scheduled turn rates, in the state and observed one leg at a time; wingmen: a co-player, the learning lead |
 
 A sinusoid could instead be posed as "stay on this ellipse in $(z, \dot z)$",
@@ -267,7 +267,7 @@ The lead does not react to the follower and has no payoff of its own: it is an
 autopilot whose turn rate is scheduled per leg, so it is an exogenous reference
 like the staircase, and the definition does not change. Two things are new
 relative to the single aircraft: a collision trips the plant, and in the
-bearing-only variant the slot error is recoverable only from the history of
+range-and-bearing variant the slot error is recoverable only from the history of
 range and bearing, so A2 holds in its weak form.
 
 The line between a reference and a player is this. A reference is

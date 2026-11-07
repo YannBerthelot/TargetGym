@@ -10,6 +10,7 @@ not:
 """
 
 from target_gym.experts.episodes import reset_where_done
+from target_gym.experts.interface import GAIN_NAMES
 from target_gym.experts.mpc import GradientMPC, NewtonMPC, SamplingMPC
 from target_gym.experts.pid import (
     Controller,
@@ -24,6 +25,7 @@ from target_gym.experts.pid import (
 
 __all__ = [
     "Controller",
+    "GAIN_NAMES",
     "HostController",
     "FunctionalExpertPolicy",
     "siso_pid",

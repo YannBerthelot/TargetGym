@@ -40,10 +40,18 @@ from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
 FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
+#: A clock 5 steps before a switch, so the ten stages below cross a target's ramp.
+START_CLOCK = {"unstable_cstr": 195}
 C2 = (
-    "hvac", "battery", "boiler_drum", "wind_turbine", "glass_furnace", "cement_kiln",
-)  # fmt: skip
-ON_SOLVER = FIVE + C2
+    "hvac",
+    "boiler_drum",
+    "wind_turbine",
+    "glass_furnace",
+    "cement_kiln",
+    "reactor",
+)  # fmt: skip  (battery holds a stand-in, labelled non-compliant, for 0.8.0)
+AIRCRAFT = ("plane", "plane_sine", "plane_energy")
+ON_SOLVER = FIVE + C2 + AIRCRAFT
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -55,18 +63,43 @@ def _oracle(name, **overrides):
 
 
 @pytest.mark.medium
-@pytest.mark.parametrize("name", ON_SOLVER)
-def test_the_exact_rewrites_replay_on_the_env(name):
+def test_the_kiln_solves_seed_zeros_reset():
+    """Seed 0's first solve never succeeded on the explicit step, whose hot
+    cells gave the plan a Hessian of 1e18 (oracle-solver.md, section 17, and
+    the amendment that closes it). With calcination stepped stably it is a
+    plain solve: converged, inside the cap, with no retry."""
+    env, params, oracle = _oracle("cement_kiln")
+    key = episode_keys(jax.random.PRNGKey(0), 1, 700)[0][0]
+    obs, state = env.reset_env(key, params)
+    oracle.step(obs, state)
+    report = oracle.solver_report()
+    assert report["solver_failures"] == 0
+    assert report["solver_capped"] == 0
+    assert report["solver_retries"] == 0
+
+
+@pytest.mark.medium
+@pytest.mark.parametrize(
+    "name, load",
+    [(n, None) for n in ON_SOLVER]
+    + [("cstr", (0.7, -0.015)), ("four_tank", (2e-4, -1e-4))],
+)
+def test_the_exact_rewrites_replay_on_the_env(name, load):
     """Ten stages from training seed 100's reset, under the moves that hold
     the actuators (raw 0 where the reset holds none in the box) plus a
     0.05 sine. The two runs differ only in the order of a few float64
     operations a step (2.2e-16 each), so the relative reward gap and the
     output gap, in resolutions, sit many decades under 1e-10 and 1e-6 unless
-    a rewrite is not exact. The compressor's sites run exact (width 0)."""
+    a rewrite is not exact. The compressor's sites run exact (width 0). With
+    a ``load`` in force at the solve, the plan and the env both hold it."""
     env, params, oracle = _oracle(name)
     with enable_x64():
         _, state = env.reset_env(jax.random.PRNGKey(100), params)
+        if load is not None:
+            state = state.replace(load=jnp.array(load, state.load.dtype))
         st, m = float64(state), oracle.model
+        if name in START_CLOCK:
+            st = st.replace(block_clock=jnp.asarray(START_CLOCK[name], jnp.int64))
         hold = jnp.where(jnp.abs(m.hold(st)) < 1.0, m.hold(st), 0.0)
         wave = 0.05 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]
         moves = jnp.clip(hold + wave, -1.0, 1.0)
@@ -182,6 +215,22 @@ def test_a_warm_solve_that_fails_is_solved_again_cold():
     assert report["solver_failures"] == 1  # the broken step's own cold solve
 
 
+@pytest.mark.medium
+def test_a_moves_action_is_what_the_env_and_the_replay_are_sent():
+    """A model's ``action`` maps a planned move to what the env gets (a rate to
+    its command, ``oracles.rates``). Halved here, so the step sends half the
+    planned move, and K8's replay, which runs the env on the same map, parts from
+    a plan that assumed the whole of it. first_order's first move is order 1, so
+    its replay misses by far more than 1e-6."""
+    env, params, oracle = _oracle("first_order")
+    oracle.model = oracle.model._replace(action=lambda state, u: 0.5 * u)
+    _, state = env.reset_env(jax.random.PRNGKey(100), params)
+    applied = oracle.step(None, state)
+    planned = np.asarray(oracle.shooting.moves(oracle._plan))[0, 0]
+    assert applied == pytest.approx(0.5 * float(np.clip(planned, -1.0, 1.0)))
+    assert oracle.certificates[-1]["output_gap"] > 1e-6
+
+
 def _imports(path: pathlib.Path) -> set[pathlib.Path]:
     found = set()
     for node in ast.walk(ast.parse(path.read_text())):
@@ -264,12 +313,14 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
 
 @pytest.mark.parametrize(
     "name, budget",
-    [(name, 0.25) for name in FIVE + ("boiler_drum", "glass_furnace", "cement_kiln")]
+    [(name, 0.25) for name in FIVE + AIRCRAFT]
+    + [(name, 0.25) for name in ("boiler_drum", "glass_furnace", "cement_kiln")]
     + [
-        # p = 1, in dollars: 500 W, half the 1 kW resolution, for one step of
+        # p = 1, in dollars: half the 1 kW or 1.7 kW resolution, for one step of
         # delta_t s at the imbalance price in $/MWh.
-        ("battery", 500.0e-6 * 100.0 * 5.0 / 3600.0),
-        ("wind_turbine", 500.0e-6 * 100.0 * 0.25 / 3600.0),
+        ("wind_turbine", 850.0e-6 * 100.0 * 0.25 / 3600.0),
+        # p = 1, in dollars: half the 0.05 K floor for a 30 s step at $230/h per K.
+        ("reactor", 230.0 / 3600.0 * 30.0 * 0.025),
         # 0.03 EUR/(K^2 h) for 0.25 h at (0.1 K / 2)^2.
         ("hvac", 0.03 * 0.25 * 0.05**2),
     ],
@@ -286,11 +337,12 @@ PRICED = {
     "cstr": 1, "first_order": 1, "four_tank": 2, "unstable_cstr": 1,
     "compressor_surge": 2,  # header pressure, recycle power
     "hvac": 2,  # comfort, energy
-    "battery": 2,  # power, fade
     "boiler_drum": 3,  # level, pressure, fuel
     "wind_turbine": 1,  # power
     "glass_furnace": 2,  # crown temperature, gas
     "cement_kiln": 2,  # free lime, fuel
+    "reactor": 1,  # Tavg: the rods' travel stops at a steady state
+    "plane": 2, "plane_sine": 2, "plane_energy": 2,  # altitude, speed
 }  # fmt: skip
 
 

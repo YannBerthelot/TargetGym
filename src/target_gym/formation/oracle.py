@@ -18,17 +18,18 @@ team's cost.
 import jax
 import jax.numpy as jnp
 
-from target_gym.experts.pid import (
-    make_plane3d_heading_pid,
-    plane3d_heading_pid_step,
-)
+from target_gym.experts.pid import make_plane3d_heading_pid
 from target_gym.formation.env import (
     commanded_heading,
 )
-from target_gym.patrol.env import PatrolState, get_obs_heading
+from target_gym.patrol.env import (
+    PatrolState,
+    get_obs_heading,
+)
 from target_gym.patrol.oracle import (
     TWIN_GAINS,
     PatrolTwinOracle,
+    lead_autopilot_step,
     twin_law_init,
     twin_law_step,
 )
@@ -95,7 +96,7 @@ class FormationOracle(PatrolTwinOracle):
         """Every seat's law: ``(lead action, wingmen actions (k, 3), carry)``."""
         lead_pid, seats = carry
         cmd = state.lead.replace(target_heading=commanded_heading(state))
-        lead, new_pid = plane3d_heading_pid_step(
+        lead, new_pid = lead_autopilot_step(
             self._lead_params, lead_pid, get_obs_heading(cmd)
         )
         # Keep the memory's types fixed, so the jitted step compiles once.
@@ -106,16 +107,13 @@ class FormationOracle(PatrolTwinOracle):
             view = PatrolState(
                 follower=wingman,
                 lead=state.lead,
-                lead_pid=lead_pid,
+                lead_memory=None,
                 slot_back=back,
                 slot_right=right,
                 slot_up=up,
                 lead_turn_rate=state.lead_turn_rate,
                 lead_turn_schedule=state.lead_turn_schedule,
                 time=state.time,
-                gust_x=state.gust_x,
-                gust_y=state.gust_y,
-                gust_z=state.gust_z,
             )
             return twin_law_step(lead_params, gains, memory, view)
 

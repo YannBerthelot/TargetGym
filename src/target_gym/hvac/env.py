@@ -46,7 +46,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -90,7 +90,9 @@ class HVACParams(EnvParams):
     T_out_mean: float = 5.0  # C, seasonal mean (heating season)
     T_out_amplitude: float = 5.0  # C, half daily swing
     T_out_noise_std: float = 3.0  # C, OU deviation std
-    solar_peak: float = 350.0  # W/m^2 on the glazing at solar noon
+    # W/m^2 on the glazing at noon, a heating season's mean over four facades
+    # with the cloud in it, not a clear-sky peak: PHYSICS.md, Solar gain.
+    solar_peak: float = 175.0
 
     # ---- Internal gains ----
     gain_occupied: float = 8.0  # W/m^2 (people, lighting, equipment)
@@ -135,12 +137,8 @@ class HVACParams(EnvParams):
     # ---- Reward (docs/reward-shaping.md; version 2), in euros per step ----
     # Comfort: while occupied, a quadratic penalty on the air temperature
     # outside a +-``comfort_tolerance`` band about the setpoint; during the
-    # setback, on the shortfall below ``setpoint_setback`` only. This plant
-    # cannot cool, and under its clear-sky solar gains the zone sits above the
-    # setback target every night and above the occupied band two thirds of
-    # the day whatever the controller does (`scripts/measure_hold.py`: mean
-    # signed error +4.3 K at setback, +1.2 K occupied, for the shipped MPC);
-    # a symmetric night target would score the weather. Priced at
+    # setback, on the shortfall below ``setpoint_setback`` only: this plant
+    # cannot cool, so a symmetric night target would score the weather. Priced at
     # ``comfort_price`` per K^2 per hour (provisional; sweep 0.1 / 0.2 / 0.4).
     # Energy: the emitter's heat at ``gas_price`` per kWh, charged in full --
     # it is the bill this plant exists to trade against comfort. Floor:
@@ -231,6 +229,8 @@ class HVACState(EnvState):
     target_T: float  # active comfort setpoint
     setpoint_occupied: float  # this episode's occupied setpoint
     Q_command: float  # commanded heating power (W)
+
+    actuator_held: jax.Array = actuator_field(1)
 
     # ---------------------------------------------------------------------------
     # Derived conductances (ISO 13790 §7). Pure functions of params.
@@ -528,8 +528,12 @@ def check_is_terminal(state: HVACState, params: HVACParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward_terms(state: HVACState, params: HVACParams, xp=jnp):
-    """The reward's additive cost terms in EUR per step (``target_gym.reward``)."""
+def compute_reward_terms(state: HVACState, params: HVACParams, xp=jnp, tripped=None):
+    """The reward's additive cost terms in EUR per step (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
     p = params
     hours = p.delta_t / 3600.0
     occupied = is_occupied(state.time, p)
@@ -540,12 +544,13 @@ def compute_reward_terms(state: HVACState, params: HVACParams, xp=jnp):
     excess = xp.where(occupied, excess_occ, excess_setback)
     comfort = p.comfort_price * hours * excess**p.tracking_exponent
     energy = p.gas_price * state.Q_emitter / 1000.0 * hours
-    terminated, _ = check_is_terminal(state, p, xp)
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, p, xp)
     terms = {
         "tracking": comfort,
         "running": energy,
     }
-    return R.with_trip(terms, terminated, R.trip_cost(p), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: HVACState, params: HVACParams, xp=jnp):

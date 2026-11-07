@@ -122,7 +122,9 @@ def _draw_map(ax, state, params, opening, control_line):
 def render_compressor_surge(state, params, step, history):
     # The control line lives with the controllers, outside the version stamp;
     # imported here so the physics never depends on it.
-    from target_gym.compressor_surge.experts import SURGE_CONTROL_LINE
+    from target_gym.compressor_surge.experts import load_gains
+
+    control_line = load_gains()["surge_line"]
 
     tau = int(state.block_clock) * params.delta_t
     opening = float(
@@ -149,8 +151,8 @@ def render_compressor_surge(state, params, step, history):
     # WATCH inside the control line or a kPa off, ALARM near the line.
     status = (
         rk.ALARM
-        if margin <= 0.5 * SURGE_CONTROL_LINE or err >= 3.0
-        else (rk.WATCH if margin < SURGE_CONTROL_LINE or err >= 1.0 else rk.NOMINAL)
+        if margin <= 0.5 * control_line or err >= 3.0
+        else (rk.WATCH if margin < control_line or err >= 1.0 else rk.NOMINAL)
     )
 
     dp_span = _DP_HI - _DP_LO
@@ -179,7 +181,7 @@ def render_compressor_surge(state, params, step, history):
             rk.GREEN,
             bipolar=True,
             neg_color=rk.RED,
-            target_frac=SURGE_CONTROL_LINE / _MARGIN_HI,
+            target_frac=control_line / _MARGIN_HI,
         ),
         rk.Gauge(
             "DEMAND DEV",
@@ -212,7 +214,7 @@ def render_compressor_surge(state, params, step, history):
             xlabel="seconds",
             lines=[
                 (0.0, rk.RED, "surge"),
-                (100.0 * SURGE_CONTROL_LINE, rk.AMBER, "control line"),
+                (100.0 * control_line, rk.AMBER, "control line"),
             ],
         ),
     ]
@@ -220,7 +222,7 @@ def render_compressor_surge(state, params, step, history):
         title="COMPRESSOR SURGE  ·  HEADER PRESSURE",
         step=step,
         elapsed_s=step * params.delta_t * params.time_unit_seconds,
-        schematic=lambda ax: _draw_map(ax, state, params, opening, SURGE_CONTROL_LINE),
+        schematic=lambda ax: _draw_map(ax, state, params, opening, control_line),
         schematic_title="COMPRESSOR MAP",
         gauges=gauges,
         strips=strips,

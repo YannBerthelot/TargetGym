@@ -29,9 +29,12 @@ ON = np.array([0.99, 0.01, 0.5, 0.5, 0.99, 0.01, 351.0], np.float32)
 
 
 def _first_then(change):
-    """Flows (raw) a fresh expert asks for on ``ON``, then on ``ON`` changed."""
+    """Flows (raw) a fresh expert asks for on ``ON``, then on ``ON`` changed at
+    the next analyser update, 5 steps on, which is when it reads one."""
     pid = make_distillation_pid_controller().host()
     first = np.asarray(pid(ON))
+    for _ in range(4):
+        pid(ON)
     obs = ON.copy()
     for i, v in change.items():
         obs[i] = v

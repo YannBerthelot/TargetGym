@@ -38,6 +38,9 @@ State (9 ODEs)
 ``T_rB_hot``, ``T_rB_cold``   regenerator B checker nodes (hidden)
 ``m_batch``    unmelted batch blanket floating on the melt (hidden)
 
+The gas's heating value wanders, hidden. The pull wanders too, but a float line
+knows its pull, so that is measured.
+
 Why the extra structure over a 3-node model
 -------------------------------------------
 * **Regenerators** are the defining feature of a float furnace. Without heat
@@ -63,7 +66,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -76,6 +79,25 @@ N_SETPOINTS = 5
 # AR(1) correlation for the pull-rate disturbance. dt=30 s, rho=0.99 -> ~50 min
 # memory: a drifting operating point rather than white noise.
 M_PULL_AR_RHO = 0.99
+
+#: AR(1) correlation of the gas's heating value: exp(-30 / 86400), a day at 30 s
+#: steps, the fast end of a supply that changes weekly and sometimes daily.
+LHV_AR_RHO = 0.99965
+#: Salt for the gas's innovations, apart from the pull's.
+_GAS = 0x474153
+
+#: The furnace's periodic orbit where an episode starts, at two constant firings,
+#: each run 2000 h with the disturbances off (PHYSICS.md, Reset). A row is the raw
+#: action, then the integrator's positions: T_crown, T_melt, T_work, m_batch, and
+#: the regenerators A and B, hot end first, just after a full reversal cycle.
+SETTLED_LOW = (
+    -0.1, 1569.30, 1535.13, 1418.31, 10306.96,
+    1369.07, 1109.19, 829.79, 537.01, 1198.27, 926.55, 636.69, 335.23,
+)  # fmt: skip
+SETTLED_HIGH = (
+    0.1, 1603.16, 1570.51, 1455.57, 10125.63,
+    1399.57, 1134.83, 849.81, 551.22, 1219.96, 942.57, 646.51, 338.93,
+)  # fmt: skip
 
 #: Steps of pure transport delay between commanding a fuel flow and that heat
 #: reaching the crown. At 30 s a step this is 60 s, covering the gas train, the
@@ -165,8 +187,13 @@ class GlassFurnaceParams(EnvParams):
     m_batch_full: float = 39000.0  # kg blanket giving full melt coverage
     batch_shield: float = 0.85  # radiation blocked at full coverage
 
-    # ---- Pull-rate disturbance (AR(1) stationary std, kg/s) ----
+    # ---- Pull-rate disturbance (AR(1) stationary std, kg/s), measured ----
     m_pull_noise_std: float = 0.4
+    # ---- Gas heating value (AR(1) stationary std, fraction of LHV), hidden ----
+    lhv_noise_std: float = 0.01
+
+    #: Fuel slew: the full band in 30 min, ours (PHYSICS.md, Actuators).
+    actuator_rate: float = 1.0 / 1800.0
 
     # ---- Thermal capacities (J/K) ----
     C_gas: float = 2.4e5  # combustion space gas (tau ~ 17 s)
@@ -256,17 +283,12 @@ class GlassFurnaceParams(EnvParams):
     #: still leaves the first slot something to correct.
     #: ``initial_T_crown_range`` bounds the result.
     initial_T_crown_offset: float = 4.0
-    # Reset places the furnace on a *consistent operating point* rather than an
-    # arbitrary state. Offsets are measured from the settled steady state at
-    # nominal firing (crown 1587 C): a real furnace takes days to reach thermal
-    # equilibrium, so starting it away from one would make the whole episode an
-    # initial transient and leave nothing to control.
-    initial_T_gas_offset: float = 31.0  # T_gas   - T_crown at steady state
-    initial_T_melt_offset: float = -35.0  # T_melt  - T_crown
-    initial_T_work_offset: float = -151.0  # T_work  - T_crown
-    initial_T_regen_hot: float = 1383.0  # hot end of the settled checker stack
-    initial_T_regen_cold: float = 544.0  # cold end
-    initial_m_batch: float = 10753.0  # settled blanket mass
+    # Reset places the furnace on its settled orbit (``settled_point``): a real
+    # furnace takes days to reach thermal equilibrium, so starting it away from
+    # one would make the whole episode an initial transient and leave nothing to
+    # control. These two are what the orbit leaves to the crown.
+    initial_T_gas_offset: float = 33.0  # T_gas - T_crown while firing
+    initial_T_meas_offset: float = 1.35  # thermocouple - crown after a reversal
 
     # ---- Time discretization ----
     delta_t: float = 30.0  # s per step
@@ -280,9 +302,8 @@ class GlassFurnaceParams(EnvParams):
     # burn-in, about stationary across the window (0.086 / 0.065 K halves),
     # `scripts/measure_hold.py`. That is the current oracle; the one
     # before it held 0.175 K. An upper bound on the
-    # achievable floor. Fuel above the hold-phase flow (0.590 kg/s, the same
-    # for PID and MPC) is charged at weight 1 (provisional: no fuel price
-    # supplied). A trip costs twice the reachable crown excursion's cost per
+    # achievable floor. Fuel is charged as a share of the hold-phase flow (0.590 kg/s, the
+    # same for PID and MPC), at weight 1 (provisional: no fuel price supplied). A trip costs twice the reachable crown excursion's cost per
     # step, 2 x (183 / 1)^2.
     reward_version: int = 2
     # The MPC holds 0.0614 K in the shipped disturbance, below the 1 K thermocouple
@@ -335,6 +356,7 @@ PARAM_UNITS = {
     "m_batch_full": "kg",
     "batch_shield": "-",
     "m_pull_noise_std": "kg/s",
+    "lhv_noise_std": "-",
     "C_gas": "J/K",
     "C_crown": "J/K",
     "C_melt": "J/K",
@@ -362,11 +384,7 @@ PARAM_UNITS = {
     "target_T_crown_trim": "K",
     "initial_T_crown_offset": "K",
     "initial_T_gas_offset": "K",
-    "initial_T_melt_offset": "K",
-    "initial_T_work_offset": "K",
-    "initial_T_regen_hot": "degC",
-    "initial_T_regen_cold": "degC",
-    "initial_m_batch": "kg",
+    "initial_T_meas_offset": "K",
     "reward_version": "-",
     "e_floor": "K",
     "e_tol": "K",
@@ -393,6 +411,8 @@ class GlassFurnaceState(EnvState):
     target_T_crown: float
     target_schedule: jnp.ndarray
     m_pull_disturbance: float
+    #: The gas's heating value, as a fraction off ``LHV``. Hidden.
+    lhv_deviation: float
 
     #: What the crown thermocouple reads, lagging ``T_crown`` by
     #: ``tau_thermocouple``. This is what ``get_obs`` reports.
@@ -405,6 +425,20 @@ class GlassFurnaceState(EnvState):
     fuel_flow: float
     T_air_preheat: float
     T_stack: float
+
+    actuator_held: jax.Array = actuator_field(1)
+
+
+def settled_point(T_crown):
+    """The orbit at a crown temperature: ``(raw action, positions)``."""
+    low, high = jnp.array(SETTLED_LOW), jnp.array(SETTLED_HIGH)
+    point = low + (T_crown - low[1]) / (high[1] - low[1]) * (high - low)
+    return point[0], point[1:]
+
+
+def pull_rate(m_pull_disturbance, params: GlassFurnaceParams):
+    """Glass leaving the furnace, kg/s, as the line knows it."""
+    return jnp.maximum(params.m_pull + m_pull_disturbance, 0.1)
 
 
 def glass_c_p(T, params: GlassFurnaceParams):
@@ -744,7 +778,16 @@ def compute_next_state(
         * jnp.sqrt(1.0 - M_PULL_AR_RHO**2)
     )
     new_disturbance = M_PULL_AR_RHO * state.m_pull_disturbance + innovation
-    m_pull_eff = jnp.maximum(params.m_pull + new_disturbance, 0.1)
+    m_pull_eff = pull_rate(new_disturbance, params)
+
+    # The gas of the day. It changes the heat a kilogram releases, and the air
+    # stays ratioed to the mass, as on a burner with no calorimeter.
+    gas_key = jax.random.fold_in(jax.random.fold_in(key, _GAS), state.time)
+    new_lhv = LHV_AR_RHO * state.lhv_deviation + (
+        jax.random.normal(gas_key)
+        * params.lhv_noise_std
+        * jnp.sqrt(1.0 - LHV_AR_RHO**2)
+    )
 
     phase = reversal_phase(state.time, params)
     positions = jnp.concatenate(
@@ -766,7 +809,7 @@ def compute_next_state(
         T_air,
         m_fuel,
         melt_open,
-        params,
+        params.replace(LHV=params.LHV * (1.0 + new_lhv)),
     )
 
     _compute_velocity = partial(
@@ -808,6 +851,7 @@ def compute_next_state(
             T_rB=new_positions[4 + N_REGEN_NODES : 4 + 2 * N_REGEN_NODES],
             target_T_crown=new_target,
             m_pull_disturbance=new_disturbance,
+            lhv_deviation=new_lhv,
             T_crown_meas=new_T_meas,
             fuel_pipeline=new_pipeline,
             fuel_flow=m_fuel,
@@ -828,12 +872,13 @@ def compute_next_state(
 def get_obs(state: GlassFurnaceState, params: GlassFurnaceParams):
     """Partially observable: only plant instrumentation is visible.
 
-    ``[T_crown_meas, T_air_preheat, fuel_pct, reversal_phase, target_T_crown]``
+    ``[T_crown_meas, T_air_preheat, fuel_pct, reversal_phase, target_T_crown,
+    pull]``
 
     A real furnace has a crown thermocouple and a regenerator/air-preheat
-    thermocouple, and the operator knows the reversal state. Glass
-    temperatures, checker node temperatures, the batch blanket mass and the
-    pull-rate disturbance are all hidden.
+    thermocouple, the operator knows the reversal state, and a float line knows
+    its pull. Glass temperatures, checker node temperatures, the batch blanket
+    mass and the gas's heating value are all hidden.
 
     The crown reading is the *instrument*, ``T_crown_meas``, which lags the true
     crown temperature by ``tau_thermocouple``. The reward scores the true one.
@@ -848,6 +893,7 @@ def get_obs(state: GlassFurnaceState, params: GlassFurnaceParams):
             fuel_pct,
             reversal_phase(state.time, params),
             state.target_T_crown,
+            pull_rate(state.m_pull_disturbance, params),
         ]
     )
 
@@ -869,12 +915,25 @@ def check_is_terminal(state: GlassFurnaceState, params: GlassFurnaceParams, xp=j
     return terminated, truncated
 
 
-def compute_reward_terms(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
-    terminated, _ = check_is_terminal(state, params, xp)
+def compute_reward_terms(
+    state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``reward`` scores the true crown. ``tripped`` marks a measured copy
+    (``base.measured_reward``): its trip comes from the true state, and its
+    crown from the thermocouple, the only crown a plant can read. At
+    ``sensor_noise_scale`` 0 no instrument stands in between, so the measured
+    cost is the true one.
+    """
+    crown = state.T_crown
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, params, xp)
+    else:
+        crown = xp.where(params.sensor_noise_scale > 0, state.T_crown_meas, crown)
     terms = {
         "tracking": R.tracking_cost(
-            state.target_T_crown - state.T_crown,
+            state.target_T_crown - crown,
             params.e_floor,
             params.e_tol,
             params.tracking_exponent,
@@ -884,7 +943,7 @@ def compute_reward_terms(state: GlassFurnaceState, params: GlassFurnaceParams, x
             state.fuel_flow, params.c_hold, params.running_weight, xp
         ),
     }
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: GlassFurnaceState, params: GlassFurnaceParams, xp=jnp):
@@ -924,5 +983,6 @@ def specific_energy_consumption(state: GlassFurnaceState, params: GlassFurnacePa
     The headline efficiency figure for a float furnace, and the main
     validation target for the regenerator model (published: 4-6 GJ/tonne).
     """
-    m_pull_eff = jnp.maximum(params.m_pull + state.m_pull_disturbance, 0.1)
-    return (state.fuel_flow * params.LHV / m_pull_eff) / 1.0e9 * 1000.0
+    m_pull_eff = pull_rate(state.m_pull_disturbance, params)
+    heat = state.fuel_flow * params.LHV * (1.0 + state.lhv_deviation)
+    return (heat / m_pull_eff) / 1.0e9 * 1000.0

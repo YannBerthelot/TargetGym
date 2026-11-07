@@ -18,18 +18,21 @@ pass them to ``evaluate``. ``target_gym.scoring`` compares a policy with the
 expert and the ceiling.
 
 How a cycle is split. A target cycle runs from one target change to the next
-(the first starts at the reset). ``cycle_segments`` splits each into
+(the first starts at the reset), and a restart after a trip starts none
+(``benchmark.target_changes``). ``cycle_segments`` splits each into
 
 1. the *settle* after its own change, measured on each cycle so every
    controller is scored against its own transient (``_settle_of``);
 2. the *hold*, the steps in between;
-3. the *anticipation* of the next change: a controller that previews the
-   schedule starts moving early, and that rising cost belongs to reaching
-   the next target, not to the hold (``anticipation``, ``anticipations``).
+3. the *lead* into the next change: a controller that previews the schedule
+   starts moving early, and that cost belongs to reaching the next target,
+   not to the hold. It is a fixed count per task (``FIXED_LEAD``), the same
+   steps for every controller, so a run's own excursion cannot leave its hold.
 
 ``burn_in`` is per plant, three cost-bearing time constants, from
-``src/target_gym/data/hold_measurements/`` (``scripts/measure_hold.py``,
-which uses the same anticipation rule on its squared errors).
+``src/target_gym/data/hold_measurements/`` (``scripts/measure_hold.py``).
+``anticipation`` and ``anticipations`` find a run's early start from its cost.
+They measure the leads and scale nothing a controller is scored on.
 """
 
 from __future__ import annotations
@@ -43,7 +46,7 @@ from target_gym import records
 
 # Absolute slack on "within twice the level", as the settle rule has always had.
 _TOL = 1e-12
-# The anticipation rule (``anticipation``).
+# The rule that measures a lead (``anticipation``).
 _ANTICIPATION_MIN_CYCLE = 16  # shorter cycles are never searched
 _ANTICIPATION_MIN_STEPS = 3  # a run is at least this long, unless it is huge
 _ANTICIPATION_RATIO = 10.0  # its median is at least this many times the level
@@ -64,6 +67,7 @@ class Episode:
     failed: np.ndarray | None = None  # bool per step: the plant tripped on this step
     terms: dict = field(default_factory=dict)  # name -> per-step array
     actions: np.ndarray | None = None  # (T, n_act), as fractions of each span
+    lead: int = 0  # steps before each target change left out of the hold
 
 
 def _cycles(ep: Episode):
@@ -81,8 +85,8 @@ class Segment(NamedTuple):
     """One target cycle split by ``cycle_segments``, as absolute step indices.
 
     ``start:hold_start`` is the settle after the cycle's own change,
-    ``hold_start:hold_end`` the hold, and ``hold_end:end`` the anticipation of
-    the next change (empty when none was detected)."""
+    ``hold_start:hold_end`` the hold, and ``hold_end:end`` the lead into the
+    next change (empty on the last cycle and on a task with no lead)."""
 
     start: int
     hold_start: int
@@ -194,27 +198,28 @@ def anticipations(series, cycles) -> list[int]:
     ]
 
 
-def cycle_segments(cost, cycles, settle: int | None = None) -> list[Segment]:
+def cycle_segments(
+    cost, cycles, settle: int | None = None, lead: int = 0
+) -> list[Segment]:
     """Split each cycle ``(a, b)`` of a per-step ``cost`` into settle, hold
-    and anticipation (module docstring). The anticipation comes from
-    ``anticipations``; the settle is ``_settle_of`` measured on the cycle
-    without its anticipation, so a cycle with none gets exactly the settle
-    it would get without the rule."""
+    and lead (module docstring). A change must follow the cycle for it to have
+    a lead, which takes at most half of it, as the settle does. The settle is
+    ``_settle_of`` on the cycle without its lead."""
     cost = np.asarray(cost)
     out = []
-    for (a, b), j in zip(cycles, anticipations(cost, cycles)):
-        h = b - j
+    for a, b in cycles:
+        h = b if b >= len(cost) else b - min(lead, (b - a) // 2)
         out.append(Segment(a, a + _settle_of(cost[a:h], settle), h, b))
     return out
 
 
 def _segments(ep: Episode, settle: int | None = None) -> list[Segment]:
-    return cycle_segments(ep.cost, _cycles(ep), settle)
+    return cycle_segments(ep.cost, _cycles(ep), settle, ep.lead)
 
 
 def _hold_level(cost: np.ndarray, s: Segment) -> float:
-    """Mean cost over the hold steps (over the cycle without its anticipation
-    when the hold is empty)."""
+    """Mean cost over the hold steps (over the cycle without its lead when the
+    hold is empty)."""
     if s.hold_end > s.hold_start:
         return cost[s.hold_start : s.hold_end].mean()
     return cost[s.start : s.hold_end].mean()
@@ -237,7 +242,7 @@ def gain(episodes, burn_in: int, key: str | None = None):
 
 def hold(episodes, burn_in: int, key: str | None = None, settle: int | None = None):
     """Mean per-step cost over the hold steps only (after the burn-in, after
-    each cycle's settle and before its anticipation of the next change):
+    each cycle's settle and before its lead into the next change):
     ``rho_hold``."""
     per_ep = []
     for ep in episodes:
@@ -275,15 +280,15 @@ def _settle_of(cost: np.ndarray, settle: int | None) -> int:
 def reach_cost(episodes, settle: int | None = None):
     """Excess cost of each target change's transient over the hold level (the
     bias ``B`` of Theorem 4). The transient is the settle of the cycle the
-    change starts, measured against that cycle's hold level, plus the
-    anticipation at the end of the previous cycle, measured against the
-    previous cycle's hold level. Negative when the cost is still rising at
+    change starts, measured against that cycle's hold level, plus the lead at
+    the end of the previous cycle, measured against the previous cycle's hold
+    level. Negative when the cost is still rising at
     the end of the cycle, because the transient is then cheaper than the
     "hold" level and the controller reached no hold in the window.
     ``transient_cost`` and ``unsettled_fraction`` report that separately."""
     vals = []
     for ep in episodes:
-        carry = None  # excess of the previous cycle's anticipation
+        carry = None  # excess of the previous cycle's lead
         for s in _segments(ep, settle):
             level = _hold_level(ep.cost, s)
             v = (ep.cost[s.start : s.hold_start] - level).sum()
@@ -298,8 +303,8 @@ def reach_cost(episodes, settle: int | None = None):
 
 def transient_cost(episodes, window: int):
     """Summed cost over the first ``window`` steps after each target change
-    (up to the cycle's own anticipation, if that comes first), plus the cost
-    of the anticipation steps among the last ``window`` before the change.
+    (up to the cycle's own lead, if that comes first), plus the cost of the
+    lead steps among the last ``window`` before the change.
 
     Nothing is subtracted, so unlike ``reach_cost``, which is relative to each
     controller's own hold level, it compares two controllers whose holds
@@ -307,7 +312,7 @@ def transient_cost(episodes, window: int):
     vals = []
     w = max(int(window), 1)
     for ep in episodes:
-        carry = None  # cost of the previous cycle's anticipation
+        carry = None  # cost of the previous cycle's lead
         for s in _segments(ep):
             v = ep.cost[s.start : min(s.start + w, s.hold_end)].sum()
             if carry is not None:
@@ -321,8 +326,8 @@ def transient_cost(episodes, window: int):
 
 def settling_time(episodes, band: float):
     """Steps per move until the tracking cost enters ``band`` and stays there
-    until the cycle's anticipation of the next change: 0 when it never leaves,
-    the whole cycle when it ends outside. A move is the reset or a target
+    until the cycle's lead into the next change: 0 when it never leaves, the
+    whole cycle when it ends outside. A move is the reset or a target
     change. Reads the ``tracking`` term, or the cost when there are no terms;
     ``scoring.settle_band`` is the plant's band."""
     vals = []
@@ -336,8 +341,8 @@ def settling_time(episodes, band: float):
 
 def unsettled_fraction(episodes):
     """Share of cycles in which the cost over the second half exceeds the
-    cost over the first half, with the anticipation of the next change left
-    out. The controller is still moving away from a hold when the cycle ends,
+    cost over the first half, with the lead into the next change left out.
+    The controller is still moving away from a hold when the cycle ends,
     so its reach cost has no hold level to be measured against."""
     n_up = n_tot = 0
     for ep in episodes:
@@ -352,7 +357,8 @@ def unsettled_fraction(episodes):
 
 def hold_mask(ep: Episode, burn_in: int, settle: int | None = None) -> np.ndarray:
     """Steps that count as hold: after the burn-in, after each cycle's settle
-    and before its anticipation of the next change."""
+    and before its lead into the next change. Given the schedule, they are the
+    same steps for every controller."""
     m = np.zeros(len(ep.cost), bool)
     for s in _segments(ep, settle):
         m[s.hold_start : s.hold_end] = True
@@ -492,7 +498,9 @@ def hold_settings(name: str) -> dict:
 #: ``c_hold`` and ``rho_floor`` are: a retuned expert or a rebuilt oracle
 #: does not move the window every controller is scored on
 #: (CONTRIBUTING.md, "Frozen scoring constants"). The hold rows keep
-#: reporting the measured settles.
+#: reporting the measured settles. Two moved with their rebuilt plants: a
+#: ``reactor`` ramp is one move lasting 20 steps, and ``wind_turbine``'s target
+#: moves now, with its expert settling in about 36 steps and its oracle in 48.
 FIXED_SETTLE = {
     "plane": 47,
     "plane_energy": 85,
@@ -502,23 +510,39 @@ FIXED_SETTLE = {
     "plane3d_racetrack": 42,
     "plane3d_figure8": 17,
     "patrol": 84,
-    "patrol_bearing_only": 84,
+    "patrol_range_bearing": 84,
     "cstr": 67,
     "first_order": 63,
     "four_tank": 581,
     "ph_neutralization": 12,
     "distillation": 46,
     "glass_furnace": 18,
-    "reactor": 1,
+    "reactor": 20,
     "hvac": 4,
     "cement_kiln": 8,
     "boiler_drum": 8,
-    "wind_turbine": 0,
+    "wind_turbine": 48,
     "battery": 6,
     "unstable_cstr": 99,
     "compressor_surge": 100,
     "formation": 45,
 }
+
+
+#: The lead of each task, in steps: how long before a move a shipped controller
+#: starts for it, the longest run ``anticipations`` finds on at least 5 % of the
+#: cycles a change follows. Frozen as ``FIXED_SETTLE`` is (CONTRIBUTING.md,
+#: "Frozen scoring constants"). Any task not listed has none. On hvac the expert's
+#: optimal start runs to 13 steps and the oracle's to 18, half a night cycle. Every
+#: expert is measured on the new plants; the other oracles' leads wait on PR 9
+#: (docs/proposals/industrial-fixes.md).
+FIXED_LEAD = {"hvac": 18}
+
+
+def fixed_lead(name: str) -> int:
+    """The steps before each move every controller leaves out of its hold on
+    ``name`` (``FIXED_LEAD``)."""
+    return FIXED_LEAD.get(name, 0)
 
 
 def fixed_settle(name: str) -> int:

@@ -13,7 +13,6 @@ import numpy as np
 import pytest
 
 from target_gym import Formation, FormationParams
-from target_gym.experts.pid import make_plane3d_heading_pid, plane3d_heading_pid_step
 from target_gym.formation.env import (
     MAX_WINGMEN,
     aircraft_costs,
@@ -25,6 +24,7 @@ from target_gym.formation.env import (
     slot_errors,
 )
 from target_gym.patrol.env import (
+    LEAD_AUTOPILOT,
     N_LEAD_LEGS,
     PatrolState,
     compute_reward_terms_patrol,
@@ -33,9 +33,13 @@ from target_gym.patrol.env import (
 )
 from target_gym.patrol.env_jax import PlanePatrol
 from target_gym.plane3d.env import compute_reward_terms_heading, wrap_angle
+from target_gym.plane3d.experts import plane3d_heading_step
 from target_gym.reward import trip_cost
 
 KEY = jax.random.PRNGKey(0)
+#: Two ULPs at 1: a small angle summed from terms near 1 rounds to this, not to a
+#: fraction of itself.
+FLOAT32_ULP = 2.4e-7
 
 
 def _reset(k=2, seed=0, **overrides):
@@ -75,7 +79,7 @@ class TestConstruction:
             Formation(num_wingmen=k)
 
     def test_tracked_values_are_the_lead_altitude_and_each_slot_error(self):
-        env, _, obs, state = _reset(follower_spawn_noise=0.0)
+        env, _, obs, state = _reset(follower_spawn_noise=0.0, sensor_noise_scale=0.0)
         assert len(env.tracked_names) == 3
         value = np.asarray(obs)[list(env.obs_value_index)]
         target = np.asarray(obs)[list(env.obs_target_index)]
@@ -138,7 +142,9 @@ class TestRoute:
         assert np.all(np.abs(sched) <= p.lead_turn_rate_range[1])
         assert float(state.lead_turn_rate) == pytest.approx(float(sched[0]))
 
-    @pytest.mark.parametrize("lead_action", [[-1.0, -1.0, -1.0], [1.0, 1.0, 1.0]])
+    # Full stick is out: a 15 deg pitch demand pulls past 2.5 g and restarts the
+    # route, so these are the limits of the throttle and the bank.
+    @pytest.mark.parametrize("lead_action", [[-1.0, -0.1, -1.0], [1.0, 0.1, 1.0]])
     def test_the_reference_follows_the_route_whatever_the_lead_does(self, lead_action):
         env, params, _, state = _reset()
         action = jnp.concatenate([jnp.asarray(lead_action), jnp.zeros(6)])
@@ -158,53 +164,61 @@ class TestRoute:
 # ─── Patrol, seat for seat ──────────────────────────────
 
 
-def _patrol_view(state, i, lead_pid):
+def _patrol_view(state, i, lead_memory):
     return PatrolState(
         follower=_wingman(state, i),
         lead=state.lead,
-        lead_pid=lead_pid,
+        lead_memory=lead_memory,
         slot_back=state.slot_back[i],
         slot_right=state.slot_right[i],
         slot_up=state.slot_up[i],
         lead_turn_rate=state.lead_turn_rate,
         lead_turn_schedule=state.lead_turn_schedule,
         time=state.time,
-        gust_x=state.gust_x,
-        gust_y=state.gust_y,
-        gust_z=state.gust_z,
+        gust_history=state.gust_history,
+        gust_own=state.gust_own[i : i + 1],
+        wake_history=state.wake_history,
     )
 
 
-@pytest.mark.parametrize("k", [1, 2])
-def test_with_the_autopilot_in_the_lead_seat_each_wingman_flies_a_patrol(k):
+@pytest.mark.parametrize("k, sigma", [(1, 3.0), (2, 0.0)])
+def test_with_the_autopilot_in_the_lead_seat_each_wingman_flies_a_patrol(k, sigma):
     """The lead flown by the patrol's own autopilot, on the heading it is
     commanded this step: every wingman then sees patrol's observation and
     moves exactly as patrol's follower does, so a policy trained on patrol
-    can fly a wingman seat unchanged."""
-    env, params, obs, state = _reset(k=k, turbulence_sigma=3.0)
+    can fly a wingman seat unchanged. Under turbulence that is the first wingman,
+    which draws the patrol follower's air; the second has air of its own."""
+    env, params, obs, state = _reset(
+        k=k, turbulence_sigma=sigma, sensor_noise_scale=0.0
+    )
     patrol = PlanePatrol()
-    pid_params, pid = make_plane3d_heading_pid()
-    actions = jax.random.uniform(jax.random.PRNGKey(7), (k, 3), minval=-1, maxval=1)
+    memory = jax.tree.map(jnp.asarray, patrol.reset_env(KEY, params)[1].lead_memory)
+    # Inside the load limits: a 14 deg pitch demand would trip both tasks at once,
+    # and each restarts on its own draw.
+    actions = jax.random.uniform(jax.random.PRNGKey(7), (k, 3), minval=-0.2, maxval=0.2)
     for _ in range(3):
-        lead_action, new_pid = plane3d_heading_pid_step(pid_params, pid, obs[:15])
+        lead_action, new_memory = plane3d_heading_step(LEAD_AUTOPILOT, memory, obs[:15])
         joint = jnp.concatenate([lead_action, actions.ravel()])
         obs2, new, _, _, _ = env.step_env(KEY, state, joint, params)
         for i in range(k):
-            view = _patrol_view(state, i, pid)
+            view = _patrol_view(state, i, memory)
             start = env.lead_obs_dim + 26 * i
             # Batched over the wingmen, float32 can round the last bit apart.
             np.testing.assert_allclose(
                 np.asarray(obs[start : start + 26]),
                 np.asarray(get_obs_full(view)),
                 rtol=1e-5,
+                atol=FLOAT32_ULP,
             )
             _, pnew, _, _, _ = patrol.step_env(KEY, view, actions[i], params)
             for a, b in zip(
                 jax.tree.leaves((pnew.follower, pnew.lead)),
                 jax.tree.leaves((_wingman(new, i), new.lead)),
             ):
-                np.testing.assert_allclose(np.asarray(a), np.asarray(b), rtol=1e-5)
-        obs, state, pid = obs2, new, new_pid
+                np.testing.assert_allclose(
+                    np.asarray(a), np.asarray(b), rtol=1e-5, atol=FLOAT32_ULP
+                )
+        obs, state, memory = obs2, new, new_memory
 
 
 # ─── Reward ─────────────────────────────────────────────
@@ -318,10 +332,9 @@ class TestTrips:
 # ─── Disturbance ────────────────────────────────────────
 
 
-def test_one_gust_for_the_whole_formation_and_any_size():
-    """The formation shares one air mass, the gust is drawn from the step
-    clock (a constant rollout key does not replay one draw), and it reaches a
-    formation of any size."""
+def test_the_gust_comes_from_the_step_clock_and_any_size_of_formation_flies_in_it():
+    """The lead's gust is drawn from the step clock (a constant rollout key does
+    not replay one draw), and the air reaches a formation of any size."""
     env = Formation(num_wingmen=MAX_WINGMEN)
     params = env.default_params.replace(turbulence_sigma=4.0)
     _, state = env.reset_env(KEY, params)
@@ -329,12 +342,13 @@ def test_one_gust_for_the_whole_formation_and_any_size():
 
     def step(s, _):
         _, s, _, _, _ = env.step_env(KEY, s, zero, params)
-        return s, s.gust_y
+        return s, jnp.concatenate([s.lead.gust_y[None], s.wingmen.gust_y])
 
     _, g = jax.jit(lambda s: jax.lax.scan(step, s, None, length=150))(state)
     g = np.asarray(g)
+    assert g.shape == (150, MAX_WINGMEN + 1)
     assert np.std(g) > 1.0
-    assert len(np.unique(np.round(g, 6))) > 100
+    assert len(np.unique(np.round(g[:, 0], 6))) > 100
 
 
 def test_every_aircraft_flies_through_one_batched_dynamics_call(monkeypatch):

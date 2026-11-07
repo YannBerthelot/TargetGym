@@ -1,0 +1,34 @@
+{
+  "cpu": "Apple M4 Pro",
+  "exception": null,
+  "expert_figure": {
+    "kind": "band",
+    "source": "a temperature-control vendor's blog, naming no original",
+    "status": "read, secondary",
+    "unit": "K",
+    "url": "https://lorentzzi.com/es/glass-production-precise-temperature-control-solutions-from-lorentzzi",
+    "value": 10.0,
+    "what": "melting-section band of a float furnace, 1550 C +-10 C; not the crown and not a measured hold"
+  },
+  "expert_fingerprint": "b1649b68d6e0a9aa",
+  "generated": "2026-11-06T12:57:00+00:00",
+  "null_wins": [],
+  "nulls": {
+    "constant 0.0": {
+      "ratio": 0.0017805484673528952,
+      "win_rate": 0.0
+    },
+    "constant 0.5": {
+      "ratio": 0.13568243175416156,
+      "win_rate": 0.0
+    },
+    "constant 1.0": {
+      "ratio": 0.0018762479056425912,
+      "win_rate": 0.0
+    },
+    "table": {
+      "ratio": 0.07297417086686439,
+      "win_rate": 0.1
+    }
+  }
+}

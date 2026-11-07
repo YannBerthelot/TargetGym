@@ -162,6 +162,41 @@ def test_a_line_search_that_fails_at_an_acceptable_point_ends_the_solve_there():
         np.testing.assert_array_equal(r.z, [0.0, 0.0])
 
 
+def test_a_shift_that_failed_does_not_set_the_next_shift():
+    """IPOPT's inertia correction (Waechter and Biegler 2006, Algorithm IC)
+    remembers the last shift that worked. f = sum (z^2 - 1)^2 / 4 on z1 = z2
+    has its minima at z = +-1. The Hessian is NaN at the start, z = 3, so no
+    shift works there and a restoration moves to z = 0.2, where f'' = -0.88
+    needs a shift near 1. Remembering the failed 1e40 would start that search
+    at 3e39, whose step is zero, and a third of it at each of the 80 iterations
+    it takes to come down. From 0.2 the gradient z^3 - z is negative, so the
+    solve descends to z = 1."""
+    with enable_x64():
+
+        def f(z):
+            return jnp.sum((z**2 - 1.0) ** 2) / 4.0
+
+        def derivs(z, lam):
+            H = jnp.diag(3.0 * z**2 - 1.0)
+            poison = jnp.where(z[0] > 2.0, jnp.nan, 1.0)
+            return (
+                jax.grad(f)(z), poison * H, jnp.array([[1.0, -1.0]]),
+                jnp.atleast_1d(z[0] - z[1]),
+            )  # fmt: skip
+
+        nlp = NLP(
+            f=f, c=lambda z: jnp.atleast_1d(z[0] - z[1]), derivs=derivs,
+            G=jnp.eye(2), g0=10.0 * jnp.ones(2), kkt=_dense_kkt,
+            restore=lambda z: 0.2 * jnp.ones(2),
+        )  # fmt: skip
+        z0 = 3.0 * jnp.ones(2)
+        r = interior_point(
+            nlp, z0, z0 + 10.0, jnp.zeros(1), 0.01 / (z0 + 10.0), mu0=0.01, max_iter=60
+        )
+        assert 0.0 <= float(r.error) <= 1e-8
+        np.testing.assert_allclose(r.z, [1.0, 1.0], atol=1e-6)
+
+
 def test_the_accept_tests_allow_ten_eps_of_the_reference():
     """f = 1 + |z - 1|^2 / 2, plus 4 eps on any point past the start, from
     z = 1 - 2e-8: the Newton step to z = 1 lowers the smooth part by 4e-16

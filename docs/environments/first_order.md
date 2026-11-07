@@ -16,7 +16,7 @@ env, params = tg.make("first_order")
 | Observation space | `Box((2,))` |
 | Tracked variable(s) | x |
 | Episode length | 150 steps of 0.05 s (7.5 s) |
-| Cite as | `first_order-v3` |
+| Cite as | `first_order-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
 
 ## Action space
@@ -53,7 +53,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 4 fields.
+`reset` samples the initial condition and the target; state has 7 fields.
 
 ## Episode end
 
@@ -80,6 +80,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 0.05 | s |
 | `max_steps_in_episode` | 150 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
+| `actuator_rate` | 0 | fraction of span per delta_t unit |
+| `actuator_lag` | 0 | delta_t units |
 | `K` | 1 | - |
 | `tau` | 0.5 | s |
 | `u_min` | -2 | - |

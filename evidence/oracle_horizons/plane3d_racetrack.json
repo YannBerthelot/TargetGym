@@ -1,0 +1,2154 @@
+{
+  "M": 76,
+  "N": 363,
+  "P": 439,
+  "P_set_by": {
+    "cv": "plane3d_racetrack:path",
+    "mv": "plane3d_racetrack:course",
+    "seed": 104
+  },
+  "P_steps": 439,
+  "P_without_quiet_fits": 439,
+  "T_c_seconds": 1.0,
+  "T_c_set_by": {
+    "cv": "plane3d_heading:heading",
+    "mv": "plane3d_heading:bank",
+    "seed": 101
+  },
+  "T_c_steps": 1,
+  "classes": {
+    "plane3d_heading:altitude": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 25
+      }
+    },
+    "plane3d_heading:bank": {
+      "class": "fopdt",
+      "votes": {
+        "fopdt": 10,
+        "integrating_lag": 0
+      }
+    },
+    "plane3d_heading:eas": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 2,
+        "integrating_lag": 4
+      }
+    },
+    "plane3d_heading:heading": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 1,
+        "integrating_lag": 26
+      }
+    },
+    "plane3d_heading:load": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "plane3d_heading:mach": {
+      "class": "fopdt",
+      "votes": {
+        "fopdt": 14,
+        "integrating_lag": 0
+      }
+    },
+    "plane3d_racetrack:altitude": {
+      "class": "fopdt",
+      "votes": {
+        "fopdt": 2,
+        "integrating_lag": 0
+      }
+    },
+    "plane3d_racetrack:bank": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "plane3d_racetrack:eas": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "plane3d_racetrack:load": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "plane3d_racetrack:mach": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "plane3d_racetrack:path": {
+      "class": "fopdt",
+      "votes": {
+        "fopdt": 3,
+        "integrating_lag": 3
+      }
+    }
+  },
+  "compliant": true,
+  "counts": {
+    "insignificant": 84,
+    "invalid": 70,
+    "quiet": 35,
+    "valid": 36
+  },
+  "cpu": "Apple M4 Pro",
+  "cvs_without_valid_pair": [
+    "plane3d_heading:eas",
+    "plane3d_heading:load"
+  ],
+  "dt": 1.0,
+  "episode_samples": 650,
+  "episode_steps": 650,
+  "generated": "2026-11-07T11:01:07+00:00",
+  "outside_section_4_5": [
+    {
+      "P": 1170,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.0115,
+        "k": -0.000171626,
+        "k_3sigma": 1.4365e-06,
+        "model": "integrating_lag",
+        "sigma": 0.000809569,
+        "snr": 7.83632,
+        "sse": 0.000787288,
+        "tau2": 122.264,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 102,
+      "test": 2
+    },
+    {
+      "P": 1470,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.9982,
+        "k": 0.000293672,
+        "k_3sigma": 4.10212e-06,
+        "model": "integrating_lag",
+        "sigma": 0.00132734,
+        "snr": 7.93186,
+        "sse": 0.00213147,
+        "tau2": 153.861,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 104,
+      "test": 2
+    },
+    {
+      "P": 926,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.1,
+        "k": 0.000189364,
+        "k_3sigma": 4.4593e-06,
+        "model": "integrating_lag",
+        "sigma": 0.000397552,
+        "snr": 8.45441,
+        "sse": 9.48515e-05,
+        "tau2": 96.4559,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 107,
+      "test": 1
+    },
+    {
+      "P": 299,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.0198,
+        "k": -0.00653042,
+        "k_3sigma": 0.000192794,
+        "model": "integrating_lag",
+        "sigma": 0.00459404,
+        "snr": 6.54274,
+        "sse": 0.00698511,
+        "tau2": 30.4595,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 100,
+      "test": 0
+    },
+    {
+      "P": 1575,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 98.8761,
+        "k": 0.00262754,
+        "k_3sigma": 1.09112e-05,
+        "model": "integrating_lag",
+        "sigma": 0.00324926,
+        "snr": 28.2997,
+        "sse": 0.0130426,
+        "tau2": 164.936,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 100
+    },
+    {
+      "P": 932,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.6612,
+        "k": -0.00197309,
+        "k_3sigma": 4.06047e-06,
+        "model": "integrating_lag",
+        "sigma": 0.000358666,
+        "snr": 92.9379,
+        "sse": 7.73088e-05,
+        "tau2": 97.1295,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 101
+    },
+    {
+      "P": 995,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.5956,
+        "k": 0.00197042,
+        "k_3sigma": 5.10822e-06,
+        "model": "integrating_lag",
+        "sigma": 0.000420568,
+        "snr": 77.637,
+        "sse": 0.000106354,
+        "tau2": 102.437,
+        "theta": 0.694569
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 103
+    },
+    {
+      "P": 1128,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.5525,
+        "k": -0.00174594,
+        "k_3sigma": 5.79152e-06,
+        "model": "integrating_lag",
+        "sigma": 0.000396988,
+        "snr": 71.0196,
+        "sse": 9.4627e-05,
+        "tau2": 117.787,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 105
+    },
+    {
+      "P": 1109,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 98.6181,
+        "k": -0.000784284,
+        "k_3sigma": 7.8932e-06,
+        "model": "integrating_lag",
+        "sigma": 0.000553475,
+        "snr": 22.8314,
+        "sse": 0.000183954,
+        "tau2": 115.876,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 106
+    },
+    {
+      "P": 1121,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.7656,
+        "k": 0.000194302,
+        "k_3sigma": 9.03634e-07,
+        "model": "integrating_lag",
+        "sigma": 0.000724239,
+        "snr": 13.6416,
+        "sse": 0.000631305,
+        "tau2": 117.042,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 107
+    },
+    {
+      "P": 1132,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 99.4919,
+        "k": 0.000797768,
+        "k_3sigma": 2.81374e-06,
+        "model": "integrating_lag",
+        "sigma": 0.000207795,
+        "snr": 62.5073,
+        "sse": 2.594e-05,
+        "tau2": 110.085,
+        "theta": 3.76725
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 108
+    },
+    {
+      "P": 382,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.3255,
+        "k": -0.00673033,
+        "k_3sigma": 7.69994e-05,
+        "model": "integrating_lag",
+        "sigma": 0.00640377,
+        "snr": 11.8267,
+        "sse": 0.0208172,
+        "tau2": 39.208,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 100
+    },
+    {
+      "P": 288,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6788,
+        "k": 0.0051707,
+        "k_3sigma": 3.70174e-05,
+        "model": "integrating_lag",
+        "sigma": 0.00706119,
+        "snr": 13.164,
+        "sse": 0.0314809,
+        "tau2": 29.3515,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 101
+    },
+    {
+      "P": 538,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.1301,
+        "k": -0.00602833,
+        "k_3sigma": 0.000170784,
+        "model": "integrating_lag",
+        "sigma": 0.00207913,
+        "snr": 11.9512,
+        "sse": 0.00150743,
+        "tau2": 55.5765,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 103
+    },
+    {
+      "P": 531,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.9834,
+        "k": 0.00550195,
+        "k_3sigma": 0.000161657,
+        "model": "integrating_lag",
+        "sigma": 0.00200104,
+        "snr": 11.3735,
+        "sse": 0.00139788,
+        "tau2": 54.8705,
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 105
+    },
+    {
+      "P": 1234,
+      "cv": "plane3d_heading:heading",
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.7069,
+        "k": -0.00264788,
+        "k_3sigma": 6.22916e-05,
+        "model": "integrating_lag",
+        "sigma": 0.000604671,
+        "snr": 15.7788,
+        "sse": 0.000124716,
+        "tau2": 50.8413,
+        "theta": 35.3932
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 108
+    }
+  ],
+  "pairs": [
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "plane3d_racetrack:path",
+      "evidence": null,
+      "failed": [],
+      "fit": null,
+      "kept": 2,
+      "label": "insignificant",
+      "mv": "plane3d_racetrack:course",
+      "seed": 100,
+      "tests": [
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 38.4003,
+            "k": 13565.4,
+            "k_3sigma": 2028.21,
+            "model": "fopdt",
+            "sigma": 341.269,
+            "snr": 0.60365,
+            "sse": 34942400.0,
+            "tau": 17.4326,
+            "theta": 19.4786
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 18.8533,
+            "k": 53.4188,
+            "k_3sigma": 25.8891,
+            "model": "integrating_lag",
+            "sigma": 427.663,
+            "snr": 0.481703,
+            "sse": 60637100.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 300,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 300
+        },
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 45.1617,
+            "k": 15322.4,
+            "k_3sigma": 1952.46,
+            "model": "fopdt",
+            "sigma": 641.692,
+            "snr": 0.651042,
+            "sse": 123546000.0,
+            "tau": 19.8711,
+            "theta": 19.6214
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 24.263,
+            "k": 63.0363,
+            "k_3sigma": 25.5185,
+            "model": "integrating_lag",
+            "sigma": 842.381,
+            "snr": 0.495937,
+            "sse": 235654000.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 300,
+          "step": 0.0698132,
+          "trips": {},
+          "window": 300
+        },
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 22.3468,
+            "k": 7657.98,
+            "k_3sigma": 1183.23,
+            "model": "fopdt",
+            "sigma": 645.034,
+            "snr": 0.647668,
+            "sse": 249642000.0,
+            "tau": 9.35648,
+            "theta": 11.4417
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 4.66439,
+            "k": 10.3548,
+            "k_3sigma": 8.04111,
+            "model": "integrating_lag",
+            "sigma": 732.727,
+            "snr": 0.570155,
+            "sse": 376278000.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 600,
+          "step": 0.0698132,
+          "trips": {},
+          "window": 600
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "plane3d_racetrack:path",
+      "evidence": "integrating_lag",
+      "failed": [
+        "V1",
+        "V2"
+      ],
+      "fit": {
+        "V1": false,
+        "V2": false,
+        "V3": true,
+        "V4": true,
+        "fit": 91.2817,
+        "k": 47060.2,
+        "k_3sigma": 3332.53,
+        "model": "fopdt",
+        "sigma": 84.1401,
+        "snr": 2.75471,
+        "sse": 2128310.0,
+        "tau": 138.756,
+        "theta": 26.5975
+      },
+      "kept": 0,
+      "label": "invalid",
+      "mv": "plane3d_racetrack:course",
+      "seed": 101,
+      "tests": [
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 91.2817,
+            "k": 47060.2,
+            "k_3sigma": 3332.53,
+            "model": "fopdt",
+            "sigma": 84.1401,
+            "snr": 2.75471,
+            "sse": 2128310.0,
+            "tau": 138.756,
+            "theta": 26.5975
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 85.0089,
+            "k": 157.594,
+            "k_3sigma": 8.34005,
+            "model": "integrating_lag",
+            "sigma": 143.226,
+            "snr": 1.61829,
+            "sse": 6292800.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 300,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 300
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "plane3d_racetrack:path",
+      "evidence": null,
+      "failed": [],
+      "fit": null,
+      "kept": 0,
+      "label": "insignificant",
+      "mv": "plane3d_racetrack:course",
+      "seed": 102,
+      "tests": [
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": false,
+            "V3": true,
+            "V4": false,
+            "fit": 34.9563,
+            "k": -97942.4,
+            "k_3sigma": 282536.0,
+            "model": "fopdt",
+            "sigma": 458.224,
+            "snr": 0.51546,
+            "sse": 85775200.0,
+            "tau": 190.676,
+            "theta": 179.0
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 33.1362,
+            "k": -369.85,
+            "k_3sigma": 116.292,
+            "model": "integrating_lag",
+            "sigma": 484.82,
+            "snr": 0.487183,
+            "sse": 90642800.0,
+            "tau2": 0.071547,
+            "theta": 173.971
+          },
+          "loops": [],
+          "samples": 300,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 300
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "plane3d_racetrack:path",
+      "evidence": null,
+      "failed": [],
+      "fit": null,
+      "kept": 0,
+      "label": "insignificant",
+      "mv": "plane3d_racetrack:course",
+      "seed": 103,
+      "tests": [
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 39.6335,
+            "k": 11926.6,
+            "k_3sigma": 1701.98,
+            "model": "fopdt",
+            "sigma": 293.662,
+            "snr": 0.605408,
+            "sse": 25873500.0,
+            "tau": 15.2106,
+            "theta": 17.3189
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 18.1129,
+            "k": 46.0695,
+            "k_3sigma": 22.94,
+            "model": "integrating_lag",
+            "sigma": 375.663,
+            "snr": 0.473259,
+            "sse": 47609600.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 300,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 300
+        }
+      ]
+    },
+    {
+      "M": 76,
+      "N": 363,
+      "P": 439,
+      "cv": "plane3d_racetrack:path",
+      "evidence": "fopdt",
+      "failed": [],
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 98.2159,
+        "k": 9659.98,
+        "k_3sigma": 26.5464,
+        "model": "fopdt",
+        "sigma": 10.8608,
+        "snr": 10.6325,
+        "sse": 70774.7,
+        "tau": 71.6636,
+        "theta": 4.28678
+      },
+      "kept": 1,
+      "label": "valid",
+      "mv": "plane3d_racetrack:course",
+      "seed": 104,
+      "tests": [
+        {
+          "fopdt": {
+            "V1": true,
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 98.8827,
+            "k": 9471.35,
+            "k_3sigma": 33.3541,
+            "model": "fopdt",
+            "sigma": 2.98994,
+            "snr": 18.4976,
+            "sse": 2682.06,
+            "tau": 66.1572,
+            "theta": 6.28051
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 73.5046,
+            "k": 42.5737,
+            "k_3sigma": 4.08296,
+            "model": "integrating_lag",
+            "sigma": 64.9014,
+            "snr": 0.852164,
+            "sse": 1508200.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 300,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 300
+        },
+        {
+          "fopdt": {
+            "V1": true,
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 98.2159,
+            "k": 9659.98,
+            "k_3sigma": 26.5464,
+            "model": "fopdt",
+            "sigma": 10.8608,
+            "snr": 10.6325,
+            "sse": 70774.7,
+            "tau": 71.6636,
+            "theta": 4.28678
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 64.2962,
+            "k": 23.4839,
+            "k_3sigma": 2.20701,
+            "model": "integrating_lag",
+            "sigma": 194.535,
+            "snr": 0.593609,
+            "sse": 28345500.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 600,
+          "step": 0.0698132,
+          "trips": {},
+          "window": 600
+        },
+        {
+          "fopdt": {
+            "V1": true,
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 98.1442,
+            "k": 9438.49,
+            "k_3sigma": 27.0977,
+            "model": "fopdt",
+            "sigma": 22.0325,
+            "snr": 10.2516,
+            "sse": 291259.0,
+            "tau": 72.6833,
+            "theta": 4.75039
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 64.5503,
+            "k": 22.9227,
+            "k_3sigma": 2.13672,
+            "model": "integrating_lag",
+            "sigma": 376.966,
+            "snr": 0.599175,
+            "sse": 106276000.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 600,
+          "step": 0.139626,
+          "trips": {},
+          "window": 600
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "plane3d_racetrack:path",
+      "evidence": "fopdt",
+      "failed": [
+        "V1"
+      ],
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.9639,
+        "k": 9056.64,
+        "k_3sigma": 40.1561,
+        "model": "fopdt",
+        "sigma": 5.75357,
+        "snr": 9.46028,
+        "sse": 9931.13,
+        "tau": 34.8556,
+        "theta": 8.62996
+      },
+      "kept": 0,
+      "label": "invalid",
+      "mv": "plane3d_racetrack:course",
+      "seed": 105,
+      "tests": [
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 97.9639,
+            "k": 9056.64,
+            "k_3sigma": 40.1561,
+            "model": "fopdt",
+            "sigma": 5.75357,
+            "snr": 9.46028,
+            "sse": 9931.13,
+            "tau": 34.8556,
+            "theta": 8.62996
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 65.0771,
+            "k": 43.6872,
+            "k_3sigma": 5.68286,
+            "model": "integrating_lag",
+            "sigma": 89.6039,
+            "snr": 0.607455,
+            "sse": 2921740.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 300,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 300
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "plane3d_racetrack:path",
+      "evidence": "integrating_lag",
+      "failed": [
+        "V1",
+        "V2"
+      ],
+      "fit": {
+        "V1": false,
+        "V2": false,
+        "V3": true,
+        "V4": true,
+        "fit": 97.157,
+        "k": 144692.0,
+        "k_3sigma": 26025.6,
+        "model": "fopdt",
+        "sigma": 26.5401,
+        "snr": 9.21041,
+        "sse": 211317.0,
+        "tau": 777.115,
+        "theta": 10.8176
+      },
+      "kept": 0,
+      "label": "invalid",
+      "mv": "plane3d_racetrack:course",
+      "seed": 106,
+      "tests": [
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 97.157,
+            "k": 144692.0,
+            "k_3sigma": 26025.6,
+            "model": "fopdt",
+            "sigma": 26.5401,
+            "snr": 9.21041,
+            "sse": 211317.0,
+            "tau": 777.115,
+            "theta": 10.8176
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 96.2815,
+            "k": 155.438,
+            "k_3sigma": 2.02167,
+            "model": "integrating_lag",
+            "sigma": 34.7142,
+            "snr": 7.04167,
+            "sse": 361522.0,
+            "tau2": 1.06096e-05,
+            "theta": 1.96608
+          },
+          "loops": [],
+          "samples": 300,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 300
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "plane3d_racetrack:path",
+      "evidence": "integrating_lag",
+      "failed": [
+        "V1",
+        "V2"
+      ],
+      "fit": {
+        "V1": false,
+        "V2": false,
+        "V3": true,
+        "V4": true,
+        "fit": 88.6312,
+        "k": 38790.8,
+        "k_3sigma": 8114.94,
+        "model": "fopdt",
+        "sigma": 52.8898,
+        "snr": 2.55289,
+        "sse": 1763780.0,
+        "tau": 749.774,
+        "theta": "< dt"
+      },
+      "kept": 1,
+      "label": "invalid",
+      "mv": "plane3d_racetrack:course",
+      "seed": 107,
+      "tests": [
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 97.3055,
+            "k": 10271.5,
+            "k_3sigma": 87.9427,
+            "model": "fopdt",
+            "sigma": 7.80408,
+            "snr": 8.2941,
+            "sse": 18271.2,
+            "tau": 66.7598,
+            "theta": 6.371
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 73.9431,
+            "k": 46.1336,
+            "k_3sigma": 4.34579,
+            "model": "integrating_lag",
+            "sigma": 69.0877,
+            "snr": 0.936895,
+            "sse": 1708610.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 300,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 300
+        },
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 88.6312,
+            "k": 38790.8,
+            "k_3sigma": 8114.94,
+            "model": "fopdt",
+            "sigma": 52.8898,
+            "snr": 2.55289,
+            "sse": 1763780.0,
+            "tau": 749.774,
+            "theta": "< dt"
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 86.8455,
+            "k": 39.0481,
+            "k_3sigma": 1.27401,
+            "model": "integrating_lag",
+            "sigma": 57.5109,
+            "snr": 2.34776,
+            "sse": 2361370.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 600,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 600
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "plane3d_racetrack:path",
+      "evidence": "fopdt",
+      "failed": [
+        "V1"
+      ],
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 90.6073,
+        "k": 26212.2,
+        "k_3sigma": 339.327,
+        "model": "fopdt",
+        "sigma": 79.6383,
+        "snr": 2.22584,
+        "sse": 3814750.0,
+        "tau": 40.7728,
+        "theta": 27.4053
+      },
+      "kept": 1,
+      "label": "invalid",
+      "mv": "plane3d_racetrack:course",
+      "seed": 108,
+      "tests": [
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": false,
+            "V3": true,
+            "V4": true,
+            "fit": 91.4519,
+            "k": 29796.2,
+            "k_3sigma": 784.78,
+            "model": "fopdt",
+            "sigma": 70.645,
+            "snr": 2.50919,
+            "sse": 1503330.0,
+            "tau": 60.9495,
+            "theta": 21.5311
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 72.5378,
+            "k": 131.376,
+            "k_3sigma": 13.096,
+            "model": "integrating_lag",
+            "sigma": 215.597,
+            "snr": 0.822191,
+            "sse": 15516100.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 300,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 300
+        },
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": true,
+            "fit": 90.6073,
+            "k": 26212.2,
+            "k_3sigma": 339.327,
+            "model": "fopdt",
+            "sigma": 79.6383,
+            "snr": 2.22584,
+            "sse": 3814750.0,
+            "tau": 40.7728,
+            "theta": 27.4053
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 55.6524,
+            "k": 62.8453,
+            "k_3sigma": 7.64548,
+            "model": "integrating_lag",
+            "sigma": 342.397,
+            "snr": 0.517708,
+            "sse": 85040400.0,
+            "tau2": "< dt",
+            "theta": "< dt"
+          },
+          "loops": [],
+          "samples": 600,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 600
+        }
+      ]
+    },
+    {
+      "M": null,
+      "N": null,
+      "P": null,
+      "cv": "plane3d_racetrack:path",
+      "evidence": null,
+      "failed": [],
+      "fit": null,
+      "kept": 1,
+      "label": "insignificant",
+      "mv": "plane3d_racetrack:course",
+      "seed": 109,
+      "tests": [
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 1.72999,
+            "k": 2261.01,
+            "k_3sigma": 2118.53,
+            "model": "fopdt",
+            "sigma": 408.107,
+            "snr": 0.381767,
+            "sse": 49965400.0,
+            "tau": 3.25757,
+            "theta": 10.7011
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 2.88886,
+            "k": -30.0549,
+            "k_3sigma": 52.4238,
+            "model": "integrating_lag",
+            "sigma": 382.018,
+            "snr": 0.407839,
+            "sse": 48793900.0,
+            "tau2": 0.0603661,
+            "theta": 125.074
+          },
+          "loops": [],
+          "samples": 300,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 300
+        },
+        {
+          "fopdt": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 0.258007,
+            "k": 610.922,
+            "k_3sigma": 1044.53,
+            "model": "fopdt",
+            "sigma": 293.937,
+            "snr": 0.530052,
+            "sse": 51839200.0,
+            "tau": 0.949225,
+            "theta": 8.72537
+          },
+          "integrating_lag": {
+            "V1": false,
+            "V2": true,
+            "V3": true,
+            "V4": false,
+            "fit": 0.787575,
+            "k": -3.85639,
+            "k_3sigma": 8.02751,
+            "model": "integrating_lag",
+            "sigma": 288.391,
+            "snr": 0.540245,
+            "sse": 51290200.0,
+            "tau2": 0.283125,
+            "theta": 108.869
+          },
+          "loops": [],
+          "samples": 600,
+          "step": 0.0349066,
+          "trips": {},
+          "window": 600
+        }
+      ]
+    }
+  ],
+  "plans_to_episode_end": false,
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 5",
+  "quiet_fits": [
+    {
+      "P": 10,
+      "cv": "plane3d_heading:altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.2775,
+        "k": 6.75829,
+        "k_3sigma": 0.0436865,
+        "model": "integrating_lag",
+        "sigma": 34.4886,
+        "snr": 7.42047,
+        "sse": 1462070.0,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 104,
+      "test": 2
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.5547,
+        "k": 6.06049,
+        "k_3sigma": 0.0467965,
+        "model": "integrating_lag",
+        "sigma": 36.8488,
+        "snr": 6.16263,
+        "sse": 1677640.0,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:throttle",
+      "seed": 106,
+      "test": 2
+    },
+    {
+      "P": 344,
+      "cv": "plane3d_heading:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.8971,
+        "k": -0.450355,
+        "k_3sigma": 0.0032466,
+        "model": "fopdt",
+        "sigma": 0.00262316,
+        "snr": 4.77494,
+        "sse": 0.00319968,
+        "tau": 55.9406,
+        "theta": 4.58499
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 100,
+      "test": 1
+    },
+    {
+      "P": 352,
+      "cv": "plane3d_heading:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.2181,
+        "k": -0.453432,
+        "k_3sigma": 0.00314268,
+        "model": "fopdt",
+        "sigma": 0.00375469,
+        "snr": 4.05366,
+        "sse": 0.00845862,
+        "tau": 57.4824,
+        "theta": 3.71104
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 101,
+      "test": 1
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.7147,
+        "k": 30.3364,
+        "k_3sigma": 0.589283,
+        "model": "integrating_lag",
+        "sigma": 20.281,
+        "snr": 7.01259,
+        "sse": 88119.4,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 104,
+      "test": 1
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.1812,
+        "k": 31.1932,
+        "k_3sigma": 0.61221,
+        "model": "integrating_lag",
+        "sigma": 30.6632,
+        "snr": 6.23515,
+        "sse": 250966.0,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 106,
+      "test": 1
+    },
+    {
+      "P": 352,
+      "cv": "plane3d_heading:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.5457,
+        "k": -0.464493,
+        "k_3sigma": 0.00299599,
+        "model": "fopdt",
+        "sigma": 0.00382123,
+        "snr": 4.25623,
+        "sse": 0.00876115,
+        "tau": 57.07,
+        "theta": 4.25656
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 108,
+      "test": 1
+    },
+    {
+      "P": 351,
+      "cv": "plane3d_heading:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.9367,
+        "k": -0.422921,
+        "k_3sigma": 0.00184843,
+        "model": "fopdt",
+        "sigma": 0.00122965,
+        "snr": 9.25613,
+        "sse": 0.00058063,
+        "tau": 57.73,
+        "theta": 2.44589
+      },
+      "mv": "plane3d_heading:pitch",
+      "seed": 109,
+      "test": 1
+    },
+    {
+      "P": 8,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.4666,
+        "k": 0.791428,
+        "k_3sigma": 0.00350562,
+        "model": "fopdt",
+        "sigma": 0.00199757,
+        "snr": 7.81151,
+        "sse": 0.00119727,
+        "tau": 0.848444,
+        "theta": 1.60096
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 100,
+      "test": 0
+    },
+    {
+      "P": 8,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.4639,
+        "k": 0.79135,
+        "k_3sigma": 0.00350898,
+        "model": "fopdt",
+        "sigma": 0.00360931,
+        "snr": 7.80411,
+        "sse": 0.00390876,
+        "tau": 0.848186,
+        "theta": 1.60102
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 100,
+      "test": 1
+    },
+    {
+      "P": 6,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.1382,
+        "k": 0.791441,
+        "k_3sigma": 0.0053245,
+        "model": "fopdt",
+        "sigma": 0.00304712,
+        "snr": 5.09029,
+        "sse": 0.00278797,
+        "tau": 0.00471979,
+        "theta": 2.55894
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 101,
+      "test": 0
+    },
+    {
+      "P": 6,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.1974,
+        "k": 0.788379,
+        "k_3sigma": 0.00271392,
+        "model": "fopdt",
+        "sigma": 0.00441254,
+        "snr": 7.04092,
+        "sse": 0.0116866,
+        "tau": 0.0069429,
+        "theta": 2.60989
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 101,
+      "test": 1
+    },
+    {
+      "P": 6,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.1238,
+        "k": 0.788374,
+        "k_3sigma": 0.00278528,
+        "model": "fopdt",
+        "sigma": 0.00905759,
+        "snr": 6.8779,
+        "sse": 0.0492371,
+        "tau": 0.00353913,
+        "theta": 2.70734
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 101,
+      "test": 2
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6263,
+        "k": 0.79194,
+        "k_3sigma": 0.00328951,
+        "model": "fopdt",
+        "sigma": 0.00187215,
+        "snr": 7.92411,
+        "sse": 0.00105194,
+        "tau": 1.02268,
+        "theta": 1.45668
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 102,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6218,
+        "k": 0.791849,
+        "k_3sigma": 0.00329537,
+        "model": "fopdt",
+        "sigma": 0.003751,
+        "snr": 7.90999,
+        "sse": 0.00422281,
+        "tau": 1.02229,
+        "theta": 1.45679
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 102,
+      "test": 1
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6177,
+        "k": 0.791845,
+        "k_3sigma": 0.00330102,
+        "model": "fopdt",
+        "sigma": 0.00751485,
+        "snr": 7.89644,
+        "sse": 0.0169492,
+        "tau": 1.02228,
+        "theta": 1.45679
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 102,
+      "test": 2
+    },
+    {
+      "P": 9,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.2701,
+        "k": 0.791924,
+        "k_3sigma": 0.00378559,
+        "model": "fopdt",
+        "sigma": 0.00215347,
+        "snr": 7.17797,
+        "sse": 0.00139123,
+        "tau": 1.39471,
+        "theta": 0.95879
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 103,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.7011,
+        "k": 0.791917,
+        "k_3sigma": 0.00318689,
+        "model": "fopdt",
+        "sigma": 0.00181281,
+        "snr": 8.09257,
+        "sse": 0.000986348,
+        "tau": 1.10156,
+        "theta": 1.42494
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 104,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6938,
+        "k": 0.791767,
+        "k_3sigma": 0.00319632,
+        "model": "fopdt",
+        "sigma": 0.00363639,
+        "snr": 8.06862,
+        "sse": 0.00396883,
+        "tau": 1.10085,
+        "theta": 1.42514
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 104,
+      "test": 1
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6579,
+        "k": 0.791941,
+        "k_3sigma": 0.003247,
+        "model": "fopdt",
+        "sigma": 0.00738723,
+        "snr": 7.96945,
+        "sse": 0.0163767,
+        "tau": 1.12941,
+        "theta": 1.46264
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 104,
+      "test": 2
+    },
+    {
+      "P": 6,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.211,
+        "k": 0.790936,
+        "k_3sigma": 0.00522061,
+        "model": "fopdt",
+        "sigma": 0.00298644,
+        "snr": 5.28436,
+        "sse": 0.00268023,
+        "tau": 0.000649604,
+        "theta": 2.39436
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 105,
+      "test": 0
+    },
+    {
+      "P": 6,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.2915,
+        "k": 0.788211,
+        "k_3sigma": 0.00262222,
+        "model": "fopdt",
+        "sigma": 0.00278022,
+        "snr": 7.40291,
+        "sse": 0.00464168,
+        "tau": 0.00172417,
+        "theta": 2.39741
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 105,
+      "test": 1
+    },
+    {
+      "P": 6,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.2951,
+        "k": 0.78825,
+        "k_3sigma": 0.00261882,
+        "model": "fopdt",
+        "sigma": 0.00555317,
+        "snr": 7.40925,
+        "sse": 0.0185187,
+        "tau": 0.00297981,
+        "theta": 2.38496
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 105,
+      "test": 2
+    },
+    {
+      "P": 8,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6602,
+        "k": 0.791556,
+        "k_3sigma": 0.00324003,
+        "model": "fopdt",
+        "sigma": 0.00184471,
+        "snr": 8.11276,
+        "sse": 0.00102135,
+        "tau": 0.958843,
+        "theta": 1.47249
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 106,
+      "test": 0
+    },
+    {
+      "P": 8,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6572,
+        "k": 0.791522,
+        "k_3sigma": 0.00324413,
+        "model": "fopdt",
+        "sigma": 0.00369407,
+        "snr": 8.10321,
+        "sse": 0.0040957,
+        "tau": 0.959628,
+        "theta": 1.47343
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 106,
+      "test": 1
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.4731,
+        "k": 0.791916,
+        "k_3sigma": 0.00350504,
+        "model": "fopdt",
+        "sigma": 0.00797225,
+        "snr": 7.53871,
+        "sse": 0.019067,
+        "tau": 1.45761,
+        "theta": 0.906643
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 106,
+      "test": 2
+    },
+    {
+      "P": 9,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.9051,
+        "k": 0.793635,
+        "k_3sigma": 0.00429513,
+        "model": "fopdt",
+        "sigma": 0.00244407,
+        "snr": 6.33632,
+        "sse": 0.00179318,
+        "tau": 0.755202,
+        "theta": 2.44873
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 107,
+      "test": 0
+    },
+    {
+      "P": 9,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.9033,
+        "k": 0.793645,
+        "k_3sigma": 0.00429766,
+        "model": "fopdt",
+        "sigma": 0.00489102,
+        "snr": 6.3325,
+        "sse": 0.00718119,
+        "tau": 0.755259,
+        "theta": 2.4487
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 107,
+      "test": 1
+    },
+    {
+      "P": 9,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.8941,
+        "k": 0.793897,
+        "k_3sigma": 0.00431204,
+        "model": "fopdt",
+        "sigma": 0.00981401,
+        "snr": 6.32571,
+        "sse": 0.0289099,
+        "tau": 0.77682,
+        "theta": 2.46166
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 107,
+      "test": 2
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.9235,
+        "k": 0.792732,
+        "k_3sigma": 0.00426636,
+        "model": "fopdt",
+        "sigma": 0.00242835,
+        "snr": 6.6275,
+        "sse": 0.00176906,
+        "tau": 1.04131,
+        "theta": 1.77678
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 108,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.787,
+        "k": 0.788972,
+        "k_3sigma": 0.002149,
+        "model": "fopdt",
+        "sigma": 0.0034847,
+        "snr": 9.22743,
+        "sse": 0.00728589,
+        "tau": 1.02151,
+        "theta": 1.76778
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 108,
+      "test": 1
+    },
+    {
+      "P": 8,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6875,
+        "k": 0.788914,
+        "k_3sigma": 0.00224414,
+        "model": "fopdt",
+        "sigma": 0.00728082,
+        "snr": 8.79379,
+        "sse": 0.0318215,
+        "tau": 0.509726,
+        "theta": 2.5276
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 108,
+      "test": 2
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6331,
+        "k": 0.792011,
+        "k_3sigma": 0.00328008,
+        "model": "fopdt",
+        "sigma": 0.001867,
+        "snr": 7.97393,
+        "sse": 0.00104617,
+        "tau": 1.0032,
+        "theta": 1.46025
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 109,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "plane3d_heading:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6283,
+        "k": 0.791911,
+        "k_3sigma": 0.00328632,
+        "model": "fopdt",
+        "sigma": 0.00374112,
+        "snr": 7.95877,
+        "sse": 0.00420065,
+        "tau": 1.00278,
+        "theta": 1.46037
+      },
+      "mv": "plane3d_heading:bank",
+      "seed": 109,
+      "test": 1
+    },
+    {
+      "P": 226,
+      "cv": "plane3d_racetrack:path",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.9639,
+        "k": 9056.64,
+        "k_3sigma": 40.1561,
+        "model": "fopdt",
+        "sigma": 5.75357,
+        "snr": 9.46028,
+        "sse": 9931.13,
+        "tau": 34.8556,
+        "theta": 8.62996
+      },
+      "mv": "plane3d_racetrack:course",
+      "seed": 105,
+      "test": 0
+    }
+  ],
+  "ramp": 0,
+  "retests": 66,
+  "status": "compliant",
+  "test": {
+    "hold_window": 20,
+    "noise": "residual of each fitted model over its fit window (N1)",
+    "seeds": [
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109
+    ],
+    "settle_steps": 300,
+    "steps": {
+      "bank": 0.1,
+      "pitch": 0.1,
+      "throttle": 0.1
+    },
+    "window_steps": 300
+  },
+  "tests": [
+    "plane3d_heading",
+    "plane3d_racetrack"
+  ],
+  "zero_models": [
+    "plane3d_heading:bank -> plane3d_heading:eas",
+    "plane3d_heading:bank -> plane3d_heading:mach",
+    "plane3d_heading:pitch -> plane3d_heading:bank",
+    "plane3d_heading:pitch -> plane3d_heading:load",
+    "plane3d_heading:throttle -> plane3d_heading:bank",
+    "plane3d_heading:throttle -> plane3d_heading:eas",
+    "plane3d_heading:throttle -> plane3d_heading:load"
+  ]
+}

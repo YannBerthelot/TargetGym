@@ -65,7 +65,7 @@ whole of what differs between them:
   by `env.tracked_names`.
 - **PID / MPC** say whether a baseline ships. Where one does not, the registry
   records why in `baselines_note` rather than leaving it silent, and the same
-  note qualifies a shipped one that needs it (`patrol_bearing_only`'s MPC is a
+  note qualifies a shipped one that needs it (`patrol_range_bearing`'s MPC is a
   full-state bound).
 - **Physics** links the environment's contract: sourced parameters, published
   validation targets asserted by tests, and quantified known deviations.

@@ -21,8 +21,8 @@ Three things, and nothing else:
 
 1. **Lift tilts with bank.** The wing's force stays perpendicular to the wing,
    so banking splits it: `L·cos φ` holds the aircraft up and `L·sin φ` turns it.
-2. **A roll moment**, from ailerons against roll damping:
-   `M_roll = M_aileron + C_lp · (p·b / 2V) · q̄ · S · b`.
+2. **A roll moment**, from ailerons against roll damping on the rate relative to
+   the air: `M_roll = M_aileron + C_lp · ((p - p_g)·b / 2V) · q̄ · S · b`.
 3. **Heading is derived**, not integrated as an input. It comes out of the
    horizontal velocity vector, so a turn is something the aircraft *does*, not
    something the model is told.
@@ -30,8 +30,12 @@ Three things, and nothing else:
 The consequence worth stating: **the aileron commands a roll rate, not a bank
 angle.** Roll damping sets a steady rate for a steady deflection, exactly as on
 a real aeroplane — hold the stick over and it keeps rolling. Holding a bank
-requires returning the aileron to neutral, which is why every 3D controller
-here is a cascade with an inner bank loop.
+requires returning the aileron to neutral, which is why the plant carries a bank
+loop. **A policy does not touch the surfaces**: an action is `[throttle, pitch
+demand, bank demand]`, held for the 1 s step, and full action is +-15 deg of pitch
+and +-45 deg of bank. The fixed inner loop of
+[`plane/PHYSICS.md`](../plane/PHYSICS.md) flies the elevator and the ailerons to
+them, with a roll integral.
 
 Deliberately **not** modelled:
 
@@ -83,6 +87,9 @@ Only the parameters the third dimension introduces. Everything else is in
 | `C_lp` | −0.4 | – | Transport-aircraft roll damping derivative | ✅ |
 | `aileron_surface` | 6.0 | m² | Consistent with the wing area | ⚠️ |
 | `moment_arm_aileron` | 14.0 | m | ~0.78 semi-span, plausible for an outboard aileron | ⚠️ |
+| `aileron_response_rate` | 1/0.06 | 1/s | As the elevator's: 0.06 s, borrowed from another aircraft | ⚠️ |
+| `bank_limit` | 60 | deg | 14 CFR 91.307(c), a trip | ✅ |
+| `turbulence_scale_length` | 533.4 | m | MIL-F-8785C above 2000 ft, 1750 ft | ✅ |
 
 ---
 
@@ -161,7 +168,10 @@ flight.
 Follow a twisted figure-8 that climbs and descends, with the 3D airliner. The
 bank has to reverse through wings level at every crossover, and the
 observation gives the vector to the nearest point of the path and the path's
-heading there, but not its curvature.
+heading there, but not its curvature. The half-width is 34 to 36 km, so the tips,
+of radius a / 3, take 25 deg of bank at 230 m/s and less at the speed flown. They
+used to be 2.7 to 4 km, 46 to 57 deg at 200 m/s. A lap is 183 km, so 1000 steps
+reach both tips at the slowest speed the schedule flies.
 
 | obs | meaning |
 |---|---|
@@ -194,7 +204,7 @@ rather than a bank angle, so heading control is a cascade through two
 integrators; the turn radius at cruise is kilometres, so the reference is large
 compared with what the aircraft can do about it; and the lift the wing can make
 bounds how tight a turn is available at all. For genuinely hidden references,
-see `patrol_bearing_only`, where the lead's heading is not measured and must be
+see `patrol_range_bearing`, where the lead's heading is not measured and must be
 reconstructed.
 
 ### The tracking reward
@@ -247,28 +257,24 @@ turbulence, an Ornstein-Uhlenbeck gust with `turbulence_sigma = 1.2` m/s per
 step and `turbulence_theta = 0.2` (2 m/s stationary gust std), without which
 the altitude hold scored nothing. The planners plan on the mean wind.
 
+The gust is the same across the span, so on its own it never reached the bank:
+with no aileron the bank stayed 0 and the heading moved 0.002 deg. So the wing also
+meets a rolling gust `p_g` (`rolling_gust`). MIL-F-8785C's Dryden spectrum for it,
+`sigma_w^2 / (V L) 0.8 (pi L / 4b)^(1/3) / (1 + (4 b w / pi V)^2)`, rolls off at
+about 20 rad/s, far above the step, so a step holds a white draw, sized to keep the
+spectrum's level at low frequency: 0.0136 rad/s at 230 m/s and 2 m/s of gust. It
+adds to the roll rate in the damping moment. Left alone it walks the bank by 9 deg
+in 2 minutes; the inner loop holds it to about 0.8 deg RMS. On the patrol tasks the
+caller owns the air, so it is not there yet: that is PR 7b.
+
 ### Integration order
 
-``rk4_2`` -- two RK4 substeps per environment step -- rather than one. The
-trajectory is converged there: over 150 steps of a fixed control input the
-altitude moves 20.4 m between one substep and two, then 0.030 m between two and
-four and 0.007 m between four and eight.
-
-One substep was the original setting and it is not defensible for this
-environment. The tracking reward has a ``precision_floor`` of 1 m and the shipped
-controllers settle between 1 and 11 m, so a 20 m integration error is larger than
-the quantity the benchmark scores -- the simulator could not resolve the
-precision the reward was paying for. It is the same failure as check 11 of the
-model review checklist, one level down: there the *metric* could not see what the
-reward asked for, here the *integrator* could not.
-
-It costs throughput: measured at batch 4096 when the change was made, the 3D
-aircraft went from 1.88 to 1.05 M steps/s and the 2D aircraft from 2.71 to 1.61.
-Those are the numbers that justified the trade; current figures on whatever
-machine you are reading this from are in
-[docs/performance.md](../../docs/performance.md). The 2D aircraft's own
-error at one substep was 0.823 m, inside its 1 m floor rather than outside it,
-but it is set the same way so the family stays consistent.
+One RK4 step per inner-loop sub-step, four to the 1 s step (`rk4_1`, `INNER_STEPS`).
+The old `rk4_2`, two RK4 steps of 0.5 s on held surfaces, moved the altitude by
+0.030 m against four steps over 150 s. An integrator of 0.25 s is finer than that
+on the same dynamics, and the check that matters is
+`test_a_step_is_its_four_sub_steps`. Current throughput is in
+[docs/performance.md](../../docs/performance.md).
 
 ### The expert
 
@@ -277,13 +283,12 @@ observation alone:
 
 - **Height and speed: TECS** (Lambregts; `plane/experts_tecs.py`). Throttle
   closes the total energy error and pitch the balance between height and speed,
-  weighted to hold height (`TECS_SPDWEIGHT` 0), over a PI pitch loop damped on
-  pitch rate. Its aircraft numbers come from a flight test of the model at
+  weighted to hold height (`TECS_SPDWEIGHT` 0). Its pitch demand goes to the
+  plant's inner loop. Its aircraft numbers come from a flight test of the model at
   230 m/s: full throttle climbs 7.9 to 10.2 m/s and idle sinks 23 to 27 m/s
   between 7500 and 3500 m.
-- **Bank: a loop damped on roll rate**, since the aileron commands a rate.
-  The 45 deg limit is ArduPilot's default and the edge of this model's
-  validity. Stall prevention, as ArduPilot's, keeps the speed above 1.3 times
+- **Bank: a demand to the plant's inner loop.** The 45 deg limit is ArduPilot's
+  default and the edge of this model's validity. Stall prevention, as ArduPilot's, keeps the speed above 1.3 times
   the clean stall (104 m/s equivalent airspeed) scaled for the full bank, and
   the bank within what the speed supports.
 - **Guidance:** a course hold on the heading task; L1 guidance (Park, Deyst and
@@ -291,9 +296,10 @@ observation alone:
   racetrack and figure-8, with the path's curvature as a coordinated-turn
   feedforward. A curved path is flown at the speed whose steady bank in its
   tightest turn leaves part of the limit for L1's corrections: 15% on the
-  circle and racetrack, 25% on the figure-8.
+  circle and racetrack, 25% on the figure-8. Otherwise it flies the 2D tasks'
+  speed schedule, 290 kt CAS then M 0.78.
 - **The figure-8's geometry.** Its observation gives the nearest point and
-  its tangent but not the curvature, and the tangent is read off the 400
+  its tangent but not the curvature, and the tangent is read off the 800
   sampled points, so it jumps by up to 1.4 deg. The expert knows the
   pattern it was given, as an autopilot knows its mission: Bernoulli's
   lemniscate of half-width a, its altitude z_mean + dz sin(tau). The nearest
@@ -304,24 +310,12 @@ observation alone:
   expert averages it from the observed tangent. The curvature is read one
   second ahead, the bank loop's lag.
 
-It was tuned inner loop first, as ArduPilot's guide orders it, by a bounded
-search on training seeds 100-109, and checked on held-out seeds 200-209; the
-scored seeds 0-9 were never flown (`scripts/tune_aircraft_guidance.py`). On
-the held-out seeds, after the scored burn-in, it holds altitude within 1.6 /
-1.6 / 1.7 m on average (heading, circle, racetrack) and heading within
-1e-4 rad, the circle within 0.96 m and the racetrack within 2.3 m: what small
-autopilots hold in flight tests. The figure-8 holds its height within 1.7 m on
-every held-out seed (median 1.25 m) and its path within 1.4 m where the lobes
-are flyable (median 1.24 m). It flies slower and higher than the other tasks,
-banked most of the way, and at that lower dynamic pressure the pitch loop
-above oscillated with a period of about 9 s. So the figure-8's pitch loop is
-damped on pitch rate (gain 6 rather than 0.3), and its TECS is faster and
-better damped (time constant 1.5 s, pitch damping 2). Those were chosen to
-keep both targets with a margin when any one gain is 25% off. On the
-patterns whose lobe tips are tighter than 45 deg of bank at the slowest speed
-stall prevention allows (radius a / 3, at altitude), it cuts the tips, as a
-real autopilot would, by up to 220 m on the held-out seeds, and still holds
-its height.
+Its guidance and TECS gains predate the inner loop, the 1.7 s engine and the
+envelope, so the figures that used to stand here no longer hold. **TECS's
+`time_const` of 2 pulls past 2.5 g on height captures**, stepping the pitch demand
+by about 10 deg in a second, and PR 9 retunes it by the accepted procedure. On
+training seeds, the procedure's starting value of 5 flew `plane` with no trip on
+10 of 10 seeds, where 2 trips on 6 of them.
 
 It replaced, in 2026-10, cascades tuned on the scored seeds: the heading and
 circle ones fed roll rate back with the wrong sign and held 44 m and 1 rad
@@ -412,7 +406,7 @@ independent of all three.
 
 **⚠️ D3 — patrol formation quality.** The physics documented here is shared and
 validated. Both patrol variants now ship a PID baseline, including
-`patrol_bearing_only`, which had none when this deviation was written; what
+`patrol_range_bearing`, which had none when this deviation was written; what
 remains is quality rather than absence. The follower settles roughly 139 m from
 its slot against a 60 m tolerance, so six formation scenarios are `strict`
 xfail. That is a controller gap, not a physics gap; it is tracked in
@@ -430,10 +424,10 @@ xfail. That is a controller gap, not a physics gap; it is tracked in
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane3d_circle` | 300 | 1 | 5 min | 3 in [-1, 1] | 17 | 26 |
-| `plane3d_figure8` | 400 | 1 | 7 min | 3 in [-1, 1] | 21 | 26 |
-| `plane3d_heading` | 300 | 1 | 5 min | 3 in [-1, 1] | 15 | 26 |
-| `plane3d_racetrack` | 650 | 1 | 11 min | 3 in [-1, 1] | 21 | 26 |
+| `plane3d_circle` | 300 | 1 | 5 min | 3 in [-1, 1] | 17 | 33 |
+| `plane3d_figure8` | 1000 | 1 | 17 min | 3 in [-1, 1] | 21 | 33 |
+| `plane3d_heading` | 300 | 1 | 5 min | 3 in [-1, 1] | 15 | 33 |
+| `plane3d_racetrack` | 650 | 1 | 11 min | 3 in [-1, 1] | 21 | 33 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -453,7 +447,7 @@ which is what the recorded baselines use.
 | `e_floor_heading` | 0.0087 rad | the 0.5 deg AHRS resolution. The oracle holds far below it in the test turbulence (1.4e-5 rad, lowest per seed over the 300-step episode; `scripts/measure_hold.py`), so the instrument, not the simulator, sets the scale; the expert holds about 1e-4 rad on held-out seeds |
 | `e_floor_path` | 3 m (`plane3d_circle`, `plane3d_racetrack`, `plane3d_figure8`; also the default where no path term is scored) | civil GPS horizontal accuracy. The oracle holds below it: its lowest per-seed path-distance holds are 0.45 / 0.47 / 1.29 m (`scripts/measure_hold.py`). Until the oracle audit (2026-10) the floors were 8.12 / 6.17 / 14.6 m: the racetrack's and figure-8's were an earlier oracle's holds, while the circle's 8.12 m was labelled one but equals 2 x 4.06 m, and that oracle's recorded hold there was 14.3 m. Expert: 0.96 / 2.3 / 1.4 m on held-out seeds, the figure-8's where its lobes are flyable (the cascades it replaced: 53 / 408 / 1767 m) |
 | `tracking_exponent` | 2 | quadratic |
-| `failure_cost` | 2.97e8 (`plane3d_heading`, `plane3d_circle`, `plane3d_racetrack`), 8.89e7 (`plane3d_figure8`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor_altitude)^2; the figure-8 scores the path alone, 2 x (20 000 / e_floor_path)^2 |
+| `failure_cost` | 2.97e8 (`plane3d_heading`, `plane3d_circle`, `plane3d_racetrack`), 1.09e9 (`plane3d_figure8`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor_altitude)^2; the figure-8 scores the path alone, 2 x (70 000 / e_floor_path)^2 |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
 | `rho_floor_tracking`, `rho_floor` | 0.344 (`plane3d_heading`), 0.466 (`plane3d_circle`), 0.487 (`plane3d_racetrack`), 0.184 (`plane3d_figure8`) | the oracle's lowest per-seed holds above in floor units, (hold / floor)^2 summed over the scored outputs (`scripts/measure_hold.py`): (0.5867 / 1)^2 + (1.4e-5 / 0.0087)^2 over the heading task's 300 steps (`-v4`), (0.6657 / 1)^2 + (0.4504 / 3)^2, (0.6803 / 1)^2 + (0.4660 / 3)^2 and (1.2871 / 3)^2 |
 
@@ -480,3 +474,44 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports the aircraft through its instruments, with every target
+exact: altitude, heading, radius and the pattern's centre
+(`docs/proposals/measurement-noise.md`). `sensor_noise_scale = 0` gives the
+noise-free task, rounding included.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `z` | 0.2 m | 1 ft | Air data computer baro altitude | Provisional: a ground test set's figure, no airborne one found | [DPST-8000](https://www.avionteq.com/Document/DPST-8000-specification-sheet.pdf) |
+| `x_dot` | 0.03 m/s | 0.125 kt | IRS/GNSS ground velocity | Ceiling: receiver accuracy, not scatter | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `y_dot` | 0.03 m/s | 0.125 kt | IRS/GNSS ground velocity | Ceiling: as `x_dot` | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `z_dot` | 0.03 m/s | 1 ft/min | IRS inertial vertical speed | No source: a placeholder, not a bound | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `theta` | none | 0.010986 deg | IRS pitch attitude | Corrected: rounding only | [HG9900](https://www.honeywellaerospace.com/us/en/products-and-services/products/navigation-and-sensors/inertial-measurement-units/hg9900-inertial-measurement-unit) |
+| `theta_dot` | 4.3e-6 rad/s | 0.015625 deg/s | IRS body pitch rate | Confirmed | [Honeywell Mk VI guide](https://fitness.manualsonline.com/manuals/mfg/honeywell/mk_vi.html?p=254) |
+| `phi` | none | 0.010986 deg | IRS roll attitude | Corrected: rounding only | [HG9900](https://www.honeywellaerospace.com/us/en/products-and-services/products/navigation-and-sensors/inertial-measurement-units/hg9900-inertial-measurement-unit) |
+| `phi_dot` | 4.3e-6 rad/s | 0.015625 deg/s | IRS body roll rate | Confirmed | [Honeywell Mk VI guide](https://fitness.manualsonline.com/manuals/mfg/honeywell/mk_vi.html?p=254) |
+| `gamma` | 1.3e-4 rad at 230 m/s, as 0.03 / V | from the velocities | IRS flight-path angle | Confirmed | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `psi` | 1.3e-4 rad at 230 m/s, as 0.03 / V | from the velocities | IRS true track angle | Confirmed | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `power` | none | 0.003 | Engine thrust indication via FADEC | No source: rounding only | [14 CFR 121 App. M](https://www.law.cornell.edu/cfr/text/14/appendix-M_to_part_121) |
+| `stick` | none | 1.6e-3 rad | Elevator surface position sensor | No source: rounding only | [14 CFR 121 App. M](https://www.law.cornell.edu/cfr/text/14/appendix-M_to_part_121) |
+| `aileron` | none | 2.6e-3 rad | Aileron surface position sensor | No source: rounding only | [14 CFR 121 App. M](https://www.law.cornell.edu/cfr/text/14/appendix-M_to_part_121) |
+| `x`, `y` | 0.27 m | none | GNSS position | Corrected | [NASA AFF](https://ntrs.nasa.gov/api/citations/20030005804/downloads/20030005804.pdf) |
+
+`gamma` and `psi` have no noise of their own: they are worked out from the
+velocities read, as an IRS does, and `psi` is the ground track, wrapped after
+rounding. `x` and `y` apply to the circle, racetrack and figure-8, where the path
+errors are computed from them, so those channels inherit the noise. The heading
+task observes no position.
+
+The figure the tracked altitude rests on is weak. No air data computer publishes
+its scatter, so 0.2 m comes from a ground test set, and the benchmark runs at
+`sensor_noise_scale` 0.5 and 2 to show how far a result depends on it. The
+ground velocity figure is a receiver's accuracy, so true scatter is smaller, and
+the vertical speed figure is a placeholder.
+
+The expert reads these values, and so does every tuner. The oracle plans and acts
+on the true state, so it stays a full-state bound. `reward`, trips and the score
+read the true state. `info["measured_reward"]` is the same cost on the readings,
+with `psi` from the velocities read and any trip taken from the true state.

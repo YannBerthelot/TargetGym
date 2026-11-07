@@ -1,0 +1,36 @@
+{
+  "cpu": "Apple M4 Pro",
+  "exception": null,
+  "expert_figure": {
+    "kind": "measured",
+    "source": "NASA Tech Briefs, Autonomous Formation Flight, February 2004",
+    "status": "read, secondary",
+    "unit": "m",
+    "url": "https://www.techbriefs.com/component/content/article/29246-drc0146",
+    "value": 1.52,
+    "what": "F/A-18 trail aircraft, relative position within 2 ft in straight and level flight, plus up to 3 ft of GPS error; light turbulence at most, no manoeuvring, and not scaled by span. The design requirement was 10 ft"
+  },
+  "expert_fingerprint": "83529c8adea7b9e5",
+  "generated": "2026-11-06T12:56:47+00:00",
+  "null_wins": [
+    "constant 0.5"
+  ],
+  "nulls": {
+    "constant 0.0": {
+      "ratio": 0.14339667222141572,
+      "win_rate": 0.6
+    },
+    "constant 0.5": {
+      "ratio": 11130.041534806487,
+      "win_rate": 0.7
+    },
+    "constant 1.0": {
+      "ratio": 0.015705555925758903,
+      "win_rate": 0.0
+    },
+    "table": {
+      "ratio": 0.24708571669057602,
+      "win_rate": 0.7
+    }
+  }
+}

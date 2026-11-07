@@ -1,0 +1,280 @@
+{
+  "M": 37,
+  "N": 184,
+  "P": 221,
+  "P_set_by": {
+    "cv": "mach",
+    "mv": "throttle",
+    "seed": 102,
+    "test": 1
+  },
+  "P_steps": 663,
+  "P_without_quiet_fits": 209,
+  "T_c_seconds": 3.0,
+  "T_c_set_by": {
+    "cv": "altitude",
+    "mv": "throttle",
+    "seed": 104
+  },
+  "T_c_steps": 3,
+  "classes": {
+    "altitude": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 20
+      }
+    },
+    "eas": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 2,
+        "integrating_lag": 6
+      }
+    },
+    "load": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "mach": {
+      "class": "fopdt",
+      "votes": {
+        "fopdt": 13,
+        "integrating_lag": 0
+      }
+    }
+  },
+  "compliant": true,
+  "counts": {
+    "insignificant": 28,
+    "invalid": 39,
+    "quiet": 8,
+    "valid": 13
+  },
+  "cpu": "Apple M4 Pro",
+  "cvs_without_valid_pair": [
+    "eas",
+    "load"
+  ],
+  "dt": 1.0,
+  "episode_samples": 534,
+  "episode_steps": 1600,
+  "generated": "2026-11-07T11:00:25+00:00",
+  "own_window": "a test on this task's own 1600-step window gave 0 valid of 20: a fit on the first 280 steps tracks the same run within about 2 % at 420 s, and drifts by 8 to 13 % at 800 s and 31 to 45 % at 1600 s, as the climb moves the air",
+  "pairs": [],
+  "plans_to_episode_end": false,
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 5",
+  "quiet_fits": [
+    {
+      "P": 10,
+      "cv": "altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.1894,
+        "k": 5.09775,
+        "k_3sigma": 0.0349225,
+        "model": "integrating_lag",
+        "sigma": 29.9807,
+        "snr": 7.1663,
+        "sse": 1010900.0,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "throttle",
+      "seed": 100,
+      "test": 2
+    },
+    {
+      "P": 221,
+      "cv": "mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6535,
+        "k": 0.216772,
+        "k_3sigma": 0.00105044,
+        "model": "fopdt",
+        "sigma": 0.000850727,
+        "snr": 8.78096,
+        "sse": 0.000410529,
+        "tau": 110.275,
+        "theta": "< dt"
+      },
+      "mv": "throttle",
+      "seed": 102,
+      "test": 1
+    },
+    {
+      "P": 221,
+      "cv": "mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.6721,
+        "k": 0.216338,
+        "k_3sigma": 0.00103746,
+        "model": "fopdt",
+        "sigma": 0.000898873,
+        "snr": 8.84358,
+        "sse": 0.000458278,
+        "tau": 109.911,
+        "theta": "< dt"
+      },
+      "mv": "throttle",
+      "seed": 102,
+      "test": 2
+    },
+    {
+      "P": 10,
+      "cv": "altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.5722,
+        "k": 5.12992,
+        "k_3sigma": 0.0408454,
+        "model": "integrating_lag",
+        "sigma": 29.104,
+        "snr": 6.15767,
+        "sse": 969677.0,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "throttle",
+      "seed": 103,
+      "test": 2
+    },
+    {
+      "P": 213,
+      "cv": "mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.7712,
+        "k": 0.231807,
+        "k_3sigma": 0.00103621,
+        "model": "fopdt",
+        "sigma": 0.000871131,
+        "snr": 9.17234,
+        "sse": 0.000430143,
+        "tau": 105.936,
+        "theta": "< dt"
+      },
+      "mv": "throttle",
+      "seed": 104,
+      "test": 1
+    },
+    {
+      "P": 10,
+      "cv": "altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.7551,
+        "k": 6.29763,
+        "k_3sigma": 0.0480669,
+        "model": "integrating_lag",
+        "sigma": 34.2094,
+        "snr": 6.4527,
+        "sse": 1342890.0,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "throttle",
+      "seed": 109,
+      "test": 2
+    },
+    {
+      "P": 125,
+      "cv": "mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.8847,
+        "k": -0.474338,
+        "k_3sigma": 0.00226353,
+        "model": "fopdt",
+        "sigma": 0.00173388,
+        "snr": 9.17826,
+        "sse": 0.00113039,
+        "tau": 62.3259,
+        "theta": 2.73133
+      },
+      "mv": "pitch",
+      "seed": 105,
+      "test": 1
+    },
+    {
+      "P": 10,
+      "cv": "altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.0972,
+        "k": 30.839,
+        "k_3sigma": 0.641404,
+        "model": "integrating_lag",
+        "sigma": 26.9146,
+        "snr": 6.11519,
+        "sse": 177639.0,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "pitch",
+      "seed": 109,
+      "test": 1
+    }
+  ],
+  "ramp": 0,
+  "retests": 39,
+  "status": "compliant",
+  "test": {
+    "hold_window": 20,
+    "noise": "residual of each fitted model over its fit window (N1)",
+    "seeds": [
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109
+    ],
+    "settle_steps": 280,
+    "steps": {
+      "pitch": 0.1,
+      "throttle": 0.1
+    },
+    "window_steps": 280
+  },
+  "tests": [
+    "plane"
+  ],
+  "zero_models": [
+    "pitch -> load",
+    "throttle -> load"
+  ]
+}

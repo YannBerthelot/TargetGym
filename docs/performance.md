@@ -39,7 +39,7 @@ somebody else's laptop is worse than no check.
 | `plane3d_racetrack` | 1.18 M | 0.97 M |
 | `reactor` | 1.17 M | 1.30 M |
 | `distillation` | 0.82 M | 0.38 M |
-| `patrol_bearing_only` | 0.64 M | 0.54 M |
+| `patrol_range_bearing` | 0.64 M | 0.54 M |
 | `patrol` | 0.62 M | 0.53 M |
 | `formation` | 0.38 M | 0.27 M |
 

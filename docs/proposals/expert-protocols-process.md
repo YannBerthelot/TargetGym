@@ -185,4 +185,226 @@ either SIMC text; C5 cites it from him and adds the margin argument.
 | D9 | `sp_trim_max` half the interlock gap (67 K, ours) or keep 120 K | Half gap; 120 K has no source either |
 | D10 | Leave `c_hold` and `e_floor` as stamped, report drift only | Yes; moving them re-stamps the env versions |
 
+## 9. The recipes as run on the new plants
+
+Written on 2026-11-06, before any held-out seed ran. It applies sections 1 to 4
+with `expert-protocols-noise.md` and the amendments of `industrial-fixes.md`, on
+the plants of PRs 3 to 7, for the seven process tasks. Each step below is fixed;
+a poor result ships (C9). `scripts/tune_process_experts.py` runs them. Bump tests
+have been looked at to set these rules up: scores have not.
+
+**Owner decisions, 2026-11-06.** R1 to R7 below are accepted, R7 for all seven tasks.
+So are three readings in the recipes below: "near `q2 = 0`" read as `q2 = 0`, the
+compressor schedule check as D3's ladder (0.10, 0.125, 0.15), and `unstable_cstr`'s
+inner PD from the datasheet. `unstable_cstr` and `distillation` ship as findings: the
+recipes' results stand and their trips stay reported.
+
+R7 came from doubling `distillation`'s episode. A bump test belongs to the recipe, so
+its length should never have followed the task's, and every recipe here read it:
+`Plant` holds one episode before the baseline and keys its noise on the episode's
+length. That is the design reason. It was also chosen with the doubling check's result
+in hand: stored gains passed it at 0.56, and gains rerun at 400 steps failed at 2.99.
+R7 moves no gain: all seven recipes reproduce their stored gains at all three levels.
+
+**A finding R1 to R7 do not address.** R7 hides the recipe's scatter and does not
+remove it. On `distillation` a new noise path moves `Kp_T` from 0.12 to 0.36 across
+test lengths of 195 to 500 steps, and a single step's change of length moves it 25 %.
+
+**A finding on the episode-length rule.** `distillation` passes it at 0.65 on held-out
+seeds while tripping 170 times on 3 of 10 seeds. The rule's one-sided check cannot see
+a hold that decays, since a longer run that does worse also passes. PR 8 or the plan
+can consider a two-sided check. This is a note: the rule is unchanged.
+
+**Shared.**
+
+| # | Choice | Value | Label |
+|---|---|---|---|
+| R1 | Where a test starts | In manual at the rest the seed's last target needs, from the plant's balances, or under a fixed loop where nobody can leave it in manual. No stored gain enters, so a run does not depend on what it replaces (`Plant(controller=...)`) | ours |
+| R2 | Loads in a test | Off, as an engineer waits for a quiet spell: `load_scale` 0 on `cstr` and `four_tank`, a steady feed on `distillation`. The sensors stay on | ours |
+| R3 | Kc,min in N7 | `u_d / NB`, with `u_d` the output move the largest load takes: the noise a loop passes need not fall below that. Our rule, since no source gives a `y_max`. It answers the noise level through `NB` | ours |
+| R4 | N8 on an update | The loop acts if the reading has moved past `NB` from the one it holds, or sits past `NB` from the target, since a target move is a move. Integrates over its own cycle, `wait` updates | derived |
+| R5 | An analyser loop's noise rules | The gate takes noise out, so N5 and N7 do not apply | derived |
+| R6 | Tests a trip cuts | Dropped from the pool, and the count prints | ours |
+| R7 | A test's length | Fixed per task at the length the recipe first ran on, not the task's episode: 150 on `first_order` and `cstr`, 300 on `ph_neutralization`, 200 on `distillation`, 1200 on `four_tank`, `unstable_cstr` and `compressor_surge` | ours |
+
+**`cstr`.** Rest from both balances. Inner: T on the coolant, 0.1 raw grown by N3,
+60 steps, valve. Outer: C_a on the inner loop's setpoint, 0.5 K grown by N3 up to
+what the coolant's room allows through the steady gain, 80 steps, with the inner
+loop closed as run. `u_d` is the coolant and setpoint moves of the load limits at
+the middle target.
+
+**`first_order`.** Rest at the target. N1 to N7, no load.
+
+**`ph_neutralization`.** The buffer stream off, `q2 = 0`, the plant's lower limit
+and the steepest curve there is: "near `q2 = 0`" read as the limit itself. Rest
+from the true curve there; the fit is in the expert's demand units on the nominal
+curve. +0.1 mL/s, 120 steps. `u_d` is the buffer's whole span of the demand at the
+middle target.
+
+**`four_tank`.** Rest from the balances, loads off. Each pump stepped 0.3 V for 2000
+s, gains from the last 200 s, the RGA read from their median, then the decoupler,
+then each loop 0.3 V in its own `w`, 1500 steps. Pumps, so no N5 or N7.
+
+**`distillation`.** A steady feed. The steady gains and the RGA come from the
+model in float64: three pairings. A P loop on the tray, 0.16 kmol/min per K (ours,
+a commissioning gain), holds the column through the tray test, since nobody leaves
+one in manual, and the fit reads the input it recorded. Tray: integrating with lag,
+boilup 0.005 kmol/min grown by N3, 20 min. Then, with the tray's PI closed as run,
+yD on reflux and xB on the tray's setpoint, 600 min on the analyser grid, 5 % of
+reflux's span and a matching setpoint step, no further than keeps a product in its
+target box (0.005 through the steady gains). `u_d` on the tray loop is `F` times
+the feed's 3 sd, from the mass balance. `sp_rate` is section 4's item 6 on the
+tray loop and boilup's room from the published point. `wait` is `Instrument.gate`.
+
+**`unstable_cstr`.** The inner PD is SIMC on the datasheet: slope UA / (rho C V),
+lag the thermowell's plus half the jacket's (half rule), delay the other half, the
+valve and half a step. A closed test of the inner loop was tried: in the 36 s this
+pole allows it read 12 K/min/K at a fit of 60 % for the datasheet's 2.09, because a
+gain and a lag draw one curve there. So the datasheet stands. N5 and N7 leave it
+alone, since a loop that stabilises the plant cannot trade speed for wear (R10 of
+the sourcing keeps a stabilising D). A P loop alone holds this plant at no gain
+tried, so PD settles it. Outer: C_a on the setpoint, inner closed, 0.5 K grown by
+N3 up to the coolant's room over `Kp_T`, 80 steps, then section 4's items 2 to 6.
+Item 6 reads `room x k'`. `check_cascade_gains` sees the thermowell and the valve,
+and prints.
+
+**`compressor_surge`.** Rest from `settled_point` at the levels the schedule ends
+on, the valve and drive held. Speed: +5 % of its span grown by N3, 100 steps, no
+dead band. Valve: 0.1 raw grown by N3 at the points with the valve open, 100 steps,
+1 % dead band, then the 1.0 cap. `u_d` is the demand's 3 sd as a recycle opening.
+**The schedule check,** a closed run of the pair on the training seeds' own
+schedules: a line passes with no trip and a map margin never under its override
+line, half the line. A line that fails climbs D3's ladder, 0.10, 0.125, 0.15, and
+re-runs the recipe; the last rung ships. The battery prints.
+
+**The RGA on `unstable_cstr`.** One MV, so there is no pairing to choose: the check
+is which reading closes the inner loop. Reported in the PR.
+
 **Source check.** PDFs: WebFetch cannot parse them, so I extracted text with pdftotext from the saved files and re-read each cited passage in a second pass. Web pages: fetched twice with different questions. Checked this way: Skogestad and Grimholt 2012 (eq. 5.12, 5.27-5.31, 5.32, 5.35, 5.38-5.39, Tables 5.1 and 5.2); Shinskey's "Characterizers" (Valmet PDF; Automation.com returns 403, so a search summary of it was the second read); Mirsky (10 % remark, open-loop line, gain under 1, stroke times); Jantzen 1998 (design checklist, GE x GU); Astrom and Hagglund 3.5 (T_t bracket, conditional integration, K T_t / T_i offset); McMillan 2012 (twice); Orion BMS (form only, no numbers). Read once: Shinskey and Gerry 2006 (bump test). **Not confirmed on a second fetch:** the Rockwell PlantPAX page (403; Fieldbus parameter names come from vendor-manual snippets in a search); Seborg et al. on setpoint limits and a ramp tied to tau_c + theta (found nowhere; the audit's attribution is unverified); Mirsky page numbers (taken from PHYSICS.md); any varying-gain guidance by Skogestad (absent from the 2003 paper, the 2012 chapter and his 2025 ABB slides).
+
+## 10. The recipes on the energy and thermal plants
+
+Written on 2026-11-07, before any held-out seed ran, for `wind_turbine`, `battery`,
+`reactor`, `boiler_drum`, `glass_furnace` and `hvac`. It applies sections 1 and 6
+with `expert-protocols-noise.md`, R1 to R7 above and the amendments of
+`industrial-fixes.md`. Each step below is fixed, and a poor result ships (C9).
+Bump tests on training seeds have been looked at to set these rules up. Scores have
+not. `scripts/tune_industrial_experts.py` and `scripts/wind_turbine_gains.py` run
+them.
+
+**Owner decisions, 2026-11-07.** R8 to R16 below are accepted, and R15 reverses D6 for
+the reason it states. So are two readings in the recipes: `boiler_drum`'s pressure
+stays first order at every level, and `hvac` keeps optimal start. `reactor` keeps its
+$1 rod step, labelled ours, with a written exception to check 1 in its `PHYSICS.md`.
+The findings ship as they stand, with no retune: `hvac`'s morning spec at 46 of 70,
+`wind_turbine` about 10 % dearer on the schedule, and `battery`'s trim chasing the
+signal.
+
+**Shared.**
+
+| # | Choice | Value | Label |
+|---|---|---|---|
+| R8 | A test's length (R7) | 120 steps on `battery`, 400 on `boiler_drum` and `glass_furnace`, 720 on `hvac`: `battery` cannot hold an episode of 2880 in manual without leaving its window | ours |
+| R9 | `battery`'s derate width | Rated power over one correlation time of the signal, 1 MW x 900 s / 1692 kWh = 0.148. Section 6's two dispatch blocks gave 0.0985 on 300 s blocks and would read 1.18 on hourly ones, more than the window | ours |
+| R10 | `wind_turbine`'s schedule | Read at the last pitch command, held between the first and last pitch of the region-3 curve, since the line is only fitted there. The line runs almost through the origin, so unheld it multiplies the gain 500 times at fine pitch | ours |
+| R11 | `wind_turbine`'s integral | In pitch units, adding `dt GK Ki e` each step, as ROSCO's `PIController` does, so the scheduled gain is the integral rate the poles ask for at that pitch. Jonkman's text scales a stored error integral by `GK`, which on this line halves the rate | derived |
+| R12 | `boiler_drum`'s commissioning loop | Firing in manual at the seed's heat balance. A P loop on level, the full feed span over the full level span, 200 / 0.5 = 400 kg/s per m, a proportional band of 100 % | ours |
+| R13 | `glass_furnace`'s step | Two steps after a firing interruption, ramped at the fuel's slew, with the ramp as the recorded input, and read against the same phase of the crown's cycle before. Held in manual the crown repeats every three reversals, 75 minutes, on a far slower drift, so a reading against the baseline's mean or one reversal back carries 0.7 K or more of the cycle's own swing, and three back carries 0.1 K. An engineer lays one trace on another. This replaces section 6's twin | derived |
+| R14 | `glass_furnace`'s delay | The datasheet's 60 s. A band exit cannot see it: the band is about 3 K, and the largest step the fuel allows moves the crown about 3 K in the 20 minutes | ours |
+| R15 | `glass_furnace`'s D | PI on the half rule, reversing D6 for this reading. D6 gives a derivative where tau2 > theta, and at Kc 0.3 a derivative of even 100 s on a 0.36 K reading at 30 s scatters about 0.5 raw per step, 25 times N5's dead band | ours |
+| R16 | `hvac`'s window | Five emitter lags on the step grid, 6 steps (90 minutes). The room has two time scales, and a longer window reads the mass's tail: k runs 3.0 at 6 steps, 3.8 at 16 and 18 at 192, and Kc 0.48, 0.75 and 5.2, past what this sample time holds | ours |
+
+**`wind_turbine`.** No bump test: this is Jonkman's recipe on the Cp table, section
+7.3, as `scripts/wind_turbine_gains.py` has always run it.
+1. Along the region-3 curve (rated speed, 12 to 25 m/s in 0.5 m/s steps, the pitch
+   that leaves 5.2966 MW of mechanical power) read `dP/dtheta`.
+2. Fit a line in pitch: `dP/dtheta(0)` and its doubling pitch `theta_K`. #157 read
+   -0.07 MW/rad and 0.015 deg.
+3. `Kp(0)` and `Ki(0)` by pole placement at `wn` 0.6 rad/s and `zeta` 0.7.
+4. `GK(theta) = 1 / (1 + theta / theta_K)`, read as R10 says, on the proportional
+   term and on the integral's rate (R11).
+5. The 0.25 Hz filter, the torque law and the limits stay as published. Their
+   noise sits inside fixed settings (`expert-protocols-noise.md`), so all three
+   levels store the same values.
+
+The RGA comes from the speed and power balances in float64, on (pitch, torque) to
+(rotor speed, power), at dispatch 3.5, 4.25 and 5 MW and mean wind 13.5, 16.75 and
+20 m/s, each with its balancing pitch.
+
+**`battery`.** Section 6, on the rebuilt plant.
+1. In manual at the seed's first block, the regulation signal off (R2), hold 120
+   steps (R8), +0.1 raw for 20 steps, meter power against its baseline.
+2. C5, C4. C7's rule for `tau1 < theta`. No N5 or N7: an inverter is no valve.
+3. `guard_margin` by R9. The limits stay at 0.10 and 0.90, as read.
+4. After the gains, `scripts/pjm_regulation_score.py`, against PJM's class 94.
+
+The trim will chase the signal's innovation, as section 6 warned. In closed form,
+`(1 - z^-1) / (1 + (Kp + Ki dt - 1) z^-1 - Kp z^-2)` from innovation to error gives
+an rms error of 2.03 times the floor at Kp 0.315, Ki 0.2, against 1.22 at today's 0.5
+and 0.02. It ships, and the PR says so.
+
+**`reactor`.** The rod program is published, and every constant in it is read
+(HRTD 8.1 and 5.0). A recipe has nothing to tune, so it stays, and all three levels
+carry a `reactor` entry that holds no gain. The stale relay gains leave the store
+(section 7). The gate's I-only null moves to Tavg, from the bump test `evidence/`
+already holds on the rebuilt plant. The rod price stays at $1, ours: the owner kept it
+on 2026-11-07, with a written exception to check 1 in `reactor`'s `PHYSICS.md`.
+
+**`boiler_drum`.** Section 6, with D7's lambda rule.
+1. Quiet steam demand (R2), rest by R12, hold 400 steps (R8).
+2. Pressure: firing +0.02 raw grown by N3, 120 steps, level loop closed. The turbine
+   valve lets pressure regulate itself, so it is first order at every level, where
+   section 6 had it integrating. C3 would flip it on a read delay that moves with
+   noise, 14 s at level 0.5 against 22 s at level 1. Lambda on that model, `lam =
+   theta`: `Kc = tau1 / (k (lam + theta))`, `Ti = min(tau1, 4 (lam + theta))` (C7).
+3. Level: its setpoint moved through the same loop so the feed's first move is 2 kg/s
+   grown by N3, 120 steps, the recorded feed as input. Integrating with lag, the lag
+   counted as delay, `lam = theta`: `Kc = (2 lam + theta) / (k' (lam + theta)^2)`,
+   `Ti = 2 lam + theta`.
+4. N5 to N7 on both, valves at 1 % of span. `u_d` is the steam demand's 3 sd, as feed
+   on the level loop and as firing on the pressure loop. N7's `lam` is solved for the
+   Kc it asks.
+5. `trim_max` goes. The level integral stops when the feed is at its limit and the
+   error would push it further.
+
+The RGA reads both CVs in both tests, from rest with the level loop open, at 120
+steps, on the two moves' slopes, since level has no steady gain.
+
+**`glass_furnace`.** Section 6, with R13 to R15.
+1. Quiet pull and gas (R2), no setpoint moves, in manual at the settled point's fuel,
+   hold 400 steps (R8), 8 whole reversal cycles.
+2. Baseline 60 samples, then the step by R13. N3's 5 bands cannot be reached, so the
+   step is the actuator's room. It ships with its ratio.
+3. 40 samples, the longest window before the next interruption. Fit `k' e^(-theta s) /
+   (s (tau2 s + 1))` with `theta` held at R14's 60 s, C5 on `k'`. A noise-free run of
+   this test reads k' 0.0045 K/s per raw and tau2 under 85 s on all five seeds tried.
+4. `theta` + 15 s, plus `tau2 / 2` by the half rule. N5 to N7 on a valve at 1 % of
+   span. `u_d` is the pull's 3 sd as its share of the fuel, capped at the room.
+5. The reading gets N5's filter.
+
+**`hvac`.** Outdoor reset and a room sensor, as the tekmar House Control 352 runs one
+zone (data brochure D 352, 06/00). Its manual says heat supplied must equal heat lost,
+draws the heating curve from a starting point at the desired room temperature, stops
+heat at warm weather shutdown when the outdoor temperature reaches that point, and
+shifts the starting point up or down from indoor feedback. It sets the unoccupied
+temperature from a schedule.
+1. The curve, in the plant's power units: `Q = H (T_s - T_out)`, `H` the building's
+   159.4 W/K, which is what the 352's heating curve setting does through a linear
+   emitter. `Q` stops at 0, the warm weather shutdown, and at `Q_heat_max`.
+2. `T_s` is the setpoint in force plus the indoor feedback, a PI on the room reading.
+3. The PI: rest from the balance on a quiet building (no weather, sun or occupancy
+   swing, R2), hold 720 steps (R8), 0.1 raw grown by N3, 6 steps (R16). C4 to C7. No
+   N5 or N7: a modulating burner has no sourced dead band.
+4. Optimal start stays: LBL's module has nothing VAV-specific, and the Siemens RVL470,
+   a weather-compensated controller of this class, has its own optimum start with a
+   maximum heating-up time.
+
+The PI gets the 352's automatic shift a number, which its manual does not give, and
+the integral is what lets the curve find the building's free gains. Siemens' room
+influence is proportional only (LMS14: `TRw = TR x room influence / 10`), and with
+free gains of 1.2 kW a proportional shift of 5 K per K leaves the room 1.3 K warm.
+
+**Levels.** `battery`, `boiler_drum`, `glass_furnace` and `hvac` rerun their recipes at
+0.5 and 2. `wind_turbine` and `reactor` read no noise.
+
+**Held-out seeds 200 to 209** only report, and nothing moves after them.

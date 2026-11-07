@@ -1,6 +1,6 @@
 """Tune the formation hold off the scored seeds, and check it on held-out ones.
 
-The expert of ``patrol``, ``patrol_bearing_only`` and the formation's wingmen
+The expert of ``patrol``, ``patrol_range_bearing`` and the formation's wingmen
 is a formation hold (``patrol.experts.FormationHoldParams``) over the 3D
 tasks' autopilot; the formation's lead flies that autopilot's course hold and
 pitch at a set power (``formation.experts.FormationLeadParams``). Every value
@@ -52,7 +52,7 @@ from target_gym.formation.env import slot_errors  # noqa: E402
 from target_gym.patrol.env import slot_error, wrap_angle  # noqa: E402
 
 TRAIN, HELD_OUT = range(100, 110), range(200, 210)
-PATROL = ("patrol", "patrol_bearing_only")
+PATROL = ("patrol", "patrol_range_bearing")
 SLOT_RMS_M, ALTITUDE_M = 8.5, 2.0
 _ROLLOUTS = {}
 
@@ -202,7 +202,6 @@ def main() -> int:
         {
             "tecs.spd_weight": (0.0, 0.5, 1.0),
             "tecs.thr_damp": (0.5, 6.0),
-            "k_eng": (0.0, 1.0),
             "k_ref": (0.3, 1.0),
         },
         followers,
@@ -233,15 +232,9 @@ def main() -> int:
     search(
         "lead pitch",
         team.lead,
-        {"Kd_theta": (0.3, 1.0, 3.0), "tecs.time_const": (1.5, 2.0)},
+        {"tecs.time_const": (1.5, 2.0)},
         lead,
         measure="altitude",
-    )
-    search(
-        "lead power",
-        team.lead,
-        {"power_set": (0.75, 0.8, 0.85), "k_speed": (0.002, 0.005, 0.01)},
-        lead,
     )
     check()
     return 0

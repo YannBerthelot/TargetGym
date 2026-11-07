@@ -29,14 +29,38 @@ Every parameter and all four ODEs were compared against PC-gym's
 Johansson (2000), *The Quadruple-Tank Process: A Multivariable Laboratory
 Process with an Adjustable Zero*, IEEE TCST 8(3).
 
+**The structure is the rig's, the numbers are not.** PC-gym gives no source for
+its values, and they describe a far larger plant than the laboratory rig:
+
+| Quantity | This task (PC-gym) | Johansson's rig |
+|---|---|---|
+| Tank area `A` | 1 m² | 28 and 32 cm² |
+| Outlet area `a` | 20 to 35 cm² | 0.057 and 0.071 cm² |
+| Pump gain `k` | 850 and 950 cm³/(V s) | 3.33 and 3.35 cm³/(V s), 3.14 and 3.29 non-minimum phase |
+| Valve split `gamma` | 0.2, 0.2 | 0.70, 0.60, and 0.43, 0.34 non-minimum phase |
+
+The rig's figures are Johansson's as reproduced by
+[Wafi and Widjiantoro 2023](https://arxiv.org/abs/2304.04763) (Tables 1 and 2) and
+[Saeed, Uddin and Katebi 2010](https://strathprints.strath.ac.uk/42140/1/quad_tank_rk.pdf).
+The paper itself could not be opened here. This task's values are unchanged, and
+no figure in this file is a measurement of the rig.
+
 Deliberately **not** modelled:
 
 | Omitted | Rationale |
 |---|---|
-| Pump dynamics and deadband | Voltage maps to flow instantaneously and linearly. |
-| Level-sensor noise and lag | Both tanks are read exactly. |
+| Pump dynamics and deadband | Voltage maps to flow instantaneously and linearly, with no rate limit or lag. Ours, for the owner to accept. |
+| Level-sensor lag | None. The transmitter updates at least once a second (see Readings), the 1 s step here. |
 | Valve-position drift | γ1 and γ2 are fixed, so the zero cannot be moved at run time — which is the one thing the real rig is famous for being able to do. |
-| Inflow disturbances | No stochastic disturbance at all. |
+
+**Unmeasured loads.** After the settle, each lower tank takes a flow nothing
+measures (`step_load`). Each is a uniform draw held for 5 min, within
+±2.5e-4 m³/s, about 4 % of the tank's flow, and the first arrives at step 581,
+the task's fixed settle, so the whole path falls in the scored hold. The draw
+comes from the episode's key and the clock, so every policy on one episode key
+meets the same loads. All these figures are ours, for the owner to accept. The
+limit is what keeps the upper tanks 30 mm above the trip at every target and
+load. `load_scale = 0` switches them off.
 
 **Regime of validity.** Levels between roughly 0.05 and 0.45 m, pump voltages
 0–10 V. Torricelli outflow assumes free discharge and no orifice submergence.
@@ -55,7 +79,8 @@ Deliberately **not** modelled:
 | Every target individually reachable | required | yes | ✅ |
 | Every target pair **jointly** reachable | required | 49/49 | ✅ |
 | Voltage headroom at the top target | < 90 % | yes | ✅ |
-| Upper-tank margin above the trip | ≥ 30 mm | **≥ 50 mm** | ✅ |
+| Upper-tank margin above the trip | ≥ 30 mm | **≥ 50 mm**, ≥ 30 mm at the worst load | ✅ |
+| Every target holds under every load | pumps inside 0 to 10 V | yes | ✅ |
 | Episode covers settling | ≥ 2 expert settles | 1200 steps, twice the expert's 570 s to the 1 mm resolution (v3; 500 in v2) | ✅ |
 
 **The negative RGA is the load-bearing result**, because it dictates how the
@@ -78,13 +103,15 @@ preference; the diagonal pairing tripped the low-level limit within 40 steps.
 
 | Symbol | Value | Unit | Source | |
 |---|---|---|---|---|
-| `gamma1`, `gamma2` | 0.2, 0.2 | – | PC-gym; sum < 1 → non-minimum phase | ✅ |
-| `k1`, `k2` | 8.5e-4, 9.5e-4 | m³/(V s) | PC-gym | ✅ |
-| `a1`–`a4` | 3.5, 3.0, 2.0, 2.5 (×10⁻³) | m² | PC-gym | ✅ |
-| `A1`–`A4` | 1.0 | m² | PC-gym | ✅ |
+| `gamma1`, `gamma2` | 0.2, 0.2 | – | PC-gym, not the rig; sum < 1 → non-minimum phase | ⚠️ |
+| `k1`, `k2` | 8.5e-4, 9.5e-4 | m³/(V s) | PC-gym, not the rig | ⚠️ |
+| `a1`–`a4` | 3.5, 3.0, 2.0, 2.5 (×10⁻³) | m² | PC-gym, not the rig | ⚠️ |
+| `A1`–`A4` | 1.0 | m² | PC-gym, not the rig | ⚠️ |
 | `v_min`, `v_max` | 0, 10 | V | THIS REPO — PC-gym has no bounds | ✅ |
 | `h_min`, `h_max` | 0.05, 1.5 | m | THIS REPO | ⚠️ D2 |
 | `tracking_band` | 0.05 | m | THIS REPO — see D1 | ✅ |
+| `load_flow` | 2.5e-4 | m³/s | THIS REPO: the upper tanks' margin, for the owner to accept | ⚠️ |
+| `load_start`, `load_period` | 581, 300 | steps | THIS REPO: the fixed settle, and a 5 min block, for the owner to accept | ⚠️ |
 | `target_h1_range` | (0.11, 0.19) | m | THIS REPO — sized against the envelope | ✅ |
 | `target_h2_range` | (0.14, 0.28) | m | THIS REPO | ✅ |
 | `delta_t` | 1.0 | s | ~58 s tank time constant | ✅ |
@@ -103,7 +130,8 @@ Hold the levels of the two lower tanks of Johansson's quadruple-tank process
 with two pumps. Each pump sends most of its flow to the upper tank on the other
 side, which drains into the opposite lower tank, so pairing each pump with the
 tank below it is the wrong move and the response is non-minimum phase. All four
-levels are measured: the difficulty is the coupling, not what is seen.
+levels are measured, but after the settle the lower tanks take flows nothing
+measures, so the difficulty is the coupling and the loads.
 
 | obs | meaning |
 |---|---|
@@ -119,9 +147,8 @@ each pump sending 80 % of its flow to the tank on the *other* side. The useful
 control move is a coordinated one, and a controller that treats the loops as
 independent and diagonal will destabilise itself.
 
-**Observation.** All four levels are measured, so unlike most of this suite the
-plant is fully observed. The
-difficulty is structural, not informational.
+**Observation.** All four levels are measured. The loads on the lower tanks are
+not, so a table of the target leaves an offset that only feedback removes.
 
 **Reward** — the floor-normalised cost described in *Reward (version 2)*
 below.
@@ -129,10 +156,12 @@ below.
 **The oracle.** The MPC slot is a problem definition, not a tuned
 controller (docs/proposals/oracle-audit.md): the shared solver's oracle
 (`target_gym.oracles`). Once every T_c, Cooper's sample time from the
-horizon protocol (4 steps, `data/oracle_horizons/four_tank.json`), it plans
-P = 252 moves of 4 steps each from the true state, fewer near the episode's
-end, and holds the first for those 4 steps. The plan maximises the episode
-reward over the horizon on the environment's own dynamics. The pumps' clips
+horizon protocol (3 steps, `data/oracle_horizons/four_tank.json`), it plans
+P = 384 moves of 3 steps each from the true state, fewer near the episode's
+end, and holds the first for those 3 steps. The plan maximises the episode
+reward over the horizon on the environment's own dynamics, with the true load,
+read at each solve and held over the plan, so it never sees an arrival coming.
+The pumps' clips
 are replaced by bounds on the moves, and both tracking terms are written as
 (e / e_floor)^2, the reward itself since e_tol is 0 and p is 2. Every level
 on every planned step is held inside its trip band, h_min < h < h_max, as a
@@ -191,9 +220,12 @@ Here γ1 and γ2 are constants, so only the non-minimum-phase configuration is
 available. Making them episode parameters would recover the benchmark's most
 distinctive property.
 
-**⚠️ D4 — no disturbance and no measurement noise.** Deterministic given the
-sampled setpoint and initial condition, which is why the conformance suite
-skips its PRNG-hygiene checks.
+**✅ D4, fixed: the plant is disturbed.** The loads of §1 replaced a plant that
+was deterministic after reset, whose hold was only the PI's tail. They come from
+the episode's key, not the step's, which is why the registry declares no
+`disturbance_fields` for the conformance suite's PRNG-hygiene checks.
+
+**⚠️ D5: the rig's name, not its numbers.** See §1.
 
 ---
 
@@ -209,37 +241,24 @@ one at a time. The expert is that pair (`make_four_tank_pid_controller`,
 `decoupled_pi_step`), SIMC-tuned (Skogestad and Grimholt 2012) from step
 tests by `scripts/tune_process_experts.py --envs four_tank`.
 
-- **Steady-state gains.** Each pump stepped 0.3 V from rest at each training
-  seed's targets (seeds 100 to 109) and run 2000 s to rest. At the median,
-  G(0) = [[0.0085, 0.0387], [0.0462, 0.0127]] m/V, so the relative gain of the
-  straight pairing is -0.065 and the crossed pairing is the one to close
-  (measured).
-- **Decoupler.** `D = G(0)^-1 diag(G12, G21)`, about [[-0.294, 1.065],
-  [1.065, -0.235]] V per V. A step in one loop's output leaves the other
-  level within 2 mm on the way and about 0.05 mm at rest (measured).
+- **Steady-state gains.** With the loads off, each pump stepped 0.3 V from rest at
+  each training seed's targets and run 2000 s. At the median, G(0) = [[0.00836,
+  0.03728], [0.04443, 0.01249]] m/V, so the relative gain of the straight pairing
+  is -0.067 and of the crossed pairing 1.067, as the closed form says.
+- **Decoupler.** `D = G(0)^-1 diag(G12, G21)`, about [[-0.300, 1.067], [1.067,
+  -0.239]] V per V.
 - **Bias.** The PIs' outputs are added to the voltages that hold the
-  targets, from the lower tanks' steady balances and the rig's datasheet
-  constants (`steady_voltages`).
-- **Loops.** Each decoupled loop stepped 0.3 V. The median first-order fits
-  are k = 0.0388 m/V, tau1 = 146 s, theta = 41.9 s on h1 and k = 0.0463 m/V,
-  tau1 = 118 s, theta = 39.4 s on h2; the delay carries the inverse
-  response. Tight SIMC (tau_c = theta): Kp_1 = 45.1 V/m, Ti_1 = 146 s,
-  Kp_2 = 32.4 V/m, Ti_2 = 118 s; 2 theta and 3 theta cost more on the training
-  seeds (20.1 per step against 46.6 and 76.9).
-- **Against the zero.** The plant's transmission zero sits at
-  z = 0.031 rad/s in the right half-plane at the median operating point
-  (derived from the linearised tank time constants), which caps the
-  closed-loop bandwidth near z / 2, a time constant of about 64 s. The SIMC
-  loops' tau_c + theta, 79 to 84 s, is within 1.3 times that limit. Their
-  integral time is tau1, so the last millimetres take long: the expert is
-  inside the transmitter's resolution about 570 s after the reset, which is
-  why the episode is 1200 steps. Johansson's own non-minimum-phase tuning
-  settles in about 2450 s in that source's simulation.
-- **Held-out check** (seeds 200 to 209). It holds 1.33 per step (worst seed
-  3.67) against a ceiling of 2 after the fixed settle of 581 steps, and never
-  trips (`tests/pc_gym/test_expert_specs.py`). The crossed PIs it replaced,
-  grid-searched on the scored reward, held 22.7 on the protocol seeds at 500
-  steps.
+  targets, from the lower tanks' steady balances and this task's constants,
+  PC-gym's and not the rig's (`steady_voltages`).
+- **Loops.** Each decoupled loop stepped in its own `w`, one run, N3 sizing it. The
+  median fits are k = 0.0368 m/V, tau1 = 120 s, theta = 52 s on h1 and k = 0.0443
+  m/V, tau1 = 102 s, theta = 48 s on h2; the delay carries the inverse response.
+  Pumps have no sourced dead band, so SIMC stands: Kp_1 = 31.4 V/m, Ti_1 = 120 s,
+  Kp_2 = 24.0 V/m, Ti_2 = 102 s.
+- **Held-out check** (seeds 200 to 209). It holds 35.8 per step (worst seed 90.1)
+  against a ceiling of 2 after the fixed settle of 581 steps, and never trips. The
+  best null is the table, ratio 0.47, 0 of 10 wins. The miss is a finding, and PR 8
+  looks at this ceiling: `tests/pc_gym/test_expert_specs.py`.
 
 ---
 
@@ -253,7 +272,7 @@ tests by `scripts/tune_process_experts.py --envs four_tank`.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `four_tank` | 1200 | 1 | 20 min | 2 in [-1, 1] | 6 | 8 |
+| `four_tank` | 1200 | 1 | 20 min | 2 in [-1, 1] | 6 | 13 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -268,7 +287,7 @@ which is what the recorded baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1e-3 m | documented minimum: the level transmitter's 1 mm resolution, both tanks. No disturbance; the MPC before the oracle audit (2026-10) held 1e-5 m on both tanks after settling (`scripts/measure_hold.py`, 900 hold steps after a 270-step burn-in; PID 0.6 and 2.9 mm), and the NLP that replaced it about 2e-7 m (protocol hold cost 3.1e-8). |
+| `e_floor` | 1e-3 m | documented minimum: the level transmitter's 1 mm resolution, both tanks. Measured with no load, before PR 8 re-measures it: the MPC before the oracle audit (2026-10) held 1e-5 m on both tanks after settling (`scripts/measure_hold.py`, 900 hold steps after a 270-step burn-in; PID 0.6 and 2.9 mm), and the NLP that replaced it about 2e-7 m (protocol hold cost 3.1e-8). |
 | `e_tol` | 0 | no level specification band |
 | `tracking_exponent` | 2 | quadratic |
 | `failure_cost` | 2.92e5 | twice the reachable two-tank excursion's cost, 2 x ((0.25 / 1e-3)^2 + (0.289 / 1e-3)^2): the steady-state tops 0.360 / 0.429 m against the lowest targets |
@@ -291,3 +310,32 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports the four levels through their instruments and the two
+setpoints exactly (`docs/proposals/measurement-noise.md`).
+`sensor_noise_scale = 0` gives the noise-free readings, rounding included. The
+Rosemount 5300's sheet gives at least one update a second (p. 33 of the PDF), so a
+reading every 1 s step with no dead time matches it.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `h1`, `h2`, `h3`, `h4` | 0.5 mm | 1 mm | Guided wave radar level transmitter | Confirmed | [Rosemount 5300](https://www.emerson.com/documents/automation/73580.pdf) |
+
+The expert reads these levels, and so does every tuner. The oracle plans and
+acts on the true state, so it stays a full-state bound. `reward`, trips, the
+score and the time-in-band and settle KPIs read the true levels.
+`info["measured_reward"]` is the same cost on the readings, with any trip taken
+from the true state, and a learner can train on it.
+
+A plant resting exactly on target pays about 0.67 per step in measured reward.
+The proposal's floor of 0.5 is the scatter alone, `(0.5 mm / 1 mm)^2` per tank.
+Rounding to 1 mm adds `step^2 / 12` to each reading's variance, 1/12 per tank.
+
+## Written exception to check 2
+
+The credibility check on a sourced real figure has nothing to read here. The owner
+accepted a class exception on 2026-11-06: no published figure could be found or opened
+after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
+says what was tried.

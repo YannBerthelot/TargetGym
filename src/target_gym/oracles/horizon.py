@@ -60,15 +60,18 @@ def cooper_horizons(fit: dict, T: float) -> tuple[int, int, int]:
     return N, M, N + M
 
 
-def task_horizon(fits: dict, dt: float):
+def task_horizon(fits: dict, dt: float, quiet: dict | None = None):
     """H2 and H5 over a task's valid fits, ``{key: fit}`` with a key per pair
     and seed: ``(T_c in steps, {key: (N, M, P)}, the key with the largest P)``.
-    With no valid fit there is no protocol horizon, ``(None, {}, None)``:
-    the task keeps its current oracle (Amendment 2, N3, replacing H20)."""
+    ``quiet`` fits, which failed V1 alone at a fit of at least 95 %, count toward
+    P and set no T_c (Amendment 4). With no valid fit there is no protocol
+    horizon, ``(None, {}, None)``: the task keeps its current oracle (Amendment
+    2, N3, replacing H20)."""
     if not fits:
         return None, {}, None
     tc = sample_steps([sample_time(f) for f in fits.values()], dt)
-    rows = {key: cooper_horizons(f, tc * dt) for key, f in fits.items()}
+    both = {**(quiet or {}), **fits}
+    rows = {key: cooper_horizons(f, tc * dt) for key, f in both.items()}
     return tc, rows, max(rows, key=lambda key: rows[key][2])
 
 
@@ -83,11 +86,12 @@ def task_ramp(fits: dict, cv: str, span: float, rates: dict, T: float):
     seed): fit}`` of tracked ``cv`` and the rate-limited MVs in ``rates``, the
     longest ramp and the key that sets it, ``(0, None)`` with none. A bump
     test is too small to reach a rate limit, so a large move's ramp is added
-    to the horizon Cooper's recipe gives."""
+    to the horizon Cooper's recipe gives. An integrating fit has no settled
+    gain, only a slope, so H21 says nothing of it."""
     rows = {
         key: ramp_samples(span, fit["k"], rates[key[0]], T)
         for key, fit in fits.items()
-        if key[1] == cv and key[0] in rates
+        if key[1] == cv and key[0] in rates and fit.get("model") != "integrating_lag"
     }
     if not rows:
         return 0, None

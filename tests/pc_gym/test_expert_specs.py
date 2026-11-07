@@ -41,13 +41,24 @@ def _episodes(name):
     return eps, p
 
 
+#: Tuned at the steepest curve, the loop no longer cycles, and it is slow.
+PROBE = "it holds 230 against a ceiling of 1, tuned at q2 = 0 as the plan says"
+#: 8 trips on 4 of 10 seeds.
+THERMOWELL = "the datasheet's inner PD trips 8 times on 4 of the 10 seeds"
+
 PLANTS = [
     "first_order",
     "cstr",
     "ph_neutralization",
-    "unstable_cstr",
+    pytest.param("unstable_cstr", marks=_finding(THERMOWELL)),
     "four_tank",
-    "distillation",
+    pytest.param(
+        "distillation",
+        marks=_finding(
+            "the doubled episode shows it: 170 trips on 3 of 10 seeds, all past step "
+            "200, where it held. Its gains stand by the owner's choice of 2026-11-06"
+        ),
+    ),
 ]
 
 
@@ -64,17 +75,35 @@ def test_the_expert_never_trips_the_plant(name):
     "name",
     [
         "first_order",
-        "cstr",
-        "ph_neutralization",
+        pytest.param(
+            "cstr",
+            marks=_finding(
+                "the recipe holds 4,509 against a ceiling of 1; the 1 min analyser "
+                "keeps the outer loop slow, and PR 8 moves this floor"
+            ),
+        ),
+        pytest.param("ph_neutralization", marks=_finding(PROBE)),
         pytest.param(
             "unstable_cstr",
             marks=_finding(
-                "the SIMC cascade holds 6.0 on average (worst seed 9.0) against "
-                "a ceiling of 1, through the unmeasured feed-temperature drift"
+                "the recipe holds 1.3e4 on average (worst seed 4.7e4) against a "
+                "ceiling of 1, mostly the cost of its trips"
             ),
         ),
-        "four_tank",
-        "distillation",
+        pytest.param(
+            "four_tank",
+            marks=_finding(
+                "the recipe holds 35.8 against a ceiling of 2 under the load "
+                "steps, and PR 8 looks at this ceiling"
+            ),
+        ),
+        pytest.param(
+            "distillation",
+            marks=_finding(
+                "the recipe holds 7,636 against a ceiling of 2, with its trips, on "
+                "chromatographs 5 min late, and PR 8 moves this floor"
+            ),
+        ),
     ],
 )
 def test_the_expert_holds_within_the_instruments_resolution(name):

@@ -15,8 +15,8 @@ env, params = tg.make("distillation")
 | Action space | `Box((2,))`, all actions in [-1, 1] |
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | yD (mole fraction), xB (mole fraction) |
-| Episode length | 200 steps of 60 s (3.33 h) |
-| Cite as | `distillation-v3` |
+| Episode length | 400 steps of 60 s (6.67 h) |
+| Cite as | `distillation-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
 
 ## Action space
@@ -59,13 +59,13 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 7 fields.
+`reset` samples the initial condition and the target; state has 11 fields.
 
 ## Episode end
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 200 steps.
+**Truncation.** After 400 steps.
 
 ## Baselines
 
@@ -85,37 +85,45 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | min |
-| `max_steps_in_episode` | 200 | steps |
+| `max_steps_in_episode` | 400 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
+| `actuator_rate` | 0 | fraction of span per delta_t unit |
+| `actuator_lag` | 0 | delta_t units |
 | `alpha` | 1.5 | - |
 | `M_tray` | 0.5 | kmol |
 | `M_drum` | 0.5 | kmol |
+| `tau_L` | 0.063 | min |
+| `L_nominal` | 2.706 | kmol/min |
 | `F` | 1 | kmol/min |
 | `zF_nominal` | 0.5 | - |
 | `qF` | 1 | - |
 | `zF_noise_std` | 0.03 | - |
 | `zF_min` | 0.4 | - |
 | `zF_max` | 0.6 | - |
-| `L_min` | 2.3 | kmol/min |
-| `L_max` | 3.1 | kmol/min |
-| `V_min` | 2.8 | kmol/min |
-| `V_max` | 3.6 | kmol/min |
+| `L_min` | 2.2 | kmol/min |
+| `L_max` | 3.4 | kmol/min |
+| `V_min` | 2.7 | kmol/min |
+| `V_max` | 3.9 | kmol/min |
 | `D_min` | 0.1 | kmol/min |
 | `D_max` | 0.9 | kmol/min |
 | `yD_floor` | 0.9 | - |
 | `xB_ceiling` | 0.1 | - |
 | `tracking_band` | 0.02 | - |
-| `precision_floor` | 0.0001 | - |
+| `precision_floor` | 0.0004 | - |
 | `boilup_cost_weight` | 0 | - |
 | `time_unit_seconds` | 60 | s |
 | `reward_version` | 2 | - |
-| `e_floor_top` | 0.0001 | - |
-| `e_floor_bottom` | 0.0001 | - |
+| `e_floor_top` | 0.0004 | - |
+| `e_floor_bottom` | 0.0004 | - |
 | `e_tol` | 0 | - |
 | `tracking_exponent` | 2 | - |
 | `c_hold` | 3.282 | kmol/min |
 | `running_weight` | 1 | - |
-| `failure_cost` | 3.61e+06 | reward |
+| `failure_cost` | 225625 | reward |
 | `restart_steps` | 240 | steps |
-| `rho_floor_tracking` | 8.53057e-05 | reward |
-| `rho_floor` | 8.53057e-05 | reward |
+| `rho_floor_tracking` | 5.33161e-06 | reward |
+| `rho_floor` | 5.33161e-06 | reward |
 

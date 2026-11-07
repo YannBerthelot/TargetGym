@@ -5,7 +5,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.cstr.env import (
     CSTRParams,
@@ -21,7 +27,7 @@ from target_gym.video import SavesVideo
 
 
 class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRParams]):
-    """Exothermic CSTR holding concentration against runaway.
+    """Exothermic CSTR holding concentration through unmeasured feed loads.
 
     Action (1,): [coolant temperature], raw in [-1, 1] -> [T_c_min, T_c_max]
     """
@@ -37,6 +43,13 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
     tracked_names: tuple = ("C_a (mol/L)",)
     obs_target_index: int = 2  # target_CA
 
+    # Process photometer on a 1 min sample loop, and Pt100 RTD (PHYSICS.md
+    # section on readings). ``dead_time`` is in ``delta_t``'s minutes.
+    readings: tuple = (
+        FieldReading("C_a", sigma=5e-4, dead_time=1.0),
+        FieldReading("T", sigma=0.04),
+    )
+
     def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (3,)
         self.positions_history = []
@@ -49,8 +62,8 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -65,12 +78,13 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
         if params is None:
             params = self.default_params
 
-        T_c = action
-        if not isinstance(action, float):
-            T_c = action.reshape(())
+        action, state = actuate(self, state, jnp.reshape(action, (1,)), params)
 
         new_state, metrics = compute_next_state(
-            T_c, state, params, integration_method=self.integration_method
+            action.reshape(()),
+            state,
+            params,
+            integration_method=self.integration_method,
         )
 
         # A trip is part of the kernel: the step is charged the trip cost and
@@ -79,8 +93,9 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state: CSTRState, params: CSTRParams = None):
         """
         Observation vector

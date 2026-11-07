@@ -1,0 +1,34 @@
+{
+  "cpu": "Apple M4 Pro",
+  "exception": null,
+  "expert_figure": {
+    "kind": "target",
+    "source": "a maintenance-software vendor's page, naming no original",
+    "status": "read, secondary",
+    "unit": "percent free lime",
+    "url": "https://oxmaint.com/industries/cement-plant/cement-plant-process-control-apc-expert-systems",
+    "value": 0.3,
+    "what": "target on free lime variability, sigma under 0.3 %; a target, not a measured hold"
+  },
+  "expert_fingerprint": "a714c77d263c047f",
+  "generated": "2026-11-06T12:56:29+00:00",
+  "null_wins": [],
+  "nulls": {
+    "constant 0.0": {
+      "ratio": 3.11898181031085e-05,
+      "win_rate": 0.0
+    },
+    "constant 0.5": {
+      "ratio": 0.0976240919081444,
+      "win_rate": 0.0
+    },
+    "constant 1.0": {
+      "ratio": 4.719281509620751e-05,
+      "win_rate": 0.0
+    },
+    "table": {
+      "ratio": 0.11179739234628666,
+      "win_rate": 0.0
+    }
+  }
+}

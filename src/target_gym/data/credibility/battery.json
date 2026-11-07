@@ -1,0 +1,42 @@
+{
+  "cpu": "Apple M4 Pro",
+  "exception": null,
+  "expert_figure": {
+    "kind": "measured",
+    "source": "PJM, Performance, Mileage and the Mileage Ratio, 2015, slide 10",
+    "status": "read, primary",
+    "unit": "PJM performance score, percent",
+    "url": "https://www.pjm.com/-/media/DotCom/committees-groups/task-forces/rmistf/20151111/20151111-item-05-performance-based-regulation-concepts.ashx",
+    "value": 94.0,
+    "what": "average RegD score of PJM's battery class, Nov 2015; a fleet average of Manual 12's score, which scripts/pjm_regulation_score.py computes on the expert. A 1 MW battery averaged 59 to 63 over a month (Watson et al., 2018), and PJM certifies at 75"
+  },
+  "expert_fingerprint": "ed16aee04b123566",
+  "generated": "2026-11-06T12:56:05+00:00",
+  "null_wins": [],
+  "nulls": {
+    "I-only": {
+      "ratio": 0.15470847196590362,
+      "win_rate": 0.0
+    },
+    "constant 0.0": {
+      "ratio": 0.011098233652081924,
+      "win_rate": 0.0
+    },
+    "constant 0.5": {
+      "ratio": 0.46904289970811464,
+      "win_rate": 0.0
+    },
+    "constant 1.0": {
+      "ratio": 0.01000419698021857,
+      "win_rate": 0.0
+    },
+    "echo": {
+      "ratio": 0.4885493153910806,
+      "win_rate": 0.2
+    },
+    "table": {
+      "ratio": 0.5153035297419871,
+      "win_rate": 0.0
+    }
+  }
+}

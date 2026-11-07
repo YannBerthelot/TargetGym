@@ -6,6 +6,7 @@ from target_gym.reactor.env import (
     ReactorParams,
     ReactorState,
     steady_state_precursors,
+    steady_state_temperatures,
     steady_state_xenon,
 )
 from target_gym.reactor.env_jax import CONTROL_PERIOD, Reactor
@@ -15,16 +16,23 @@ def _make_state(params=None, **overrides) -> ReactorState:
     if params is None:
         params = ReactorParams()
     I_hat_eq, Xe_hat_eq = steady_state_xenon(1.0, params)
+    T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(1.0, params)
     defaults = dict(
         time=0,
         physics_time=0,
         n=1.0,
         C=steady_state_precursors(1.0, params),
-        T_fuel=params.initial_T_fuel,
-        T_coolant=params.initial_T_coolant,
+        T_fuel=T_fuel,
+        T_coolant=T_hot,
+        T_cold=T_cold,
+        T_sg=T_sg,
         I_hat=I_hat_eq,
         Xe_hat=Xe_hat_eq,
         target_n=0.8,
+        T_ref=570.0,
+        load_wobble=0.0,
+        ramp_down_at=3600.0,
+        ramp_up_at=18000.0,
         demand_key=jax.random.PRNGKey(42),
         rho_ext=jnp.zeros(()),
         rho_ext_cmd=0.0,
@@ -39,8 +47,12 @@ def test_reset_draws_inside_its_ranges_at_steady_precursors():
     _, state = env.reset_env(key)
 
     p = env.default_params
-    assert p.initial_n_range[0] <= float(state.n) <= p.initial_n_range[1]
-    assert p.target_n_range[0] <= float(state.target_n) <= p.target_n_range[1]
+    assert float(state.n) == pytest.approx(1.0)
+    assert float(state.target_n) == pytest.approx(1.0)
+    assert p.ramp_down_range[0] <= float(state.ramp_down_at) <= p.ramp_down_range[1]
+    hold = float(state.ramp_up_at - state.ramp_down_at) - 600.0
+    assert p.hold_range[0] <= hold + 1e-2
+    assert hold <= p.hold_range[1] + 1e-2
     # Precursors are initialised at the steady-state value for n.
     expected_C = steady_state_precursors(state.n, p)
     assert jnp.allclose(state.C, expected_C)
@@ -70,35 +82,31 @@ def test_get_obs_hides_fuel_and_precursors():
         assert not bool(jnp.any(jnp.isclose(obs, hidden)))
 
 
-def test_ou_demand_evolves_target():
-    """OU demand process produces varying targets within the configured range."""
+def test_the_load_wobbles_inside_its_day():
+    """The OU part moves the load while the schedule holds it at full."""
     env = Reactor()
     params = env.default_params
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
 
-    # Initial target is within range
-    assert params.target_n_range[0] - 1e-6 <= float(state.target_n)
-    assert float(state.target_n) <= params.target_n_range[1] + 1e-6
-
-    # Step for a while and collect targets — they should vary
+    # Well before any ramp: the day says 1, and the wobble moves about it.
     targets = [float(state.target_n)]
     _jstep = jax.jit(env.step_env)
-    for _ in range(200):
-        _, state, _, done, _ = _jstep(key, state, jnp.array([0.0]), params)
+    for _ in range(30):
+        _, state, _, _, _ = _jstep(key, state, jnp.array([0.0]), params)
         targets.append(float(state.target_n))
-        assert params.target_n_range[0] - 1e-6 <= targets[-1]
-        assert targets[-1] <= params.target_n_range[1] + 1e-6
+    assert max(targets) < 1.05
+    assert min(targets) > 0.95
+    assert max(targets) - min(targets) > 1e-4
 
-    # Target should have changed (OU has nonzero sigma)
-    assert max(targets) - min(targets) > 0.001
 
-    # Different seeds produce different demand trajectories
-    unique_targets = set()
-    for seed in range(10):
-        _, st = env.reset_env(jax.random.PRNGKey(seed), params)
-        unique_targets.add(float(st.target_n))
-    assert len(unique_targets) > 1
+def test_seeds_draw_different_days():
+    env = Reactor()
+    days = {
+        float(env.reset_env(jax.random.PRNGKey(seed), env.default_params)[1].ramp_up_at)
+        for seed in range(10)
+    }
+    assert len(days) == 10
 
 
 def test_observation_scales_rod_to_unit_range():
@@ -125,10 +133,10 @@ def test_time_limit_counts_env_steps_and_rollout_stops_there():
     """Regression for the truncation bug that understated the baselines 5x.
 
     ``max_steps_in_episode`` used to be in physics steps while the shipped
-    rollout counted env steps, so it ran ten times past the limit and scored a
-    frozen plant at a tenth of the reward. Now the limit is env steps: the
-    episode ends exactly there, and the reward in the last step is the same
-    order as in the first.
+    rollout counted env steps, so it ran past the limit and scored a frozen
+    plant at a fraction of the reward. Now the limit is env steps: the episode
+    ends exactly there, and the reward in the last step is the same order as in
+    the first.
     """
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import rollout

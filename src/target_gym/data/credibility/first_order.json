@@ -1,0 +1,32 @@
+{
+  "cpu": "Apple M4 Pro",
+  "exception": "check 2: no published figure could be found or opened, after two searches with a re-fetch check (accepted 2026-11-06)",
+  "expert_figure": {
+    "status": "no sourced figure"
+  },
+  "expert_fingerprint": "b3e946bff4232043",
+  "generated": "2026-11-06T12:56:39+00:00",
+  "null_wins": [],
+  "nulls": {
+    "I-only": {
+      "ratio": 0.24649998633409237,
+      "win_rate": 0.0
+    },
+    "constant 0.0": {
+      "ratio": 0.0005161917747723627,
+      "win_rate": 0.0
+    },
+    "constant 0.5": {
+      "ratio": 0.0048263448442191475,
+      "win_rate": 0.0
+    },
+    "constant 1.0": {
+      "ratio": 0.00430101199063756,
+      "win_rate": 0.0
+    },
+    "table": {
+      "ratio": 0.24695795190438097,
+      "win_rate": 0.0
+    }
+  }
+}

@@ -35,6 +35,25 @@ knob on the same response.
 about 8 s against 25 minutes for the solid, a factor of ~180. Solving it
 algebraically each step removes the stiffest dynamics at no cost in fidelity.
 
+**Calcination is stepped exactly.** At the burning zone its rate constant is
+1.3 /s, 40 times what one explicit 30 s step can follow: RK4's limit is
+k h = 2.785, which calcination passes above 1429 K. So `calcination_step` holds
+the temperatures over the step and solves the residual's linear decay in closed
+form, by exponential Euler (Hochbruck and Ostermann 2010, eq. 1.6), marching
+each zone's mean down the kiln, and the other states take RK4 with that mean
+rate held. So the reaction's heat is the carbonate that reacted. Every weight
+is positive and they sum to at most 1, so alpha needs no clip, and the ODE's
+steady states are the step's own.
+
+Against a 0.25 s explicit run of the same equations, discharge free lime stays
+within a tenth of `e_floor` through fuel and speed moves. The explicit step it
+replaced was 0.47 of `e_floor` off, took the heat of about 13 times the carbonate
+in a hot zone, and multiplied a fraction's error up to 231 times a step, held
+back only by a clip at 1. Free lime stays on RK4: it is stable up to 1898 K,
+above the operating range, and an exact step lost the tracked output's accuracy
+(0.58 of `e_floor`). A rate constant raised by a factor f lowers that limit, to
+1878 K at f = 1.2 and 1855 K at f = 1.5, where `rk4_2` would be needed.
+
 **The flame is distributed**, decaying exponentially over ~15 m from the
 burner. This is not cosmetic: a point source at the burner end dumps the whole
 firing rate into one 3.75 m slice, exhausts the gas immediately, and leaves the
@@ -175,31 +194,27 @@ discharge assay report. The axial profile is hidden.
 
 Expensive to step, honestly so: 64 coupled states with a sequential gas sweep.
 
-**The oracle is the shared solver (`oracle.py`).** The fast reactions are the
-hard part. In the hot cells a reaction's rate times the 30 s step is far past
-what the explicit integrator can follow, so one step amplifies a fraction's
-error about a millionfold, and only the env's clip of the fractions to [0, 1]
-bounds it. Those cells sit on the clip, so the planner's model keeps it,
-exactly, where the inventory had dropped it. That is what the audit's
-"derivatives" came to: in float64 they are finite, and with the clip they are
-usable. (In float32 reverse mode they overflow after about eight steps, which
-is why `GradientMPC` once sat at its initial action and a cross-entropy
-sampler held this slot; it was planning 96 x 32 samples per step.)
+**The oracle is the shared solver (`oracle.py`).** The planner runs the env's
+own step, `advance`, in float64, with the raw moves' clips removed. The
+fractions need no clip there: alpha's step keeps it a fraction, and lime stays
+inside [0, 1] below the trip. (Through the explicit step that this replaced,
+float32 reverse-mode derivatives overflowed after about eight steps, which is
+why `GradientMPC` once sat at its initial action and a cross-entropy sampler
+held this slot; it was planning 96 x 32 samples per step.)
 
 The rest is the rule: the episode reward on the mean feed, a hard limit per
 cell at `T_bz_max`, the burning zone's soft max above `T_bz_min`, and free lime
-below `lime_max`. Cooper's recipe gives P = 22 steps (11 minutes) from the
+below `lime_max`. Cooper's recipe gives P = 20 steps (10 minutes) from the
 speed-to-lime pair, well short of the 25-minute transport delay, because the
 kiln's speed moves discharge lime at once.
 
-**Where it falls short.** About 3 % of the solves fail, for the reason above:
-a plan's free states can sit just off the clip, where the exact Hessian
-reaches 1e18 and no shift gives a usable step. A failed solve applies the
-previous plan's next move, or the held actuators at the start of an episode,
-where there is no previous plan. Over the ten test seeds the oracle averages
--406 against -110 for the `NewtonMPC` that held this slot, and on every seed it
-beats the expert by at least 11 to 1. Integrating calcination stably in the env
-would remove the cause.
+Over the ten test seeds none of the 7000 solves fails or reaches the cap, at
+about 10 iterations each, one warm solve is replaced by a cold retry, and
+nothing trips. On the explicit step 234 of those solves failed. The first
+steps' cost is the plant's reach, not the planner's: on a far target the plan
+goes straight to full fuel and least speed, which moves discharge lime about
+3.1e-3 in a step, so seed 0's target, 8.3e-3 away, costs about 150 before it is
+met.
 
 ---
 
@@ -249,7 +264,7 @@ peak temperature is resolution-limited; a finer grid shifts it modestly.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `cement_kiln` | 700 | 30 | 5.8 h | 2 in [-1, 1] | 8 | 85 |
+| `cement_kiln` | 700 | 30 | 5.8 h | 2 in [-1, 1] | 8 | 88 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -289,3 +304,53 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports free lime, both pyrometers, the exhaust and the raw meal
+feed through their instruments (`docs/proposals/measurement-noise.md`). `fuel_pct`
+and `speed_pct` are the controller's own commands, with no lag, and they stay
+exact with the target. `sensor_noise_scale = 0` gives the noise-free task,
+rounding included.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `lime[-1]`, via `discharge_lime(state)` | 1.8e-4 mass fraction | 1e-4 | XRD channel of a Thermo ARL X900 lab spectrometer | Confirmed; interval assumed | [AN41422](https://documents.thermofisher.com/TFS-Assets/CAD/Application-Notes/free-lime-determination-in-clinker-an41422-en.pdf) |
+| `max(T_solid)`, via `burning_zone_temperature(state)` | 1.6 K | 0.1 K | IMPAC ISR 6 two-colour ratio pyrometer | Confirmed | [ISR 6](https://www.advancedenergy.com/globalassets/resources-root/data-sheets/en-op-isr6-data-sheet.pdf) |
+| `T_solid[0]` | 1.2 K | 0.1 K | IMPAC ISR 6 ratio pyrometer | Confirmed | [ISR 6](https://www.advancedenergy.com/globalassets/resources-root/data-sheets/en-op-isr6-data-sheet.pdf) |
+| `T_exhaust` | 0.33 K | | Type S thermocouple with TMT82 transmitter | Confirmed | [TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
+| `raw_meal` | 0.13 kg/s | | Pfister FRW rotor weighfeeder | Not checked | [FRW](https://www.fuller-technologies.com/files/764b473acc9a2dfc00e9247773be104557c5d5b8.pdf/Fuller-PFISTER-FRW-5-Series-Rotor-Weighfeeder.pdf) |
+
+The pyrometer figures read the sheet's repeatability, with no stated coverage, as
+2 sigma. They exclude kiln dust and flame, so they are lower bounds in a real
+kiln. `T_exhaust` is an upper bound for the electronics and excludes gas
+turbulence. The free-lime figure is ten runs on one pellet, so it excludes
+sampling and preparation, and wet titration is about ten times worse.
+
+**Weak figures.**
+
+- The hourly free-lime sample is an assumption. No standard or handbook was found.
+  Vendor pages give
+  ["hourly to two-hourly"](https://ifactoryapp.com/industries/cement-plant/automated-test-scheduling-lims-sampling-frequency)
+  and ["typically every 2 hours"](https://oxmaint.com/industries/cement-plant/cement-plant-free-lime-quality-control-cmms-process-link),
+  and [GCI Tech Notes 1(7), 1995](https://www.gcisolutions.com/library/gci_tech_notes/gcitn199507.html)
+  calls hourly a conservative strategy for cement process streams, without
+  mentioning free lime. This task takes the short end of that range.
+- The refutation pass did not reach `raw_meal`. It reads a 0.5 % accuracy, with
+  coverage and interval unstated, as 2 sigma on 53.82 kg/s.
+
+Free lime holds its noise between samples while the value stays current, so a
+filter gets one independent draw an hour and no stale value. True sample-and-hold
+would change the control problem, and no accepted expert protocol covers it.
+
+One draw shifts the whole `T_solid` profile, so the burning-zone noise sits after
+the max. Separate draws would lift the max by about 1.77 sigma if all 16 zones sat
+level. The settled profile peaks 6 K above its neighbour, where the lift is under
+0.01 sigma, so the difference shows only when the peak passes between zones.
+`T_solid[0]` has its own pyrometer and its own draw.
+
+The expert reads these values, and so does every tuner. The oracle plans and acts
+on the true state, so it stays a full-state bound. `reward`, trips and the score
+read the true state. `info["measured_reward"]` is the same cost on the readings,
+with any trip taken from the true state, so resting on target costs a learner
+`(1.8e-4 / 5e-4)^2 = 0.13` per step, plus about 0.003 for the 1e-4 rounding.

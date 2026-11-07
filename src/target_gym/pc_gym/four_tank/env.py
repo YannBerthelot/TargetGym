@@ -6,13 +6,17 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
+
+#: Salt for the load path's key (``step_load``).
+_LOADS = 0x4C4F4144
 
 
 @struct.dataclass
 class FourTankParams(EnvParams):
+    # The plant constants are PC-gym's, not the Johansson rig's (PHYSICS.md).
     # Gravitational acceleration (m/s²)
     g: float = 9.81
     # Pump split ratios (fraction of pump flow to lower tanks)
@@ -85,11 +89,22 @@ class FourTankParams(EnvParams):
     delta_t: float = 1.0
     max_steps_in_episode: int = 1200
 
+    # ---- Unmeasured loads on the lower tanks (``step_load``; ours, PHYSICS.md) ----
+    #: Limit of each tank's draw, about 4 % of its 6e-3 m^3/s flow: the upper
+    #: tanks keep the 30 mm above the trip at every target and load.
+    load_flow: float = 2.5e-4
+    #: First arrival, the fixed settle of ``eval.FIXED_SETTLE``, so the whole
+    #: path is scored, and the steps between arrivals (5 min).
+    load_start: int = 581
+    load_period: int = 300
+    #: 0 switches the loads off, and the planner's copy holds the one it read.
+    load_scale: float = 1.0
+
     # ---- Reward (docs/reward-shaping.md; version 2) ----
-    # No disturbance and fixed targets: the shipped MPC holds both levels to
-    # 1e-5 m after settling (`scripts/measure_hold.py`), so the floor is
-    # effectively zero and the normalisation uses the level transmitter's
-    # 1 mm resolution. One term per tank, summed. The span costs
+    # Measured with no load on the plant, before PR 8 re-measures the floors:
+    # the shipped MPC held both levels to 1e-5 m after settling
+    # (`scripts/measure_hold.py`), so the normalisation uses the level
+    # transmitter's 1 mm resolution. One term per tank, summed. The span costs
     # (1.45 / 1e-3)^2 = 2.1e6 per tank per step; overflow or dry-out twice the
     # two-tank maximum.
     reward_version: int = 2
@@ -101,8 +116,8 @@ class FourTankParams(EnvParams):
     )  # reachable errors: steady tops 0.360 / 0.429 m against the lowest targets
     #: Restart time priced into a trip (``reward.trip_cost``; 10 min at 1 s steps: refill after an overflow or dry-out, provisional).
     restart_steps: int = 600
-    #: The oracle's best hold. Zero: the plant is deterministic, so exact hold
-    #: is achievable and ``e_floor`` is a scale, not a floor.
+    #: The oracle's best hold. Zero from the plant with no load, where exact
+    #: hold is achievable and ``e_floor`` is a scale, not a floor; PR 8 redoes it.
     rho_floor_tracking: float = 0.0
     rho_floor: float = 0.0
     #: True where e_floor is a resolution, not a measured or certified floor.
@@ -130,6 +145,10 @@ PARAM_UNITS = {
     "precision_floor": "m",
     "h_max": "m",
     "tracking_band": "m",
+    "load_flow": "m^3/s",
+    "load_start": "steps",
+    "load_period": "steps",
+    "load_scale": "-",
     "e_floor": "m",
     "reward_version": "-",
     "e_tol": "m",
@@ -154,8 +173,34 @@ class FourTankState(EnvState):
     v1: float
     v2: float
 
+    actuator_held: jax.Array = actuator_field(2)
+    #: The flows into tanks 1 and 2 over the last step (``step_load``), hidden.
+    load: jax.Array = struct.field(default_factory=lambda: jnp.zeros(2), kw_only=True)
 
-def compute_velocity(position, action, params: FourTankParams):
+
+def step_load(state: FourTankState, params: FourTankParams):
+    """The flow into each lower tank over the step from ``state``, in m^3/s,
+    negative for a draw.
+
+    None until ``load_start``, then a uniform draw held for ``load_period``
+    steps. It comes from the episode's ``sensor_key`` and the clock, so no
+    action or step key moves it and a trip's restart keeps it: every policy on
+    one episode key meets the same loads. At ``load_scale`` 0 the state's load
+    stands, so the planner's copy (``plan_params``) keeps the one the oracle read.
+    """
+    block = jnp.maximum((state.time - params.load_start) // params.load_period, 0)
+    key = jax.random.fold_in(jax.random.fold_in(state.sensor_key, _LOADS), block)
+    draw = jax.random.uniform(key, (2,), state.load.dtype, -1.0, 1.0)
+    live = jnp.where(
+        state.time >= params.load_start,
+        params.load_scale * params.load_flow * draw,
+        0.0,
+    )
+    return jnp.where(params.load_scale > 0, live, state.load)
+
+
+def compute_velocity(position, action, params: FourTankParams, load=(0.0, 0.0)):
+    """The four mass balances; ``load`` is the unmeasured flow into tanks 1, 2."""
     h1, h2, h3, h4 = position[0], position[1], position[2], position[3]
     v1, v2 = action[0], action[1]
 
@@ -168,11 +213,13 @@ def compute_velocity(position, action, params: FourTankParams):
         -(params.a1 / params.A1) * jnp.sqrt(2 * params.g) * sqrt_h1
         + (params.a3 / params.A1) * jnp.sqrt(2 * params.g) * sqrt_h3
         + (params.gamma1 * params.k1 / params.A1) * v1
+        + load[0] / params.A1
     )
     dh2dt = (
         -(params.a2 / params.A2) * jnp.sqrt(2 * params.g) * sqrt_h2
         + (params.a4 / params.A2) * jnp.sqrt(2 * params.g) * sqrt_h4
         + (params.gamma2 * params.k2 / params.A2) * v2
+        + load[1] / params.A2
     )
     dh3dt = (
         -(params.a3 / params.A3) * jnp.sqrt(2 * params.g) * sqrt_h3
@@ -215,7 +262,10 @@ def compute_next_state(
     v2 = convert_raw_action_to_range(action_raw[1], params.v_min, params.v_max)
     action = jnp.array([v1, v2])
 
-    _compute_velocity = partial(compute_velocity, action=action, params=params)
+    load = step_load(state, params)
+    _compute_velocity = partial(
+        compute_velocity, action=action, params=params, load=load
+    )
     (h1, h2, h3, h4), metrics = integrate_dynamics(
         positions=jnp.array([state.h1, state.h2, state.h3, state.h4]),
         delta_t=params.delta_t,
@@ -223,7 +273,9 @@ def compute_next_state(
         method=integration_method,
     )
     return (
-        state.replace(h1=h1, h2=h2, h3=h3, h4=h4, v1=v1, v2=v2, time=state.time + 1),
+        state.replace(
+            h1=h1, h2=h2, h3=h3, h4=h4, v1=v1, v2=v2, load=load, time=state.time + 1
+        ),
         metrics,
     )
 
@@ -247,9 +299,16 @@ def check_is_terminal(state: FourTankState, params: FourTankParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward_terms(state: FourTankState, params: FourTankParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
-    terminated, _ = check_is_terminal(state, params, xp)
+def compute_reward_terms(
+    state: FourTankState, params: FourTankParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, params, xp)
     track = R.tracking_cost(
         state.target_h1 - state.h1,
         params.e_floor,
@@ -266,7 +325,7 @@ def compute_reward_terms(state: FourTankState, params: FourTankParams, xp=jnp):
     terms = {
         "tracking": track,
     }
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: FourTankState, params: FourTankParams, xp=jnp):

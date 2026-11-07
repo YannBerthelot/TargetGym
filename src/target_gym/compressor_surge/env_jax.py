@@ -5,7 +5,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.compressor_surge.env import (
     CompressorSurgeParams,
     CompressorSurgeState,
@@ -47,6 +53,16 @@ class CompressorSurge(
     tracked_names: tuple = ("header pressure (kPa)",)
     obs_target_index: int = 6  # live setpoint
 
+    # PHYSICS.md section on readings. The delivered flow is computed, so its
+    # meter reads through ``demand_dev``. 1 rpm at an assumed 10,000 rpm.
+    readings: tuple = (
+        FieldReading("dp", sigma=9.17),
+        FieldReading("m_c", sigma=0.021),
+        FieldReading("demand_dev", sigma=8.4e-4),
+        FieldReading("N", sigma=5.8e-5, step=1e-4),
+        FieldReading("x", sigma=1.5e-3),
+    )
+
     def __init__(self, integration_method: str = "rk4_10"):
         # "rk4_N": N substeps per step, each one actuator rate-limit update and
         # one RK4 step of delta_t / N. Checked here so a bad string fails at
@@ -63,8 +79,8 @@ class CompressorSurge(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -80,7 +96,8 @@ class CompressorSurge(
             params = self.default_params
 
         action = jnp.reshape(jnp.asarray(action), (2,))
-        new_state, metrics = compute_next_state(
+        action, state = actuate(self, state, action, params)
+        proposal, metrics = compute_next_state(
             action, state, params, key, integration_method=self.integration_method
         )
 
@@ -92,10 +109,24 @@ class CompressorSurge(
         # clock: the step that enters a block is scored against its level,
         # which the returned observation also shows.
         new_state, reward, terminated, info = finish_step(
-            self, key, state, new_state, params
+            self, key, state, proposal, params
         )
+        # The plant's own actuators set the rates, so the applied action is
+        # where they went.
+        info["applied_action"] = self.initial_action(proposal, params)
         return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    def initial_action(self, state, params):
+        """The raw action that holds the drive setpoint and valve where they are."""
+        return jnp.stack(
+            [
+                2.0 * (state.N_ramp - params.N_min) / (params.N_max - params.N_min)
+                - 1.0,
+                2.0 * state.x - 1.0,
+            ]
+        )
+
+    @measured_obs
     def get_obs(
         self, state: CompressorSurgeState, params: CompressorSurgeParams = None
     ):
@@ -124,8 +155,8 @@ class CompressorSurge(
         """A fresh schedule, the initial deviation drawn from its stationary law
         clipped at ``demand_dev_reset_clip`` sd, and the plant at its
         equilibrium at ``N_reset`` and ``x_reset`` for the drifted first
-        opening, with the schedule clock at 0. The reset is off target by
-        design (PHYSICS.md, task design)."""
+        opening, with the schedule clock at 0. The target opens on the reset's
+        own pressure and ramps onto the first level (PHYSICS.md, task design)."""
         if params is None:
             params = self.default_params
 
@@ -141,11 +172,12 @@ class CompressorSurge(
         )
         rho = suction_density(params)
         U = params.N_reset * params.U_r
+        dp = rho * U**2 * characteristic(phi, params)
 
         state = CompressorSurgeState(
             time=0,
             m_c=rho * params.A_c * U * phi,
-            dp=rho * U**2 * characteristic(phi, params),
+            dp=dp,
             N=params.N_reset,
             N_ramp=params.N_reset,
             x=params.x_reset,
@@ -154,6 +186,11 @@ class CompressorSurge(
             setpoint_levels=setpoint_levels,
             demand_levels=demand_levels,
             block_clock=0,
+            # Folded, so the schedule and deviation keep their draws.
+            surge_offset=jax.random.uniform(
+                jax.random.fold_in(key, 1), maxval=params.surge_offset_max
+            ),
+            setpoint_lead=dp - setpoint_levels[0],
         )
 
         obs = self.get_obs(state, params)

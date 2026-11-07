@@ -139,7 +139,10 @@ def _formation_errors(obs, state, params):
 
 
 def _plane_speed(obs, state, params):
-    return abs(float(np.sqrt(state.x_dot**2 + state.z_dot**2) - params.target_speed))
+    from target_gym.plane.env import target_airspeed
+
+    speed = np.sqrt(state.x_dot**2 + state.z_dot**2)
+    return abs(float(speed - target_airspeed(state, params)))
 
 
 def _battery_fade(obs, state, params):
@@ -208,7 +211,7 @@ PLANTS = {
     "patrol": (_patrol_errors, None, 70, "phugoid ~1 min", None),
     # The same plant, reward and oracle (which reads the true state), so the
     # same window: the protocol then scores both variants after the capture.
-    "patrol_bearing_only": (_patrol_errors, None, 70, "phugoid ~1 min", None),
+    "patrol_range_bearing": (_patrol_errors, None, 70, "phugoid ~1 min", None),
     "cstr": (None, None, 4, "residence ~1 min at 15 s steps", 100),
     "first_order": (None, None, 10, "tau = 0.5 s at 0.05 s steps", 100),
     "four_tank": (None, None, 90, "tank tau ~1.5 min at 1 s steps", 300),
@@ -237,10 +240,10 @@ PLANTS = {
     ),
     "reactor": (
         None,
-        lambda o, s, p: abs(float(s.rho_ext_cmd - s.rho_ext)),
+        lambda o, s, p: abs(float(s.rod_moved)),
         667,
-        "OU demand 1/theta = 6667 s at 10 s steps (xenon constrains reach only)",
-        2000,
+        "xenon's hours through the hold, at 30 s steps; the day's ramps are moves",
+        1440,
     ),
     "hvac": (
         None,
@@ -265,7 +268,7 @@ PLANTS = {
     ),
     "wind_turbine": (
         _wind_errors,
-        lambda o, s, p: abs(float(s.pitch_cmd - s.pitch)) / float(p.pitch_max),
+        lambda o, s, p: float(s.pitch_travel) / float(p.pitch_max),
         100,
         "rotor inertia, tens of seconds at 0.25 s steps",
         400,
@@ -456,11 +459,12 @@ def measure(name, seeds, controllers=("pid", "mpc")):
     kinds = [k for k in kinds if k in controllers]
     for kind in kinds:
         t0 = time.time()
-        E, C, B, term, half1, half2 = [], [], [], 0, [], []
+        E, C, B, term, half1, half2, leads = [], [], [], 0, [], [], []
         for seed in range(seeds):
             e, c, tg, ended = _episode(spec, env, params, kind, seed, err_fn, cons_fn)
             term += int(ended)
-            m, settle, bounds, _antic = split_seed(e, tg, burn_in, settle=fixed_settle)
+            m, settle, bounds, antic = split_seed(e, tg, burn_in, settle=fixed_settle)
+            leads.extend(antic[:-1])
             E.append(e[m])
             C.append(c[m])
             B.append(settle)
@@ -482,6 +486,10 @@ def measure(name, seeds, controllers=("pid", "mpc")):
             "e_hold_second_half": np.mean(half2, axis=0).tolist(),
             "c_hold": None if np.isnan(C).all() else float(np.nanmean(C)),
             "settle": float(np.median(B)),
+            # What ``FIXED_LEAD`` is taken from: the longest early start, and
+            # the share of the cycles a change follows that show one.
+            "anticipation": int(max(leads, default=0)),
+            "anticipation_share": float(np.mean(np.array(leads) > 0)) if leads else 0.0,
             "cycles_per_episode": len(bounds) - 1,
             "trips": term,
             "hold_steps_scored": int(len(E)),

@@ -54,14 +54,15 @@ ones of the same mean: the wrong preference for a hold. The Target-MDP note
 (Proposition 8) gives an example where that preference costs an arbitrary
 amount.
 
-### Running cost: only what could have been avoided
+### Running cost: what a bill charges
 
-Consumption (fuel, energy, boilup, reagent, actuator travel) is charged above
+Consumption (fuel, energy, boilup, reagent) is charged in full, as a share of
 `c_hold`, what the best shipped controller consumes per step while holding.
-That is the avoidable part. Dimensionless form:
+A saving below `c_hold` pays, and swinging around it costs nothing extra.
+Dimensionless form:
 
 ```
-running_cost = w * max(c - c_hold, 0) / c_hold
+running_cost = w * c / c_hold
 ```
 
 `w` reads as "one floor-width of tracking error is worth `w` times the
@@ -70,8 +71,9 @@ matters. Where the owner's tariff is known the term is priced instead
 (`price * quantity`), and tracking is in the same currency, so there is no
 weight to choose: the reactor's imbalance at three times spot, the building's
 gas per kWh, the battery's imbalance per MWh and fade per kWh of lost capacity.
-Wear and fatigue have no defensible tariff, so they are charged per unit of
-avoidable activity times a documented weight.
+Wear and fatigue have no defensible tariff, so they are charged past a dead band,
+per unit of activity times a documented weight (`w * max(q - free, 0) / free`). The
+aircraft's speed deviation pays the same way, since it is a tolerance, not a bill.
 
 ### Failure
 
@@ -194,17 +196,17 @@ within sampling error. A floor the MPC beats by more is wrong. Each plant's
 | `hvac` | p=2, dead-zone | overheating-bound; MPC reference | +-0.5 K occupied; night lower bound only (provisional) | gas EUR 0.10/kWh, in full | EUR per step; comfort EUR 0.03/K^2 h (provisional; restarts in place) |
 | `battery` | p=1 | 1596 W (closed form) | 0 | fade above hold at $300/kWh of capacity | $ per step, imbalance $100/MWh |
 | `wind_turbine` | p=1 | 1680 W (an earlier oracle's lowest per-seed hold, upper bound; the current one holds 1454 W) | 0 | pitch activity above hold, weight 1 (provisional) | $ per step, imbalance $100/MWh (provisional) |
-| `glass_furnace` | p=2 | 1 K (thermocouple resolution; the MPC holds 0.0614) | 0 | fuel above hold, w=1 | dimensionless |
-| `cement_kiln` | p=2 | 5e-4 (assay resolution; the MPC holds 4.9e-5) | 0 (provisional) | fuel above hold, w=1 | dimensionless |
-| `boiler_drum` | p=2 x2 | 2.7 mm level (an earlier oracle's lowest per-seed hold; the current one holds 2.45 mm), 0.05 bar (transmitter resolution; the MPC holds 0.052) | 0 | fuel above hold, w=1 | dimensionless |
-| `distillation` | p=2 x2 | 1e-4 / 1e-4 (analyser resolution; the MPC holds 7.6e-7 / 5.2e-7) | 0 (provisional) | boilup above hold, w=1 | dimensionless |
-| `ph_neutralization` | p=2 | 0.01 pH (electrode resolution; the MPC holds 0.0013) | 0 (provisional) | reagent above hold, w=1 | dimensionless |
-| `unstable_cstr` | p=2 | 1e-4 mol/L (analyser resolution; the MPC holds 6.29e-6, lowest per seed, so `rho* = (6.29e-6 / 1e-4)^2 = 0.00396`) | 0 (provisional) | none | dimensionless |
+| `glass_furnace` | p=2 | 1 K (thermocouple resolution; the MPC holds 0.0614) | 0 | fuel, w=1 | dimensionless |
+| `cement_kiln` | p=2 | 5e-4 (assay resolution; the MPC holds 4.9e-5) | 0 (provisional) | fuel, w=1 | dimensionless |
+| `boiler_drum` | p=2 x2 | 2.7 mm level (an earlier oracle's lowest per-seed hold; the current one holds 2.45 mm), 0.05 bar (transmitter resolution; the MPC holds 0.052) | 0 | fuel, w=1 | dimensionless |
+| `distillation` | p=2 x2 | 4e-4 / 4e-4 (analyser scatter; the MPC holds 7.6e-7 / 5.2e-7) | 0 (provisional) | boilup, w=1 | dimensionless |
+| `ph_neutralization` | p=2 | 0.01 pH (electrode resolution; the MPC holds 0.0013) | 0 (provisional) | reagent, w=1 | dimensionless |
+| `unstable_cstr` | p=2 | 5e-4 mol/L (analyser scatter; the MPC holds 2.23e-6, lowest per seed, so `rho* = (2.23e-6 / 5e-4)^2 = 1.99e-5`) | 0 (provisional) | none | dimensionless |
 | `compressor_surge` | p=2 | 0.0275 kPa (pressure transmitter accuracy, 0.055 % (read) of a 0 to 50 kPa span (ours); the MPC holds 1.03e-4, lowest per seed, so `rho* = (1.03e-4 / 0.0275)^2 = 1.40e-5`) | 0 (provisional) | recycle power above hold, w=1 (`c_hold` 62 270 W, the MPC's measured hold consumption) | dimensionless |
-| `cstr`, `first_order`, `four_tank` | p=2 | documented minima (no disturbance; `rho_floor = 0`) | 0 | none | dimensionless |
+| `cstr`, `first_order`, `four_tank` | p=2 | documented minima (`rho_floor = 0`; `cstr` and `four_tank` have loads, and a hold on them waits on PR 9) | 0 | none | dimensionless |
 | `plane`, `plane_sine`, `plane_energy` | p=2 | 1 / 1.26 / 1.20 m: `plane`'s is the altimeter resolution (the MPC holds 0.46 m); `plane_sine`'s an earlier MPC's hold, kept within 1.5x of that resolution (the MPC holds 0.53 m); `plane_energy`'s its MPC's lowest per-seed hold between ladder steps, from 4.55 m in `-v3` (the MPC holds 1.18 m under it); lowest per-seed holds in the test turbulence | 0 (a +-30 m band made the hold vacuous) | airspeed deviation above hold, w=1 | dimensionless |
 | `plane3d_*` | p=2 | altitude 1 m (altimeter resolution; the MPC holds 0.59 / 0.67 / 0.68 m on heading / circle / racetrack), heading 0.0087 rad (AHRS resolution; the MPC holds 1.4e-5), path 3 m (GPS resolution; the MPC holds 0.45 / 0.47 / 1.29 m on circle / racetrack / figure-8); lowest per-seed holds in turbulence | 0 | none | dimensionless |
-| `patrol`, `patrol_bearing_only` | p=2 x2 | slot 3 m (relative-GPS resolution; the oracle holds 0.10 m, lowest per seed; 18.6 m, an earlier planner's hold, until version 3), heading 0.0087 rad (AHRS resolution; the oracle holds 1.6e-3 rad), so `rho* = (0.1021 / 3)^2 + (1.631e-3 / 0.0087)^2 = 0.0363` | 0 (provisional) | none | dimensionless |
+| `patrol`, `patrol_range_bearing` | p=2 x2 | slot 3 m (relative-GPS resolution; the oracle holds 0.10 m, lowest per seed; 18.6 m, an earlier planner's hold, until version 3), heading 0.0087 rad (AHRS resolution; the oracle holds 1.6e-3 rad), so `rho* = (0.1021 / 3)^2 + (1.631e-3 / 0.0087)^2 = 0.0363` | 0 (provisional) | none | dimensionless |
 | `formation` | p=2 x6 | the lead's altitude 1 m (altimeter resolution; the oracle holds 0.80 m) and heading 0.0087 rad (AHRS resolution; 1.0e-3 rad), each wingman's slot 3 m (relative-GPS resolution; 0.23 and 0.23 m) and alignment 0.0087 rad (1.1e-3 and 1.1e-3 rad); lowest per-seed holds, so `rho* = 0.704`, 0.646 of it the lead's altitude | 0 (provisional, the patrol's) | none | dimensionless |
 
 "Provisional" marks a number the plant's owner would supply (a tolerance from

@@ -14,10 +14,14 @@ target MDPs*).
 
 **The flight physics is not this module's.** Every aircraft is advanced by
 `compute_next_state_3d`, reused verbatim from
-[the 3D aircraft](../plane3d/PHYSICS.md), and all of them fly in one air mass:
-one turbulence gust, drawn from the step clock as in the patrol, is folded
-into the wind every aircraft sees, and each still gets its own
-altitude-dependent shear.
+[the 3D aircraft](../plane3d/PHYSICS.md), and each flies in the part of the air
+it is in, as in the patrol (`../patrol/PHYSICS.md`, *The air*). The lead draws the
+gust from the step clock. Each wingman meets it a slot depth later, shares what
+its offset from the lead's path leaves shared, and draws the rest, with its own
+rolling gust. Each still gets its own altitude-dependent shear. The lead's wake
+reaches the wingmen as in the patrol (`wake_air`). The V's lateral spacing of at
+least 60 m keeps every wingman outboard of the vortex pair, in its upwash. A
+wingman's own wake is left out: only the unscored ranks behind it would meet it.
 
 **The slot geometry and each wingman's observation are the patrol's**
 (`slot_error_vector`, `get_obs_full`), applied to each wingman against the
@@ -40,10 +44,11 @@ height are drawn once per episode (`slot_back_range`, `slot_lateral_range`,
 With at least 60 m of lateral spacing per rank, the two wingmen of a rank
 start at least 120 m apart.
 
-**Trips.** The formation trips when any aircraft leaves the altitude
-envelope, any two aircraft come within `min_separation` (25 m), or any
-wingman is `max_slot_error` (1500 m) from its slot. The whole formation
-restarts (`base.failure_kernel`).
+**Trips.** The formation trips when any aircraft leaves the 3D tasks' envelope
+(altitude, 60 deg of bank, the load limits, VMO and MMO), any two aircraft come
+within `min_separation` (40 m, over the 34.1 to 35.8 m span), or any wingman is
+`max_slot_error` (1500 m) from its slot. The whole formation restarts
+(`base.failure_kernel`).
 
 **Two views.** `Formation` is the registered, joint form: one action of 3 per
 aircraft and the observations concatenated, lead first. `FormationMARL`
@@ -61,10 +66,13 @@ aircraft, in the JaxMARL style; every agent receives the team reward and
 | Wingmen colliding with each other, or with the lead, trip | at `min_separation` | `test_wingmen_colliding_with_each_other_trip`, `test_a_wingman_colliding_with_the_lead_trips` |
 | A trip is charged once and the whole formation restarts | `restart_steps x failure_cost`, a fresh formation on the same clock | `test_a_trip_is_charged_once_and_the_whole_formation_restarts` |
 | The V is symmetric, drawn per episode, and starts clear of a collision | 64 draws | `test_the_v_is_drawn_per_episode_within_the_ranges`, `test_the_formation_starts_clear_of_a_collision` |
-| One gust for the whole formation, from the step clock | distinct draws under a constant key | `test_one_gust_for_the_whole_formation_and_any_size` |
+| The gust comes from the step clock and reaches any size of formation | distinct draws under a constant key | `test_the_gust_comes_from_the_step_clock_and_any_size_of_formation_flies_in_it` |
+| Each wingman flies in its own air | gusts differ | `test_formation_wingmen_are_in_their_own_air` |
+| Each wingman meets the lead's wake on its own side | one upwash in still air | `test_each_wingman_meets_the_wake_on_its_own_side` |
+| The expert's lead seat flies the schedule | 2 m/s of it at 3000 m, no trip | `test_the_formation_lead_seat_flies_the_schedule` |
 | The multi-agent view is the joint task split by seat | same observations, same reward | `tests/formation/test_formation_marl.py` |
-| The expert's lead holds the route on held-out seeds | mean altitude error at most 2 m, heading at most 0.5 deg, seeds 200-209 | `test_the_formation_lead_holds_altitude_and_heading` |
-| The expert's wingmen hold their slots on held-out seeds | RMS slot error after the burn-in at most 8.5 m, no trip, seeds 200-209 (seed 208 a strict expected failure, D3) | `test_every_formation_wingman_holds_its_slot` |
+| The expert's lead holds the route on held-out seeds | mean altitude error at most 2 m, heading at most 0.5 deg, seeds 200-209 (all strict expected failures until PR 9, D3) | `test_the_formation_lead_holds_altitude_and_heading` |
+| The expert's wingmen hold their slots on held-out seeds | RMS slot error after the burn-in at most 8.5 m, no trip, seeds 200-209 (all strict expected failures until PR 9, D3) | `test_every_formation_wingman_holds_its_slot` |
 
 The environment also passes every shared contract in
 `tests/test_env_conformance.py`, including that its PID beats the best
@@ -122,12 +130,9 @@ Virginia University's three-aircraft trials), not of a deployed product.
 
 The lead holds the route with the 3D heading task's autopilot: a course hold
 on the heading the route commands, with the leg's turn rate fed forward, and
-TECS's pitch on the altitude. Its throttle stays at a set power (0.8, trimmed
-by 0.005 per m/s off the speed it engaged at), since a formation lead flies
-smooth and predictable and leaves the speed changes to its wingmen. Under
-TECS's throttle the airliner's 20 s engine lag sets up a slow throttle cycle
-(power 0.2 to 0.7 over about 40 s), and wingmen feeding the lead's speed
-forward chase it.
+TECS on height and the 3D tasks' speed schedule. With the engine's 1.7 s lag
+TECS's throttle flies as smooth and predictable as a formation lead should, so
+the set power the old 20 s lag called for is gone.
 
 The lead and the hold were tuned on training seeds 100-109 and checked once
 on held-out seeds 200-209 (`scripts/tune_formation_hold.py`,
@@ -135,8 +140,9 @@ on held-out seeds 200-209 (`scripts/tune_formation_hold.py`,
 for the lead (2 m, 0.5 deg) and the patrol's for the wingmen (8.5 m RMS).
 Over the scored part of the episode the lead holds its altitude 0.94 to
 1.56 m off on average and its heading 0.05 to 0.14 deg off. Nineteen of the
-twenty wingmen hold 2.7 to 7.7 m RMS (median 4.2); the twentieth misses (D3).
-No seed trips. The team it replaced (2026-10), the patrol's scripted lead
+twenty wingmen held 2.7 to 7.7 m RMS (median 4.2) and no seed tripped, on the old
+plant: a 4 deg route, one common gust and no envelope (D3 has this plant's). The
+team it replaced (2026-10), the patrol's scripted lead
 autopilot and pursuit PID, held the lead's altitude 141 to 155 m off and the
 slots 35 to 56 m off.
 
@@ -177,18 +183,14 @@ can fly into the other wingman's path without seeing it. Its own slot error,
 which it does observe, is what keeps it out of that region, and the trip on
 a collision is what charges a policy that lets it happen.
 
-**D3: a wingman that spawns high can rejoin after the burn-in.** On held-out
-seed 208 the first wingman spawns 30 m above its slot. It idles its engine to
-come down, overshoots to 105 m below and falls 170 m behind while the lead
-accelerates on its set power from 200 to 226 m/s, and with only the power
-between the lead's 0.8 and full to close on, it rejoins only around step 140,
-past the scored burn-in at 100: 32.6 m RMS over the scored window, then 5 to
-8 m. On another turbulence draw of the same seeds (the tuning script's
-traced search) the worst wingman holds 10.3 m, so the join from a poor spawn
-is a weakness of the expert, not one seed's accident. It is kept as a strict
-expected failure. A fix (a lead set power with
-more margin, or the hold trading height before speed while it joins) would
-have to be tuned on training seeds and checked on fresh held-out ones.
+**D3: the expert does not fly this plant yet.** PR 9 retunes it. On held-out
+seeds 200-209, 7 of 10 trip, 12 to 80 times an episode, and the wingmen hold 25 to
+153 m RMS. A wingman spawned up to about 40 m off its slot asks TECS for a height
+capture whose 2 s time constant pulls past 2.5 g, as on the 3D tasks, and after a
+trip the expert's memory stays stale across the restart, which turns one trip into
+a cascade. The lead's seat flies 9 to 12 m off its altitude on the seeds that do
+not trip. All of it is kept as strict expected failures. The join from a poor spawn
+was already the expert's weakness on the old plant.
 
 ---
 
@@ -202,7 +204,7 @@ have to be tuned on training seeds and checked on fresh held-out ones.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 18 |
+| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 81 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -241,3 +243,52 @@ log-scaled slot-keeping, each times its heading alignment. It reads
 restart a tripped step scores `-restart_steps` instead, as on `unstable_cstr`
 and `compressor_surge`, since a 0 would make a trip that restarts the
 formation in its slots nearly free.
+
+## Readings
+
+The observation reports every aircraft through its instruments, with the slot
+offsets, the commanded altitude and heading and the route's turn rate exact
+(`docs/proposals/measurement-noise.md`). `sensor_noise_scale = 0` gives the
+noise-free task, rounding included. The same instruments sit on the lead and on
+each wingman:
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `z` | 0.2 m | 1 ft | Air data computer baro altitude | Provisional: a ground test set's figure, no airborne one found | [DPST-8000](https://www.avionteq.com/Document/DPST-8000-specification-sheet.pdf) |
+| `x_dot` | 0.03 m/s | 0.125 kt | IRS/GNSS ground velocity | Ceiling: receiver accuracy, not scatter | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `y_dot` | 0.03 m/s | 0.125 kt | IRS/GNSS ground velocity | Ceiling: as `x_dot` | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `z_dot` | 0.03 m/s | 1 ft/min | IRS inertial vertical speed | No source: a placeholder, not a bound | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `theta` | none | 0.010986 deg | IRS pitch attitude | Corrected: rounding only | [HG9900](https://www.honeywellaerospace.com/us/en/products-and-services/products/navigation-and-sensors/inertial-measurement-units/hg9900-inertial-measurement-unit) |
+| `theta_dot` | 4.3e-6 rad/s | 0.015625 deg/s | IRS body pitch rate | Confirmed | [Honeywell Mk VI guide](https://fitness.manualsonline.com/manuals/mfg/honeywell/mk_vi.html?p=254) |
+| `phi` | none | 0.010986 deg | IRS roll attitude | Corrected: rounding only | [HG9900](https://www.honeywellaerospace.com/us/en/products-and-services/products/navigation-and-sensors/inertial-measurement-units/hg9900-inertial-measurement-unit) |
+| `phi_dot` | 4.3e-6 rad/s | 0.015625 deg/s | IRS body roll rate | Confirmed | [Honeywell Mk VI guide](https://fitness.manualsonline.com/manuals/mfg/honeywell/mk_vi.html?p=254) |
+| `gamma` | 1.3e-4 rad at 230 m/s, as 0.03 / V | from the velocities | IRS flight-path angle | Confirmed | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `psi` | 1.3e-4 rad at 230 m/s, as 0.03 / V | from the velocities | IRS true track angle | Confirmed | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
+| `power` | none | 0.003 | Engine thrust indication via FADEC | No source: rounding only | [14 CFR 121 App. M](https://www.law.cornell.edu/cfr/text/14/appendix-M_to_part_121) |
+| `stick` | none | 1.6e-3 rad | Elevator surface position sensor | No source: rounding only | [14 CFR 121 App. M](https://www.law.cornell.edu/cfr/text/14/appendix-M_to_part_121) |
+| `aileron` | none | 2.6e-3 rad | Aileron surface position sensor | No source: rounding only | [14 CFR 121 App. M](https://www.law.cornell.edu/cfr/text/14/appendix-M_to_part_121) |
+| `x`, `y` | 0.27 m | none | GNSS position | Corrected | [NASA AFF](https://ntrs.nasa.gov/api/citations/20030005804/downloads/20030005804.pdf) |
+
+The lead's seat reads these directly, and each wingman gets them over the
+air-to-air datalink, so one draw of the lead's readings reaches every seat, and
+the slot errors in the lead's seat match the wingmen's. The datalink carries the
+figures above: `lead.x` and `lead.y` rest on [NASA's Autonomous Formation Flight
+relative GPS](https://ntrs.nasa.gov/api/citations/20030005820/downloads/20030005820.pdf)
+(Corrected), and the rest are as the table's.
+
+`gamma` and `psi` have no noise of their own: on every aircraft they are worked
+out from the velocities read, as an IRS does. The slot errors, relative
+velocities, relative heading and lead speed are computed from these readings, so
+they inherit the noise. That includes the slot frame, which turns with the lead's
+measured track.
+
+The figure the tracked altitude rests on is weak. No air data computer publishes
+its scatter, so 0.2 m comes from a ground test set, and the benchmark runs at
+`sensor_noise_scale` 0.5 and 2 to show how far a result depends on it. The
+ground velocity figure is a receiver's accuracy, so true scatter is smaller, and
+the vertical speed figure is a placeholder.
+
+The expert reads these values, and so does every tuner. The oracle plans and acts
+on the true state, so it stays a full-state bound. `reward`, trips and the score
+read the true state. `info["measured_reward"]` is the same cost on the readings,
+with any trip taken from the true state.

@@ -7,9 +7,11 @@ The two balances and the ten physical parameter values are the shipped
 ``cstr``'s, imported from ``target_gym.pc_gym.cstr.env`` and never retyped, so
 an edit there moves this task too (its spec declares that file in
 ``fingerprint_sources``). This module adds a first-order jacket lag between
-the coolant command and the jacket temperature the balances see, a drifting
-feed temperature, a stratified schedule of six concentration targets on the
-middle branch, where every target is a saddle, and a high-temperature trip.
+the coolant command and the jacket temperature the balances see, a valve with
+its own lag and slew limit in front of that (``actuator_lag``, ``actuator_rate``),
+a drifting feed temperature, a stratified schedule of six concentration targets
+on the middle branch, where every target is a saddle, reached by a ramp, and a
+high-temperature trip.
 
 State (three ODEs, one stochastic disturbance, the schedule)
 ------------------------------------------------------------
@@ -30,7 +32,7 @@ from jax.tree_util import Partial as partial
 
 import target_gym.pc_gym.cstr.env as cstr_env
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -69,9 +71,13 @@ class UnstableCSTRParams(EnvParams):
     # (derived).
     T_c_min: float = 290.0  # K
     T_c_max: float = 310.0  # K
-    #: Jacket time constant. TUNED: not sourced, justified by PHYSICS.md's
-    #: jacket-lag sensitivity table.
+    #: Jacket time constant. Synthetic: the longest lag the cascade survives,
+    #: not a hardware figure (PHYSICS.md, section 6).
     tau_j: float = 0.1  # min (6 s)
+    #: The coolant valve: a 2 s lag and 8 % of its span per second, 4.8 per
+    #: minute (PHYSICS.md, section 3).
+    actuator_lag: float = 2.0 / 60.0  # min
+    actuator_rate: float = 0.08 * 60.0  # fraction of the span per min
     #: High-high interlock (ours), 4.49 K above the extinction fold and
     #: 12.17 K above the hottest target (derived).
     T_trip: float = 365.0  # K
@@ -98,6 +104,9 @@ class UnstableCSTRParams(EnvParams):
     # cascade on DEFAULT_GAINS (derived, scripts/unstable_cstr_numbers.py
     # --section settle).
     block_steps: int = 200
+    # The largest switch takes three residence times, when a mixed tank has
+    # gone 95 % of the way to a new steady state (ours, set before any result).
+    target_ramp: float = 0.10 / 3.0  # mol/L per min
     initial_CA_offset: float = 0.01  # mol/L, reset box half-width
     initial_T_offset: float = 1.5  # K, reset box half-width
     delta_t: float = _DT  # min (3 s)
@@ -105,30 +114,32 @@ class UnstableCSTRParams(EnvParams):
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     reward_version: int = 2
-    # The analyser resolution, provisional. scripts/measure_hold.py records the
+    # The analyser's scatter, as on cstr. scripts/measure_hold.py records the
     # MPC's hold from minute 6 of each block to the switch, less the steps in
     # which it already moves toward the next level (target_gym.eval finds
     # them), and e_floor is raised only if that hold is coarser. The v2
     # ranking and the PID tuning do not depend on it: every cost term scales by
     # 1/e_floor^2.
-    e_floor: float = 1e-4  # mol/L
+    e_floor: float = 5e-4  # mol/L
     e_tol: float = 0.0  # no product specification supplied (provisional)
     tracking_exponent: float = 2.0
     #: The largest |target - C_a| an untripped state reaches (derived, closed
     #: form): max(Caf - 0.45, 0.65 - C_a at 365 K on the steady-state curve)
     #: = max(0.55, 0.386). The v1 envelope and the base of ``failure_cost``.
     CA_error_max: float = 0.55  # mol/L
-    failure_cost: float = 2.0 * (0.55 / 1e-4) ** 2  # twice the largest tracking cost
+    failure_cost: float = 2.0 * (0.55 / 5e-4) ** 2  # twice the largest tracking cost
     #: Restart time priced into a trip (``reward.trip_cost``): cstr's
     #: provisional 1 h restart (240 steps of 15 s) at 3 s steps.
     restart_steps: int = round(_CSTR.restart_steps * _CSTR.delta_t / _DT)
     #: The oracle's best hold, (e_hold_min / e_floor) ** 2. The MPC holds C_a to
     #: 2.23e-6 mol/L (measured, the lowest per-seed hold scripts/measure_hold.py
-    #: recorded; 6.29e-6 for the CasADi oracle before v3), under the analyser
-    #: resolution, so e_floor stays at the resolution and the reference is that
-    #: finer hold in floor-widths, squared.
-    rho_floor_tracking: float = (2.23e-6 / 1e-4) ** 2
-    rho_floor: float = (2.23e-6 / 1e-4) ** 2  # no running cost: rho_floor_tracking
+    #: recorded; 6.29e-6 for the CasADi oracle before v3), under the analyser's
+    #: scatter, so e_floor stays at the scatter and the reference is that
+    #: finer hold in floor-widths, squared. PR 9 re-measures the hold.
+    #: A decimal, not ``(2.23e-6 / 5e-4) ** 2``: ``**`` rounds differently on macOS
+    #: and Linux, and the version stamp hashes the value.
+    rho_floor_tracking: float = 1.98916e-05
+    rho_floor: float = 1.98916e-05  # no running cost: rho_floor_tracking
     #: False: the plant is disturbed (docs/reward-shaping.md).
     floor_is_documented_minimum: bool = False
 
@@ -156,6 +167,7 @@ PARAM_UNITS = {
     "Ti_tau": "min",
     "Ti_dev_reset_clip": "-",
     "block_steps": "steps",
+    "target_ramp": "mol/L per min",
     "initial_CA_offset": "mol/L",
     "initial_T_offset": "K",
     "delta_t": "min",
@@ -185,6 +197,8 @@ class UnstableCSTRState(EnvState):
     #: a trip's fresh draw restarts the schedule while ``time`` runs on.
     block_clock: int
 
+    actuator_held: jax.Array = actuator_field(1)
+
 
 def steady_temperature(level, params: UnstableCSTRParams, xp=jnp):
     """T*(L), the reactor temperature at which ``C_a = L`` is steady.
@@ -211,14 +225,24 @@ def steady_coolant(level, Ti_dev, params: UnstableCSTRParams, xp=jnp):
     return T + (qV * (T - params.Ti - Ti_dev) - A * qV * (params.Caf - level)) / beta
 
 
-def live_target(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):
-    """The level the state is scored against and observes.
+def scheduled_level(levels, clock, params: UnstableCSTRParams, xp=jnp):
+    """The target at step ``clock`` of the schedule ``levels``: it leaves the
+    last level on the step that enters a block, and moves at ``target_ramp``
+    until it reaches the block's own.
 
-    The clamp holds the last level past block six. ``block_clock`` is traced
-    under ``jit``, so the clamp uses ``xp.minimum``.
+    The clamp holds the last level past block six. ``clock`` is traced under
+    ``jit``, so the clamp uses ``xp.minimum``.
     """
-    block = xp.minimum(state.block_clock // params.block_steps, N_BLOCKS - 1)
-    return state.target_levels[block]
+    block = xp.minimum(clock // params.block_steps, N_BLOCKS - 1)
+    steps = clock - block * params.block_steps + 1
+    moved = params.target_ramp * params.delta_t * steps
+    last = levels[xp.maximum(block - 1, 0)]
+    return last + xp.clip(levels[block] - last, -moved, moved)
+
+
+def live_target(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):
+    """The target the state is scored against and observes."""
+    return scheduled_level(state.target_levels, state.block_clock, params, xp)
 
 
 def draw_schedule(key, params: UnstableCSTRParams) -> jnp.ndarray:
@@ -336,9 +360,16 @@ def check_is_terminal(state: UnstableCSTRState, params: UnstableCSTRParams, xp=j
     return terminated, truncated
 
 
-def compute_reward_terms(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
-    terminated, _ = check_is_terminal(state, params, xp)
+def compute_reward_terms(
+    state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp, tripped=None
+):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, params, xp)
     terms = {
         "tracking": R.tracking_cost(
             live_target(state, params, xp) - state.C_a,
@@ -348,7 +379,7 @@ def compute_reward_terms(state: UnstableCSTRState, params: UnstableCSTRParams, x
             xp,
         ),
     }
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):

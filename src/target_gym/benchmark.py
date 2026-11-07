@@ -64,7 +64,7 @@ from typing import (
 
 import numpy as np
 
-from target_gym.eval import Episode, evaluate, fixed_settle, hold_settings
+from target_gym.eval import Episode, evaluate, fixed_lead, fixed_settle, hold_settings
 
 
 class Unsupported(Exception):
@@ -136,7 +136,7 @@ _OUTPUT_FLOORS: dict[str, tuple[tuple[str, float], ...]] = {
     "plane3d_racetrack": (("e_floor_altitude", 1.0),),
     "plane3d_figure8": (("e_floor_path", 1.0),),  # the distance to the curve
     "patrol": (("e_floor_slot", 1.0),),
-    "patrol_bearing_only": (("e_floor_slot", 1.0),),  # its measured slot range
+    "patrol_range_bearing": (("e_floor_slot", 1.0),),  # its measured slot range
     "formation": (("e_floor_altitude", 1.0), ("e_floor_slot", 1.0)),
     "distillation": (("e_floor_top", 1.0), ("e_floor_bottom", 1.0)),  # yD, xB
     "boiler_drum": (("e_floor_level", 1.0), ("e_floor_pressure", 1.0)),
@@ -208,22 +208,43 @@ _CHANGE_OVER_MEDIAN_STEP = 10.0
 _ROUNDING = 1e-6
 
 
-def target_changes(targets: np.ndarray, first: np.ndarray) -> np.ndarray:
+def target_changes(
+    targets: np.ndarray, first: np.ndarray, restarts: np.ndarray | None = None
+) -> np.ndarray:
     """``(T,)`` bool: a new target became active at the step, the rule
     :func:`target_gym.eval.run_episode` splits cycles by. Some target moved
     since the previous step by more than ``_CHANGE_OVER_MEDIAN_STEP`` times
     its median step over the episode, and by more than rounding. Every step of
     a schedule counts however small next to the target's value; a drifting or
-    smooth target, which moves about as much every step, never does.
-    ``targets`` ``(T, n_out)``, ``first`` the targets at reset."""
+    smooth target, which moves about as much every step, never does. A run of
+    such steps is one move, counted where it starts, so a ramp is not a change
+    per step.
+
+    A restart after a trip is a fresh draw of the plant, not a move: the target
+    jumps because of the run, not the schedule. It shows for two steps, the
+    reset's own target on the step of the trip, then the schedule's level at the
+    clock on the next. ``restarts`` ``(T,)`` marks the trips, and both steps are
+    left out, so a policy that trips is held over the same steps as one that does
+    not. A scheduled move landing on either step cannot be told from the restart,
+    and is not counted. ``targets`` ``(T, n_out)``, ``first`` the targets at reset.
+    """
     targets = np.asarray(targets, float)
+    kept = np.ones(len(targets), bool)
+    if restarts is not None:
+        tripped = np.asarray(restarts, bool)
+        kept = ~(tripped | np.concatenate([[False], tripped[:-1]]))
+    changes = np.zeros(len(targets), bool)
+    if not kept.any():
+        return changes
     prev = np.vstack([np.asarray(first, float)[None], targets[:-1]])
     step = np.abs(targets - prev)
     scale = np.abs(np.vstack([prev, targets])).max(axis=0)
     floor = np.maximum(
-        _CHANGE_OVER_MEDIAN_STEP * np.median(step, axis=0), _ROUNDING * scale
+        _CHANGE_OVER_MEDIAN_STEP * np.median(step[kept], axis=0), _ROUNDING * scale
     )
-    return (step > floor).any(axis=1)
+    moved = (step[kept] > floor).any(axis=1)
+    changes[kept] = moved & ~np.concatenate([[False], moved[:-1]])
+    return changes
 
 
 def episode_keys(key, n: int, n_steps: int):
@@ -244,8 +265,12 @@ def _batched(env, per_episode_params: bool):
     import jax
     import jax.numpy as jnp
 
+    from target_gym.base import true_obs as plant_now
+
     pa = 0 if per_episode_params else None
     step_all = jax.vmap(env.step_env, in_axes=(0, 0, 0, pa))
+    true_obs = jax.vmap(lambda state, p: plant_now(env, state, p), in_axes=(0, pa))
+    instrumented = bool(getattr(env, "readings", ()))
 
     def advance(keys, state, obs, action, params, done):
         obs_n, state_n, r, term, info = step_all(keys, state, action, params)
@@ -256,7 +281,9 @@ def _batched(env, per_episode_params: bool):
                 jnp.reshape(live, live.shape + (1,) * (new.ndim - 1)), new, old
             )
 
-        return freeze(obs_n, obs), jax.tree.map(freeze, state_n, state), r, term, info
+        obs_n, state_n = freeze(obs_n, obs), jax.tree.map(freeze, state_n, state)
+        true = true_obs(state_n, params) if instrumented else obs_n
+        return obs_n, state_n, true, r, term, info
 
     terms_fn = getattr(env, "reward_terms", None)
     return (
@@ -281,9 +308,12 @@ def run_policy(
 
     Returns per-episode, per-step arrays ``(n, T)``: ``reward``, ``tripped``
     (``info["tripped"]``, False where the plant reports none), ``in_band``
-    (every tracked error within ``e_floor``), ``target_change``, ``action``
-    ``(n, T, n_act)``, ``value`` / ``target`` ``(n, T, n_out)`` (the measured
-    outputs and their targets after the step; ``value0`` / ``target0``
+    (every tracked error within ``e_floor``, on the true outputs, since this
+    KPI describes the plant and not its instruments), ``applied`` ``(n, T,
+    n_act)``, what the actuator did with each action, ``target_change``,
+    ``action`` ``(n, T, n_act)``, ``value`` / ``target`` ``(n, T, n_out)`` (the
+    outputs as the policy read them, and their targets, after the step;
+    ``value0`` / ``target0``
     ``(n, n_out)`` at the reset), ``terminated`` (latched from
     the step on which the episode terminated), and ``info_error`` where the
     plant reports its true tracking error; ``action_low`` / ``action_high``, the
@@ -334,9 +364,8 @@ def run_policy(
     vi, ti = list(task.value_index), list(task.target_index)
     done = np.zeros(n, bool)
     length = np.minimum(task.max_steps, T).astype(int)
-    rec: dict[str, list] = {
-        k: [] for k in ("reward", "tripped", "terminated", "action", "value", "target")
-    }
+    names = ("reward", "tripped", "terminated", "action", "applied", "value", "target")
+    rec: dict[str, list] = {k: [] for k in names}
     err_rec, band_rec, terms_rec = [], [], {}
     t0 = time.perf_counter()
     for t in range(T):
@@ -345,7 +374,7 @@ def run_policy(
         else:
             action, carry = policy.act(carry, obs, t)
         action = jnp.reshape(jnp.asarray(action, jnp.float32), (n, task.n_act))
-        obs, state, r, term, info = advance(
+        obs, state, true, r, term, info = advance(
             step_keys[t], state, obs, action, params, jnp.asarray(done)
         )
         o = np.asarray(obs)
@@ -358,9 +387,12 @@ def run_policy(
                 np.asarray(fn(state, params, jnp.asarray(tripped)), float)
             )
         rec["action"].append(np.asarray(action))
+        applied = info.get("applied_action") if isinstance(info, dict) else None
+        applied = action if applied is None else applied
+        rec["applied"].append(np.reshape(np.asarray(applied), (n, task.n_act)))
         rec["value"].append(o[:, vi])
         rec["target"].append(o[:, ti])
-        band_rec.append(task.in_band(o))
+        band_rec.append(task.in_band(np.asarray(true)))
         if isinstance(info, dict) and "error" in info:
             err_rec.append(np.asarray(info["error"], float))
         step_terms = info.get("reward_terms") if isinstance(info, dict) else None
@@ -375,7 +407,10 @@ def run_policy(
     out: dict[str, Any] = {k: np.stack(v, axis=1) for k, v in rec.items()}
     out["in_band"] = np.stack(band_rec, axis=1)
     out["target_change"] = np.stack(
-        [target_changes(out["target"][i], first_target[i]) for i in range(n)]
+        [
+            target_changes(out["target"][i], first_target[i], out["tripped"][i])
+            for i in range(n)
+        ]
     )
     if err_rec:
         out["info_error"] = np.stack(err_rec, axis=1)
@@ -384,6 +419,7 @@ def run_policy(
     out["value0"], out["target0"] = first_value, first_target
     out["action_low"], out["action_high"] = task.action_low, task.action_high
     out["length"] = length
+    out["lead"] = fixed_lead(task.name)
     out["carry"] = carry  # the policy's final carry, for its own diagnostics
     out["wall_s"] = time.perf_counter() - t0
     return out
@@ -392,14 +428,14 @@ def run_policy(
 def episodes_of(rollout: Mapping[str, Any]) -> list[Episode]:
     """The protocol's :class:`~target_gym.eval.Episode` records of a
     :func:`run_policy` rollout, each cut at its own length. The actions are
-    clipped to the box, as the plant reads them, and given as fractions of
-    their span. A quantity the rollout recorded joins the terms."""
+    what the actuator applied, as fractions of their span. A quantity the
+    rollout recorded joins the terms."""
     out = []
     low = np.ravel(rollout["action_low"])
     span = np.ravel(rollout["action_high"]) - low
     named = {**rollout["terms"], **rollout.get("records", {})}
     for i, L in enumerate(np.asarray(rollout["length"], int)):
-        actions = np.asarray(rollout["action"][i, :L], float)
+        actions = np.asarray(rollout["applied"][i, :L], float)
         out.append(
             Episode(
                 cost=-np.asarray(rollout["reward"][i, :L], float),
@@ -408,6 +444,7 @@ def episodes_of(rollout: Mapping[str, Any]) -> list[Episode]:
                 failed=np.asarray(rollout["tripped"][i, :L], bool),
                 terms={k: np.asarray(v[i, :L], float) for k, v in named.items()},
                 actions=np.clip((actions - low) / span, 0.0, 1.0),
+                lead=rollout.get("lead", 0),
             )
         )
     return out
