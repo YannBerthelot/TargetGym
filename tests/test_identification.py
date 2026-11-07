@@ -238,6 +238,36 @@ def test_a_trip_brings_a_p_only_setpoint_test_on_the_tripped_cv():
     assert pairs[0, 0, 0]["label"] == "valid"
 
 
+class TripsInItsSettle(FakePlant):
+    """A retest whose loop trips the plant before the step: base and step both
+    stop at index 0, so the test holds no samples."""
+
+    def test(self, s, j, step, window, loops):
+        if not loops:
+            return super().test(s, j, step, window, loops)
+        self.calls.append((step, window, loops))
+        empty = np.zeros((0, 1))
+        return Run(
+            step, window, loops, empty, empty, empty, np.zeros(1),
+            {"base": (0, 0), "step": (0, 0)},
+        )  # fmt: skip
+
+
+def test_a_retest_with_no_samples_leaves_the_last_test_that_has_some():
+    """Owner's ruling, 2026-11-07: a test with 0 samples is not the last test. The
+    row keeps its cut test, whose fit votes for its CV's class, where it would
+    otherwise end "short" with no class at all. A move of 0.2 in noise of sigma
+    0.0044 (a band of 0.026) is about 8 bands: V1 fails, and the trip brings the
+    loop. Cut at 60 steps, 6 tau, the response still settles, so it can vote."""
+    plant = TripsInItsSettle(k=2.0, tau=10.0, sigma=0.0044, trip_at=60)
+    pairs, classes = identify(plant, [0.1])
+    p = pairs[0, 0, 0]
+    assert p["tests"][-1][0].dy.shape[0] == 0, "the retest must have run and tripped"
+    assert p["kept"] == 0
+    assert classes[0]["class"] == "fopdt"
+    assert p["failed"] == ["V1"]
+
+
 def test_a_zero_response_is_insignificant_and_never_retested():
     plant = FakePlant(k=0.0)
     pairs, classes = identify(plant, [0.1])

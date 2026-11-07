@@ -532,7 +532,7 @@ def _loops(plant, s, j, run, A, failing, trials):
             mv = plant.expert_mv[c]
         else:
             mv = max(
-                range(plant.n_mv),
+                {m for m, _ in trials},
                 key=lambda m: max(_snr(a[c]) for _, a in trials[m, s]),
             )
         a = A[c] if mv == j else trials[mv, s][-1][1][c]
@@ -565,12 +565,12 @@ def _remedies(plant, s, j, run, A, size, failing, trials):
     return step, window, loops
 
 
-def identify(plant, sizes):
-    """H15 to H19 on every MV and seed of ``plant``: ``(pairs, classes)``,
-    pairs keyed ``(mv, cv, seed index)`` with their tests, kept test, label,
-    fit and failed checks; classes keyed by CV with the vote."""
+def identify(plant, sizes, mvs=None):
+    """H15 to H19 on every seed of ``plant``, every MV or those in ``mvs``:
+    ``(pairs, classes)``, pairs keyed ``(mv, cv, seed index)`` with their tests,
+    kept test, label, fit and failed checks; classes keyed by CV with the vote."""
     trials = {}
-    for j in range(plant.n_mv):
+    for j in range(plant.n_mv) if mvs is None else mvs:
         for s in range(plant.n_seeds):
             step = plant.direction(plant.u0[s][j], sizes[j])
             trials[j, s] = [_trial(plant, s, j, step, plant.n_ep, ())]
@@ -592,8 +592,11 @@ def identify(plant, sizes):
     for (j, s), tried in trials.items():
         for i in range(plant.n_cv):
             seen = [a[i] for _, a in tried]
-            kept = next((n for n, a in enumerate(seen) if passes(a)), len(seen) - 1)
-            gone = not passes(seen[kept]) and insignificant(seen[-1])
+            # A test with no samples says nothing, so it is not the last test
+            # (horizon protocol, H23).
+            last = max((n for n, a in enumerate(seen) if a["samples"]), default=0)
+            kept = next((n for n, a in enumerate(seen) if passes(a)), last)
+            gone = not passes(seen[kept]) and insignificant(seen[last])
             pairs[j, i, s] = {
                 "tests": [(run, a[i]) for run, a in tried],
                 "kept": kept,
@@ -647,7 +650,12 @@ class Plant:
     ``actuate(u, y, memory) -> (action, memory)`` maps the test's MVs to the
     env's action (by default the raw action), and ``applied(u, action)`` is
     what a test records as its input (by default ``u``), for a loop closed
-    inside ``actuate`` whose MV is not all that moves the plant.
+    inside ``actuate`` whose MV is not all that moves the plant. ``reads`` are
+    further ``f(obs, state, params)``, appended to the ``y`` that ``actuate`` and
+    ``settled`` get, for a closed loop that reads what no CV does.
+    ``settled(u0, y)`` replaces the held moves once the plant has settled, for a
+    test MV that is not the expert's command, and ``angles`` lists the CVs that
+    wrap, which are unwrapped before a response is read.
     """
 
     def __init__(
@@ -666,6 +674,9 @@ class Plant:
         direction=away_from_nearer_limit,
         controller=None,
         applied=None,
+        reads=(),
+        settled=None,
+        angles=(),
     ):
         env = spec.make_env()
         self.n_ep = int(params.max_steps_in_episode)
@@ -706,8 +717,12 @@ class Plant:
                 body, (*env.reset_env(key, params), ctrl.init_state), jnp.arange(n)
             )
 
+        self._angles = tuple(angles)
+
         def read(obs, state):
-            return jnp.stack([jnp.reshape(f(obs, state, params), ()) for f in cvs])
+            return jnp.stack(
+                [jnp.reshape(f(obs, state, params), ()) for f in (*cvs, *reads)]
+            )
 
         def step(key, state, a):
             obs, state, _, _, info = env.step_env(key, state, a, params)
@@ -719,6 +734,8 @@ class Plant:
             len(seeds), -1
         )
         self._y = np.asarray(jax.vmap(read)(obs, state), float)
+        if settled is not None:
+            self.u0 = np.asarray(settled(self.u0, self._y), float)
         self._states = [
             jax.tree_util.tree_map(lambda x, s=s: x[s], state)
             for s in range(len(seeds))
@@ -763,11 +780,14 @@ class Plant:
             if bool(tripped):
                 trip = (max(t - n_pre, 0), self._which(y))
                 break
-            (Y if t >= n_pre else Y0).append(y)
+            (Y if t >= n_pre else Y0).append(y[: self.n_cv])
             (U if t >= n_pre else U0).append(np.array(self._applied(u, a), float))
         shape = (-1, self.n_cv), (-1, self.n_mv)
         pre = np.reshape(Y0, shape[0]), np.reshape(U0, shape[1])
-        return np.reshape(Y, shape[0]), np.reshape(U, shape[1]), trip, y_at, pre
+        Y = np.reshape(Y, shape[0])
+        for i in self._angles:
+            Y[:, i] = np.unwrap(Y[:, i])
+        return Y, np.reshape(U, shape[1]), trip, y_at[: self.n_cv], pre
 
     def test(self, s, j, step, window, loops) -> Run:
         """MV ``j`` stepped by ``step`` on seed index ``s``, against the
