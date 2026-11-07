@@ -707,10 +707,21 @@ finishes over 20 h. And the floor at the melter's end now sits on the cooled ret
 dead time fell from 4.9 h to 0.7 h. What a real melter shows as lags of 1 to 16 h appears here as
 the 20 h tail, not as a dead time.
 
-**The one check that could move this.** The first arrival rides a waist current of 41 m/h, over
-the 7 to 25 m/h published for melters, and the waist has no side-wall drag and no coolers acting
-as a barrier. A published minimum residence time from the hot spot to the canal would say whether
-an hour is real. It wasn't looked for yet.
+**The residence time check (owner's go).** A tracer washed through the design point, script
+`scripts/glass_slow_residence.py`, read as the CFD reads its fastest 0.1 % of particles:
+
+| | Base grid, env's | Columns doubled | Published |
+|---|---|---|---|
+| Shortest batch to canal | 4.3 h | 5.4 h, about 6.5 h extrapolated | 12.3 h on a 68.4 h mean in a 600 t/d float CFD; 0.15 to 0.20 of the mean (Beerkens), so 7.3 to 9.7 h on this plant's 48.7 h |
+| Shortest over mean | 0.09 | 0.11, about 0.13 extrapolated | 0.15 to 0.20 |
+| Hot spot's top 10 cm to canal, first and peak | 0.6 to 0.9 h, 3.1 h | 0.8 to 1.0 h, 2.7 h | Not found |
+
+The mean, 48.7 h, is the tank's volume over the pull, as it must be. The shortest path, once the
+grid is refined, sits within about a third of the published ratio, short but not by the factor
+of two that would have made the hour's first arrival an artefact. The env's grid smears the
+shortest path by a fifth to a quarter, which is numerical, and stated. So the hour is mostly the
+physics of this layout: a waist and a surface current carry fined glass to the canal quickly,
+and the delay family's absence on the adopted score is not a numerical accident.
 
 **The money is mostly the trip cost, which is `ours`.** Fuel runs about 36,500 EUR a day. A lost
 hour of glass costs 12,500 EUR; an hour of crown trip at ten steps of glass per step costs about
