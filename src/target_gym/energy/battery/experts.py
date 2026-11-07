@@ -61,19 +61,23 @@ def battery_pid_step(params, state, obs, xp=jnp):
     feedforward = xp.where(obs[..., 6] * 60.0 <= p.dt, obs[..., 5], target_MW)
 
     err = target_MW - delivered_MW
-    integral = state.integral + err * p.dt
-    demand = feedforward + p.Kp * err + p.Ki * integral
+    demand = feedforward + p.Kp * err + p.Ki * state.integral
 
     # Fade the demand out only in the direction that would breach a limit.
     discharge_room = xp.clip((soc - p.soc_min) / p.guard_margin, 0.0, 1.0)
     charge_room = xp.clip((p.soc_max - soc) / p.guard_margin, 0.0, 1.0)
     room = xp.where(demand > 0.0, discharge_room, charge_room)
-    demand = demand * room
+
+    # The integral stops under the guard and acts only outside it: a guard is not
+    # a clip, so this step's share would reach the pack.
+    shedding = room < 1.0
+    grown = state.integral + err * p.dt
+    demand = xp.where(shedding, demand, demand + p.Ki * err * p.dt) * room
 
     raw = xp.clip(demand / p.power_max_MW, -1.0, 1.0)
     # Anti-windup: stop integrating once the demand is clipped or guarded.
-    held = xp.logical_or(xp.abs(raw) >= 1.0, room < 1.0)
-    integral = xp.where(held, integral - err * p.dt, integral)
+    held = xp.logical_or(xp.abs(raw) >= 1.0, shedding)
+    integral = xp.where(held, state.integral, grown)
     return xp.stack([raw], axis=-1), BatteryPIDState(integral=integral)
 
 

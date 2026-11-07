@@ -71,6 +71,19 @@ def test_the_integral_stops_while_the_guard_sheds():
 MARGIN = 900.0 / (1692.0 * 3.6)
 
 
+def test_the_guard_leaves_the_trim_no_integral_action_at_all():
+    """Half the margin above the floor, 100 kW short: half of the target plus Kp
+    on the error. The integral has stopped, so this step's share of it must not
+    act either. With the recipe's Ki dt of 1 it would take the loop's gain under
+    the guard past 1, and the pack would limit-cycle."""
+    params = REGISTRY["battery"].make_pid_controller().params
+    soc = 0.10 + MARGIN / 2
+    expected = 0.5 * (0.4 + params.Kp * 0.1)
+    assert _command(soc=soc, delivered=0.3, target=0.4) == pytest.approx(
+        expected, abs=1e-4
+    )
+
+
 def test_the_guard_margin_is_one_correlation_time_at_rated_power():
     params = REGISTRY["battery"].make_pid_controller().params
     assert params.guard_margin == pytest.approx(MARGIN, rel=1e-6)

@@ -95,10 +95,16 @@ def test_the_i_gain_is_simcs_with_the_lag_counted_as_delay():
 
 
 def test_an_invalid_bump_test_tunes_no_loop():
-    """All 10 of ``reactor``'s fits are invalid, ``cstr``'s are all valid. Those
-    fits read ``n``, from before the rebuild; PR 9 measures Tavg's."""
-    assert i_gains("reactor", 1, 1, 1.0) is None
+    """All 10 of ``glass_furnace``'s crown fits are invalid, ``cstr``'s are all
+    valid."""
+    assert i_gains("glass_furnace", 1, 1, 30.0) is None
     assert i_gains("cstr", 1, 1, 0.25)[0, 0] != 0.0
+
+
+def test_the_reactors_i_only_null_reads_tavg_on_its_control_step():
+    """k 22.7 K per raw, lag 35 s and delay 1 s at 30 s a step: 1 / (2 x 22.7 x
+    (35 + 1) / 30) = 0.018 raw per K per step."""
+    assert i_gains("reactor", 1, 1, 30.0)[0, 0] == pytest.approx(0.018, rel=0.1)
 
 
 def test_a_task_with_no_bump_test_has_no_i_only_null():

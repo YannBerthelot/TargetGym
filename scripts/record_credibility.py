@@ -53,7 +53,7 @@ PAIRS = {
     "cstr": ((0, "coolant", "C_a"),),
     "ph_neutralization": ((0, "base", "pH"),),
     "glass_furnace": ((0, "fuel", "T_crown"),),
-    "reactor": ((0, "rod", "n"),),
+    "reactor": ((0, "rod", "T_avg"),),
     "hvac": ((0, "heating", "T_air"),),
     "battery": ((0, "power", "P"),),
     "four_tank": ((0, "pump1", "h1"), (1, "pump2", "h2")),
@@ -84,9 +84,8 @@ def simc_i_gain(k: float, tau: float, theta: float) -> float:
 def i_gains(name: str, n_act: int, n_out: int, step: float) -> np.ndarray | None:
     """``(n_act, n_out)`` gains per step from the recorded bump tests, or None
     with no usable test. A pair needs a valid first-order fit on most seeds: an
-    invalid fit reads something else (``reactor``'s reads the slow thermal tail,
-    and tunes a loop 300 times too slow), and a pure integrator around an
-    integrator cannot settle."""
+    invalid fit reads something else, and a pure integrator around an integrator
+    cannot settle. ``step`` is the control step, in the fits' time units."""
     if name not in PAIRS:
         return None
     rows = json.loads((EVIDENCE / f"{name}.json").read_text())
@@ -134,7 +133,9 @@ def fitted_row(name: str) -> dict:
     table = fit_table(
         *settled_points(run_on_seeds(shipped_policy("pid"), name, TRAIN_SEEDS))
     )
-    gains = i_gains(name, info.n_act, len(info.target_index), float(params.delta_t))
+    env = spec.make_env()
+    step = getattr(env, "control_period", 1) * float(params.delta_t)
+    gains = i_gains(name, info.n_act, len(info.target_index), step)
     return {
         "expert_fingerprint": expert_fingerprint(spec),
         "table": {k: np.asarray(v).tolist() for k, v in table._asdict().items()},
