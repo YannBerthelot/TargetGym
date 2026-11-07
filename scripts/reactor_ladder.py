@@ -23,6 +23,16 @@ set's results were seen. The report says so, and keeps both:
 7. Cascade: Tavg sets a boron concentration, and boron holds it, read as a sample.
 8. Static decoupler: boron takes back the reactivity the rods' loop puts in.
 
+The rods' gain on delta I is not one number. A bank near the top barely tilts the
+flux, and at half power a weak feedback lets the same tilt move the offset further.
+The first tune read the gain at full power from the top, and in the half-power hold
+the gain ran 2.7 to 4 times higher, past the rod loop's margin, where it locked into a
+cycle of two steps. So the rods' gain is read at each point the day holds: full power
+with the rods out, and half power with the rods where they centre delta I, by a small
+bump, and the tune takes the largest (``hold_bump``). SIMC's margin (about 3 in gain,
+Skogestad 2003, table 2) is a margin on the gain it is tuned for, so it is tuned for
+the largest. This was a fix after results, for a bug the owner approved fixing.
+
 The script keeps the best rung that trips no seed. The published rod program with
 rung 1's boron loop is a row beside it, as rule 3 allows.
 
@@ -37,7 +47,14 @@ import jax.numpy as jnp
 import numpy as np
 
 from target_gym.reactor import Reactor, ReactorParams
-from target_gym.reactor.env import rod_balance, steady_state_temperatures
+from target_gym.reactor.env import (
+    moderator_tilt,
+    rod_balance,
+    rod_tilt,
+    rod_worth,
+    steady_state_temperatures,
+    tavg_program,
+)
 from target_gym.reactor.experts import (
     RodControlParams,
     RodControlState,
@@ -298,6 +315,58 @@ def bumps(env, params):
     }  # fmt: skip
 
 
+HOLD_LOAD = 0.5  # the day's low point, ``scheduled_load``
+HOLD_BUMP = 10.0  # rod steps in, small: the gain is read where the rods sit
+
+
+def hold_point(env, p, seed, load):
+    """Lined out at ``load`` with no schedule: xenon balanced there, the rods where
+    their tilt cancels the coolant's so delta I sits at 0, boron critical."""
+    q = p.replace(initial_xenon_power_range=(load, load))
+    _, s = env.reset_env(jax.random.PRNGKey(seed), q)
+    d, far = s.n.dtype, jnp.asarray(1e8, s.n.dtype)
+    T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, q)
+    lo, hi = 3.0 / 228.0, 0.5
+    target = -moderator_tilt(T_hot, T_cold, q)
+    for _ in range(50):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if rod_tilt(mid, q) < target else (lo, mid)
+    y = 0.5 * (lo + hi)
+    needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), s.Xe_hat, q)
+    needed = needed - (rod_worth(y, q) - rod_worth(q.rod_park, q))
+    level = jnp.asarray(load, d)
+    from target_gym.reactor.env import steady_state_precursors
+
+    s = s.replace(
+        n=level, C=steady_state_precursors(level, q), T_fuel=jnp.asarray(T_fuel, d),
+        T_coolant=jnp.asarray(T_hot, d), T_cold=jnp.asarray(T_cold, d),
+        T_sg=jnp.asarray(T_sg, d), target_n=level, T_ref=jnp.asarray(tavg_program(level, q), d),
+        boron=jnp.asarray(q.boron_ref + needed / q.boron_worth, d),
+        rod_in=jnp.asarray(y, d), ramp_down_at=jnp.asarray(-1e8, d), ramp_up_at=far,
+    )  # fmt: skip
+    return q, s, y
+
+
+def hold_bump(env, params):
+    """The rods' gain on delta I at the half-power hold, per unit of demand: a bump of
+    ``HOLD_BUMP`` steps in from where the rods centre delta I, read as for the others.
+    """
+    p = params.replace(demand_sigma=0.0, sensor_noise_scale=0.0)
+    du = -2.0 * HOLD_BUMP / 228.0
+    K = []
+    for seed in SEEDS:
+        q, s, y = hold_point(env, p, seed, HOLD_LOAD)
+
+        def step(s, a, q=q):
+            _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, q)
+            return s, s
+
+        a = jnp.array([1.0 - 2.0 * y + du, 0.0])
+        run = jax.lax.scan(step, s, jnp.tile(a, (120, 1)))[1]
+        K.append(fopdt(np.asarray(run.delta_I), float(s.delta_I))[0] / du)
+    return float(np.median(K))
+
+
 def bumps_rod_on_delta_I(env, params, ff):
     """Rungs 5 to 8: the same bumps on the other pairing."""
     p = params.replace(demand_sigma=0.0, sensor_noise_scale=0.0)
@@ -325,7 +394,9 @@ def bumps_rod_on_delta_I(env, params, ff):
         delay.append(float(s.boron_delay) * DT)
         ppm = np.asarray(run.boron)
         k_ppm.append(float((ppm[-1] - ppm[-41]) / (40.0 * DT)) / 0.2)
-    rod = (float(np.median(K)), float(np.median(tau)), float(np.median(theta)))
+    held = hold_bump(env, params)
+    full = float(np.median(K))
+    rod = (max(full, held), float(np.median(tau)), float(np.median(theta)))
     boron = (float(np.median(k_b)), float(np.median(delay)))
     inner = (float(np.median(k_ppm)), float(np.median(delay)))
     rod_Kc, rod_Ti = simc(*rod)
@@ -339,7 +410,11 @@ def bumps_rod_on_delta_I(env, params, ff):
     tune = Tune2(
         rod_Kc, rod_Ti, boron_Kc, boron_Ti, ff, ppm_Kc, ppm_Ti, inner_Kc, decouple
     )
-    return tune, {"rods_on_delta_I": rod, "boron_on_Tavg": boron, "boron_on_ppm": inner}
+    return tune, {
+        "rods_on_delta_I": rod, "rods_on_delta_I_full_power": full,
+        "rods_on_delta_I_half_power_hold": held, "boron_on_Tavg": boron,
+        "boron_on_ppm": inner,
+    }  # fmt: skip
 
 
 def published(p, tune):

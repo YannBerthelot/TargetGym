@@ -222,7 +222,10 @@ power or to a trip.
 
 The expert is rung 5 of `scripts/reactor_ladder.py`, rods on delta I and boron on
 Tavg, from bump tests and SIMC. The published rod program stays in `experts.py` as
-`rod_control_step`, a row in that script's table. Results and room are in
+`rod_control_step`, a row in that script's table. The rods' gain on delta I is read at
+both of the day's holds and the loop is tuned on the larger, the half-power one, since
+a bank deep in a half-power core moves the offset 2 to 4 times harder than one near the
+top at full power. Results and room are in
 `docs/proposals/reactor-axial.md`.
 
 ---

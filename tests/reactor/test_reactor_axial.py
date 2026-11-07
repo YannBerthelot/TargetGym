@@ -248,3 +248,29 @@ def test_reward_charges_past_the_band_only():
     # 1 % past the band: 1 % of rated derated, $1000/h, over a 5 s sub-step.
     extra = float(outside["tracking"]) - float(base["tracking"])
     assert extra == pytest.approx(1000.0 * 5.0 / 3600.0, rel=1e-3)
+
+
+# Contract: the reference's rod loop on delta I is stable at every point the day
+# holds. Its plant settles inside a step, so the loop is discrete: with g the gain
+# times Kc, z^2 - (1 - 2g) z - g = 0 reaches -1, a swing of delta I every other step,
+# at g = 2/3. A swing over the band (0.05) between two steps is that cycle, since
+# nothing else in the plant moves delta I that fast. The day's hard point is the
+# half-power hold; seeds 100, 102 and 103 cycled there under a full-power tune.
+@pytest.mark.parametrize("seed", [100, 102, 103])
+def test_the_reference_does_not_cycle_the_offset_in_the_half_power_hold(seed):
+    from target_gym.reactor.experts import make_reactor_pid_controller
+
+    env = Reactor()
+    p = ReactorParams(demand_sigma=0.0, sensor_noise_scale=0.0)
+    expert = make_reactor_pid_controller()
+    obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
+
+    def step(carry, key):
+        s, obs, memory = carry
+        a, memory = expert.act(memory, obs)
+        obs, s, _, _, _ = env.step_env(key, s, a, p)
+        return (s, obs, memory), s.delta_I
+
+    keys = jax.random.split(jax.random.PRNGKey(seed + 7), 1440)  # half a day
+    di = np.asarray(jax.lax.scan(step, (s, obs, expert.init_state), keys)[1])
+    assert np.max(np.abs(np.diff(di))) < p.delta_I_band

@@ -93,13 +93,17 @@ def rod_control_step(params, state, obs, xp=jnp):
 @struct.dataclass
 class ReferenceParams:
     """Rung 5 of ``scripts/reactor_ladder.py``: rods on delta I, boron on Tavg, by
-    SIMC from bump tests on seeds 100 to 109. The rods' loop is a pure integral on
-    the bump's 0.777 of delta I per unit of rod action, a quarter of the inverse a
-    step, and the boron's the integrating rule on -0.0170 K/s per unit of flow, over
-    a median delay of 525 s. Nothing here was set from a result."""
+    SIMC from bump tests on seeds 100 to 109. The rods' loop is a pure integral, a
+    quarter of the inverse a step, on the largest gain of delta I per unit of rod
+    action read at the day's two holds: 0.777 at full power with the rods out, 1.711
+    at half power with the rods where delta I sits at 0, so the half-power one. The
+    boron's is the integrating rule on -0.0170 K/s per unit of flow, over a median
+    delay of 525 s. Reading the gain at full power only left the rods' loop past its
+    margin in the half-power hold, where it cycled (docs/proposals/reactor-axial.md).
+    Nothing here was set from a cost."""
 
     dt: float = 30.0
-    rod_Kc: float = 0.3215723
+    rod_Kc: float = 0.1461203
     rod_Ti: float = 30.0
     boron_Kc: float = -0.0560285
     boron_Ti: float = 4200.0

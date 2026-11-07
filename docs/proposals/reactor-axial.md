@@ -11,8 +11,8 @@ holds the measurements, under the rules of `task-charter.md`.
 The property appeared. With no controller, the plant has a slow axial xenon mode close to
 the published one, rods move the offset hard and at once, and boron moves it almost not at
 all and arrives late. A textbook controller holds the plant with no trip on the ten
-nominal seeds, and the foresight plan is at least 1.75 times cheaper on every seed, 2.7
-times on the four seeds solved to convergence.
+nominal seeds, and the foresight plan is at least 1.78 times cheaper on every seed, 2.8
+to 3.0 times on the four seeds solved to convergence.
 
 Three things are not clean. The ceiling is an interior-point solve on four corner seeds,
 converged but local, and Adam's on the other six is about a third too high. Rule 4 and a
@@ -82,7 +82,9 @@ rule 7's 3 times. It was 1.17 M before. No reset or step runs a solver loop.
 
 ## Reference
 
-Rule 3's recipe, ten nominal seeds, 100 to 109, from `scripts/reactor_ladder.py`:
+Rule 3's recipe, ten nominal seeds, 100 to 109, from `scripts/reactor_ladder.py`. Rungs 5
+to 8 are shown before and after the rod-loop fix described below. Rungs 1 to 4 and the
+rod program do not use that loop and did not change.
 
 | Row | Pairing | Mean cost | Seeds tripped | Steps past band of 2880 |
 |---|---|---:|---:|---:|
@@ -90,19 +92,18 @@ Rule 3's recipe, ten nominal seeds, 100 to 109, from `scripts/reactor_ladder.py`
 | Rung 2 | Mode A | $363k | 0 | 2222 |
 | Rung 3 | Mode A | $31.2M | 10 | 2720 |
 | Rung 4 | Mode A | $3.07M | 2 | 1534 |
-| **Rung 5, reference** | rods on delta I, boron on Tavg | **$15,427** | **0** | **92.5** |
-| Rung 6 | same | $21,180 | 0 | 103 |
-| Rung 7 | same | $24,147 | 0 | 102 |
-| Rung 8 | same | $1.01M | 1 | 83 |
+| **Rung 5, reference** | rods on delta I, boron on Tavg | **$9,607** (was $15,427) | **0** | **24** (was 92.5) |
+| Rung 6 | same | $14,918 (was $21,180) | 0 | 24 (was 103) |
+| Rung 7 | same | $17,920 (was $24,147) | 0 | 24 (was 102) |
+| Rung 8 | same | $17,923 (was $1.01M) | 0 (was 1) | 24 (was 83) |
 | Rod program with boron trim | published | $25.2M | 10 | 2289 |
 
-The reference's cost splits into $11,266 of tracking and $4,161 of running. It reaches 52
-steps of rods and |delta I| of .251. It is not good control. Some episodes chatter, with
-delta I near -0.2 for hours at low load (seed 100 costs $52k), and Tavg swings +8 and -18 K
-in the ramps. This is the best textbook recipe, not a plant's practice.
+The reference's cost splits into $6,975 of tracking and $2,631 of running. It reaches 44
+steps of rods and |delta I| of .077. Tavg still swings in the ramps. This is the best
+textbook recipe, not a plant's practice.
 
-Two corrections came after results were seen, against the charter's spirit of a fixed
-recipe, so both sets are kept above and the reasons stated:
+Three corrections came after results were seen, against the charter's spirit of a fixed
+recipe, so the earlier numbers are kept above and the reasons stated:
 
 1. The first rod tune gave a limit cycle between 54 and 18 steps, from misreading zero dead
    time. The static SIMC case is now pure integral with one step of lag and one of delay,
@@ -112,6 +113,55 @@ recipe, so both sets are kept above and the reasons stated:
    zero and the pairing cannot work. That Mode A's pairing fails under this recipe is
    itself a finding, and fits OAPS naming the operator's struggle with the offset as the
    limit on load follow.
+3. The rod loop on delta I locked into a cycle at half power. The owner approved fixing
+   it as a bug. The next section gives the cause and the rule.
+
+### The rod loop's limit cycle, and the fix
+
+**Cause.** The rods' gain on delta I changes across the day. The tilt a bank puts in goes
+as sin(pi y)^3, so a bank near the top barely tilts the flux, and at half power the weaker
+power feedback lets the same tilt move the offset further. The recipe read the gain from
+one bump, at full power from the top: 0.777 per unit of demand. In the half-power hold the
+local gain, measured step by step along the reference's own run, was 2.7 to 4.0 times
+that. The loop is a velocity PI with one step of delay on a plant that settles inside a
+step. With g the gain times Kc, its poles solve z^2 - (1 - 2g) z - g = 0, which reaches
+-1, a cycle of two steps, at g = 2/3. The tune set g = 1/4, so it had a gain margin of
+2.67. On seed 100 the cycle started where the local gain reached 3.03 times, and on seed
+102 at 2.74 times. Seed 108 sat at 2.70 times and stayed just stable.
+
+It reproduces without noise or wobble: seeds 100, 102 and 103 then show 444, 34 and 115
+two-step swings of delta I over 0.05, and the other seven none.
+
+**Rule.** The rods' gain is read at each point the day holds, and the tune uses the
+largest. Full power is read as before. Half power is read by a bump of 10 steps, from a
+line-out with xenon balanced and the rods where their tilt cancels the coolant's, so
+delta I sits at 0 (42 steps). That reads 1.711, 2.20 times the full-power gain, and SIMC
+is applied to it unchanged. SIMC's margin, a gain margin near 3 for tc = theta (Skogestad,
+J. Process Control 13, 2003, table 2), is a margin on the gain it is tuned for. Tuning for
+the largest gain measured is our reading of that, not a sentence the paper states. Under
+it, the worst local gain seen in operation, 4.0 times, gives g = 0.45, under the 2/3
+limit. No cost was looked at to choose the bump point or its size: the hold is the day's
+other operating point, and the bump is small because the gain is local.
+
+**Result.** With no noise or wobble, no seed shows a two-step swing after the fix, and
+|delta I| peaks at 0.068 to 0.070 on every seed. With them, as scored:
+
+| Seed | Before | After | Change |
+|---:|---:|---:|---:|
+| 100 | $51,948 | $9,836 | -81 % |
+| 101 | $10,811 | $10,982 | +2 % |
+| 102 | $14,719 | $9,824 | -33 % |
+| 103 | $13,744 | $9,380 | -32 % |
+| 104 | $8,655 | $8,754 | +1 % |
+| 105 | $8,936 | $8,942 | 0 % |
+| 106 | $9,877 | $10,029 | +2 % |
+| 107 | $14,027 | $9,307 | -34 % |
+| 108 | $12,398 | $9,708 | -22 % |
+| 109 | $9,157 | $9,304 | +2 % |
+
+No seed trips, before or after, and that includes the four corner seeds 100, 102, 108 and
+109. The seeds that did not cycle pay 0 to 2 % more, from the slower loop at full power.
+Seeds 107 and 108 had shorter cycles with noise that the no-noise run did not show.
 
 ## Nulls
 
@@ -123,16 +173,16 @@ own: a quadratic in the load through the reference's actions on training seeds 0
 |---|---:|---:|---:|
 | Constant low, middle, high | $5.7G, $28.9M, $413M | 10 each | 0 |
 | Rods parked, no boron | $459,513 | 0 | 0 |
-| Table of load | $41,662 | 0 | 1 |
-| Table plus Tavg integrator | $492,485 | 0 | 0 |
+| Table of load | $42,498 | 0 | 0 |
+| Table plus Tavg integrator | $491,400 | 0 | 0 |
 | Witness: rod integrator | $1.02M | 0 | 0 |
 | Witness: Tavg integrator | $562,067 | 0 | 0 |
 
-No null comes near half. The table is worth reading, though. It is past the band for only
-6.7 steps, with |delta I| of .058, tighter than the reference, because it sets the rods
-from the load and hardly moves boron (10 ppm). It pays $41,108 of tracking for Tavg off its
-program, and its one win is seed 100, where the reference chatters. So the offset alone is
-easy to hold if Tavg is given up. The task is having both.
+Against the fixed reference no null wins a seed. Before the fix the table won one, seed
+100, where the reference cycled. The table is worth reading, though. It keeps |delta I|
+near .08, about as tight as the reference, because it sets the rods from the load and
+hardly moves boron (9 ppm). It pays $41,962 of tracking for Tavg off its program. So the
+offset alone is easy to hold if Tavg is given up. The task is having both.
 
 ## Ceiling and room
 
@@ -140,23 +190,25 @@ easy to hold if Tavg is given up. The task is having both.
 single shooting), with the true model, the true state, the future and the seed's noise,
 starting from the reference's actions, so it can only lower that cost. The shared oracle's
 5 minute horizon is shorter than the boron line and cannot see the problem. Adam with
-cosine decay, ten seeds on bob's CPU.
+cosine decay, ten seeds on bob's CPU. These runs started from the reference before its
+fix. A plan's cost does not depend on where it started, so the ceilings stand. The room
+uses the fixed reference.
 
-| Seed | Reference | Ceiling, 3000 iters | Room | Ceiling, 6000 iters | Room |
+| Seed | Reference, fixed | Ceiling, 3000 iters | Room | Ceiling, 6000 iters | Room |
 |---:|---:|---:|---:|---:|---:|
-| 100 | $51,948 | $5,289 | 9.82 | $4,164 | 12.47 |
-| 101 | $10,812 | $5,778 | 1.87 | $4,345 | 2.49 |
-| 102 | $14,711 | $5,369 | 2.74 | | |
-| 103 | $13,757 | $4,425 | 3.11 | | |
-| 104 | $8,655 | $4,842 | 1.79 | | |
-| 105 | $8,935 | $4,564 | 1.96 | | |
-| 106 | $9,877 | $5,642 | 1.75 | | |
-| 107 | $14,027 | $4,818 | 2.91 | | |
-| 108 | $12,401 | $4,391 | 2.82 | | |
-| 109 | $9,157 | $4,654 | 1.97 | | |
+| 100 | $9,836 | $5,289 | 1.86 | $4,164 | 2.36 |
+| 101 | $10,982 | $5,778 | 1.90 | $4,345 | 2.53 |
+| 102 | $9,824 | $5,369 | 1.83 | | |
+| 103 | $9,380 | $4,425 | 2.12 | | |
+| 104 | $8,754 | $4,842 | 1.81 | | |
+| 105 | $8,942 | $4,564 | 1.96 | | |
+| 106 | $10,029 | $5,642 | 1.78 | | |
+| 107 | $9,307 | $4,818 | 1.93 | | |
+| 108 | $9,708 | $4,391 | 2.21 | | |
+| 109 | $9,304 | $4,654 | 2.00 | | |
 
-At 3000 iterations the mean ceiling is $4,977, the median room 2.36 and the range 1.75 to
-9.82.
+At 3000 iterations the mean ceiling is $4,977, the median room 1.92 and the range 1.78 to
+2.21.
 
 **Adam did not converge.** Doubling the iterations cut the cost by 21 and 25 %. Each
 run flattens near its end only because the learning rate decays.
@@ -170,12 +222,12 @@ the seed's true load wobble, cold from the held state, then replayed through
 picked from those draws, not from any cost. Each plan is replayed through `step_env`,
 and the replayed cost is the one reported.
 
-| Seed | Hold, delay | Reference | Adam, 3000 | Interior point, replayed | Room |
-|---:|---|---:|---:|---:|---:|
-| 109 | short, short | $9,157 | $4,654 | $3,352 | 2.73 |
-| 102 | short, long | $14,716 | $5,369 | $3,488 | 4.22 |
-| 108 | long, short | $12,403 | $4,391 | $3,220 | 3.85 |
-| 100 | long, long | $51,951 | $5,289 | $3,265 | 15.9 |
+| Seed | Hold, delay | Reference, fixed | Adam, 3000 | Interior point, replayed | Room | Room before the fix |
+|---:|---|---:|---:|---:|---:|---:|
+| 109 | short, short | $9,304 | $4,654 | $3,352 | 2.78 | 2.73 |
+| 102 | short, long | $9,824 | $5,369 | $3,488 | 2.82 | 4.22 |
+| 108 | long, short | $9,708 | $4,391 | $3,220 | 3.01 | 3.85 |
+| 100 | long, long | $9,836 | $5,289 | $3,265 | 3.01 | 15.9 |
 
 Every solve converged at the final width: KKT error about 5e-9, under the solver's
 1e-8, in 113 to 276 iterations, with no trip on replay. The first, wider rung hit its
@@ -184,34 +236,22 @@ hours on 8 CPU threads.
 
 The interior point is 27 to 38 % cheaper than Adam at 3000 iterations, and 22 % cheaper
 on seed 100 than Adam at 6000. So Adam's ceilings are too high by about a third, and
-its rooms too low by as much. On these four seeds the room is 2.7 to 16.
+its rooms too low by as much. On these four seeds the room is 2.8 to 3.0.
 
-### Why seed 100's room is 15.9
+### Why seed 100's room was 15.9
 
-The reference, not the plant. The solver brings seed 100 to $3,265, in line with the
-other three ($3,220 to $3,488), so the plant on that seed is no harder. The reference
-pays $46,544 of its $51,951 in hours 5 to 10, the hold at 50 % load. There its rod loop
-on delta I sits in a limit cycle with a period of 2 steps (1 min): the rods swing
-between 25 and 52 steps and delta I between -0.25 and +0.24, against a band of +-0.05.
-At $1000 an hour per % past the band, that is about $11k an hour, as charged.
+It was the reference, not the plant. The solver brings seed 100 to $3,265, in line with
+the other three ($3,220 to $3,488). The reference paid $46,544 of its $51,951 in hours 5
+to 10, the hold at 50 % load, where its rod loop cycled with a period of 2 steps (1 min).
+The rods swung between 25 and 52 steps and delta I between -0.25 and +0.24, against a band
+of +-0.05. That cost about $11k an hour, at $1000 an hour per % past the band.
 
-It is not anything else checked:
-
-- No near-trip. Power peaks at 1.020 against 1.09, the hot leg at 603.2 K against 620,
-  Tavg's low at 559.2 K against 556, and fuel at 1062 K against 1473.
-- No boron limit. The boron command is at a bound on 1.3 % of steps, as on the other
-  seeds (0.5 to 1.4 %).
-- No scoring fault. The cost is the reward's own terms, and the plant replays the
-  solver's plans to within 1 % (below).
-- Not noise. With no wobble and no sensor noise, seed 100 still costs $43,708 and delta I
-  still reaches 0.171 in the hold, against 0.122 on seed 102 and 0.005 on seed 108.
-
-Why this seed and not 108, whose hold is as long, was not proven. Seed 100's boron line
-is slow (25 steps against 12), so the rods sit deeper in the hold (25 to 52 steps against
-35 to 48). A deeper bank has a steeper rod worth, which would raise the loop's gain past
-what the full-power tune can hold. So the 15.9 measures this fault in the recipe, and the
-other three seeds' 2.7 to 4.2 are the fairer reading. Fixing the reference is the
-owner's call under rule 3.
+None of the other causes checked held. Power peaked at 1.020 against 1.09, the hot leg at
+603.2 K against 620, Tavg's low at 559.2 K against 556, so there was no near-trip. The boron
+command was at a bound on 1.3 % of steps, as on the other seeds, so boron did not
+saturate. The cost is the reward's own terms, so it was not a scoring fault. The cycle
+reproduced with no noise. The fix is in the reference section above, and seed 100's room
+is now 3.01.
 
 ### Why the planned cost is below the replayed one
 
@@ -270,7 +310,7 @@ Rewritten around the two inputs: the reactor's env, expert, oracle and physics t
 `tests/test_industrial_readings.py`. Four tests that only made sense for rods alone were
 deleted, against the usual rule, because the plant they described is gone: three on the
 rods-only budget and `test_tavg_stays_inside_the_deadband_on_held_out_seeds`. The owner
-should confirm those deletions. `tests/reactor/test_reactor_axial.py` adds 15
+should confirm those deletions. `tests/reactor/test_reactor_axial.py` adds 18
 spec-derived tests.
 
 ## Sources
