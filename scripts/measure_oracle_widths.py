@@ -426,7 +426,9 @@ def _aircraft(name, points):
             "plane3d_heading": lambda: jnp.stack([x1[2], track]),
             "plane3d_figure8": lambda: x1[:3],
         }.get(name, lambda: jnp.stack([x1[2], x1[0], x1[1]]))()
-        limited = om.flight_outputs(x1, flown)
+        # K11 is for a trip: the reach rows bound the plan, and backing them off
+        # would forbid surface the aircraft has.
+        limited = om.flight_outputs(x1, flown).at[-2:].set(0.0)
         if follows:
             from target_gym.patrol.oracle import slot_terms
 

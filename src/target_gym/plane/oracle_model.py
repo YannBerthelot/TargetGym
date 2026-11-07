@@ -178,6 +178,11 @@ def attitude(kp, ki, kd, error, rate, integral, scaler, dt, width, delta):
     return surface, integral + free * ki * scaler**2 * error * dt
 
 
+def loop_output(kp, kd, error, rate, integral, scaler):
+    """``attitude``'s output before its clip."""
+    return kp * scaler * error + integral - kd * scaler**2 * rate
+
+
 def surface_step(requested, current, dt, response_rate, rate_limit, width, delta):
     """``compute_next_surface``, its rate limit smoothed."""
     move = (requested - current) * (1.0 - jnp.exp(-response_rate * dt))
@@ -239,12 +244,14 @@ def decayed(gust, t, p):
 
 class Flown(NamedTuple):
     """A task step's outputs for the limits and the guards: the loads at the inner
-    sub-steps, EAS and Mach on the state reached, each guard's smallest argument."""
+    sub-steps, EAS and Mach on the state reached, each guard's smallest argument,
+    and the attitude loops' outputs on the last sub-step, unclipped (T1s)."""
 
     loads: jnp.ndarray
     eas: jnp.ndarray
     mach: jnp.ndarray
     guards: jnp.ndarray
+    reach: jnp.ndarray
 
 
 def accelerate_3d(velocities, positions, thrust, stick, aileron, air, mass, p, w, d):
@@ -315,6 +322,10 @@ def flight_step(p, x, u, t, gust, method, widths, deltas=NO_DELTA, roll_gust=Non
         rho = compute_air_density_from_altitude(z)
         eas = air_speed * jnp.sqrt(rho / p.air_density_at_sea_level)
         scaler = airspeed_scaler(eas, g)
+        reach = jnp.stack([
+            loop_output(g.Kp_theta, g.Kd_theta, pitch_demand - theta, q, pitch_integ, scaler),
+            loop_output(g.Kp_roll, g.Kd_roll, bank_demand - phi, roll_rate, roll_integ, scaler),
+        ])  # fmt: skip
         stick_out, pitch_integ = attitude(
             g.Kp_theta, g.Ki_theta, g.Kd_theta, pitch_demand - theta, q, pitch_integ,
             scaler, dt, w.surface_clip, deltas.surface_clip,
@@ -367,14 +378,14 @@ def flight_step(p, x, u, t, gust, method, widths, deltas=NO_DELTA, roll_gust=Non
             eas - g.scaling_speed / g.scale_max,
         ])  # fmt: skip
         rest = (power, stick, aileron, pitch_integ, roll_integ, burned)
-        return (velocities, positions, rest), (lift / (mass * p.gravity), guards)
+        return (velocities, positions, rest), (lift / (mass * p.gravity), guards, reach)
 
     start = (
         jnp.stack([x[3], x[4], x[5], x[8], x[9]]),
         jnp.stack([x[0], x[1], x[2], x[6], x[7]]),
         (x[10], x[11], x[12], x[13], x[14], jnp.zeros_like(x[0])),
     )
-    end, (loads, guards) = jax.lax.scan(inner, start, None, length=INNER_STEPS)
+    end, (loads, guards, reach) = jax.lax.scan(inner, start, None, length=INNER_STEPS)
     (vx, vy, vz, q, roll_rate), (px, py, z, theta, phi) = end[0], end[1]
     power, stick, aileron, pitch_integ, roll_integ, burned = end[2]
     fuel = x[15] - burned
@@ -389,7 +400,8 @@ def flight_step(p, x, u, t, gust, method, widths, deltas=NO_DELTA, roll_gust=Non
     rho = compute_air_density_from_altitude(z)
     eas = air_speed * jnp.sqrt(rho / p.air_density_at_sea_level)
     mach = air_speed / sound_speed(z, w, deltas)
-    return x1, Flown(loads, eas, mach, jnp.append(jnp.min(guards, axis=0), fuel))
+    guards = jnp.append(jnp.min(guards, axis=0), fuel)
+    return x1, Flown(loads, eas, mach, guards, reach[-1])
 
 
 def turn_distance(sin_e, cos_e, width, delta=0.0):
@@ -414,13 +426,14 @@ def flight_limits(p, price):
         Limit(-float(p.bank_limit), float(p.bank_limit), price),
         Limit(hi=float(p.vmo_eas), price=price),
         Limit(hi=float(p.mmo), price=price),
+        *(Limit(-1.0, 1.0, price) for _ in range(2)),
     )
 
 
 def flight_outputs(x1, flown):
     """The limited quantities of ``flight_limits`` on a step's outputs."""
     return jnp.concatenate(
-        [x1[2:3], flown.loads, x1[7:8], flown.eas[None], flown.mach[None]]
+        [x1[2:3], flown.loads, x1[7:8], flown.eas[None], flown.mach[None], flown.reach]
     )
 
 
