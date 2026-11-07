@@ -47,7 +47,7 @@ from target_gym.registry import REGISTRY
 SCATTER = {
     "glass_furnace": {0: 0.36, 1: 0.32, 2: 100.0 * 3e-4 / 0.698},  # fuel_max
     # Tavg is the mean of two RTDs, so 0.045 over sqrt(2).
-    "reactor": {0: 1.9e-4, 1: 0.045, 4: 0.045 / math.sqrt(2.0)},
+    "reactor": {0: 1.9e-4, 1: 0.045, 4: 0.045 / math.sqrt(2.0), 6: 2.7e-4},
     "hvac": {
         0: 0.023,
         1: 0.023,
@@ -363,7 +363,10 @@ def test_reactor_measured_reward_carries_the_steps_one_reading():
     key = jax.random.PRNGKey(3)
     for t in range(5):
         obs, new, reward, _, info = env.step_env(
-            jax.random.fold_in(key, t), hot.replace(time=t), jnp.array([0.2]), params
+            jax.random.fold_in(key, t),
+            hot.replace(time=t),
+            jnp.array([1.0, 0.0]),
+            params,
         )
         d = float(obs[4]) - 0.5 * float(new.T_coolant + new.T_cold)
         assert abs(d) > 0.0

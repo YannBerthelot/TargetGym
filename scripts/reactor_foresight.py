@@ -84,7 +84,7 @@ def main():
         return jnp.sum(costs), costs
 
     grad = jax.value_and_grad(loss, has_aux=True)
-    opt = optax.adam(args.lr)
+    opt = optax.adam(optax.cosine_decay_schedule(args.lr, args.iters + 1))
 
     @jax.jit
     def update(plans, state):

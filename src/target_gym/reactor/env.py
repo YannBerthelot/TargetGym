@@ -509,7 +509,8 @@ def compute_velocity(position, action, params: ReactorParams, load=1.0, rod_eps=
     n = position[0]
     C = position[1 : 1 + N_GROUPS]
     slow = position[1 + N_GROUPS :]
-    T_f, T_h, T_c, _, _, Xe, _, _ = slow
+    T_f, T_h, T_c = slow[:3]
+    Xe = slow[5]
 
     rho = _reactivity(action, T_f, T_h, T_c, Xe, params)
     dn_dt = ((rho - BETA_TOT) / params.Lambda_gen) * n + jnp.sum(LAMBDA_I * C)

@@ -109,6 +109,7 @@ class Reactor(
             params = self.default_params
 
         action, state = actuate(self, state, jnp.reshape(action, (2,)), params)
+        action = jnp.clip(action, -1.0, 1.0)
         # The boron command joins the queue once a control step.
         state = state.replace(
             boron_queue=jnp.concatenate([action[1:], state.boron_queue[:-1]])
