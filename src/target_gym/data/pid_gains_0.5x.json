@@ -234,5 +234,114 @@
       }
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+  },
+  "wind_turbine": {
+    "Kp": 7.0512614276929275,
+    "Ki": 3.021969183296969,
+    "theta_K_deg": 0.015260586305121303,
+    "schedule_lo_deg": 3.5987370366807205,
+    "schedule_hi_deg": 22.839432509805743,
+    "model": {
+      "dP_dtheta": -68136.11296669637,
+      "theta_K_deg": 0.015260586305121303,
+      "zeta": 0.7,
+      "wn": 0.6
+    },
+    "tuning_rule": "jonkman_pole_placement",
+    "note": "NREL 5 MW baseline (Jonkman et al. 2009, ch. 7): pitch PI on the filtered generator speed, Kp and Ki by pole placement (wn 0.6, zeta 0.7) on the best-fit dP/dtheta of the Cp table along the region-3 curve, with his schedule read at the last pitch command and held on that curve (scripts/wind_turbine_gains.py). Generator speed in rad/s to pitch in rad."
+  },
+  "battery": {
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
+    "Kp": 0.3010334440698565,
+    "Ki": 0.1999655736948046,
+    "guard_margin": 0.14775413711583923,
+    "model": {
+      "power": {
+        "k": 1.000172,
+        "tau1": 0.672093,
+        "theta": 2.5,
+        "band": 0.000956,
+        "step": 0.1,
+        "bands": 104.657681,
+        "spread": 1.001126,
+        "tests": 10.0,
+        "tau_c": 2.5
+      }
+    }
+  },
+  "boiler_drum": {
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
+    "Kp_pressure": 0.04988524400719868,
+    "Ki_pressure": 0.0004454039605321072,
+    "Kd_pressure": 0.0,
+    "Tf_pressure": 0.0,
+    "Kp_level": 449.36686113706367,
+    "Ki_level": 7.114663869649483,
+    "Tf_level": 0.0,
+    "model_pressure": {
+      "k": 67.61818462941397,
+      "tau1": 188.89638143464728,
+      "theta": 14.000000120004174,
+      "band": 0.065988,
+      "step": 0.02,
+      "bands": 20.494135,
+      "spread": 1.084854,
+      "tests": 10.0,
+      "tau_c": 14.0,
+      "lam": 14.000000120004174
+    },
+    "model_level": {
+      "k": 7.927473903494472e-05,
+      "tau1": 1.86181478396403,
+      "theta": 21.053553120245184,
+      "band": 0.001477,
+      "step": 0.02,
+      "bands": 25.763846,
+      "spread": 1.13205,
+      "tests": 10.0,
+      "tau_c": 21.053553,
+      "lam": 21.053553120245184
+    }
+  },
+  "glass_furnace": {
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
+    "Kp": 0.34698945107299334,
+    "Ki": 0.000139953089366113,
+    "Kd": 0.0,
+    "Tf": 66.89114881915053,
+    "model": {
+      "k": 0.004649539453178354,
+      "tau1": 17.227871,
+      "theta": 150.5050848430887,
+      "band": 2.885092,
+      "step": 1.001096,
+      "bands": 1.936009,
+      "spread": 1.569042,
+      "tests": 10.0,
+      "tau_c": 469.32662563326875,
+      "tau2": 17.227870855099802
+    }
+  },
+  "hvac": {
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
+    "kp": 0.2018905979455138,
+    "Ti": 1100.2272025202958,
+    "model": {
+      "T_air": {
+        "k": 3.027567,
+        "tau1": 1100.227203,
+        "theta": 450.0,
+        "band": 0.1,
+        "step": 0.164261,
+        "bands": 4.973125,
+        "spread": 1.035059,
+        "tests": 10.0,
+        "tau_c": 450.0
+      }
+    }
+  },
+  "reactor": {
+    "tuning_rule": "published",
+    "note": "The rod program is published (HRTD 8.1 and 5.0), and every constant is in RodControlParams. Nothing is tuned, and this entry holds no gain. It exists because a noise level's file must name every task it serves."
   }
 }

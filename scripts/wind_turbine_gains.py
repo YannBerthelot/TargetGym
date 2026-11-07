@@ -16,13 +16,21 @@ speed and ``N`` the gearbox ratio; the gains act on generator speed in rad/s
 and give pitch in rad. The line's doubling pitch ``theta_K`` sets the gain
 schedule ``GK = 1 / (1 + theta / theta_K)``.
 
-On the real blade the sensitivity grows about linearly with pitch (Jonkman's
--25.52e6 W/rad at 0 deg, theta_K 6.3 deg). On this plant's analytic Cp fit it
-is not monotone: about -66 MW/rad near 1 deg, -4 at 9 deg, -58 at 33 deg. The
-best-fit line is flat (theta_K over a thousand degrees), so the schedule is 1
-and the gains are fixed at the line's intercept. A schedule read off the exact
-sensitivity instead multiplies the gains where the surface is almost flat in
-pitch, and trips the turbine.
+The sensitivity grows about linearly with pitch. Jonkman's has the wake frozen,
+-25.52e6 W/rad at 0 deg with theta_K 6.3 deg. On ROSCO's steady table the line
+runs almost through the origin, -0.07 MW/rad and 0.015 deg, so ``Kp`` and ``Ki``
+at 0 deg are huge and mean nothing alone: only ``GK`` times them is flown, read
+at the last pitch command. The line is fitted on the region-3 curve and says
+nothing off it, so the expert holds the schedule between the curve's first and
+last pitch (docs/proposals/expert-protocols-process.md, section 10).
+
+The speed filter and the limits are fixed, and nothing here reads noise, so
+``--write`` stores the same values at every noise level.
+
+The pairing is pitch on rotor speed and torque on power. ``pairing`` reads its
+RGA from the two balances, with ``a`` and ``b`` the aerodynamic torque's slopes in
+speed and pitch: at steady state ``a dw + b dtheta - N dtau = 0`` and ``dP = eta N
+(tau dw + w dtau)``.
 """
 
 from __future__ import annotations
@@ -49,9 +57,12 @@ from target_gym.energy.wind_turbine.env import (  # noqa: E402
     aerodynamic_torque,
     drivetrain_inertia,
 )
-from target_gym.provenance import GAINS_PATH  # noqa: E402
+from target_gym.identification import rga  # noqa: E402
+from target_gym.provenance import GAIN_LEVELS, GAINS_PATH, gains_path  # noqa: E402
 
 ZETA, WN = 0.7, 0.6
+#: The pairing's operating points, dispatch in W and mean wind in m/s.
+POWERS, WINDS = (3.5e6, 4.25e6, 5.0e6), (13.5, 16.75, 20.0)
 
 
 def sensitivity_curve(p):
@@ -72,6 +83,33 @@ def sensitivity_curve(p):
     return np.array(rows)
 
 
+def pairing(p, P_e: float, v: float) -> float:
+    """lambda_11, of pitch on rotor speed, at dispatch ``P_e`` and wind ``v``,
+    from the speed and power balances at rated speed and the balancing pitch."""
+    w0 = float(p.omega_rated_rpm) * 2 * np.pi / 60
+    eta, N = float(p.eta_gen), float(p.N_gear)
+    torque = P_e / (eta * N * w0)
+    balance = lambda th: float(aerodynamic_torque(w0, v, th, p)[0]) - N * torque
+    theta = brentq(balance, 0.0, 30.0)
+    wind_step = 1e-4 * w0
+    pitch_step = 0.5  # deg, half a table cell
+
+    def tau(w, th):
+        return float(aerodynamic_torque(w, v, th, p)[0])
+
+    a = (tau(w0 + wind_step, theta) - tau(w0 - wind_step, theta)) / (2 * wind_step)
+    b = (tau(w0, theta + pitch_step) - tau(w0, theta - pitch_step)) / (
+        2 * pitch_step
+    )
+    G = np.array(
+        [
+            [-b / a, N / a],
+            [-eta * N * torque * b / a, eta * N * (torque * N / a + w0)],
+        ]
+    )
+    return float(rga(G)[0, 0])
+
+
 def gains(p) -> dict:
     curve = sensitivity_curve(p)
     slope, intercept = np.polyfit(np.radians(curve[:, 0]), curve[:, 1], 1)
@@ -86,9 +124,16 @@ def gains(p) -> dict:
     print(
         f"best-fit line: dP/dtheta(0) {intercept / 1e6:.3f} MW/rad, theta_K {theta_K:.0f} deg"
     )
+    print("lambda_11, pitch on speed, by dispatch (MW) and wind (m/s):")
+    for P_e in POWERS:
+        row = "  ".join(f"{v}: {pairing(p, P_e, v):.3f}" for v in WINDS)
+        print(f"  {P_e / 1e6:.2f}: {row}")
     return {
         "Kp": 2 * I * W0 * ZETA * WN / den,
         "Ki": I * W0 * WN**2 / den,
+        "theta_K_deg": float(theta_K),
+        "schedule_lo_deg": float(curve[0, 0]),
+        "schedule_hi_deg": float(curve[-1, 0]),
         "model": {
             "dP_dtheta": float(intercept),
             "theta_K_deg": float(theta_K),
@@ -99,10 +144,10 @@ def gains(p) -> dict:
         "note": (
             "NREL 5 MW baseline (Jonkman et al. 2009, ch. 7): pitch PI on the "
             "filtered generator speed, Kp and Ki by pole placement (wn 0.6, "
-            "zeta 0.7) on the best-fit dP/dtheta of this plant's Cp surface "
-            "along the region-3 curve; that line is flat, so no gain schedule "
-            "(scripts/wind_turbine_gains.py). Generator speed in rad/s to "
-            "pitch in rad."
+            "zeta 0.7) on the best-fit dP/dtheta of the Cp table along the "
+            "region-3 curve, with his schedule read at the last pitch command "
+            "and held on that curve (scripts/wind_turbine_gains.py). Generator "
+            "speed in rad/s to pitch in rad."
         ),
     }
 
@@ -114,10 +159,12 @@ def main() -> None:
     out = gains(WindTurbineParams())
     print(json.dumps(out, indent=2))
     if args.write:
-        stored = json.loads(GAINS_PATH.read_text())
-        stored["wind_turbine"] = out
-        GAINS_PATH.write_text(json.dumps(stored, indent=2) + "\n")
-        print(f"wrote wind_turbine to {GAINS_PATH.relative_to(ROOT)}")
+        for level in GAIN_LEVELS:
+            path = gains_path(level)
+            stored = json.loads(path.read_text())
+            stored["wind_turbine"] = out
+            path.write_text(json.dumps(stored, indent=2) + "\n")
+            print(f"wrote wind_turbine to {path.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

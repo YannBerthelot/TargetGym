@@ -164,10 +164,10 @@ def test_a_level_with_no_file_raises_for_every_task_form(store):
 
 
 def test_a_level_without_the_task_raises_even_if_its_gains_are_in_code(store):
-    # hvac stores nothing in the file, so an entry is how a level vouches for it.
+    # The reactor's program is in code, so an entry is how a level vouches for it.
     store(2, {"first_order": {"Kp": 0.1, "Ki": 0.0, "Kd": 0.0}})
-    with pytest.raises(KeyError, match="hvac"):
-        REGISTRY["hvac"].make_pid_controller(2)
+    with pytest.raises(KeyError, match="reactor"):
+        REGISTRY["reactor"].make_pid_controller(2)
 
 
 def test_a_level_missing_one_gain_raises_instead_of_using_a_default(store):
@@ -227,8 +227,7 @@ def test_gain_raises_on_a_key_the_store_does_not_hold():
         pid.gain("no_such_task", "Kp")
 
 
-def test_battery_keeps_the_gains_it_ran_on_as_literals():
-    # 0.5, 0.02 and 0.12 are the defaults its factory passed to gain() before
-    # gain() raised; the store had no battery entry, so those were the gains.
-    params = REGISTRY["battery"].make_pid_controller().params
-    assert (params.Kp, params.Ki, params.guard_margin) == (0.5, 0.02, 0.12)
+def test_a_task_with_nothing_tuned_still_has_a_store_entry_at_each_level():
+    # The rod program is published, and a level's file must name what it serves.
+    for level in (0.5, 2.0):
+        assert REGISTRY["reactor"].make_pid_controller(level).params is not None

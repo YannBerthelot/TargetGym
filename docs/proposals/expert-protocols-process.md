@@ -301,9 +301,9 @@ them. R8 to R16 are ours and wait for the owner, as R1 to R7 did.
 | R10 | `wind_turbine`'s schedule | Read at the last pitch command, held between the first and last pitch of the region-3 curve, since the line is only fitted there. The line runs almost through the origin, so unheld it multiplies the gain 500 times at fine pitch | ours |
 | R11 | `wind_turbine`'s integral | In pitch units, adding `dt GK Ki e` each step, as ROSCO's `PIController` does, so the scheduled gain is the integral rate the poles ask for at that pitch. Jonkman's text scales a stored error integral by `GK`, which on this line halves the rate | derived |
 | R12 | `boiler_drum`'s commissioning loop | Firing in manual at the seed's heat balance. A P loop on level, the full feed span over the full level span, 200 / 0.5 = 400 kg/s per m, a proportional band of 100 % | ours |
-| R13 | `glass_furnace`'s step | Two steps after a firing interruption, ramped at the fuel's slew, with the ramp as the recorded input | derived |
-| R14 | `glass_furnace`'s delay | The datasheet's 60 s. A band exit cannot see it: the band is 2.8 to 4.2 K, and a firing step at the slew moves the crown about 2.6 K in the 20 minutes | ours |
-| R15 | `glass_furnace`'s D | PI on the half rule, reversing D6 for this reading. D6 gives a derivative where tau2 > theta, but a derivative of about 150 s on a 0.36 K reading at 30 s passes about 1.8 raw of noise at the Kc N7 leaves, 90 times N5's dead band | ours |
+| R13 | `glass_furnace`'s step | Two steps after a firing interruption, ramped at the fuel's slew, with the ramp as the recorded input, and read against the same phase of the crown's cycle before. Held in manual the crown repeats every three reversals, 75 minutes, on a far slower drift, so a reading against the baseline's mean or one reversal back carries 0.7 K or more of the cycle's own swing, and three back carries 0.1 K. An engineer lays one trace on another. This replaces section 6's twin | derived |
+| R14 | `glass_furnace`'s delay | The datasheet's 60 s. A band exit cannot see it: the band is about 3 K, and the largest step the fuel allows moves the crown about 3 K in the 20 minutes | ours |
+| R15 | `glass_furnace`'s D | PI on the half rule, reversing D6 for this reading. D6 gives a derivative where tau2 > theta, and at Kc 0.3 a derivative of even 100 s on a 0.36 K reading at 30 s scatters about 0.5 raw per step, 25 times N5's dead band | ours |
 | R16 | `hvac`'s window | Five emitter lags on the step grid, 6 steps (90 minutes). The room has two time scales, and a longer window reads the mass's tail: k runs 3.0 at 6 steps, 3.8 at 16 and 18 at 192, and Kc 0.48, 0.75 and 5.2, past what this sample time holds | ours |
 
 **`wind_turbine`.** No bump test: this is Jonkman's recipe on the Cp table, section
@@ -344,10 +344,11 @@ the evidence to the coordinator.
 
 **`boiler_drum`.** Section 6, with D7's lambda rule.
 1. Quiet steam demand (R2), rest by R12, hold 400 steps (R8).
-2. Pressure: firing +0.02 raw grown by N3, 120 steps, level loop closed. C3 picks the
-   model: the turbine valve now lets pressure regulate itself, so it is first order
-   unless `tau1 > 8 theta`. Lambda on that model, `lam = theta`: `Kc = tau1 / (k (lam
-   + theta))`, `Ti = tau1`. On the integrating model, the rule below.
+2. Pressure: firing +0.02 raw grown by N3, 120 steps, level loop closed. The turbine
+   valve lets pressure regulate itself, so it is first order at every level, where
+   section 6 had it integrating. C3 would flip it on a read delay that moves with
+   noise, 14 s at level 0.5 against 22 s at level 1. Lambda on that model, `lam =
+   theta`: `Kc = tau1 / (k (lam + theta))`, `Ti = min(tau1, 4 (lam + theta))` (C7).
 3. Level: its setpoint moved through the same loop so the feed's first move is 2 kg/s
    grown by N3, 120 steps, the recorded feed as input. Integrating with lag, the lag
    counted as delay, `lam = theta`: `Kc = (2 lam + theta) / (k' (lam + theta)^2)`,
@@ -364,10 +365,11 @@ steps, on the two moves' slopes, since level has no steady gain.
 **`glass_furnace`.** Section 6, with R13 to R15.
 1. Quiet pull and gas (R2), no setpoint moves, in manual at the settled point's fuel,
    hold 400 steps (R8), 8 whole reversal cycles.
-2. Baseline 60 samples, then the step. N3's 5 bands cannot be reached, so the step is
-   the actuator's room. It ships with its ratio.
+2. Baseline 60 samples, then the step by R13. N3's 5 bands cannot be reached, so the
+   step is the actuator's room. It ships with its ratio.
 3. 40 samples, the longest window before the next interruption. Fit `k' e^(-theta s) /
-   (s (tau2 s + 1))` with `theta` held at R14's 60 s, C5 on `k'`.
+   (s (tau2 s + 1))` with `theta` held at R14's 60 s, C5 on `k'`. A noise-free run of
+   this test reads k' 0.0045 K/s per raw and tau2 under 85 s on all five seeds tried.
 4. `theta` + 15 s, plus `tau2 / 2` by the half rule. N5 to N7 on a valve at 1 % of
    span. `u_d` is the pull's 3 sd as its share of the fuel, capped at the room.
 5. The reading gets N5's filter.

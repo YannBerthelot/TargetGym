@@ -17,16 +17,14 @@ from target_gym.experts.pid import Controller, gain
 
 @struct.dataclass
 class BatteryPIDParams:
-    """Gains and limits of the dispatch-following battery controller.
-
-    These are the values the baseline was scored with. Keep them Python
-    floats so the host arithmetic on constants runs in double precision, as
-    it did when the baseline was recorded.
+    """Gains and limits of the dispatch-following battery controller. The
+    recipe in ``scripts/tune_industrial_experts.py`` stores the first three.
+    Keep them Python floats, so the host arithmetic stays in double precision.
     """
 
-    Kp: float = 0.5
-    Ki: float = 0.02
-    guard_margin: float = 0.12
+    Kp: float
+    Ki: float
+    guard_margin: float
     # 5 % inside the pack's trips: MESA-1's operators advise that margin, and a
     # guard that fades to nothing on the trip itself rests on it.
     soc_min: float = 0.10
@@ -82,8 +80,8 @@ def battery_pid_step(params, state, obs, xp=jnp):
 def make_battery_pid_controller() -> Controller:
     """The shipped battery PID as a :class:`Controller`, gains as tuned."""
     params = BatteryPIDParams(
-        Kp=gain("battery", "Kp", 0.5),
-        Ki=gain("battery", "Ki", 0.02),
-        guard_margin=gain("battery", "guard_margin", 0.12),
+        Kp=gain("battery", "Kp"),
+        Ki=gain("battery", "Ki"),
+        guard_margin=gain("battery", "guard_margin"),
     )
     return Controller(params, BatteryPIDState(integral=0.0), battery_pid_step)

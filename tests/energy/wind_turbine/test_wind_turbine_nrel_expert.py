@@ -12,15 +12,17 @@ chapter 7 (not from the code):
   least 1 deg or the filtered speed is at least 1161.963 rpm. Torque is
   limited to 47,402.91 N m and to 15,000 N m/s.
 * Pitch: a PI on the filtered generator-speed error against 1173.7 rpm, with
-  ``Kp = 2 I W0 zeta wn / (N (-dP/dtheta))`` and ``Ki = I W0 wn^2 / (N
-  (-dP/dtheta))``, ``wn`` 0.6 rad/s and ``zeta`` 0.7; the integral is
-  saturated at the pitch limits; the command moves at most 8 deg/s; it starts
-  bumpless from the measured pitch.
+  ``Kp = 2 I W0 zeta wn / (N (-dP/dtheta(0)))`` and ``Ki = I W0 wn^2 / (N
+  (-dP/dtheta(0)))``, ``wn`` 0.6 rad/s and ``zeta`` 0.7, each times the schedule
+  ``GK = 1 / (1 + theta / theta_K)``; the integral is saturated at the pitch
+  limits; the command moves at most 8 deg/s; it starts bumpless from the
+  measured pitch.
 * Ours, for a curtailed task: ``P`` is the dispatched target over the
   generator efficiency (Jonkman's 5.296610 MW is 5 MW / 0.944), and the
-  below-rated torque never exceeds region 3's. Gains are fixed: on our Cp
-  surface the sensitivity's best-fit line is flat, so the schedule ``GK``
-  is 1.
+  below-rated torque never exceeds region 3's.
+* Ours (docs/proposals/expert-protocols-process.md, R10): ``GK`` reads the last
+  pitch command, held inside the region-3 curve's pitch range. Derived (R11):
+  the integral is in pitch units and adds ``dt GK Ki e``, as ROSCO's does.
 """
 
 import json
@@ -31,7 +33,7 @@ import numpy as np
 import pytest
 
 import target_gym as tg
-from target_gym.energy.wind_turbine.env import WindTurbineParams
+from target_gym.energy.wind_turbine.env import WindTurbineParams, aerodynamic_torque
 from target_gym.provenance import GAINS_PATH
 from target_gym.registry import REGISTRY
 
@@ -101,12 +103,39 @@ def test_the_pitch_gains_are_jonkmans_pole_placement():
     params = tg.make_expert("wind_turbine").params
     assert params.Kp == pytest.approx(2 * I * W0 * 0.7 * 0.6 / den, rel=1e-9)
     assert params.Ki == pytest.approx(I * W0 * 0.6**2 / den, rel=1e-9)
+    assert params.theta_K_deg == pytest.approx(m["theta_K_deg"], rel=1e-9)
+
+
+def _gk(theta_deg, params):
+    return 1.0 / (1.0 + theta_deg / params.theta_K_deg)
+
+
+def test_the_schedule_reads_the_surfaces_sensitivity_where_the_task_runs():
+    """Pole placement needs dP/dtheta at the pitch it flies. From the table by
+    a central difference at rated speed, not through the fitted line: at 15, 16
+    and 18 m/s the rated-power pitch's sensitivity is dP/dtheta(0) / GK within
+    15 %, the table's own scatter about the line."""
+    from scipy.optimize import brentq
+
+    params = tg.make_expert("wind_turbine").params
+    m = json.loads(GAINS_PATH.read_text())["wind_turbine"]["model"]
+    w0 = float(WP.omega_rated_rpm) * RPM
+    P0 = float(WP.P_rated) / ETA
+
+    def power(v, th):
+        return float(aerodynamic_torque(w0, v, th, WP)[1])
+
+    for v in (15.0, 16.0, 18.0):
+        th = brentq(lambda t: power(v, t) - P0, 0.0, 30.0)
+        d = 1.0  # deg, a table cell either side
+        exact = (power(v, th + d) - power(v, th - d)) / math.radians(2 * d)
+        assert m["dP_dtheta"] / _gk(th, params) == pytest.approx(exact, rel=0.15)
 
 
 def test_a_speed_step_reaches_the_pitch_through_the_quarter_hertz_filter():
     """Bumpless at rated speed and 10 deg, then 1 % overspeed: the filter
     passes (1 - alpha) of it, and the PI moves the pitch by
-    (Kp + Ki Ts) (1 - alpha) de."""
+    GK(10 deg) (Kp + Ki Ts) (1 - alpha) de."""
     params = tg.make_expert("wind_turbine").params
     expert = _expert()
     tq = 4.0e6 / ETA / (RATED_GEN_RPM * RPM)
@@ -115,9 +144,43 @@ def test_a_speed_step_reaches_the_pitch_through_the_quarter_hertz_filter():
     )
     alpha = math.exp(-2.0 * math.pi * TS * 0.25)
     de = 0.01 * RATED_GEN_RPM * RPM * (1.0 - alpha)
-    moved = math.degrees((params.Kp + params.Ki * TS) * de)
+    moved = math.degrees(_gk(10.0, params) * (params.Kp + params.Ki * TS) * de)
     a = expert(_obs(1.01 * RATED_GEN_RPM, 10.0, tq))
     assert _pitch(a) - 10.0 == pytest.approx(moved, rel=1e-3)
+
+
+def test_the_gain_falls_as_the_blade_feathers():
+    """The same speed error at 20 deg moves the pitch GK(20) / GK(10) as far,
+    about half here, where the sensitivity has doubled."""
+    params = tg.make_expert("wind_turbine").params
+    tq = 4.0e6 / ETA / (RATED_GEN_RPM * RPM)
+
+    def first_move(pitch):
+        expert = _expert()
+        expert(_obs(RATED_GEN_RPM, pitch, tq))
+        return _pitch(expert(_obs(1.01 * RATED_GEN_RPM, pitch, tq))) - pitch
+
+    ratio = _gk(20.0, params) / _gk(10.0, params)
+    assert first_move(20.0) / first_move(10.0) == pytest.approx(ratio, rel=1e-3)
+
+
+@pytest.mark.parametrize(
+    "outside, end", [(0.0, "schedule_lo_deg"), (35.0, "schedule_hi_deg")]
+)
+def test_the_schedule_holds_at_the_ends_of_the_curve(outside, end):
+    """Past either end of the region-3 curve the line says nothing, so the
+    gain stays what it was at that end (R10). Near 0 deg an unheld line would
+    multiply it 500 times."""
+    params = tg.make_expert("wind_turbine").params
+    tq = 4.0e6 / ETA / (RATED_GEN_RPM * RPM)
+    expert = _expert()
+    expert(_obs(RATED_GEN_RPM, outside, tq))
+    alpha = math.exp(-2.0 * math.pi * TS * 0.25)
+    de = 0.001 * RATED_GEN_RPM * RPM * (1.0 - alpha)
+    gk = _gk(getattr(params, end), params)
+    moved = math.degrees(gk * (params.Kp + params.Ki * TS) * de)
+    a = expert(_obs(1.001 * RATED_GEN_RPM, outside, tq))
+    assert _pitch(a) - outside == pytest.approx(moved, rel=1e-3)
 
 
 def test_the_pitch_command_moves_at_most_8_deg_per_second():

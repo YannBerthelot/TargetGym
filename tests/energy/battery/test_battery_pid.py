@@ -8,8 +8,10 @@ an inner PI) and the controller's documented design (not its code):
   next block, which the market publishes ahead.
 * A PI trims the losses: delivering less than the target commands more.
 * Near either SoC limit, 5 % inside the trips (MESA-1 report), the demand fades
-  linearly to zero at the limit over the guard margin (0.12 of SoC), only in the
-  direction that would breach it.
+  linearly to zero at the limit over the guard margin, only in the direction that
+  would breach it. The margin is the charge rated power draws over one correlation
+  time of the signal (docs/proposals/expert-protocols-process.md, R9), 1 MW x 900 s
+  of the 1692 kWh pack, 0.1478.
 """
 
 import jax
@@ -66,18 +68,28 @@ def test_the_integral_stops_while_the_guard_sheds():
     assert float(memory.integral) == pytest.approx(0.0, abs=1e-6)
 
 
+MARGIN = 900.0 / (1692.0 * 3.6)
+
+
+def test_the_guard_margin_is_one_correlation_time_at_rated_power():
+    params = REGISTRY["battery"].make_pid_controller().params
+    assert params.guard_margin == pytest.approx(MARGIN, rel=1e-6)
+
+
 @pytest.mark.parametrize(
     "soc, target, expected",
     [
-        (0.10 + 0.06, 0.4, 0.2),  # half the margin above the floor: half the discharge
-        (0.10 + 0.06, -0.4, -0.4),  # charging near the floor is not faded
-        (0.90 - 0.03, -0.4, -0.1),  # a quarter of the margin below the ceiling
-        (0.90 - 0.03, 0.4, 0.4),  # discharging near the ceiling is not faded
+        # Half the margin above the floor: half the discharge.
+        (0.10 + MARGIN / 2, 0.4, 0.2),
+        (0.10 + MARGIN / 2, -0.4, -0.4),  # charging near the floor is not faded
+        # A quarter of the margin below the ceiling.
+        (0.90 - MARGIN / 4, -0.4, -0.1),
+        (0.90 - MARGIN / 4, 0.4, 0.4),  # discharging near the ceiling is not faded
     ],
 )
 def test_the_soc_guard_fades_only_the_breaching_direction(soc, target, expected):
     assert _command(soc=soc, delivered=target, target=target) == pytest.approx(
-        expected, abs=1e-5
+        expected, abs=1e-4
     )
 
 

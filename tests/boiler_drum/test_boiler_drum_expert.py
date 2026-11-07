@@ -1,5 +1,5 @@
 """The boiler drum expert: three-element level control and a pressure loop,
-both lambda-tuned.
+both lambda-tuned from single-run bump tests.
 
 Contract, from boiler-control practice and the tuning recipe (not the code):
 
@@ -10,10 +10,15 @@ Contract, from boiler-control practice and the tuning recipe (not the code):
   h_fw)``, plus a pressure PI. ``h_g`` is saturated steam at the drum's 85 bar
   (IAPWS-IF97: 2749 kJ/kg at 8.5 MPa) and ``h_fw`` the plant's feedwater
   enthalpy.
-* Both loops are lambda-tuned for an integrating process from the stored
-  step-test model ``k' e^(-theta s) / s``: ``Kc = (2 lam + theta) / (k' (lam +
-  theta)^2)`` and ``Ti = 2 lam + theta`` (on the action; the firing PI's gain
-  on the [-1, 1] action is twice its gain on the heat fraction).
+* Level integrates, so it is lambda-tuned from the stored model ``k' e^(-theta
+  s) / s``: ``Kc = (2 lam + theta) / (k' (lam + theta)^2)``, ``Ti = 2 lam + theta``.
+* Steam follows pressure, so pressure regulates itself, and is lambda-tuned from
+  its stored first-order model: ``Kc = tau1 / (k (lam + theta))``, ``Ti = tau1``,
+  on the action (the firing PI's gain on the [-1, 1] action is twice its gain on
+  the heat fraction).
+* The level trim has no limit of its own. Its integral stops at the feedwater's
+  limits, while the error would push past them (Astrom and Hagglund 3.5).
+* Each reading goes through its stored filter, ``Tf_level`` and ``Tf_pressure``.
 """
 
 import json
@@ -62,15 +67,73 @@ def _stored():
     return json.loads(GAINS_PATH.read_text())["boiler_drum"]
 
 
-@pytest.mark.parametrize("loop, scale", [("level", 1.0), ("pressure", 2.0)])
-def test_both_loops_follow_the_lambda_rule_for_their_step_test(loop, scale):
-    m = _stored()[f"model_{loop}"]
+def test_level_follows_the_lambda_rule_for_an_integrating_loop():
+    m = _stored()["model_level"]
     k, theta, lam = m["k"], m["theta"], m["lam"]
     Kc = (2 * lam + theta) / (k * (lam + theta) ** 2)
     Ti = 2 * lam + theta
     params = tg.make_expert("boiler_drum").params
-    assert scale * getattr(params, f"Kp_{loop}") == pytest.approx(Kc, rel=1e-9)
-    assert scale * getattr(params, f"Ki_{loop}") == pytest.approx(Kc / Ti, rel=1e-9)
+    assert params.Kp_level == pytest.approx(Kc, rel=1e-9)
+    assert params.Ki_level == pytest.approx(Kc / Ti, rel=1e-9)
+
+
+def test_pressure_follows_the_lambda_rule_for_a_first_order_loop():
+    m = _stored()["model_pressure"]
+    k, tau1, theta, lam = m["k"], m["tau1"], m["theta"], m["lam"]
+    Kc = tau1 / (k * (lam + theta))
+    params = tg.make_expert("boiler_drum").params
+    assert 2.0 * params.Kp_pressure == pytest.approx(Kc, rel=1e-9)
+    assert 2.0 * params.Ki_pressure == pytest.approx(Kc / tau1, rel=1e-9)
+
+
+def _feed(expert, obs):
+    return 0.5 * (float(np.asarray(expert(obs))[1]) + 1.0) * float(P.q_feed_max)
+
+
+def _expert(**changes):
+    expert = REGISTRY["boiler_drum"].make_pid_controller()
+    expert = expert.replace(params=expert.params.replace(**changes)).host()
+    expert.reset()
+    return expert
+
+
+def test_the_trim_has_no_limit_of_its_own():
+    """0.1 m low at 1000 kg/s per m asks for 100 kg/s over the steam's 80. The
+    old 25 kg/s clamp would stop at 105."""
+    expert = _expert(Kp_level=1000.0, Ki_level=0.0)
+    assert _feed(expert, _obs(level=-0.1)) == pytest.approx(180.0, rel=1e-4)
+
+
+def test_the_level_integral_stops_at_the_feed_limit():
+    """Pinned at 200 kg/s for ten steps by a 0.5 m error, then 0.01 m high. The
+    integral kept nothing from the pinned steps, so the feed is the steam less
+    the P term and one step's integral: 80 - 1000 x 0.01 - 10 x 0.01 x 2."""
+    expert = _expert(Kp_level=1000.0, Ki_level=10.0)
+    pinned = [_feed(expert, _obs(level=-0.5)) for _ in range(10)]
+    assert pinned == pytest.approx([200.0] * 10, rel=1e-5)
+    assert _feed(expert, _obs(level=0.01)) == pytest.approx(69.8, rel=1e-3)
+
+
+def test_the_level_integral_runs_off_a_limit_the_error_is_leaving():
+    """At the upper limit a falling error may still integrate: conditional
+    integration stops the update that would saturate further, not this one."""
+    expert = _expert(Kp_level=30000.0, Ki_level=10.0)
+    assert _feed(expert, _obs(level=-0.01)) == pytest.approx(200.0, rel=1e-5)
+    # Past the limit, from 80 + 300 - 0.4 at a high level: 2 s of +0.01 m error.
+    high = _feed(expert, _obs(level=0.001))
+    assert high == pytest.approx(80.0 - 30.0 - 10.0 * 0.002, rel=1e-3)
+
+
+def test_a_reading_passes_its_filter():
+    """A filter of 2 s on a 2 s step passes 1 - e^-1 = 0.632 of a level step."""
+    expert = _expert(Kp_level=100.0, Ki_level=0.0, alpha_level=0.632)
+    assert _feed(expert, _obs(level=0.0)) == pytest.approx(80.0, rel=1e-5)
+    assert _feed(expert, _obs(level=0.1)) == pytest.approx(80.0 - 6.32, rel=1e-4)
+
+
+def test_the_filter_starts_on_the_first_reading():
+    expert = _expert(Kp_level=100.0, Ki_level=0.0, alpha_level=0.1)
+    assert _feed(expert, _obs(level=0.1)) == pytest.approx(70.0, rel=1e-4)
 
 
 # Spec, stated before measuring the level: three-element control holds drum

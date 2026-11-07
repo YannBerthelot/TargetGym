@@ -591,3 +591,51 @@ def test_a_loop_closed_inside_a_test_records_what_it_sent():
     bump = plant.bump(0, 0, 0, 0.1, 10, Instrument(float(p.delta_t)))
     # 0.25 + 0.1 = 0.35 before, and the step lands on it: the deviation is 0.1.
     np.testing.assert_allclose(bump.U[:, 0], 0.1 * np.sign(bump.step), rtol=1e-6)
+
+
+def test_a_step_can_land_at_a_phase_of_a_cycle():
+    # A firing interruption every 7 steps: the step lands 2 past one, whatever
+    # the hold's length, on the same baseline, and the plant is the same plant.
+    plant = _plant(REGISTRY["first_order"], 0.0)
+    inst = Instrument.of(REGISTRY["first_order"].make_env(), plant_params(0.0), "x")
+    run = plant.bump(0, 0, 0, 0.1, 40, inst)
+    held = plant.bump(0, 0, 0, 0.1, 40, inst, at=(7, 2))
+    assert held.clock % 7 == 2
+    assert run.clock <= held.clock < run.clock + 7
+    assert len(held.base) == len(run.base)
+    np.testing.assert_allclose(held.dy, run.dy, atol=1e-3)
+
+
+def test_a_read_delay_can_be_a_datasheets():
+    # sd 0.02, k 2, delay 3: the band is 0.12. With the delay given, no band
+    # exit is read, however the response leaves the band.
+    read = single_run(
+        lambda du: bumps(du, 2.0, 10.0, 3.0, sigma=0.02),
+        0.5,
+        1.0,
+        Instrument(1.0),
+        delay=7.0,
+    )
+    assert all(f["theta"] == pytest.approx(7.0) for f in read.fits)
+
+
+def test_noise_rules_run_on_another_tuning_rule():
+    # Lambda on a first-order loop, k 2, tau 10: Kc = 10 / (2 (lam + theta)),
+    # Ti = 10. Past the dead band's most it stops where N7 says, through ``lam``.
+    def rule(theta, lam):
+        return 10.0 / (2.0 * (lam + theta)), 10.0
+
+    out = noise_tune(2.0, 10.0, 1.0, 1.0, 1.0, 0.02, kc_min=0.5, rule=rule)
+    assert out["Kc"] == pytest.approx(0.5, rel=1e-6)
+    assert out["Ti"] == 10.0
+    assert out["tau_c"] == pytest.approx(10.0 - out["theta"], rel=1e-6)
+
+
+def test_the_default_rule_is_simc_unchanged():
+    def rule(theta, tau_c):
+        return simc(2.0, 10.0, theta, tau_c)
+
+    out = noise_tune(2.0, 10.0, 1.0, 1.0, 1.0, 0.02, kc_min=0.5)
+    again = noise_tune(2.0, 10.0, 1.0, 1.0, 1.0, 0.02, kc_min=0.5, rule=rule)
+    assert again["Kc"] == pytest.approx(out["Kc"], rel=1e-6)
+    assert again["tau_c"] == pytest.approx(out["tau_c"], rel=1e-6)

@@ -1,40 +1,27 @@
-"""Tune the industrial experts by their field's recipe, from step tests on the
-simulator's training seeds.
+"""Tune the industrial experts by their recipes, from single-run bump tests.
 
 Run with ``uv run python scripts/tune_industrial_experts.py [--envs ...]
-[--level 2] [--write] [--check]``. Without ``--write`` it prints the step-test
-models and the settings; ``--write`` stores them in
-``src/target_gym/data/pid_gains.json``, or that level's file (``--level``, the
-sensor noise it tunes on); ``--check`` scores the stored expert on the held-out
-seeds against the ceiling.
+[--level 2] [--write] [--check]``. Without ``--write`` it prints each test and the
+settings; ``--write`` stores them in ``src/target_gym/data/pid_gains.json``, or
+that level's file (``--level``, the sensor noise it tunes on); ``--check`` scores
+the stored expert on the held-out seeds, which only report.
 
-* ``boiler_drum``: three-element control, both loops lambda-tuned. A step on
-  the feedwater trim (pressure loop in auto) and one on the firing (level loop
-  in auto). Drum level and pressure both integrate their input, so each is
-  fitted as ``k' e^(-theta s) / s`` and lambda-tuned for an integrating
-  process: ``Kc = (2 lam + theta) / (k' (lam + theta)^2)``,
-  ``Ti = 2 lam + theta``. The level's inverse response (shrink) is in its
-  fitted delay.
-* ``glass_furnace``: the crown-temperature PI by SIMC. The crown responds on
-  two time scales and is still rising hours after a firing step, so it is
-  lag-dominant and SIMC tunes it on the integrating approximation of its
-  first hour: ``Kc = 1 / (k' (tau_c + theta))``, ``tau_I = 4 (tau_c + theta)``.
+The recipes for ``battery``, ``boiler_drum``, ``glass_furnace`` and ``hvac`` are
+section 10 of docs/proposals/expert-protocols-process.md, on the machinery of
+``tune_process_experts`` (a test starts from no stored gain, one run per training
+seed, the fit C5 picks, SIMC with tau_c = theta, then N5 to N7 on valves). The rod
+program on ``reactor`` is published, so it has no recipe, and ``wind_turbine`` has
+its own script, ``wind_turbine_gains.py``. ``cement_kiln`` is set aside and still
+runs on the shipped expert, with the 3 x 4 grid of its old protocol.
 
-A step test runs from the steady state each training seed (100-109) reaches
-under the shipped expert, in one run: hold, record a baseline, step
-(docs/proposals/expert-protocols-noise.md, N1). Nobody holds a drum level, so
-that test stays closed. The digital loop adds half a sample to the delay (SIMC's
-half rule). The closed-loop time constant (``lam`` or ``tau_c``) is the one
-tuning choice: ``theta``, ``2 theta`` or ``3 theta``, the looser one only if it
-is more than 1 % cheaper over the training seeds (the rule the process-plant
-experts use, ``scripts/tune_process_experts.py``). Seeds 0-9 are scored and
-are never run here.
+Seeds 0-9 are scored and are never run here.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import pathlib
 import sys
 import warnings
@@ -50,16 +37,34 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 import target_gym.experts.pid as pid_mod  # noqa: E402
+sys.path.insert(0, str(ROOT / "scripts"))
+
 from target_gym import eval as E  # noqa: E402
-from target_gym.identification import BASELINE, fit  # noqa: E402
+from target_gym.identification import (  # noqa: E402
+    BASELINE,
+    DEAD_BAND,
+    Instrument,
+    Loop,
+    Plant,
+    rga,
+)
 from target_gym.provenance import GAIN_LEVELS, gains_path  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 from target_gym.scoring import ceiling  # noqa: E402
+from tune_process_experts import manual, read_loop, record, tuned  # noqa: E402
 
 TRAIN = range(100, 110)
 HELD_OUT = range(200, 210)
 #: The sensor noise a run tunes on and the level it writes, set by ``--level``.
 LEVEL = 1.0
+#: Valve dead band on a raw action, which spans 2.
+RAW_BAND = DEAD_BAND * 2.0
+#: A test's hold, and the length ``Plant`` keys its noise on (section 10, R8).
+TEST_STEPS = {"battery": 120, "boiler_drum": 400, "glass_furnace": 400, "hvac": 720}
+SOURCE = (
+    "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, "
+    "seeds 100-109"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -93,18 +98,6 @@ def step_response(name, seed, act, n_settle, n_test, delta):
     return t, ys[BASELINE:] - ys[:BASELINE].mean(), float(p.delta_t)
 
 
-def fit_integrating(t, dy, du):
-    """Least-squares ``k' e^(-theta s) / s``: ``dy = k' du max(t - theta, 0)``."""
-
-    def residual(q):
-        return q[0] * du * np.maximum(t - q[1], 0.0) - dy
-
-    slope = (dy[-1] - dy[len(dy) // 2]) / (t[-1] - t[len(t) // 2]) / du
-    return least_squares(
-        residual, [slope, t[1]], bounds=([-np.inf, 0], [np.inf, t[-1]])
-    ).x
-
-
 def fit_fopdt(t, dy, du):
     """Least-squares ``k e^(-theta s) / (tau s + 1)`` fit to a step of ``du``."""
 
@@ -121,16 +114,6 @@ def simc_pi(k, tau, theta, tau_c):
     return tau / (k * (tau_c + theta)), min(tau, 4.0 * (tau_c + theta))
 
 
-def lambda_integrating(k, theta, lam):
-    """Lambda tuning of an integrating process: ``(Kc, Ti)``."""
-    return (2 * lam + theta) / (k * (lam + theta) ** 2), 2 * lam + theta
-
-
-def simc_integrating(k, theta, tau_c):
-    """SIMC PI on an integrating process (Skogestad 2003, Table 1)."""
-    return 1.0 / (k * (tau_c + theta)), 4.0 * (tau_c + theta)
-
-
 def train_cost(name, settings):
     """Mean cost per step over the training seeds with ``settings`` stored."""
     spec = REGISTRY[name]
@@ -145,18 +128,6 @@ def train_cost(name, settings):
         return float(np.mean([ep.cost.mean() for ep in episodes]))
     finally:
         pid_mod._gains_cache = stored
-
-
-def pick(name, theta, build):
-    """``theta``, ``2 theta`` or ``3 theta``: a looser one only if more than
-    1 % cheaper than every tighter one on the training seeds."""
-    costs = {m: train_cost(name, build(m * theta)) for m in (1, 2, 3)}
-    best = 1
-    for m in (2, 3):
-        if costs[m] < 0.99 * min(costs[n] for n in range(1, m)):
-            best = m
-    print(f"  n theta -> training cost per step {costs}; n = {best}")
-    return best
 
 
 # ---------------------------------------------------------------------------
@@ -206,99 +177,226 @@ class _Closed:
         return a
 
 
-def tune_boiler_drum() -> dict:
-    from target_gym.boiler_drum.env import BoilerDrumParams
-
-    q_max = float(BoilerDrumParams().q_feed_max)
-
-    def level_step(s, du):
-        test = _Closed(0, 1)
-        t, dy, dt = step_response("boiler_drum", s, test, 150, 120, 2 * du / q_max)
-        u = 0.5 * q_max * np.array(test.sent)  # raw feed to feed units
-        f = fit("integrating_lag", dt, dy, u[BASELINE:] - u[:BASELINE].mean())
-        return f["k"], f["theta"] + f["tau2"], dt
-
-    def firing(a, obs):  # the firing held, the pressure loop opened
-        u0 = float(a[0])
-        return lambda o, d: float(np.clip(u0 + d, -1.0, 1.0))
-
-    out = {}
-    for loop in ("pressure", "level"):
-        models = []
-        for s in TRAIN:
-            if loop == "level":
-                *model, dt = level_step(s, 2.0)
-            else:
-                test = _OpenLoop(1, 0, firing)
-                t, dy, dt = step_response("boiler_drum", s, test, 150, 120, 0.02)
-                model = fit_integrating(t, dy, 0.02)
-            models.append(model)
-        k, theta = np.median(models, axis=0)
-        theta = float(theta) + dt / 2
-        print(f"{loop}: k' {k:.4g} per s, theta {theta:.3g} s (with half a sample)")
-        # The firing PI adds Q_max (Kp e + Ki int e) to the heat, and the
-        # action is 2 Q / Q_max - 1, so its gain on the action is 2 Kp.
-        scale = 0.5 if loop == "pressure" else 1.0
-
-        def build(lam, k=k, theta=theta, loop=loop, scale=scale):
-            Kc, Ti = lambda_integrating(k, theta, lam)
-            return {f"Kp_{loop}": scale * Kc, f"Ki_{loop}": scale * Kc / Ti}
-
-        m = pick("boiler_drum", theta, build)
-        out.update(build(m * theta))
-        out[f"model_{loop}"] = {"k": float(k), "theta": theta, "lam": m * theta}
-        pid_mod._gains_cache = {
-            **pid_mod.load_gains(),
-            "boiler_drum": {**pid_mod.load_gains()["boiler_drum"], **out},
-        }
-    out["Kd_pressure"] = 0.0
-    out["tuning_rule"] = "lambda_integrating"
-    out["note"] = (
-        "Three-element: feedwater follows measured steam flow, a level PI trims "
-        "it; firing is an enthalpy feedforward plus a pressure PI. Both loops "
-        "lambda-tuned for an integrating process from step tests on seeds "
-        "100-109 (scripts/tune_industrial_experts.py)."
+def _params(name, **changes):
+    return REGISTRY[name].make_test_params(
+        sensor_noise_scale=LEVEL, max_steps_in_episode=TEST_STEPS[name], **changes
     )
-    return out
+
+
+def tune_battery() -> dict:
+    """A power bump in manual, the signal off (R2), then SIMC and R9's derate."""
+    name = "battery"
+    spec, p = REGISTRY[name], _params(name, dispatch_noise_std=0.0)
+    env = spec.make_env()
+    # In manual at the block's level: a raw action is MW on this pack.
+    rest = manual(lambda o, xp: xp.reshape(o[4], (1,)))
+    plant = Plant(spec, p, [lambda o, s, q: o[3]], [(None, None)], controller=rest)
+    inst = Instrument.of(env, p, "power")
+    loop = read_loop(plant, "P on inverter", 0, 0, 0.1, 20, inst, room=plant.room(0))
+    out = tuned(loop, inst.h)
+    return {
+        "Kp": out["Kc"],
+        "Ki": out["Kc"] / out["Ti"],
+        "guard_margin": float(p.power_max * p.regulation_tau / p.energy_nominal),
+        "model": {"power": record(loop, out)},
+    }
+
+
+def _lambda_rule(loop):
+    """D7's rule on a loop's model, ``(theta, lam) -> (Kc, Ti)``. On a first-order
+    loop it is C7's, with its cap on a long lag."""
+    k, tau1 = loop["k"], loop["tau1"]
+    if loop["integrating"]:
+        return lambda th, lam: ((2 * lam + th) / (k * (lam + th) ** 2), 2 * lam + th)
+    return lambda th, lam: (tau1 / (k * (lam + th)), min(tau1, 4 * (lam + th)))
+
+
+def _boiler_pairing(plant, inst_p, inst_l) -> np.ndarray:
+    """The RGA of (pressure, level) on (firing, feed), read with no loop closed
+    from the moves over a test, since level has no steady gain."""
+    G = np.zeros((2, 2))
+    for j in range(2):
+        for cv, inst in enumerate((inst_p, inst_l)):
+            moves = [
+                plant.bump(s, j, cv, 0.02, 120, inst) for s in range(plant.n_seeds)
+            ]
+            G[cv, j] = np.median([b.dy[-20:].mean() / b.step for b in moves])
+    return rga(G)
+
+
+def tune_boiler_drum() -> dict:
+    """Pressure, then level, under R12's P loop on level. Lambda (D7) on each."""
+    name = "boiler_drum"
+    spec, p = REGISTRY[name], _params(name, q_steam_noise_std=0.0)
+    env = spec.make_env()
+    q_max, Q_max = float(p.q_feed_max), float(p.Q_max)
+    per_kg = 2.0 / q_max  # raw per kg/s
+    level_gain = q_max / (2.0 * float(p.level_trip))  # R12, 400 kg/s per m
+    h_steam = 2.75e6  # J/kg, the expert's feedforward
+
+    def rest(o, xp):
+        feed = xp.clip(o[2] + level_gain * (o[5] - o[0]), 0.0, q_max)
+        heat = o[2] * (h_steam - float(p.h_feedwater))
+        return xp.stack([2 * heat / Q_max - 1, per_kg * feed - 1])
+
+    cvs = [lambda o, s, q: o[1], lambda o, s, q: o[0]]
+    plant = Plant(spec, p, cvs, [(None, None)] * 2, controller=manual(rest))
+    closed = (Loop(1, 1, level_gain * per_kg, 0),)
+    inst_p, inst_l = Instrument.of(env, p, "pressure"), Instrument.of(env, p, "level")
+
+    # Steam follows pressure, so pressure stays first order at every level.
+    pressure = read_loop(
+        plant, "pressure on firing", 0, 0, 0.02, 120, inst_p, room=1.0, loops=closed
+    )
+    level = read_loop(
+        plant,
+        "level on feed",
+        1,
+        1,
+        2.0 * per_kg,
+        120,
+        inst_l,
+        room=plant.room(1),
+        model="integrating_lag",
+        loops=closed,
+    )
+    # The feed's gain per kg/s, the lag counted as delay (section 10).
+    level = {
+        **level,
+        "k": level["k"] * per_kg,
+        "theta": level["theta"] + level["tau1"],
+    }
+    # N7's floor: the steam demand's 3 sd, as feed and as firing.
+    swing = 3 * float(REGISTRY[name].make_test_params().q_steam_noise_std)
+    firing = 2 * swing * (h_steam - float(p.h_feedwater)) / Q_max
+    p_out = tuned(pressure, inst_p.h, RAW_BAND, firing, _lambda_rule(pressure))
+    l_out = tuned(level, inst_l.h, DEAD_BAND * q_max, swing, _lambda_rule(level))
+    print("  RGA, pressure and level on firing and feed:")
+    print(np.round(_boiler_pairing(plant, inst_p, inst_l), 3))
+
+    def kept(loop, out):
+        exact = {"k": loop["k"], "tau1": loop["tau1"], "theta": out["theta"]}
+        return {**record(loop, out), **exact, "lam": out["tau_c"]}
+
+    # The firing PI adds Q_max (Kp e + Ki int e) to the heat, and the action is
+    # 2 Q / Q_max - 1, so its gain on the action is 2 Kp.
+    return {
+        "Kp_pressure": 0.5 * p_out["Kc"],
+        "Ki_pressure": 0.5 * p_out["Kc"] / p_out["Ti"],
+        "Kd_pressure": 0.0,
+        "Tf_pressure": p_out["Tf"],
+        "Kp_level": l_out["Kc"],
+        "Ki_level": l_out["Kc"] / l_out["Ti"],
+        "Tf_level": l_out["Tf"],
+        "model_pressure": kept(pressure, p_out),
+        "model_level": kept(level, l_out),
+    }
 
 
 def tune_glass_furnace() -> dict:
-    from target_gym.glass_furnace.env import GlassFurnaceParams
+    """A firing step two steps after an interruption, ramped at the slew, read
+    against the crown's own cycle with the datasheet's delay (R13, R14), then a
+    PI on the half rule (R15). Held in manual the crown repeats every three
+    reversals, 75 minutes, on a far slower drift."""
+    from target_gym.glass_furnace.env_jax import FUEL_DEAD_TIME_STEPS, settled_point
 
-    # Firing stops while the regenerators reverse, and the PI waits at full
-    # demand through it: the manual output is its average over one cycle.
-    gp = GlassFurnaceParams()
-    WINDOW = int(round(float(gp.reversal_period) / float(gp.delta_t)))
-
-    def hold(a, obs):  # the firing held at its last command, the loop opened
-        u0 = float(a[0])
-        return lambda o, d: float(np.clip(u0 + d, -1.0, 1.0))
-
-    models = []
-    for s in TRAIN:
-        t, dy, dt = step_response(
-            "glass_furnace", s, _OpenLoop(0, 0, hold, window=WINDOW), 400, 120, 0.05
-        )
-        models.append(fit_integrating(t, dy, 0.05))
-    k, theta = np.median(models, axis=0)
-    theta = float(theta) + dt / 2
-    print(f"crown: k' {k:.4g} K/s per unit, theta {theta:.3g} s (first hour)")
-
-    def build(tau_c):
-        Kc, Ti = simc_integrating(k, theta, tau_c)
-        return {"Kp": Kc, "Ki": Kc / Ti, "Kd": 0.0}
-
-    m = pick("glass_furnace", theta, build)
-    out = build(m * theta)
-    out["model"] = {"k": float(k), "theta": theta, "tau_c": m * theta}
-    out["tuning_rule"] = "simc_integrating"
-    out["note"] = (
-        "Crown-temperature PI by SIMC on the integrating approximation of a "
-        "firing step's first hour, from step tests on seeds 100-109 "
-        "(scripts/tune_industrial_experts.py). Practice runs an MPC over this "
-        "loop; this is the base layer under it."
+    name = "glass_furnace"
+    spec = REGISTRY[name]
+    nominal = spec.make_test_params()
+    p = _params(
+        name, m_pull_noise_std=0.0, lhv_noise_std=0.0, target_T_crown_trim=0.0
     )
-    return out
+    env = spec.make_env()
+    dt = float(p.delta_t)
+    slew = 2.0 * float(p.actuator_rate) * dt  # raw per step
+
+    def ramp(u, y, held):
+        held = u.copy() if held is None else held
+        held = held + np.clip(u - held, -slew, slew)
+        return held, held
+
+    rest = manual(lambda o, xp: xp.reshape(settled_point(o[4])[0], (1,)))
+    plant = Plant(
+        spec,
+        p,
+        [lambda o, s, q: o[0]],
+        [(None, None)],
+        controller=rest,
+        actuate=ramp,
+        applied=lambda u, a: a,
+    )
+    inst = Instrument.of(env, p, "T_crown_meas")
+    room = plant.room(0)
+    loop = read_loop(
+        plant,
+        "crown on firing",
+        0,
+        0,
+        0.05,
+        40,
+        inst,
+        room=room,
+        model="integrating_lag",
+        at=(3 * round(float(p.reversal_period) / dt), 2),
+        delay=FUEL_DEAD_TIME_STEPS * dt,
+    )
+    # The half rule (section 10, R15).
+    loop = {**loop, "theta": loop["theta"] + loop["tau1"] / 2}
+    # The pull's 3 sd as its share of the fuel, in raw, capped at the room.
+    fuel = 0.5 * float(p.fuel_min + p.fuel_max)
+    share = 3 * float(nominal.m_pull_noise_std) / float(p.m_pull)
+    span = float(p.fuel_max - p.fuel_min)
+    out = tuned(loop, inst.h, RAW_BAND, min(room, 2 * share * fuel / span))
+    return {
+        "Kp": out["Kc"],
+        "Ki": out["Kc"] / out["Ti"],
+        "Kd": 0.0,
+        "Tf": out["Tf"],
+        "model": {
+            **record(loop, out),
+            "k": loop["k"],
+            "theta": out["theta"],
+            "tau_c": out["tau_c"],
+            "tau2": loop["tau1"],
+        },
+    }
+
+
+def tune_hvac() -> dict:
+    """The room's PI on a quiet building, on the emitter's five lags (R16). The
+    curve itself reads the building's datasheet, in ``experts.py``."""
+    from target_gym.hvac.env import total_heat_loss_coefficient
+
+    name = "hvac"
+    spec = REGISTRY[name]
+    quiet = spec.make_test_params()
+    design = float(quiet.setpoint_occupied)
+    p = _params(
+        name,
+        T_out_amplitude=0.0,
+        T_out_noise_std=0.0,
+        solar_peak=0.0,
+        gain_occupied=float(quiet.gain_unoccupied),
+        setpoint_setback=design,
+        setpoint_occupied_range=(design, design),
+    )
+    env = spec.make_env()
+    H = float(total_heat_loss_coefficient(p))
+    # From the balance at the design setpoint, with the one gain left.
+    load = H * (design - float(p.T_out_mean)) - float(p.gain_unoccupied * p.A_floor)
+    raw = 2.0 * load / float(p.Q_heat_max) - 1.0
+    rest = manual(lambda o, xp: xp.full((1,), raw))
+    plant = Plant(spec, p, [lambda o, s, q: o[0]], [(None, None)], controller=rest)
+    inst = Instrument.of(env, p, "T_air")
+    window = math.ceil((5 * float(p.emitter_tau) + inst.h / 2) / inst.h)
+    loop = read_loop(plant, "T_air on heat", 0, 0, 0.1, window, inst, room=plant.room(0))
+    out = tuned(loop, inst.h)
+    # The loop's output is 0 to 1 of the heat, and a raw action spans 2.
+    return {
+        "kp": 0.5 * out["Kc"],
+        "Ti": out["Ti"],
+        "model": {"T_air": record(loop, out)},
+    }
 
 
 def tune_cement_kiln() -> dict:
@@ -353,8 +451,10 @@ def tune_cement_kiln() -> dict:
 
 
 TUNERS = {
+    "battery": tune_battery,
     "boiler_drum": tune_boiler_drum,
     "glass_furnace": tune_glass_furnace,
+    "hvac": tune_hvac,
     "cement_kiln": tune_cement_kiln,
 }
 
@@ -362,7 +462,7 @@ TUNERS = {
 def write(name: str, settings: dict) -> None:
     path = gains_path(LEVEL)
     stored = json.loads(path.read_text()) if path.exists() else {}
-    stored[name] = settings
+    stored[name] = {"tuning_rule": SOURCE, **settings}
     path.write_text(json.dumps(stored, indent=2) + "\n")
     pid_mod._gains_cache = None
     print(f"wrote {name} to {path.relative_to(ROOT)}")
