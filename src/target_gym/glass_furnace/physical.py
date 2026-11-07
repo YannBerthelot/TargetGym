@@ -579,12 +579,17 @@ def plant_step(s, fuel, charge, cullet, thickness, time, g, p, lhv=0.0):
     T = s.T
     Tf = 0.5 * (T[:, 1:] + T[:, :-1])
     grad = (T[:, 1:] - T[:, :-1]) / a.dxc
+    # The current answers to the gradient over neighbouring faces: a current driven by
+    # one face alone feeds a two-cell wiggle that the explicit step amplifies. Long waves
+    # are untouched, and the filter's weight goes with the grid.
+    wide = jnp.concatenate([grad[:, :1], grad, grad[:, -1:]], 1)
+    drive = 0.25 * wide[:, :-2] + 0.5 * grad + 0.25 * wide[:, 2:]
     source = jnp.concatenate([melt * a.dx[: a.nm], jnp.zeros(g.n_refiner)])
     Q = jnp.cumsum(source) / p.rho_glass
     cover_f = jnp.concatenate([f, jnp.zeros(g.n_refiner)])
     cover_face = 0.5 * (cover_f[1:] + cover_f[:-1])
     u = column_flow(
-        grad, jnp.maximum(viscosity(Tf), MU_GUARD), a.dz, Q[:-1], cover_face, v,
+        drive, jnp.maximum(viscosity(Tf), MU_GUARD), a.dz, Q[:-1], cover_face, v,
         p.g_accel * p.rho_glass * p.beta_glass,
     )  # fmt: skip
     dz_ = a.dz[:, None]
