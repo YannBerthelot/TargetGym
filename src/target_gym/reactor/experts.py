@@ -12,7 +12,7 @@ from flax import struct
 from target_gym.experts.pid import Controller
 
 # ---------------------------------------------------------------------------
-# The expert: Westinghouse rod control on average temperature
+# The published program: Westinghouse rod control on average temperature
 # ---------------------------------------------------------------------------
 
 
@@ -85,8 +85,59 @@ def rod_control_step(params, state, obs, xp=jnp):
     return xp.stack([action], axis=-1), new_state
 
 
+# ---------------------------------------------------------------------------
+# The expert: the ladder's best rung
+# ---------------------------------------------------------------------------
+
+
+@struct.dataclass
+class ReferenceParams:
+    """Rung 5 of ``scripts/reactor_ladder.py``: rods on delta I, boron on Tavg, by
+    SIMC from bump tests on seeds 100 to 109. The rods' loop is a pure integral on
+    the bump's 0.777 of delta I per unit of rod action, a quarter of the inverse a
+    step, and the boron's the integrating rule on -0.0170 K/s per unit of flow, over
+    a median delay of 525 s. Nothing here was set from a result."""
+
+    dt: float = 30.0
+    rod_Kc: float = 0.3215723
+    rod_Ti: float = 30.0
+    boron_Kc: float = -0.0560285
+    boron_Ti: float = 4200.0
+    park: float = 1.0 - 2.0 * 3.0 / 228.0
+    reach: float = 30.0 * 72.0 / 60.0 / 228.0 * 2.0
+
+
+@struct.dataclass
+class ReferenceState:
+    """The two loops' outputs and last errors, and whether they have started."""
+
+    rods: float = 0.0
+    boron: float = 0.0
+    last_e: float = 0.0
+    last_di: float = 0.0
+    started: float = 0.0
+
+
+def reference_step(params, state, obs, xp=jnp):
+    """One 30 s step: ``obs = [n, T_hot, rod, load, T_avg, T_ref, delta_I, boron]``,
+    the action is ``[rod demand, boron flow]``."""
+    p = params
+    rod, T_avg, T_ref, di = obs[..., 2], obs[..., 4], obs[..., 5], obs[..., 6]
+    rods = xp.where(state.started > 0.5, state.rods, p.park + 0.0 * rod)
+    e_di = -di
+    rods = rods + p.rod_Kc * ((e_di + state.last_di) + p.dt / p.rod_Ti * e_di)
+    rods = xp.clip(xp.clip(rods, rod - p.reach, rod + p.reach), -1.0, 1.0)
+    e = T_ref - T_avg
+    boron = state.boron + p.boron_Kc * ((e - state.last_e) + p.dt / p.boron_Ti * e)
+    boron = xp.clip(boron, -1.0, 1.0)
+    new = ReferenceState(
+        rods=rods, boron=boron, last_e=e, last_di=di, started=1.0 + 0.0 * e
+    )
+    return xp.stack([rods, boron], axis=-1), new
+
+
 def make_reactor_pid_controller() -> Controller:
-    """The expert: Westinghouse rod control as a
-    :class:`~target_gym.experts.pid.Controller`. The program is published
-    (:class:`RodControlParams`); nothing is tuned on seeds."""
-    return Controller(RodControlParams(), RodControlState(), rod_control_step)
+    """The expert: the ladder's best rung as a
+    :class:`~target_gym.experts.pid.Controller`. :func:`rod_control_step`, the
+    published rod program, is a row in the ladder's table beside it."""
+    return Controller(ReferenceParams(), ReferenceState(), reference_step)

@@ -131,9 +131,9 @@ def test_rod_worth_never_reaches_prompt_critical(params):
 
 
 def test_rod_speed_is_the_jacks_speed_over_the_bank(params):
-    """72 steps/min of a 228-step, 1500 pcm stroke: 7.89 pcm/s. The old 40 and 20
-    pcm/s were 5 and 2.5 times that, and a jack has one speed."""
-    assert params.rod_speed == pytest.approx(7.89e-5, rel=1e-3)
+    """72 steps/min of a 228-step stroke, as a fraction of it, and a jack has one
+    speed."""
+    assert params.rod_speed == pytest.approx(72.0 / 60.0 / 228.0, rel=1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -205,35 +205,6 @@ def _return_need(hold_hours, params, dt=30.0):
         I += dt * lam_I * (n - I)
         Xe += dt * (a * n + b * I - (lam_X + sph * n) * Xe)
     return _rod_worth_needed(1.0, params) + params.rho_Xe_full * (Xe - 1.0)
-
-
-def test_rods_can_hold_every_load_of_the_day_at_equilibrium_xenon_of_full_power(params):
-    """The required worth is an output of the model, not something tuned."""
-    for n in np.linspace(params.load_min, 1.0, 9):
-        need = _rod_worth_needed(float(n), params)
-        assert (
-            params.rho_ext_min <= need <= params.rho_ext_max
-        ), f"n={n:.2f} needs {need * 1e5:.0f} pcm, outside the rod range"
-
-
-def test_full_power_leaves_540_pcm_of_rods_above(params):
-    """Rods-only load follow keeps them in at power, as mechanical shim does."""
-    margin = params.rho_ext_max - _rod_worth_needed(1.0, params)
-    assert margin == pytest.approx(540e-5, rel=0.01)
-
-
-def test_the_rods_run_out_after_a_mid_length_hold_only(params):
-    """Xenon peaks about 5 h after the cut, so a return then asks for more than the
-    bank has, and a short or long hold does not. By hand from the chain: +647 pcm
-    above the full-power balance at 5 h, +473 at 2 h."""
-    assert _return_need(5.0, params) > params.rho_ext_max
-    assert _return_need(2.0, params) < params.rho_ext_max
-    assert _return_need(10.0, params) < params.rho_ext_max
-
-
-# ---------------------------------------------------------------------------
-# 5. Xenon -- the environment's central mechanic
-# ---------------------------------------------------------------------------
 
 
 def _xenon_after_power_drop(n_after, params, hours=40.0, dt=4.0):

@@ -46,9 +46,7 @@ def thesis_mode(sigma_x, flux=2.02e13):
     stiffness = 45 * np.pi**3 / (8 * 365.8**2) * 0.405 - S + 7 * flux * 3.64e-16 * 0.39
     tilt = -4 * S / stiffness  # A = tilt * B, small B, from A = v - sqrt(v^2 + 1)
     g, h, b = gx * Sf * flux / X0, gi * Sf * flux / X0, sigma_x * flux
-    matrix = np.array(
-        [[g * tilt - lx - 2 / 3 * b * (tilt + 1), h], [li * tilt, -li]]
-    )
+    matrix = np.array([[g * tilt - lx - 2 / 3 * b * (tilt + 1), h], [li * tilt, -li]])
     root = np.linalg.eigvals(matrix)
     root = root[np.argmax(root.real)]
     return root.real * 3600, 2 * np.pi / abs(root.imag) / 3600

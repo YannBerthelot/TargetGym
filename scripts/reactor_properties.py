@@ -27,7 +27,9 @@ STEP_H = 30.0 / 3600.0
 def flat(load, **changes):
     """Lined out at ``load`` with no schedule: xenon balanced there, boron critical."""
     env = Reactor()
-    p = ReactorParams(demand_sigma=0.0, initial_xenon_power_range=(load, load), **changes)
+    p = ReactorParams(
+        demand_sigma=0.0, initial_xenon_power_range=(load, load), **changes
+    )
     _, s = env.reset_env(jax.random.PRNGKey(0), p)
     return env, p, s
 
@@ -94,7 +96,9 @@ def _mode(load, dip=30.0, hours=120.0):
     return {
         "load": load,
         "period_h": 2.0 * float(np.mean(np.diff([x for x, _ in points]))),
-        "decay_per_h": float(np.log(swings[2] / swings[0]) / (points[2][0] - points[0][0])),
+        "decay_per_h": float(
+            np.log(swings[2] / swings[0]) / (points[2][0] - points[0][0])
+        ),
         "trips": trips,
         "turning_points": [(x, round(y, 3)) for x, y in points[:6]],
         "offset_at_end": float(ao[-1]),

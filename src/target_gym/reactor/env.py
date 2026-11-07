@@ -57,7 +57,7 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
-from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
+from target_gym.utils import log_scaled_reward
 
 # ---------------------------------------------------------------------------
 # Standard 6-group U-235 thermal delayed-neutron data (Keepin 1965).
@@ -153,12 +153,9 @@ class ReactorParams(EnvParams):
     sigma_phi0: float = _BURN  # 1/s
     # gamma_ratio: ratio of direct Xe-135 fission yield to I-135 yield.
     gamma_ratio: float = _GAMMA_X / _GAMMA_I
-    # Equilibrium xenon worth at full power: S / nu_Sigma_f, flux-squared weighted
-    # over the cosine (8 / (3 pi)). rho_Xe = -rho_Xe_full * (Xe_hat - 1).
-    rho_Xe_full: float = (
-        8.0 / (3.0 * math.pi) * _SIGMA_X * (_GAMMA_X + _GAMMA_I) * _SIGMA_F * _PHI_FULL
-        / (LAMBDA_XENON + _BURN) / _NU_SIGMA_F
-    )  # fmt: skip
+    # Equilibrium xenon reactivity worth at full power. Typical PWR: 2000-3500 pcm.
+    # rho_Xe = -rho_Xe_full * (Xe_hat - 1).
+    rho_Xe_full: float = 0.025  # = 2500 pcm
 
     # ---- Termination / safety bounds ----
     n_min: float = 0.01  # near-shutdown — SCRAM
@@ -331,8 +328,6 @@ class ReactorState(EnvState):
     # of the core are mean + tilt and mean - tilt.
     I_hat: float  # mean I-135
     Xe_hat: float  # mean Xe-135
-    I_tilt: float  # I-135, top half against the mean
-    Xe_tilt: float  # Xe-135, top half against the mean
 
     target_n: float  # the turbine's load
     T_ref: float  # Tref, the program at that load (K)
@@ -345,16 +340,20 @@ class ReactorState(EnvState):
     #: keyed on, so it runs ``control_period`` times faster.
     physics_time: int
 
-    rod_in: float  # how far in the rods are, a fraction of the stroke
-    rho_ext: float  # the rods' worth there
+    rho_ext: float  # the rods' worth where they are
     #: What the controller *asked* the rods for this step, before the rate
     #: limit, as a worth. Read only by reward version 1.
     rho_ext_cmd: float
-    boron: float  # ppm in the core
-    delta_I: float  # power difference, top minus bottom, a fraction of rated
+    I_tilt: float = 0.0  # I-135, top half against the mean
+    Xe_tilt: float = 0.0  # Xe-135, top half against the mean
+    rod_in: float = 3.0 / 228.0  # how far in the rods are, a fraction of the stroke
+    boron: float = 1690.0  # ppm in the core
+    delta_I: float = 0.0  # power difference, top minus bottom, a fraction of rated
     #: Boron flow commands on their way to the core, newest first.
-    boron_queue: jax.Array
-    boron_delay: int  # control steps from the command to the core
+    boron_queue: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(BORON_QUEUE, jnp.float32)
+    )
+    boron_delay: int = 20  # control steps from the command to the core
     rod_moved: float = 0.0  # fraction of the stroke the rods travelled last sub-step
     effluent: float = 0.0  # kg/s the last sub-step's command injected
 
@@ -447,12 +446,7 @@ def flux_tilt(Xe_tilt, Xe_hat, n, eps, params: ReactorParams):
 def rod_tilt(rod_in, params: ReactorParams):
     """``eps`` of a bank in from the top: half its absorption, weighted by
     sin(pi y)^3, nothing when it is out or all the way in."""
-    return (
-        -0.5
-        * params.rho_ext_min
-        * params.nu_Sigma_f
-        * jnp.sin(jnp.pi * rod_in) ** 3
-    )
+    return -0.5 * params.rho_ext_min * params.nu_Sigma_f * jnp.sin(jnp.pi * rod_in) ** 3
 
 
 def moderator_tilt(T_hot, T_cold, params: ReactorParams):
@@ -661,14 +655,14 @@ def compute_next_state(
 
     # Boron: feed and bleed of well-mixed coolant, exact over the sub-step.
     arriving = state.boron_queue[state.boron_delay - 1]
-    flow = jnp.where(arriving < 0, -arriving * p.dilution_flow, arriving * p.boration_flow)
+    flow = jnp.where(
+        arriving < 0, -arriving * p.dilution_flow, arriving * p.boration_flow
+    )
     feed = jnp.where(arriving < 0, 0.0, p.boric_acid_ppm)
     closes = 1.0 - jnp.exp(-flow / p.primary_mass * p.delta_t)
     boron = state.boron + (feed - state.boron) * closes
 
-    rho_ext = (
-        rods - rod_worth(p.rod_park, p) + p.boron_worth * (boron - p.boron_ref)
-    )
+    rho_ext = rods - rod_worth(p.rod_park, p) + p.boron_worth * (boron - p.boron_ref)
     rod_eps = rod_tilt(rod_in, p)
 
     # ── Integrate coupled ODEs ──
@@ -719,7 +713,9 @@ def compute_next_state(
     eps = rod_eps + moderator_tilt(T_hot, T_cold, p)
     delta_I = new_n * flux_tilt(Xe_tilt, Xe_hat, new_n, eps, p)
     command = state.boron_queue[0]
-    injected = jnp.where(command < 0, -command * p.dilution_flow, command * p.boration_flow)
+    injected = jnp.where(
+        command < 0, -command * p.dilution_flow, command * p.boration_flow
+    )
 
     # One physics sub-step. The env-step clock ``state.time`` is advanced by
     # ``Reactor.step_env`` once per control period, not here.

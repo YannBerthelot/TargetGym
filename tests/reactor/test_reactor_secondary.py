@@ -42,8 +42,8 @@ QUIET = P.replace(demand_sigma=0.0)
 
 
 def _lined_out(load, rods_offset=0.0):
-    """The plant at rest at ``load``, its rods ``rods_offset`` off balance, with the
-    turbine held there."""
+    """The plant at rest at ``load``, ``rods_offset`` of reactivity off balance on
+    its boron, with the rods parked and the turbine held there."""
     params = QUIET.replace(load_min=load)
     _, state = ENV.reset_env(jax.random.PRNGKey(0), params)
     T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, params)
@@ -60,24 +60,24 @@ def _lined_out(load, rods_offset=0.0):
         Xe_hat=jnp.float32(Xe_hat),
         target_n=jnp.float32(load),
         T_ref=jnp.float32(tavg_program(load, params)),
-        rho_ext=jnp.float32(rods + rods_offset),
+        boron=jnp.float32(params.boron_ref + (rods + rods_offset) / params.boron_worth),
         ramp_down_at=jnp.float32(-1e6),
         ramp_up_at=jnp.float32(1e9),
     )
     return state, params
 
 
-def _action(rho, params):
-    span = params.rho_ext_max - params.rho_ext_min
-    return 2.0 * (rho - params.rho_ext_min) / span - 1.0
+def _action(state):
+    """The rod demand that leaves the rods where they are."""
+    return 1.0 - 2.0 * state.rod_in
 
 
 def _hold(state, params, seconds, raw=None):
     """Run the plant with the rods at ``raw``, by default where they are."""
-    raw = _action(state.rho_ext, params) if raw is None else raw
+    raw = _action(state) if raw is None else raw
 
     def body(s, _):
-        return compute_next_state(raw, s, params)[0], None
+        return compute_next_state(jnp.array([raw, 0.0]), s, params)[0], None
 
     steps = int(seconds / float(params.delta_t))
     return jax.lax.scan(body, state, None, length=steps)[0]
@@ -111,7 +111,7 @@ def test_a_turbine_cut_heats_the_cold_leg():
     cold_before, steam_before = float(state.T_cold), float(state.T_sg)
     cut = params.replace(load_min=0.6)
     state = state.replace(target_n=jnp.float32(0.6))
-    held = _hold(state, cut, 60.0, raw=_action(state.rho_ext, cut))
+    held = _hold(state, cut, 60.0)
     assert float(held.T_sg) > steam_before + 0.1
     assert float(held.T_cold) > cold_before + 0.1
 
@@ -150,24 +150,24 @@ def test_inserting_rods_lowers_power_on_the_scored_step():
     """Past an inner solve of about 1.25 s, TR-BDF2 misses the prompt jump and this
     goes the wrong way: 40 pcm in, then a 5 s sub-step, reads 1.04 at two solves."""
     state, params = _lined_out(0.8)
-    new, _ = compute_next_state(-1.0, state, params)
+    new, _ = compute_next_state(jnp.array([-1.0, 0.0]), state, params)
     assert float(new.n) < 0.8
 
 
-def test_a_day_is_twelve_hours_of_30_s_steps():
+def test_a_day_is_24_hours_of_30_s_steps():
     assert CONTROL_PERIOD * float(P.delta_t) == pytest.approx(30.0)
-    assert int(P.max_steps_in_episode) == 1440
+    assert int(P.max_steps_in_episode) == 2880
 
 
-def test_the_load_ramps_at_five_percent_a_minute():
+def test_the_load_ramps_at_two_percent_a_minute():
     down, up = 3600.0, 5.0 * 3600.0
     load = lambda t: float(scheduled_load(t, down, up, P))  # noqa: E731
     assert load(0.0) == pytest.approx(1.0)
-    assert load(down + 300.0) == pytest.approx(0.75, abs=1e-3)
-    assert load(down + 600.0) == pytest.approx(0.5, abs=1e-3)
+    assert load(down + 750.0) == pytest.approx(0.75, abs=1e-3)
+    assert load(down + 1500.0) == pytest.approx(0.5, abs=1e-3)
     assert load(up - 1.0) == pytest.approx(0.5, abs=1e-3)
-    assert load(up + 300.0) == pytest.approx(0.75, abs=1e-3)
-    assert load(up + 600.0) == pytest.approx(1.0, abs=1e-3)
+    assert load(up + 750.0) == pytest.approx(0.75, abs=1e-3)
+    assert load(up + 1500.0) == pytest.approx(1.0, abs=1e-3)
 
 
 @pytest.mark.parametrize("seed", [100, 101, 103])
@@ -200,11 +200,12 @@ def test_reset_starts_on_program_at_full_load():
 
 @pytest.mark.parametrize("raw, sign", [(1.0, 1.0), (-1.0, -1.0)])
 def test_rods_move_at_72_steps_a_minute_both_ways(raw, sign):
-    """72 / 60 / 228 of 1500 pcm a second, over the 5 s sub-step: 39.47 pcm."""
+    """72 / 60 / 228 of the stroke a second, over the 5 s sub-step: 6 steps."""
     state, params = _lined_out(0.8)
-    new, _ = compute_next_state(raw, state, params)
-    moved = float(new.rho_ext) - float(state.rho_ext)
-    assert moved == pytest.approx(sign * 39.47e-5, rel=1e-3)
+    state = state.replace(rod_in=jnp.float32(0.5))
+    new, _ = compute_next_state(jnp.array([raw, 0.0]), state, params)
+    moved = (float(state.rod_in) - float(new.rod_in)) * 228.0
+    assert moved == pytest.approx(sign * 6.0, rel=1e-3)
 
 
 def test_wear_charges_travel_and_not_a_command_the_rods_cannot_reach():
@@ -212,19 +213,20 @@ def test_wear_charges_travel_and_not_a_command_the_rods_cannot_reach():
     the 5 s sub-step, $6, however far off the command is. Past their stop they
     move nothing, so it costs nothing."""
     state, params = _lined_out(0.8)
-    new, _ = compute_next_state(1.0, state, params)
+    state = state.replace(rod_in=jnp.float32(0.5))
+    new, _ = compute_next_state(jnp.array([1.0, 0.0]), state, params)
     assert float(compute_reward_terms(new, params)["running"]) == pytest.approx(
         6.0, rel=1e-3
     )
-    stuck = state.replace(rho_ext=jnp.float32(params.rho_ext_max))
-    new, _ = compute_next_state(1.0, stuck, params)
+    stuck = state.replace(rod_in=jnp.float32(0.0))
+    new, _ = compute_next_state(jnp.array([1.0, 0.0]), stuck, params)
     assert float(compute_reward_terms(new, params)["running"]) == pytest.approx(0.0)
 
 
 def test_a_rod_step_costs_its_price():
     """One step of the 228-step stroke at $1 a step."""
     state, params = _lined_out(0.8)
-    moved = state.replace(rod_moved=jnp.float32(0.015 / 228.0))
+    moved = state.replace(rod_moved=jnp.float32(1.0 / 228.0))
     assert float(compute_reward_terms(moved, params)["running"]) == pytest.approx(
         1.0, rel=1e-3
     )
@@ -242,29 +244,31 @@ def test_one_kelvin_off_program_costs_its_lost_output():
 def test_a_step_sums_the_sub_steps_of_a_moving_rod():
     """A full-speed step moves 72 / 2 = 36 rod steps in 30 s, so $36 of wear."""
     state, params = _lined_out(0.8)
+    state = state.replace(rod_in=jnp.float32(0.5))
     _, _, _, _, info = ENV.step_env(
-        jax.random.PRNGKey(0), state, jnp.array([1.0]), params
+        jax.random.PRNGKey(0), state, jnp.array([1.0, 0.0]), params
     )
     assert float(info["reward_terms"]["running"]) == pytest.approx(36.0, rel=0.01)
 
 
-def test_the_expert_keeps_tavg_on_program_through_a_day():
-    """No rod program is any use if it limit-cycles: over a full day its travel
-    stays near the 2100 pcm the prototype needed, far from the 172,000 pcm of a
-    60 s step."""
+def test_the_expert_keeps_the_offset_in_band_on_a_steady_load():
+    """No use if it limit-cycles: over 4 h at a steady load the rods barely move, and
+    delta I and Tavg stay inside their bands."""
     import target_gym as tg
 
     expert = tg.make_expert("reactor").host()
     expert.reset()
     params = QUIET.replace(max_steps_in_episode=480)
     obs, state = ENV.reset_env(jax.random.PRNGKey(100), params)
+    far = jnp.float32(1e8)
+    state = state.replace(ramp_down_at=far, ramp_up_at=far)
     step = jax.jit(ENV.step_env)
     key = jax.random.PRNGKey(1)
-    rods, errors = [float(state.rho_ext)], []
+    rods, errors = [float(state.rod_in) * 228.0], []
     for _ in range(480):
         obs, state, _, _, _ = step(key, state, expert(np.asarray(obs)), params)
-        rods.append(float(state.rho_ext))
+        rods.append(float(state.rod_in) * 228.0)
         errors.append(abs(float(obs[4]) - float(obs[5])))
-    travel_pcm = np.abs(np.diff(rods)).sum() * 1e5
-    assert travel_pcm < 5000.0
+    assert np.abs(np.diff(rods)).sum() < 500.0
     assert np.median(errors) < 1.5 / 1.8
+    assert abs(float(state.delta_I)) < params.delta_I_band

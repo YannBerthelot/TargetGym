@@ -41,15 +41,14 @@ def test_a_demand_past_the_rods_reach_moves_them_as_one_at_it(sign):
     env, p = SPEC.make_env(), SPEC.make_test_params()
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, p)
-    span = p.rho_ext_max - p.rho_ext_min
-    raw = 2.0 * (float(state.rho_ext) - p.rho_ext_min) / span - 1.0
+    state = state.replace(rod_in=jnp.asarray(0.5, state.n.dtype))
+    raw = 1.0 - 2.0 * float(state.rod_in)
     reach = reach_scale(env, p, 1)[0] / 2.0
-    at = env.step_env(key, state, jnp.array([raw + sign * reach]), p)[1]
-    past = env.step_env(key, state, jnp.array([sign]), p)[1]
-    assert (float(at.rho_ext) - float(state.rho_ext)) * sign > 0.0
-    moved = 2.0 * (float(at.rho_ext) - float(state.rho_ext)) / span
+    at = env.step_env(key, state, jnp.array([raw + sign * reach, 0.0]), p)[1]
+    past = env.step_env(key, state, jnp.array([sign, 0.0]), p)[1]
+    moved = 2.0 * (float(state.rod_in) - float(at.rod_in))
     assert moved == pytest.approx(sign * reach, rel=1e-3)
-    for field in ("rho_ext", "n", "T_coolant", "T_cold"):
+    for field in ("rod_in", "n", "T_coolant", "T_cold"):
         np.testing.assert_allclose(
             getattr(past, field), getattr(at, field), rtol=1e-5, err_msg=field
         )
@@ -71,7 +70,11 @@ def test_a_plan_on_the_loads_ramp_replays_on_the_env(start_of_ramp):
         st = float64(state)
         down = jnp.float64(start_of_ramp)
         load = scheduled_load(0.0, down, st.ramp_up_at, oracle.params) + 0.01
-        st = st.replace(ramp_down_at=down, load_wobble=jnp.float64(0.01), target_n=load)
+        # Rods mid-stroke: the plan drops the clip at the stops, so its demand stays
+        # inside them.
+        st = st.replace(
+            ramp_down_at=down, load_wobble=jnp.float64(0.01), target_n=load, rod_in=0.5
+        )
         m = oracle.model
         d = {"task": m.data(st), "end": 10, "widths": jnp.zeros(1)}
         moves = m.hold(st)[None] + 0.1 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]

@@ -38,7 +38,11 @@ import numpy as np
 
 from target_gym.reactor import Reactor, ReactorParams
 from target_gym.reactor.env import rod_balance, steady_state_temperatures
-from target_gym.reactor.experts import RodControlParams, RodControlState, rod_control_step
+from target_gym.reactor.experts import (
+    RodControlParams,
+    RodControlState,
+    rod_control_step,
+)
 
 SEEDS = tuple(range(100, 110))
 DT = 30.0
@@ -332,7 +336,9 @@ def bumps_rod_on_delta_I(env, params, ff):
     K_ppm = boron[0] / inner[0]
     ppm_Kc, ppm_Ti = simc(K_ppm, 600.0, 2.0 * inner[1])
     decouple = float(np.median(K_rT)) / boron[0] / DT
-    tune = Tune2(rod_Kc, rod_Ti, boron_Kc, boron_Ti, ff, ppm_Kc, ppm_Ti, inner_Kc, decouple)
+    tune = Tune2(
+        rod_Kc, rod_Ti, boron_Kc, boron_Ti, ff, ppm_Kc, ppm_Ti, inner_Kc, decouple
+    )
     return tune, {"rods_on_delta_I": rod, "boron_on_Tavg": boron, "boron_on_ppm": inner}
 
 
@@ -357,7 +363,15 @@ def main():
     p = ReactorParams()
     tune, models = bumps(env, p)
     zero = jnp.asarray(0.0)
-    memory = (jnp.asarray(PARK), zero, jnp.asarray(PARK), zero, zero, zero, jnp.asarray(1.0))
+    memory = (
+        jnp.asarray(PARK),
+        zero,
+        jnp.asarray(PARK),
+        zero,
+        zero,
+        zero,
+        jnp.asarray(1.0),
+    )
     table = {}
     for rung in (1, 2, 3, 4):
         act = lambda m, o, rung=rung: policy_step(tune, rung, m, o)  # noqa: E731

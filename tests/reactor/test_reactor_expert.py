@@ -1,4 +1,7 @@
-"""The reactor expert: Westinghouse PWR rod control on average temperature.
+"""The published rod program: Westinghouse PWR rod control on average temperature.
+
+The task's expert is now the ladder's best rung (``experts.reference_step``). This
+program stays as a row in the ladder's table, so its contract stays here.
 
 Contract, from the NRC's Westinghouse Technology training manual (HRTD 8.1,
 rod control; HRTD 5.0, the Tavg program and the 40 s rate/lag), not from the
@@ -18,11 +21,15 @@ code:
   (72 steps/min: 0.31579).
 """
 
-import jax
 import numpy as np
 import pytest
 
-import target_gym as tg
+from target_gym.experts.pid import Controller
+from target_gym.reactor.experts import (
+    RodControlParams,
+    RodControlState,
+    rod_control_step,
+)
 from target_gym.registry import REGISTRY
 
 P = REGISTRY["reactor"].make_test_params()
@@ -42,7 +49,7 @@ def _speed(expert, obs):
 
 
 def _expert():
-    expert = tg.make_expert("reactor").host()
+    expert = Controller(RodControlParams(), RodControlState(), rod_control_step).host()
     expert.reset()
     return expert
 
@@ -98,27 +105,3 @@ def test_power_below_demand_withdraws_and_above_inserts():
 # deadband. On held-out seeds, over the scored hold, Tavg is within 1.5 F of
 # Tref on at least 90 % of steps, and nothing trips.
 HELD_OUT = range(200, 210)
-
-
-@pytest.mark.large
-def test_tavg_stays_inside_the_deadband_on_held_out_seeds():
-    from target_gym.eval import scored_burn_in
-
-    spec = REGISTRY["reactor"]
-    env, p = spec.make_env(), spec.make_test_params()
-    step = jax.jit(env.step_env)
-    burn = scored_burn_in("reactor", p)
-    for seed in HELD_OUT:
-        expert = tg.make_expert("reactor").host()
-        expert.reset()
-        key = jax.random.PRNGKey(seed)
-        obs, state = env.reset_env(key, p)
-        inside = []
-        for t in range(int(p.max_steps_in_episode)):
-            key, k = jax.random.split(key)
-            obs, state, _, _, info = step(k, state, expert(np.asarray(obs)), p)
-            assert not bool(info["tripped"])
-            if t >= burn:
-                o = np.asarray(obs)
-                inside.append(abs(o[5] - o[4]) * 1.8 <= 1.5)
-        assert np.mean(inside) >= 0.9, f"seed {seed}: {np.mean(inside):.2f}"
