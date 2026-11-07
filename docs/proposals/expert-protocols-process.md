@@ -281,3 +281,120 @@ re-runs the recipe; the last rung ships. The battery prints.
 is which reading closes the inner loop. Reported in the PR.
 
 **Source check.** PDFs: WebFetch cannot parse them, so I extracted text with pdftotext from the saved files and re-read each cited passage in a second pass. Web pages: fetched twice with different questions. Checked this way: Skogestad and Grimholt 2012 (eq. 5.12, 5.27-5.31, 5.32, 5.35, 5.38-5.39, Tables 5.1 and 5.2); Shinskey's "Characterizers" (Valmet PDF; Automation.com returns 403, so a search summary of it was the second read); Mirsky (10 % remark, open-loop line, gain under 1, stroke times); Jantzen 1998 (design checklist, GE x GU); Astrom and Hagglund 3.5 (T_t bracket, conditional integration, K T_t / T_i offset); McMillan 2012 (twice); Orion BMS (form only, no numbers). Read once: Shinskey and Gerry 2006 (bump test). **Not confirmed on a second fetch:** the Rockwell PlantPAX page (403; Fieldbus parameter names come from vendor-manual snippets in a search); Seborg et al. on setpoint limits and a ramp tied to tau_c + theta (found nowhere; the audit's attribution is unverified); Mirsky page numbers (taken from PHYSICS.md); any varying-gain guidance by Skogestad (absent from the 2003 paper, the 2012 chapter and his 2025 ABB slides).
+
+## 10. The recipes on the energy and thermal plants
+
+Written on 2026-11-07, before any held-out seed ran, for `wind_turbine`, `battery`,
+`reactor`, `boiler_drum`, `glass_furnace` and `hvac`. It applies sections 1 and 6
+with `expert-protocols-noise.md`, R1 to R7 above and the amendments of
+`industrial-fixes.md`. Each step below is fixed, and a poor result ships (C9).
+Bump tests on training seeds have been looked at to set these rules up. Scores have
+not. `scripts/tune_industrial_experts.py` and `scripts/wind_turbine_gains.py` run
+them. R8 to R16 are ours and wait for the owner, as R1 to R7 did.
+
+**Shared.**
+
+| # | Choice | Value | Label |
+|---|---|---|---|
+| R8 | A test's length (R7) | 120 steps on `battery`, 400 on `boiler_drum` and `glass_furnace`, 720 on `hvac`: `battery` cannot hold an episode of 2880 in manual without leaving its window | ours |
+| R9 | `battery`'s derate width | Rated power over one correlation time of the signal, 1 MW x 900 s / 1692 kWh = 0.148. Section 6's two dispatch blocks gave 0.0985 on 300 s blocks and would read 1.18 on hourly ones, more than the window | ours |
+| R10 | `wind_turbine`'s schedule | Read at the last pitch command, held between the first and last pitch of the region-3 curve, since the line is only fitted there. The line runs almost through the origin, so unheld it multiplies the gain 500 times at fine pitch | ours |
+| R11 | `wind_turbine`'s integral | In pitch units, adding `dt GK Ki e` each step, as ROSCO's `PIController` does, so the scheduled gain is the integral rate the poles ask for at that pitch. Jonkman's text scales a stored error integral by `GK`, which on this line halves the rate | derived |
+| R12 | `boiler_drum`'s commissioning loop | Firing in manual at the seed's heat balance. A P loop on level, the full feed span over the full level span, 200 / 0.5 = 400 kg/s per m, a proportional band of 100 % | ours |
+| R13 | `glass_furnace`'s step | Two steps after a firing interruption, ramped at the fuel's slew, with the ramp as the recorded input | derived |
+| R14 | `glass_furnace`'s delay | The datasheet's 60 s. A band exit cannot see it: the band is 2.8 to 4.2 K, and a firing step at the slew moves the crown about 2.6 K in the 20 minutes | ours |
+| R15 | `glass_furnace`'s D | PI on the half rule, reversing D6 for this reading. D6 gives a derivative where tau2 > theta, but a derivative of about 150 s on a 0.36 K reading at 30 s passes about 1.8 raw of noise at the Kc N7 leaves, 90 times N5's dead band | ours |
+| R16 | `hvac`'s window | Five emitter lags on the step grid, 6 steps (90 minutes). The room has two time scales, and a longer window reads the mass's tail: k runs 3.0 at 6 steps, 3.8 at 16 and 18 at 192, and Kc 0.48, 0.75 and 5.2, past what this sample time holds | ours |
+
+**`wind_turbine`.** No bump test: this is Jonkman's recipe on the Cp table, section
+7.3, as `scripts/wind_turbine_gains.py` has always run it.
+1. Along the region-3 curve (rated speed, 12 to 25 m/s in 0.5 m/s steps, the pitch
+   that leaves 5.2966 MW of mechanical power) read `dP/dtheta`.
+2. Fit a line in pitch: `dP/dtheta(0)` and its doubling pitch `theta_K`. #157 read
+   -0.07 MW/rad and 0.015 deg.
+3. `Kp(0)` and `Ki(0)` by pole placement at `wn` 0.6 rad/s and `zeta` 0.7.
+4. `GK(theta) = 1 / (1 + theta / theta_K)`, read as R10 says, on the proportional
+   term and on the integral's rate (R11).
+5. The 0.25 Hz filter, the torque law and the limits stay as published. Their
+   noise sits inside fixed settings (`expert-protocols-noise.md`), so all three
+   levels store the same values.
+
+The RGA comes from the speed and power balances in float64, on (pitch, torque) to
+(rotor speed, power), at dispatch 3.5, 4.25 and 5 MW and mean wind 13.5, 16.75 and
+20 m/s, each with its balancing pitch.
+
+**`battery`.** Section 6, on the rebuilt plant.
+1. In manual at the seed's first block, the regulation signal off (R2), hold 120
+   steps (R8), +0.1 raw for 20 steps, meter power against its baseline.
+2. C5, C4. C7's rule for `tau1 < theta`. No N5 or N7: an inverter is no valve.
+3. `guard_margin` by R9. The limits stay at 0.10 and 0.90, as read.
+4. After the gains, `scripts/pjm_regulation_score.py`, against PJM's class 94.
+
+The trim will chase the signal's innovation, as section 6 warned. In closed form,
+`(1 - z^-1) / (1 + (Kp + Ki dt - 1) z^-1 - Kp z^-2)` from innovation to error gives
+an rms error of 2.03 times the floor at Kp 0.315, Ki 0.2, against 1.22 at today's 0.5
+and 0.02. It ships, and the PR says so.
+
+**`reactor`.** The rod program is published, and every constant in it is read
+(HRTD 8.1 and 5.0). A recipe has nothing to tune, so it stays, and all three levels
+carry a `reactor` entry that holds no gain. The stale relay gains leave the store
+(section 7). The gate's I-only null moves to Tavg, from the bump test `evidence/`
+already holds on the rebuilt plant. The rod price stays at $1, ours, and the PR puts
+the evidence to the coordinator.
+
+**`boiler_drum`.** Section 6, with D7's lambda rule.
+1. Quiet steam demand (R2), rest by R12, hold 400 steps (R8).
+2. Pressure: firing +0.02 raw grown by N3, 120 steps, level loop closed. C3 picks the
+   model: the turbine valve now lets pressure regulate itself, so it is first order
+   unless `tau1 > 8 theta`. Lambda on that model, `lam = theta`: `Kc = tau1 / (k (lam
+   + theta))`, `Ti = tau1`. On the integrating model, the rule below.
+3. Level: its setpoint moved through the same loop so the feed's first move is 2 kg/s
+   grown by N3, 120 steps, the recorded feed as input. Integrating with lag, the lag
+   counted as delay, `lam = theta`: `Kc = (2 lam + theta) / (k' (lam + theta)^2)`,
+   `Ti = 2 lam + theta`.
+4. N5 to N7 on both, valves at 1 % of span. `u_d` is the steam demand's 3 sd, as feed
+   on the level loop and as firing on the pressure loop. N7's `lam` is solved for the
+   Kc it asks.
+5. `trim_max` goes. The level integral stops when the feed is at its limit and the
+   error would push it further.
+
+The RGA reads both CVs in both tests, from rest with the level loop open, at 120
+steps, on the two moves' slopes, since level has no steady gain.
+
+**`glass_furnace`.** Section 6, with R13 to R15.
+1. Quiet pull and gas (R2), no setpoint moves, in manual at the settled point's fuel,
+   hold 400 steps (R8), 8 whole reversal cycles.
+2. Baseline 60 samples, then the step. N3's 5 bands cannot be reached, so the step is
+   the actuator's room. It ships with its ratio.
+3. 40 samples, the longest window before the next interruption. Fit `k' e^(-theta s) /
+   (s (tau2 s + 1))` with `theta` held at R14's 60 s, C5 on `k'`.
+4. `theta` + 15 s, plus `tau2 / 2` by the half rule. N5 to N7 on a valve at 1 % of
+   span. `u_d` is the pull's 3 sd as its share of the fuel, capped at the room.
+5. The reading gets N5's filter.
+
+**`hvac`.** Outdoor reset and a room sensor, as the tekmar House Control 352 runs one
+zone (data brochure D 352, 06/00). Its manual says heat supplied must equal heat lost,
+draws the heating curve from a starting point at the desired room temperature, stops
+heat at warm weather shutdown when the outdoor temperature reaches that point, and
+shifts the starting point up or down from indoor feedback. It sets the unoccupied
+temperature from a schedule.
+1. The curve, in the plant's power units: `Q = H (T_s - T_out)`, `H` the building's
+   159.4 W/K, which is what the 352's heating curve setting does through a linear
+   emitter. `Q` stops at 0, the warm weather shutdown, and at `Q_heat_max`.
+2. `T_s` is the setpoint in force plus the indoor feedback, a PI on the room reading.
+3. The PI: rest from the balance on a quiet building (no weather, sun or occupancy
+   swing, R2), hold 720 steps (R8), 0.1 raw grown by N3, 6 steps (R16). C4 to C7. No
+   N5 or N7: a modulating burner has no sourced dead band.
+4. Optimal start stays: LBL's module has nothing VAV-specific, and the Siemens RVL470,
+   a weather-compensated controller of this class, has its own optimum start with a
+   maximum heating-up time.
+
+The PI gets the 352's automatic shift a number, which its manual does not give, and
+the integral is what lets the curve find the building's free gains. Siemens' room
+influence is proportional only (LMS14: `TRw = TR x room influence / 10`), and with
+free gains of 1.2 kW a proportional shift of 5 K per K leaves the room 1.3 K warm.
+
+**Levels.** `battery`, `boiler_drum`, `glass_furnace` and `hvac` rerun their recipes at
+0.5 and 2. `wind_turbine` and `reactor` read no noise.
+
+**Held-out seeds 200 to 209** only report, and nothing moves after them.
