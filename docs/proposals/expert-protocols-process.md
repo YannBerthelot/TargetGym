@@ -290,7 +290,15 @@ with `expert-protocols-noise.md`, R1 to R7 above and the amendments of
 `industrial-fixes.md`. Each step below is fixed, and a poor result ships (C9).
 Bump tests on training seeds have been looked at to set these rules up. Scores have
 not. `scripts/tune_industrial_experts.py` and `scripts/wind_turbine_gains.py` run
-them. R8 to R16 are ours and wait for the owner, as R1 to R7 did.
+them.
+
+**Owner decisions, 2026-11-07.** R8 to R16 below are accepted, and R15 reverses D6 for
+the reason it states. So are two readings in the recipes: `boiler_drum`'s pressure
+stays first order at every level, and `hvac` keeps optimal start. `reactor` keeps its
+$1 rod step, labelled ours, with a written exception to check 1 in its `PHYSICS.md`.
+The findings ship as they stand, with no retune: `hvac`'s morning spec at 46 of 70,
+`wind_turbine` about 10 % dearer on the schedule, and `battery`'s trim chasing the
+signal.
 
 **Shared.**
 

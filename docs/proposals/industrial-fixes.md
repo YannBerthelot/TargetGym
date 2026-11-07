@@ -349,8 +349,11 @@ Chosen by the owner on 2026-11-07.
 
 9. **`reactor` keeps its $1 rod step, with a written exception to check 1.** An
    integrator on Tavg beats the rod program at that price, at 1.17 on 10 of 10 seeds,
-   and the gate would pass from $3. No source settles the price, so it stays ours, and
-   the exception is in the task's `PHYSICS.md` and `EXCEPTIONS`.
+   and the gate would pass from $3. It is the better controller on this reward. No
+   source settles the price, so it stays ours, and the exception is in the task's
+   `PHYSICS.md` and `EXCEPTIONS`.
+10. **Rules R8 to R16 of the process protocols are accepted,** with section 10's two
+    readings, and R15 reverses D6. Part E's findings ship with no retune.
 
 ## Cost
 

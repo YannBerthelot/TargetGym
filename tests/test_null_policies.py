@@ -46,7 +46,8 @@ fit_table, i_gains, simc_i_gain = FIT.fit_table, FIT.i_gains, FIT.simc_i_gain
 _STALE_TECS = "PR 9: TECS's time_const 2 trips the new envelope; at 5 this passes"
 
 #: The tasks a null policy beats today, each a finding of the industrial review.
-#: The PR that fixes one removes its line.
+#: The PR that fixes one removes its line. ``reactor``'s stays, with no PR to remove
+#: it: its win is an exception the owner accepted, so the mark shows if it ever stops.
 KNOWN = {
     "formation": "the hold's gains predate the envelope and the 0.03 rad/s route; "
     "PR 9 retunes it",

@@ -311,30 +311,10 @@ true state, xenon and the day's schedule included, and plans the load's mean pat
 
 **An integrator on Tavg beats the rod program.** The dead band costs $365 of Tavg
 error to save $119 of rod travel, at the $1 a step labelled ours above. The expert
-moves 480 steps in a day and the integrator 598. The price where they tie is $3.07 on
-the means, between $1.91 and $5.84 by seed, and the gate's rule (6 wins with a ratio
-above 1) fails to $2.50 and passes from $3.
-
-| rod price | ratio | seeds the integrator wins |
-|---|---|---|
-| $1 | 1.18 | 10 |
-| $2 | 1.06 | 9 |
-| $2.50 | 1.03 | 7 |
-| $3 | 1.00 | 5 |
-| $4 | 0.97 | 2 |
-
-Either the rod price is too low, or a controller tighter than the Westinghouse
-program is simply better on this reward. The owner kept $1 on 2026-11-07, with the
-written exception at the end of this page, and the gate shows the win as a strict
-xfail with this witness in place. The price was not moved to make it pass.
-
-What the sources give is thin. Whole-head replacement projects ran from $20 million to
-$150 million (NEI Magazine, both read), for nozzle cracking rather than wear. A
-vendor's 8 million steps of mechanism life was only seen in a search summary, so it is
-not a read figure. At 480 steps a day, 40 years is 7 million steps, which fits it. All
-of a head over 8 million steps is $2.50 to $19 a step, and a tenth of a head's
-mechanisms, roughly one bank (ours), is $0.25 to $1.90. Either end of that holds $1,
-and only the whole-head reading reaches $3.
+moves 480 steps in a day and the integrator 598. The owner kept that price on
+2026-11-07, so the integrator is the better controller on this reward, and the
+written exception at the end of this page holds the evidence. The gate shows the win
+as a strict xfail with this witness in place. The price was not moved to make it pass.
 
 ---
 
@@ -430,13 +410,36 @@ floor of the proposal's quadratic form here.
 
 A null policy wins here. A plain integrator on Tavg beats the rod program on 10 of 10
 held-out seeds, at a ratio of 1.17, with the rod step at $1. The owner accepted that
-on 2026-11-07 and kept the price, because no source settles a better one: the evidence
-in section 6 holds both $1 and the $3 at which the gate would pass, and passing a gate
-is no reason to move a price.
+on 2026-11-07 and kept the price, labelled ours. The integrator is the better
+controller on this reward, and that is the result. Passing a gate is no reason to move
+a price.
 
-So the expert stays the published program, and a policy can beat it by holding Tavg
+**What the price would have to be.** The two tie at $3.07 on the means, between $1.91
+and $5.84 by seed. The gate's rule, 6 wins with a ratio above 1, fails up to $2.50 and
+passes from $3.
+
+| rod price | ratio | seeds the integrator wins | gate |
+|---|---|---|---|
+| $1, kept | 1.18 | 10 | fails |
+| $2 | 1.06 | 9 | fails |
+| $2.50 | 1.03 | 7 | fails |
+| $3 | 1.00 | 5 | passes |
+| $4 | 0.97 | 2 | passes |
+
+**What the sources can and cannot say.** Whole-head replacement projects ran from $20
+million to $150 million (NEI Magazine, both read twice), and those heads were replaced
+for nozzle cracking, not for wear. A vendor's 8 million steps of mechanism life was
+only seen in a search summary, so it is not a read figure. At 480 steps a day, 40
+years is 7 million steps, which fits it. All of a head over 8 million steps is $2.50 to
+$19 a step, and a tenth of a head's mechanisms, roughly one bank (ours), is $0.25 to
+$1.90. The whole-head reading charges a mechanism's wear with a cost it did not cause,
+and the bank's share rests on two figures nobody opened, so nothing here settles a
+price. Both $1 and $3 sit inside the range.
+
+The expert stays the published program, and a policy can beat it by holding Tavg
 tighter than its dead band and paying for the rod travel. The witness stays in the
-gate as a strict xfail, so a change that stops it winning shows up.
+gate as a strict xfail, with no PR to remove it, so a change that stops it winning
+shows up.
 
 ## Written exception to check 2
 
