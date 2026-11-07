@@ -167,7 +167,8 @@ run flattens near its end only because the learning rate decays.
 multiple-shooting NLP and IPOPT port, exact Hessian, stretched to the whole day, with
 the seed's true load wobble, cold from the held state, then replayed through
 `step_env`. The seeds are the ones nearest each corner of hold length and boron delay,
-picked from those draws, not from any cost.
+picked from those draws, not from any cost. Each plan is replayed through `step_env`,
+and the replayed cost is the one reported.
 
 | Seed | Hold, delay | Reference | Adam, 3000 | Interior point, replayed | Room |
 |---:|---|---:|---:|---:|---:|
@@ -185,15 +186,63 @@ The interior point is 27 to 38 % cheaper than Adam at 3000 iterations, and 22 % 
 on seed 100 than Adam at 6000. So Adam's ceilings are too high by about a third, and
 its rooms too low by as much. On these four seeds the room is 2.7 to 16.
 
-Two limits on these numbers:
+### Why seed 100's room is 15.9
 
-- The replayed cost is 20 to 30 % above the solver's own (about $2,600 a seed). Sensor
-  noise is not the cause, since replaying without it gives the same cost. The likely
-  causes are the planner's model of the wobble inside each 30 s step, and the
-  smoothing of the boron corner. That gap was not traced further. The replayed cost is
-  the one charged, so it is the one used.
-- A converged solve is a local optimum of a nonconvex problem. It is a better upper
-  bound on the best cost, not a proof of it.
+The reference, not the plant. The solver brings seed 100 to $3,265, in line with the
+other three ($3,220 to $3,488), so the plant on that seed is no harder. The reference
+pays $46,544 of its $51,951 in hours 5 to 10, the hold at 50 % load. There its rod loop
+on delta I sits in a limit cycle with a period of 2 steps (1 min): the rods swing
+between 25 and 52 steps and delta I between -0.25 and +0.24, against a band of +-0.05.
+At $1000 an hour per % past the band, that is about $11k an hour, as charged.
+
+It is not anything else checked:
+
+- No near-trip. Power peaks at 1.020 against 1.09, the hot leg at 603.2 K against 620,
+  Tavg's low at 559.2 K against 556, and fuel at 1062 K against 1473.
+- No boron limit. The boron command is at a bound on 1.3 % of steps, as on the other
+  seeds (0.5 to 1.4 %).
+- No scoring fault. The cost is the reward's own terms, and the plant replays the
+  solver's plans to within 1 % (below).
+- Not noise. With no wobble and no sensor noise, seed 100 still costs $43,708 and delta I
+  still reaches 0.171 in the hold, against 0.122 on seed 102 and 0.005 on seed 108.
+
+Why this seed and not 108, whose hold is as long, was not proven. Seed 100's boron line
+is slow (25 steps against 12), so the rods sit deeper in the hold (25 to 52 steps against
+35 to 48). A deeper bank has a steeper rod worth, which would raise the loop's gain past
+what the full-power tune can hold. So the 15.9 measures this fault in the recipe, and the
+other three seeds' 2.7 to 4.2 are the fairer reading. Fixing the reference is the
+owner's call under rule 3.
+
+### Why the planned cost is below the replayed one
+
+The smoothed boron corner, all of it. The planner smooths the split between dilution and
+boration with a softplus of width w = 0.01. At a resting command of 0 that leaves each
+branch open by w ln 2 = 0.0069 of its flow: 0.069 kg/s of water and 0.021 kg/s of acid
+at once. The effluent is charged on the command, so the planner gets this mixing free and
+uses it to trim Tavg. The plant has no flow at 0. Rolled through the planner's own model,
+on the same plans:
+
+| Seed | Planner, as solved | Rod corner exact | Boron corner exact | Both exact | Plant |
+|---:|---:|---:|---:|---:|---:|
+| 100 | $2,590 | $2,590 | $3,278 | $3,278 | $3,265 |
+| 102 | $2,636 | $2,636 | $3,518 | $3,518 | $3,488 |
+| 108 | $2,637 | $2,637 | $3,237 | $3,237 | $3,220 |
+| 109 | $2,690 | $2,690 | $3,365 | $3,365 | $3,352 |
+
+The Tavg term carries the whole difference, $573 to $589 smoothed against $1,176 to
+$1,471 exact. The rod corner changes nothing. With both corners exact the planner is
+within 0.4 to 0.9 % of the plant. What is left is the wobble inside each 30 s step: with
+no wobble on either side the two agree to $0.1 on seed 109 ($3,625.0). Sensor noise,
+precision and block size are not causes. Noise changes no cost, and the block is one
+step on both sides.
+
+So the replayed cost is the honest ceiling, and the planned one is not, since no plant
+can reach it. These plans are optimal for a planner model that is wrong at rest, so the
+plant's best is probably below the replayed cost. A re-solve that charges the effluent on
+the smoothed flows, or takes the boron width toward 0, would close that, and was not run.
+
+A converged solve is a local optimum of a nonconvex problem. It is a better upper bound
+on the best cost, not a proof of it.
 
 Two fixes to the reactor's oracle came out of this, both in the shared slot. The boron
 move had no scale of its own, which would have crashed the oracle's solve. The planner
