@@ -71,8 +71,8 @@ reading lag, sensor noise and gas drift don't change it, so they stay out of any
 what makes this task hard. Delay in a 2 minute reading is not a hard feature, and neither is
 gas, in spite of the table above: the gas only matters once a hidden bath shares its shape.
 
-The oracle knows the reversal clock and the coming targets, so part of this 0.26 is preview,
-which does not count as reachable room. Real non-stationarity can't be switched off here,
+The oracle knows the reversal clock and the coming targets, so this is a ceiling, not a claim
+about what an agent can reach. Real non-stationarity can't be switched off here,
 because the plant has none. That test waits for the rebuilt plant, and any bath factor that
 fails it leaves the claim.
 
@@ -175,18 +175,20 @@ Sizes come from sources and the owner before any controller runs. Then, one atte
    moved or not.
 2. **Realism.** Run the plain PI. It should land near the real 2.2 K crown spread. If it does
    not, report that. Do not tune the bath to reach it.
-3. **Room.** Compare the best ladder rung with a controller given the true state and no preview.
-   Room counts only if the gap is at least 0.3 decades above the 1 K floor.
+3. **Room.** Reference cost over the cost of a converged oracle given the true model, the true
+   state and foresight, on the whole episode, as in charter draft 3. It is reported, not gated.
 4. **Switch-off.** Remove each named factor from the rebuilt plant. A factor that does not shrink
    the gap leaves the claim.
 5. **Cost.** Charter rule 7, no task over 3 times the median step.
 
-If it fails on room, the task stays as a solved task outside the flagship, with no second try.
+The owner's reason: the foresight ceiling is a sound number, and claiming what an agent could
+reach is not. So there is no threshold. Whether the task joins the flagship is chosen by reading
+the room table, with a written reason. There is still no second try and no tuning on results.
 
 **The risk, plainly.** My expectation is that upset speed stays the sticking point: at real
 numbers bath events are slow next to the loop, so a PI may reject them all on a rich plant too.
-Then the rebuild buys realism and not room, and the honest reachable room is the reversal and the
-hidden-state problem of keeping the glass right with no reading.
+Then the rebuild buys realism and little room, and the ceiling's gap would be mostly the reversal
+and foresight. That number is still reported as it stands.
 
 ## Open for the owner
 
