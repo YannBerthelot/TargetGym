@@ -22,7 +22,9 @@ def quiet(H_scale=1.0):
 
 
 def start(raw, p):
-    fuel = convert_raw_action_to_range(raw, min_action=p.fuel_min, max_action=p.fuel_max)
+    fuel = convert_raw_action_to_range(
+        raw, min_action=p.fuel_min, max_action=p.fuel_max
+    )
     x = np.zeros(B.N_POS)
     x[: B.N_ROOF] = [1590, 1570, 1520, 1430, 1270]
     x[B.BS : B.WORK] = 1550
@@ -54,8 +56,14 @@ def orbit(raw, p):
         s, _ = jax.lax.scan(step, s, None, length=DAYS * 2880)
         s = s.replace(time=0)
         _, y = jax.lax.scan(lambda c, _: step(c, 0), s, None, length=CYCLE)
-        mean = jax.lax.scan(lambda c, _: (lambda n: (n, n.T_crown))(
-            B.next_state(raw, c, p, key, "rk4_2")), s, None, length=CYCLE)[1].mean()
+        mean = jax.lax.scan(
+            lambda c, _: (lambda n: (n, n.T_crown))(
+                B.next_state(raw, c, p, key, "rk4_2")
+            ),
+            s,
+            None,
+            length=CYCLE,
+        )[1].mean()
         return mean, y.mean(), s
 
     return run(start(raw, p))

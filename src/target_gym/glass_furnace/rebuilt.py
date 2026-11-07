@@ -17,9 +17,6 @@ calibration:
     hot surface -> throat surface  -> throat deep  -> hot deep -> hot surface
 """
 
-from typing import Tuple
-
-import chex
 import jax
 import jax.numpy as jnp
 from flax import struct
@@ -37,6 +34,7 @@ from target_gym.base import (
     measured_obs,
 )
 from target_gym.glass_furnace.env import (
+    _GAS,
     FUEL_DEAD_TIME_STEPS,
     KELVIN_OFFSET,
     LHV_AR_RHO,
@@ -44,7 +42,6 @@ from target_gym.glass_furnace.env import (
     N_REGEN_NODES,
     N_SETPOINTS,
     SIGMA_SB,
-    _GAS,
     GlassFurnaceParams,
     _regenerator_flows,
     charge_rate_now,
@@ -172,12 +169,7 @@ def cell_flow(dT, T_deep, p):
     length = p.A_melt / p.tank_width / 3.0
     nu = glass_viscosity(T_deep) / p.rho_glass
     per_width = (
-        0.00542
-        * p.g_accel
-        * p.beta_glass
-        * (dT / length)
-        * p.tank_depth**4
-        / nu
+        0.00542 * p.g_accel * p.beta_glass * (dT / length) * p.tank_depth**4 / nu
     )
     return p.current_scale * per_width * p.tank_width * p.rho_glass
 
@@ -191,9 +183,7 @@ def moved(time_s, times, sizes, ramp, band):
 
 def footprint(m_batch, thickness, p):
     """The blanket's footprint, m^2, batch and the free glass between its logs."""
-    return jnp.maximum(m_batch, 0.0) / (
-        p.rho_batch * thickness * p.blanket_solid
-    )
+    return jnp.maximum(m_batch, 0.0) / (p.rho_batch * thickness * p.blanket_solid)
 
 
 def surfaces(m_batch, thickness, p):
@@ -261,9 +251,7 @@ def regenerators(x, T_gas, m_fuel, phase, p):
     )
 
 
-def velocity(
-    x, m_fuel, m_pull, phase, T_gas, H_melt, thickness, params, position_time
-):
+def velocity(x, m_fuel, m_pull, phase, T_gas, H_melt, thickness, params, position_time):
     """Right-hand side, ``x`` the positions."""
     p = params
     QA, QB, _, _ = regenerators(x, T_gas, m_fuel, phase, p)
@@ -288,8 +276,12 @@ def velocity(
     # ---- Roof: conduction between cells, the back loses through its insulation
     cells = jnp.array(ROOF_CELLS)
     gaps = 0.5 * (cells[1:] + cells[:-1])
-    across = p.k_brick * (x[:N_ROOF - 1] - x[1:N_ROOF]) / gaps
-    A_flame = p.eps_rad * SIGMA_SB * ((T_gas + KELVIN_OFFSET) ** 4 - (x[0] + KELVIN_OFFSET) ** 4)
+    across = p.k_brick * (x[: N_ROOF - 1] - x[1:N_ROOF]) / gaps
+    A_flame = (
+        p.eps_rad
+        * SIGMA_SB
+        * ((T_gas + KELVIN_OFFSET) ** 4 - (x[0] + KELVIN_OFFSET) ** 4)
+    )
     into_face = (
         A_flame * p.A_crown
         + p.h_conv * p.A_crown * (T_gas - x[0])
@@ -366,17 +358,11 @@ def velocity(
         gas_b + roof_b + hs_b - Q_under_b + heat[BS]
         + glass_in * cp(p.T_batch_top) * (p.T_batch_top - x[BS])
     ) / (surface_mass * cp(x[BS]))  # fmt: skip
-    dbd = (-hs_b - bottom * (x[BD] - p.T_ambient) + heat[BD]) / (
-        deep_mass * cp(x[BD])
-    )
+    dbd = (-hs_b - bottom * (x[BD] - p.T_ambient) + heat[BD]) / (deep_mass * cp(x[BD]))
     dhs = (gas_h + roof_h + hs_h - Q_under_h + heat[HS]) / (surface_mass * cp(x[HS]))
-    dhd = (-hs_h - bottom * (x[HD] - p.T_ambient) + heat[HD]) / (
-        deep_mass * cp(x[HD])
-    )
+    dhd = (-hs_h - bottom * (x[HD] - p.T_ambient) + heat[HD]) / (deep_mass * cp(x[HD]))
     dts = (gas_t + roof_t + hs_t + heat[TS]) / (surface_mass * cp(x[TS]))
-    dtd = (-hs_t - bottom * (x[TD] - p.T_ambient) + heat[TD]) / (
-        deep_mass * cp(x[TD])
-    )
+    dtd = (-hs_t - bottom * (x[TD] - p.T_ambient) + heat[TD]) / (deep_mass * cp(x[TD]))
     dwork = (
         gas_w + roof_w
         - p.U_wall * p.A_wall_work * (x[WORK] - p.T_ambient)
@@ -415,7 +401,9 @@ def state_moves(state, time, p):
     thick = moved(
         t, state.move_times[1], state.move_sizes[1], p.move_ramp, p.thickness_band
     )
-    return p.H_melt * (1.0 - p.cullet_gain * cullet), p.blanket_thickness * (1.0 + thick)
+    return p.H_melt * (1.0 - p.cullet_gain * cullet), p.blanket_thickness * (
+        1.0 + thick
+    )
 
 
 def plant_step(state, m_fuel, new_disturbance, new_lhv, p, method):
@@ -449,7 +437,9 @@ def plant_step(state, m_fuel, new_disturbance, new_lhv, p, method):
     return new, T_gas, phase, T_air_new, T_stack_new
 
 
-def advance(state, new, T_gas, m_fuel, new_disturbance, new_lhv, T_air, T_stack, cmd, p):
+def advance(
+    state, new, T_gas, m_fuel, new_disturbance, new_lhv, T_air, T_stack, cmd, p
+):
     """The state after ``plant_step``."""
     alpha = 1.0 - jnp.exp(-p.delta_t / jnp.maximum(p.tau_thermocouple, 1e-6))
     tc = brick_temperature(new[:N_ROOF], p.tc_depth) + p.tc_offset
@@ -457,7 +447,7 @@ def advance(state, new, T_gas, m_fuel, new_disturbance, new_lhv, T_air, T_stack,
     return state.replace(
         T_gas=T_gas,
         T_roof=new[:N_ROOF],
-        T_bath=new[BS : WORK],
+        T_bath=new[BS:WORK],
         T_work=new[WORK],
         m_batch=jnp.maximum(new[BATCH], 0.0),
         T_rA=new[RA:RB],
@@ -493,12 +483,16 @@ def next_state(raw, state, p, key, method):
     cmd = convert_raw_action_to_range(raw, min_action=p.fuel_min, max_action=p.fuel_max)
     m_fuel = state.fuel_pipeline[0] * firing_fraction(state.time, p)
     disturbance, lhv = next_noise(state, key, p)
-    new, T_gas, _, T_air, T_stack = plant_step(state, m_fuel, disturbance, lhv, p, method)
+    new, T_gas, _, T_air, T_stack = plant_step(
+        state, m_fuel, disturbance, lhv, p, method
+    )
     return advance(state, new, T_gas, m_fuel, disturbance, lhv, T_air, T_stack, cmd, p)
 
 
 def is_tripped(state, p, xp=jnp):
-    crown = xp.logical_or(state.T_crown <= p.T_crown_min, state.T_crown >= p.T_crown_max)
+    crown = xp.logical_or(
+        state.T_crown <= p.T_crown_min, state.T_crown >= p.T_crown_max
+    )
     bath = xp.stack([state.T_bath.min(), state.T_work])
     low = xp.any(bath <= p.T_glass_min)
     high = xp.logical_or(

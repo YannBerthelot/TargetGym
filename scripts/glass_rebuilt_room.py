@@ -13,11 +13,11 @@ import jax
 
 jax.config.update("jax_enable_x64", True)
 
+import glass_rebuilt_ladder as L  # noqa: E402
+import glass_rebuilt_oracle as O  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
 import numpy as np  # noqa: E402
 
-import glass_rebuilt_ladder as L  # noqa: E402
-import glass_rebuilt_oracle as O  # noqa: E402
 from target_gym.glass_furnace import rebuilt as B  # noqa: E402
 
 #: The recipe's printed result on the full plant.

@@ -40,7 +40,9 @@ def start(T, p, days=25):
 def run(state, raw, p, steps):
     def f(s, _):
         s = B.next_state(raw, s, p, KEY, "rk4_2")
-        return s, jnp.stack([s.T_crown, s.T_crown_meas, s.T_bath[2], s.T_work, s.m_batch])
+        return s, jnp.stack(
+            [s.T_crown, s.T_crown_meas, s.T_bath[2], s.T_work, s.m_batch]
+        )
 
     return np.asarray(jax.jit(lambda: jax.lax.scan(f, state, None, length=steps))()[1])
 
@@ -105,13 +107,20 @@ kicks = {
 }
 for tag, k in kicks.items():
     d = ave(run(k, raw, base, N)[:, 1] - a[:, 1])
-    print(f"{tag:24s} reading at 1,6,24,96 h:", [round(float(d[int(h * 120)]), 2) for h in (1, 6, 24, 96)])
+    print(
+        f"{tag:24s} reading at 1,6,24,96 h:",
+        [round(float(d[int(h * 120)]), 2) for h in (1, 6, 24, 96)],
+    )
 
 print("-- lookalike upsets: reading after each, fuel held")
+
+
 def moved_state(which, size):
     mt = s.move_times.at[which, 0].set(-1e7)
     ms = s.move_sizes.at[which, 0].set(size)
     return s.replace(move_times=mt, move_sizes=ms)
+
+
 rows = {
     "gas +1 %": (s, base.replace(LHV=base.LHV * 1.01)),
     "pull -2 %": (s, base.replace(m_pull=base.m_pull * 0.98)),
@@ -123,14 +132,34 @@ rows = {
 for tag, (st, p) in rows.items():
     r = run(st, raw, p, N)
     d = ave(r[:, 1] - a[:, 1])
-    print(f"{tag:18s} at 1,6,24,96 h:", [round(float(d[int(h * 120)]), 2) for h in (1, 6, 24, 96)],
-          " batch +%:", round(100 * float(r[:400, 4].max() / a[:400, 4].mean() - 1), 1))
+    print(
+        f"{tag:18s} at 1,6,24,96 h:",
+        [round(float(d[int(h * 120)]), 2) for h in (1, 6, 24, 96)],
+        " batch +%:",
+        round(100 * float(r[:400, 4].max() / a[:400, 4].mean() - 1), 1),
+    )
 
 print("-- upset speed: fastest slope of the cycle-mean reading, K/h")
 for tag, (st, p) in rows.items():
-    r = run(st.replace(move_times=st.move_times.at[:, 0].set(600.0 * 30) if "pull" not in tag and "gas" not in tag else st.move_times), raw, p, 2880)
+    r = run(
+        st.replace(
+            move_times=(
+                st.move_times.at[:, 0].set(600.0 * 30)
+                if "pull" not in tag and "gas" not in tag
+                else st.move_times
+            )
+        ),
+        raw,
+        p,
+        2880,
+    )
     d = ave(r[:, 1] - a[:2880, 1])
     print(f"{tag:18s} {np.abs(np.gradient(d, DT / 3600)).max():.2f} K/h")
 
 c = a[:300]
-print("reversal swing p-p: hot face", round(float(np.ptp(c[:, 0])), 2), "reading", round(float(np.ptp(c[:, 1])), 2))
+print(
+    "reversal swing p-p: hot face",
+    round(float(np.ptp(c[:, 0])), 2),
+    "reading",
+    round(float(np.ptp(c[:, 1])), 2),
+)

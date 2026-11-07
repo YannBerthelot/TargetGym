@@ -30,7 +30,12 @@ def rollout(seed, u, p):
     def f(s, tu):
         t, a = tu
         _, s, r, _, info = env.step_env(jax.random.fold_in(key, t), s, a[None], p)
-        return s, (-r, s.T_crown - s.target_T_crown, s.T_crown_meas - s.target_T_crown, info["tripped"])
+        return s, (
+            -r,
+            s.T_crown - s.target_T_crown,
+            s.T_crown_meas - s.target_T_crown,
+            info["tripped"],
+        )
 
     return jax.lax.scan(f, st, (jnp.arange(u.shape[0]), u))[1]
 
@@ -41,7 +46,8 @@ def rate_step(p):
 
 def plan(seed, u0, p, every, iters):
     """L-BFGS on the valve at knots ``every`` steps apart, from ``u0``, all steps.
-    The objective is the whole episode's cost, the score's window included."""
+    The objective drops the first ``SKIP`` steps; set it to 0 to count the whole episode.
+    """
     n = u0.shape[0]
     grid = jnp.arange(n, dtype=jnp.float64)
     knots = jnp.arange(0, n + every, every, dtype=jnp.float64)
@@ -85,7 +91,10 @@ if __name__ == "__main__":
     seed = 100 + seed_index
     out = sys.argv[3]
     p = B.RebuiltParams()
-    u = np.asarray(u_all[seed_index, :, 0] if u_all.ndim == 3 else u_all[seed_index], dtype=np.float64)
+    u = np.asarray(
+        u_all[seed_index, :, 0] if u_all.ndim == 3 else u_all[seed_index],
+        dtype=np.float64,
+    )
     print("start", true_cost(seed, u, p), flush=True)
     for every, iters in ((20, 300), (5, 300), (2, 300), (1, 300)):
         t0 = time.time()

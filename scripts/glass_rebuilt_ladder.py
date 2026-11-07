@@ -121,7 +121,9 @@ if __name__ == "__main__":
     k, theta = bump()
     Kc = 1.0 / (k * 2 * theta)
     Ti = 4 * 2 * theta
-    print(f"bump k' {k:.5f} K/s per raw, theta {theta:.0f} s -> Kc {Kc:.3f}, Ti {Ti:.0f}")
+    print(
+        f"bump k' {k:.5f} K/s per raw, theta {theta:.0f} s -> Kc {Kc:.3f}, Ti {Ti:.0f}"
+    )
     ffg = pull_gain()
     print(f"pull feedforward {ffg:.3f} raw per kg/s")
     p = B.RebuiltParams()
