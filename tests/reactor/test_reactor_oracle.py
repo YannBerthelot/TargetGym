@@ -18,8 +18,9 @@ import pytest
 from target_gym import registry
 from target_gym.experts.mpc import plan_params
 from target_gym.oracles.controller import Oracle, enable_x64, float64
+from target_gym.reactor import Reactor, ReactorParams
 from target_gym.reactor.env import scheduled_load
-from target_gym.reactor.oracle import reach_scale
+from target_gym.reactor.oracle import boron_step, reach_scale, reactor_model
 
 SPEC = registry.get("reactor")
 
@@ -82,3 +83,25 @@ def test_a_plan_on_the_loads_ramp_replays_on_the_env(start_of_ramp):
     assert not bool(cert["replay_trip"])
     assert float(cert["replay_gap"]) <= 1e-10
     assert float(cert["output_gap"]) <= 1e-6
+
+
+@pytest.mark.parametrize(
+    "arriving, expected",
+    [
+        (0.0, 1690.0),
+        # Clean water at 10 kg/s through 2.5e5 kg for 5 s.
+        (-1.0, 1690.0 * np.exp(-2e-4)),
+        # Acid at 7800 ppm and 3 kg/s through the same mass for 5 s.
+        (1.0, 7800.0 + (1690.0 - 7800.0) * np.exp(-6e-5)),
+    ],
+)
+def test_the_planners_boron_is_the_plants_mixing_at_no_width(arriving, expected):
+    p = ReactorParams()
+    out = boron_step(jnp.asarray(arriving), jnp.asarray(1690.0), p, 0.0)
+    assert float(out) == pytest.approx(expected, rel=1e-5)
+
+
+def test_every_move_has_a_scale():
+    env, p = Reactor(), ReactorParams()
+    model = reactor_model(env, p)
+    assert len(model.move_scale(1)) == model.nu

@@ -58,11 +58,24 @@ def reach(env, p, x, u, steps):
 
 
 def reach_scale(env, p, steps):
-    """Half the span of the raw demand's reach over ``steps`` held steps."""
-    return (float(2.0 * steps * env.control_period * rod_travel(p)),)
+    """Each move's typical size: half the span of the raw rod demand's reach over
+    ``steps`` held steps, and the boron flow's range."""
+    return (float(2.0 * steps * env.control_period * rod_travel(p)), 1.0)
 
 
-def reactor_step(env, p, x, u, t, task, width, deltas=None):
+def boron_step(arriving, boron, p, width):
+    """The boron over one sub-step under the arriving flow command: below 0 it
+    dilutes with water, above 0 it borates. The two branches' slopes differ, a corner
+    right where a resting plan sits, so ``width`` smooths the split as K2 does; 0.0 is
+    the env's exact step."""
+    down = softplus_clip(-arriving, 0.0, 2.0, width) * p.dilution_flow
+    up = softplus_clip(arriving, 0.0, 2.0, width) * p.boration_flow
+    flow = down + up
+    feed = up * p.boric_acid_ppm / jnp.where(flow > 0.0, flow, 1.0)
+    return boron + (feed - boron) * (1.0 - jnp.exp(-flow / p.primary_mass * p.delta_t))
+
+
+def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
     """One control step from ``x`` = (the plant, the rods in raw units, the boron,
     its queue) under the raw demand ``u``: ``(x_next, rows)``, one row (Tref - Tavg,
     n, T_fuel, T_hot, Tavg, delta I) per sub-step. ``width`` is the rate corner's
@@ -76,11 +89,6 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None):
     deltas = jnp.zeros(period, x.dtype) if deltas is None else deltas
     queue = jnp.concatenate([u[1:], x[QUEUE:-1]])
     arriving = queue[delay.astype(jnp.int32) - 1]
-    flow = jnp.where(
-        arriving < 0, -arriving * p.dilution_flow, arriving * p.boration_flow
-    )
-    feed = jnp.where(arriving < 0, 0.0, p.boric_acid_ppm)
-    closes = 1.0 - jnp.exp(-flow / p.primary_mass * p.delta_t)
 
     def load_at(i):
         k = start + t * period + i
@@ -91,7 +99,7 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None):
         plant, rods, boron = carry
         rods = rods + softplus_clip(u[0] - rods, -most, most, width) + deltas[i]
         rod_in = 0.5 * (1.0 - rods)
-        boron = boron + (feed - boron) * closes
+        boron = boron_step(arriving, boron, p, boron_width)
         rho = rod_worth(rod_in, p) - rod_worth(p.rod_park, p)
         rho = rho + p.boron_worth * (boron - p.boron_ref)
         eps = rod_tilt(rod_in, p)
@@ -120,7 +128,10 @@ def reactor_model(env, p) -> TaskModel:
     flow_step = float(p.effluent_price * p.delta_t * period)
 
     def step(d, x, u, t):
-        x1, rows = reactor_step(env, p, x, u, t, d["task"], d["widths"][0])
+        boron_width = d.get("boron_width", 0.0)
+        x1, rows = reactor_step(
+            env, p, x, u, t, d["task"], d["widths"][0], boron_width=boron_width
+        )
         y = jnp.concatenate([
             rows[:, 0] / p.e_floor, rows[:, 5], (x1[RODS:RODS + 1] - x[RODS:RODS + 1]) / 2.0,
             -u[1:], u[1:], rows[:, 1:5].ravel(),
