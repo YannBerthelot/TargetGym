@@ -54,7 +54,7 @@ def secant(f, x0, x1, target, tol, lo, hi, n=8):
 def settle(days=30):
     steps = int(days * 86400 / PP.delta_t)
     run = jax.jit(lambda s, u, q: hold(s, u, q, steps))
-    state = {"s": P.initial_fields(G, PP)}
+    state = {"s": P.initial_fields(G, PP)}  # built outside any trace
 
     def canal_at(fuel):
         def f(q):
@@ -62,12 +62,12 @@ def settle(days=30):
             state["s"], state["y"] = s, y
             return float(y[1])
 
-        q, _ = secant(f, 3.0e6, 4.5e6, CANAL, 0.2, 0.0, 2.0e7)
+        q, _ = secant(f, 2.0e6, 3.0e6, CANAL, 0.2, 0.0, 2.0e7)
         print(f"  fuel {fuel:.4f}: cooling {q / 1e6:.3f} MW", flush=True)
         state["q"] = q
         return float(state["y"][0])
 
-    fuel, crown = secant(canal_at, 0.50, 0.53, CROWN, 0.3, 0.35, 0.8)
+    fuel, crown = secant(canal_at, 0.42, 0.45, CROWN, 0.3, 0.3, 0.8)
     return fuel, state["q"], state["s"], crown, float(state["y"][1])
 
 

@@ -45,9 +45,9 @@ class EnvParams:
     crown_high: float = 1893.15  # K, 1620 C: silica degrades above, SEFPRO
     # No capacity was found. Ours: twice what holds the canal at the design point, so
     # the coolers bind only far from it. Set from the settle script's output.
-    cooling_max: float = 12.1e6
+    cooling_max: float = 10.5e6
     cooling_above: float = 1.0  # K over the target the loop holds, ours
-    cooling_gain: float = 4.448e5  # W/K, SIMC on a 5 % cooling step (scripts)
+    cooling_gain: float = 3.134e5  # W/K, SIMC on a 5 % cooling step (scripts)
     cooling_ti: float = 7680.0  # s, same recipe
     # gas: ENTSOG's 4 to 6 MJ/m3 swings on about 50, read as four spreads, daily;
     # pull: +-2 % wander (US11261117B2) as two spreads; cullet, blanket: the owner's

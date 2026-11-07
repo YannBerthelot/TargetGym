@@ -339,8 +339,13 @@ def layout(g):
 
 @functools.lru_cache(maxsize=8)
 def _layout(
-    g, length=21.5, refiner=20.5, width=11.0, height=2.4, depth=1.2, crown=0.45
-):
+    g, length=21.5, refiner=20.5, width=11.0, height=2.4, depth=1.2, crown=0.45,
+    waist=7.5, waist_share=4.5 / 14.0, end_share=10.0 / 14.0,
+):  # fmt: skip
+    """Geometry. The waist and working end follow a 1300 t/d float furnace (Materials 17
+    (2024) 4989, Table 1: melter 14 m wide, waist 7.5 m long and 4.5 m wide, working end
+    10 m wide), their widths scaled to this melter's; half the refiner's columns are
+    waist."""
 
     def graded(total, first, n):
         lo, hi = 1.0001, 4.0
@@ -352,9 +357,22 @@ def _layout(
     dz = graded(depth, g.skin, g.n_depth)
     dr = graded(crown, g.roof_skin, g.n_roof)
     nm = g.n_bays * g.cols_per_bay
+    nw = g.n_refiner // 2
     dx = np.concatenate(
-        [np.full(nm, length / nm), np.full(g.n_refiner, refiner / g.n_refiner)]
+        [
+            np.full(nm, length / nm),
+            np.full(nw, waist / nw),
+            np.full(g.n_refiner - nw, (refiner - waist) / (g.n_refiner - nw)),
+        ]
     )
+    wc = np.concatenate(
+        [
+            np.full(nm, width),
+            np.full(nw, width * waist_share),
+            np.full(g.n_refiner - nw, width * end_share),
+        ]
+    )
+    wf = np.concatenate([[width], np.minimum(wc[1:], wc[:-1]), wc[-1:]])
     z = np.concatenate([[0.0], np.cumsum(dz)])
     F1 = float(band_fraction(2.8 * 1900.0))  # the crown and flame's own spectrum
     F2 = float(band_fraction(5.0 * 1900.0)) - F1
@@ -369,7 +387,8 @@ def _layout(
         dzc=jnp.asarray(0.5 * (dz[1:] + dz[:-1])),
         dxc=jnp.asarray(0.5 * (dx[1:] + dx[:-1])),
         dr=jnp.asarray(dr), drc=jnp.asarray(0.5 * (dr[1:] + dr[:-1])),
-        width=width, depth=depth, deposit=jnp.asarray(D),
+        width=width, wc=jnp.asarray(wc), wf=jnp.asarray(wf), depth=depth,
+        deposit=jnp.asarray(D),
         bay=jnp.repeat(jnp.arange(g.n_bays), g.cols_per_bay),
         offset=jnp.tile(
             (np.arange(g.cols_per_bay) + 0.5 - 0.5 * g.cols_per_bay) * length / nm,
@@ -415,6 +434,10 @@ class PhysicalParams(GlassFurnaceParams):
     # s: the surface current's Courant number reached 1 at 180 s near the batch tip
     # when firing hard, so 120 s, good to about 34 m/h over a 1.8 m column.
     delta_t: float = 120.0
+    # Each port's share of the firing, ours: no split was found. Even up to the hot
+    # spot's port, W2000b's 13 m, then falling linearly; the last port's 0.4 is the
+    # least taper of 1.0, 0.8, 0.6, 0.4, 0.2 that puts the crown's peak in that bay.
+    port_shares: tuple = (1.0, 1.0, 1.0, 1.0, 0.7, 0.4)
     max_steps_in_episode: int = 5040  # seven days
 
 
@@ -492,7 +515,7 @@ def fining_done(T, p):
 
 def _gas_balance(s, E_load, T_load, fuel_heat, m_gas, H_air, a, g, p):
     """Each bay's gas, algebraically: firing in, flue out, radiation, convection."""
-    share = 1.0 / g.n_bays
+    share = jnp.asarray(p.port_shares) / jnp.sum(jnp.asarray(p.port_shares))
     E = jnp.concatenate([SIGMA * s.T_roof[0] ** 4, E_load])
     drive = a.Ugs @ E
     mc = share * m_gas * p.c_p_gas
@@ -608,18 +631,21 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
     wide = jnp.concatenate([grad[:, :1], grad, grad[:, -1:]], 1)
     drive = 0.25 * wide[:, :-2] + 0.5 * grad + 0.25 * wide[:, 2:]
     source = jnp.concatenate([melt * a.dx[: a.nm], jnp.zeros(g.n_refiner)])
-    Q = jnp.cumsum(source) / p.rho_glass
+    Q = jnp.cumsum(source * a.wc) / p.rho_glass  # m^3/s through each cell's far face
     cover_f = jnp.concatenate([f, jnp.zeros(g.n_refiner)])
     cover_face = 0.5 * (cover_f[1:] + cover_f[:-1])
     u = column_flow(
-        drive, jnp.maximum(viscosity(Tf), MU_GUARD), a.dz, Q[:-1], cover_face, v,
+        drive, jnp.maximum(viscosity(Tf), MU_GUARD), a.dz, Q[:-1] / a.wf[1:-1],
+        cover_face, v,
         p.g_accel * p.rho_glass * p.beta_glass,
     )  # fmt: skip
     dz_ = a.dz[:, None]
-    out = (Q[-1] * a.dz / a.depth)[:, None]
-    F = jnp.concatenate([jnp.zeros((g.n_depth, 1)), u * dz_, out], 1)
+    out = (Q[-1] * a.dz / a.depth)[:, None]  # m^3/s per layer, leaving
+    # Volume flows per layer through each face, and each cell's plan area.
+    F = jnp.concatenate([jnp.zeros((g.n_depth, 1)), u * dz_ * a.wf[1:-1], out], 1)
+    plan = a.dx * a.wc
     W = jnp.concatenate(
-        [(source / a.dx / p.rho_glass)[None], (F[:, :-1] - F[:, 1:]) / a.dx], 0
+        [(source / a.dx / p.rho_glass)[None], (F[:, :-1] - F[:, 1:]) / plan], 0
     )
     W = jnp.cumsum(W, 0)
     Wp, Wm = jnp.maximum(W, 0.0), jnp.maximum(-W, 0.0)
@@ -630,15 +656,13 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
     zero = jnp.zeros((g.n_depth, 1))
     carry = jnp.concatenate([zero, carry, out * T[:, -1:]], 1)
     kf = melt_conductivity(Tf)
-    along = kf * grad / rc * dz_
+    along = kf * grad / rc * dz_ * a.wf[1:-1]
     along = jnp.concatenate([zero, along, zero], 1)
-    R = (carry[:, :-1] - carry[:, 1:] + along[:, 1:] - along[:, :-1]) / a.dx
-    R = R - 2.0 * p.U_side / a.width * (T - Ta) / rc * dz_
+    R = (carry[:, :-1] - carry[:, 1:] + along[:, 1:] - along[:, :-1]) / plan
+    R = R - 2.0 * p.U_side / a.wc * (T - Ta) / rc * dz_
     R = R.at[-1].add(-p.U_bottom * (T[-1] - Ta) / rc)
 
-    loss_ref = _refiner_loss(T[0, a.nm :], p) + cooling / jnp.sum(
-        a.dx[a.nm :] * a.width
-    )
+    loss_ref = _refiner_loss(T[0, a.nm :], p) + cooling / jnp.sum(plan[a.nm :])
     q_all = jnp.concatenate([(1.0 - f) * q + spare, -loss_ref])
     R = R + a.deposit[:, None] * q_all / rc
     Tt0 = T[0]
@@ -671,7 +695,7 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
     aa_x = jnp.concatenate([pad, -Wp[1:-1]], 0)
     cc_x = jnp.concatenate([-Wm[1:-1], pad], 0)
     bb_x = dz_ / dt + Wm[:-1] + Wp[1:]
-    rhs_x = dz_ / dt * X + (carry[:, :-1] - carry[:, 1:]) / a.dx
+    rhs_x = dz_ / dt * X + (carry[:, :-1] - carry[:, 1:]) / plan
     Xn = jnp.maximum(thomas(aa_x, bb_x, cc_x, rhs_x), fining_done(Tn, p))
 
     # ---- Crown: conduction, the face linearised
@@ -705,16 +729,16 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
         m=m_new, c=c_new, q_under=q_under, foam=foam, fining=Xn,
     )  # fmt: skip
 
-    w_area = a.dx * a.width
+    w_area = plan
     books = dict(
         **{"in": fuel_heat + rc * jnp.sum(W[0] * w_area) * p.T_melt_K},
         out=m_gas * p.c_p_gas * (T_stack - p.T_ambient)
         + 2.0 * jnp.sum(loss_r)
         + jnp.sum(a.A_crown * back_U * (Trn[-1] - Ta))
-        + jnp.sum(2.0 * p.U_side * (T - Ta) * dz_ * a.dx)
+        + jnp.sum(2.0 * p.U_side * (T - Ta) * dz_ * a.dx)  # two walls per cell
         + jnp.sum(p.U_bottom * (T[-1] - Ta) * w_area)
         + jnp.sum(loss_ref * w_area[a.nm :])
-        + rc * jnp.sum(out[:, 0] * T[:, -1]) * a.width
+        + rc * jnp.sum(out[:, 0] * T[:, -1])
         + used,
         T_stack=T_stack, T_air=T_air, foam=foam, melt=melt, q=q_all, v=v, fuel=fuel,
         in_blanket=in_blanket, u=u, H_load=H_load, H_crown=H_crown,
@@ -728,10 +752,10 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
 def stored_energy(s, g, p):
     a = layout(g)
     rc = p.rho_glass * p.c_glass
-    melt = rc * jnp.sum(s.T * a.dz[:, None] * a.dx * a.width)
+    melt = rc * jnp.sum(s.T * a.dz[:, None] * a.dx * a.wc)
     roof = p.rho_brick * p.cp_brick * jnp.sum(s.T_roof * a.dr[:, None] * a.A_crown)
     regen = 2.0 * p.C_regen_node * jnp.sum(s.T_r)
-    held = p.delta_t * jnp.sum(s.q_under * a.dx * a.width)
+    held = p.delta_t * jnp.sum(s.q_under * a.dx * a.wc)
     return melt + roof + regen + held
 
 

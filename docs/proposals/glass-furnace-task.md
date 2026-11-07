@@ -637,3 +637,40 @@ The refiner has no waist, so most of its cooling falls on glass going back to th
 is why the cooling is so large and why the canal answers the cooling within minutes. The delay
 then sits in the fining, not in the canal. Measuring the twelve tests on this refiner would
 measure the missing waist.
+
+### Waist and firing taper (owner's pick)
+
+**Waist.** From a 1300 t/d float furnace (Materials 17 (2024) 4989, Table 1): waist 7.5 m long and
+4.5 m wide on a 14 m melter, working end 10 m wide. Scaled to this 11 m melter: 3.5 m waist,
+7.9 m working end. In the long-tank flow a narrower face carries the same exchange per metre of
+width, so less in total. No side-wall drag: at 3.5 m wide and 1.15 m deep it would add about a
+tenth.
+
+**Firing taper, `ours`.** No per-port split was found. Ports 1 to 4 even, then 0.7 and 0.4: the
+least taper of five tried that puts the crown's peak in bay 3, W2000b's 13 m hot spot.
+
+**The design point:** fuel 0.514 kg/s, refiner cooling 5.25 MW, crown face 1590 C in bay 3, canal
+1101 C, specific energy 4.33 GJ/t. Refiner loop by its recipe: 3.13e5 W/K, integral 2.1 h.
+
+| Figure | Before the waist | With it | Published |
+|---|---|---|---|
+| Forward flow into the refiner, over pull | 4.3 | 3.3 | 1.2 to 2.5, US4798616 |
+| Refiner cooling, share of firing | 22 % | 21 % | Not found |
+| Hottest crown face | 1633 C | 1594 C | Silica degrades above 1620 C |
+| Fastest day-mean current | 20 m/h | 41 m/h, in the waist | 7 to 25 m/h in melters |
+| Fining share leaving | 0.52 | 0.47 | No pass mark found |
+
+**Fuel +1 %, refiner loop working, no walks:**
+
+| Reading | Settled | First move | t63 | Coast after a 4 h pulse |
+|---|---|---|---|---|
+| Margin (the cooling's work) | +22 K | 0.2 h, fitted dead time 1.1 h | 8 h | Peaks 0.9 h after |
+| Fining share | +0.021 | 1.1 h | 20 h | Peaks 1.4 h after |
+| Floor, melter's end | +3.0 K | 0.4 h, fitted 0.7 h | 7 h | Peaks 0.9 h after |
+| Crown couple | +4.9 K | 0.1 h | 5.5 h | None |
+
+**Reading this.** The waist cut the return flow by a quarter but not the cooling: the refiner's
+cooling itself steepens the gradient that drives the exchange. With 5.25 MW of margin the canal
+can't fall below target unless the fuel is cut by far more than any walk moves it, so in the score
+the canal stays in place and the fining pass mark is what binds. The fining is slow, 20 h, but
+moves little with fuel, and the delays measured on this plant sit near 1 h, under the 2 h aim.
