@@ -21,6 +21,7 @@ Run once, before the re-record; the file is in the oracle's fingerprint.
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib
 import json
 
@@ -38,6 +39,7 @@ from target_gym.hvac.env import WEATHER_OU_THETA
 from target_gym.oracles.controller import enable_x64, float64
 from target_gym.oracles.rates import RateLimit
 from target_gym.oracles.widths import kink_width, limit_backoff, noise_backoff
+from target_gym.plane.dynamics import INNER_STEPS
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
@@ -47,8 +49,23 @@ PROTOCOL = "docs/proposals/oracle-smoothing-protocol.md, K4 to K6, K10 and K11"
 RISK, RECORDED_SEEDS = 0.01, 10
 #: Tasks whose moves are rates (``oracles.rates``).
 BY_RATE = ("boiler_drum", "glass_furnace")
+AIRCRAFT_2D = ("plane", "plane_energy", "plane_sine")
+#: The tasks whose reward prices a heading, a min over turn directions (S4).
+TURNS = ()
+AIRCRAFT = AIRCRAFT_2D + TURNS
+#: The dropped guards (T4) of the aircraft (section 5.2).
+_AIRFRAME = {
+    "mach": "plane/dynamics.py, the shock stall, the drag rise and the caps past "
+    "M_crit, which MMO does not keep off: checked",
+    "section_cap": "plane/dynamics.py, the section's lift cap of +-2",
+    "angular_clip": "plane/env.py, the clip of the angular accelerations",
+    "incidence_wrap": "plane/dynamics.py, the wraps at +-180 deg",
+    "scaler": "plane/dynamics.py, airspeed_scaler's clip, from below",
+    "fuel": "plane/env.py, the tanks' clip",
+}
 #: The dropped guards (T4) of each task, by the protocol's inventory.
 GUARDS = {
+    **{n: _AIRFRAME for n in AIRCRAFT},
     "cstr": {},
     "first_order": {},
     "four_tank": {
@@ -362,6 +379,141 @@ def reactor_sites(points) -> tuple[dict, list]:
     return out, [float(b) for b in limit_backoff(limited, [width or 0.0], pts, n)]
 
 
+def _aircraft(name, points):
+    """A flight task's params, probes and ``run(probe, deltas, gust, roll)``, one
+    planned step at width 0 giving its tracked outputs and limited quantities."""
+    from target_gym.plane import oracle_model as om
+
+    spec = REGISTRY[name]
+    env, p = spec.make_env(), float64(spec.make_test_params())
+    pts = [(float64(s), jnp.asarray(u, jnp.float64)) for s, u in points]
+    zero = jnp.zeros(len(om.SITE_NAMES))
+    method = env.integration_method
+    if name in AIRCRAFT_2D:
+        from target_gym.plane.oracle import plane_step, state_x
+
+        def run(probe, deltas, gust, roll):
+            state, u = probe
+            x1, (loads, eas, mach, _) = plane_step(
+                p, state_x(state), u, 0, gust, method, zero, deltas
+            )
+            limited = jnp.concatenate([x1[:1], loads, eas[None], mach[None]])
+            return x1[:1], limited
+
+        return p, pts, run, ("gust_x", "gust_z")
+
+    def run(probe, deltas, gust, roll):
+        state, u = probe
+        x1, flown = om.flight_step(
+            p, om.flight_x(state), u, 0, gust, method, zero, deltas, roll
+        )
+        tracked = jnp.stack([x1[2], jnp.arctan2(x1[4], x1[3])])
+        return tracked, om.flight_outputs(x1, flown)
+
+    return p, pts, run, ("gust_x", "gust_y", "gust_z")
+
+
+def _gust(state, fields):
+    return jnp.stack([getattr(state, f) for f in fields])
+
+
+def aircraft_sites(name, points) -> tuple[dict, list]:
+    """An aircraft's sites, each delta entering every evaluation of a step at once,
+    against its tracked outputs, and the back-off of each limit."""
+    from target_gym.plane import oracle_model as om
+
+    p, pts, run, fields = _aircraft(name, points)
+    sites = {
+        "buffet": ("plane/dynamics.py, the buffet line's cap", p.CL_max - p.CL_min),
+        "cl_stall": ("plane/dynamics.py, the stall clip", p.CL_max - p.CL_min),
+        "separation": ("plane/dynamics.py, abs(incidence)", 2.0 * p.aoa_stall),
+        "surface_clip": ("plane/dynamics.py, attitude_axis", 2.0),
+        "surface_rate": (
+            "plane/dynamics.py, compute_next_surface",
+            2.0 * p.surface_rate_limit * p.delta_t / INNER_STEPS,
+        ),
+        "tropopause": ("plane/dynamics.py, the sound speed's switch", 288.15 - om.T11),
+    }
+    resolutions = [p.precision_floor]
+    if name not in AIRCRAFT_2D:
+        resolutions.append(p.heading_precision_floor)
+    n = len(om.SITE_NAMES)
+    zero = jnp.zeros(n)
+    no_roll = jnp.zeros(())
+
+    def tracked(probe, deltas):
+        return run(probe, om.sites(deltas), _gust(probe[0], fields), no_roll)[0]
+
+    out = {}
+    for i, site_name in enumerate(om.SITE_NAMES):
+        where, scale = sites[site_name]
+
+        @jax.jit
+        def site(probe, delta, i=i):
+            return tracked(probe, zero.at[i].set(delta[0]))
+
+        out[site_name] = {
+            "site": where,
+            "scale": float(scale),
+            "width": kink_width(site, float(scale), pts, resolutions),
+            "evaluations": 1,
+        }
+
+    @jax.jit
+    def limited(probe, deltas):
+        deltas = om.sites(deltas.sum(axis=-1))
+        return run(probe, deltas, _gust(probe[0], fields), no_roll)[1]
+
+    widths = [out[n_]["width"] or 0.0 for n_ in om.SITE_NAMES]
+    return out, [float(b) for b in limit_backoff(limited, widths, pts, 1)]
+
+
+def turn_site() -> dict:
+    """The min over turn directions (S4): it prices the reward and moves no state,
+    so K5 takes the first rung of the turn's 2 pi, as the kiln's soft max does."""
+    scale = 2.0 * float(np.pi)
+    return {
+        "site": "plane3d/env.py, wrap_angle in the heading cost",
+        "scale": scale,
+        "width": scale / 10.0,
+        "evaluations": 1,
+    }
+
+
+def aircraft_noise(name, points) -> list:
+    """K11's noise term of each limit: one innovation of the gust, the axes
+    independent, so their terms add in quadrature (derived), and on a 3D aircraft
+    the rolling gust's held white draw at the slowest probe, its largest."""
+    from target_gym.plane import oracle_model as om
+    from target_gym.plane3d.dynamics import rolling_gust
+
+    p, pts, run, fields = _aircraft(name, points)
+    std = float(p.turbulence_sigma) * float(np.sqrt(p.delta_t))
+    steps = RECORDED_SEEDS * int(p.max_steps_in_episode)
+    no_roll = jnp.zeros(())
+    terms = []
+    for axis, _ in enumerate(fields):
+
+        @jax.jit
+        def by_gust(probe, d, axis=axis):
+            gust = _gust(probe[0], fields).at[axis].add(d)
+            return run(probe, om.NO_DELTA, gust, no_roll)[1]
+
+        terms.append(noise_backoff(by_gust, std, pts, RISK, steps))
+    if name not in AIRCRAFT_2D:
+
+        @jax.jit
+        def by_roll(probe, d):
+            return run(probe, om.NO_DELTA, _gust(probe[0], fields), d)[1]
+
+        slowest = min(float(jnp.hypot(s.x_dot, s.y_dot)) for s, _ in pts)
+        one = jax.vmap(lambda k: rolling_gust(k, slowest, p), axis_size=20000)(
+            jax.random.split(jax.random.PRNGKey(0), 20000)
+        )
+        terms.append(noise_backoff(by_roll, float(jnp.std(one)), pts, RISK, steps))
+    return [float(b) for b in np.sqrt(np.sum(np.square(terms), axis=0))]
+
+
 def battery_sites(_points) -> tuple[dict, list]:
     """The charge a new half-cycle jumps to at the hysteresis (env.py:366): it
     moves no tracked output, so K5 takes the ladder's first rung, and no limit."""
@@ -390,6 +542,7 @@ def kiln_sites(_points) -> tuple[dict, list]:
 
 
 SITES = {
+    **{n: functools.partial(aircraft_sites, n) for n in AIRCRAFT},
     "reactor": reactor_sites,
     "battery": battery_sites,
     "cement_kiln": kiln_sites,
@@ -484,7 +637,12 @@ def main(tasks) -> None:
         points = probes(name) if name in SITES or name in NOISY else []
         with enable_x64():
             sites, gaps = SITES[name](points) if name in SITES else ({}, [])
-            noise = noise_terms(name, points) if name in NOISY else []
+            if name in TURNS:
+                sites["turn"] = turn_site()
+            if name in AIRCRAFT:
+                noise = aircraft_noise(name, points)
+            else:
+                noise = noise_terms(name, points) if name in NOISY else []
         n = max(len(gaps), len(noise))
         gaps, noise = gaps or [0.0] * n, noise or [0.0] * n
         backoffs = [g + b for g, b in zip(gaps, noise)]

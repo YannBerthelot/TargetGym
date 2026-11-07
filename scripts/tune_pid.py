@@ -647,16 +647,6 @@ def _controller_defaults(gains_key):
     reported success and changed nothing. Seeding from the constructor's own
     defaults is what the controller has in fact been running on.
     """
-    import dataclasses
-
-    if gains_key == "plane_cascaded":
-        from target_gym.plane.oracle import PlaneCascadedPIDParams
-
-        return {
-            f.name: float(f.default)
-            for f in dataclasses.fields(PlaneCascadedPIDParams)
-            if f.name != "dt" and isinstance(f.default, (int, float))
-        }
     return None
 
 

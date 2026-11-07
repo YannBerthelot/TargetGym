@@ -114,11 +114,10 @@ bound for the others. Each task's controller lives in its package's
 
 | Implementation | Used by | When it applies |
 |---|---|---|
-| The shared solver (`target_gym.oracles`) | cstr, first_order, four_tank, unstable_cstr, compressor_surge, hvac, glass_furnace, cement_kiln, boiler_drum, wind_turbine, reactor | A problem definition, not a tuned controller (docs/proposals/oracle-audit.md): the episode reward on the noise-free plant, over the horizon the horizon protocol measured, solved once every Cooper sample time by IPOPT's algorithm in JAX with the trips as hard limits. Each solve's certificate is recorded |
+| The shared solver (`target_gym.oracles`) | cstr, first_order, four_tank, unstable_cstr, compressor_surge, hvac, glass_furnace, cement_kiln, boiler_drum, wind_turbine, reactor, plane, plane_sine, plane_energy | A problem definition, not a tuned controller (docs/proposals/oracle-audit.md): the episode reward on the noise-free plant, over the horizon the horizon protocol measured, solved once every Cooper sample time by IPOPT's algorithm in JAX with the trips as hard limits. Each solve's certificate is recorded |
 | `ScheduleFeedforward` | battery | Follows the signal inside a published cycle-depth bound. A stand-in, labelled non-compliant: it wins 9 of 10 seeds |
 | `NewtonMPC` | ph_neutralization | Iterative LQR on the environment's own step: Newton's method on the action sequence |
-| `GradientMPC` | distillation, plane_energy, the four 3D aircraft tasks | Differentiates the JAX dynamics and descends the objective |
-| Two gradient planners with a handover | plane, plane_sine | Both actuators planned to capture the initial altitude, then the elevator only, with the throttle on the PID's airspeed loop |
+| `GradientMPC` | distillation, the four 3D aircraft tasks | Differentiates the JAX dynamics and descends the objective |
 | Feedback law plus a residual planner | patrol, patrol_range_bearing, formation | Flies the lead's own autopilot on the follower's state, and a 30-step planner adds a correction; on formation one planner corrects every seat, the lead's too |
 
 The MPC has no learned parameters. It solves its problem online at every step

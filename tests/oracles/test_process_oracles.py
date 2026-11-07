@@ -50,7 +50,8 @@ C2 = (
     "cement_kiln",
     "reactor",
 )  # fmt: skip  (battery holds a stand-in, labelled non-compliant, for 0.8.0)
-ON_SOLVER = FIVE + C2
+AIRCRAFT = ("plane", "plane_sine", "plane_energy")
+ON_SOLVER = FIVE + C2 + AIRCRAFT
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -312,7 +313,8 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
 
 @pytest.mark.parametrize(
     "name, budget",
-    [(name, 0.25) for name in FIVE + ("boiler_drum", "glass_furnace", "cement_kiln")]
+    [(name, 0.25) for name in FIVE + AIRCRAFT]
+    + [(name, 0.25) for name in ("boiler_drum", "glass_furnace", "cement_kiln")]
     + [
         # p = 1, in dollars: half the 1 kW or 1.7 kW resolution, for one step of
         # delta_t s at the imbalance price in $/MWh.
@@ -340,6 +342,7 @@ PRICED = {
     "glass_furnace": 2,  # crown temperature, gas
     "cement_kiln": 2,  # free lime, fuel
     "reactor": 1,  # Tavg: the rods' travel stops at a steady state
+    "plane": 2, "plane_sine": 2, "plane_energy": 2,  # altitude, speed
 }  # fmt: skip
 
 

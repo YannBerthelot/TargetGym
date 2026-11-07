@@ -1,0 +1,869 @@
+{
+  "M": 19,
+  "N": 84,
+  "P": 103,
+  "P_set_by": {
+    "cv": "patrol_slots:along",
+    "mv": "patrol_slots:speed",
+    "seed": 100
+  },
+  "P_steps": 103,
+  "P_without_quiet_fits": 103,
+  "T_c_seconds": 1.0,
+  "T_c_set_by": {
+    "cv": "patrol:mach",
+    "mv": "patrol:throttle",
+    "seed": 109
+  },
+  "T_c_steps": 1,
+  "classes": {
+    "patrol:altitude": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 1,
+        "integrating_lag": 13
+      }
+    },
+    "patrol:bank": {
+      "class": "fopdt",
+      "votes": {
+        "fopdt": 9,
+        "integrating_lag": 0
+      }
+    },
+    "patrol:eas": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 18
+      }
+    },
+    "patrol:load": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "patrol:mach": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 17
+      }
+    },
+    "patrol:separation": {
+      "class": "fopdt",
+      "votes": {
+        "fopdt": 2,
+        "integrating_lag": 1
+      }
+    },
+    "patrol:slot": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 3
+      }
+    },
+    "patrol_slots:across": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 6
+      }
+    },
+    "patrol_slots:along": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 4
+      }
+    },
+    "patrol_slots:altitude": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "patrol_slots:bank": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "patrol_slots:eas": {
+      "class": "fopdt",
+      "votes": {
+        "fopdt": 1,
+        "integrating_lag": 0
+      }
+    },
+    "patrol_slots:load": {
+      "class": null,
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 0
+      }
+    },
+    "patrol_slots:mach": {
+      "class": "fopdt",
+      "votes": {
+        "fopdt": 1,
+        "integrating_lag": 0
+      }
+    },
+    "patrol_slots:separation": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 0,
+        "integrating_lag": 5
+      }
+    },
+    "patrol_slots:slot": {
+      "class": "integrating_lag",
+      "votes": {
+        "fopdt": 1,
+        "integrating_lag": 6
+      }
+    }
+  },
+  "compliant": true,
+  "counts": {
+    "insignificant": 87,
+    "invalid": 155,
+    "quiet": 31,
+    "valid": 8
+  },
+  "cpu": "Apple M4 Pro",
+  "cvs_without_valid_pair": [
+    "patrol:bank",
+    "patrol:load",
+    "patrol:separation",
+    "patrol:slot"
+  ],
+  "dt": 1.0,
+  "episode_samples": 200,
+  "episode_steps": 200,
+  "generated": "2026-11-07T11:01:47+00:00",
+  "pairs": [],
+  "plans_to_episode_end": false,
+  "protocol": "docs/proposals/oracle-horizon-protocol.md, Amendments 1 to 5",
+  "quiet_fits": [
+    {
+      "P": 10,
+      "cv": "patrol:eas",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.0167,
+        "k": 0.479745,
+        "k_3sigma": 0.0268291,
+        "model": "integrating_lag",
+        "sigma": 0.0457611,
+        "snr": 5.41047,
+        "sse": 0.0717879,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "patrol:throttle",
+      "seed": 101,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "patrol:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.3413,
+        "k": 0.00195528,
+        "k_3sigma": 8.02345e-05,
+        "model": "integrating_lag",
+        "sigma": 0.000138669,
+        "snr": 7.41134,
+        "sse": 6.42041e-07,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "patrol:throttle",
+      "seed": 101,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "patrol:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.4144,
+        "k": 0.00170621,
+        "k_3sigma": 6.98373e-05,
+        "model": "integrating_lag",
+        "sigma": 0.000115506,
+        "snr": 7.50798,
+        "sse": 4.28721e-07,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "patrol:throttle",
+      "seed": 104,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "patrol:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.832,
+        "k": 0.00174715,
+        "k_3sigma": 8.03086e-05,
+        "model": "integrating_lag",
+        "sigma": 0.000144584,
+        "snr": 6.44711,
+        "sse": 7.26982e-07,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "patrol:throttle",
+      "seed": 106,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "patrol:eas",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.754,
+        "k": 0.301494,
+        "k_3sigma": 0.0143609,
+        "model": "integrating_lag",
+        "sigma": 0.0246403,
+        "snr": 6.3561,
+        "sse": 0.0205687,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "patrol:throttle",
+      "seed": 108,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "patrol:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.1546,
+        "k": 0.00147731,
+        "k_3sigma": 4.71336e-05,
+        "model": "integrating_lag",
+        "sigma": 8.19337e-05,
+        "snr": 9.56798,
+        "sse": 2.21565e-07,
+        "tau2": 9.91846e-06,
+        "theta": "< dt"
+      },
+      "mv": "patrol:throttle",
+      "seed": 108,
+      "test": 0
+    },
+    {
+      "P": 16,
+      "cv": "patrol:eas",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.0629,
+        "k": 0.643736,
+        "k_3sigma": 0.0264068,
+        "model": "integrating_lag",
+        "sigma": 0.0243419,
+        "snr": 9.22915,
+        "sse": 0.0130356,
+        "tau2": "< dt",
+        "theta": 0.303722
+      },
+      "mv": "patrol:throttle",
+      "seed": 109,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "patrol:altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.2431,
+        "k": 35.4732,
+        "k_3sigma": 1.15839,
+        "model": "integrating_lag",
+        "sigma": 7.83943,
+        "snr": 5.75355,
+        "sse": 5149.55,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "patrol:pitch",
+      "seed": 100,
+      "test": 0
+    },
+    {
+      "P": 36,
+      "cv": "patrol:altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.0136,
+        "k": 38.5832,
+        "k_3sigma": 1.27839,
+        "model": "integrating_lag",
+        "sigma": 2.12141,
+        "snr": 9.27042,
+        "sse": 148.512,
+        "tau2": 0.00350752,
+        "theta": 1.24816
+      },
+      "mv": "patrol:pitch",
+      "seed": 101,
+      "test": 0
+    },
+    {
+      "P": 15,
+      "cv": "patrol:eas",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.3563,
+        "k": -1.81091,
+        "k_3sigma": 0.0732941,
+        "model": "integrating_lag",
+        "sigma": 0.127418,
+        "snr": 7.38339,
+        "sse": 0.535771,
+        "tau2": 0.00248336,
+        "theta": 0.212345
+      },
+      "mv": "patrol:pitch",
+      "seed": 101,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "patrol:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.2329,
+        "k": -0.0055899,
+        "k_3sigma": 0.000236171,
+        "model": "integrating_lag",
+        "sigma": 0.000410573,
+        "snr": 7.10403,
+        "sse": 5.56282e-06,
+        "tau2": 0.00173099,
+        "theta": "< dt"
+      },
+      "mv": "patrol:pitch",
+      "seed": 101,
+      "test": 0
+    },
+    {
+      "P": 36,
+      "cv": "patrol:altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.1025,
+        "k": 40.1112,
+        "k_3sigma": 1.17844,
+        "model": "integrating_lag",
+        "sigma": 2.67684,
+        "snr": 9.58336,
+        "sse": 293.784,
+        "tau2": 0.0257631,
+        "theta": 1.2247
+      },
+      "mv": "patrol:pitch",
+      "seed": 103,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "patrol:eas",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.7157,
+        "k": -1.71738,
+        "k_3sigma": 0.0730119,
+        "model": "integrating_lag",
+        "sigma": 0.177483,
+        "snr": 6.28457,
+        "sse": 1.29193,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "patrol:pitch",
+      "seed": 103,
+      "test": 0
+    },
+    {
+      "P": 87,
+      "cv": "patrol:slot",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.6008,
+        "k": -54.5229,
+        "k_3sigma": 5.37291,
+        "model": "integrating_lag",
+        "sigma": 3.20364,
+        "snr": 9.67016,
+        "sse": 443.434,
+        "tau2": 8.03164,
+        "theta": "< dt"
+      },
+      "mv": "patrol:pitch",
+      "seed": 103,
+      "test": 0
+    },
+    {
+      "P": 24,
+      "cv": "patrol:eas",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.1682,
+        "k": -1.80062,
+        "k_3sigma": 0.0602837,
+        "model": "integrating_lag",
+        "sigma": 0.0896118,
+        "snr": 9.69827,
+        "sse": 0.248939,
+        "tau2": 0.295552,
+        "theta": 0.584641
+      },
+      "mv": "patrol:pitch",
+      "seed": 104,
+      "test": 0
+    },
+    {
+      "P": 24,
+      "cv": "patrol:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.2136,
+        "k": -0.00589238,
+        "k_3sigma": 0.000184362,
+        "model": "integrating_lag",
+        "sigma": 0.000290854,
+        "snr": 9.87225,
+        "sse": 2.62248e-06,
+        "tau2": 0.000865491,
+        "theta": 0.715921
+      },
+      "mv": "patrol:pitch",
+      "seed": 104,
+      "test": 0
+    },
+    {
+      "P": 40,
+      "cv": "patrol:altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.1932,
+        "k": 39.5957,
+        "k_3sigma": 1.22363,
+        "model": "integrating_lag",
+        "sigma": 2.02941,
+        "snr": 9.90113,
+        "sse": 135.912,
+        "tau2": 0.000753894,
+        "theta": 1.42645
+      },
+      "mv": "patrol:pitch",
+      "seed": 106,
+      "test": 0
+    },
+    {
+      "P": 28,
+      "cv": "patrol:eas",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.7605,
+        "k": -1.7573,
+        "k_3sigma": 0.0611702,
+        "model": "integrating_lag",
+        "sigma": 0.106342,
+        "snr": 8.49145,
+        "sse": 0.373182,
+        "tau2": 9.51111e-05,
+        "theta": 0.940483
+      },
+      "mv": "patrol:pitch",
+      "seed": 106,
+      "test": 0
+    },
+    {
+      "P": 26,
+      "cv": "patrol:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.5231,
+        "k": -0.00568196,
+        "k_3sigma": 0.000213546,
+        "model": "integrating_lag",
+        "sigma": 0.00037124,
+        "snr": 7.87142,
+        "sse": 4.54804e-06,
+        "tau2": 0.00381078,
+        "theta": 0.808686
+      },
+      "mv": "patrol:pitch",
+      "seed": 106,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "patrol:altitude",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.3211,
+        "k": 35.4029,
+        "k_3sigma": 1.15222,
+        "model": "integrating_lag",
+        "sigma": 7.42747,
+        "snr": 5.94624,
+        "sse": 4605.48,
+        "tau2": "< dt",
+        "theta": "< dt"
+      },
+      "mv": "patrol:pitch",
+      "seed": 107,
+      "test": 0
+    },
+    {
+      "P": 18,
+      "cv": "patrol:eas",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.2206,
+        "k": -1.74755,
+        "k_3sigma": 0.0739106,
+        "model": "integrating_lag",
+        "sigma": 0.122499,
+        "snr": 7.19315,
+        "sse": 0.480191,
+        "tau2": 0.00103269,
+        "theta": 0.428692
+      },
+      "mv": "patrol:pitch",
+      "seed": 108,
+      "test": 0
+    },
+    {
+      "P": 14,
+      "cv": "patrol:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.6744,
+        "k": -0.005894,
+        "k_3sigma": 0.000288524,
+        "model": "integrating_lag",
+        "sigma": 0.000478197,
+        "snr": 6.20802,
+        "sse": 7.31753e-06,
+        "tau2": 0.000752329,
+        "theta": 0.192988
+      },
+      "mv": "patrol:pitch",
+      "seed": 108,
+      "test": 0
+    },
+    {
+      "P": 29,
+      "cv": "patrol:mach",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.1808,
+        "k": -0.00626595,
+        "k_3sigma": 0.000283097,
+        "model": "integrating_lag",
+        "sigma": 0.000201903,
+        "snr": 9.81105,
+        "sse": 8.56069e-07,
+        "tau2": 0.612613,
+        "theta": 0.69912
+      },
+      "mv": "patrol:pitch",
+      "seed": 109,
+      "test": 0
+    },
+    {
+      "P": 13,
+      "cv": "patrol:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 98.0429,
+        "k": 0.7799,
+        "k_3sigma": 0.00531373,
+        "model": "fopdt",
+        "sigma": 0.00148571,
+        "snr": 9.09968,
+        "sse": 0.000179558,
+        "tau": 1.34466,
+        "theta": 2.44809
+      },
+      "mv": "patrol:bank",
+      "seed": 100,
+      "test": 0
+    },
+    {
+      "P": 11,
+      "cv": "patrol:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.6974,
+        "k": 0.838258,
+        "k_3sigma": 0.0227861,
+        "model": "fopdt",
+        "sigma": 0.00341266,
+        "snr": 4.34029,
+        "sse": 0.000342634,
+        "tau": 1.22169,
+        "theta": 1.38522
+      },
+      "mv": "patrol:bank",
+      "seed": 101,
+      "test": 0
+    },
+    {
+      "P": 11,
+      "cv": "patrol:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.9561,
+        "k": 0.838655,
+        "k_3sigma": 0.0197222,
+        "model": "fopdt",
+        "sigma": 0.00323619,
+        "snr": 4.63432,
+        "sse": 0.000347288,
+        "tau": 1.23693,
+        "theta": 1.50311
+      },
+      "mv": "patrol:bank",
+      "seed": 103,
+      "test": 0
+    },
+    {
+      "P": 11,
+      "cv": "patrol:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.4574,
+        "k": 0.848446,
+        "k_3sigma": 0.0243251,
+        "model": "fopdt",
+        "sigma": 0.00364642,
+        "snr": 4.20427,
+        "sse": 0.000386028,
+        "tau": 1.29036,
+        "theta": 1.62819
+      },
+      "mv": "patrol:bank",
+      "seed": 104,
+      "test": 0
+    },
+    {
+      "P": 15,
+      "cv": "patrol:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 97.3752,
+        "k": 0.778631,
+        "k_3sigma": 0.0119114,
+        "model": "fopdt",
+        "sigma": 0.00189694,
+        "snr": 7.03302,
+        "sse": 0.000122399,
+        "tau": 1.68958,
+        "theta": 2.67774
+      },
+      "mv": "patrol:bank",
+      "seed": 106,
+      "test": 0
+    },
+    {
+      "P": 10,
+      "cv": "patrol:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.911,
+        "k": 0.826382,
+        "k_3sigma": 0.0164765,
+        "model": "fopdt",
+        "sigma": 0.00327066,
+        "snr": 4.62456,
+        "sse": 0.000471909,
+        "tau": 1.13819,
+        "theta": 1.5338
+      },
+      "mv": "patrol:bank",
+      "seed": 107,
+      "test": 0
+    },
+    {
+      "P": 13,
+      "cv": "patrol:bank",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 96.4159,
+        "k": 0.866065,
+        "k_3sigma": 0.0243271,
+        "model": "fopdt",
+        "sigma": 0.00284292,
+        "snr": 5.25139,
+        "sse": 0.000178362,
+        "tau": 1.63028,
+        "theta": 1.56669
+      },
+      "mv": "patrol:bank",
+      "seed": 109,
+      "test": 0
+    },
+    {
+      "P": 56,
+      "cv": "patrol_slots:across",
+      "fit": {
+        "V1": false,
+        "V2": true,
+        "V3": true,
+        "V4": true,
+        "fit": 95.1378,
+        "k": -160.868,
+        "k_3sigma": 11.6345,
+        "model": "integrating_lag",
+        "sigma": 3.07529,
+        "snr": 5.69095,
+        "sse": 208.069,
+        "tau2": 0.0200729,
+        "theta": 2.18526
+      },
+      "mv": "patrol_slots:course",
+      "seed": 107,
+      "test": 0
+    }
+  ],
+  "ramp": 0,
+  "retests": 39,
+  "status": "compliant",
+  "test": {
+    "hold_window": 20,
+    "noise": "residual of each fitted model over its fit window (N1)",
+    "seeds": [
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109
+    ],
+    "settle_steps": 200,
+    "steps": {
+      "bank": 0.1,
+      "pitch": 0.1,
+      "throttle": 0.1
+    },
+    "window_steps": 200
+  },
+  "tests": [
+    "patrol",
+    "patrol_slots"
+  ],
+  "zero_models": []
+}
