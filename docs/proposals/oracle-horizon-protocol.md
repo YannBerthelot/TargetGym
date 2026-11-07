@@ -811,12 +811,13 @@ seeds, -17.18 against -16.54. At P = 932 it wins 10 of 10, at -12.90.
 | boiler_drum | 1 | 178 | 1 | 237 | 237 | fuel to pressure, seed 102, valid |
 | cement_kiln | 1 | 20 | 1 | 20 | deferred, see below | |
 | compressor_surge | 1 | 91 | 1 | 95 | **187** | speed to dp, seed 105, 96.8 %, 5.8 |
-| distillation | none | none | 1 | 165 | **336** | V to xB, seed 106, 98.3 %, 9.97 |
+| distillation | none | none | 1 | 69 | **324** | L to xB, seed 103, on its 400 steps |
 | first_order | 1 | 62 | 1 | 62 | 62 | u to x, seed 104, valid |
 | four_tank | 4 | 252 | 3 | 384 | 384 | pump2 to h1, seed 106, valid |
 | glass_furnace | 30 | 143 | 29 | 158 | 158 | fuel to T_work, seed 108, valid |
 | hvac | 1 | 932 | 1 | 8 | **930** | heating to T_air, seed 102, 98.1 %, 9.97 |
 | reactor | none | none | 1 | 10 | 10 | rod to T_avg, seed 100, valid |
+| unstable_cstr | 1 | 76 | 1 | 80 | 80 | T_sp to C_a, seed 106, valid |
 | wind_turbine | 1 | 290 | 1 | 159 | **266** | pitch to P, seed 109, 97.8 %, 8.7 |
 
 P includes H21's ramp: 5 on the wind, 64 on the compressor, 2 on the reactor.
@@ -829,9 +830,9 @@ bad fit. That plans all 700 steps, and is impractical: about 37 h a seed at 170 
 P = 20 and no ten-seed run was made at 1048. No exception is granted, so the kiln's
 horizon is open, not compliant, until this is settled.
 
-`ph_neutralization` stays non-compliant. `cstr` and `unstable_cstr` have no valid fit
-on their changed plants, under experts PR 9 has yet to retune, so they keep their
-files and P until those experts land.
+`ph_neutralization` stays non-compliant. `cstr` has no valid fit on its changed plant
+under its retuned expert: all ten pairs fail V1 alone, and H22 sets no T_c. So it keeps
+its file at P = 32 (N3).
 
 **The reactor is compliant now.** It had no valid fit before. It has 20 of 40 now, on
 T_avg and T_hot. `n` and T_fuel have none.

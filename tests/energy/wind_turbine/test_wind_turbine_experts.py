@@ -122,7 +122,9 @@ def test_the_resting_target_spends_the_tie_budget_over_an_episode_at_the_edge():
     and K8's replay, which runs ``model.step``, never sees it."""
     env, p = SPEC.make_env(), plan_params(SPEC, SPEC.make_test_params())
     mpc = SPEC.make_mpc(env, p)
-    budget = 500.0e-6 * 100.0 * 0.25 / 3600.0  # the tie's, in dollars
+    # The tie's, in dollars: half the 1.7 kW resolution, 850 W, for one 0.25 s
+    # step at $100/MWh.
+    budget = 850.0e-6 * 100.0 * 0.25 / 3600.0
     with enable_x64():
         st = float64(env.reset_env(jax.random.PRNGKey(0), p)[1])
         m = mpc.model

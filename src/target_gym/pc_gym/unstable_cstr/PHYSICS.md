@@ -583,7 +583,7 @@ not a tuned controller (docs/proposals/oracle-audit.md): the shared solver's
 oracle (`target_gym.oracles`). It reads no expert code and no gains. Once
 every step (Cooper's sample time from the horizon protocol,
 `data/oracle_horizons/unstable_cstr.json`, measured on the stabilised plant
-as its section 4.4 sets out), it plans P = 76 moves of the raw coolant from
+as its section 4.4 sets out), it plans P = 80 moves of the raw coolant from
 the true state, fewer near the episode's end, and applies the first. The plan
 maximises the episode reward over the horizon on the environment's own
 dynamics, with the feed drift on its noise-free mean path, a^k dTi
