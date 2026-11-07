@@ -155,12 +155,15 @@ def test_a_step_keeps_its_books():
     p = P.PhysicalParams()
 
     def run(s, t):
-        return P.plant_step(s, 0.46, 5.79, 0.25, 0.2, t, g, p)[0], None
+        new, b = P.plant_step(s, 0.46, 5.79, 0.25, 0.2, t, g, p)
+        return new, b["in"] - b["out"]
 
-    # Past the first steps: a foam's top is carried one step, so it only lags once
-    # the start's guess has gone.
-    s = jax.jit(lambda: jax.lax.scan(run, P.initial_fields(g, p), jnp.arange(400))[0])()
-    new, books = jax.jit(lambda: P.plant_step(s, 0.46, 5.79, 0.25, 0.2, 400, g, p))()
+    # Over a stretch past the start: a foam's top is carried one step, so single
+    # steps carry a small lag term that sums out. The tolerance is 0.5 % of the firing.
+    start = P.initial_fields(g, p)
+    s = jax.jit(lambda: jax.lax.scan(run, start, jnp.arange(2880))[0])()
+    new, flows = jax.jit(lambda: jax.lax.scan(run, s, 2880 + jnp.arange(100)))()
     change = float(P.stored_energy(new, g, p) - P.stored_energy(s, g, p))
-    flows = 30.0 * float(books["in"] - books["out"])
-    assert change == pytest.approx(flows, abs=5e-3 * abs(30.0 * float(books["in"])))
+    assert change == pytest.approx(
+        30.0 * float(jnp.sum(flows)), abs=0.005 * 100 * 30.0 * 0.46 * p.LHV
+    )

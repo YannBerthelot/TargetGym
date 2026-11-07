@@ -324,9 +324,14 @@ class Grid:
     roof_skin: float = 0.003  # m, the hot-face cell
 
 
+def layout(g):
+    """Arrays of a grid, safe to build while tracing."""
+    with jax.ensure_compile_time_eval():
+        return _layout(g)
+
+
 @functools.lru_cache(maxsize=8)
-def layout(g, length=21.5, refiner=20.5, width=11.0, height=2.4, depth=1.2, crown=0.45):
-    """Arrays of a grid."""
+def _layout(g, length=21.5, refiner=20.5, width=11.0, height=2.4, depth=1.2, crown=0.45):
 
     def graded(total, first, n):
         lo, hi = 1.0001, 4.0
