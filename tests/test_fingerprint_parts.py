@@ -55,8 +55,9 @@ def _moved(spec, change) -> set[str]:
         ("compressor_surge", "compressor_surge/experts.py", {"expert"}),
         # An oracle on the shared solver reads no expert code.
         ("wind_turbine", "energy/wind_turbine/experts.py", {"expert"}),
+        ("plane", "experts/pid.py", {"expert"}),
         # Oracles that still read expert code: their part moves with it.
-        ("plane", "experts/pid.py", {"expert", "oracle"}),
+        ("patrol", "experts/pid.py", {"expert", "oracle", "stamp"}),
         ("formation", "patrol/oracle.py", {"oracle"}),
     ],
 )

@@ -341,60 +341,21 @@ the total energy error and pitch holds height. On held-out seeds 200-209 it
 holds altitude within 1.5 m on average on `plane`, 1.9 m on `plane_sine`, and
 1.6 m on `plane_energy` once each ladder step is captured; the airliner climbs
 those 360-720 m steps at its 8 m/s, which fills most of each 150 s rung. It
-replaced, in 2026-10, the cascaded PID below, which was tuned on the scored
-seeds and stays as the oracle's speed loop and hold.
+replaced, in 2026-10, a cascaded PID tuned on the scored seeds.
 
 ### The reference controller
 
-The MPC slot holds a gradient MPC that rolls out the simulator itself
-(`make_plane_mpc` in `oracle.py`): 20 s of horizon on the mean wind, started
-from and compared at every step against the cascaded PID's rollout. Since the
-oracle audit (2026-10) it differs by task. On `plane` and `plane_sine` two
-planners share the episode (`PlaneHandoverMPC`). The shipped planner, which
-plans power and stick with a fixed step, flies the capture of the initial
-altitude offset. Once the aircraft has held within 3 m of the commanded
-altitude for five consecutive steps, a second planner takes over: the
-throttle is the cascaded PID's airspeed loop, and the planner optimises the
-elevator alone, 100 iterations with a step that decays from 0.05 to 0.002
-over each solve. If the error ever passes 20 m, the shipped planner takes
-back over.
-
-Each planner covers the other's weakness. Planning both actuators, the
-shipped planner never moved its throttle after its first plan: on `plane` the
-command was constant to three decimals over the scored window of every
-protocol seed, while the airspeed sat 10 to 27 m/s off cruise on average. Its
-fixed step was also its resolution: the decay alone took seed 1's altitude
-cost from 1.47 to 0.47 per step. The speed-loop planner, flown from the first
-step, captured the initial offset more slowly. Over the ten recorded seeds it
-was worse on 9 of 10 `plane` seeds and all 10 `plane_sine` seeds, by 4 to 29%
-per seed whatever the start offset (on `plane` seed 0, 591 m off, its first
-140 steps cost 2.04e6 against 1.75e6).
-
-The airspeed loop runs live in the plant and as a JAX port inside the hold
-planner's rollout, so the elevator plan is optimised against the throttle the
-plant will get. At the handover its integrator starts from the value closest
-to zero that puts its first command within 0.01 of the shipped planner's last
-throttle: zero when both sit at full throttle, as at the end of a climb. On
-the protocol seeds the cost per step falls from 3.45 to 0.516 on `plane` and
-from 2.99 to 0.546 on `plane_sine`, with zero trips, and the reach cost is
-the shipped planner's to within 0.01%. Over ten seeds the episode costs 3273
-per step against the shipped planner's 3276 on `plane`, and 1249 against 1251
-on `plane_sine`, lower on every seed of both. `plane_energy` keeps the
-shipped planner throughout. Its cost is the ladder's transients, which
-neither change moved: the speed loop traded 7 to 8% more altitude cost for
-less airspeed cost, a trade its tighter floor makes worse (rescored at the
-1.20 m floor, the same trajectories cost 6.6 to 7.7% more than the shipped
-planner's). Under that floor (`plane_energy-v3`) it costs 511 per step on the
-protocol against the PID's 11 210, with zero trips.
-
-Each oracle reads the PID's gains from a key of `pid_gains.json` that its
-own oracle fingerprint collects: `plane_cascaded` on `plane`, and a copy
-of it under the task's own name on the other two (`plane_sine_cascaded`,
-`plane_energy_cascaded`), which a test holds equal to it. The planner's
-objective is the reward over a fixed scale per task, not over
-`rho_floor_tracking`: that is the oracle's best hold, set from its own
-holds, and while the planner read it every re-measured floor changed the
-oracle that measured it.
+The MPC slot holds the shared solver (`plane_model` in `oracle.py`,
+`target_gym.oracles`): the episode reward on the noise-free plant, over the
+horizon the horizon protocol measured, solved to convergence once every Cooper
+sample time, 3 steps on all three tasks, which share one test. Its model is the plant's
+step, inner loop included, restated in `oracle_model.py` with its kinks treated by
+the smoothing protocol, and K8's replay runs each plan on the exact step. The
+trips are hard limits on every visited state: the altitude band, the load factor
+at each inner sub-step, VMO and MMO, each backed off by the planner's worst
+one-step error on it. It reads no expert code. A surface's rate limit needs no
+row: 30 deg/s for a 1 s step crosses the whole travel, so no demand lies past its
+reach, and the corner inside the step is smoothed.
 
 ## 5. Known deviations
 

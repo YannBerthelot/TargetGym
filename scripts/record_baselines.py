@@ -389,7 +389,15 @@ def _pool(workers: int) -> cf.ProcessPoolExecutor:
 #: default. A per-seed worker compiles its own planner, and these compiles
 #: peak at several GB (measured on macOS: the formation oracle 7.4, the
 #: patrol's 4.0), so four at once take down a 16 GB CI runner.
-WORKER_GB = {"formation": 8.0, "patrol": 4.5, "patrol_range_bearing": 4.5}
+WORKER_GB = {
+    "formation": 8.0,
+    "patrol": 4.5,
+    "patrol_range_bearing": 4.5,
+    # The shared solver's exact Hessians, measured on Linux.
+    "plane": 8.5,
+    "plane_sine": 8.5,
+    "plane_energy": 8.5,
+}
 DEFAULT_WORKER_GB = 2.0
 
 
