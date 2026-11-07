@@ -186,46 +186,39 @@ trims it slowly. That is what makes it immune to the level lying during a
 transient. Single-element level control, a level loop on the feedwater alone,
 is the weaker controller precisely because it has no such feedforward.
 
-**The expert's tuning: lambda, from step tests on the training seeds.** Both
-loops are lambda-tuned for an integrating process, as drum level is in
-practice (`scripts/tune_industrial_experts.py`; the table above predates it).
-On each training seed (100 to 109), from the steady state the shipped
-controller reaches there, one loop is put in manual at its average output
-and stepped, against an unstepped run on the same noise:
+**The expert's tuning: lambda, from single-run bump tests.** The recipe is section
+10 of `docs/proposals/expert-protocols-process.md`. On each training seed (100 to
+109) the firing is in manual at the seed's heat balance, a P loop holds the level,
+since nobody leaves a drum level in manual, and the steam demand is quiet. Each loop
+then takes one step:
 
-| loop | step | fitted `k' e^(-theta s) / s` | lambda | gains |
+| loop | step | model | lambda | gains |
 |---|---|---|---|---|
-| level (pressure in auto) | feed trim +2 kg/s | 7.41e-5 m/s per kg/s, theta 13.5 s | theta | Kp 749 kg/s per m, Ki 18.5 |
-| pressure (level in auto) | firing +0.02 | 0.359 bar/s per unit action, theta 1.55 s | theta | Kp 0.672, Ki 0.144 per bar (of Q_max) |
+| pressure | firing +0.02, 120 steps | k 60 bar per unit action, tau 146 s, theta 22 s | theta | Kc 0.0554 per bar on the action, Ti 146 s |
+| level | feed +2 kg/s through the loop's setpoint, 120 steps | k' 7.96e-5 m/s per kg/s, theta 19.6 s and lag 1.3 s, counted as delay | theta | Kp 451 kg/s per m, Ki 7.18 |
 
-The level's inverse response, the shrink before the rise, is in its fitted
-delay. Theta includes half a sample. `Kc = (2 lam + theta) / (k' (lam +
-theta)^2)` and `Ti = 2 lam + theta`. Lambda is theta, 2 theta or 3 theta,
-the looser only if it is more than 1 % cheaper over the training seeds. The
-tight choice won on both loops. The hand-tuned gains it replaces were
-Kp 60, Ki 0.6 on level and Kp 0.05, Ki 0.002 on pressure.
+Steam now follows pressure at a fixed turbine valve, so pressure regulates itself and
+its model is first order. The firing lag is most of its 22 s, which is why the gains
+fall from Kc 1.34, the value the old plant gave, to 0.055. The level's trim has no limit of its
+own now: the integral stops only at the feedwater's limits, while the error pushes
+past them.
 
-**The bad seed.** Under the hand tuning, protocol seed 1 cost 1058 a step
-against 322 and 192 on seeds 0 and 2. Level carried almost all of it: a mean
-level error of 28 to 79 mm against the 2.7 mm floor, with pressure within
-0.03 to 0.05 bar. Seed 1's steam demand swings the most (73 to 98 kg/s), and
-the slow level trim let the level wander with it. On the held-out seeds 200
-to 209 the lambda-tuned expert holds 142 a step (median 140, worst 222), the
-hand tuning 635 (median 580, worst 1383), against a ceiling of 1.14: 2.10
-decades of room, and no seed dominates.
+The level's RGA, firing and feed on pressure and level, read from the moves over a
+test with the loop open, is 1.03 on the diagonal, so the pairing stands. The level
+step above is N1's closed test, and its fit carries the shrink in its delay.
 
-Spec, a strict xfail in `tests/boiler_drum/test_boiler_drum_expert.py`. Mean
-level error under 25 mm (about an inch) on every held-out seed. Measured
-19 to 34 mm, 6 of 10 seeds above.
+On the held-out seeds 200 to 209 it holds 409 a step (worst 792) against a ceiling of
+1.14, with no trip, where the old gains held 1624. Level RMS is 48 mm, 34 to 64 by
+seed, and p99 77 to 160 mm, against the +-1 inch of check 2, so it is 1.9 times the
+figure on RMS and 3 to 6 on p99. Pressure RMS is 0.24 to 0.45 bar. Spec, a strict
+xfail in `tests/boiler_drum/test_boiler_drum_expert.py`: mean level error under 25 mm
+on every held-out seed. Measured 26 to 52 mm.
 
-**These gains predate the actuator limits,** and PR 9 of the industrial fixes
-retunes them. On the limited plant, held-out seeds 200 to 209, they trip nowhere
-and hold 75 mm and 1.03 bar, at 1624 a step. With no lag or rate limit, steam
-following pressure alone, the same gains hold 25 mm and 0.032 bar at 122 to 404.
-Most of the loss is the fuel rate: 20 s of lag alone holds 0.59 bar at 913 to
-1259. The review's figures, 0.65 bar and a cost of 1342 at 20 s, came from the
-plant before steam followed pressure. Its 0.6 trips per episode at 60 s do not
-carry over: at 60 s this plant does not trip, because pressure regulates itself.
+**Most of what remains is the fuel rate.** A 20 s firing lag and a 0.7 %/s slew keep
+pressure, and with it swell, from answering the steam swings the feed sees at once.
+The review's figures, 0.65 bar and a cost of 1342 at 20 s, came from the plant before
+steam followed pressure. Its 0.6 trips per episode at 60 s do not carry over: at 60 s
+this plant does not trip, because pressure regulates itself.
 
 **The oracle is the shared solver, on the reward itself (`oracle.py`).** Cooper's
 recipe gives P = 237 steps (474 s), which covers the ~35 s swell peak several

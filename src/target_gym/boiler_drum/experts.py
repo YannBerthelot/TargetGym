@@ -61,7 +61,9 @@ def boiler_drum_pid_step(params, state, obs, xp=jnp):
     p = params
     first = state.started < 0.5
     level = xp.where(
-        first, obs[..., 0], state.level_f + p.alpha_level * (obs[..., 0] - state.level_f)
+        first,
+        obs[..., 0],
+        state.level_f + p.alpha_level * (obs[..., 0] - state.level_f),
     )
     pressure = xp.where(
         first,

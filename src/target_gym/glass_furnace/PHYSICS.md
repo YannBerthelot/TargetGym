@@ -268,38 +268,36 @@ flame-length effects.
 
 (The table predates the version-2 reward and the tuning below.)
 
-**The expert: the base layer, SIMC-tuned.** Practice runs an MPC over the
-crown loop, and an observation-only MPC is planned (experts refactor, PR 2).
-Until it exists the expert is the base layer under it: a PI on the measured
-crown temperature (`scripts/tune_industrial_experts.py`). On each training
-seed (100 to 109), from the steady state there, the firing is put in manual
-at its average over one regenerator cycle (25 min; firing stops at each
-reversal, and the PI sits at full demand through it) and stepped by +0.05.
-The crown is still rising hours later, on two time scales, so SIMC tunes it
-on the integrating approximation of its first hour: k' 0.00276 K/s per unit
-action, theta 15 s (half a sample; the fit leaves no delay of its own).
-`Kc = 1 / (k' (tau_c + theta))` = 12.1 per K and `tau_I = 4 (tau_c +
-theta)` = 120 s, with tau_c = theta (2 and 3 theta were within 1 % on the
-training seeds). No derivative. The grid search it replaces (Kp 2.5,
-Ki 0.15, Kd 0.05) ran on the scored seeds 0 to 2. Relay autotuning does *not*
-work on this plant: the crown temperature integrates the firing rate, so
-under a bang-bang relay it drifts without sustained zero-crossings and
-Åström–Hägglund has no ultimate gain or period to extract.
+**The expert: the base layer, SIMC-tuned.** Practice runs an MPC over the crown
+loop. The expert is the base layer under it: a PI on the filtered crown reading. Its
+recipe is section 10 of `docs/proposals/expert-protocols-process.md`.
 
-On the held-out seeds 200 to 209 it held 0.739 a step, the grid-searched
-gains 0.837, against a ceiling of 1, before the slew limit: the base layer
-tracked within the thermocouple's resolution, so the task had no room left for
-the hold. These gains predate the limit, and PR 9 of the industrial fixes
-retunes them. They demand a relay, saturated on 95 % of steps (the review: 94 %),
-because 12 per K on a 0.36 K reading spans the action. The review had the fuel
-moving 2.3 % of firing a step; the actuator now moves it 0.49 %, its limit
-nearly every step, and the same gains hold 1.12 K with no trips.
-Spec, a strict xfail in `tests/glass_furnace/test_glass_furnace_pid.py`: the
-true crown within 2 K on at least 95 % of hold steps. Measured 88.8 to
-97.0 %, 6 of 10 seeds under, with peaks of 4.3 to 6.9 K. The grid-searched
-gains score the same (88.8 to 96.9 %, peaks 4.4 to 7.1 K): the misses are
-the firing interruptions at each reversal, which a PI on the crown meets only
-after the fact.
+On each training seed (100 to 109) the firing is in manual at the settled point's
+fuel, the pull and the gas quiet. The step lands two steps after a firing
+interruption and ramps at the fuel's slew, and the crown is read against the same
+phase of its own cycle before, three reversals back, because that swing is as large
+as the step's whole effect. Held in manual the crown repeats every 75 minutes, and a
+reading one reversal back still carries 0.7 K. The noise band is 3.37 K with the
+reversal dips in it, so N3's 5 bands cannot be reached, and the step is the fuel's
+whole room, one raw unit, moving the crown 1.8 bands in the 20 minutes before the next
+interruption. That ships with its ratio, and no band exit can read the delay, so it
+is held at the fuel line's 60 s.
+
+The fit, `k' e^(-theta s) / (s (tau2 s + 1))`, reads k' 0.0049 K/s per unit action and
+tau2 56 s. A noise-free run reads 0.0045 and under 85 s. With half a sample and the
+half rule, theta is 103 s. SIMC gives Kc 1.0, and N5 and N7 take it down: the filter
+reaches its cap of 82 s, and the output's noise still passes the valve's dead band,
+so Kc falls to the floor of the largest load, 0.297 per K, with Ti 2730 s. The
+protocol's derivative (D6) is left out: at this Kc, 100 s of derivative on a 0.36 K
+reading at 30 s scatters about 0.5 raw a step.
+
+Kp has fallen from 12 to 0.3, and the action no longer saturates. On the held-out
+seeds 200 to 209 it holds 1.15 K a step (worst 1.82) against a ceiling of 1, about
+what the old gains' relay did at 1.12, with no trip: crown RMS 1.3 to 1.9 K, p99 4 to
+6 K, and 100 % of steps within the +-10 K of check 2. Spec, a strict xfail in
+`tests/glass_furnace/test_glass_furnace_pid.py`: the true crown within 2 K on at least
+95 % of hold steps. Measured 78 to 91 %. The misses are the firing interruptions at
+each reversal, which a PI on the crown meets only after the fact.
 
 **The oracle.** It is the shared solver on the plant itself (`oracle.py`):
 all four checker nodes per chamber, the fuel pipeline, the flame's algebraic

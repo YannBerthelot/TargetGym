@@ -279,7 +279,9 @@ and its program is published, so nothing is tuned on seeds.
   moving rods stop only at 1.0 F (lockup); 8 steps/min to 3 F, then 32 steps/min per F
   up to 72 steps/min from 5 F. A positive error withdraws.
 
-Its protocol is PR 9's, written afresh on this plant.
+Every constant is read, so the recipe has nothing to tune, at any noise level
+(`docs/proposals/expert-protocols-process.md`, section 10). The store's old relay
+gains are gone, and each level's file holds an entry with no gain in it.
 
 ### Results
 
@@ -308,11 +310,31 @@ epigraph terms, and the trips are hard limits on every sub-step's state. It read
 true state, xenon and the day's schedule included, and plans the load's mean path.
 
 **An integrator on Tavg beats the rod program.** The dead band costs $365 of Tavg
-error to save $119 of rod travel, at the $1 a step labelled ours above. The two break
-even at about $3 a step, between $1.9 and $5.8 by seed. Either the rod price is too
-low, or a controller tighter than the Westinghouse program is simply better on this
-reward. That is for the owner and PR 9, and the gate shows it as a strict xfail with
-this witness in place. The price was not moved to make it pass.
+error to save $119 of rod travel, at the $1 a step labelled ours above. The expert
+moves 480 steps in a day and the integrator 598. The price where they tie is $3.07 on
+the means, between $1.91 and $5.84 by seed, and the gate's rule (6 wins with a ratio
+above 1) fails to $2.50 and passes from $3.
+
+| rod price | ratio | seeds the integrator wins |
+|---|---|---|
+| $1 | 1.18 | 10 |
+| $2 | 1.06 | 9 |
+| $2.50 | 1.03 | 7 |
+| $3 | 1.00 | 5 |
+| $4 | 0.97 | 2 |
+
+Either the rod price is too low, or a controller tighter than the Westinghouse
+program is simply better on this reward. That is the owner's to settle, and the gate
+shows it as a strict xfail with this witness in place. The price was not moved to
+make it pass.
+
+What the sources give is thin. Whole-head replacement projects ran from $20 million to
+$150 million (NEI Magazine, both read), for nozzle cracking rather than wear. A
+vendor's 8 million steps of mechanism life was only seen in a search summary, so it is
+not a read figure. At 480 steps a day, 40 years is 7 million steps, which fits it. All
+of a head over 8 million steps is $2.50 to $19 a step, and a tenth of a head's
+mechanisms, roughly one bank (ours), is $0.25 to $1.90. Either end of that holds $1,
+and only the whole-head reading reaches $3.
 
 ---
 

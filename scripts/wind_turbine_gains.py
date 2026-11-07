@@ -58,7 +58,7 @@ from target_gym.energy.wind_turbine.env import (  # noqa: E402
     drivetrain_inertia,
 )
 from target_gym.identification import rga  # noqa: E402
-from target_gym.provenance import GAIN_LEVELS, GAINS_PATH, gains_path  # noqa: E402
+from target_gym.provenance import GAIN_LEVELS, gains_path  # noqa: E402
 
 ZETA, WN = 0.7, 0.6
 #: The pairing's operating points, dispatch in W and mean wind in m/s.
@@ -98,9 +98,7 @@ def pairing(p, P_e: float, v: float) -> float:
         return float(aerodynamic_torque(w, v, th, p)[0])
 
     a = (tau(w0 + wind_step, theta) - tau(w0 - wind_step, theta)) / (2 * wind_step)
-    b = (tau(w0, theta + pitch_step) - tau(w0, theta - pitch_step)) / (
-        2 * pitch_step
-    )
+    b = (tau(w0, theta + pitch_step) - tau(w0, theta - pitch_step)) / (2 * pitch_step)
     G = np.array(
         [
             [-b / a, N / a],

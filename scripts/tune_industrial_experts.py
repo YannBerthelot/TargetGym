@@ -37,7 +37,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 import target_gym.experts.pid as pid_mod  # noqa: E402
+
 sys.path.insert(0, str(ROOT / "scripts"))
+
+from tune_process_experts import manual, read_loop, record, tuned  # noqa: E402
 
 from target_gym import eval as E  # noqa: E402
 from target_gym.identification import (  # noqa: E402
@@ -51,7 +54,6 @@ from target_gym.identification import (  # noqa: E402
 from target_gym.provenance import GAIN_LEVELS, gains_path  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 from target_gym.scoring import ceiling  # noqa: E402
-from tune_process_experts import manual, read_loop, record, tuned  # noqa: E402
 
 TRAIN = range(100, 110)
 HELD_OUT = range(200, 210)
@@ -303,9 +305,7 @@ def tune_glass_furnace() -> dict:
     name = "glass_furnace"
     spec = REGISTRY[name]
     nominal = spec.make_test_params()
-    p = _params(
-        name, m_pull_noise_std=0.0, lhv_noise_std=0.0, target_T_crown_trim=0.0
-    )
+    p = _params(name, m_pull_noise_std=0.0, lhv_noise_std=0.0, target_T_crown_trim=0.0)
     env = spec.make_env()
     dt = float(p.delta_t)
     slew = 2.0 * float(p.actuator_rate) * dt  # raw per step
@@ -389,7 +389,9 @@ def tune_hvac() -> dict:
     plant = Plant(spec, p, [lambda o, s, q: o[0]], [(None, None)], controller=rest)
     inst = Instrument.of(env, p, "T_air")
     window = math.ceil((5 * float(p.emitter_tau) + inst.h / 2) / inst.h)
-    loop = read_loop(plant, "T_air on heat", 0, 0, 0.1, window, inst, room=plant.room(0))
+    loop = read_loop(
+        plant, "T_air on heat", 0, 0, 0.1, window, inst, room=plant.room(0)
+    )
     out = tuned(loop, inst.h)
     # The loop's output is 0 to 1 of the heat, and a raw action spans 2.
     return {
