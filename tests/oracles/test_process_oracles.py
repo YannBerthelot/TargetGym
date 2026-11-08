@@ -341,7 +341,7 @@ PRICED = {
     "wind_turbine": 1,  # power
     "glass_furnace": 2,  # crown temperature, gas
     "cement_kiln": 2,  # free lime, fuel
-    "reactor": 1,  # Tavg: the rods' travel stops at a steady state
+    "reactor": 2,  # Tavg past its dead band, the offset past its band (its clock)
     "plane": 2, "plane_sine": 2, "plane_energy": 2,  # altitude, speed
 }  # fmt: skip
 
