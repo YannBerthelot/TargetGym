@@ -216,6 +216,14 @@ that floods the turbine while load, pressure and feedwater supply change,
 using feedwater, the boiler and turbine masters, and manual control when the
 automatics cannot cope [S4, p. 1; S10; S12].
 
+## How often each window occurs
+
+Added 2026-11-08 for the frequency-weighted headline. No source in this record
+gives how often a unit runs back or trips a feed pump, or how its hours split
+between full and part load; [S3] has setpoints "change several times during
+every 24 h", and [S10] calls runback tests necessary after any change to the
+gas pass, fans or mills. The weights are therefore ours (PHYSICS.md).
+
 ## For the owner to open by hand
 
 - https://www.control.lth.se/fileadmin/control/Education/DoctorateProgram/PhysicalModeling/Lectures/Astrom-Bell.pdf

@@ -259,3 +259,15 @@ def test_the_valve_follows_the_plan(env):
     expected_end = float(state.ramp_start) + abs(span) / float(state.ramp_rate)
     assert expected_end < PARAMS.max_steps_in_episode * PARAMS.delta_t
     np.testing.assert_allclose(loads[-1], float(state.load_to), rtol=1e-5)
+
+
+def test_a_normal_window_weighs_most_and_every_weight_is_positive():
+    """Charter J4: weights are real operating time; normal operation is most of
+    it, and every scenario keeps a positive share."""
+    from target_gym import scenarios
+    from target_gym.registry import REGISTRY
+
+    shares = scenarios.weights(REGISTRY["boiler_drum"])
+    assert max(shares, key=shares.get) == "normal"
+    assert all(v > 0.0 for v in shares.values())
+    assert sum(shares.values()) == pytest.approx(1.0)

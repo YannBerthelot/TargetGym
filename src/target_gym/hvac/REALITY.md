@@ -198,6 +198,10 @@ weather, so the room stays inside its comfort band through the coming
 occupied hours without heating and cooling on the same day, because the slab
 cannot correct within the day [9, p. 3], [7, p. 7].
 
+Added 2026-11-08 for the frequency-weighted headline: no source in this
+record gives how many weeks of a heating season are cold snaps, sunny spells
+or low-occupancy weeks; the weights are ours (PHYSICS.md).
+
 ## For the owner to open by hand
 
 - ASHRAE Standard 55-2023, section on temperature variation with time (full

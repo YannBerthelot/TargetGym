@@ -1,5 +1,5 @@
 {
-  "fingerprint": "6973c9c541fe70f8",
-  "note": "Re-stamped in place, unreleased v5: scenarios.py now returns rows that the registry builds into Scenario, so the package imports nothing outside its fingerprint; the suite and the plant are unchanged.",
-  "stamped": "2026-11-08T16:56:00+00:00"
+  "fingerprint": "d93ba16aa1465aa3",
+  "note": "Re-stamped in place, unreleased v5: scenario weights added (the headline's frequency weighting); the plant and the scenarios' overrides are unchanged.",
+  "stamped": "2026-11-08T17:32:13+00:00"
 }

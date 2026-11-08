@@ -224,3 +224,15 @@ def test_episode_starts_established_at_the_bands_heating_edge(env, seed):
 
 def test_the_episode_is_two_weeks(env):
     assert PARAMS.max_steps_in_episode * PARAMS.delta_t == 14 * 86400.0
+
+
+def test_a_normal_window_weighs_most_and_every_weight_is_positive():
+    """Charter J4: weights are real operating time; normal operation is most of
+    it, and every scenario keeps a positive share."""
+    from target_gym import scenarios
+    from target_gym.registry import REGISTRY
+
+    shares = scenarios.weights(REGISTRY["hvac"])
+    assert max(shares, key=shares.get) == "normal"
+    assert all(v > 0.0 for v in shares.values())
+    assert sum(shares.values()) == pytest.approx(1.0)

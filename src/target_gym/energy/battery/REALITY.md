@@ -335,3 +335,10 @@ These were read once, by text extraction of the PDFs, and not re-fetched.
   Storage. https://atb.nlr.gov/electricity/2025/utility-scale_battery_storage
 - **PE-VISTRA:** K. Clark, Vistra releases Moss Landing energy storage incident
   findings, Power Engineering, 25 Jan 2022. https://www.power-eng.com/?p=115477
+
+## How often each window occurs
+
+Added 2026-11-08 for the frequency-weighted headline: no source in this record
+gives how many EFA blocks a year hold a price spike, a negative hour, a long
+one-way frequency deviation or a BMS error near its outliers; the weights are
+ours (PHYSICS.md).

@@ -143,6 +143,14 @@ the plan ramps once to another load, 5 to 15 minutes in. The suite
 | `id_fan_runback` | from 75 to 100 % load, the fans cap firing at the runback load's and the plan runs back at 12 to 25 %/min to 50 % | [S10] Figs. 5, 6 |
 | `feed_pump_trip` | from 75 to 100 % load, feed falls to half the nominal flow until the standby pump delivers 30 to 60 s later, and the unit runs back | [S10] Fig. 7, [S11], [S9] |
 
+**Weights (charter J4).** Each scenario's real operating time, in hours a year
+(`scenarios.py`): normal 5600, low load 1600, industrial swing 800, ID fan
+runback 3, feed pump trip 2. All are ours, with the family ranges in
+`scenarios.py`; REALITY.md finds no source for how often a runback or a feed
+pump trip happens. The bad days weigh 0.06 % of the headline together, so it
+is mostly a normal day's; the per-scenario savings and the worst scenario
+show the rest.
+
 **Score** (rule 15), in GBP: each step charges the steam delivered off the plan
 beyond the steam meter's resolution, as generation at `steam_rate`, at the
 imbalance price; in boiler-following a pressure error is generation off

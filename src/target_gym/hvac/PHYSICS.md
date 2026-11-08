@@ -132,6 +132,11 @@ radiant floors. The suite (`scenarios.py`):
 | `sunny_spell` | twice the season's mean sun | [6], [8] |
 | `low_gains` | occupied gains at the unoccupied 2 W/m^2 | [9] part 2 |
 
+**Weights (charter J4).** Each scenario's share of a 13-fortnight heating
+season (`scenarios.py`): normal 6, shoulder season 4, sunny spell 1.5, cold
+snap 1, low gains 0.5. All are ours, with family ranges in `scenarios.py`;
+REALITY.md has no weather statistics.
+
 **Score** (rule 15, Amendment 3), in euros: the heat pump's electricity, the
 slab's heat over its COP at the supply temperature, at the tariff; and each
 occupied kelvin-hour of room outside the band, or of floor above 29 C, at the

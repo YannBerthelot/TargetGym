@@ -300,3 +300,11 @@ period baselines (eight moves a block, each landing two periods later) with
 the true charge, the signal's future and the prices: a `TaskModel` whose step
 is a whole settlement period, or a dynamic program over the period starts.
 The old shared-solver planner was removed in version 4.
+
+## Weights (charter J4)
+
+Each scenario's real operating time, in 4 h blocks a year of 2190
+(`scenarios.py`): normal 1900, negative price 100, wrong estimate 100, price
+spike 60, long deviation 20, long deviation with a wrong estimate 1. All are
+ours, with family ranges in `scenarios.py`; REALITY.md gives the events but
+not how many blocks a year hold them.
