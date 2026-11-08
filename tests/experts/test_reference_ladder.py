@@ -203,3 +203,51 @@ def test_a_zone_loop_holds_two_sigma_inside_its_cheap_edge(ladder):
     # sigma is x's own spread under the loop: on this linear plant the loop holds x
     # with the same spread at the setpoint as at the centre (20 %: ten seeds).
     assert np.std(second_half, ddof=1) == pytest.approx(sigma, rel=0.2)
+
+
+def test_a_zones_sigma_is_read_on_the_scored_normal_day(ladder):
+    # A row may quiet its bump tests (here, no sensor noise). The zone's spread is
+    # still the normal day's, so it matches the spread of a row whose tests are
+    # noisy (20 %: ten seeds), and is not the near-zero of a quiet test.
+    import dataclasses
+
+    base = ladder.ROWS["first_order"]()
+    x = dataclasses.replace(base.loops[0], zone=(0.5, 1.5, "high"))
+    noisy = dataclasses.replace(base, loops=(x,), balance=None)
+    quiet = dataclasses.replace(noisy, test={"sensor_noise_scale": 0.0})
+    ladder.build("first_order", noisy)
+    ladder.build("first_order", quiet)
+    assert quiet.placed["x on u"][0] > 0.0
+    assert quiet.placed["x on u"][0] == pytest.approx(
+        noisy.placed["x on u"][0], rel=0.2
+    )
+
+
+def test_a_paired_bump_cancels_what_both_runs_share(ladder):
+    # Read against the same seed's unstepped run, a step of nothing reads nothing,
+    # sensor noise included, and the datasheet's lag reads to within 1 %: K = 2
+    # per raw action, tau = 0.5 s.
+    import numpy as np
+
+    from target_gym.identification import Instrument, Plant
+    from target_gym.registry import REGISTRY
+
+    spec = REGISTRY["first_order"]
+    env = spec.make_env()
+    row = ladder.ROWS["first_order"]()
+    params = spec.make_test_params(
+        sensor_noise_scale=1.0, max_steps_in_episode=row.steps
+    )
+    plant = Plant(
+        spec,
+        params,
+        [ladder.wrap(row.loops[0].read)],
+        [(None, None)],
+        controller=ladder.manual(row.rest),
+        paired=True,
+    )
+    inst = Instrument.of(env, params, "x")
+    assert np.all(plant.bump(0, 0, 0, 0.0, 60, inst).dy == 0.0)
+    model = ladder.read_loop(plant, "x", 0, 0, 0.1, 60, inst, plant.room(0), "fopdt")
+    assert model["k"] == pytest.approx(2.0, rel=0.01)
+    assert model["tau"] == pytest.approx(0.5, rel=0.01)

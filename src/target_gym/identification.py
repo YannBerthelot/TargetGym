@@ -671,7 +671,11 @@ class Plant:
     ``settled`` get, for a closed loop that reads what no CV does.
     ``settled(u0, y)`` replaces the held moves once the plant has settled, for a
     test MV that is not the expert's command, and ``angles`` lists the CVs that
-    wrap, which are unwrapped before a response is read.
+    wrap, which are unwrapped before a response is read. With ``paired`` a bump
+    is read against the same seed's unstepped run, whose noise and disturbances
+    are the stepped run's, instead of against its baseline's mean: a slow walk or
+    drift the two share then leaves the response. The baseline still sets the
+    noise band, which a real reading has.
     """
 
     def __init__(
@@ -693,7 +697,9 @@ class Plant:
         reads=(),
         settled=None,
         angles=(),
+        paired=False,
     ):
+        self.paired = paired
         env = spec.make_env()
         self.n_ep = int(params.max_steps_in_episode)
         self.dt = getattr(env, "control_period", 1) * float(params.delta_t)
@@ -850,10 +856,16 @@ class Plant:
         Y, U, trip, _, (Y0, U0) = self._run(s, j, step, window, loops, n_pre)
         base = Y0[hold::every, cv]
         before = np.mean(base) if at is None else Y0[-at[0] :, cv][: len(Y)]
+        u_before = np.mean(U0[hold::every, j])
+        if self.paired:
+            Yr, Ur, _, _, _ = self._run(s, j, 0.0, window, loops, n_pre)
+            n = min(len(Y), len(Yr))
+            Y, U = Y[:n] - Yr[:n], U[:n] - Ur[:n]
+            before, u_before = 0.0, 0.0
         return Bump(
             base,
             Y[::every, cv] - before,
-            U[::every, [j]] - np.mean(U0[hold::every, j]),
+            U[::every, [j]] - u_before,
             step,
             trip,
             now + n_pre,

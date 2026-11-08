@@ -14,7 +14,9 @@ Each task's row lives in its own file, ``scripts/ladder_rows/<task>.py``, defini
 ``row()``. A loop on a zone (``Cv.zone``) holds a setpoint ``k = 2`` standard deviations
 inside the zone's cheap edge, never past its centre (``ladder.zone_setpoint``). The
 deviation is the controlled variable's, with the pi rung held at the zone's centre on
-the bump-test seeds in the normal-day scenario, over the second half of each episode.
+the bump-test seeds in the scored normal day, over the second half of each episode.
+Bumps are read against the same seed's unstepped run (``Plant(paired=True)``), so a
+slow walk or drift the two runs share leaves the response.
 
 A rung a task doesn't have is reported with the reason from its row.
 """
@@ -255,9 +257,7 @@ def build(name: str, row: Row, spec=None) -> dict:
     """Every rung of ``row``, as ``{rung: Controller}``."""
     spec = spec or REGISTRY[name]
     env = spec.make_env()
-    p = spec.make_test_params(
-        sensor_noise_scale=NOISE, max_steps_in_episode=row.steps, **row.test
-    )
+    p = spec.make_test_params(**_test_params(row))
     rungs = {}
     if row.published:
         rungs["published"] = row.published(spec)
@@ -269,11 +269,7 @@ def build(name: str, row: Row, spec=None) -> dict:
     cvs += [wrap(o.read) for o in row.limits]
 
     def params_at(change):
-        return spec.make_test_params(
-            sensor_noise_scale=NOISE,
-            max_steps_in_episode=row.steps,
-            **{**row.test, **change},
-        )
+        return spec.make_test_params(**{**_test_params(row), **change})
 
     def rest_of(q):
         return row.rest_at(q) if row.rest_at else row.rest
@@ -286,6 +282,7 @@ def build(name: str, row: Row, spec=None) -> dict:
             [(None, None)] * len(cvs),
             controller=manual(rest_of(q)),
             start=row.start,
+            paired=True,
         )
 
     at_points = [params_at(change) for change in ({}, *row.points)]
@@ -397,6 +394,7 @@ def build(name: str, row: Row, spec=None) -> dict:
                     inner, [row.loops[c.loop].mv for c in row.cascades], n, dt
                 ),
                 mv_range=FREE,
+                paired=True,
             )
             for at, q in zip(plants, at_points)
         ]
@@ -476,6 +474,12 @@ def build(name: str, row: Row, spec=None) -> dict:
     return rungs
 
 
+def _test_params(row) -> dict:
+    """The bump tests' parameters: noise scale 1 and the row's episode, then the
+    row's own changes, which may quiet a disturbance for clean bumps."""
+    return {"sensor_noise_scale": NOISE, "max_steps_in_episode": row.steps, **row.test}
+
+
 def _constant(value):
     value = float(value)
     return lambda o, xp: xp.asarray(value, dtype=xp.float32)
@@ -530,16 +534,13 @@ class Recorder(Reference):
 
 def cv_traces(name, row, controller, i, spec=None) -> list:
     """Loop ``i``'s reading under ``controller``, one array per bump-test seed, on
-    the normal-day scenario at the bump tests' parameters."""
+    the scored normal day: the suite's first scenario at the scored parameters, so
+    a disturbance a row quiets for its bump tests still moves it."""
     spec = spec or REGISTRY[name]
     env = spec.make_env()
     normal = scenarios.suite(spec)[0]
     params = scenarios.params_for(
-        spec,
-        normal,
-        sensor_noise_scale=NOISE,
-        max_steps_in_episode=row.steps,
-        **row.test,
+        spec, normal, **{"sensor_noise_scale": NOISE, **row.score}
     )
     task = task_info(name, env, params, len(SEEDS))
     policy = Recorder(row.loops[i].name, controller, row.loops[i].read)
