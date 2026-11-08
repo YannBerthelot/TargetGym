@@ -53,3 +53,28 @@ def test_the_planners_pH_has_the_titration_curves_slope(q3):
         (_root(Wa, Wb + h, p) - _root(Wa, Wb - h, p)) / (2 * h),
     )
     np.testing.assert_allclose([float(g) for g in grad], want, rtol=1e-3)
+
+
+def test_the_oracle_plans_on_the_buffer_flow_it_reads():
+    """The oracle reads the buffer flow, which the observation hides, and plans
+    its mean path: the planner's copy of the params has the OU innovation
+    zeroed, and the planned step from the same tanks moves with the buffer the
+    state carries. Rewritten for the job score (charter Amendment 3): the
+    planned stage cost is the reward's terms."""
+    import jax.numpy as jnp
+
+    from target_gym.experts.mpc import plan_params
+    from target_gym.pc_gym.ph_neutralization.oracle import ph_stage
+
+    spec = registry.get("ph_neutralization")
+    env = spec.make_env()
+    params = spec.make_test_params()
+    planned = plan_params(spec, params)
+    assert float(planned.q2_noise_std) == 0.0
+
+    _, state = env.reset_env(jax.random.PRNGKey(0), planned)
+    action = env.initial_action(state, planned)
+    low, cost_low = ph_stage(env, state.replace(q2=jnp.asarray(0.0)), action, planned)
+    high, cost_high = ph_stage(env, state.replace(q2=jnp.asarray(2.0)), action, planned)
+    assert float(high.pH_s1) > float(low.pH_s1)
+    assert np.isfinite(float(cost_low)) and np.isfinite(float(cost_high))

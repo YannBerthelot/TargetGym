@@ -67,4 +67,6 @@ def make_ph_mpc(env, params, horizon: int = 20, n_iter: int = 10):
     hold error (0.0146 pH against 0.0022 on the protocol seeds); what remains
     is the OU innovation itself, which no causal controller can predict.
     """
-    return NewtonMPC(env, params, horizon=horizon, n_iter=n_iter, stage_fn=ph_stage)
+    return NewtonMPC(
+        env, params, action_dim=2, horizon=horizon, n_iter=n_iter, stage_fn=ph_stage
+    )

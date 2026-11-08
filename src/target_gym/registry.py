@@ -795,8 +795,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("q2_noise_std",),
         # v4 (charter Amendment 2): the permit zone with its 60 min timed
         # limit, diversion below pH 5, acid strength upsets, a 2 h episode from
-        # established operation, and a job score in reagent litres.
-        version=4,
+        # established operation, and a job score in reagent litres. v5
+        # (Amendment 3): two 10 min stages with a valve each, a finite
+        # diversion basin pumped back, influent flow swings, scenarios.
+        version=5,
+        scenarios=_scenarios("target_gym.pc_gym.ph_neutralization.scenarios"),
     ),
     EnvSpec(
         name="distillation",

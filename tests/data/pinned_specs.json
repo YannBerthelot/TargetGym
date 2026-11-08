@@ -534,7 +534,7 @@
   {
     "name": "ph_neutralization",
     "group": "process",
-    "version": 4,
+    "version": 5,
     "display_name": "pH neutralisation",
     "params_cls": [
       "target_gym.pc_gym.ph_neutralization.env",

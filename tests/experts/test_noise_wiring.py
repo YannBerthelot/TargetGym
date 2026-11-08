@@ -78,7 +78,14 @@ def test_ph_reads_its_filter_in_demand_units(Tf):
     d1 = float(reagent_demand(7.2, curve, np))
     span = float(p.q3_max - p.q3_min)
     c = ph_linearised_pi(1.0, 1e12, p, Tf=Tf)
-    out = _run(c, [[7.0, 50.0, 7.0], [7.2, 50.0, 7.0]])
+    # Staged (v5): the stage-1 loop reads the stage-1 probe, channel 4.
+    out = _run(
+        c,
+        [
+            [7.0, 50.0, 7.0, 0.0, 7.0, 0.0, 16.6, 0.0],
+            [7.0, 50.0, 7.0, 0.0, 7.2, 0.0, 16.6, 0.0],
+        ],
+    )
     expected = -2.0 / span * a * (d1 - d0)
     assert out[1][0] - out[0][0] == pytest.approx(expected, rel=1e-3)
 

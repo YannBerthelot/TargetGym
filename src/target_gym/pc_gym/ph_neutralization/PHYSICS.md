@@ -1,11 +1,12 @@
 # pH neutralisation: physics model, sources, limits and deviations
 
-The plant is a continuous stirred-tank pH neutralisation: a strong acid
-neutralised by a strong base with a carbonate buffer, the Hall and Seborg and
-Henson and Seborg bench rigs, standing for an industrial effluent
-neutralisation unit. `REALITY.md` in this folder is the plant's record, with
+The plant is a two-stage continuous pH neutralisation: a strong acid
+neutralised by a strong base with a carbonate buffer, in two stirred tanks in
+series, a member of the industrial effluent neutralisation family. Its
+chemistry is the Hall and Seborg and Henson and Seborg bench rigs'; its
+staging and retention are the family's. `REALITY.md` in this folder is the plant's record, with
 sources [P1] to [P10]; `COLD_REVIEW.md` lists how the earlier task differed.
-This page follows charter Amendments 1 and 2 (`docs/proposals/task-charter.md`).
+This page follows charter Amendments 1 to 3 (`docs/proposals/task-charter.md`).
 
 **Named property: the titration curve.** The process gain swings by an order
 of magnitude across the operating range, and the unmeasured buffer moves the
@@ -56,37 +57,37 @@ Deliberately **not** modelled:
 
 ## 2. Numbers: cited or ours
 
-Rule 1: every number is cited or labelled `ours` with a reason.
+Rule 1, with Amendment 3's rule 19: a number is cited, or ours inside the
+family's documented range, or ours with a reason.
 
 | Symbol | Value | Unit | Cited or ours |
 |---|---|---|---|
-| `V` | 2900 | mL | ours: the Henson and Seborg rig volume as the benchmark literature copies it; [P2] could not be opened (REALITY.md, owner list) |
-| `q1`, `Wa1`, `Wb1` | 16.6, 3.0e-3, 0 | mL/s, M | ours: acid stream as copied from [P2], unverified |
+| `V_s1`, `V` | 20000, 20000 | mL | ours, family: two stages [P3; P7], each over the 10 min retention [P4, p. 2] at the nominal 32.8 mL/s (10.2 min) |
+| `q1`, `Wa1`, `Wb1` | 16.6, 3.0e-3, 0 | mL/s, M | ours: acid stream as the benchmark copies [P2], unverified |
 | `q2_nominal`, `Wa2`, `Wb2` | 0.55, -3.0e-2, 3.0e-2 | mL/s, M | ours: buffer stream as copied from [P2], unverified |
 | `Wa3`, `Wb3` | -3.05e-3, 5.0e-5 | M | ours: base stream as copied from [P2], unverified |
 | `pK1`, `pK2` | 6.35, 10.25 | - | cited: carbonic acid constants at 25 C, as in [P2] |
-| `q3_min` | 0 | mL/s | cited by absence: no source gives a floor on reagent flow, and a pump can stop (REALITY.md, "What they move") |
-| `q3_max` | 22 | mL/s | ours: rig valve size not found; covers the acid upsets at +20 % |
-| `q2_noise_std` | 0.35 | mL/s | ours: buffering changes are sourced [P1; P2], their size is not |
-| `BUFFER_OU_THETA` | 2e-3 | 1/s | ours: shape and rate of buffer changes not found |
+| `q3_min` | 0 | mL/s | cited by absence: no source gives a floor on reagent flow |
+| `q3_max` | 22 | mL/s | ours: valve size not found; covers the upsets |
+| `q3_trim_max` | 2.2 | mL/s | ours, family: a tenth of stage 1's, as the 1 and 0.1 GPM final elements of [P4, p. 2] |
+| `q2_noise_std`, `BUFFER_OU_THETA` | 0.35, 2e-3 | mL/s, 1/s | ours: buffering changes are sourced [P1; P2], their size and rate are not |
 | `q2_min`, `q2_max` | 0, 2.5 | mL/s | ours: keeps the buffer flow physical |
-| `acid_upset_size` | 0.2 | - | ours: large acid strength changes are sourced [P3, p. 4], their size is not |
-| `acid_upset_ramp` | 600 | s | ours: the "calm to rocking during one lunch break" of [P3, p. 8] read as minutes |
-| `permit_low`, `permit_high` | 6, 8 | pH | cited: the example spec pH 7 +- 1 [P7, p. 2]; a real permit's range is set by the guideline [P8] |
+| `acid_upset_size`, `acid_upset_ramp` | 0.2, 600 | -, s | ours: large acid changes are sourced [P3, p. 4], their size is not |
+| `flow_swing` | 0.2 | - | ours: influent flow swings (Amendment 3), metered [P3, Figure 2]; size not found |
+| `permit_low`, `permit_high` | 6, 8 | pH | cited: the example spec pH 7 +- 1 [P7, p. 2] |
 | `excursion_limit` | 3600 | s | cited: no single excursion over 60 min [P8] |
-| `sewer_floor` | 5.0 | pH | cited: no discharge to a sewer below pH 5.0 [P9] |
-| `setpoint_pH` | 7 | pH | ours: the centre of the permit range; the set point is the operator's [P3, p. 4] and not scored |
-| `delta_t` | 5 | s | ours: twice the 2.5 s the 7 to 10 s mixing delay [P7, p. 2] needs to show as 2 steps |
-| `max_steps_in_episode` | 1440 | steps | ours: 2 h, past the 60 min excursion [P8] |
-| `reagent_price` | 1 | L/L | ours: the cost is reagent litres, the field plant's reagent to influent metric [P3, p. 9] |
+| `sewer_floor` | 5.0 | pH | cited [P9] |
+| `basin_volume` | 236.2 | L | ours, family "hours of flow" (Amendment 3): 2 h of nominal discharge |
+| `pumpback_flow` | 4.15 | mL/s | ours: a quarter of the influent, so the basin drains in about 16 h |
+| `setpoint_pH` | 7 | pH | ours: the permit centre; the set point is the operator's [P3, p. 4] |
+| `delta_t`, `max_steps_in_episode` | 5, 1440 | s, steps | ours: 2 h, past the 60 min excursion [P8] |
+| `reagent_price` | 1 | L/L | ours: the score is reagent litres, the field plant's metric [P3, p. 9] |
 | `excursion_price` | 1.667 | L/s | ours: no price found; a minute outside costs 100 minutes of hold reagent |
-| `diversion_price` | 1 | L/L | ours: a diverted litre is treated again, about 1 L of this dilute base per litre |
-| `failure_cost` | 8.443 | L | ours: one step outside at the full valve, the worst step a surviving plant pays, so the violation costs another hour of that |
-| `restart_steps` | 720 | steps | ours: a violation is charged as 60 min more outside; no fine found |
-| `e_floor` | 1.0 | pH | cited: the permit half-width [P7, p. 2]; read by the time-in-band KPI only, not by the reward |
+| `diversion_price` | 2 | L/L | ours: above reagent (Amendment 3): a diverted litre is pumped back and treated again, about 1 L of this dilute base per litre, plus the pumping |
+| `failure_cost` | 9.0 | L | ours: above the worst surviving step (outside, both valves full, diverting at full flow, 8.96 L) |
+| `restart_steps` | 720 | steps | ours: a violation is charged another hour; no fine found |
+| `e_floor` | 1.0 | pH | cited: the permit half-width [P7, p. 2]; read by the time-in-band KPI only |
 | `precision_floor`, `pH_min`, `pH_max`, `reagent_cost_weight` | 0.01, 2, 12, 0 | - | the retired version-1 reward only |
-
-Count: 7 cited (including the absence of a reagent floor), 18 ours.
 
 ---
 
@@ -94,15 +95,15 @@ Count: 7 cited (including the absence of a reagent floor), 18 ours.
 
 | Limit | Kind | Model | Source |
 |---|---|---|---|
-| Discharge outside pH 6 to 8 | Zone, timed | Priced per second outside (`excursion`); one excursion past 60 min is a permit violation, the task's trip | [P8]; range [P7] |
-| Discharge below pH 5.0 | Protected | Below 5.0 the effluent is diverted, not discharged: no trip, the excursion clock holds, and the diverted volume is charged for treatment (`diversion`) | [P9]; diversion [P3, pp. 4-5] |
-| Reagent valve | Hardware | 0 to 22 mL/s, clipped | ours (section 2) |
-| Level | Not modelled | Continuous overflow tank, fixed volume | [P4, p. 1] is a batch interlock |
+| Discharge outside pH 6 to 8 | Zone, timed | Priced per second outside; one excursion past 60 min is a violation, the trip. The clock runs whether or not the effluent is diverted (Amendment 3) | [P8]; range [P7] |
+| Discharge below pH 5.0 | Protected | Diverted into a finite basin, priced per litre at 2 L of reagent, pumped back to stage 1 when the discharge recovers; an overrun basin is a violation | [P9]; diversion [P3, pp. 4-5]; basin Amendment 3 |
+| Reagent valves | Hardware | 0 to 22 and 0 to 2.2 mL/s, clipped | ours (section 2) |
+| Level | Not modelled | Continuous overflow tanks | [P4, p. 1] is a batch interlock |
 
 The monthly allowance of 7 h 26 min outside [P8] is longer than an episode,
-so only the 60 min rule is modelled. The violation restarts the plant on its
-steady state at the set point (`base.failure_kernel`). A real violation does
-not restart a plant; it is reported. Deviation D5.
+so only the 60 min rule is modelled. A violation restarts the plant on its
+steady state at the set point (`base.failure_kernel`); a real one is reported
+and the plant runs on (D5).
 
 ---
 
@@ -110,112 +111,137 @@ not restart a plant; it is reported. Deviation D5.
 
 | obs | meaning | source |
 |---|---|---|
-| 0 | tank pH, through the probe (section Readings) | probe in the tank [P5, p. 1; P6] |
-| 1 | base valve, percent of its range | the operator's own valve |
+| 0 | discharge pH, stage 2's probe (section Readings) | [P5, p. 1; P6] |
+| 1 | stage-1 reagent valve, percent | the operator's own |
 | 2 | set point, pH 7 | the operator's own |
-| 3 | minutes outside the permit in this excursion | the discharge monitor records it [P5, p. 2; P8] |
+| 3 | minutes outside the permit in this excursion | the monitor [P5, p. 2; P8] |
+| 4 | stage-1 pH, its probe | a transmitter per stage [P3, pp. 4-5] |
+| 5 | stage-2 trim valve, percent | the operator's own |
+| 6 | influent flow, mL/s | the waste flow transmitter [P3, Figure 2] |
+| 7 | basin level, percent | ours: an operator reads a basin's level |
 
-With one mixed tank the discharge sensor [P5, p. 2] reads the tank's pH. The
-influent flow is constant here, so its meter [P3, Figure 2] reads a constant
-and is left out. The buffer flow, the acid strength and the invariants are
-hidden: no source shows them measured.
+The buffer flow, the acid strength and the invariants are hidden: no source
+shows them measured.
 
 ---
 
 ## 5. Episode (rule 17)
 
-The tank starts on the steady state that holds pH 7 under the buffer flow it
-meets, as a loop in automatic leaves it, with the reagent valve where that
-needs it. Two things move:
-
-- **Influent acid strength** [P3, p. 4]: two changes per episode at times
-  drawn uniformly over it, each to a level within +-20 % of nominal, ramped
-  over 10 min. Hidden. Size, rate and count are ours (section 2).
-- **Buffer flow** [P1; P2]: an Ornstein-Uhlenbeck drift, mean 0.55 mL/s,
-  std 0.35 mL/s, correlation time 500 s. Shape and size ours.
-
-Nothing else moves: the set point does not, as no source shows it moved
-from outside.
+Both tanks start on the steady state that holds pH 7 under the buffer flow
+they meet, the trim valve shut and the basin empty, as a loop in automatic
+leaves them. What then moves is set by the scenario (section 6): influent acid
+strength [P3, p. 4], influent flow, and the buffer's Ornstein-Uhlenbeck drift
+[P1; P2]. Each upset comes twice, at times drawn over the episode, to a level
+drawn within its size, ramped over 10 min.
 
 ---
 
-## 6. Score (rule 15)
+## 6. Scenarios (rule 20)
 
-The job, from REALITY.md: keep the effluent pH inside the discharge permit by
-adding reagent [P5, p. 1], without overdosing [P5, p. 2]. Per step, in litres
-of reagent:
+`scenarios.py` in this folder, on `EnvSpec.scenarios`:
+
+| Scenario | What moves | Source |
+|---|---|---|
+| `normal` | buffer drift only | [P5, p. 1]; [P2] |
+| `acid_strength` | acid strength, +-20 % | [P3, p. 4] |
+| `flow_swing` | influent flow, +-20 %, metered | [P3, Figure 2]; Amendment 3 |
+| `buffer_loss` | buffering falls away (nominal buffer 0) | [P1]; [P2] |
+| `bad_day` | acid strength and flow together | [P3, p. 8] |
+
+Probe coating [P5, pp. 2-3; P6] is documented as a bad day but has no sourced
+rate, so it is not a scenario yet (D1).
+
+---
+
+## 7. Score (rule 15)
+
+The job: keep the discharge inside the permit by adding reagent [P5, p. 1],
+without overdosing [P5, p. 2]. Per step, in litres of reagent:
 
 ```
-reward = -(reagent + excursion + diversion + failure)
-reagent   = q3 dt / 1000
-excursion = 1.667 dt          while the discharge is outside pH 6 to 8
-diversion = (q1 + q2 + q3) dt / 1000   while the tank is below pH 5.0
-failure   = 720 x 8.443       on the step an excursion passes 60 min
+reward    = -(reagent + excursion + diversion + failure)
+reagent   = (q3 + q3_trim) dt / 1000
+excursion = 1.667 dt                       while the discharge is outside 6 to 8
+diversion = 2 (q1 + q2 + q3 + q3_trim) dt / 1000   while it is below 5.0
+failure   = 720 x 9.0                      on a violation (60 min, or basin overrun)
 ```
 
-Inside the permit only reagent counts: precision earns nothing, as no source
-says it pays. A tank held near pH 6 uses less base than one at 7, and that is
-the trade the field plant made by moving set points toward the limit [P3,
-p. 4].
+Inside the permit only reagent counts. Adding no reagent now costs far more
+than holding the band (section 8), where the review measured it within 1.1 to
+1.4 times a perfect hold.
 
 ---
 
-## 7. Behaviour tests
+## 8. Behaviour tests
 
-`tests/pc_gym/ph_neutralization/test_ph_reality.py`, from COLD_REVIEW.md's
-proposals with their tolerances:
+`tests/pc_gym/ph_neutralization/test_ph_reality.py`:
 
-| Test | Source | Before | After |
-|---|---|---|---|
-| Mixing and measurement delay 5 to 20 s | [P7, p. 2] | pass | pass |
-| Buffer shifts the curve by at least 0.1 pH | [P1; P2] | pass | pass |
-| Every step below pH 5.0 is diverted | [P9; P3] | fail | pass |
-| An excursion under 60 min is no violation | [P8] | pass | pass |
-| An excursion past 60 min trips within one step | [P8] | fail | pass |
-| Inside the band, less reagent scores at least as well | [P5; P3] | fail | pass |
+| Test | Source | Result |
+|---|---|---|
+| Each stage holds at least 10 min | [P4, p. 2]; [P3; P7] | pass |
+| Mixing and measurement delay 5 to 20 s on the stage-1 probe | [P7, p. 2] | pass |
+| Buffer shifts the curve by at least 0.1 pH | [P1; P2] | pass |
+| Every step below pH 5.0 is diverted | [P9; P3] | pass |
+| An excursion under 60 min is no violation | [P8] | pass |
+| An excursion past 60 min trips within one step | [P8] | pass |
+| Diverting does not stop the hour | Amendment 3 | pass |
+| An overrun basin is a violation | Amendment 3 | pass |
+| Inside the band, less reagent scores at least as well | [P5; P3] | pass |
+| No reagent costs at least five times a hold, and trips | Amendment 3 (five times is ours) | pass |
+| Influent flow swings are metered and move the plant | [P3, Figure 2] | pass |
 
----
-
-## 8. Known deviations (rule 13)
-
-**D1. Electrode drift and fouling.** The probe lags and reports late, with
-noise, and stays that fast. Coating and junction blockage make real probes
-sluggish and drive overdosing [P5, p. 2; P6]. Effect on the score: easier.
-
-**D2. One buffer species.** Carbonate only. Real effluents carry several weak
-acid and base pairs. Effect: a smoother curve than a real effluent's.
-
-**D3. Ideal valve.** No resolution, stick-slip or limit cycles from split
-range [P3, p. 4]; no on/off or timer dosing [P4]. Effect: easier near the
-equivalence point.
-
-**D4. One tank.** Real strong acid units are staged [P3; P7, p. 1]. Effect: a
-single tank's gain, and the 88 s residence time of a bench rig, far under the
-10 min that [P4, p. 2] asks of a continuous tank under on/off control.
-
-**D5. A violation restarts the plant.** The framework's trip restarts on the
-steady state at the set point. A real violation is reported and the plant runs
-on. Effect: after a violation the episode resumes from a good state, at the
-charged cost.
-
-**D6. Rig constants unverified.** V, the flows and the concentrations are the
-benchmark's copy of [P2], which could not be opened (REALITY.md, owner list).
+`test_ph_experts.py` checks that the oracle plans on the buffer flow it reads.
 
 ---
 
-## 9. What the reference ladder row needs
+## 9. Known deviations (rule 13)
 
-For `scripts/reference_ladder.py` (rule 3, not edited here):
+**D1. Electrode drift and fouling.** The probes lag and report late, with
+noise, and stay that fast. Coating and junction blockage make real probes
+sluggish and drive overdosing [P5, p. 2; P6]. Effect: easier.
 
-- Bump tests at the steady state of reset, valve stepped by +-0.5 mL/s, read on
-  the probe, with the acid upsets and the buffer drift off.
-- PI by SIMC on the permit centre, then feedforward: none is available, since
-  the influent flow is constant and its acid strength unmeasured.
-- Cascade: no second measurement. Override: the excursion clock (obs 3) is
-  available for a rung that drives back inside before 60 min.
-- The rung is scored on the job cost of section 6, not on tracking.
-- The oracle's stage (`oracle.py`) has no slope at the permit edge and must be
-  rebuilt before rule 9 runs it.
+**D2. One buffer species.** Carbonate only. Effect: a smoother curve than a
+real effluent's.
+
+**D3. Ideal valves.** No resolution, stick-slip or split-range limit cycles
+[P3, p. 4]; no on/off or timer dosing [P4]. Effect: easier near equivalence.
+
+**D4. Bench chemistry at industrial retention.** The streams are the bench
+rig's [P2] in tanks sized to the family's retention; the flows are millilitres
+per second. The dynamics scale with residence time, so this picks a family
+member, not a plant.
+
+**D5. A violation restarts the plant.** A real violation is reported and the
+plant runs on. Effect: after a violation the episode resumes from a good state,
+at the charged cost.
+
+**D6. Rig constants unverified.** The streams are the benchmark's copy of [P2]
+(REALITY.md, owner list).
+
+---
+
+## 10. What the reference ladder row needs
+
+- Zone: the discharge pH in 6 to 8 [P7]; the cheap side is low (pH 6), since
+  less base holds a lower pH (19 % less at pH 6 than at 7 at nominal buffer).
+  The reference sits 2 sigma above 6 (`ladder.zone_setpoint`, rule 22); stage
+  1 has no zone and follows the same setpoint.
+- Scenarios: the five of section 6.
+- Two valves: stage 1 coarse, stage 2 trim. Bump tests at the reset steady
+  state with `acid_upset_size`, `flow_swing` and `q2_noise_std` at 0.
+- Feedforward is now available from the metered influent flow (obs 6), through
+  the steady balance (`steady_base_flow`), as the field case names [P3, p. 3].
+- The expert (`experts.py`) runs the linearised PI on stage 1 and a trim PI on
+  the discharge with the same gains; its stored gains predate the staging.
+
+## 11. Oracle needs
+
+The oracle (`oracle.py`, NewtonMPC with `action_dim=2`) reads the true state,
+the buffer included, and plans the buffer's mean path (tested). Its stage cost
+is the reward's terms on the planner pH, so the excursion and diversion terms
+have no slope at the permit's edges: before rule 9 runs it, the stage needs a
+smooth hinge at 6, 8 and 5, and the 1440-step episode needs its horizon
+re-measured for 20 min of residence. Not run.
 
 ---
 
@@ -229,7 +255,7 @@ For `scripts/reference_ladder.py` (rule 3, not edited here):
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ph_neutralization` | 1440 | 5 | 2.0 h | 1 in [-1, 1] | 4 | 14 |
+| `ph_neutralization` | 1440 | 5 | 2.0 h | 2 in [-1, 1] | 8 | 29 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

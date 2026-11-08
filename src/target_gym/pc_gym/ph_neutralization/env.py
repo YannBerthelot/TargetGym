@@ -4,9 +4,10 @@ pH neutralisation — CSTR with acid, buffer and base streams.
 See ``PHYSICS.md`` in this directory for the sources, the limits and the
 score, and ``REALITY.md`` for the plant record they come from.
 
-The job (charter Amendment 2): keep the discharge inside its permit, pH 6 to 8,
-at the least reagent. An excursion past 60 min is a violation, and effluent
-below pH 5 is diverted.
+The job (charter Amendments 2 and 3): keep the discharge of a two-stage
+neutralization inside its permit, pH 6 to 8, at the least reagent. An
+excursion past 60 min is a violation; effluent below pH 5 is diverted into a
+finite basin and pumped back, and an overrun basin is a violation too.
 
 Model
 -----
@@ -77,11 +78,16 @@ BUFFER_OU_THETA = 2.0e-3
 
 @struct.dataclass
 class PHParams(EnvParams):
-    # ---- Reactor ----
-    V: float = 2900.0  # mL, well-mixed tank volume
+    # ---- Stages (charter Amendment 3) ----
+    # Two stirred tanks in series, as strong acid neutralization is staged
+    # [P3; P5, p. 2; P7, p. 1], each holding more than 10 min of flow at the
+    # nominal steady state (about 32.8 mL/s), the retention [P4, p. 2] asks of
+    # a continuous tank. Ours, family member: 20 L each, about 10.2 min.
+    V_s1: float = 20000.0  # mL, stage 1
+    V: float = 20000.0  # mL, stage 2, whose outlet is the discharge
 
-    # ---- Acid stream (HNO3), fixed ----
-    q1: float = 16.6  # mL/s
+    # ---- Acid stream (HNO3) ----
+    q1: float = 16.6  # mL/s, nominal influent
     Wa1: float = 3.0e-3  # M
     Wb1: float = 0.0
 
@@ -93,12 +99,14 @@ class PHParams(EnvParams):
     Wa2: float = -3.0e-2  # M
     Wb2: float = 3.0e-2  # M
 
-    # ---- Base stream (NaOH + NaHCO3) -- the manipulated variable ----
-    # No source gives a floor on reagent flow: a dosing pump or valve can stop
-    # (REALITY.md, "What they move"; COLD_REVIEW item 6). The top is ours: the
-    # rig's valve size was not found, and 22 mL/s covers the acid upsets below.
+    # ---- Base reagent (NaOH + NaHCO3) -- the manipulated variables ----
+    # One valve per stage [P3, pp. 4-5]. No source gives a floor on reagent
+    # flow: a dosing pump or valve can stop. The stage-1 top is ours (the rig's
+    # valve size was not found). The stage-2 trim valve is a tenth of it, as
+    # the two final elements of [P4, p. 2] (1 and 0.1 GPM).
     q3_min: float = 0.0  # mL/s
     q3_max: float = 22.0  # mL/s
+    q3_trim_max: float = 2.2  # mL/s
     Wa3: float = -3.05e-3  # M
     Wb3: float = 5.0e-5  # M
 
@@ -106,27 +114,33 @@ class PHParams(EnvParams):
     pK1: float = 6.35
     pK2: float = 10.25
 
-    # ---- Influent acid strength (REALITY.md, "A normal day and a bad day") ----
+    # ---- Influent upsets (REALITY.md, "A normal day and a bad day") ----
     # Large unknown changes in the influent's strong acid concentration from
-    # production units [P3, p. 4]. Their size and timing are not found; ours:
-    # two changes an episode, each to within +-20 % of nominal, ramped over
-    # 10 min, the scale of the "calm to rocking and reeling during one lunch
-    # break" of [P3, p. 8].
+    # production units [P3, p. 4]: two an episode, within +-20 % of nominal,
+    # ramped over 10 min (ours, the "calm to rocking and reeling during one
+    # lunch break" of [P3, p. 8]).
     acid_upset_size: float = 0.2  # fraction of Wa1
     acid_upset_ramp: float = 600.0  # s
+    # Influent flow swings (Amendment 3), metered [P3, Figure 2]: two an
+    # episode, within +-flow_swing of nominal, ramped like the acid. Ours.
+    flow_swing: float = 0.2  # fraction of q1
 
     # ---- Limits (REALITY.md, "Limits"; charter rule 14) ----
     # Zone: the permit range, which the guideline sets [P8]. Ours, from the one
     # range a source prints: the example spec pH 7 +- 1 [P7, p. 2].
     permit_low: float = 6.0  # pH
     permit_high: float = 8.0  # pH
-    # Timed: no single excursion outside the range over 60 min [P8]. Past it is
-    # a permit violation, the task's trip.
+    # Timed: no single excursion outside the range over 60 min [P8], diverted
+    # or not (Amendment 3). Past it is a permit violation, the task's trip.
     excursion_limit: float = 3600.0  # s
     # Protected: no discharge below pH 5.0 to a public sewer [P9]; the field
-    # plant diverts effluent when the tank is too low [P3, pp. 4-5]. Diverted
-    # effluent is not discharged, so it does not run the excursion clock.
+    # plant diverts effluent when the tank is too low [P3, pp. 4-5], into a
+    # finite basin (Amendment 3) that is pumped back to stage 1 for treatment.
+    # Overrunning the basin is a violation. Ours, family range "hours of
+    # flow": 2 h of nominal discharge; pump-back at a quarter of the influent.
     sewer_floor: float = 5.0  # pH
+    basin_volume: float = 2.0 * 3600.0 * 32.8 / 1000.0  # L
+    pumpback_flow: float = 4.15  # mL/s
 
     # ---- Retired version-1 reward fields, read only by reward_version 1 ----
     pH_min: float = 2.0
@@ -134,34 +148,33 @@ class PHParams(EnvParams):
     pH_max: float = 12.0
     reagent_cost_weight: float = 0.0
 
-    # ---- Episode (charter rule 17) ----
-    # Established operation: the tank on its steady state at the operator's set
-    # point, pH 7, the centre of the permit range. The set point is the
-    # operator's choice [P3, p. 4] and is not scored.
+    # ---- Episode (charter rules 17 and 20) ----
+    # Established operation: both tanks on the steady state at the operator's
+    # set point, pH 7, the centre of the permit range. The set point is the
+    # operator's choice [P3, p. 4] and is not scored. 2 h at 5 s: longer than
+    # the 60 min excursion the permit counts [P8], with room for the upsets.
+    # Ours. The scenario suite (scenarios.py) sets which upsets run.
     setpoint_pH: float = 7.0
-    # 2 h at 5 s: longer than the 60 min excursion the permit counts [P8], with
-    # room for both acid upsets. Ours.
     delta_t: float = 5.0
     max_steps_in_episode: int = 1440
 
     # ---- Score (charter rule 15; REALITY.md, "The operator's job") ----
     # Keep the effluent inside the permit without overdosing reagent [P5, p. 2].
-    # The cost is in litres of reagent, the quantity the field plant tracks per
-    # shift as a reagent to influent ratio [P3, p. 9]. No price of reagent, of an
-    # excursion or of diverted effluent was found, so each is in reagent litres:
-    # - excursion_price, ours: a minute outside the permit costs 100 minutes of
-    #   the reagent a hold uses (about 1 L/min), so leaving the zone never pays.
-    # - diversion_price, ours: a diverted litre is treated again, at about the
-    #   1 L of reagent per litre of influent this plant's dilute base needs.
-    # - a violation (trip) is charged a second hour outside, ours: no fine found,
-    #   at the worst surviving step's cost (outside, valve full) per step, so
-    #   tripping on purpose never pays.
-    reward_version: int = 3
+    # In litres of reagent, the quantity the field plant tracks per shift
+    # [P3, p. 9]. No price was found, so each charge is in reagent litres, ours:
+    # - excursion_price: a minute outside the permit costs 100 minutes of the
+    #   reagent a hold uses (about 1 L/min), so leaving the zone never pays;
+    # - diversion_price: a diverted litre is pumped back and treated again,
+    #   priced above reagent (Amendment 3): 2 L per L, the reagent it takes
+    #   again (about 1 L per L with this dilute base) and the pumping;
+    # - a violation is charged as another hour at the worst surviving step's
+    #   cost, so tripping on purpose never pays.
+    reward_version: int = 4
     reagent_price: float = 1.0  # per L of reagent
     excursion_price: float = 100.0 / 60.0  # L per s outside the permit
-    diversion_price: float = 1.0  # L per L diverted
-    failure_cost: float = 100.0 / 60.0 * 5.0 + 22.0 * 5.0 / 1000.0  # L per step
-    #: A violation is charged as another hour outside (720 steps of 5 s).
+    diversion_price: float = 2.0  # L per L diverted
+    failure_cost: float = 9.0  # L per step, above any surviving step
+    #: A violation is charged as another hour (720 steps of 5 s).
     restart_steps: int = 720
     # Read by the benchmark's time-in-band KPI, not by the reward: the permit's
     # half-width around the set point, so "in band" means inside the permit.
@@ -170,6 +183,7 @@ class PHParams(EnvParams):
 
 #: Units of the PHParams fields, for the generated environment pages.
 PARAM_UNITS = {
+    "V_s1": "mL",
     "V": "mL",
     "q1": "mL/s",
     "Wa1": "mol/L",
@@ -182,16 +196,20 @@ PARAM_UNITS = {
     "Wb2": "mol/L",
     "q3_min": "mL/s",
     "q3_max": "mL/s",
+    "q3_trim_max": "mL/s",
     "Wa3": "mol/L",
     "Wb3": "mol/L",
     "pK1": "-",
     "pK2": "-",
     "acid_upset_size": "-",
     "acid_upset_ramp": "s",
+    "flow_swing": "-",
     "permit_low": "pH",
     "permit_high": "pH",
     "excursion_limit": "s",
     "sewer_floor": "pH",
+    "basin_volume": "L",
+    "pumpback_flow": "mL/s",
     "pH_min": "pH",
     "precision_floor": "pH",
     "pH_max": "pH",
@@ -209,24 +227,36 @@ PARAM_UNITS = {
 
 @struct.dataclass
 class PHState(EnvState):
-    Wa: float  # charge-related reaction invariant (HIDDEN)
-    Wb: float  # total carbonate invariant (HIDDEN)
+    Wa: float  # stage 2 (discharge) charge invariant (HIDDEN)
+    Wb: float  # stage 2 total carbonate (HIDDEN)
     q2: float  # buffer flow, the unmeasured disturbance (HIDDEN)
 
-    pH: float  # the single measurement
-    q3: float  # commanded base flow
+    pH: float  # discharge pH, stage 2's probe
+    q3: float  # stage-1 reagent valve, mL/s
     target_pH: float  # the operator's set point, informational, not scored
 
-    # Influent acid strength, as a multiple of Wa1 (HIDDEN): it ramps from
-    # ``upset_levels[i]`` to ``upset_levels[i + 1]`` starting at
-    # ``upset_times[i]`` (steps).
+    # Influent acid strength and flow, as multiples of nominal (acid HIDDEN,
+    # flow metered): each ramps from ``levels[i]`` to ``levels[i + 1]`` from
+    # ``times[i]`` (steps).
     upset_times: jax.Array
     upset_levels: jax.Array
+    flow_times: jax.Array
+    flow_levels: jax.Array
     # Seconds the discharge has been outside the permit in this excursion, the
     # clock the continuous monitor keeps [P8]. Read by the operator.
     excursion: float
 
-    actuator_held: jax.Array = actuator_field(1)
+    # Stage 1 (HIDDEN invariants, its probe read), the trim valve, the basin.
+    Wa_s1: float = struct.field(default=0.0, kw_only=True)
+    Wb_s1: float = struct.field(default=0.0, kw_only=True)
+    pH_s1: float = struct.field(default=7.0, kw_only=True)
+    q3_trim: float = struct.field(default=0.0, kw_only=True)
+    basin: float = struct.field(default=0.0, kw_only=True)  # L held
+    q1: float = struct.field(default=16.6, kw_only=True)  # influent, mL/s, metered
+    Wa_basin: float = struct.field(default=0.0, kw_only=True)
+    Wb_basin: float = struct.field(default=0.0, kw_only=True)
+
+    actuator_held: jax.Array = actuator_field(2)
 
 
 def titration_residual(pH, Wa, Wb, params: PHParams):
@@ -265,46 +295,87 @@ def solve_pH(Wa, Wb, params: PHParams):
     return 0.5 * (lo + hi)
 
 
-def acid_scale(state, params: PHParams, xp=jnp):
-    """The influent's strong acid strength at ``state.time``, as a multiple of
-    ``Wa1``: piecewise ramps between the episode's upset levels."""
+def ramp_schedule(times, levels, state, params: PHParams, xp=jnp):
+    """A multiple of nominal at ``state.time``: piecewise ramps over
+    ``acid_upset_ramp`` from ``levels[i]`` to ``levels[i + 1]`` at
+    ``times[i]``."""
     t = state.time * params.delta_t
-    starts = state.upset_times * params.delta_t
+    starts = times * params.delta_t
     ramp = jnp.maximum(params.acid_upset_ramp, params.delta_t)
     frac = xp.clip((t - starts) / ramp, 0.0, 1.0)
-    steps = state.upset_levels[1:] - state.upset_levels[:-1]
-    return state.upset_levels[0] + xp.sum(frac * steps)
+    return levels[0] + xp.sum(frac * (levels[1:] - levels[:-1]))
+
+
+def acid_scale(state, params: PHParams, xp=jnp):
+    """The influent's strong acid strength now, as a multiple of ``Wa1``."""
+    return ramp_schedule(state.upset_times, state.upset_levels, state, params, xp)
+
+
+def influent_flow(state, params: PHParams, xp=jnp):
+    """The influent flow now, mL/s, as its meter reads it."""
+    return params.q1 * ramp_schedule(
+        state.flow_times, state.flow_levels, state, params, xp
+    )
 
 
 def compute_velocity(position, action, q2, params: PHParams, Wa1=None):
-    """RHS for the two reaction invariants. ``action`` is the base flow q3,
-    ``Wa1`` the influent's acid strength now (``params.Wa1`` by default)."""
+    """RHS for one tank fed by the acid, buffer and base streams, the single
+    stage of the steady-state helpers. ``action`` is the base flow q3."""
     p = params
     Wa1 = p.Wa1 if Wa1 is None else Wa1
     Wa, Wb = position[0], position[1]
     q3 = action
-    dWa = (p.q1 * (Wa1 - Wa) + q2 * (p.Wa2 - Wa) + q3 * (p.Wa3 - Wa)) / p.V
-    dWb = (p.q1 * (p.Wb1 - Wb) + q2 * (p.Wb2 - Wb) + q3 * (p.Wb3 - Wb)) / p.V
+    dWa = (p.q1 * (Wa1 - Wa) + q2 * (p.Wa2 - Wa) + q3 * (p.Wa3 - Wa)) / p.V_s1
+    dWb = (p.q1 * (p.Wb1 - Wb) + q2 * (p.Wb2 - Wb) + q3 * (p.Wb3 - Wb)) / p.V_s1
     return jnp.array([dWa, dWb]), None
+
+
+def staged_velocity(position, flows, params: PHParams):
+    """Both tanks' invariants. ``flows`` holds the influent ``q1`` and its acid
+    ``Wa1``, the buffer ``q2``, both valves, and the pump-back ``qp`` with the
+    basin's invariants."""
+    p = params
+    q1, Wa1, q2, q3, q3t, qp, Wa_b, Wb_b = flows
+    Wa_1, Wb_1, Wa_2, Wb_2 = position
+    dWa_1 = (
+        q1 * (Wa1 - Wa_1)
+        + q2 * (p.Wa2 - Wa_1)
+        + q3 * (p.Wa3 - Wa_1)
+        + qp * (Wa_b - Wa_1)
+    ) / p.V_s1
+    dWb_1 = (
+        q1 * (p.Wb1 - Wb_1)
+        + q2 * (p.Wb2 - Wb_1)
+        + q3 * (p.Wb3 - Wb_1)
+        + qp * (Wb_b - Wb_1)
+    ) / p.V_s1
+    Q1 = q1 + q2 + q3 + qp
+    dWa_2 = (Q1 * (Wa_1 - Wa_2) + q3t * (p.Wa3 - Wa_2)) / p.V
+    dWb_2 = (Q1 * (Wb_1 - Wb_2) + q3t * (p.Wb3 - Wb_2)) / p.V
+    return jnp.array([dWa_1, dWb_1, dWa_2, dWb_2]), None
 
 
 @partial(jax.jit, static_argnames=["integration_method"])
 def compute_next_state(
-    action_raw: float,
+    action_raw,
     state: PHState,
     params: PHParams,
     key: jax.Array,
     integration_method: str = "rk4_2",
 ):
-    """``action_raw`` in [-1, 1] maps to base flow in [q3_min, q3_max]."""
+    """``action_raw`` in [-1, 1]^2 maps to the stage-1 base flow in
+    [q3_min, q3_max] and the stage-2 trim in [0, q3_trim_max]."""
     p = params
+    action_raw = jnp.reshape(action_raw, (2,))
     q3 = convert_raw_action_to_range(
-        action_raw, min_action=p.q3_min, max_action=p.q3_max
+        action_raw[0], min_action=p.q3_min, max_action=p.q3_max
+    )
+    q3t = convert_raw_action_to_range(
+        action_raw[1], min_action=0.0, max_action=p.q3_trim_max
     )
 
-    # OU buffer-flow disturbance. The innovation is drawn from a key folded
-    # with ``state.time`` so a caller passing a constant key still gets a
-    # genuine zero-mean process.
+    # OU buffer-flow disturbance, keyed on ``state.time`` so a constant key
+    # still gives a genuine zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     sigma = p.q2_noise_std * jnp.sqrt(2.0 * BUFFER_OU_THETA * p.delta_t)
     q2 = (
@@ -314,34 +385,54 @@ def compute_next_state(
     )
     q2 = jnp.clip(q2, p.q2_min, p.q2_max)
 
+    q1 = influent_flow(state, p)
     Wa1 = p.Wa1 * acid_scale(state, p)
-    _compute_velocity = partial(
-        compute_velocity, action=q3, q2=q2, params=params, Wa1=Wa1
+    # The interlock reads the discharge at the step's start: below the sewer
+    # floor the outflow goes to the basin, else the basin is pumped back.
+    diverting = state.pH < p.sewer_floor
+    qp = jnp.where(
+        diverting,
+        0.0,
+        jnp.minimum(p.pumpback_flow, 1000.0 * state.basin / p.delta_t),
     )
+    flows = (q1, Wa1, q2, q3, q3t, qp, state.Wa_basin, state.Wb_basin)
     new_positions, _ = integrate_dynamics(
-        positions=jnp.array([state.Wa, state.Wb]),
+        positions=jnp.array([state.Wa_s1, state.Wb_s1, state.Wa, state.Wb]),
         delta_t=p.delta_t,
-        compute_velocity=_compute_velocity,
+        compute_velocity=partial(staged_velocity, flows=flows, params=p),
         method=integration_method,
     )
-    Wa, Wb = new_positions[0], new_positions[1]
+    Wa_1, Wb_1, Wa, Wb = (new_positions[i] for i in range(4))
+
+    # The basin mixes what it receives and loses what is pumped back.
+    outflow_L = (q1 + q2 + q3 + qp + q3t) * p.delta_t / 1000.0
+    into = jnp.where(diverting, outflow_L, 0.0)
+    held = state.basin + into
+    weight = jnp.where(held > 0.0, into / jnp.maximum(held, 1e-9), 0.0)
+    Wa_basin = state.Wa_basin + weight * (state.Wa - state.Wa_basin)
+    Wb_basin = state.Wb_basin + weight * (state.Wb - state.Wb_basin)
+    basin = jnp.maximum(held - qp * p.delta_t / 1000.0, 0.0)
+
     pH = solve_pH(Wa, Wb, params)
-    # The excursion clock runs while the discharge is outside the permit, and
-    # holds while the effluent is diverted, since none is then discharged.
+    # The excursion clock runs while the discharge is outside the permit,
+    # diverted or not (Amendment 3), and resets when it is back inside.
     outside = jnp.logical_or(pH < p.permit_low, pH > p.permit_high)
-    diverted = pH < p.sewer_floor
-    excursion = jnp.where(
-        diverted,
-        state.excursion,
-        jnp.where(outside, state.excursion + p.delta_t, 0.0),
-    )
+    excursion = jnp.where(outside, state.excursion + p.delta_t, 0.0)
     return (
         state.replace(
             Wa=Wa,
             Wb=Wb,
+            Wa_s1=Wa_1,
+            Wb_s1=Wb_1,
             q2=q2,
             pH=pH,
+            pH_s1=solve_pH(Wa_1, Wb_1, params),
             q3=q3,
+            q3_trim=q3t,
+            q1=q1,
+            basin=basin,
+            Wa_basin=Wa_basin,
+            Wb_basin=Wb_basin,
             excursion=excursion,
             time=state.time + 1,
         ),
@@ -349,33 +440,42 @@ def compute_next_state(
     )
 
 
-# Deliberately not jitted. It was decorated with
-# ``@partial(jax.jit, static_argnames=["params"])``, which keys the compilation
-# cache on the params object: a fresh ``Params(...)`` -- what every sweep, tuner
-# and MPC builds -- was a cache miss and a full recompile, measured at ~1600x the
-# cost of a cached call. Callers that want it fused already jit ``step_env``,
-# which traces this inline.
+# Deliberately not jitted (see the other process tasks): callers that want it
+# fused jit ``step_env``, which traces this inline.
 def get_obs(state: PHState, params: PHParams):
-    """``[pH, q3_pct, setpoint_pH, excursion_min]``: the tank's pH probe
-    [P5, p. 1; P6], the operator's own reagent valve, the set point, and the
-    minutes the discharge has been outside the permit in this excursion, which
-    the continuous monitor records for inspection [P5, p. 2; P8]. With one
-    mixed tank the discharge sensor reads the tank's pH.
+    """``[pH, q3_pct, setpoint_pH, excursion_min, pH_s1, trim_pct, q1,
+    basin_pct]``: the discharge probe on stage 2 [P5, p. 1; P6], the stage-1
+    valve, the set point, the minutes outside the permit in this excursion,
+    which the monitor records [P5, p. 2; P8], the stage-1 probe [P3, pp. 4-5],
+    the trim valve, the metered influent flow [P3, Figure 2], and the basin's
+    level, which the operator reads (ours).
 
-    The reaction invariants, the buffer flow and the influent's acid strength
-    are hidden: a plant has a pH electrode, not an on-line assay of carbonate
-    speciation, and the acid changes come from production units unannounced
-    [P3, p. 4]. The influent flow is constant, so its meter [P3, Figure 2]
-    would read a constant and is left out.
+    The invariants, the buffer flow and the influent's acid strength are
+    hidden: a plant has pH electrodes, not an assay of carbonate speciation,
+    and the acid changes come unannounced [P3, p. 4].
     """
     q3_pct = 100.0 * (state.q3 - params.q3_min) / (params.q3_max - params.q3_min)
-    return jnp.array([state.pH, q3_pct, state.target_pH, state.excursion / 60.0])
+    trim_pct = 100.0 * state.q3_trim / params.q3_trim_max
+    return jnp.array(
+        [
+            state.pH,
+            q3_pct,
+            state.target_pH,
+            state.excursion / 60.0,
+            state.pH_s1,
+            trim_pct,
+            state.q1,
+            100.0 * state.basin / params.basin_volume,
+        ]
+    )
 
 
 def check_is_terminal(state: PHState, params: PHParams, xp=jnp):
-    """The trip is the permit violation: one excursion past the allowed 60 min
-    [P8]. Low pH is protected by diversion and never trips."""
-    terminated = state.excursion > params.excursion_limit
+    """The trip is a permit violation: one excursion past the allowed 60 min
+    [P8], or an overrun diversion basin (Amendment 3)."""
+    terminated = xp.logical_or(
+        state.excursion > params.excursion_limit, state.basin > params.basin_volume
+    )
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
@@ -384,11 +484,11 @@ def compute_reward_terms(state: PHState, params: PHParams, xp=jnp, tripped=None)
     """The reward's additive cost terms, each >= 0, in litres of reagent
     (PHParams, "Score").
 
-    - ``reagent``: the base used this step [P5, p. 2; P3, p. 9];
-    - ``excursion``: discharge outside the permit, priced per second [P8];
-    - ``diversion``: effluent diverted below the sewer floor, treated again
-      [P9; P3, pp. 4-5];
-    - ``failure``: the permit violation, through ``reward.with_trip``.
+    - ``reagent``: the base both valves used this step [P5, p. 2; P3, p. 9];
+    - ``excursion``: the discharge outside the permit, per second [P8];
+    - ``diversion``: effluent diverted below the sewer floor, to be pumped back
+      and treated again [P9; P3, pp. 4-5];
+    - ``failure``: the violation, through ``reward.with_trip``.
 
     ``tripped`` overrides the trip check on ``state``, for a measured copy,
     whose noise must not fire or hide a trip (``base.measured_reward``).
@@ -398,11 +498,11 @@ def compute_reward_terms(state: PHState, params: PHParams, xp=jnp, tripped=None)
         tripped, _ = check_is_terminal(state, p, xp)
     diverted = state.pH < p.sewer_floor
     outside = xp.logical_or(state.pH < p.permit_low, state.pH > p.permit_high)
-    discharging_outside = xp.logical_and(outside, xp.logical_not(diverted))
-    outflow_L = (p.q1 + state.q2 + state.q3) * p.delta_t / 1000.0
+    outflow_L = (state.q1 + state.q2 + state.q3 + state.q3_trim) * p.delta_t / 1000.0
+    reagent_L = (state.q3 + state.q3_trim) * p.delta_t / 1000.0
     terms = {
-        "reagent": R.priced_cost(state.q3 * p.delta_t / 1000.0, p.reagent_price, xp),
-        "excursion": xp.where(discharging_outside, p.excursion_price * p.delta_t, 0.0),
+        "reagent": R.priced_cost(reagent_L, p.reagent_price, xp),
+        "excursion": xp.where(outside, p.excursion_price * p.delta_t, 0.0),
         "diversion": xp.where(diverted, p.diversion_price * outflow_L, 0.0),
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)

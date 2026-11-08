@@ -55,7 +55,10 @@ SCATTER = {
     "first_order": {0: 1.1e-3},
     "unstable_cstr": {0: 5e-4, 1: 0.04, 2: 0.04},
     "distillation": {0: 4e-4, 1: 4e-4, 6: 3e-3 * TRAY_SLOPE},
-    "ph_neutralization": {0: _with_rounding(0.01, 0.01)},
+    "ph_neutralization": {
+        0: _with_rounding(0.01, 0.01),
+        4: _with_rounding(0.01, 0.01),
+    },
     "compressor_surge": {
         0: 9.17 / KPA,
         1: 0.021,
@@ -71,8 +74,9 @@ EXACT = {
     "unstable_cstr": (3,),
     # Flows, specs, and the feed meter (FC 1), read exactly: ours.
     "distillation": (2, 3, 4, 5, 7),
-    # Valve, set point, and the monitor's own excursion clock.
-    "ph_neutralization": (1, 2, 3),
+    # Valves, set point, the monitor's excursion clock, the flow meter and the
+    # basin level, read exactly (ours: no figures found).
+    "ph_neutralization": (1, 2, 3, 5, 6, 7),
     "compressor_surge": (4, 6),
 }
 #: Channels with a scatter of their own arithmetic, tested on their own below.
