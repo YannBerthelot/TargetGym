@@ -37,6 +37,8 @@ from target_gym.reactor.env import (
     compute_reward_terms,
     rod_insertion_limit,
     rod_worth,
+    tavg_dnb_limit,
+    tavg_program,
 )
 
 
@@ -172,3 +174,46 @@ def test_the_boron_reading_is_twenty_minutes_late():
     assert core[lag - 1] < start - 0.5  # the core has moved by then
     np.testing.assert_allclose(readings[: lag - 1], start, atol=1e-3)
     np.testing.assert_allclose(readings[lag:], core[: len(core) - lag], rtol=1e-6)
+
+
+# --- Tavg's upper limit (DNB), the hot side ---
+# Westinghouse STS LCO 3.4.1 (as summarised for the US EPR GTS and the AP1000 bases):
+# RCS average temperature at or below the COLR's limit, restored within 2 h, else
+# MODE 2 within 6 h. The limit is an absolute value: Braidwood's COLR sets nominal
+# Tavg at rated power at 588.0 F and the limit at 593.1 F, 5.1 F = 2.833 K above
+# (from a search summary; nrc.gov blocks automated reads). So the limit is the
+# full-power program plus 2.833 K at every power, and an overrun goes to hot standby.
+
+HOT_MARGIN = 5.1 / 1.8
+
+
+def test_time_above_the_dnb_limit_counts_and_resets():
+    env, p, obs, s = reset()
+    limit = float(tavg_program(1.0, p)) + HOT_MARGIN
+    tavg = float(0.5 * (s.T_coolant + s.T_cold))
+    hot = s.replace(
+        T_coolant=s.T_coolant + 2 * (limit + 0.5 - tavg),
+        T_cold=s.T_cold + 2 * (limit + 0.5 - tavg),
+    )
+    hot = at(hot, above_dnb=100.0)
+    assert float(step(env, p, hot).above_dnb) == pytest.approx(100.0 + p.delta_t)
+    assert float(step(env, p, at(s, above_dnb=100.0)).above_dnb) == 0.0
+
+
+def test_the_dnb_limit_is_the_full_power_programs_at_every_power():
+    p = ReactorParams()
+    assert float(tavg_dnb_limit(p)) == pytest.approx(
+        float(tavg_program(1.0, p)) + HOT_MARGIN, abs=1e-3
+    )
+
+
+@pytest.mark.parametrize("seconds, ends", [(7195.0, False), (7200.0, True)])
+def test_two_hours_above_the_dnb_limit_costs_hot_standby(seconds, ends):
+    env, p, obs, s = reset()
+    s = at(s, above_dnb=seconds)
+    terminated, _ = check_is_terminal(s, p)
+    assert bool(terminated) is ends
+    if ends:
+        assert float(compute_reward_terms(s, p)["failure"]) == pytest.approx(
+            1.2e6, rel=1e-4
+        )
