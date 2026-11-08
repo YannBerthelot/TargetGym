@@ -149,3 +149,32 @@ So a sourced band needs the task to follow Mode G, which 48 of EDF's 56 units ru
 (OAPS 2.2). That means two rod groups: shimming rods on a calibration of power, and an
 R group in its 27-step band on Tavg with the speed program above. Staying with one
 Mode A bank keeps the rods parked at the top or puts them at an unsourced depth.
+
+## Mode G, first build (2026-11-08): the plant fails its own line-out
+
+What was built, on the work-in-progress commit:
+
+- Two groups and three inputs.
+- The shimming group is worth the power defect from 100 % to 0 %, 1922 pcm (derived),
+  set by a calibration of position against power, at 60 steps/min.
+- Group R sits in its 27-step band, worth 168 pcm (ours), at 72 steps/min.
+- R's position is observed. 20 contract tests pass.
+
+Measured with no controller:
+
+- At full power the axial mode has a period of 33.3 h and decays at -0.070 /h.
+- At 75 % and 50 %, lined out with the shimming group on its calibration, the offset
+  sits at its -0.99 clip.
+- Moving R across its band at full power shifts delta I by -0.39.
+- The same reactivity in boron shifts it by -0.04 and arrives 11 min later.
+
+The cause: the model turns each pcm of rods into about 0.0024 of offset. Half the
+shimming group's worth, one bank in the middle of the core, then tilts the core
+completely. EDF spreads that worth across grey groups inserted in sequence, so that "as
+less perturbations as possible" are produced (ICAPP 2016, II.B). That design is the
+point of Mode G, and this model has no data for it: no group worths, no grey strength,
+no calibration curve were found.
+
+The core physics itself is not the problem now. At Krsko's half-power state (D bank 34
+steps in, xenon 110 of 96), the model with the 283 pcm coupling and the old single bank
+gives delta I +0.054, against the published +0.05.

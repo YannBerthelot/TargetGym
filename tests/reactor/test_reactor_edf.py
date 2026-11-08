@@ -36,7 +36,7 @@ def reset(seed=0):
 
 def test_the_observation_carries_the_hours_to_each_ramp():
     env, p, obs, s = reset()
-    assert obs.shape == (10,)
+    assert obs.shape == (11,)  # with group R's position last (Mode G)
     np.testing.assert_allclose(obs[8], float(s.ramp_down_at) / 3600.0, rtol=1e-6)
     np.testing.assert_allclose(obs[9], float(s.ramp_up_at) / 3600.0, rtol=1e-6)
 

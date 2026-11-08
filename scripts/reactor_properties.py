@@ -19,7 +19,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from target_gym.reactor import Reactor, ReactorParams
-from target_gym.reactor.env import rod_worth, tavg_program
+from target_gym.reactor.env import rod_worth, shim_position, tavg_program
 
 STEP_H = 30.0 / 3600.0
 
@@ -48,7 +48,9 @@ def line_out(env, p, s, load):
     )
 
     T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, p)
+    shim = shim_position(load, p)
     needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), s.Xe_hat, p)
+    needed = needed - (rod_worth(shim, p) - rod_worth(p.rod_park, p))
     d = s.n.dtype
     q = jnp.asarray(load, d)
     return s.replace(
@@ -56,7 +58,7 @@ def line_out(env, p, s, load):
         T_coolant=jnp.asarray(T_hot, d), T_cold=jnp.asarray(T_cold, d),
         T_sg=jnp.asarray(T_sg, d), target_n=q, T_ref=jnp.asarray(tavg_program(q, p), d),
         boron=jnp.asarray(p.boron_ref + needed / p.boron_worth, d),
-        ramp_down_at=jnp.asarray(-1e8, d), ramp_up_at=far,
+        ramp_down_at=jnp.asarray(-1e8, d), ramp_up_at=far, rod_in=jnp.asarray(shim, d),
     )  # fmt: skip
 
 
@@ -71,7 +73,14 @@ def rollout(env, p, s, actions):
 
 
 def rods_at(steps_in):
-    return 1.0 - 2.0 * steps_in / 228.0
+    return 1.0 - 2.0 * steps_in / 260.0
+
+
+def hold(s, n):
+    """``n`` steps of actions holding the shimming group where it is, R mid-band."""
+    a = np.zeros((n, 3))
+    a[:, 0] = 1.0 - 2.0 * float(s.rod_in)
+    return a
 
 
 def _mode(load, dip=30.0, hours=120.0):
@@ -79,9 +88,8 @@ def _mode(load, dip=30.0, hours=120.0):
     env, p, s = flat(load)
     s = line_out(env, p, s, load)
     n = int(hours / STEP_H)
-    a = np.zeros((n, 2))
-    a[:, 0] = rods_at(3.0)
-    a[: int(2.5 / STEP_H), 0] = rods_at(3.0 + dip)
+    a = hold(s, n)
+    a[: int(2.5 / STEP_H), 0] = rods_at(float(s.rod_in) * 260.0 + dip)
     tr = rollout(env, p, s, a)
     ao = np.asarray(tr.delta_I) / np.asarray(tr.n)
     trips = int(np.sum(np.asarray(tr.time) == 0))
@@ -110,18 +118,21 @@ def _moves():
     env, p, s = flat(1.0)
     s = line_out(env, p, s, 1.0)
     steps_in = 60.0  # to be matched by boron
-    rods = float(rod_worth((3.0 + steps_in) / 228.0, p) - rod_worth(3.0 / 228.0, p))
+    rods = float(rod_worth(steps_in / 260.0, p) - rod_worth(0.0, p))
     n = int(2.0 / STEP_H)
-    a = np.zeros((n, 2))
-    a[:, 0] = rods_at(3.0 + steps_in)
+    a = hold(s, n)
+    a[:, 0] = rods_at(steps_in)
     rod_run = rollout(env, p, s, a)
+    # Group R across its whole band, foot to top: its full reach.
+    a = hold(s, n)
+    a[:, 1] = -1.0
+    r_run = rollout(env, p, s, a)
     # The same worth as boration at full flow: ppm over the rate.
     ppm = rods / p.boron_worth
     rate = p.boration_flow / p.primary_mass * (p.boric_acid_ppm - p.boron_ref)
     on = int(round(ppm / rate / 30.0))
-    a = np.zeros((n, 2))
-    a[:, 0] = rods_at(3.0)
-    a[:on, 1] = 1.0
+    a = hold(s, n)
+    a[:on, 2] = 1.0
     boron_run = rollout(env, p, s, a)
     t = np.arange(n) * STEP_H * 60.0
 
@@ -140,6 +151,7 @@ def _moves():
         "rod_steps": steps_in, "worth_pcm": rods * 1e5, "boron_ppm": ppm,
         "boron_full_flow_min": on / 2.0, "boron_delay_min": float(s.boron_delay) / 2.0,
         "rods": effect(rod_run), "boron": effect(boron_run),
+        "r_band_in": effect(r_run),
     }  # fmt: skip
 
 
@@ -149,8 +161,8 @@ def _bank():
     from target_gym.reactor.env import rod_tilt
 
     out = []
-    for steps in (30, 60, 90, 114):
-        y = steps / 228.0
+    for steps in (30, 60, 90, 130):
+        y = steps / 260.0
         out.append({
             "steps_in": steps,
             "worth_pcm": float(rod_worth(y, p)) * 1e5,
