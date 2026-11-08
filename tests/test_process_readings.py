@@ -51,11 +51,14 @@ def _with_rounding(sigma, step):
 
 #: Channel -> its scatter, in the observation's units.
 SCATTER = {
-    "cstr": {0: 5e-4, 1: 0.04},
+    "cstr": {0: 0.04, 1: 0.04},
     "first_order": {0: 1.1e-3},
-    "unstable_cstr": {0: 5e-4, 1: 0.04, 2: 0.04},
+    "unstable_cstr": {0: 0.5},
     "distillation": {0: 4e-4, 1: 4e-4, 6: 3e-3 * TRAY_SLOPE},
-    "ph_neutralization": {0: _with_rounding(0.01, 0.01)},
+    "ph_neutralization": {
+        0: _with_rounding(0.01, 0.01),
+        4: _with_rounding(0.01, 0.01),
+    },
     "compressor_surge": {
         0: 9.17 / KPA,
         1: 0.021,
@@ -66,12 +69,16 @@ SCATTER = {
 }
 #: Setpoints and the controller's own commands.
 EXACT = {
-    "cstr": (2,),
+    "cstr": (2, 3),
     "first_order": (1,),
-    "unstable_cstr": (3,),
-    "distillation": (2, 3, 4, 5),
-    "ph_neutralization": (1, 2),
-    "compressor_surge": (4, 6),
+    "unstable_cstr": (1, 2),
+    # Flows, specs, and the feed meter (FC 1), read exactly: ours.
+    "distillation": (2, 3, 4, 5, 7),
+    # Valves, set point, the monitor's excursion clock, the flow meter and the
+    # basin level, read exactly (ours: no figures found).
+    "ph_neutralization": (1, 2, 3, 5, 6, 7),
+    # Drive setpoint, header setpoint, and the surge counter (ours: exact).
+    "compressor_surge": (4, 6, 7),
 }
 #: Channels with a scatter of their own arithmetic, tested on their own below.
 DERIVED = {"compressor_surge": (2,)}
@@ -81,27 +88,16 @@ PERIOD = {"distillation": {0: CYCLE_STEPS, 1: CYCLE_STEPS}}
 #: A copy of the state with the target exactly on the tracked value, so a
 #: tracking cost on the measured copy is noise alone.
 ON_TARGET = {
-    "cstr": lambda s: s.replace(target_CA=s.C_a),
+    "cstr": lambda s: s.replace(target_T=s.T),
     "first_order": lambda s: s.replace(target_x=s.x),
-    "unstable_cstr": lambda s: s.replace(
-        target_levels=jnp.full_like(s.target_levels, s.C_a)
-    ),
-    "distillation": lambda s: s.replace(target_yD=s.x[-1], target_xB=s.x[0]),
-    "ph_neutralization": lambda s: s.replace(target_pH=s.pH),
-    "compressor_surge": lambda s: s.replace(
-        setpoint_levels=jnp.full_like(s.setpoint_levels, s.dp),
-        setpoint_lead=jnp.zeros_like(s.setpoint_lead),
-    ),
+    "unstable_cstr": lambda s: s.replace(target_T=s.T),
 }
 #: The proposal's floor per step, with rounding's ``step^2 / 12`` on pH. The
 #: table's 0.11 and 0.034 are (9.17 Pa / 27.5 Pa)^2 and (1.1e-3 / 6e-3)^2.
 FLOOR = {
-    "cstr": (5e-4 / 5e-4) ** 2,
+    "cstr": (0.04 / 0.1) ** 2,
     "first_order": (1.1e-3 / 6e-3) ** 2,
-    "unstable_cstr": (5e-4 / 5e-4) ** 2,
-    "distillation": 2.0 * (4e-4 / 4e-4) ** 2,
-    "ph_neutralization": 1.0 + 1.0 / 12.0,
-    "compressor_surge": (9.17 / 27.5) ** 2,
+    "unstable_cstr": (0.5 / 1.0) ** 2,
 }
 #: Independent tracked readings behind each floor: a sum of k equal chi-squared
 #: terms has standard deviation floor * sqrt(2 / k).
@@ -173,7 +169,8 @@ def test_every_channel_is_either_noisy_or_exact(name):
     assert sorted(named) == list(range(env.obs_shape[0]))
 
 
-@tasks
+# Tasks scored on the operator's job (charter rule 15) have no tracking term.
+@pytest.mark.parametrize("name", sorted(FLOOR))
 def test_measured_cost_carries_the_proposals_floor(name):
     env, params, state = _reset(name)
     state = ON_TARGET[name](state)
@@ -312,6 +309,9 @@ def test_action_noise_reaches_the_actuators_inside_their_rate_limit():
         jnp.float32,
     )
     key = jax.random.PRNGKey(0)
+    # The valve's positioner dead time (version 4) would hold the step's move
+    # back; this checks the scatter's path to the actuators.
+    params = params.replace(valve_lag=0.0)
     noisy = env.step_env(key, state, action, params.replace(action_noise=0.05))[1]
     clean = env.step_env(key, state, action, params)[1]
     assert float(noisy.N_ramp) != float(clean.N_ramp)

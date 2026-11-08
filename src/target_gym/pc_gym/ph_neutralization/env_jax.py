@@ -22,6 +22,7 @@ from target_gym.pc_gym.ph_neutralization.env import (
     compute_reward_terms,
     get_obs,
     solve_pH,
+    steady_base_flow,
     steady_state_invariants,
 )
 from target_gym.pc_gym.ph_neutralization.rendering import _render
@@ -33,8 +34,9 @@ class PHNeutralization(
 ):
     """pH neutralisation CSTR (reaction-invariant formulation).
 
-    Observation (3,): [pH, q3_pct, target_pH]
-    Action      (1,): base flow, raw in [-1, 1] -> [q3_min, q3_max]
+    Observation (8,): [pH, q3_pct, setpoint_pH, excursion_min, pH_s1, trim_pct,
+                       q1, basin_pct]
+    Action      (2,): stage-1 base flow and stage-2 trim, raw in [-1, 1]
     """
 
     registry_name: str = "ph_neutralization"
@@ -51,10 +53,11 @@ class PHNeutralization(
     # ``delta_t`` is (PHYSICS.md section on readings).
     readings: tuple = (
         FieldReading("pH", sigma=0.01, step=0.01, lag=10.0, dead_time=10.0),
+        FieldReading("pH_s1", sigma=0.01, step=0.01, lag=10.0, dead_time=10.0),
     )
 
     def __init__(self, integration_method: str = "rk4_2"):
-        self.obs_shape = (3,)
+        self.obs_shape = (8,)
         self.integration_method = integration_method
 
     @property
@@ -76,10 +79,10 @@ class PHNeutralization(
     ):
         if params is None:
             params = self.default_params
-        action, state = actuate(self, state, jnp.reshape(action, (1,)), params)
+        action, state = actuate(self, state, jnp.reshape(action, (2,)), params)
 
         new_state, _ = compute_next_state(
-            action.reshape(()),
+            action,
             state,
             params,
             key,
@@ -111,42 +114,66 @@ class PHNeutralization(
         if params is None:
             params = self.default_params
 
-        key, q3_key, target_key, buffer_key = jax.random.split(key, 4)
+        keys = jax.random.split(key, 5)
 
-        # Start on the steady state for the sampled flows: a CSTR left running
-        # is at equilibrium, and starting off it would spend the first several
-        # residence times relaxing rather than being controlled.
-        q3 = jax.random.uniform(
-            q3_key,
-            minval=params.initial_q3_range[0],
-            maxval=params.initial_q3_range[1],
-        )
+        # Established operation (charter rule 17): both tanks on the steady
+        # state that holds the set point under the buffer flow they meet, the
+        # trim valve shut and the basin empty, as a loop in automatic leaves
+        # them. The upsets come later, unannounced.
         q2 = jnp.clip(
-            params.q2_nominal + params.q2_noise_std * jax.random.normal(buffer_key),
+            params.q2_nominal + params.q2_noise_std * jax.random.normal(keys[0]),
             params.q2_min,
             params.q2_max,
         )
-        target_pH = jax.random.uniform(
-            target_key,
-            minval=params.target_pH_range[0],
-            maxval=params.target_pH_range[1],
+        target_pH = jnp.asarray(params.setpoint_pH, jnp.float32)
+        q3 = jnp.clip(
+            steady_base_flow(target_pH, q2, params), params.q3_min, params.q3_max
         )
+        span = params.max_steps_in_episode
+
+        def schedule(times_key, levels_key, size):
+            times = jnp.sort(jax.random.randint(times_key, (2,), 0, span))
+            draws = jax.random.uniform(levels_key, (2,), minval=-1.0, maxval=1.0)
+            return times, jnp.concatenate([jnp.ones((1,)), 1.0 + size * draws])
+
+        upset_times, upset_levels = schedule(keys[1], keys[2], params.acid_upset_size)
+        flow_times, flow_levels = schedule(keys[3], keys[4], params.flow_swing)
         Wa, Wb = steady_state_invariants(q3, q2, params)
+        pH = solve_pH(Wa, Wb, params)
 
         state = PHState(
             time=0,
             Wa=Wa,
             Wb=Wb,
             q2=q2,
-            pH=solve_pH(Wa, Wb, params),
+            pH=pH,
             q3=q3,
             target_pH=target_pH,
+            upset_times=upset_times,
+            upset_levels=upset_levels,
+            flow_times=flow_times,
+            flow_levels=flow_levels,
+            excursion=jnp.zeros(()),
+            Wa_s1=Wa,
+            Wb_s1=Wb,
+            pH_s1=pH,
+            q3_trim=jnp.zeros(()),
+            q1=jnp.asarray(params.q1),
+            basin=jnp.zeros(()),
+            Wa_basin=Wa,
+            Wb_basin=Wb,
         )
         return self.get_obs(state), state
 
+    def initial_action(self, state, params):
+        """The raw actions that hold the reset valves where they run."""
+        u = 2.0 * (state.q3 - params.q3_min) / (params.q3_max - params.q3_min) - 1.0
+        trim = 2.0 * state.q3_trim / params.q3_trim_max - 1.0
+        return jnp.stack([u, trim])
+
     def action_space(self, params: PHParams | None = None) -> spaces.Box:
         return spaces.Box(
-            low=jnp.array([-1.0]), high=jnp.array([1.0]), shape=(1,), dtype=jnp.float32
+            low=-jnp.ones(2), high=jnp.ones(2), shape=(2,), dtype=jnp.float32
         )
 
     def observation_space(self, params: PHParams) -> spaces.Box:

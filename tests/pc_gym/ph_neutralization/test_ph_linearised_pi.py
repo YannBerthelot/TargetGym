@@ -4,8 +4,9 @@ Contract (PHYSICS.md section 7, from pH practice): the PI acts on reagent
 demand, the steady base flow the titration curve says a pH needs at the
 nominal buffer flow, so ``reagent_demand`` must invert the plant's own steady
 state. Its bias is the target's demand, so at rest on target with the
-nominal buffer it asks for the flow that holds the target. A pH below target
-opens the base valve further; above it, closes it.
+nominal buffer it asks for the flow that holds the target, with the stage-2
+trim shut. A pH below target opens the base valve further; above it, closes
+it. The plant is staged: the stage-1 valve reads the stage-1 probe.
 
 The oracle for the curve is the environment's own steady state: mixing
 (``steady_state_invariants``) and the bisection on the charge balance
@@ -44,6 +45,13 @@ def test_demand_inverts_the_plants_steady_state(q3):
     assert abs(float(reagent_demand(_steady_pH(q3), CURVE, np)) - q3) < DEMAND_TOL
 
 
+def _obs(pH_1, target, pH_2=None):
+    """The 8-channel observation with both probes at ``pH_1`` unless the
+    discharge's ``pH_2`` is given."""
+    pH_2 = pH_1 if pH_2 is None else pH_2
+    return np.array([pH_2, 50.0, target, 0.0, pH_1, 0.0, P.q1, 0.0], np.float32)
+
+
 def _raw(q3):
     return 2.0 * (q3 - P.q3_min) / (P.q3_max - P.q3_min) - 1.0
 
@@ -51,14 +59,20 @@ def _raw(q3):
 @pytest.mark.parametrize("target", [6.5, 7.0, 8.0])
 def test_on_target_it_asks_for_the_flow_that_holds_the_target(target):
     pid = make_ph_pid_controller().host()
-    raw = float(pid(np.array([target, 50.0, target], np.float32))[0])
-    q3 = P.q3_min + 0.5 * (raw + 1.0) * (P.q3_max - P.q3_min)
+    action = np.asarray(pid(_obs(target, target)))
+    q3 = P.q3_min + 0.5 * (float(action[0]) + 1.0) * (P.q3_max - P.q3_min)
     assert _steady_pH(q3) == pytest.approx(target, abs=1e-3)
+    assert float(action[1]) == pytest.approx(-1.0)  # the trim rests shut
 
 
 def test_acid_effluent_opens_the_base_valve_and_alkaline_closes_it():
     on, acid, alkaline = (
-        float(make_ph_pid_controller().host()(np.array([pH, 50.0, 7.0]))[0])
+        float(make_ph_pid_controller().host()(_obs(pH, 7.0))[0])
         for pH in (7.0, 6.8, 7.2)
     )
     assert acid > on > alkaline
+
+
+def test_an_acid_discharge_opens_the_trim():
+    trim = float(make_ph_pid_controller().host()(_obs(7.0, 7.0, pH_2=6.8))[1])
+    assert trim > -1.0

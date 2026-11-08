@@ -54,11 +54,6 @@ N_STAGES = 41  # 40 trays + reboiler + condenser, minus shared indexing
 N_FEED = 21  # feed stage, counting the reboiler as stage 1
 TRAYS = jnp.arange(2, N_STAGES)  # stage numbers of the 39 trays, bottom first
 
-# Ornstein-Uhlenbeck feed-composition disturbance: mean-reversion rate (1/min).
-# 1/theta ~ 500 min, a few dominant time constants, so the feed drifts as a
-# changing operating condition rather than as noise.
-FEED_OU_THETA = 2.0e-3
-
 # The tray thermocouple. Stage 15, six below the feed, counting the reboiler as
 # stage 1: the bottom-section stage with the largest steady-state temperature
 # gain to boilup (the maximum gain rule; 220 K per kmol/min at the nominal
@@ -76,143 +71,116 @@ class DistillationParams(EnvParams):
     # ---- Column ----
     alpha: float = 1.5  # relative volatility
     M_tray: float = 0.5  # kmol tray holdup
-    M_drum: float = 0.5  # kmol condenser / reboiler holdup
+    # The drums: D2's holdups "for more realistic studies" (charter Amendment
+    # 3); Column A's own analysis uses 0.5 kmol in each [D1, D2].
+    M_reboiler: float = 10.0  # kmol
+    M_condenser: float = 32.1  # kmol
     tau_L: float = 0.063  # min, liquid lag per tray (Skogestad's taul)
     L_nominal: float = 2.706  # kmol/min, the reflux at which M_i = M_tray
 
     # ---- Feed ----
-    F: float = 1.0  # kmol/min
-    zF_nominal: float = 0.5  # mole fraction light component
-    qF: float = 1.0  # saturated liquid
-    zF_noise_std: float = 0.03  # OU stationary std
-    zF_min: float = 0.40
-    zF_max: float = 0.60
+    F: float = 1.0  # kmol/min, nominal [D2]
+    zF_nominal: float = 0.5  # mole fraction light component [D2]
+    qF: float = 1.0  # saturated liquid [D2]
+    # The bad days of [D1, p. 33, Fig. 18]: the feed rate steps by 20 % and its
+    # composition by 0.1. Each comes once an episode, at a time drawn in
+    # ``step_window`` and with a random sign; timing and sign are ours.
+    feed_step: float = 0.2  # fraction of F
+    zF_step: float = 0.1  # mole fraction
+    step_window: Tuple[int, int] = (30, 300)  # min
 
     # ---- Manipulated variables (LV configuration) ----
-    # Wide enough to hold every target in the box at reset feeds within two sigma:
-    # (0.995, 0.005) needs L 3.35 and V 3.85, (0.98, 0.02) L 2.27 and V 2.73.
-    L_min: float = 2.20
-    L_max: float = 3.40
-    V_min: float = 2.70
-    V_max: float = 3.90
+    # Ours: no Column A flow limits were found. Wide enough to hold both specs
+    # after every sourced feed step, with 5 % to spare: F 0.8 to 1.2 and zF 0.4
+    # to 0.6 need L 1.95 to 2.96 and V 2.29 to 3.65 (derived,
+    # test_distillation_hydraulics.py). Flooding, the real ceiling on V [D6],
+    # has no sourced figure.
+    L_min: float = 1.85
+    L_max: float = 3.11
+    V_min: float = 2.18
+    V_max: float = 3.83
     # Distillate is D = V - L; clipped so the overall balance stays physical at
     # the corners of the action box, where V - L could otherwise go negative.
     D_min: float = 0.10
     D_max: float = 0.90
 
-    # ---- Operating / termination bounds ----
-    yD_floor: float = 0.90  # distillate purity lost
-    xB_ceiling: float = 0.10  # bottoms purity lost
+    # ---- Product zones (charter rules 14 and 19) ----
+    # On a real splitter the product limits are control zones, a quality
+    # limit, not a trip [D4, p. 5, Table 1]: below yD_spec or above xB_spec the
+    # product is off spec. Column A's products, 0.99 and 0.01 [D2], are its
+    # design point; the family designs a column with its impurity 3 sigma
+    # inside the spec, 700 ppm against a 1,000 ppm limit [D7], so each
+    # impurity's spec is the design impurity over 0.7. Ours, family member.
+    yD_spec: float = 1.0 - 0.01 / 0.7
+    xB_spec: float = 0.01 / 0.7
 
-    # ---- Reward shaping ----
-    # Error scale for the MPC's tracking term, in mole fraction. Not read by
-    # ``compute_reward``, which normalises by the full [0, 1] envelope under a
-    # log; this is the planner's quadratic surrogate scale. 0.02 is about the
-    # width this column is actually operated over. A band the reward ignores
-    # and the controller steers by is worth watching: the glass furnace had one
-    # inherited from a deleted reward and it cost 16% against its own PID.
-    tracking_band: float = 0.02
+    # ---- Retired version-1 reward fields, read only by reward_version 1 ----
     precision_floor: float = 4e-4  # mole fraction, online analyser scatter
-    # Zeroed for the 0.6 line: this phase scores setpoint tracking alone.
-    # A running cost is a real part of every one of these plants, but its
-    # weight against tracking accuracy is a design decision this library has
-    # not earned yet, and an arbitrary one turns a tracking benchmark into a
-    # multi-objective problem whose Pareto point nobody chose. The glass
-    # furnace showed the cost of getting it wrong: its MPC sat 6 K cold with
-    # fuel at minimum 80% of the time, because a 0.1 fuel weight against a
-    # quadratic tracking surrogate made that the optimum of the objective it
-    # was given. The field and the term stay, so a weight can be restored
-    # once there is a defensible way to set it. See docs/roadmap.md.
-    boilup_cost_weight: float = 0.0  # was 0.05; reboiler duty is the running cost
-
-    # ---- Targets ----
-    target_yD_range: Tuple[float, float] = (0.980, 0.995)
-    target_xB_range: Tuple[float, float] = (0.005, 0.020)
-    initial_L_range: Tuple[float, float] = (2.65, 2.76)
+    boilup_cost_weight: float = 0.0
 
     # ---- Time discretization ----
-    # Minutes. Dominant time constant ~194 min, so 400 steps ~ 2 tau: at 200 the
-    # expert's hold was 2.8 times a doubled run's, against the episode-length
-    # rule. The integrator needs 16 substeps at this step size for stability; see
-    # ``compute_next_state``.
+    # Minutes [D1, D2]. 400 min, about two dominant time constants (194 min
+    # [D1, p. 14]), holds both feed steps and the recovery after the later one
+    # (about 40 min in [D1, Fig. 18]); ours. The integrator needs 16 substeps
+    # at this step size for stability; see ``compute_next_state``.
     delta_t: float = 1.0
     #: ``delta_t`` is in minutes (Skogestad's model unit); seconds per unit.
     time_unit_seconds: float = 60.0
     max_steps_in_episode: int = 400
 
-    # ---- Reward (docs/reward-shaping.md; version 2) ----
-    # Two tracked compositions, one term each, summed. The shipped MPC's
-    # long-run hold errors under the shipped feed-composition disturbance
-    # (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in)
-    # are top 7.6e-7 and bottom 5.2e-7 mole fraction, each its lowest of three
-    # seeds (PID down to 5.7e-5 and 1.3e-4): the current oracle,
-    # planning on the mean feed with a decaying step. It held
-    # 1.35e-5 and 3.3e-5 before. Upper bounds on the achievable floors.
-    # e_tol = 0 provisionally: the product purity specifications a column is
-    # run against come from the sales contract and are to be supplied. Boilup
-    # is charged as a share of the hold-phase rate (3.282 kmol/min, PID; MPC
-    # 3.292), at weight 1. A trip is charged at twice the reachable 0.095 error on each
-    # product, in floor units (`failure_cost`).
-    reward_version: int = 2
-    # The MPC holds 7.6e-7 / 5.2e-7 in the shipped disturbance, below the 4e-4
-    # scatter of the composition analyser: the instrument sets both scales.
+    # ---- Score (charter rule 15; REALITY.md, "The operator's job") ----
+    # Keep both impurities inside their zones at the least reflux and boilup
+    # [D4, p. 5]. In kmol of boilup per step: the boilup itself, and each kmol
+    # of off-spec product, which is run through the column again at the
+    # nominal V/F = 3.206 kmol of boilup per kmol (ours: no price was found,
+    # and a second pass is the cheapest way to recover it). Inside the zones
+    # purity earns nothing more; it costs the boilup it takes.
+    reward_version: int = 3
+    boilup_price: float = 1.0  # per kmol of boilup
+    reprocess_price: float = 3.206  # kmol of boilup per kmol off spec
+    # No trip (the zones are not trips), so this is never charged; sized above
+    # any surviving step: the most boilup and all product off spec.
+    failure_cost: float = 3.83 + 3.206 * 1.2
+    restart_steps: int = 1
+    # Read by the benchmark's time-in-band KPI, not by the reward: the
+    # analysers' scatter.
     e_floor_top: float = 4e-4  # mole fraction
     e_floor_bottom: float = 4e-4
-    e_tol: float = 0.0  # provisional; purity specs to be supplied
-    tracking_exponent: float = 2.0
-    c_hold: float = 3.282  # boilup while holding (PID)
-    running_weight: float = 1.0
-    failure_cost: float = (
-        2.0 * 2.0 * (0.095 / 4e-4) ** 2
-    )  # reachable 0.095 on each product (0.98 -> 0.90 trip; 0.02 -> 0.10)
-    #: Restart time priced into a trip (``reward.trip_cost``; 4 h at 1 min steps: column shutdown and re-establishment of the profile, provisional).
-    restart_steps: int = 240
-    #: Tracking cost per step at the floor, in the reward's units.
-    #: The oracle's best hold: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (the MPC's 7.64e-7 / 5.19e-7 holds in 4e-4 units).
-    rho_floor_tracking: float = (7.64e-7 / 4e-4) ** 2 + (5.19e-7 / 4e-4) ** 2
-    rho_floor: float = (7.64e-7 / 4e-4) ** 2 + (5.19e-7 / 4e-4) ** 2
-    #: True where e_floor is a resolution, not a measured or certified floor.
-    floor_is_documented_minimum: bool = False
 
 
 #: Units of the DistillationParams fields, for the generated environment pages.
 PARAM_UNITS = {
     "alpha": "-",
     "M_tray": "kmol",
-    "M_drum": "kmol",
+    "M_reboiler": "kmol",
+    "M_condenser": "kmol",
     "tau_L": "min",
     "L_nominal": "kmol/min",
     "F": "kmol/min",
     "zF_nominal": "-",
     "qF": "-",
-    "zF_noise_std": "-",
-    "zF_min": "-",
-    "zF_max": "-",
+    "feed_step": "-",
+    "zF_step": "-",
+    "step_window": "min",
     "L_min": "kmol/min",
     "L_max": "kmol/min",
     "V_min": "kmol/min",
     "V_max": "kmol/min",
     "D_min": "kmol/min",
     "D_max": "kmol/min",
-    "yD_floor": "-",
-    "xB_ceiling": "-",
-    "tracking_band": "-",
+    "yD_spec": "-",
+    "xB_spec": "-",
     "precision_floor": "-",
     "boilup_cost_weight": "-",
     "delta_t": "min",
     "time_unit_seconds": "s",
+    "reward_version": "-",
+    "boilup_price": "kmol",
+    "reprocess_price": "kmol/kmol",
+    "failure_cost": "kmol",
+    "restart_steps": "steps",
     "e_floor_top": "-",
     "e_floor_bottom": "-",
-    "reward_version": "-",
-    "e_tol": "-",
-    "tracking_exponent": "-",
-    "failure_cost": "reward",
-    "restart_steps": "steps",
-    "rho_floor_tracking": "reward",
-    "rho_floor": "reward",
-    "c_hold": "kmol/min",
-    "running_weight": "-",
 }
 
 
@@ -239,10 +207,22 @@ class DistillationState(EnvState):
 
     L: float  # reflux (manipulated)
     V: float  # boilup (manipulated)
-    target_yD: float
+    target_yD: float  # the product specs, constant (the zones' edges)
     target_xB: float
 
     actuator_held: jax.Array = actuator_field(2)
+    #: Feed rate now, kmol/min (measured, FC 1 [D4]).
+    F: float = struct.field(default=1.0, kw_only=True)
+    #: The episode's two feed steps (HIDDEN until they come): the minute each
+    #: comes, and its sign. A state built by hand has none.
+    feed_step_at: jax.Array = struct.field(
+        default_factory=lambda: jnp.asarray(10**9, jnp.int32), kw_only=True
+    )
+    feed_sign: jax.Array = struct.field(default=1.0, kw_only=True)
+    zF_step_at: jax.Array = struct.field(
+        default_factory=lambda: jnp.asarray(10**9, jnp.int32), kw_only=True
+    )
+    zF_sign: jax.Array = struct.field(default=1.0, kw_only=True)
     # Liquid leaving each tray, ordered as ``steady_liquid`` (HIDDEN).
     liquid: jax.Array = struct.field(default_factory=_nominal_liquid, kw_only=True)
 
@@ -252,44 +232,43 @@ def vle(x, params: DistillationParams):
     return params.alpha * x / (1.0 + (params.alpha - 1.0) * x)
 
 
-def flows(L, V, params: DistillationParams):
+def flows(L, V, params: DistillationParams, F=None):
     """Product flows from the overall balance, kept physical by clipping D."""
+    F = params.F if F is None else F
     D = jnp.clip(V - L, params.D_min, params.D_max)
-    B = params.F - D
+    B = F - D
     return D, B
 
 
-def compute_velocity(position, action, zF, params: DistillationParams):
+def compute_velocity(position, action, zF, params: DistillationParams, F=None):
     """Stage balances and tray hydraulics, as Skogestad's ``colamod.m``.
 
     ``position`` is the 41 compositions, then the 39 tray flows in the order of
-    ``steady_liquid``. ``action`` is ``(L, V)`` in physical units.
+    ``steady_liquid``. ``action`` is ``(L, V)`` in physical units, ``F`` the
+    feed rate now (``params.F`` by default).
     """
     p = params
+    F = p.F if F is None else F
     x, liquid = position[:N_STAGES], position[N_STAGES:]
     L, V = action
-    D, _ = flows(L, V, p)
+    D, _ = flows(L, V, p, F)
     # The reboiler's level loop passes on what arrives, so bottoms follows the
     # cascade, within the range ``flows`` keeps D in.
-    B = jnp.clip(liquid[0] - V, p.F - p.D_max, p.F - p.D_min)
+    B = jnp.clip(liquid[0] - V, F - p.D_max, F - p.D_min)
     y = vle(x, p)
 
     # Interior trays: liquid down from above, vapour up from below, and the
     # feed into the liquid on stage N_FEED. Vapour is the same throughout.
     liquid_in = jnp.append(liquid[1:], L)
     feed = TRAYS == N_FEED
-    dM = liquid_in - liquid + feed * p.qF * p.F
+    dM = liquid_in - liquid + feed * p.qF * F
     dMx = (
-        liquid_in * x[2:]
-        + V * y[:-2]
-        - liquid * x[1:-1]
-        - V * y[1:-1]
-        + feed * p.F * zF
+        liquid_in * x[2:] + V * y[:-2] - liquid * x[1:-1] - V * y[1:-1] + feed * F * zF
     )
     dx_trays = (dMx - x[1:-1] * dM) / tray_holdup(liquid, p)
 
-    dx_reboiler = (liquid[0] * x[1] - V * y[0] - B * x[0]) / p.M_drum
-    dx_condenser = (V * y[-2] - (L + D) * x[-1]) / p.M_drum
+    dx_reboiler = (liquid[0] * x[1] - V * y[0] - B * x[0]) / p.M_reboiler
+    dx_condenser = (V * y[-2] - (L + D) * x[-1]) / p.M_condenser
 
     velocity = [jnp.array([dx_reboiler]), dx_trays, jnp.array([dx_condenser])]
     return jnp.concatenate(velocity + [dM / p.tau_L]), None
@@ -320,20 +299,14 @@ def compute_next_state(
         action_raw[1], min_action=p.V_min, max_action=p.V_max
     )
 
-    # OU feed-composition disturbance, drawn from a key folded with
-    # ``state.time`` so a caller passing a constant key still gets a genuine
-    # zero-mean process.
-    noise = jax.random.normal(jax.random.fold_in(key, state.time))
-    sigma = p.zF_noise_std * jnp.sqrt(2.0 * FEED_OU_THETA * p.delta_t)
-    zF = jnp.clip(
-        state.zF
-        + FEED_OU_THETA * (p.zF_nominal - state.zF) * p.delta_t
-        + sigma * noise,
-        p.zF_min,
-        p.zF_max,
-    )
+    # The feed's two steps [D1, Fig. 18], on the episode's schedule.
+    t_next = state.time + 1
+    F = p.F * (1.0 + p.feed_step * state.feed_sign * (t_next > state.feed_step_at))
+    zF = p.zF_nominal + p.zF_step * state.zF_sign * (t_next > state.zF_step_at)
 
-    _compute_velocity = partial(compute_velocity, action=(L, V), zF=zF, params=params)
+    _compute_velocity = partial(
+        compute_velocity, action=(L, V), zF=zF, params=params, F=F
+    )
     new_position, _ = integrate_dynamics(
         positions=jnp.concatenate([state.x, state.liquid]),
         delta_t=p.delta_t,
@@ -346,7 +319,9 @@ def compute_next_state(
     liquid = new_position[N_STAGES:]
 
     return (
-        state.replace(x=new_x, liquid=liquid, zF=zF, L=L, V=V, time=state.time + 1),
+        state.replace(
+            x=new_x, liquid=liquid, zF=zF, F=F, L=L, V=V, time=state.time + 1
+        ),
         None,
     )
 
@@ -364,13 +339,13 @@ def tray_temperature(state: DistillationState):
 
 
 def get_obs(state: DistillationState, params: DistillationParams):
-    """``[yD, xB, L_pct, V_pct, target_yD, target_xB, T_15]``.
+    """``[yD, xB, L_pct, V_pct, spec_yD, spec_xB, T_15, F]``.
 
-    The two product compositions are analysed and one tray temperature is
-    measured, as on a real column, which has analysers on the product
-    streams and thermocouples on a few trays, not an assay of all 40. The
-    interior profile, which is the column's memory, is otherwise hidden, as
-    is the feed composition.
+    The two product analysers [D4, Fig. 1; D5], one tray temperature [D5], the
+    operator's own reflux and boilup, the product specs, and the feed flow,
+    which the plant meters (FC 1 [D4, p. 5]). The interior profile, which is
+    the column's memory, is hidden, as is the feed composition: no feed
+    analyser was found.
     """
     L_pct = (state.L - params.L_min) / (params.L_max - params.L_min)
     V_pct = (state.V - params.V_min) / (params.V_max - params.V_min)
@@ -383,13 +358,15 @@ def get_obs(state: DistillationState, params: DistillationParams):
             state.target_yD,
             state.target_xB,
             tray_temperature(state),
+            state.F,
         ]
     )
 
 
 def check_is_terminal(state: DistillationState, params: DistillationParams, xp=jnp):
-    yD, xB = state.x[-1], state.x[0]
-    terminated = xp.logical_or(yD <= params.yD_floor, xB >= params.xB_ceiling)
+    """No trip: the product limits are zones [D4, p. 5, Table 1], and flooding,
+    the column's hydraulic limit [D6], has no sourced kind (REALITY.md)."""
+    terminated = xp.zeros((), dtype=bool)
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
@@ -397,7 +374,11 @@ def check_is_terminal(state: DistillationState, params: DistillationParams, xp=j
 def compute_reward_terms(
     state: DistillationState, params: DistillationParams, xp=jnp, tripped=None
 ):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+    """The reward's additive cost terms, each >= 0, in kmol of boilup per step
+    (``DistillationParams``, "Score").
+
+    - ``boilup``: the reboiler's duty [D4, p. 5];
+    - ``off_spec``: each product outside its zone, run through again.
 
     ``tripped`` overrides the trip check on ``state``, for a measured copy,
     whose noise must not fire or hide a trip (``base.measured_reward``).
@@ -405,14 +386,14 @@ def compute_reward_terms(
     p = params
     if tripped is None:
         tripped, _ = check_is_terminal(state, p, xp)
-    track = R.tracking_cost(
-        state.target_yD - state.x[-1], p.e_floor_top, p.e_tol, p.tracking_exponent, xp
-    ) + R.tracking_cost(
-        state.target_xB - state.x[0], p.e_floor_bottom, p.e_tol, p.tracking_exponent, xp
-    )
+    D, B = flows(state.L, state.V, p, state.F)
+    off_top = xp.where(state.x[-1] < p.yD_spec, D, 0.0)
+    off_bottom = xp.where(state.x[0] > p.xB_spec, B, 0.0)
     terms = {
-        "tracking": track,
-        "running": R.running_cost(state.V, p.c_hold, p.running_weight, xp),
+        "boilup": R.priced_cost(state.V * p.delta_t, p.boilup_price, xp),
+        "off_spec": R.priced_cost(
+            (off_top + off_bottom) * p.delta_t, p.reprocess_price, xp
+        ),
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 

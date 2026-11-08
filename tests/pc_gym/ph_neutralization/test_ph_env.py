@@ -79,11 +79,6 @@ def test_nominal_operating_point_matches_the_benchmark(params):
     assert _steady_pH(NOMINAL_Q3, NOMINAL_Q2, params) == pytest.approx(7.03, abs=0.1)
 
 
-def test_residence_time_is_about_ninety_seconds(params):
-    tau = params.V / (params.q1 + NOMINAL_Q2 + NOMINAL_Q3)
-    assert 60.0 < tau < 120.0
-
-
 def test_ph_increases_monotonically_with_base_flow(params):
     flows = np.linspace(params.q3_min, params.q3_max, 30)
     phs = [_steady_pH(float(q), NOMINAL_Q2, params) for q in flows]
@@ -178,9 +173,14 @@ def test_steady_state_is_a_fixed_point(params):
 def test_action_maps_to_the_base_flow_range(params):
     env = PHNeutralization()
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    for raw, expected in ((-1.0, params.q3_min), (1.0, params.q3_max)):
-        new_state, _ = compute_next_state(raw, state, params, jax.random.PRNGKey(0))
+    for raw, expected, trim in (
+        (-1.0, params.q3_min, 0.0),
+        (1.0, params.q3_max, params.q3_trim_max),
+    ):
+        action = jnp.array([raw, raw])
+        new_state, _ = compute_next_state(action, state, params, jax.random.PRNGKey(0))
         assert float(new_state.q3) == pytest.approx(expected, rel=1e-5)
+        assert float(new_state.q3_trim) == pytest.approx(trim, abs=1e-6)
 
 
 def test_observation_hides_the_invariants_and_the_buffer(params):

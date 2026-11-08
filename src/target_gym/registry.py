@@ -167,6 +167,10 @@ class EnvSpec:
         Zero-argument callable returning the task's scenario suite
         (``target_gym.scenarios``), kept in the task's own package so the
         fingerprints cover it. ``None`` is one ``normal`` scenario.
+    extra:
+        The reason a task is in Extra (charter rule 5): kept in the
+        repository and listed with this reason, never scored. ``None`` is a
+        benchmark candidate (``benchmark_specs``).
     fingerprint_sources:
         Source files outside the task's own package that its physics imports,
         relative to ``src/target_gym`` (e.g. ``"pc_gym/cstr/env.py"``). Both
@@ -208,6 +212,7 @@ class EnvSpec:
     #: a planner uses for its internal model. See ``experts.mpc.plan_params``.
     noise_fields: tuple[str, ...] = ()
     scenarios: Callable[[], tuple] | None = None
+    extra: str | None = None
     disturbance_overrides: dict[str, Any] = field(default_factory=dict)
     fingerprint_sources: tuple[str, ...] = ()
 
@@ -497,6 +502,22 @@ def _mpc(factory_name: str, module: str) -> Callable[[Any, Any], Any]:
     return make
 
 
+def _scenarios(factory_name: str, module: str) -> Callable[[], tuple]:
+    # A task's scenario suite lives in its own package, so its fingerprint
+    # covers it, as plain dicts: the package does not import
+    # ``target_gym.scenarios``, which would need declaring in its fingerprint.
+    def suite():
+        from importlib import import_module
+
+        from target_gym.scenarios import Scenario
+
+        return tuple(
+            Scenario(**s) for s in getattr(import_module(module), factory_name)()
+        )
+
+    return suite
+
+
 def _shared_oracle(name: str) -> tuple[str, ...]:
     """The data an oracle on the shared solver reads: its horizon summary
     and its smoothing widths (``EnvSpec.oracle_data``)."""
@@ -708,15 +729,15 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_cstr_pid_controller", module="target_gym.pc_gym.cstr.experts"
         ),
         make_mpc=_mpc("make_cstr_mpc", module="target_gym.pc_gym.cstr.oracle"),
-        # 150 steps, over twice the 67 steps the SIMC cascade takes to come
-        # within twice the level it holds. At 100 the scored hold was the last
-        # third.
         tuned_gains_key="cstr",
         oracle_data=_shared_oracle("cstr"),
-        # The feed loads, frozen at the true one for the oracle, as any
-        # process noise is: no plan sees a later arrival.
-        noise_fields=("load_scale",),
-        version=4,
+        # v5 (charter Amendment 3): a PARSEX-like jacketed reactor with the
+        # jacket in code, cooling water as the move, a high-temperature
+        # interlock, temperature as the job, scenarios.
+        version=5,
+        scenarios=_scenarios(
+            "cstr_scenarios", module="target_gym.pc_gym.cstr.scenarios"
+        ),
     ),
     EnvSpec(
         name="first_order",
@@ -748,17 +769,18 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_four_tank_mpc", module="target_gym.pc_gym.four_tank.oracle"
         ),
-        # 1200 steps, twice the 570 s the decoupled SIMC expert takes to bring
-        # both levels within the 1 mm transmitter resolution: the plant is
-        # non-minimum phase (gamma1 + gamma2 = 0.4), which caps any feedback
-        # loop near a 64 s time constant. At 500 steps it was still settling.
         tuned_gains_key="four_tank",
         oracle_data=_shared_oracle("four_tank"),
-        # The tank loads, frozen at the true one for the oracle, as any
-        # process noise is: no plan sees a later arrival.
-        noise_fields=("load_scale",),
+        extra=(
+            "a lab rig with no industrial job: Johansson's teaching process "
+            "tracks levels to 1 mm, and no plant family stands behind its "
+            "flow-split zero (charter Amendment 3)"
+        ),
         # 4: the levels are read through instruments (PHYSICS.md, Readings).
-        version=4,
+        # 5 (charter Amendment 2): the Lund rig's P+ constants, no trip, an
+        # overflowing rim, and an episode of setpoint steps from the operating
+        # point with an extra upper outlet and a cup.
+        version=5,
     ),
     EnvSpec(
         name="ph_neutralization",
@@ -772,14 +794,21 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_ph_mpc", module="target_gym.pc_gym.ph_neutralization.oracle"
         ),
-        # 300 steps = 25 min ~ 17 residence times, enough for the buffer
-        # disturbance to move the operating point.
         tuned_gains_key="ph_neutralization",
         disturbance_fields=("q2",),
         # The buffer flow's OU innovation, zeroed for the oracle, which rolls
         # the simulator and would otherwise plan on one seed's draws.
         noise_fields=("q2_noise_std",),
-        version=3,
+        # v4 (charter Amendment 2): the permit zone with its 60 min timed
+        # limit, diversion below pH 5, acid strength upsets, a 2 h episode from
+        # established operation, and a job score in reagent litres. v5
+        # (Amendment 3): two 10 min stages with a valve each, a finite
+        # diversion basin pumped back, influent flow swings, scenarios.
+        version=5,
+        scenarios=_scenarios(
+            "ph_neutralization_scenarios",
+            module="target_gym.pc_gym.ph_neutralization.scenarios",
+        ),
     ),
     EnvSpec(
         name="distillation",
@@ -800,12 +829,16 @@ _SPECS: tuple[EnvSpec, ...] = (
         # step (80 states, 16 substeps for stability).
         tuned_gains_key="distillation",
         # v3 observes the stage-15 temperature, the thermocouple the base
-        # layer's temperature loop holds.
-        version=4,
-        disturbance_fields=("zF",),
-        # The feed composition's OU innovation. Declared so the planner plans on the
-        # mean (``plan_params``) rather than on one fixed noise path.
-        noise_fields=("zF_noise_std",),
+        # layer's temperature loop holds. v5 (charter Amendment 2): product
+        # zones instead of trips, feed-rate and composition steps [D1, Fig.
+        # 18], the feed flow observed, and a job score in kmol of boilup.
+        # The feed steps are drawn at reset, so no step key moves them: no
+        # ``disturbance_fields``. v6 (charter Amendment 3): D2's realistic
+        # drums, specs at the family's give-away margin, scenario suite.
+        version=6,
+        scenarios=_scenarios(
+            "distillation_scenarios", module="target_gym.pc_gym.distillation.scenarios"
+        ),
     ),
     # -- Industrial / energy ------------------------------------------------
     EnvSpec(
@@ -954,18 +987,16 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_unstable_cstr_mpc", module="target_gym.pc_gym.unstable_cstr.oracle"
         ),
-        # v3: the oracle's best hold, rho_floor_tracking and rho_floor, re-measured
-        # for the JAX oracle (2.23e-6 mol/L against the CasADi one's 6.29e-6).
-        version=4,
-        # 1200 steps = 60 min at 3 s: six 10-minute blocks, with no
-        # effectiveness_overrides.
+        # v5 (charter Amendment 3): an LDPE-like adiabatic autoclave at its
+        # documented unstable steady state, initiator flow as the move, a
+        # high-temperature trip, temperature as the job, scenarios.
+        version=5,
         tuned_gains_key="unstable_cstr",
         oracle_data=_shared_oracle("unstable_cstr"),
-        disturbance_fields=("Ti_dev",),
-        noise_fields=("Ti_sigma",),
-        # The balances and the ten parameter values are imported from cstr, so an
-        # edit there moves this task's stamp and baseline too.
-        fingerprint_sources=("pc_gym/cstr/env.py",),
+        scenarios=_scenarios(
+            "unstable_cstr_scenarios",
+            module="target_gym.pc_gym.unstable_cstr.scenarios",
+        ),
     ),
     EnvSpec(
         name="compressor_surge",
@@ -990,8 +1021,13 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("demand_dev",),
         noise_fields=("demand_sigma",),
         # No fingerprint_sources: the package imports only itself and the
-        # shared plumbing.
-        version=3,
+        # shared plumbing. v4 (charter Amendment 3): the counted-surge trip,
+        # the valve's positioner lag, a constant header setpoint, a recycle
+        # energy score inside a header zone, scenarios.
+        version=4,
+        scenarios=_scenarios(
+            "compressor_surge_scenarios", module="target_gym.compressor_surge.scenarios"
+        ),
     ),
     EnvSpec(
         name="formation",
@@ -1042,6 +1078,11 @@ REGISTRY: dict[str, EnvSpec] = {spec.name: spec for spec in _SPECS}
 def all_specs() -> Iterator[EnvSpec]:
     """Iterate over every registered environment spec."""
     return iter(_SPECS)
+
+
+def benchmark_specs() -> Iterator[EnvSpec]:
+    """The benchmark candidates: every spec not in Extra (charter rule 5)."""
+    return (spec for spec in _SPECS if spec.extra is None)
 
 
 def specs_in_group(group: str) -> Iterator[EnvSpec]:

@@ -174,7 +174,10 @@ def test_without_recorded_moves_the_best_known_is_unknown():
 
 # The ceiling of every environment. hvac prices comfort without
 # ``reward.tracking_cost`` and has its own test below.
-_VIA_TRACKING_COST = sorted(n for n in REGISTRY if n != "hvac")
+# Tasks scored on the operator's job (charter rule 15) track no setpoint.
+_VIA_TRACKING_COST = sorted(
+    n for n in REGISTRY if n != "hvac" and n not in scoring.JOB_SCORED
+)
 
 
 def _control_step_tracking(env, state, params) -> float:
@@ -268,8 +271,8 @@ def test_the_building_settles_within_its_ceiling():
 @pytest.mark.parametrize(
     "name, floor, reading",
     [
-        ("cstr", "e_floor", "C_a"),
-        ("unstable_cstr", "e_floor", "C_a"),
+        ("cstr", "e_floor", "T"),
+        ("unstable_cstr", "e_floor", "T"),
         ("distillation", "e_floor_top", "x"),
         ("distillation", "e_floor_bottom", "x"),
         ("boiler_drum", "e_floor_pressure", "pressure"),
@@ -704,7 +707,7 @@ def test_every_task_states_a_band_per_tracked_output_or_none(name):
         ("plane3d_racetrack", [65.0 * 0.3048]),
         ("patrol", [8.5]),  # the slot's 8.5 m, patrol/PHYSICS.md
         ("formation", [20.0, 8.5, 8.5]),  # the lead, then each wingman
-        ("ph_neutralization", [0.5]),  # pH 6 to 9, from a target as low as 6.5
+        ("ph_neutralization", [1.0]),  # the permit range pH 7 +-1 [P7]
         ("glass_furnace", [10.0]),  # +-10 C, a vendor's melting-section figure
     ],
 )

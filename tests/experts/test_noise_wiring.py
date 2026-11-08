@@ -13,7 +13,7 @@ import math
 import numpy as np
 import pytest
 
-from target_gym.pc_gym.cstr.experts import cstr_cascade
+from target_gym.pc_gym.cstr.experts import cstr_temperature_pi
 from target_gym.pc_gym.distillation.experts import distillation_base_layer
 from target_gym.pc_gym.first_order.experts import first_order_pi
 from target_gym.pc_gym.ph_neutralization.experts import (
@@ -43,29 +43,16 @@ def test_first_order_reads_its_filter(Tf):
     assert out[1][0] == pytest.approx(-2.0 * a * 0.1, rel=1e-5)
 
 
-@pytest.mark.parametrize("Tf_T", [0.0, 0.2])
-def test_the_cstr_inner_loop_reads_its_filter(Tf_T):
-    # No outer gain: the setpoint is the target's steady temperature, so only T
-    # moves the output, P only since Ti_T is enormous.
+@pytest.mark.parametrize("Tf", [0.0, 0.5])
+def test_the_cstr_temperature_loop_reads_its_filter(Tf):
+    # P only, gain 0.1 per K, on T stepping 1 K above its setpoint: the first
+    # update starts the filter, the second moves it by a of the step (v5).
     p = REGISTRY["cstr"].make_test_params()
-    a = _coefficient(float(p.delta_t), Tf_T) if Tf_T else 1.0
-    c = cstr_cascade(0.0, 1.0, 0.1, 1e12, p, Tf_T=Tf_T)
-    target = float(sum(p.target_CA_range) / 2)
-    out = _run(c, [[target, 325.0, target], [target, 326.0, target]])
-    assert out[1][0] - out[0][0] == pytest.approx(-0.1 * a, rel=1e-3)
-
-
-@pytest.mark.parametrize("Tf_C", [0.0, 0.5])
-def test_the_cstr_outer_loop_reads_its_filter(Tf_C):
-    # T sits at the setpoint's rest, so the outer P moves the setpoint by -10 K
-    # per mol/L of filtered reading, and the inner P turns that into coolant.
-    p = REGISTRY["cstr"].make_test_params()
-    a = _coefficient(float(p.delta_t), Tf_C) if Tf_C else 1.0
-    c = cstr_cascade(-10.0, 1e12, 0.1, 1e12, p, Tf_C=Tf_C)
-    target = float(sum(p.target_CA_range) / 2)
-    out = _run(c, [[target, 325.0, target], [target - 0.01, 325.0, target]])
-    # The error is +0.01 at reading level, so the setpoint moves -10 * a * 0.01.
-    assert out[1][0] - out[0][0] == pytest.approx(-0.1 * 10.0 * a * 0.01, rel=1e-3)
+    a = _coefficient(float(p.delta_t), Tf) if Tf else 1.0
+    c = cstr_temperature_pi(0.1, 1e12, p, Tf=Tf)
+    sp = float(p.T_setpoint)
+    out = _run(c, [[sp, 320.0, 50.0, sp], [sp + 1.0, 320.0, 50.0, sp]])
+    assert out[1][0] - out[0][0] == pytest.approx(0.1 * a, rel=1e-3)
 
 
 @pytest.mark.parametrize("Tf", [0.0, 20.0])
@@ -78,7 +65,14 @@ def test_ph_reads_its_filter_in_demand_units(Tf):
     d1 = float(reagent_demand(7.2, curve, np))
     span = float(p.q3_max - p.q3_min)
     c = ph_linearised_pi(1.0, 1e12, p, Tf=Tf)
-    out = _run(c, [[7.0, 50.0, 7.0], [7.2, 50.0, 7.0]])
+    # Staged (v5): the stage-1 loop reads the stage-1 probe, channel 4.
+    out = _run(
+        c,
+        [
+            [7.0, 50.0, 7.0, 0.0, 7.0, 0.0, 16.6, 0.0],
+            [7.0, 50.0, 7.0, 0.0, 7.2, 0.0, 16.6, 0.0],
+        ],
+    )
     expected = -2.0 / span * a * (d1 - d0)
     assert out[1][0] - out[0][0] == pytest.approx(expected, rel=1e-3)
 

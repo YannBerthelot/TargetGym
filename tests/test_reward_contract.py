@@ -285,6 +285,10 @@ def test_reward_parameters_are_documented(spec):
         if not any(abs(n - float(v)) <= 0.02 * max(abs(float(v)), 1e-12) for n in nums):
             wrong.append(f"{k}: PHYSICS.md says {nums}, params say {v}")
     assert not wrong, f"{spec.name}: {wrong}"
+    from target_gym.scoring import JOB_SCORED
+
+    if spec.name in JOB_SCORED:
+        return  # no floor: the job score prices a zone (charter rule 15)
     assert re.search(
         r"measure_hold\.py|floor_\w+\.py|closed form|documented minimum", text
     ), f"{spec.name}: PHYSICS.md does not say how the floor was obtained"

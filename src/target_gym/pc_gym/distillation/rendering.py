@@ -213,15 +213,12 @@ def render_distillation(state, params, step, history):
     history["V"].append(float(state.V))
     history["reward"].append(float(compute_reward(state, params)))
 
+    # Off spec past either zone's edge (PHYSICS.md, Limits).
     e = max(
-        abs(float(x[-1]) - float(state.target_yD)),
-        abs(float(x[0]) - float(state.target_xB)),
+        float(state.target_yD) - float(x[-1]),
+        float(x[0]) - float(state.target_xB),
     )
-    status = (
-        rk.NOMINAL
-        if e < params.tracking_band
-        else (rk.WATCH if e < 3 * params.tracking_band else rk.ALARM)
-    )
+    status = rk.NOMINAL if e <= 0.0 else (rk.WATCH if e < 0.01 else rk.ALARM)
 
     gauges = [
         rk.Gauge(
@@ -255,7 +252,8 @@ def render_distillation(state, params, step, history):
         rk.Gauge(
             "FEED zF",
             f"{float(state.zF):.4f}",
-            (float(state.zF) - params.zF_min) / (params.zF_max - params.zF_min),
+            (float(state.zF) - params.zF_nominal + 2 * params.zF_step)
+            / (4 * params.zF_step),
             rk.PURPLE,
             hidden=True,
         ),

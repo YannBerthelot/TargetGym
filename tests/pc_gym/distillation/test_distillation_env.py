@@ -15,7 +15,6 @@ from target_gym.pc_gym.distillation.env import (
     N_STAGES,
     DistillationParams,
     DistillationState,
-    check_is_terminal,
     compute_next_state,
     compute_reward,
     flows,
@@ -47,7 +46,7 @@ def _raw(L, V, params):
 
 
 def _settle(params, L=NOMINAL_L, V=NOMINAL_V, steps=4000, zF=None):
-    p = params.replace(zF_noise_std=0.0)
+    p = params.replace(feed_step=0.0, zF_step=0.0)
     state = DistillationState(
         time=0,
         x=jnp.linspace(0.01, 0.99, N_STAGES),
@@ -161,7 +160,7 @@ def test_default_integrator_is_stable_and_fewer_substeps_are_not(params):
     The stiffest mode is |lambda| = 32.5 /min at the nominal point and 37.6 /min
     across the flow box, and RK4 needs h*|lambda| < 2.78 (PHYSICS.md section 4).
     """
-    p = params.replace(zF_noise_std=0.0)
+    p = params.replace(feed_step=0.0, zF_step=0.0)
     raw = _raw(NOMINAL_L, NOMINAL_V, p)
     key = jax.random.PRNGKey(0)
 
@@ -249,16 +248,6 @@ def test_reward_requires_both_specifications(params):
     # just outside the band -- but the multiplicative property is the claim, and
     # it holds: one spec alone is worth a fraction of both.
     assert r_top_only < 0.4 * r_both
-
-
-def test_terminates_when_purity_is_lost(params):
-    env = DistillationColumn()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    lost_top = state.replace(x=state.x.at[-1].set(params.yD_floor - 0.05))
-    lost_bottom = state.replace(x=state.x.at[0].set(params.xB_ceiling + 0.05))
-    assert bool(check_is_terminal(lost_top, params)[0])
-    assert bool(check_is_terminal(lost_bottom, params)[0])
-    assert not bool(check_is_terminal(state, params)[0])
 
 
 def test_reset_starts_from_the_converged_profile(params):

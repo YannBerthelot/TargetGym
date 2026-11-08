@@ -68,7 +68,7 @@ def test_stage_15_has_the_largest_bottom_section_gain_to_boilup():
     """The maximum gain rule: of the bottom-section trays (stages 2 to 20),
     stage 15's temperature moves most per unit boilup at steady state."""
     env = DistillationColumn()
-    p = P.replace(zF_noise_std=0.0)
+    p = P.replace(feed_step=0.0, zF_step=0.0)
     _, state = env.reset_env(jax.random.PRNGKey(0), p)
     state = state.replace(zF=jnp.float32(p.zF_nominal))
 

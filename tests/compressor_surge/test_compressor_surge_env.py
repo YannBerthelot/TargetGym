@@ -28,26 +28,22 @@ import numpy as np
 import pytest
 from scipy.optimize import brentq
 
-from target_gym import reward as R
 from target_gym.base import restart_key
 from target_gym.compressor_surge.env import (
     KPA,
     N_DEMAND_BLOCKS,
     N_SETPOINT_BLOCKS,
+    VALVE_HISTORY,
     CompressorSurgeParams,
     CompressorSurgeState,
     characteristic,
-    check_is_terminal,
     compute_next_state,
     compute_reward,
-    compute_reward_terms,
     compute_velocity,
     consumer_flow,
     equilibrium_phi,
     get_obs,
     live_target,
-    recycle_power,
-    scheduled_demand,
     sound_speed,
     suction_density,
     surge_constant,
@@ -134,6 +130,8 @@ def _state(
         ),
         demand_levels=f(np.full(N_DEMAND_BLOCKS, u) if levels is None else levels),
         block_clock=jnp.asarray(block_clock, jnp.int32),
+        # The valve has been held at x: its positioner's history says so.
+        valve_cmds=f(np.full(VALVE_HISTORY, x)),
     )
 
 
@@ -228,7 +226,8 @@ def _episodes(env, params, keys, kind, bias=0.0):
 
 
 def test_observation_units_schedules_and_integrator(env, params):
-    """The observation is ``[dp, m_c, m_d, N, N_ramp, x, live setpoint]`` with
+    """The observation is ``[dp, m_c, m_d, N, N_ramp, x, live setpoint, surge
+    count]`` with
     pressures in kPa and the speeds and valve in percent; the tracked channel
     is the pressure against its setpoint. Both schedules fill the episode
     exactly, and the plant integrates with RK4 alone."""
@@ -243,6 +242,7 @@ def test_observation_units_schedules_and_integrator(env, params):
         100.0 * float(state.N_ramp),
         100.0 * float(state.x),
         float(live_target(state, params)) / KPA,
+        0.0,
     ]
     np.testing.assert_allclose(np.asarray(obs), expected, rtol=1e-6)
     assert float(obs[env.obs_value_index]) == pytest.approx(expected[0])
@@ -263,6 +263,9 @@ def test_actions_map_to_commands(params):
     opening of 0, 0.5 and 1; a raw action beyond [-1, 1] is clipped. Each
     command is reached from within one step's reach and shows in the
     observation's percent channels."""
+    # The map and the rate limit, with no positioner dead time ahead of them
+    # (that is test_compressor_surge_reality.py's).
+    params = params.replace(valve_lag=0.0)
     key = jax.random.PRNGKey(0)
     base = _equilibrium_state(params, 0.9, 0.3, 0.6)
     for raw, N_cmd, x_cmd in (
@@ -327,6 +330,9 @@ def test_actuators_are_rate_limited_per_substep(params):
     inside the step. The limit applies per 10 ms substep, so the speed after
     one step of a full drive ramp is the lag's response to a ten-stair
     staircase, not to a jump (float64)."""
+    # The map and the rate limit, with no positioner dead time ahead of them
+    # (that is test_compressor_surge_reality.py's).
+    params = params.replace(valve_lag=0.0)
     key = jax.random.PRNGKey(0)
     with enable_x64():
         base = _equilibrium_state(params, 0.9, 0.5, 0.6, dtype=jnp.float64)
@@ -414,104 +420,6 @@ def _rollout_next(params, state, action, key, n):
 # ---------------------------------------------------------------------------
 # 2. Schedules
 # ---------------------------------------------------------------------------
-
-
-def test_schedule_draw(env, params):
-    """Over 256 seeds every level lies in its range. The live setpoint moves
-    only in the 10 s ramps from 0, 30, 60 and 90 s. The scheduled demand is level 0
-    until 20 s and
-    then moves only during the 5 s ramps that start at 20, 40, 60, 80 and
-    100 s, linearly, reaching each block's level at the ramp's end."""
-    keys = jax.random.split(jax.random.PRNGKey(0), 256)
-    _, states = jax.jit(jax.vmap(lambda k: env.reset_env(k, params)))(keys)
-    sp = np.asarray(states.setpoint_levels, float)
-    dm = np.asarray(states.demand_levels, float)
-    assert sp.min() >= 20.0e3 - 1e-2 and sp.max() <= 28.0e3 + 1e-2
-    assert dm.min() >= 0.35 - 1e-6 and dm.max() <= 0.95 + 1e-6
-    assert sp.min() < 20.2e3 and sp.max() > 27.8e3
-    assert np.all(np.asarray(states.block_clock) == 0)
-
-    clocks = jnp.arange(params.max_steps_in_episode)
-    targets = jax.vmap(
-        lambda s: jax.vmap(lambda c: live_target(s.replace(block_clock=c), params))(
-            clocks
-        )
-    )(states)
-    changes = (
-        np.flatnonzero(np.any(np.diff(np.asarray(targets), axis=1) != 0, axis=0)) + 1
-    )
-    assert list(changes) == [c + k for c in (0, 300, 600, 900) for k in range(1, 101)]
-
-    tau = np.linspace(0.0, 125.0, 12501)  # 10 ms grid
-    d = np.asarray(
-        jax.vmap(lambda L: scheduled_demand(L, jnp.asarray(tau), params))(
-            states.demand_levels
-        )
-    )
-    np.testing.assert_allclose(
-        d[:, tau < 20.0], dm[:, :1] * np.ones((1, (tau < 20.0).sum())), atol=1e-6
-    )
-    ramping = np.zeros_like(tau, bool)
-    for k in range(1, N_DEMAND_BLOCKS):
-        start = 20.0 * k
-        window = (tau >= start) & (tau <= start + 5.0)
-        ramping |= window
-        w = np.clip((tau[window] - start) / 5.0, 0.0, 1.0)
-        np.testing.assert_allclose(
-            d[:, window],
-            dm[:, k - 1 : k] + (dm[:, k : k + 1] - dm[:, k - 1 : k]) * w,
-            atol=1e-5,
-        )
-        at_end = (tau >= start + 5.0) & (tau < start + 20.0)
-        np.testing.assert_allclose(
-            d[:, at_end], np.repeat(dm[:, k : k + 1], at_end.sum(), 1), atol=1e-5
-        )
-    moving = np.any(np.abs(np.diff(d, axis=1)) > 1e-7, axis=0)
-    assert np.all(ramping[1:][moving] | ramping[:-1][moving])
-
-
-def test_live_target_follows_the_block_clock(params, step):
-    """Block k ends its ramp on ``level[k]``, and the last level holds past the
-    fourth block. The first step of a ramp is scored against the target it
-    moved to, which its observation already shows: 1 % of the 2 kPa move here.
-    Both read ``setpoint_block_steps`` from the params the step is given."""
-    levels = np.array([20.0e3, 22.0e3, 26.0e3, 28.0e3], np.float32)
-    quiet = params.replace(demand_sigma=0.0)
-    short = quiet.replace(
-        setpoint_block_steps=50, setpoint_ramp_s=2.0, max_steps_in_episode=200
-    )
-    state = _equilibrium_state(quiet, 0.9, 0.0, 0.8, setpoints=levels)
-    for p in (params, short):
-        b = p.setpoint_block_steps
-        r = round(p.setpoint_ramp_s / p.delta_t)
-        for clock, k in (
-            (0, 0),
-            (b, 0),
-            (b + r, 1),
-            (2 * b + r, 2),
-            (3 * b + r, 3),
-            (5000, 3),
-        ):
-            s = state.replace(block_clock=jnp.asarray(clock, jnp.int32))
-            assert float(live_target(s, p)) == pytest.approx(levels[k]), (b, clock)
-
-    for p in (quiet, short):
-        before = state.replace(
-            block_clock=jnp.asarray(p.setpoint_block_steps, jnp.int32)
-        )
-        moved = levels[0] + (levels[1] - levels[0]) * p.delta_t / p.setpoint_ramp_s
-        obs, after, reward, _, info = step(
-            jax.random.PRNGKey(0), before, _action(p, 0.9, 0.0), p
-        )
-        assert not bool(info["tripped"])
-        assert int(after.block_clock) == p.setpoint_block_steps + 1
-        assert float(obs[6]) == pytest.approx(moved / KPA)
-        # The recycle is shut and still, so the running and wear terms are 0
-        # and the reward is the tracking cost against the moved target.
-        assert float(recycle_power(after, p)) == 0.0
-        assert float(reward) == pytest.approx(
-            -(((moved - float(after.dp)) / KPA / p.e_floor) ** 2), rel=1e-4
-        )
 
 
 def test_demand_uses_stage_times(params):
@@ -612,57 +520,6 @@ def test_demand_deviation_is_a_zero_mean_ou_process(env, params):
 # ---------------------------------------------------------------------------
 
 
-def test_trip_reads_the_substep_minimum(params, step):
-    """A swing that dips below the line between two control samples trips.
-    From m_c 12.466 kg/s and dp 33.065 kPa at rated speed with the recycle
-    shut and an opening whose equilibrium is 12 % right of the line, Phi is
-    0.5088 at the start of the step and 0.5085 at its end, and below 0.491 in
-    the middle (derived: 0.05 s before the bottom of a Helmholtz swing that
-    reaches 0.490, by integrating the env's velocity backwards). The hard
-    minimum is read here from ten one-substep calls; the step's soft minimum
-    lies at most T ln 10 = 2.3e-3 below it, and at or below it."""
-    p = params.replace(demand_sigma=0.0)
-    flow, head = _flow_scale(p), _head_scale(p)
-    phi_eq = 0.56
-    u = (
-        flow
-        * phi_eq
-        / float(consumer_flow(head * float(characteristic(phi_eq, p, np)), 1.0, p, np))
-    )
-    state = _state(p, 12.466, 33065.4, 1.0, 0.0, u)
-    action = _action(p, 1.0, 0.0)
-    key = jax.random.PRNGKey(0)
-
-    s1, _ = compute_next_state(action, state, p, key)
-    one_substep = p.replace(delta_t=p.delta_t / 10)
-    s, phis = state, []
-    for _ in range(10):
-        s, _ = compute_next_state(
-            action, s, one_substep, key, integration_method="rk4_1"
-        )
-        phis.append(float(s.m_c) / flow)
-    hard = min(phis)
-    assert float(state.m_c) / flow > 0.5 and float(s1.m_c) / flow > 0.5
-    assert phis[-1] == pytest.approx(float(s1.m_c) / flow, abs=1e-6)
-    assert hard < 0.491
-    gap = hard - float(s1.phi_min)
-    assert -1e-6 <= gap <= p.soft_min_temperature * math.log(10) + 1e-6
-
-    _, after, _, terminated, info = step(key, state, action, p)
-    assert bool(info["tripped"]) and not bool(terminated)
-
-    # The rule itself: at the line and above it the state continues; below it,
-    # or NaN, it trips.
-    for phi_min, trips in (
-        (0.5, False),
-        (0.5001, False),
-        (0.4999, True),
-        (np.nan, True),
-    ):
-        s = state.replace(phi_min=jnp.float32(phi_min))
-        assert bool(check_is_terminal(s, p)[0]) == trips, phi_min
-
-
 def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
     """Full travel low (70 %, recycle shut) trips. The step is charged
     ``restart_steps x failure_cost`` in version 2 and exactly
@@ -702,32 +559,6 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
         -params.restart_steps * params.failure_cost, rel=1e-6
     )
     assert float(r1) == -9000.0
-
-
-def test_restart_and_failure_cost_are_derived(params):
-    """``dp_error_max`` is the 28 kPa top level against the lowest pressure
-    an untripped plant holds, 7.32 kPa at 70 % with the recycle and the
-    consumers fully open (derived); the other side, the 105 % peak 35.66 kPa
-    against 20 kPa, is smaller. ``failure_cost`` is twice the largest
-    tracking cost, 2 (20.68 / 0.0275)^2 = 1.131e6, and a trip costs 9000 of
-    them, 1.018e10."""
-    with enable_x64():
-        phi = float(equilibrium_phi(params.N_min, 1.0, 1.0, params, 30, xp=np))
-    dp_low = (
-        _head_scale(params, params.N_min) * float(characteristic(phi, params, np)) / KPA
-    )
-    assert dp_low == pytest.approx(7.32, abs=0.005)
-    peak = _head_scale(params, params.N_max) * (params.psi_c0 + 2 * params.H) / KPA
-    assert peak == pytest.approx(35.66, abs=0.005)
-    assert params.dp_error_max == pytest.approx(
-        params.p_ref_range[1] / KPA - dp_low, abs=0.005
-    )
-    assert peak - params.p_ref_range[0] / KPA < params.dp_error_max
-
-    assert params.failure_cost == 2.0 * (params.dp_error_max / params.e_floor) ** 2
-    assert params.failure_cost == pytest.approx(1.131e6, rel=1e-4)
-    assert params.restart_steps == 9000
-    assert R.trip_cost(params) == pytest.approx(1.0179e10, rel=1e-4)
 
 
 def test_the_error_envelope_is_certified(env, params):
@@ -771,7 +602,7 @@ def test_the_error_envelope_is_certified(env, params):
 # ---------------------------------------------------------------------------
 
 
-def _exact_state(params, dp, x=0.0, phi_min=0.6, target=24.0e3):
+def _exact_state(params, dp, x=0.0, phi_min=0.6, target=24.0e3, surge_times=None):
     """A float64 NumPy state, for scoring the reward exactly with ``xp=np``."""
     return CompressorSurgeState(
         time=0,
@@ -785,41 +616,8 @@ def _exact_state(params, dp, x=0.0, phi_min=0.6, target=24.0e3):
         setpoint_levels=np.full(N_SETPOINT_BLOCKS, target),
         demand_levels=np.full(N_DEMAND_BLOCKS, 0.6),
         block_clock=0,
+        surge_times=np.full(3, -1.0e9) if surge_times is None else surge_times,
     )
-
-
-def test_v2_reward_units(params):
-    """Version 2 is minus the floor-normalised squared error plus the
-    recycle power as a share of ``c_hold``: tracking is 0 at the setpoint and 1
-    one ``e_floor`` (0.0275 kPa) away; running is 1 at ``c_hold`` and 2 at twice
-    it. A tripped state pays the trip cost alone."""
-    dp = 24.0e3
-    per_x = float(recycle_power(_exact_state(params, dp, x=1.0), params, np))
-    x_hold = params.c_hold / per_x
-
-    terms = compute_reward_terms(_exact_state(params, dp), params, np)
-    assert set(terms) == {"tracking", "running", "wear", "failure"}
-    assert float(compute_reward(_exact_state(params, dp), params, np)) == 0.0
-    for sign in (-1.0, 1.0):
-        s = _exact_state(params, dp + sign * params.e_floor * KPA)
-        assert float(compute_reward_terms(s, params, np)["tracking"]) == pytest.approx(
-            1.0, rel=1e-9
-        )
-    for scale, running in ((0.5, 0.5), (1.0, 1.0), (2.0, 2.0), (3.0, 3.0)):
-        s = _exact_state(params, dp, x=scale * x_hold)
-        assert float(recycle_power(s, params, np)) == pytest.approx(
-            scale * params.c_hold, rel=1e-12
-        )
-        assert float(compute_reward_terms(s, params, np)["running"]) == pytest.approx(
-            running, abs=1e-9
-        )
-        assert float(compute_reward(s, params, np)) == pytest.approx(-running, abs=1e-9)
-
-    tripped = _exact_state(params, 20.0e3, x=1.0, phi_min=0.49)
-    terms = compute_reward_terms(tripped, params, np)
-    assert float(terms["tracking"]) == 0.0 and float(terms["running"]) == 0.0
-    assert float(terms["failure"]) == R.trip_cost(params)
-    assert float(compute_reward(tripped, params, np)) == -R.trip_cost(params)
 
 
 def test_v1_is_log_scaled_and_charges_downtime(params):
@@ -842,8 +640,9 @@ def test_v1_is_log_scaled_and_charges_downtime(params):
     np.testing.assert_allclose(gains, gains[0], rtol=0.02)
     assert all(0.0 <= score(e) <= 1.0 for e in errors)
 
-    assert score(0.0, phi_min=0.49) == -1.0 * v1.restart_steps == -9000.0
-    assert score(5.0, phi_min=0.49) == -9000.0
+    counted = np.full(3, 0.0)  # three surges just now: the counted trip
+    assert score(0.0, surge_times=counted) == -1.0 * v1.restart_steps == -9000.0
+    assert score(5.0, surge_times=counted) == -9000.0
 
 
 @pytest.mark.large

@@ -69,7 +69,8 @@ from target_gym import eval as E
 from target_gym import records
 from target_gym.eval import fixed_settle
 
-__all__ = ["CONSUMPTION", "SPEC_BAND", "TRACKED_TERMS", "ceiling", "compare"]
+__all__ = ["CONSUMPTION", "JOB_SCORED", "SPEC_BAND", "TRACKED_TERMS", "ceiling"]
+__all__ += ["compare"]
 __all__ += ["fixed_settle", "headroom", "best_known", "recorded", "s_max", "score"]
 __all__ += ["score_policy", "seed_scores", "settle_band", "spec_band"]
 __all__ += ["gap_closed", "headline"]
@@ -82,6 +83,13 @@ _HEADING = ("heading_precision_floor", "e_floor_heading", 1)
 _PATH = ("position_precision_floor", "e_floor_path", 1)
 _SLOT = ("slot_precision_floor", "e_floor_slot", 1)
 _ONE = (("precision_floor", "e_floor", 1),)
+
+#: Tasks redesigned under charter Amendment 2 (rule 15): scored on the
+#: operator's job, a zone and the source's economic cost, with no tracked
+#: setpoint. They have no tracking ceiling or settle band, which rule 8 no
+#: longer reads (S and H are dropped), so ``ceiling`` and ``settle_band`` are
+#: NaN for them, and they are in neither ``TRACKED_TERMS`` nor ``CONSUMPTION``.
+JOB_SCORED = frozenset({"compressor_surge", "distillation", "ph_neutralization"})
 
 #: Per environment, the terms its reward tracks: ``(resolution field, e_floor
 #: field, count)`` on its params. ``count`` is ``"wingmen"`` for a term charged
@@ -106,18 +114,12 @@ TRACKED_TERMS = {
     "cstr": _ONE,
     "unstable_cstr": _ONE,
     "four_tank": (("precision_floor", "e_floor", 2),),
-    "distillation": (
-        ("precision_floor", "e_floor_top", 1),
-        ("precision_floor", "e_floor_bottom", 1),
-    ),
-    "ph_neutralization": _ONE,
     "glass_furnace": _ONE,
     "cement_kiln": _ONE,
     "boiler_drum": (
         ("level_precision_floor", "e_floor_level", 1),
         ("pressure_precision_floor", "e_floor_pressure", 1),
     ),
-    "compressor_surge": _ONE,
     "reactor": _ONE,
     "battery": _ONE,
     "wind_turbine": _ONE,
@@ -140,9 +142,6 @@ CONSUMPTION = {
     "glass_furnace": lambda state, params, tripped: state.fuel_flow,
     "cement_kiln": lambda state, params, tripped: state.fuel,
     "boiler_drum": lambda state, params, tripped: state.Q_fuel,
-    "distillation": lambda state, params, tripped: state.V,
-    "ph_neutralization": lambda state, params, tripped: state.q3,
-    "compressor_surge": _recycle_power,
 }
 
 _RVSM = 65.0 * 0.3048  # m
@@ -168,9 +167,9 @@ SPEC_BAND = {
     "patrol_range_bearing": ((8.5,), _SLOT_BAND),
     "formation": ((20.0, 8.5, 8.5), _ALTITUDE_BAND + "; " + _SLOT_BAND),
     "ph_neutralization": (
-        (0.5,),
-        "a pH 6 to 9 permit, from the lowest target of 6.5, "
-        "ph_neutralization/PHYSICS.md",
+        (1.0,),
+        "the permit range pH 7 +-1, the example spec of Faanes and Skogestad "
+        "2000 (ph_neutralization/REALITY.md [P7])",
     ),
     "glass_furnace": (
         (10.0,),
@@ -221,6 +220,8 @@ def _per_step(name: str, params, env, at_resolution: bool) -> float:
     resolution (or one floor) beyond its tolerance."""
     from target_gym.registry import REGISTRY, control_step_seconds
 
+    if name in JOB_SCORED:
+        return float("nan")
     spec = REGISTRY[name]
     p = params if params is not None else spec.make_test_params()
     env = env if env is not None else spec.make_env()
