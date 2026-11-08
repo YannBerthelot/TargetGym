@@ -12,17 +12,26 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   on the episode's load plan, which the oracle knows ahead as the operator does,
   upset included (a ceiling cheats on purpose); the upset's firing and feed caps;
 - objective: the score's steam off the plan past the meter's resolution, at
-  the imbalance price in GBP per step (T2), the absolute value and the dead
-  band each smoothed by a square root of a square;
+  the imbalance price in GBP per step: an absolute epigraph row with the
+  meter's dead band as its tolerance (T2), so the planned cost of a plan is
+  the env's (``tests/oracles/test_thermal_energy_oracles.py``);
 - limits: the level between the two trips on every visited state, elastic at
   the trip cost per unit (T3). The trip's 10 s delay is not used: the plan
   never leaves the band, which is stricter than the plant;
 - rest (G12): feedwater is a spare move, the level being limited but not
   priced, so it rests at normal water level;
 - dropped guards (T4): the void, circulation, pressure and volume clips,
-  which the level limits keep off their edges.
+  which the level limits keep off their edges. Not the steam under the water
+  surface's floor at 0 (``compute_next_state``) on the ceiling's plans: a plan
+  over the whole episode drove it below 0 in its last steps, where the env
+  holds it at 0 and the level rose 0.19 m above the model's into a trip, so
+  the ceiling holds it at or above 0 as a limit (``ceiling=True``).
 
-Not yet run on this plant (rule 9's room is "not measured").
+The plant draws nothing after its reset, so the reset state is the whole
+future: ``ceiling_data`` is the solve's data for a plan over the episode, the
+ceiling of charter J3 (``data/oracle_ceilings/boiler_drum.json``). The
+registry's receding slot keeps the resting target; the ceiling plans the score
+alone.
 
 The cold start holds both actuators where they stand.
 """
@@ -41,12 +50,14 @@ from target_gym.boiler_drum.env import (
 from target_gym.integration import integrate_dynamics
 from target_gym.oracles.controller import Oracle, TaskModel
 from target_gym.oracles.rates import RateLimit
-from target_gym.oracles.shooting import Limit
+from target_gym.oracles.shooting import Hinge, Limit
 from target_gym.reward import trip_cost
 
 
-def boiler_model(env, p) -> TaskModel:
+def boiler_model(env, p, rest: bool = True, ceiling: bool = False) -> TaskModel:
     rate = RateLimit.of(env, p)
+    # GBP per (kg/s) off the plan for one step (``imbalance_cost``).
+    per_kg_s = float(imbalance_cost(p.delta_t, p))
 
     def step(d, x, u, t):
         plan, level_ref, now = d["task"]
@@ -65,11 +76,10 @@ def boiler_model(env, p) -> TaskModel:
         )  # fmt: skip
         level = drum_level(x1[1], x1[2], x1[3], level_ref, x1[0], p)
         off = steam_draw(q_demand, x1[0], p) - q_demand
-        past = jnp.sqrt(off * off + 1e-6) - p.steam_resolution
-        kg = 0.5 * (past + jnp.sqrt(past * past + 1e-6)) * p.delta_t
-        cost = imbalance_cost(kg, p)
         tracked = jnp.stack([level, x1[0]])
-        return jnp.concatenate([x1, held]), cost, jnp.stack([level]), tracked, ()
+        cost = jnp.zeros((), x.dtype)
+        y = jnp.stack([off, level] + ([x1[3]] if ceiling else []))
+        return jnp.concatenate([x1, held]), cost, y, tracked, ()
 
     price = float(trip_cost(p))
     return TaskModel(
@@ -85,13 +95,35 @@ def boiler_model(env, p) -> TaskModel:
         resolution=(
             float(p.level_precision_floor), float(p.pressure_precision_floor)
         ),
-        limits=(Limit(p.level_trip_low, p.level_trip_high, price),),
+        hinges=(
+            Hinge(weight=per_kg_s, absolute=True, tol=float(p.steam_resolution)),
+        ),
+        limits=(Limit(p.level_trip_low, p.level_trip_high, price),)
+        + ((Limit(lo=0.0, price=price),) if ceiling else ()),
         # G12: feedwater is a spare move, since the level is limited and not
         # priced; it rests at normal water level, 1 at the high trip.
-        rest=lambda x: drum_level(
+        rest=(lambda x: drum_level(
             x[1], x[2], x[3], p.A_d * p.normal_level_height, x[0], p
-        ) / p.level_trip_high,
+        ) / p.level_trip_high) if rest and not ceiling else None,
     )  # fmt: skip
+
+
+def ceiling_backoffs(env, p) -> tuple:
+    """How far inside each limit the ceiling plans: one sigma of the level's
+    reading (0.5 mm). The plan with foresight rides the trip levels for
+    minutes (a runback's shrink is cheapest spent there), and the float32
+    plant the score runs ends 1e-6 m off a float64 plan, which trips it.
+    None on the floor of the steam under the water, which the env clips."""
+    (sigma,) = [r.sigma for r in env.readings if r.field == "level"]
+    return (float(sigma), 0.0)
+
+
+def ceiling_data(env, p, state, step_keys):
+    """The data of a plan over the whole episode from the reset ``state``:
+    the load plan and its upset are drawn at the reset, so the step keys add
+    nothing."""
+    del env, p, step_keys
+    return state, state.level_ref, state.time
 
 
 def make_boiler_drum_mpc(env, params) -> Oracle:

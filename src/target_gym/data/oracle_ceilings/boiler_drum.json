@@ -1,0 +1,1247 @@
+{
+ "task": "boiler_drum",
+ "protocol": "charter J3: the score's own reward planned with the true model, the true state and the episode's future, replayed on the env in float32 on seeds 100 to 109 at sensor noise 1; room = the kept reference's mean cost per step over the oracle's replayed one, on the same seeds",
+ "solver": "shared shooting IPM (oracles.shooting), one plan over the 1800-step episode, block 1, cap 500 iterations, from the reset state; level limits backed off by the level reading's sigma (0.5 mm), V_sd >= 0 held",
+ "reference": "cascade",
+ "J_reference": 1.4531317731737375e-05,
+ "J_ceiling": 2.750831088558601e-06,
+ "room_J": 5.28251908747752,
+ "scenarios": {
+  "normal": {
+   "weight": 0.6995627732667083,
+   "reference_mean": 0.0,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_mean": 0.0,
+   "ceiling_per_seed": [
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0
+   ],
+   "planned_mean": 0.0,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.0,
+   "room": "undefined (0/0)",
+   "terms_mean": {
+    "failure": 0.0,
+    "imbalance": 0.0
+   },
+   "solver": {
+    "max_kkt_error": 4.577187414400523e-09,
+    "max_iterations": 15,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 9.999900187060728e-09,
+    "max_planned_limit_excess": -0.22522903880061124
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 3.2097449041094267e-09,
+       "iterations": 15,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319878e-09
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 4.577187414400523e-09,
+       "iterations": 11,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999900187060728e-09
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 4.341006874285464e-09,
+       "iterations": 11,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898674831112e-09
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 9.090913837216053e-10,
+       "iterations": 14,
+       "capped": false,
+       "failed": false,
+       "violation": 9.090909090909083e-09
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 4.37458719659148e-09,
+       "iterations": 11,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898676980603e-09
+      }
+     ]
+    },
+    {
+     "seed": 105,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 4.251487931008115e-09,
+       "iterations": 10,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898683633563e-09
+      }
+     ]
+    },
+    {
+     "seed": 106,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 9.091438930140293e-10,
+       "iterations": 13,
+       "capped": false,
+       "failed": false,
+       "violation": 9.090909090909083e-09
+      }
+     ]
+    },
+    {
+     "seed": 107,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 4.1256492893283526e-09,
+       "iterations": 9,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898691512283e-09
+      }
+     ]
+    },
+    {
+     "seed": 108,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 9.090987498063006e-10,
+       "iterations": 12,
+       "capped": false,
+       "failed": false,
+       "violation": 9.090909090909083e-09
+      }
+     ]
+    },
+    {
+     "seed": 109,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.5066005459449433e-09,
+       "iterations": 12,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319878e-09
+      }
+     ]
+    }
+   ]
+  },
+  "industrial_swing": {
+   "weight": 0.09993753903810118,
+   "reference_mean": 8.15767605190053e-06,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_mean": 0.0,
+   "ceiling_per_seed": [
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0
+   ],
+   "planned_mean": 0.0,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 8.15767605190053e-06,
+   "room": "unbounded",
+   "terms_mean": {
+    "failure": 0.0,
+    "imbalance": 0.0
+   },
+   "solver": {
+    "max_kkt_error": 9.965934658587962e-09,
+    "max_iterations": 13,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 9.999899578999705e-09,
+    "max_planned_limit_excess": -0.20858064868275833
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 6.138453815637256e-09,
+       "iterations": 12,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898700668821e-09
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 4.872021600531169e-09,
+       "iterations": 10,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898688411437e-09
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 5.019462047556823e-09,
+       "iterations": 9,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999899578999705e-09
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 5.22502387500563e-09,
+       "iterations": 10,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898681043913e-09
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 6.140081651434892e-09,
+       "iterations": 10,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898504197613e-09
+      }
+     ]
+    },
+    {
+     "seed": 105,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.5064258690337658e-09,
+       "iterations": 13,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319882e-09
+      }
+     ]
+    },
+    {
+     "seed": 106,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 6.1040965834578814e-09,
+       "iterations": 10,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898646241733e-09
+      }
+     ]
+    },
+    {
+     "seed": 107,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 4.1256492893283526e-09,
+       "iterations": 9,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898691512283e-09
+      }
+     ]
+    },
+    {
+     "seed": 108,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 9.965934658587962e-09,
+       "iterations": 11,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999894053653732e-09
+      }
+     ]
+    },
+    {
+     "seed": 109,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 4.648835144996804e-09,
+       "iterations": 9,
+       "capped": false,
+       "failed": false,
+       "violation": 9.99989869696703e-09
+      }
+     ]
+    }
+   ]
+  },
+  "low_load": {
+   "weight": 0.19987507807620236,
+   "reference_mean": 0.0,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_mean": 0.0,
+   "ceiling_per_seed": [
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0
+   ],
+   "planned_mean": 0.0,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.0,
+   "room": "undefined (0/0)",
+   "terms_mean": {
+    "failure": 0.0,
+    "imbalance": 0.0
+   },
+   "solver": {
+    "max_kkt_error": 7.318583063724112e-09,
+    "max_iterations": 14,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 9.999898689648878e-09,
+    "max_planned_limit_excess": -0.22579631535511746
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 6.0125954325765e-09,
+       "iterations": 10,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999897617637175e-09
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.5059046480423907e-09,
+       "iterations": 13,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319878e-09
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 7.318583063724112e-09,
+       "iterations": 10,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898670413625e-09
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.5061138441198408e-09,
+       "iterations": 13,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319878e-09
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 9.090910063846276e-10,
+       "iterations": 14,
+       "capped": false,
+       "failed": false,
+       "violation": 9.090909090909083e-09
+      }
+     ]
+    },
+    {
+     "seed": 105,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.505948239933599e-09,
+       "iterations": 12,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319878e-09
+      }
+     ]
+    },
+    {
+     "seed": 106,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 4.307653606389485e-09,
+       "iterations": 10,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898689648878e-09
+      }
+     ]
+    },
+    {
+     "seed": 107,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.50660435325867e-09,
+       "iterations": 11,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319878e-09
+      }
+     ]
+    },
+    {
+     "seed": 108,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 5.457614465942952e-09,
+       "iterations": 9,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898674626628e-09
+      }
+     ]
+    },
+    {
+     "seed": 109,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 4.452703700832783e-09,
+       "iterations": 9,
+       "capped": false,
+       "failed": false,
+       "violation": 9.999898680344472e-09
+      }
+     ]
+    }
+   ]
+  },
+  "id_fan_runback": {
+   "weight": 0.00037476577139287947,
+   "reference_mean": 0.036354893987419146,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_mean": 0.007340134287970533,
+   "ceiling_per_seed": [
+    0.01317291781187761,
+    0.002264509035161508,
+    0.001528557086680343,
+    0.004444643816517703,
+    0.005351252530448234,
+    0.0005924136096696328,
+    0.01693325995287902,
+    0.021157364623116404,
+    0.006153888475821263,
+    0.0018025359375336179
+   ],
+   "planned_mean": 0.0073401083098282565,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.036354893987419146,
+   "room": 4.9528922171083165,
+   "terms_mean": {
+    "failure": 0.0,
+    "imbalance": 0.007340133825395034
+   },
+   "solver": {
+    "max_kkt_error": 6.209167208170996e-09,
+    "max_iterations": 75,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 9.808353129692193e-09,
+    "max_planned_limit_excess": -0.0005000101922951194
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 0.01317291781187761,
+     "planned_cost_per_step": 0.013172845439062792,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.013172916866082636
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.508419541948235e-09,
+       "iterations": 66,
+       "capped": false,
+       "failed": false,
+       "violation": 9.788066912541638e-09
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.002264509035161508,
+     "planned_cost_per_step": 0.002264508969105726,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.002264508967163642
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.506534495566183e-09,
+       "iterations": 68,
+       "capped": false,
+       "failed": false,
+       "violation": 9.500357112113278e-09
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 0.001528557086680343,
+     "planned_cost_per_step": 0.0015285556744564705,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0015285569084355505
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 6.209167208170996e-09,
+       "iterations": 68,
+       "capped": false,
+       "failed": false,
+       "violation": 9.104497544765167e-09
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.004444643816517703,
+     "planned_cost_per_step": 0.004444604107774285,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.004444643171078882
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.5902369167462394e-09,
+       "iterations": 62,
+       "capped": false,
+       "failed": false,
+       "violation": 9.597755812329467e-09
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 0.005351252530448234,
+     "planned_cost_per_step": 0.005351250657424946,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.005351251897067029
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.5061076944807625e-09,
+       "iterations": 58,
+       "capped": false,
+       "failed": false,
+       "violation": 9.626564489995104e-09
+      }
+     ]
+    },
+    {
+     "seed": 105,
+     "replay_cost_per_step": 0.0005924136096696328,
+     "planned_cost_per_step": 0.0005924106471835145,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0005924133207922624
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.6249460866825184e-09,
+       "iterations": 49,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319898e-09
+      }
+     ]
+    },
+    {
+     "seed": 106,
+     "replay_cost_per_step": 0.01693325995287902,
+     "planned_cost_per_step": 0.016933383197770373,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.016933259414320473
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.505980593131491e-09,
+       "iterations": 75,
+       "capped": false,
+       "failed": false,
+       "violation": 9.783235666027679e-09
+      }
+     ]
+    },
+    {
+     "seed": 107,
+     "replay_cost_per_step": 0.021157364623116404,
+     "planned_cost_per_step": 0.021157141845379625,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.021157364140166175
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.5078213224448037e-09,
+       "iterations": 73,
+       "capped": false,
+       "failed": false,
+       "violation": 9.808353129692193e-09
+      }
+     ]
+    },
+    {
+     "seed": 108,
+     "replay_cost_per_step": 0.006153888475821263,
+     "planned_cost_per_step": 0.006153860497738475,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.006153887817603947
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.5442123559206252e-09,
+       "iterations": 58,
+       "capped": false,
+       "failed": false,
+       "violation": 9.640248987974331e-09
+      }
+     ]
+    },
+    {
+     "seed": 109,
+     "replay_cost_per_step": 0.0018025359375336179,
+     "planned_cost_per_step": 0.0018025220623863669,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.001802535751239734
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.548481236917224e-09,
+       "iterations": 66,
+       "capped": false,
+       "failed": false,
+       "violation": 9.34355232073969e-09
+      }
+     ]
+    }
+   ]
+  },
+  "feed_pump_trip": {
+   "weight": 0.00024984384759525296,
+   "reference_mean": 0.00036618781938990545,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_mean": 0.0,
+   "ceiling_per_seed": [
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0
+   ],
+   "planned_mean": 0.0,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.00036618781938990545,
+   "room": "unbounded",
+   "terms_mean": {
+    "failure": 0.0,
+    "imbalance": 0.0
+   },
+   "solver": {
+    "max_kkt_error": 8.019114958015294e-09,
+    "max_iterations": 16,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 9.090909090909758e-09,
+    "max_planned_limit_excess": -0.17644478442395206
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.5059336144925246e-09,
+       "iterations": 16,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319887e-09
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.505912234536948e-09,
+       "iterations": 16,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319883e-09
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 8.019114958015294e-09,
+       "iterations": 15,
+       "capped": false,
+       "failed": false,
+       "violation": 8.019114958015294e-09
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.5059534234980123e-09,
+       "iterations": 13,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319883e-09
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 9.226519468690662e-10,
+       "iterations": 16,
+       "capped": false,
+       "failed": false,
+       "violation": 9.090909090909758e-09
+      }
+     ]
+    },
+    {
+     "seed": 105,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 3.0176163013685697e-09,
+       "iterations": 13,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319882e-09
+      }
+     ]
+    },
+    {
+     "seed": 106,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 7.024821633248857e-09,
+       "iterations": 16,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319887e-09
+      }
+     ]
+    },
+    {
+     "seed": 107,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.505913578395976e-09,
+       "iterations": 16,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319887e-09
+      }
+     ]
+    },
+    {
+     "seed": 108,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 9.195090379045824e-10,
+       "iterations": 16,
+       "capped": false,
+       "failed": false,
+       "violation": 9.090909090909748e-09
+      }
+     ]
+    },
+    {
+     "seed": 109,
+     "replay_cost_per_step": -0.0,
+     "planned_cost_per_step": 0.0,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "imbalance": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [],
+       "error": 2.5059262003584114e-09,
+       "iterations": 16,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440319883e-09
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "generated": "2026-11-08, AMD EPYC 9454 (bob)"
+}
