@@ -4,7 +4,7 @@ This record describes how pressurised-water reactors of the large Western family
 (EDF's 900 to 1450 MWe units, Westinghouse 2 to 4-loop plants and their licensees)
 follow load: what operators read, what they move, which limits they keep and what a
 day of load follow looks like. It pools sources across the family (charter rule 19),
-listed at the end as [S1] to [S16] (no S5). EDF practice is the frame; a Westinghouse figure
+listed at the end as [S1] to [S17] (no S5). EDF practice is the frame; a Westinghouse figure
 is used where EDF's was not found, and says so. Numbers read off a figure are
 labelled "read from fig. N".
 
@@ -75,6 +75,15 @@ while delta I stays inside +-5 % (read from figs. 3 and 6), and xenon reads 110
 against 96 at full power at the 50 % point (read from fig. 5) [S3]. Xenon peaks
 about 6 h (S9) to 7 to 8 h (S10) after a reduction.
 
+## 7. How often each day comes
+
+EDF's units spend, per unit and year, 1400 h in frequency regulation, 250 h in load
+following (7.1 TWh) and 41 h in short hot shutdowns; about 4 % of available
+generation goes unproduced for modulation [S17, slide 7]. An EDF load-follow day is
+off full power for about 6.3 h, so 250 h is about 40 days a year, 11 % of days. The
+task weighs baseload days (with frequency control) at 0.892 and the five load-follow
+days at 0.0216 each, an equal split that no source gives (ours).
+
 ## Sources
 
 - [S1] IAEA Nuclear Energy Series NP-T-3.23 (2018), *Non-baseload operation in
@@ -96,6 +105,9 @@ about 6 h (S9) to 7 to 8 h (S10) after a reduction.
 - [S14] Muniglia et al., ICAPP 2016, hal-01355257; arXiv 2107.11201.
 - [S15] Delayed return to full power at Doel-3, INIS record 1ypr9-dk595.
   <https://inis.iaea.org/records/1ypr9-dk595>
+- [S17] P. Mercel (EDF), *For a low carbon electricity generation: flexibility of the
+  French nuclear fleet*, IEA workshop on nuclear power, 25 February 2019.
+  <https://iea.blob.core.windows.net/assets/imports/events/260/Session3.3_Mercel_Philippe.pdf>
 - [S16] Castro Monteiro et al., KNS Spring 2020, 20A-065, APR1400 restart.
   <https://www.kns.org/files/pre_paper/44/20A-065-Rafael-Castro-Monteiro.pdf>
 

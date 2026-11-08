@@ -3,6 +3,12 @@
 Contract: 4 to 10 scenarios, each a day the family's sources show (REALITY.md,
 section 6) and citing it; inside each, the day has the documented shape: its depth
 and its ramp rate, and a hold only where the source has one.
+
+Weights (REALITY.md section 7): EDF's units spend 250 h a year load following
+(IEA 2019 workshop, EDF, slide 7). An EDF day is off full power for its hold, 5.5 h
+on average, plus two 25 min ramps: 6.33 h, so 39.5 days a year, a share of
+39.5 / 365 = 0.108 of days. Baseload days take the rest, 0.892. The five
+load-follow days share 0.108 equally (ours: no source splits it), 0.0216 each.
 """
 
 import jax
@@ -54,3 +60,11 @@ def test_each_day_has_its_documented_shape(name):
         assert float(p.load_ramp_rate) * 3600.0 == pytest.approx(rate)
         held = float(st.ramp_up_at - st.ramp_down_at) - (1 - low) / p.load_ramp_rate
         assert hold[0] * 3600.0 - 1.0 <= held <= hold[1] * 3600.0 + 1.0
+
+
+def test_each_day_weighs_its_share_of_operating_time():
+    w = scenarios.weights(SPEC)
+    assert w["baseload"] == pytest.approx(0.892, abs=0.002)
+    for name in SHAPES:
+        if name != "baseload":
+            assert w[name] == pytest.approx(0.0216, abs=0.0005)
