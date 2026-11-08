@@ -136,3 +136,7 @@ Meet the header pressure or flow demand while keeping the operating point right 
 - Emerson, "Increased plant availability through proper anti-surge valve selection", white paper en-1653588, https://www.emerson.com/documents/automation/white-paper-increased-plant-availability-through-proper-anti-surge-valve-selection-en-1653588.pdf (redirects). A search snippet says "typically less than 2 seconds" stroke; confirm.
 - Fisher, "Optimized antisurge control valves" brochure en-127170, https://s1-live.emerson.com/documents/automation/brochure-fisher-optimized-antisurge-control-valves-en-127170.pdf (host unreachable). A search snippet says the valves open in under 2 s; confirm.
 - NOVA Gas Transmission field tests of a pipeline station, IPC1998 paper, https://asmedc.silverchair.com/IPC/proceedings-pdf/IPC1998/40238/1057/2507098/1057_1.pdf (blocked). Check station surge and valve dynamics data.
+
+## How often each window occurs (2026-11-08)
+
+How often a normal day and each bad day occur: not found in the sources read.

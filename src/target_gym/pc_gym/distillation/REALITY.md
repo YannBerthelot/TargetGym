@@ -136,3 +136,7 @@ Keep both product impurities inside their zones, at the least reflux and boilup,
 - R. Pihlaja, "Distillation Column Flooding Diagnostics with Intelligent Differential Pressure Transmitter", Emerson whitepaper, https://www2.emersonprocess.com/siteadmincenter/PM%20Rosemount%20Documents/3051S_ASP_Distillation_Column_Flooding.pdf . Check the DP trend figures and how far ahead of flood the warning came.
 - S. Skogestad, M. Morari, "Understanding the dynamic behavior of distillation columns", Ind. Eng. Chem. Res. 27, 1988 (paywalled). The original Column A paper.
 - Fortuna, Graziani, Xibilia, "Soft sensors for product quality monitoring in debutanizer distillation columns", Control Engineering Practice 13, 2005 (paywalled). A search snippet says the GC delay is 30 to 75 min; check it in the paper.
+
+## How often each window occurs (2026-11-08)
+
+How often a normal day and each bad day occur: not found in the sources read.

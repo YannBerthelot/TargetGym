@@ -192,6 +192,14 @@ event. Not run.
 
 ---
 
+
+### Scenario weights (charter J4)
+
+`normal` 0.7, `setpoint_step` 0.1, `catalyst_loss` 0.1, `feed_buildup` 0.05, `cooling_loss` 0.05: shares of operating time for the headline. No source says how often each
+window occurs (`REALITY.md`), so each is ours, the normal day in the family
+range 0.5 to 0.9 and the rest split among the upsets; the family sweep (B7)
+draws them.
+
 <!-- BEGIN GENERATED FACTS -->
 
 <!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:

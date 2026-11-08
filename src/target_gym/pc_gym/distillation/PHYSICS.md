@@ -332,6 +332,14 @@ way to buy it back.
 
 ---
 
+
+### Scenario weights (charter J4)
+
+`normal` 0.7, `feed_rate_step` 0.1, `feed_composition_step` 0.1, `both_steps` 0.1: shares of operating time for the headline. No source says how often each
+window occurs (`REALITY.md`), so each is ours, the normal day in the family
+range 0.5 to 0.9 and the rest split among the upsets; the family sweep (B7)
+draws them.
+
 <!-- BEGIN GENERATED FACTS -->
 
 <!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:

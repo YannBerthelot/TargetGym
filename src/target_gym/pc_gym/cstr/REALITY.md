@@ -240,3 +240,7 @@ p.34 (30)].
 - CCPS, "Guidelines for Process Safety in Batch Reaction Systems" and
   "Guidelines for Safe Automation of Chemical Processes"; IEC 61511. Paid.
   Check: high-temperature trip practice and response times.
+
+## How often each window occurs (2026-11-08)
+
+How often a normal day and each bad day occur: not found in the sources read.

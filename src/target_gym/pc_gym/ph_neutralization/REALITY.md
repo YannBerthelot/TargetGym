@@ -219,3 +219,7 @@ adding acid or caustic [P5, p. 1], without overdosing reagent [P5, p. 2].
   number of stages.
 - eCFR text of 40 CFR 401.17 and 403.5 at https://www.ecfr.gov (bot check);
   the Cornell copy was read instead.
+
+## How often each window occurs (2026-11-08)
+
+How often a normal day and each bad day occur: not found in the sources read.
