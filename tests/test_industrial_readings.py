@@ -289,6 +289,7 @@ def test_boiler_drum_measured_reward_has_the_proposals_floor():
     assert floor == pytest.approx(0.1936 + 0.0351, abs=4 * sd / math.sqrt(DRAWS))
 
 
+@pytest.mark.parametrize("name, sigma_W", [("wind_turbine", 1e3), ("battery", 330.0)])
 def test_measured_power_is_the_meters(name, sigma_W):
     """The proposal's reason for wind's own reading: speed times torque, each
     through its own sensor, scatters about 10.6 kW against a 1 kW meter, and a

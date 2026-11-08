@@ -6,12 +6,13 @@ settings; ``--write`` stores them in ``src/target_gym/data/pid_gains.json``, or
 that level's file (``--level``, the sensor noise it tunes on); ``--check`` scores
 the stored expert on the held-out seeds, which only report.
 
-The recipes for ``battery``, ``boiler_drum``, ``glass_furnace`` and ``hvac`` are
+The recipes for ``battery``, ``boiler_drum`` and ``hvac`` are
 section 10 of docs/proposals/expert-protocols-process.md, on the machinery of
 ``tune_process_experts`` (a test starts from no stored gain, one run per training
 seed, the fit C5 picks, SIMC with tau_c = theta, then N5 to N7 on valves). The rod
 program on ``reactor`` is published, so it has no recipe, and ``wind_turbine`` has
-its own script, ``wind_turbine_gains.py``. ``cement_kiln`` is set aside and still
+its own script, ``wind_turbine_gains.py``, and ``glass_furnace``'s fining PI
+its recipe in ``glass_slow_props.py``. ``cement_kiln`` is set aside and still
 runs on the shipped expert, with the 3 x 4 grid of its old protocol.
 
 Seeds 0-9 are scored and are never run here.
@@ -62,7 +63,7 @@ LEVEL = 1.0
 #: Valve dead band on a raw action, which spans 2.
 RAW_BAND = DEAD_BAND * 2.0
 #: A test's hold, and the length ``Plant`` keys its noise on (section 10, R8).
-TEST_STEPS = {"battery": 120, "boiler_drum": 400, "glass_furnace": 400, "hvac": 720}
+TEST_STEPS = {"battery": 120, "boiler_drum": 400, "hvac": 720}
 SOURCE = (
     "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, "
     "seeds 100-109"
@@ -295,73 +296,6 @@ def tune_boiler_drum() -> dict:
     }
 
 
-def tune_glass_furnace() -> dict:
-    """A firing step two steps after an interruption, ramped at the slew, read
-    against the crown's own cycle with the datasheet's delay (R13, R14), then a
-    PI on the half rule (R15). Held in manual the crown repeats every three
-    reversals, 75 minutes, on a far slower drift."""
-    from target_gym.glass_furnace.env_jax import FUEL_DEAD_TIME_STEPS, settled_point
-
-    name = "glass_furnace"
-    spec = REGISTRY[name]
-    nominal = spec.make_test_params()
-    p = _params(name, m_pull_noise_std=0.0, lhv_noise_std=0.0, target_T_crown_trim=0.0)
-    env = spec.make_env()
-    dt = float(p.delta_t)
-    slew = 2.0 * float(p.actuator_rate) * dt  # raw per step
-
-    def ramp(u, y, held):
-        held = u.copy() if held is None else held
-        held = held + np.clip(u - held, -slew, slew)
-        return held, held
-
-    rest = manual(lambda o, xp: xp.reshape(settled_point(o[4])[0], (1,)))
-    plant = Plant(
-        spec,
-        p,
-        [lambda o, s, q: o[0]],
-        [(None, None)],
-        controller=rest,
-        actuate=ramp,
-        applied=lambda u, a: a,
-    )
-    inst = Instrument.of(env, p, "T_crown_meas")
-    room = plant.room(0)
-    loop = read_loop(
-        plant,
-        "crown on firing",
-        0,
-        0,
-        0.05,
-        40,
-        inst,
-        room=room,
-        model="integrating_lag",
-        at=(3 * round(float(p.reversal_period) / dt), 2),
-        delay=FUEL_DEAD_TIME_STEPS * dt,
-    )
-    # The half rule (section 10, R15).
-    loop = {**loop, "theta": loop["theta"] + loop["tau1"] / 2}
-    # The pull's 3 sd as its share of the fuel, in raw, capped at the room.
-    fuel = 0.5 * float(p.fuel_min + p.fuel_max)
-    share = 3 * float(nominal.m_pull_noise_std) / float(p.m_pull)
-    span = float(p.fuel_max - p.fuel_min)
-    out = tuned(loop, inst.h, RAW_BAND, min(room, 2 * share * fuel / span))
-    return {
-        "Kp": out["Kc"],
-        "Ki": out["Kc"] / out["Ti"],
-        "Kd": 0.0,
-        "Tf": out["Tf"],
-        "model": {
-            **record(loop, out),
-            "k": loop["k"],
-            "theta": out["theta"],
-            "tau_c": out["tau_c"],
-            "tau2": loop["tau1"],
-        },
-    }
-
-
 def tune_hvac() -> dict:
     """The room's PI on a quiet building, on the emitter's five lags (R16). The
     curve itself reads the building's datasheet, in ``experts.py``."""
@@ -455,7 +389,6 @@ def tune_cement_kiln() -> dict:
 TUNERS = {
     "battery": tune_battery,
     "boiler_drum": tune_boiler_drum,
-    "glass_furnace": tune_glass_furnace,
     "hvac": tune_hvac,
     "cement_kiln": tune_cement_kiln,
 }

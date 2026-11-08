@@ -275,6 +275,11 @@ def _params_table(params) -> str:
 def _baseline_section(spec, row: dict | None) -> str:
     if not spec.has_pid:
         return f"No baseline ships for this environment. {spec.baselines_note or ''}".strip()
+    # A record of another episode length is a retired plant's (glass_furnace's
+    # 1600 steps before v4), not this task's numbers, so it is not shown.
+    steps_now = int(spec.make_test_params().max_steps_in_episode)
+    if row and int(row.get("steps", steps_now)) != steps_now:
+        row = None
     lines = []
     if row and row.get("pid_returns"):
         # Reported the way docs/baseline-results.md reports them: every reward is
@@ -479,6 +484,10 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
             '`info["tripped"]` and `info["trip_cost"]` until the controller '
             "brings it back."
         )
+    elif float(getattr(params, "failure_cost", 1.0)) == 0.0:
+        # A plant with no trip prices nothing for one (glass_furnace).
+        trip = "**Termination.** None: nothing trips this plant."
+        term_doc = None
     else:
         trip = (
             "**Termination.** None by default. Leaving the operating envelope "

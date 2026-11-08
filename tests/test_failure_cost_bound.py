@@ -30,6 +30,8 @@ KNOWN_BELOW: dict[str, str] = {
     # cement_kiln sat here until v3: a kiln starved of fuel ran cold to ~17 %
     # free lime without tripping. It now trips at ``lime_max`` (5 %), the
     # level its failure_cost is sized on.
+    "glass_furnace": "no trip: the plant's override protects the crown and the canal "
+    "and fining are priced zones, so failure_cost is 0 and never charged",
 }
 
 

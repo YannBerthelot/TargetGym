@@ -365,9 +365,9 @@ def _four_tank():
 
 
 def _glass_furnace():
-    from target_gym.glass_furnace.physical_env import FloatFurnace
+    from target_gym.glass_furnace.env_jax import GlassFurnace
 
-    return FloatFurnace()
+    return GlassFurnace()
 
 
 def _glass_furnace_scenarios():
@@ -818,7 +818,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         name="glass_furnace",
         group="industrial",
         env_factory=_glass_furnace,
-        params_cls=_LazyParams("target_gym.glass_furnace.physical_env", "FloatParams"),
+        params_cls=_LazyParams(
+            "target_gym.glass_furnace.env_jax", "GlassFurnaceParams"
+        ),
         make_pid=_pid(
             "make_glass_furnace_pid_controller",
             module="target_gym.glass_furnace.experts",
@@ -833,7 +835,15 @@ _SPECS: tuple[EnvSpec, ...] = (
             "ladder's first rung, a PI on the cold-end fining reading two sigma "
             "above its pass mark. The old MPC read the retired plant's params, so "
             "the MPC slot is empty; the ceiling is scripts/glass_slow_oracle.py, "
-            "not yet converged (PHYSICS.md, section Attempt 3)."
+            "not yet converged (PHYSICS.md, section 2)."
+        ),
+        expert_degraded=(
+            "The fining PI costs 335,604 EUR a 7-day episode, mean of the conformance "
+            "test's two seeds, against 242,995 for the best constant valve (raw 0.0, "
+            "0.5 kg/s). Its setpoint sits two sigma above a pass mark the reward "
+            "prices as a step, so it loses glass where a wide constant margin does "
+            "not: full back-off is what this reward pays for (PHYSICS.md, cold "
+            "review item 4). A finding for the reference ladder; not tuned."
         ),
         tuned_gains_key="glass_furnace",
         disturbance_fields=("walk",),

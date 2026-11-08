@@ -390,7 +390,11 @@ def _terminal_disturbances(spec, seeds, split_key, steps):
         )
         return [getattr(state, f) for f in spec.disturbance_fields]
 
-    return [[float(v) for v in terminal(jax.random.PRNGKey(seed))] for seed in seeds]
+    # An array field (glass_furnace's walks) counts each component.
+    return [
+        [float(x) for v in terminal(jax.random.PRNGKey(seed)) for x in np.ravel(v)]
+        for seed in seeds
+    ]
 
 
 def test_disturbance_magnitude_is_independent_of_key_splitting(spec):
@@ -453,7 +457,8 @@ def test_distinct_keys_give_distinct_stochastic_trajectories(spec):
             _, s, _, terminated, _ = _step(sub, s, action, params)
             if bool(terminated):
                 break
-        finals.append(tuple(float(getattr(s, f)) for f in spec.disturbance_fields))
+        fields = spec.disturbance_fields
+        finals.append(tuple(float(x) for f in fields for x in np.ravel(getattr(s, f))))
     assert len(set(finals)) > 1, "PRNG key had no effect on the disturbance"
 
 
@@ -940,7 +945,6 @@ KNOWN_DISCARDED_UNPACKS = {
     ("plane3d/dynamics.py", "_, _, z, theta, phi = positions"),
     ("plane3d/env.py", "_, _, z, theta, phi = positions"),
     ("energy/wind_turbine/oracle.py", "_, _, v_mean, deviation = task"),
-    ("glass_furnace/oracle.py", "_, start, lhv, disturbance = task"),
     ("reactor/env.py", "T_f, T_h, T_c, _, _, Xe = slow"),
 }
 

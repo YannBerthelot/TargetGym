@@ -14,11 +14,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from target_gym.glass_furnace import env_jax as E
 from target_gym.glass_furnace import physical as P
-from target_gym.glass_furnace import physical_env as E
 from target_gym.glass_furnace.physical_scenarios import suite
 
-ENV = E.FloatFurnace()
+ENV = E.GlassFurnace()
 F0 = E.design_state()[0]
 SEEDS = int(sys.argv[1]) if len(sys.argv) > 1 else 6
 BASE = ENV.default_params

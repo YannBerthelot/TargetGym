@@ -172,9 +172,10 @@ def test_without_recorded_moves_the_best_known_is_unknown():
     assert math.isnan(best["oracle_settling_ratio"])
 
 
-# The ceiling of every environment. hvac prices comfort without
-# ``reward.tracking_cost`` and has its own test below.
-_VIA_TRACKING_COST = sorted(n for n in REGISTRY if n != "hvac")
+# The ceiling of every environment. hvac prices comfort, and glass_furnace lost glass,
+# without ``reward.tracking_cost``; each has its own test below.
+_PRICED_DIRECTLY = ("hvac", "glass_furnace")
+_VIA_TRACKING_COST = sorted(n for n in REGISTRY if n not in _PRICED_DIRECTLY)
 
 
 def _control_step_tracking(env, state, params) -> float:
@@ -238,6 +239,23 @@ def test_the_building_ceiling_is_the_comfort_price_of_one_resolution():
     )
     tracking = float(env.reward_terms(state, params)["tracking"])
     assert tracking == pytest.approx(scoring.ceiling("hvac", params), rel=1e-5)
+
+
+def test_a_furnace_step_one_resolution_short_loses_its_glass():
+    """Hand-worked, independent of ``scoring``: 5.79 kg/s for one 120 s step is
+    0.6948 t, at 600 EUR/t 416.88 EUR. Short of the pass mark by the reading's
+    scatter, the reward charges all of it, and that is the ceiling and the band."""
+    spec = REGISTRY["glass_furnace"]
+    env, params = spec.make_env(), spec.make_test_params()
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    short = state.plant.fining * 0.0 + params.fining_pass - params.e_floor
+    state = state.replace(plant=state.plant.replace(fining=short), pull=params.pull)
+    tracking = float(env.reward_terms(state, params)["tracking"])
+    assert tracking == pytest.approx(416.88, rel=1e-4)
+    assert scoring.ceiling("glass_furnace", params) == pytest.approx(416.88, rel=1e-4)
+    assert scoring.settle_band("glass_furnace", params) == pytest.approx(
+        416.88, rel=1e-4
+    )
 
 
 @pytest.mark.parametrize("name", _VIA_TRACKING_COST)
@@ -689,7 +707,7 @@ def test_the_consumption_is_the_quantity_the_reward_charges(name):
 def test_every_task_states_a_band_per_tracked_output_or_none(name):
     spec = REGISTRY[name]
     band = scoring.spec_band(name)
-    if name == "hvac":  # one-sided at night, and the reward prices it
+    if name in _PRICED_DIRECTLY:  # one-sided, and the reward prices it
         assert band is None
         return
     assert band.shape == (len(spec.make_env().tracked_names),)

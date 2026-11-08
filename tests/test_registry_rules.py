@@ -238,6 +238,9 @@ _SHARED_MODULES = {
     # Unhashed on purpose too: it films an episode, which cannot change what
     # the episode scores.
     "target_gym.video",
+    # Unhashed on purpose as well: a ``Scenario`` only carries a suite's overrides
+    # and weights, which the task's own package sets and its fingerprints cover.
+    "target_gym.scenarios",
 }
 # And, in experts*.py and oracle*.py only, the shared controller code.
 _CONTROLLER_MODULES = {

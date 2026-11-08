@@ -1,8 +1,7 @@
-"""Attempts 2 and 3: the glass furnace from its equations, unregistered.
+"""The glass furnace's plant from its equations (attempt 3, registered as v4).
 
-Every term is a conservation law or a sourced relation. Citations are in
-``PHYSICS.md`` under "Physical plant". Temperatures are in K here unless a name says
-otherwise; the shipped regenerator constants are reused through ``GlassFurnaceParams``.
+Every term is a conservation law or a sourced relation. Citations are in ``PHYSICS.md``
+under "Model". Temperatures are in K here unless a name says otherwise.
 
 Attempt 3 steps at 120 s with the reversal averaged out: each checker node takes half its
 flue duty and half its air duty, and the firing gap enters as its mean. The refiner takes a
@@ -20,12 +19,8 @@ import jax.numpy as jnp
 import numpy as np
 from flax import struct
 
-from target_gym.glass_furnace.env import (
-    KELVIN_OFFSET,
-    N_REGEN_NODES,
-    GlassFurnaceParams,
-)
-
+KELVIN_OFFSET = 273.15  # C -> K
+N_REGEN_NODES = 4  # checker nodes per chamber, hot end first
 SIGMA = 5.670374e-8
 C2 = 14387.77  # um K, Planck's second constant
 
@@ -425,7 +420,21 @@ def _layout(
 
 
 @struct.dataclass
-class PhysicalParams(GlassFurnaceParams):
+class PhysicalParams:
+    # Combustion and regenerators, as the first plant had them (v1 to v3).
+    LHV: float = 50.0e6  # J/kg, natural gas lower heating value
+    AFR: float = 17.0  # stoichiometric air/fuel mass ratio
+    excess_air: float = 0.10  # typical; sets flue O2
+    c_p_air: float = 1150.0  # J/(kg K), hot air
+    c_p_gas: float = 1200.0  # J/(kg K), flue gas
+    C_regen_node: float = 3.0e7  # J/K per checker node
+    eps_regen_node: float = 0.80  # per node, N_REGEN_NODES in series per chamber
+    reversal_period: float = 1500.0  # s (25 min), a typical float furnace
+    reversal_dead_time: float = 40.0  # s of interrupted firing per reversal
+    # Firing during the changeover, as a fraction of commanded: pilots stay lit.
+    reversal_firing_floor: float = 0.05
+    A_regen: float = 300.0  # m^2 per chamber
+    T_ambient: float = 25.0  # C
     rho_glass: float = 2319.0  # kg/m^3 at 1400 C
     beta_glass: float = 5.95e-5  # 1/K, cubical
     c_glass: float = 1300.0  # J/(kg K), the shipped form at 1200 C

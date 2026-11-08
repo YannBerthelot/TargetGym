@@ -31,9 +31,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from target_gym.glass_furnace import env_jax as E
 from target_gym.glass_furnace import physical as P
-from target_gym.glass_furnace import physical_env as E
-from target_gym.glass_furnace.env import N_REGEN_NODES, firing_fraction
 
 
 @pytest.fixture(scope="module")
@@ -45,10 +44,10 @@ def plant():
 def test_uniform_checkers_preheat_by_the_node_cascade(plant):
     _, p, _ = plant
     T_n, m_air, m_gas = 1200.0, 8.0, 8.5
-    nodes = jnp.full((N_REGEN_NODES,), T_n)
+    nodes = jnp.full((P.N_REGEN_NODES,), T_n)
     Q, air, flue = P.averaged_stack(nodes, T_n, m_air, m_gas, p)
     e, Ta = p.eps_regen_node, p.T_ambient
-    expected = T_n - (1.0 - e) ** N_REGEN_NODES * (T_n - Ta)
+    expected = T_n - (1.0 - e) ** P.N_REGEN_NODES * (T_n - Ta)
     assert float(air) == pytest.approx(expected, rel=1e-5)
     assert float(flue) == pytest.approx(
         T_n, rel=1e-6
@@ -75,11 +74,6 @@ def test_mean_firing_is_the_clocks_average(plant):
         1 - p.reversal_firing_floor
     )
     assert float(P.mean_firing(p)) == pytest.approx(hand, rel=1e-6)
-    # The shipped clock, sampled each second over a whole double cycle.
-    fine = p.replace(delta_t=1.0)
-    n = int(2 * p.reversal_period)
-    clock = np.mean(np.asarray(firing_fraction(jnp.arange(n), fine)))
-    assert clock == pytest.approx(hand, rel=1e-4)
 
 
 def test_canal_reads_the_leaving_glass_by_its_flow(plant):
@@ -155,7 +149,7 @@ def test_glass_under_the_band_brings_no_fining_to_the_canal(plant):
     assert float(P.sensors(new, g, p)["fining"]) == 0.0
 
 
-ENV = E.FloatFurnace()
+ENV = E.GlassFurnace()
 P0 = ENV.default_params
 
 
@@ -188,7 +182,7 @@ def test_the_registered_task_is_this_plant_with_its_scenarios():
     from target_gym.registry import REGISTRY
 
     spec = REGISTRY["glass_furnace"]
-    assert type(spec.make_env()) is E.FloatFurnace
+    assert type(spec.make_env()) is E.GlassFurnace
     shares = scenarios.weights(spec)
     assert set(shares) == {"normal", "pull_up", "pull_down", "gas_rich", "gas_lean"}
     up = scenarios.params_for(spec, scenarios.suite(spec)[1])

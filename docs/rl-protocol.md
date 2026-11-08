@@ -230,7 +230,7 @@ before reading any result from it.
 | patrol | 200 | 13 | 65 | 0.99500 |
 | patrol_range_bearing | 200 | 12 | 60 | 0.99500 |
 | distillation | 400 | 8 | 40 | 0.99750 |
-| glass_furnace | 1600 | 132 | 660 | 0.99938 |
+| glass_furnace | 5040 | 1368 | 6838 | 0.99980 |
 | cement_kiln | 700 | 58 | 290 | 0.99857 |
 | battery | 2880 | 1 | 5 | 0.99965 |
 | boiler_drum | 400 | 3 | 15 | 0.99750 |
@@ -242,12 +242,16 @@ before reading any result from it.
 | compressor_surge | 1200 | 49.3 | 247 | 0.99917 |
 | formation | 200 | 36 | 180 | 0.99500 |
 
-Two rows are filled by hand. `unstable_cstr` has no step response to fit (it
+Three rows are filled by hand. `unstable_cstr` has no step response to fit (it
 runs away open loop), so its tau is the unstable time constant, the time an
 uncontrolled error takes to grow e-fold over its five targets
 (`scripts/unstable_cstr_numbers.py --section targets`). `compressor_surge`'s
 is the slowest header-pressure response to its actuator steps
-(`scripts/compressor_surge_numbers.py --section steady`).
+(`scripts/compressor_surge_numbers.py --section steady`). `glass_furnace`'s is the
+fining share's 63 % time on a 1 % valve step from the settled state, 41.8 h of lag
+plus 3.8 h of dead time (`scripts/glass_slow_props.py step`). Seven days cover 3.7
+tau, not 5: the glass leaving the tank keeps answering a move for longer than an
+episode.
 
 ### How long an episode has to be
 

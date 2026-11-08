@@ -4,7 +4,7 @@ A float furnace runs continuously, so an episode is a window of it: seven days o
 established operation. Inside each scenario the walks and the event's start time are
 drawn by the seed, inside the window the parameters give. Every event is one the record
 shows; sizes the record doesn't give are ours inside the family's range, said where they
-are set (``physical_env.EnvParams``).
+are set (``env_jax.GlassFurnaceParams``).
 """
 
 from target_gym.scenarios import Scenario

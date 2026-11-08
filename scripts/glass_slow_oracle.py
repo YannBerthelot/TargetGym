@@ -21,11 +21,11 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
+from target_gym.glass_furnace import env_jax as E
 from target_gym.glass_furnace import physical as P
-from target_gym.glass_furnace import physical_env as E
 from target_gym.glass_furnace.physical_scenarios import suite
 
-ENV = E.FloatFurnace()
+ENV = E.GlassFurnace()
 F0 = E.design_state()[0]
 SCENARIO = {s.name: s for s in suite()}[sys.argv[1]]
 SEED = int(sys.argv[2])

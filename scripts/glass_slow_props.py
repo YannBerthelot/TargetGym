@@ -14,10 +14,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from target_gym.glass_furnace import env_jax as E
 from target_gym.glass_furnace import physical as P
-from target_gym.glass_furnace import physical_env as E
 
-ENV = E.FloatFurnace()
+ENV = E.GlassFurnace()
 EP = ENV.default_params
 QUIET = EP.replace(walk_sd=(0.0,) * len(E.WALKS))
 H = int(3600 / EP.delta_t)  # steps per hour
