@@ -560,8 +560,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("turbulence_sigma",),
         # v6: the 2D plant's Amendment 2 changes (plane/PHYSICS.md).
         # v7: Amendment 2's job: ATC clearances, scored on the AIM and RVSM
-        # bands (plane/PHYSICS.md).
-        version=7,
+        # bands (plane/PHYSICS.md). v8: the altitude band travels with the
+        # 500 fpm profile instead of starting where it ends.
+        version=8,
     ),
     EnvSpec(
         name="plane_sine",

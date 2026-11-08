@@ -52,7 +52,7 @@
   {
     "name": "plane_energy",
     "group": "aircraft",
-    "version": 7,
+    "version": 8,
     "display_name": "Altitude and airspeed",
     "params_cls": [
       "target_gym.plane.env",

@@ -15,14 +15,15 @@ Contract (sources in src/target_gym/plane/REALITY.md and PHYSICS.md):
   1 500 s.
 - Score (rule 15). Speed inside +-10 kt of the assigned speed [AIM 4-4-12]. In a
   level change, climb or descend at no less than 500 fpm [AIM 4-4-10]: the
-  altitude band is +-65 ft [RVSM] about a level the aircraft must close at
-  500 fpm from the clearance. Within 1 000 ft of the level, no more than
+  altitude band is +-65 ft [RVSM] about a level that closes at 500 fpm from
+  the clearance, so the band travels with that profile. Within 1 000 ft of the level, no more than
   1 500 fpm [AIM 4-4-10], charged past that edge in 500 fpm widths, half the
   AIM's 500 to 1 500 fpm range.
 
 Hand-derived numbers: 2 000 ft = 609.6 m; 500 fpm = 2.54 m/s, so 60 s after the
-clearance the aircraft may still be 609.6 - 152.4 = 457.2 m short. Not having
-moved, it is 152.4 m past that, (152.4 / 19.812)^2 = 59.17 per second. 2 000 fpm
+clearance the profile is 609.6 - 152.4 = 457.2 m short of the level. Not having
+moved, the aircraft is 152.4 m behind the profile, 132.588 m past its +-19.812 m
+band, (132.588 / 19.812)^2 = 44.79 per second. 2 000 fpm
 within 1 000 ft is 500 fpm past 1 500, (500 / 500)^2 = 1.0 per second.
 """
 
@@ -165,7 +166,7 @@ def test_climbing_faster_than_500_fpm_costs_nothing():
 def test_not_starting_a_cleared_climb_is_charged_past_the_500_fpm_profile():
     params = _params()
     env, state = _state(params, 360, BASE)
-    assert float(-env.compute_reward(state, params)) == pytest.approx(59.17, rel=1e-3)
+    assert float(-env.compute_reward(state, params)) == pytest.approx(44.79, rel=1e-3)
 
 
 def test_more_than_1500_fpm_within_1000_ft_of_the_level_is_charged():

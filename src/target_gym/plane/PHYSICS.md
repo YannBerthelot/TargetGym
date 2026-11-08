@@ -448,8 +448,9 @@ at 300 s, +10 kt at 600 s, -1 000 ft at 900 s, -10 kt at 1 200 s, -2 000 ft at
 speeds in 10 kt [AIM 4-4-12: adjustments "in 5 or 10 knot increments"].
 
 **Score (rule 15).** The speed band, +-10 kt about the assigned speed, all
-along [AIM 4-4-12]. The altitude band, +-65 ft [RVSM], about a level the
-aircraft must close at no less than 500 fpm from each level clearance: "if at
+along [AIM 4-4-12]. The altitude band, +-65 ft [RVSM], about a level that
+closes at 500 fpm from each level clearance, so the band travels with that profile
+and a prompt start costs nothing: "if at
 anytime the pilot is unable to climb or descend at a rate of at least 500 feet
 a minute, advise ATC" [AIM 4-4-10]; ahead of that profile costs nothing.
 `level_off`: within 1 000 ft of the level, no more than 1 500 fpm [AIM 4-4-10:

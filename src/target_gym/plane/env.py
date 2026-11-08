@@ -541,15 +541,16 @@ def assigned_cas(time, params, xp=jnp):
 
 def level_change_allowance(time, params, xp=jnp):
     """How far from its level the aircraft may still be at step ``time``, m:
-    the band, or what a 500 fpm climb or descent from the latest level
-    clearance has not yet closed [AIM 4-4-10], whichever is larger."""
+    the band about a level that closes at 500 fpm from the latest level
+    clearance [AIM 4-4-10], so the band travels with that profile and a prompt
+    start costs nothing."""
     k = clearance_tread(time, params, xp)
     since = xp.asarray(time, jnp.float32) * params.delta_t - (
         _LAST_LEVEL_CHANGE[k] * params.clearance_period
     )
     left = _LEVEL_CHANGE_FT[k] * 0.3048 - params.level_change_rate_min * since
     on_clearances = params.target_pattern == 5
-    return xp.where(on_clearances, xp.maximum(params.e_tol, left), params.e_tol)
+    return params.e_tol + xp.where(on_clearances, xp.maximum(left, 0.0), 0.0)
 
 
 def target_airspeed(state: PlaneState, params: PlaneParams):

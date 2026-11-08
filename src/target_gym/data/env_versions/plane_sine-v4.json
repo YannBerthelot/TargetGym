@@ -1,5 +1,5 @@
 {
-  "fingerprint": "03dba9a3e1d301ea",
-  "note": "charter Amendment 2 on the 2D plant (plane/PHYSICS.md); re-stamped in place after plane_energy's clearance rules were added to plane/env.py: they act only on target_pattern 5, so this task's costs and dynamics are unchanged",
-  "stamped": "2026-11-08T13:24:36+00:00"
+  "fingerprint": "85f3a18980696f21",
+  "note": "charter Amendment 2 on the 2D plant (plane/PHYSICS.md); re-stamped in place after later plane/env.py changes that act only on target_pattern 5 (plane_energy), so this task is unchanged",
+  "stamped": "2026-11-08T13:49:10+00:00"
 }
