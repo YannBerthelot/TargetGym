@@ -24,7 +24,11 @@ from target_gym.reactor.experts import make_reactor_pid_controller, xenon_feedfo
 
 def test_xenon_tool_follows_the_plants_xenon_through_a_load_cut():
     env = Reactor()
-    p = ReactorParams(demand_sigma=0.0, initial_xenon_power_range=(1.0, 1.0))
+    # Rods held with no boron through the cut run Tavg hot for hours; the DNB
+    # limit's clock is lifted so no restart resets the xenon being followed.
+    p = ReactorParams(
+        demand_sigma=0.0, initial_xenon_power_range=(1.0, 1.0), dnb_allowed=1e9
+    )
     _, s = env.reset_env(jax.random.PRNGKey(0), p)
     s = s.replace(ramp_down_at=jnp.float32(0.0), ramp_up_at=jnp.float32(1e8))
     hold = jnp.array([1.0 - 2.0 * float(s.rod_in), 0.0], jnp.float32)

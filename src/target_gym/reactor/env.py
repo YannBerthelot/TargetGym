@@ -264,6 +264,13 @@ class ReactorParams(EnvParams):
     ril_full: float = 0.22
     ril_half: float = 0.78
     ril_allowed: float = 7200.0  # s
+    # Tavg's upper limit, the DNB parameter of STS LCO 3.4.1: at or below the COLR's
+    # value, restored within 2 h, else MODE 2 within 6 h (hot standby here).
+    # Braidwood's COLR: nominal Tavg at rated power 588.0 F, limit 593.1 F, so 5.1 F
+    # above the full-power program at every power (from a search summary; nrc.gov
+    # blocks automated reads). The only plant found with both numbers.
+    dnb_margin: float = 5.1 / 1.8  # K above the full-power program
+    dnb_allowed: float = 7200.0  # s
     # Effluent: every kg injected displaces a kg to treat. Boiling it off is 2.26
     # MJ/kg, 0.628 kWh, at $100/MWh, ours.
     effluent_price: float = 0.0628  # $/kg
@@ -320,6 +327,8 @@ PARAM_UNITS = {
     "ril_full": "",
     "ril_half": "",
     "ril_allowed": "s",
+    "dnb_margin": "K",
+    "dnb_allowed": "s",
     "effluent_price": "$/kg",
     "P_thermal_ref": "W",
     "C_fuel": "J/K",
@@ -408,6 +417,7 @@ class ReactorState(EnvState):
     below_floor: float = 0.0  # s Tavg has been under T_avg_min without a break
     ao_outside: float = 0.0  # s the offset has spent outside its band today
     ril_outside: float = 0.0  # s the rods have sat past their insertion limit
+    above_dnb: float = 0.0  # s Tavg has sat above its DNB limit without a break
     xenon_power: float = 1.0  # the recent power the starting xenon is balanced with
     #: Core boron as the boronmeter has read it, newest first; the reading is the
     #: oldest, ``BORON_METER_STEPS`` control steps late.
@@ -492,6 +502,12 @@ def rod_insertion_limit(n, params: ReactorParams):
     p = params
     slope = (p.ril_half - p.ril_full) / 0.5
     return jnp.clip(p.ril_full + slope * (1.0 - n), 0.0, 1.0)
+
+
+def tavg_dnb_limit(params: ReactorParams):
+    """Tavg's upper limit (K): the full-power program plus ``dnb_margin``, an
+    absolute value as a COLR gives it."""
+    return tavg_program(1.0, params) + params.dnb_margin
 
 
 def flux_tilt(Xe_tilt, Xe_hat, n, eps, params: ReactorParams):
@@ -828,6 +844,11 @@ def compute_next_state(
             ),
             ao_outside=state.ao_outside
             + p.delta_t * (jnp.abs(delta_I - new_n * p.ao_ref) > p.ao_band * new_n),
+            above_dnb=jnp.where(
+                0.5 * (T_hot + T_cold) > tavg_dnb_limit(p),
+                state.above_dnb + p.delta_t,
+                0.0,
+            ),
             ril_outside=jnp.where(
                 rod_in > rod_insertion_limit(new_n, p),
                 state.ril_outside + p.delta_t,
@@ -877,10 +898,13 @@ def get_obs(state: ReactorState, params: ReactorParams):
 
 
 def timed_out(state: ReactorState, params: ReactorParams):
-    """A timed limit overrun: Tavg under its floor or the rods past their insertion
-    limit for longer than allowed. The plant goes to hot standby, not a scram."""
-    return (state.below_floor >= params.floor_allowed) | (
-        state.ril_outside >= params.ril_allowed
+    """A timed limit overrun: Tavg under its floor or above its DNB limit, or the rods
+    past their insertion limit, for longer than allowed. The plant goes to hot standby, not a scram.
+    """
+    return (
+        (state.below_floor >= params.floor_allowed)
+        | (state.ril_outside >= params.ril_allowed)
+        | (state.above_dnb >= params.dnb_allowed)
     )
 
 
