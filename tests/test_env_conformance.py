@@ -1169,7 +1169,7 @@ KNOWN_SEAMS = {
     "plane3d_figure8": "shock-stall model near 308 m/s, unreachable",
     "battery": "state-of-charge-dependent power limit binding near soc 0.115",
     "reactor": "fuel-temperature feedback near 718 K",
-    "glass_furnace": "m_batch = maximum(.., 0) -- the batch blanket running out",
+    "glass_furnace": "advance_blanket: mass floored at 0 -- the blanket running out",
 }
 SEAM_LIMIT = 0.5
 

@@ -1,6 +1,6 @@
 """Attempt 3's oracle: the fuel a controller with foresight would fire.
 
-    python glass_slow_oracle.py SETTLED.npz SCENARIO SEED [iterations] [knot_hours]
+    python glass_slow_oracle.py SCENARIO SEED [iterations] [knot_hours] [OUT_DIR]
 
 It knows the true plant, its state and every walk and event of the seed's episode. First
 it finds the best constant valve in hindsight on a grid; then it shapes the valve as a
@@ -25,16 +25,16 @@ from target_gym.glass_furnace import physical as P
 from target_gym.glass_furnace import physical_env as E
 from target_gym.glass_furnace.physical_scenarios import suite
 
-d = np.load(sys.argv[1])
-F0, Q0 = float(d["fuel"]), float(d["cooling"])
-S0 = P.Fields(**{k: jnp.asarray(d[k]) for k in d if k not in ("fuel", "cooling")})
-SCENARIO = {s.name: s for s in suite()}[sys.argv[2]]
-SEED = int(sys.argv[3])
-ITERS = int(sys.argv[4]) if len(sys.argv) > 4 else 400
-KNOT_H = float(sys.argv[5]) if len(sys.argv) > 5 else 2.0
-EP = E.EnvParams().replace(**SCENARIO.overrides)
-N = EP.plant.max_steps_in_episode
-PER = int(round(KNOT_H * 3600.0 / EP.plant.delta_t))
+ENV = E.FloatFurnace()
+F0 = E.design_state()[0]
+SCENARIO = {s.name: s for s in suite()}[sys.argv[1]]
+SEED = int(sys.argv[2])
+ITERS = int(sys.argv[3]) if len(sys.argv) > 3 else 400
+KNOT_H = float(sys.argv[4]) if len(sys.argv) > 4 else 2.0
+OUT = sys.argv[5] if len(sys.argv) > 5 else "."
+EP = ENV.default_params.replace(**SCENARIO.overrides)
+N = EP.max_steps_in_episode
+PER = int(round(KNOT_H * 3600.0 / EP.delta_t))
 KNOTS = -(-N // PER)
 LO, HI = EP.fuel_min, EP.fuel_max
 
@@ -52,21 +52,24 @@ def costs(z, width):
     """Episode cost, EUR: with ``width`` 0 the true one, else a smooth step of that
     width on the fining share (and 100 times it, in K, on the canal)."""
     k0, k1 = jax.random.split(jax.random.split(jax.random.PRNGKey(0), 64)[SEED])
-    _, st = E.reset(k0, S0, EP, fuel=F0, cooling=Q0)
+    _, st = ENV.reset_env(k0, EP)
     u = jnp.repeat(valve(z), PER)[:N]
-    step = jax.checkpoint(lambda st, k, a: E.step(k, st, a, EP))
+    step = jax.checkpoint(
+        lambda st, k, a: ENV.step_env(k, st, E.to_action(a, EP), EP)[1]
+    )
 
     def f(st, x):
         k, a = x
-        _, st, _, c = step(st, k, a)
-        r = P.sensors(st.fields, EP.grid, EP.plant)
-        glass = st.pull * EP.plant.delta_t / 1000.0 * EP.lost_glass_price
+        st = step(st, k, a)
+        c = E.compute_reward_terms(st, EP)
+        r = P.sensors(st.plant, EP.grid, EP.plant)
+        glass = st.pull * EP.delta_t / 1000.0 * EP.lost_glass_price
         w = jnp.maximum(width, 1e-9)
         ok = jax.nn.sigmoid((r["fining"] - EP.fining_pass) / w) * jax.nn.sigmoid(
             (r["canal"] - EP.canal_target) / (100.0 * w)
         )
-        smooth = c["fuel"] + glass * (1.0 - ok)
-        return st, jnp.where(width > 0, smooth, c["fuel"] + c["lost_glass"])
+        smooth = c["running"] + glass * (1.0 - ok)
+        return st, jnp.where(width > 0, smooth, c["running"] + c["tracking"])
 
     return jnp.sum(jax.lax.scan(f, st, (jax.random.split(k1, N), u))[1])
 
@@ -105,7 +108,7 @@ def solve(start):
 
 
 def main():
-    days = N * EP.plant.delta_t / 86400.0
+    days = N * EP.delta_t / 86400.0
     t0 = time.time()
     c_best, c_cost = best_constant()
     print(
@@ -131,10 +134,7 @@ def main():
         flush=True,
     )
     z = out["best constant"][0] if a <= b else out["design"][0]
-    np.save(
-        sys.argv[1].replace(".npz", f"_oracle_{SCENARIO.name}_{SEED}.npy"),
-        np.asarray(valve(z)),
-    )
+    np.save(f"{OUT}/oracle_{SCENARIO.name}_{SEED}.npy", np.asarray(valve(z)))
 
 
 if __name__ == "__main__":

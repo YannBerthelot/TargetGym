@@ -1,6 +1,6 @@
 """Attempt 3's box nulls on its scenario suite: cost per day, lost glass and crown.
 
-    python glass_slow_eval.py SETTLED.npz [seeds]
+    python glass_slow_eval.py [seeds]
 
 Box nulls are constant valves at the middle and at each bound of the action box
 (``target_gym.null_policies``), plus the settled design valve for reference. Seeds are
@@ -18,23 +18,24 @@ from target_gym.glass_furnace import physical as P
 from target_gym.glass_furnace import physical_env as E
 from target_gym.glass_furnace.physical_scenarios import suite
 
-d = np.load(sys.argv[1])
-F0, Q0 = float(d["fuel"]), float(d["cooling"])
-S0 = P.Fields(**{k: jnp.asarray(d[k]) for k in d if k not in ("fuel", "cooling")})
-SEEDS = int(sys.argv[2]) if len(sys.argv) > 2 else 6
-BASE = E.EnvParams()
-N = BASE.plant.max_steps_in_episode
-H = 3600.0 / BASE.plant.delta_t
+ENV = E.FloatFurnace()
+F0 = E.design_state()[0]
+SEEDS = int(sys.argv[1]) if len(sys.argv) > 1 else 6
+BASE = ENV.default_params
+N = BASE.max_steps_in_episode
+H = 3600.0 / BASE.delta_t
 
 
 def episode(key, fuel, ep):
     k0, k1 = jax.random.split(key)
-    _, st = E.reset(k0, S0, ep, fuel=F0, cooling=Q0)
+    _, st = ENV.reset_env(k0, ep)
+    a = E.to_action(jnp.asarray(fuel), ep)
 
     def f(st, k):
-        _, st, _, c = E.step(k, st, fuel, ep)
-        hot = P.sensors(st.fields, ep.grid, ep.plant)["hot"]
-        return st, jnp.stack([c["fuel"], c["lost_glass"], hot])
+        _, st, _, _, _ = ENV.step_env(k, st, a, ep)
+        c = E.compute_reward_terms(st, ep)
+        hot = P.sensors(st.plant, ep.grid, ep.plant)["hot"]
+        return st, jnp.stack([c["running"], c["tracking"], hot])
 
     return jax.lax.scan(f, st, jax.random.split(k1, N))[1]
 

@@ -614,43 +614,35 @@
   {
     "name": "glass_furnace",
     "group": "industrial",
-    "version": 3,
+    "version": 4,
     "display_name": "Glass Furnace",
     "params_cls": [
-      "target_gym.glass_furnace.env",
-      "GlassFurnaceParams"
+      "target_gym.glass_furnace.physical_env",
+      "FloatParams"
     ],
     "env_factory": "_glass_furnace",
     "env_class": [
-      "target_gym.glass_furnace.env_jax",
-      "GlassFurnace"
+      "target_gym.glass_furnace.physical_env",
+      "FloatFurnace"
     ],
     "make_pid": [
       "_pid.<locals>.make",
       "target_gym.glass_furnace.experts",
       "make_glass_furnace_pid_controller"
     ],
-    "make_mpc": [
-      "_mpc.<locals>.make",
-      "target_gym.glass_furnace.oracle",
-      "make_glass_furnace_mpc"
-    ],
+    "make_mpc": null,
     "scored_overrides": {},
     "tuned_gains_key": "glass_furnace",
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "The plant was rebuilt (attempt 3: a float melter in two dimensions, scored in money on fuel and lost glass). The PID is the reference ladder's first rung, a PI on the cold-end fining reading two sigma above its pass mark. The old MPC read the retired plant's params, so the MPC slot is empty; the ceiling is scripts/glass_slow_oracle.py, not yet converged (PHYSICS.md, section Attempt 3).",
     "disturbance_fields": [
-      "m_pull_disturbance",
-      "lhv_deviation"
+      "walk"
     ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": [
-      "m_pull_noise_std",
-      "lhv_noise_std"
-    ]
+    "noise_fields": []
   },
   {
     "name": "reactor",

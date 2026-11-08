@@ -45,7 +45,9 @@ from target_gym.registry import REGISTRY
 #: Channel to sigma in the observation's units, by hand from the table. Channels
 #: not listed stay exact, apart from the held ones in ``HELD``.
 SCATTER = {
-    "glass_furnace": {0: 0.36, 1: 0.32, 2: 100.0 * 3e-4 / 0.698},  # fuel_max
+    # Crown, two floors and the canal at 0.36 K; the fining share read at the cold
+    # end, 0.005. The batch line is sampled, not noised.
+    "glass_furnace": {0: 0.36, 1: 0.36, 2: 0.36, 3: 0.36, 4: 0.005},
     # Tavg is the mean of two RTDs, so 0.045 over sqrt(2).
     "reactor": {0: 1.9e-4, 1: 0.045, 4: 0.045 / math.sqrt(2.0)},
     "hvac": {
@@ -83,7 +85,6 @@ STEPS = {
 
 #: A state outside each task's envelope.
 OUTSIDE = {
-    "glass_furnace": lambda s: s.replace(T_crown=jnp.float32(2000.0)),
     "reactor": lambda s: s.replace(n=jnp.float32(2.0)),
     "hvac": lambda s: s.replace(T_air=jnp.float32(50.0)),
     "boiler_drum": lambda s: s.replace(level=jnp.float32(1.0)),
@@ -212,9 +213,7 @@ def test_free_lime_scatters_at_its_figure_across_samples():
 
 @pytest.mark.parametrize("name", TASKS)
 def test_noise_never_reaches_the_plant_or_the_reward(name):
-    """The whole state stays equal, whatever the noise scale. That covers
-    ``glass_furnace``: a reading written back would enter ``T_crown_meas``, the
-    lag's own state, and every later reading with it."""
+    """The whole state stays equal, whatever the noise scale."""
     env, params, start = _setup(name, unrounded=False)
     key = jax.random.PRNGKey(1)
     action = _action(env, params)
@@ -234,7 +233,7 @@ def test_noise_never_reaches_the_plant_or_the_reward(name):
         jax.tree_util.tree_map(np.testing.assert_array_equal, a, b)
 
 
-@pytest.mark.parametrize("name", TASKS)
+@pytest.mark.parametrize("name", sorted(OUTSIDE))  # glass_furnace has no trip
 def test_the_measured_trip_is_the_one_it_is_given(name):
     """A measured copy can sit outside the envelope when the plant is not, and
     the other way round, so the check must not run on it."""
@@ -266,23 +265,6 @@ def _floor(env, params, state, times):
     return float(jnp.mean(jax.jit(jax.vmap(at))(times)))
 
 
-def test_glass_furnace_measured_reward_has_the_proposals_floor():
-    """``(0.36 / 1)^2`` per step, on a chi-squared of one degree of freedom:
-    sd ``sqrt(2) * 0.1296`` per draw, on top of the fuel's ``w * c / c_hold``,
-    whose meter scatters by 0.05 % of it."""
-    env, params, state = _setup("glass_furnace")
-    resting = state.replace(
-        T_crown=state.target_T_crown,
-        T_crown_meas=state.target_T_crown,
-        fuel_flow=jnp.float32(params.fuel_min),
-    )
-    floor = _floor(env, params, resting, jnp.arange(DRAWS))
-    running = params.running_weight * params.fuel_min / params.c_hold
-    assert floor == pytest.approx(
-        0.1296 + running, abs=4 * 1.414 * 0.1296 / math.sqrt(DRAWS)
-    )
-
-
 def test_cement_kiln_measured_reward_has_the_proposals_floor():
     """``(1.8e-4 / 5e-4)^2`` per step. One draw per sample, so the steps are an
     hour apart. Zero fuel costs nothing."""
@@ -307,28 +289,6 @@ def test_boiler_drum_measured_reward_has_the_proposals_floor():
     assert floor == pytest.approx(0.1936 + 0.0351, abs=4 * sd / math.sqrt(DRAWS))
 
 
-def test_glass_furnace_measured_reward_is_the_cost_of_the_reading_received():
-    """A plant knows its crown only through the thermocouple, so the measured
-    cost is the observation's, lag and noise together, while ``reward`` scores
-    the true crown. In K, at ``e_floor`` 1, plus fuel as a share of the hold."""
-    env, params, state = _setup("glass_furnace", unrounded=False)
-    key = jax.random.PRNGKey(2)
-    for t in range(5):
-        obs, state, reward, _, info = env.step_env(
-            jax.random.fold_in(key, t), state, jnp.zeros(1), params
-        )
-        crown, _, fuel_pct, _, target, _ = np.asarray(obs, np.float64)
-        running = fuel_pct * params.fuel_max / 100.0
-        running *= params.running_weight / params.c_hold
-        expected = (target - crown) ** 2 + running
-        assert float(-info["measured_reward"]) == pytest.approx(expected, abs=2e-2)
-        true_cost = float(state.target_T_crown - state.T_crown) ** 2 + (
-            float(state.fuel_flow) * params.running_weight / params.c_hold
-        )
-        assert float(-reward) == pytest.approx(true_cost, abs=2e-2)
-
-
-@pytest.mark.parametrize("name, sigma_W", [("wind_turbine", 1e3), ("battery", 330.0)])
 def test_measured_power_is_the_meters(name, sigma_W):
     """The proposal's reason for wind's own reading: speed times torque, each
     through its own sensor, scatters about 10.6 kW against a 1 kW meter, and a

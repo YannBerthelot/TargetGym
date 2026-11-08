@@ -155,146 +155,165 @@ def test_glass_under_the_band_brings_no_fining_to_the_canal(plant):
     assert float(P.sensors(new, g, p)["fining"]) == 0.0
 
 
+ENV = E.FloatFurnace()
+P0 = ENV.default_params
+
+
+def _quiet(params=P0):
+    return params.replace(walk_sd=(0.0,) * len(E.WALKS))
+
+
+def _act(fuel, params=P0):
+    return E.to_action(jnp.asarray(fuel), params)
+
+
 def test_reward_prices_fuel_and_glass_lost_on_the_charged_pull():
-    ep = E.EnvParams()
-    dt = ep.plant.delta_t
-    fuel_cost = 0.45 * dt * ep.plant.LHV / 3.6e9 * ep.gas_price  # EUR/MWh on energy
-    pull = 1.1 * ep.pull  # a pull change in progress
-    glass = pull * dt / 1000.0 * ep.lost_glass_price  # EUR/t on the tonnes charged
-    good = dict(canal=ep.canal_target + 0.5, fining=ep.fining_pass + 0.01, pull=pull)
-    ok = E.reward_terms(0.45, **good, ep=ep)
-    assert set(ok) == {"fuel", "lost_glass"}
-    assert float(ok["fuel"]) == pytest.approx(fuel_cost, rel=1e-6)
-    assert float(ok["lost_glass"]) == 0.0
-    for bad in (dict(canal=ep.canal_target - 0.5), dict(fining=ep.fining_pass - 0.01)):
-        cost = E.reward_terms(0.45, **{**good, **bad}, ep=ep)
-        assert float(cost["lost_glass"]) == pytest.approx(glass, rel=1e-6)
+    p = P0
+    dt = p.delta_t
+    fuel_cost = 0.45 * dt * p.plant.LHV / 3.6e9 * p.gas_price  # EUR/MWh on energy
+    pull = 1.1 * p.pull  # a pull change in progress
+    glass = pull * dt / 1000.0 * p.lost_glass_price  # EUR/t on the tonnes charged
+    good = dict(canal=p.canal_target + 0.5, fining=p.fining_pass + 0.01, pull=pull)
+    ok = E.costs(0.45, **good, params=p)
+    assert set(ok) == {"running", "tracking"}  # fuel, and lost glass
+    assert float(ok["running"]) == pytest.approx(fuel_cost, rel=1e-6)
+    assert float(ok["tracking"]) == 0.0
+    for bad in (dict(canal=p.canal_target - 0.5), dict(fining=p.fining_pass - 0.01)):
+        cost = E.costs(0.45, **{**good, **bad}, params=p)
+        assert float(cost["tracking"]) == pytest.approx(glass, rel=1e-6)
 
 
-def _quiet(ep):
-    return ep.replace(walk_sd=(0.0,) * len(E.WALKS))
+def test_the_registered_task_is_this_plant_with_its_scenarios():
+    from target_gym import scenarios
+    from target_gym.registry import REGISTRY
+
+    spec = REGISTRY["glass_furnace"]
+    assert type(spec.make_env()) is E.FloatFurnace
+    shares = scenarios.weights(spec)
+    assert set(shares) == {"normal", "pull_up", "pull_down", "gas_rich", "gas_lean"}
+    up = scenarios.params_for(spec, scenarios.suite(spec)[1])
+    assert up.pull_change > 0.0
 
 
-def test_crown_override_holds_the_hottest_face_under_1620_c(plant):
-    g, p, s = plant
-    ep = _quiet(E.EnvParams())
-    _, state = E.reset(jax.random.PRNGKey(0), s, ep)
+def test_crown_override_holds_the_hottest_face_under_1620_c():
+    p = _quiet()
+    _, state = ENV.reset_env(jax.random.PRNGKey(0), p)
 
     def f(st, k):
-        _, st, _, _ = E.step(k, st, ep.fuel_max, ep)
-        return st, P.sensors(st.fields, g, p)["hot"]
+        _, st, _, _, _ = ENV.step_env(k, st, _act(p.fuel_max, p), p)
+        return st, P.sensors(st.plant, p.grid, p.plant)["hot"]
 
     keys = jax.random.split(jax.random.PRNGKey(1), int(2 * 86400 / p.delta_t))
     hot = np.asarray(jax.jit(lambda: jax.lax.scan(f, state, keys)[1])())
     later = hot[int(6 * 3600 / p.delta_t) :]  # past the start's own transient
-    assert later.max() <= ep.crown_high
+    assert later.max() <= p.crown_high
 
 
-def test_override_leaves_the_valve_alone_under_the_limit(plant):
-    _, _, s = plant
-    ep = _quiet(E.EnvParams())
-    _, state = E.reset(jax.random.PRNGKey(0), s, ep)
+def test_override_leaves_the_valve_alone_under_the_limit():
+    p = _quiet()
+    _, state = ENV.reset_env(jax.random.PRNGKey(0), p)
     # A cold crown no longer calls for more fuel: the low override is gone.
     for face in (1773.15, 1600.0):  # 1500 C, and 1327 C, under silica's 1400 C
-        cold = state.fields.replace(T_roof=state.fields.T_roof.at[0].set(face))
-        _, new, _, _ = E.step(
-            jax.random.PRNGKey(2), state.replace(fields=cold), 0.30, ep
+        cold = state.plant.replace(T_roof=state.plant.T_roof.at[0].set(face))
+        _, new, _, _, _ = ENV.step_env(
+            jax.random.PRNGKey(2), state.replace(plant=cold), _act(0.30, p), p
         )
-        assert float(new.fuel) == pytest.approx(0.30, rel=1e-6)
+        assert float(new.fuel) == pytest.approx(0.30, rel=1e-5)
 
 
-def test_observation_carries_readings_not_the_hidden_walks(plant):
-    _, _, s = plant
-    ep = E.EnvParams()
-    _, state = E.reset(jax.random.PRNGKey(0), s, ep)
+def test_observation_carries_readings_not_the_hidden_walks():
+    _, state = ENV.reset_env(jax.random.PRNGKey(0), P0)
     other = state.replace(walk=state.walk + 0.03)
-    np.testing.assert_array_equal(E.observe(state, ep), E.observe(other, ep))
-    assert len(E.OBS_NAMES) == E.observe(state, ep).shape[0]
+    np.testing.assert_array_equal(ENV.get_obs(state, P0), ENV.get_obs(other, P0))
+    assert len(E.OBS_NAMES) == ENV.get_obs(state, P0).shape[0]
 
 
-def test_walks_start_where_the_seed_puts_them(plant):
-    _, _, s = plant
-    ep = E.EnvParams()
-    first = lambda k: E.reset(jax.random.PRNGKey(k), s, ep)[1].walk
+def test_walks_start_where_the_seed_puts_them():
+    first = lambda k: ENV.reset_env(jax.random.PRNGKey(k), P0)[1].walk
     np.testing.assert_array_equal(first(3), first(3))
     assert not np.allclose(first(3), first(4))
     # Over many seeds, each walk starts at its stationary spread; 2000 draws give the sd
     # to about 2 %, so 10 % is the bound.
-    starts = np.asarray(jax.vmap(lambda k: E.reset(k, s, ep)[1].walk)(
+    starts = np.asarray(jax.vmap(lambda k: ENV.reset_env(k, P0)[1].walk)(
         jax.random.split(jax.random.PRNGKey(5), 2000)))  # fmt: skip
-    np.testing.assert_allclose(starts.std(0), ep.walk_sd, rtol=0.1)
+    np.testing.assert_allclose(starts.std(0), P0.walk_sd, rtol=0.1)
 
 
-def _trace(state, ep, fuel, steps, key=1):
-    g, p = ep.grid, ep.plant
-
+def _trace(state, p, fuel, steps, key=1):
     def f(st, k):
-        obs, st, _, _ = E.step(k, st, fuel, ep)
-        return st, (obs, P.sensors(st.fields, g, p)["fining"], st.pull, st.time)
+        obs, st, _, _, _ = ENV.step_env(k, st, _act(fuel, p), p)
+        return st, (
+            obs,
+            P.sensors(st.plant, p.grid, p.plant)["fining"],
+            st.pull,
+            st.time,
+        )
 
     keys = jax.random.split(jax.random.PRNGKey(key), steps)
     return [np.asarray(x) for x in jax.jit(lambda: jax.lax.scan(f, state, keys)[1])()]
 
 
-def test_quality_is_read_a_transit_later(plant):
-    _, _, s = plant
-    ep = _quiet(E.EnvParams()).replace(quality_noise=0.0)
-    _, state = E.reset(jax.random.PRNGKey(0), s, ep)
-    d = int(round(ep.quality_delay_h * 3600 / ep.plant.delta_t))
-    obs, share, _, _ = _trace(state, ep, 0.47, 3 * d + 10)
+def _reading(channel):
+    return next(r for r in ENV.readings if r.channel == channel)
+
+
+def test_quality_is_read_a_transit_later():
+    p = _quiet().replace(sensor_noise_scale=0.0)
+    _, state = ENV.reset_env(jax.random.PRNGKey(0), p)
     q = E.OBS_NAMES.index("fining share read at the cold end")
+    d = int(round(_reading(q).dead_time / p.delta_t))
+    assert d > 1
+    obs, share, _, _ = _trace(state, p, 0.47, 3 * d + 10)
     np.testing.assert_allclose(obs[d:, q], share[:-d], rtol=1e-6)
 
 
-def test_a_planned_pull_change_follows_its_plan_and_shows_its_notice(plant):
-    _, _, s = plant
-    ep = _quiet(E.EnvParams()).replace(pull_change=0.1, pull_change_window_h=(6.0, 6.0))
-    _, state = E.reset(jax.random.PRNGKey(0), s, ep)
-    H = 3600 / ep.plant.delta_t
-    steps = int((6.0 + ep.pull_ramp_h + 2.0) * H)
-    obs, _, pull, time = _trace(state, ep, 0.47, steps)
-    hours = time * ep.plant.delta_t / 3600
+def test_a_planned_pull_change_follows_its_plan_and_shows_its_notice():
+    p = _quiet().replace(pull_change=0.1, pull_change_window_h=(6.0, 6.0))
+    _, state = ENV.reset_env(jax.random.PRNGKey(0), p)
+    H = 3600 / p.delta_t
+    steps = int((6.0 + p.pull_ramp_h + 2.0) * H)
+    obs, _, pull, time = _trace(state, p, 0.47, steps)
+    hours = time * p.delta_t / 3600
     plan = obs[:, E.OBS_NAMES.index("pull planned, kg/s")]
-    assert np.allclose(pull[hours < 6.0], ep.pull)
-    assert np.allclose(pull[hours > 6.0 + ep.pull_ramp_h], 1.1 * ep.pull)
-    early = hours < 6.0 - ep.pull_notice_h - 0.1
-    assert np.allclose(plan[early], ep.pull)
+    assert np.allclose(pull[hours < 6.0], p.pull)
+    assert np.allclose(pull[hours > 6.0 + p.pull_ramp_h], 1.1 * p.pull)
+    early = hours < 6.0 - p.pull_notice_h - 0.1
+    assert np.allclose(plan[early], p.pull)
     assert np.allclose(
-        plan[hours >= 6.0 - ep.pull_notice_h + ep.pull_ramp_h], 1.1 * ep.pull
+        plan[hours >= 6.0 - p.pull_notice_h + p.pull_ramp_h], 1.1 * p.pull
     )
 
 
-def test_batch_line_is_read_on_its_cadence(plant):
-    _, _, s = plant
-    ep = _quiet(E.EnvParams())
-    _, state = E.reset(jax.random.PRNGKey(0), s, ep)
-    every = int(round(ep.batch_line_every_h * 3600 / ep.plant.delta_t))
-    obs, _, _, time = _trace(state, ep, 0.40, 4 * every)
-    line = obs[:, E.OBS_NAMES.index("batch line, m")]
-    blocks = line.reshape(4, every)
-    assert np.all(blocks == blocks[:, :1])  # held between readings
-    assert not np.all(blocks[:, 0] == blocks[0, 0])  # and read anew at each
+def test_batch_line_is_read_on_its_cadence():
+    p = _quiet().replace(sensor_noise_scale=0.0)
+    _, state = ENV.reset_env(jax.random.PRNGKey(0), p)
+    b = E.OBS_NAMES.index("batch line, m")
+    every = int(round(_reading(b).interval / p.delta_t))
+    obs, _, _, time = _trace(state, p, 0.40, 4 * every)
+    line, block = obs[:, b], time // every
+    for k in np.unique(block):
+        assert np.all(line[block == k] == line[block == k][0])  # held between readings
+    firsts = [line[block == k][0] for k in np.unique(block)]
+    assert len(set(np.round(firsts, 6))) > 1  # and read anew at each
 
 
-def test_cullet_ratio_is_read_as_charged(plant):
-    _, _, s = plant
-    ep = E.EnvParams()
-    _, state = E.reset(jax.random.PRNGKey(0), s, ep)
-    _, new, _, _ = E.step(jax.random.PRNGKey(1), state, 0.47, ep)
-    c = E.observe(new, ep)[E.OBS_NAMES.index("cullet ratio")]
+def test_cullet_ratio_is_read_as_charged():
+    _, state = ENV.reset_env(jax.random.PRNGKey(0), P0)
+    _, new, _, _, _ = ENV.step_env(jax.random.PRNGKey(1), state, _act(0.47), P0)
+    c = ENV.get_obs(new, P0)[E.OBS_NAMES.index("cullet ratio")]
     assert float(c) == pytest.approx(
-        ep.cullet + float(new.walk[E.WALKS.index("cullet")])
+        P0.cullet + float(new.walk[E.WALKS.index("cullet")])
     )
 
 
 def test_walks_have_their_stated_spread_and_memory():
-    ep = E.EnvParams()
-    steps = int(2000 * 86400 / ep.plant.delta_t)
+    ep = P0
+    steps = int(2000 * 86400 / ep.delta_t)
     w = np.asarray(E.walks(jax.random.PRNGKey(3), steps, ep))
     # Each column: sd as stated, and correlation e^-1 one correlation time apart. About
     # 1000 independent stretches, so the sd is good to about 3 %; 10 % is the bound.
     for i, (sd, hours) in enumerate(zip(ep.walk_sd, ep.walk_hours)):
-        lag = int(hours * 3600 / ep.plant.delta_t)
+        lag = int(hours * 3600 / ep.delta_t)
         x = w[:, i]
         assert x.std() == pytest.approx(sd, rel=0.1)
         r = np.corrcoef(x[:-lag], x[lag:])[0, 1]

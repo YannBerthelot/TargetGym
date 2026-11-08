@@ -365,9 +365,15 @@ def _four_tank():
 
 
 def _glass_furnace():
-    from target_gym.glass_furnace.env_jax import GlassFurnace
+    from target_gym.glass_furnace.physical_env import FloatFurnace
 
-    return GlassFurnace()
+    return FloatFurnace()
+
+
+def _glass_furnace_scenarios():
+    from target_gym.glass_furnace.physical_scenarios import suite
+
+    return suite()
 
 
 def _reactor():
@@ -812,23 +818,27 @@ _SPECS: tuple[EnvSpec, ...] = (
         name="glass_furnace",
         group="industrial",
         env_factory=_glass_furnace,
-        params_cls=_LazyParams("target_gym.glass_furnace.env", "GlassFurnaceParams"),
+        params_cls=_LazyParams("target_gym.glass_furnace.physical_env", "FloatParams"),
         make_pid=_pid(
             "make_glass_furnace_pid_controller",
             module="target_gym.glass_furnace.experts",
         ),
-        # 13.3 h at dt=30 s, 12.1 tau
-        make_mpc=_mpc(
-            "make_glass_furnace_mpc", module="target_gym.glass_furnace.oracle"
+        # Attempt 3 (2026-11-08) replaced the plant. The old MPC planned on the old
+        # plant's params, so its slot is retired; the task's ceiling is the
+        # foresight oracle in scripts/glass_slow_oracle.py.
+        make_mpc=None,
+        baselines_note=(
+            "The plant was rebuilt (attempt 3: a float melter in two dimensions, "
+            "scored in money on fuel and lost glass). The PID is the reference "
+            "ladder's first rung, a PI on the cold-end fining reading two sigma "
+            "above its pass mark. The old MPC read the retired plant's params, so "
+            "the MPC slot is empty; the ceiling is scripts/glass_slow_oracle.py, "
+            "not yet converged (PHYSICS.md, section Attempt 3)."
         ),
         tuned_gains_key="glass_furnace",
-        disturbance_fields=("m_pull_disturbance", "lhv_deviation"),
-        # The AR(1) innovations of the pull and the gas, zeroed for the oracle,
-        # which rolls the simulator and so plans their conditional means from
-        # the state.
-        oracle_data=_shared_oracle("glass_furnace"),
-        noise_fields=("m_pull_noise_std", "lhv_noise_std"),
-        version=3,
+        disturbance_fields=("walk",),
+        scenarios=_glass_furnace_scenarios,
+        version=4,
     ),
     EnvSpec(
         name="reactor",

@@ -166,22 +166,17 @@
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "glass_furnace": {
-    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
-    "Kp": 0.2973263678258992,
-    "Ki": 0.00010900560104732946,
+    "tuning_rule": "SIMC with tc = theta on the valve's step test of the settled attempt 3 plant (scripts/glass_slow_props.py step); setpoint two sigma above the pass mark, sigma the fining reading's spread under this PI on six walk seeds (scripts/glass_slow_props.py walks). Provisional until the reference ladder measures its own",
+    "Kp": 1.9796,
+    "Ki": 1.7911690191820487e-05,
     "Kd": 0.0,
-    "Tf": 82.23748934141194,
+    "u0": -0.09119999999999995,
+    "backoff": 0.0292,
     "model": {
-      "k": 0.004932214484413031,
-      "tau1": 55.593722,
-      "theta": 185.03435101817686,
-      "band": 3.366995,
-      "step": 1.001096,
-      "bands": 1.759773,
-      "spread": 2.457697,
-      "tests": 10.0,
-      "tau_c": 496.8718193280657,
-      "tau2": 55.59372215353034
+      "k": 11.003,
+      "tau_h": 41.75,
+      "theta_h": 3.833,
+      "sigma": 0.0146
     }
   },
   "distillation": {

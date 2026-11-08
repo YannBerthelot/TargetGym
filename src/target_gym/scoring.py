@@ -172,11 +172,7 @@ SPEC_BAND = {
         "a pH 6 to 9 permit, from the lowest target of 6.5, "
         "ph_neutralization/PHYSICS.md",
     ),
-    "glass_furnace": (
-        (10.0,),
-        "secondary: a float furnace's melting section, 1550 C +-10 C, a vendor's "
-        "blog naming no original; the crown has no figure of its own",
-    ),
+    "glass_furnace": None,  # a zone, fining and canal, that the reward prices
     "reactor": (
         (1.5 / 1.8,),
         "ours: the rod controller's +-1.5 F dead band, as reactor/PHYSICS.md cites "

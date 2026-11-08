@@ -20,7 +20,7 @@ from target_gym.glass_furnace import physical as P
 from target_gym.glass_furnace import physical_env as E
 
 CROWN = 1590.0 + 273.15  # K, the hot face, W2000b's peak at 14 m
-EP = E.EnvParams()
+EP = E.FloatFurnace().default_params
 G, PP = EP.grid, EP.plant
 CANAL = EP.canal_target + EP.cooling_above
 
