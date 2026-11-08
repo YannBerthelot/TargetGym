@@ -297,4 +297,4 @@ def test_the_reference_does_not_cycle_the_offset_in_the_half_power_hold(seed):
 
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), 1440)  # half a day
     di = np.asarray(jax.lax.scan(step, (s, obs, expert.init_state), keys)[1])
-    assert np.max(np.abs(np.diff(di))) < p.delta_I_band
+    assert np.max(np.abs(np.diff(di))) < p.ao_band

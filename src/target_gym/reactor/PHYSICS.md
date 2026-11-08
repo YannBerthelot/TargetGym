@@ -107,11 +107,12 @@ on the moderator coefficient, burn-up, samarium, decay heat, loop transport dela
 
 | Quantity | Source figure | Model | |
 |---|---|---|---|
-| Axial mode period, full power | 28.3 h (Ringhals-4), about 28.5 h (Oconee II, fig. III-1) | **29.4 h** | yes |
-| Axial mode decay, full power | 0.05 per hour (Ringhals-4) | **0.035 per hour** | near |
+| Axial mode period, full power | 28.3 h measured (Ringhals-4); 31.5 to 39.3 h in Pedersen et al.'s models | **32.7 h** | in the models' range |
+| Axial mode decay, full power | 0.05 per hour (Ringhals-4) | **0.070 per hour** | near |
+| Axial mode at half power | damped (DP-1239: feedback weakens, xenon saturates) | **-0.057 per hour** | yes |
 | Undamped xenon cross section | 3.02e-18 cm2 (thesis, section 3.2) | 2.92e-18 | yes |
 | Tilt after the Oconee pulse | 0.19 (fig. III-1) | **0.19 +- 0.04** | yes |
-| Rods 34 steps in at 50 %, xenon at 110 of 96 | delta I near +5 % (Krsko figs 3, 5, 6) | **+10 to +13 %** | sign yes, size twice |
+| Rods 34 steps in at 50 %, xenon at 110 of 96 | delta I near +5 % (Krsko figs 3, 5, 6) | **+5.4 %** | yes |
 | Rate that full flows allow at 1690 ppm | 1 to 2 %/min (OAPS) | **about 2 %/min** | yes |
 | Rods steps for delta I = 0 at 50 % | 34 steps (Krsko fig. 3) | **42 steps** | yes |
 | Inhour at +100 pcm | tens of seconds | 55 s | yes |
@@ -143,7 +144,7 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `boric_acid_ppm` | 7800 | ppm | A vendor's recycling concentrate, seen in a search summary, the PDF would not open | ours |
 | `primary_mass` | 2.5e5 | kg | The water behind `C_coolant` and `C_cold`. 60 ppm of 1690 then takes 9 t, against Krsko fig. 4's 6 t | ours |
 | `sigma_x` | 2.72e-18 | cm2 | Mastroianni, Table III-1 | read |
-| `D_diffusion` | 0.405 | cm | Table III-1 | read |
+| `D_diffusion` | 4.99 | cm | 283 pcm, the first axial harmonic's eigenvalue separation of Ringhals-4 in Pedersen et al.'s homogeneous model (table 3), as D x 3 pi^2 / (H^2 nu Sigma_f). The thesis's 0.405 cm gives 23 pcm, halves coupled 12 times too weakly (docs/proposals/reactor-coupling.md). Owner's decision, 2026-11-08 | derived |
 | `alpha_power` | 3.64e-16 | cm2 s | Table III-1 | read |
 | `Sigma_f` | 0.14 | 1/cm | Table III-1 | read |
 | `gamma_x`, `gamma_I` | 0.0046, 0.061 | | Table III-1 | read |
@@ -157,7 +158,8 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `C_fuel`, `UA`, `m_dot_cp` | as in `env.py` | | The 33 K rise, a 5 s fuel lag | earlier |
 | `C_coolant`, `C_cold`, `UA_sg`, `C_sg` | as in `env.py` | | No source for the volumes | ours |
 | `T_avg_no_load`, `T_avg_full_load` | 564.8, 580.2 | K | NRC HRTD 5.0, read by an earlier session | earlier |
-| `n_max`, `T_avg_min` | 1.09, 556 | | Remembered trips, neither opened | ours |
+| `n_max` | 1.09 | | Remembered trip, not opened | ours |
+| `T_avg_min`, `floor_allowed` | 556 K, 900 s | | The minimum temperature for criticality, 541 F at Salem, a limit with 15 min to act, not a trip. No EDF figure is public; the NRC copies could not be opened | ours |
 | `load_ramp_rate` | 2 %/min | | Top of OAPS's Mode A range | read |
 | `load_min`, `hold_range` | 0.5, 3 to 8 h | | The URD's cycle, Chari and Rohr (1997) | earlier |
 | `ramp_down_range` | 0.5 to 2 h | s | | ours |
@@ -175,10 +177,12 @@ chosen on the thesis's printed results, not on anything of this task's.
 
 ## 4. Task design
 
-Hold Tavg on program and delta I in its band through a 100-50-100 day, with rods and
-boron. Each episode starts at full load, rods parked, boron critical, xenon at the
-balance of a recent power of 0.9 to 1.0 and no tilt. The load starts down in 0.5 to
-2 h, holds at 50 % for 3 to 8 h and comes back, at 2 %/min with a small wobble.
+Run a 100-50-100 day as EDF runs Mode A (docs/proposals/reactor-plant-check.md): hold
+Tavg within the rods' dead band of its program and the axial offset within 0.05 of
+its reference, with rods and boron, knowing the day's plan. Each episode starts at full
+load, rods parked, boron critical, xenon at the balance of a recent power of 0.9 to
+1.0 and no tilt. The load starts down in 0.5 to 2 h, holds at 50 % for 3 to 8 h and
+comes back, at 2 %/min with a small wobble.
 
 | obs | meaning |
 |---|---|
@@ -190,6 +194,8 @@ balance of a recent power of 0.9 to 1.0 and no tilt. The load starts down in 0.5
 | 5 | `T_ref` (K) |
 | 6 | `delta_I`, top minus bottom, a fraction of rated |
 | 7 | boron in the core (ppm) |
+| 8 | hours until the planned ramp down starts, 0 once it has |
+| 9 | hours until the planned ramp up starts, 0 once it has |
 
 Actions: `[rod demand, boron flow]` in [-1, 1]. Rod demand reads as obs 2. Boron flow
 is -1 for full dilution, +1 for full boration. Xenon, iodine, their tilts, the boron
@@ -202,9 +208,11 @@ on its way and the delay's length are all hidden.
 **D1: the load goes straight to heat.** Steam pressure, valves and the secondary's
 controls are left out.
 
-**D2: delta I at part load is about twice Krsko's.** The sensitivity is read and
-reproduces Oconee, so the excess is in `eps`, or in `alpha_coolant`, which is ours.
-Nothing was moved to close it.
+**D2: the halves' coupling is not the thesis's.** D is set from Ringhals-4's eigenvalue
+separation, not from the thesis's one-group constants, which coupled the halves 12
+times too weakly and made the half-power mode neutral. The thesis cross-checks run on
+the thesis's own D. With the new D, Krsko's half-power state comes out at +5.4 %
+against +5 %.
 
 **D3: rods from one side.** A bank reaches only the top, so at full power with rods
 out nothing can push power up the core. Xenon tilted to the top can drive delta I
@@ -220,12 +228,13 @@ power or to a trip.
 
 ## 6. The expert
 
-The expert is rung 5 of `scripts/reactor_ladder.py`, rods on delta I and boron on
-Tavg, from bump tests and SIMC. The published rod program stays in `experts.py` as
-`rod_control_step`, a row in that script's table. The rods' gain on delta I is read at
-both of the day's holds and the loop is tuned on the larger, the half-power one, since
-a bank deep in a half-power core moves the offset 2 to 4 times harder than one near the
-top at full power. Results and room are in
+The expert is rung 5 of `scripts/reactor_ladder.py`, EDF's Mode A. The rods hold Tavg
+past their 1.6 C dead band. The operator's boron steers the offset through the rods, as
+a cascade, fed forward from the plan and led by the line's delay. Boron takes Tavg
+while the rods sit at their top stop. Every gain is SIMC on bump tests at full power
+and at the half-power hold, keeping the least gain. The published rod program stays in
+`experts.py` as `rod_control_step`, a row in that script's table. Results and room are
+in
 `docs/proposals/reactor-axial.md`.
 
 ---
@@ -240,7 +249,7 @@ top at full power. Results and room are in
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 8 | 60 |
+| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 10 | 61 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -256,11 +265,11 @@ which is what the recorded baselines use.
 | parameter | value | source |
 | --- | --- | --- |
 | `e_floor` | 0.05 K | the RTD reading's resolution, about its 0.045 K scatter: a documented minimum, not a certified floor |
-| `e_tol` | 0 | none |
+| `e_tol` | 1.6 K | the black rods' dead band: EDF's rods move only past 1.6 C off program (IAEA NP-T-3.23, annex II-5.1). CEA's papers on Mode G's R group give 0.8 C with slow motion up to 1.7 C |
 | `tracking_exponent` | 1 | linear, as lost output is |
 | `imbalance_multiple` | 1.25 x 0.0023 per K of `spot_price_per_MWh` on `P_electric_GW` | **ours.** Off program, steam conditions cost output. The relative Carnot slope at 547 K steam and 305 K condenser is 305 / (547 x 242) = 0.23 %/K. At the one imbalance price of the priced plants, $100/MWh (1.25 x the $80 spot), on `P_electric_GW` = 1.0 GW, a third of the 3 GW thermal, that is 100 x 1000 x 0.0023 = $230/h per K, so **$1.917 per K over a 30 s step**. It prices a hot plant as a cold one, which the slope does not say |
 | `rod_step_price` | $1 per step | **ours,** kept by the owner on 2026-11-07. Rod travel, as the steps the rods actually moved |
-| `delta_I_band` | 0.05 | +-5 % of rated, Krsko section 2. No cost inside it |
+| `ao_band`, `ao_ref` | 0.05, 0 | EDF: during load follow the axial offset stays within 0.05 of its reference (IAEA NP-T-3.23, annex II-4.3). The reference is the offset at full power, xenon balanced, rods out: 0 in this core. In delta I the band is 0.05 times the power |
 | `delta_I_price` | $1000/h per 1 % past the band | **ours.** Past the band a plant must act on its power, so each 1 % is priced as 1 % of 1 GWe derated, at $100/MWh |
 | `effluent_price` | $0.0628 per kg injected | **ours.** Every kg injected displaces a kg to treat (OAPS). Boiling it off takes 2.26 MJ/kg, 0.628 kWh, at $100/MWh |
 | `failure_cost` | 1708.36 $ per step | twice the dearest step that survives: 40 K off program, $7.67, 36 rod steps, $36, full dilution, $18.84, and all the power in one half, $791.67, per 30 s |

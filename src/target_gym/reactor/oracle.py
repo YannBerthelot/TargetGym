@@ -11,9 +11,11 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   corner left inside the reach smoothed by softplus at the K5 width (T5,
   ``data/oracle_widths/reactor.json``); the load on the day's schedule, with its
   wobble on its noise-free mean path;
-- objective: |Tref - Tavg| and delta I past its band through epigraph rows on every
-  sub-step, and the rods' travel and the effluent through rows a step (T2);
-- limits: power, fuel temperature, the hot leg and Tavg on every sub-step's state,
+- objective: |Tref - Tavg| past the rods' dead band, and delta I past the offset's
+  band on either side, through epigraph rows on every sub-step, and the rods' travel
+  and the effluent through rows a step (T2);
+- limits: power, fuel temperature and the hot leg on every sub-step's state; Tavg's
+  floor has time to act, so only the replay charges it;
   elastic at the trip cost per unit (T3), backed off by the planner's error on
   them (K11, in the widths file);
 - dropped guard (T4): the rods' range clip after the rate limit, since the demand
@@ -119,7 +121,7 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
 
 
 def reactor_model(env, p) -> TaskModel:
-    assert float(p.e_tol) == 0.0 and float(p.tracking_exponent) == 1.0
+    assert float(p.tracking_exponent) == 1.0
     assert env.integration_method.startswith("tr_bdf2_")
     per_K_s = p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW / 3.6
     per_K = float(per_K_s * p.delta_t)  # a sub-step's dollars
@@ -132,9 +134,12 @@ def reactor_model(env, p) -> TaskModel:
         x1, rows = reactor_step(
             env, p, x, u, t, d["task"], d["widths"][0], boron_width=boron_width
         )
+        # The offset's band in delta I is the band times the power, both sides.
+        off = rows[:, 5] - rows[:, 1] * p.ao_ref
         y = jnp.concatenate([
-            rows[:, 0] / p.e_floor, rows[:, 5], (x1[RODS:RODS + 1] - x[RODS:RODS + 1]) / 2.0,
-            -u[1:], u[1:], rows[:, 1:5].ravel(),
+            rows[:, 0] / p.e_floor, off - p.ao_band * rows[:, 1],
+            -off - p.ao_band * rows[:, 1], (x1[RODS:RODS + 1] - x[RODS:RODS + 1]) / 2.0,
+            -u[1:], u[1:], rows[:, 1:4].ravel(),
         ])  # fmt: skip
         return x1, jnp.zeros((), x.dtype), y, rows[-1:, 4], ()
 
@@ -143,8 +148,7 @@ def reactor_model(env, p) -> TaskModel:
         Limit(p.n_min, p.n_max, price),
         Limit(p.T_fuel_min, p.T_fuel_max, price),
         Limit(hi=p.T_coolant_max, price=price),
-        Limit(lo=p.T_avg_min, price=price),
-    )
+    )  # Tavg's floor is a limit with time to act, charged on replay, not planned
     rod_raw = lambda s: 1.0 - 2.0 * s.rod_in  # noqa: E731
     return TaskModel(
         nx=47, nu=2, step=step,
@@ -162,8 +166,9 @@ def reactor_model(env, p) -> TaskModel:
         hold=lambda s: jnp.stack([rod_raw(s), jnp.zeros_like(s.rod_in)]),
         tracked=lambda s: 0.5 * (s.T_coolant + s.T_cold)[None],
         resolution=(float(p.precision_floor),),
-        hinges=(Hinge(weight=per_K * float(p.e_floor), absolute=True),) * period
-        + (Hinge(weight=per_delta_I, absolute=True, tol=float(p.delta_I_band)),) * period
+        hinges=(Hinge(weight=per_K * float(p.e_floor), absolute=True,
+                      tol=float(p.e_tol / p.e_floor)),) * period
+        + (Hinge(weight=per_delta_I),) * (2 * period)
         + (
             Hinge(weight=float(p.rod_step_price * p.rod_stroke_steps), absolute=True),
             Hinge(weight=flow_step * float(p.dilution_flow)),

@@ -38,7 +38,6 @@ from target_gym.reactor.oracle import reactor_model  # noqa: E402
 
 WIDTH = 0.0010526315789473686  # the rod corner's, data/oracle_widths/reactor.json
 SCALE = 0.10526315789473685
-BORON_PER_ROD = 1.0 / SCALE  # the boron flow's range over the rod reach
 
 
 def wobble_path(env, p, seed, actions):
@@ -81,19 +80,23 @@ def build(env, p, steps, block, max_iter):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, required=True)
-    parser.add_argument("--tune", required=True, help="ladder JSON holding tune2")
+    parser.add_argument("--tune", required=True, help="a saved ladder run")
     parser.add_argument("--steps", type=int, default=2880)
     parser.add_argument("--block", type=int, default=1, help="env steps a move holds")
     parser.add_argument("--max-iter", type=int, default=600)
     args = parser.parse_args()
 
     env, p = Reactor(), ReactorParams()
-    tune = ladder.Tune2(**json.load(open(args.tune))["tune2"])
-    reference, ref_cost = foresight.reference_actions(env, p, tune, args.seed)
+    ref = ladder.reference(json.load(open(args.tune)), p)
+    reference, ref_cost = foresight.reference_actions(env, p, ref, args.seed)
     path = wobble_path(env, p, args.seed, reference)
     _, state = env.reset_env(jax.random.PRNGKey(args.seed), p)
 
-    plans, widths = None, [SCALE * 0.1, SCALE * 0.01, WIDTH]
+    # (rod corner, boron corner) per rung. The last rung narrows the boron corner a
+    # further tenfold: at a resting command each branch stays open by width x ln 2, and
+    # the planner takes that mixing free, which the plant does not give.
+    plans = None
+    widths = [(SCALE * 0.1, 0.1), (SCALE * 0.01, 0.01), (WIDTH, 0.01), (WIDTH, 0.001)]
     with enable_x64():
         q, st = float64(p), float64(state)
         model, shooting = build(env, q, args.steps, args.block, args.max_iter)
@@ -101,9 +104,9 @@ def main():
             "task": model.data(st), "end": args.steps, "path": jnp.asarray(path, float),
         }  # fmt: skip
         x0, hold = model.state_x(st), model.hold(st)
-        for width in dict.fromkeys(widths):
+        for width, boron_width in widths:
             data["widths"] = jnp.asarray([width])
-            data["boron_width"] = jnp.asarray(width * BORON_PER_ROD)
+            data["boron_width"] = jnp.asarray(boron_width)
             t0 = time.time()
             if plans is None:
                 plans = shooting.solve(data, x0, hold)
@@ -112,7 +115,7 @@ def main():
             jax.block_until_ready(plans.z)
             c = plans.certificate
             print(json.dumps({
-                "width": width, "seconds": round(time.time() - t0, 1),
+                "width": width, "boron_width": boron_width, "seconds": round(time.time() - t0, 1),
                 "iterations": int(c.iterations), "kkt_error": float(c.error),
                 "capped": bool(c.capped), "failed": bool(c.failed),
                 "violation": float(c.violation), "planned_cost": float(plans.cost),

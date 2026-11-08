@@ -21,6 +21,8 @@ Rungs, each adding to the last:
 3. Cascade: the offset sets the rods' target position, and boron carries the rods
    there, read as an integrator.
 4. Override: past 0.04 of offset, boron runs at full flow the way that closes it.
+5. Rung 3 with an override on the rods' saturation instead: at their top stop with
+   Tavg still low, boron takes Tavg, the textbook answer to a saturated actuator.
 
 The published rod program with rung 1's boron loop is a row beside them, as rule 3
 allows. The script keeps the best rung that trips no seed.
@@ -162,6 +164,8 @@ class Tune:
     ao_Ti: float
     inner_Kc: float  # rung 3, inner: boron per unit of rod position off target
     inner_Ti: float
+    t_Kc: float = 0.0  # rung 5, override: boron per K of Tavg past the dead band
+    t_Ti: float = 1.0
 
 
 def dead(e):
@@ -177,7 +181,7 @@ def make_policy(tune, rung, p):
         return scheduled_load(t + DT, down, up, p) - scheduled_load(t, down, up, p)
 
     def act(m, obs):
-        u, b, target, last_e, last_ao, last_r, clock, down, up = m
+        u, b, target, last_e, last_ao, last_r, clock, down, up, bt = m
         n, rod, T_avg, T_ref = obs[0], obs[2], obs[4], obs[5]
         di, to_down, to_up = obs[6], obs[8], obs[9]
         # The plan, read once at the start: absolute times on the policy's clock.
@@ -202,16 +206,30 @@ def make_policy(tune, rung, p):
         out = b
         if rung >= 2:
             out = out + tune.ff * planned_step(clock, down, up)
-        if rung >= 4:
+        if rung == 4:
             # Borating lets the rods out, which raises the offset.
             out = jnp.where(ao > BAND_OVERRIDE, 1.0, out)
             out = jnp.where(ao < -BAND_OVERRIDE, -1.0, out)
+        if rung >= 5:
+            # Override on the rods' saturation: at their top stop with Tavg still low,
+            # boron takes Tavg; off the stop its loop resets, so the switch is bumpless.
+            stuck = (rod >= PARK - 1e-3) & (e > 0.0)
+            bt = jnp.where(
+                stuck, bt + tune.t_Kc * ((e - last_e) + DT / tune.t_Ti * e), 0.0
+            )
+            out = out + bt
         a = jnp.stack([u, jnp.clip(out, -1.0, 1.0)])
-        return a, (u, b, target, e, ao, r, clock + DT, down, up)
+        return a, (u, b, target, e, ao, r, clock + DT, down, up, bt)
 
     zero = jnp.asarray(0.0)
-    memory = (jnp.asarray(PARK), zero, jnp.asarray(PARK)) + (zero,) * 6
+    memory = (jnp.asarray(PARK), zero, jnp.asarray(PARK)) + (zero,) * 7
     return act, memory
+
+
+def reference(saved, p):
+    """``(act, memory)`` of the best rung in a saved ladder run."""
+    tune = Tune(**saved["tune"])
+    return make_policy(tune, int(saved["best_rung"].split()[1]), p)
 
 
 def published(p, tune):
@@ -344,8 +362,29 @@ def bumps(env, params):
         + p.boration_flow * (p.boric_acid_ppm - p.boron_ref)
     ) / p.primary_mass  # fmt: skip
     ff = ppm_per_load / (rate * DT)
+
+    # The override's loop: boron on Tavg with the rods held where they sit, read as an
+    # integrator past the line's delay.
+    def boron_on_tavg(q, s):
+        a = jnp.array([1.0 - 2.0 * s.rod_in, BORON_BUMP])
+        tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), 120)
+        slope, delay = integrator(tavg(tr))
+        return slope / BORON_BUMP, max(delay, float(s.boron_delay) * DT)
+
+    fits = [[boron_on_tavg(q, s) for q, s in pts] for pts in every]
+    (t_Kc, t_Ti), report["boron_on_Tavg"] = design(fits, simc_integrating)
     tune = Tune(
-        rod_Kc, rod_Ti, boron_Kc, boron_Ti, ff, ao_Kc, ao_Ti, inner_Kc, inner_Ti
+        rod_Kc,
+        rod_Ti,
+        boron_Kc,
+        boron_Ti,
+        ff,
+        ao_Kc,
+        ao_Ti,
+        inner_Kc,
+        inner_Ti,
+        t_Kc,
+        t_Ti,
     )
     return tune, report
 
@@ -404,7 +443,7 @@ def main():
     p = ReactorParams()
     tune, models = bumps(env, p)
     table = {}
-    for rung in (1, 2, 3, 4):
+    for rung in (1, 2, 3, 4, 5):
         act, memory = make_policy(tune, rung, p)
         table[f"rung {rung}"] = rows(env, p, act, memory)
     act, memory = published(p, tune)

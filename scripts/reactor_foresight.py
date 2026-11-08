@@ -28,18 +28,15 @@ import reactor_ladder as ladder  # noqa: E402
 from target_gym.reactor import Reactor, ReactorParams  # noqa: E402
 
 
-def reference_actions(env, p, tune, seed):
-    """The best rung's actions on ``seed``, and its cost."""
+def reference_actions(env, p, ref, seed):
+    """The best rung's actions on ``seed``, and its cost. ``ref`` is its
+    ``(act, memory)``."""
+    act, memory = ref
     obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
-    zero = jnp.asarray(0.0)
-    memory = (
-        jnp.asarray(ladder.PARK), zero, s.boron, zero, zero, jnp.asarray(1.0),
-        jnp.asarray(ladder.PARK),
-    )  # fmt: skip
 
     def step(carry, key):
         s, obs, memory = carry
-        a, memory = ladder.policy_step2(tune, 5, memory, obs)
+        a, memory = act(memory, obs)
         obs, s, r, _, _ = env.step_env(key, s, a, p)
         return (s, obs, memory), (a, -r)
 
@@ -68,15 +65,15 @@ def main():
     parser.add_argument("--iters", type=int, default=2000)
     parser.add_argument("--lr", type=float, default=2e-3)
     parser.add_argument("--report", type=int, default=250)
-    parser.add_argument("--tune", default=None, help="ladder JSON holding tune2")
+    parser.add_argument("--tune", default=None, help="a saved ladder run")
     args = parser.parse_args()
 
     env = Reactor()
     p = ReactorParams()
-    tune = ladder.Tune2(**json.load(open(args.tune))["tune2"])
+    ref = ladder.reference(json.load(open(args.tune)), p)
     seeds = jnp.asarray(args.seeds)
     start, reference = jax.jit(
-        jax.vmap(lambda s: reference_actions(env, p, tune, s))
+        jax.vmap(lambda s: reference_actions(env, p, ref, s))
     )(seeds)  # fmt: skip
 
     def loss(plans):

@@ -232,10 +232,11 @@ def test_a_rod_step_costs_its_price():
     )
 
 
-def test_one_kelvin_off_program_costs_its_lost_output():
-    """$230/h per K over the 5 s sub-step: $0.319."""
+def test_one_kelvin_past_the_dead_band_costs_its_lost_output():
+    """$230/h per K past the rods' 1.6 K dead band, over the 5 s sub-step: $0.319.
+    The owner moved the charge outside the dead band on 2026-11-08 (EDF practice)."""
     state, params = _lined_out(0.8)
-    off = state.replace(T_coolant=state.T_coolant + 2.0)  # Tavg up 1 K
+    off = state.replace(T_coolant=state.T_coolant + 5.2)  # Tavg up 2.6 K
     cost = float(compute_reward_terms(off, params)["tracking"])
     on = float(compute_reward_terms(state, params)["tracking"])
     assert cost - on == pytest.approx(230.0 * 5.0 / 3600.0, rel=0.01)
@@ -270,5 +271,6 @@ def test_the_expert_keeps_the_offset_in_band_on_a_steady_load():
         rods.append(float(state.rod_in) * 228.0)
         errors.append(abs(float(obs[4]) - float(obs[5])))
     assert np.abs(np.diff(rods)).sum() < 500.0
-    assert np.median(errors) < 1.5 / 1.8
-    assert abs(float(state.delta_I)) < params.delta_I_band
+    assert np.median(errors) < params.e_tol  # inside the rods' dead band
+    offset = float(state.delta_I) / float(state.n) - params.ao_ref
+    assert abs(offset) < params.ao_band

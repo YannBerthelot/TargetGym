@@ -23,10 +23,10 @@ import reactor_ladder as ladder  # noqa: E402
 from target_gym.reactor import Reactor, ReactorParams  # noqa: E402
 
 
-def fit_table(env, p, tune):
+def fit_table(env, p, ref):
     """The reference's actions as a quadratic in the load, on training seeds."""
     seeds = jnp.arange(10)
-    actions = jax.vmap(lambda s: foresight.reference_actions(env, p, tune, s)[0])(seeds)
+    actions = jax.vmap(lambda s: foresight.reference_actions(env, p, ref, s)[0])(seeds)
     loads = jax.vmap(lambda s: _loads(env, p, s, actions[s]))(seeds)
     x, y = np.asarray(loads).ravel(), np.asarray(actions).reshape(-1, 2)
     return jnp.asarray(np.polyfit(x, y, 2).T, jnp.float32)
@@ -47,9 +47,9 @@ def _loads(env, p, seed, plan):
 def main():
     env, p = Reactor(), ReactorParams()
     saved = json.load(open(sys.argv[1]))
-    tune = ladder.Tune2(**saved["tune2"])
-    reference = np.asarray(saved["table"]["rung 5"]["cost_by_seed"])
-    coef = fit_table(env, p, tune)
+    ref = ladder.reference(saved, p)
+    reference = np.asarray(saved["table"][saved["best_rung"]]["cost_by_seed"])
+    coef = fit_table(env, p, ref)
     zero = jnp.asarray(0.0)
 
     def table(obs):
