@@ -269,12 +269,71 @@ class PlanPolicy:
         return self.plans[:, t], carry
 
 
-def replay(name: str, env, params, seeds, plans) -> dict:
-    """``plans`` on ``seeds`` through ``run_policy``: each seed's mean cost per
-    step and whether it tripped, as the references are scored."""
+def tracking(env, params, seed: int, plan, feedback) -> dict:
+    """What ``TrackingPolicy`` needs to hold one plan's path: along the
+    planned path, the states ``x`` (``get`` of each state before its step),
+    and the first-order effect of the state and of the move on the pinned
+    output after the step, ``dy_dx`` and ``dy_du`` (one move).
+
+    ``feedback = (get, put, i)``: ``get(state)`` the plant's state vector,
+    ``put(state, x)`` the state with that vector, ``i`` the pinned entry."""
+    get, put, i = feedback
+    s0, keys = _episode(env, params, seed)
+    plan = jnp.asarray(plan, jnp.float32)
+
+    def f(s, ka):
+        k, a = ka
+        _, s1, _, _, _ = env.step_env(k, s, a, params)
+        return jax.tree_util.tree_map(lambda x, y: x.astype(y.dtype), s1, s), s
+
+    states = jax.lax.scan(f, s0, (keys, plan))[1]
+
+    def pinned(x, u, s, k):
+        return get(env.step_env(k, put(s, x), u, params)[1])[i]
+
+    xs = jax.vmap(get)(states)
+    dx, du = jax.jit(jax.vmap(jax.grad(pinned, argnums=(0, 1))))(xs, plan, states, keys)
+    return {"x": np.asarray(xs), "dy_dx": np.asarray(dx), "dy_du": np.asarray(du)}
+
+
+class TrackingPolicy:
+    """Plans held on their path by the true state (an oracle row): the planned
+    move plus the one that cancels, to first order, the pinned output's
+    deviation after the step, ``-dy_dx . (x - x_plan) / dy_du``.
+
+    On an open-loop unstable plant a plan's path is not reproducible: the
+    benchmark's loop batches the episodes, whose float32 rounding differs in
+    the last bit from the planner's, and the plant grows it. This moves only
+    by that rounding, so the plan's cost is what the env charges."""
+
+    name = "ceiling"
+    oracle = True
+
+    def __init__(self, plans, paths, get):
+        self.plans = np.asarray(plans, float)  # (n, T, 1)
+        self.x = np.stack([p["x"] for p in paths])  # (n, T, nx)
+        self.dx = np.stack([p["dy_dx"] for p in paths])
+        du = np.stack([p["dy_du"] for p in paths])[..., 0]  # (n, T)
+        self.du = np.where(np.abs(du) > 1e-12, du, np.inf)
+        self.get = jax.jit(jax.vmap(get))
+
+    def reset(self, key, obs, task):
+        return None
+
+    def act(self, carry, obs, t, state=None):
+        x = np.asarray(self.get(state), float)
+        dy = np.sum(self.dx[:, t] * (x - self.x[:, t]), axis=-1)
+        u = self.plans[:, t, 0] - dy / self.du[:, t]
+        return np.clip(u, -1.0, 1.0)[:, None], carry
+
+
+def replay(name: str, env, params, seeds, plans, policy=None) -> dict:
+    """``plans`` on ``seeds`` through ``run_policy`` (open loop, or by
+    ``policy``): each seed's mean cost per step and whether it tripped, as
+    the references are scored."""
     rollout = run_policy(
-        PlanPolicy(plans), env, params, task_info(name, env, params, len(seeds)),
-        seeds=list(seeds),
+        policy or PlanPolicy(plans), env, params,
+        task_info(name, env, params, len(seeds)), seeds=list(seeds),
     )  # fmt: skip
     eps = episodes_of(rollout)
     return {

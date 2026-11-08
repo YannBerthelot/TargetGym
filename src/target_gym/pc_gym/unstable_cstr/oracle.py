@@ -71,6 +71,21 @@ CEILING_TERMS = ("tracking",)
 CEILING_WINDOW = (160, 20)
 
 
+def _x(s):
+    return jnp.stack([s.I, s.M, s.T])
+
+
+def _put(s, x):
+    return s.replace(I=x[0], M=x[1], T=x[2])
+
+
+#: The ceiling's replay (``foresight.TrackingPolicy``): its plan held on its
+#: path by the reactor temperature, entry 2 of (I, M, T). The plant is open-
+#: loop unstable, so the benchmark's batched float32 rounding, a bit off the
+#: planner's, would otherwise grow along the plan.
+CEILING_FEEDBACK = (_x, _put, 2)
+
+
 def ceiling_margins(state, p):
     """The ceiling's margins (``pc_gym.foresight``): the trip temperature,
     ``T_trip - T`` in kelvin (``e_floor``), backed off one; the price is the

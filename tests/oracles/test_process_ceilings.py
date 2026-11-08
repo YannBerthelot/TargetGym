@@ -69,6 +69,20 @@ def test_the_planned_cost_of_a_plan_is_the_envs_replayed_cost(name):
     np.testing.assert_allclose(planned, replayed, rtol=1e-6, atol=1e-7)
 
 
+def test_a_tracked_plan_on_the_unstable_plant_replays_at_its_planned_cost():
+    from target_gym.pc_gym.unstable_cstr.oracle import CEILING_FEEDBACK
+
+    name = "unstable_cstr"
+    env, params = _short(name, 8, scenario=2)
+    plan = np.random.default_rng(1).uniform(-0.5, 0.5, (8, 1))
+    path = foresight.tracking(env, params, SEED, plan, CEILING_FEEDBACK)
+    policy = foresight.TrackingPolicy(plan[None], [path], CEILING_FEEDBACK[0])
+    replayed = foresight.replay(name, env, params, [SEED], plan[None], policy)
+    np.testing.assert_allclose(
+        replayed["costs"][0], foresight.plan_cost(env, params, SEED, plan), rtol=1e-6
+    )
+
+
 def test_one_ph_step_costs_the_reagent_it_doses():
     env, params = _short("ph_neutralization", 1)
     plan = np.array([[0.0, -1.0]])  # q3 at half of 22 mL/s, the trim shut
