@@ -22,11 +22,14 @@ Contract:
 - Holding (B5): right turns, inbound leg 1 min at or below 14 000 ft and 1.5 min
   above, turns at 3 deg/s or 30 deg of bank, speed at most 230 KIAS up to
   14 000 ft and 265 above [IFH ch. 10]; cross-track inside 3/4 of +-1 NM
-  [ACS, AIM], headings +-10 deg of the pattern's [ACS].
+  [ACS, AIM], headings +-10 deg of the pattern's [ACS]; altitude inside the
+  holding tolerance, +-100 ft [ACS IR.III.B.S4], since the holds are at FL100
+  to FL260, below the RVSM airspace where +-65 ft applies (owner, 2026-11-08).
 
 Hand-derived numbers: 3/4 NM = 1 389 m; 2 778 m off the pattern is 1 389 m past
 the edge, (1389 / 1389)^2 = 1.0. Flying a leg backwards is 180 deg off, 170 deg
-past the edge, (170 / 10)^2 = 289.
+past the edge, (170 / 10)^2 = 289. 200 ft off the hold's level is 100 ft past
+its +-100 ft band, (100 / 100)^2 = 1.0.
 """
 
 import jax
@@ -39,6 +42,8 @@ from target_gym.plane.dynamics import scheduled_airspeed
 
 FT, KT, G = 0.3048, 1852.0 / 3600.0, 9.81
 BAND = 65.0 * FT
+#: The band each task's altitude is held to (module docstring).
+ALTITUDE_BAND = {"plane3d_heading": BAND, "plane3d_racetrack": 100.0 * FT}
 KEY = jax.random.PRNGKey(11)
 HEADING, RACETRACK = "plane3d_heading", "plane3d_racetrack"
 
@@ -107,9 +112,7 @@ def test_a_full_bank_demand_is_held_at_the_protected_bank(name):
     of the 30 deg chosen (ours, inside that range), and peaks nearer 30 than
     the 45 deg demand the agent had before (37.5)."""
     params = _params(name, target_altitude_range=(6000.0, 6000.0))
-    states, _, tripped = _rollout(
-        name, params, 20, act=lambda o, a: a.at[2].set(1.0)
-    )
+    states, _, tripped = _rollout(name, params, 20, act=lambda o, a: a.at[2].set(1.0))
     phi = np.rad2deg([float(s.phi) for s in states])
     assert not tripped
     assert phi.max() < 37.5
@@ -334,6 +337,20 @@ def test_two_widths_off_the_pattern_cost_one_per_second():
     assert float(-env.compute_reward(state, params)) == pytest.approx(1.0, rel=2e-3)
 
 
+def test_inside_100_ft_of_the_hold_costs_nothing():
+    """+-100 ft [ACS IR.III.B.S4]: 90 ft off, with RVSM's 65 ft passed, is
+    inside the holding tolerance."""
+    env, params, state = _on_pattern()
+    state = state.replace(z=state.z + 90.0 * FT)
+    assert float(-env.compute_reward(state, params)) == pytest.approx(0.0, abs=1e-6)
+
+
+def test_200_ft_off_the_hold_costs_one_per_second():
+    env, params, state = _on_pattern()
+    state = state.replace(z=state.z + 200.0 * FT)
+    assert float(-env.compute_reward(state, params)) == pytest.approx(1.0, rel=2e-3)
+
+
 def test_flying_the_pattern_backwards_is_charged_on_heading():
     """Right turns only [IFH ch. 10]: on the leg, reversed, 170 deg past +-10."""
     env, params, state = _on_pattern(backwards=True)
@@ -346,7 +363,8 @@ def test_flying_the_pattern_backwards_is_charged_on_heading():
 @pytest.mark.medium
 @pytest.mark.parametrize("name", (HEADING, RACETRACK))
 def test_the_reference_holds_the_rvsm_band_in_still_air(name):
-    """B1: +-65 ft in calm air [RVSM] through the task under the reference,
+    """B1: its altitude band in calm air (+-65 ft [RVSM] on the heading task,
+    +-100 ft [ACS] on the hold) through the task under the reference,
     whose whole-episode cost is printed (the room's numerator), not asserted."""
     env, _ = tg.make(name)
     params = _params(name)
@@ -354,7 +372,7 @@ def test_the_reference_holds_the_rvsm_band_in_still_air(name):
     error = np.array([float(s.z - s.target_altitude) for s in states])
     cost = sum(float(-env.compute_reward(s, params)) for s in states[1:])
     assert not tripped
-    assert np.abs(error).max() < BAND
+    assert np.abs(error).max() < ALTITUDE_BAND[name]
     print(f"{name}: reference cost in calm air {cost:.1f}")
 
 

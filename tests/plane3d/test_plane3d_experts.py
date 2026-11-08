@@ -64,11 +64,14 @@ EXTRA = ["plane3d_circle", "plane3d_figure8"]
 
 @pytest.mark.parametrize("name", AMENDED)
 def test_the_amended_tasks_score_bands_and_price_only_the_ground(name):
-    """Amendment 2: altitude past +-65 ft [RVSM], heading past +-10 deg [ACS],
-    the racetrack's path past 3/4 NM [ACS, AIM]; a crash (the one trip) costs
-    an hour at 40 000 ft off the level (ours); a hold inside the bands costs 0."""
+    """Amendment 2: altitude past +-65 ft [RVSM] on the heading task, past the
+    holding tolerance +-100 ft on the racetrack [ACS IR.III.B.S4], which holds
+    at FL100 to FL260, below RVSM airspace (owner, 2026-11-08); heading past
+    +-10 deg [ACS], the racetrack's path past 3/4 NM [ACS, AIM]; a crash (the
+    one trip) costs an hour at 40 000 ft off the level (ours); a hold inside the
+    bands costs 0."""
     p = registry.get(name).make_test_params()
-    band = 65.0 * 0.3048
+    band = (100.0 if name == "plane3d_racetrack" else 65.0) * 0.3048
     assert p.e_floor_altitude == p.e_tol_altitude == pytest.approx(band)
     assert p.e_floor_heading == p.e_tol_heading == pytest.approx(np.deg2rad(10.0))
     if name == "plane3d_racetrack":

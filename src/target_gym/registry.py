@@ -694,7 +694,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         scenarios=_scenarios("target_gym.plane3d.scenarios", "racetrack_suite"),
         # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank and
         # a scenario suite with steady winds.
-        version=7,
+        # v8: the altitude band is the ACS holding tolerance, +-100 ft, at the
+        # hold's FL100 to FL260, below RVSM airspace (plane3d/PHYSICS.md).
+        version=8,
     ),
     EnvSpec(
         name="plane3d_figure8",

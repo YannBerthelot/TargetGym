@@ -35,7 +35,10 @@ def test_a_hold_in_wind_starts_established_in_that_wind():
     ground = float(np.hypot(state.x_dot, state.y_dot))
     heading = float(state.target_heading)
     assert air == pytest.approx(assigned, abs=0.05)
-    assert ground == pytest.approx(np.sqrt(
-        (assigned * np.cos(heading) + params.wind_x) ** 2
-        + (assigned * np.sin(heading) + params.wind_y) ** 2
-    ), rel=1e-3)
+    assert ground == pytest.approx(
+        np.sqrt(
+            (assigned * np.cos(heading) + params.wind_x) ** 2
+            + (assigned * np.sin(heading) + params.wind_y) ** 2
+        ),
+        rel=1e-3,
+    )

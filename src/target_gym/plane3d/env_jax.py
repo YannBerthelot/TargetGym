@@ -499,7 +499,9 @@ class Plane3DRacetrack(_Airplane3DBase):
         # holding pattern from established on its inbound leg, 1 200 s (ours:
         # three laps of the slowest pattern, 2 x 90 s legs and two 96 s turns,
         # with the turbulence zone anywhere in it).
-        band = 65.0 * 0.3048  # +-65 ft [RVSM A.4.1.4]
+        # +-100 ft, the holding tolerance [ACS IR.III.B.S4]: the holds are at
+        # FL100 to FL260, below RVSM airspace (owner, 2026-11-08).
+        band = 100.0 * 0.3048
         ten = float(np.deg2rad(10.0))  # +-10 deg [ACS IR.III.B.S4]
         track = 0.75 * 1852.0  # 3/4 of the +-1 NM terminal CDI [ACS, AIM]
         return PlaneParams3D(

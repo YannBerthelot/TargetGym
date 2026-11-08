@@ -532,6 +532,12 @@ the racetrack (largest altitude error 4 m), and a low hold flies 220 KIAS inside
 four clearances, not one turn and a long straight hold. Each clearance's band
 travels from the heading flown then, so a new clearance costs nothing when given.
 
+**The hold's altitude band (owner, 2026-11-08).** The racetrack holds at FL100 to
+FL260, below RVSM airspace, so its altitude band is the ACS holding tolerance,
++-100 ft [ACS IR.III.B.S4: holding at "altitude +-100 feet"], not RVSM's +-65 ft
+(plane3d_racetrack-v8). The heading task flies the same levels on +-65 ft; the
+owner's answer covered the hold only.
+
 **Scenarios (rule 20)**, `plane3d/scenarios.py`. Both: normal (one light zone),
 calm, the worst recorded zone (2.5 times the light sigma, 0.5 g [BEA447 Figure
 24]), a steady 30 kt and a 50 kt wind [IFH ch. 10: tracks and holds are flown
@@ -563,8 +569,14 @@ hold (1.5 min legs, 265 KIAS cap) [IFH ch. 10].
 | 50 kt wind | 0 | |
 | zone over the window | 0 | |
 | low hold, 50 kt | | 400 to 834 |
-| low hold, 67 kt | | 1 113 to 2 201 |
+| low hold, 67 kt | | 1 130 to 2 203 |
 | high hold, 50 kt | | 166 to 665 |
+
+The racetrack's figures are on v8 (+-100 ft); on v7's +-65 ft they were the same to
+within 2 % (seed 104 of the low holds 576 and 1 113), since the reference's
+altitude stays inside both bands and its cost is path, heading and speed in wind.
+Weighted by the scenarios' shares, the racetrack reference costs about 123 per
+episode: 30 kt 15.5, low hold 50 kt 44.6, design wind 29.7, high hold 33.4.
 
 `plane3d_heading` costs 0 on every scenario: no family cost was found that the
 reference pays (rule 23: fuel in a cruise hold gives about 1.02, as on `plane`),
@@ -578,7 +590,7 @@ demand), airspeed (CV `airspeed`, MV throttle) and the lateral loop (heading: CV
 `psi` against `target_heading`; racetrack: CV `cross_track`, with `curvature` as a
 feedforward), bump-tested at the corners of `target_altitude_range` and, on the
 racetrack, of the wind scenarios' speeds; the bank MV is bounded by
-`protected_bank`; the zones for rule 22's back-off are the +-65 ft, +-10 kt, +-10
+`protected_bank`; the zones for rule 22's back-off are the altitude band (+-65 ft heading, +-100 ft hold), +-10 kt, +-10
 deg and 1 389 m bands. Until then TECS with course hold or L1 is the reference.
 
 **Known deviation: the `amended` flag (rule 13).** The Extra 3D tasks
@@ -595,14 +607,14 @@ re-record its baselines then.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_altitude` | 19.812 m (`plane3d_heading`, `plane3d_racetrack`, Amendment 2: +-65 ft [RVSM]); 1 m (`plane3d_circle`); `plane3d_figure8` scores no altitude and keeps the 1.44 m class default | the barometric altimeter's resolution. The oracle holds below it in the test turbulence: its lowest per-seed long-run mean \|error\| is 0.67 / 0.67 / 0.68 m (`scripts/measure_hold.py`, 2 seeds, hold steps after a 210-step burn-in, the second half of the episode on the 200-step heading task). Measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. Until the oracle audit (2026-10) the floors were an earlier oracle's holds, 1.44 / 4.06 / 1.39 m (the `-v2` tasks). Expert: 1.6 / 1.6 / 1.7 m on held-out seeds (the cascade it replaced: 44 / 7.2 / 5.2 m) |
-| `e_tol_altitude` | 19.812 m on `plane3d_heading` and `plane3d_racetrack` (Amendment 2, +-65 ft [RVSM]); else 0 | Amendment 2: precision inside the band earns nothing (rule 15). Else no dead zone; a +-30 m band made the altitude hold vacuous (see the 2D aircraft) |
+| `e_floor_altitude` | 19.812 m (`plane3d_heading`, Amendment 2: +-65 ft [RVSM]); 30.48 m (`plane3d_racetrack`, Amendment 3: +-100 ft, the ACS holding tolerance); 1 m (`plane3d_circle`); `plane3d_figure8` scores no altitude and keeps the 1.44 m class default | the barometric altimeter's resolution. The oracle holds below it in the test turbulence: its lowest per-seed long-run mean \|error\| is 0.67 / 0.67 / 0.68 m (`scripts/measure_hold.py`, 2 seeds, hold steps after a 210-step burn-in, the second half of the episode on the 200-step heading task). Measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. Until the oracle audit (2026-10) the floors were an earlier oracle's holds, 1.44 / 4.06 / 1.39 m (the `-v2` tasks). Expert: 1.6 / 1.6 / 1.7 m on held-out seeds (the cascade it replaced: 44 / 7.2 / 5.2 m) |
+| `e_tol_altitude` | 19.812 m on `plane3d_heading` (Amendment 2, +-65 ft [RVSM]), 30.48 m on `plane3d_racetrack` (Amendment 3, +-100 ft [ACS IR.III.B.S4]); else 0 | Amendment 2: precision inside the band earns nothing (rule 15). Else no dead zone; a +-30 m band made the altitude hold vacuous (see the 2D aircraft) |
 | `e_floor_heading` | 0.1745 rad on `plane3d_heading` and `plane3d_racetrack` (Amendment 2: +-10 deg [ACS IR.III.B.S4]); else 0.0087 rad | Amendment 2: the instrument-rating ACS's heading tolerance. Else the 0.5 deg AHRS resolution. The oracle holds far below it in the test turbulence (1.4e-5 rad, lowest per seed over the 300-step episode; `scripts/measure_hold.py`), so the instrument, not the simulator, sets the scale; the expert holds about 1e-4 rad on held-out seeds |
 | `e_tol_heading` | 0.1745 rad on `plane3d_heading` and `plane3d_racetrack`; else 0 | Amendment 2: +-10 deg [ACS IR.III.B.S4], about a heading the aircraft turns toward at a holding turn's rate on the heading task, about the pattern's on the racetrack |
 | `e_tol_path` | 1 389 m on `plane3d_racetrack`; else 0 | Amendment 2: 3/4 of the +-1 NM GPS terminal CDI scale [ACS IR.III.B.S4, AIM 1-1-17]; terminal rather than en route (+-5 NM) is ours |
 | `e_floor_path` | 1 389 m (`plane3d_racetrack`, Amendment 2); 3 m (`plane3d_circle`, `plane3d_figure8`; also the default where no path term is scored) | civil GPS horizontal accuracy. The oracle holds below it: its lowest per-seed path-distance holds are 0.45 / 0.47 / 1.29 m (`scripts/measure_hold.py`). Until the oracle audit (2026-10) the floors were 8.12 / 6.17 / 14.6 m: the racetrack's and figure-8's were an earlier oracle's holds, while the circle's 8.12 m was labelled one but equals 2 x 4.06 m, and that oracle's recorded hold there was 14.3 m. Expert: 0.96 / 2.3 / 1.4 m on held-out seeds, the figure-8's where its lobes are flyable (the cascades it replaced: 53 / 408 / 1767 m) |
 | `tracking_exponent` | 2 | quadratic |
-| `failure_cost` | 3.77e5 (`plane3d_heading`, `plane3d_racetrack`: Amendment 2, ours, an hour at 40 000 ft off the level past +-65 ft), 2.97e8 (`plane3d_circle`), 1.09e9 (`plane3d_figure8`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor_altitude)^2; the figure-8 scores the path alone, 2 x (70 000 / e_floor_path)^2 |
+| `failure_cost` | 3.77e5 (`plane3d_heading`) and 1.59e5 (`plane3d_racetrack`): Amendments 2 and 3, ours, an hour at 40 000 ft off the level past the altitude band; 2.97e8 (`plane3d_circle`), 1.09e9 (`plane3d_figure8`) | twice the altitude envelope's cost, 2 x (12 192 / e_floor_altitude)^2; the figure-8 scores the path alone, 2 x (70 000 / e_floor_path)^2 |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
 | `rho_floor_tracking`, `rho_floor` | 0 (`plane3d_heading`, `plane3d_racetrack`: a hold inside the bands costs nothing), 0.466 (`plane3d_circle`), 0.184 (`plane3d_figure8`) | the oracle's lowest per-seed holds above in floor units, (hold / floor)^2 summed over the scored outputs (`scripts/measure_hold.py`): (0.5867 / 1)^2 + (1.4e-5 / 0.0087)^2 over the heading task's 300 steps (`-v4`), (0.6657 / 1)^2 + (0.4504 / 3)^2, (0.6803 / 1)^2 + (0.4660 / 3)^2 and (1.2871 / 3)^2 |
 
