@@ -30,7 +30,6 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
-import target_gym.pc_gym.cstr.env as cstr_env
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
@@ -39,9 +38,21 @@ from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 #: Blocks per episode: the first level and five switches.
 N_BLOCKS = 6
 
+
 # The shipped cstr's defaults, read once. Every inherited value below is
 # written ``_CSTR.<field>``.
-_CSTR = cstr_env.CSTRParams()
+class _SeborgReactor:
+    """The textbook reactor this task shared with cstr before cstr's version 5
+    (Seborg et al.'s first-order exothermic CSTR), kept here until this task's
+    own rebuild replaces it."""
+
+    q, V, rho, C = 100.0, 100.0, 1000.0, 0.239
+    deltaHr, EA_over_R, k0, UA = -5e4, 8750.0, 7.2e10, 5e4
+    Ti, Caf, precision_floor = 350.0, 1.0, 5e-4
+    restart_steps, delta_t = 240, 0.25
+
+
+_CSTR = _SeborgReactor()
 
 # The step, in minutes (3 s). ``delta_t`` and ``restart_steps`` both use it.
 _DT = 0.05
@@ -276,14 +287,16 @@ def compute_velocity(position, action, Ti_dev, params: UnstableCSTRParams):
     coolant slot and the drifted feed ``Ti + Ti_dev``. The jacket follows the
     command ``action`` through a first-order lag.
     """
-    T_j = position[2]
-    balances = cstr_env.compute_velocity(
-        position[:2], T_j, params.replace(Ti=params.Ti + Ti_dev)
-    )[0]
-    return (
-        jnp.array([balances[0], balances[1], (action - T_j) / params.tau_j]),
-        None,
+    p = params
+    C_a, T, T_j = position[0], position[1], position[2]
+    rA = p.k0 * jnp.exp(-p.EA_over_R / T) * C_a
+    dC = p.q / p.V * (p.Caf - C_a) - rA
+    dT = (
+        p.q / p.V * (p.Ti + Ti_dev - T)
+        + (-p.deltaHr) * rA / (p.rho * p.C)
+        + p.UA * (T_j - T) / (p.rho * p.C * p.V)
     )
+    return jnp.array([dC, dT, (action - T_j) / p.tau_j]), None
 
 
 @partial(jax.jit, static_argnames=["integration_method"])

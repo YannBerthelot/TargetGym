@@ -351,12 +351,13 @@ def tune_cstr_pid(
     loss_fn = make_siso_pid_loss_fn(
         env,
         params,
-        state_index=0,  # Ca
-        setpoint_index=2,  # target_Ca
+        state_index=0,  # T, the reactor temperature (version 5)
+        setpoint_index=3,  # its setpoint
         reset_fn=lambda key, p, target: env.reset_env(key, p)[1].replace(
-            target_CA=target
+            target_T=target
         ),
-        target_range=tuple(params.target_CA_range),
+        # The setpoints within PARSEX's 2 C move [S1, Fig. 2].
+        target_range=(params.T_setpoint - 2.0, params.T_setpoint + 2.0),
         n_targets=16,
         n_steps=int(params.max_steps_in_episode),
     )
@@ -364,9 +365,10 @@ def tune_cstr_pid(
         print("Tuning CSTR PID...")
     Kp, Ki, Kd = tune_pid_gains(
         loss_fn,
-        init_Kp=-100.0,
-        init_Ki=-20.0,
-        init_Kd=-0.5,
+        # More water for a hotter reactor: the error sp - T is negative.
+        init_Kp=-0.1,
+        init_Ki=-0.005,
+        init_Kd=0.0,
         n_grad_steps=n_grad_steps,
         lr=lr,
         l2_reg=1e-8,

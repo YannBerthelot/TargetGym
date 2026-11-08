@@ -271,7 +271,7 @@ def test_the_building_settles_within_its_ceiling():
 @pytest.mark.parametrize(
     "name, floor, reading",
     [
-        ("cstr", "e_floor", "C_a"),
+        ("cstr", "e_floor", "T"),
         ("unstable_cstr", "e_floor", "C_a"),
         ("distillation", "e_floor_top", "x"),
         ("distillation", "e_floor_bottom", "x"),

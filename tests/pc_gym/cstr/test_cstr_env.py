@@ -1,3 +1,12 @@
+"""The jacketed CSTR's balances and step (version 5).
+
+Contract, from the energy and mass balances in env.py's docstring [S1]: the
+reaction consumes A and releases heat; more cooling water cools the jacket,
+and a cooler jacket cools the reactor; with no reactant left the cooling wins;
+RK4 and Euler agree at a small step; the raw command clips at the valve's
+range.
+"""
+
 import jax.numpy as jnp
 
 from target_gym.pc_gym.cstr.env import (
@@ -7,64 +16,50 @@ from target_gym.pc_gym.cstr.env import (
     compute_velocity,
 )
 
+P = CSTRParams()
+X = jnp.array([0.31, 331.15, 320.15])  # the design point [S1]
+
 
 def test_compute_velocity_trends():
-    """The expected qualitative trends of the velocity vector."""
-    params = CSTRParams(delta_t=0.1)
-    C_a = 1.0
-    T = 350.0
-    position = jnp.array([C_a, T])
-    # Compare cooling effect: lowering T_c should reduce dT/dt
-    v_high, _ = compute_velocity(
-        position, action=302.0, params=params
-    )  # warmer coolant
-    v_low, _ = compute_velocity(position, action=295.0, params=params)  # colder coolant
+    """More water cools the jacket; a cooler jacket cools the reactor."""
+    more, _ = compute_velocity(X, action=P.Fw_max, params=P)
+    less, _ = compute_velocity(X, action=P.Fw_min, params=P)
+    assert more[2] < less[2]
+    cold, _ = compute_velocity(X.at[2].set(300.0), action=P.Fw_min, params=P)
+    assert cold[1] < less[1]
+    none, _ = compute_velocity(X.at[0].set(0.0), action=P.Fw_max, params=P)
+    assert none[1] < 0.0
 
-    # C_a should decrease due to reaction + inflow
-    assert v_high[0] < 0.0
 
-    # Colder coolant should lead to lower dT/dt
-    assert v_low[1] < v_high[1]
+def test_the_reaction_consumes_a_and_releases_heat():
+    """At the feed's own concentration and temperature the inflow balances,
+    so what is left is the reaction: A falls and T rises."""
+    p = P.replace(UA=0.0)
+    v, _ = compute_velocity(
+        jnp.array([P.Caf, 331.15, 331.15]),
+        action=0.0,
+        params=p,
+        extra=(331.15, P.Caf, P.k0),
+    )
+    assert v[0] < 0.0 and v[1] > 0.0
 
-    # In the trivial case with no reactant, heat release vanishes -> cooling dominates
-    v_no_reaction, _ = compute_velocity((0.0, T), action=295.0, params=params)
-    assert v_no_reaction[1] < 0.0
+
+def _state():
+    return CSTRState(time=0, C_a=0.31, T=331.15, target_T=331.15, F_w=5334.0)
 
 
 def test_integration_methods_agree_for_small_dt():
-    """RK4 and Euler should give similar results if dt is small."""
     params = CSTRParams(delta_t=1e-4)
-    state = CSTRState(C_a=1.0, T=350.0, T_c=298.0, time=0, target_CA=0.85)
-
-    action = 0.3
-    new_state_euler, _ = compute_next_state(
-        T_c_raw=action, state=state, params=params, integration_method="euler_1"
-    )
-    new_state_rk4, _ = compute_next_state(
-        T_c_raw=action, state=state, params=params, integration_method="rk4_1"
-    )
-
-    assert jnp.allclose(new_state_euler.C_a, new_state_rk4.C_a, atol=1e-5)
-    assert jnp.allclose(new_state_euler.T, new_state_rk4.T, atol=1e-5)
+    euler, _ = compute_next_state(0.3, _state(), params, integration_method="euler_1")
+    rk4, _ = compute_next_state(0.3, _state(), params, integration_method="rk4_1")
+    for f in ("C_a", "T", "T_j"):
+        assert jnp.allclose(getattr(euler, f), getattr(rk4, f), atol=1e-5)
 
 
 def test_action_clipping():
-    """Raw action should be scaled and then clamped between [T_c_min, T_c_max]."""
+    """A raw command past the box runs the valve at its end, 40 or 110 g/s."""
     params = CSTRParams(delta_t=0.1)
-    state = CSTRState(C_a=1.0, T=350.0, T_c=298.0, time=0, target_CA=0.85)
-
-    # Very large raw input -> clipped to max
-    action = 100.0
-    new_state, _ = compute_next_state(
-        T_c_raw=action,
-        state=state,
-        params=params,
-        integration_method="euler_1",
-    )
-    assert new_state.T_c == params.T_c_max
-
-    # Very negative raw input -> clipped to min
-    new_state, _ = compute_next_state(
-        T_c_raw=-action, state=state, params=params, integration_method="euler_1"
-    )
-    assert new_state.T_c == params.T_c_min
+    s, _ = compute_next_state(100.0, _state(), params, integration_method="euler_1")
+    assert s.F_w == params.Fw_max
+    s, _ = compute_next_state(-100.0, _state(), params, integration_method="euler_1")
+    assert s.F_w == params.Fw_min

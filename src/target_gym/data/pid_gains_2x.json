@@ -21,37 +21,18 @@
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "cstr": {
-    "Kp": -11.734053,
-    "Ti": 1.392308,
-    "Kp_T": 0.320735,
-    "Ti_T": 0.619626,
-    "Tf_C": 0.134739,
-    "Tf_T": 0.061963,
+    "Kp": 0.096823,
+    "Ti": 18.38,
+    "Tf": 0.0,
     "model": {
       "T": {
-        "k": 5.166528,
-        "tau1": 0.619626,
-        "theta": 0.125,
-        "band": 0.493998,
-        "step": 0.449399,
-        "bands": 4.700088,
-        "spread": 1.225984,
-        "tests": 10.0,
-        "tau_c": 0.186963
-      },
-      "C_a": {
-        "k": -0.007952,
-        "tau1": 0.889061,
-        "theta": 1.375,
-        "band": 0.006222,
-        "step": 2.31518,
-        "bands": 2.959144,
-        "spread": 1.17758,
-        "tests": 10.0,
-        "tau_c": 13.411023
+        "k": -10.69,
+        "tau1": 18.38,
+        "theta": 8.88,
+        "tau_c": 8.88
       }
     },
-    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+    "tuning_rule": "SIMC (Skogestad and Grimholt 2012), tau_c = theta, on one bump test of the cooling water (+0.2 raw) from the design steady state, noise and events off (cstr version 5, PHYSICS.md 'Expert'); the reference ladder replaces it; the bump test is noise-free, so every level shares it"
   },
   "ph_neutralization": {
     "Kp": 0.100527,

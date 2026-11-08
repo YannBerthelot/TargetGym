@@ -427,7 +427,7 @@
   {
     "name": "cstr",
     "group": "process",
-    "version": 4,
+    "version": 5,
     "display_name": "CSTR",
     "params_cls": [
       "target_gym.pc_gym.cstr.env",
@@ -457,9 +457,7 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": [
-      "load_scale"
-    ]
+    "noise_fields": []
   },
   {
     "name": "first_order",

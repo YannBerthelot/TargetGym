@@ -1,35 +1,23 @@
 import jax
+import jax.numpy as jnp
 
-from target_gym.pc_gym.cstr.env import CSTRState
 from target_gym.pc_gym.cstr.env_jax import CSTR
 
 
-def test_reset_draws_inside_its_ranges():
-    env = CSTR()
-    key = jax.random.PRNGKey(0)
-    _, state = env.reset_env(key)
-
-    # Initial C_a is within allowed range
-    assert (
-        env.default_params.initial_CA_range[0]
-        <= state.C_a
-        <= env.default_params.initial_CA_range[1]
-    )
-
-    # Target_Ca is within allowed range
-    assert (
-        env.default_params.target_CA_range[0]
-        <= state.target_CA
-        <= env.default_params.target_CA_range[1]
-    )
-
-
-def test_a_state_on_the_envelope_limit_does_not_terminate():
-    """The CSTR has no trip: its envelope limits are unreachable from any
-    coolant setting (the reactor settles between 318 and 329 K), so even a
-    state placed on a limit does not terminate."""
+def test_reset_draws_its_feed_inside_s1s_days():
+    """[S1, Tables 3, 4]: the feed at 23.1 and 24.9 C on two days."""
     env = CSTR()
     p = env.default_params
+    for k in range(8):
+        _, s = env.reset_env(jax.random.PRNGKey(k))
+        assert p.feed_T_range[0] <= float(s.T_feed) <= p.feed_T_range[1]
 
-    hot = CSTRState(time=0, C_a=0.5, T=p.T_max, target_CA=0.6, T_c=298.0)
-    assert not bool(env.is_terminated(hot, p))
+
+def test_only_the_interlock_trips():
+    """[S3]: the interlock acts on high temperature; below it nothing trips,
+    however cold the reactor."""
+    env = CSTR()
+    p = env.default_params
+    _, s = env.reset_env(jax.random.PRNGKey(0))
+    assert not bool(env.is_terminated(s.replace(T=jnp.asarray(300.0)), p))
+    assert bool(env.is_terminated(s.replace(T=jnp.asarray(p.T_trip)), p))

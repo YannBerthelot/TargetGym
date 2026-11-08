@@ -723,15 +723,13 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_cstr_pid_controller", module="target_gym.pc_gym.cstr.experts"
         ),
         make_mpc=_mpc("make_cstr_mpc", module="target_gym.pc_gym.cstr.oracle"),
-        # 150 steps, over twice the 67 steps the SIMC cascade takes to come
-        # within twice the level it holds. At 100 the scored hold was the last
-        # third.
         tuned_gains_key="cstr",
         oracle_data=_shared_oracle("cstr"),
-        # The feed loads, frozen at the true one for the oracle, as any
-        # process noise is: no plan sees a later arrival.
-        noise_fields=("load_scale",),
-        version=4,
+        # v5 (charter Amendment 3): a PARSEX-like jacketed reactor with the
+        # jacket in code, cooling water as the move, a high-temperature
+        # interlock, temperature as the job, scenarios.
+        version=5,
+        scenarios=_scenarios("target_gym.pc_gym.cstr.scenarios"),
     ),
     EnvSpec(
         name="first_order",
@@ -987,7 +985,6 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("Ti_sigma",),
         # The balances and the ten parameter values are imported from cstr, so an
         # edit there moves this task's stamp and baseline too.
-        fingerprint_sources=("pc_gym/cstr/env.py",),
     ),
     EnvSpec(
         name="compressor_surge",
