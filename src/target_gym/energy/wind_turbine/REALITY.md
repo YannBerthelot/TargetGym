@@ -259,3 +259,22 @@ All were fetched twice and the cited phrases found both times, except where mark
   5 MW's IEC turbulence class: not found in S1.
 - S5 re-read for the damping loop: a PT3-D-notch transfer function (Eqs. 6 and 7) whose gain KC and
   notch time constant were "adjusted manually in the GUI" per operating point; no values printed.
+
+### Added for Amendment 3 (fetched once, 2026-11-08)
+
+- [S20] IRENA, Renewable Energy Technologies: Cost Analysis Series, Wind Power, June 2012.
+  https://www.irena.org/-/media/Files/IRENA/Agency/Publication/2012/RE_Technologies_Cost_Analysis-WIND_POWER.pdf
+  Table 1: new onshore installed cost 1,300 to 2,200 USD/kW (2010) and LCOE 0.06 to 0.14 USD/kWh
+  across China/India, Europe and North America. Table 4.1: wind turbine 65 to 84 % of onshore
+  capital cost. The component guide (REpower MM92, 100 m tower): tower 26.3 %, rotor blades
+  22.2 %, pitch system 2.66 % of the turbine's cost. LCOE note: "a 20 year lifetime". A
+  search snippet gave NREL's reference land-based LCOE as 39 to 42 $/MWh (2022 to 2023); nrel.gov
+  did not resolve, so it was not read.
+- [S21] AOC 15/50 user manual, p. 78. https://www.manualsdir.com/manuals/39101/aoc-15.html?page=78
+  "Rotor over-speed faults and parking brake undercurrent faults require to be reset
+  manually"; other faults reset automatically. A small turbine's manual: the family's rule that
+  an overspeed trip waits for a person, not its downtime. Downtime after a manual reset: not
+  found. A safety-chain patent (US9945358) allows the reset from a control centre.
+- [S18 family] ROSCO's Cp tables at the same commit for the IEA 15 MW, BAR 10 and NREL 2.8 MW
+  rotors: peak Cp 0.470 at a tip speed ratio of 8.5, 0.454 at 10.0 and 0.477 at 8.2; every
+  table, the NREL 5 MW's included, stops at 30 deg of pitch.

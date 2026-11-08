@@ -805,7 +805,7 @@
   {
     "name": "wind_turbine",
     "group": "energy",
-    "version": 4,
+    "version": 5,
     "display_name": "Wind Turbine",
     "params_cls": [
       "target_gym.energy.wind_turbine.env",

@@ -42,8 +42,9 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.energy.wind_turbine.cp_table import (
-    CP_TABLE,
-    CT_TABLE,
+    CP_MAX,
+    CP_TABLE_FEATHER,
+    CT_TABLE_FEATHER,
     PITCH_STEP,
     TSR_FIRST,
     TSR_STEP,
@@ -104,9 +105,12 @@ class WindTurbineParams(EnvParams):
     #: Reference wind of the class, m/s (ours: class I, 50 m/s [S13]); only
     #: the gust's 1.35 (Ve1 - V) branch reads it, which never binds here.
     v_ref: float = 50.0
-    #: Start of one extreme operating gust, s; negative for none. A 1-year
-    #: event [S13], so none in a normal 10 min episode.
-    gust_start: float = -1.0
+    #: 1 for one extreme operating gust in the episode, 0 for none. A 1-year
+    #: event [S13], so none on a normal day; a scenario of its own.
+    gust: float = 0.0
+    #: When it starts, s, drawn by the seed (ours: anywhere a full gust fits
+    #: after the first minute).
+    gust_window: Tuple[float, float] = (60.0, 580.0)
 
     # ---- Safety system ----
     #: Overspeed level as a multiple of rated speed: "approximately 20 %
@@ -118,18 +122,52 @@ class WindTurbineParams(EnvParams):
     #: Fraction of rated power the turbine is asked for (ROSCO's rating R,
     #: [S9 Ex. 29]); 1 on a normal day [S1 Sec. 7]. Read by the agent.
     rating: float = 1.0
-    #: 0.25 s steps (ours: commercial rates not found; 12 per tower period).
+    #: A curtailment: the rating falls to ``derate_to`` at a time drawn in
+    #: ``derate_window`` (s), a de-rate step [S11 Fig. ES-8] to a set point
+    #: followed within a TSO-set time [S10 Art. 13(6)]. 1 for none. The size
+    #: is ours: 10 %, S11's continuous AGC de-rate (p. xix).
+    derate_to: float = 1.0
+    derate_window: Tuple[float, float] = (60.0, 300.0)
+    #: 0.25 s steps (ours: controllers run at 80 to 100 Hz [S1, S3]; 12 per
+    #: tower period).
     delta_t: float = 0.25
     #: 10 min: one SCADA interval [S7] and one load case [S2 Table 2].
     max_steps_in_episode: int = 2400
 
-    # ---- Score (rule 15): energy off the rating, in MWh ----
-    reward_version: int = 3
-    #: A trip's restart: ROSCO's start-up from feather, 400 s [S9 Ex. 32], at
-    #: 0.25 s steps.
-    restart_steps: int = 1600
-    #: Production lost per step of a restart, MWh: rated power for one step.
-    failure_cost: float = 5.0 * 0.25 / 3600.0
+    # ---- Score (rule 15), in dollars: lost production, tower and pitch wear ----
+    reward_version: int = 4
+    #: Value of lost production, $/MWh: ours, inside the family's LCOE range,
+    #: 60 to 140 $/MWh for new onshore plants [S20 Table 1].
+    energy_price: float = 60.0
+    #: Installed cost, $/kW: ours, inside 1,300 to 2,200 [S20 Table 1].
+    capex_per_kw: float = 1750.0
+    #: The turbine's share of it: ours, inside 65 to 84 % [S20 Table 4.1].
+    turbine_share: float = 0.75
+    #: The tower's and the pitch system's shares of the turbine [S20, REpower
+    #: MM92 breakdown]: 26.3 % and 2.66 %.
+    tower_share: float = 0.263
+    pitch_share: float = 0.0266
+    #: Design life, years [S20, the LCOE's 20 year lifetime].
+    design_life_years: float = 20.0
+    #: Tower top height, m [S1 Table 6-2], the lever of the base moment.
+    tower_height: float = 87.6
+    #: S-N slope of the tower's steel for the damage-equivalent load (ours,
+    #: the review's m = 4; the family uses 3 to 5 for welded steel).
+    fatigue_exponent: float = 4.0
+    #: The design rates, (MN m)^m and deg per step: 20 years at these use the
+    #: tower and the pitch system up exactly. Ours, measured once from S1's
+    #: controller on seeds 100 to 107 of the normal scenario (PHYSICS.md).
+    tower_damage_design: float = 2.126e5
+    pitch_travel_design: float = 0.1754
+    #: A trip's restart: an overspeed trip needs a manual reset [S21]; ours,
+    #: 2 h, between ROSCO's automatic 400 s start-up [S9 Ex. 32] and a site
+    #: visit. At 0.25 s steps.
+    restart_steps: int = 28800
+    #: The manual reset's callout, $ (ours: no family figure found).
+    reset_callout: float = 1000.0
+    #: Per step of a restart, $: rated production lost at ``energy_price``,
+    #: plus the callout spread over the restart.
+    failure_cost: float = 5.0 * 0.25 / 3600.0 * 60.0 + 1000.0 / 28800.0
     # Kept for the time-in-band KPI tables (benchmark._OUTPUT_FLOORS) and the
     # oracle's resolution; the score does not read them.
     e_floor: float = 1680.0  # W
@@ -160,12 +198,24 @@ PARAM_UNITS = {
     "turbulence_lambda1": "m",
     "kaimal_factor": "-",
     "v_ref": "m/s",
-    "gust_start": "s",
+    "gust": "-",
+    "derate_to": "-",
+    "energy_price": "$/MWh",
+    "capex_per_kw": "$/kW",
+    "turbine_share": "-",
+    "tower_share": "-",
+    "pitch_share": "-",
+    "design_life_years": "years",
+    "tower_height": "m",
+    "fatigue_exponent": "-",
+    "tower_damage_design": "(MN m)^m per step",
+    "reset_callout": "$",
+    "pitch_travel_design": "deg per step",
     "overspeed_factor": "-",
     "rating": "-",
     "reward_version": "-",
     "restart_steps": "steps",
-    "failure_cost": "MWh per step",
+    "failure_cost": "$ per step",
     "e_floor": "W",
     "precision_floor": "W",
 }
@@ -194,6 +244,18 @@ class WindTurbineState(EnvState):
     v_turb: float = 0.0
     #: 1 once the safety system has fed the blades to feather (a trip).
     feathered: float = 0.0
+    #: When this episode's gust and curtailment start, s (-1 for none).
+    gust_t0: float = -1.0
+    derate_t0: float = -1.0
+    #: Tower-base moment (N m) last step and at the last turning point, its
+    #: direction (+1, -1, 0), and the damage the last step closed, (MN m)^m:
+    #: half-cycles counted between turning points (PHYSICS.md, Score).
+    moment: float = 0.0
+    moment_turn: float = 0.0
+    moment_dir: float = 0.0
+    damage: float = 0.0
+    #: How far the pitch moved over the last step (deg).
+    pitch_travel: float = 0.0
 
     actuator_held: jax.Array = actuator_field(2)
 
@@ -234,12 +296,12 @@ def _table(table, tip_speed_ratio, pitch_deg):
 
 def power_coefficient(tip_speed_ratio, pitch_deg, params: WindTurbineParams):
     """Cp(lambda, beta) from ROSCO's table. Negative where the rotor brakes."""
-    return _table(CP_TABLE, tip_speed_ratio, pitch_deg)
+    return _table(CP_TABLE_FEATHER, tip_speed_ratio, pitch_deg)
 
 
 def thrust_coefficient(tip_speed_ratio, pitch_deg, params: WindTurbineParams):
     """Ct(lambda, beta) from ROSCO's table."""
-    return _table(CT_TABLE, tip_speed_ratio, pitch_deg)
+    return _table(CT_TABLE_FEATHER, tip_speed_ratio, pitch_deg)
 
 
 def aerodynamic_torque(omega, v_wind, pitch_deg, params: WindTurbineParams):
@@ -309,14 +371,38 @@ def gust_magnitude(v_hub, params: WindTurbineParams):
     )
 
 
-def gust(t, v_hub, params: WindTurbineParams):
-    """The gust's departure from the mean at time ``t`` (s) [S13]."""
-    tau = t - params.gust_start
-    on = (params.gust_start >= 0.0) & (tau >= 0.0) & (tau <= EOG_SECONDS)
+def gust(t, v_hub, t0, params: WindTurbineParams):
+    """The gust's departure from the mean at time ``t`` (s), for a gust that
+    starts at ``t0`` (none if negative) [S13]."""
+    tau = t - t0
+    on = (t0 >= 0.0) & (tau >= 0.0) & (tau <= EOG_SECONDS)
     shape = jnp.sin(3.0 * jnp.pi * tau / EOG_SECONDS) * (
         1.0 - jnp.cos(2.0 * jnp.pi * tau / EOG_SECONDS)
     )
     return jnp.where(on, -0.37 * gust_magnitude(v_hub, params) * shape, 0.0)
+
+
+def tower_base_moment(x_tower, params: WindTurbineParams):
+    """Fore-aft bending moment at the tower base, N m: the mode's elastic force
+    at the top times the tower's height."""
+    return tower_stiffness(params) * x_tower * params.tower_height
+
+
+def count_half_cycles(state, moment, params):
+    """Half-cycle counting between turning points of the base moment: when the
+    moment turns, the half-cycle from the last turning point closes, with
+    damage 0.5 (range / 1 MN m)^m. Returns (moment, last turn, direction,
+    damage this step)."""
+    step = moment - state.moment
+    direction = jnp.sign(step)
+    turned = (
+        (state.moment_dir != 0.0) & (direction != 0.0) & (direction != state.moment_dir)
+    )
+    span = jnp.abs(state.moment - state.moment_turn) / 1.0e6
+    damage = jnp.where(turned, 0.5 * span**params.fatigue_exponent, 0.0)
+    turn = jnp.where(turned, state.moment, state.moment_turn)
+    direction = jnp.where(direction == 0.0, state.moment_dir, direction)
+    return moment, turn, direction, damage
 
 
 def compute_velocity(position, action, v_wind, params: WindTurbineParams):
@@ -369,7 +455,7 @@ def compute_next_state(
     v_turb = state.v_turb * decay + sigma * jnp.sqrt(1.0 - decay**2) * noise
     t_new = (state.time + 1) * p.delta_t
     v_wind = jnp.maximum(
-        state.v_mean + v_turb + gust(t_new, state.v_mean, p), 0.1
+        state.v_mean + v_turb + gust(t_new, state.v_mean, state.gust_t0, p), 0.1
     )  # 0.1 m/s: a numerical floor, never reached
 
     rates = (
@@ -392,6 +478,11 @@ def compute_next_state(
     position = jnp.stack([omega, pitch, torque, new[3], new[4]])
     accel = compute_velocity(position, (0.0, 0.0), v_wind, p)[0][4]
     over = omega >= p.overspeed_factor * omega_rated(p)
+    moment, turn, direction, damage = count_half_cycles(
+        state, tower_base_moment(new[3], p), p
+    )
+    derated = (state.derate_t0 >= 0.0) & (t_new >= state.derate_t0)
+    rating = jnp.where(derated, p.derate_to, p.rating)
 
     return (
         state.replace(
@@ -405,8 +496,13 @@ def compute_next_state(
             v_turb=v_turb,
             torque_cmd=torque_cmd,
             power=electrical_power(omega, torque, p),
-            target_power=p.rating * p.P_rated,
+            target_power=rating * p.P_rated,
             feathered=jnp.where(tripped | over, 1.0, 0.0),
+            moment=moment,
+            moment_turn=turn,
+            moment_dir=direction,
+            damage=damage,
+            pitch_travel=jnp.abs(pitch - state.pitch),
             time=state.time + 1,
         ),
         None,
@@ -443,15 +539,46 @@ def check_is_terminal(state: WindTurbineState, params: WindTurbineParams, xp=jnp
     return terminated, truncated
 
 
-def energy_off_rating(state, params: WindTurbineParams, power, xp=jnp):
-    """MWh delivered off the rating over one step, above or below alike."""
-    return xp.abs(state.target_power - power) / 1.0e6 * params.delta_t / 3600.0
+def wind_power(v_wind, params: WindTurbineParams):
+    """Electrical power the wind carries at the table's peak Cp, W."""
+    p = params
+    return p.eta_gen * 0.5 * p.rho * rotor_area(p) * v_wind**3 * CP_MAX
+
+
+def available_power(state, params: WindTurbineParams, xp=jnp):
+    """What the wind makes available, W: the rating's power, or less where the
+    wind at peak Cp falls short of it."""
+    return xp.minimum(state.target_power, wind_power(state.v_wind, params))
+
+
+def lost_production(state, params: WindTurbineParams, power, xp=jnp):
+    """MWh short of the available power over one step; over-production is free."""
+    short = xp.maximum(available_power(state, params, xp) - power, 0.0)
+    return short / 1.0e6 * params.delta_t / 3600.0
+
+
+def tower_cost(params: WindTurbineParams):
+    """The tower's cost, $."""
+    p = params
+    return p.capex_per_kw * p.P_rated / 1e3 * p.turbine_share * p.tower_share
+
+
+def pitch_system_cost(params: WindTurbineParams):
+    """The pitch system's cost, $."""
+    p = params
+    return p.capex_per_kw * p.P_rated / 1e3 * p.turbine_share * p.pitch_share
+
+
+def life_steps(params: WindTurbineParams):
+    return params.design_life_years * 365.25 * 24.0 * 3600.0 / params.delta_t
 
 
 def compute_reward_terms(
     state: WindTurbineState, params: WindTurbineParams, xp=jnp, tripped=None
 ):
-    """The score's terms, in MWh, each >= 0.
+    """The score's terms in dollars, each >= 0: production lost against what
+    the wind made available, the tower's fatigue and the pitch system's wear,
+    each at its share of the turbine's cost over its design life.
 
     ``tripped`` marks a measured copy (``base.measured_reward``): its trip comes
     from the true state, and its power from the meter.
@@ -462,7 +589,14 @@ def compute_reward_terms(
         power = electrical_power(state.omega, state.torque, p)
     else:
         power = state.power
-    terms = {"off_rating": energy_off_rating(state, p, power, xp)}
+    life = life_steps(p)
+    terms = {
+        "lost": lost_production(state, p, power, xp) * p.energy_price,
+        "tower": tower_cost(p) * state.damage / (p.tower_damage_design * life),
+        "pitch": pitch_system_cost(p)
+        * state.pitch_travel
+        / (p.pitch_travel_design * life),
+    }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 

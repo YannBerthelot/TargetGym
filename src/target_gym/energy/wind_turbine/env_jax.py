@@ -24,6 +24,7 @@ from target_gym.energy.wind_turbine.env import (
     get_obs,
     omega_rated,
     rotor_thrust,
+    tower_base_moment,
     tower_stiffness,
     turbulence_sigma,
 )
@@ -138,7 +139,7 @@ class WindTurbine(
         # mean wind from S2's above-rated load cases, the turbulence drawn from
         # its stationary law, the rotor at rated speed delivering the rating,
         # the pitch that balances it, the tower at rest under the thrust.
-        key, wind_key, turb_key = jax.random.split(key, 3)
+        key, wind_key, turb_key, gust_key, derate_key = jax.random.split(key, 5)
         v_mean = jax.random.uniform(
             wind_key,
             minval=params.v_mean_range[0],
@@ -155,6 +156,23 @@ class WindTurbine(
         )
         pitch0 = balance_pitch(w0, v_wind, target_power / params.eta_gen, params)
         x0 = rotor_thrust(w0, v_wind, pitch0, params) / tower_stiffness(params)
+        # The scenario's events, timed by the seed inside their windows.
+        gust_t0 = jnp.where(
+            params.gust > 0.5,
+            jax.random.uniform(
+                gust_key, minval=params.gust_window[0], maxval=params.gust_window[1]
+            ),
+            -1.0,
+        )
+        derate_t0 = jnp.where(
+            params.derate_to < 1.0,
+            jax.random.uniform(
+                derate_key,
+                minval=params.derate_window[0],
+                maxval=params.derate_window[1],
+            ),
+            -1.0,
+        )
 
         state = WindTurbineState(
             time=0,
@@ -171,6 +189,10 @@ class WindTurbine(
             a_tower=jnp.zeros_like(x0),
             v_turb=v_turb,
             feathered=jnp.zeros_like(x0),
+            gust_t0=gust_t0,
+            derate_t0=derate_t0,
+            moment=tower_base_moment(x0, params),
+            moment_turn=tower_base_moment(x0, params),
         )
         return self.get_obs(state), state
 

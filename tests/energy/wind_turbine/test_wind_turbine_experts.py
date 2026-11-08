@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from target_gym import registry
-from target_gym.energy.wind_turbine.cp_table import CP_TABLE
+from target_gym.energy.wind_turbine.cp_table import CP_TABLE, CP_TABLE_FEATHER
 from target_gym.energy.wind_turbine.env import omega_rated
 from target_gym.energy.wind_turbine.oracle import pitch_reach, table_cp, torque_reach
 from target_gym.experts.mpc import plan_params
@@ -43,9 +43,9 @@ def test_the_resting_target_spends_the_tie_budget_over_an_episode_at_the_edge():
     edge, and K8's replay, which runs ``model.step``, never sees it."""
     env, p = SPEC.make_env(), plan_params(SPEC, SPEC.make_test_params())
     mpc = SPEC.make_mpc(env, p)
-    # The tie's, in the score's MWh: half the 1.7 kW resolution, 850 W, for
-    # one 0.25 s step.
-    budget = 850.0e-6 * 0.25 / 3600.0
+    # The tie's, in the score's dollars: half the 1.7 kW resolution, 850 W, for
+    # one 0.25 s step at 60 $/MWh.
+    budget = 850.0e-6 * 0.25 / 3600.0 * 60.0
     with enable_x64():
         st = float64(env.reset_env(jax.random.PRNGKey(0), p)[1])
         m = mpc.model
@@ -143,9 +143,9 @@ def test_at_width_zero_the_table_is_read_bilinearly(row, column):
 def test_past_its_edges_the_table_holds_its_last_nodes():
     with enable_x64():
         low = table_cp(jnp.float64(1.0), jnp.float64(-3.0), 0.0, 0.0)
-        high = table_cp(jnp.float64(20.0), jnp.float64(40.0), 0.0, 0.0)
+        high = table_cp(jnp.float64(20.0), jnp.float64(100.0), 0.0, 0.0)
     assert float(low) == pytest.approx(CP_TABLE[0, 0], abs=1e-12)
-    assert float(high) == pytest.approx(CP_TABLE[25, 30], abs=1e-12)
+    assert float(high) == pytest.approx(CP_TABLE_FEATHER[25, 90], abs=1e-12)
 
 
 def test_the_smoothed_table_stays_within_its_gap_of_the_lookup():

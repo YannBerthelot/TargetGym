@@ -5,9 +5,17 @@ Contract:
 - Limits (rule 14): overspeed is a trip, handled by the safety system [S4] at
   about 20 % above rated speed [S17]: past it the plant is lost to a shutdown.
   Low rotor speed is not a trip: no source calls it one (REALITY.md sec. 3).
-- Score (rule 15): the energy delivered off the rating, in MWh per step, and a
-  trip costs rated power over a restart, ROSCO's 400 s start-up [S9 Ex. 32]:
-  5 MW x 400 s = 0.5556 MWh.
+- Score (rules 15 and 23, Amendment 3), in dollars per step:
+  * production short of what the wind makes available, min(rating, the wind's
+    power at peak Cp), at 60 $/MWh; over-production is free;
+  * the tower's fatigue: its cost, 1750 $/kW x 5000 kW x 0.75 x 0.263 =
+    $1,726,031 [S20], spread so that 20 years [S20] at the design damage rate
+    cost exactly that; damage closes per half-cycle of the base moment between
+    turning points, 0.5 (range / 1 MN m)^4;
+  * the pitch system's wear: 1750 x 5000 x 0.75 x 0.0266 = $174,563 [S20], the
+    same way over its design travel;
+  * a trip: 2 h of rated production at 60 $/MWh, $600, plus a $1,000 manual
+    reset callout [S21]: $1,600.
 - Observation (rule 16): the controller's readings plus the nacelle
   accelerometer [S3, S5] and the nacelle anemometer [S6]; the rating, a
   schedule known ahead, is read.
@@ -60,21 +68,58 @@ def test_a_slow_rotor_is_not_a_trip(env):
     assert not bool(tripped)
 
 
-def test_a_trip_costs_rated_power_over_a_400_s_restart(env):
+def test_a_trip_costs_two_hours_of_production_and_a_reset(env):
     state = _reset(env).replace(omega=jnp.asarray(1.3 * RATED))
     reward = float(W.compute_reward(_step(state), PARAMS))
-    assert reward == pytest.approx(-5.0 * 400.0 / 3600.0, rel=1e-3)
+    assert reward == pytest.approx(-1600.0, rel=1e-3)
 
 
-@pytest.mark.parametrize("off_MW", [0.0, 1.0, -0.5])
-def test_the_score_is_the_energy_off_the_rating(env, off_MW):
-    """One quarter-second step 1 MW off the rating is 1 x 0.25 / 3600 MWh,
-    above or below it alike."""
-    state = _reset(env)
-    torque = (5.0e6 + off_MW * 1e6) / (PARAMS.eta_gen * PARAMS.N_gear * RATED)
-    state = state.replace(omega=jnp.asarray(RATED), torque=jnp.asarray(torque))
-    reward = float(W.compute_reward(state, PARAMS))
-    assert reward == pytest.approx(-abs(off_MW) * 0.25 / 3600.0, abs=1e-9)
+def _producing(env, MW, wind=18.0):
+    state = _reset(env).replace(v_wind=jnp.asarray(wind), damage=0.0, pitch_travel=0.0)
+    torque = MW * 1e6 / (PARAMS.eta_gen * PARAMS.N_gear * RATED)
+    return state.replace(omega=jnp.asarray(RATED), torque=jnp.asarray(torque))
+
+
+@pytest.mark.parametrize("MW, short_MW", [(5.0, 0.0), (4.0, 1.0), (5.5, 0.0)])
+def test_production_short_of_the_rating_is_priced_and_over_production_is_free(
+    env, MW, short_MW
+):
+    """In 18 m/s the wind offers more than the rating. 1 MW short for 0.25 s is
+    1 x 0.25 / 3600 MWh, at 60 $/MWh $0.004167."""
+    terms = env.reward_terms(_producing(env, MW), PARAMS)
+    assert float(terms["lost"]) == pytest.approx(short_MW * 0.25 / 3600.0 * 60.0)
+
+
+def test_in_a_lull_only_what_the_wind_offers_is_owed(env):
+    """At 10 m/s the wind carries 0.944 x 0.5 x 1.225 x pi 63^2 x 1000 x
+    0.465861 = 3.3587 MW at peak Cp, so 3 MW is 0.3587 MW short: $0.001494."""
+    terms = env.reward_terms(_producing(env, 3.0, wind=10.0), PARAMS)
+    assert float(terms["lost"]) == pytest.approx(0.3587 * 0.25 / 3600 * 60, rel=2e-3)
+
+
+def test_twenty_years_at_the_design_rates_cost_the_tower_and_the_pitch_system(env):
+    life = 20 * 365.25 * 24 * 3600 / 0.25
+    state = _producing(env, 5.0).replace(
+        damage=jnp.asarray(PARAMS.tower_damage_design),
+        pitch_travel=jnp.asarray(PARAMS.pitch_travel_design),
+    )
+    terms = env.reward_terms(state, PARAMS)
+    assert float(terms["tower"]) * life == pytest.approx(1_726_031.25, rel=1e-4)
+    assert float(terms["pitch"]) * life == pytest.approx(174_562.5, rel=1e-4)
+
+
+def test_a_sine_moment_closes_two_half_cycles_of_its_range_per_period(env):
+    """A base moment swinging +/- 10 MN m: each half-cycle spans 20 MN m, damage
+    0.5 x 20^4 = 80,000, two per period."""
+    state = _reset(env).replace(moment=0.0, moment_turn=0.0, moment_dir=0.0)
+    total = 0.0
+    for k in range(1, 12 * 10 + 1):  # 10 periods of 12 samples
+        moment = 10e6 * np.sin(2 * np.pi * k / 12 + 1e-3)
+        m, turn, d, damage = W.count_half_cycles(state, jnp.asarray(moment), PARAMS)
+        state = state.replace(moment=m, moment_turn=turn, moment_dir=d)
+        total += float(damage)
+    # The first half-cycle starts at 0, not at a peak: 19 full ranges, one half.
+    assert total == pytest.approx(19 * 80_000 + 0.5 * 10**4, rel=1e-3)
 
 
 def test_the_observation_carries_the_rating_accelerometer_and_anemometer(env):
@@ -116,8 +161,37 @@ def test_each_episode_starts_in_established_operation(env, seed):
     )
 
 
-def test_the_rating_does_not_move_during_an_episode(env):
+def test_the_rating_does_not_move_on_a_normal_day(env):
     state = _reset(env)
     for _ in range(50):
         state = _step(state)
     assert float(state.target_power) == pytest.approx(5.0e6)
+
+
+def test_a_curtailment_lowers_the_rating_once_at_its_drawn_time(env):
+    p = PARAMS.replace(derate_to=0.9, derate_window=(1.0, 1.0))
+    state = _reset(env, params=p)
+    targets = []
+    for _ in range(8):
+        state = _step(state, p)
+        targets.append(float(state.target_power))
+    assert targets[:3] == [5.0e6] * 3 and targets[3:] == [4.5e6] * 5
+
+
+def test_the_scenario_suite_builds_and_every_scenario_runs():
+    from target_gym import scenarios
+    from target_gym.registry import REGISTRY
+
+    spec = REGISTRY["wind_turbine"]
+    suite = scenarios.suite(spec)
+    assert 4 <= len(suite) <= 10 and suite[0].name == "normal"
+    assert all(s.source for s in suite)
+    for s in suite:
+        p = scenarios.params_for(spec, s, max_steps_in_episode=8)
+        e = spec.make_env()
+        obs, state = e.reset_env(jax.random.PRNGKey(0), p)
+        for _ in range(8):
+            obs, state, reward, _, _ = e.step_env(
+                jax.random.PRNGKey(0), state, e.initial_action(state, p), p
+            )
+        assert np.isfinite(float(reward)) and np.all(np.isfinite(np.asarray(obs)))

@@ -938,7 +938,7 @@ KNOWN_DISCARDED_UNPACKS = {
     ("plane/oracle.py", "_, z, theta = positions"),
     ("plane3d/dynamics.py", "_, _, z, theta, phi = positions"),
     ("plane3d/env.py", "_, _, z, theta, phi = positions"),
-    ("energy/wind_turbine/oracle.py", "_, v_mean, v_turb, now = task"),
+    ("energy/wind_turbine/oracle.py", "_, v_mean, v_turb, now, gust_t0, _ = task"),
     ("glass_furnace/oracle.py", "_, start, lhv, disturbance = task"),
     ("reactor/env.py", "T_f, T_h, T_c, _, _, Xe = slow"),
 }

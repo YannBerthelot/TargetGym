@@ -316,8 +316,9 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
     [(name, 0.25) for name in FIVE + AIRCRAFT]
     + [(name, 0.25) for name in ("boiler_drum", "glass_furnace", "cement_kiln")]
     + [
-        # In the score's MWh: half the 1.7 kW resolution for one 0.25 s step.
-        ("wind_turbine", 850.0e-6 * 0.25 / 3600.0),
+        # In the score's dollars: half the 1.7 kW resolution for one 0.25 s
+        # step at 60 $/MWh.
+        ("wind_turbine", 850.0e-6 * 0.25 / 3600.0 * 60.0),
         # p = 1, in dollars: half the 0.05 K floor for a 30 s step at $230/h per K.
         ("reactor", 230.0 / 3600.0 * 30.0 * 0.025),
         # p = 1, in euros: the work an occupied K h loses, 0.02 x 15 people x

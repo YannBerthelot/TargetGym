@@ -520,6 +520,22 @@ def _mpc(factory_name: str, module: str) -> Callable[[Any, Any], Any]:
     return make
 
 
+def _scenarios(factory_name: str, module: str) -> Callable[[], tuple]:
+    # A task's scenario suite lives in its own package, so its fingerprint
+    # covers it, as plain dicts: the package does not import
+    # ``target_gym.scenarios``, which would need declaring in its fingerprint.
+    def suite():
+        from importlib import import_module
+
+        from target_gym.scenarios import Scenario
+
+        return tuple(
+            Scenario(**s) for s in getattr(import_module(module), factory_name)()
+        )
+
+    return suite
+
+
 def _shared_oracle(name: str) -> tuple[str, ...]:
     """The data an oracle on the shared solver reads: its horizon summary
     and its smoothing widths (``EnvSpec.oracle_data``)."""
@@ -947,16 +963,19 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_wind_turbine_mpc", module="target_gym.energy.wind_turbine.oracle"
         ),
-        # v4 (charter Amendments 1 and 2): the tower's first fore-aft mode on
-        # the rotor's thrust, the safety system's overspeed feather as the one
-        # trip, 10 min of established above-rated operation in IEC normal
-        # turbulence, and a score in MWh off the rating
-        # (energy/wind_turbine/PHYSICS.md).
+        # v5 (charter Amendment 3): the tower's fore-aft mode on the rotor's
+        # thrust, the overspeed feather as the one trip, 10 min windows of
+        # above-rated operation in six scenarios, and a score in dollars: lost
+        # production against the available power, tower fatigue and pitch wear
+        # at their shares of the turbine's cost (energy/wind_turbine/PHYSICS.md).
         tuned_gains_key="wind_turbine",
         oracle_data=_shared_oracle("wind_turbine"),
         noise_fields=("turbulence_iref",),
         disturbance_fields=("v_wind",),
-        version=4,
+        scenarios=_scenarios(
+            "wind_turbine_scenarios", module="target_gym.energy.wind_turbine.scenarios"
+        ),
+        version=5,
     ),
     EnvSpec(
         name="battery",

@@ -351,8 +351,8 @@ def test_measured_power_is_the_meters(name, sigma_W):
     env, params, state = _setup(name)
     true_MW = float(env.get_obs(state, _quiet(params))[3])
     state = state.replace(target_power=jnp.float32(true_MW * 1e6 + 1e5))
-    if name == "wind_turbine":  # scored in MWh off the rating (rule 15)
-        term, per_W = "off_rating", 1e-6 * params.delta_t / 3600.0
+    if name == "wind_turbine":  # lost production at 60 $/MWh (v5)
+        term, per_W = "lost", 1e-6 * params.delta_t / 3600.0 * params.energy_price
     else:
         term, per_W = "tracking", params.imbalance_price / 1e6 * params.delta_t / 3600.0
 

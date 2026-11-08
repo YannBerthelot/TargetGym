@@ -80,3 +80,22 @@ _CT = """
 1.098156 0.941373 0.787439 0.627098 0.449210 0.246925 0.028662 -0.198996 -0.434846 -0.677094 -0.923225 -1.169251 -1.410513 -1.642804 -1.863707 -2.072377 -2.266900 -2.443154 -2.595911 -2.718548 -2.800637 -2.829676 -2.798002 -2.713156 -2.598249 -2.486428 -2.400100 -2.338052 -2.292009 -2.254855 -2.222470
 """
 CT_TABLE = np.array(_CT.split(), dtype=np.float64).reshape(26, 31)
+
+#: The tables carried on to feather, 31 to 90 deg (ours, PHYSICS.md D3): Cp goes
+#: on along each row's slope over its last 5 deg, so a feathered rotor keeps
+#: braking, and Ct falls linearly to 0 at 90 deg, where the blades are edge-on.
+#: ROSCO's tables stop at 30 deg for every rotor it ships (NREL 5 MW, IEA 15 MW,
+#: BAR 10, NREL 2.8 MW).
+_BEYOND = np.arange(31.0, 91.0) - 30.0
+CP_TABLE_FEATHER = np.concatenate(
+    [
+        CP_TABLE,
+        CP_TABLE[:, -1:] + np.outer((CP_TABLE[:, -1] - CP_TABLE[:, -6]) / 5.0, _BEYOND),
+    ],
+    axis=1,
+)
+CT_TABLE_FEATHER = np.concatenate(
+    [CT_TABLE, CT_TABLE[:, -1:] * (1.0 - _BEYOND / 60.0)], axis=1
+)
+#: Peak Cp of the table at fine pitch, for the power the wind makes available.
+CP_MAX = float(CP_TABLE[:, 0].max())
