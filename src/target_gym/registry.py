@@ -545,6 +545,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("turbulence_sigma",),
         # v4: Amendment 2, the job (plane/PHYSICS.md): protected limits, air
         # data read, established start, a turbulence zone, band costs.
+        fingerprint_sources=("scenarios.py",),
         scenarios=_scenarios("target_gym.plane.scenarios", "suite"),
         # v5: Amendment 3 (plane/PHYSICS.md): cruise at FL290 to 370, the light
         # zone's sigma re-derived there, and a scenario suite.
@@ -629,7 +630,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # The 2D aircraft's dynamics, which the 3D model extends, and the
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
-        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
+        fingerprint_sources=(
+            "plane/dynamics.py",
+            "plane/experts_tecs.py",
+            "scenarios.py",
+        ),
         # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
         # established start, a turbulence zone, heading select scored on the RVSM, AIM and ACS bands.
         scenarios=_scenarios("target_gym.plane3d.scenarios", "heading_suite"),
@@ -679,7 +684,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # The 2D aircraft's dynamics, which the 3D model extends, and the
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
-        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
+        fingerprint_sources=(
+            "plane/dynamics.py",
+            "plane/experts_tecs.py",
+            "scenarios.py",
+        ),
         # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
         # established start, a turbulence zone, the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands.
         scenarios=_scenarios("target_gym.plane3d.scenarios", "racetrack_suite"),

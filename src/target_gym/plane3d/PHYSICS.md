@@ -550,6 +550,7 @@ hold (1.5 min legs, 265 KIAS cap) [IFH ch. 10].
 | heading-change size | uniform over the compass | ours: vectors of any size |
 | steady winds | 30, 50, 67 kt | ours, family range calm to the holding area's design wind 2h + 47 kt (secondary, REALITY.md) |
 | worst zone | 1.375 m/s | derived: 2.5 x 0.55 m/s, the load linear in the gust |
+| scenario weights | heading: normal 0.35, calm 0.30, worst 0.05, 30 kt 0.20, 50 kt 0.10, long zone 0.05; racetrack: normal 0.35, calm 0.30, worst 0.05, 30 kt 0.20, low hold 50 kt 0.07, design wind 0.02, high hold 50 kt 0.08 (shares of operating time, normalised) | ours, family ranges in `plane3d/scenarios.py`; no source gives how often a wind aloft is met |
 
 **What the reference does on it**, whole-episode cost on seeds 0 to 4:
 

@@ -1,5 +1,5 @@
 {
-  "fingerprint": "aa311d0371ea888a",
-  "note": "re-stamped in place: plane3d gained Amendment 3 code this task does not run (the protected bank behind PlaneParams3D.amended, off here; the heading clearance hook, the identity off the heading task) and a state field it never sets (clearance_time, 0); behaviour unchanged",
-  "stamped": "2026-11-08T16:41:39+00:00"
+  "fingerprint": "1da4c0726af35fd4",
+  "note": "re-stamped in place: the package's scenarios.py (another task's suite) gained weights, which this task does not read; behaviour unchanged",
+  "stamped": "2026-11-08T17:44:02+00:00"
 }

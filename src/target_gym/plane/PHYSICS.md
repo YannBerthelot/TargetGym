@@ -518,6 +518,7 @@ FL350 to 370 [TCDS]), light and low (60 t, FL290 to 310).
 | `initial_mass` | 73.5 t; 60 t and 78 t in scenarios | ours, family range 42.6 t (OEW) to 78 t (MTOW) |
 | worst zone | 2.5 x the light sigma | derived: 0.5 g, BEA447 Figure 24's top, over 0.2 g, the load being linear in the gust |
 | episode | 1 800 s | ours: one zone of up to 30 min [BEA447] |
+| scenario weights | normal 0.40, calm 0.35, worst zone 0.05, long zone 0.05, heavy-high 0.075, light-low 0.075 | ours, family ranges in `plane/scenarios.py`; the turbulence shares bounded by BEA447 Figure 24 (a zone in force at most about a third of cruise time) |
 
 **`plane_energy`: Extra (rule 18).** The owner's criterion: a heavy member, 78 t,
 at FL330 to 370; Extra if residual climb stays well above 500 fpm. It is 909 to

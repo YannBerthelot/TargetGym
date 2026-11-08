@@ -1,5 +1,5 @@
 {
-  "fingerprint": "1d9cf5e5f0275be8",
-  "note": "re-stamped in place: plane/env_jax.py changed only plane's default_params (Amendment 3); this task's own params and code paths are unchanged; behaviour unchanged",
-  "stamped": "2026-11-08T16:41:39+00:00"
+  "fingerprint": "b67788a057c2e721",
+  "note": "re-stamped in place: the package's scenarios.py (another task's suite) gained weights, which this task does not read; behaviour unchanged",
+  "stamped": "2026-11-08T17:44:02+00:00"
 }

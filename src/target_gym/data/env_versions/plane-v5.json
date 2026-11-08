@@ -1,5 +1,5 @@
 {
-  "fingerprint": "c07db76a488f3d16",
-  "note": "charter Amendment 3 (plane/PHYSICS.md): cruise at FL290 to FL370, the light zone's sigma re-derived at FL330 (0.598 m/s), a six-scenario suite",
-  "stamped": "2026-11-08T16:41:39+00:00"
+  "fingerprint": "6bca178190290086",
+  "note": "charter Amendment 3 (plane/PHYSICS.md): cruise at FL290 to FL370, the light zone's sigma re-derived at FL330 (0.598 m/s), a six-scenario suite; re-stamped in place after the suite's scenarios took their operating-time weights and the shared scenarios.py joined the fingerprint (no plant change)",
+  "stamped": "2026-11-08T17:44:02+00:00"
 }

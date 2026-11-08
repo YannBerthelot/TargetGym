@@ -1,5 +1,5 @@
 {
-  "fingerprint": "202b2798211a9625",
-  "note": "charter Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank, a seven-scenario suite with steady winds",
-  "stamped": "2026-11-08T16:41:39+00:00"
+  "fingerprint": "2e1012bdddbeabac",
+  "note": "charter Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank, a seven-scenario suite with steady winds; re-stamped in place after the suite's scenarios took their operating-time weights and the shared scenarios.py joined the fingerprint (no plant change)",
+  "stamped": "2026-11-08T17:44:02+00:00"
 }

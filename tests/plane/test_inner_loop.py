@@ -33,13 +33,15 @@ from target_gym.plane.dynamics import (
 from target_gym.plane.env import compute_next_state
 from target_gym.plane.env_jax import Airplane2D
 from target_gym.plane3d.env import compute_next_state_3d
-from target_gym.plane3d.env_jax import Plane3DHeading
+from target_gym.plane3d.env_jax import Plane3DCircle, Plane3DHeading
 
 KEY = jax.random.PRNGKey(0)
 
 
 def _still_3d():
-    env = Plane3DHeading()
+    # The unamended 3D plant, whose bank demand reaches 45 deg: the amended
+    # tasks clip it at the protected 30 deg (tests/plane3d/test_plane3d_reality.py).
+    env = Plane3DCircle()
     params = env.default_params.replace(turbulence_sigma=0.0, sensor_noise_scale=0.0)
     _, state = env.reset_env(KEY, params)
     state = state.replace(

@@ -26,7 +26,7 @@ def test_each_kept_task_has_a_sourced_suite(name):
 
 def test_a_hold_in_wind_starts_established_in_that_wind():
     spec = registry.get("plane3d_racetrack")
-    (strong,) = [s for s in scenarios.suite(spec) if s.name == "strong_wind"]
+    (strong,) = [s for s in scenarios.suite(spec) if s.name == "low_hold_wind"]
     params = scenarios.params_for(spec, strong, sensor_noise_scale=0.0)
     env = spec.make_env()
     obs, state = env.reset_env(jax.random.PRNGKey(2), params)

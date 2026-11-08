@@ -1,5 +1,5 @@
 {
-  "fingerprint": "28723702c126b0c1",
-  "note": "charter Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank, ATC vectors every 150 s, a six-scenario suite",
-  "stamped": "2026-11-08T16:41:39+00:00"
+  "fingerprint": "eba696173b026fe5",
+  "note": "charter Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank, ATC vectors every 150 s, a six-scenario suite; re-stamped in place after the suite's scenarios took their operating-time weights and the shared scenarios.py joined the fingerprint (no plant change)",
+  "stamped": "2026-11-08T17:44:02+00:00"
 }
