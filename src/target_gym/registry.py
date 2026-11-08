@@ -498,6 +498,20 @@ class _LazyParams:
 # -- PID factories ----------------------------------------------------------
 
 
+def _scenarios(module: str) -> Callable[[], tuple]:
+    """A task's scenario suite, ``suite()`` in its own package (imported lazily),
+    as ``Scenario`` keyword arguments, so the package imports nothing outside it."""
+
+    def suite():
+        from importlib import import_module
+
+        from target_gym.scenarios import Scenario
+
+        return tuple(Scenario(**kw) for kw in import_module(module).suite())
+
+    return suite
+
+
 def _pid(factory_name: str, module: str) -> Callable[[], Any]:
     # Every task's PID lives in its own package's ``experts`` module, as a
     # factory returning a pure ``Controller``: experts/pid.py holds only the
@@ -999,6 +1013,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         oracle_data=_shared_oracle("reactor"),
         version=4,
         noise_fields=("demand_sigma",),
+        scenarios=_scenarios("target_gym.reactor.scenarios"),
     ),
     EnvSpec(
         name="hvac",

@@ -1,0 +1,586 @@
+{
+ "bump_models": {
+  "rods_on_Tavg": [
+   [
+    3.3143310546875,
+    30.0,
+    0.0
+   ],
+   [
+    23.09505271911621,
+    30.0,
+    0.0
+   ]
+  ],
+  "boron_on_offset": [
+   [
+    0.000816663377918303,
+    1395.0
+   ],
+   [
+    0.0008318495820276439,
+    1005.0
+   ]
+  ],
+  "boron_on_rods": [
+   [
+    0.00033856058144010603,
+    1155.0
+   ],
+   [
+    0.00037250531022436917,
+    1095.0
+   ]
+  ],
+  "offset_on_rod_target": [
+   [
+    0.2095770537853241,
+    300.0,
+    1020.0
+   ],
+   [
+    2.305756092071533,
+    765.0,
+    855.0
+   ]
+  ],
+  "boron_on_Tavg": [
+   [
+    -0.0161031074821949,
+    570.0
+   ],
+   [
+    -0.017802175134420395,
+    585.0
+   ]
+  ],
+  "rods_on_offset": [
+   [
+    0.22423939406871796,
+    30.0,
+    0.0
+   ],
+   [
+    1.9594659805297852,
+    30.0,
+    0.0
+   ]
+  ]
+ },
+ "tune": {
+  "rod_Kc": 0.01082482915456046,
+  "rod_Ti": 30.0,
+  "boron_Kc": 0.43888699892693867,
+  "boron_Ti": 11160.0,
+  "ff": -113.64819067771116,
+  "ao_Kc": 0.19402243914303513,
+  "ao_Ti": 765.0,
+  "inner_Kc": 1.2258107254663724,
+  "inner_Ti": 8760.0,
+  "t_Kc": -0.04801103506999523,
+  "t_Ti": 4680.0,
+  "wd_Kc": 0.1275857822917686,
+  "wd_Ti": 30.0
+ },
+ "best_rung": "rung 5",
+ "reference": "bank D on delta I, boron on Tavg",
+ "table": {
+  "rung 1": {
+   "cost_mean": 2399844.25,
+   "cost_by_seed": [
+    2466991.5,
+    2606336.5,
+    1709419.6,
+    656703.5,
+    3651446.0,
+    2460208.2,
+    3661686.0,
+    2609609.8,
+    2456777.0,
+    1719265.9
+   ],
+   "tracking": 236355.84375,
+   "running": 3488.6953125,
+   "seeds_tripped": 9,
+   "past_band_steps": 2034.1,
+   "max_abs_offset": 0.9900000691413879,
+   "past_dead_band_steps": 2328.3,
+   "deepest_rods_steps": 121.83692932128906,
+   "boron_span_ppm": 158.9630126953125
+  },
+  "rung 2": {
+   "cost_mean": 897718.875,
+   "cost_by_seed": [
+    588396.4,
+    679687.5,
+    739808.6,
+    2811288.8,
+    769925.6,
+    609570.8,
+    694128.1,
+    718823.6,
+    582622.7,
+    782937.0
+   ],
+   "tracking": 655302.5,
+   "running": 2416.370361328125,
+   "seeds_tripped": 1,
+   "past_band_steps": 644.5,
+   "max_abs_offset": 0.9900000691413879,
+   "past_dead_band_steps": 2068.0,
+   "deepest_rods_steps": 113.91036224365234,
+   "boron_span_ppm": 173.902099609375
+  },
+  "rung 3": {
+   "cost_mean": 675887.8125,
+   "cost_by_seed": [
+    593759.4,
+    691292.8,
+    742908.0,
+    637131.9,
+    769842.0,
+    593936.8,
+    716805.0,
+    693214.8,
+    566801.1,
+    753186.6
+   ],
+   "tracking": 668497.5,
+   "running": 7390.3271484375,
+   "seeds_tripped": 0,
+   "past_band_steps": 866.9,
+   "max_abs_offset": 0.8565822839736938,
+   "past_dead_band_steps": 2092.9,
+   "deepest_rods_steps": 82.3419189453125,
+   "boron_span_ppm": 226.1688232421875
+  },
+  "rung 4": {
+   "cost_mean": 3205585.5,
+   "cost_by_seed": [
+    3682523.2,
+    3701604.2,
+    3725412.0,
+    658551.2,
+    3684564.0,
+    626702.9,
+    3692009.0,
+    3705569.0,
+    3680099.5,
+    4898821.0
+   ],
+   "tracking": 177679.90625,
+   "running": 27906.412109375,
+   "seeds_tripped": 8,
+   "past_band_steps": 1886.9,
+   "max_abs_offset": 0.9900000691413879,
+   "past_dead_band_steps": 2409.5,
+   "deepest_rods_steps": 115.64275360107422,
+   "boron_span_ppm": 199.224609375
+  },
+  "rung 5": {
+   "cost_mean": 670332.625,
+   "cost_by_seed": [
+    584069.5,
+    674364.7,
+    734704.4,
+    634377.9,
+    765861.4,
+    592109.2,
+    709619.7,
+    690749.8,
+    566091.9,
+    751377.2
+   ],
+   "tracking": 662303.375,
+   "running": 8029.1923828125,
+   "seeds_tripped": 0,
+   "past_band_steps": 875.2,
+   "max_abs_offset": 0.7253758907318115,
+   "past_dead_band_steps": 1622.0,
+   "deepest_rods_steps": 78.52116394042969,
+   "boron_span_ppm": 220.499755859375
+  },
+  "rod program + boron on offset": {
+   "cost_mean": 1504939.125,
+   "cost_by_seed": [
+    598662.9,
+    674586.8,
+    1706977.8,
+    2454193.0,
+    1740089.8,
+    1565381.5,
+    1621377.4,
+    701426.1,
+    1532406.8,
+    2454287.8
+   ],
+   "tracking": 422402.65625,
+   "running": 2536.495361328125,
+   "seeds_tripped": 7,
+   "past_band_steps": 1401.8,
+   "max_abs_offset": 0.9900000691413879,
+   "past_dead_band_steps": 1814.1,
+   "deepest_rods_steps": 125.99325561523438,
+   "boron_span_ppm": 130.018798828125
+  },
+  "rod program + rung 5 boron": {
+   "cost_mean": 671232.625,
+   "cost_by_seed": [
+    585483.6,
+    680621.0,
+    737563.8,
+    633121.9,
+    766841.6,
+    591178.4,
+    712874.1,
+    690285.1,
+    564144.4,
+    750212.6
+   ],
+   "tracking": 660426.1875,
+   "running": 10806.4248046875,
+   "seeds_tripped": 0,
+   "past_band_steps": 1108.8,
+   "max_abs_offset": 0.7718133330345154,
+   "past_dead_band_steps": 925.7,
+   "deepest_rods_steps": 80.9940414428711,
+   "boron_span_ppm": 220.9078369140625
+  },
+  "bank D on delta I, boron on Tavg": {
+   "cost_mean": 2520.317138671875,
+   "cost_by_seed": [
+    2461.8,
+    2792.2,
+    2453.8,
+    2748.9,
+    2123.1,
+    2515.9,
+    2565.4,
+    2329.5,
+    2660.6,
+    2551.9
+   ],
+   "tracking": 348.9430847167969,
+   "running": 2171.3740234375,
+   "seeds_tripped": 0,
+   "past_band_steps": 27.9,
+   "max_abs_offset": 0.08108872175216675,
+   "past_dead_band_steps": 612.8,
+   "deepest_rods_steps": 42.97267150878906,
+   "boron_span_ppm": 160.56884765625
+  },
+  "null: rods parked, no boron": {
+   "cost_mean": 657990.75,
+   "cost_by_seed": [
+    567122.2,
+    656185.1,
+    721653.8,
+    626692.4,
+    757385.8,
+    580493.2,
+    692360.1,
+    681091.2,
+    555330.8,
+    741592.6
+   ],
+   "tracking": 657990.75,
+   "running": 2.123415470123291e-06,
+   "seeds_tripped": 0,
+   "past_band_steps": 1863.6,
+   "max_abs_offset": 0.5132513046264648,
+   "past_dead_band_steps": 2621.7,
+   "deepest_rods_steps": 3.000002145767212,
+   "boron_span_ppm": 0.0
+  }
+ },
+ "by_scenario": {
+  "edf_daily": {
+   "reference": {
+    "cost_mean": 2520.317138671875,
+    "cost_by_seed": [
+     2461.8,
+     2792.2,
+     2453.8,
+     2748.9,
+     2123.1,
+     2515.9,
+     2565.4,
+     2329.5,
+     2660.6,
+     2551.9
+    ],
+    "tracking": 348.9430847167969,
+    "running": 2171.3740234375,
+    "seeds_tripped": 0,
+    "past_band_steps": 27.9,
+    "max_abs_offset": 0.08108872175216675,
+    "past_dead_band_steps": 612.8,
+    "deepest_rods_steps": 42.97267150878906,
+    "boron_span_ppm": 160.56884765625
+   },
+   "null": {
+    "cost_mean": 657990.75,
+    "cost_by_seed": [
+     567122.2,
+     656185.1,
+     721653.8,
+     626692.4,
+     757385.8,
+     580493.2,
+     692360.1,
+     681091.2,
+     555330.8,
+     741592.6
+    ],
+    "tracking": 657990.75,
+    "running": 2.123415470123291e-06,
+    "seeds_tripped": 0,
+    "past_band_steps": 1863.6,
+    "max_abs_offset": 0.5132513046264648,
+    "past_dead_band_steps": 2621.7,
+    "deepest_rods_steps": 3.000002145767212,
+    "boron_span_ppm": 0.0
+   }
+  },
+  "edf_short_hold": {
+   "reference": {
+    "cost_mean": 2356.632568359375,
+    "cost_by_seed": [
+     2304.3,
+     2697.4,
+     2274.0,
+     2580.8,
+     1921.5,
+     2271.1,
+     2475.8,
+     2071.1,
+     2575.4,
+     2395.1
+    ],
+    "tracking": 358.7615661621094,
+    "running": 1997.87109375,
+    "seeds_tripped": 0,
+    "past_band_steps": 27.9,
+    "max_abs_offset": 0.08108872175216675,
+    "past_dead_band_steps": 580.7,
+    "deepest_rods_steps": 42.97267150878906,
+    "boron_span_ppm": 153.0528564453125
+   },
+   "null": {
+    "cost_mean": 787312.625,
+    "cost_by_seed": [
+     759434.0,
+     795528.4,
+     798277.2,
+     783724.1,
+     803367.2,
+     777146.4,
+     793166.8,
+     789257.2,
+     748860.5,
+     824364.9
+    ],
+    "tracking": 787312.625,
+    "running": 2.123415470123291e-06,
+    "seeds_tripped": 0,
+    "past_band_steps": 495.6,
+    "max_abs_offset": 0.39529234170913696,
+    "past_dead_band_steps": 2298.1,
+    "deepest_rods_steps": 3.000002145767212,
+    "boron_span_ppm": 0.0
+   }
+  },
+  "krsko_slow": {
+   "reference": {
+    "cost_mean": 1320.5169677734375,
+    "cost_by_seed": [
+     1266.6,
+     1445.9,
+     1278.7,
+     1270.3,
+     1266.8,
+     1321.8,
+     1363.1,
+     1308.9,
+     1338.3,
+     1344.7
+    ],
+    "tracking": 113.25303649902344,
+    "running": 1207.263916015625,
+    "seeds_tripped": 0,
+    "past_band_steps": 0.0,
+    "max_abs_offset": 0.013438118621706963,
+    "past_dead_band_steps": 495.1,
+    "deepest_rods_steps": 42.46611404418945,
+    "boron_span_ppm": 84.464111328125
+   },
+   "null": {
+    "cost_mean": 567503.375,
+    "cost_by_seed": [
+     553518.2,
+     579045.9,
+     564175.4,
+     570954.1,
+     563737.1,
+     574588.0,
+     566401.6,
+     563698.0,
+     544129.5,
+     594786.3
+    ],
+    "tracking": 567503.375,
+    "running": 2.123415470123291e-06,
+    "seeds_tripped": 0,
+    "past_band_steps": 1971.7,
+    "max_abs_offset": 0.361848920583725,
+    "past_dead_band_steps": 2637.4,
+    "deepest_rods_steps": 3.000002145767212,
+    "boron_span_ppm": 0.0
+   }
+  },
+  "krsko_shallow": {
+   "reference": {
+    "cost_mean": 670.3776245117188,
+    "cost_by_seed": [
+     610.1,
+     766.0,
+     647.3,
+     636.9,
+     648.2,
+     651.8,
+     727.8,
+     663.7,
+     642.5,
+     709.5
+    ],
+    "tracking": 5.933170318603516,
+    "running": 664.4444580078125,
+    "seeds_tripped": 0,
+    "past_band_steps": 0.0,
+    "max_abs_offset": 0.010120674967765808,
+    "past_dead_band_steps": 29.3,
+    "deepest_rods_steps": 33.020877838134766,
+    "boron_span_ppm": 51.07275390625
+   },
+   "null": {
+    "cost_mean": 628878.875,
+    "cost_by_seed": [
+     618365.5,
+     638240.6,
+     626597.6,
+     631410.5,
+     624599.6,
+     636378.6,
+     627020.0,
+     628624.5,
+     606428.6,
+     651122.9
+    ],
+    "tracking": 628878.875,
+    "running": 2.123415470123291e-06,
+    "seeds_tripped": 0,
+    "past_band_steps": 666.9,
+    "max_abs_offset": 0.1021377220749855,
+    "past_dead_band_steps": 2542.1,
+    "deepest_rods_steps": 3.000002145767212,
+    "boron_span_ppm": 0.0
+   }
+  },
+  "fast_return": {
+   "reference": {
+    "cost_mean": 4392.75830078125,
+    "cost_by_seed": [
+     4716.9,
+     4985.1,
+     4759.0,
+     3944.6,
+     4196.0,
+     4131.2,
+     4889.8,
+     4271.8,
+     4019.5,
+     4013.7
+    ],
+    "tracking": 2276.85546875,
+    "running": 2115.90283203125,
+    "seeds_tripped": 0,
+    "past_band_steps": 21.4,
+    "max_abs_offset": 0.1636708825826645,
+    "past_dead_band_steps": 1136.8,
+    "deepest_rods_steps": 43.20709991455078,
+    "boron_span_ppm": 174.107666015625
+   },
+   "null": {
+    "cost_mean": 673186.1875,
+    "cost_by_seed": [
+     582446.4,
+     671429.4,
+     736834.8,
+     641901.6,
+     772406.4,
+     595759.9,
+     707479.0,
+     696258.0,
+     570598.2,
+     756749.2
+    ],
+    "tracking": 673186.1875,
+    "running": 2.123415470123291e-06,
+    "seeds_tripped": 0,
+    "past_band_steps": 1803.6,
+    "max_abs_offset": 0.513279914855957,
+    "past_dead_band_steps": 2622.2,
+    "deepest_rods_steps": 3.000002145767212,
+    "boron_span_ppm": 0.0
+   }
+  },
+  "baseload": {
+   "reference": {
+    "cost_mean": 124.16190338134766,
+    "cost_by_seed": [
+     75.5,
+     183.1,
+     70.7,
+     105.8,
+     94.5,
+     130.4,
+     173.4,
+     108.7,
+     133.6,
+     165.9
+    ],
+    "tracking": 0.0,
+    "running": 124.16190338134766,
+    "seeds_tripped": 0,
+    "past_band_steps": 0.0,
+    "max_abs_offset": 0.0038784260395914316,
+    "past_dead_band_steps": 0.0,
+    "deepest_rods_steps": 7.0436577796936035,
+    "boron_span_ppm": 13.627197265625
+   },
+   "null": {
+    "cost_mean": 0.7585546374320984,
+    "cost_by_seed": [
+     0.0,
+     3.9,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     2.7,
+     0.0,
+     0.0,
+     1.0
+    ],
+    "tracking": 0.7585525512695312,
+    "running": 2.123415470123291e-06,
+    "seeds_tripped": 0,
+    "past_band_steps": 0.0,
+    "max_abs_offset": 0.00385430920869112,
+    "past_dead_band_steps": 195.7,
+    "deepest_rods_steps": 3.000002145767212,
+    "boron_span_ppm": 0.0
+   }
+  }
+ }
+}

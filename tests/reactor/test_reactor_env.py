@@ -63,6 +63,8 @@ def _position_from_state(state: ReactorState) -> jnp.ndarray:
                     state.T_sg,
                     state.I_hat,
                     state.Xe_hat,
+                    state.I_tilt,
+                    state.Xe_tilt,
                 ]
             ),
         ]
@@ -145,7 +147,7 @@ def test_a_physics_sub_step_moves_the_physics_clock_alone(method):
     state = _default_state(params)
 
     new_state, _ = compute_next_state(
-        rho_raw=0.3,
+        action=jnp.array([0.3, 0.0]),
         state=state,
         params=params,
         integration_method=method,
@@ -163,21 +165,28 @@ def test_action_rate_limiting():
     params = ReactorParams()
     state = _default_state(params)  # starts with rho_ext=0
 
+    state = state.replace(rod_in=0.5)  # mid-stroke, so both ways are open
     step = params.rod_speed * params.delta_t
-    start = float(state.rho_ext)
+    start = float(state.rod_in)
 
     # One step toward max withdrawal, and one toward max insertion, at one speed.
-    new_state, _ = compute_next_state(rho_raw=1.0, state=state, params=params)
-    assert float(new_state.rho_ext) - start == pytest.approx(step, rel=1e-4)
-    assert float(new_state.rho_ext) < params.rho_ext_max  # not at max yet
-    new_state, _ = compute_next_state(rho_raw=-1.0, state=state, params=params)
-    assert float(new_state.rho_ext) - start == pytest.approx(-step, rel=1e-4)
+    new_state, _ = compute_next_state(
+        action=jnp.array([1.0, 0.0]), state=state, params=params
+    )
+    assert float(new_state.rod_in) - start == pytest.approx(-step, rel=1e-4)
+    assert float(new_state.rod_in) > 0.0  # not out yet
+    new_state, _ = compute_next_state(
+        action=jnp.array([-1.0, 0.0]), state=state, params=params
+    )
+    assert float(new_state.rod_in) - start == pytest.approx(step, rel=1e-4)
 
     # After many steps, should reach the limit
     st = state
     for _ in range(200):
-        st, _ = compute_next_state(rho_raw=1.0, state=st, params=params)
-    assert float(st.rho_ext) == pytest.approx(params.rho_ext_max, rel=1e-4)
+        st, _ = compute_next_state(
+            action=jnp.array([1.0, 0.0]), state=st, params=params
+        )
+    assert float(st.rod_in) == pytest.approx(0.0, abs=1e-6)
 
 
 def test_reward_peaks_on_target():
@@ -198,7 +207,7 @@ def test_rod_motion_penalty_applied():
     """Non-zero rod reactivity reduces the reward even at perfect tracking."""
     params = ReactorParams(reward_version=1)
     state = _default_state(params, target=1.0, n=1.0).replace(rho_ext=jnp.zeros(()))
-    state_with_rods = state.replace(rho_ext=jnp.asarray(params.rho_ext_max))
+    state_with_rods = state.replace(rho_ext=jnp.asarray(params.rho_ext_min))
     r_neutral = float(compute_reward(state, params))
     r_rodded = float(compute_reward(state_with_rods, params))
     assert r_neutral > r_rodded
@@ -243,6 +252,8 @@ def test_settles_toward_lower_power_when_rods_inserted():
 
     # Insert rods hard (-1 raw → rho_ext_min).
     for _ in range(20):
-        state, _ = compute_next_state(rho_raw=-1.0, state=state, params=params)
+        state, _ = compute_next_state(
+            action=jnp.array([-1.0, 0.0]), state=state, params=params
+        )
 
     assert float(state.n) < 1.0

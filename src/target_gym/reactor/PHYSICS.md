@@ -1,320 +1,274 @@
 # Nuclear reactor: physics model, provenance and validation
 
-Reference plant: a **3 GW thermal pressurised-water reactor**, modelled with point
-kinetics, six delayed-neutron groups, xenon-135 poisoning, thermal feedback, a steam
-generator driven by the turbine, and rate-limited control rods.
+Reference plant: a **3 GW thermal pressurised-water reactor** with a two-point core:
+iodine and xenon in the top and bottom halves, an axial offset, rods that enter from
+the top, soluble boron that reaches the core late, thermal feedback, and a steam
+generator driven by the turbine.
 
-Contract for `target_gym.reactor`. Method: `docs/PHYSICS_METHODOLOGY.md`.
+Contract for `target_gym.reactor`. Design notes and measured results:
+`docs/proposals/reactor-axial.md`.
 
-Status: ✅ validated · ⚠️ defensible but approximate · ❌ known deviation
+Each number is **read** (opened and read twice), **derived** (computed from read
+numbers, the sum shown) or **ours** (a choice, with its reason).
 
 ---
 
-## 0. The rebuilt control problem
+## 0. The control property
 
-A rebuild (`docs/proposals/industrial-fixes.md`, PR 6).
+**Axial offset.** Rods act in seconds but disturb the power's axial shape, and that
+shape drives a xenon oscillation near 29 h long. Boron leaves the shape alone but
+reaches the core 5 to 15 minutes late. A plant running Mode A depends on both, which
+is why OAPS names the operator's struggle with the offset as the real limit on its
+load following.
 
-The task used to ask a reactor to track a power demand with its rods, on a plant
-with no secondary side, a fixed inlet temperature and a fixed flow. One rod integrator
-matched the full-state oracle, because power was all there was to hold.
-
-The rebuilt task asks **how to hold Tavg on its program through a 100-50-100 day.**
-With a steam generator in the loop, the turbine sets the heat leaving the primary,
-and energy balance then fixes steady power at the load wherever the rods are. Rods
-200 pcm apart leave `n` at 0.8000 and move Tavg by 6 K. So the rods' job is Tavg,
-which is what a PWR's rod control does, and what the tracked output now is. The owner
-chose that on 2026-11-06, with the 30 s step in section 3, over keeping `n` scored.
-
-Three things make that a control problem:
-
-1. **Xenon is a large, slow, unmeasured disturbance.** It moves the rods' balance by
-   hundreds of pcm through the day.
-2. **The bank has a stop.** After a hold of about 3 to 8 h, the return asks for more
-   than the 1500 pcm bank has, so Tavg sags.
-3. **Rod travel costs money.** Holding tighter costs steps, which is what a dead band
-   is for.
+Tavg is held by reactivity from either actuator. Delta I is moved only by the rods.
+So the rods are spent on the offset, and boron carries Tavg through the ramps, late.
 
 ---
 
 ## 1. Model and provenance
 
-**Point kinetics** with the standard six-group U-235 thermal delayed-neutron data of
-Keepin (1965):
+**Total power** is point kinetics with Keepin's six delayed groups:
 
 ```
 dn/dt   = ((rho - beta) / Lambda) n + sum_i lambda_i C_i
 dC_i/dt = (beta_i / Lambda) n - lambda_i C_i          i = 1..6
 ```
 
-Reactivity is the sum of the rod, the thermal feedbacks and the xenon term:
+**Reactivity:**
 
 ```
-rho = rho_ext
-    + alpha_fuel    (T_fuel - T_fuel_ref)
-    + alpha_coolant (T_avg  - T_coolant_ref)
-    - rho_Xe_full   (Xe_hat - 1)
+rho = rod_worth(y) - rod_worth(y_park) + boron_worth (boron - boron_ref)
+    + alpha_fuel (T_fuel - T_fuel_ref) + alpha_coolant (T_avg - T_coolant_ref)
+    - rho_Xe_full (Xe_hat - 1)
+rod_worth(y) = -1500 pcm (y - sin(2 pi y) / (2 pi))
 ```
 
-**Thermal model.** Fuel, a hot-leg node holding the core, a cold-leg node holding the
-steam generator tubes, and the steam generator's secondary:
+`y` is how far in the rods are, as a fraction of the stroke. The curve is the
+integral worth of a cosine flux, so a shallow bank is worth little.
 
-```
-C_fuel    dT_fuel/dt = P_ref n - UA (T_fuel - T_hot)
-C_coolant dT_hot/dt  = UA (T_fuel - T_hot) - m_dot_cp (T_hot - T_cold)
-C_cold    dT_cold/dt = m_dot_cp (T_hot - T_cold) - UA_sg (T_avg - T_sg)
-C_sg      dT_sg/dt   = UA_sg (T_avg - T_sg) - P_ref load
-T_avg = (T_hot + T_cold) / 2
-```
-
-The turbine takes `P_ref load` from the secondary. A cut in load warms the secondary,
-then the cold leg, and the moderator feedback brings the reactor down with it, with
-no rod moving. That is how a PWR follows its turbine.
-
-**Xenon-135** is tracked through its iodine parent in normalised units, so
-equilibrium at full power is `I_hat = Xe_hat = 1`:
+**The two-point core** is the Onega and Kisner model, as Mastroianni's 1979 thesis
+prints it (eqs 2.15 to 2.18). Flux, iodine and xenon are each a cosine plus a first
+harmonic, `psi = n (cos bz + A sin 2bz)`, with amplitudes found by integrating over
+the two halves of the core. `A` is then exactly (top - bottom) / (top + bottom), the
+axial offset, and each half is `mean +- tilt`:
 
 ```
 dI_hat/dt  = lambda_I (n - I_hat)
-dXe_hat/dt = a n + b I_hat - (lambda_Xe + sigma_phi0 n) Xe_hat
+dI_tilt/dt = lambda_I (n A - I_tilt)
+dXe_hat/dt = a (r n + I_hat) - (lambda_Xe + s n (1 + A Xe_tilt / Xe_hat)) Xe_hat
+dXe_tilt/dt = a (r n A + I_tilt) - lambda_Xe Xe_tilt - (8 / 3 pi) s n (A Xe_hat + Xe_tilt)
+
+A = -(8 b + 10 eps) / (N + sqrt(N^2 + 64 b (b + 5/4 eps)))
+b = S Xe_tilt
+N = 45 pi^3 D / (8 H^2) - S Xe_hat + 7 n Phi alpha nu_Sigma_f
 ```
 
-Integration is **TR-BDF2 on the fast block** (neutrons plus precursors) with the
-thermal and fission-product states advanced explicitly. One control step is 6
-sub-steps of 5 s, each of 4 inner solves. Those 4 are needed: at 2 solves, an inner
-step of 2.5 s misses the prompt jump, and inserting rods raises power. Over a full
-day of rod program, this agrees with 0.5 s sub-steps to a mean of 0.07 K in Tavg and
-to 4 pcm in 3086 pcm of rod travel.
+Here `s` is `sigma_phi0`, `r` is `gamma_ratio`, `a = (lambda_Xe + s) / (1 + r)` and
+`S` is the full-power xenon's absorption, `sigma_x X0`. With `eps = 0`, `Xe_hat = 1`
+and `n = 1` this is the thesis's `A = v - sqrt(v^2 + 1)`, `v = N / (8 S Xe_tilt)`.
 
-Deliberately **not** modelled:
+**What we added to the thesis, by its own method.** Projecting the diffusion equation
+onto the first harmonic gives the thesis's `v`, down to `D`, `S` and the denominator,
+so the same projection places an absorption difference `eps` between the halves. A
+term of 0.25 % of absorption, the thesis's stand-in for the rod move, then leaves a
+tilt of 0.19 once it ends, which is the plant's reading. Two sources feed `eps`:
 
-| Omitted | Rationale |
-|---|---|
-| Spatial neutronics (flux tilt, axial offset, xenon oscillations) | Point kinetics is a zero-dimensional reduction. Real load follow is limited by axial offset, which this cannot show. |
-| Samarium-149 and other poisons | Xenon dominates the short-term reactivity balance. |
-| Burn-up and fuel depletion | Episodes are 12 h; depletion acts over months. |
-| Boron / chemical shim | Real PWRs trim reactivity with boron. The EUR asks for load following without adjusting it (Lokhov 2012), and here the rods do everything. |
-| Primary-loop transport delay | The two coolant nodes smear it. |
-| Turbine, condenser, steam pressure | The turbine is a heat sink at the load. |
-| Decay heat | Power follows the neutron flux, so a scram removes all heat instantly. |
+```
+eps = -0.5 rho_ext_min nu_Sigma_f sin(pi y)^3                     rods from the top
+    + alpha_coolant nu_Sigma_f (rise_full - (T_hot - T_cold)) / 4  moderator
+```
 
-**Regime of validity.** Power manoeuvring between 50 % and 100 % of rated, with
-reactivity well below prompt critical. Not valid for startup, shutdown transients, or
-any accident scenario.
+The rods' weight is their overlap with the harmonic: nothing when out, and nothing
+all the way in. The moderator's term is the coolant's rise up the core: the two
+node means sit a quarter of the rise either side of Tavg, and a smaller rise at part
+load moves power up the core, the direction Krsko describes. Boron enters no `eps`:
+it is uniform, and the APR1400 paper finds its effect on axial shape negligible.
+
+**Boron** is a feed and bleed of well-mixed coolant. A command joins a queue, and
+reaches the core `boron_delay` control steps later:
+
+```
+d(boron)/dt = Q / M (C_feed - boron)
+Q = 10 kg/s dilution (C_feed 0), 3 kg/s boration (C_feed boric_acid_ppm)
+```
+
+The heat path is unchanged: fuel, hot leg, cold leg, steam generator, with the
+turbine taking `P_ref load`. Energy balance fixes steady power at the load. Thermal
+states and xenon step explicitly, neutrons by TR-BDF2, 4 solves in each of 6 sub-steps
+of 5 s.
+
+**Left out:** the second axial harmonic and radial modes, grey rods, boron's effect
+on the moderator coefficient, burn-up, samarium, decay heat, loop transport delay.
 
 ---
 
 ## 2. Validation targets
 
-| Quantity | Target | Model | |
+| Quantity | Source figure | Model | |
 |---|---|---|---|
-| Total delayed fraction beta | 0.0065 (U-235 thermal) | **0.00650** | ✅ |
-| Neutron generation time Lambda | 1e-5 to 1e-4 s (PWR) | 1e-4 | ✅ |
-| Doppler coefficient | -2 to -4 pcm/K | **-3.0** | ✅ |
-| Moderator coefficient | -10 to -50 pcm/K | **-30** | ⚠️ |
-| I-135 half-life | 6.57 h | **6.57 h** | ✅ |
-| Xe-135 half-life | 9.14 h | **9.13 h** | ✅ |
-| Stable period at +100 pcm (inhour) | tens of seconds | **55 s** | ✅ |
-| Maximum rod worth vs prompt critical | must stay < beta | **0.77 beta** | ✅ |
-| Steady power at a load, any rod position | the load | **0.8000 at 0.8** | ✅ |
-| Tavg shift per rod move at fixed power | `d rho / |alpha_f + alpha_m|` | **3.03 K per 100 pcm** | ✅ |
-| Rod speed, either way | 72 steps/min: 7.89 pcm/s | **7.89** | ✅ |
-| Coolant rise across the core | 30 to 40 K | **33.3 K** | ✅ |
-| Fuel temperature at full power | below the 1473 K trip | **1051 K** | ✅ |
-| Xenon peak after a scram | 9 to 11 h | 8.3 h | ⚠️ D2 |
-| Peak xenon worth after a scram | about 2000 to 3000 pcm | **-2213 pcm** | ✅ |
+| Axial mode period, full power | 28.3 h measured (Ringhals-4); 31.5 to 39.3 h in Pedersen et al.'s models | **32.7 h** | in the models' range |
+| Axial mode decay, full power | 0.05 per hour (Ringhals-4) | **0.070 per hour** | near |
+| Axial mode at half power | damped (DP-1239: feedback weakens, xenon saturates) | **-0.057 per hour** | yes |
+| Undamped xenon cross section | 3.02e-18 cm2 (thesis, section 3.2) | 2.92e-18 | yes |
+| Tilt after the Oconee pulse | 0.19 (fig. III-1) | **0.19 +- 0.04** | yes |
+| Rods 34 steps in at 50 %, xenon at 110 of 96 | delta I near +5 % (Krsko figs 3, 5, 6) | **+5.4 %** | yes |
+| Rate that full flows allow at 1690 ppm | 1 to 2 %/min (OAPS) | **about 2 %/min** | yes |
+| Rods steps for delta I = 0 at 50 % | 34 steps (Krsko fig. 3) | **42 steps** | yes |
+| Inhour at +100 pcm | tens of seconds | 55 s | yes |
+| Coolant rise | 30 to 40 K | 33.3 K | yes |
+| Peak xenon worth after a scram | 1800 to 3200 pcm, test band | **1419 pcm** | **no** |
 
-The **inhour check** ties Lambda and all twelve delayed-neutron constants together
-through the dispersion relation, and a reactor period is the quantity an operator
-would recognise.
-
-The **reactivity budget** is the second. With Tavg on program, the rods have to
-cancel the power defect and the xenon, and the worth required is an output of the
-model:
-
-| load | Tavg | feedback, from full power | rods needed, at full-power xenon |
-|---|---|---|---|
-| 1.00 | 580.2 K | 0 | -38 pcm |
-| 0.75 | 576.4 K | +480 pcm | -518 pcm |
-| 0.50 | 572.5 K | +961 pcm | -999 pcm |
-
-The bank spans -1000 to +500 pcm, so the rods sit about 40 pcm in at full power, with
-540 above them, and 50 % load fits at the bottom. Xenon moves that through the day.
-A return to full power after a hold asks for more than the full-power position by:
-
-| hold | 2 h | 3 h | 4 h | 5 h | 6 h | 7 h | 8 h | 9 h |
-|---|---|---|---|---|---|---|---|---|
-| extra rods at the return (pcm) | 473 | 576 | 630 | 647 | 638 | 610 | 569 | 519 |
-
-So holds of about 3 to 8 h run out of bank, by up to about 100 pcm or 3 K of Tavg
-until the xenon burns off, and shorter or longer ones do not. With only 40 pcm spare
-at full power, as this plant once had, every policy sagged 18 K on every return.
+**The peak xenon miss.** The two-point model's flux, 2.69e13 with its pi / 4, burns
+xenon at 5.75e-5 per second, against the 7.95e-5 this page used before. The flux is
+tied to the period, so it stayed, and the old test fails on it. Reported, not moved.
 
 ---
 
 ## 3. Parameter table
 
-Status of each source: **read** means two readers opened the page and found the
-value. **earlier** means a previous session read it from the NRC's manual, whose PDFs
-now refuse automated readers, so it was not re-read here. **ours** means a choice for
-the owner to accept, with what is behind it.
-
-| Symbol | Value | Unit | Source | |
+| Symbol | Value | Unit | Source | Status |
 |---|---|---|---|---|
-| `beta_i`, `lambda_i` | 6-group | – | Keepin (1965), U-235 thermal | ✅ |
-| `Lambda_gen` | 1e-4 | s | PWR range | ✅ |
-| `alpha_fuel` | -3.0e-5 | 1/K | Doppler, PWR range | ✅ |
-| `alpha_coolant` | -30e-5 | 1/K | Ours: inside the -10 to -50 pcm/K range this page used, where the old -5 sat outside. Plant limits seen only in search results run near -80 pcm/K at end of cycle | ⚠️ |
-| `T_fuel_ref` | 1064 | K | Ours: sets the rods about 40 pcm in at full power, a mechanical-shim position for load follow without boron | ⚠️ |
-| `rho_ext_min/max` | -0.010 / +0.005 | – | A 1500 pcm bank, below prompt critical | ⚠️ |
-| `rod_speed` | 7.89e-5 | 1/s | Earlier: 72 steps/min over the 228-step stroke (NRC HRTD 8.1, NUREG/CR-5555), one speed both ways. It replaces 40 and 20 pcm/s, which were 5 and 2.5 times that | ✅ |
-| `P_thermal_ref` | 3.0 | GW | Large PWR | ✅ |
-| `C_fuel`, `UA` | 3.3e7 J/K, 6.6e6 W/K | – | About 100 t of UO2; gives a 5 s fuel time constant | ⚠️ |
-| `m_dot_cp` | 9.0e7 | W/K | Gives the 33 K core rise | ✅ |
-| `C_coolant`, `C_cold` | 4.7e8, 9.3e8 | J/K | Ours: about 250 t of primary water at 5.6 kJ/kg/K, split a third and two thirds. No open source for the volume was found | ⚠️ |
-| `UA_sg` | 1.36e8 | W/K | Ours: 22 K from Tavg to the steam at full load | ⚠️ |
-| `C_sg` | 1.0e9 | J/K | Ours: secondary water and tube metal, about 7 s against `UA_sg` | ⚠️ |
-| `T_avg_no_load`, `T_avg_full_load` | 564.8, 580.2 | K | Earlier: 557 to 584.7 F, NRC HRTD 5.0 | ✅ |
-| `sigma_phi0` | 7.95e-5 | 1/s | sigma_a 2.65e-18 cm2 x Phi of about 3e13 n/cm2/s | ✅ |
-| `gamma_ratio` | 0.049 | – | Direct Xe yield / I yield (0.003 / 0.061) | ✅ |
-| `rho_Xe_full` | 0.025 | – | Equilibrium xenon worth, 2500 pcm | ✅ |
-| `n_max` | 1.09 | – | Ours: the high-flux trip as remembered, 109 %. Neither reader could open a source | ⚠️ |
-| `T_avg_min` | 556 | K | Ours: 541 F, the minimum temperature for criticality as remembered. Neither reader could open a source | ⚠️ |
-| `load_ramp_rate` | 5 %/min | – | Read: the EPRI URD column of Table 1 in [Chari and Rohr, 1997](https://proceedings.cns-snc.ca/index.php/pcns/article/download/3245/3244/3280). The URD itself is not open, so this is a vendor's quotation of it. The EUR's standard rate is lower, at 3 %/min ([Lokhov, 2012](https://www.neimagazine.com/features/featureload-following-capabilities-of-npps)) | ✅ |
-| `load_min` | 0.5 | – | Read: the URD's 100-50-100 daily cycle, same table | ✅ |
-| `hold_range` | 3 to 8 h | s | Inside the URD's 2 to 10 h, same paper, so the return falls inside 12 h | ✅ |
-| `ramp_down_range` | 0.5 to 2 h | s | Ours | ⚠️ |
-| `demand_theta`, `demand_sigma` | 300 s, 0.5 % sd | – | Ours: a small frequency-control wobble | ⚠️ |
-| `delta_t` | 5.0 | s | Physics sub-step; 6 per env step, so 1440 env steps = 12 h | ✅ |
+| `beta_i`, `lambda_i` | 6-group | | Keepin (1965) | earlier |
+| `Lambda_gen` | 1e-4 | s | PWR range | earlier |
+| `alpha_fuel` | -3.0e-5 | 1/K | Doppler, PWR range | earlier |
+| `alpha_coolant` | -30e-5 | 1/K | Inside -10 to -50 pcm/K, no figure opened | ours |
+| `T_fuel_ref` | 1051.4 | K | Zero feedback at full power on program | derived |
+| `rho_ext_min` | -0.015 | | A 1500 pcm bank, kept from the earlier plant, no figure opened | ours |
+| `rod_speed` | 72 / 60 / 228 | 1/s | 72 steps/min over 228 steps, NRC HRTD 8.1, read by an earlier session | earlier |
+| `rod_park` | 3 / 228 | | D bank at 225 steps, Krsko fig. 3 | read |
+| `boron_ref` | 1690 | ppm | Krsko fig. 3 | read |
+| `boron_worth` | -8e-5 | 1/ppm | Two NRC papers gave -6.73 and -8.15 pcm/ppm in search summaries, neither would open | ours |
+| `dilution_flow`, `boration_flow` | 10, 3 | kg/s | OAPS, section 2.1 | read |
+| `boron_delay_range` | 10 to 30 | steps | 5 to 15 min, OAPS, section 2.1, drawn at reset | read |
+| `boric_acid_ppm` | 7800 | ppm | A vendor's recycling concentrate, seen in a search summary, the PDF would not open | ours |
+| `primary_mass` | 2.5e5 | kg | The water behind `C_coolant` and `C_cold`. 60 ppm of 1690 then takes 9 t, against Krsko fig. 4's 6 t | ours |
+| `sigma_x` | 2.72e-18 | cm2 | Mastroianni, Table III-1 | read |
+| `D_diffusion` | 4.99 | cm | 283 pcm, the first axial harmonic's eigenvalue separation of Ringhals-4 in Pedersen et al.'s homogeneous model (table 3), as D x 3 pi^2 / (H^2 nu Sigma_f). The thesis's 0.405 cm gives 23 pcm, halves coupled 12 times too weakly (docs/proposals/reactor-coupling.md). Owner's decision, 2026-11-08 | derived |
+| `alpha_power` | 3.64e-16 | cm2 s | Table III-1 | read |
+| `Sigma_f` | 0.14 | 1/cm | Table III-1 | read |
+| `gamma_x`, `gamma_I` | 0.0046, 0.061 | | Table III-1 | read |
+| `H_core` | 365.8 | cm | Table I-1 | read |
+| `nu_Sigma_f` | 2.44 x 0.16 | 1/cm | Derived, see below | derived |
+| `Phi_full` | 2.02e13 / 0.75 | 1/cm2/s | Thesis section 3.1, the test's flux at 75 % power | read |
+| `sigma_phi0` | 5.75e-5 | 1/s | `sigma_x Phi_full pi / 4` | derived |
+| `gamma_ratio` | 0.0754 | | `gamma_x / gamma_I` | derived |
+| `rho_Xe_full` | 0.025 | | 2500 pcm, kept | earlier |
+| `P_thermal_ref` | 3.0 | GW | Large PWR | earlier |
+| `C_fuel`, `UA`, `m_dot_cp` | as in `env.py` | | The 33 K rise, a 5 s fuel lag | earlier |
+| `C_coolant`, `C_cold`, `UA_sg`, `C_sg` | as in `env.py` | | No source for the volumes | ours |
+| `T_avg_no_load`, `T_avg_full_load` | 564.8, 580.2 | K | NRC HRTD 5.0, read by an earlier session | earlier |
+| `n_max` | 1.09 | | Remembered trip, not opened | ours |
+| `T_avg_min`, `floor_allowed` | 556 K, 900 s | | The minimum temperature for criticality, 541 F at Salem, a limit with 15 min to act, not a trip. No EDF figure is public; the NRC copies could not be opened | ours |
+| `load_ramp_rate` | 2 %/min | | Top of OAPS's Mode A range | read |
+| `load_min`, `hold_range` | 0.5, 3 to 8 h | | The URD's cycle, Chari and Rohr (1997) | earlier |
+| `ramp_down_range` | 0.5 to 2 h | s | | ours |
+| `demand_theta`, `demand_sigma` | 300 s, 0.5 % | | A small frequency-control wobble | ours |
+| `max_steps_in_episode` | 2880 | steps | A day, so the xenon's swing shows after the return | design |
 
-**Actuator and timing figures.** The rate limit is the jack speed above, and the
-rods have no lag on top. The rods are read back exactly, by counting steps. The RTDs
-and ion chambers have no dead time or lag here, labelled ours: their response is
-taken to sit inside the 30 s step, with no figure opened.
-
-**Why 30 s and not the plan's 60 s.** The program's slowest speed is 8 steps/min. Over
-60 s that is 8 steps, 53 pcm, about 1.8 K, more than the 1.5 F dead band, so the rods
-limit-cycle: 172,300 pcm of travel in a day against 2100 at 30 s, 20 s or 10 s.
+**`nu_Sigma_f`.** Table I-1 prints Sigma_a 1.53 and nu Sigma_f 1.56, and with those
+the thesis's equations are heavily overdamped, which its own results are not.
+Sigma_a is not one of the varied parameters. Criticality asks Sigma_a = nu Sigma_f,
+and its fission estimate of 0.16 with Chalmers' nu of 2.44 gives 0.39. That value
+reproduces its undamped cross section to 3 % and its plant's period to 2 %. It was
+chosen on the thesis's printed results, not on anything of this task's.
 
 ---
 
 ## 4. Task design
 
-### Task: `reactor`
-
-Hold a 3 GW pressurised-water reactor's average coolant temperature on its program
-through a day of load follow, using the control rods. The turbine goes from full load
-to half and back at 5 %/min, power follows it by itself, and xenon moves the rods'
-balance by hundreds of pcm. Rod travel wears the mechanism, and costs are in dollars.
+Run a 100-50-100 day as EDF runs Mode A (docs/proposals/reactor-plant-check.md): hold
+Tavg within the rods' dead band of its program and the axial offset within 0.05 of
+its reference, with rods and boron, knowing the day's plan. Each episode starts at full
+load, rods parked, boron critical, xenon at the balance of a recent power of 0.9 to
+1.0 and no tilt. The load starts down in 0.5 to 2 h, holds at 50 % for 3 to 8 h and
+comes back, at 2 %/min with a small wobble.
 
 | obs | meaning |
 |---|---|
-| 0 | `n`, neutron power relative to nominal (1 is full power) |
+| 0 | `n`, power relative to rated |
 | 1 | hot-leg temperature (K) |
-| 2 | rod position, normalised to [-1, 1] |
-| 3 | turbine load, relative to rated |
-| 4 | `T_avg`, the mean of the hot and cold legs (K) |
-| 5 | `T_ref`, the program at this load (K) |
+| 2 | rod position, +1 fully out, -1 fully in |
+| 3 | turbine load |
+| 4 | `T_avg` (K) |
+| 5 | `T_ref` (K) |
+| 6 | `delta_I`, top minus bottom, a fraction of rated |
+| 7 | boron in the core (ppm), as the boronmeter read it 20 min ago |
+| 8 | hours until the planned ramp down starts, 0 once it has |
+| 9 | hours until the planned ramp up starts, 0 once it has |
+| 10 | the recent power the starting xenon is balanced with (rule 16: operators know their power history) |
 
-**The day.** Each episode starts at full load on program, with xenon at the
-equilibrium of a recent power of 0.9 to 1.0. The load starts down between 0.5 and 2 h
-in, holds at 50 % for 3 to 8 h and comes back, each ramp at 5 %/min, with a small
-frequency-control wobble on top. The wobble is two-sided at full load as well, so the
-load can pass 1 by a fraction of a percent. Each ramp is one move to the scorer, so a
-day has three cycles, and a ramp lasts 20 steps.
+Actions: `[rod demand, boron flow]` in [-1, 1]. Rod demand reads as obs 2. Boron flow
+is -1 for full dilution, +1 for full boration. Xenon, iodine, their tilts, the boron
+on its way and the delay's length are hidden; the power history in obs 10 is what an
+operator's xenon tool starts from.
 
-**Why it is hard.**
+**Limits** (charter rule 14, Amendment 3):
 
-1. **Xenon is hidden and moves by hundreds of pcm.** Nobody measures it, and it
-   drifts through the whole hold.
-2. **The bank runs out** after a mid-length hold (section 2).
-3. **Tight holding costs rod travel,** and the mechanism has a finite life.
-4. **Four timescales at once**: prompt neutrons (ms), precursors (s to min),
-   thermal (s to min), xenon (hours).
-5. **Most of the state is hidden.** The six precursors, fuel temperature, the steam
-   generator, iodine and xenon are all unobserved.
+| limit | kind | form | source |
+|---|---|---|---|
+| power, fuel temperature, hot leg | trip | the envelope; a scram, 48 h of lost output | ours, family 24 to 70 h (Doel-3, INIS 1ypr9-dk595; APR1400, KNS 20A-065) |
+| Tavg under 556 C | timed | 900 s allowed, then hot standby, 15 h of lost output | ours, inside the family's 15 to 30 min to restore; 15 h from Doel-3's 6 h down and 18 h reduced |
+| axial offset outside +-0.05 | penalty clock | time outside counts at every power; 1 h in 24 h is free; past it, the lost output of a derate to 50 % | EDF's band (IAEA NP-T-3.23, annex II-4.3); the 1 h in 24 h and the derate from Westinghouse specifications (D.C. Cook, RAOC), pooled in since EDF's was not found |
+| rod insertion limit | timed | a straight line in power, 22 % of the stroke in at full power to 78 % at half; 2 h to restore (STS 3.1.6), then hot standby | KAIST's lead for the points; the family's shape |
 
-**Reward** = -(Tavg off program + rod travel + trip cost), in dollars.
+The clock starts each day at 0 (ours: the episode is the 24 h window).
 
 ---
 
 ## 5. Known deviations
 
-**⚠️ D1: the load goes straight to heat.** The turbine is a heat sink at the load.
-Steam pressure, valve limits and the secondary's own control are left out, so a sag in
-Tavg costs no megawatts here, only its price in the reward.
+**D1: the load goes straight to heat.** Steam pressure, valves and the secondary's
+controls are left out.
 
-**⚠️ D2: the xenon peak is early and shallow.** 8.3 h after a full scram at 1.89 times
-equilibrium, against a documented 9 to 11 h. The peak *worth* (-2213 pcm) lands in the
-right band, so the reactivity consequence is realistic even though the timing is
-roughly an hour early.
+**D2: the halves' coupling is not the thesis's.** D is set from Ringhals-4's eigenvalue
+separation, not from the thesis's one-group constants, which coupled the halves 12
+times too weakly and made the half-power mode neutral. The thesis cross-checks run on
+the thesis's own D. With the new D, Krsko's half-power state comes out at +5.4 %
+against +5 %.
 
-**⚠️ D3: rods only.** Real plants use boron for much of a load cycle (Chari and Rohr
-1997), and the EUR's rods-only load following relies on grey rods this model does not
-have. Here the one bank carries the whole swing, and it has to sit inserted at full
-power to have the room.
+**D3: rods from one side.** A bank reaches only the top, so at full power with rods
+out nothing can push power up the core. Xenon tilted to the top can drive delta I
+down and past the band, and only time brings it back. Real plants have more than one
+bank.
 
-**⚠️ D4: the coolant is two lumps.** Transport delay around the loop is smeared, so a
-fast change at the steam generator reaches the core slightly early.
+**D4: no scored peaking.** Delta I is scored on its penalty clock alone, with no link
+to local power or to a trip, and the outer AFD envelope is not modelled.
 
-**❌ D5: no decay heat.** Power follows the neutron flux exactly, so a scram removes
-all heat immediately. A real reactor still produces about 7 % of rated power seconds
-after shutdown, decaying over hours.
+**D6: an overrun is priced, not flown.** Past the offset's allowed hour the cost is a
+derate's lost output, but the load does not drop: the plant keeps following the plan.
+
+**D8: EDF Mode A cannot hold the band on these days.** With the offset band as a
+penalty clock, the Mode A pairing (the rod program on Tavg, the operator's boron on the
+offset) spends about 9 h a day outside the band on seeds 100 to 109, overruns the
+allowed hour on every seed and loses to the parked-rods null ($671k against $658k,
+docs/proposals/reactor-ladder-a3.json). That is the family's own experience: EDF
+developed Mode G, with grey power-shimming groups, for deep load following, and 48 of
+its 56 units run it (Muniglia et al., ICAPP 2016, hal-01355257; arXiv 2107.11201).
+Mode G is not modelled (docs/proposals/reactor-coupling.md). The owner adopted the
+Westinghouse procedure instead on 2026-11-08: bank D on delta I and boron trimming Tavg
+(Krsko, NENE 2022, section 3; KNS 18A-534), if it keeps the rod insertion limit.
+
+**D7: the boronmeter reads exact.** It is 20 min late (Areva US 8,489,338) but carries
+none of the patent's 7 % noise.
+
+**D5: no decay heat.** A scram removes all heat at once.
 
 ---
 
-## 6. The expert: Westinghouse rod control on average temperature
+## 6. The expert
 
-The expert is a PWR's automatic rod control, as the NRC's Westinghouse Technology
-training manual describes it (HRTD 8.1, rod control; HRTD 5.0, the Tavg program and
-the rate/lag unit). It reads the observation only (`experts.py`, `rod_control_step`),
-and its program is published, so nothing is tuned on seeds.
-
-- **Temperature channel.** Tavg against the program.
-- **Power-mismatch channel.** A rate/lag `40 s / (1 + 40 s)` on (load - power) in %
-  power, sampled exactly at the 30 s step. A nonlinear gain turns it into deg F: 0.3 F
-  per % up to 1 %, 1.5 F per % beyond. A variable gain multiplies it by 2 up to 50 %
-  load and by 1 / load above. The channel only acts on changes, so a steady mismatch
-  is left to the temperature channel.
-- **Rod speed.** On the total error in deg F: no motion inside +-1.5 F from rest;
-  moving rods stop only at 1.0 F (lockup); 8 steps/min to 3 F, then 32 steps/min per F
-  up to 72 steps/min from 5 F. A positive error withdraws.
-
-Every constant is read, so the recipe has nothing to tune, at any noise level
-(`docs/proposals/expert-protocols-process.md`, section 10). The store's old relay
-gains are gone, and each level's file holds an entry with no gain in it.
-
-### Results
-
-Measured on the held-out seeds 200 to 209 (2026-11-06), before any re-record.
-
-| policy | ratio to the expert | seeds won | trips | Tavg cost | rod cost |
-|---|---|---|---|---|---|
-| expert | 1 | | 0 | $1163 | $480 |
-| oracle, 4 seeds | 1.8 | 4 of 4 | 0 | $206 | $755 |
-| a plain integrator on Tavg, the gate's witness | **1.17** | **10 of 10** | 0 | $798 | $598 |
-| table with an I-only trim on Tavg, SIMC gain | 0.72 | 0 of 10 | 0 | $885 | $1407 |
-| the review's rod integrator, as written | 0.15 | 0 of 10 | 0 | $10,534 | $712 |
-| table of the target | 0.11 | 0 of 10 | 0 | | |
-| constant, middle of the range | 0.04 | 0 of 10 | 0 | | |
-| the review's law, at its per-second gain | 0.04 | 0 of 10 | 2 | | |
-
-The review's law stopped winning because of the plant: it holds energy, which keeps
-Tavg near its starting value and off program at part load. The oracle's row is the
-`NewtonMPC` that held this slot, on seeds 200 to 203.
-
-The oracle is now the shared solver (`oracle.py`): the env's own stiff step, sub-step
-by sub-step, over the 5 minutes the horizon protocol gives, P = 10 steps with a ramp
-of 2. The rod demand stays within the rods' reach, the corner left inside it is
-smoothed at the K5 width, each sub-step's Tavg error and a step's rod travel are
-epigraph terms, and the trips are hard limits on every sub-step's state. It reads the
-true state, xenon and the day's schedule included, and plans the load's mean path.
-
-**An integrator on Tavg beats the rod program.** The dead band costs $365 of Tavg
-error to save $119 of rod travel, at the $1 a step labelled ours above. The expert
-moves 480 steps in a day and the integrator 598. The owner kept that price on
-2026-11-07, so the integrator is the better controller on this reward, and the
-written exception at the end of this page holds the evidence. The gate shows the win
-as a strict xfail with this witness in place. The price was not moved to make it pass.
+The expert is the reference of `scripts/reactor_ladder.py`, EDF's Mode A. The
+published rod program (`rod_control_step`, the NRC's Westinghouse manual) holds Tavg.
+The operator's boron, from the ladder's rung 5, steers the offset through the rods as a
+cascade, fed forward from the plan and led by the line's delay, fed forward from
+xenon's balance by the operator's xenon tool (textbook iodine and xenon run on the
+observed power from the power history, `xenon_feedforward`, on every rung), and takes
+Tavg while the rods sit at their top stop, handing back bumplessly. Every boron gain is SIMC on bump tests at full power and
+at the half-power hold, keeping the least gain. The owner chose this pairing on
+2026-11-08: the program's nonlinear speed copes with the rods' 7-fold gain swing, which
+the rungs' linear PI could not. Results and room are in
+`docs/proposals/reactor-axial.md`.
 
 ---
 
@@ -328,7 +282,7 @@ as a strict xfail with this witness in place. The price was not moved to make it
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 1440 | 30 | 12.0 h | 1 in [-1, 1] | 6 | 23 |
+| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 11 | 105 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -339,17 +293,22 @@ which is what the recorded baselines use.
 
 ## Reward (version 2), in dollars per 30 s control step
 
-`compute_reward = -(tracking + running + failure)`; each physics sub-step charges its 5 s and `step_env` sums the six, see docs/reward-shaping.md.
+`compute_reward = -(tracking + running + failure)`, with Tavg under its program past the dead band and the offset clock's derate in `tracking`, and rod travel and effluent in `running`; each physics sub-step charges its 5 s and `step_env` sums the six, see docs/reward-shaping.md.
 
 | parameter | value | source |
 | --- | --- | --- |
 | `e_floor` | 0.05 K | the RTD reading's resolution, about its 0.045 K scatter: a documented minimum, not a certified floor |
-| `e_tol` | 0 | none. The rod program's dead band is the controller's, not the reward's |
+| `e_tol` | 1.6 K | the black rods' dead band: EDF's rods move only past 1.6 C off program (IAEA NP-T-3.23, annex II-5.1). CEA's papers on Mode G's R group give 0.8 C with slow motion up to 1.7 C |
 | `tracking_exponent` | 1 | linear, as lost output is |
 | `imbalance_multiple` | 1.25 x 0.0023 per K of `spot_price_per_MWh` on `P_electric_GW` | **ours.** Off program, steam conditions cost output. The relative Carnot slope at 547 K steam and 305 K condenser is 305 / (547 x 242) = 0.23 %/K. At the one imbalance price of the priced plants, $100/MWh (1.25 x the $80 spot), on `P_electric_GW` = 1.0 GW, a third of the 3 GW thermal, that is 100 x 1000 x 0.0023 = $230/h per K, so **$1.917 per K over a 30 s step**. It prices a hot plant as a cold one, which the slope does not say |
-| `rod_step_price` | $1 per step | **ours.** Rod travel, as the steps the rods actually moved. Mechanism lives of 6 to 9 million steps turned up in search results, but neither reader could open one |
-| `failure_cost` | 87.34 $ per step | twice the dearest step that survives: 40 K off program, $7.67, and 36 rod steps, $36, per 30 s |
-| `restart_steps` | 5760 (48 h) | restart time priced into a trip, `restart_steps x failure_cost` (a SCRAM's xenon-limited restart; provisional); where a plant engineer would get it: the plant's restart procedure |
+| `rod_step_price` | $1 per step | **ours,** kept by the owner on 2026-11-07. Rod travel, as the steps the rods actually moved |
+| `ao_band`, `ao_ref` | 0.05, 0 | EDF: during load follow the axial offset stays within 0.05 of its reference (IAEA NP-T-3.23, annex II-4.3). The reference is the offset at full power, xenon balanced, rods out: 0 in this core. In delta I the band is 0.05 times the power |
+| `ao_allowed`, `derate_to`, `derate_price_per_MWh` | 3600 s, 0.5, $80/MWh | the penalty clock: 1 h in 24 h, then a derate to 50 %, its lost output priced at $80/MWh (inside the family's $80 to $100) on `P_electric_GW` (Westinghouse specifications, D.C. Cook and RAOC, pooled in) |
+| `ril_full`, `ril_half`, `ril_allowed` | 0.22, 0.78, 7200 s | the rod insertion limit, a straight line in power (KAIST's lead), 2 h to restore (STS 3.1.6) |
+| `effluent_price` | $0.0628 per kg injected | **ours.** Every kg injected displaces a kg to treat (OAPS). Boiling it off takes 2.26 MJ/kg, 0.628 kWh, at $100/MWh |
+| `failure_cost` | 666.67 $ per step | a step of lost production: 1 GWe at $80/MWh, inside the family's $80 to $100 |
+| `restart_steps` | 5760 (48 h) | a scram's restart, **ours,** family 24 to 70 h: Doel-3 ran 18 h at reduced power after a 6 h scram (INIS 1ypr9-dk595), APR1400's restart windows are 22 to 70 h (KNS 20A-065) |
+| `standby_steps` | 1800 (15 h) | hot standby after a timed limit's overrun, **ours:** Doel-3's 6 h down and 18 h reduced, about 15 h of full output lost |
 
 A step at the floor costs `rho_floor_tracking`, $0.0958: the price per K over the 30
 s step, times `e_floor`.
@@ -375,7 +334,7 @@ old weights are read only by it).
 ## Readings
 
 The observation reports power and the coolant temperatures through their instruments
-(`docs/proposals/measurement-noise.md`). Rod position, the load and Tref stay exact:
+(`docs/proposals/measurement-noise.md`). Rod position, the load and Tref stay exact, and boron reads 20 min late:
 the rods are the controller's own rate-limited command, known by counting steps.
 `sensor_noise_scale = 0` gives the noise-free task. Tavg is the mean of the two RTDs,
 so it scatters by 0.045 K over sqrt(2), and shares a draw with the hot-leg channel.
@@ -383,6 +342,7 @@ so it scatters by 0.045 K over sqrt(2), and shares a draw with the hot-leg chann
 | reading | sigma | step | instrument | status | source |
 | --- | --- | --- | --- | --- | --- |
 | `n` | 1.9e-4 of rated | | Ex-core power-range ionization chambers | Corrected | [OSTI 7260785](https://www.osti.gov/servlets/purl/7260785) |
+| `delta_I` | 2.7e-4 of rated | | Two ex-core sections, each as noisy as `n`, summed. Ours, from that one figure | ours | as `n` |
 | `T_coolant`, `T_cold` | 0.045 K | | Pt100 RTD with TMT82-class transmitter | Corrected | [TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
 
 **Weak figures.** Both are bounds, from opposite sides.
@@ -405,45 +365,3 @@ sub-steps as it does `reward`. Each sub-step's true error is shifted by the draw
 in the observation that step returns, because a controller gets one reading per
 step, and any trip comes from the true state. The cost is linear, so noise has no
 floor of the proposal's quadratic form here.
-
-## Written exception to check 1
-
-A null policy wins here. A plain integrator on Tavg beats the rod program on 10 of 10
-held-out seeds, at a ratio of 1.17, with the rod step at $1. The owner accepted that
-on 2026-11-07 and kept the price, labelled ours. The integrator is the better
-controller on this reward, and that is the result. Passing a gate is no reason to move
-a price.
-
-**What the price would have to be.** The two tie at $3.07 on the means, between $1.91
-and $5.84 by seed. The gate's rule, 6 wins with a ratio above 1, fails up to $2.50 and
-passes from $3.
-
-| rod price | ratio | seeds the integrator wins | gate |
-|---|---|---|---|
-| $1, kept | 1.18 | 10 | fails |
-| $2 | 1.06 | 9 | fails |
-| $2.50 | 1.03 | 7 | fails |
-| $3 | 1.00 | 5 | passes |
-| $4 | 0.97 | 2 | passes |
-
-**What the sources can and cannot say.** Whole-head replacement projects ran from $20
-million to $150 million (NEI Magazine, both read twice), and those heads were replaced
-for nozzle cracking, not for wear. A vendor's 8 million steps of mechanism life was
-only seen in a search summary, so it is not a read figure. At 480 steps a day, 40
-years is 7 million steps, which fits it. All of a head over 8 million steps is $2.50 to
-$19 a step, and a tenth of a head's mechanisms, roughly one bank (ours), is $0.25 to
-$1.90. The whole-head reading charges a mechanism's wear with a cost it did not cause,
-and the bank's share rests on two figures nobody opened, so nothing here settles a
-price. Both $1 and $3 sit inside the range.
-
-The expert stays the published program, and a policy can beat it by holding Tavg
-tighter than its dead band and paying for the rod travel. The witness stays in the
-gate as a strict xfail, with no PR to remove it, so a change that stops it winning
-shows up.
-
-## Written exception to check 2
-
-The credibility check on a sourced real figure has nothing to read here. The owner
-accepted a class exception on 2026-11-06: no published figure could be found or opened
-after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
-says what was tried.
