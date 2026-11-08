@@ -38,7 +38,7 @@ def _draw_turbine(ax, state, params):
     cx, cy, R = 0.56, 0.55, 0.30
 
     # Inflow.
-    v_frac = rk.clamp01((v - params.v_min) / (params.v_max - params.v_min))
+    v_frac = rk.clamp01(v / (1.2 * params.v_cut_out))
     for i, yy in enumerate(np.linspace(cy - R * 0.8, cy + R * 0.8, 5)):
         rk.flow_arrow(
             ax,
@@ -197,7 +197,7 @@ def render_wind_turbine(state, params, step, history):
         rk.Gauge(
             "WIND",
             f"{float(state.v_wind):.1f} m/s",
-            (float(state.v_wind) - params.v_min) / (params.v_max - params.v_min),
+            float(state.v_wind) / (1.2 * params.v_cut_out),
             rk.TEAL,
             hidden=True,
         ),

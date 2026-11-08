@@ -69,8 +69,14 @@ from target_gym import eval as E
 from target_gym import records
 from target_gym.eval import fixed_settle
 
-__all__ = ["CONSUMPTION", "JOB_SCORED", "SPEC_BAND", "TRACKED_TERMS", "ceiling"]
-__all__ += ["compare"]
+__all__ = [
+    "CONSUMPTION",
+    "JOB_SCORED",
+    "SPEC_BAND",
+    "TRACKED_TERMS",
+    "ceiling",
+    "compare",
+]
 __all__ += ["fixed_settle", "headroom", "best_known", "recorded", "s_max", "score"]
 __all__ += ["score_policy", "seed_scores", "settle_band", "spec_band"]
 __all__ += ["gap_closed", "headline"]
@@ -84,12 +90,22 @@ _PATH = ("position_precision_floor", "e_floor_path", 1)
 _SLOT = ("slot_precision_floor", "e_floor_slot", 1)
 _ONE = (("precision_floor", "e_floor", 1),)
 
-#: Tasks redesigned under charter Amendment 2 (rule 15): scored on the
-#: operator's job, a zone and the source's economic cost, with no tracked
-#: setpoint. They have no tracking ceiling or settle band, which rule 8 no
-#: longer reads (S and H are dropped), so ``ceiling`` and ``settle_band`` are
-#: NaN for them, and they are in neither ``TRACKED_TERMS`` nor ``CONSUMPTION``.
-JOB_SCORED = frozenset({"compressor_surge", "distillation", "ph_neutralization"})
+#: Tasks scored on the operator's job (charter B5): keeping inside the plant's
+#: limits at the source's economic cost, with no tracked setpoint. They have no
+#: tracking ceiling or settle band (``ceiling`` and ``settle_band`` are NaN),
+#: and they are in neither ``TRACKED_TERMS`` nor ``CONSUMPTION``. Their headline
+#: is ``headline``; room comes from an oracle.
+JOB_SCORED = frozenset(
+    {
+        "battery",
+        "boiler_drum",
+        "compressor_surge",
+        "distillation",
+        "hvac",
+        "ph_neutralization",
+        "wind_turbine",
+    }
+)
 
 #: Per environment, the terms its reward tracks: ``(resolution field, e_floor
 #: field, count)`` on its params. ``count`` is ``"wingmen"`` for a term charged
@@ -141,7 +157,6 @@ def _recycle_power(state, params, tripped):
 CONSUMPTION = {
     "glass_furnace": lambda state, params, tripped: state.fuel_flow,
     "cement_kiln": lambda state, params, tripped: state.fuel,
-    "boiler_drum": lambda state, params, tripped: state.Q_fuel,
 }
 
 _RVSM = 65.0 * 0.3048  # m
@@ -210,8 +225,6 @@ def _currency_per_floor(name: str, p, step_seconds: float) -> float:
             p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW * 1000.0
         ) / 3600.0
         return per_unit_s * step_seconds * p.e_floor
-    if name in ("battery", "wind_turbine"):
-        return p.imbalance_price / 1.0e6 * step_seconds / 3600.0 * p.e_floor
     return 1.0
 
 

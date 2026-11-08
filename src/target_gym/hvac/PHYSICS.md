@@ -1,398 +1,222 @@
-# Building HVAC — physics model, provenance and validation
+# Building heating with a TABS slab: model, sources, limits and deviations
 
-Reference building: a **150 m² well-insulated single thermal zone**, heavyweight
-("medium" construction class), hydronic heating, heating-season weather.
+Version 5, rebuilt on 2026-11-08 under charter Amendments 1 to 3. The plant
+record is `REALITY.md`, and its cold review `COLD_REVIEW.md`. Source numbers
+[1] to [21] are REALITY.md's. Under Amendment 3 the task represents the
+family of slab-heated offices, not one building: numbers outside the record
+are labelled "ours" with the family's range. Nothing here is compared with an earlier version
+of the task (rule 11).
 
-Contract for `target_gym.hvac`. Every constant is derived here, cited, or
-flagged `TUNED — not sourced`; each row of §2 is asserted by a test in
-`tests/hvac/test_hvac_env.py`. Method: `docs/PHYSICS_METHODOLOGY.md`.
+## 1. The job
 
-Status: ✅ validated · ⚠️ defensible but approximate · ❌ known deviation
+REALITY.md sec. 6: choose the water temperature about a day ahead from the
+weather, so the room stays inside its comfort band through the coming hours,
+because the slab cannot correct within the day [9, p. 3], [7, p. 7].
 
----
+Named property (rule 18): **slow concrete-slab heating**. Heat reaches the
+room only through a concrete core with hours of time constant, and the slab
+self-regulates: its output falls as the room warms [7, p. 7], [9, p. 7].
 
-## 1. Model and provenance
+## 2. Model
 
-**EN ISO 13790 "simple hourly method"** — the 5R1C reduced-order network: three
-nodes (air, surface, mass), five conductances, one capacitance.
+The zone is the ISO 13790 5R1C network (air, surface star node and mass node,
+one capacitance), with a TABS slab added as [9]'s first-order model (Fig. 3):
+supply water, the fictitious resistance `R_t`, the concrete core's capacity,
+then the room.
 
 ```
-          Phi_ia + Q_heat        Phi_st            Phi_m
-                |                  |                 |
- T_out --H_ve-- T_air --H_tr_is-- T_s --H_tr_ms-- T_mass
-                                   |                 |
-                                H_tr_w            H_tr_em
-                                   |                 |
-                                 T_out             T_out
+dT_core/dt = (Q_slab + H_slab (T_air - T_core)) / C_slab
+Q_slab     = H_water max(T_supply - T_core, 0)        H_water = covered area / R_t
+H_slab     = A_floor / R_up + A_floor / R_down
+R_up       = d / (2 lambda) + R_flooring + 1 / h_floor   (floor face, carpet)
+R_down     = d / (2 lambda) + 1 / h_ceiling              (ceiling face)
+T_return   = T_supply - Q_slab / (m_dot c_w)
+T_floor    = T_air + (T_core - T_air) (1 / h_floor) / R_up
 ```
 
-Chosen because it is the standard reduced-order building model, is fully
-specified in a public standard, and is the lineage BOPTEST-style benchmarks
-build on. ISO 13790 has since been **superseded by EN ISO 52016-1**, which
-resolves construction layer-by-layer; 5R1C remains the accepted lumped
-approximation and is what keeps this environment cheap enough for RL.
+The core couples to the air node, and the air and surface nodes are solved in
+closed form each step. The zone is one storey of a stack of like storeys, so
+both faces of the slab heat it, as in [9]'s simulated room. The plant heats
+only: water below the core gives no heat, since it has no chiller.
 
-Only `T_mass` carries capacitance. `T_air` and `T_surface` have none, so their
-balances are two linear equations solved in closed form each step — no solver,
-no stiffness. Two differential states total (`T_mass`, plus `Q_emitter` for the
-heating system's lag).
+Measured on the plant: the slab's heat into the room after a 5 K supply step
+reaches 63.2 % of its change in 150 min (test 1); at design (-10 C, 21 C) the
+supply is 27.7 C and the floor surface 22.2 C (test 8).
 
-Deliberately **not** modelled:
+## 3. Numbers
 
-| Omitted | Rationale |
-|---|---|
-| Multiple zones | Single zone. Multi-zone coupling is a different (much larger) control problem. |
-| Humidity / latent load | Sensible heat only, as ISO 13790's simple method assumes. |
-| Cooling / heat-pump COP | Heating only; the action is thermal power, not electrical. |
-| Window opening, blinds, infiltration wind-dependence | Ventilation is a fixed air-change rate. |
-| Layer-resolved construction | The point of the lumped 5R1C reduction. |
-
-**Regime of validity.** Heating season, continuous occupancy schedule, indoor
-temperatures 15–25 °C. Not valid for cooling, summer overheating studies, or
-buildings whose construction class differs materially from "medium".
-
----
-
-## 2. Validation targets
-
-Derived from the parameter table, then checked against published ranges for a
-well-insulated dwelling.
-
-| Quantity | Target | Model | |
+| Symbol | Value | Unit | Source |
 |---|---|---|---|
-| Total heat loss coefficient `H` | — | 159.4 W/K = 1.06 W/(m²·K) | ✅ |
-| Building time constant `τ = C_m/H` | 30–100 h (heavyweight) | **43.1 h** | ✅ |
-| Design heat load at −10 °C | 30–50 W/m² (well-insulated) | **31.9 W/m²** | ✅ |
-| Heater sizing vs design load | 1.3–2.0× | 1.5× (7.2 kW vs 4.8 kW) | ✅ |
-| Overnight free-float drop (8 h, T_out 0 °C) | a few K for heavyweight | 20 → 16.6 °C | ✅ |
-| Steady 20 °C at T_out = 0 °C | — | 3.19 kW | ✅ |
-| Free gains against losses, per day | gains below losses | 39.1 against 57.4 kWh | ✅ |
-| Heating energy (expert) | — | 21.3 kWh/day, 142 Wh/(m²·day) | ⚠️ |
+| `slab_thickness` | 0.25 | m | [9] Table 2 |
+| `tabs_covering` | 0.80 | - | [9] Table 2 |
+| `R_t` | 0.08 | m^2 K/W | [9] Table 2, per covered m^2 |
+| `water_flow` | 15 | kg/(h m^2) | [9] Table 2 |
+| `R_flooring` | 0.125 | m^2 K/W | [9] Table 2 (carpet) |
+| `h_floor` | 10.8 | W/(m^2 K) | [5] p. 25 design table: 100 W/m^2 at 29 C and 50 W/m^2 at 24.8 C over a 20 C room, 11.1 and 10.4 |
+| `h_ceiling` | 6.5 | W/(m^2 K) | Ours: EN 1264-5 Table A.1 as commonly quoted, not read |
+| `concrete_density`, `concrete_heat_capacity`, `concrete_conductivity` | 2400, 1000, 2.0 | kg/m^3, J/(kg K), W/(m K) | Ours: ISO 10456 values as commonly quoted, not read; published ranges are 0.8 to 1.2 kJ/(kg K) and 1.5 to 3.5 W/(m K) |
+| `c_water` | 4186 | J/(kg K) | Water |
+| `T_supply_max` | 49 | C | The TABS family's documented maximum, Madrid's [14, Table 1]; Muenster runs 16 to 30 C [13]; screed floors are cut at 55 C [17] |
+| `T_supply_min` | 15 | C | Ours: the valve's lowest setting, which is off |
+| `cop_carnot_fraction` | 0.52 | - | Ours, family range 0.50 to 0.57: brine heat pump datasheets give COP 4.4 to 5.0 at B0/W35 and 2.7 to 3.2 at B0/W55 [18]; the model gives 4.58 and 3.10 |
+| `T_brine` | 0 | C | Ours, family range -5 to 5 C: the EN 14511 rating point B0 [18] |
+| `price_valle`, `price_llano`, `price_punta` | 0.139, 0.184, 0.263 | EUR/kWh | [19]: one Spanish 2.0TD offer, valle 00 to 08 h, punta 10 to 14 and 18 to 22 h; Madrid charges its slabs on the night tariff [14] |
+| `productivity_per_K` | 0.02 | 1/K | [20]: 2 % of work per K above 25 C; ours below 21 C, where [20] shows a loss but no per-K figure was read |
+| `occupants_per_m2` | 0.10 | 1/m^2 | Ours, family range 0.07 to 0.12 (8 to 15 m^2 a person) |
+| `labour_cost` | 31.8 | EUR/h | [21]: EU hourly labour cost, 2023 |
+| `occupied_start_h`, `occupied_end_h` | 8, 18 | h | [6, p. 3]: an office's day |
+| `frost_on`, `frost_off` | 4.4, 7.2 | C | [1]: below 40 F the zones go to setback until above 45 F |
+| `band_low`, `band_high` | 21, 26 | C | [9] p. 5: room setpoints 21 C heating, 26 C cooling, all year |
+| `floor_surface_max` | 29 | C | [5] p. 23 (EN 1264), [4] |
+| `comfort_tolerance` | 2.5 | K | Half the band, read only by the time-in-band KPI tables |
+| `precision_floor` | 0.1 | K | The BMS step, ours (Readings) |
+| `max_steps_in_episode` | 1344 | steps | Two weeks: a curve change is judged over two weeks [11, p. 1] |
+| `comfort_price` | 9.54 | EUR/(K h) | `productivity_per_K` x 15 occupants x `labour_cost`: the work an occupied kelvin-hour outside the band loses |
+| `restart_steps`, `failure_cost` | 0, 0.0 | - | No limit trips this plant |
+| `delta_t` | 900 | s | Ours: the standard building-simulation step |
 
-The time constant and design load are the load-bearing checks: together they
-pin both the envelope quality and the thermal mass, and they are what make the
-control problem what it is — a building that responds over *hours*.
+The building around the slab keeps its ISO 13790 envelope: 150 m^2 floor,
+`lambda_at` 4.5, "medium" class mass 165 kJ/(K m^2), `h_is` 3.45, `h_ms` 9.1,
+U-values 0.28 / 0.18 / 1.30 W/(m^2 K), 0.5 air changes per hour; H = 159.4
+W/K. These, the weather (5 C mean, 5 K daily half swing, 3 K OU deviation
+with a 12 h correlation), the solar peak (175 W/m^2, a PVGIS heating-season
+mean over four facades) and the internal gains (8 and 2 W/m^2, over the
+office day of [6]) are **ours**: REALITY.md has no weather statistics.
 
----
+Readings: room, outdoor, slab core and return water, each 0.023 K (SHT45
+class) rounded to the BMS's 0.1 K step (ours). The 24 h mean is computed from
+the true outdoor history, so it carries no noise worth modelling (0.023 K over
+96 readings). The supply is the valve's setting, exact.
 
-## 3. Parameter table
+## 4. Limits (rule 14)
 
-### Geometry (ISO 13790 §7 standard factors)
-| Symbol | Value | Unit | Source | |
-|---|---|---|---|---|
-| `A_floor` | 150 | m² | Reference zone size | ✅ |
-| `lambda_at` | 4.5 | – | `A_tot/A_floor`, ISO 13790 standard value | ✅ |
-| `f_class` | 2.5 | – | `A_m/A_floor`, "medium" class | ✅ |
-| `cm_per_area` | 165 000 | J/(K·m²) | "medium" class internal heat capacity | ✅ |
-| `h_is` | 3.45 | W/(m²·K) | Air↔surface film, ISO 13790 | ✅ |
-| `h_ms` | 9.1 | W/(m²·K) | Surface↔mass, ISO 13790 | ✅ |
+| Limit | Kind | Model |
+|---|---|---|
+| Supply water 49 C [14] | Protected | The valve's range stops at the TABS family's maximum |
+| Frost, room below 4.4 C [1] | Protected | The plant takes the supply to 49 C until the room exceeds 7.2 C; the electricity is charged |
+| Comfort band 21 to 26 C [9] | Zone | Each occupied kelvin-hour outside costs `comfort_price`, the work it loses [20, 21] |
+| Floor surface 29 C [5], [4] | Zone | Each occupied kelvin-hour above costs `comfort_price` |
+| ASHRAE 55 drift [4] | Not priced | No source prices it; test 11 checks the plant stays inside it |
 
-### Envelope
-| Symbol | Value | Unit | Source | |
-|---|---|---|---|---|
-| `U_wall` | 0.28 | W/(m²·K) | Modern insulated wall | ✅ |
-| `U_roof` | 0.18 | W/(m²·K) | Modern insulated roof | ✅ |
-| `U_window` | 1.30 | W/(m²·K) | Double glazing | ✅ |
-| `g_window` | 0.55 | – | Solar transmittance, double glazing | ✅ |
-| `A_wall/roof/window` | 120/150/25 | m² | Geometry for a 150 m² zone | ⚠️ |
-| `air_changes_per_hour` | 0.5 | 1/h | Typical dwelling ventilation rate | ✅ |
+Nothing trips. The old 5 C and 35 C trips had no source and are gone.
 
-`H_tr_em` is obtained by the standard's *series* split of the opaque envelope:
-`1/H_tr_op = 1/H_tr_em + 1/H_tr_ms`, giving 61.7 W/K.
+**Zones and cheap side (rule 22).** The comfort band, 21 to 26 C, is the
+zone; its cheap side is the low edge, since heat costs and the band's top is
+reached only by the sun. The reference's room setpoint is 21 C plus two
+standard deviations of the occupied room temperature, measured on its bump
+seeds. The floor limit never binds in the heating season (22.2 C at design).
 
-### Systems and disturbances
-| Symbol | Value | Unit | Source | |
-|---|---|---|---|---|
-| `Q_heat_max` | 7200 | W | 1.5× the 4.78 kW design load | ✅ |
-| `emitter_tau` | 900 | s | **Ours, for the owner to accept**: radiator and water lag. No measured figure for a room's panel radiator was found | ⚠️ |
-| `gain_occupied` | 8.0 | W/m² | People + lighting + equipment | ✅ |
-| `solar_peak` | 175 | W/m² | A heating season's mean over four facades, *Solar gain* below | ✅ |
-| `T_out_mean/amplitude` | 5 / 5 | °C | Heating-season daily cycle | ⚠️ |
-| `T_out_noise_std` | 3.0 | °C | OU weather deviation, ~12 h correlation | ⚠️ |
+## 5. Observation, episode and score
 
----
+**Observation** (rule 16): room air [6, 14], outdoor air and its mean over
+the last 24 h [9, 13], slab core [7, p. 8], [12, p. 12], return water [12, 14],
+the supply, the clock, the band's centre, the next 24 h's forecast mean
+outdoor temperature, and the tariff now with the hours to its next change.
+The forecast is what the job sentence plans on, "a day ahead from the
+weather": the daily cycle plus today's deviation decaying at the weather's
+rate, so its error is the weather's unforecast part. The tariff is a schedule
+known ahead (rule 16). The building's other mass is hidden.
 
-### Solar gain
+**Episode** (rule 17) and **scenarios** (rule 20): two weeks from established
+operation. The reset settles the building, slab included, at 21 C for the last
+day's mean weather and gains, with the supply that holds it there, as a
+heating curve runs it [7, p. 7]. No night setback: slab buildings hold a
+near-constant slab setpoint [7, p. 7], and [15] advises against setback for
+radiant floors. The suite (`scenarios.py`):
 
-`solar_peak` is the noon value of a half sine over 12 h, so a day delivers
-`175 * 12 * 2 / pi` = 1337 Wh/m² on the glazing. It is a seasonal mean with the
-cloud in it, not a clear-sky peak.
+| Scenario | Overrides | Source |
+|---|---|---|
+| `normal` | none, 5 C mean | [7], [9] |
+| `cold_snap` | 5 C mean -> -5 C | [15], [11] |
+| `shoulder_season` | 12 C mean, around the heating limit | [11], [9] |
+| `sunny_spell` | twice the season's mean sun | [6], [8] |
+| `low_gains` | occupied gains at the unoccupied 2 W/m^2 | [9] part 2 |
 
-It was 350 W/m², winter clear sky, every day. Then free gains matched losses, 57.45
-against 57.38 kWh/day, heating was never needed, and leaving the heater off beat
-the expert. 175 comes from what the glass receives over a heating season, not from
-any score. The zone's 25 m² of glazing has no stated orientation, so this takes the
-mean of four vertical facades, from [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/)
-5.2 (SARAH2, 2005 to 2020, `PVcalc` at slope 90 degrees), with the daily mean air
-temperature from its monthly tool (2010 to 2019):
+**Weights (charter J4).** Each scenario's share of a 13-fortnight heating
+season (`scenarios.py`): normal 6, shoulder season 4, sunny spell 1.5, cold
+snap 1, low gains 0.5. All are ours, with family ranges in `scenarios.py`;
+REALITY.md has no weather statistics.
 
-| site, season | mean air, °C | S / E / W / N, kWh/m²/day | four facades | as `solar_peak` |
-|---|---|---|---|---|
-| Frankfurt, Oct to Apr | 5.9 | 2.29 / 1.26 / 1.24 / 0.47 | 1.32 | **172** |
-| Paris, Nov to Mar | 5.9 | 2.31 / 1.05 / 1.05 / 0.40 | 1.20 | 157 |
-| London, Nov to Mar | 5.7 | 2.06 / 0.90 / 0.89 / 0.35 | 1.05 | 137 |
-| London, Oct to Apr | 7.1 | 2.29 / 1.19 / 1.17 / 0.47 | 1.28 | 167 |
-| Paris, Oct to Apr | 7.6 | 2.57 / 1.37 / 1.34 / 0.50 | 1.45 | 189 |
+**Score** (rule 15, Amendment 3), in euros: the heat pump's electricity, the
+slab's heat over its COP at the supply temperature, at the tariff; and each
+occupied kelvin-hour of room outside the band, or of floor above 29 C, at the
+work it loses. Night charging pays twice: the night tariff is 0.53 of the
+peak's, and the slab carries the heat into the day. Inside the band being
+nearer its middle earns nothing (rule 15; [20]'s loss inside 21 to 26 C is
+small and is not counted). The floor of the score, in closed form: a room held
+in the band costs only its electricity.
 
-The model's season is 5 °C. Frankfurt's seven months sit closest, with the whole of
-a heating season in them, and the plan's 175 is that figure, rounded. A building
-with all its glass facing south would see 260 to 340 and need far less heat.
+**The reference measured per scenario** (the heating curve, seeds 100 to 109,
+sensor noise on), euros per fortnight:
 
-With it, 18.4 kWh of solar and 20.7 kWh of occupancy leave 18.3 kWh a day to the
-heater, a third of the 57.4 kWh lost at 20 °C. Over 212 days that is 26 kWh/m² a
-year, an ordinary figure for this envelope. Left off, the zone settles near 15 °C.
-
-## 4. Task design
-
-### Task: `hvac`
-
-Keep a heavyweight, well-insulated single-zone building at its comfort setpoint
-through occupied hours and a night setback, with hydronic heating, over a week
-of heating-season weather. The cost is in euros: discomfort outside a 0.5 K
-band, plus the gas bill. The building's thermal mass is hidden and responds
-over tens of hours, so recovery from setback has to start well before the
-setpoint steps up.
-
-| obs | meaning |
-|---|---|
-| 0 | zone air temperature (°C) |
-| 1 | outdoor temperature (°C) |
-| 2 | heat output, percent of maximum |
-| 3 | solar irradiance, fraction of its peak |
-| 4 | sine of the hour of day |
-| 5 | cosine of the hour of day |
-| 6 | target zone temperature (°C) |
-
-**Observation.** What a building management system actually measures: zone and
-outdoor temperature, its own heat output, a pyranometer, and the clock. **`T_mass`,
-`T_surface` and `weather_dev` are hidden**, and the mass is precisely the state
-governing the multi-hour response. The agent measures air temperature but is
-really fighting a mass it cannot see.
-
-**Setpoint schedule** — occupied 21 °C (sampled 20–22.5 °C per episode), night
-setback 17 °C. Recovery from setback takes hours against a 43 h time constant,
-so a controller that waits for the setpoint step is already late. This is the
-structural gap MPC exploits and PID cannot close.
-
-**Reward** — in euros per step: discomfort outside a 0.5 K band, the gas bill
-and a trip cost, described in *Reward (version 2)* below.
-
-**Episode** 720 steps of 15 min (7.5 days).
-
----
-
-## 5. Known deviations
-
-**⚠️ D1 — synthetic weather.** Outdoor temperature is a daily sinusoid plus an
-OU deviation, not a real weather file. It has the right magnitude and
-correlation time but none of a real year's structure (fronts, multi-day cold
-spells). Cloud is in `solar_peak` only as a mean, so every day has the same sun.
-Consequence: an agent cannot learn genuine climate patterns, only the daily
-cycle plus noise.
-
-**⚠️ D2 — no cooling.** Heating only, so summer operation and the
-cooling/heating changeover are out of scope. Over-heating is penalised but
-cannot be corrected except by backing off the heat.
-
-**The 35 °C trip is still reachable only through the actuator**, which was
-worth checking, because a terminal state the controller has no authority over
-would be unlike every other trip in this suite. Peak free gain is 3.6 kW --
-2.4 kW of solar through the glazing plus 1.2 kW of occupancy -- against a heat
-loss coefficient of 159.4 W/K, so the *steady* rise above outdoor would be
-23 K, which on a 10 °C afternoon points at 33 °C. It never gets there: solar is
-zero for twelve hours a day and the 43 h thermal mass integrates, so with the
-heater held fully off the zone peaks at 18.3 to 20.6 °C across seeds. Reaching
-the trip requires the heater, so it is the controller's to avoid.
-
-**⚠️ D3 — solar gain ignores orientation and shading.** A single glazing area
-with one sinusoidal profile; a real zone has orientation-dependent gains and
-self-shading.
-
-**⚠️ D4 — lumped thermal mass.** The single `C_m` cannot represent a building
-whose surface responds quickly while its core lags — the distinction EN ISO
-52016-1 exists to capture. Adequate here, and the reason the model stays cheap.
-
----
-
-## 6. Baselines
-
-| controller | return | MAE | energy |
+| Scenario | Electricity | Lost work | Occupied mean room |
 |---|---|---|---|
-| MPC (24-step horizon, 6 h) | **135.8** | 1.72 °C | **39.6 kWh** |
-| PID | 87.6 | 1.38 °C | 68.3 kWh |
-| heating off | 34.4 | 2.97 °C | 0 |
+| `normal` | 13.9 to 18.5 | 0.2 to 9.9 | 22.7 C |
+| `cold_snap` | 32.1 to 37.4 | 0.3 to 11.0 | 22.6 C |
+| `shoulder_season` | 3.5 to 6.8 | 0.1 to 9.2 | 22.9 C |
+| `sunny_spell` | 8.7 to 13.1 | 0.5 to 8.3 | 23.7 C |
+| `low_gains` | 16.6 to 21.3 | 1.1 to 17.0 | 22.1 C |
 
-3-day episode. The MPC scores **1.55×** the PID while using **42 % less
-energy** — the anticipation advantage, from pre-heating ahead of setback
-recovery and coasting on forecast solar rather than reacting to it. It accepts
-slightly looser comfort (1.72 vs 1.38 °C MAE) for a large energy saving, which
-is exactly the trade the reward asks for. (The table predates the version-2
-reward and the expert below.)
+The curve undershoots 21 C on cold mornings (minimum 20.1 C) and never reaches
+the band's top. Rule 23: every seed costs more than zero.
 
-The oracle is now the shared solver (`oracle.py`): the episode reward on the
-5R1C model, the comfort hinge as epigraph rows, and a plan that runs to the
-episode's end, since Cooper's recipe gives P = 930 steps on this building's mass.
-That fit falls just short of the noise test, at 9.97 of its 10 bands with a fit of
-98 %, and counts under the owner's rule of 2026-11-06 (`docs/proposals/
-oracle-horizon-protocol.md`, Amendment 4). On the ten test seeds it beats the expert
-on every seed, -12.90 against -16.54, with no trip. Without the mass in the horizon
-it plans 2 hours, cannot see the morning, and wins only 3 of 10.
+## 6. Behaviour tests (charter step 3, Amendment 3)
 
-### The expert: outdoor reset with indoor feedback and optimal start
+`tests/hvac/test_hvac_reality.py` runs the cold review's eleven tests. Tests 2
+and 6 are restated as family properties, written in the tests before the
+rerun:
 
-Guideline 36 targets commercial VAV, so the expert is what a hot-water system in a
-dwelling runs: an outdoor reset with a room sensor, as the tekmar House Control 352
-runs one zone (data brochure D 352, 06/00), on the observation only (`experts.py`,
-`reset_step`). Its recipe is section 10 of
-`docs/proposals/expert-protocols-process.md`.
+| Test | Source | Result |
+|---|---|---|
+| 1. Slab time constant 145 to 462 min | [10], [6] | Pass, 150 min |
+| 2. Family: an ordinary change (+5 K supply, the size of a curve shift [11]) felt after 60 min or more | [8], [11] | Pass, 225 min |
+| 3. Curve shift moves the room one for one | [11] | Pass, ratio 0.76 |
+| 4. Slab output falls when gains rise | [7], [9] | Pass |
+| 5. Setback recovery 1 h or more | [15] | **Fails**: 45 min; 8 h with the water off cools the room only to 20.2 C |
+| 6. Family: the steady supply at -8 C lies in the TABS range, above 20 C and at most 30 C | [13] | Pass, 26.0 C |
+| 7. Heating limit 8 to 15 C | [11], [9] | Pass |
+| 8. Floor at most 29 C, supply at most 49 C at design | [5], [14] | Pass: 22.2 C and 27.7 C |
+| 9. Morning overshoot after reduced mode | [12] | Pass |
+| 10. Design supply never recovers a setback | [15] | Pass, 20.49 C after 15 h (limit 20.5) |
+| 11. ASHRAE 55 drift under the curve | [4] | Pass: at most 0.25 K in 15 min and 0.41 K in 1 h |
 
-- **The heating curve.** Heat supplied must equal heat lost, so the curve starts at
-  the setpoint in force and falls with the outdoor temperature. On this linear emitter
-  it is `Q = H (T_s - T_out)`, with `H` the building's 159.4 W/K. The heat stops when
-  the outdoor temperature reaches the starting point, which is warm weather shutdown.
-- **Indoor feedback.** The 352 shifts the starting point up when the zone is cold and
-  down when it is warm, and gives no number. Here that is a PI on the zone reading,
-  on a 0-1 heating signal: kp 0.236 per K and Ti 1309 s, from a bump on a quiet
-  building over five emitter lags. Its integral finds the free gains, and stops while
-  the signal is saturated.
-- **Optimal start.** LBL's `OBC/Utilities/OptimalStart` with its defaults. Nothing in
-  it is VAV-specific, and weather-compensated controllers carry their own: the
-  Siemens RVL470 calculates its changeover time up to a maximum heating-up period.
-  Three hours before occupancy it
-  samples the zone; if the zone is more than 0.5 K under the occupied setpoint, the
-  warm-up lasts the deficit over the learned heating rate, capped at 3 h. The rate is
-  the mean of the last three learned rates, floored at 1 K/h. Each warm-up learns one:
-  the temperature gained over the time taken to reach the setpoint, pushed at
-  midnight. During the warm-up the setpoint in force is the occupied one.
-- **What it knows.** The clock (from the time-of-day channels), the occupancy schedule
-  (07:00 to 22:00), the occupied setpoint last seen, the design 21 C before the first,
-  and the building's heat-loss figure. All are what a controller is commissioned with.
+Test 5 stays as a finding. [15]'s recoveries are for baseboard homes; a slab
+building is not set back (REALITY.md sec. 2), and 8 h off cools this one only
+0.8 K, so the full-heat recovery is short. Effect on the score: none, since no
+scenario sets the building back. Test 10 passes by 0.01 K for the same reason.
 
-The bump reads k 3.08 K per unit action and a lag of 1309 s, with half a sample as
-delay. SIMC at those values lands near the G36 PI it replaces, 0.1 per K and 900 s.
+## 7. Deviations still in the model
 
-On the held-out seeds 200 to 209 it costs EUR 15.65 an episode (worst 19.91), with no
-trip, and uses 22.9 kWh a day. Its zone is within the comfort tolerance on 83 % of
-occupied steps, 0.2 K above target on average, where the G36 loop ran 1.0 K above.
-No null policy passes for it: the table reaches 0.81 and wins no seed.
+- Heating only; TABS plants are reversible [13, 14]. Overheating above 26 C is
+  charged to an actuator that can only stop heating.
+- Weather, sun and gains are ours (section 3). Cold snaps, sunny spells and
+  low-gain days are scenarios, a fortnight each, not events inside one.
+- A free continuous supply every 15 min; practice changes the curve once a day
+  and spreads it over 12 h [6].
+- One retailer's tariff [19] stands for the family's day-night prices.
+- The forecast is the weather model's own conditional mean; real day-ahead
+  forecasts carry their own error, not modelled.
+- The 5R1C "medium" mass is kept beside the slab, which a TABS building would
+  count in its class.
 
-Spec, a strict xfail in `tests/hvac/test_hvac_expert.py`: the zone within the comfort
-tolerance at the start of occupancy on 90 % of held-out mornings. It holds 46 of 70,
-where the G36 loop held 67. This is what the stronger loop does to optimal start. The
-zone now reaches its setpoint fast, on the air's quick rise, so the module learns
-about 5 K/h, starts 0.7 h before occupancy, and the mass pulls the air back: the
-median morning is 0.16 K short, and the worst 2.9 K. G36's warm-ups ran to the 3 h
-cap. It ships as a finding, and the morning's cost is small next to the day's.
+## 8. What the reference ladder's row needs
 
-**Cheap to step**: one differential state with closed-form algebraic nodes,
-which is what the 5R1C reduction buys. See
-[docs/performance.md](../../../docs/performance.md) for measured throughput --
-it depends on the machine and the batch size, so it is measured in one place
-rather than claimed in fifteen.
+- The move is the supply water temperature (C). A bump test is a supply step;
+  the slab's time constant is hours (test 1), so bumps need about a day.
+- The zone back-off (section 4): room setpoint 21 C plus 2 sigma of the
+  occupied room temperature on the bump seeds, with `ladder.zone_setpoint`
+  and the cheap side "low".
+- The steady-state feedforward rung is the heating curve from the plant's
+  balance (hvac/experts.py), read on the 24 h mean or the forecast (channel 9).
+- The cascade rung has measured inner variables: the slab core (channel 3) or
+  the return water (channel 4) [7, 12].
+- Cost in euros of electricity at the tariff and occupied lost work; seeds
+  start established, so no warm-up transient enters it.
 
----
+## 9. What the oracle needs
 
-<!-- BEGIN GENERATED FACTS -->
-
-<!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
-     `make ci-docs` fails if this block does not match the code. Prose
-     about *why* these numbers are what they are belongs outside it. -->
-
-### Facts, generated from the code
-
-| environment | steps | step (s) | episode | action | obs | float state |
-| --- | --- | --- | --- | --- | --- | --- |
-| `hvac` | 720 | 900 | 180.0 h | 1 in [-1, 1] | 7 | 11 |
-
-`float state` counts the scalar and array float fields the state carries,
-`time` excluded; the gap between it and `obs` is what the controller cannot
-see. Episode lengths are the scored configuration's (`env.default_params`),
-which is what the recorded baselines use.
-
-<!-- END GENERATED FACTS -->
-
-## Reward (version 2), in euros per step
-
-`compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.
-
-| parameter | value | source |
-| --- | --- | --- |
-| `comfort_tolerance` | 0.5 K | occupied comfort band about the setpoint (dead-zone) |
-| `setback_lower_bound_only` | True | **provisional design choice.** During the setback only the shortfall below 17 C is charged. This plant cannot cool, so a symmetric night target would score the weather: at the old clear-sky `solar_peak` the zone sat +4.3 K above the setback target every night (`scripts/measure_hold.py`, shipped MPC). Not remeasured at 175. |
-| `comfort_price` | 0.03 EUR per K^2 per hour | **provisional**: twice the gas it takes to remove 1 K for 1 h (H = 159 W/K at EUR 0.10/kWh = EUR 0.016), so comfort is worth fixing but not at any price; the earlier 0.2 was 12x the gas and the gas term never bound. Sweep 0.015 / 0.03 / 0.06 |
-| `gas_price` | 0.10 EUR/kWh | charged on the emitter's heat in full: the bill the plant trades against comfort |
-| `tracking_exponent` | 2 | quadratic outside the band |
-| `failure_cost` | 4.3 EUR per step | twice the reachable excursion's comfort cost for one 15 min step, 2 x 0.03 x 17^2 x 0.25: a 22.5 C setpoint to the 5 C trip, less the band |
-| `restart_steps` | 4 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (reset after a freeze or overheat alarm; provisional); where a plant engineer would get it: the plant's restart procedure |
-| `restart_in_place` | True | a building does not restart cold: its thermal mass persists through a lockout, so after a trip the plant keeps its state and every step outside the envelope is charged the trip cost (`restart_steps x failure_cost` = EUR 17) until the controller brings it back (`base.failure_kernel`); a fresh draw at 18-22 C offered a free cool-down for EUR 78 against EUR 145/day of overheating
-
-Floor: overheating sets it. The shipped MPC's lowest per-seed hold cost after burn-in (EUR 0.0273 per
-step on the test episode, comfort 0.0206; the 3-seed means are 0.0427 and 0.0364 -- the weather moves it 2x between seeds; `scripts/evaluate_baselines.py`) is `rho_floor`, an upper bound; the certified
-reduced-model optimum under this cost is not yet computed (the earlier
-certified HVAC runs used the version-1 comfort cost). `e_floor` is not a
-parameter of this priced reward; `rho_floor` carries the MPC reference.
-
-`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
-hold cost the reference controller demonstrated, in the reward's units, which
-is 1 per term where the floor is that hold and less where the floor is clamped
-at the instrument resolution -- and `rho_floor` the same with consumption
-charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
-measured/certified floor or a resolution used as a scale, and where it is a
-resolution on a deterministic plant both references are 0, since exact hold is
-achievable there and the resolution only sets the unit;
-`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
-cost the envelope can produce, and `restart_steps` the time a restart would take,
-so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
-ends the window, in either mode (`base.failure_kernel`): the building keeps its
-state (`restart_in_place`), and every step outside the envelope is charged the
-trip cost, with tracking and running cost zeroed, until the controller brings
-it back. `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
-capped log-scaled reward of the previous version (`precision_floor` and the
-old weights are read only by it).
-
-## Readings
-
-The observation reports air, outdoor air, the emitter's heat and solar irradiance
-through their instruments (`docs/proposals/measurement-noise.md`), and `heat_pct`
-inherits the heat meter's noise. The clock channels and the setpoint stay exact.
-`sensor_noise_scale = 0` gives the noise-free task, rounding included.
-
-| reading | sigma | step | instrument | status | source |
-| --- | --- | --- | --- | --- | --- |
-| `T_air` | 0.023 K | 0.1 K at BMS | Digital room sensor, SHT45 class | Confirmed | [SHT45](https://cdn.sparkfun.com/assets/9/7/7/a/d/SHT45-AD1B-R2_datasheet.pdf) |
-| `T_out` | 0.023 K | 0.1 K at BMS | Shielded outdoor sensor | Not checked | [SHT45](https://cdn.sparkfun.com/assets/9/7/7/a/d/SHT45-AD1B-R2_datasheet.pdf) |
-| `Q_emitter` | 27 W | | Hydronic heat meter: Pt100 pair plus flow sensor | Not checked | [TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
-| `solar_gain(time)` | 1 W/m2 | | Kipp & Zonen SMP6 pyranometer | Not checked, no source | [SMP6](https://spaces.awi.de/download/attachments/183009319/KippZonen_Manual_Smart_Pyranometers_DE_HMe.pdf?api=v2) |
-
-The 0.1 K step is this library's own floor for a building management system. The
-sensor's converter resolves 0.01 K, and no source gives the BMS figure. At 0.1 K
-the step dominates: rounding alone gives 0.029 K rms, and a reading mid-bin sits
-still between steps.
-
-**Weak figures.**
-
-- `solar_gain` is a guess. The manual gives offsets under 10 W/m2 and no scatter
-  figure. It is 0.57 % of `solar_norm` at peak.
-- `Q_emitter` has no meter sheet behind it. It is the scatter of a Pt100 pair on
-  an assumed 15 K loop difference, 0.38 % of reading, taken at `Q_heat_max`.
-- `T_out` assumes the zone sensor's class, and the refutation pass did not reach it.
-
-Solar gain is computed from the clock, which must stay exact, so it is a channel
-reading: channel 3 in `solar_norm` units, 1/175 of the 175 W/m2 peak. It reads
-small values of either sign at night, as a real pyranometer's offset does.
-
-**Timing, all ours for the owner to accept.** The 15 min step is the standard
-building-simulation step and a plausible BMS trend interval, no source opened.
-The readings have no dead time.
-
-The expert reads these values, and so does every tuner. The oracle plans and acts
-on the true state, so it stays a full-state bound. `reward`, trips and the score
-read the true state. `info["measured_reward"]` is the same cost on the readings,
-with any trip taken from the true state.
-
-## Written exception to check 2
-
-The credibility check on a sourced real figure has nothing to read here. The owner
-accepted a class exception on 2026-11-06: no published figure could be found or opened
-after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
-says what was tried.
+- `oracle.py` is ported to v5 (COP, tariff, occupied hinges at the work-loss
+  price) and builds; it has not run.
+- Its horizon must reach across a night to the next occupied day, at least 24
+  h (96 steps), for night charging to show; the slab's time constant (150 min
+  for its flux) sets how far ahead a supply move pays.

@@ -1,8 +1,10 @@
 """
-Boiler drum — natural-circulation drum boiler with shrink-and-swell.
+Boiler drum: natural-circulation drum boiler with shrink-and-swell.
 
 See ``PHYSICS.md`` in this directory for provenance, the parameter table and
-the validation targets. Method: ``docs/PHYSICS_METHODOLOGY.md``.
+the known deviations, and ``REALITY.md`` for how real drum boilers are read,
+moved and protected. Every change below cites ``REALITY.md`` (charter rules
+11 to 18).
 
 Topology::
 
@@ -18,35 +20,18 @@ Topology::
                        v              |
                        +----[ Q ]-----+
 
-Four states: drum pressure ``p``, total water volume ``V_wt``, and the steam
-mass held in the risers (``m_sr``) and as bubbles below the drum water level
-(``m_sd``). The first two carry the global inventory; the last two say where
-the steam *is*, which is what fixes the water surface.
+The plant is Astrom and Bell's fourth-order drum model, ported from the
+authors' own simulation code with the numbers of the P16-G16 unit
+(REALITY.md [S1], Appendix B). Four states: drum pressure ``p``, total water
+volume ``V_wt``, steam quality at the riser outlet ``alpha_r`` and the steam
+volume under the drum's water surface ``V_sd``.
 
-Why this environment exists
----------------------------
-Drum level is the classic **non-minimum-phase** control problem, and nothing
-else in this suite has that shape:
-
-* **Swell.** Open the turbine valve and pressure falls, so every bubble in the
-  system expands and the hot water inventory flashes. The level goes *up* even
-  though mass is leaving. A controller that reacts to the level it sees cuts
-  feedwater exactly when it should be adding it, and the level then collapses.
-* **Shrink.** Subcooled feedwater collapses bubbles, so adding water makes the
-  level *fall* before it rises.
-* **Level is an integrator.** It has no natural steady state -- a 2 % feedwater
-  bias walks the level 9 cm in ten minutes -- so the controller cannot simply
-  settle on a bias.
-* **Both limits are irrecoverable.** High level carries water into the turbine;
-  low level uncovers the tubes. Real boilers trip on both.
-* **Voidage is unmeasurable.** ``m_sr`` and ``m_sd`` are hidden. No plant
-  instrument reads riser void fraction, and it is precisely the state driving
-  the inverse response.
-
-The controller sets firing rate and feedwater flow, through actuators that lag
-and slew. The turbine sets its valve, a hidden disturbance whose *future* is
-unknown. The steam flow it passes follows drum pressure and is measured, as in
-three-element control.
+The job (REALITY.md sec. 6): keep the drum water between the low trip that
+starves the tubes and the high trip that floods the turbine while the load
+moves, and hold the steam pressure, with feedwater and firing. The unit is in
+boiler-following mode [S10]: the turbine valve follows the load plan, and the
+boiler holds pressure. Steam that leaves off the plan is the cost, and a trip
+loses the production of a hot restart.
 """
 
 from typing import Tuple
@@ -59,64 +44,69 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
-from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
+from target_gym.utils import convert_raw_action_to_range
 
 PA_PER_BAR = 1e5
-
-# Ornstein-Uhlenbeck steam demand. 1/theta is about 200 s, so a load swing
-# persists over several drum time constants rather than flickering step to step.
-STEAM_OU_THETA = 5.0e-3
 
 
 @struct.dataclass
 class BoilerDrumParams(EnvParams):
     delta_t: float = 2.0
-    max_steps_in_episode: int = 400  # 800 s at dt = 2 s
+    #: One hour of operation around a planned load change (PHYSICS.md, Task).
+    max_steps_in_episode: int = 1800
 
-    # ---- Reward (docs/reward-shaping.md; version 2) ----
-    # Two tracked outputs, one term each, summed. The level floor, 2.67 mm, is
-    # an earlier oracle's lowest per-seed hold, measured when that oracle saw
-    # the steam noise of its best seed; the pressure floor is the 0.05 bar
-    # transmitter resolution. The current oracle plans on the mean steam
-    # demand and holds 2.45 mm and 0.0519 bar on its
-    # best seed (`scripts/measure_hold.py`, 1200 hold steps after a 60-step
-    # burn-in; PID 37-70 mm, 0.035-0.050 bar). Both are within 1.5x of the
-    # floors, so the floors stay the scale. Upper bounds on the achievable
-    # floors. Fuel is charged as a share of the hold-phase firing rate
-    # (1.566e8 W, MPC), at weight 1. The level trip (0.25 m) costs (0.25 / 0.00267)^2 =
-    # 8.8e3 and the reachable 23 bar pressure error (23 / 0.05)^2 = 2.1e5; a
-    # trip twice the sum.
-    reward_version: int = 2
-    e_floor_level: float = 2.67e-3  # m, an earlier oracle's best hold; now 2.45 mm
-    e_floor_pressure: float = 0.05  # bar, the transmitter's resolution; MPC 0.052
-    e_tol: float = 0.0
-    tracking_exponent: float = 2.0
-    c_hold: float = 1.566e8  # W fuel while holding (MPC)
-    running_weight: float = 1.0
-    failure_cost: float = 2.0 * (
-        (0.25 / 2.67e-3) ** 2 + (23.0 / 0.05) ** 2
-    )  # level trip, and the reachable 23 bar (88 -> 65)
-    #: Restart time priced into a trip (``reward.trip_cost``; 4 h at 2 s steps: a drum trip's restart, provisional).
-    restart_steps: int = 7200
-    #: Tracking cost per step at the floor, in the reward's units.
-    #: The oracle's best hold: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (the MPC's 2.45 mm level and 0.0519 bar
-    #: pressure holds, in 2.67 mm and 0.05 bar units).
-    rho_floor_tracking: float = (2.45e-3 / 2.67e-3) ** 2 + (0.0519 / 0.05) ** 2
-    rho_floor: float = (2.45e-3 / 2.67e-3) ** 2 + (0.0519 / 0.05) ** 2
-    #: True where e_floor is a resolution, not a measured or certified floor.
-    floor_is_documented_minimum: bool = False
+    # ---- Score (rule 15, Amendment 3): money at the imbalance price ----
+    # REALITY.md sec. 6: the job is to keep the level between the trips while
+    # the load moves. In boiler-following mode the boiler holds pressure for the
+    # turbine [S10], so a pressure error is steam, and generation, off the
+    # plan, which imbalance settlement prices; a trip is "a costly plant trip"
+    # [S2], the generation lost until a hot restart. Steam off the plan within
+    # the steam meter's resolution is not counted: no settlement can see it.
+    # Precision inside the trips earns nothing (rule 15).
+    reward_version: int = 4
+    #: Ours, family range 2.18 to 4.51 kg/kWh (ideal-cycle examples, REALITY.md
+    #: [S23]): the steam a kWh of the unit's generation takes.
+    steam_rate: float = 3.5  # kg/kWh
+    #: Ours, family range GBP 30 to 156 per MWh: 59 % of 2018's settlement
+    #: periods fell in 30 to 60, the short system averaged 78.84 [S22]; the
+    #: annual mean was 44.61 over 2017 to 2020 and 156.20 over 2021 to 2022
+    #: [S22b].
+    imbalance_price: float = 80.0  # GBP/MWh
+    #: Steam off the plan below this is not counted: the steam meter's scatter
+    #: (the ``q_steam`` reading, PHYSICS.md).
+    steam_resolution: float = 0.047  # kg/s
+    #: Restart time priced into a trip: a hot start of a hard coal unit, 2.5 h
+    #: at the low end of "most commonly used" (Agora Energiewende 2017,
+    #: Table 1, p. 47; REALITY.md [S17]), at 2 s steps.
+    restart_steps: int = 4500
+    #: The generation a restart step does not make, in GBP: nominal steam for
+    #: one step, over the steam rate, at the imbalance price.
+    failure_cost: float = 93.35 * 2.0 / 3.5 / 1000.0 * 80.0
+    # Kept for the time-in-band KPI tables (benchmark._OUTPUT_FLOORS); the
+    # score does not read them.
+    e_floor_level: float = 2.67e-3  # m
+    e_floor_pressure: float = 0.05  # bar
+    level_precision_floor: float = 1e-3  # m, drum level transmitter
+    pressure_precision_floor: float = 0.05  # bar, pressure transmitter
+    level_band: float = 0.10  # m, the expert tools' error scale
+    pressure_band: float = 2.0  # bar, likewise
 
-    # -- geometry (Astrom & Bell P16-G16, Oresundsverket 160 MW unit) --------
-    V_t: float = 88.0  # m3   total water + steam volume
-    V_d: float = 40.0  # m3   drum
+    # -- geometry and masses (P16-G16, REALITY.md [S1], Appendix B) -----------
+    V_t: float = 85.0  # m3   total volume, V_d + V_r + V_dc
+    V_d: float = 37.0  # m3   drum
     V_r: float = 37.0  # m3   risers
     V_dc: float = 11.0  # m3   downcomers
-    A_d: float = 20.0  # m2   drum area at normal water level
-    A_dc: float = 0.355  # m2   downcomer flow area
-    L_r: float = 11.0  # m    riser height
-    m_metal: float = 300_000.0  # kg   tube + drum metal
-    C_metal: float = 550.0  # J/(kg K)
+    A_d: float = 23.0  # m2   drum area at normal water level
+    m_metal: float = 300_000.0  # kg   total metal
+    m_riser: float = 100_000.0  # kg   riser metal
+    m_drum: float = 20_000.0  # kg   drum metal
+    C_metal: float = 650.0  # J/(kg K)
+    k_e: float = 200.0  # circulation: q_dc^2 = k_e (rho_w - rho_s) V_r alpha_v
+    V_sd0: float = 8.0  # m3   steam under the level with no condensation
+    beta: float = 0.3  # -    empirical drum flow parameter, [S1] eq. (19)
+    T_d_flow: float = 600.0  # kg   residence time T_d = T_d_flow / q_s
+    #: Normal water level: the code's level is (V_wd + V_sd) / A_d - 1.0 m.
+    normal_level_height: float = 1.0  # m
 
     # -- saturated-steam property fits, quadratic in pressure [bar] ----------
     # Least-squares fits to IAPWS saturation values at 60-110 bar; residuals
@@ -127,106 +117,107 @@ class BoilerDrumParams(EnvParams):
     h_w_coef: Tuple[float, float, float] = (-1.3899160e1, 7.0854286e3, 8.3899193e5)
     h_s_coef: Tuple[float, float, float] = (-9.8207283e0, 8.6952381e1, 2.8145190e6)
 
-    # -- circulation and voidage --------------------------------------------
-    k_friction: float = 25.0  # -    downcomer/riser loop friction; sets the
-    #                                 circulation ratio (validated at 5-15)
-    tau_sr: float = 8.0  # s    steam transit time through the risers
-    T_d: float = 15.0  # s    bubble residence below the drum water level
-    f_carry: float = 0.10  # -    riser steam passing below the water level;
-    #                                 the rest is separated above it
-    f_cd: float = 0.25  # -    share of the feedwater heat deficit paid by
-    #                                 collapsing drum bubbles (see PHYSICS.md)
-    c_pw: float = 5700.0  # J/(kg K) saturated water near 300 C
-    gravity: float = 9.81
-
     # -- operating point ------------------------------------------------------
     h_feedwater: float = 1.037e6  # J/kg feedwater at 240 C
     Q_max: float = 2.4e8  # W    maximum firing rate (150 % of nominal)
     q_feed_max: float = 200.0  # kg/s maximum feedwater flow
     Q_nominal: float = 1.6e8  # W
     q_steam_nominal: float = 93.35  # kg/s
-    p_nominal: float = 85.0  # bar
-    V_wt_nominal: float = 58.0  # m3   water inventory at normal water level
+    p_nominal: float = 85.0  # bar, the pressure the boiler master holds
 
-    # -- disturbance ----------------------------------------------------------
-    q_steam_noise_std: float = 8.0  # kg/s stationary std of the load swing
+    # -- the load plan (rule 17, PHYSICS.md "Task") ---------------------------
+    #: Loads, as fractions of nominal steam: from the top of a hard coal unit's
+    #: minimum load (25 to 40 %, [S17] Table 1) to nominal.
+    load_range: Tuple[float, float] = (0.40, 1.0)
+    #: Load ramp, % of nominal per minute: the family's 1 to 6 %/min, "1% or 2%
+    #: per minute" typical [S10] to state-of-the-art coal's 3 to 6 [S17].
+    ramp_rate_range: Tuple[float, float] = (1.0, 6.0)
+    #: When the planned ramp starts, s after the episode starts. Ours: early
+    #: enough that the slowest full ramp ends inside the hour.
+    ramp_start_range: Tuple[float, float] = (300.0, 900.0)
+
+    # -- upsets, the family's bad days (REALITY.md sec. 5; scenarios.py) ------
+    #: 0 none, 1 an ID fan runback, 2 a feed pump trip.
+    event_kind: int = 0
+    #: When the upset strikes, s. Ours, inside the window.
+    event_time_range: Tuple[float, float] = (300.0, 900.0)
+    #: Where a runback takes the unit, of nominal steam. Ours, family range: "set
+    #: to a point that was below the three-mill minimum" [S10]; the minimum
+    #: load is 25 to 40 % [S17], so 0.40 to 0.60.
+    runback_load: float = 0.50
+    #: Runback rate, % of nominal per minute. Ours, family range from [S10]:
+    #: "The entire runback occurred in just over two minutes" from 75 % load.
+    runback_rate_range: Tuple[float, float] = (12.0, 25.0)
+    #: Feed flow left after one pump trips, of nominal steam. Ours, family
+    #: range 0.5 to 0.6: the second of two 50 or 60 % pumps (the feed span,
+    #: ``q_feed_max``, carries both pumps' headroom).
+    feed_trip_capacity: float = 0.5
+    #: Until the standby pump delivers, s: "may take more than 30 seconds to
+    #: start, come up to speed and pressure" [S11]. Ours, 30 to 60 s.
+    standby_delay_range: Tuple[float, float] = (30.0, 60.0)
 
     # -- actuators, fuel then feedwater (PHYSICS.md, Actuators) ----------------
-    # Rates are Bell & Astrom's for this unit, as fractions of the span per
-    # second. The feedwater's lag is theirs; the firing lag is ours.
     actuator_rate: Tuple[float, float] = (0.007, 0.05)
     actuator_lag: Tuple[float, float] = (20.0, 1.0)  # s
 
-    # -- task -----------------------------------------------------------------
-    target_pressure_range: Tuple[float, float] = (82.0, 88.0)
-    initial_level_range: Tuple[float, float] = (-0.05, 0.05)
-    # Error scale for the MPC's tracking term, not read by ``compute_reward``.
-    # See "Why the MPC does not minimise the reward" in docs/baselines.md.
-    level_band: float = 0.10  # m
-    pressure_band: float = 2.0  # bar, likewise
-    level_trip: float = 0.25  # m    carryover / dryout, both irrecoverable
-    pressure_min: float = 65.0
-    level_precision_floor: float = 1e-3  # m, drum level transmitter
-    pressure_precision_floor: float = 0.05  # bar, pressure transmitter
-    pressure_max: float = 105.0  # bar
-    # Zeroed for the 0.6 line: this phase scores setpoint tracking alone.
-    # A running cost is a real part of every one of these plants, but its
-    # weight against tracking accuracy is a design decision this library has
-    # not earned yet, and an arbitrary one turns a tracking benchmark into a
-    # multi-objective problem whose Pareto point nobody chose. The glass
-    # furnace showed the cost of getting it wrong: its MPC sat 6 K cold with
-    # fuel at minimum 80% of the time, because a 0.1 fuel weight against a
-    # quadratic tracking surrogate made that the optimum of the objective it
-    # was given. The field and the term stay, so a weight can be restored
-    # once there is a defensible way to set it. See docs/roadmap.md.
-    fuel_weight: float = 0.0  # was 0.05
+    # -- limits (rule 14, REALITY.md sec. 3) ------------------------------------
+    #: Low level trip, master fuel trip: "Drum Level Low-low (-330 mm)" [S9].
+    level_trip_low: float = -0.330  # m
+    #: High level trip: "Drum Level HH (+254 mm)" (Hub Power Station FSSS
+    #: logic, REALITY.md [S20]); it trips the turbine against carryover [S12].
+    level_trip_high: float = 0.254  # m
+    #: A level trip acts when the level stays past it "for more than ten
+    #: seconds" [S9, items 23 and 24]; instantaneous trips "would cause
+    #: excessive false trips" [S21].
+    level_trip_delay: float = 10.0  # s
 
 
 #: Units of the BoilerDrumParams fields, for the generated environment pages.
 PARAM_UNITS = {
     "reward_version": "-",
+    "restart_steps": "steps",
+    "failure_cost": "GBP per step",
+    "steam_rate": "kg/kWh",
+    "imbalance_price": "GBP/MWh",
+    "steam_resolution": "kg/s",
+    "event_kind": "-",
+    "event_time_range": "s",
+    "runback_load": "fraction of nominal steam",
+    "runback_rate_range": "% of nominal per minute",
+    "feed_trip_capacity": "fraction of nominal steam",
+    "standby_delay_range": "s",
     "e_floor_level": "m",
     "e_floor_pressure": "bar",
-    "e_tol": "m or bar",
-    "tracking_exponent": "-",
-    "c_hold": "W",
-    "running_weight": "-",
-    "failure_cost": "reward",
-    "restart_steps": "steps",
-    "rho_floor_tracking": "reward",
-    "rho_floor": "reward",
+    "level_precision_floor": "m",
+    "pressure_precision_floor": "bar",
+    "level_band": "m",
+    "pressure_band": "bar",
     "V_t": "m^3",
     "V_d": "m^3",
     "V_r": "m^3",
     "V_dc": "m^3",
     "A_d": "m^2",
-    "A_dc": "m^2",
-    "L_r": "m",
     "m_metal": "kg",
+    "m_riser": "kg",
+    "m_drum": "kg",
     "C_metal": "J/(kg K)",
-    "k_friction": "-",
-    "tau_sr": "s",
-    "T_d": "s",
-    "f_carry": "-",
-    "f_cd": "-",
-    "c_pw": "J/(kg K)",
-    "gravity": "m/s^2",
+    "k_e": "kg/s^2 per kg/m^3 per m^3",
+    "V_sd0": "m^3",
+    "beta": "-",
+    "T_d_flow": "kg",
+    "normal_level_height": "m",
     "h_feedwater": "J/kg",
     "Q_max": "W",
     "q_feed_max": "kg/s",
     "Q_nominal": "W",
     "q_steam_nominal": "kg/s",
     "p_nominal": "bar",
-    "V_wt_nominal": "m^3",
-    "q_steam_noise_std": "kg/s",
-    "level_band": "m",
-    "pressure_band": "bar",
-    "level_trip": "m",
-    "pressure_min": "bar",
-    "level_precision_floor": "m",
-    "pressure_precision_floor": "bar",
-    "pressure_max": "bar",
-    "fuel_weight": "-",
+    "load_range": "fraction of nominal steam",
+    "ramp_rate_range": "% of nominal per minute",
+    "ramp_start_range": "s",
+    "level_trip_low": "m",
+    "level_trip_high": "m",
+    "level_trip_delay": "s",
 }
 
 
@@ -234,21 +225,36 @@ PARAM_UNITS = {
 class BoilerDrumState(EnvState):
     pressure: jnp.ndarray  # bar
     V_wt: jnp.ndarray  # m3   total water volume
-    m_sr: jnp.ndarray  # kg   steam held in the risers
-    m_sd: jnp.ndarray  # kg   bubbles below the drum water level
+    alpha_r: jnp.ndarray  # -    steam quality at the riser outlet
+    V_sd: jnp.ndarray  # m3   steam under the drum's water surface
     level: jnp.ndarray  # m    deviation from normal water level
     q_steam: jnp.ndarray  # kg/s turbine draw, measured
-    q_demand: jnp.ndarray  # kg/s the turbine valve's draw at p_nominal, hidden
+    q_demand: jnp.ndarray  # kg/s what the turbine valve passes at p_nominal
     Q_fuel: jnp.ndarray  # W
     q_feed: jnp.ndarray  # kg/s
-    target_pressure: jnp.ndarray  # bar
-    level_ref: jnp.ndarray  # m3   water volume that reads as zero level
+    target_pressure: jnp.ndarray  # bar, the boiler master's setpoint
+    level_ref: jnp.ndarray  # m3   V_wd + V_sd at normal water level
+    # The load plan: from ``load_from`` the valve ramps to ``load_to`` at
+    # ``ramp_rate`` from ``ramp_start`` on (``load_plan``).
+    load_from: jnp.ndarray  # kg/s
+    load_to: jnp.ndarray  # kg/s
+    ramp_start: jnp.ndarray  # s
+    ramp_rate: jnp.ndarray  # kg/s per s
+    # The upset (``event_kind``): when it strikes, how fast the unit runs
+    # back, and how long until the standby feed pump delivers.
+    event_time: jnp.ndarray  # s, 1e9 with no upset
+    event_rate: jnp.ndarray  # kg/s per s
+    standby_delay: jnp.ndarray  # s
+    # How long the level has stayed past each trip, s (``level_trip_delay``).
+    time_high: jnp.ndarray
+    time_low: jnp.ndarray
 
     actuator_held: jax.Array = actuator_field(2)
 
-    # ---------------------------------------------------------------------------
-    # Saturated steam properties
-    # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Saturated steam properties
+# ---------------------------------------------------------------------------
 
 
 def _poly(coef, p):
@@ -285,127 +291,200 @@ def latent_heat(p_bar, params: BoilerDrumParams):
 
 
 # ---------------------------------------------------------------------------
-# Dynamics
+# Dynamics: Astrom and Bell's fourth-order model ([S1], Appendix B)
 # ---------------------------------------------------------------------------
 
 
-def void_fraction(m_sr, p_bar, params: BoilerDrumParams):
-    """Mean volumetric void fraction in the risers.
+def _void(alpha_r, rho_w, rho_s, d_rho_w, d_rho_s):
+    """Mean volume fraction of steam in the risers and its two derivatives,
+    for a linear quality profile ([S1], Appendix B)."""
+    z = jnp.maximum(alpha_r, 1e-6) * (rho_w - rho_s) / rho_s
+    lz = jnp.log1p(z) / z
+    av = rho_w / (rho_w - rho_s) * (1.0 - lz)
+    davdar = rho_w / rho_s * (lz - 1.0 / (1.0 + z)) / z
+    zp = (rho_s * d_rho_w - rho_w * d_rho_s) * alpha_r / (rho_s * rho_s)
+    z1 = (rho_w * d_rho_s - rho_s * d_rho_w) / (rho_w - rho_s) ** 2
+    z2 = rho_w / (rho_w - rho_s) * (lz - 1.0 / (1.0 + z)) / z * zp
+    davdp = z1 * (1.0 - lz) + z2
+    return av, davdar, davdp
 
-    Steam is tracked as *mass*, so a falling pressure raises the void fraction
-    instantly at constant mass. That is the mechanism behind the swell.
-    """
-    rho_s = steam_density(p_bar, params)
-    return jnp.clip(m_sr / (rho_s * params.V_r), 0.0, 0.95)
 
-
-def circulation_flow(alpha_v, p_bar, params: BoilerDrumParams):
-    """Natural circulation from the downcomer/riser density difference.
-
-    The all-water downcomer is heavier than the two-phase riser; the imbalance
-    drives the loop and is balanced by friction.
-    """
-    rho_w = water_density(p_bar, params)
-    rho_s = steam_density(p_bar, params)
-    driving = (rho_w - rho_s) * alpha_v * params.A_dc * params.L_r * params.gravity
-    return jnp.sqrt(
-        jnp.clip(2.0 * rho_w * driving / params.k_friction, 0.0, jnp.inf) + 1e-9
+def _properties(p_bar, pr):
+    return dict(
+        rho_w=water_density(p_bar, pr),
+        rho_s=steam_density(p_bar, pr),
+        h_w=water_enthalpy(p_bar, pr),
+        h_s=steam_enthalpy(p_bar, pr),
+        d_rho_w=_dpoly(pr.rho_w_coef, p_bar),
+        d_rho_s=_dpoly(pr.rho_s_coef, p_bar),
+        d_h_w=_dpoly(pr.h_w_coef, p_bar),
+        d_h_s=_dpoly(pr.h_s_coef, p_bar),
+        d_ts=_dpoly(pr.ts_coef, p_bar),
     )
 
 
-def drum_level(V_wt, m_sr, m_sd, level_ref, p_bar, params: BoilerDrumParams):
-    """Level as a deviation from normal water level, which is what the gauge reads.
+def void_fraction(alpha_r, p_bar, params: BoilerDrumParams):
+    """Mean volumetric steam fraction in the risers."""
+    s = _properties(p_bar, params)
+    return _void(alpha_r, s["rho_w"], s["rho_s"], s["d_rho_w"], s["d_rho_s"])[0]
 
-    Water in the drum is what the total inventory leaves over once the
-    downcomers and the water fraction of the risers are accounted for -- so
-    riser voidage moves the level directly, without any mass entering or
-    leaving the drum.
-    """
+
+def circulation_flow(alpha_v, p_bar, params: BoilerDrumParams):
+    """Downcomer flow from the static momentum balance, [S1] eq. (16)."""
+    rho_w = water_density(p_bar, params)
     rho_s = steam_density(p_bar, params)
-    alpha_v = void_fraction(m_sr, p_bar, params)
+    return jnp.sqrt(
+        jnp.maximum(params.k_e * (rho_w - rho_s) * params.V_r * alpha_v, 0.0) + 1e-9
+    )
+
+
+def drum_level(V_wt, alpha_r, V_sd, level_ref, p_bar, params: BoilerDrumParams):
+    """Level as a deviation from normal water level, [S1] eqs. (21), (22)."""
+    alpha_v = void_fraction(alpha_r, p_bar, params)
     V_wd = V_wt - params.V_dc - (1.0 - alpha_v) * params.V_r
-    return (V_wd + m_sd / rho_s - level_ref) / params.A_d
+    return (V_wd + V_sd - level_ref) / params.A_d
 
 
 def steam_draw(q_demand, p_bar, params: BoilerDrumParams):
-    """Steam through a fixed turbine valve, proportional to drum pressure.
+    """Steam through the turbine valve, proportional to drum pressure.
 
-    Bell & Astrom's ``q_s = (1.1 u2 - 0.19) P``. ``q_demand`` is what the valve
-    passes at ``p_nominal``.
+    ``q_demand`` is what the valve passes at ``p_nominal``.
     """
     return q_demand * p_bar / params.p_nominal
 
 
 def compute_velocity(position, action, q_demand, params: BoilerDrumParams):
-    """Time derivatives of ``[pressure, V_wt, m_sr, m_sd]``.
+    """Time derivatives of ``[pressure, V_wt, alpha_r, V_sd]``, pressure in
+    bar/s. ``action`` is ``(Q_fuel [W], q_feed [kg/s])``.
 
-    ``action`` is ``(Q_fuel [W], q_feed [kg/s])``, ``q_demand`` as ``steam_draw``.
+    The four balances of [S1] Appendix B, ``e @ dx = b``, solved in order: the
+    global mass and energy balances for ``(V_wt, p)``, the risers' for
+    ``alpha_r`` and the drum's for ``V_sd``.
     """
-    p_bar, V_wt, m_sr, m_sd = position[0], position[1], position[2], position[3]
+    p_bar, V_wt, alpha_r, V_sd = position[0], position[1], position[2], position[3]
     Q, q_f = action
     pr = params
 
     p_bar = jnp.clip(p_bar, 20.0, 200.0)
-    q_steam = steam_draw(q_demand, p_bar, pr)
-    rho_w = water_density(p_bar, pr)
-    rho_s = steam_density(p_bar, pr)
-    h_w = water_enthalpy(p_bar, pr)
-    h_s = steam_enthalpy(p_bar, pr)
-    h_c = jnp.maximum(h_s - h_w, 1e4)
-    d_rho_w = _dpoly(pr.rho_w_coef, p_bar)
-    d_rho_s = _dpoly(pr.rho_s_coef, p_bar)
-    d_h_w = _dpoly(pr.h_w_coef, p_bar)
-    d_h_s = _dpoly(pr.h_s_coef, p_bar)
-    d_ts = _dpoly(pr.ts_coef, p_bar)
-
-    V_st = pr.V_t - V_wt
-    alpha_v = void_fraction(m_sr, p_bar, pr)
-    q_dc = circulation_flow(alpha_v, p_bar, pr)
-
-    # -- global mass and energy balances, solved jointly for (dp, dV_wt) -----
-    #   d/dt[rho_s V_st + rho_w V_wt]                        = q_f - q_s
-    #   d/dt[rho_s h_s V_st + rho_w h_w V_wt - p V_t + metal] = Q + q_f h_f - q_s h_s
-    a11 = V_st * d_rho_s + V_wt * d_rho_w
-    a12 = rho_w - rho_s
-    a21 = (
-        V_st * (rho_s * d_h_s + h_s * d_rho_s)
-        + V_wt * (rho_w * d_h_w + h_w * d_rho_w)
-        + pr.m_metal * pr.C_metal * d_ts
-        - pr.V_t
+    alpha_r = jnp.clip(alpha_r, 1e-4, 0.9)
+    q_s = steam_draw(q_demand, p_bar, pr)
+    s = _properties(p_bar, pr)
+    rho_w, rho_s, h_w, h_s = s["rho_w"], s["rho_s"], s["h_w"], s["h_s"]
+    d_rho_w, d_rho_s, d_h_w, d_h_s, d_ts = (
+        s["d_rho_w"],
+        s["d_rho_s"],
+        s["d_h_w"],
+        s["d_h_s"],
+        s["d_ts"],
     )
-    a22 = rho_w * h_w - rho_s * h_s
-    b1 = q_f - q_steam
-    b2 = Q + q_f * pr.h_feedwater - q_steam * h_s
-    det = a11 * a22 - a12 * a21
-    det = jnp.where(jnp.abs(det) < 1e-6, 1e-6, det)
-    dp = (b1 * a22 - a12 * b2) / det  # Pa/s
-    dV_wt = (a11 * b2 - b1 * a21) / det
+    h_c = h_s - h_w
+    h_f = pr.h_feedwater
+    av, davdar, davdp = _void(alpha_r, rho_w, rho_s, d_rho_w, d_rho_s)
+    q_dc = circulation_flow(av, p_bar, pr)
+    V_st = pr.V_t - V_wt
+    V_wd = V_wt - pr.V_dc - (1.0 - av) * pr.V_r
+    T_d = pr.T_d_flow / jnp.maximum(q_s, 1.0)
 
-    # -- flashing -------------------------------------------------------------
-    # A falling pressure lowers the saturation temperature, leaving the water
-    # inventory superheated so that it boils. This is fast, and it is the
-    # dominant swell mechanism.
-    V_wr = pr.V_r * (1.0 - alpha_v)
-    V_wd = jnp.maximum(V_wt - pr.V_dc - V_wr, 0.0)
-    flash_gain = -(rho_w * pr.c_pw * d_ts / h_c) * dp
-    q_flash_r = V_wr * flash_gain
-    q_flash_d = V_wd * flash_gain
+    e11 = rho_w - rho_s
+    e12 = V_st * d_rho_s + V_wt * d_rho_w
+    e21 = rho_w * h_w - rho_s * h_s
+    e22 = (
+        V_st * (h_s * d_rho_s + rho_s * d_h_s)
+        + V_wt * (h_w * d_rho_w + rho_w * d_h_w)
+        - pr.V_t
+        + pr.m_metal * pr.C_metal * d_ts
+    )
+    e32 = (
+        ((1.0 - alpha_r) * h_c * d_rho_s + rho_s * d_h_s) * av * pr.V_r
+        + (rho_w * d_h_w - alpha_r * h_c * d_rho_w) * (1.0 - av) * pr.V_r
+        + (rho_s + (rho_w - rho_s) * alpha_r) * h_c * pr.V_r * davdp
+        - pr.V_r
+        + pr.m_riser * pr.C_metal * d_ts
+    )
+    e33 = (rho_s + (rho_w - rho_s) * alpha_r) * h_c * pr.V_r * davdar
+    e42 = (
+        V_sd * d_rho_s
+        + (
+            rho_s * V_sd * d_h_s
+            + rho_w * V_wd * d_h_w
+            - V_sd
+            - V_wd
+            + pr.m_drum * pr.C_metal * d_ts
+        )
+        / h_c
+        + alpha_r
+        * (1.0 + pr.beta)
+        * pr.V_r
+        * (av * d_rho_s + (1.0 - av) * d_rho_w + (rho_s - rho_w) * davdp)
+    )
+    e43 = alpha_r * (1.0 + pr.beta) * (rho_s - rho_w) * pr.V_r * davdar
+    e44 = rho_s
 
-    # -- riser steam mass -----------------------------------------------------
-    # The feedwater heat deficit is paid ONCE: (1 - f_cd) of it arrives at the
-    # risers as subcooling and suppresses boiling there, and f_cd collapses
-    # bubbles in the drum below. Charging it to both drives m_sd negative.
-    subcool = (1.0 - pr.f_cd) * (q_f / jnp.maximum(q_dc, 1e-6)) * (h_w - pr.h_feedwater)
-    q_ct = jnp.maximum(Q - q_dc * subcool, 0.0) / h_c
-    carry_out = m_sr / pr.tau_sr
-    dm_sr = q_ct + q_flash_r - carry_out
+    b1 = q_f - q_s
+    b2 = Q + q_f * h_f - q_s * h_s
+    b3 = Q - alpha_r * h_c * q_dc
+    b4 = rho_s * (pr.V_sd0 - V_sd) / T_d + (h_f - h_w) * q_f / h_c
 
-    # -- drum bubbles ---------------------------------------------------------
-    q_cd = pr.f_cd * q_f * (h_w - pr.h_feedwater) / h_c
-    dm_sd = pr.f_carry * carry_out + q_flash_d - m_sd / pr.T_d - q_cd
+    det = e11 * e22 - e12 * e21
+    dV_wt = (b1 * e22 - e12 * b2) / det
+    dp = (e11 * b2 - e21 * b1) / det  # Pa/s
+    dalpha = (b3 - e32 * dp) / e33
+    dV_sd = (b4 - e42 * dp - e43 * dalpha) / e44
+    return jnp.array([dp / PA_PER_BAR, dV_wt, dalpha, dV_sd]), None
 
-    # dp falls out of the balance in Pa/s; the state is carried in bar.
-    return jnp.array([dp / PA_PER_BAR, dV_wt, dm_sr, dm_sd]), None
+
+# ---------------------------------------------------------------------------
+# The load plan
+# ---------------------------------------------------------------------------
+
+
+def _base_plan(state: BoilerDrumState, seconds):
+    span = state.load_to - state.load_from
+    moved = state.ramp_rate * jnp.maximum(seconds - state.ramp_start, 0.0)
+    return state.load_from + jnp.sign(span) * jnp.minimum(moved, jnp.abs(span))
+
+
+def runback_target(params: BoilerDrumParams):
+    return params.runback_load * params.q_steam_nominal
+
+
+def load_plan(state: BoilerDrumState, seconds, params: BoilerDrumParams):
+    """What the turbine valve passes at ``p_nominal`` at time ``seconds``.
+
+    The plan ramps from ``load_from`` to ``load_to`` at ``ramp_rate`` from
+    ``ramp_start``. An upset runs the unit back from where the plan stood,
+    at ``event_rate``, to ``runback_load``, and holds it there: an ID fan
+    runback [S10], or the runback a feed pump trip drives [S10, S9].
+    """
+    base = _base_plan(state, seconds)
+    struck = _base_plan(state, state.event_time)
+    back = jnp.maximum(
+        runback_target(params),
+        struck - state.event_rate * jnp.maximum(seconds - state.event_time, 0.0),
+    )
+    upset = (params.event_kind > 0) & (seconds >= state.event_time)
+    return jnp.where(upset, jnp.minimum(base, back), base)
+
+
+def actuator_caps(state: BoilerDrumState, seconds, params: BoilerDrumParams):
+    """The firing and feedwater the plant can deliver at ``seconds``, W and kg/s.
+
+    After an ID fan trip the fans hold firing to what the runback load needs
+    [S10]. After a feed pump trip one pump is left until the standby delivers
+    [S10, S11].
+    """
+    pr = params
+    after = seconds >= state.event_time
+    h_s = steam_enthalpy(pr.p_nominal, pr)
+    fan_cap = runback_target(pr) * (h_s - pr.h_feedwater)
+    Q_cap = jnp.where((pr.event_kind == 1) & after, fan_cap, pr.Q_max)
+    pump_out = after & (seconds < state.event_time + state.standby_delay)
+    q_cap = jnp.where(
+        (pr.event_kind == 2) & pump_out,
+        pr.feed_trip_capacity * pr.q_steam_nominal,
+        pr.q_feed_max,
+    )
+    return Q_cap, q_cap
 
 
 def compute_next_state(
@@ -415,7 +494,9 @@ def compute_next_state(
     key: jax.Array,
     integration_method: str = "rk4_1",
 ):
-    """``action_raw`` is ``[fuel, feedwater]``, each in [-1, 1]."""
+    """``action_raw`` is ``[fuel, feedwater]``, each in [-1, 1]. ``key`` is
+    unused: the plan is drawn at reset, and nothing else moves (rule 17)."""
+    del key
     pr = params
     action_raw = jnp.atleast_1d(action_raw)
     Q_fuel = convert_raw_action_to_range(
@@ -424,73 +505,72 @@ def compute_next_state(
     q_feed = convert_raw_action_to_range(
         action_raw[1], min_action=0.0, max_action=pr.q_feed_max
     )
-
-    # OU turbine valve. The innovation is drawn from a key folded with
-    # ``state.time`` so a caller passing a constant key still gets a genuine
-    # zero-mean process.
-    noise = jax.random.normal(jax.random.fold_in(key, state.time))
-    sigma = pr.q_steam_noise_std * jnp.sqrt(2.0 * STEAM_OU_THETA * pr.delta_t)
-    q_demand = (
-        state.q_demand
-        - STEAM_OU_THETA * (state.q_demand - pr.q_steam_nominal) * pr.delta_t
-        + sigma * noise
-    )
-    q_demand = jnp.clip(q_demand, 0.0, 2.0 * pr.q_steam_nominal)
+    q_demand = load_plan(state, (state.time + 1) * pr.delta_t, pr)
+    Q_cap, q_cap = actuator_caps(state, state.time * pr.delta_t, pr)
+    Q_fuel = jnp.minimum(Q_fuel, Q_cap)
+    q_feed = jnp.minimum(q_feed, q_cap)
 
     _compute_velocity = partial(
         compute_velocity, action=(Q_fuel, q_feed), q_demand=q_demand, params=pr
     )
     new_positions, _ = integrate_dynamics(
-        positions=jnp.array([state.pressure, state.V_wt, state.m_sr, state.m_sd]),
+        positions=jnp.array([state.pressure, state.V_wt, state.alpha_r, state.V_sd]),
         delta_t=pr.delta_t,
         compute_velocity=_compute_velocity,
         method=integration_method,
     )
     pressure = jnp.clip(new_positions[0], 20.0, 200.0)
     V_wt = jnp.clip(new_positions[1], 1.0, pr.V_t - 1.0)
-    m_sr = jnp.maximum(new_positions[2], 0.0)
-    m_sd = jnp.maximum(new_positions[3], 0.0)
+    alpha_r = jnp.clip(new_positions[2], 1e-4, 0.9)
+    V_sd = jnp.maximum(new_positions[3], 0.0)
 
-    level = drum_level(V_wt, m_sr, m_sd, state.level_ref, pressure, pr)
+    level = drum_level(V_wt, alpha_r, V_sd, state.level_ref, pressure, pr)
+    time_high = jnp.where(
+        level >= pr.level_trip_high, state.time_high + pr.delta_t, 0.0
+    )
+    time_low = jnp.where(level <= pr.level_trip_low, state.time_low + pr.delta_t, 0.0)
     return (
         state.replace(
             pressure=pressure,
             V_wt=V_wt,
-            m_sr=m_sr,
-            m_sd=m_sd,
+            alpha_r=alpha_r,
+            V_sd=V_sd,
             level=level,
             q_steam=steam_draw(q_demand, pressure, pr),
             q_demand=q_demand,
             Q_fuel=Q_fuel,
             q_feed=q_feed,
+            time_high=time_high,
+            time_low=time_low,
             time=state.time + 1,
         ),
         None,
     )
 
 
-# Deliberately not jitted. It was decorated with
-# ``@partial(jax.jit, static_argnames=["params"])``, which keys the compilation
-# cache on the params object: a fresh ``Params(...)`` -- what every sweep, tuner
-# and MPC builds -- was a cache miss and a full recompile, measured at ~1600x the
-# cost of a cached call. Callers that want it fused already jit ``step_env``,
-# which traces this inline.
 def get_obs(state: BoilerDrumState, params: BoilerDrumParams):
-    """Plant instrumentation only.
+    """What the control room reads (rule 16, REALITY.md sec. 1 and 2).
 
-    ``[level, pressure, q_steam, fuel_pct, feed_pct, target_level, target_pressure]``
+    ``[level, pressure, q_steam, fuel_pct, feed_pct, target_level,
+    target_pressure, load_now, load_planned, s_to_ramp, fuel_cap_pct,
+    feed_cap_pct]``
 
-    A boiler has a drum level gauge, a drum pressure transmitter and a steam
-    flow meter -- the three measurements of classic three-element control --
-    and reads its own fuel and feedwater actuators, which lag its demands. It
-    does **not** measure riser void fraction or total water inventory, so
-    ``m_sr``, ``m_sd`` and ``V_wt`` are hidden, and neither does it read the
-    turbine valve. The void distribution is exactly what drives the inverse
-    response the controller has to anticipate.
-
-    The level target is a constant zero (normal water level) and is carried in
-    the observation so that both targets are addressable the same way.
+    Drum level, drum pressure and steam flow, the three-element measurements
+    [S5, S12]; the fuel and feedwater actuators' positions; and the load plan,
+    which the unit master knows ahead [S10]: the valve's load now, the load the
+    plan ramps to, and the seconds until the ramp starts (0 once it has). Riser
+    quality and the steam under the water surface are hidden: no instrument
+    reads them. An upset is read as it strikes, not before: the plan then
+    shows the runback's load, and the last two channels the firing and the
+    feedwater the plant can still deliver, as the fan and pump trip alarms
+    tell the control room.
     """
+    seconds = state.time * params.delta_t
+    Q_cap, q_cap = actuator_caps(state, seconds, params)
+    upset = (params.event_kind > 0) & (seconds >= state.event_time)
+    planned = jnp.where(
+        upset, jnp.minimum(state.load_to, runback_target(params)), state.load_to
+    )
     return jnp.array(
         [
             state.level,
@@ -500,101 +580,68 @@ def get_obs(state: BoilerDrumState, params: BoilerDrumParams):
             100.0 * state.q_feed / params.q_feed_max,
             jnp.zeros_like(state.level),
             state.target_pressure,
+            state.q_demand,
+            planned,
+            jnp.maximum(state.ramp_start - seconds, 0.0),
+            100.0 * Q_cap / params.Q_max + 0.0 * state.level,
+            100.0 * q_cap / params.q_feed_max + 0.0 * state.level,
         ]
     )
 
 
 def check_is_terminal(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
-    """High level carries water to the turbine; low level uncovers the tubes."""
-    level_trip = xp.abs(state.level) >= params.level_trip
-    pressure_trip = xp.logical_or(
-        state.pressure <= params.pressure_min, state.pressure >= params.pressure_max
-    )
-    terminated = xp.logical_or(level_trip, pressure_trip)
+    """A level trip: past either trip level for more than ``level_trip_delay``.
+
+    High level trips the turbine against carryover, low level trips the fuel
+    against dry tubes [S12, S9]. No pressure limit is modelled: REALITY.md
+    found no sourced value (rule 14).
+    """
+    high = state.time_high > params.level_trip_delay
+    low = state.time_low > params.level_trip_delay
+    terminated = xp.logical_or(high, low)
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
+
+
+def steam_off_plan(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
+    """Kilograms of steam delivered off the load plan in one step, beyond the
+    steam meter's resolution."""
+    off = xp.abs(state.q_steam - state.q_demand) - params.steam_resolution
+    return xp.maximum(off, 0.0) * params.delta_t
+
+
+def imbalance_cost(kg, params: BoilerDrumParams):
+    """GBP for ``kg`` of steam's generation at the imbalance price."""
+    return kg / params.steam_rate / 1000.0 * params.imbalance_price
 
 
 def compute_reward_terms(
     state: BoilerDrumState, params: BoilerDrumParams, xp=jnp, tripped=None
 ):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+    """The score's terms, in GBP, each >= 0.
 
     ``tripped`` overrides the trip check on ``state``, for a measured copy,
     whose noise must not fire or hide a trip (``base.measured_reward``).
     """
     if tripped is None:
         tripped, _ = check_is_terminal(state, params, xp)
-    track = R.tracking_cost(
-        state.level, params.e_floor_level, params.e_tol, params.tracking_exponent, xp
-    ) + R.tracking_cost(
-        state.pressure - state.target_pressure,
-        params.e_floor_pressure,
-        params.e_tol,
-        params.tracking_exponent,
-        xp,
-    )
-    terms = {
-        "tracking": track,
-        "running": R.running_cost(
-            state.Q_fuel, params.c_hold, params.running_weight, xp
-        ),
-    }
+    terms = {"imbalance": imbalance_cost(steam_off_plan(state, params, xp), params)}
     return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
-def compute_reward_v1(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
-    """Level and pressure tracking, minus fuel.
-
-    Tracking is log-scaled (``utils.log_scaled_reward``): every halving of the
-    error is worth the same increment, from the plant's operating envelope down
-    to ``precision_floor``, the finest error its instrument can resolve. Below
-    that the reward stops paying, because further "improvement" is noise.
-
-    This replaced a clipped squared band, which was flat -- exactly zero, no
-    gradient -- for any error outside the band, and which stopped
-    discriminating just where a good controller operates. See
-    docs/reward-shaping.md.
-
-    """
-    # Envelopes are the trip limits: the reward reaches zero exactly where the
-    # plant is lost, as it does for the aircraft's altitude envelope.
-    level_score = log_scaled_reward(
-        xp.abs(state.level), params.level_precision_floor, params.level_trip, xp
-    )
-    pressure_score = log_scaled_reward(
-        xp.abs(state.pressure - state.target_pressure),
-        params.pressure_precision_floor,
-        params.pressure_max - params.pressure_min,
-        xp,
-    )
-    fuel = state.Q_fuel / params.Q_max
-    return (0.5 * level_score + 0.5 * pressure_score) * (
-        1.0 - params.fuel_weight * fuel
-    )
-
-
 def compute_reward(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
-    return R.select(
-        params.reward_version,
-        compute_reward_v1(state, params, xp),
-        R.total(compute_reward_terms(state, params, xp), xp),
-        xp,
-    )
+    return R.total(compute_reward_terms(state, params, xp), xp)
 
 
 def steady_state(params: BoilerDrumParams, p_bar=None, q_steam=None):
-    """Solve for the operating point that balances all four derivatives.
+    """The balanced operating point at ``p_bar`` and ``q_steam``, at normal
+    water level.
 
-    Used by ``reset_env`` and by the tests. At steady state ``dp = 0``, so the
-    flashing terms vanish and the problem collapses: ``m_sr`` is the root of a
-    *scalar* balance (steam generated = steam carried out) and ``m_sd`` then
-    follows explicitly. Solving the full 4-vector with Newton would also work
-    but is far too expensive to sit in a reset path.
-
-    ``V_wt`` is not solved for: the global balances vanish identically here for
-    any water inventory, so where normal water level sits is a design choice,
-    not something the steady state determines.
+    Returns ``(V_wt, alpha_r, V_sd, level_ref, Q)``. At steady state the
+    riser balance gives ``alpha_r h_c q_dc(alpha_r) = Q``, a scalar root, and
+    the drum balance gives ``V_sd`` explicitly. ``V_wt`` is what puts the
+    water surface at normal level, ``normal_level_height`` above the drum's
+    reference ([S1] Appendix B).
     """
     pr = params
     p_bar = pr.p_nominal if p_bar is None else p_bar
@@ -603,41 +650,31 @@ def steady_state(params: BoilerDrumParams, p_bar=None, q_steam=None):
     h_w = water_enthalpy(p_bar, pr)
     h_c = h_s - h_w
     rho_s = steam_density(p_bar, pr)
-
-    # Firing that sustains this steam flow, with feedwater matching it.
     Q = q_steam * (h_s - pr.h_feedwater)
-    q_f = q_steam
-    V_wt = pr.V_wt_nominal
 
-    def residual(m_sr):
-        alpha_v = void_fraction(m_sr, p_bar, pr)
-        q_dc = circulation_flow(alpha_v, p_bar, pr)
-        subcool = (
-            (1.0 - pr.f_cd) * (q_f / jnp.maximum(q_dc, 1e-6)) * (h_w - pr.h_feedwater)
-        )
-        q_ct = jnp.maximum(Q - q_dc * subcool, 0.0) / h_c
-        return q_ct - m_sr / pr.tau_sr
+    def residual(a):
+        av = void_fraction(a, p_bar, pr)
+        return a * h_c * circulation_flow(av, p_bar, pr) - Q
 
-    m_sr = pr.tau_sr * q_steam
+    alpha_r = jnp.asarray(0.1)
     grad = jax.grad(residual)
-    for _ in range(15):
-        m_sr = m_sr - residual(m_sr) / grad(m_sr)
+    for _ in range(20):
+        alpha_r = jnp.clip(alpha_r - residual(alpha_r) / grad(alpha_r), 1e-3, 0.9)
 
-    alpha_v = void_fraction(m_sr, p_bar, pr)
-    q_cd = pr.f_cd * q_f * (h_w - pr.h_feedwater) / h_c
-    m_sd = pr.T_d * (pr.f_carry * m_sr / pr.tau_sr - q_cd)
-
-    V_wd = V_wt - pr.V_dc - (1.0 - alpha_v) * pr.V_r
-    level_ref = V_wd + m_sd / rho_s
-    return V_wt, m_sr, m_sd, level_ref, Q
+    T_d = pr.T_d_flow / q_steam
+    V_sd = pr.V_sd0 + T_d * (pr.h_feedwater - h_w) * q_steam / (h_c * rho_s)
+    av = void_fraction(alpha_r, p_bar, pr)
+    level_ref = pr.A_d * pr.normal_level_height
+    V_wd = level_ref - V_sd
+    V_wt = V_wd + pr.V_dc + (1.0 - av) * pr.V_r
+    return V_wt, alpha_r, V_sd, level_ref, Q
 
 
 def circulation_ratio(params: BoilerDrumParams, p_bar=None, q_steam=None):
-    """Circulation flow divided by steam flow -- 5-15 for a natural-circulation
-    drum boiler, and the figure of merit that sets ``k_friction``."""
+    """Circulation flow divided by steam flow: 5 to 15 for natural circulation."""
     pr = params
     p_bar = pr.p_nominal if p_bar is None else p_bar
     q_steam = pr.q_steam_nominal if q_steam is None else q_steam
-    _, m_sr, _, _, _ = steady_state(pr, p_bar, q_steam)
-    alpha_v = void_fraction(m_sr, p_bar, pr)
+    _, alpha_r, _, _, _ = steady_state(pr, p_bar, q_steam)
+    alpha_v = void_fraction(alpha_r, p_bar, pr)
     return circulation_flow(alpha_v, p_bar, pr) / q_steam

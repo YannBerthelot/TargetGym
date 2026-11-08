@@ -316,13 +316,14 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
     [(name, 0.25) for name in FIVE + AIRCRAFT]
     + [(name, 0.25) for name in ("boiler_drum", "glass_furnace", "cement_kiln")]
     + [
-        # p = 1, in dollars: half the 1 kW or 1.7 kW resolution, for one step of
-        # delta_t s at the imbalance price in $/MWh.
-        ("wind_turbine", 850.0e-6 * 100.0 * 0.25 / 3600.0),
+        # In the score's dollars: half the 1.7 kW resolution for one 0.25 s
+        # step at 60 $/MWh.
+        ("wind_turbine", 850.0e-6 * 0.25 / 3600.0 * 60.0),
         # p = 1, in dollars: half the 0.05 K floor for a 30 s step at $230/h per K.
         ("reactor", 230.0 / 3600.0 * 30.0 * 0.025),
-        # 0.03 EUR/(K^2 h) for 0.25 h at (0.1 K / 2)^2.
-        ("hvac", 0.03 * 0.25 * 0.05**2),
+        # p = 1, in euros: the work an occupied K h loses, 0.02 x 15 people x
+        # EUR 31.8 = EUR 9.54, for 0.25 h at half the 0.1 K resolution.
+        ("hvac", 9.54 * 0.25 * 0.05),
     ],
 )
 def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name, budget):
@@ -337,7 +338,7 @@ PRICED = {
     "cstr": 1, "first_order": 1, "four_tank": 2, "unstable_cstr": 1,
     "compressor_surge": 2,  # header pressure, recycle power
     "hvac": 2,  # comfort, energy
-    "boiler_drum": 3,  # level, pressure, fuel
+    "boiler_drum": 1,  # steam off the plan; the level is limited, not priced
     "wind_turbine": 1,  # power
     "glass_furnace": 2,  # crown temperature, gas
     "cement_kiln": 2,  # free lime, fuel

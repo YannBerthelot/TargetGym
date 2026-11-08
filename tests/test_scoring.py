@@ -196,13 +196,6 @@ def test_a_reactor_step_sums_its_sub_steps_at_the_ceilings_price():
     assert scoring.ceiling("reactor", params) == pytest.approx(0.09583, rel=1e-3)
 
 
-def test_the_wind_ceiling_is_the_class_01s_meter_at_rated_power():
-    """A class 0.1S meter at 5 MW resolves 1.7 kW, and tracking is linear at
-    $100/MWh over 0.25 s: 1700 W x 100 / 1e6 x 0.25 / 3600 = $1.18e-5."""
-    params = REGISTRY["wind_turbine"].make_test_params()
-    assert scoring.ceiling("wind_turbine", params) == pytest.approx(1.18e-5, rel=2e-3)
-
-
 @pytest.mark.parametrize("name", _VIA_TRACKING_COST)
 def test_the_ceiling_is_the_rewards_tracking_cost_at_one_resolution(name, monkeypatch):
     """Every ``tracking_cost`` the reward calls, at an error one resolution
@@ -226,23 +219,6 @@ def test_the_ceiling_is_the_rewards_tracking_cost_at_one_resolution(name, monkey
     assert tracking == pytest.approx(scoring.ceiling(name, params), rel=1e-5)
 
 
-def test_the_building_ceiling_is_the_comfort_price_of_one_resolution():
-    from target_gym.hvac.env import is_occupied
-
-    spec = REGISTRY["hvac"]
-    env, params = spec.make_env(), spec.make_test_params()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    occupied = next(
-        t for t in np.arange(0.0, 7 * 86400.0, 900.0) if bool(is_occupied(t, params))
-    )
-    state = state.replace(
-        time=occupied,
-        T_air=state.target_T + params.comfort_tolerance + params.precision_floor,
-    )
-    tracking = float(env.reward_terms(state, params)["tracking"])
-    assert tracking == pytest.approx(scoring.ceiling("hvac", params), rel=1e-5)
-
-
 @pytest.mark.parametrize("name", _VIA_TRACKING_COST)
 def test_the_settle_band_is_the_rewards_tracking_cost_at_the_floor(name, monkeypatch):
     """Every ``tracking_cost`` the reward calls, at an error at its floor
@@ -259,13 +235,6 @@ def test_the_settle_band_is_the_rewards_tracking_cost_at_the_floor(name, monkeyp
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     tracking = _control_step_tracking(env, state, params)
     assert tracking == pytest.approx(scoring.settle_band(name, params), rel=1e-5)
-
-
-def test_the_building_settles_within_its_ceiling():
-    """hvac has no floor: its band is the comfort tolerance plus one
-    resolution, which is its ceiling."""
-    params = REGISTRY["hvac"].make_test_params()
-    assert scoring.settle_band("hvac", params) == scoring.ceiling("hvac", params)
 
 
 @pytest.mark.parametrize(

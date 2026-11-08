@@ -3,57 +3,59 @@
 Kept apart from the expert (``experts.py``) so that each has a fingerprint of
 its own (``provenance.oracle_fingerprint``). The planner problem, by the
 smoothing protocol's inventory (docs/proposals/oracle-smoothing-protocol.md,
-section 5.4, and Amendment 3), run by ``target_gym.oracles.controller.Oracle``:
+section 5.4), run by ``target_gym.oracles.controller.Oracle``:
 
 - model: the env's step restated (``wind_step``) with its own right-hand side,
-  ``velocity``: the raw moves' clips removed and the moves bounded (T1); both
-  commands within their actuator's reach (T1r, ``reach``); the corners left
-  inside the reach and Cp's floor smoothed by softplus at the K5 widths (T5,
-  ``data/oracle_widths/wind_turbine.json``); ROSCO's table read through K2's
-  clip, cell by cell, which is its bilinear lookup at width 0 (T5, one site per
-  axis, ``table_weights``); the wind on its noise-free mean path, updated before
-  the step as the env does; the dispatch's levels along the plan;
-- objective: the imbalance, the pitch's travel above its hold level and the
-  speed above its band through epigraph rows on every visited state, linear
-  since e_tol = 0 and p = 1 (T2); the speed's resting target at rated (G12),
-  since the reward prices only power at a steady state and leaves the rotor's
-  stored energy free;
-- limit: the rotor speed, underspeed < omega / rated < overspeed on every
-  visited state, elastic at the trip cost per unit (T3), backed off by the
-  planner's error on it (K11, in the widths file);
-- dropped guards (T4): the tip-speed and speed guards, and the pitch and
-  torque clips after the step, since a lag toward an in-range command stays
-  in range.
+  ``velocity``: the rotor, the tower's fore-aft mode and the actuators' ramps at
+  their rate limits, the rate clips smoothed by softplus at the K5 widths (T5);
+  ROSCO's Cp and Ct tables read through K2's clip, cell by cell, which is their
+  bilinear lookup at width 0 (``table_weights``); the wind on its noise-free
+  mean path (the turbulence's deviation decaying at the Kaimal time scale, the
+  gust if one is set), which the oracle knows ahead;
+- objective: the score's lost production against the available power (the
+  rating, timed curtailment included, or the wind at peak Cp), a one-sided
+  epigraph row, and the pitch system's wear, an absolute row on the pitch's
+  travel, both in dollars on every visited state (T2); the speed's resting
+  target at rated (G12), since the score leaves the rotor's stored energy
+  free. The tower's fatigue is not in the plan: its half-cycle count reads
+  turning points of the history, which the planner's smooth model has not
+  got (PHYSICS.md, what the oracle needs);
+- limit: the rotor speed under the safety system's overspeed level on every
+  visited state, elastic at the trip cost per unit (T3);
+- dropped guards (T4): the speed and wind floors, and the pitch and torque
+  clips after the step, since a ramp toward an in-range command stays in range.
 
-The reward is in dollars, so the tie-break's budget is what half a resolution
-costs in one step in dollars (G10). The cold start holds the pitch and the
-torque where they are.
+Not yet run on this plant (rule 9's room is "not measured"). The cold start
+holds the pitch and the torque where they are.
 """
 
 import jax.numpy as jnp
 from jax.tree_util import Partial as partial
 
 from target_gym.energy.wind_turbine.cp_table import (
-    CP_TABLE,
+    CP_TABLE_FEATHER,
+    CT_TABLE_FEATHER,
     PITCH_STEP,
     TSR_FIRST,
     TSR_STEP,
 )
 from target_gym.energy.wind_turbine.env import (
-    N_TARGET_BLOCKS,
-    WIND_OU_THETA,
     drivetrain_inertia,
     electrical_power,
+    gust,
+    life_steps,
     omega_rated,
+    pitch_system_cost,
     rotor_area,
+    tower_damping,
+    tower_stiffness,
+    turbulence_time_constant,
+    wind_power,
 )
 from target_gym.integration import integrate_dynamics
 from target_gym.oracles.controller import Oracle, TaskModel, raw_of, softplus_clip
 from target_gym.oracles.shooting import Hinge, Limit
 from target_gym.reward import trip_cost
-
-#: Cp's ceiling (``power_coefficient``), which no reachable state meets.
-BETZ = 0.593
 
 
 def commands(p, u):
@@ -62,19 +64,13 @@ def commands(p, u):
     return pitch, 0.5 * (u[1] + 1.0) * p.torque_max
 
 
-def rate_reach(rate, tau, p, steps):
-    """How far past its position a command keeps an actuator at full rate over
-    the whole hold of ``steps`` task steps: it closes the gap at the rate limit
-    until the gap is rate * tau, where the lag takes over (``compute_velocity``)."""
-    return rate * (steps * p.delta_t + tau)
-
-
 def pitch_reach(p, steps):
-    return rate_reach(p.pitch_rate_max, p.pitch_tau, p, steps)
+    """How far an actuator moves at its rate limit over ``steps`` task steps."""
+    return p.pitch_rate_max * steps * p.delta_t
 
 
 def torque_reach(p, steps):
-    return rate_reach(p.torque_rate_max, p.torque_tau, p, steps)
+    return p.torque_rate_max * steps * p.delta_t
 
 
 def reach(p, x, u, steps):
@@ -104,83 +100,92 @@ def table_weights(z, nodes, width):
     return jnp.concatenate([1.0 - ramp[:1], ramp[:-1] - ramp[1:], ramp[-1:]])
 
 
-def table_cp(lam, pitch, width_tsr, width_pitch):
-    """``power_coefficient``'s lookup, before its clip, by ``table_weights``."""
-    table = jnp.asarray(CP_TABLE, lam.dtype)
+def table_read(table, lam, pitch, width_tsr, width_pitch):
+    """A coefficient table's lookup by ``table_weights``."""
+    table = jnp.asarray(table, lam.dtype)
     tsr = table_weights((lam - TSR_FIRST) / TSR_STEP, table.shape[0], width_tsr)
     beta = table_weights(pitch / PITCH_STEP, table.shape[1], width_pitch)
     return tsr @ table @ beta
 
 
-def velocity(position, action, v_wind, widths, deltas, p):
-    """``compute_velocity`` with its kinks smoothed at ``widths`` (in name order:
-    Cp's floor, the table's pitch axis and tip-speed axis, the pitch rate, the
-    torque rate; 0.0 is the exact clip) and ``deltas`` added to the outputs of Cp,
-    the pitch rate and the torque rate at every evaluation (K5's probe), the
-    guards dropped."""
-    omega, pitch, torque = position[0], position[1], position[2]
-    pitch_cmd, torque_cmd = action
-    lam = omega * p.R / v_wind
-    fit = table_cp(lam, pitch, widths[2], widths[1])
-    cp = softplus_clip(fit, 0.0, BETZ, widths[0]) + deltas[0]
-    tau_aero = 0.5 * p.rho * rotor_area(p) * v_wind**3 * cp / omega
-    dpitch = softplus_clip(
-        (pitch_cmd - pitch) / p.pitch_tau, -p.pitch_rate_max, p.pitch_rate_max,
-        widths[3],
-    )  # fmt: skip
-    dtorque = softplus_clip(
-        (torque_cmd - torque) / p.torque_tau, -p.torque_rate_max, p.torque_rate_max,
-        widths[4],
-    )  # fmt: skip
+def table_cp(lam, pitch, width_tsr, width_pitch):
+    """``power_coefficient``'s lookup by ``table_weights``."""
+    return table_read(CP_TABLE_FEATHER, lam, pitch, width_tsr, width_pitch)
+
+
+def velocity(position, action, v_wind, widths, p):
+    """``compute_velocity`` with the tables read at ``widths`` (in the widths
+    file's order: unused, pitch axis, tip-speed axis), the guards dropped.
+    ``action`` is the step's (pitch rate, torque rate)."""
+    omega, pitch, torque, x, xdot = position
+    v_rel = v_wind - xdot
+    lam = omega * p.R / v_rel
+    cp = table_read(CP_TABLE_FEATHER, lam, pitch, widths[2], widths[1])
+    ct = table_read(CT_TABLE_FEATHER, lam, pitch, widths[2], widths[1])
+    q = 0.5 * p.rho * rotor_area(p) * v_rel**2
+    tau_aero = q * v_rel * cp / omega
+    accel = (q * ct - tower_damping(p) * xdot - tower_stiffness(p) * x) / (
+        p.tower_modal_mass
+    )
     return jnp.stack([
         (tau_aero - p.N_gear * torque) / drivetrain_inertia(p),
-        dpitch + deltas[1],
-        dtorque + deltas[2],
+        action[0], action[1], xdot, accel,
     ]), None  # fmt: skip
 
 
-def wind_step(env, p, x, u, t, task, widths, deltas=(0.0, 0.0, 0.0)):
-    """One env step from ``x`` = (omega, pitch, torque) under the raw move
-    ``u``: x_next."""
-    _, _, v_mean, deviation = task
-    action = commands(p, u)
-    v_wind = v_mean + deviation * (1.0 - WIND_OU_THETA * p.delta_t) ** (t + 1)
+def wind_step(env, p, x, u, t, task, widths):
+    """One env step from ``x`` = (omega, pitch, torque, x_tower, v_tower) under
+    the raw move ``u``: (x_next, the step's wind)."""
+    _, v_mean, v_turb, now, gust_t0, _ = task
+    pitch_cmd, torque_cmd = commands(p, u)
+    rates = (
+        softplus_clip(
+            (pitch_cmd - x[1]) / p.delta_t, -p.pitch_rate_max, p.pitch_rate_max,
+            widths[3],
+        ),
+        softplus_clip(
+            (torque_cmd - x[2]) / p.delta_t, -p.torque_rate_max, p.torque_rate_max,
+            widths[4],
+        ),
+    )  # fmt: skip
+    decay = jnp.exp(-p.delta_t / turbulence_time_constant(v_mean, p))
+    v_wind = (
+        v_mean + v_turb * decay ** (t + 1)
+        + gust((now + t + 1) * p.delta_t, v_mean, gust_t0, p)
+    )  # fmt: skip
     x1, _ = integrate_dynamics(
         positions=x, delta_t=p.delta_t, method=env.integration_method,
         compute_velocity=partial(
-            velocity, action=action, v_wind=v_wind, widths=widths, deltas=deltas,
-            p=p,
+            velocity, action=rates, v_wind=v_wind, widths=widths, p=p
         ),
     )  # fmt: skip
-    return x1
+    return x1, v_wind
 
 
 def wind_model(env, p) -> TaskModel:
-    assert float(p.e_tol) == 0.0 and float(p.tracking_exponent) == 1.0
-    per_W = float(p.imbalance_price / 1.0e6 * p.delta_t / 3600.0)
-    floor = per_W * float(p.e_floor)
+    per_W = float(1.0e-6 * p.delta_t / 3600.0)  # MWh per W per step
     rated = omega_rated(p)
+    per_deg = float(pitch_system_cost(p) / (p.pitch_travel_design * life_steps(p)))
 
     def step(d, x, u, t):
-        task, w = d["task"], d["widths"]
-        levels, clock = task[0], task[1]
-        x1 = wind_step(env, p, x, u, t, task, w)
+        task = d["task"]
+        x1, v_wind = wind_step(env, p, x, u, t, task, d["widths"])
         power = electrical_power(x1[0], x1[2], p)
-        block = jnp.minimum(
-            (clock + t + 1) // p.target_block_steps, N_TARGET_BLOCKS - 1
-        )
-        y = jnp.stack([
-            (levels[block] - power) / p.e_floor,
-            (x1[1] - x[1]) / (p.pitch_max * p.c_hold),
-            x1[0] / rated - p.speed_band,
-            x1[0],
-        ])  # fmt: skip
+        now, derate_t0 = task[3], task[5]
+        derated = (derate_t0 >= 0.0) & ((now + t + 1) * p.delta_t >= derate_t0)
+        rating = jnp.where(derated, p.derate_to, p.rating) * p.P_rated
+        available = jnp.minimum(rating, wind_power(v_wind, p))
+        y = jnp.stack([available - power, x1[1] - x[1], x1[0]])
         return x1, jnp.zeros((), x.dtype), y, power[None], ()
 
     return TaskModel(
-        nx=3, nu=2, step=step,
-        state_x=lambda s: jnp.stack([s.omega, s.pitch, s.torque]),
-        data=lambda s: (s.target_levels, s.block_clock, s.v_mean, s.v_wind - s.v_mean),
+        nx=5, nu=2, step=step,
+        state_x=lambda s: jnp.stack(
+            [s.omega, s.pitch, s.torque, s.x_tower, s.v_tower]
+        ),
+        data=lambda s: (
+            s.target_power, s.v_mean, s.v_turb, s.time, s.gust_t0, s.derate_t0
+        ),
         hold=lambda s: jnp.stack([
             raw_of(s.pitch, p.pitch_min, p.pitch_max),
             raw_of(s.torque, 0.0, p.torque_max),
@@ -188,19 +193,13 @@ def wind_model(env, p) -> TaskModel:
         tracked=lambda s: electrical_power(s.omega, s.torque, p)[None],
         resolution=(float(p.precision_floor),),
         hinges=(
-            Hinge(weight=floor, absolute=True),
-            Hinge(weight=floor * float(p.fatigue_weight), absolute=True, tol=1.0),
-            Hinge(weight=floor * float(p.speed_weight)),
+            Hinge(weight=per_W * float(p.energy_price)),
+            Hinge(weight=per_deg, absolute=True),
         ),
-        limits=(
-            Limit(
-                p.underspeed_factor * rated, p.overspeed_factor * rated,
-                float(trip_cost(p)),
-            ),
-        ),
+        limits=(Limit(hi=p.overspeed_factor * rated, price=float(trip_cost(p))),),
         move_rows=lambda x, u, steps: reach(p, x, u, steps),
         move_scale=lambda steps: reach_scale(p, steps),
-        tie_budget=per_W * 0.5 * float(p.precision_floor),
+        tie_budget=per_W * float(p.energy_price) * 0.5 * float(p.precision_floor),
         rest=lambda x: (x[0] - rated) / (rated * (p.overspeed_factor - 1.0)),
     )  # fmt: skip
 

@@ -381,6 +381,15 @@ def _reactor():
     return Reactor()
 
 
+def _battery_scenarios():
+    # The package lists its suite as plain rows, so it imports nothing outside
+    # its fingerprint; the rows become Scenarios here.
+    from target_gym.energy.battery.scenarios import battery_scenarios
+    from target_gym.scenarios import Scenario
+
+    return tuple(Scenario(**row) for row in battery_scenarios())
+
+
 def _battery():
     from target_gym.energy.battery.env_jax import GridBattery
 
@@ -399,10 +408,24 @@ def _cement_kiln():
     return CementKiln()
 
 
+def _boiler_drum_scenarios():
+    from target_gym.boiler_drum.scenarios import boiler_drum_scenarios
+    from target_gym.scenarios import Scenario
+
+    return tuple(Scenario(**row) for row in boiler_drum_scenarios())
+
+
 def _boiler_drum():
     from target_gym.boiler_drum.env_jax import BoilerDrum
 
     return BoilerDrum()
+
+
+def _hvac_scenarios():
+    from target_gym.hvac.scenarios import hvac_scenarios
+    from target_gym.scenarios import Scenario
+
+    return tuple(Scenario(**row) for row in hvac_scenarios())
 
 
 def _hvac():
@@ -884,14 +907,21 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.hvac.env", "HVACParams"),
         make_pid=_pid("make_hvac_pid_controller", module="target_gym.hvac.experts"),
         make_mpc=_mpc("make_hvac_mpc", module="target_gym.hvac.oracle"),
-        # 720 steps at dt = 900 s is 7.5 days, so fifteen setback recoveries
-        # and as many solar cycles, which is what distinguishes controllers
-        # here.
+        # v4 (charter Amendments 1 and 2): a TABS concrete slab between the
+        # supply water and the room ([9]'s first-order model), supply water
+        # as the action, the 21 to 26 C band at all hours with no setback,
+        # two-week episodes from established operation, a score in euros of
+        # heat and kelvin-hours of discomfort (hvac/PHYSICS.md).
         tuned_gains_key="hvac",
         oracle_data=_shared_oracle("hvac"),
         disturbance_fields=("weather_dev",),
         noise_fields=("T_out_noise_std",),
-        version=3,
+        # v5 (Amendment 3): supply capped at 49 C [14], a brine heat pump whose
+        # COP falls with supply temperature, a three-period tariff, comfort
+        # priced as lost office work, a day-ahead forecast in the observation,
+        # and a scenario suite.
+        scenarios=_hvac_scenarios,
+        version=5,
     ),
     EnvSpec(
         name="cement_kiln",
@@ -922,15 +952,19 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_boiler_drum_pid_controller", module="target_gym.boiler_drum.experts"
         ),
         make_mpc=_mpc("make_boiler_drum_mpc", module="target_gym.boiler_drum.oracle"),
-        # 400 steps = 800 s at dt = 2 s, about 20 times the ~35 s swell peak,
-        # so a controller has to survive many inverse-response transients.
+        # v4 (charter Amendments 1 and 2): Astrom and Bell's published model,
+        # the sourced timed level trips, a load plan ramping at 1 to 2 %/min
+        # over an hour, and a score in tonnes of steam off the plan
+        # (boiler_drum/PHYSICS.md).
         tuned_gains_key="boiler_drum",
-        disturbance_fields=("q_steam",),
-        # The steam demand's OU innovation. Declared so the planner plans on the
-        # mean (``plan_params``) rather than on one fixed noise path.
+        # The load plan is drawn at reset and read by the agent: no hidden
+        # disturbance moves with the step's key.
         oracle_data=_shared_oracle("boiler_drum"),
-        noise_fields=("q_steam_noise_std",),
-        version=3,
+        # v5 (Amendment 3): scenarios with an ID fan runback and a feed pump
+        # trip, ramps over the family's 1 to 6 %/min, a score in GBP at the
+        # imbalance price past the steam meter's resolution.
+        scenarios=_boiler_drum_scenarios,
+        version=5,
     ),
     EnvSpec(
         name="wind_turbine",
@@ -946,12 +980,19 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_wind_turbine_mpc", module="target_gym.energy.wind_turbine.oracle"
         ),
-        # 400 steps = 100 s ~ 7 rotor time constants.
+        # v5 (charter Amendment 3): the tower's fore-aft mode on the rotor's
+        # thrust, the overspeed feather as the one trip, 10 min windows of
+        # above-rated operation in six scenarios, and a score in dollars: lost
+        # production against the available power, tower fatigue and pitch wear
+        # at their shares of the turbine's cost (energy/wind_turbine/PHYSICS.md).
         tuned_gains_key="wind_turbine",
         oracle_data=_shared_oracle("wind_turbine"),
-        noise_fields=("turbulence_std",),
+        noise_fields=("turbulence_iref",),
         disturbance_fields=("v_wind",),
-        version=3,
+        scenarios=_scenarios(
+            "wind_turbine_scenarios", module="target_gym.energy.wind_turbine.scenarios"
+        ),
+        version=5,
     ),
     EnvSpec(
         name="battery",
@@ -962,12 +1003,18 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_battery_pid_controller", module="target_gym.energy.battery.experts"
         ),
         make_mpc=_mpc("make_battery_mpc", module="target_gym.energy.battery.oracle"),
-        # 2880 steps = 4 h, about three times the 75 min it takes to traverse
-        # the usable state-of-charge range at full power.
+        # v4 (charter Amendments 1 and 2): an LFP Megapack whose BMS reports a
+        # drifting state of charge, selling Dynamic Regulation for one 4 h EFA
+        # block, steered by its baseline past gate closure, and scored in MW h
+        # of availability lost (energy/battery/PHYSICS.md).
         tuned_gains_key="battery",
-        noise_fields=("dispatch_noise_std",),
-        disturbance_fields=("target_power",),
-        version=3,
+        # The regulation signal's innovation, and the BMS error drawn at reset.
+        noise_fields=("signal_std", "soc_error_std"),
+        disturbance_fields=("regulation",),
+        # v5 (Amendment 3): the named property is the 60 to 90 min gate-closure
+        # delay; energy priced at the GB wholesale price; six scenarios.
+        scenarios=_battery_scenarios,
+        version=5,
     ),
     # Append new tasks here, never insert: a task's position in REGISTRY is its
     # benchmark seed index, and TargetFoundation derives seeds the same way.

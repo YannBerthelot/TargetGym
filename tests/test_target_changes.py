@@ -81,7 +81,6 @@ def test_a_change_in_any_output_counts_from_the_target_at_reset():
 # ``time`` from i to i + 1, so level k becomes active at entry k block - 1.
 #   plane_energy (v4): target_steps = 8 treads over 1600 steps, 200 steps each
 #     (``plane.env.commanded_altitude``); the eighth starts on the last step.
-#   wind_turbine: N_TARGET_BLOCKS = 4 blocks of target_block_steps 100.
 #   glass_furnace: N_SETPOINTS = 5 slots over 1600 steps, 320 each.
 _TRIPS_ON_A_MOVE = pytest.mark.xfail(
     strict=True,
@@ -89,7 +88,7 @@ _TRIPS_ON_A_MOVE = pytest.mark.xfail(
     "of a restart cannot be told from it",
 )
 SCHEDULES = [pytest.param("plane_energy", 200, 8, marks=_TRIPS_ON_A_MOVE)]
-SCHEDULES += [("wind_turbine", 100, 3), ("glass_furnace", 320, 4)]
+SCHEDULES += [("glass_furnace", 320, 4)]
 
 
 def test_a_restart_is_not_a_target_change():
