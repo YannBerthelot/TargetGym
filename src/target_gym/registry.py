@@ -1012,8 +1012,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("demand_dev",),
         noise_fields=("demand_sigma",),
         # No fingerprint_sources: the package imports only itself and the
-        # shared plumbing.
-        version=3,
+        # shared plumbing. v4 (charter Amendment 3): the counted-surge trip,
+        # the valve's positioner lag, a constant header setpoint, a recycle
+        # energy score inside a header zone, scenarios.
+        version=4,
+        scenarios=_scenarios("target_gym.compressor_surge.scenarios"),
     ),
     EnvSpec(
         name="formation",

@@ -1,75 +1,135 @@
 # Compressor surge: physics model, provenance and validation
 
-## Status: Extra (charter rule 5), 2026-11-08
+## Version 4 (charter Amendment 3), 2026-11-08
 
-This task goes to Extra under charter rules 2, 18 and 5. It keeps its code and
-is not scored.
+Back from Extra by the owner's decision. The task represents the family of
+centrifugal compressors with an anti-surge recycle (rule 19). Its 0.83 s
+deep-surge cycle lies inside the family's 0.4 to 8 Hz (Almasi, Plant
+Engineering 2014, which says "most often between 0.6 and 2.5 Hz"; a
+compressor-control text gives 0.5 to 10 Hz and Pinelli 0.25 to 3.5 Hz,
+verified by the owner's review), so the period is no reason for Extra. The
+plant model below (sections 1 to 4) stands. Version 4 changes the limits,
+the actuator, the episode and the score; where the older sections speak of
+the line trip, the hidden surge line, the moving setpoint or the version-2
+reward, this section replaces them.
 
-**Reason.** The named property is surge, a counted event that trips the
-machine after 3 surges in 10 to 20 s [C5; C3, p. 3]. The model does surge,
-but at a scale no source sets. Its duct and plenum (`L_c` 4 m, `V_p` 15 m^3)
-are tuned to reach Greitzer's B = 1.8, and `A_c` and `U_r` are ours (section
-on parameters below). With them the deep-surge cycle runs at 0.83 s, where
-the audit's test 1 asks the 1 to 3 s of a large industrial machine [C1]
-(rated speed, recycle shut, opening 0.2, no trip; `compressor-surge-period.py`
-in the session notes folder). No source in `REALITY.md` gives a machine's duct
-length and discharge volume together with its period, so the period could
-only be moved by moving unsourced numbers until the test passes, which rule 2
-forbids. The audit's test 5 needs the surge signatures operators read
-(suction pressure and temperature rising, speed falling [C4, Table 1]), which
-need a suction volume, an energy balance and drive inertia, none with a
-sourced size. The episode's header, its setpoint schedule and its demand
-schedule have no source either (`COLD_REVIEW.md`, rule 12 candidates).
+**Job** [C3, pp. 1-2, 4; C5]: meet the header pressure while keeping right of
+the surge line, with as little recycle as possible and no counted surge.
 
-**What a future task would need.** A machine record with geometry and a
-measured surge period (Greitzer 1976 Part II, and the Moore et al. full-scale
-ESD tests, are on the owner list), the counted-surge trip of [C5], the
-recycle valve's 150 to 300 ms positioner lag [C7], and the job of
-`REALITY.md`: meet a constant header pressure [C3, p. 4] with as little
-recycle as possible and no counted surge.
+### Numbers changed or added
 
-The sections below describe the task as it was, for the record.
+| Symbol | Value | Unit | Cited or ours |
+|---|---|---|---|
+| `surge_trip_count`, `surge_window` | 3, 15 | -, s | cited count [C5; C3, p. 3]; window ours inside C5's 10 to 20 s |
+| `valve_lag` | 0.15 | s | ours, family: a dead time before the valve moves, inside C7's 150 to 300 ms (the lower end, rule 19) |
+| `header_setpoint` | 24 | kPa | ours: constant, as the usual target is [C3, p. 4]; the middle of the header this plant supplies |
+| `header_band` | 1.2 | kPa | ours: +-5 % of the setpoint; no band found |
+| `energy_price` | 1 | per kJ | ours: the score's unit is kJ of recycle energy [C3, p. 1; C1] |
+| `zone_price` | 1000 | kJ/s | ours: a second outside the zone costs about 16 s of the hold's recycle power |
+| `surge_price` | 2000 | kJ | ours: each surge's wear [C3, p. 1], no price found |
 
-Reference process: a variable-speed compressor feeding a header through a
-lumped duct and plenum (Greitzer's compression-system model) with the
-Moore-Greitzer cubic characteristic scaled by the fan laws. Gas leaves the
-header through the consumers' valve, against their static head, and through a
-recycle (anti-surge) valve back to suction. The header pressure follows a
-ramped setpoint while the consumers' demand ramps between levels, and the
-plant trips when the compressor's flow coefficient falls below the episode's
-surge line, a hidden offset right of the map's.
+The hidden surge-line offset (`surge_offset_max`), the moving setpoint
+schedule (`p_ref_range`) and the travel, tracking and running terms are gone:
+none had a source.
 
-Contract for `target_gym.compressor_surge`. Method:
-`docs/PHYSICS_METHODOLOGY.md`.
+### Limits (rule 14)
 
-Status: ✅ validated · ⚠️ defensible but approximate · ❌ known deviation
+| Limit | Kind | Model | Source |
+|---|---|---|---|
+| Surge | Trip | A surge is a flow reversal; 3 within 15 s trip the machine, which restarts after 15 min priced | [C5; C3, p. 3; C1; C4] |
+| Each surge | Cost | Priced per surge, wear | [C3, p. 1] |
+| Header pressure | Zone | Outside +-1.2 kPa of 24 kPa priced per second | [C3, p. 4] for the constant target; band ours |
+| Recycle valve | Hardware | 0.15 s dead time, then 2 s to open, 10 s to close | [C7; C1; Mirsky et al.] |
 
-Every number carries a label: **read** (from a source or from shipped code),
-**derived** (computed from read values by a script or test named beside it),
-**ours** (a design choice), **TUNED** (ours and load-bearing, justified by a
-sensitivity table), **measured** (printed by the repo script or flag named
-beside it, run on the built env). "The numbers script" is
-`scripts/compressor_surge_numbers.py`; a flag such as `--section params` or
-`--sensitivity` names the part of it that prints the figure. A test named
-next to a measured number asserts that number or a bound on it; the number
-itself is the one the named section prints.
+A short excursion left of the line that recovers no longer trips (deviation
+D4, fixed; `test_a_short_excursion_does_not_trip` now passes).
 
-The heavy flags `--hardness`, `--sensitivity`, `--v1` and `--pid-validation`
-run the pair at its shipped gains (section 7), and their figures here are at
-the measured `c_hold`, 62.27 kW. `--mpc-gate`, which left with CasADi
-after 0.7.0, ran before `scripts/measure_hold.py` measured `c_hold`, so the
-costs it printed, for the NMPC, the pair and G10, are at the provisional
-49.6 kW. The running term only falls as `c_hold` rises, so the measured value
-lowers each of those costs by at most its energy share at 49.6 kW. For the
-NMPC the run printed that share,
-0.39 and 0.41 % at its two candidate margins. Trip counts, margins, recycle
-power and valve travel do not depend on `c_hold`.
+### Observation (rule 16)
 
-**Figures that predate the ramps.** Setpoint ramps, the surge-line offset and the
-wear term landed on the integration branch in November 2026. Everything labelled
-measured in sections 4 to 8 was taken on stepped setpoints and the fixed line, with
-the pair and the NMPC as they stood, so it describes that plant and PR 9 measures
-again. Section 5's ramp figures are the exception, and say so.
+The seven channels of section 5 plus the surge counter over its window (obs 7),
+which the surge detector keeps [C5; C4]. The setpoint channel is constant.
+
+### Episode (rules 17 and 20)
+
+The machine starts at the speed that holds 24 kPa at the reset's recycle and
+first demand (established operation). Demand moves as the scenario says:
+
+| Scenario | Demand | Source |
+|---|---|---|
+| `normal` | 0.7 to 0.95, 5 s ramps | [C3, p. 2]: right of the control line, recycle shut or nearly |
+| `slow_approach` | 0.25 to 0.6, 15 s ramps | [C3, p. 2] |
+| `fast_approach` | 0.2 to 0.6, 1 s ramps | [C3, p. 2] |
+| `load_swings` | 0.35 to 0.95, 5 s ramps | [C3, pp. 2-4] |
+
+Sizes and rates are ours; the sources name the cases. An emergency shutdown
+[C6] needs a driver model and has no scenario yet.
+
+### Score (rule 15)
+
+```
+reward = -(energy + zone + surge + failure)       in kJ per 0.1 s step
+energy = recycle power x dt / 1000
+zone   = 1000 x dt     while |dp - 24 kPa| > 1.2 kPa
+surge  = 2000 per surge
+failure = 9000 x 2200  on the third surge in 15 s
+```
+
+### Behaviour tests
+
+`tests/compressor_surge/test_compressor_surge_reality.py`, the audit's tests
+restated on the family's ranges:
+
+| Test | Range and source | Result |
+|---|---|---|
+| 1. Deep-surge period | 0.125 to 2.5 s (0.4 to 8 Hz, Almasi) | pass (0.83 s) |
+| 2. Flow reversal | within 0.06 s [C1, C2] | pass |
+| 3. Swings about zero flow | negative every cycle, mean within half the half-amplitude [C8, Fig. 5] (50 % ours, the audit's 25 % widened) | pass |
+| 4. Period rises with volume | direction [C8, p. 4] | pass |
+| 5. Signal directions at onset | [C4, Table 1] | not tested: no suction volume, energy balance or drive inertia (D7) |
+| 6. Valve stroke | T95 under 2.5 s [C1]; under 5 % at 0.15 s, more at 0.30 s [C7] | pass, with the dead time |
+| 7. Surge counted before it trips | 1 surge no trip, 3 in the window trip [C5] | pass |
+| Constant header setpoint | [C3, p. 4] | pass |
+| In the zone, less recycle scores better | [C3, p. 1] | pass |
+
+Tests 1 to 4 passed on the model before version 4; 6, 7 and the job tests
+failed and pass now.
+
+**Findings.**
+- The valve's lag had to be a dead time: a first-order lag of 0.2 s still let
+  the rate-limited stroke move at once, against C7's "lag" read as time to
+  visible motion. 0.15 s is the family range's lower end.
+- The stored anti-surge pair, tuned before the dead time, limit-cycles with
+  it; `test_functional_core_matches_the_class` now runs without the dead time.
+  The ladder re-tunes it.
+
+### What the reference ladder row needs
+
+- Zone: the header pressure in 24 +- 1.2 kPa, two-sided, no cheap side for
+  the pressure itself; the cost lever is the recycle, cheapest shut. The
+  reference holds the setpoint (zone centre) and keeps the recycle as low as
+  the surge line allows; its anti-surge rung backs off from the line by its
+  control margin (10 to 15 % [C1], about 10 % [C6], 3 to 5 % of span [C7]).
+- Scenarios: the four above.
+- The pair (`experts.py`) predates the dead time and limit-cycles with it.
+
+### Oracle needs
+
+`oracle.py`'s model now prices recycle energy and a smooth zone hinge, and
+keeps Phi right of the line as a limit, so it never surges: a bound from the
+safe side. Its valve model lacks the positioner's dead time, which must be
+added before rule 9 runs it. Not run.
+
+### Reward parameters (version 4)
+
+| parameter | value | source |
+| --- | --- | --- |
+| `energy_price` | 1 per kJ | ours, the unit |
+| `zone_price` | 1000 kJ/s | ours, above any recycle saving |
+| `surge_price` | 2000 kJ | ours, wear per surge [C3, p. 1] |
+| `failure_cost` | 2200 kJ per step | ours: above the worst surviving step (a surge, zone, full recycle) |
+| `restart_steps` | 9000 (15 min) | ours, provisional; no restart time found |
+| `e_floor` | 1.2 kPa | the header zone's half-width, for the time-in-band KPI only |
+| `precision_floor` | 0.0275 kPa | version 1 only: the transmitter's reference accuracy (below) |
 
 ---
 
@@ -288,7 +348,6 @@ at the end, with their sources.
 | `delta_t` | 0.1 | s | ours | 4.5 steps per Helmholtz period (0.452 s, derived) | ✅ |
 | `max_steps_in_episode` | 1200 (120 s) | steps | ours | four setpoint blocks, six demand blocks | ✅ |
 | `reward_version` | 2 | | read | the suite's current reward, `docs/reward-shaping.md` | ✅ |
-| `floor_is_documented_minimum` | False | | ours | the plant is disturbed | ✅ |
 
 ---
 
@@ -989,7 +1048,7 @@ controller knows which way the error runs.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 7 | 23 |
+| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 8 | 154 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -998,7 +1057,7 @@ which is what the recorded baselines use.
 
 <!-- END GENERATED FACTS -->
 
-## Reward (version 2)
+## Reward (version 2, retired in version 4)
 
 `compute_reward = -(tracking + running + wear + failure)`, see
 docs/reward-shaping.md. Tracking is the header-pressure error in kPa over
@@ -1011,19 +1070,8 @@ recycle is forced pay a running cost no controller can avoid.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 0.0275 kPa (derived: the resolution clamp binds) | `max(precision_floor, lowest per-seed MPC hold)`, with the hold from `scripts/measure_hold.py --envs compressor_surge`. The NMPC's lowest per-seed hold is 1.03e-4 kPa (measured; the pair's lowest is 0.043 kPa), 267 times finer than the transmitter's 0.0275 kPa, so the clamp binds and `e_floor` stays at the transmitter accuracy, a measured upper bound clamped at the instrument resolution (docs/reward-shaping.md, "How each floor was obtained") |
-| `e_tol` | 0 (ours, provisional) | no header-pressure specification has been supplied |
-| `tracking_exponent` | 2 (ours) | a pressure deviation has no linear settlement price |
 | `dp_error_max` | 20.68 kPa (derived) | the 28 kPa top level against the 7.32 kPa lowest pressure an untripped plant holds (`--section params`, `test_restart_and_failure_cost_are_derived`); `test_the_error_envelope_is_certified` checks it against random bang-bang on both actuators over 512 episodes; the version-1 envelope and the base of `failure_cost` |
-| `failure_cost` | 1.131e6 (derived), twice (20.68 / 0.0275)^2 | twice the largest tracking cost an untripped state reaches (derived) |
-| `restart_steps` | 9000 (15 min, ours, provisional) | no source gives a restart time; a trip costs 9000 x 1.131e6 = 1.018e10 (derived, `--section params`, `test_restart_and_failure_cost_are_derived`) |
-| `c_hold` | 62 270 W (62.27 kW, measured) | the NMPC's mean recycle power over its hold, from `scripts/measure_hold.py --envs compressor_surge` (the pair's is 66.1 kW). It replaced a provisional 49.6 kW; the oracle reads `c_hold` through the reward |
-| `running_weight` | 1 (ours, provisional) | one floor-width of tracking error is worth once the hold-phase recycle power |
-| `travel_free` | 0.0025 per step | read: the least a real valve follows, a digital positioner's hysteresis plus dead band, 0.25 % of span (Fisher DVC6200, `docs/proposals/measurement-noise.md`, the same figure as `eval.REVERSAL_DEAD_BAND`). Wear is charged above it. Not a measured hold, since the pair's own valve travels 0.0071 per step in hold (measured, seeds 100 to 109), mostly flow-noise chatter through `kp_surge` |
-| `travel_weight` | 1 (ours, provisional) | twice the free travel in one step is worth one floor-width of tracking error. A full stroke at 0.05 per step costs 19 per step |
 | `precision_floor` | 0.0275 kPa (derived) | the header-pressure transmitter's reference accuracy, 0.055 % of calibrated span (read: Yokogawa EJA530E gauge transmitter, GS 01C31F01-01EN, p.1, capsule A at spans of 20 kPa or more, https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf; Siemens SITRANS P320, catalog FI 01 09/2026, p.1/14, 1 bar cell at a turn-down of 5 or less, https://support.industry.siemens.com/cs/attachments/109765052/sitransp_p320_p420_fi01_en.pdf), times a 0 to 50 kPa calibrated span (ours). It covers linearity, hysteresis and repeatability together, and the Yokogawa sheet states it as a 3-sigma bound, so an error below it is one the instrument cannot tell from a smaller one. Neither sheet gives a finer measuring resolution; the one resolution found, the current output's quantisation (Endress+Hauser Cerabar PMP71B, TI01509P, p.24, https://bdih-download.endress.com/file/11181feb66c9cd03e4256402f1eff641/TI01509PEN_1025-00.pdf), is finer than the repeatability and is not used. The value scales with the span. Version 1's floor and the clamp on `e_floor`, so while the clamp binds it sets the version-2 scale |
-| `rho_floor_tracking` | 1.40e-5 (derived from the measured hold) | (lowest per-seed MPC hold / `e_floor`)^2 = (1.03e-4 / 0.0275)^2, from `scripts/measure_hold.py`; below 1 because the clamp binds |
-| `rho_floor` | 1.40e-5 (derived from the measured hold) | equal to `rho_floor_tracking`, from when recycle power at `c_hold` cost nothing. It gains the running term, about `running_weight`, when PR 9 re-measures the hold |
 | `floor_is_documented_minimum` | False | the plant is disturbed |
 
 **The hold window.** `scripts/measure_hold.py` scores this plant's hold

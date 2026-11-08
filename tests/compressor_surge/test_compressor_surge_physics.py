@@ -26,6 +26,7 @@ from scipy.optimize import brentq
 from target_gym.compressor_surge.env import (
     N_DEMAND_BLOCKS,
     N_SETPOINT_BLOCKS,
+    VALVE_HISTORY,
     CompressorSurgeParams,
     CompressorSurgeState,
     characteristic,
@@ -40,7 +41,6 @@ from target_gym.compressor_surge.env import (
     recycle_flow,
     sound_speed,
     suction_density,
-    surge_constant,
     surge_flow_per_speed,
 )
 from target_gym.compressor_surge.env_jax import CompressorSurge
@@ -103,6 +103,7 @@ def _state(params, m_c, dp, N, x, u, dtype=jnp.float64, **kw):
         setpoint_levels=f(np.full(N_SETPOINT_BLOCKS, 24.0e3)),
         demand_levels=f(np.full(N_DEMAND_BLOCKS, u)),
         block_clock=jnp.asarray(0, jnp.int32),
+        valve_cmds=f(np.full(VALVE_HISTORY, x)),
     )
     fields.update(
         {k: (f(v) if k not in ("time", "block_clock") else v) for k, v in kw.items()}
@@ -477,63 +478,6 @@ def test_fan_laws(params):
         assert dp / dp1 == pytest.approx(N**2, rel=1e-5)
 
 
-def test_surge_line_is_a_parabola(params):
-    """At 80, 90 and 100 % with the recycle shut, the smallest consumer
-    opening whose equilibrium does not trip (found by bisection on the env's
-    Newton equilibrium and its trip rule) puts the compressor on dp = K m^2,
-    K = 215.51 Pa/(kg/s)^2 (derived), to 1 %. Held there with 2 % more
-    opening the env does not trip; with 2 % less it does."""
-    K = float(surge_constant(params))
-    assert K == pytest.approx(215.51, abs=0.01)
-    assert float(surge_flow_per_speed(params)) == pytest.approx(12.25, abs=1e-3)
-    env = CompressorSurge()
-    key = jax.random.PRNGKey(0)
-    quiet = params.replace(demand_sigma=0.0)
-
-    @jax.jit
-    def hold(state, action):
-        def body(s, _):
-            _, s2, _, _, info = env.step_env(key, s, action, quiet)
-            return s2, info["tripped"]
-
-        return jax.lax.scan(body, state, None, length=100)[1]
-
-    for N in (0.8, 0.9, 1.0):
-        with enable_x64():
-            phi_of = jax.jit(lambda u, N=N: equilibrium_phi(N, 0.0, u, params, 30))
-
-            def trips(u):
-                return not (float(phi_of(u)) >= 2.0 * params.W)
-
-            lo, hi = 0.2, 1.0
-            assert trips(lo) and not trips(hi)
-            for _ in range(50):
-                mid = 0.5 * (lo + hi)
-                lo, hi = (mid, hi) if trips(mid) else (lo, mid)
-            u_star = hi
-            phi = float(phi_of(u_star))
-            phi_hi = float(phi_of(1.02 * u_star))
-            m = _flow_scale(params, N) * phi
-            dp = _head_scale(params, N) * float(characteristic(phi, params, np))
-        assert dp == pytest.approx(K * m**2, rel=0.01), N
-
-        # Held from the equilibrium at 2 % more opening, and with the opening
-        # then cut to 2 % less (float32, as shipped).
-        action = jnp.array([_raw(N, params.N_min, params.N_max), -1.0])
-        for scale, should_trip in ((1.02, False), (0.98, True)):
-            s = _state(
-                quiet,
-                _flow_scale(params, N) * phi_hi,
-                _head_scale(params, N) * float(characteristic(phi_hi, params, np)),
-                N,
-                0.0,
-                scale * u_star,
-                dtype=jnp.float32,
-            )
-            tripped = np.asarray(hold(s, action))
-            assert tripped.any() == should_trip, (N, scale)
-
-
 def test_every_block_is_feasible(params):
     """At 105 % the compressor delivers 18.70 kg/s at 20 kPa and 17.08 at
     28 kPa, above the 12.00 and 16.10 kg/s the consumers take at full
@@ -568,40 +512,6 @@ def test_every_block_is_feasible(params):
     assert min(speeds) == pytest.approx(0.786, abs=1e-3)
     assert max(speeds) == pytest.approx(1.018, abs=1e-3)
     assert params.N_min <= min(speeds) and max(speeds) <= params.N_max
-
-
-def test_most_blocks_force_recycle(params):
-    """Over 1e5 uniform draws of a setpoint level and a demand level, the
-    consumers take less than the surge flow at the setpoint in 66 % of them
-    (+-1 %): the recycle must open there to hold the pressure without
-    surge."""
-    rng = np.random.default_rng(0)
-    dp = rng.uniform(*params.p_ref_range, 100_000)
-    u = rng.uniform(*params.demand_range, 100_000)
-    surge_flow = np.sqrt(dp / float(surge_constant(params)))
-    forced = np.asarray(consumer_flow(dp, u, params, np)) < surge_flow
-    assert forced.mean() == pytest.approx(0.66, abs=0.01)
-
-
-def test_no_fixed_valve_is_both_safe_and_able(params):
-    """A fixed recycle opening must be at least 0.256 to keep every block's
-    equilibrium off the surge line (20 kPa, demand 0.35) and at most 0.071
-    for 105 % to hold every block's pressure (28 kPa, demand 0.95). No
-    opening does both, so the recycle has to move."""
-    dp = np.linspace(*params.p_ref_range, 41)[:, None]
-    u = np.linspace(*params.demand_range, 41)[None, :]
-    m_d = np.asarray(consumer_flow(dp, u, params, np))
-    per_x = np.asarray(recycle_flow(dp, 1.0, params, np))
-    x_min = np.maximum((np.sqrt(dp / float(surge_constant(params))) - m_d) / per_x, 0.0)
-    phi_max = np.vectorize(
-        lambda p: _right_branch_phi(p / _head_scale(params, params.N_max), params)
-    )(dp)
-    x_max = (_flow_scale(params, params.N_max) * phi_max - m_d) / per_x
-    assert x_min.max() == pytest.approx(0.256, abs=1e-3)
-    assert x_max.min() == pytest.approx(0.071, abs=1e-3)
-    assert np.unravel_index(x_min.argmax(), x_min.shape) == (0, 0)
-    assert np.unravel_index(x_max.argmin(), x_max.shape) == (40, 40)
-    assert x_min.max() > x_max.min()
 
 
 def test_monotonicity(params):
@@ -822,18 +732,13 @@ def test_helmholtz_frequency_sees_the_discharge_temperature(params):
     assert abs(lam) >= 1.03 * suction
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Deviation D4: the trip is instantaneous; any substep below the line trips.",
-)
 def test_a_short_excursion_does_not_trip(params):
     """D4. Surge takes time to develop, so a real machine carried across its
     surge line for less than a Helmholtz period (0.45 s) recovers without
     surging. Here, from an equilibrium 5 % right of the line at rated speed
     with the flow knocked to 1 % left of it, the plant is back right of the
-    line within one period (stepping ``compute_next_state``), and the env
-    trips on the first step, where the test asks for no trip."""
+    line within one period (stepping ``compute_next_state``), and the env does
+    not trip: the trip counts surges [C5] (deviation D4, fixed in version 4)."""
     phi_eq = 1.05 * 2.0 * params.W
     m, dp = _flow_scale(params) * phi_eq, _head_scale(params) * float(
         characteristic(phi_eq, params, np)

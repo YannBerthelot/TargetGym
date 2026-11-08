@@ -77,7 +77,8 @@ EXACT = {
     # Valves, set point, the monitor's excursion clock, the flow meter and the
     # basin level, read exactly (ours: no figures found).
     "ph_neutralization": (1, 2, 3, 5, 6, 7),
-    "compressor_surge": (4, 6),
+    # Drive setpoint, header setpoint, and the surge counter (ours: exact).
+    "compressor_surge": (4, 6, 7),
 }
 #: Channels with a scatter of their own arithmetic, tested on their own below.
 DERIVED = {"compressor_surge": (2,)}
@@ -92,10 +93,6 @@ ON_TARGET = {
     "unstable_cstr": lambda s: s.replace(
         target_levels=jnp.full_like(s.target_levels, s.C_a)
     ),
-    "compressor_surge": lambda s: s.replace(
-        setpoint_levels=jnp.full_like(s.setpoint_levels, s.dp),
-        setpoint_lead=jnp.zeros_like(s.setpoint_lead),
-    ),
 }
 #: The proposal's floor per step, with rounding's ``step^2 / 12`` on pH. The
 #: table's 0.11 and 0.034 are (9.17 Pa / 27.5 Pa)^2 and (1.1e-3 / 6e-3)^2.
@@ -103,7 +100,6 @@ FLOOR = {
     "cstr": (5e-4 / 5e-4) ** 2,
     "first_order": (1.1e-3 / 6e-3) ** 2,
     "unstable_cstr": (5e-4 / 5e-4) ** 2,
-    "compressor_surge": (9.17 / 27.5) ** 2,
 }
 #: Independent tracked readings behind each floor: a sum of k equal chi-squared
 #: terms has standard deviation floor * sqrt(2 / k).

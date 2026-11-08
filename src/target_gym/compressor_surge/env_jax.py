@@ -13,6 +13,7 @@ from target_gym.base import (
     measured_obs,
 )
 from target_gym.compressor_surge.env import (
+    VALVE_HISTORY,
     CompressorSurgeParams,
     CompressorSurgeState,
     _substeps,
@@ -68,7 +69,7 @@ class CompressorSurge(
         # one RK4 step of delta_t / N. Checked here so a bad string fails at
         # construction rather than at the first traced step.
         _substeps(integration_method)
-        self.obs_shape = (7,)
+        self.obs_shape = (8,)
         self.positions_history = []
         self.integration_method = integration_method
 
@@ -167,30 +168,49 @@ class CompressorSurge(
             jax.random.normal(dev_key), -clip, clip
         )
         opening = demand_opening(demand_levels, 0.0, demand_dev, params)
-        phi = equilibrium_phi(
-            params.N_reset, params.x_reset, opening, params, params.reset_newton_iters
-        )
         rho = suction_density(params)
-        U = params.N_reset * params.U_r
+
+        # Established operation (charter rule 17): the speed that holds the
+        # header setpoint at the reset's recycle and first opening, by
+        # bisection on the equilibrium's pressure, which rises with speed.
+        def header_at(N):
+            phi = equilibrium_phi(
+                N, params.x_reset, opening, params, params.reset_newton_iters
+            )
+            return rho * (N * params.U_r) ** 2 * characteristic(phi, params)
+
+        def bisect(bounds, _):
+            lo, hi = bounds
+            mid = 0.5 * (lo + hi)
+            low = header_at(mid) < params.header_setpoint
+            return (jnp.where(low, mid, lo), jnp.where(low, hi, mid)), None
+
+        (lo, hi), _ = jax.lax.scan(
+            bisect,
+            (jnp.asarray(params.N_min), jnp.asarray(params.N_max)),
+            None,
+            length=24,
+        )
+        N0 = 0.5 * (lo + hi)
+        phi = equilibrium_phi(
+            N0, params.x_reset, opening, params, params.reset_newton_iters
+        )
+        U = N0 * params.U_r
         dp = rho * U**2 * characteristic(phi, params)
 
         state = CompressorSurgeState(
             time=0,
             m_c=rho * params.A_c * U * phi,
             dp=dp,
-            N=params.N_reset,
-            N_ramp=params.N_reset,
+            N=N0,
+            N_ramp=N0,
             x=params.x_reset,
             demand_dev=demand_dev,
             phi_min=phi,
             setpoint_levels=setpoint_levels,
             demand_levels=demand_levels,
             block_clock=0,
-            # Folded, so the schedule and deviation keep their draws.
-            surge_offset=jax.random.uniform(
-                jax.random.fold_in(key, 1), maxval=params.surge_offset_max
-            ),
-            setpoint_lead=dp - setpoint_levels[0],
+            valve_cmds=jnp.full((VALVE_HISTORY,), params.x_reset),
         )
 
         obs = self.get_obs(state, params)
