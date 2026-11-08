@@ -285,17 +285,6 @@ class EnvSpec:
 # ---------------------------------------------------------------------------
 
 
-def _scenarios(module, name):
-    """A task's scenario suite, imported when asked for (``target_gym.scenarios``)."""
-
-    def suite():
-        import importlib
-
-        return getattr(importlib.import_module(module), name)()
-
-    return suite
-
-
 def _plane():
     from target_gym.plane.env_jax import Airplane2D
 
@@ -537,16 +526,18 @@ def _mpc(factory_name: str, module: str) -> Callable[[Any, Any], Any]:
 
 
 def _scenarios(factory_name: str, module: str) -> Callable[[], tuple]:
-    # A task's scenario suite lives in its own package, so its fingerprint
-    # covers it, as plain dicts: the package does not import
-    # ``target_gym.scenarios``, which would need declaring in its fingerprint.
+    """A task's scenario suite, imported when asked for: ``module.factory_name()``
+    returns ``Scenario`` records or plain dicts of their fields. The suite lives in
+    the task's own package, so its fingerprint covers it."""
+
     def suite():
         from importlib import import_module
 
         from target_gym.scenarios import Scenario
 
         return tuple(
-            Scenario(**s) for s in getattr(import_module(module), factory_name)()
+            s if isinstance(s, Scenario) else Scenario(**s)
+            for s in getattr(import_module(module), factory_name)()
         )
 
     return suite
@@ -590,7 +581,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v4: Amendment 2, the job (plane/PHYSICS.md): protected limits, air
         # data read, established start, a turbulence zone, band costs.
         fingerprint_sources=("scenarios.py",),
-        scenarios=_scenarios("target_gym.plane.scenarios", "suite"),
+        scenarios=_scenarios("suite", module="target_gym.plane.scenarios"),
         # v5: Amendment 3 (plane/PHYSICS.md): cruise at FL290 to 370, the light
         # zone's sigma re-derived there, and a scenario suite.
         version=5,
@@ -681,7 +672,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
         # established start, a turbulence zone, heading select scored on the RVSM, AIM and ACS bands.
-        scenarios=_scenarios("target_gym.plane3d.scenarios", "heading_suite"),
+        scenarios=_scenarios("heading_suite", module="target_gym.plane3d.scenarios"),
         # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank,
         # vectors every 150 s, and a scenario suite.
         version=7,
@@ -735,7 +726,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
         # established start, a turbulence zone, the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands.
-        scenarios=_scenarios("target_gym.plane3d.scenarios", "racetrack_suite"),
+        scenarios=_scenarios("racetrack_suite", module="target_gym.plane3d.scenarios"),
         # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank and
         # a scenario suite with steady winds.
         # v8: the altitude band is the ACS holding tolerance, +-100 ft, at the
