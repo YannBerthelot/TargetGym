@@ -12,7 +12,6 @@ from reference_ladder import (  # noqa: E402
     Cv,
     Inner,
     Row,
-    corners,
 )
 
 from target_gym.registry import REGISTRY
@@ -52,11 +51,6 @@ def row() -> Row:
         1200,
         balance,
         (h1, h2),
-        test={"load_scale": 0.0},
-        points=corners(
-            target_h1_range=tuple(p.target_h1_range),
-            target_h2_range=tuple(p.target_h2_range),
-        ),
         balance=balance,
         cascades=(
             Inner(
@@ -87,8 +81,7 @@ def row() -> Row:
         decouple=True,
         why={
             "override": "low trip has 30 mm of margin at worst load",
-            "points": "only the target corners: the lower tanks' loads are steps the "
-            "episode switches during a run, and no parameter holds one, so the tests "
-            "run at no load",
+            "points": "four_tank is Extra and its row is not rewritten for the "
+            "rebuilt rig, which has no target ranges or load scale to pin",
         },
     )

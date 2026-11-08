@@ -1,95 +1,93 @@
 """The reference ladder's row for ``unstable_cstr`` (docs/proposals/task-charter.md, J1).
 
-What the plant's datasheet and balances say, and nothing read from a score.
+What the plant's datasheet and balances say, and nothing read from a score
+(PHYSICS.md section 10). The LDPE autoclave's zone temperature on the initiator
+feed [L1, p. 2], tracking its setpoint. The operating point is open-loop unstable
+(a mode growing over 175 s), so the loop is tuned by a published rule for such a
+plant: SIMC for an integrating process (Skogestad 2003), which holds where the
+unstable time constant is long against the test, read as an integrating lag over a
+brief open-loop bump.
 """
 
 from __future__ import annotations
 
-import jax.numpy as jnp
-import numpy as np
+import math
+
 from reference_ladder import (  # noqa: E402
+    Cv,
     Row,
 )
 
-from target_gym.experts.pid import Controller
 from target_gym.registry import REGISTRY
 
-
-def _lee_cascade(p):
-    """The inner PID by Lee, Lee and Park (2000), lambda = theta, on the unstable
-    pole at the band's fastest end, under an outer SIMC PI. From plant numbers only.
-    The form is derived, not copied: the paper itself was not read."""
-    from target_gym.pc_gym.unstable_cstr.env import steady_coolant, steady_temperature
-
-    def poles(L):
-        T = steady_temperature(L, p, np)
-        k = (p.q / p.V) * (p.Caf - L) / L
-        kT = k * p.EA_over_R / T**2
-        A, b, q = -p.deltaHr / (p.rho * p.C), p.UA / (p.rho * p.C * p.V), p.q / p.V
-        J = np.array([[-q - k, -kT * L], [A * k, -q - b + A * kT * L]])
-        return np.linalg.eigvals(J).real.max(), k, kT, b
-
-    band = np.linspace(*p.target_CA_range, 21)
-    Ld = band[int(np.argmax([poles(L)[0] for L in band]))]
-    pole, k, kT, b = poles(Ld)
-    well = 10.0 / 60.0
-    t2, th = well + p.tau_j / 2, p.tau_j / 2 + p.actuator_lag + p.delta_t / 2
-    lam = th
-    tau, K = 1 / pole, b / pole
-    beta = tau * ((lam / tau + 1) ** 2 * np.exp(th / tau) - 1)
-    d = [2 * lam - beta + th, lam**2 - th**2 / 2 + beta * th]
-    d.append(th**3 / 6 - beta * th**2 / 2)
-    n = [-1 / K, (tau - beta) / K, tau * beta / K]
-    f0 = n[0] / d[0]
-    f1 = (n[1] - f0 * d[1]) / d[0]
-    f2 = (n[2] - f0 * d[2] - f1 * d[1]) / d[0]
-    Ki, Kp, Kd = f0, f1 + f0 * t2, f2 + f1 * t2
-    tho = 2 * lam + th
-    t1 = 1 / (p.q / p.V + k)
-    ko = kT * Ld * t1
-    Kco, Tio = t1 / (ko * 2 * tho), min(t1, 8 * tho)
-    a = -np.expm1(-p.delta_t / beta)
-    b_f = -np.expm1(-p.delta_t * 10 * Kp / Kd)
-    span = float(p.T_c_max - p.T_c_min)
-    low = float(p.T_c_min)
-    dt = float(p.delta_t)
-
-    def step(_, m, obs, xp=jnp):
-        Ca, T, L = obs[0], obs[1], obs[3]
-        e = L - Ca
-        io, ii, sp, f, started = m
-        first = started > 0
-        sp = xp.where(first, sp, T)
-        f_new = xp.where(first, f + b_f * (T - f), T)
-        rate = (f_new - xp.where(first, f, T)) / dt
-        raw = steady_temperature(L, p, xp) - Kco * (e + io / Tio)
-        sp = sp + a * (raw - sp)
-        ei = sp - T
-        coolant = steady_coolant(L, 0.0, p, xp) + Kp * ei + ii - Kd * rate
-        held = xp.clip(coolant, low, low + span)
-        free = held == coolant
-        io = xp.where(free, io + e * dt, io)
-        ii = xp.where(free, ii + Ki * ei * dt, ii)
-        action = xp.reshape(2 * (held - low) / span - 1, (1,))
-        return action, (io, ii, sp, f_new, xp.ones_like(started))
-
-    zero = (0.0, 0.0, 0.0, 0.0, 0.0)
-    return Controller(None, tuple(np.float32(x) for x in zero), step)
+#: The unstable mode's time constant at 513 K, s (PHYSICS.md, named property).
+UNSTABLE_TAU = 175.0
 
 
 def row() -> Row:
-    band = {"target_CA_range": (0.50, 0.70)}
-    p = REGISTRY["unstable_cstr"].make_test_params(**band)
+    from target_gym.pc_gym.unstable_cstr.env import steady_state
+
+    spec = REGISTRY["unstable_cstr"]
+    p = spec.make_test_params()
+    i_min, i_span = float(p.I_f_min), float(p.I_f_max - p.I_f_min)
+
+    def pump(o, xp):
+        """The raw command holding the reset's initiator: the reset puts the
+        reactor on its steady state, and the pump's rate reads exactly (obs 1)."""
+        return xp.reshape(o[1] / 50.0 - 1.0, (1,))
+
+    def balance(o, xp):
+        """The initiator the balances need at the setpoint the operator reads
+        (obs 2), at the nominal feed (``env.steady_state``)."""
+        I_f = steady_state(o[2], p)[2]
+        return xp.reshape(xp.clip(2.0 * (I_f - i_min) / i_span - 1.0, -1.0, 1.0), (1,))
+
+    # The bump: 0.02 raw, 1 % of the pump's range, as the expert's test (PHYSICS.md
+    # section 9), sized up by the thermocouple's noise band where it reads too
+    # small; over a quarter of the unstable time constant, 43 s, so the response
+    # stays near its first ramp. The pump has no valve's dead band.
+    window = math.floor(UNSTABLE_TAU / 4 / float(p.delta_t))
+    T = Cv(
+        "T on initiator",
+        0,
+        lambda o, xp: o[0],
+        lambda o, xp: o[2],
+        "T",
+        0.02,
+        window,
+        model="integrating_lag",
+        valve=False,
+    )
+    # Bump tests from the steady state with the events off (PHYSICS.md section
+    # 10), at every corner of the ranges the loop visits: the setpoint and its
+    # grade change [L1], the feed 5 K warmer, the initiator 20 % less efficient,
+    # the feed 10 % more (scenarios.py). The reset puts each on its own steady
+    # state. The hold before a bump is open loop on an unstable plant, so it is
+    # short: two 60 s episodes and the baseline grow a start error about fourfold.
+    points = tuple(
+        {
+            "T_setpoint": float(p.T_setpoint) + dT,
+            "T_feed": float(p.T_feed) + dTf,
+            "f_eff": float(p.f_eff) * efficiency,
+            "feed_mass": float(p.feed_mass) * flow,
+        }
+        for dT in (0.0, 24.0)
+        for dTf in (0.0, 5.0)
+        for efficiency in (1.0, 1.0 - 0.2)
+        for flow in (1.0, 1.0 + 0.1)
+    )
     return Row(
-        1200,
-        None,
-        score=band,
-        published=lambda s: _lee_cascade(p),
+        60,
+        pump,
+        (T,),
+        points=points,
+        balance=balance,
         why={
-            "pi": "open-loop unstable: no bump test without an inner loop",
-            "feedforward": "as pi",
-            "cascade": "the published rule is the cascade",
+            "cascade": "no inner measurement: the zone thermocouple is the only "
+            "reading [L1, p. 2]",
             "decoupler": "one MV",
-            "override": "the published rule holds the trip on its nominal seeds, or fails",
+            "override": "the trip reads the loop's own temperature and the "
+            "initiator is its only MV: an override would push the way the loop "
+            "already does",
         },
     )
