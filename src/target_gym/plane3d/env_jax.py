@@ -150,10 +150,16 @@ class _Airplane3DBase(
         # The VMO/MMO warning [TCDS item 10], reported, never a trip when
         # amended.
         warning = overspeed(airspeed_3d(new_state, params), new_state.z, params)
+        new_state = self._next_clearance(key, new_state, params)
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params, metrics=metrics, overspeed=warning
         )
         return self.get_obs(new_state, params), new_state, reward, terminated, info
+
+    def _next_clearance(self, key, state, params):
+        """The state after ATC's clearance for this step, if any (the heading
+        task's vectors); the other tasks have none."""
+        return state
 
     def is_terminated(self, state: PlaneState3D, params: PlaneParams3D) -> jax.Array:
         """Natural termination only; the time limit is gymnax's ``is_truncated``."""
@@ -306,6 +312,9 @@ class _Airplane3DBase(
         )
 
 
+#: Folded into a step's key for its heading clearance, apart from its gusts.
+_CLEARANCE = 0x48444E47
+
 # ─── Heading task ──────────────────────────────────────
 
 
@@ -348,6 +357,7 @@ class Plane3DHeading(_Airplane3DBase):
         ten = float(np.deg2rad(10.0))  # +-10 deg [ACS]
         return PlaneParams3D(
             max_steps_in_episode=600,
+            heading_clearance_period=150.0,
             amended=True,
             turbulence_sigma=0.55,
             zone_onset_range=(0.0, 600.0),
@@ -366,6 +376,31 @@ class Plane3DHeading(_Airplane3DBase):
         super().__init__(integration_method, observe_wind)
         # 18 with the air data (Amendment 2, rule 16); 21 with the wind sensor.
         self.obs_shape = (21,) if observe_wind else (18,)
+
+    def _next_clearance(self, key, state, params):
+        """Every ``heading_clearance_period`` s a new heading over
+        ``target_heading_range``; its size is the turn from the heading flown."""
+        period = jnp.maximum(params.heading_clearance_period / params.delta_t, 1.0)
+        due = (
+            (params.heading_clearance_period > 0.0)
+            & (state.time > 0)
+            & (state.time < params.max_steps_in_episode)
+            & (jnp.mod(state.time, period) == 0)
+        )
+        heading = jax.random.uniform(
+            jax.random.fold_in(key, _CLEARANCE),
+            minval=params.target_heading_range[0],
+            maxval=params.target_heading_range[1],
+        )
+        return state.replace(
+            target_heading=jnp.where(due, heading, state.target_heading),
+            heading_change=jnp.where(
+                due,
+                jnp.abs(wrap_angle(heading - state.psi)),
+                state.heading_change,
+            ),
+            clearance_time=jnp.where(due, state.time, state.clearance_time),
+        )
 
     def compute_reward(self, state, params):
         return compute_reward_heading(state, params)

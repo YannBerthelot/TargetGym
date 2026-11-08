@@ -95,6 +95,8 @@ class PlaneState3D(EnvState):
     n_z: float = 1.0
     zone_start: float = 0.0
     zone_end: float = 0.0
+    #: The step of the heading clearance in force (Amendment 3).
+    clearance_time: float = 0.0
 
     actuator_held: jax.Array = actuator_field(3)
 
@@ -330,6 +332,10 @@ class PlaneParams3D(EnvParams):
     #: Holding turns: 3 deg/s or 30 deg of bank, whichever is less [IFH ch. 10].
     holding_rate: float = 3.0 * 3.14159265 / 180.0
     holding_bank: float = 30.0 * 3.14159265 / 180.0
+    #: Heading select is vectoring (rule 17, Amendment 3): a new heading every
+    #: this many seconds, drawn over ``target_heading_range`` (ours: vectors come
+    #: one after another; no source gives their spacing). 0: one clearance.
+    heading_clearance_period: float = 0.0
     #: The protected bank: the demand stops here, for agent and reference alike
     #: (rule 14, Amendment 3). Ours, family range 25 to 30 deg [IFH ch. 10's 30
     #: deg holding bank; ICAO Doc 8168 and the A320 HDG mode's 25, unconfirmed].
@@ -359,6 +365,7 @@ PARAM_UNITS = {
     "holding_rate": "rad/s",
     "holding_bank": "rad",
     "protected_bank": "rad",
+    "heading_clearance_period": "s",
     "holding_split_altitude": "m",
     "holding_leg_low": "s",
     "holding_leg_high": "s",
@@ -1278,6 +1285,7 @@ def compute_next_state_3d(
         n_z=metrics[1][-1] / (mass_now * params.gravity),
         zone_start=state.zone_start,
         zone_end=state.zone_end,
+        clearance_time=state.clearance_time,
     )
     return new_state, metrics
 
@@ -1314,7 +1322,8 @@ def compute_reward_terms_heading(
         params,
         xp,
     )
-    left = state.heading_change - rate * state.time * params.delta_t
+    since = (state.time - state.clearance_time) * params.delta_t
+    left = state.heading_change - rate * since
     allowance = params.e_tol_heading + xp.maximum(left, 0.0)
     behind = xp.maximum(error - allowance, 0.0) + params.e_tol_heading
     heading = R.tracking_cost(

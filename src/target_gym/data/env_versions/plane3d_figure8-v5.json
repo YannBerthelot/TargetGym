@@ -1,5 +1,5 @@
 {
-  "fingerprint": "7c5f46075c1db80f",
-  "note": "re-stamped in place: plane3d's established reset (Amendment 2) runs only on the amended tasks, which this one is not; behaviour unchanged",
-  "stamped": "2026-11-08T13:55:48+00:00"
+  "fingerprint": "aa311d0371ea888a",
+  "note": "re-stamped in place: plane3d gained Amendment 3 code this task does not run (the protected bank behind PlaneParams3D.amended, off here; the heading clearance hook, the identity off the heading task) and a state field it never sets (clearance_time, 0); behaviour unchanged",
+  "stamped": "2026-11-08T16:41:39+00:00"
 }

@@ -204,6 +204,50 @@ def test_the_clearance_itself_costs_nothing():
     assert float(-env.compute_reward(state, params)) == pytest.approx(0.0, abs=1e-6)
 
 
+def _clearances(seed, steps=600):
+    """The heading task's targets and costs step by step under the reference."""
+    env, _ = tg.make(HEADING)
+    params = _params(HEADING, target_altitude_range=(5000.0, 5000.0))
+    key = jax.random.PRNGKey(seed)
+    obs, state = env.reset_env(key, params)
+    expert = tg.make_expert(HEADING)
+    memory, policy = expert.reset(), jax.jit(expert.step)
+    step = jax.jit(env.step_env)
+    targets, costs, sizes = [float(state.target_heading)], [], []
+    for k in jax.random.split(key, steps):
+        action, memory = policy(memory, obs)
+        obs, new, reward, _, _ = step(k, state, action, params)
+        if float(new.target_heading) != targets[-1]:
+            sizes.append(
+                (float(new.heading_change), float(new.target_heading), float(new.psi))
+            )
+        targets.append(float(new.target_heading))
+        costs.append(float(-reward))
+        state = new
+    return params, np.array(targets), np.array(costs), sizes
+
+
+def test_heading_clearances_come_in_a_sequence():
+    """Rule 17 (Amendment 3): heading select is vectoring, a clearance after
+    another, not one turn and a long straight hold. Every 150 s (ours) a new
+    heading, drawn over the whole compass (ours), and nowhere else. Each
+    clearance's size is the turn from the heading flown then."""
+    params, targets, _, sizes = _clearances(seed=4)
+    changed = np.flatnonzero(np.diff(targets) != 0.0) + 1
+    assert list(changed) == [150, 300, 450]
+    for size, target, psi in sizes:
+        turn = abs(np.angle(np.exp(1j * (target - psi))))
+        assert size == pytest.approx(turn, abs=1e-4)
+
+
+def test_a_new_clearance_costs_nothing_when_it_is_given():
+    """At each clearance the whole turn is still allowed, as at the first: the
+    reference, on its last heading by then, pays nothing that step."""
+    _, targets, costs, _ = _clearances(seed=4)
+    for t in (150, 300, 450):
+        assert costs[t - 1] == pytest.approx(0.0, abs=1e-6)
+
+
 def test_not_turning_is_charged_past_the_holding_turn_rate():
     """30 s after a 90 deg clearance, not turned: the turn at min(3 deg/s,
     g tan 30 / V) has closed rate * 30 s, so that much less 10 deg is past the

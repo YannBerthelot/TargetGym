@@ -1,5 +1,5 @@
 {
-  "fingerprint": "dec00e60b6e72319",
-  "note": "re-stamped in place: plane/dynamics.py, plane/env.py and plane3d gained Amendment 2 code that this task does not run (PlaneParams3D.amended off, target_pattern not 5) and functions it does not call; behaviour unchanged",
-  "stamped": "2026-11-08T13:49:10+00:00"
+  "fingerprint": "380b7b2962cc0f19",
+  "note": "re-stamped in place: plane3d gained Amendment 3 code this task does not run (the protected bank behind PlaneParams3D.amended, off here; the heading clearance hook, the identity off the heading task) and a state field it never sets (clearance_time, 0); behaviour unchanged",
+  "stamped": "2026-11-08T16:41:39+00:00"
 }
