@@ -1,5 +1,35 @@
 # Compressor surge: physics model, provenance and validation
 
+## Status: Extra (charter rule 5), 2026-11-08
+
+This task goes to Extra under charter rules 2, 18 and 5. It keeps its code and
+is not scored.
+
+**Reason.** The named property is surge, a counted event that trips the
+machine after 3 surges in 10 to 20 s [C5; C3, p. 3]. The model does surge,
+but at a scale no source sets. Its duct and plenum (`L_c` 4 m, `V_p` 15 m^3)
+are tuned to reach Greitzer's B = 1.8, and `A_c` and `U_r` are ours (section
+on parameters below). With them the deep-surge cycle runs at 0.83 s, where
+the audit's test 1 asks the 1 to 3 s of a large industrial machine [C1]
+(rated speed, recycle shut, opening 0.2, no trip; `compressor-surge-period.py`
+in the session notes folder). No source in `REALITY.md` gives a machine's duct
+length and discharge volume together with its period, so the period could
+only be moved by moving unsourced numbers until the test passes, which rule 2
+forbids. The audit's test 5 needs the surge signatures operators read
+(suction pressure and temperature rising, speed falling [C4, Table 1]), which
+need a suction volume, an energy balance and drive inertia, none with a
+sourced size. The episode's header, its setpoint schedule and its demand
+schedule have no source either (`COLD_REVIEW.md`, rule 12 candidates).
+
+**What a future task would need.** A machine record with geometry and a
+measured surge period (Greitzer 1976 Part II, and the Moore et al. full-scale
+ESD tests, are on the owner list), the counted-surge trip of [C5], the
+recycle valve's 150 to 300 ms positioner lag [C7], and the job of
+`REALITY.md`: meet a constant header pressure [C3, p. 4] with as little
+recycle as possible and no counted surge.
+
+The sections below describe the task as it was, for the record.
+
 Reference process: a variable-speed compressor feeding a header through a
 lumped duct and plenum (Greitzer's compression-system model) with the
 Moore-Greitzer cubic characteristic scaled by the fan laws. Gas leaves the
