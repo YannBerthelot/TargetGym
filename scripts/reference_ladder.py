@@ -42,7 +42,12 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from target_gym import scenarios  # noqa: E402
-from target_gym.benchmark import episodes_of, run_policy, task_info  # noqa: E402
+from target_gym.benchmark import (  # noqa: E402
+    episodes_of,
+    run_policy,
+    shipped_policy,
+    task_info,
+)
 from target_gym.experts.ladder import (  # noqa: E402
     Cascade,
     Override,
@@ -53,6 +58,7 @@ from target_gym.experts.ladder import (  # noqa: E402
     decoupler,
     ladder_controller,
     most_sensitive,
+    null_verdict,
     zone_setpoint,
 )
 from target_gym.experts.pid import Controller  # noqa: E402
@@ -553,6 +559,11 @@ def cv_traces(name, row, controller, i, spec=None) -> list:
 def run_rung(name, row, label, controller, spec=None) -> dict:
     """``controller`` on the ladder's seeds over the task's scenarios: each seed's
     ``J``, the seeds that trip in any scenario, and each scenario's own costs."""
+    return run_suite(name, row, Reference(label, controller), spec)
+
+
+def run_suite(name, row, policy, spec=None) -> dict:
+    """``run_rung`` for any ``benchmark.Policy``."""
     spec = spec or REGISTRY[name]
     env = spec.make_env()
     weights = scenarios.weights(spec)
@@ -560,9 +571,7 @@ def run_rung(name, row, label, controller, spec=None) -> dict:
     for s in scenarios.suite(spec):
         params = scenarios.params_for(spec, s, sensor_noise_scale=NOISE, **row.score)
         task = task_info(name, env, params, len(SEEDS))
-        episodes = episodes_of(
-            run_policy(Reference(label, controller), env, params, task, seeds=SEEDS)
-        )
+        episodes = episodes_of(run_policy(policy, env, params, task, seeds=SEEDS))
         per[s.name] = (
             np.array([float(e.cost.mean()) for e in episodes]),
             np.array([bool(np.any(e.failed)) for e in episodes]),
@@ -579,8 +588,9 @@ def run_rung(name, row, label, controller, spec=None) -> dict:
     }
 
 
-def climb(name: str) -> dict:
-    """The ladder on ``name``: each rung's result and the one kept."""
+def climb(name: str, nulls: bool = False) -> dict:
+    """The ladder on ``name``: each rung's result and the one kept, and with
+    ``nulls`` the null policies against the kept rung (``check_nulls``)."""
     print(name, flush=True)
     row = ROWS[name]()
     results = {}
@@ -592,10 +602,52 @@ def climb(name: str) -> dict:
     kept = best_rung({k: results[k] for k in order})
     print(f"  kept: {kept}", flush=True)
     placed = {k: {"sigma": v[0], "setpoint": v[1]} for k, v in row.placed.items()}
-    return {"rungs": results, "kept": kept, "left_out": row.why, "placed": placed}
+    out = {"rungs": results, "kept": kept, "left_out": row.why, "placed": placed}
+    if nulls and kept:
+        out["nulls"] = check_nulls(name, row, results[kept])
+    return out
 
 
 _ORDER = ("pi", "feedforward", "cascade", "decoupler", "override", "published")
+
+
+def check_nulls(name: str, row, reference: dict) -> dict:
+    """Charter J2: every null policy (``null_policies``) over the same scenarios and
+    seeds as ``reference``, a ``run_suite`` result. A null whose stored table no
+    longer fits the plant is reported with its error, not run. The tables and
+    integrator gains come from the old plants' recordings until the re-record
+    refits them, so a table null's result is marked stale."""
+    from target_gym.null_policies import null_policies
+
+    runs, broken = {}, {}
+    for null in null_policies(name):
+        try:
+            runs[null.name] = run_suite(name, row, null)
+        except Exception as err:  # a stale table's shape, or a missing field
+            broken[null.name] = f"{type(err).__name__}: {err}"
+    verdict = null_verdict(reference["costs"], {k: v["costs"] for k, v in runs.items()})
+    stale = sorted(k for k in runs if k in ("table", "I-only"))
+    for k, v in runs.items():
+        print(
+            f"  null {k}: median {np.median(v['costs']):.4g}, wins "
+            f"{verdict['wins'][k]} of {verdict['seeds']}, {v['trips']} trips",
+            flush=True,
+        )
+    return {**verdict, "runs": runs, "broken": broken, "stale": stale}
+
+
+def expert_reference(name: str) -> dict:
+    """A task whose reference is its shipped expert (aircraft, reactor): the expert
+    over the suite, and the nulls against it."""
+    print(name, flush=True)
+    row = Row(0, None)
+    reference = run_suite(name, row, shipped_policy("pid"))
+    print(
+        f"  expert: median {np.median(reference['costs']):.4g}, "
+        f"{reference['trips']} trips",
+        flush=True,
+    )
+    return {"reference": reference, "nulls": check_nulls(name, row, reference)}
 
 
 #: The rows, one file per task in ``scripts/ladder_rows``, each defining ``row()``.
@@ -623,9 +675,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--tasks", nargs="*", default=list(ROWS))
     parser.add_argument("--out", type=pathlib.Path, default=None)
+    parser.add_argument("--nulls", action="store_true", help="J2 against the kept rung")
+    parser.add_argument(
+        "--expert", nargs="*", default=[], help="tasks whose reference is the expert"
+    )
     args = parser.parse_args()
-    for name in args.tasks:
-        result = climb(name)
+    for name in args.expert:
+        result = expert_reference(name)
+        if args.out:
+            args.out.mkdir(parents=True, exist_ok=True)
+            (args.out / f"{name}.json").write_text(json.dumps(result, indent=1))
+    for name in [] if args.expert and args.tasks == list(ROWS) else args.tasks:
+        result = climb(name, args.nulls)
         if args.out:
             args.out.mkdir(parents=True, exist_ok=True)
             (args.out / f"{name}.json").write_text(json.dumps(result, indent=1))

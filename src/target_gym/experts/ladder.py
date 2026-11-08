@@ -20,12 +20,24 @@ from target_gym.identification import simc
 
 __all__ = ["Cascade", "Override", "Pi", "Rung", "best_rung", "decoupler"]
 __all__ += ["ladder_controller", "most_sensitive", "pi_gains"]
-__all__ += ["K_BACKOFF", "cv_sigma", "zone_setpoint"]
+__all__ += ["K_BACKOFF", "cv_sigma", "null_verdict", "zone_setpoint"]
 
 #: Charter Amendment 3, rule 22: on a zone the reference sits this many standard
 #: deviations inside the cheap edge, the usual two-sigma give-away, fixed before any
 #: room is seen.
 K_BACKOFF = 2.0
+
+
+def null_verdict(reference, nulls: dict) -> dict:
+    """Charter J2 on paired per-seed costs: each null's ``wins``, the seeds it costs
+    strictly less on, and ``fails``, true when any null wins more than half."""
+    ref = np.asarray(reference, float)
+    wins = {k: int(np.sum(np.asarray(v, float) < ref)) for k, v in nulls.items()}
+    return {
+        "wins": wins,
+        "seeds": len(ref),
+        "fails": any(w > len(ref) / 2 for w in wins.values()),
+    }
 
 
 def cv_sigma(traces, burn_in: int = 0) -> float:
