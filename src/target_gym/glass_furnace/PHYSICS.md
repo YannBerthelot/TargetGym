@@ -481,6 +481,75 @@ the session notes.
 | Refiner crown | 6.8 W/(m^2 K), four times insulated | Ford float, seen once |
 | Emissivity, firing shares, couple depth, height | `ours` | None found |
 
+## Attempt 3: the slow plant and its job (unregistered)
+
+`physical.py` with `physical_env.py`, `physical_scenarios.py`, and the plant record
+`REALITY.md` (charter Amendments 1 to 3). Design, results and decisions are in
+`docs/proposals/glass-furnace-task.md`, from "Attempt 3" on. The cold review is
+`COLD_REVIEW.md`. The settled design state is `scripts/glass_slow_design.npz`.
+
+**Job and score (rule 15).** Keep the glass fined and at forming temperature at the canal
+at the least fuel (REALITY.md, section 6). Cost per step: fuel at 60.5 EUR/MWh [S21], plus
+the charged pull at 600 EUR/t (`ours`, the owner's pick) when the canal is under 1100 C
+[S16] or the fining share leaving is under 0.5. The named property: lower variance lets
+the fuel drop toward the defect limit, worth 2 to 4 % of fuel in the family [S1; S2; S3].
+
+**Limits by kind (rule 14).** Fining: a zone, priced as lost glass. Canal: a zone, held by
+the refiner's cooling loop. Crown at 1620 C [S13]: protected by the plant's override, the
+owner's pick and a known deviation (the record finds wear, not protection). The 1400 C
+low side is not modelled: it never binds, since the hottest face sits far above it.
+
+### Cold review, item by item (rule 13)
+
+| # | What differs from the plant | Status | Effect on the score |
+|---|---|---|---|
+| 1 | The agent moves the valve; operators move crown and bottom setpoints, with firing following the crown [S4] | Known deviation, for the owner | The agent must also do a crown loop's fast work against gas swings, which a setpoint action would hand to an inner loop |
+| 2 | Quality is read as the fining share, 0.3 h late with 0.005 noise; real lines count defects at the cold end [S38], with no unit or resolution found | Known deviation | The loss variable is nearly observed; only the transit and noise hide the margin |
+| 3 | Crown: a protected override on the true hottest face; the record finds wear, unpriced | Known deviation (owner's pick); wear measured as is | Running hot costs only fuel. Hours over 1600 and 1610 C are reported (`glass_slow_eval.py`) |
+| 4 | Lost glass at 600 EUR/t, a step on the canal and fining at that moment, on the charged pull | Known deviation; the price is the owner's | The step makes full back-off optimal; the challenge found any price from 300 to 700 EUR/t gives the same back-off |
+| 5 | The fining criterion is a flow-weighted mean share of 0.5, where bubbles leave only with complete fining [S12; S31] | Known deviation; fixed before any run, as asked | Looser than the source; defects from the fastest streamlines are averaged away |
+| 6 | The canal is held by a cooling loop the task builds; no source shows that loop | Known deviation | The canal never binds; overheating costs fuel only, and cooling is free |
+| 7 | Reset draws the walks from the seed but starts from a state settled at nominal | Known deviation | A start transient the agent did not cause, common to all policies |
+| 8 | Walks are smooth first-order processes; real pull wander is stepwise | Known deviation | Slow, smooth disturbances favour a constant valve with a margin |
+| 9 | No couple lag, drift or reversal ripple; air preheat and stack had no source | Partly fixed: air preheat and stack removed | Readings are cleaner than real |
+| 10 | Batch islands as a wedge; no level loop, tweel, waist coolers or boost; forward flow into the waist 2.6 times the pull against 1.2 to 2.5 [S17] | Known deviation | The refiner is slightly more coupled to the melter than the range allows |
+| 11 | Unsourced numbers | Listed below with their family ranges | See the list |
+| 12 | A constant valve with a margin may do nearly as well as a controller | Measured: box nulls against the oracle on the suite | Reported as room in the proposal |
+| 13 | Crown wear neither priced nor measured | Fixed: measured as is | Hours over 1600 and 1610 C, and the maximum, per policy |
+| 14 | Cooling air power, scanner rejects and cullet remelt are not charged; the agent sees the valve after the override | Known deviation; the last is intended | Small |
+
+### Unsourced numbers and their family ranges (rule 19)
+
+| Number | Value | Family range or reason |
+|---|---|---|
+| Cold-end transit | 0.3 h | 14 to 20 min: a 50 m bath and 100 m lehr at 7.5 to 10.4 m/min [S40; S41; S42], arithmetic |
+| Planned pull change | +-10 % | Inside 2 % float wander [S5] to a container plant's 29 to 42 % [S3, slide 8] |
+| Gas swing | +-6 % of heating value | 3 MJ/m3 within a day [S20] on a Wobbe index of about 50, arithmetic |
+| Pull ramp, notice, gas ramp, event window | 2 h, 8 h, 6 h, 24 to 96 h | Not found; ours |
+| Fining pass | 0.5 | Middle of Beerkens' 1420 to 1500 C band [S31] |
+| Lost glass price | 600 EUR/t | Not found; the owner's pick near one market figure seen once |
+| Crown override margin and gains | 5 K, 0.0101 kg/s per K, 2 h | Ours, a protection's design; SIMC on the fuel step |
+| Refiner cooling capacity, setpoint offset, gains | Twice design, 1 K, by SIMC | Not found; ours |
+| Walk spreads and memories | Gas 2 %, pull 1 %, cullet 5 points, blanket 10 %, sulfate 17 %; 24 or 12 h | Gas: ENTSOG's 4 to 6 MJ/m3 read as four spreads [S20]; pull: the 2 % wander as two [S5]; cullet and blanket: the owner's +-10 points and +-20 %; sulfate: ours |
+| Quality reading noise | 0.005 | Not found; ours |
+| Waist and working end widths | 3.5 and 7.9 m | A 1300 t/d furnace's ratios to its melter [S18], scaled |
+| Surface emissivity, port shares, couple depth and bay, combustion height | 0.8; ports 1 to 4 even then 0.7, 0.4; 36 mm in bay 3; 2.4 m | Not found; ours |
+| Bubble radius | 8.3 mm | Top of the laboratory range [S32] |
+
+### The reference ladder's row (rule 3, for `scripts/reference_ladder.py`)
+
+- **Action:** the valve, kg/s, box 0.25 to 0.75. Step 120 s, episode 5040 steps (7 days).
+- **Controlled variable:** the fining share read at the cold end, observation 4. Zone 0.5 to 1;
+  the cheap side is low (less fuel, lower share), so the setpoint sits 2 sigma above 0.5.
+- **Other limits:** the canal (held by the plant's loop) and the crown (held by the plant's
+  override) need no rung of the reference.
+- **Measured disturbances for feedforward:** pull and planned pull (observations 7 and 8),
+  cullet ratio (9), batch line (10).
+- **Scenarios:** `physical_scenarios.suite()`: normal, pull_up, pull_down, gas_rich,
+  gas_lean.
+- **Start:** `physical_env.reset(key, fields, ep, fuel, cooling)` from
+  `scripts/glass_slow_design.npz`.
+
 ## Reward (version 2)
 
 `compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.

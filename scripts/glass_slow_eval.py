@@ -56,10 +56,14 @@ def main():
             y = np.asarray(run(keys))
             eur = y[:, :, :2].sum(1) / days
             lost_h = (y[:, :, 1] > 0).sum(1) / H
+            # Crown wear has no family price, so it is measured as is (charter rule 19).
+            hot = y[:, :, 2] - 273.15
+            above = [float((hot > c).sum(1).mean() / H) for c in (1600.0, 1610.0)]
             print(
                 f"  {name:8s} {fuel:.3f} kg/s: EUR/day {np.round(eur.sum(1))},"
                 f" fuel {np.round(eur[:, 0].mean())}, lost glass h {np.round(lost_h, 1)},"
-                f" hottest face max {y[:, :, 2].max() - 273.15:.1f} C",
+                f" hottest face max {hot.max():.1f} C, h over 1600 and 1610 C"
+                f" {above[0]:.1f}, {above[1]:.1f}",
                 flush=True,
             )
 
