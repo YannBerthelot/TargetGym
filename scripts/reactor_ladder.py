@@ -74,6 +74,9 @@ BORON_BUMP = (
 #: The boron line's delay the operator plans with: the middle of its drawn range,
 #: 10 to 30 steps, ours, since an operator knows the line, not today's draw.
 LEAD_STEPS = 20
+#: The procedure's action band on the offset: half the 0.05 target band, ours,
+#: fixed by the owner on 2026-11-08 before any rerun (PHYSICS.md section 6).
+ACTION_BAND = 0.025
 
 
 def simc(K, tau, theta):
@@ -260,7 +263,9 @@ def procedure(p, tune):
         n, rod, T_avg, T_ref, di = obs[0], obs[2], obs[4], obs[5], obs[6]
         down = jnp.where(clock == 0.0, obs[8] * 3600.0, down)
         up = jnp.where(clock == 0.0, obs[9] * 3600.0, up)
-        ao = p.ao_ref - di / jnp.maximum(n, 0.05)
+        off = p.ao_ref - di / jnp.maximum(n, 0.05)
+        # The action band: no error within ACTION_BAND of the reference.
+        ao = jnp.sign(off) * jnp.maximum(jnp.abs(off) - ACTION_BAND, 0.0)
         u = u + tune.wd_Kc * ((ao - last_ao) + DT / tune.wd_Ti * ao)
         u = jnp.clip(u, rod - STEPS_PER_MOVE, rod + STEPS_PER_MOVE)
         deepest = 1.0 - 2.0 * rod_insertion_limit(n, p)

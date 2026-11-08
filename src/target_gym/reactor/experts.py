@@ -109,6 +109,9 @@ class ReferenceParams:
     t_Ti: float = 4680.0
     ff: float = -113.64819067771116
     ao_ref: float = 0.0
+    # The rods' action band: no error while the offset is within 0.025 of its
+    # reference, half the 0.05 target band (owner, 2026-11-08; PHYSICS.md section 6).
+    action_band: float = 0.025
     lead: float = 20.0 * 30.0  # s, the middle of the line's 10 to 30 steps
     park: float = 1.0 - 2.0 * 3.0 / 228.0
     reach: float = 30.0 * 72.0 / 60.0 / 228.0 * 2.0
@@ -178,7 +181,8 @@ def reference_step(params, state, obs, xp=jnp):
     down = xp.where(first, to_down * 3600.0, state.down)
     up = xp.where(first, to_up * 3600.0, state.up)
 
-    ao = p.ao_ref - di / xp.maximum(n, 0.05)
+    off = p.ao_ref - di / xp.maximum(n, 0.05)
+    ao = xp.sign(off) * xp.maximum(xp.abs(off) - p.action_band, 0.0)
     held = xp.where(first, rod, state.rods)
     rods = held + p.wd_Kc * ((ao - state.last_ao) + p.dt / p.wd_Ti * ao)
     rods = xp.clip(rods, rod - p.reach, rod + p.reach)

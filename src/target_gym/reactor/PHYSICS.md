@@ -266,17 +266,31 @@ weighted-saving headline does not use).
 
 ## 6. The expert
 
-The expert is the reference of `scripts/reactor_ladder.py`, EDF's Mode A. The
-published rod program (`rod_control_step`, the NRC's Westinghouse manual) holds Tavg.
-The operator's boron, from the ladder's rung 5, steers the offset through the rods as a
-cascade, fed forward from the plan and led by the line's delay, fed forward from
+The expert is the reference of `scripts/reactor_ladder.py`: the Westinghouse procedure
+(Krsko, NENE 2022, section 3; KNS 18A-534), kept over EDF's Mode A, which loses to the
+null on these days (D8). Bank D holds the axial offset and never sits deeper than its
+insertion limit; boron trims Tavg past the rods' 1.6 C dead band (IAEA NP-T-3.23, annex
+II-5.1), fed forward from the day's plan, led by the boron line's delay, and from
 xenon's balance by the operator's xenon tool (textbook iodine and xenon run on the
-observed power from the power history, `xenon_feedforward`, on every rung), and takes
-Tavg while the rods sit at their top stop, handing back bumplessly. Every boron gain is SIMC on bump tests at full power and
-at the half-power hold, keeping the least gain. The owner chose this pairing on
-2026-11-08: the program's nonlinear speed copes with the rods' 7-fold gain swing, which
-the rungs' linear PI could not. Results and room are in
-`docs/proposals/reactor-axial.md`.
+observed power from the power history, `xenon_feedforward`). Both loops are SIMC PIs
+on bump tests at full power and at the half-power hold, keeping the least gain. The
+owner adopted it on 2026-11-08, on condition it keeps the insertion limit, which it
+does on every scenario. Results and room are in `docs/proposals/reactor-axial.md`.
+
+**The rods' action band (owner, 2026-11-08), fixed before any rerun.** On a baseload
+day a plant's rods sit still: the target band is a limit operators keep, and they move
+bank D only when the offset heads for it. Without a band the rods chased the
+frequency-control wobble and the sensor noise, 30 to 38 steps a day with the offset
+never past 0.004, and the parked-rods null beat the reference there. No source gives
+the action threshold; the family's range runs from 0 (act on any offset) to the whole
+target band (act only once outside, which spends the penalty clock). The owner fixed
+it at half the band: the rods' loop sees no error while the offset is within 0.025 of
+its reference, half of EDF's 0.05 (2.5 % of delta I at full power, half the +-5 %
+delta I band of Krsko and the Westinghouse specifications), and past it the error is
+the excess. It is a band on the offset, like the target band, so in delta I it
+narrows with power as the target band does; read as 2.5 % of delta I at every power
+it would equal the whole band at the half-power hold. **ours,** family range 0 to
+0.05, chosen at half, and not to be adjusted after results (J1).
 
 ---
 
