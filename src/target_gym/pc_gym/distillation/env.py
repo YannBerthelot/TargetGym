@@ -71,7 +71,10 @@ class DistillationParams(EnvParams):
     # ---- Column ----
     alpha: float = 1.5  # relative volatility
     M_tray: float = 0.5  # kmol tray holdup
-    M_drum: float = 0.5  # kmol condenser / reboiler holdup
+    # The drums: D2's holdups "for more realistic studies" (charter Amendment
+    # 3); Column A's own analysis uses 0.5 kmol in each [D1, D2].
+    M_reboiler: float = 10.0  # kmol
+    M_condenser: float = 32.1  # kmol
     tau_L: float = 0.063  # min, liquid lag per tray (Skogestad's taul)
     L_nominal: float = 2.706  # kmol/min, the reflux at which M_i = M_tray
 
@@ -89,24 +92,27 @@ class DistillationParams(EnvParams):
     # ---- Manipulated variables (LV configuration) ----
     # Ours: no Column A flow limits were found. Wide enough to hold both specs
     # after every sourced feed step, with 5 % to spare: F 0.8 to 1.2 and zF 0.4
-    # to 0.6 need L 2.14 to 3.25 and V 2.48 to 3.93 (derived,
+    # to 0.6 need L 1.95 to 2.96 and V 2.29 to 3.65 (derived,
     # test_distillation_hydraulics.py). Flooding, the real ceiling on V [D6],
     # has no sourced figure.
-    L_min: float = 2.00
-    L_max: float = 3.40
-    V_min: float = 2.35
-    V_max: float = 4.15
+    L_min: float = 1.85
+    L_max: float = 3.11
+    V_min: float = 2.18
+    V_max: float = 3.83
     # Distillate is D = V - L; clipped so the overall balance stays physical at
     # the corners of the action box, where V - L could otherwise go negative.
     D_min: float = 0.10
     D_max: float = 0.90
 
-    # ---- Product zones (charter rule 14) ----
-    # Column A's design products [D2]. On a real splitter the product limits
-    # are control zones, a quality limit, not a trip [D4, p. 5, Table 1], so
-    # these are zones: below yD_spec or above xB_spec the product is off spec.
-    yD_spec: float = 0.99
-    xB_spec: float = 0.01
+    # ---- Product zones (charter rules 14 and 19) ----
+    # On a real splitter the product limits are control zones, a quality
+    # limit, not a trip [D4, p. 5, Table 1]: below yD_spec or above xB_spec the
+    # product is off spec. Column A's products, 0.99 and 0.01 [D2], are its
+    # design point; the family designs a column with its impurity 3 sigma
+    # inside the spec, 700 ppm against a 1,000 ppm limit [D7], so each
+    # impurity's spec is the design impurity over 0.7. Ours, family member.
+    yD_spec: float = 1.0 - 0.01 / 0.7
+    xB_spec: float = 0.01 / 0.7
 
     # ---- Retired version-1 reward fields, read only by reward_version 1 ----
     precision_floor: float = 4e-4  # mole fraction, online analyser scatter
@@ -134,7 +140,7 @@ class DistillationParams(EnvParams):
     reprocess_price: float = 3.206  # kmol of boilup per kmol off spec
     # No trip (the zones are not trips), so this is never charged; sized above
     # any surviving step: the most boilup and all product off spec.
-    failure_cost: float = 4.15 + 3.206 * 1.2
+    failure_cost: float = 3.83 + 3.206 * 1.2
     restart_steps: int = 1
     # Read by the benchmark's time-in-band KPI, not by the reward: the
     # analysers' scatter.
@@ -146,7 +152,8 @@ class DistillationParams(EnvParams):
 PARAM_UNITS = {
     "alpha": "-",
     "M_tray": "kmol",
-    "M_drum": "kmol",
+    "M_reboiler": "kmol",
+    "M_condenser": "kmol",
     "tau_L": "min",
     "L_nominal": "kmol/min",
     "F": "kmol/min",
@@ -260,8 +267,8 @@ def compute_velocity(position, action, zF, params: DistillationParams, F=None):
     )
     dx_trays = (dMx - x[1:-1] * dM) / tray_holdup(liquid, p)
 
-    dx_reboiler = (liquid[0] * x[1] - V * y[0] - B * x[0]) / p.M_drum
-    dx_condenser = (V * y[-2] - (L + D) * x[-1]) / p.M_drum
+    dx_reboiler = (liquid[0] * x[1] - V * y[0] - B * x[0]) / p.M_reboiler
+    dx_condenser = (V * y[-2] - (L + D) * x[-1]) / p.M_condenser
 
     velocity = [jnp.array([dx_reboiler]), dx_trays, jnp.array([dx_condenser])]
     return jnp.concatenate(velocity + [dM / p.tau_L]), None

@@ -126,6 +126,8 @@ Keep both product impurities inside their zones, at the least reflux and boilup,
 - [D5] M. H. Beauford (Phillips Petroleum), "Inferential correction of composition for a distillation analyzer", US Patent 5,464,504, 1995, https://patents.google.com/patent/US5464504 . Checked twice.
 - [D6] J. Cahill (Emerson), "Early Detection of Distillation Column Flooding Conditions", 1 Aug 2012, on R. Pihlaja's field test with the University of Texas Separations Research Program, https://www.emersonautomationexperts.com/2012/measurement/pressure/early-detection-of-distillation-column-flooding-conditions . Vendor blog. Checked twice.
 
+- [D7] Distillation column design chapter, Taylor and Francis, book 9780429107290, chapter 10.1201/b10875-7, https://www.taylorfrancis.com/books/9780429107290/chapters/10.1201/b10875-7 . Fetched once, 2026-11-08, as a search-engine extract; the page itself returns 403 to the reader, so the re-fetch check could not be made (for the owner to open). The extract: with an upper limit of 1,000 ppm heavy key in the distillate and a standard deviation of 100 ppm, the desired impurity may be 700 ppm, 3 standard deviations below the limit; a second example puts a 32 % limit with a 0.2 % standard deviation.
+
 ## For the owner to open by hand
 
 - J. Ford (Maverick), "Distillation columns: Product composition control, process identification models", Control Engineering, https://www.controleng.com/distillation-columns-product-composition-control-process-identification-models/ (403). Check the depropanizer trend figure and the reported dead time 34.5 min and lag 14 min from reflux to tray temperature or GC (seen only in a search snippet, not cited above).

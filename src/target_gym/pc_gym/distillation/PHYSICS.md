@@ -95,22 +95,23 @@ not from this column. Eq. 31's own rounded entries give 36.07 and 146.0.
 | stages, feed stage | 41, 21 | - | cited [D2] |
 | `alpha` | 1.5 | - | cited [D2] |
 | `F`, `zF_nominal`, `qF` | 1.0, 0.5, 1.0 | kmol/min, -, - | cited [D2] |
-| `M_tray`, `M_drum` | 0.5, 0.5 | kmol | cited [D2]; D2 suggests 10 and 32.1 kmol drums "for more realistic studies" (deviation D3) |
+| `M_tray` | 0.5 | kmol | cited [D2] |
+| `M_reboiler`, `M_condenser` | 10, 32.1 | kmol | cited: D2's holdups "for more realistic studies"; Column A's analysis uses 0.5 [D1, D2] |
 | `tau_L` | 0.063 | min | cited [D1, p. 13; D2] |
 | `L_nominal` | 2.706 | kmol/min | cited [D2] |
 | `feed_step` | 0.2 | - | cited: F 1 to 1.2 [D1, Fig. 18] |
 | `zF_step` | 0.1 | - | cited: zF 0.5 to 0.6 [D1, Fig. 18] |
 | `step_window` | 30, 300 | min | ours: each step once, with room after it for the 40 min recovery of [D1, Fig. 18] |
-| `L_min`, `L_max` | 2.00, 3.40 | kmol/min | ours: hold both specs after any sourced feed step, plus 5 % |
-| `V_min`, `V_max` | 2.35, 4.15 | kmol/min | ours: as `L`; flooding [D6] has no figure |
+| `L_min`, `L_max` | 1.85, 3.11 | kmol/min | ours: hold both specs after any sourced feed step, plus 5 % |
+| `V_min`, `V_max` | 2.18, 3.83 | kmol/min | ours: as `L`; flooding [D6] has no figure |
 | `D_min`, `D_max` | 0.1, 0.9 | kmol/min | ours: keeps the balance physical at the box's corners (deviation D5) |
-| `yD_spec`, `xB_spec` | 0.99, 0.01 | - | cited: Column A's products [D2] |
+| `yD_spec`, `xB_spec` | 0.9857, 0.0143 | - | ours, family: each impurity's spec is Column A's design impurity, 0.01 [D2], over 0.7, as a column is designed 3 sigma inside its spec, 700 against 1,000 ppm [D7] |
 | `delta_t` | 1 | min | cited: the splitter's MPC samples at 1 min [D4, p. 5] |
 | `max_steps_in_episode` | 400 | steps | ours: about two dominant time constants |
 | analyser cycle, dead time | 5, 5 | min | cited range: 3 to 30 min in total [D5] |
 | `boilup_price` | 1 | kmol | ours: the unit of the score |
 | `reprocess_price` | 3.206 | kmol/kmol | ours: no price found; off-spec product is run through again, at the nominal V/F |
-| `failure_cost` | 7.997 | kmol | never charged: no trip; above any surviving step |
+| `failure_cost` | 7.677 | kmol | never charged: no trip; above any surviving step |
 | `restart_steps` | 1 | steps | never charged |
 | `e_floor_top`, `e_floor_bottom` | 4e-4 | - | the analysers' scatter (section Readings), for the time-in-band KPI only |
 
@@ -122,8 +123,8 @@ Count: 12 cited, 11 ours.
 
 | Limit | Kind | Model | Source |
 |---|---|---|---|
-| Distillate below yD 0.99 | Zone | Off-spec distillate is charged its reprocessing | spec [D2]; zone [D4, p. 5, Table 1] |
-| Bottoms above xB 0.01 | Zone | As above, for bottoms | spec [D2]; zone [D4, p. 5, Table 1] |
+| Distillate below yD 0.9857 | Zone | Off-spec distillate is charged its reprocessing | spec [D2]; zone [D4, p. 5, Table 1] |
+| Bottoms above xB 0.0143 | Zone | As above, for bottoms | spec [D2]; zone [D4, p. 5, Table 1] |
 | Flooding | Not modelled | Kind not found [D6]; `V_max` stands in, ours | [D6] |
 | Reflux and boilup | Hardware | The flow box, clipped | ours (section 3) |
 
@@ -144,7 +145,8 @@ composition and the interior profile are hidden: no feed analyser was found.
 ## 6. Episode (rule 17)
 
 The column starts at rest at its design point [D2]: the converged profile at L
-2.706 and V 3.206, both products on spec. Then:
+2.706 and V 3.206, both products on spec with the family's give-away margin
+[D7]. Each scenario (below) then runs:
 
 - **The feed rate steps by 20 %** [D1, Fig. 18], once, up or down, at a
   minute drawn in 30 to 300. The plant meters it.
@@ -165,56 +167,73 @@ kmol of boilup:
 ```
 reward   = -(boilup + off_spec)
 boilup   = V dt
-off_spec = 3.206 (D [yD < 0.99] + B [xB > 0.01]) dt
+off_spec = 3.206 (D [yD < 0.9857] + B [xB > 0.0143]) dt
 ```
 
 Inside the zones purity earns nothing; it costs the boilup it takes.
 
 ---
 
-## 8. Behaviour tests
+## 8. Scenarios (rule 20)
 
-`tests/pc_gym/distillation/test_distillation_reality.py` and, for tests 5 and 7,
-`test_distillation_hydraulics.py`:
+`scenarios.py` in this folder, on `EnvSpec.scenarios`:
 
-| Test | Source | Before | After |
-|---|---|---|---|
-| 1. Nominal products | [D2] | pass | pass |
-| 2. Reflux step end values | [D1, p. 14, Fig. 5] | pass | pass |
-| 3. Boilup step, Fig. 5 sizes | [D1, Fig. 5] | pass | pass |
-| 4. Internal flows, smaller and faster | [D1, Fig. 6] | pass | pass |
-| 5. Reflux reaches the reboiler after 39 lags | [D1, Fig. 4] | pass | pass |
-| 6. Slowest modes 193.9, 12.0, 3.5 min | [D1, 4.4] | pass | pass |
-| 7. Gains eq. 31, RGA 35.94 | [D1, eq. 31] | pass | pass |
-| 8. 20 % feed step under D1's PI | [D1, Fig. 18, eq. 82] | fail (feed rate fixed) | pass |
-| 9. zF step smaller than the feed step | [D1, Fig. 18] | fail (same) | pass |
-| 10. Analyser 3 to 30 min late | [D5] | pass | pass |
-| Product limits are zones, not trips | [D4, Table 1] | fail | pass |
-| Inside spec, less boilup scores better | [D4, p. 5] | pass | pass |
+| Scenario | Overrides | Source |
+|---|---|---|
+| `normal` | no feed step | [D4, p. 5]: the zones held at least boilup |
+| `feed_rate_step` | feed rate 20 %, up or down | [D1, Fig. 18] |
+| `feed_composition_step` | zF 0.1, up or down | [D1, Fig. 18] |
+| `both_steps` | both, at independent times | [D1, Fig. 18] |
 
-**Findings on the audit's tests, from D1's own figures.** Three of the audit's
-tolerances read D1's prose more tightly than D1's figures draw it, and the
-model is D1's own `colamod.m` (its gains match eq. 31 to 1e-4 and its slowest
-mode is 193.9 min). The tests now check what the figures show, and nothing in
-the model moved:
-
-- Test 2: the "time constant of about 194 minutes" is the linearised mode
-  (D1 section 4.4 says so); the nonlinear response to the 0.1 % step reaches
-  63 % at 160 min, with a 170 min tail, as Fig. 5 draws it. The 194 min is
-  test 6.
-- Test 3: "almost the same, but in opposite direction" is drawn in Fig. 5 as
-  a boilup step 1.4 times the reflux step on xD at 500 min. The test reads
-  Fig. 5's four values at 500 min, within the audit's 25 %.
-- Test 4: the audit's 7 to 30 min is D1's case with no liquid flow dynamics
-  (the dotted lines); with them, Fig. 6 rises fast and then creeps. The test
-  asks for "much faster" as under a quarter of the external step's 63 % time
-  (ours).
-- Test 9: D1 adds that zF moves xD less than xB, so the 1e-3 size is read on
-  xB.
+Timing (30 to 300 min) and sign are drawn by the seed. A boilup upset from steam
+pressure [D1, Fig. 12] and an analyser failure [D1, 6.5] are documented, but
+their sizes are not, so they have no scenario yet.
 
 ---
 
-## 9. Known deviations (rule 13)
+## 9. Behaviour tests
+
+`tests/pc_gym/distillation/test_distillation_reality.py` and, for tests 5 and 7,
+`test_distillation_hydraulics.py`. D1's figures are for Column A with 0.5 kmol
+drums and no flow box, so tests 1 and 5 to 10 run that configuration
+(`column_a()` in the test). Tests 2 to 4 run the shipped column, with
+realistic drums, against family ranges: each source span pooled over Column A
+[D1] and the real splitter [D3, D4], widened by the audit's 25 %.
+
+| Test | Range and source | Result |
+|---|---|---|
+| 1. Nominal products | yD 0.989 to 0.991, xB 0.009 to 0.011 [D2] | pass |
+| 2. Reflux step | end values within 25 % of D1's; decay time 89 to 243 min, from 118.5 min [D4, G2; D3] to 194 min [D1] | pass |
+| 3. Boilup step | opposite sign; ratio to the reflux step 0.75 to 1.25 on each, "almost the same" [D1] and eq. 31's 0.98 and 1.01 | **fail: 1.50 on xD** |
+| 4. Internal flows | both purer; gain 48 to 125 times smaller on each [D1; eq. 31: 64, 80]; 63 % time under a quarter of the external step's (ours) | gains pass; **speed fails: 97 against 211 min, 0.46** |
+| 5. Reflux reaches the reboiler after 39 lags | [D1, Fig. 4] | pass |
+| 6. Slowest modes 193.9, 12.0, 3.5 min | [D1, 4.4], Column A | pass |
+| 7. Gains eq. 31, RGA 35.94 | [D1, eq. 31] | pass |
+| 8. 20 % feed step under D1's PI | [D1, Fig. 18, eq. 82], Column A | pass |
+| 9. zF step smaller than the feed step | [D1, Fig. 18] | pass |
+| 10. Analyser 3 to 30 min late | [D5] | pass |
+| Starts on spec | rule 17 | pass |
+| Specs at the family give-away | [D7] | pass |
+| Product limits are zones | [D4, Table 1] | pass |
+| Inside spec, less boilup scores better | [D4, p. 5] | pass |
+
+**Finding, test 3.** At D1's own 0.0027 kmol/min step the column is already
+nonlinear: the boilup step's steady effect on xD is 1.50 times the reflux
+step's, where eq. 31's linear gains give 0.98. D1's Fig. 5 draws the same
+asymmetry (1.42 at 500 min); its "almost the same" is the linear statement. The
+model is D1's own, so this is the source's prose against its own figure, not
+missing physics. Not moved.
+
+**Finding, test 4.** With D2's drums the internal-flow response is slower: the
+32.1 kmol condenser adds about 10 min of lag on yD. It is still about twice as
+fast as the external step, but not under a quarter. D1 gives no figure with
+liquid flow dynamics, and the quarter is ours, fixed before the run. Not moved.
+
+With realistic drums the slowest modes are 219.5, 32.2 and 11.3 min (derived).
+
+---
+
+## 10. Known deviations (rule 13)
 
 **D1. Tray temperature ignores pressure.** Real tray temperature moves with
 column pressure and needs a correction, and inferential control at alpha 1.5 is
@@ -225,10 +244,8 @@ temperature loop is easier than on a real column.
 perfectly, and DP, the flooding warning [D6], is not modelled. Effect: no
 flooding to watch.
 
-**D3. Small drums.** 0.5 kmol, Column A's; D2 suggests 10 and 32.1 kmol for
-realism, which would add about 10 min of lag on yD. Kept at 0.5 so that
-D1's published dynamics (tests 2 to 9) hold. Effect: the top product answers
-faster than on a plant.
+**D3. Column A's analysis has small drums.** The task ships D2's realistic 10
+and 32.1 kmol; D1's published dynamics are checked on 0.5 kmol (section 9).
 
 **D4. No move limits.** The real splitter's MPC moves reflux at most 0.13 t/h
 per minute [D4, Table 2]. That is a controller's setting on another column,
@@ -243,16 +260,44 @@ the real splitter's is 111 min [D4, G2]. The task is Column A.
 
 ---
 
-## 10. What the reference ladder row needs
+## 11. What the reference ladder row needs
 
+- Zones: yD at least `yD_spec` (0.9857), cheap side low (less purity, less
+  boilup); xB at most `xB_spec` (0.0143), cheap side high. The reference sits
+  2 sigma inside each cheap edge (`ladder.zone_setpoint`, rule 22).
+- Scenarios: the four of section 8, from `EnvSpec.scenarios`.
 - Bump tests at the design point with `feed_step` and `zF_step` at 0.
 - PI by SIMC on the analysers (5 min sample, 5 min dead time), then
   feedforward from the measured feed flow (obs 7) through the overall balance
   (D = zF F / yD), then the stage-15 temperature cascade, then the static
-  decoupler.
-- The rung is scored on the zone and boilup cost of section 7.
+  decoupler. Scored on section 7's cost.
+
+## 12. Oracle needs
+
+The oracle (`oracle.py`, GradientMPC on the env's reward) reads the true state
+and plans on the reward, which now prices zones and boilup. It must see each
+scenario's step schedule, which is in the state. Not run.
 
 ---
+
+## 13. Cold review of the restated ranges
+
+A reviewer with no context read REALITY.md, D1's text and the three tests,
+without their results, on 2026-11-08. Verdicts and what changed:
+
+- Test 2, faithful with a fix: the lower end used the natural period of D4's
+  G2 (100 min), not its decay time, 2 / 0.01688 = 118.5 min, which matches
+  D4's 118.6 min term and D3's 2 h. Now 89 to 243 min.
+- Test 3, faithful with a fix: Fig. 5's 1.42 and 0.73 are transients at
+  500 min, not the steady ratio the test measures. Now 0.75 to 1.25, anchored
+  on "almost the same" and eq. 31.
+- Test 4, not faithful as written: 30 to 300 was not the stated 25 % rule
+  (eq. 31 gives 64 and 80, so 48 to 125), only xD was checked, and the speed
+  threshold is authored. Now both products, 48 to 125, the threshold labelled
+  ours, and the 63 % time read on the full trace.
+
+The fixes come from the reviewer's reading of the sources and were applied
+before the tests were run again; tests 3 and 4 then fail (section 9).
 
 ## 4. Numerics
 

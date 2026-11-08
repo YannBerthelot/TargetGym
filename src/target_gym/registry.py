@@ -25,6 +25,7 @@ observation and one action per aircraft, in the JaxMARL style.
 
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterator, cast
 
@@ -502,6 +503,15 @@ def _mpc(factory_name: str, module: str) -> Callable[[Any, Any], Any]:
     return make
 
 
+def _scenarios(module: str) -> Callable[[], tuple]:
+    """A task's scenario suite, imported when asked for (``EnvSpec.scenarios``)."""
+
+    def load() -> tuple:
+        return importlib.import_module(module).scenarios()
+
+    return load
+
+
 def _shared_oracle(name: str) -> tuple[str, ...]:
     """The data an oracle on the shared solver reads: its horizon summary
     and its smoothing widths (``EnvSpec.oracle_data``)."""
@@ -811,8 +821,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # zones instead of trips, feed-rate and composition steps [D1, Fig.
         # 18], the feed flow observed, and a job score in kmol of boilup.
         # The feed steps are drawn at reset, so no step key moves them: no
-        # ``disturbance_fields``.
-        version=5,
+        # ``disturbance_fields``. v6 (charter Amendment 3): D2's realistic
+        # drums, specs at the family's give-away margin, scenario suite.
+        version=6,
+        scenarios=_scenarios("target_gym.pc_gym.distillation.scenarios"),
     ),
     # -- Industrial / energy ------------------------------------------------
     EnvSpec(

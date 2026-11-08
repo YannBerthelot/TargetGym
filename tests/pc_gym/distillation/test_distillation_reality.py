@@ -24,6 +24,28 @@ from the code (tolerances are the audit's, fixed before any run):
 10. the analyser reports a change 3 to 30 min after it happens [D5].
 Two more, from the job [D4, p. 5]: the product limits are zones, not trips,
 and inside them the run on less boilup scores better.
+
+Configurations (charter Amendment 3). D1's figures are for Column A with
+0.5 kmol drums, so tests 1 and 5 to 10 run that configuration. The shipped
+column has D2's realistic drums, 10 and 32.1 kmol, and tests 2 to 4 are
+restated as family ranges, pooled over Column A [D1] and the real propylene
+splitter [D3, D4], each source span widened by 25 % either side (the audit's
+plot-reading tolerance):
+2. a 0.1 % reflux step moves the products to Column A's end values within 25 %
+   [D1 alone], and the response's decay time lies in the family's 118.5 min
+   (the decay time 2 / 0.01688 of D4's plant model G2, matching its 118.6 min
+   term and D3's "about 2 h") to 194 min [D1], so 89 to 243 min;
+3. the boilup step by the same amount moves both products the other way, "almost
+   the same" [D1]: at steady state eq. 31 gives ratios 0.98 and 1.01, so 0.75 to
+   1.25 on each;
+4. L and V up 0.27 together: both purer, with a gain "about 100 times" smaller
+   [D1], which eq. 31 puts at 64 (xD) and 80 (xB), so 48 to 125 on each; and
+   "much faster" [D1], read as a 63 % time under a quarter of the external
+   step's: that threshold is authored (ours), as D1 gives no figure with liquid
+   flow dynamics.
+The three were restated after a cold review (PHYSICS.md section 13).
+Rule 17: the episode starts on spec, the specs sitting the family's give-away
+margin from Column A's products [D7].
 """
 
 import jax
@@ -51,8 +73,15 @@ ENV = DistillationColumn()
 
 
 def quiet(**kw):
-    """No feed moves, no drift, no instrument noise."""
+    """The shipped column with no feed moves and no instrument noise."""
     return DistillationParams(sensor_noise_scale=0.0, feed_step=0.0, zF_step=0.0, **kw)
+
+
+def column_a(**kw):
+    """Column A as D1 analyses it: 0.5 kmol in both drums [D1, D2], and no flow
+    limits, which D1 does not have (a box wide enough never to bind)."""
+    box = dict(L_min=1.0, L_max=4.0, V_min=1.5, V_max=4.5)
+    return quiet(M_reboiler=0.5, M_condenser=0.5, **{**box, **kw})
 
 
 def raw(L, V, p):
@@ -88,12 +117,10 @@ def t63(trace):
     return float(np.argmax(frac >= 1.0 - np.exp(-1.0)))
 
 
-@pytest.fixture(scope="module")
-def rest():
-    """Column A at rest at its nominal flows, in float64 so the 194 min mode
-    reaches rest."""
+def _at_rest(p):
+    """``p``'s column at rest at its nominal flows, in float64 so the slowest
+    mode reaches rest."""
     with enable_x64():
-        p = quiet()
         s = jax.tree.map(
             lambda a: (
                 jnp.asarray(a).astype(jnp.float64)
@@ -104,6 +131,16 @@ def rest():
         )
         s, _ = hold(p, s, L0, V0, 3000)
     return p, s
+
+
+@pytest.fixture(scope="module")
+def rest():
+    return _at_rest(column_a())
+
+
+@pytest.fixture(scope="module")
+def shipped():
+    return _at_rest(quiet())
 
 
 def test_the_nominal_flows_give_the_published_products(rest):
@@ -121,52 +158,61 @@ def _step(rest, L, V, minutes=2000):
     return tr - tr[0], tr
 
 
-def test_a_reflux_step_moves_both_products_as_published(rest):
-    """[D1, p. 14]: xD 0.99 to about 0.992, xB 0.01 to about 0.0135. Its "time
-    constant of about 194 minutes" is the linearised slowest mode, which D1
-    section 4.4 computes and says corresponds to it: that is
-    ``test_the_slowest_modes_are_the_published_ones``. The nonlinear response
-    to this step is faster, 160 min to 63 % and a 170 min tail, as D1's own
-    Fig. 5 shows (PHYSICS.md, section 7)."""
-    d, _ = _step(rest, L0 + DL, V0)
-    assert 0.0015 <= d[-1, 0] <= 0.0025
-    assert 0.0025 <= d[-1, 1] <= 0.0045
+def _tail_tau(trace, lo=400, hi=1400):
+    """The response's time constant: the decay rate of its approach to the
+    final value, fitted where the faster modes are gone."""
+    y = np.asarray(trace)
+    gap = np.abs(y[-1] - y[lo:hi])
+    return -1.0 / np.polyfit(np.arange(lo, hi), np.log(gap), 1)[0]
 
 
-#: [D1, Fig. 5], read off the plot at 500 min, x 1e-3: L step xD +1.8, xB
-#: +3.15; V step xD -2.55, xB -2.3. 25 % for a plot reading, the audit's.
-FIG5_AT_500 = {"L": (1.8e-3, 3.15e-3), "V": (-2.55e-3, -2.3e-3)}
+def test_a_reflux_step_moves_both_products_in_the_family_range(shipped):
+    d, tr = _step(shipped, L0 + DL, V0, minutes=3000)
+    assert 0.002 * 0.75 <= d[-1, 0] <= 0.002 * 1.25
+    assert 0.0035 * 0.75 <= d[-1, 1] <= 0.0035 * 1.25
+    assert 89 <= _tail_tau(tr[:, 0]) <= 243
 
 
-def test_a_boilup_step_moves_both_products_the_other_way_as_figure_5(rest):
-    """[D1, p. 14]: the boilup step by the same amount moves the products
-    "almost the same, but in opposite direction"; Fig. 5 gives the sizes."""
-    for name, (L, V) in (("L", (L0 + DL, V0)), ("V", (L0, V0 + DL))):
-        d, _ = _step(rest, L, V, minutes=500)
-        for j in (0, 1):
-            want = FIG5_AT_500[name][j]
-            assert np.sign(d[-1, j]) == np.sign(want)
-            assert abs(d[-1, j] - want) <= 0.25 * abs(want), (name, j, d[-1])
+def test_a_boilup_step_moves_both_products_the_other_way_in_the_family_range(
+    shipped,
+):
+    dL, _ = _step(shipped, L0 + DL, V0, minutes=3000)
+    dV, _ = _step(shipped, L0, V0 + DL, minutes=3000)
+    for j, (lo, hi) in enumerate(((0.75, 1.25), (0.75, 1.25))):
+        assert np.sign(dV[-1, j]) == -np.sign(dL[-1, j])
+        assert lo <= abs(dV[-1, j]) / abs(dL[-1, j]) <= hi
 
 
-def test_internal_flows_purify_both_products_with_a_smaller_faster_gain(rest):
-    """[D1, p. 15, Fig. 6]: L and V up 0.27 together, D constant. Both products
-    purer, the effect of a given change in L "about 100 times smaller" (30 to
-    300, the audit's), and "the dynamics are much faster". The audit's 7 to
-    30 min is D1's case with no liquid flow dynamics (the dotted lines); with
-    them, Fig. 6 rises fast and then creeps, so "much faster" is tested as a
-    63 % time under a quarter of the external step's (ours)."""
-    dL, ext = _step(rest, L0 + DL, V0)
-    d, tr = _step(rest, L0 + 100 * DL, V0 + 100 * DL, minutes=2000)
+def test_internal_flows_purify_both_products_with_a_smaller_faster_gain(shipped):
+    dL, ext = _step(shipped, L0 + DL, V0, minutes=3000)
+    d, tr = _step(shipped, L0 + 100 * DL, V0 + 100 * DL, minutes=3000)
     assert d[-1, 0] > 0 and d[-1, 1] < 0
-    gain_step = abs(dL[-1, 0]) / DL
-    gain_internal = abs(d[-1, 0]) / (100 * DL)
-    assert 30 <= gain_step / gain_internal <= 300
-    assert t63(tr[:500, 0]) < 0.25 * t63(ext[:, 0])
+    for j in (0, 1):
+        gain_step = abs(dL[-1, j]) / DL
+        gain_internal = abs(d[-1, j]) / (100 * DL)
+        assert 48 <= gain_step / gain_internal <= 125, j
+    assert t63(tr[:, 0]) < 0.25 * t63(ext[:, 0])
+
+
+def test_an_episode_starts_on_spec():
+    """Rule 17: established operation, so both products inside their zones at
+    reset, on every seed."""
+    p = DistillationParams()
+    for seed in range(5):
+        _, s = ENV.reset_env(jax.random.PRNGKey(seed), p)
+        assert float(s.x[-1]) >= p.yD_spec and float(s.x[0]) <= p.xB_spec
+
+
+def test_the_specs_sit_the_family_give_away_from_the_design_products():
+    """[D7]: a column is designed with its impurity 3 sigma inside the spec, 700
+    ppm against a 1,000 ppm limit, so the spec is the design impurity / 0.7."""
+    p = DistillationParams()
+    assert 1.0 - p.yD_spec == pytest.approx(0.01 / 0.7, rel=1e-3)
+    assert p.xB_spec == pytest.approx(0.01 / 0.7, rel=1e-3)
 
 
 def test_the_slowest_modes_are_the_published_ones():
-    p = quiet()
+    p = column_a()
     here = jnp.concatenate([jnp.asarray(_NOMINAL_PROFILE), steady_liquid(L0, p)])
     with enable_x64():
         here = here.astype(jnp.float64)
@@ -198,7 +244,7 @@ def _closed_loop(p, s, minutes=300):
 def _feed_run(feed, zF):
     """A step at minute 10 of the feed rate by ``feed`` (fraction) or of its
     composition by ``zF``, from rest at the nominal point."""
-    p = quiet().replace(feed_step=abs(feed), zF_step=abs(zF))
+    p = column_a().replace(feed_step=abs(feed), zF_step=abs(zF))
     s = start(p).replace(
         feed_step_at=jnp.asarray(10 if feed else 10**6),
         feed_sign=jnp.sign(jnp.asarray(feed or 1.0)),
@@ -237,7 +283,7 @@ def test_a_feed_composition_step_is_smaller_than_a_feed_rate_step():
 
 
 def test_the_analyser_reports_a_change_3_to_30_min_late():
-    p = quiet()
+    p = column_a()
     s = start(p)
     step = jax.jit(ENV.step_env)
     key = jax.random.PRNGKey(0)

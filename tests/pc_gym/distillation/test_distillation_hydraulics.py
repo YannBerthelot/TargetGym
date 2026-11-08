@@ -119,7 +119,7 @@ def test_moving_holdup_conserves_the_light_component():
         M = tray_holdup(flow, P)
         np.testing.assert_allclose(M, P.M_tray + TAUL * rise, atol=1e-12)
         trays = jnp.sum(M * dx[1:-1] + x[1:-1] * TAUL * dflow)
-        change = float(trays + P.M_drum * (dx[0] + dx[-1]))
+        change = float(trays + P.M_reboiler * dx[0] + P.M_condenser * dx[-1])
         out = float((V0 - L0) * x[-1] + (flow[0] - V0) * x[0])
     assert change == pytest.approx(P.F * 0.5 - out, abs=1e-9)
 
