@@ -232,11 +232,14 @@ def ceiling_data(env, p, state, step_keys):
     """The data of a plan from ``state`` over the steps of ``step_keys``: the
     wind and the rating's power after every step, from those keys.
     Neither depends on the moves, so they are read off a run of the env at
-    any move (here the reset's pitch and torque held)."""
+    any move (here the reset's pitch and torque held) that cannot trip: a trip
+    restarts the plant on a fresh draw of the turbulence, which is not the
+    episode's wind (the overspeed level is lifted for this run alone)."""
     held = env.initial_action(state, p)
+    free = p.replace(overspeed_factor=1e9)
 
     def advance(s, k):
-        s1 = env.step_env(k, s, held, p)[1]
+        s1 = env.step_env(k, s, held, free)[1]
         return s1, jnp.stack([s1.v_wind, s1.target_power])
 
     path = jax.lax.scan(advance, state, step_keys)[1]

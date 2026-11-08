@@ -122,6 +122,39 @@ def test_wind_plan_costs_what_the_env_charges_bar_the_tower():
     np.testing.assert_allclose(planned, replayed - terms["tower"], rtol=1e-9)
 
 
+def test_wind_ceiling_plans_on_the_episodes_wind_even_where_a_held_run_trips():
+    """From 1 % under the overspeed level the reset's pitch and torque held
+    overspeed the rotor, and a trip redraws the turbulence. The wind does not
+    depend on the rotor, so the ceiling's must be the one a feathering run from
+    the reset's own speed, which does not trip, sees."""
+    from target_gym.energy.wind_turbine.env import omega_rated
+    from target_gym.energy.wind_turbine.oracle import ceiling_data
+
+    spec = REGISTRY["wind_turbine"]
+    env, p = spec.make_env(), spec.make_test_params()
+    resets, steps = episode_keys(jax.random.PRNGKey(100), 1, 40)
+    st = env.reset_env(resets[0], p)[1]
+    # At fine pitch in this seed's 19 m/s the rotor runs away.
+    fast = st.replace(
+        omega=jnp.float32(1.19 * float(omega_rated(p))), pitch=jnp.float32(0.0)
+    )
+    path = np.asarray(ceiling_data(env, p, fast, steps[:, 0])[-1])
+
+    def run(action):
+        def f(s, k):
+            _, s1, _, _, info = env.step_env(k, s, action(s), p)
+            return s1, (s1.v_wind, info["tripped"])
+
+        return f
+
+    held = env.initial_action(fast, p)
+    assert bool(jnp.any(jax.lax.scan(run(lambda s: held), fast, steps[:, 0])[1][1]))
+    feather = run(lambda s: jnp.array([1.0, 1.0]))
+    wind, tripped = jax.lax.scan(feather, st, steps[:, 0])[1]
+    assert not bool(jnp.any(tripped))
+    np.testing.assert_array_equal(path[:, 0], np.asarray(wind))
+
+
 class Schedule:
     """Plays a fixed raw action per step."""
 
