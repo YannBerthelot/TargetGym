@@ -57,6 +57,24 @@ def test_an_override_naming_no_parameter_is_an_error():
         scenarios.suite(declaring(Scenario("typo", {"tua": 20.0})))
 
 
+def test_weights_are_shares_of_operating_time():
+    spec = declaring(
+        Scenario("normal day", {}, weight=3.0),
+        Scenario("upset", {"K": 2.0}, weight=1.0),
+    )
+    assert scenarios.weights(spec) == pytest.approx({"normal day": 0.75, "upset": 0.25})
+
+
+def test_a_task_with_no_declared_suite_runs_its_normal_scenario_all_the_time():
+    assert scenarios.weights(REGISTRY["first_order"]) == {"normal": 1.0}
+
+
+@pytest.mark.parametrize("weight", [0.0, -1.0, float("nan")])
+def test_a_scenario_weight_must_be_positive(weight):
+    with pytest.raises(ValueError):
+        scenarios.suite(declaring(Scenario("upset", {"K": 2.0}, weight=weight)))
+
+
 def test_params_for_applies_the_scenario_then_the_caller():
     scenario = Scenario("slow plant", {"tau": 20.0, "K": 2.0})
     p = scenarios.params_for(REGISTRY["first_order"], scenario, K=3.0)
