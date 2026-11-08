@@ -299,3 +299,15 @@ def test_walks_have_their_stated_spread_and_memory():
         assert x.std() == pytest.approx(sd, rel=0.1)
         r = np.corrcoef(x[:-lag], x[lag:])[0, 1]
         assert r == pytest.approx(np.exp(-1.0), abs=0.06)
+
+
+def test_scenario_weights_give_the_normal_day_most_of_the_time():
+    # The family runs a float line steadily for most of its time [S5]; gas swings
+    # [S19; S20] and planned pull changes [S1; S9] are rarer windows (REALITY.md).
+    from target_gym.glass_furnace.physical_scenarios import suite
+
+    shares = {s.name: s.weight for s in suite()}
+    total = sum(shares.values())
+    assert all(w > 0 for w in shares.values())
+    assert shares["normal"] / total > 0.5
+    assert max(shares, key=shares.get) == "normal"

@@ -845,3 +845,50 @@ scheme, and the pass mark follows it, by the owner's rule. Refiner loop: 2.62e5 
 two columns differ, trust the second. Part of the earlier gain spread was numerical smearing,
 which varied with the operating state; the seeing-would-pay result grew because a controller
 told the walks now acts on a sharper plant.
+
+## Amendment 3 work (2026-11-08)
+
+The owner's decisions for glass, relayed by the review session, applied on this branch in
+the order asked. `REALITY.md` pools float and container sources; `COLD_REVIEW.md` is a
+fresh agent's read of it against the task; `PHYSICS.md`, section "Attempt 3", answers each
+of its fourteen items and lists the unsourced numbers with their family ranges.
+
+**What changed.** The fining pass mark is fixed at 0.5, the middle of Beerkens' 1420 to
+1500 C band, written before any run. The agent reads the fining share only at the cold
+end, 0.3 h late with noise, plus the cullet ratio, the batch line every 30 min and the pull
+plan 8 h ahead; air preheat and stack left the observation, having no source. The walks
+start where the seed puts them. Lost glass is priced on the charged pull. The dead low
+crown override is gone; the high one stays, the owner's pick, listed as a deviation; the
+max-fuel null now peaks at 1620.0 C. Crown wear has no family price (a modelled corrosion
+rate at one temperature, nothing against temperature), so it is measured as is: hours over
+1600 and 1610 C per policy. Five scenarios with weights: normal 0.7, pull up and down 0.05
+each, gas rich and lean 0.1 each, all ours inside family ranges.
+
+**The twelve tests now.** Met: A1 to A3, B1 to B3, B5, C1 to C3. Findings: C4, the gain
+spread, is 1.24 times against 1.5. B4 is met, but the step test's tuned gain overshoots
+22 % against the 10 % aim. A3 is measured against a PI with a thin back-off, which loses
+more glass than holding the design valve; against the ladder's two-sigma reference it is
+unmeasured.
+
+**Box nulls and the oracle,** three seeds per scenario, EUR per day:
+
+| Scenario | Box mid | Box max | Design valve held | Oracle, best path found | Best null over oracle |
+|---|---|---|---|---|---|
+| Normal | 34,573 | 34,801 | 33,886 | 33,328 | 1.037 |
+| Pull up | 35,164 | 35,715 | 188,424 | 34,905 | 1.007 |
+| Pull down | 34,080 | 34,145 | 33,442 | 32,891 | 1.036 |
+| Gas rich | 34,406 | 34,484 | 34,019 | 33,208 | 1.036 |
+| Gas lean | 64,137 | 35,102 | 163,402 | 33,864 | 1.037 |
+| Weighted | 37,517 | 34,812 | 54,556 | 33,427 | 1.041 |
+
+The box min loses glass all week (over 300,000 EUR a day). The max-fuel null holds the
+crown over 1610 C for the whole week.
+
+**The oracle is not converged.** It first finds the best constant valve in hindsight, then
+shapes a two-hour path from it and from the design valve by gradient, keeping each start's
+best true cost. One seed in fifteen meets the 0.5 % agreement between starts; the rest
+disagree by 0.5 to 2.9 %, and on most seeds the shaped path barely beats the best
+constant. So the costs above are an upper bound on the ceiling's: room over the best box
+null is at least 1.04 weighted, and at least 1.007 after a pull rise. The family's own
+saving from steadier control is 2 to 4 % of fuel [S2; S3], which this matches. Room over
+the reference waits for the ladder's row.

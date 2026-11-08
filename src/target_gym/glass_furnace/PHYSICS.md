@@ -514,7 +514,7 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 | 9 | No couple lag, drift or reversal ripple; air preheat and stack had no source | Partly fixed: air preheat and stack removed | Readings are cleaner than real |
 | 10 | Batch islands as a wedge; no level loop, tweel, waist coolers or boost; forward flow into the waist 2.6 times the pull against 1.2 to 2.5 [S17] | Known deviation | The refiner is slightly more coupled to the melter than the range allows |
 | 11 | Unsourced numbers | Listed below with their family ranges | See the list |
-| 12 | A constant valve with a margin may do nearly as well as a controller | Measured: box nulls against the oracle on the suite | Reported as room in the proposal |
+| 12 | A constant valve with a margin may do nearly as well as a controller | Measured: the best box null costs 4.1 % more than the oracle's best path, weighted; 0.7 to 3.7 % per scenario. The oracle is not converged, so these are lower bounds on room | Small room, as the family's 2 to 4 % saving says |
 | 13 | Crown wear neither priced nor measured | Fixed: measured as is | Hours over 1600 and 1610 C, and the maximum, per policy |
 | 14 | Cooling air power, scanner rejects and cullet remelt are not charged; the agent sees the valve after the override | Known deviation; the last is intended | Small |
 
@@ -535,6 +535,7 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 | Waist and working end widths | 3.5 and 7.9 m | A 1300 t/d furnace's ratios to its melter [S18], scaled |
 | Surface emissivity, port shares, couple depth and bay, combustion height | 0.8; ports 1 to 4 even then 0.7, 0.4; 36 mm in bay 3; 2.4 m | Not found; ours |
 | Bubble radius | 8.3 mm | Top of the laboratory range [S32] |
+| Scenario weights | Normal 0.7; pull up and down 0.05 each; gas rich and lean 0.1 each | Gas swings: none at stable entry points to weekly where LNG blends [S19; S20], each 0 to 0.3. Pull changes: none on a steady float line [S5] to about 20 job changes a month on a container line [S9], each 0 to 0.3. Normal: the rest, 0.4 to 1 |
 
 ### The reference ladder's row (rule 3, for `scripts/reference_ladder.py`)
 
