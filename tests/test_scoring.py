@@ -272,7 +272,7 @@ def test_the_building_settles_within_its_ceiling():
     "name, floor, reading",
     [
         ("cstr", "e_floor", "T"),
-        ("unstable_cstr", "e_floor", "C_a"),
+        ("unstable_cstr", "e_floor", "T"),
         ("distillation", "e_floor_top", "x"),
         ("distillation", "e_floor_bottom", "x"),
         ("boiler_drum", "e_floor_pressure", "pressure"),

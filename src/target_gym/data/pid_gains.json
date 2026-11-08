@@ -366,35 +366,18 @@
     "note": "a copy of plane_cascaded, read by the plane_energy oracle (plane/oracle.py), whose oracle fingerprint covers it (oracle_gains_keys on its spec). tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
   },
   "unstable_cstr": {
-    "Kp_T": 2.206154,
-    "Kd_T": 0.478,
-    "Kc_Ca": 26.576068,
-    "Ti_Ca": 0.34482,
-    "Tf_Ca": 0.03337,
-    "sp_rate": 9.686836,
-    "sp_below": 4.72585,
-    "sp_above": 4.72585,
-    "sp_line_margin": 2.068244,
-    "Tc_bias": 300.882172,
+    "Kp": -0.028326,
+    "Ti": 35.1,
+    "Td": 0.0,
+    "Tf": 0.0,
     "model": {
-      "C_a": {
-        "k": -0.01946,
-        "tau1": 0.233696,
-        "theta": 0.3,
-        "band": 0.011864,
-        "step": -2.098814,
-        "bands": 3.442598,
-        "spread": 1.466375,
-        "tests": 10.0,
-        "tau_c": 0.33337
-      },
-      "pole": {
-        "rate": 2.4224279711911776,
-        "on C_a": 2.5672246091719226,
-        "on T": 4.166543090292996
+      "T": {
+        "k_slope": 4.028,
+        "theta": 4.39,
+        "tau_c": 4.39
       }
     },
-    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+    "tuning_rule": "SIMC for an integrating process (Skogestad 2003), tau_c = theta, on one bump test of the initiator (+0.02 raw) from the 513 K steady state, noise and events off: the unstable mode's 175 s is slow against the test (unstable_cstr version 5, PHYSICS.md 'Expert'); the reference ladder replaces it"
   },
   "compressor_surge": {
     "kp_speed": 0.028934,

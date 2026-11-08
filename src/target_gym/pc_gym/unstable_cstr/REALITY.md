@@ -213,3 +213,49 @@ heat release outruns the jacket [U1; S5, p.4; S3, PDF p.48].
   Check: positive-feedback time constant formula and example values.
 - CCPS guidelines and IEC 61511. Paid. Check: trip response time against
   runaway time.
+
+## Amendment 3: the LDPE autoclave family (2026-11-08)
+
+The owner's review found industrial operation at an unstable point in the LDPE
+autoclave family, and the task is rebuilt as a member of it. These sources
+were fetched once on 2026-11-08 and read in full (L1, L2, L3) or by their
+abstract (L4). Facts used:
+
+- [L1] E. Caliani, M. Cavalcanti, F. A. N. Fernandes, L. M. F. Lona,
+  "Modelling and simulation of high pressure industrial autoclave polyethylene
+  reactor", ICHEAP-8, 2007, with Politeno plant data,
+  https://skoge.folk.ntnu.no/prost/proceedings/icheap8-pres07/icheap8webpapers/191%20Caliani.pdf .
+  The reactor is "essentially adiabatic and cooling is provided by the inflow
+  of cold monomer"; initiator fed at several points "provides control of the
+  temperature" (p. 1). PID controllers manipulate the initiator feed on
+  measured segment temperatures (p. 2). The model needs temperature
+  controllers "because the industrial reactor normally operates at an unstable
+  steady state in which the operation can either cause the temperature to rise
+  or cool down the reactor until no polymerization occurs" (p. 2). 1600 atm,
+  ethylene feed at 353 K, zone temperatures held at 513, 513, 537, 513 and
+  531 K (p. 3); control "within a few residence time".
+- [L2] A. M. Moutinho de Jesus, "Modeling an industrial LDPE plant with Aspen
+  Plus and Aspen Polymers", MSc thesis, Instituto Superior Tecnico (Repsol
+  Sines autoclave),
+  https://scholar.tecnico.ulisboa.pt/api/records/TalL7DXsQdaOukAly8w-K0N1DI3adWwoNttF/file/a5d30e27d29cacd9c06971b51f4821d9c3e5662ebb889ab7070d3f05fa2ef17b.pdf .
+  A 5-zone autoclave at 1250 to 1950 bar and 170 to 300 C (Table 1, Fig. 11);
+  40 grades, each with its zone temperatures (section 3.2); residence time 20
+  to 90 s and initiator half-lives of 0.02 to 1 s (p. 21); initiator
+  decomposition constants from supplier sheets (Table 3); kinetic constants
+  pooled from six literature sets, among them Ham et al.'s autoclave set
+  (Table 4).
+- [L3] RSU International Research Conference 2018, paper G2-IN18-006, a CFD
+  study of an LDPE autoclave with ethylene decomposition,
+  https://rsucon.rsu.ac.th/files/proceedings/inter2018/G2-IN18-006.pdf . A
+  498 L autoclave fed 8 kg/s of mixture at 499 kg/m3 (Tables 3, 4); the
+  initiator premixed at a mass fraction near 1.2e-4; ethylene decomposition
+  "can produce a large amount of heat" and the runaway is "a problem in LDPE
+  autoclave reactor plant".
+- [L4] L. Marini, C. Georgakis, "Low-density polyethylene vessel reactors:
+  Part I: Steady state and dynamic modelling", AIChE J. 30(3), 1984, 401-408,
+  https://doi.org/10.1002/aic.690300308 , by its abstract: a perfectly mixed
+  and an imperfectly mixed model; the reactor is open-loop unstable at low
+  temperatures and open-loop stable at high polymerization temperatures.
+
+How often each operating window occurs (normal day, grade changes, feed
+upsets): not found in these sources.

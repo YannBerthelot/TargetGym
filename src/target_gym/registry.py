@@ -974,17 +974,13 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_unstable_cstr_mpc", module="target_gym.pc_gym.unstable_cstr.oracle"
         ),
-        # v3: the oracle's best hold, rho_floor_tracking and rho_floor, re-measured
-        # for the JAX oracle (2.23e-6 mol/L against the CasADi one's 6.29e-6).
-        version=4,
-        # 1200 steps = 60 min at 3 s: six 10-minute blocks, with no
-        # effectiveness_overrides.
+        # v5 (charter Amendment 3): an LDPE-like adiabatic autoclave at its
+        # documented unstable steady state, initiator flow as the move, a
+        # high-temperature trip, temperature as the job, scenarios.
+        version=5,
         tuned_gains_key="unstable_cstr",
         oracle_data=_shared_oracle("unstable_cstr"),
-        disturbance_fields=("Ti_dev",),
-        noise_fields=("Ti_sigma",),
-        # The balances and the ten parameter values are imported from cstr, so an
-        # edit there moves this task's stamp and baseline too.
+        scenarios=_scenarios("target_gym.pc_gym.unstable_cstr.scenarios"),
     ),
     EnvSpec(
         name="compressor_surge",

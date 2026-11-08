@@ -53,7 +53,7 @@ def _with_rounding(sigma, step):
 SCATTER = {
     "cstr": {0: 0.04, 1: 0.04},
     "first_order": {0: 1.1e-3},
-    "unstable_cstr": {0: 5e-4, 1: 0.04, 2: 0.04},
+    "unstable_cstr": {0: 0.5},
     "distillation": {0: 4e-4, 1: 4e-4, 6: 3e-3 * TRAY_SLOPE},
     "ph_neutralization": {
         0: _with_rounding(0.01, 0.01),
@@ -71,7 +71,7 @@ SCATTER = {
 EXACT = {
     "cstr": (2, 3),
     "first_order": (1,),
-    "unstable_cstr": (3,),
+    "unstable_cstr": (1, 2),
     # Flows, specs, and the feed meter (FC 1), read exactly: ours.
     "distillation": (2, 3, 4, 5, 7),
     # Valves, set point, the monitor's excursion clock, the flow meter and the
@@ -90,16 +90,14 @@ PERIOD = {"distillation": {0: CYCLE_STEPS, 1: CYCLE_STEPS}}
 ON_TARGET = {
     "cstr": lambda s: s.replace(target_T=s.T),
     "first_order": lambda s: s.replace(target_x=s.x),
-    "unstable_cstr": lambda s: s.replace(
-        target_levels=jnp.full_like(s.target_levels, s.C_a)
-    ),
+    "unstable_cstr": lambda s: s.replace(target_T=s.T),
 }
 #: The proposal's floor per step, with rounding's ``step^2 / 12`` on pH. The
 #: table's 0.11 and 0.034 are (9.17 Pa / 27.5 Pa)^2 and (1.1e-3 / 6e-3)^2.
 FLOOR = {
     "cstr": (0.04 / 0.1) ** 2,
     "first_order": (1.1e-3 / 6e-3) ** 2,
-    "unstable_cstr": (5e-4 / 5e-4) ** 2,
+    "unstable_cstr": (0.5 / 1.0) ** 2,
 }
 #: Independent tracked readings behind each floor: a sum of k equal chi-squared
 #: terms has standard deviation floor * sqrt(2 / k).
