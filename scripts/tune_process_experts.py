@@ -341,7 +341,10 @@ def tune_four_tank() -> dict:
     )
 
     name = "four_tank"
-    spec, p = REGISTRY[name], _params(name, load_scale=0.0)
+    # The rig left alone (v5): no setpoint moves, extra outlet or cup.
+    spec, p = REGISTRY[name], _params(
+        name, setpoint_step=0.0, leak_fraction=0.0, cup_volume=0.0
+    )
     env = spec.make_env()
     prm = four_tank_decoupled_pi(1.0, 1.0, 1.0, 1.0, np.eye(2), p).params
     raw_per_volt = 2 / float(p.v_max - p.v_min)

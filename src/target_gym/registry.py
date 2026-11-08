@@ -167,6 +167,10 @@ class EnvSpec:
         Zero-argument callable returning the task's scenario suite
         (``target_gym.scenarios``), kept in the task's own package so the
         fingerprints cover it. ``None`` is one ``normal`` scenario.
+    extra:
+        The reason a task is in Extra (charter rule 5): kept in the
+        repository and listed with this reason, never scored. ``None`` is a
+        benchmark candidate (``benchmark_specs``).
     fingerprint_sources:
         Source files outside the task's own package that its physics imports,
         relative to ``src/target_gym`` (e.g. ``"pc_gym/cstr/env.py"``). Both
@@ -208,6 +212,7 @@ class EnvSpec:
     #: a planner uses for its internal model. See ``experts.mpc.plan_params``.
     noise_fields: tuple[str, ...] = ()
     scenarios: Callable[[], tuple] | None = None
+    extra: str | None = None
     disturbance_overrides: dict[str, Any] = field(default_factory=dict)
     fingerprint_sources: tuple[str, ...] = ()
 
@@ -750,6 +755,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         tuned_gains_key="four_tank",
         oracle_data=_shared_oracle("four_tank"),
+        extra=(
+            "a lab rig with no industrial job: Johansson's teaching process "
+            "tracks levels to 1 mm, and no plant family stands behind its "
+            "flow-split zero (charter Amendment 3)"
+        ),
         # 4: the levels are read through instruments (PHYSICS.md, Readings).
         # 5 (charter Amendment 2): the Lund rig's P+ constants, no trip, an
         # overflowing rim, and an episode of setpoint steps from the operating
@@ -1039,6 +1049,11 @@ REGISTRY: dict[str, EnvSpec] = {spec.name: spec for spec in _SPECS}
 def all_specs() -> Iterator[EnvSpec]:
     """Iterate over every registered environment spec."""
     return iter(_SPECS)
+
+
+def benchmark_specs() -> Iterator[EnvSpec]:
+    """The benchmark candidates: every spec not in Extra (charter rule 5)."""
+    return (spec for spec in _SPECS if spec.extra is None)
 
 
 def specs_in_group(group: str) -> Iterator[EnvSpec]:

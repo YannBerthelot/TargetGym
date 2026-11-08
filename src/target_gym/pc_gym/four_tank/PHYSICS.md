@@ -1,5 +1,16 @@
 # Four-tank process: physics model, sources, limits and deviations
 
+## Status: Extra (charter rule 5, Amendment 3), 2026-11-08
+
+The owner's decision: a lab rig with no industrial job. Johansson's teaching
+process tracks levels to 1 mm, and no plant family stands behind a right
+half-plane zero made by a flow split; inverse response is carried by
+`boiler_drum` and strong interaction by `distillation`. In code it is
+`EnvSpec.extra` on the registry entry, so `registry.benchmark_specs()` leaves
+it out. It keeps its plant, expert and tests: the decoupled expert was re-run
+on this rig by its recipe (`scripts/tune_process_experts.py --envs four_tank`),
+and `test_four_tank_decoupler.py` passes on it.
+
 The plant is Johansson's quadruple-tank laboratory process (Lund, 1996) in its
 non-minimum phase setting P+, the rig of Johansson and Nunes 1998 [S1].
 `REALITY.md` here is its record, with sources [S1] to [S7]; `COLD_REVIEW.md`

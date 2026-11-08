@@ -130,38 +130,38 @@
     "note": "The rod program is published (HRTD 8.1 and 5.0), and every constant is in RodControlParams. Nothing is tuned, and this entry holds no gain. It exists because a noise level's file must name every task it serves."
   },
   "four_tank": {
-    "Kp_1": 31.350462,
-    "Ti_1": 119.98385,
-    "Kp_2": 23.996064,
-    "Ti_2": 102.069122,
-    "D11": -0.300043,
-    "D12": 1.067265,
-    "D21": 1.067265,
-    "D22": -0.239264,
+    "Kp_1": 13.720225,
+    "Ti_1": 79.172471,
+    "Kp_2": 13.573081,
+    "Ti_2": 118.04905,
+    "D11": -1.000175,
+    "D12": 1.615875,
+    "D21": 1.615875,
+    "D22": -0.995004,
     "model": {
       "h1": {
-        "k": 0.0368,
-        "tau1": 119.98385,
-        "theta": 52.0,
-        "band": 0.00347,
-        "step": 0.093596,
-        "bands": 4.963443,
-        "spread": 1.282999,
+        "k": 0.050178,
+        "tau1": 79.172471,
+        "theta": 57.5,
+        "band": 0.003523,
+        "step": 0.070616,
+        "bands": 5.02906,
+        "spread": 1.011022,
         "tests": 10.0,
-        "tau_c": 52.0
+        "tau_c": 57.5
       },
       "h2": {
-        "k": 0.044308,
-        "tau1": 102.069122,
-        "theta": 48.0,
-        "band": 0.003435,
-        "step": 0.077274,
-        "bands": 4.984356,
-        "spread": 1.388398,
+        "k": 0.053032,
+        "tau1": 118.04905,
+        "theta": 82.0,
+        "band": 0.003575,
+        "step": 0.067683,
+        "bands": 5.020418,
+        "spread": 1.006385,
         "tests": 10.0,
-        "tau_c": 48.0
+        "tau_c": 82.0
       },
-      "rga": -0.0673
+      "rga": -0.6159
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
