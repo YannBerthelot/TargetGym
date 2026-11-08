@@ -539,20 +539,22 @@ def calibrated_airspeed(z, tas, xp=jnp):
     return 340.29 * xp.sqrt(5.0 * ((impact / 101325.0 + 1.0) ** (2.0 / 7.0) - 1.0))
 
 
-def speed_band_excess(z, tas, params, xp=jnp):
+def speed_band_excess(z, tas, params, xp=jnp, cas=None):
     """How far the airspeed sits past the assigned speed's band, in band widths.
 
     Pilots complying with a speed adjustment "are expected to maintain a speed
     within plus or minus 10 knots or 0.02 Mach number of the specified speed"
     [AIM 4-4-12]. The schedule assigns CAS below its crossover and Mach above
     it, so the band is read in the unit the schedule assigns at ``z``.
+    ``cas`` is the assigned CAS, ``params.target_cas`` by default.
     """
     temperature = xp.maximum(288.15 - 0.0065 * z, 216.65)
     sound = xp.sqrt(1.4 * 287.0 * temperature)
-    target = scheduled_airspeed(z, params.target_cas, params.target_mach, xp)
+    cas = params.target_cas if cas is None else cas
+    target = scheduled_airspeed(z, cas, params.target_mach, xp)
     on_mach = target / sound >= params.target_mach - 1e-6
     cas_excess = (
-        xp.abs(calibrated_airspeed(z, tas, xp) - params.target_cas) - params.speed_band
+        xp.abs(calibrated_airspeed(z, tas, xp) - cas) - params.speed_band
     ) / params.speed_band
     mach_excess = (
         xp.abs(tas / sound - params.target_mach) - params.mach_band

@@ -52,7 +52,7 @@
   {
     "name": "plane_energy",
     "group": "aircraft",
-    "version": 6,
+    "version": 7,
     "display_name": "Altitude and airspeed",
     "params_cls": [
       "target_gym.plane.env",
@@ -68,26 +68,24 @@
       "target_gym.plane.experts",
       "make_plane_pid_controller"
     ],
-    "make_mpc": [
-      "_mpc.<locals>.make",
-      "target_gym.plane.oracle",
-      "make_plane_mpc"
-    ],
+    "make_mpc": null,
     "scored_overrides": {
-      "max_steps_in_episode": 1600,
-      "e_floor": 1.2,
-      "c_hold": 5.23,
-      "failure_cost": 206451200.0,
-      "rho_floor_tracking": 0.9625245069444446,
-      "rho_floor": 0.9625245069444446,
-      "speed_weight": 0.5,
-      "target_pattern": 1,
-      "target_amplitude": 900.0,
-      "target_steps": 8
+      "max_steps_in_episode": 1800,
+      "e_floor": 19.812,
+      "e_tol": 19.812,
+      "failure_cost": 377468.4556213017,
+      "rho_floor_tracking": 0.0,
+      "rho_floor": 0.0,
+      "target_altitude_range": [
+        3400.0,
+        7300.0
+      ],
+      "target_pattern": 5,
+      "speed_band_cost": true
     },
     "tuned_gains_key": "plane",
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "No oracle ships until the 2D oracle is rebuilt for the Amendment 2 score (clearances on the AIM and RVSM bands, plane/PHYSICS.md): the shipped model plans the earlier cost, so plane_energy's room is not measured (charter rule 9).",
     "disturbance_fields": [
       "gust_x",
       "gust_z"

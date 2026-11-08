@@ -185,11 +185,10 @@ follows a frequency, not only how well it holds a level.
 
 ### Task: `plane_energy`
 
-Walk a ladder of eight altitude levels while holding a commanded airspeed,
-with the same airliner as `plane`. Scoring airspeed as well as altitude
-removes the spare degree of freedom two actuators would have on one
-objective, so throttle and pitch have to share the work. The commanded airspeed
-is a schedule, below.
+Fly ATC's level and speed clearances with the same airliner as `plane`: TECS's
+job, altitude changes with the speed held and speed changes at a constant level
+[TECS]. Redesigned on 2026-11-08 under Amendment 2; see *Amendment 2:
+`plane_energy`* below.
 
 ### Observation: `plane`, `plane_sine`, `plane_energy`
 
@@ -436,6 +435,50 @@ order with the right scale; no sensor latency; no high-speed protection; the
 speed schedule and altitude range are unsourced. None changes the score while the
 reference stays inside the bands.
 
+## Amendment 2: `plane_energy` (2026-11-08)
+
+The plant, the readings, the turbulence zone and the established start are
+`plane`'s (above). Tests: `tests/plane/test_plane_energy_reality.py`.
+
+**Mission (rule 17).** The cold review found the old ladder's level steps
+instant and its score without a trade (D1, D3). Now, from established cruise,
+every 300 s one clearance (`CLEARANCE_LEVELS_FT`, `CLEARANCE_SPEEDS_KT`): +2 000 ft
+at 300 s, +10 kt at 600 s, -1 000 ft at 900 s, -10 kt at 1 200 s, -2 000 ft at
+1 500 s. Levels move in whole 1 000 ft, the vertical separation minimum [RVSM];
+speeds in 10 kt [AIM 4-4-12: adjustments "in 5 or 10 knot increments"].
+
+**Score (rule 15).** The speed band, +-10 kt about the assigned speed, all
+along [AIM 4-4-12]. The altitude band, +-65 ft [RVSM], about a level the
+aircraft must close at no less than 500 fpm from each level clearance: "if at
+anytime the pilot is unable to climb or descend at a rate of at least 500 feet
+a minute, advise ATC" [AIM 4-4-10]; ahead of that profile costs nothing.
+`level_off`: within 1 000 ft of the level, no more than 1 500 fpm [AIM 4-4-10:
+"between 500 and 1,500 fpm until the assigned altitude is reached"]. Thrust is
+finite, so a climb at the minimum rate with the speed held is the
+speed-against-height trade TECS makes (B3: a pitch-only step moves total energy
+under 20 % of what a throttle step does, true of the plant before and after).
+
+| Number | Value | Status |
+|---|---|---|
+| level step | 1 000 ft | cited: RVSM's vertical separation minimum |
+| speed step | 10 kt | cited: AIM 4-4-12 |
+| minimum level-change rate | 500 fpm | cited: AIM 4-4-10, read 2026-11-08 on faa.gov |
+| level-off rate | at most 1 500 fpm within 1 000 ft | cited: AIM 4-4-10 |
+| level-off band width | 500 fpm | ours: half the AIM's 500 to 1 500 fpm range |
+| `clearance_period` | 300 s | ours: a 2 000 ft change at 500 fpm takes 240 s, plus a minute held |
+| clearance order and sizes | +2 000 ft, +10 kt, -1 000 ft, -10 kt, -2 000 ft | ours: both kinds, both directions; a published A320 profile is not found |
+| `target_altitude_range` | 3 400 to 7 300 m | ours: keeps every cleared level inside 3 000 to 8 000 m |
+| episode | 1 800 s | ours: six clearances |
+
+**What the reference does on it.** TECS on seeds 100 to 104 never leaves the
+altitude or speed band (at most 0.1 per episode) and never trips, but costs 159
+to 180 per episode on `level_off`: it closes on a level at up to 4 300 fpm where
+the AIM asks for 1 500. A controller that levels off by the rule scores less.
+The 2D oracle plans the earlier cost, so the room is "not measured" (rule 9).
+
+**Known deviations.** The speed schedule's CAS is still the unsourced 290 kt;
+no published clearance profile was found, so the sequence is ours.
+
 ## 5. Known deviations
 
 **✅ D1 and D2 — resolved.** They were one defect, not two.
@@ -570,15 +613,15 @@ which is what the recorded baselines use.
 
 ## Reward (version 2)
 
-*On `plane`, the terms below are replaced by the band costs of Amendment 2
-(below); `plane_sine` and `plane_energy` keep them until their own change.*
+*On `plane` and `plane_energy`, the terms below are replaced by the band costs of
+Amendment 2 (below); `plane_sine` (Extra) keeps them.*
 
 `compute_reward = -(tracking + running + failure)`, shared by `plane`, `plane_sine` and `plane_energy`, see docs/reward-shaping.md.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 19.812 m (`plane`, Amendment 2: the +-65 ft band [RVSM], below), 1.26 (`plane_sine`), 1.20 (`plane_energy`) | `plane` before Amendment 2 used 1 m, the resolution. The long-run mean \|error\| the shipped MPC holds in the test turbulence, lowest per seed (`scripts/measure_hold.py`, 2 seeds), floored at the 1 m barometric resolution: a hold the instrument cannot see is not a floor. `plane`: the resolution; the MPC holds 0.55 / 0.46 m (the cascaded PID 1.83 / 0.87; the expert 1.5 on held-out seeds). `plane_sine`: an earlier MPC's hold. The current one holds 0.53 / 0.53 m (the cascaded PID 45.4 / 44.7; the expert 1.9 on held-out seeds), below the resolution, and the resolution is within 1.5x of 1.26 m, so the floor stays (oracle audit, 2026-10). `plane_energy` (`-v3`): the MPC's 1.198 m between ladder steps, rounded; under that floor it holds 1.35 / 1.18 m (the cascaded PID 8.5 / 12.1). It was 4.55 m, an earlier MPC's hold taken before its moves toward the next target were separated from its hold. Upper bounds otherwise |
-| `e_tol` | 0; 19.812 m on `plane` | `plane` (Amendment 2): +-65 ft [RVSM A.4.1.4], inside which precision earns nothing (rule 15). The others: no dead zone. A +-30 m band (the pilot's instrument tolerance; the autopilot's is +-20 m, RVSM +-65 ft) was tried and made the hold vacuous: both controllers held within 0.1 m in still air, and the tracking cost was identically zero |
+| `e_floor` | 19.812 m (`plane` and `plane_energy`, Amendment 2: the +-65 ft band [RVSM], below), 1.26 (`plane_sine`) | `plane` before Amendment 2 used 1 m, the resolution. The long-run mean \|error\| the shipped MPC holds in the test turbulence, lowest per seed (`scripts/measure_hold.py`, 2 seeds), floored at the 1 m barometric resolution: a hold the instrument cannot see is not a floor. `plane`: the resolution; the MPC holds 0.55 / 0.46 m (the cascaded PID 1.83 / 0.87; the expert 1.5 on held-out seeds). `plane_sine`: an earlier MPC's hold. The current one holds 0.53 / 0.53 m (the cascaded PID 45.4 / 44.7; the expert 1.9 on held-out seeds), below the resolution, and the resolution is within 1.5x of 1.26 m, so the floor stays (oracle audit, 2026-10). `plane_energy` (`-v3`): the MPC's 1.198 m between ladder steps, rounded; under that floor it holds 1.35 / 1.18 m (the cascaded PID 8.5 / 12.1). It was 4.55 m, an earlier MPC's hold taken before its moves toward the next target were separated from its hold. Upper bounds otherwise |
+| `e_tol` | 0; 19.812 m on `plane` and `plane_energy` | `plane` (Amendment 2): +-65 ft [RVSM A.4.1.4], inside which precision earns nothing (rule 15). The others: no dead zone. A +-30 m band (the pilot's instrument tolerance; the autopilot's is +-20 m, RVSM +-65 ft) was tried and made the hold vacuous: both controllers held within 0.1 m in still air, and the tracking cost was identically zero |
 | `tracking_exponent` | 2 | quadratic outside the tolerance |
 | `c_hold` | 5.06 m/s (`plane`), 8.15 (`plane_sine`), 5.23 (`plane_energy`) | airspeed deviation from `target_speed` while holding, the cascaded PID's (`scripts/measure_hold.py`), the better controller on speed when it was the expert. The MPC holds 5.13 and 8.25 m/s on `plane` and `plane_sine`, where its throttle is the PID's own airspeed loop once it holds, and 19.6 on `plane_energy`, where it plans the throttle itself |
 | `running_weight` | 1 | the speed term stands in for fuel; sweep 0.5 / 1 / 2 |

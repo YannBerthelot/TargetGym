@@ -531,16 +531,21 @@ _SPECS: tuple[EnvSpec, ...] = (
         # data read, established start, a turbulence zone, band costs.
         version=4,
     ),
-    # Two moving-setpoint variants of the same aircraft: same plant, same
-    # controllers, a different commanded altitude. Steps expose the transient
-    # response repeatedly, and the sinusoid the closed loop's bandwidth.
+    # The same aircraft on ATC's level and speed clearances (plane_energy), and
+    # on a sinusoid (plane_sine, Extra: no real duty, plane/EXTRA.md).
     EnvSpec(
         name="plane_energy",
         group="aircraft",
         env_factory=_plane_energy,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
-        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 2D oracle is rebuilt for the Amendment 2 "
+            "score (clearances on the AIM and RVSM bands, plane/PHYSICS.md): "
+            "the shipped model plans the earlier cost, so plane_energy's room "
+            "is not measured (charter rule 9)."
+        ),
         # Gains are the altitude-hold task's, deliberately not re-tuned here,
         # so the PID stays an honest reference for whether the trade pays.
         tuned_gains_key="plane",
@@ -553,8 +558,10 @@ _SPECS: tuple[EnvSpec, ...] = (
             "zone_onset_range": (0.0, 0.0),
         },
         noise_fields=("turbulence_sigma",),
-        # v6: the 2D plant's Amendment 2 changes (plane/PHYSICS.md)
-        version=6,
+        # v6: the 2D plant's Amendment 2 changes (plane/PHYSICS.md).
+        # v7: Amendment 2's job: ATC clearances, scored on the AIM and RVSM
+        # bands (plane/PHYSICS.md).
+        version=7,
     ),
     EnvSpec(
         name="plane_sine",

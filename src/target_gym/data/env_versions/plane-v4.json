@@ -1,5 +1,5 @@
 {
-  "fingerprint": "ed93fb8de1b06cdb",
-  "note": "charter Amendment 2 on the 2D plant (plane/PHYSICS.md): protected load factor and AoA, VMO a warning, Dryden gust in one zone, established trimmed start, airspeed and load factor read; plane also scored on the RVSM and AIM bands",
-  "stamped": "2026-11-08T13:04:11+00:00"
+  "fingerprint": "62e061d54b721406",
+  "note": "charter Amendment 2 on the 2D plant and plane's band score (plane/PHYSICS.md); re-stamped in place after plane_energy's clearance rules were added to plane/env.py: they act only on target_pattern 5, so this task's costs and dynamics are unchanged",
+  "stamped": "2026-11-08T13:24:36+00:00"
 }

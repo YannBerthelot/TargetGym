@@ -1,5 +1,5 @@
 {
-  "fingerprint": "dbed986c7cc541da",
-  "note": "plane/dynamics.py gained functions the 2D plant calls (protection, Dryden gust, trim, CAS, speed band, overspeed); this environment calls none of them and none it calls changed, so its behaviour is unchanged",
-  "stamped": "2026-11-08T13:04:11+00:00"
+  "fingerprint": "b3d0e1a333951845",
+  "note": "re-stamped without a note",
+  "stamped": "2026-11-08T13:24:36+00:00"
 }

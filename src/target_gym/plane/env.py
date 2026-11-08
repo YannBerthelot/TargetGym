@@ -261,6 +261,7 @@ class PlaneParams(EnvParams):
     #   2  ramp      a constant climb or descent rate
     #   3  sinusoid  a continuous oscillation about the sampled altitude
     #   4  chirp     a sinusoid whose frequency rises through the episode
+    #   5  clearances  ATC's level and speed clearances (``plane_energy``)
     # Weight on an airspeed target, alongside the altitude one. Zero -- the
     # default -- leaves the task exactly as it was, tracking altitude alone.
     #
@@ -336,6 +337,18 @@ class PlaneParams(EnvParams):
     #: [AIM 4-4-12].
     speed_band: float = 10.0 * 1852.0 / 3600.0
     mach_band: float = 0.02
+    # ---- Clearances (``target_pattern = 5``, ``plane_energy``) ----
+    #: One clearance per tread, s (ours: a 2 000 ft change at the 500 fpm
+    #: minimum takes 240 s, plus a minute held at the new level).
+    clearance_period: float = 300.0
+    #: Climb or descend at no less than 500 fpm [AIM 4-4-10].
+    level_change_rate_min: float = 500.0 * 0.3048 / 60.0
+    #: Within 1 000 ft of the level, no more than 1 500 fpm [AIM 4-4-10] ...
+    level_off_height: float = 1000.0 * 0.3048
+    level_off_rate_max: float = 1500.0 * 0.3048 / 60.0
+    #: ... charged past it in widths of 500 fpm, half the AIM's 500 to
+    #: 1 500 fpm range (ours: the band's half-width, as the other bands).
+    level_off_rate_band: float = 500.0 * 0.3048 / 60.0
     # Impulse gust mode. impulse_prob = 0 (default) => the OU turbulence above. When
     # impulse_prob > 0 the gust is instead a rare, memoryless "kick": each step a kick
     # arrives with per-step probability impulse_prob and jumps the gust by ~sigma*N,
@@ -434,6 +447,11 @@ PARAM_UNITS = {
     "speed_band_cost": "-",
     "speed_band": "m/s",
     "mach_band": "-",
+    "clearance_period": "s",
+    "level_change_rate_min": "m/s",
+    "level_off_height": "m",
+    "level_off_rate_max": "m/s",
+    "level_off_rate_band": "m/s",
 }
 
 
@@ -479,9 +497,65 @@ def check_no_nan(x, id=None):
             raise AssertionError(f"NaN detected in {id}: {x}")
 
 
+#: ``plane_energy``'s clearances, one per ``clearance_period`` from the start:
+#: the level, ft, and the speed, kt, above the starting ones. Ours: the order
+#: and the sizes, chosen so each kind comes in both directions and the levels
+#: stay inside the altitude range. Sourced: levels move in whole 1 000 ft
+#: [RVSM's separation minimum], speeds in 10 kt [AIM 4-4-12].
+CLEARANCE_LEVELS_FT = (0.0, 2000.0, 2000.0, 1000.0, 1000.0, -1000.0)
+CLEARANCE_SPEEDS_KT = (0.0, 0.0, 10.0, 10.0, 0.0, 0.0)
+
+
+def _level_changes():
+    """For each tread, the tread of the latest level change and its size, ft."""
+    last, size = [0], [0.0]
+    for k in range(1, len(CLEARANCE_LEVELS_FT)):
+        moved = CLEARANCE_LEVELS_FT[k] != CLEARANCE_LEVELS_FT[k - 1]
+        last.append(k if moved else last[-1])
+        size.append(
+            abs(CLEARANCE_LEVELS_FT[k] - CLEARANCE_LEVELS_FT[k - 1])
+            if moved
+            else size[-1]
+        )
+    return jnp.array(last, jnp.float32), jnp.array(size, jnp.float32)
+
+
+_LAST_LEVEL_CHANGE, _LEVEL_CHANGE_FT = _level_changes()
+
+
+def clearance_tread(time, params, xp=jnp):
+    """Which clearance is in force at step ``time``."""
+    t = xp.asarray(time, dtype=jnp.float32) * params.delta_t
+    k = xp.floor(t / params.clearance_period)
+    return xp.asarray(xp.clip(k, 0, len(CLEARANCE_LEVELS_FT) - 1), dtype=jnp.int32)
+
+
+def assigned_cas(time, params, xp=jnp):
+    """The CAS assigned at step ``time``: the schedule's, plus the clearance's
+    change on ``plane_energy``."""
+    extra = jnp.array(CLEARANCE_SPEEDS_KT)[clearance_tread(time, params, xp)]
+    return params.target_cas + xp.where(
+        params.target_pattern == 5, extra * 1852.0 / 3600.0, 0.0
+    )
+
+
+def level_change_allowance(time, params, xp=jnp):
+    """How far from its level the aircraft may still be at step ``time``, m:
+    the band, or what a 500 fpm climb or descent from the latest level
+    clearance has not yet closed [AIM 4-4-10], whichever is larger."""
+    k = clearance_tread(time, params, xp)
+    since = xp.asarray(time, jnp.float32) * params.delta_t - (
+        _LAST_LEVEL_CHANGE[k] * params.clearance_period
+    )
+    left = _LEVEL_CHANGE_FT[k] * 0.3048 - params.level_change_rate_min * since
+    on_clearances = params.target_pattern == 5
+    return xp.where(on_clearances, xp.maximum(params.e_tol, left), params.e_tol)
+
+
 def target_airspeed(state: PlaneState, params: PlaneParams):
     """The airspeed demanded at the aircraft's altitude."""
-    return scheduled_airspeed(state.z, params.target_cas, params.target_mach)
+    cas = assigned_cas(state.time, params)
+    return scheduled_airspeed(state.z, cas, params.target_mach)
 
 
 def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped=None):
@@ -503,13 +577,28 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped
     legacy = R.excess_cost(
         xp.abs(ground - target_airspeed(state, p)), p.c_hold, p.running_weight, xp
     )
-    band = speed_band_excess(state.z, airspeed(state, p, xp), p, xp) ** 2
+    cas = assigned_cas(state.time, p, xp)
+    band = speed_band_excess(state.z, airspeed(state, p, xp), p, xp, cas=cas) ** 2
+    # On the clearances (``plane_energy``) the altitude band trails a 500 fpm
+    # climb or descent from each level clearance [AIM 4-4-10]; elsewhere the
+    # allowance is the band itself and this is plain tracking past ``e_tol``.
+    error = xp.abs(state.target_altitude - state.z)
+    # Past the allowance, measured from ``e_tol`` so the shared cost reads it;
+    # ahead of the profile is zero, never wrapped by the cost's absolute value.
+    allowance = level_change_allowance(state.time, p, xp)
+    behind = xp.maximum(error - allowance, 0.0) + p.e_tol
     terms = {
         "tracking": R.tracking_cost(
-            state.target_altitude - state.z, p.e_floor, p.e_tol, p.tracking_exponent, xp
+            behind, p.e_floor, p.e_tol, p.tracking_exponent, xp
         ),
         "running": xp.where(p.speed_band_cost, band, legacy),
     }
+    # Within 1 000 ft of the level, no more than 1 500 fpm [AIM 4-4-10].
+    fast = xp.maximum(xp.abs(state.z_dot) - p.level_off_rate_max, 0.0)
+    near = error < p.level_off_height
+    terms["level_off"] = xp.where(
+        (p.target_pattern == 5) & near, (fast / p.level_off_rate_band) ** 2, 0.0
+    )
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
@@ -651,7 +740,9 @@ def commanded_altitude(base: float, time, params: PlaneParams, xp=jnp):
     rate = 1.0 + (params.target_chirp_octaves - 1.0) * (t / total)
     chirp = base + span * xp.sin(2.0 * xp.pi * t * rate / params.target_period)
 
-    options = xp.stack([hold * xp.ones_like(t), steps, ramp, sine, chirp])
+    level = jnp.array(CLEARANCE_LEVELS_FT)[clearance_tread(time, params, xp)]
+    cleared = base + level * 0.3048
+    options = xp.stack([hold * xp.ones_like(t), steps, ramp, sine, chirp, cleared])
     target = options[params.target_pattern]
     return xp.clip(target, params.min_alt + span * 0.2, params.max_alt - span * 0.2)
 

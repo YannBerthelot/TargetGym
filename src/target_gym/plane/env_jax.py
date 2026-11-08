@@ -21,7 +21,9 @@ from target_gym.plane.env import (
     PlaneParams,
     PlaneState,
     airspeed,
+    assigned_cas,
     check_is_terminal,
+    commanded_altitude,
     compute_next_state,
     compute_reward,
     compute_reward_terms,
@@ -114,6 +116,16 @@ class Airplane2D(
             # (``restart_steps``) at the cost of 40 000 ft off the level.
             failure_cost=((12192.0 - band) / band) ** 2,
         )
+
+    def assigned_cas(self, state, params=None):
+        """The CAS assigned at ``state``'s step (``plane.env.assigned_cas``)."""
+        params = self.default_params if params is None else params
+        return assigned_cas(state.time, params)
+
+    def commanded_level(self, state, params=None):
+        """The level commanded at ``state``'s step."""
+        params = self.default_params if params is None else params
+        return commanded_altitude(state.base_target_altitude, state.time, params)
 
     def trim_action(self, state, params=None):
         """The action that holds ``state``'s throttle and pitch: on a reset
@@ -285,12 +297,18 @@ class Airplane2D(
 
 
 class PlaneEnergy(Airplane2D):
-    """``plane_energy``: the 2D aircraft on an altitude staircase, scored on
-    altitude *and* airspeed.
+    """``plane_energy``: the 2D aircraft flying ATC's level and speed
+    clearances, TECS's job (plane/REALITY.md, missions): altitude changes with
+    the speed held, and speed changes at a constant level.
 
-    With two actuators against one scored objective a controller could trade
-    airspeed for altitude for free. Scoring both forces the trade,
-    repeatedly. The pure staircase is ``PlaneParams(speed_weight=0.0)``.
+    From established cruise, every 300 s one clearance: a new level, in whole
+    1 000 ft, or a new speed, in 10 kt (``plane.env.CLEARANCE_LEVELS_FT``,
+    ``CLEARANCE_SPEEDS_KT``). The score is the job's bands: the speed inside
+    +-10 kt [AIM 4-4-12] all along; the altitude inside +-65 ft [RVSM] of a
+    level the aircraft closes at no less than 500 fpm from each clearance, and
+    no more than 1 500 fpm within its last 1 000 ft [AIM 4-4-10]. Thrust is
+    finite, so holding speed through a climb at the minimum rate is the
+    speed-against-height trade TECS makes [TECS].
 
     Action (2,): [throttle, pitch demand], raw in [-1, 1], as ``Airplane2D``.
     """
@@ -299,26 +317,21 @@ class PlaneEnergy(Airplane2D):
 
     @property
     def default_params(self) -> PlaneParams:
-        # The scored configuration. ``c_hold`` is the PID's hold-phase
-        # airspeed deviation on this task, and ``e_floor`` the oracle's
-        # lowest per-seed altitude hold between ladder steps, 1.198 m
-        # rounded; rho is its 1.18 m in floor units
-        # (`scripts/measure_hold.py`).
-        # 1600 steps, eight 200-step treads: twice the PID's settle after an
-        # altitude step (about 90 steps), so every tread is half hold
-        # (tests/test_episode_length.py).
-        rho = (1.1773 / 1.20) ** 2
+        band = 65.0 * 0.3048  # +-65 ft [RVSM A.4.1.4]
         return PlaneParams(
-            max_steps_in_episode=1600,
-            target_pattern=1,
-            target_amplitude=900.0,
-            target_steps=8,
-            speed_weight=0.5,
-            c_hold=5.23,
-            e_floor=1.20,
-            rho_floor_tracking=rho,
-            rho_floor=rho,
-            failure_cost=2.0 * (12192.0 / 1.20) ** 2,
+            # Six 300 s clearances (``clearance_period``).
+            max_steps_in_episode=1800,
+            target_pattern=5,
+            # The clearances span +2 000 to -1 000 ft about the start, so it
+            # starts where they stay inside 3 000 to 8 000 m (ours).
+            target_altitude_range=(3_400.0, 7_300.0),
+            e_floor=band,
+            e_tol=band,
+            speed_band_cost=True,
+            rho_floor_tracking=0.0,
+            rho_floor=0.0,
+            # As ``plane``: the ground is the one trip, priced by us.
+            failure_cost=((12192.0 - band) / band) ** 2,
         )
 
 
