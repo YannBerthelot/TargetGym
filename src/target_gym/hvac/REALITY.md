@@ -237,6 +237,27 @@ cannot correct within the day [9, p. 3], [7, p. 7].
 16. Siemens RVS61.843 / Albatros2 user manual, "Room influence", p. 80. https://manualslib.com/manual/3049546/Siemens-Albatros2.html?page=80
 17. Wavin, "Underfloor radiant systems, product guide", p. 15. https://pinaxo.com/public/e6d311ee955bda8cd8ef2d7b748cea6f/wavin-underfloor-radiant-systems/15
 
+Added by the Amendment 3 fix session, 2026-11-08 (each fetched or read once):
+
+18. Brine-to-water heat pump datasheets, EN 14511: Dimplex SI 90TU, COP 5.00
+    at B0/W35, 3.80 at B0/W45, 3.10 at B0/W55 (compressor 1); Wolf BWS-1, 4.6
+    to 4.7 at B0/W35 and 2.8 to 2.9 at B0/W55; Vaillant geoTHERM 22 to 46 kW,
+    4.4 to 4.5 and 3.1 to 3.2; CTA Optiheat Inverta, 4.7 / 3.5 / 2.7. Read from
+    a search summary of the datasheets, not each PDF.
+    https://www.dimplex.co.uk/sites/g/files/emiian551/files/2024-03/Technical_data_SI90TU_Issue_0.pdf
+19. Spanish 2.0TD electricity offer (retailer listing on roams.es and
+    comparadorluz.com): punta 0.263, llano 0.184, valle 0.139 EUR/kWh; valle
+    00:00 to 08:00 on weekdays, punta 10:00 to 14:00 and 18:00 to 22:00. Read
+    from a search summary. https://roams.es/energia/luz/serosense/tarifa-dh-2-0-td-serosense/
+20. LBNL Indoor Air Quality Scientific Findings, "Temperature and office work
+    performance": performance peaks near 71 F (21.7 C) and falls above and
+    below it (fetched once). Seppanen and Fisk, ASHRAE Transactions 2005: a 2 %
+    decrement in work performance per degree C above 25 C (read from a search
+    summary). https://iaqscience.lbl.gov/temperature-and-office-work-performance
+21. Eurostat news release, 27 March 2024: EU average hourly labour cost EUR
+    31.8 in 2023. https://ec.europa.eu/eurostat/web/products-eurostat-news/w/ddn-20240327-2
+    (read from a search summary).
+
 Re-confirmation (2026-11-08): every source above was fetched twice. Sources
 1, 4, 16 and 17 (web pages) were re-read and confirmed on the second fetch.
 Sources 2 to 15 are PDFs read by text extraction; the second fetch of each

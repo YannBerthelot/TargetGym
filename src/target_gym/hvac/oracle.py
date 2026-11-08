@@ -9,10 +9,10 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   slab core, the move a supply water temperature inside the valve's range
   (T1); the weather's deviation on its noise-free mean path, updated before
   the step as the env does; the clock, sun and gains along the plan;
-- objective: the slab's heat in euros, smoothed at the heating-only edge,
-  and the comfort hinges through epigraph rows on every visited state (T2):
-  the room below and above the band and the floor above its limit, each
-  linear in kelvin-hours as the score is;
+- objective: the heat pump's electricity at the tariff, its slab heat
+  smoothed at the heating-only edge, and the comfort hinges through epigraph
+  rows on every occupied state (T2): the room below and above the band and the
+  floor above its limit, each linear in kelvin-hours at the work-loss price;
 - no limit trips (T3), no smoothed site (T5) and no dropped guard (T4).
 
 Frost protection is not planned: the band keeps the room far above it. Not
@@ -25,8 +25,11 @@ from jax.tree_util import Partial as partial
 from target_gym.hvac.env import (
     WEATHER_OU_THETA,
     compute_velocity,
+    electricity_price,
     floor_surface_temperature,
+    heat_pump_cop,
     internal_gain,
+    is_occupied,
     outdoor_temperature,
     slab_conductances,
     solar_gain,
@@ -62,10 +65,16 @@ def hvac_model(env, p) -> TaskModel:
         T_floor = floor_surface_temperature(x1[1], T_air, p)
         gap = T_sup - x1[1]
         heat = H_water * 0.5 * (gap + jnp.sqrt(gap * gap + 1e-4))
-        y = jnp.stack(
-            [p.band_low - T_air, T_air - p.band_high, T_floor - p.floor_surface_max]
+        occupied = is_occupied(now, p)
+        y = jnp.where(
+            occupied,
+            jnp.stack(
+                [p.band_low - T_air, T_air - p.band_high, T_floor - p.floor_surface_max]
+            ),
+            -1.0,
         )
-        return x1, p.heat_price * heat / 1000.0 * hours, y, T_air[None], ()
+        kwh = heat / heat_pump_cop(T_sup, p) / 1000.0 * hours
+        return x1, electricity_price(start + t, p) * kwh, y, T_air[None], ()
 
     weight = float(p.comfort_price * hours)
     return TaskModel(

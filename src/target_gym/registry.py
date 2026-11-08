@@ -406,6 +406,12 @@ def _boiler_drum():
     return BoilerDrum()
 
 
+def _hvac_scenarios():
+    from target_gym.hvac.scenarios import hvac_scenarios
+
+    return hvac_scenarios()
+
+
 def _hvac():
     from target_gym.hvac.env_jax import BuildingHVAC
 
@@ -866,7 +872,12 @@ _SPECS: tuple[EnvSpec, ...] = (
         oracle_data=_shared_oracle("hvac"),
         disturbance_fields=("weather_dev",),
         noise_fields=("T_out_noise_std",),
-        version=4,
+        # v5 (Amendment 3): supply capped at 49 C [14], a brine heat pump whose
+        # COP falls with supply temperature, a three-period tariff, comfort
+        # priced as lost office work, a day-ahead forecast in the observation,
+        # and a scenario suite.
+        scenarios=_hvac_scenarios,
+        version=5,
     ),
     EnvSpec(
         name="cement_kiln",

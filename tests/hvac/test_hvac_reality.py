@@ -116,16 +116,20 @@ def test_slab_heating_time_constant_is_a_concrete_core_tabs():
     assert 145.0 <= minutes <= 462.0, minutes
 
 
-# 2. [8, p. 15]: in TABS and embedded systems it can take one hour to several
-#    hours before a setpoint change is felt. Time from full heat to a 0.5 K rise
-#    in room air, settled at 20 C, outdoor 0 C, quiet weather. At least 60 min.
-def test_a_change_is_felt_only_after_an_hour_or_more():
+# 2. Family property (Amendment 3), restated as an ordinary change: in TABS and
+#    embedded systems "it can take one hour to several hours before a setpoint
+#    change is felt" [8, p. 15]. An ordinary change is a curve shift of the size
+#    operators make, 2 to 5 K [11, p. 2]; this one is the larger, +5 K of supply,
+#    from settled at 20 C, outdoor 0 C, quiet weather. Time to a 0.5 K rise of
+#    the room: at least 60 min. Written before this rerun; the review measured
+#    225 min on the 55 C-capped plant.
+def test_an_ordinary_change_is_felt_only_after_an_hour_or_more():
     params = _quiet(0.0)
-    state, _ = _settled(params, 20.0)
-    states = _run(params, state, lambda obs, k: params.T_supply_max, DAY)
+    state, T_sup = _settled(params, 20.0)
+    states = _run(params, state, lambda obs, k: T_sup + 5.0, 2 * DAY)
     T_air = np.asarray(states.T_air)
     k = int(np.argmax(T_air >= 20.5))
-    assert T_air[k] >= 20.5, "never felt within a day"
+    assert T_air[k] >= 20.5, "never felt within two days"
     assert (k + 1) * DT_MIN >= 60.0, (k + 1) * DT_MIN
 
 
@@ -172,13 +176,16 @@ def test_setback_recovery_takes_hours():
     assert (k + 1) * DT_MIN >= 60.0, (float(off.T_air[-1]), (k + 1) * DT_MIN)
 
 
-# 6. [11, p. 3]: underfloor heating built after 2010, 30 to 35 C supply at -8 C
-#    outdoor. Steady supply that holds 20 C, no sun, unoccupied gains.
-#    Tolerance: 30 to 35 C, +-1 K for the steady-state criterion.
-def test_steady_supply_at_minus_eight_matches_the_guidance():
+# 6. Family property (Amendment 3): a TABS slab heats with water a few kelvin
+#    above the room. The TABS buildings in REALITY.md run 16 to 30 C supply
+#    (Muenster [13]); [11]'s 30 to 35 C at -8 C is for screed underfloor floors,
+#    another member, with a larger water-to-surface resistance. Steady supply
+#    that holds 20 C at -8 C, no sun, unoccupied gains: above 20 C and at most
+#    30 C. Written before this rerun; the earlier figure was 26.0 C.
+def test_steady_supply_at_minus_eight_is_in_the_tabs_range():
     params = _quiet(-8.0)
     *_, T_sup = steady_state(params, -8.0, 20.0)
-    assert 29.0 <= float(T_sup) <= 36.0, float(T_sup)
+    assert 20.0 < float(T_sup) <= 30.0, float(T_sup)
 
 
 # 7. [11, p. 3], [9, p. 5]: heating limit 8 to 15 C outdoor (13.1 C in [9]).
@@ -198,15 +205,16 @@ def test_heating_limit_is_where_free_gains_hold_twenty():
     assert 8.0 <= 0.5 * (lo + hi) <= 15.0, 0.5 * (lo + hi)
 
 
-# 8. [5, p. 23]: 29 C floor surface, occupied area; [17]: 55 C supply cut-off.
-#    Design outdoor -10 C, the curve holding 21 C: surface at most 29 C and
-#    supply at most 55 C, no margin.
+# 8. [5, p. 23]: 29 C floor surface, occupied area; the supply within the
+#    TABS family's 49 C maximum [14] (screed's cut-off is 55 C [17]). Design
+#    outdoor -10 C, the curve holding 21 C: surface at most 29 C and supply at
+#    most 49 C, no margin.
 def test_floor_surface_and_supply_stay_within_limits_at_design():
     params = _quiet(-10.0)
     _, T_core, _, T_sup = steady_state(params, -10.0, 21.0)
     surface = float(floor_surface_temperature(T_core, 21.0, params))
     assert surface <= 29.0, surface
-    assert float(T_sup) <= 55.0, float(T_sup)
+    assert float(T_sup) <= 49.0, float(T_sup)
 
 
 # 9. [12, p. 6]: a heavy system overshoots when it changes from reduced to

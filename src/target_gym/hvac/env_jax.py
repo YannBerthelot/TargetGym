@@ -41,8 +41,9 @@ class BuildingHVAC(
 ):
     """Single-zone building heated by a TABS slab (ISO 13790 5R1C plus [9]'s slab).
 
-    Observation (9,): [T_air, T_out, T_out_24h, T_core, T_return, T_supply,
-                       sin_h, cos_h, band_centre]
+    Observation (12,): [T_air, T_out, T_out_24h, T_core, T_return, T_supply,
+                        sin_h, cos_h, band_centre, T_out_forecast_24h,
+                        price_now, h_to_price_change]
     Action      (1,): supply water temperature, raw in [-1, 1] ->
                       [T_supply_min, T_supply_max]
     """
@@ -66,7 +67,7 @@ class BuildingHVAC(
     )
 
     def __init__(self, integration_method: str = "rk4_2"):
-        self.obs_shape = (9,)
+        self.obs_shape = (12,)
         self.integration_method = integration_method
 
     @property

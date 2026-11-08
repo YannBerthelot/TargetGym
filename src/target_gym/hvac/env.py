@@ -84,12 +84,23 @@ class HVACParams(EnvParams):
     c_water: float = 4186.0  # J/(kg K)
 
     # ---- Supply water (rule 14) ----
-    #: Hard limit at the heating elements, cut by a safety device even without
-    #: power, for cement screed [17]: the mixing valve cannot exceed it.
-    T_supply_max: float = 55.0  # C
+    #: The TABS family's documented maximum heating supply, Madrid's 49 C
+    #: [14, Table 1]; screed floors are cut at 55 C [17], Muenster runs TABS
+    #: at 16 to 30 C [13].
+    T_supply_max: float = 49.0  # C
     #: Ours: the valve's lowest setting, below any core temperature here, so
     #: the slab gets no heat.
     T_supply_min: float = 15.0  # C
+
+    # ---- The heat source: a brine-to-water heat pump [13, 14] ----
+    #: COP = eta T_supply / (T_supply - T_brine), in kelvin. Ours, family range
+    #: 0.50 to 0.57: datasheet COPs of 4.4 to 5.0 at B0/W35 and 2.7 to 3.2 at
+    #: B0/W55 (EN 14511; Dimplex SI 90TU 5.00 / 3.80 / 3.10 at W35 / W45 / W55;
+    #: Wolf BWS-1, Vaillant geoTHERM, CTA Optiheat; REALITY.md [18]).
+    cop_carnot_fraction: float = 0.52
+    #: The brine's temperature, C: the EN 14511 rating point B0. Ours, family
+    #: range -5 to 5 C for a ground loop in the heating season.
+    T_brine: float = 0.0
 
     # ---- Frost protection, a protected limit [1] ----
     frost_on: float = 4.4  # C, any zone below 40 F
@@ -104,8 +115,9 @@ class HVACParams(EnvParams):
     # ---- Internal gains (ours, PHYSICS.md) ----
     gain_occupied: float = 8.0  # W/m^2 (people, lighting, equipment)
     gain_unoccupied: float = 2.0  # W/m^2
-    occupied_start_h: float = 7.0
-    occupied_end_h: float = 22.0
+    #: An office's day, 08:00 to 18:00 [6, p. 3].
+    occupied_start_h: float = 8.0
+    occupied_end_h: float = 18.0
 
     # ---- Comfort band, all hours (rule 14, zone) ----
     #: Room setpoints 21 C heating and 26 C cooling, "used all year" [9, p. 5];
@@ -124,16 +136,30 @@ class HVACParams(EnvParams):
     #: Two weeks: a heating curve change is judged over two weeks [11, p. 1].
     max_steps_in_episode: int = 1344
 
-    # ---- Score (rule 15), euros per step ----
-    # Energy: the heat into the slab's water at ``heat_price``. Comfort: each
-    # kelvin-hour outside the band, and of floor surface above 29 C, as [9]
-    # counts discomfort (Kh), at ``comfort_price``. Both prices are ours.
-    reward_version: int = 3
-    #: Ours: a heat price; REALITY.md names energy as the cost but no tariff.
-    heat_price: float = 0.10  # EUR per kWh
-    #: Ours: twice the heat it takes to hold this building 1 K warmer for 1 h
-    #: (159 W/K at EUR 0.10/kWh is EUR 0.016).
-    comfort_price: float = 0.03  # EUR per K h
+    # ---- Score (rule 15, Amendment 3), euros per step ----
+    # Energy: the heat pump's electricity at a three-period tariff, so night
+    # charging of the slab pays, as Madrid charges its floors on the night
+    # tariff [14, p. 14]. Comfort: lost office work while occupied, per
+    # kelvin-hour outside the band or of floor above 29 C.
+    reward_version: int = 4
+    #: Spanish 2.0TD energy prices, EUR/kWh, one retailer's offer (REALITY.md
+    #: [19]): valle 00:00 to 08:00, llano 08:00 to 10:00, 14:00 to 18:00 and
+    #: 22:00 to 24:00, punta 10:00 to 14:00 and 18:00 to 22:00.
+    price_valle: float = 0.139
+    price_llano: float = 0.184
+    price_punta: float = 0.263
+    #: Work lost per kelvin outside the band: 2 % per K above 25 C (Seppanen
+    #: and Fisk 2005, REALITY.md [20]); performance peaks near 21.7 C and falls
+    #: on both sides [20]. Ours below the band, where no per-K figure was read.
+    productivity_per_K: float = 0.02
+    #: Office occupants per m^2. Ours, family range 0.07 to 0.12 (8 to 15
+    #: m^2 a person).
+    occupants_per_m2: float = 0.10
+    #: EU hourly labour cost, 2023 (Eurostat, REALITY.md [21]).
+    labour_cost: float = 31.8  # EUR per person-hour
+    #: Euros per occupied kelvin-hour: productivity_per_K x occupants x labour
+    #: cost, 0.02 x 15 x 31.8.
+    comfort_price: float = 0.02 * 0.10 * 150.0 * 31.8  # EUR per K h
     #: No limit trips this plant (``check_is_terminal``), so a trip costs 0.
     restart_steps: int = 0
     failure_cost: float = 0.0
@@ -185,7 +211,14 @@ PARAM_UNITS = {
     "comfort_tolerance": "K",
     "precision_floor": "K",
     "reward_version": "-",
-    "heat_price": "EUR/kWh",
+    "cop_carnot_fraction": "-",
+    "T_brine": "degC",
+    "price_valle": "EUR/kWh",
+    "price_llano": "EUR/kWh",
+    "price_punta": "EUR/kWh",
+    "productivity_per_K": "1/K",
+    "occupants_per_m2": "1/m^2",
+    "labour_cost": "EUR/h",
     "comfort_price": "EUR/(K h)",
     "restart_steps": "steps",
     "failure_cost": "EUR per step",
@@ -299,6 +332,40 @@ def split_gains(phi_int, phi_sol, params: HVACParams):
     return phi_ia, phi_st, phi_m
 
 
+def heat_pump_cop(T_supply, params: HVACParams):
+    """The heat pump's COP at ``T_supply``, a fixed share of Carnot's."""
+    hot = T_supply + 273.15
+    lift = jnp.maximum(T_supply - params.T_brine, 5.0)
+    return params.cop_carnot_fraction * hot / lift
+
+
+def electricity_price(time, params: HVACParams):
+    """The tariff's price at step ``time``, EUR/kWh [19]."""
+    h = hour_of_day(time, params)
+    punta = ((h >= 10.0) & (h < 14.0)) | ((h >= 18.0) & (h < 22.0))
+    return jnp.where(
+        h < 8.0,
+        params.price_valle,
+        jnp.where(punta, params.price_punta, params.price_llano),
+    )
+
+
+def hours_to_price_change(time, params: HVACParams):
+    """Hours until the tariff next changes: at 00, 08, 10, 14, 18 and 22."""
+    h = hour_of_day(time, params)
+    edges = jnp.array([8.0, 10.0, 14.0, 18.0, 22.0, 24.0])
+    return jnp.min(jnp.where(edges > h, edges - h, 99.0))
+
+
+def outdoor_forecast(time, weather_dev, params: HVACParams):
+    """The next 24 h's mean outdoor temperature, as a forecast gives it: the
+    daily cycle, and today's deviation decaying at the weather's rate. Its
+    error is the weather's own unforecast innovation."""
+    ahead = jnp.arange(1, DAY_STEPS + 1)
+    decay = (1.0 - WEATHER_OU_THETA * params.delta_t) ** ahead
+    return jnp.mean(outdoor_temperature(time + ahead, weather_dev * decay, params))
+
+
 def scheduled_band(params: HVACParams):
     """The comfort band, the same at every hour [9, p. 5]."""
     return params.band_low, params.band_high
@@ -361,9 +428,11 @@ def solve_air_and_surface(T_mass, T_core, T_out, phi_st, phi_ia, params: HVACPar
 
 def slab_heat(T_supply, T_core, params: HVACParams):
     """Heat from the water into the core, W. Heating only: water below the
-    core gives none, since the plant has no chiller (PHYSICS.md)."""
+    core gives none, since the plant has no chiller, and the valve's lowest
+    setting is off (PHYSICS.md)."""
     H_water = slab_conductances(params)["H_water"]
-    return H_water * jnp.maximum(T_supply - T_core, 0.0)
+    on = T_supply > params.T_supply_min
+    return jnp.where(on, H_water * jnp.maximum(T_supply - T_core, 0.0), 0.0)
 
 
 def return_temperature(T_supply, T_core, params: HVACParams):
@@ -468,13 +537,15 @@ def get_obs(state: "HVACState", params: HVACParams):
     """What the building's controller reads (rule 16, REALITY.md sec. 1).
 
     ``[T_air, T_out, T_out_24h, T_core, T_return, T_supply, sin_h, cos_h,
-    band_centre]``
+    band_centre, T_out_forecast_24h, price_now, h_to_price_change]``
 
     The room sensor [6, 14]; the outdoor sensor and its mean over the last 24 h,
     which TABS controllers use [9, 13]; the slab's core sensor, which all
     eleven designers fit [7, p. 8], [12, p. 12]; the return water [12, 14]; the
     supply the valve gives; the clock; the band's centre (the band is 21 to 26
-    C [9]). The building's other mass is hidden.
+    C [9]); the day-ahead weather the job sentence plans on (the next 24 h's
+    mean, REALITY.md sec. 6); and the tariff, a schedule known ahead (rule 16).
+    The building's other mass is hidden.
     """
     h = hour_of_day(state.time, params)
     angle = 2.0 * jnp.pi * h / 24.0
@@ -489,6 +560,9 @@ def get_obs(state: "HVACState", params: HVACParams):
             jnp.sin(angle),
             jnp.cos(angle),
             band_centre(params) + 0.0 * state.T_air,
+            outdoor_forecast(state.time, state.weather_dev, params),
+            electricity_price(state.time, params),
+            hours_to_price_change(state.time, params),
         ]
     )
 
@@ -502,25 +576,33 @@ def check_is_terminal(state: "HVACState", params: HVACParams, xp=jnp):
 
 
 def comfort_kelvin_hours(state: "HVACState", params: HVACParams, xp=jnp):
-    """Kelvin-hours outside the band and of floor above its limit, one step."""
+    """Occupied kelvin-hours outside the band and of floor above its limit,
+    one step. Out of hours no work is lost."""
     p = params
     hours = p.delta_t / 3600.0
     outside = xp.maximum(p.band_low - state.T_air, 0.0) + xp.maximum(
         state.T_air - p.band_high, 0.0
     )
     floor = xp.maximum(state.T_floor - p.floor_surface_max, 0.0)
-    return (outside + floor) * hours
+    occupied = is_occupied(state.time, p)
+    return xp.where(occupied, outside + floor, 0.0) * hours
+
+
+def electricity_kwh(state: "HVACState", params: HVACParams):
+    """The heat pump's electricity for the last step's slab heat, kWh."""
+    hours = params.delta_t / 3600.0
+    return state.Q_slab / heat_pump_cop(state.T_supply, params) / 1000.0 * hours
 
 
 def compute_reward_terms(state: "HVACState", params: HVACParams, xp=jnp, tripped=None):
-    """The score's terms in euros per step: comfort and heat."""
+    """The score's terms in euros per step: lost work and electricity. The
+    electricity is the last step's, at the tariff that step ran under."""
     p = params
-    hours = p.delta_t / 3600.0
     if tripped is None:
         tripped, _ = check_is_terminal(state, p, xp)
     terms = {
         "comfort": p.comfort_price * comfort_kelvin_hours(state, p, xp),
-        "heat": p.heat_price * state.Q_slab / 1000.0 * hours,
+        "electricity": electricity_price(state.time - 1, p) * electricity_kwh(state, p),
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
