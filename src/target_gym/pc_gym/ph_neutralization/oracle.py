@@ -40,15 +40,19 @@ def _planner_pH_jvp(primals, tangents):
 
 
 def ph_stage(env, state, action, params):
-    """``NewtonMPC``'s stage: the env's step, and its reward in floor units
-    with the pH recomputed by ``planner_pH``, so the cost has its slope."""
+    """``NewtonMPC``'s stage: the env's step and its job cost (reagent,
+    excursion, diversion), on the pH ``planner_pH`` gives.
+
+    Only the reagent term has a slope: the excursion and diversion terms are
+    steps in pH, so a gradient planner cannot see the permit edge. This oracle
+    has not been rebuilt for the job score (charter rule 15) and is not to be
+    run until it is; rule 9 reports its room as "not measured" meanwhile.
+    """
+    from target_gym.pc_gym.ph_neutralization.env import compute_reward_terms
+
     _, new, _, _, _ = env.step_env(jax.random.PRNGKey(0), state, action, params)
-    p = params
-    pH = planner_pH(new.Wa, new.Wb, p)
-    cost = R.tracking_cost(
-        new.target_pH - pH, p.e_floor, p.e_tol, p.tracking_exponent
-    ) + R.running_cost(new.q3, p.c_hold, p.running_weight)
-    return new, cost / p.rho_floor_tracking
+    planned = new.replace(pH=planner_pH(new.Wa, new.Wb, params))
+    return new, -R.total(compute_reward_terms(planned, params))
 
 
 def make_ph_mpc(env, params, horizon: int = 20, n_iter: int = 10):

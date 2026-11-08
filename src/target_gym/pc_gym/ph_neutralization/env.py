@@ -1,8 +1,12 @@
 """
 pH neutralisation — CSTR with acid, buffer and base streams.
 
-See ``PHYSICS.md`` in this directory for provenance, the sourced parameter
-table and validation targets. Method: ``docs/PHYSICS_METHODOLOGY.md``.
+See ``PHYSICS.md`` in this directory for the sources, the limits and the
+score, and ``REALITY.md`` for the plant record they come from.
+
+The job (charter Amendment 2): keep the discharge inside its permit, pH 6 to 8,
+at the least reagent. An excursion past 60 min is a violation, and effluent
+below pH 5 is diverted.
 
 Model
 -----
@@ -40,8 +44,6 @@ Why this is a hard target MDP
   (Wa, Wb) pairs with different local gain, so the plant is genuinely
   partially observed rather than merely noisy.
 """
-
-from typing import Tuple
 
 import jax
 import jax.numpy as jnp
@@ -92,7 +94,10 @@ class PHParams(EnvParams):
     Wb2: float = 3.0e-2  # M
 
     # ---- Base stream (NaOH + NaHCO3) -- the manipulated variable ----
-    q3_min: float = 10.0  # mL/s
+    # No source gives a floor on reagent flow: a dosing pump or valve can stop
+    # (REALITY.md, "What they move"; COLD_REVIEW item 6). The top is ours: the
+    # rig's valve size was not found, and 22 mL/s covers the acid upsets below.
+    q3_min: float = 0.0  # mL/s
     q3_max: float = 22.0  # mL/s
     Wa3: float = -3.05e-3  # M
     Wb3: float = 5.0e-5  # M
@@ -101,73 +106,66 @@ class PHParams(EnvParams):
     pK1: float = 6.35
     pK2: float = 10.25
 
-    # ---- Operating / termination bounds ----
-    pH_min: float = 2.0  # grossly acidic -- off spec
+    # ---- Influent acid strength (REALITY.md, "A normal day and a bad day") ----
+    # Large unknown changes in the influent's strong acid concentration from
+    # production units [P3, p. 4]. Their size and timing are not found; ours:
+    # two changes an episode, each to within +-20 % of nominal, ramped over
+    # 10 min, the scale of the "calm to rocking and reeling during one lunch
+    # break" of [P3, p. 8].
+    acid_upset_size: float = 0.2  # fraction of Wa1
+    acid_upset_ramp: float = 600.0  # s
+
+    # ---- Limits (REALITY.md, "Limits"; charter rule 14) ----
+    # Zone: the permit range, which the guideline sets [P8]. Ours, from the one
+    # range a source prints: the example spec pH 7 +- 1 [P7, p. 2].
+    permit_low: float = 6.0  # pH
+    permit_high: float = 8.0  # pH
+    # Timed: no single excursion outside the range over 60 min [P8]. Past it is
+    # a permit violation, the task's trip.
+    excursion_limit: float = 3600.0  # s
+    # Protected: no discharge below pH 5.0 to a public sewer [P9]; the field
+    # plant diverts effluent when the tank is too low [P3, pp. 4-5]. Diverted
+    # effluent is not discharged, so it does not run the excursion clock.
+    sewer_floor: float = 5.0  # pH
+
+    # ---- Retired version-1 reward fields, read only by reward_version 1 ----
+    pH_min: float = 2.0
     precision_floor: float = 1e-2  # pH units, glass electrode resolution
-    pH_max: float = 12.0  # grossly alkaline -- off spec
+    pH_max: float = 12.0
+    reagent_cost_weight: float = 0.0
 
-    # ---- Reward shaping ----
-    # Error scale for the MPC's tracking term, not read by ``compute_reward``.
-    # See "Why the MPC does not minimise the reward" in docs/baselines.md.
-    tracking_band: float = 1.0  # pH units
-    # Zeroed for the 0.6 line: this phase scores setpoint tracking alone.
-    # A running cost is a real part of every one of these plants, but its
-    # weight against tracking accuracy is a design decision this library has
-    # not earned yet, and an arbitrary one turns a tracking benchmark into a
-    # multi-objective problem whose Pareto point nobody chose. The glass
-    # furnace showed the cost of getting it wrong: its MPC sat 6 K cold with
-    # fuel at minimum 80% of the time, because a 0.1 fuel weight against a
-    # quadratic tracking surrogate made that the optimum of the objective it
-    # was given. The field and the term stay, so a weight can be restored
-    # once there is a defensible way to set it. See docs/roadmap.md.
-    reagent_cost_weight: float = 0.0  # was 0.05
-
-    # ---- Initial / target ranges ----
-    # Targets sit around neutrality, which is where the titration curve is
-    # steepest and the control problem is genuinely hard.
-    target_pH_range: Tuple[float, float] = (6.5, 8.0)
-    initial_q3_range: Tuple[float, float] = (14.5, 16.5)
-
-    # ---- Time discretization ----
-    # Residence time V/q_total ~ 88 s, so dt = 5 s gives ~18 steps per
-    # residence time. 600 steps = 50 min ~ 34 residence times.
+    # ---- Episode (charter rule 17) ----
+    # Established operation: the tank on its steady state at the operator's set
+    # point, pH 7, the centre of the permit range. The set point is the
+    # operator's choice [P3, p. 4] and is not scored.
+    setpoint_pH: float = 7.0
+    # 2 h at 5 s: longer than the 60 min excursion the permit counts [P8], with
+    # room for both acid upsets. Ours.
     delta_t: float = 5.0
-    max_steps_in_episode: int = 300
+    max_steps_in_episode: int = 1440
 
-    # ---- Reward (docs/reward-shaping.md; version 2) ----
-    # Floor: the shipped MPC's long-run mean |pH error| under the shipped
-    # buffer-flow disturbance (q2 noise), 0.0013 pH (the lowest of three
-    # seeds: 0.0021 / 0.0031 / 0.0013; PID 0.016-0.054) over 900 hold steps
-    # after a 108-step burn-in, `scripts/measure_hold.py`. That is the oracle
-    # reading the buffer flow; the planner that
-    # assumed nominal flow held 0.0080. An upper bound on the achievable
-    # floor (no reduced-model optimum exists for this plant).
-    # e_tol = 0 provisionally: the discharge permit band a plant would use
-    # here is a regulatory number to be supplied (typically pH 6-9 on the
-    # outfall). Reagent is charged as a share of the hold-phase flow (16.24
-    # mL/s, the same for PID and MPC), at weight 1: one floor-width of pH error
-    # is worth the whole hold-phase reagent flow again. The failure cost was set
-    # at twice the span's cost in units of the earlier 0.0080 pH hold,
-    # (10 / 0.0080)^2 = 1.6e6 per step. It is never charged (see PHYSICS.md),
-    # so it was left as it is when the hold improved.
-    reward_version: int = 2
-    # The MPC holds 0.0013 pH in the shipped disturbance, below the 0.01 pH
-    # electrode resolution: the instrument sets the scale.
-    e_floor: float = 0.01  # pH
-    e_tol: float = 0.0  # provisional; permit band to be supplied
-    tracking_exponent: float = 2.0
-    c_hold: float = 16.24  # mL/s reagent while holding (PID = MPC)
-    running_weight: float = 1.0
-    failure_cost: float = 3.1e6
-    #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 5 s steps: flush the tank after a gross excursion, provisional).
+    # ---- Score (charter rule 15; REALITY.md, "The operator's job") ----
+    # Keep the effluent inside the permit without overdosing reagent [P5, p. 2].
+    # The cost is in litres of reagent, the quantity the field plant tracks per
+    # shift as a reagent to influent ratio [P3, p. 9]. No price of reagent, of an
+    # excursion or of diverted effluent was found, so each is in reagent litres:
+    # - excursion_price, ours: a minute outside the permit costs 100 minutes of
+    #   the reagent a hold uses (about 1 L/min), so leaving the zone never pays.
+    # - diversion_price, ours: a diverted litre is treated again, at about the
+    #   1 L of reagent per litre of influent this plant's dilute base needs.
+    # - a violation (trip) is charged a second hour outside, ours: no fine found,
+    #   at the worst surviving step's cost (outside, valve full) per step, so
+    #   tripping on purpose never pays.
+    reward_version: int = 3
+    reagent_price: float = 1.0  # per L of reagent
+    excursion_price: float = 100.0 / 60.0  # L per s outside the permit
+    diversion_price: float = 1.0  # L per L diverted
+    failure_cost: float = 100.0 / 60.0 * 5.0 + 22.0 * 5.0 / 1000.0  # L per step
+    #: A violation is charged as another hour outside (720 steps of 5 s).
     restart_steps: int = 720
-    #: Tracking cost per step at the floor, in the reward's units.
-    #: The oracle's best hold: the lowest per-seed hold cost the shipped MPC
-    #: demonstrated, in the reward's units (the MPC's 0.0013 pH hold in 0.01 units).
-    rho_floor_tracking: float = (0.0013 / 0.01) ** 2
-    rho_floor: float = (0.0013 / 0.01) ** 2
-    #: True where e_floor is a resolution, not a measured or certified floor.
-    floor_is_documented_minimum: bool = False
+    # Read by the benchmark's time-in-band KPI, not by the reward: the permit's
+    # half-width around the set point, so "in band" means inside the permit.
+    e_floor: float = 1.0  # pH
 
 
 #: Units of the PHParams fields, for the generated environment pages.
@@ -188,21 +186,24 @@ PARAM_UNITS = {
     "Wb3": "mol/L",
     "pK1": "-",
     "pK2": "-",
+    "acid_upset_size": "-",
+    "acid_upset_ramp": "s",
+    "permit_low": "pH",
+    "permit_high": "pH",
+    "excursion_limit": "s",
+    "sewer_floor": "pH",
     "pH_min": "pH",
     "precision_floor": "pH",
     "pH_max": "pH",
-    "tracking_band": "pH",
     "reagent_cost_weight": "-",
-    "e_floor": "pH",
+    "setpoint_pH": "pH",
     "reward_version": "-",
-    "e_tol": "pH",
-    "tracking_exponent": "-",
-    "failure_cost": "reward",
+    "reagent_price": "L/L",
+    "excursion_price": "L/s",
+    "diversion_price": "L/L",
+    "failure_cost": "L",
     "restart_steps": "steps",
-    "rho_floor_tracking": "reward",
-    "rho_floor": "reward",
-    "c_hold": "mL/s",
-    "running_weight": "-",
+    "e_floor": "pH",
 }
 
 
@@ -214,7 +215,16 @@ class PHState(EnvState):
 
     pH: float  # the single measurement
     q3: float  # commanded base flow
-    target_pH: float
+    target_pH: float  # the operator's set point, informational, not scored
+
+    # Influent acid strength, as a multiple of Wa1 (HIDDEN): it ramps from
+    # ``upset_levels[i]`` to ``upset_levels[i + 1]`` starting at
+    # ``upset_times[i]`` (steps).
+    upset_times: jax.Array
+    upset_levels: jax.Array
+    # Seconds the discharge has been outside the permit in this excursion, the
+    # clock the continuous monitor keeps [P8]. Read by the operator.
+    excursion: float
 
     actuator_held: jax.Array = actuator_field(1)
 
@@ -255,12 +265,25 @@ def solve_pH(Wa, Wb, params: PHParams):
     return 0.5 * (lo + hi)
 
 
-def compute_velocity(position, action, q2, params: PHParams):
-    """RHS for the two reaction invariants. ``action`` is the base flow q3."""
+def acid_scale(state, params: PHParams, xp=jnp):
+    """The influent's strong acid strength at ``state.time``, as a multiple of
+    ``Wa1``: piecewise ramps between the episode's upset levels."""
+    t = state.time * params.delta_t
+    starts = state.upset_times * params.delta_t
+    ramp = jnp.maximum(params.acid_upset_ramp, params.delta_t)
+    frac = xp.clip((t - starts) / ramp, 0.0, 1.0)
+    steps = state.upset_levels[1:] - state.upset_levels[:-1]
+    return state.upset_levels[0] + xp.sum(frac * steps)
+
+
+def compute_velocity(position, action, q2, params: PHParams, Wa1=None):
+    """RHS for the two reaction invariants. ``action`` is the base flow q3,
+    ``Wa1`` the influent's acid strength now (``params.Wa1`` by default)."""
     p = params
+    Wa1 = p.Wa1 if Wa1 is None else Wa1
     Wa, Wb = position[0], position[1]
     q3 = action
-    dWa = (p.q1 * (p.Wa1 - Wa) + q2 * (p.Wa2 - Wa) + q3 * (p.Wa3 - Wa)) / p.V
+    dWa = (p.q1 * (Wa1 - Wa) + q2 * (p.Wa2 - Wa) + q3 * (p.Wa3 - Wa)) / p.V
     dWb = (p.q1 * (p.Wb1 - Wb) + q2 * (p.Wb2 - Wb) + q3 * (p.Wb3 - Wb)) / p.V
     return jnp.array([dWa, dWb]), None
 
@@ -291,7 +314,10 @@ def compute_next_state(
     )
     q2 = jnp.clip(q2, p.q2_min, p.q2_max)
 
-    _compute_velocity = partial(compute_velocity, action=q3, q2=q2, params=params)
+    Wa1 = p.Wa1 * acid_scale(state, p)
+    _compute_velocity = partial(
+        compute_velocity, action=q3, q2=q2, params=params, Wa1=Wa1
+    )
     new_positions, _ = integrate_dynamics(
         positions=jnp.array([state.Wa, state.Wb]),
         delta_t=p.delta_t,
@@ -299,13 +325,24 @@ def compute_next_state(
         method=integration_method,
     )
     Wa, Wb = new_positions[0], new_positions[1]
+    pH = solve_pH(Wa, Wb, params)
+    # The excursion clock runs while the discharge is outside the permit, and
+    # holds while the effluent is diverted, since none is then discharged.
+    outside = jnp.logical_or(pH < p.permit_low, pH > p.permit_high)
+    diverted = pH < p.sewer_floor
+    excursion = jnp.where(
+        diverted,
+        state.excursion,
+        jnp.where(outside, state.excursion + p.delta_t, 0.0),
+    )
     return (
         state.replace(
             Wa=Wa,
             Wb=Wb,
             q2=q2,
-            pH=solve_pH(Wa, Wb, params),
+            pH=pH,
             q3=q3,
+            excursion=excursion,
             time=state.time + 1,
         ),
         None,
@@ -319,47 +356,56 @@ def compute_next_state(
 # cost of a cached call. Callers that want it fused already jit ``step_env``,
 # which traces this inline.
 def get_obs(state: PHState, params: PHParams):
-    """``[pH, q3_pct, target_pH]`` -- a pH probe and the operator's own valve.
-    The env reads pH through the probe's lag, dead time and noise.
+    """``[pH, q3_pct, setpoint_pH, excursion_min]``: the tank's pH probe
+    [P5, p. 1; P6], the operator's own reagent valve, the set point, and the
+    minutes the discharge has been outside the permit in this excursion, which
+    the continuous monitor records for inspection [P5, p. 2; P8]. With one
+    mixed tank the discharge sensor reads the tank's pH.
 
-    The reaction invariants and the buffer flow are hidden. That is not an
-    artificial restriction: a plant has a pH electrode, not an on-line assay
-    of carbonate speciation. It also makes the environment a genuine POMDP,
-    because the same pH can arise from different (Wa, Wb) pairs whose local
-    process gain differs by an order of magnitude.
+    The reaction invariants, the buffer flow and the influent's acid strength
+    are hidden: a plant has a pH electrode, not an on-line assay of carbonate
+    speciation, and the acid changes come from production units unannounced
+    [P3, p. 4]. The influent flow is constant, so its meter [P3, Figure 2]
+    would read a constant and is left out.
     """
     q3_pct = 100.0 * (state.q3 - params.q3_min) / (params.q3_max - params.q3_min)
-    return jnp.array([state.pH, q3_pct, state.target_pH])
+    return jnp.array([state.pH, q3_pct, state.target_pH, state.excursion / 60.0])
 
 
 def check_is_terminal(state: PHState, params: PHParams, xp=jnp):
-    # No trip: the effluent is a convex mix of the inlet streams, so its pH
-    # stays within about 3.1-10.6 whatever the valves do, and the 2 / 12
-    # limits are unreachable. Kept as documentation of the off-spec range.
-    terminated = xp.zeros((), dtype=bool)
+    """The trip is the permit violation: one excursion past the allowed 60 min
+    [P8]. Low pH is protected by diversion and never trips."""
+    terminated = state.excursion > params.excursion_limit
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
 
 def compute_reward_terms(state: PHState, params: PHParams, xp=jnp, tripped=None):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+    """The reward's additive cost terms, each >= 0, in litres of reagent
+    (PHParams, "Score").
+
+    - ``reagent``: the base used this step [P5, p. 2; P3, p. 9];
+    - ``excursion``: discharge outside the permit, priced per second [P8];
+    - ``diversion``: effluent diverted below the sewer floor, treated again
+      [P9; P3, pp. 4-5];
+    - ``failure``: the permit violation, through ``reward.with_trip``.
 
     ``tripped`` overrides the trip check on ``state``, for a measured copy,
     whose noise must not fire or hide a trip (``base.measured_reward``).
     """
+    p = params
     if tripped is None:
-        tripped, _ = check_is_terminal(state, params, xp)
+        tripped, _ = check_is_terminal(state, p, xp)
+    diverted = state.pH < p.sewer_floor
+    outside = xp.logical_or(state.pH < p.permit_low, state.pH > p.permit_high)
+    discharging_outside = xp.logical_and(outside, xp.logical_not(diverted))
+    outflow_L = (p.q1 + state.q2 + state.q3) * p.delta_t / 1000.0
     terms = {
-        "tracking": R.tracking_cost(
-            state.target_pH - state.pH,
-            params.e_floor,
-            params.e_tol,
-            params.tracking_exponent,
-            xp,
-        ),
-        "running": R.running_cost(state.q3, params.c_hold, params.running_weight, xp),
+        "reagent": R.priced_cost(state.q3 * p.delta_t / 1000.0, p.reagent_price, xp),
+        "excursion": xp.where(discharging_outside, p.excursion_price * p.delta_t, 0.0),
+        "diversion": xp.where(diverted, p.diversion_price * outflow_L, 0.0),
     }
-    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: PHState, params: PHParams, xp=jnp):
@@ -395,3 +441,20 @@ def process_gain(q3, q2, params: PHParams, dq: float = 0.01):
     lo = solve_pH(*steady_state_invariants(q3 - dq, q2, params), params)
     hi = solve_pH(*steady_state_invariants(q3 + dq, q2, params), params)
     return (hi - lo) / (2.0 * dq)
+
+
+def steady_base_flow(pH, q2, params: PHParams, Wa1=None):
+    """The base flow q3 whose steady state sits at ``pH``, for the acid
+    strength ``Wa1`` (``params.Wa1`` by default). At steady state the
+    invariants are the streams' flow-weighted means, so the charge balance is
+    linear in q3 and the inverse titration curve is closed-form."""
+    p = params
+    Wa1 = p.Wa1 if Wa1 is None else Wa1
+    f = 10.0 ** (pH - 14.0) - 10.0 ** (-pH)
+    c = (1.0 + 2.0 * 10.0 ** (pH - p.pK2)) / (
+        1.0 + 10.0 ** (p.pK1 - pH) + 10.0 ** (pH - p.pK2)
+    )
+    r1 = Wa1 + f + p.Wb1 * c
+    r2 = p.Wa2 + f + p.Wb2 * c
+    r3 = p.Wa3 + f + p.Wb3 * c
+    return -(p.q1 * r1 + q2 * r2) / r3

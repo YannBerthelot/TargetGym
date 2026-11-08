@@ -1,11 +1,9 @@
-"""The pH oracle reads the buffer flow and plans its mean path.
+"""The pH oracle's planner pH.
 
-It rolls the env's own step with the buffer's noise zeroed, so it plans q2's
-OU mean decay from the current value. Planning on the nominal flow instead
-made almost all of the old oracle's hold error (0.0146 pH against 0.0022 on
-the protocol seeds), so the closed-loop check below (in the slow job) would
-catch a return to it. The env finds pH by bisection, whose derivative is
-zero, so the planner's pH carries the titration curve's slope instead.
+The env finds pH by bisection, whose derivative is zero, so the planner's pH
+carries the titration curve's slope instead. The closed-loop oracle check went
+with the tracking score (charter rule 15): the oracle is rebuilt for the job
+score before it is run again.
 """
 
 import jax
@@ -13,27 +11,6 @@ import numpy as np
 import pytest
 
 from target_gym import registry
-from target_gym.experts.mpc import plan_params
-
-
-def test_the_oracle_holds_well_below_the_nominal_model():
-    """Seed 1 is the protocol seed where the buffer drifts furthest: planning on
-    the nominal flow held 0.022 pH there, reading it holds 0.0031."""
-    spec = registry.get("ph_neutralization")
-    env = spec.make_env()
-    params = spec.make_test_params()
-    oracle = spec.make_mpc(env, plan_params(spec, params))
-    oracle.reset()
-    key = jax.random.PRNGKey(1)
-    obs, state = env.reset_env(key, params)
-    step = jax.jit(env.step_env)
-    errors = []
-    for t in range(int(params.max_steps_in_episode)):
-        action = np.atleast_1d(oracle.step(obs, state))
-        obs, state, *_ = step(key, state, action, params)
-        if t >= 108:  # the protocol's burn-in on this plant
-            errors.append(abs(float(state.target_pH) - float(state.pH)))
-    assert np.mean(errors) < 0.006
 
 
 def _root(Wa, Wb, p):

@@ -22,6 +22,7 @@ from target_gym.pc_gym.ph_neutralization.env import (
     compute_reward_terms,
     get_obs,
     solve_pH,
+    steady_base_flow,
     steady_state_invariants,
 )
 from target_gym.pc_gym.ph_neutralization.rendering import _render
@@ -33,7 +34,7 @@ class PHNeutralization(
 ):
     """pH neutralisation CSTR (reaction-invariant formulation).
 
-    Observation (3,): [pH, q3_pct, target_pH]
+    Observation (4,): [pH, q3_pct, setpoint_pH, excursion_min]
     Action      (1,): base flow, raw in [-1, 1] -> [q3_min, q3_max]
     """
 
@@ -54,7 +55,7 @@ class PHNeutralization(
     )
 
     def __init__(self, integration_method: str = "rk4_2"):
-        self.obs_shape = (3,)
+        self.obs_shape = (4,)
         self.integration_method = integration_method
 
     @property
@@ -111,25 +112,30 @@ class PHNeutralization(
         if params is None:
             params = self.default_params
 
-        key, q3_key, target_key, buffer_key = jax.random.split(key, 4)
+        key, times_key, levels_key, buffer_key = jax.random.split(key, 4)
 
-        # Start on the steady state for the sampled flows: a CSTR left running
-        # is at equilibrium, and starting off it would spend the first several
-        # residence times relaxing rather than being controlled.
-        q3 = jax.random.uniform(
-            q3_key,
-            minval=params.initial_q3_range[0],
-            maxval=params.initial_q3_range[1],
-        )
+        # Established operation (charter rule 17): the tank on the steady state
+        # that holds the set point under the buffer flow it meets, as a loop in
+        # automatic leaves it. The acid upsets come later, unannounced.
         q2 = jnp.clip(
             params.q2_nominal + params.q2_noise_std * jax.random.normal(buffer_key),
             params.q2_min,
             params.q2_max,
         )
-        target_pH = jax.random.uniform(
-            target_key,
-            minval=params.target_pH_range[0],
-            maxval=params.target_pH_range[1],
+        target_pH = jnp.asarray(params.setpoint_pH, jnp.float32)
+        q3 = jnp.clip(
+            steady_base_flow(target_pH, q2, params), params.q3_min, params.q3_max
+        )
+        upset_times = jnp.sort(
+            jax.random.randint(times_key, (2,), 0, params.max_steps_in_episode)
+        )
+        upset_levels = jnp.concatenate(
+            [
+                jnp.ones((1,)),
+                1.0
+                + params.acid_upset_size
+                * jax.random.uniform(levels_key, (2,), minval=-1.0, maxval=1.0),
+            ]
         )
         Wa, Wb = steady_state_invariants(q3, q2, params)
 
@@ -141,6 +147,9 @@ class PHNeutralization(
             pH=solve_pH(Wa, Wb, params),
             q3=q3,
             target_pH=target_pH,
+            upset_times=upset_times,
+            upset_levels=upset_levels,
+            excursion=jnp.zeros(()),
         )
         return self.get_obs(state), state
 

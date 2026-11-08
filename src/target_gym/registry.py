@@ -767,14 +767,15 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_ph_mpc", module="target_gym.pc_gym.ph_neutralization.oracle"
         ),
-        # 300 steps = 25 min ~ 17 residence times, enough for the buffer
-        # disturbance to move the operating point.
         tuned_gains_key="ph_neutralization",
         disturbance_fields=("q2",),
         # The buffer flow's OU innovation, zeroed for the oracle, which rolls
         # the simulator and would otherwise plan on one seed's draws.
         noise_fields=("q2_noise_std",),
-        version=3,
+        # v4 (charter Amendment 2): the permit zone with its 60 min timed
+        # limit, diversion below pH 5, acid strength upsets, a 2 h episode from
+        # established operation, and a job score in reagent litres.
+        version=4,
     ),
     EnvSpec(
         name="distillation",

@@ -1,13 +1,15 @@
-# pH neutralisation — physics model, provenance and validation
+# pH neutralisation: physics model, sources, limits and deviations
 
-Reference process: a **continuous stirred-tank pH neutralisation reactor** —
-strong acid neutralised by strong base in the presence of a carbonate buffer.
-The canonical extreme-nonlinearity benchmark in process control.
+The plant is a continuous stirred-tank pH neutralisation: a strong acid
+neutralised by a strong base with a carbonate buffer, the Hall and Seborg and
+Henson and Seborg bench rigs, standing for an industrial effluent
+neutralisation unit. `REALITY.md` in this folder is the plant's record, with
+sources [P1] to [P10]; `COLD_REVIEW.md` lists how the earlier task differed.
+This page follows charter Amendments 1 and 2 (`docs/proposals/task-charter.md`).
 
-Contract for `target_gym.pc_gym.ph_neutralization`. Method:
-`docs/PHYSICS_METHODOLOGY.md`.
-
-Status: ✅ validated · ⚠️ defensible but approximate · ❌ known deviation
+**Named property: the titration curve.** The process gain swings by an order
+of magnitude across the operating range, and the unmeasured buffer moves the
+curve [P1; P2]. It is in the model below (rule 18).
 
 ---
 
@@ -42,182 +44,178 @@ overshoots the bracket.
 
 Deliberately **not** modelled:
 
-| Omitted | Rationale |
+| Omitted | Why |
 |---|---|
-| Temperature dependence of pK1/pK2 | Isothermal operation, as in the benchmark. |
-| Mixing dynamics / imperfect stirring | Perfect mixing is the standard assumption; a real tank adds a transport lag. |
-| Electrode drift and fouling | The probe lags and reports late, with noise (section Readings). Real probes also drift and foul. |
-| Acid/base concentration variation | Feed concentrations are fixed; only flows vary. |
-
-**Regime of validity.** Near-neutral operation (pH 4–10) with the carbonate
-buffer present. Outside that, the single-buffer titration curve is a poorer
-approximation of a real multi-species effluent.
+| Temperature dependence of pK1, pK2 | Isothermal, as the bench rig. |
+| Mixing dynamics | One perfectly mixed tank; the mixing delay is lumped into the probe's dead time (section Readings). |
+| Staging | Real units run two or more tanks or mixers [P3; P5, p. 2; P7]. One tank is the rig [P1, P2]. Deviation D4. |
+| Electrode drift and fouling | Named failures [P5, pp. 2-3; P6], not modelled. Deviation D1. |
+| Several buffer species | Carbonate only. Deviation D2. |
 
 ---
 
-## 2. Validation targets
+## 2. Numbers: cited or ours
 
-| Quantity | Target | Model | |
+Rule 1: every number is cited or labelled `ours` with a reason.
+
+| Symbol | Value | Unit | Cited or ours |
 |---|---|---|---|
-| Nominal steady pH at q3 = 15.6, q2 = 0.55 | ≈ 7 (benchmark design point) | **7.026** | ✅ |
-| Residence time V/q_total | — | 88.5 s | ✅ |
-| pH bounded to [0, 14] | required | yes | ✅ |
-| pH monotone increasing in base flow | required | yes | ✅ |
-| Titration curve S-shaped, steepest near equivalence | required | yes | ✅ |
-| Gain variation across operating range, nominal buffer | order of magnitude | **45×** | ✅ |
-| Gain variation with no buffer | far larger | **462×** | ✅ |
+| `V` | 2900 | mL | ours: the Henson and Seborg rig volume as the benchmark literature copies it; [P2] could not be opened (REALITY.md, owner list) |
+| `q1`, `Wa1`, `Wb1` | 16.6, 3.0e-3, 0 | mL/s, M | ours: acid stream as copied from [P2], unverified |
+| `q2_nominal`, `Wa2`, `Wb2` | 0.55, -3.0e-2, 3.0e-2 | mL/s, M | ours: buffer stream as copied from [P2], unverified |
+| `Wa3`, `Wb3` | -3.05e-3, 5.0e-5 | M | ours: base stream as copied from [P2], unverified |
+| `pK1`, `pK2` | 6.35, 10.25 | - | cited: carbonic acid constants at 25 C, as in [P2] |
+| `q3_min` | 0 | mL/s | cited by absence: no source gives a floor on reagent flow, and a pump can stop (REALITY.md, "What they move") |
+| `q3_max` | 22 | mL/s | ours: rig valve size not found; covers the acid upsets at +20 % |
+| `q2_noise_std` | 0.35 | mL/s | ours: buffering changes are sourced [P1; P2], their size is not |
+| `BUFFER_OU_THETA` | 2e-3 | 1/s | ours: shape and rate of buffer changes not found |
+| `q2_min`, `q2_max` | 0, 2.5 | mL/s | ours: keeps the buffer flow physical |
+| `acid_upset_size` | 0.2 | - | ours: large acid strength changes are sourced [P3, p. 4], their size is not |
+| `acid_upset_ramp` | 600 | s | ours: the "calm to rocking during one lunch break" of [P3, p. 8] read as minutes |
+| `permit_low`, `permit_high` | 6, 8 | pH | cited: the example spec pH 7 +- 1 [P7, p. 2]; a real permit's range is set by the guideline [P8] |
+| `excursion_limit` | 3600 | s | cited: no single excursion over 60 min [P8] |
+| `sewer_floor` | 5.0 | pH | cited: no discharge to a sewer below pH 5.0 [P9] |
+| `setpoint_pH` | 7 | pH | ours: the centre of the permit range; the set point is the operator's [P3, p. 4] and not scored |
+| `delta_t` | 5 | s | ours: twice the 2.5 s the 7 to 10 s mixing delay [P7, p. 2] needs to show as 2 steps |
+| `max_steps_in_episode` | 1440 | steps | ours: 2 h, past the 60 min excursion [P8] |
+| `reagent_price` | 1 | L/L | ours: the cost is reagent litres, the field plant's reagent to influent metric [P3, p. 9] |
+| `excursion_price` | 1.667 | L/s | ours: no price found; a minute outside costs 100 minutes of hold reagent |
+| `diversion_price` | 1 | L/L | ours: a diverted litre is treated again, about 1 L of this dilute base per litre |
+| `failure_cost` | 8.443 | L | ours: one step outside at the full valve, the worst step a surviving plant pays, so the violation costs another hour of that |
+| `restart_steps` | 720 | steps | ours: a violation is charged as 60 min more outside; no fine found |
+| `e_floor` | 1.0 | pH | cited: the permit half-width [P7, p. 2]; read by the time-in-band KPI only, not by the reward |
+| `precision_floor`, `pH_min`, `pH_max`, `reagent_cost_weight` | 0.01, 2, 12, 0 | - | the retired version-1 reward only |
 
-The nominal design point matching 7.03 is the load-bearing check: it pins the
-feed concentrations and flows jointly against the published benchmark.
-
----
-
-## 3. Parameter table
-
-| Symbol | Value | Unit | Source | |
-|---|---|---|---|---|
-| `V` | 2900 | mL | Benchmark reactor volume | ✅ |
-| `q1`, `Wa1`, `Wb1` | 16.6, 3.0e−3, 0 | mL/s, M | Acid feed (HNO₃) | ✅ |
-| `q2_nominal`, `Wa2`, `Wb2` | 0.55, −3.0e−2, 3.0e−2 | mL/s, M | Buffer (NaHCO₃) | ✅ |
-| `Wa3`, `Wb3` | −3.05e−3, 5.0e−5 | M | Base (NaOH + NaHCO₃) | ✅ |
-| `q3_min`, `q3_max` | 10, 22 | mL/s | Spans pH ≈ 4.0–10.2, bracketing equivalence; the 2 / 12 off-spec limits are unreachable (steady pH 3.1–10.6 at the flow extremes) | ✅ |
-| `pK1`, `pK2` | 6.35, 10.25 | – | Carbonic acid dissociation constants | ✅ |
-| `q2_noise_std` | 0.35 | mL/s | TUNED — buffering disturbance amplitude | ⚠️ |
-| `delta_t` | 5.0 | s | ≈ 18 steps per residence time | ✅ |
-
----
-
-## 4. Task design
-
-### Task: `ph_neutralization`
-
-Hold the pH of a stirred tank, where strong acid meets strong base in a
-carbonate buffer, at a target by setting the base flow. The titration curve
-makes the process gain swing by more than an order of magnitude across the
-range, and the buffer flow that moves the curve drifts unmeasured, so the same
-pH reading can call for very different moves.
-
-| obs | meaning |
-|---|---|
-| 0 | pH |
-| 1 | base flow valve, percent of its range |
-| 2 | target pH |
-
-**Why it is hard.** Three compounding difficulties, all physical:
-
-1. **The titration curve is savagely nonlinear.** Steady-state gain varies 45×
-   across the operating range at nominal buffering. A fixed-gain controller is
-   either sluggish on the flat shoulders or unstable through the steep middle.
-2. **Buffering is the disturbance, and it is unmeasured.** Buffer flow shifts
-   the operating point *and* flattens the curve by an order of magnitude:
-
-   | buffer q2 (mL/s) | operating pH | gain ratio |
-   |---|---|---|
-   | 0.00 | 4.16 | 462× |
-   | 0.55 | 7.03 | 45× |
-   | 4.00 | 7.87 | 8× |
-
-   It drifts as an Ornstein–Uhlenbeck process with a ~500 s correlation time —
-   several residence times, so it reads as a changing operating condition
-   rather than noise.
-3. **pH does not determine the state.** The same pH can arise from different
-   (Wa, Wb) pairs whose local gain differs substantially, so the plant is
-   genuinely partially observed rather than merely noisy.
-
-**Observation.** A plant has a pH electrode and knows its own valve position. It does not have an on-line assay of carbonate
-speciation, so `Wa`, `Wb` and the buffer flow are hidden. The electrode reads through
-a 10 s lag and reports what it saw 10 s ago (section Readings).
-
-**Reward** — the floor-normalised cost described in *Reward (version 2)*
-below.
+Count: 7 cited (including the absence of a reagent floor), 18 ours.
 
 ---
 
-## 5. Baselines
+## 3. Limits (rule 14)
 
-| controller | return | tracking error |
+| Limit | Kind | Model | Source |
+|---|---|---|---|
+| Discharge outside pH 6 to 8 | Zone, timed | Priced per second outside (`excursion`); one excursion past 60 min is a permit violation, the task's trip | [P8]; range [P7] |
+| Discharge below pH 5.0 | Protected | Below 5.0 the effluent is diverted, not discharged: no trip, the excursion clock holds, and the diverted volume is charged for treatment (`diversion`) | [P9]; diversion [P3, pp. 4-5] |
+| Reagent valve | Hardware | 0 to 22 mL/s, clipped | ours (section 2) |
+| Level | Not modelled | Continuous overflow tank, fixed volume | [P4, p. 1] is a batch interlock |
+
+The monthly allowance of 7 h 26 min outside [P8] is longer than an episode,
+so only the 60 min rule is modelled. The violation restarts the plant on its
+steady state at the set point (`base.failure_kernel`). A real violation does
+not restart a plant; it is reported. Deviation D5.
+
+---
+
+## 4. Observation (rule 16)
+
+| obs | meaning | source |
 |---|---|---|
-| MPC (horizon 20 ≈ 100 s) | **278.9** | **0.030 pH** |
-| PID | 258.0 | 0.085 pH |
-| constant valve | 7.3 | 0.885 pH |
+| 0 | tank pH, through the probe (section Readings) | probe in the tank [P5, p. 1; P6] |
+| 1 | base valve, percent of its range | the operator's own valve |
+| 2 | set point, pH 7 | the operator's own |
+| 3 | minutes outside the permit in this excursion | the discharge monitor records it [P5, p. 2; P8] |
 
-The bisection dominates the step cost, and is the price of having the
-nonlinearity be exact rather than approximated. Its step count was cut from 44
-to 20 on measurement, which roughly doubled throughput; see
-[docs/performance.md](../../../docs/performance.md).
-
-**The MPC's pH has the titration curve's slope.** The oracle is `NewtonMPC`
-(iterative LQR) on the environment's own `step_env`, and its cost is the
-version-2 reward. The env finds pH by bisection, whose derivative is zero, so
-a planner differentiating it sees no slope anywhere; the planner's pH
-(`planner_pH`) has the env's value and the implicit-function slope of the
-charge balance. A flat objective failed the earlier oracles in the same way:
-copying the clipped version-1 reward gave IPOPT no gradient past the band, it
-optimised the only live term (reagent cost) and railed the valve shut, at
-~3.9 pH mean error. What the objective must share with the reward is its
-**minimiser**, and it must have a slope.
-
-**The MPC reads the buffer flow.** The buffer flow is not in the
-observation, but the MPC is the oracle and reads the state, as it already did
-for the equally hidden invariants Wa and Wb. It plans q2's mean path from the
-current value, the env's own OU update with the noise zeroed. Until the oracle audit (2026-10-01) it planned on the nominal
-flow and left receding-horizon feedback to absorb the drift, and that model
-error made almost all of its hold error. On the protocol seeds, reading q2
-cut the protocol cost from 3.06 to 0.096 and the mean hold error from 0.0146
-to 0.0022 pH. What is left is the OU innovation itself: a planner told the
-realised next q2 tracks to about 1e-5 pH, so the whole remaining tracking cost
-is that one-step innovation, which no causal controller can predict. (The
-table above predates the version-2 reward and this change.)
+With one mixed tank the discharge sensor [P5, p. 2] reads the tank's pH. The
+influent flow is constant here, so its meter [P3, Figure 2] reads a constant
+and is left out. The buffer flow, the acid strength and the invariants are
+hidden: no source shows them measured.
 
 ---
 
-## 6. Known deviations
+## 5. Episode (rule 17)
 
-**⚠️ D1. Electrode drift and fouling.** The probe has a lag and a dead time, with
-the noise of section Readings, and stays that fast. Real electrodes also drift and
-foul, and a 1 mm coating can take the response from seconds to minutes
-([McMillan](https://www.controlglobal.com/articles/2013/mcmillan-ph-response-accuracy-reliability)).
+The tank starts on the steady state that holds pH 7 under the buffer flow it
+meets, as a loop in automatic leaves it, with the reagent valve where that
+needs it. Two things move:
 
-**⚠️ D2 — single buffer species.** Carbonate only. Real effluents carry several
-weak acid/base pairs, giving a titration curve with multiple inflections
-rather than one.
+- **Influent acid strength** [P3, p. 4]: two changes per episode at times
+  drawn uniformly over it, each to a level within +-20 % of nominal, ramped
+  over 10 min. Hidden. Size, rate and count are ours (section 2).
+- **Buffer flow** [P1; P2]: an Ornstein-Uhlenbeck drift, mean 0.55 mL/s,
+  std 0.35 mL/s, correlation time 500 s. Shape and size ours.
 
-**⚠️ D3 — flows are exact.** No valve dynamics, hysteresis or flow measurement
-error on the manipulated stream.
+Nothing else moves: the set point does not, as no source shows it moved
+from outside.
 
 ---
 
-## 7. Expert
+## 6. Score (rule 15)
 
-pH loops in practice use the titration curve to linearise the loop
-([Shinskey and Gerry, "Optimize your pH system", 2006](https://www.plantservices.com/articles/2006/026)).
-The expert does that with what a commissioning engineer has: the streams'
-compositions, the acid flow and the nominal buffer flow, which give the
-titration curve that a lab titration of the effluent would. It never reads the
-buffer flow, which has no meter here. The factory is `make_ph_pid_controller`
-and the gains come from `scripts/tune_process_experts.py --envs ph_neutralization`.
+The job, from REALITY.md: keep the effluent pH inside the discharge permit by
+adding reagent [P5, p. 1], without overdosing [P5, p. 2]. Per step, in litres
+of reagent:
 
-- **Linearisation.** `reagent_demand(pH)` is the steady base flow that leaves
-  the effluent at that pH at the nominal buffer flow. At steady state the
-  charge balance is linear in q3, so the inverse curve is closed-form. The PI
-  acts on the target's demand minus the measured pH's, in mL/s, so its loop
-  gain is about 1 wherever the operating point sits on the curve, instead of
-  varying about 45 times (section 2).
-- **Bias.** The PI's output is added to the target's demand, the valve
-  position the curve says the target needs. This is ours: q1 is constant and
-  q2 unmeasured, so there is no inflow to feed forward from.
-- **Tuning.** With the buffer stream off, q2 = 0, the plant's lower limit and the
-  steepest curve there is, as the plan asks. In manual at the rest the true curve
-  gives there, +0.1 mL/s, 120 steps, read in the expert's demand units on the
-  nominal curve. The median fit is k = 19.7, tau1 = 95.3 s and theta = 17.5 s, with
-  the probe's dead time and half the 5 s sample. At the nominal buffer the same test
-  reads k = 1.0, so the steep end has 20 times the gain. SIMC with tau_c = theta
-  gives Kp = 0.138 and Ti = 95.3 s. The band is 0.104 mL/s, which the valve's dead
-  band absorbs, so no filter. Kp is 0.199 and 0.100 at levels 0.5 and 2.
-- **Held-out check** (seeds 200 to 209). It holds 230 per step (worst seed 619)
-  against a ceiling of 1, from 4,690 on the gains tuned without the probe, and no
-  longer cycles. pH cannot trip. The best null is the table, ratio 0.48, 0 of 10
-  wins. The miss is a finding: `tests/pc_gym/test_expert_specs.py`.
+```
+reward = -(reagent + excursion + diversion + failure)
+reagent   = q3 dt / 1000
+excursion = 1.667 dt          while the discharge is outside pH 6 to 8
+diversion = (q1 + q2 + q3) dt / 1000   while the tank is below pH 5.0
+failure   = 720 x 8.443       on the step an excursion passes 60 min
+```
+
+Inside the permit only reagent counts: precision earns nothing, as no source
+says it pays. A tank held near pH 6 uses less base than one at 7, and that is
+the trade the field plant made by moving set points toward the limit [P3,
+p. 4].
+
+---
+
+## 7. Behaviour tests
+
+`tests/pc_gym/ph_neutralization/test_ph_reality.py`, from COLD_REVIEW.md's
+proposals with their tolerances:
+
+| Test | Source | Before | After |
+|---|---|---|---|
+| Mixing and measurement delay 5 to 20 s | [P7, p. 2] | pass | pass |
+| Buffer shifts the curve by at least 0.1 pH | [P1; P2] | pass | pass |
+| Every step below pH 5.0 is diverted | [P9; P3] | fail | pass |
+| An excursion under 60 min is no violation | [P8] | pass | pass |
+| An excursion past 60 min trips within one step | [P8] | fail | pass |
+| Inside the band, less reagent scores at least as well | [P5; P3] | fail | pass |
+
+---
+
+## 8. Known deviations (rule 13)
+
+**D1. Electrode drift and fouling.** The probe lags and reports late, with
+noise, and stays that fast. Coating and junction blockage make real probes
+sluggish and drive overdosing [P5, p. 2; P6]. Effect on the score: easier.
+
+**D2. One buffer species.** Carbonate only. Real effluents carry several weak
+acid and base pairs. Effect: a smoother curve than a real effluent's.
+
+**D3. Ideal valve.** No resolution, stick-slip or limit cycles from split
+range [P3, p. 4]; no on/off or timer dosing [P4]. Effect: easier near the
+equivalence point.
+
+**D4. One tank.** Real strong acid units are staged [P3; P7, p. 1]. Effect: a
+single tank's gain, and the 88 s residence time of a bench rig, far under the
+10 min that [P4, p. 2] asks of a continuous tank under on/off control.
+
+**D5. A violation restarts the plant.** The framework's trip restarts on the
+steady state at the set point. A real violation is reported and the plant runs
+on. Effect: after a violation the episode resumes from a good state, at the
+charged cost.
+
+**D6. Rig constants unverified.** V, the flows and the concentrations are the
+benchmark's copy of [P2], which could not be opened (REALITY.md, owner list).
+
+---
+
+## 9. What the reference ladder row needs
+
+For `scripts/reference_ladder.py` (rule 3, not edited here):
+
+- Bump tests at the steady state of reset, valve stepped by +-0.5 mL/s, read on
+  the probe, with the acid upsets and the buffer drift off.
+- PI by SIMC on the permit centre, then feedforward: none is available, since
+  the influent flow is constant and its acid strength unmeasured.
+- Cascade: no second measurement. Override: the excursion clock (obs 3) is
+  available for a rung that drives back inside before 60 min.
+- The rung is scored on the job cost of section 6, not on tracking.
+- The oracle's stage (`oracle.py`) has no slope at the permit edge and must be
+  rebuilt before rule 9 runs it.
 
 ---
 
@@ -231,7 +229,7 @@ and the gains come from `scripts/tune_process_experts.py --envs ph_neutralizatio
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ph_neutralization` | 300 | 5 | 25 min | 1 in [-1, 1] | 3 | 10 |
+| `ph_neutralization` | 1440 | 5 | 2.0 h | 1 in [-1, 1] | 4 | 14 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -239,38 +237,6 @@ see. Episode lengths are the scored configuration's (`env.default_params`),
 which is what the recorded baselines use.
 
 <!-- END GENERATED FACTS -->
-
-## Reward (version 2)
-
-`compute_reward = -(tracking + running + failure)`, see docs/reward-shaping.md.
-
-| parameter | value | source |
-| --- | --- | --- |
-| `e_floor` | 0.01 pH (the MPC holds 0.0013) | the lowest per-seed long-run mean \|error\| the shipped MPC held under the shipped buffer-flow disturbance (`scripts/measure_hold.py`, 900 hold steps after a 108-step burn-in; seeds 0.0021 / 0.0031 / 0.0013, PID 0.016-0.054). The MPC reads the buffer flow from the state since the oracle audit (2026-10-01); planning on the nominal flow, it held 0.0080. A per-seed minimum so no run of the reference sits below it; an upper bound on the achievable floor Below the instrument resolution the plant's own table cites, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
-| `e_tol` | 0 | **provisional.** The discharge permit band (typically pH 6-9 on an outfall) is a regulatory number the plant would supply. |
-| `tracking_exponent` | 2 | quadratic |
-| `c_hold` | 16.24 mL/s | reagent flow while holding, PID and MPC alike (`scripts/measure_hold.py`) |
-| `running_weight` | 1 | one floor-width of pH error is worth the hold-phase reagent flow again; sweep 0.5 / 1 / 2 |
-| `failure_cost` | 3.1e6 | twice the span's cost in units of the earlier 0.0080 pH hold, (10 / 0.0080)^2, left as it is when the hold improved. **Never charged**: the effluent is a convex mix of the inlet streams, so its pH stays within about 3.1-10.6 whatever the valves do; the 2 / 12 limits are documentation of the off-spec range |
-| `restart_steps` | 720 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (flush the tank after a gross excursion; provisional; never exercised, see `failure_cost`); where a plant engineer would get it: the plant's restart procedure |
-
-`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
-hold cost the reference controller demonstrated, in the reward's units, which
-is 1 per term where the floor is that hold and less where the floor is clamped
-at the instrument resolution -- and `rho_floor` the same with consumption
-charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
-measured/certified floor or a resolution used as a scale, and where it is a
-resolution on a deterministic plant both references are 0, since exact hold is
-achievable there and the resolution only sets the unit;
-`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
-cost the envelope can produce, and `restart_steps` the time a restart would take,
-so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
-ends the window (`base.failure_kernel`): the step that leaves the envelope is
-charged the trip cost, with tracking and running cost zeroed, and the plant
-restarts at once as `reset_env` would, on the same clock. `terminated` stays
-false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
-capped log-scaled reward of the previous version (`precision_floor` and the
-old weights are read only by it).
 
 ## Readings
 
@@ -314,9 +280,8 @@ score read the true state. `info["measured_reward"]` is the same cost on the
 readings, with any trip taken from the true state, and a learner can train on
 it.
 
-A plant resting exactly on target pays about 1.08 per step in measured reward.
-The proposal's floor of 1 is the scatter alone, `(0.01 / 0.01)^2`. Rounding to
-0.01 pH adds `step^2 / 12` to the variance, 1/12 of the floor.
+The score reads the true pH. A probe reading inside the band while the tank is
+just outside is the operator's risk, as on the plant.
 
 ## Written exception to check 2
 

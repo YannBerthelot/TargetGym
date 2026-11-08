@@ -70,7 +70,8 @@ EXACT = {
     "first_order": (1,),
     "unstable_cstr": (3,),
     "distillation": (2, 3, 4, 5),
-    "ph_neutralization": (1, 2),
+    # Valve, set point, and the monitor's own excursion clock.
+    "ph_neutralization": (1, 2, 3),
     "compressor_surge": (4, 6),
 }
 #: Channels with a scatter of their own arithmetic, tested on their own below.
@@ -87,7 +88,6 @@ ON_TARGET = {
         target_levels=jnp.full_like(s.target_levels, s.C_a)
     ),
     "distillation": lambda s: s.replace(target_yD=s.x[-1], target_xB=s.x[0]),
-    "ph_neutralization": lambda s: s.replace(target_pH=s.pH),
     "compressor_surge": lambda s: s.replace(
         setpoint_levels=jnp.full_like(s.setpoint_levels, s.dp),
         setpoint_lead=jnp.zeros_like(s.setpoint_lead),
@@ -100,7 +100,6 @@ FLOOR = {
     "first_order": (1.1e-3 / 6e-3) ** 2,
     "unstable_cstr": (5e-4 / 5e-4) ** 2,
     "distillation": 2.0 * (4e-4 / 4e-4) ** 2,
-    "ph_neutralization": 1.0 + 1.0 / 12.0,
     "compressor_surge": (9.17 / 27.5) ** 2,
 }
 #: Independent tracked readings behind each floor: a sum of k equal chi-squared
@@ -173,7 +172,8 @@ def test_every_channel_is_either_noisy_or_exact(name):
     assert sorted(named) == list(range(env.obs_shape[0]))
 
 
-@tasks
+# Tasks scored on the operator's job (charter rule 15) have no tracking term.
+@pytest.mark.parametrize("name", sorted(FLOOR))
 def test_measured_cost_carries_the_proposals_floor(name):
     env, params, state = _reset(name)
     state = ON_TARGET[name](state)
