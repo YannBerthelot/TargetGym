@@ -45,10 +45,12 @@ Score a policy of your own::
 before each episode. The expert is the environment's shipped ``"pid"`` slot, run on
 the same seeds.
 
-The charter's Amendment 3 (rule 21) adds the headline that replaces these as tasks
-are rebuilt. ``gap_closed`` is the share of the reference-to-ceiling cost gap a
-policy closes, per seed, and ``headline`` averages it over a task's scenarios
-(``target_gym.scenarios``) with equal weight.
+The task charter (J4) adds the headline that replaces these as tasks are rebuilt.
+``headline`` is the saving over the reference on a year of operation: each scenario
+(``target_gym.scenarios``) weighted by its share of operating time, with the
+per-scenario savings and the probability of improvement beside it. ``gap_closed``,
+the share of the reference-to-ceiling gap a policy closes, is reported, never the
+headline.
 
 ``seed_scores`` is a different number for a different job: one score per
 training seed, on the whole episode with no burn-in, from costs measured
@@ -296,25 +298,89 @@ def gap_closed(policy_cost, reference_cost, ceiling_cost) -> np.ndarray:
         return np.where(has_gap, (b - x) / np.where(has_gap, gap, 1.0), np.nan)
 
 
-def headline(costs) -> dict:
-    """A task's headline from ``{scenario: {"policy", "reference", "ceiling"}}``,
-    each a cost per step per seed (or one value for all seeds).
+_N_BOOT = 2000
 
-    Each scenario scores the IQM of its seeds' ``gap_closed``, leaving out seeds
-    with no gap. ``headline`` is the plain mean over scenarios, so a rare upset
-    counts as much as a normal day. A scenario with no gap on any seed is listed in
-    ``solved`` and left out; with every scenario solved the headline is NaN.
+
+def _costs(values) -> np.ndarray:
+    a = np.atleast_1d(np.asarray(values, dtype=float))
+    if np.isnan(a).any() or (a < 0).any():
+        raise ValueError("costs must be non-negative and not NaN")
+    return a
+
+
+def _saving(w, xs, bs) -> float:
+    j_ref = sum(wi * bi.mean() for wi, bi in zip(w, bs))
+    j_policy = sum(wi * xi.mean() for wi, xi in zip(w, xs))
+    return 1.0 - j_policy / j_ref if j_ref > 0 else float("nan")
+
+
+def headline(costs, weights) -> dict:
+    """A task's headline (charter J4): the frequency-weighted saving over the
+    reference.
+
+    ``costs`` is ``{scenario: {"policy": ..., "reference": ...}}``, each a cost per
+    step per seed, paired seed for seed. A scenario may add ``"ceiling"`` (per seed
+    or one value) and ``"policy_trips"`` with ``"reference_trips"`` (per seed).
+    ``weights`` is each scenario's share of operating time, at any positive scale.
+
+    ``saving`` is ``1 - J_policy / J_reference``, with ``J = sum_s w_s * mean(cost |
+    s)``; ``saving_ci`` its 95 % interval, resampling seeds within each scenario and
+    keeping the pairs. Beside it: ``per_scenario`` savings, the ``worst`` scenario,
+    and ``probability_of_improvement``, the weighted share of seeds won. With
+    ceilings, ``gap_closed`` per scenario on its means; with trips,
+    ``beats_reference``: the interval above 0 and no more trips in any scenario. A
+    reference that costs nothing leaves the saving NaN, a solved task.
     """
-    per, solved = {}, []
-    for name, c in costs.items():
-        g = gap_closed(c["policy"], c["reference"], c["ceiling"]).ravel()
-        g = g[~np.isnan(g)]
-        if g.size == 0:
-            solved.append(name)
-        else:
-            per[name] = _iqm(g)
-    mean = float(np.mean(list(per.values()))) if per else float("nan")
-    return {"per_scenario": per, "headline": mean, "solved": solved}
+    names = list(costs)
+    if set(weights) != set(names):
+        raise ValueError(f"weights {sorted(weights)} must cover {sorted(names)}")
+    w = np.array([float(weights[n]) for n in names])
+    if not (np.isfinite(w).all() and (w > 0).all()):
+        raise ValueError(f"weights must be positive, got {w}")
+    w = w / w.sum()
+    xs = [_costs(costs[n]["policy"]) for n in names]
+    bs = [_costs(costs[n]["reference"]) for n in names]
+    if any(x.shape != b.shape for x, b in zip(xs, bs)):
+        raise ValueError("policy and reference need the same seeds in each scenario")
+
+    point = _saving(w, xs, bs)
+    ci = (float("nan"), float("nan"))
+    if math.isfinite(point):
+        rng = np.random.default_rng(0)
+        boots = []
+        for _ in range(_N_BOOT):
+            picks = [rng.integers(0, len(b), len(b)) for b in bs]
+            resampled_x = [x[i] for x, i in zip(xs, picks)]
+            resampled_b = [b[i] for b, i in zip(bs, picks)]
+            boots.append(_saving(w, resampled_x, resampled_b))
+        lo, hi = np.percentile(boots, [2.5, 97.5])
+        ci = (float(lo), float(hi))
+    per = {
+        n: 1.0 - x.mean() / b.mean() if b.mean() > 0 else float("nan")
+        for n, x, b in zip(names, xs, bs)
+    }
+    scored = {n: v for n, v in per.items() if v == v}
+    out = {
+        "saving": point,
+        "saving_ci": ci,
+        "per_scenario": per,
+        "worst": min(scored, key=scored.get) if scored else None,
+        "probability_of_improvement": float(
+            sum(wi * np.mean(x < b) for wi, x, b in zip(w, xs, bs))
+        ),
+    }
+    if all("ceiling" in costs[n] for n in names):
+        out["gap_closed"] = {
+            n: float(gap_closed(x.mean(), b.mean(), _costs(costs[n]["ceiling"]).mean()))
+            for n, x, b in zip(names, xs, bs)
+        }
+    if all("policy_trips" in costs[n] and "reference_trips" in costs[n] for n in names):
+        fewer = all(
+            np.sum(costs[n]["policy_trips"]) <= np.sum(costs[n]["reference_trips"])
+            for n in names
+        )
+        out["beats_reference"] = bool(ci[0] > 0 and fewer)
+    return out
 
 
 def _iqm(x: np.ndarray) -> float:
