@@ -108,26 +108,27 @@ class FourTank(
         if params is None:
             params = self.default_params
 
-        key, h1_key, h2_key, h3_key, h4_key, t1_key, t2_key = jax.random.split(key, 7)
+        keys = jax.random.split(key, 7)
 
-        h1 = jax.random.uniform(
-            h1_key, minval=params.initial_h1_range[0], maxval=params.initial_h1_range[1]
+        # Established operation (charter rule 17): both pumps at the operating
+        # point and the four tanks on its steady state [S4, pp. 5-6], solved
+        # from the mass balances [S1, eq. (1)]: each outflow a_i sqrt(2 g h_i)
+        # equals its inflow.
+        p = params
+        v = p.v_nominal
+        q3 = (1.0 - p.gamma2) * p.k2 * v
+        q4 = (1.0 - p.gamma1) * p.k1 * v
+        q1 = p.gamma1 * p.k1 * v + q3
+        q2 = p.gamma2 * p.k2 * v + q4
+        level = lambda q, a: (q / a) ** 2 / (2.0 * p.g)  # noqa: E731
+        h1, h2, h3, h4 = (
+            level(q1, p.a1),
+            level(q2, p.a2),
+            level(q3, p.a3),
+            level(q4, p.a4),
         )
-        h2 = jax.random.uniform(
-            h2_key, minval=params.initial_h2_range[0], maxval=params.initial_h2_range[1]
-        )
-        h3 = jax.random.uniform(
-            h3_key, minval=params.initial_h3_range[0], maxval=params.initial_h3_range[1]
-        )
-        h4 = jax.random.uniform(
-            h4_key, minval=params.initial_h4_range[0], maxval=params.initial_h4_range[1]
-        )
-        target_h1 = jax.random.uniform(
-            t1_key, minval=params.target_h1_range[0], maxval=params.target_h1_range[1]
-        )
-        target_h2 = jax.random.uniform(
-            t2_key, minval=params.target_h2_range[0], maxval=params.target_h2_range[1]
-        )
+        nominal = jnp.stack([h1, h2])
+        span = p.max_steps_in_episode
 
         state = FourTankState(
             time=0,
@@ -135,11 +136,21 @@ class FourTank(
             h2=h2,
             h3=h3,
             h4=h4,
-            target_h1=target_h1,
-            target_h2=target_h2,
-            v1=0.0,
-            v2=0.0,
+            target_h1=h1,
+            target_h2=h2,
+            v1=v,
+            v2=v,
+            sp_tank=jax.random.randint(keys[0], (), 0, 2),
+            sp_sign=jnp.where(jax.random.bernoulli(keys[1], 0.5, (3,)), 1.0, -1.0),
+            leak_start=jax.random.randint(keys[2], (), 0, span - p.leak_duration),
+            leak_tank=jax.random.randint(keys[3], (), 0, 2),
+            cup_time=jax.random.randint(keys[4], (), 0, span),
+            cup_tank=jax.random.randint(keys[5], (), 0, 2),
+            nominal_h=nominal,
         )
+        # The pumps start where the operating point holds them.
+        u = 2.0 * (v - p.v_min) / (p.v_max - p.v_min) - 1.0
+        state = state.replace(actuator_held=jnp.full((2,), u))
         obs = self.get_obs(state)
         return obs, state
 

@@ -7,17 +7,16 @@ section 5.3), run by ``target_gym.oracles.controller.Oracle``:
 
 - model: the env's own ``compute_velocity`` and integrator, with the raw
   moves' clips removed and the moves bounded instead (T1);
-- the load: the true one, read at each solve and held over the plan, the
-  planner's certainty equivalence (``plan_params``), never a later arrival;
+- no disturbance: the extra outlet, the cup and the setpoint moves are not
+  in the plan (the version-4 rebuild; the oracle is not re-run yet);
 - objective: both lower tanks' tracking terms as (e / e_floor)^2, exact
   since e_tol = 0 and p = 2 (T2);
-- limits: every level inside the trip band, h_min < h < h_max, on every
-  visited state, elastic at the trip cost per metre (T3);
+- limits: every level inside the tank, 0 <= h <= h_max, on every visited
+  state, elastic at the trip cost per metre (T3);
 - dropped guard: the outflow's sqrt(max(h, 0)) (T4), kept off its edge by
   the band; every plan's levels are checked against 0.
 
-The reset state's pump voltages are 0 V until the first step, so the cold
-start holds both pumps off.
+The reset state holds both pumps at the operating point.
 """
 
 import jax.numpy as jnp
@@ -34,20 +33,20 @@ def four_tank_model(env, p) -> TaskModel:
     assert float(p.e_tol) == 0.0 and float(p.tracking_exponent) == 2.0
 
     def step(d, x, u, t):
-        targets, load = d["task"]
+        targets = d["task"]
         v = p.v_min + 0.5 * (u + 1.0) * (p.v_max - p.v_min)  # T1
         h, _ = integrate_dynamics(
             positions=x, delta_t=p.delta_t, method=env.integration_method,
-            compute_velocity=partial(compute_velocity, action=v, params=p, load=load),
+            compute_velocity=partial(compute_velocity, action=v, params=p),
         )  # fmt: skip
         cost = jnp.sum(((targets - h[:2]) / p.e_floor) ** 2)
         return h, cost, h, h[:2], h  # the guard's edge is h = 0
 
-    band = Limit(p.h_min, p.h_max, float(trip_cost(p)))
+    band = Limit(0.0, p.h_max, float(trip_cost(p)))
     return TaskModel(
         nx=4, nu=2, step=step,
         state_x=lambda s: jnp.stack([s.h1, s.h2, s.h3, s.h4]),
-        data=lambda s: (jnp.stack([s.target_h1, s.target_h2]), s.load),
+        data=lambda s: jnp.stack([s.target_h1, s.target_h2]),
         hold=lambda s: raw_of(jnp.stack([s.v1, s.v2]), p.v_min, p.v_max),
         tracked=lambda s: jnp.stack([s.h1, s.h2]),
         resolution=(float(p.precision_floor),) * 2,

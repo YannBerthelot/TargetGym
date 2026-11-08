@@ -743,17 +743,13 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_four_tank_mpc", module="target_gym.pc_gym.four_tank.oracle"
         ),
-        # 1200 steps, twice the 570 s the decoupled SIMC expert takes to bring
-        # both levels within the 1 mm transmitter resolution: the plant is
-        # non-minimum phase (gamma1 + gamma2 = 0.4), which caps any feedback
-        # loop near a 64 s time constant. At 500 steps it was still settling.
         tuned_gains_key="four_tank",
         oracle_data=_shared_oracle("four_tank"),
-        # The tank loads, frozen at the true one for the oracle, as any
-        # process noise is: no plan sees a later arrival.
-        noise_fields=("load_scale",),
         # 4: the levels are read through instruments (PHYSICS.md, Readings).
-        version=4,
+        # 5 (charter Amendment 2): the Lund rig's P+ constants, no trip, an
+        # overflowing rim, and an episode of setpoint steps from the operating
+        # point with an extra upper outlet and a cup.
+        version=5,
     ),
     EnvSpec(
         name="ph_neutralization",

@@ -1,4 +1,4 @@
-"""Unmeasured load steps on ``cstr`` and ``four_tank``, and the ``cstr`` analyser
+"""Unmeasured load steps on ``cstr``, and the ``cstr`` analyser
 (docs/proposals/industrial-fixes.md, PR 4).
 
 Contract, taken from the proposal and not from the code:
@@ -22,9 +22,11 @@ from target_gym import eval as E
 from target_gym.registry import REGISTRY
 
 #: A raw action that keeps each plant inside its trip band for a whole episode.
-RAW = {"cstr": 0.0, "four_tank": 0.4}
-LIMIT = {"cstr": ("Ti_load", "Caf_load"), "four_tank": ("load_flow", "load_flow")}
-TRACKED = {"cstr": "C_a", "four_tank": "h1"}
+# four_tank left in its version 4: the rig's disturbances are an extra outlet
+# and a cup (pc_gym/four_tank/PHYSICS.md), tested in test_four_tank_reality.py.
+RAW = {"cstr": 0.0}
+LIMIT = {"cstr": ("Ti_load", "Caf_load")}
+TRACKED = {"cstr": "C_a"}
 NAMES = tuple(RAW)
 
 
