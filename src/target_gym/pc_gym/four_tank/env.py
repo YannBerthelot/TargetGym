@@ -76,9 +76,9 @@ class FourTankParams(EnvParams):
     e_floor: float = 1e-3  # m
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
-    # The rig cannot trip (no interlock found), so this is never charged; it is
-    # sized above any reachable tracking cost, both errors at a full tank.
-    failure_cost: float = 2.0 * (0.25 / 1e-3) ** 2
+    # The rig cannot trip (no interlock found), so a trip has no cost: 0, the
+    # charter's convention for a plant with no trip (B5).
+    failure_cost: float = 0.0
     restart_steps: int = 1
     #: The oracle's best hold: not measured on this rig yet.
     rho_floor_tracking: float = 0.0

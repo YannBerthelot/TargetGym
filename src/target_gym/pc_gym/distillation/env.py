@@ -138,9 +138,9 @@ class DistillationParams(EnvParams):
     reward_version: int = 3
     boilup_price: float = 1.0  # per kmol of boilup
     reprocess_price: float = 3.206  # kmol of boilup per kmol off spec
-    # No trip (the zones are not trips), so this is never charged; sized above
-    # any surviving step: the most boilup and all product off spec.
-    failure_cost: float = 3.83 + 3.206 * 1.2
+    # No trip (the zones are not trips), so a trip has no cost: 0, the
+    # charter's convention for a plant with no trip (B5).
+    failure_cost: float = 0.0
     restart_steps: int = 1
     # Read by the benchmark's time-in-band KPI, not by the reward: the
     # analysers' scatter.

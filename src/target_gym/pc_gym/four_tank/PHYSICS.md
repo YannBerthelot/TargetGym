@@ -66,7 +66,7 @@ tank is empty [S2, p. 121], and a full one overflows back to the reservoir
 | `precision_floor`, `e_floor` | 1e-3 | m | ours: the stand-in reading's 1 mm step |
 | `e_tol` | 0 | m | no band found [REALITY.md, Limits] |
 | `tracking_exponent` | 2 | - | ours: no cost of error found |
-| `failure_cost` | 125000 | reward | never charged: the rig has no trip |
+| `failure_cost` | 0 | reward | the rig has no trip, so a trip costs nothing (charter B5) |
 | `restart_steps` | 1 | steps | never charged |
 | `rho_floor`, `rho_floor_tracking` | 0 | reward | not measured on the rebuilt rig; `e_floor` is the reading's step, the documented minimum the instrument resolves, used as a scale, so `floor_is_documented_minimum` is true and the oracle's hold is a scale, not a floor |
 
