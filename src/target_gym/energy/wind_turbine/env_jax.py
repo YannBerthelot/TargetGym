@@ -22,6 +22,7 @@ from target_gym.energy.wind_turbine.env import (
     compute_reward_terms,
     electrical_power,
     get_obs,
+    induction,
     omega_rated,
     rotor_thrust,
     tower_base_moment,
@@ -186,6 +187,8 @@ class WindTurbine(
             power=electrical_power(w0, torque0, params),
             x_tower=x0,
             v_tower=jnp.zeros_like(x0),
+            # Established: the wake in equilibrium with the rotor.
+            w_induced=induction(w0, v_wind, pitch0, params)[0],
             a_tower=jnp.zeros_like(x0),
             v_turb=v_turb,
             feathered=jnp.zeros_like(x0),

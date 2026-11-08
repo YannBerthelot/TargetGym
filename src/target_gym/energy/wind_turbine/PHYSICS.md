@@ -22,9 +22,22 @@ wind it sees, the free wind less the tower top's velocity:
     J dw/dt   = tau_aero - N tau_gen
     m x''     = F_thrust - c x' - k x
     v_rel     = v - x'
-    tau_aero  = 0.5 rho A v_rel^3 Cp(lambda, beta) / w,   lambda = w R / v_rel
-    F_thrust  = 0.5 rho A v_rel^2 Ct(lambda, beta)
+    v_eff     = v_rel - (w_i - w_qs)
+    tau_aero  = 0.5 rho A v_eff^3 Cp(lambda, beta) / w,   lambda = w R / v_eff
+    F_thrust  = 0.5 rho A v_eff^2 Ct(lambda, beta)
+    dw_i/dt   = (w_qs - w_i) / tau1,   w_qs = a v_rel,   a from Ct by momentum theory
+    tau1      = 1.1 / (1 - 1.3 min(a, 0.5)) R / v_rel                     (Oye, [S22])
     P_elec    = eta N tau_gen w
+
+**Dynamic inflow** (owner, 2026-11-08). The tables hold equilibrium induction, so
+the rotor-average induced velocity `w_i` is a state that lags its quasi-steady value
+`w_qs` by Oye's tau1, as OpenFAST's DBEMT writes it [S22]. The tables are read at the
+wind that gives the rotor plane its lagging inflow, so a wind or pitch step changes
+the loads at once and then relaxes as the wake catches up. `a` comes from Ct by
+momentum theory up to Ct 0.96 and by Buhl's correction above it, which joins it in
+value and slope [S22]. One lumped lag: Oye's second filter tau2 and its radial split
+are not modelled. tau1 is 9 s at rated wind (11.4 m/s) and 3 s at 25 m/s (ours from
+the formula, family range 3 to 11 s over 11 to 25 m/s for a = 0.1 to 0.33).
 
 The structure is S16's Eq. (1) without the blade's flap mode, with thrust from ROSCO's
 Ct table [S18] and torque from its Cp table [S18] read bilinearly and held at their
@@ -86,6 +99,8 @@ times slower.
 | `tower_share` | 0.263 | [S20], REpower MM92 |
 | `pitch_share` | 0.0266 | [S20], REpower MM92 |
 | `design_life_years` | 20 | [S20] |
+| `dynamic_inflow` | 1 | 1 the lag on, 0 the quasi-steady tables |
+| `oye_k1`, `oye_k2` | 1.1, 1.3 | [S22], Oye's tau1 |
 | `fatigue_exponent` | 4 | ours, the review's m = 4, family range 3 to 5 for welded steel (not read) |
 | `tower_damage_design` | 2.126e5 (MN m)^4 per step | ours: measured once, S1's controller, published gains, seeds 100 to 107 of the normal scenario |
 | `pitch_travel_design` | 0.1754 deg per step | ours: the same runs |
@@ -171,7 +186,7 @@ restated as family ranges or properties, written in the test before the rerun.
 | 1 Rated torque | pass | |
 | 2 Peak Cp in 0.45 to 0.49, at a TSR of 7 to 10.5 (five rotors) | pass | 0.466 at 7.5 |
 | 3 Region 3 hold, published gains | pass | |
-| 4 Wind-step peak time in 5.5 to 22 s (bandwidths 0.2 to 0.6 rad/s) | fail | 2.5 s; overshoot 13.4 % passes |
+| 4 Wind-step peak time in 5.5 to 22 s (bandwidths 0.2 to 0.6 rad/s) | fail | 2.25 s with dynamic inflow (2.5 s without); overshoot passes |
 | 5 Sensitivity to pitch grows along Region 3, at least doubling | pass | |
 | 6 Actuator saturations | pass | |
 | 7 Tower mode 0.324 Hz | pass | 0.323 Hz |
@@ -181,9 +196,12 @@ restated as family ranges or properties, written in the test before the rerun.
 | 11 Overspeed feathers and the rotor slows | pass | |
 | 12 De-rate to 0.9 | pass | |
 
-Test 4 is a real gap: the steady Cp table has no dynamic inflow, so power answers pitch
-at once and S1's gains regulate faster than any family design. A first-order inflow lag
-is the family's mechanism; it is not built (D1).
+Test 4 still fails with dynamic inflow (owner, 2026-11-08): the speed peak comes at
+2.25 s, against 2.5 s without it. Oye's lag makes the first response to a wind step
+sharper, the loads overshooting before the wake catches up, so it cannot slow the
+peak. What sets 2.25 s is S1's gains on this rigid drivetrain; the published
+bandwidths that give 7.3 to 22 s assume a flexible drivetrain and the blade modes
+(D2). A finding, kept failing.
 
 The job tests (`test_wind_turbine_job.py`) cover the trip, the dollar score's terms, the
 half-cycle count on a sine, the curtailment's timing, the observation, the episode and
@@ -191,7 +209,8 @@ the scenario suite.
 
 ## 7. Deviations still in the model
 
-- D1. No dynamic inflow: test 4 fails at 2.5 s.
+- D1. Dynamic inflow is one lumped Oye lag (tau1 only, no radial split), and the
+  oracle's planner keeps the quasi-steady tables (section 9).
 - D2. One tower mode: no side-side, second fore-aft, drivetrain or blade modes, no 1p or
   3p loading. So blade-root loads are not priced, and S5's trade of 2.1 % tower DEL for
   1.26 % blade DEL is only half in the score; pitch wear stands in for the rest.
@@ -207,11 +226,16 @@ the scenario suite.
 - D7. Cut-out at 25 m/s is not modelled.
 - D8. The sensor sigmas other than the anemometer's are not in REALITY.md.
 - D9. No sensor delays (not found).
-- D10. `test_failure_cost_bound` fails: with random bang-bang pitch, one surviving step
-  costs $0.46 against `failure_cost` $0.056, because a violent tower cycle of about
-  130 MN m consumes more tower life in one half-cycle than a step of downtime costs.
-  Physically real under m = 4; whether the per-step bound should hold for wear terms is
-  for the owner.
+- D10. One violent tower half-cycle (about 130 MN m under random bang-bang pitch)
+  costs $0.46, more than a step of trip downtime ($0.056). The owner restated the
+  trip bound per episode on 2026-11-08 (`tests/test_failure_cost_bound.py`): an
+  episode with a trip costs at least the $1,600 restart, more than the worst
+  surviving 10 min, so tripping on purpose never pays. It passes.
+
+**Cost (charter J6).** The lag adds one state. On bob, batch 256, 8 cores, in one
+run of all 24 tasks: 0.31 M steps/s with it against 0.35 without (13 % slower),
+and the median task runs 0.28 M steps/s, so the step is about the median's,
+well inside 3 times it.
 
 ## 8. What the reference ladder's row needs
 
@@ -225,7 +249,9 @@ loop of S5's form, which is what the score now pays for.
 
 ## 9. What the oracle needs
 
-The oracle builds. Its plan prices lost production against the available power and the
+The oracle builds. Its planner keeps the quasi-steady tables (five states; the
+env's `compute_velocity` takes the inflow as an optional sixth), so it should add
+the induced velocity before its room is read. Its plan prices lost production against the available power and the
 pitch travel, but not the tower's fatigue: the half-cycle count reads turning points of
 the history, which the smooth planner has not got. Before its room means anything it
 needs a smooth stand-in for the damage (for example the squared tower-base moment rate,

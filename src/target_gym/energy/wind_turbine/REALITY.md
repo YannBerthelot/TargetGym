@@ -275,6 +275,11 @@ All were fetched twice and the cited phrases found both times, except where mark
   manually"; other faults reset automatically. A small turbine's manual: the family's rule that
   an overspeed trip waits for a person, not its downtime. Downtime after a manual reset: not
   found. A safety-chain patent (US9945358) allows the reset from a control centre.
+- [S22] OpenFAST documentation, AeroDyn theory, dynamic BEM (DBEMT), Oye's model:
+  tau1 = 1.1 / (1 - 1.3 min(a, 0.5)) R / U0, tau2 = (0.39 - 0.26 (r/R)^2) tau1.
+  https://openfast.readthedocs.io/en/main/source/user/aerodyn/theory.html (fetched
+  once, 2026-11-08). Buhl's correction above Ct 0.96 is AeroDyn's standard high-thrust
+  form (not re-read here).
 - [S18 family] ROSCO's Cp tables at the same commit for the IEA 15 MW, BAR 10 and NREL 2.8 MW
   rotors: peak Cp 0.470 at a tip speed ratio of 8.5, 0.454 at 10.0 and 0.477 at 8.2; every
   table, the NREL 5 MW's included, stops at 30 deg of pitch.
