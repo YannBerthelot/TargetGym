@@ -1,5 +1,5 @@
 {
-  "fingerprint": "494f9a3e1e3c882a",
-  "note": "Branch stamp on feat/sensor-noise, redone at the 0.8.0 re-record: the batch of PR 8, the process experts and the patrol wake.",
-  "stamped": "2026-11-06T13:55:17+00:00"
+  "fingerprint": "d39e598c184d3890",
+  "note": "plane/dynamics.py gained functions the 2D plant calls (protection, Dryden gust, trim, CAS, speed band, overspeed); this environment calls none of them and none it calls changed, so its behaviour is unchanged",
+  "stamped": "2026-11-08T13:04:11+00:00"
 }

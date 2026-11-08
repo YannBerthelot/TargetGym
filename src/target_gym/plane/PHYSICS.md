@@ -171,11 +171,11 @@ it replaced the logarithmic reward of version 1.
 
 ### Task: `plane`
 
-Hold an A320-class airliner at a target altitude in light-to-moderate
-turbulence with throttle and a pitch demand. This is the suite's transparent
-aircraft: nearly the whole state is observed and only the gusts are hidden, so
-the difficulty is the plant itself, with slow climbs and pitch, speed and
-thrust all coupled.
+Cruise an A320-class airliner at its assigned level and speed for 30 min,
+through one zone of light turbulence, with throttle and a pitch demand. Redesigned
+on 2026-11-08 under charter Amendment 2 from [REALITY.md](REALITY.md) and
+[COLD_REVIEW.md](COLD_REVIEW.md); the section *Amendment 2: `plane`* below gives
+every change and the status of every number it brought in.
 
 ### Task: `plane_sine`
 
@@ -205,6 +205,12 @@ is a schedule, below.
 | 7 | throttle, 0 to 1 |
 | 8 | elevator deflection (rad) |
 | 9 | commanded airspeed (m/s) |
+| 10 | airspeed, true, against the wind and gust (m/s) |
+| 11 | normal load factor at the end of the step (g) |
+
+Channels 10 and 11 were added under Amendment 2, rule 16: the autopilot reads air
+data and the IRS's accelerations [BEA447, TECS, P409]. `env.obs_index` names
+every channel.
 
 Nearly full state, and deliberately so: this is the suite's *transparent*
 aircraft, where the difficulty is the plant rather than what can be seen of it.
@@ -246,7 +252,8 @@ climb before any tracking began.
 
 ### Turbulence
 
-The test configurations fly in light-to-moderate turbulence: an
+*Superseded for the scored tasks by Amendment 2 (below): a Dryden gust in one zone
+per episode. The impulse mode below is unchanged.* The test configurations fly in light-to-moderate turbulence: an
 Ornstein-Uhlenbeck gust on both axes with `turbulence_sigma = 1.2` m/s per 1 s
 step and `turbulence_theta = 0.2`, a stationary gust standard deviation of
 2 m/s (MIL-F-8785C puts light turbulence near 1.5 m/s and moderate near 3 m/s
@@ -309,7 +316,9 @@ trim, so a 1.8 deg demand pulled 1.9 g in the first second.
 
 ### The envelope
 
-The plant trips outside these limits (`check_is_terminal`, read on the true state):
+*Superseded for the 2D aircraft by Amendment 2 (below): load factor and AoA are
+protected, VMO/MMO is a warning, and only the ground trips. The table stays true
+for the 3D aircraft until its own change.* The plant trips outside these limits (`check_is_terminal`, read on the true state):
 
 | limit | value | source | |
 |---|---|---|---|
@@ -356,6 +365,76 @@ at each inner sub-step, VMO and MMO, each backed off by the planner's worst
 one-step error on it. It reads no expert code. A surface's rate limit needs no
 row: 30 deg/s for a 1 s step crosses the whole travel, so no demand lies past its
 reach, and the corner inside the step is smoothed.
+
+## Amendment 2: `plane` (2026-11-08)
+
+Each change cites [REALITY.md](REALITY.md) (tags in square brackets are its
+sources) and, where it fixes a finding, [COLD_REVIEW.md](COLD_REVIEW.md). Tests:
+`tests/plane/test_plane_reality.py`, from [BEHAVIOUR_TESTS.md](BEHAVIOUR_TESTS.md).
+
+**Limits (rule 14).** Load factor and AoA are protected, as normal law protects
+them [CFR 25.337, NTSB 1.6.3, BEA447] (cold review A1, A3):
+`protected_pitch_demand` clips the attitude demand to the incidence that lifts
+`load_factor_max` (2.5) or `load_factor_min` (-1.0) times the weight, or reaches
+the buffet line, whichever binds first. The inversion uses the wing's linear lift
+curve and its Prandtl-Glauert factor and leaves the tail's share out. Probe from
+trim, full demand, calm air: at most 2.08 g, at least -0.55 g, AoA at most 8.5 deg,
+from 3 000 to 8 000 m. VMO/MMO is the TCDS's warning (`info["overspeed"]`), not a
+trip (A2); no high-speed protection is modelled, since what the controls do above
+VMO is not found. The ceiling is 39 100 ft [TCDS], an operating limit. The ground
+is the one trip (A4, A5).
+
+**Readings (rule 16).** Airspeed, gust included, and normal acceleration are
+observed (A6, A7). Sensor latencies are not found [REALITY.md], so none.
+
+**Episode (rule 17).** The hold starts established: at the assigned level, at the
+scheduled airspeed against the mean wind, in trim (`trim_level`, Newton's method
+on the model's accelerations) (A9, A10). The target is one level [RVSM]. One
+turbulence zone per episode [BEA447 Figure 24] (A11); the gust is a Dryden
+first-order gust with the 1 750 ft scale length [MADDEN] on every axis (A12).
+
+**Score (rule 15).** `tracking`: zero inside +-65 ft of the level [RVSM]; past it,
+`((|e| - 65 ft) / 65 ft)^2` per second, which is the shared `tracking_cost` with
+`e_tol = e_floor = 65 ft`. `running`: the same on the assigned speed's band
+(`speed_band_cost`), +-10 kt CAS below the schedule's crossover and +-0.02 M above
+it [AIM 4-4-12]. `rho_floor` is 0: the best hold inside the bands costs nothing.
+The 2D oracle plans the earlier cost and refuses `plane`'s, so `plane`'s room is
+"not measured" (rule 9) until the oracle is rebuilt. Precision inside a band earns nothing (A16). The squared shape is the
+owner's choice of 2026-11-08: real regimes (RVSM monitoring, RNP containment)
+budget large deviations more tightly than small ones, and the square is the
+smooth form of that.
+
+| Number | Value | Status |
+|---|---|---|
+| `load_factor_max`, `load_factor_min` | 2.5, -1.0 g | cited: CFR 25.337(b), (c), the limits normal law protects |
+| AoA limit | the buffet line's | ours: the model's own stall boundary; the A320's alpha max is not found |
+| `vmo_eas`, `mmo` | 350 kt, 0.82 | cited: TCDS item 10 |
+| `max_alt` | 39 100 ft | cited: TCDS item 11 |
+| `altitude_band` | 65 ft | cited: RVSM A.4.1.4 |
+| `speed_band`, `mach_band` | 10 kt, 0.02 | cited: AIM 4-4-12, read 2026-11-08 on faa.gov |
+| band cost shape | squared excess in band widths | ours: the owner's choice, see above |
+| `gust_scale_length` | 1 750 ft | cited: MADDEN, after MIL-F-8785C |
+| `turbulence_sigma` | 0.55 m/s | derived: the sharp-edged gust load dn/dw = rho V S a / (2 m g) is 0.073 g per m/s at the schedule's 193.5 m/s at 5 500 m (Prandtl-Glauert slope); a minute holds 60 V / L = 22 scale lengths, whose expected range is 2 sqrt(2 ln 22) = 4.96 standard deviations; so 0.2 g peak to peak, the level BEA447 Figure 24 records most, needs 0.2 / (4.96 x 0.073) = 0.55 m/s. Checked by A5: median minute 0.155 g, worst 0.45 g |
+| `zone_duration_range` | 180 to 1 800 s | cited: BEA447 Figure 24 |
+| `zone_onset_range` | anywhere in the episode | ours: every episode holds one onset; real calm lasts over an hour [BEA447 Figure 24], longer than an episode |
+| episode | 1 800 s | ours: one zone of up to 30 min, with calm around a shorter one |
+| `failure_cost`, `restart_steps` | ((12 192 - 19.8) / 19.8)^2, 3 600 | ours: a crash is not priced in any source; an hour at the cost of 40 000 ft off the level |
+| model gas constant | 287.0 J/(kg K) | known deviation: ISA's is 287.053, so the model's CAS differs from TAS at sea level by 6e-5; kept, since the patrol tasks share the schedule |
+| `target_cas`, `target_mach` | 290 kt, M 0.78 | unsourced in REALITY.md (EUROCONTROL's A320 climb, cold review D4) |
+| `target_altitude_range` | 3 000 to 8 000 m | unsourced: cruise levels are not in REALITY.md (cold review B1) |
+| TECS `time_const` | 5 s | cited range 3 to 10 s [P409, TECS]; 5 is AP_TECS's default (C1) |
+
+**What the reference does on it.** TECS, still air, 10 min: within 11.3 m (B1).
+In a light zone for 30 min: within 12.3 m and 2.5 m/s, median minute 0.155 g. On
+five scored seeds (100 to 104) the whole-episode cost is 0: the reference never
+leaves a band. On this score `plane` is solved by the reference; whether it stays
+a benchmark candidate is for the room table (rule 9).
+
+**Known deviations (rule 13).** The gust is held over the step's four sub-steps,
+so loads step each second; the vertical Dryden gust is second order, ours first
+order with the right scale; no sensor latency; no high-speed protection; the
+speed schedule and altitude range are unsourced. None changes the score while the
+reference stays inside the bands.
 
 ## 5. Known deviations
 
@@ -491,12 +570,15 @@ which is what the recorded baselines use.
 
 ## Reward (version 2)
 
+*On `plane`, the terms below are replaced by the band costs of Amendment 2
+(below); `plane_sine` and `plane_energy` keep them until their own change.*
+
 `compute_reward = -(tracking + running + failure)`, shared by `plane`, `plane_sine` and `plane_energy`, see docs/reward-shaping.md.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 1 m (`plane`), 1.26 (`plane_sine`), 1.20 (`plane_energy`) | the long-run mean \|error\| the shipped MPC holds in the test turbulence, lowest per seed (`scripts/measure_hold.py`, 2 seeds), floored at the 1 m barometric resolution: a hold the instrument cannot see is not a floor. `plane`: the resolution; the MPC holds 0.55 / 0.46 m (the cascaded PID 1.83 / 0.87; the expert 1.5 on held-out seeds). `plane_sine`: an earlier MPC's hold. The current one holds 0.53 / 0.53 m (the cascaded PID 45.4 / 44.7; the expert 1.9 on held-out seeds), below the resolution, and the resolution is within 1.5x of 1.26 m, so the floor stays (oracle audit, 2026-10). `plane_energy` (`-v3`): the MPC's 1.198 m between ladder steps, rounded; under that floor it holds 1.35 / 1.18 m (the cascaded PID 8.5 / 12.1). It was 4.55 m, an earlier MPC's hold taken before its moves toward the next target were separated from its hold. Upper bounds otherwise |
-| `e_tol` | 0 | no dead zone. A +-30 m band (the pilot's instrument tolerance; the autopilot's is +-20 m, RVSM +-65 ft) was tried and made the hold vacuous: both controllers held within 0.1 m in still air, and the tracking cost was identically zero |
+| `e_floor` | 19.812 m (`plane`, Amendment 2: the +-65 ft band [RVSM], below), 1.26 (`plane_sine`), 1.20 (`plane_energy`) | `plane` before Amendment 2 used 1 m, the resolution. The long-run mean \|error\| the shipped MPC holds in the test turbulence, lowest per seed (`scripts/measure_hold.py`, 2 seeds), floored at the 1 m barometric resolution: a hold the instrument cannot see is not a floor. `plane`: the resolution; the MPC holds 0.55 / 0.46 m (the cascaded PID 1.83 / 0.87; the expert 1.5 on held-out seeds). `plane_sine`: an earlier MPC's hold. The current one holds 0.53 / 0.53 m (the cascaded PID 45.4 / 44.7; the expert 1.9 on held-out seeds), below the resolution, and the resolution is within 1.5x of 1.26 m, so the floor stays (oracle audit, 2026-10). `plane_energy` (`-v3`): the MPC's 1.198 m between ladder steps, rounded; under that floor it holds 1.35 / 1.18 m (the cascaded PID 8.5 / 12.1). It was 4.55 m, an earlier MPC's hold taken before its moves toward the next target were separated from its hold. Upper bounds otherwise |
+| `e_tol` | 0; 19.812 m on `plane` | `plane` (Amendment 2): +-65 ft [RVSM A.4.1.4], inside which precision earns nothing (rule 15). The others: no dead zone. A +-30 m band (the pilot's instrument tolerance; the autopilot's is +-20 m, RVSM +-65 ft) was tried and made the hold vacuous: both controllers held within 0.1 m in still air, and the tracking cost was identically zero |
 | `tracking_exponent` | 2 | quadratic outside the tolerance |
 | `c_hold` | 5.06 m/s (`plane`), 8.15 (`plane_sine`), 5.23 (`plane_energy`) | airspeed deviation from `target_speed` while holding, the cascaded PID's (`scripts/measure_hold.py`), the better controller on speed when it was the expert. The MPC holds 5.13 and 8.25 m/s on `plane` and `plane_sine`, where its throttle is the PID's own airspeed loop once it holds, and 19.6 on `plane_energy`, where it plans the throttle itself |
 | `running_weight` | 1 | the speed term stands in for fuel; sweep 0.5 / 1 / 2 |

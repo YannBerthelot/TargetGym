@@ -50,7 +50,9 @@ C2 = (
     "cement_kiln",
     "reactor",
 )  # fmt: skip  (battery holds a stand-in, labelled non-compliant, for 0.8.0)
-AIRCRAFT = ("plane", "plane_sine", "plane_energy")
+# ``plane`` scores bands since Amendment 2, and its oracle waits on a rebuild
+# (plane/PHYSICS.md); the other two still fly the 2D plant on the old cost.
+AIRCRAFT = ("plane_sine", "plane_energy")
 ON_SOLVER = FIVE + C2 + AIRCRAFT
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 

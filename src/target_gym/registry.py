@@ -510,13 +510,26 @@ _SPECS: tuple[EnvSpec, ...] = (
         env_factory=_plane,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
-        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 2D oracle is rebuilt for the Amendment 2 "
+            "score (+-65 ft and +-10 kt bands, plane/PHYSICS.md): the shipped "
+            "model plans the earlier quadratic cost, so plane's room is not "
+            "measured (charter rule 9)."
+        ),
         tuned_gains_key="plane",
         oracle_data=_shared_oracle("plane"),
         disturbance_fields=("gust_x", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step (the scored
+        # episode puts its zone anywhere, plane/PHYSICS.md).
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
-        version=3,
+        # v4: Amendment 2, the job (plane/PHYSICS.md): protected limits, air
+        # data read, established start, a turbulence zone, band costs.
+        version=4,
     ),
     # Two moving-setpoint variants of the same aircraft: same plant, same
     # controllers, a different commanded altitude. Steps expose the transient
@@ -533,9 +546,15 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="plane",
         oracle_data=_shared_oracle("plane_energy"),
         disturbance_fields=("gust_x", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step (the scored
+        # episode puts its zone anywhere, plane/PHYSICS.md).
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
-        version=5,
+        # v6: the 2D plant's Amendment 2 changes (plane/PHYSICS.md)
+        version=6,
     ),
     EnvSpec(
         name="plane_sine",
@@ -547,9 +566,15 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="plane",
         oracle_data=_shared_oracle("plane_sine"),
         disturbance_fields=("gust_x", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step (the scored
+        # episode puts its zone anywhere, plane/PHYSICS.md).
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
-        version=3,
+        # v4: the 2D plant's Amendment 2 changes (plane/PHYSICS.md)
+        version=4,
     ),
     EnvSpec(
         name="plane3d_heading",

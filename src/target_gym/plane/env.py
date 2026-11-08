@@ -15,6 +15,7 @@ from target_gym.plane.dynamics import (
     STICK_RESPONSE_RATE,
     STICK_TRAVEL,
     InnerLoop,
+    advance_dryden_gust,
     advance_gust,
     airspeed_scaler,
     attitude_axis,
@@ -27,8 +28,10 @@ from target_gym.plane.dynamics import (
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
     compute_velocity_from_horizontal_and_vertical_speed,
-    outside_envelope,
+    in_zone,
+    protected_pitch_demand,
     scheduled_airspeed,
+    speed_band_excess,
     step_key,
     total_wind_2d,
 )
@@ -73,8 +76,14 @@ class PlaneState(EnvState):
     gust_z: float = 0.0
     # The inner loop's pitch integral, in surface units.
     pitch_integ: float = 0.0
-    # The step's load factor furthest from 1 g, which the limits read.
+    # The step's load factor furthest from 1 g, inside its sub-steps.
     load_factor: float = 1.0
+    # The normal load factor at the end of the step, what an accelerometer reads.
+    n_z: float = 1.0
+    # The episode's turbulence zone, in seconds from the start (REALITY.md,
+    # time scales: zones of 3 to 30 min with calm between [BEA447 Figure 24]).
+    zone_start: float = 0.0
+    zone_end: float = 0.0
 
     actuator_held: jax.Array = actuator_field(2)
 
@@ -210,6 +219,7 @@ class PlaneParams(EnvParams):
         5.06  # m/s airspeed deviation while holding (PID; 8.15 sine, 5.23 ladder)
     )
     running_weight: float = 1.0
+    #: ``plane`` sets its own (Amendment 2, ``Airplane2D.default_params``).
     failure_cost: float = 2.0 * (12192.0 / 1.0) ** 2
     #: Restart time priced into a trip (``reward.trip_cost``): a crash loses the
     #: sortie, 1 h of flight at 1 s steps (provisional).
@@ -227,7 +237,9 @@ class PlaneParams(EnvParams):
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = False
     min_alt: float = 0.0
-    max_alt: float = 40_000.0 / 3.281
+    # The A320's maximum operating altitude, 39 100 ft [TCDS item 11]. An
+    # operating limit, not a trip: no source has the aircraft trip there.
+    max_alt: float = 39_100.0 * 0.3048
     # Look-ahead wind: apply the gust ALREADY stored in the state this step, so
     # the sensor that reads it reveals the disturbance *before* it acts. That
     # makes it genuine feedforward an agent can pre-cancel -- and a disturbance a
@@ -280,7 +292,9 @@ class PlaneParams(EnvParams):
     #: it around the target instead keeps the sampling varied while making the
     #: episode about holding the altitude, which is what the reward scores.
     #: ``initial_altitude_range`` still bounds the result.
-    initial_altitude_offset_range: Tuple[float, float] = (-600.0, 600.0)
+    #: Zero on the scored tasks: the hold starts established at its level
+    #: [BEA447, ALT CRZ; REALITY.md]. Extra tasks may still widen it.
+    initial_altitude_offset_range: Tuple[float, float] = (0.0, 0.0)
     initial_z_dot: float = 0.0
     initial_x_dot: float = 200.0
     initial_theta_dot: float = 0.0
@@ -297,8 +311,31 @@ class PlaneParams(EnvParams):
     # sigma = 0 (default) => no turbulence, wind is exactly the steady mean.
     # 1.2 m/s per 1 s step is a 2 m/s stationary gust std at theta = 0.2:
     # light-to-moderate turbulence (provisional; see PHYSICS.md).
-    turbulence_sigma: float = 1.2
+    #
+    # Now (Amendment 2): ``turbulence_sigma`` is the gust's stationary standard
+    # deviation inside a zone, on every axis (isotropic above 2 000 ft
+    # [MADDEN]), 0.55 m/s: the intensity whose sharp-edged gust load at the
+    # schedule's speed at 5 500 m spans the 0.2 g peak to peak per minute that
+    # BEA447 Figure 24 records most (PHYSICS.md, turbulence: derived).
+    # ``turbulence_theta`` is not read by the Dryden gust, whose correlation is
+    # set by ``gust_scale_length`` and the airspeed.
+    turbulence_sigma: float = 0.55
     turbulence_theta: float = 0.2
+    #: 1 750 ft above 2 000 ft AGL [MADDEN, MIL-F-8785C].
+    gust_scale_length: float = 1750.0 * 0.3048
+    #: When the zone starts, s: anywhere in a 30 min episode (ours: so every
+    #: episode holds one onset; real calm lasts over an hour [BEA447 Fig. 24]).
+    zone_onset_range: Tuple[float, float] = (0.0, 1800.0)
+    #: How long it lasts, s: 3 to 30 min [BEA447 Figure 24].
+    zone_duration_range: Tuple[float, float] = (180.0, 1800.0)
+    # ---- The job's bands (Amendment 2, rule 15) ----
+    #: Score the speed as the band below rather than as ``c_hold``'s excess.
+    #: ``plane`` sets it, with ``e_tol = e_floor = 65 ft`` [RVSM A.4.1.4].
+    speed_band_cost: bool = False
+    #: +-10 kt of an assigned speed below the crossover, +-0.02 Mach above it
+    #: [AIM 4-4-12].
+    speed_band: float = 10.0 * 1852.0 / 3600.0
+    mach_band: float = 0.02
     # Impulse gust mode. impulse_prob = 0 (default) => the OU turbulence above. When
     # impulse_prob > 0 the gust is instead a rare, memoryless "kick": each step a kick
     # arrives with per-step probability impulse_prob and jumps the gust by ~sigma*N,
@@ -391,6 +428,12 @@ PARAM_UNITS = {
     "target_steps": "-",
     "target_chirp_octaves": "-",
     "impulse_prob": "1/step",
+    "gust_scale_length": "m",
+    "zone_onset_range": "s",
+    "zone_duration_range": "s",
+    "speed_band_cost": "-",
+    "speed_band": "m/s",
+    "mach_band": "-",
 }
 
 
@@ -407,21 +450,15 @@ def check_mass_does_not_increase(old_mass, new_mass, xp=jnp):
 
 
 def check_is_terminal(state: PlaneState, params: PlaneParams, xp=jnp):
-    """The aircraft trips when its altitude leaves ``[min_alt, max_alt]`` or it
-    leaves the envelope (``plane.dynamics.outside_envelope``).
+    """The aircraft trips only when it reaches the ground.
 
     Returns ``(tripped, truncated)``. A trip does not end the episode:
     ``base.failure_kernel`` charges it and restarts the aircraft.
     """
-    wind_x, wind_z = total_wind_2d(state.z, state.gust_x, state.gust_z, params)
-    air_speed = compute_velocity_from_horizontal_and_vertical_speed(
-        state.x_dot - wind_x, state.z_dot - wind_z
-    )
-    terminated = (
-        (state.z <= params.min_alt)
-        | (state.z >= params.max_alt)
-        | outside_envelope(state.load_factor, air_speed, state.z, params)
-    )
+    # Load factor, AoA and overspeed are protected or warned, never trips
+    # (rule 14; REALITY.md, limits); the ceiling is an operating limit. The
+    # ground is the one loss.
+    terminated = state.z <= params.min_alt
     truncated = state.time >= params.max_steps_in_episode
 
     # done = xp.logical_or(done_alt, done_steps)
@@ -454,18 +491,34 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped
     whose noise must not fire or hide a trip (``base.measured_reward``).
     """
     p = params
-    speed = xp.sqrt(state.x_dot**2 + state.z_dot**2)
     if tripped is None:
         tripped, _ = check_is_terminal(state, p, xp)
+    # With ``speed_band_cost`` (``plane``, Amendment 2) the score is the job
+    # (rule 15; REALITY.md, the job): the altitude inside +-65 ft [RVSM], which
+    # is ``e_tol = e_floor = 65 ft``, and the assigned speed inside +-10 kt or
+    # +-0.02 M [AIM 4-4-12], both charged as the squared excess past the edge
+    # in band widths, per second. Without it, the earlier ground-speed excess
+    # over ``c_hold`` (``plane_sine``, ``plane_energy`` until their change).
+    ground = xp.sqrt(state.x_dot**2 + state.z_dot**2)
+    legacy = R.excess_cost(
+        xp.abs(ground - target_airspeed(state, p)), p.c_hold, p.running_weight, xp
+    )
+    band = speed_band_excess(state.z, airspeed(state, p, xp), p, xp) ** 2
     terms = {
         "tracking": R.tracking_cost(
             state.target_altitude - state.z, p.e_floor, p.e_tol, p.tracking_exponent, xp
         ),
-        "running": R.excess_cost(
-            xp.abs(speed - target_airspeed(state, p)), p.c_hold, p.running_weight, xp
-        ),
+        "running": xp.where(p.speed_band_cost, band, legacy),
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
+
+
+def airspeed(state, params, xp=jnp):
+    """True airspeed, against the wind the aircraft is in, gust included: what
+    the air data computer reads [BEA447, ADR], which sees a horizontal gust at
+    once (COLD_REVIEW A6). Its lag is not found (REALITY.md), so none."""
+    wind_x, wind_z = total_wind_2d(state.z, state.gust_x, state.gust_z, params)
+    return xp.sqrt((state.x_dot - wind_x) ** 2 + (state.z_dot - wind_z) ** 2)
 
 
 def compute_reward_v1(state: PlaneState, params: PlaneParams, xp=jnp):
@@ -548,6 +601,10 @@ def get_obs(state: PlaneState, params: PlaneParams = None, xp=jnp):
             # whether or not it is scored, so the shape does not depend on a
             # reward weight.
             params_target_speed,
+            # What the autopilot reads from air data and the IRS (rule 16;
+            # REALITY.md, readings): airspeed and normal acceleration.
+            airspeed(state, params, xp),
+            state.n_z,
         ]
     )
 
@@ -627,14 +684,30 @@ def compute_next_state(
     # ADVANCED gust (stored for next step). With wind_lookahead we APPLY the gust
     # already in the state (which the sensor revealed before this action -> the
     # agent can pre-cancel it); otherwise we apply the advanced gust (post-hoc).
-    gust = advance_gust(
-        jnp.array([state.gust_x, state.gust_z]),
+    # Dryden gust in a zone, calm outside it (PHYSICS.md, turbulence). The
+    # impulse mode is the old kick model, kept for the Extra variants.
+    previous = jnp.array([state.gust_x, state.gust_z])
+    zone = in_zone(state.time * params.delta_t, state.zone_start, state.zone_end)
+    dryden = advance_dryden_gust(
+        previous,
+        compute_velocity_from_horizontal_and_vertical_speed(
+            state.x_dot - params.wind_x - previous[0],
+            state.z_dot - params.wind_z - previous[1],
+        ),
+        jnp.where(zone, params.turbulence_sigma, 0.0),
+        params.gust_scale_length,
+        params.delta_t,
+        step_key(key, state.time),
+    )
+    kicked = advance_gust(
+        previous,
         params.turbulence_theta,
         params.turbulence_sigma,
         params.delta_t,
         step_key(key, state.time),
         params.impulse_prob,
     )
+    gust = jnp.where(params.impulse_prob > 0.0, kicked, dryden)
     # With look-ahead the gust already in the state is the one that acts now;
     # the freshly advanced one is stored for the next step.
     applied = jnp.where(
@@ -659,11 +732,19 @@ def compute_next_state(
         )
         rho = compute_air_density_from_altitude(z)
         eas = air_speed * jnp.sqrt(rho / params.air_density_at_sea_level)
+        demand = protected_pitch_demand(
+            pitch_demand,
+            jnp.arctan2(z_dot - total_wind_z, x_dot - total_wind_x),
+            air_speed,
+            z,
+            mass_now,
+            params,
+        )
         surface, integ = attitude_axis(
             gains.Kp_theta,
             gains.Ki_theta,
             gains.Kd_theta,
-            pitch_demand - theta,
+            demand - theta,
             theta_dot,
             integ,
             airspeed_scaler(eas, gains),
@@ -761,5 +842,8 @@ def compute_next_state(
         gust_z=gust[1],
         pitch_integ=pitch_integ,
         load_factor=load_factor,
+        n_z=metrics[1][-1] / (mass_now * params.gravity),
+        zone_start=state.zone_start,
+        zone_end=state.zone_end,
     )
     return new_state, metrics

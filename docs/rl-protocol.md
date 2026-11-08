@@ -220,7 +220,7 @@ before reading any result from it.
 | cstr | 150 | 5 | 25 | 0.99333 |
 | first_order | 150 | 10 | 50 | 0.99333 |
 | hvac | 720 | 62 | 310 | 0.99861 |
-| plane | 280 | 23 | 115 | 0.99643 |
+| plane | 1800 | 23 | 115 | 0.99944 |
 | plane_energy | 1600 | 23 | 115 | 0.99938 |
 | plane_sine | 480 | 23 | 115 | 0.99792 |
 | plane3d_heading | 300 | 14 | 70 | 0.99667 |

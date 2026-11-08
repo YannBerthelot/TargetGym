@@ -11,13 +11,16 @@ from target_gym.plane.dynamics import (
     STICK_TRAVEL,
     compute_gamma,
     instruments,
+    overspeed,
     read_angles,
+    scheduled_airspeed,
     total_wind_2d,
-    trim_stick,
+    trim_level,
 )
 from target_gym.plane.env import (
     PlaneParams,
     PlaneState,
+    airspeed,
     check_is_terminal,
     compute_next_state,
     compute_reward,
@@ -31,7 +34,6 @@ from target_gym.plane.env import (
 # imported it, and once the aircraft renderers were unified it was drawing in a
 # style that matched nothing else shipped, so it is gone.
 from target_gym.plane.rendering_console import _render
-from target_gym.utils import compute_norm_from_coordinates
 from target_gym.video import SavesVideo
 
 
@@ -52,7 +54,26 @@ class Airplane2D(
     screen_width = 600
     screen_height = 400
 
-    # obs = [x_dot, z, z_dot, theta, theta_dot, gamma, target_altitude, power, stick]
+    #: Each observation channel's index, so consumers need not count.
+    obs_index = {
+        name: i
+        for i, name in enumerate(
+            (
+                "x_dot",
+                "z",
+                "z_dot",
+                "theta",
+                "theta_dot",
+                "gamma",
+                "target_altitude",
+                "power",
+                "stick",
+                "target_speed",
+                "airspeed",
+                "load_factor",
+            )
+        )
+    }
     obs_value_index: int = 1  # z (altitude)
     tracked_names: tuple = ("altitude (m)",)
     obs_target_index: int = 6  # target_altitude
@@ -68,14 +89,38 @@ class Airplane2D(
         # Ten, not nine: the commanded airspeed is appended to the
         # observation whether or not it is being scored, so the shape does not
         # depend on a reward weight. Twelve with the wind sensor.
-        self.obs_shape = (12,) if observe_wind else (10,)
+        # Twelve with airspeed and normal acceleration, the air data and IRS
+        # readings an autopilot has (rule 16); fourteen with the wind sensor.
+        self.obs_shape = (14,) if observe_wind else (12,)
         self.positions_history = []
         self.integration_method = integration_method
 
     @property
     def default_params(self) -> PlaneParams:
-        # The scored configuration of ``plane``, the altitude hold.
-        return PlaneParams(max_steps_in_episode=280)
+        # The scored configuration of ``plane``, the altitude hold: 30 min of
+        # cruise (ours: long enough for one turbulence zone of up to 30 min
+        # with calm on either side when it is shorter [BEA447 Figure 24]).
+        band = 65.0 * 0.3048  # +-65 ft [RVSM A.4.1.4]
+        return PlaneParams(
+            max_steps_in_episode=1800,
+            e_floor=band,
+            e_tol=band,
+            speed_band_cost=True,
+            # A hold inside both bands costs nothing, so the best hold does.
+            rho_floor_tracking=0.0,
+            rho_floor=0.0,
+            # The ground is the one trip left (rule 14; REALITY.md finds no
+            # other), and no source prices a crash: ours, an hour
+            # (``restart_steps``) at the cost of 40 000 ft off the level.
+            failure_cost=((12192.0 - band) / band) ** 2,
+        )
+
+    def trim_action(self, state, params=None):
+        """The action that holds ``state``'s throttle and pitch: on a reset
+        state, the one that keeps the aircraft established."""
+        params = self.default_params if params is None else params
+        lever = (state.power - params.idle_power) / (1.0 - params.idle_power)
+        return jnp.stack([2.0 * lever - 1.0, state.theta / PITCH_DEMAND_MAX])
 
     def compute_reward(self, state, params):
         return compute_reward(state, params)
@@ -113,8 +158,10 @@ class Airplane2D(
         # A crash is part of the kernel: the step is charged the trip cost and
         # the flight restarts at once, or is lost (``terminated``) with
         # ``params.continuing = False`` (``base.finish_step``).
+        # The VMO/MMO warning [TCDS item 10]: reported, never a trip.
+        warning = overspeed(airspeed(new_state, params), new_state.z, params)
         new_state, reward, terminated, info = finish_step(
-            self, key, state, new_state, params, metrics=metrics
+            self, key, state, new_state, params, metrics=metrics, overspeed=warning
         )
         return self.get_obs(new_state, params), new_state, reward, terminated, info
 
@@ -130,14 +177,16 @@ class Airplane2D(
         """
         if params is None:
             params = self.default_params
-        key, altitude_key, target_key = jax.random.split(key, 3)
+        key, altitude_key, target_key, zone_key = jax.random.split(key, 4)
 
-        initial_x = 0.0
         target_altitude = jax.random.uniform(
             target_key,
             minval=params.target_altitude_range[0],
             maxval=params.target_altitude_range[1],
         )
+        # Established at the assigned level and speed, in trim (rule 17; the
+        # cruise hold is flown established in ALT CRZ [BEA447]). The offset
+        # is zero on the scored tasks; Extra variants may widen it.
         initial_z = jnp.clip(
             target_altitude
             + jax.random.uniform(
@@ -148,49 +197,44 @@ class Airplane2D(
             params.initial_altitude_range[0],
             params.initial_altitude_range[1],
         )
-        initial_z_dot = params.initial_z_dot
-        initial_x_dot = params.initial_x_dot
-        initial_theta = jnp.deg2rad(params.initial_theta)
-        initial_gamma = jnp.arcsin(
-            initial_z_dot
-            / (
-                compute_norm_from_coordinates(
-                    jnp.array([initial_x_dot, initial_z_dot + 1e-6])
-                )
-            )
-        )
-        initial_alpha = initial_theta - initial_gamma
-        # ``initial_fuel_quantity`` is a component of ``initial_mass``, not an
-        # addition to it -- 73 500 kg is the all-up takeoff mass, of which
-        # 19 088 kg is fuel (PHYSICS.md section 3). Adding them counted the
-        # fuel twice, a 20-tonne error that was invisible while the dynamics
-        # ignored ``state.m`` and used ``params.initial_mass`` directly.
+        air_speed = scheduled_airspeed(initial_z, params.target_cas, params.target_mach)
+        # ``initial_fuel_quantity`` is a component of ``initial_mass``.
         initial_m = params.initial_mass
-        initial_power = params.initial_power
-        # The autopilot engages in trim; ``initial_stick`` is an offset from it.
-        trim = trim_stick(initial_x_dot, initial_z, initial_theta, params)
-        initial_stick = trim + jnp.deg2rad(params.initial_stick)
-        initial_fuel = params.initial_fuel_quantity
+        theta, stick, power = trim_level(air_speed, initial_z, initial_m, params)
+        x_dot = air_speed + params.wind_x
+        onset_key, length_key = jax.random.split(zone_key)
+        zone_start = jax.random.uniform(
+            onset_key,
+            minval=params.zone_onset_range[0],
+            maxval=params.zone_onset_range[1],
+        )
+        zone_length = jax.random.uniform(
+            length_key,
+            minval=params.zone_duration_range[0],
+            maxval=params.zone_duration_range[1],
+        )
 
         state = PlaneState(
-            x=initial_x,
-            x_dot=initial_x_dot,
+            x=0.0,
+            x_dot=x_dot,
             z=initial_z,
-            z_dot=initial_z_dot,
-            theta=initial_theta,
-            theta_dot=jnp.deg2rad(params.initial_theta_dot),
-            alpha=initial_alpha,
-            gamma=initial_gamma,
+            z_dot=0.0,
+            theta=theta,
+            theta_dot=0.0,
+            alpha=theta,
+            gamma=0.0,
             m=initial_m,
-            power=initial_power,
-            stick=initial_stick,
-            fuel=initial_fuel,
+            power=power,
+            stick=stick,
+            fuel=params.initial_fuel_quantity,
             time=0,
             target_altitude=target_altitude,
             # What the moving patterns oscillate about; identical to
             # target_altitude while the pattern is 'hold'.
             base_target_altitude=target_altitude,
-            pitch_integ=trim / STICK_TRAVEL,
+            pitch_integ=stick / STICK_TRAVEL,
+            zone_start=zone_start,
+            zone_end=zone_start + zone_length,
         )
 
         obs = self.get_obs(state, params)

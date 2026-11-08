@@ -1,10 +1,13 @@
-"""The aircraft's envelope (docs/proposals/industrial-fixes.md, PR 7).
+"""The aircraft's envelope (docs/proposals/industrial-fixes.md, PR 7, and
+charter Amendment 2).
 
 Contract, each from a published figure:
 
-- The plant trips outside the limit load factors of 14 CFR 25.337, +2.5 and -1,
-  beyond VMO 350 kt and MMO 0.82 (OpenAP's A320 data), and past 60 deg of bank
-  (14 CFR 91.307(c)).
+- The 2D aircraft's flight controls protect the limit load factors of 14 CFR
+  25.337, +2.5 and -1, and its AoA; VMO 350 kt and MMO 0.82 [TCDS] are a
+  warning (``overspeed``), not a trip (plane/REALITY.md, limits;
+  tests/plane/test_plane_reality.py). The 3D aircraft still trips on them and
+  on 60 deg of bank until its own Amendment 2 change.
 - The wing's lift stops at a buffet line that falls with Mach, instead of rising
   with Prandtl-Glauert as it did. The tail keeps its own limit.
 - The ``plane`` family's airspeed demand is a schedule of 290 kt CAS and M 0.78
@@ -22,9 +25,10 @@ import pytest
 from target_gym.plane.dynamics import (
     buffet_line,
     compute_acceleration,
+    overspeed,
     scheduled_airspeed,
 )
-from target_gym.plane.env import PlaneParams, check_is_terminal
+from target_gym.plane.env import PlaneParams, airspeed, check_is_terminal
 from target_gym.plane.env_jax import Airplane2D
 from target_gym.plane3d.env import check_is_terminal_3d
 from target_gym.plane3d.env_jax import Plane3DHeading
@@ -66,6 +70,11 @@ def _trips(params, state):
     return bool(check(state, params)[0])
 
 
+def _overspeed(params, state):
+    """The VMO/MMO warning on a 2D state, against the wind it flies in."""
+    return bool(overspeed(airspeed(state, params), state.z, params))
+
+
 # -- Trips --------------------------------------------------------------------
 
 
@@ -79,7 +88,7 @@ def test_a_cruise_inside_the_envelope_does_not_trip(make):
     "load_factor,trips",
     [(2.4, False), (2.6, True), (-0.9, False), (-1.1, True)],
 )
-@pytest.mark.parametrize("make", (_state_2d, _state_3d))
+@pytest.mark.parametrize("make", (_state_3d,))
 def test_the_limit_load_factors_trip(make, load_factor, trips):
     assert _trips(*make(5000.0, 180.0, load_factor=load_factor)) is trips
 
@@ -87,17 +96,25 @@ def test_the_limit_load_factors_trip(make, load_factor, trips):
 # At 3000 m, EAS = 0.8615 TAS, so 350 kt (180.06 m/s EAS) is 209 m/s of TAS, where
 # M = 0.636: this trips on EAS alone.
 @pytest.mark.parametrize("speed,trips", [(205.0, False), (213.0, True)])
-@pytest.mark.parametrize("make", (_state_2d, _state_3d))
-def test_vmo_trips_on_equivalent_airspeed(make, speed, trips):
-    assert _trips(*make(3000.0, speed)) is trips
+def test_vmo_trips_on_equivalent_airspeed(speed, trips):
+    assert _trips(*_state_3d(3000.0, speed)) is trips
+
+
+@pytest.mark.parametrize("speed,warns", [(205.0, False), (213.0, True)])
+def test_the_vmo_warning_reads_equivalent_airspeed(speed, warns):
+    assert _overspeed(*_state_2d(3000.0, speed)) is warns
 
 
 # At 8000 m, a = 308.1 m/s, so M 0.82 is 252.6 m/s, whose EAS is 165 m/s: this
 # trips on Mach alone.
 @pytest.mark.parametrize("speed,trips", [(246.0, False), (258.0, True)])
-@pytest.mark.parametrize("make", (_state_2d, _state_3d))
-def test_mmo_trips_on_mach(make, speed, trips):
-    assert _trips(*make(8000.0, speed)) is trips
+def test_mmo_trips_on_mach(speed, trips):
+    assert _trips(*_state_3d(8000.0, speed)) is trips
+
+
+@pytest.mark.parametrize("speed,warns", [(246.0, False), (258.0, True)])
+def test_the_mmo_warning_reads_mach(speed, warns):
+    assert _overspeed(*_state_2d(8000.0, speed)) is warns
 
 
 @pytest.mark.parametrize("bank,trips", [(58.0, False), (62.0, True), (-62.0, True)])
@@ -110,34 +127,18 @@ def test_the_old_cruise_at_3000_m_is_past_vmo():
     params, state = _state_2d(3000.0, 230.0)
     eas = 230.0 * np.sqrt(float(state.rho) / 1.225)
     assert eas / KT == pytest.approx(385.0, abs=1.0)
-    assert _trips(params, state)
+    assert _overspeed(params, state)
 
 
 def test_a_steady_headwind_counts_toward_the_airspeed():
     # 180 m/s over the ground into 40 m/s of wind is 220 m/s of air, past 209.
     params, state = _state_2d(3000.0, 180.0)
-    assert not _trips(params, state)
-    assert _trips(params.replace(wind_x=-40.0), state)
+    assert not _overspeed(params, state)
+    assert _overspeed(params.replace(wind_x=-40.0), state)
 
 
-def test_full_nose_up_pulls_past_the_limit_load_and_trips():
-    """The review's finding: full stick at 3500 m gave 5.5 g (5.2 g when re-run).
-    At 190 m/s, inside VMO, the wing still has 2.5 g well within its buffet line,
-    so a full pitch demand must reach the limit and trip inside the pull."""
-    env = Airplane2D()
-    params = env.default_params.replace(turbulence_sigma=0.0)
-    _, state = env.reset_env(KEY, params)
-    state = state.replace(
-        z=jnp.float32(3500.0),
-        x_dot=jnp.float32(190.0),
-        target_altitude=jnp.float32(3500.0),
-    )
-    step = jax.jit(env.step_env)
-    trips = []
-    for _ in range(10):
-        _, state, _, _, info = step(KEY, state, jnp.array([1.0, 1.0]), params)
-        trips.append(bool(info["tripped"]))
-    assert any(trips)
+# Full nose-up no longer trips: normal law protects the load factor
+# (test_plane_reality.test_full_pitch_demand_is_protected_not_tripped).
 
 
 def test_a_new_load_factor_is_read_each_step():
@@ -227,7 +228,7 @@ def test_the_schedule_stays_inside_vmo_and_mmo(z):
     params, state = _state_2d(z, 180.0)
     speed = float(scheduled_airspeed(z, params.target_cas, params.target_mach))
     params, state = _state_2d(z, speed)
-    assert not _trips(params, state)
+    assert not _overspeed(params, state)
 
 
 def test_the_observation_commands_the_scheduled_airspeed():
@@ -250,19 +251,12 @@ def test_the_airspeed_term_charges_the_distance_from_the_schedule():
     assert float(env.reward_terms(off, params)["running"]) > 0.0
 
 
-TECS_PREDATES_THE_ENVELOPE = pytest.mark.xfail(
-    strict=True,
-    reason="PR 9: TECS's time_const 2 pulls past 2.5 g on a height capture; the "
-    "protocol's start of 5 does not",
-)
-
-
 @pytest.mark.parametrize(
     "name",
     (
-        pytest.param("plane", marks=TECS_PREDATES_THE_ENVELOPE),
+        "plane",
         "plane_sine",
-        pytest.param("plane_energy", marks=TECS_PREDATES_THE_ENVELOPE),
+        "plane_energy",
     ),
 )
 def test_the_expert_flies_the_schedule_without_tripping(name):

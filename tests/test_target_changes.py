@@ -140,8 +140,14 @@ def test_a_tripping_run_is_held_over_the_schedule():
     a restart stay in its hold."""
     spec = REGISTRY["plane_energy"]
     params = spec.make_test_params()
-    ep = E.run_episode(spec, params, baseline_policy(spec, "pid", params), seed=100)
-    assert ep.failed.sum() > 8  # this expert trips until PR 9, which is the case
+
+    # Full nose-down at idle dives into the ground, the 2D aircraft's one trip
+    # since Amendment 2 (its expert no longer trips), and restarts, over and over.
+    def dive(obs):
+        return np.array([-1.0, -1.0], np.float32)
+
+    ep = E.run_episode(spec, params, dive, seed=100)
+    assert ep.failed.sum() > 8
     assert set(np.flatnonzero(ep.target_change)) <= set(200 * np.arange(1, 9) - 1)
 
 
