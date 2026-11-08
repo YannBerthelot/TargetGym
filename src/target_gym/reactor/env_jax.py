@@ -30,7 +30,6 @@ from target_gym.reactor.env import (
     rod_balance,
     rod_worth,
     scheduled_load,
-    shim_position,
     steady_state_precursors,
     steady_state_temperatures,
     steady_state_xenon,
@@ -82,7 +81,7 @@ class Reactor(
     )
 
     def __init__(self, integration_method: str = "tr_bdf2_4"):
-        self.obs_shape = (11,)
+        self.obs_shape = (10,)
         self.integration_method = integration_method
 
     @property
@@ -109,11 +108,11 @@ class Reactor(
         if params is None:
             params = self.default_params
 
-        action, state = actuate(self, state, jnp.reshape(action, (3,)), params)
+        action, state = actuate(self, state, jnp.reshape(action, (2,)), params)
         action = jnp.clip(action, -1.0, 1.0)
         # The boron command joins the queue once a control step.
         state = state.replace(
-            boron_queue=jnp.concatenate([action[2:], state.boron_queue[:-1]])
+            boron_queue=jnp.concatenate([action[1:], state.boron_queue[:-1]])
         )
         # A controller gets one reading a step, so every sub-step's measured
         # cost carries the draw of the observation this step returns.
@@ -259,9 +258,6 @@ class Reactor(
         T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, params)
         # Critical on boron: the rods stay parked, whatever xenon asks for.
         needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, params)
-        # The shimming group on its calibration, R mid-band, critical on boron.
-        shim = shim_position(load, params)
-        needed = needed - (rod_worth(shim, params) - rod_worth(params.rod_park, params))
         boron = params.boron_ref + needed / params.boron_worth
         delay = jax.random.randint(
             delay_key,
@@ -292,9 +288,8 @@ class Reactor(
             ramp_down_at=down_at,
             ramp_up_at=up_at,
             demand_key=demand_key,
-            rod_in=as_state(shim),
-            r_in=as_state(0.5 * params.r_band),
-            rho_ext=as_state(rod_worth(shim, params)),
+            rod_in=as_state(params.rod_park),
+            rho_ext=as_state(rod_worth(params.rod_park, params)),
             rho_ext_cmd=as_state(0.0),
             boron=as_state(boron),
             delta_I=as_state(0.0),
@@ -309,9 +304,9 @@ class Reactor(
 
     def action_space(self, params: ReactorParams | None = None) -> spaces.Box:
         return spaces.Box(
-            low=-jnp.ones(3),
-            high=jnp.ones(3),
-            shape=(3,),
+            low=-jnp.ones(2),
+            high=jnp.ones(2),
+            shape=(2,),
             dtype=jnp.float32,
         )
 

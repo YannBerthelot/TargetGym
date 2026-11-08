@@ -105,24 +105,14 @@ class ReactorParams(EnvParams):
     T_fuel_ref: float = 1051.4  # K
     T_coolant_ref: float = 580.2  # K, Tavg at full load
 
-    # ---- The rods, as EDF's Mode G (Muniglia et al., ICAPP 2016, II.C) ----
-    # Two groups enter from the top of a 260-step core. The power-shimming group
-    # (grey G1, G2, black N1, N2, one bank here) is set from the power by a
-    # calibration; its worth is the power defect from full power to none, so the
-    # calibration spans the range (derived from this plant's balance, 1922 pcm).
-    # The grey groups' gentler effect on the offset is not modelled.
-    rho_ext_min: float = -0.0192184  # the shimming group fully inserted
-    rho_ext_max: float = 0.0  # fully withdrawn
-    rod_speed: float = 60.0 / 60.0 / 260.0  # 1/s, the shimming group, 60 steps/min
-    rod_stroke_steps: float = 260.0  # ICAPP 2016: 260 steps of about 1.65 cm
-    rod_park: float = 0.0  # the shimming group's calibrated position at full power
-    # The temperature group R, 9 black rods, held in a manoeuvring band of 27 steps
-    # at the top, at up to 72 steps/min. Its band is worth 2 x 2.8 K at the moderator
-    # coefficient, 168 pcm: ours, so the band spans the speed program's full scale
-    # both ways (the program reaches full speed at 2.8 C).
-    r_band: float = 27.0 / 260.0
-    r_band_worth: float = -168e-5
-    r_speed: float = 72.0 / 60.0 / 260.0  # 1/s
+    # ---- The rods: a 1500 pcm bank, entering from the top ----
+    rho_ext_min: float = -0.015  # rods fully inserted
+    rho_ext_max: float = 0.0  # rods fully withdrawn
+    # 72 steps/min over a 228-step stroke, in either direction, as a fraction of
+    # the stroke: a magnetic jack has one speed.
+    rod_speed: float = 72.0 / 60.0 / 228.0  # 1/s
+    rod_stroke_steps: float = 228.0
+    rod_park: float = 3.0 / 228.0  # D bank at 225 steps, Krsko fig. 3
 
     # ---- Soluble boron ----
     boron_ref: float = 1690.0  # ppm, Krsko fig. 3, at full power
@@ -376,8 +366,7 @@ class ReactorState(EnvState):
     rho_ext_cmd: float
     I_tilt: float = 0.0  # I-135, top half against the mean
     Xe_tilt: float = 0.0  # Xe-135, top half against the mean
-    rod_in: float = 0.0  # how far in the shimming group is, a fraction of the stroke
-    r_in: float = 13.5 / 260.0  # how far in group R is, a fraction of the stroke
+    rod_in: float = 3.0 / 228.0  # how far in the rods are, a fraction of the stroke
     boron: float = 1690.0  # ppm in the core
     delta_I: float = 0.0  # power difference, top minus bottom, a fraction of rated
     #: Boron flow commands on their way to the core, newest first.
@@ -389,7 +378,7 @@ class ReactorState(EnvState):
     effluent: float = 0.0  # kg/s the last sub-step's command injected
     below_floor: float = 0.0  # s Tavg has been under T_avg_min without a break
 
-    actuator_held: jax.Array = actuator_field(3)
+    actuator_held: jax.Array = actuator_field(2)
 
 
 def steady_state_precursors(n_0: float, params: ReactorParams) -> jnp.ndarray:
@@ -473,41 +462,6 @@ def flux_tilt(Xe_tilt, Xe_hat, n, eps, params: ReactorParams):
     b = S * Xe_tilt
     root = jnp.sqrt(jnp.maximum(N * N + 64.0 * b * (b + 1.25 * eps), 1e-10))
     return jnp.clip(-(8.0 * b + 10.0 * eps) / (N + root), -0.99, 0.99)
-
-
-def _s_curve(y):
-    return y - jnp.sin(2.0 * jnp.pi * y) / (2.0 * jnp.pi)
-
-
-def r_worth(r_in, params: ReactorParams):
-    """Group R's worth with a fraction ``r_in`` of the stroke in: the same cosine-flux
-    S-curve as the shimming group's, scaled so its band is worth ``r_band_worth``."""
-    return params.r_band_worth * _s_curve(r_in) / _s_curve(params.r_band)
-
-
-def r_tilt(r_in, params: ReactorParams):
-    """``eps`` of group R: as a bank of the full worth its band's share implies."""
-    full = params.r_band_worth / _s_curve(params.r_band)
-    return -0.5 * full * params.nu_Sigma_f * jnp.sin(jnp.pi * r_in) ** 3
-
-
-def shim_position(load, params: ReactorParams):
-    """The shimming group's calibration: the insertion whose worth takes the power
-    defect from full power to ``load``, at balanced xenon, as EDF calibrates
-    position against electrical power (IAEA NP-T-3.23, section 5)."""
-    p = params
-
-    def needed(level):
-        T_fuel, T_hot, T_cold, _ = steady_state_temperatures(level, p)
-        return rod_balance(T_fuel, 0.5 * (T_hot + T_cold), 1.0, p)
-
-    want = needed(load) - needed(1.0)
-    lo, hi = jnp.asarray(0.0), jnp.asarray(1.0)
-    for _ in range(40):
-        mid = 0.5 * (lo + hi)
-        deeper = rod_worth(mid, p) - rod_worth(0.0, p) > want
-        lo, hi = jnp.where(deeper, mid, lo), jnp.where(deeper, hi, mid)
-    return 0.5 * (lo + hi)
 
 
 def rod_tilt(rod_in, params: ReactorParams):
@@ -715,16 +669,11 @@ def compute_next_state(
     end of ``state.boron_queue`` (``Reactor.step_env`` feeds it).
     """
     p = params
-    # Rods: +1 asks for all the way out, -1 all the way in; R's -1 is its band's foot.
+    # Rods: +1 asks for all the way out, -1 all the way in.
     wanted = 0.5 * (1.0 - action[0])
     most = p.rod_speed * p.delta_t
     rod_in = jnp.clip(state.rod_in + jnp.clip(wanted - state.rod_in, -most, most), 0, 1)
     rods = rod_worth(rod_in, p)
-    r_wanted = 0.5 * (1.0 - action[1]) * p.r_band
-    r_most = p.r_speed * p.delta_t
-    r_in = jnp.clip(
-        state.r_in + jnp.clip(r_wanted - state.r_in, -r_most, r_most), 0.0, p.r_band
-    )
 
     # Boron: feed and bleed of well-mixed coolant, exact over the sub-step.
     arriving = state.boron_queue[state.boron_delay - 1]
@@ -736,8 +685,7 @@ def compute_next_state(
     boron = state.boron + (feed - state.boron) * closes
 
     rho_ext = rods - rod_worth(p.rod_park, p) + p.boron_worth * (boron - p.boron_ref)
-    rho_ext = rho_ext + r_worth(r_in, p) - r_worth(0.5 * p.r_band, p)
-    rod_eps = rod_tilt(rod_in, p) + r_tilt(r_in, p)
+    rod_eps = rod_tilt(rod_in, p)
 
     # ── Integrate coupled ODEs ──
     positions = jnp.concatenate(
@@ -828,8 +776,7 @@ def compute_next_state(
             rod_in=rod_in,
             rho_ext=rods,
             rho_ext_cmd=rod_worth(wanted, p),
-            r_in=r_in,
-            rod_moved=jnp.abs(rod_in - state.rod_in) + jnp.abs(r_in - state.r_in),
+            rod_moved=jnp.abs(rod_in - state.rod_in),
             effluent=injected,
             below_floor=jnp.where(
                 0.5 * (T_hot + T_cold) < p.T_avg_min, state.below_floor + p.delta_t, 0.0
@@ -851,8 +798,7 @@ def get_obs(state: ReactorState, params: ReactorParams):
     Partially observable: the agent sees only measurable quantities.
 
     ``obs = [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron, to_down,
-    to_up, R position]``, each group's position in [-1, 1] with +1 fully out (R's
-    -1 the foot of its band), as the demands are.
+    to_up]``, the rod position in [-1, 1] with +1 fully out, as the demand is.
     ``to_down`` and ``to_up`` are the hours until the planned ramps start, 0 once
     they have: the dispatch an operator gets in advance (OAPS, section 1), so boron
     can lead its delay.
@@ -873,7 +819,6 @@ def get_obs(state: ReactorState, params: ReactorParams):
             state.boron,
             jnp.maximum(state.ramp_down_at - now, 0.0) / 3600.0,
             jnp.maximum(state.ramp_up_at - now, 0.0) / 3600.0,
-            1.0 - 2.0 * state.r_in / params.r_band,
         ]
     )
 
