@@ -45,6 +45,7 @@ from target_gym.reactor import Reactor, ReactorParams
 from target_gym.reactor.env import (
     moderator_tilt,
     rod_balance,
+    rod_insertion_limit,
     rod_tilt,
     rod_worth,
     scheduled_load,
@@ -171,6 +172,8 @@ class Tune:
     inner_Ti: float
     t_Kc: float = 0.0  # rung 5, override: boron per K of Tavg past the dead band
     t_Ti: float = 1.0
+    wd_Kc: float = 0.0  # the procedure: bank D per unit of offset
+    wd_Ti: float = 1.0
 
 
 def dead(e):
@@ -239,15 +242,55 @@ def make_policy(tune, rung, p):
 
 
 PUBLISHED = "rod program + rung 5 boron"
+PROCEDURE = "bank D on delta I, boron on Tavg"
+
+
+def procedure(p, tune):
+    """The Westinghouse procedure (Krsko, NENE 2022, section 3; KNS 18A-534): bank D
+    holds the offset, kept above its insertion limit, and boron trims Tavg past the
+    rods' dead band. Boron is fed forward from the plan and from xenon, as on every
+    rung. Both loops are SIMC PIs on the recipe's bump tests."""
+
+    def planned_step(clock, down, up):
+        t = clock + LEAD_STEPS * DT
+        return scheduled_load(t + DT, down, up, p) - scheduled_load(t, down, up, p)
+
+    def act(m, obs):
+        u, b, last_ao, last_e, clock, down, up, I_x, Xe_x = m
+        n, rod, T_avg, T_ref, di = obs[0], obs[2], obs[4], obs[5], obs[6]
+        down = jnp.where(clock == 0.0, obs[8] * 3600.0, down)
+        up = jnp.where(clock == 0.0, obs[9] * 3600.0, up)
+        ao = p.ao_ref - di / jnp.maximum(n, 0.05)
+        u = u + tune.wd_Kc * ((ao - last_ao) + DT / tune.wd_Ti * ao)
+        u = jnp.clip(u, rod - STEPS_PER_MOVE, rod + STEPS_PER_MOVE)
+        deepest = 1.0 - 2.0 * rod_insertion_limit(n, p)
+        u = jnp.clip(u, deepest, PARK)
+        e = dead(T_ref - T_avg)
+        b = jnp.clip(b + tune.t_Kc * ((e - last_e) + DT / tune.t_Ti * e), -1.0, 1.0)
+        xenon, I_x, Xe_x = xenon_feedforward(
+            I_x, Xe_x, n, obs[7], clock == 0.0, p, DT, history=obs[10]
+        )
+        out = b + tune.ff * planned_step(clock, down, up) + xenon
+        a = jnp.stack([u, jnp.clip(out, -1.0, 1.0)])
+        return a, (u, b, ao, e, clock + DT, down, up, I_x, Xe_x)
+
+    zero = jnp.asarray(0.0)
+    return act, (jnp.asarray(PARK),) + (zero,) * 8
 
 
 def reference(saved, p):
-    """``(act, memory)`` of the reference in a saved ladder run: the published rod
-    program with the best rung's boron when that runs clean, else the best rung."""
-    tune = Tune(**saved["tune"])
-    if saved.get("reference") == PUBLISHED:
+    """``(act, memory)`` of the reference a saved ladder run chose."""
+    return reference_policy(
+        saved.get("reference") or saved["best_rung"], p, Tune(**saved["tune"])
+    )
+
+
+def reference_policy(name, p, tune):
+    if name == PUBLISHED:
         return program_with(p, tune, 5)
-    return make_policy(tune, int(saved["best_rung"].split()[1]), p)
+    if name == PROCEDURE:
+        return procedure(p, tune)
+    return make_policy(tune, int(name.split()[1]), p)
 
 
 def program_with(p, tune, rung):
@@ -396,6 +439,17 @@ def bumps(env, params):
 
     fits = [[boron_on_tavg(q, s) for q, s in pts] for pts in every]
     (t_Kc, t_Ti), report["boron_on_Tavg"] = design(fits, simc_integrating)
+
+    # The procedure's rods: ROD_BUMP steps in, boron held, an hour, on the offset.
+    def rods_on_offset(q, s):
+        du = -2.0 * ROD_BUMP / 228.0
+        a = jnp.array([1.0 - 2.0 * s.rod_in + du, 0.0])
+        tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), 120)
+        k, lag, delay = fopdt(offset(tr), float(s.delta_I / s.n))
+        return k / du, lag, delay
+
+    fits = [[rods_on_offset(q, s) for q, s in pts] for pts in every]
+    (wd_Kc, wd_Ti), report["rods_on_offset"] = design(fits, simc)
     tune = Tune(
         rod_Kc,
         rod_Ti,
@@ -408,6 +462,8 @@ def bumps(env, params):
         inner_Ti,
         t_Kc,
         t_Ti,
+        wd_Kc,
+        wd_Ti,
     )
     return tune, report
 
@@ -426,13 +482,16 @@ def episode(env, p, seed, act, memory):
         a, memory = act(memory, obs)
         obs, s, r, _, info = env.step_env(key, s, a, p)
         t = info["reward_terms"]
+        past_ril = s.rod_in > rod_insertion_limit(s.n, p)
         return (s, obs, memory), (
             -r, t["tracking"], t["running"], info["tripped"], s.delta_I / s.n,
-            s.rod_in, s.boron, 0.5 * (s.T_coolant + s.T_cold) - s.T_ref,
+            s.rod_in, s.boron, 0.5 * (s.T_coolant + s.T_cold) - s.T_ref, past_ril,
         )  # fmt: skip
 
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), p.max_steps_in_episode)
-    _, (c, tr, ru, trip, ao, rod, boron, e) = jax.lax.scan(step, (s, obs, memory), keys)
+    _, (c, tr, ru, trip, ao, rod, boron, e, ril) = jax.lax.scan(
+        step, (s, obs, memory), keys
+    )
     return {
         "cost": jnp.sum(c), "tracking": jnp.sum(tr), "running": jnp.sum(ru),
         "trips": jnp.sum(trip),
@@ -441,6 +500,7 @@ def episode(env, p, seed, act, memory):
         "past_dead_band_steps": jnp.sum(jnp.abs(e) > p.e_tol),
         "deepest_rods": jnp.max(rod) * 228.0,
         "boron_span": jnp.max(boron) - jnp.min(boron),
+        "past_ril_steps": jnp.sum(ril),
     }  # fmt: skip
 
 
@@ -473,17 +533,36 @@ def main():
     table["rod program + boron on offset"] = rows(env, p, act, memory)
     act, memory = program_with(p, tune, 5)
     table[PUBLISHED] = rows(env, p, act, memory)
+    act, memory = procedure(p, tune)
+    table[PROCEDURE] = rows(env, p, act, memory)
     hold = lambda m, o: (jnp.array([PARK, 0.0]), m)  # noqa: E731
     table["null: rods parked, no boron"] = rows(env, p, hold, jnp.asarray(0.0))
     rung_names = [k for k in table if k.startswith("rung")]
     clean = [k for k in rung_names if table[k]["seeds_tripped"] == 0]
     best = min(clean, key=lambda k: table[k]["cost_mean"]) if clean else None
-    # The owner's choice of 2026-11-08: the published rod program carries the rods,
-    # the recipe's boron the operator's part, if that pairing trips no seed.
-    reference = PUBLISHED if table[PUBLISHED]["seeds_tripped"] == 0 else best
+    # The candidates (owner, 2026-11-08): the rungs, the published rod program with
+    # the recipe's boron, and the published procedure, if it keeps the insertion
+    # limit. The reference is the cheapest that trips no seed.
+    candidates = [k for k in rung_names + [PUBLISHED, PROCEDURE]
+                  if table[k]["seeds_tripped"] == 0]  # fmt: skip
+    reference = (
+        min(candidates, key=lambda k: table[k]["cost_mean"]) if candidates else None
+    )
+    by_scenario = {}
+    if reference is not None:
+        from target_gym import scenarios
+        from target_gym.registry import REGISTRY
+
+        for sc in scenarios.suite(REGISTRY["reactor"]):
+            q = ReactorParams(**sc.overrides)
+            act, memory = reference_policy(reference, q, tune)
+            by_scenario[sc.name] = {
+                "reference": rows(env, q, act, memory),
+                "null": rows(env, q, hold, jnp.asarray(0.0)),
+            }
     print(json.dumps({
         "bump_models": models, "tune": tune.__dict__, "best_rung": best,
-        "reference": reference, "table": table,
+        "reference": reference, "table": table, "by_scenario": by_scenario,
     }, indent=1))  # fmt: skip
 
 

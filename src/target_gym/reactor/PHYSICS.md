@@ -238,6 +238,17 @@ to local power or to a trip, and the outer AFD envelope is not modelled.
 **D6: an overrun is priced, not flown.** Past the offset's allowed hour the cost is a
 derate's lost output, but the load does not drop: the plant keeps following the plan.
 
+**D8: EDF Mode A cannot hold the band on these days.** With the offset band as a
+penalty clock, the Mode A pairing (the rod program on Tavg, the operator's boron on the
+offset) spends about 9 h a day outside the band on seeds 100 to 109, overruns the
+allowed hour on every seed and loses to the parked-rods null ($671k against $658k,
+docs/proposals/reactor-ladder-a3.json). That is the family's own experience: EDF
+developed Mode G, with grey power-shimming groups, for deep load following, and 48 of
+its 56 units run it (Muniglia et al., ICAPP 2016, hal-01355257; arXiv 2107.11201).
+Mode G is not modelled (docs/proposals/reactor-coupling.md). The owner adopted the
+Westinghouse procedure instead on 2026-11-08: bank D on delta I and boron trimming Tavg
+(Krsko, NENE 2022, section 3; KNS 18A-534), if it keeps the rod insertion limit.
+
 **D7: the boronmeter reads exact.** It is 20 min late (Areva US 8,489,338) but carries
 none of the patent's 7 % noise.
 
