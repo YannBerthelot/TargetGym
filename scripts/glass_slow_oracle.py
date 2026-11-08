@@ -2,13 +2,15 @@
 
     python glass_slow_oracle.py SETTLED.npz SCENARIO SEED [iterations] [knot_hours]
 
-It knows the true plant, its state and every walk and event of the seed's episode, and
-chooses the valve as a piecewise-constant path (one value per ``knot_hours``) by Adam on
-the gradient through the whole episode. Lost glass is a step in cost, so the gradient
-uses a smooth step of it; every cost reported is the true one, from the environment's own
-``reward_terms``. Converged is shown, not assumed: two starts, the design valve and the
-middle of the box, must end within 0.5 % of each other, with the last tenth of the
-iterations flat.
+It knows the true plant, its state and every walk and event of the seed's episode. First
+it finds the best constant valve in hindsight on a grid; then it shapes the valve as a
+piecewise-constant path (one value per ``knot_hours``) by Adam on the gradient through the
+whole episode, from that constant and from the design valve. Lost glass is a step in
+cost, so the gradient sees a smooth step whose width shrinks over the run; every cost
+reported is the true one from the environment's ``reward_terms``, and each start keeps
+its best true path, so the oracle is never worse than the best constant. A step whose
+gradient is not finite is skipped and counted. Converged is shown, not assumed: the two
+starts must end within 0.5 % of each other.
 """
 
 import sys
@@ -41,8 +43,14 @@ def valve(z):
     return LO + (HI - LO) * jax.nn.sigmoid(z)
 
 
-def costs(z, soft):
-    """Episode cost, EUR: smooth (for the gradient) or true."""
+def unvalve(u):
+    u = jnp.clip(u, LO + 1e-4, HI - 1e-4)
+    return jnp.log((u - LO) / (HI - u))
+
+
+def costs(z, width):
+    """Episode cost, EUR: with ``width`` 0 the true one, else a smooth step of that
+    width on the fining share (and 100 times it, in K, on the canal)."""
     k0, k1 = jax.random.split(jax.random.split(jax.random.PRNGKey(0), 64)[SEED])
     _, st = E.reset(k0, S0, EP, fuel=F0, cooling=Q0)
     u = jnp.repeat(valve(z), PER)[:N]
@@ -51,56 +59,78 @@ def costs(z, soft):
     def f(st, x):
         k, a = x
         _, st, _, c = step(st, k, a)
-        if not soft:
-            return st, c["fuel"] + c["lost_glass"]
         r = P.sensors(st.fields, EP.grid, EP.plant)
         glass = st.pull * EP.plant.delta_t / 1000.0 * EP.lost_glass_price
-        ok = jax.nn.sigmoid((r["fining"] - EP.fining_pass) / 0.005) * jax.nn.sigmoid(
-            (r["canal"] - EP.canal_target) / 0.5
+        w = jnp.maximum(width, 1e-9)
+        ok = jax.nn.sigmoid((r["fining"] - EP.fining_pass) / w) * jax.nn.sigmoid(
+            (r["canal"] - EP.canal_target) / (100.0 * w)
         )
-        return st, c["fuel"] + glass * (1.0 - ok)
+        smooth = c["fuel"] + glass * (1.0 - ok)
+        return st, jnp.where(width > 0, smooth, c["fuel"] + c["lost_glass"])
 
     return jnp.sum(jax.lax.scan(f, st, (jax.random.split(k1, N), u))[1])
 
 
+TRUE = jax.jit(lambda z: costs(z, 0.0))
+GRAD = jax.jit(jax.value_and_grad(costs))
+
+
+def best_constant():
+    grid = jnp.linspace(0.40, 0.60, 41)
+    c = np.asarray(
+        jax.jit(jax.vmap(lambda u: costs(jnp.full((KNOTS,), unvalve(u)), 0.0)))(grid)
+    )
+    return float(grid[int(np.argmin(c))]), float(c.min())
+
+
 def solve(start):
-    z = jnp.full((KNOTS,), jnp.log((start - LO) / (HI - start)))
-    opt = optax.adam(optax.exponential_decay(0.1, ITERS, 0.1))
+    z = jnp.full((KNOTS,), unvalve(jnp.asarray(start)))
+    opt = optax.adam(optax.exponential_decay(0.05, ITERS, 0.1))
     state = opt.init(z)
-    grad = jax.jit(jax.value_and_grad(lambda z: costs(z, True)))
-    true = jax.jit(lambda z: costs(z, False))
-    trace = []
+    best_z, best = z, float(TRUE(z))
+    skipped = 0
     for i in range(ITERS):
-        v, g = grad(z)
+        width = 0.02 * (0.1 ** (i / max(ITERS - 1, 1)))  # 0.02 down to 0.002
+        _, g = GRAD(z, width)
+        if not bool(jnp.all(jnp.isfinite(g))):
+            skipped += 1
+            continue
         upd, state = opt.update(g, state)
         z = optax.apply_updates(z, upd)
-        if i % 10 == 0 or i == ITERS - 1:
-            trace.append(float(true(z)))
-    return z, trace
+        if i % 10 == 9 or i == ITERS - 1:
+            v = float(TRUE(z))
+            if v < best:
+                best_z, best = z, v
+    return best_z, best, skipped
 
 
 def main():
     days = N * EP.plant.delta_t / 86400.0
     t0 = time.time()
-    out = {}
-    for name, start in (("design", F0), ("box mid", 0.5 * (LO + HI))):
-        z, trace = solve(start)
-        out[name] = (z, trace)
-        tail = np.array(trace[-max(len(trace) // 10, 2) :])
-        print(
-            f"{SCENARIO.name} seed {SEED} start {name}: EUR/day {trace[-1] / days:.0f},"
-            f" last tenth spread {100 * np.ptp(tail) / tail.mean():.2f} %,"
-            f" mean valve {float(valve(z).mean()):.4f} kg/s, {time.time() - t0:.0f} s",
-            flush=True,
-        )
-    a, b = (out[k][1][-1] for k in out)
-    best = min(a, b)
+    c_best, c_cost = best_constant()
     print(
-        f"{SCENARIO.name} seed {SEED}: oracle EUR/day {best / days:.0f}; starts agree to"
-        f" {100 * abs(a - b) / best:.2f} % ({'converged' if abs(a - b) / best < 0.005 else 'NOT converged'})",
+        f"{SCENARIO.name} seed {SEED}: best constant {c_best:.3f} kg/s, EUR/day {c_cost / days:.0f}",
         flush=True,
     )
-    z = out["design"][0] if a <= b else out["box mid"][0]
+    out = {}
+    for name, start in (("best constant", c_best), ("design", F0)):
+        z, best, skipped = solve(start)
+        out[name] = (z, best)
+        print(
+            f"{SCENARIO.name} seed {SEED} start {name}: EUR/day {best / days:.0f},"
+            f" mean valve {float(valve(z).mean()):.4f} kg/s, skipped {skipped},"
+            f" {time.time() - t0:.0f} s",
+            flush=True,
+        )
+    a, b = (out[k][1] for k in out)
+    best = min(a, b)
+    print(
+        f"{SCENARIO.name} seed {SEED}: oracle EUR/day {best / days:.0f}; best constant"
+        f" {c_cost / days:.0f}; starts agree to {100 * abs(a - b) / best:.2f} %"
+        f" ({'converged' if abs(a - b) / best < 0.005 else 'NOT converged'})",
+        flush=True,
+    )
+    z = out["best constant"][0] if a <= b else out["design"][0]
     np.save(
         sys.argv[1].replace(".npz", f"_oracle_{SCENARIO.name}_{SEED}.npy"),
         np.asarray(valve(z)),

@@ -132,9 +132,9 @@ def run_lookalike():
     print(
         f"gas +{100 * x:.2f} % matches sulfate +50 % on the couple at 2 h (noise-free obs)"
     )
-    print("  h | sulfate: couple, air, stack, cooling share, fining | gas: same")
+    print("  h | sulfate: couple, floor, canal, cooling share, fining | gas: same")
     for h in (1, 2, 3, 4, 6, 8, 12, 24):
-        o = lambda r: np.round((at(r[1], h) - at(base[1], h))[[0, 6, 7, 5]], 3)
+        o = lambda r: np.round((at(r[1], h) - at(base[1], h))[[0, 2, 3, 5]], 3)
         fn = lambda r: round(float(at(r[0], h)[1] - at(base[0], h)[1]), 4)
         print(f"  {h:3d}", o(foam), fn(foam), "|", o(gas), fn(gas))
     for lab, r in (("sulfate", foam), ("gas", gas)):
