@@ -1,5 +1,32 @@
 # Unstable CSTR: physics model, provenance and validation
 
+## Status: Extra (charter rule 5), 2026-11-08
+
+This task goes to Extra under charter rules 17 and 18, with rule 5's single
+design. It keeps its code and is not scored.
+
+**Reason.** The named property is an open-loop unstable operating point. The
+plant record (`REALITY.md`, "The plant") finds that point run only on
+laboratory and pilot reactors [U2; S1, p. 3]. A production reactor run
+deliberately at an open-loop unstable point, with plant data, was not found,
+and neither was the propylene glycol pilot the task names. Rule 17 asks that
+the episode be real operation, and there is no real operation at this point
+to model: its targets, its disturbances and its trip would all be ours. The
+cold review (`COLD_REVIEW.md`) adds that the property depends on a synthetic
+jacket: at the 6 s lag the task is controllable, while one plant reports about
+2 min of jacket dead time [S6], and McMillan's gain window closes as the lags
+approach the positive-feedback time constant [U1]. The real jacket would make a
+different task, which rule 5 does not allow as a second try.
+
+**What a future task would need.** An industrial record of a continuous
+reactor run at an unstable point (Pinheiro and Kershenbaum 1999 is on the
+owner list, unopened), a jacket energy balance with sourced dead time, and the
+operator's job of `REALITY.md`: hold temperature, watch the rate of rise, and
+trip feed before heat release outruns the jacket. The `cstr` task now carries
+the jacket and the runaway on the same reactor (`../cstr/PHYSICS.md`).
+
+The sections below describe the task as it was, for the record.
+
 Reference process: the shipped `cstr` reactor, a jacketed continuous
 stirred-tank reactor running an irreversible first-order exothermic reaction
 A → B, held on its **open-loop unstable middle steady state**. The coolant
