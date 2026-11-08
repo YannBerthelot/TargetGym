@@ -343,7 +343,7 @@ PRICED = {
     "boiler_drum": 1,  # steam off the plan; the level is limited, not priced
     "wind_turbine": 1,  # power
     "cement_kiln": 2,  # free lime, fuel
-    "reactor": 1,  # Tavg: the rods' travel stops at a steady state
+    "reactor": 2,  # Tavg past its dead band, the offset past its band (its clock)
     "plane": 2, "plane_sine": 2, "plane_energy": 2,  # altitude, speed
 }  # fmt: skip
 

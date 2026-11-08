@@ -117,9 +117,10 @@ class ReferenceParams:
 @struct.dataclass
 class ReferenceState:
     """The two loops' outputs and last errors, the plan, the clock and the xenon
-    tool's iodine and xenon."""
+    tool's iodine and xenon. The rods' loop starts from where the rods are read on
+    the first step, so every field starts at 0."""
 
-    rods: float = 1.0 - 2.0 * 3.0 / 228.0
+    rods: float = 0.0
     boron: float = 0.0
     last_ao: float = 0.0
     last_e: float = 0.0
@@ -178,7 +179,8 @@ def reference_step(params, state, obs, xp=jnp):
     up = xp.where(first, to_up * 3600.0, state.up)
 
     ao = p.ao_ref - di / xp.maximum(n, 0.05)
-    rods = state.rods + p.wd_Kc * ((ao - state.last_ao) + p.dt / p.wd_Ti * ao)
+    held = xp.where(first, rod, state.rods)
+    rods = held + p.wd_Kc * ((ao - state.last_ao) + p.dt / p.wd_Ti * ao)
     rods = xp.clip(rods, rod - p.reach, rod + p.reach)
     rods = xp.clip(rods, 1.0 - 2.0 * rod_insertion_limit(n, plant), p.park)
 
