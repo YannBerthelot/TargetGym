@@ -120,13 +120,20 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
     return jnp.concatenate([plant, jnp.stack([rods, boron]), queue]), rows
 
 
+#: $/h per 1 % of rated delta I past the band, the plan's surrogate (ours).
+PLAN_BAND_WEIGHT = 1000.0
+
+
 def reactor_model(env, p) -> TaskModel:
     assert float(p.tracking_exponent) == 1.0
     assert env.integration_method.startswith("tr_bdf2_")
     per_K_s = p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW / 3.6
     per_K = float(per_K_s * p.delta_t)  # a sub-step's dollars
     period = env.control_period
-    per_delta_I = float(p.delta_I_price * 100.0 * p.delta_t / 3600.0)
+    # The plan's surrogate for the offset's penalty clock, which has no gradient:
+    # past the band, each 1 % of rated delta I weighs as 1 % of 1 GWe at $100/MWh.
+    # Plans are scored on replay, against the clock itself.
+    per_delta_I = float(PLAN_BAND_WEIGHT * 100.0 * p.delta_t / 3600.0)
     flow_step = float(p.effluent_price * p.delta_t * period)
 
     def step(d, x, u, t):
@@ -166,7 +173,7 @@ def reactor_model(env, p) -> TaskModel:
         hold=lambda s: jnp.stack([rod_raw(s), jnp.zeros_like(s.rod_in)]),
         tracked=lambda s: 0.5 * (s.T_coolant + s.T_cold)[None],
         resolution=(float(p.precision_floor),),
-        hinges=(Hinge(weight=per_K * float(p.e_floor), absolute=True,
+        hinges=(Hinge(weight=per_K * float(p.e_floor),
                       tol=float(p.e_tol / p.e_floor)),) * period
         + (Hinge(weight=per_delta_I),) * (2 * period)
         + (

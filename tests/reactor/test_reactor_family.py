@@ -9,6 +9,10 @@ Contracts, from sources, written before the runs:
   travel moves delta I by no more than the band's width, 10 %, and the same day,
   rods for delta I inside that travel and boron for criticality, stays inside
   +-5 % (read off a figure: 0.01 slack).
+- Xenon's swing on a load cut (Krsko fig. 5, the same day): at the 50 % point the
+  mean xenon reads 110 against 96 at full power, 1.146 times. Tolerance 0.05: two
+  readings off a figure, about 2 in 100 each, and the 50 % point's time to half an
+  hour, while xenon climbs about 2 % an hour.
 """
 
 import jax
@@ -39,7 +43,8 @@ def test_the_banks_whole_travel_moves_delta_i_by_less_than_the_band(n):
     assert 0.0 < swing <= 2.0 * KRSKO_BAND
 
 
-def test_a_krsko_day_with_the_banks_travel_stays_inside_the_band():
+@pytest.fixture(scope="module")
+def krsko_day():
     """Krsko's day 1: 100 to 50 % at 8 %/h and straight back. As in the paper, bank
     D is positioned for delta I but only inside its 35-step travel, and boron
     trims Tavg for criticality. The two loops' gains are ours: a procedure, not
@@ -66,9 +71,20 @@ def test_a_krsko_day_with_the_banks_travel_stays_inside_the_band():
         boron = jnp.clip(-0.1 * error, -1.0, 1.0)  # dilute when cold
         a = jnp.stack([rods, boron]).astype(jnp.float32)
         _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, p)
-        return (s, steps_in), (s.delta_I, s.time)
+        return (s, steps_in), (s.delta_I, s.time, s.Xe_hat, s.target_n)
 
     start = (s, jnp.asarray(PARK, s.n.dtype))
-    _, (dI, t) = jax.lax.scan(step, start, None, length=p.max_steps_in_episode)
-    assert int(np.sum(np.asarray(t) == 0)) == 0  # no trip
-    assert float(np.max(np.abs(np.asarray(dI)))) <= KRSKO_BAND + FIGURE_SLACK
+    _, trace = jax.lax.scan(step, start, None, length=p.max_steps_in_episode)
+    return [np.asarray(x) for x in trace]
+
+
+def test_a_krsko_day_with_the_banks_travel_stays_inside_the_band(krsko_day):
+    dI, t, _, _ = krsko_day
+    assert int(np.sum(t == 0)) == 0  # no trip
+    assert float(np.max(np.abs(dI))) <= KRSKO_BAND + FIGURE_SLACK
+
+
+def test_xenon_swings_on_the_load_cut_as_krskos(krsko_day):
+    _, _, xenon, load = krsko_day
+    bottom = int(np.argmin(load))
+    assert xenon[bottom] == pytest.approx(110.0 / 96.0, abs=0.05)

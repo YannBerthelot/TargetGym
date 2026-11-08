@@ -234,9 +234,10 @@ def test_a_rod_step_costs_its_price():
 
 def test_one_kelvin_past_the_dead_band_costs_its_lost_output():
     """$230/h per K past the rods' 1.6 K dead band, over the 5 s sub-step: $0.319.
-    The owner moved the charge outside the dead band on 2026-11-08 (EDF practice)."""
+    The owner moved the charge outside the dead band on 2026-11-08 (EDF practice),
+    and to Tavg under its program only (rule 15, Amendment 3)."""
     state, params = _lined_out(0.8)
-    off = state.replace(T_coolant=state.T_coolant + 5.2)  # Tavg up 2.6 K
+    off = state.replace(T_coolant=state.T_coolant - 5.2)  # Tavg down 2.6 K
     cost = float(compute_reward_terms(off, params)["tracking"])
     on = float(compute_reward_terms(state, params)["tracking"])
     assert cost - on == pytest.approx(230.0 * 5.0 / 3600.0, rel=0.01)
@@ -263,6 +264,7 @@ def test_the_expert_keeps_the_offset_in_band_on_a_steady_load():
     obs, state = ENV.reset_env(jax.random.PRNGKey(100), params)
     far = jnp.float32(1e8)
     state = state.replace(ramp_down_at=far, ramp_up_at=far)
+    obs = ENV.get_obs(state, params)  # the plan the expert reads: no ramp today
     step = jax.jit(ENV.step_env)
     key = jax.random.PRNGKey(1)
     rods, errors = [float(state.rod_in) * 228.0], []

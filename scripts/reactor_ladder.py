@@ -56,6 +56,7 @@ from target_gym.reactor.experts import (
     RodControlParams,
     RodControlState,
     rod_control_step,
+    xenon_feedforward,
 )
 
 SEEDS = tuple(range(100, 110))
@@ -185,7 +186,7 @@ def make_policy(tune, rung, p):
         return scheduled_load(t + DT, down, up, p) - scheduled_load(t, down, up, p)
 
     def act(m, obs):
-        u, b, target, last_e, last_ao, last_r, clock, down, up, bt = m
+        u, b, target, last_e, last_ao, last_r, clock, down, up, bt, I_x, Xe_x = m
         n, rod, T_avg, T_ref = obs[0], obs[2], obs[4], obs[5]
         di, to_down, to_up = obs[6], obs[8], obs[9]
         # The plan, read once at the start: absolute times on the policy's clock.
@@ -207,7 +208,7 @@ def make_policy(tune, rung, p):
         else:
             b = b + tune.boron_Kc * ((ao - last_ao) + DT / tune.boron_Ti * ao)
         b = jnp.clip(b, -1.0, 1.0)
-        out = b
+        out = b_before_override = b
         if rung >= 2:
             out = out + tune.ff * planned_step(clock, down, up)
         if rung == 4:
@@ -216,17 +217,24 @@ def make_policy(tune, rung, p):
             out = jnp.where(ao < -BAND_OVERRIDE, -1.0, out)
         if rung >= 5:
             # Override on the rods' saturation: at their top stop with Tavg still low,
-            # boron takes Tavg; off the stop its loop resets, so the switch is bumpless.
+            # boron takes Tavg. Off the stop, what it built moves into the boron
+            # loop's integrator, so the handback is bumpless.
             stuck = (rod >= PARK - 1e-3) & (e > 0.0)
+            b = jnp.clip(b + jnp.where(stuck, 0.0, bt), -1.0, 1.0)
             bt = jnp.where(
                 stuck, bt + tune.t_Kc * ((e - last_e) + DT / tune.t_Ti * e), 0.0
             )
-            out = out + bt
+            out = b + bt + (out - b_before_override)
+        # Every rung: the operator's xenon tool (experts.xenon_feedforward).
+        xenon, I_x, Xe_x = xenon_feedforward(
+            I_x, Xe_x, n, obs[7], clock == 0.0, p, DT, history=obs[10]
+        )
+        out = out + xenon
         a = jnp.stack([u, jnp.clip(out, -1.0, 1.0)])
-        return a, (u, b, target, e, ao, r, clock + DT, down, up, bt)
+        return a, (u, b, target, e, ao, r, clock + DT, down, up, bt, I_x, Xe_x)
 
     zero = jnp.asarray(0.0)
-    memory = (jnp.asarray(PARK), zero, jnp.asarray(PARK)) + (zero,) * 7
+    memory = (jnp.asarray(PARK), zero, jnp.asarray(PARK)) + (zero,) * 9
     return act, memory
 
 
@@ -260,18 +268,7 @@ def program_with(p, tune, rung):
 
 def published(p, tune):
     """The published rod program on Tavg with rung 1's boron loop on the offset."""
-    rc = RodControlParams()
-
-    def act(memory, obs):
-        state, last_ao, b = memory
-        a, state = rod_control_step(rc, state, obs[:6])
-        ao = p.ao_ref - obs[6] / jnp.maximum(obs[0], 0.05)
-        b = b + tune.boron_Kc * ((ao - last_ao) + DT / tune.boron_Ti * ao)
-        b = jnp.clip(b, -1.0, 1.0)
-        return jnp.stack([a[0], b]), (state, ao, b)
-
-    zero = jnp.asarray(0.0)
-    return act, (RodControlState(zero, zero, zero), zero, zero)
+    return program_with(p, tune, 1)
 
 
 # ---------------------------------------------------------------------------

@@ -6,13 +6,12 @@ Contract, from the sources the plant check cites:
   once it has, as the dispatch an operator gets in advance (OAPS, section 1);
 - Tavg costs nothing within 1.6 K of its program, the black rods' dead band (IAEA
   NP-T-3.23, annex II-5.1), and the linear price past it;
-- delta I is charged past an axial-offset band of 0.05 around the reference, so in
-  delta I the band is 0.05 times the power (IAEA NP-T-3.23, annex II-4.3);
+- the axial-offset band (0.05 around the reference, IAEA NP-T-3.23, annex II-4.3)
+  is a penalty clock since Amendment 3, tested in test_reactor_limits.py;
 - Tavg under the criticality floor is a limit with a time to act: the run ends only
   once it has lasted ``floor_allowed``.
 
 Prices by hand: Tavg, 1.25 x 0.0023 x $80/MWh x 1000 MW = $230/h per K, $0.3194 per K
-over a 5 s sub-step; delta I, $1000/h per 1 % of rated past the band, $1.3889 per 0.01
 over a 5 s sub-step.
 """
 
@@ -36,7 +35,7 @@ def reset(seed=0):
 
 def test_the_observation_carries_the_hours_to_each_ramp():
     env, p, obs, s = reset()
-    assert obs.shape == (10,)
+    assert obs.shape == (11,)
     np.testing.assert_allclose(obs[8], float(s.ramp_down_at) / 3600.0, rtol=1e-6)
     np.testing.assert_allclose(obs[9], float(s.ramp_up_at) / 3600.0, rtol=1e-6)
 
@@ -57,22 +56,6 @@ def tavg_off_by(s, kelvin):
 def test_tavg_costs_only_past_the_rods_dead_band(off, expected):
     env, p, obs, s = reset()
     terms = compute_reward_terms(tavg_off_by(s, off), p)
-    assert float(terms["tracking"]) == pytest.approx(expected, rel=1e-3, abs=1e-6)
-
-
-@pytest.mark.parametrize(
-    "n, delta_I, expected",
-    [
-        (1.0, 0.04, 0.0),  # offset 0.04, inside
-        (0.5, 0.02, 0.0),  # offset 0.04 at half power, inside
-        (0.5, 0.03, 0.69444),  # offset 0.06: 0.005 of rated past 0.025
-        (1.0, -0.06, 1.38889),  # 0.01 past on the low side
-    ],
-)
-def test_delta_I_costs_past_an_offset_band_that_scales_with_power(n, delta_I, expected):
-    env, p, obs, s = reset()
-    s = s.replace(n=s.n * 0 + n, delta_I=s.delta_I * 0 + delta_I)
-    terms = compute_reward_terms(s, p)
     assert float(terms["tracking"]) == pytest.approx(expected, rel=1e-3, abs=1e-6)
 
 

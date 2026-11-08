@@ -247,11 +247,9 @@ def test_xenon_peak_timing_is_early(params):
     assert 7.0 < peak_t < 9.5
 
 
-def test_peak_xenon_worth_is_in_the_published_band(params):
-    """The reactivity consequence, which is what actually matters."""
-    _, peak_x = _xenon_after_power_drop(0.0, params)
-    worth_pcm = params.rho_Xe_full * (peak_x - 1.0) * 1e5
-    assert 1800.0 < worth_pcm < 3200.0
+# The scram's peak xenon worth (1800 to 3200 pcm, no source named) was retired by
+# the owner on 2026-11-08 (charter, Amendment 3): the task has no scram. The load
+# cut's swing is tested against Krsko in test_reactor_family.py.
 
 
 def test_deeper_power_cuts_make_bigger_and_later_pits(params):

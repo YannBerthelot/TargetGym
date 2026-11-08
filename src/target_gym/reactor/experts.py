@@ -97,7 +97,7 @@ class ReferenceParams:
     ladder's rung 5. Boron steers the axial offset through the rods, as a cascade
     (the offset sets the rods' target, boron carries them there). It is fed forward
     from the day's plan for the power defect, led by the boron line's expected delay,
-    and takes Tavg while the rods sit at their top stop with Tavg still low past
+    and from xenon's balance (:func:`xenon_feedforward`), and takes Tavg while the rods sit at their top stop with Tavg still low past
     1.6 C (IAEA NP-T-3.23, annex II-5.1). Every boron gain is SIMC on a bump test at
     full power and at the half-power hold, the design asking the least gain kept.
     Nothing here was set from a cost (docs/proposals/reactor-axial.md)."""
@@ -120,8 +120,8 @@ class ReferenceParams:
 
 @struct.dataclass
 class ReferenceState:
-    """The rod program's state, the boron loops' outputs and last errors, the plan
-    and the clock."""
+    """The rod program's state, the boron loops' outputs and last errors, the plan,
+    the clock and the xenon tool's iodine and xenon."""
 
     rods: RodControlState = struct.field(default_factory=RodControlState)
     boron: float = 0.0
@@ -133,11 +133,44 @@ class ReferenceState:
     down: float = 0.0
     up: float = 0.0
     override: float = 0.0
+    I_hat: float = 0.0
+    Xe_hat: float = 0.0
+
+
+def xenon_feedforward(I_hat, Xe_hat, n, boron, first, plant, dt, xp=jnp, history=None):
+    """The boron flow that cancels xenon's reactivity rate, and the next ``I_hat,
+    Xe_hat``.
+
+    The operator's xenon tool (OAPS, section 1): the textbook iodine and xenon
+    equations (the same point form as the plant's means, PHYSICS.md) run on the
+    observed power, started in balance with the recent power the observation
+    reports (``history``; the first reading when it is not given). Xenon's worth
+    ``rho_Xe_full (Xe_hat - 1)`` is met by boron at its worth, and the ppm rate
+    turned into a flow by the line's feed and bleed: dilution removes
+    ``dilution_flow / primary_mass * boron`` ppm/s at full flow, boration adds
+    ``boration_flow / primary_mass * (acid - boron)``. No gain is tuned."""
+    from target_gym.reactor.env import LAMBDA_IODINE, LAMBDA_XENON
+
+    p = plant
+    s, r = p.sigma_phi0, p.gamma_ratio
+    a = (LAMBDA_XENON + s) / (1.0 + r)
+    h = n if history is None else history
+    balance = (LAMBDA_XENON + s) * h / (LAMBDA_XENON + s * h)
+    I_hat = xp.where(first, h, I_hat)
+    Xe_hat = xp.where(first, balance, Xe_hat)
+    dI = LAMBDA_IODINE * (n - I_hat)
+    dXe = a * (r * n + I_hat) - (LAMBDA_XENON + s * n) * Xe_hat
+    ppm_rate = p.rho_Xe_full * dXe / p.boron_worth  # ppm/s, negative: dilute
+    dilute = p.dilution_flow / p.primary_mass * xp.maximum(boron, 1.0)
+    borate = p.boration_flow / p.primary_mass * (p.boric_acid_ppm - boron)
+    flow = xp.where(ppm_rate < 0.0, ppm_rate / dilute, ppm_rate / borate)
+    return flow, I_hat + dt * dI, Xe_hat + dt * dXe
 
 
 def reference_step(params, state, obs, xp=jnp):
-    """One 30 s step: ``obs = [n, T_hot, rod, load, T_avg, T_ref, delta_I, boron,
-    to_down, to_up]``, the action ``[rod demand, boron flow]``."""
+    """One 30 s step: ``obs = [n, T_hot, rod, load, T_avg, T_ref, delta_I, boron
+    (20 min late), to_down, to_up, xenon's power history]``, the action ``[rod
+    demand, boron flow]``."""
     from target_gym.reactor.env import ReactorParams, scheduled_load
 
     p, plant = params, ReactorParams()
@@ -164,11 +197,18 @@ def reference_step(params, state, obs, xp=jnp):
     planned = planned - scheduled_load(t, down, up, plant, xp=xp)
     stuck = (rod >= p.park - 1e-3) & (e > 0.0)
     step = p.t_Kc * ((e - state.last_e) + p.dt / p.t_Ti * e)
+    # Bumpless handback: off the stop, what the override built moves into the
+    # cascade's integrator instead of vanishing.
+    boron = xp.clip(boron + xp.where(stuck, 0.0, state.override), -1.0, 1.0)
     override = xp.where(stuck, state.override + step, 0.0)
-    out = xp.clip(boron + p.ff * planned + override, -1.0, 1.0)
+    xenon, I_hat, Xe_hat = xenon_feedforward(
+        state.I_hat, state.Xe_hat, n, obs[..., 7], first, plant, p.dt, xp, obs[..., 10]
+    )
+    out = xp.clip(boron + p.ff * planned + override + xenon, -1.0, 1.0)
     new = ReferenceState(
         rods=rod_state, boron=boron, target=target, last_e=e, last_ao=ao, last_r=r,
         clock=state.clock + p.dt, down=down, up=up, override=override,
+        I_hat=I_hat, Xe_hat=Xe_hat,
     )  # fmt: skip
     return xp.stack([rods, out], axis=-1), new
 

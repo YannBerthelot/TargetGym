@@ -263,17 +263,6 @@ def test_part_load_shifts_the_offset_up_the_core_near_the_published_state():
     assert 0.05 / 3.0 < delta_I < 0.05 * 3.0
 
 
-def test_reward_charges_past_the_band_only():
-    env, p, s = _reset(**XE_FULL)
-    terms = env.reward_terms(s.replace(delta_I=jnp.float32(0.049)), p)
-    outside = env.reward_terms(s.replace(delta_I=jnp.float32(-0.06)), p)
-    base = env.reward_terms(s, p)
-    assert float(terms["tracking"]) == pytest.approx(float(base["tracking"]))
-    # 1 % past the band: 1 % of rated derated, $1000/h, over a 5 s sub-step.
-    extra = float(outside["tracking"]) - float(base["tracking"])
-    assert extra == pytest.approx(1000.0 * 5.0 / 3600.0, rel=1e-3)
-
-
 # Contract: the reference does not limit-cycle the offset at any point the day holds.
 # The plant settles inside a step, so a discrete loop past its margin cycles at a
 # pole of -1: delta I swings one way then back, over the band (0.05), step after

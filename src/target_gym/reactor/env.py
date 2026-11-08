@@ -83,6 +83,12 @@ LAMBDA_XENON = 2.11e-5  # 1/s  (ln2 / (9.14 * 3600))
 
 #: Longest boron transport delay the queue holds, in 30 s control steps: 15 min.
 BORON_QUEUE = 30
+#: The boronmeter's delay in control steps: 20 min of 30 s steps. Areva's patent
+#: US 8,489,338 gives the boron meter's reading "after a significant delay, of
+#: the order of some twenty minutes"; Framatome's COMBO meter claims under a
+#: minute. The French family's figure is kept. The queue holds one more slot so
+#: its oldest entry is exactly this many steps old.
+BORON_METER_STEPS = 40
 
 # The two-point model's numbers, Mastroianni (1979), Table III-1, used twice below.
 _SIGMA_X = 2.72e-18  # cm2
@@ -244,15 +250,32 @@ class ReactorParams(EnvParams):
     # $1000/h on 1 GWe at $100/MWh, ours.
     ao_band: float = 0.05
     ao_ref: float = 0.0
-    delta_I_price: float = 1000.0  # $/h per 1 % past the band
+    # Time outside the band counts at every power during load follow (EDF's scope),
+    # and 1 h of it in 24 h is allowed (Westinghouse's allowance, D.C. Cook and RAOC
+    # specifications, pooled in since EDF's was not found). Past it the plant must
+    # derate to 50 %, priced as the derate's lost output at spot. The clock starts
+    # the day at 0: the window is the episode, ours.
+    ao_allowed: float = 3600.0  # s in 24 h
+    derate_to: float = 0.5  # of rated power
+    # The rod insertion limit, the family's shape: a straight line in power, 22 %
+    # of the stroke in at full power to 78 % at half (KAIST's lead), 2 h to restore
+    # (STS 3.1.6), then hot standby.
+    ril_full: float = 0.22
+    ril_half: float = 0.78
+    ril_allowed: float = 7200.0  # s
     # Effluent: every kg injected displaces a kg to treat. Boiling it off is 2.26
     # MJ/kg, 0.628 kWh, at $100/MWh, ours.
     effluent_price: float = 0.0628  # $/kg
-    # Twice the dearest step that survives: 40 K off program, $7.67, 36 rod steps,
-    # $36, full dilution, $18.84, and all the power in one half, $791.67, per 30 s.
-    failure_cost: float = 2.0 * (7.67 + 36.0 + 18.84 + 791.67)
-    #: Restart time priced into a trip (``reward.trip_cost``; 48 h at 30 s steps: a SCRAM's xenon-limited restart, provisional).
+    # A trip is lost production: 1 GWe at spot ($80/MWh, inside the family's $80 to
+    # $100) over the restart, $666.67 per 30 s step down.
+    failure_cost: float = 1000.0 * 80.0 * 30.0 / 3600.0
+    #: A scram's restart, 48 h (ours, family 24 to 70 h: Doel-3 ran 18 h at reduced
+    #: power after a 6 h scram, INIS 1ypr9-dk595; APR1400's restart windows are
+    #: 22 to 70 h, KNS 20A-065).
     restart_steps: int = 5760
+    #: Hot standby after a timed limit's overrun: 15 h (ours, Doel-3's 6 h down and
+    #: 18 h reduced, about 15 h of full output lost; no scram review).
+    standby_steps: int = 1800
     #: Tracking cost per step at the floor, in the reward's units.
     rho_floor_tracking: float = 100.0 * 1000.0 * 0.0023 / 3600.0 * 0.05 * 30.0
     rho_floor: float = 100.0 * 1000.0 * 0.0023 / 3600.0 * 0.05 * 30.0
@@ -290,7 +313,11 @@ PARAM_UNITS = {
     "ao_band": "-",
     "ao_ref": "-",
     "floor_allowed": "s",
-    "delta_I_price": "$/h/%",
+    "ao_allowed": "s",
+    "derate_to": "",
+    "ril_full": "",
+    "ril_half": "",
+    "ril_allowed": "s",
     "effluent_price": "$/kg",
     "P_thermal_ref": "W",
     "C_fuel": "J/K",
@@ -377,6 +404,14 @@ class ReactorState(EnvState):
     rod_moved: float = 0.0  # fraction of the stroke the rods travelled last sub-step
     effluent: float = 0.0  # kg/s the last sub-step's command injected
     below_floor: float = 0.0  # s Tavg has been under T_avg_min without a break
+    ao_outside: float = 0.0  # s the offset has spent outside its band today
+    ril_outside: float = 0.0  # s the rods have sat past their insertion limit
+    xenon_power: float = 1.0  # the recent power the starting xenon is balanced with
+    #: Core boron as the boronmeter has read it, newest first; the reading is the
+    #: oldest, ``BORON_METER_STEPS`` control steps late.
+    boron_meter: jax.Array = struct.field(
+        default_factory=lambda: jnp.full(BORON_METER_STEPS + 1, 1690.0, jnp.float32)
+    )
 
     actuator_held: jax.Array = actuator_field(2)
 
@@ -447,6 +482,14 @@ def xenon_stiffness(params: ReactorParams):
     p = params
     X0 = (p.gamma_I + p.gamma_x) * p.Sigma_f * p.Phi_full
     return p.sigma_x * X0 / (LAMBDA_XENON + p.sigma_phi0)
+
+
+def rod_insertion_limit(n, params: ReactorParams):
+    """How far in the rods may sit at power ``n``, a fraction of the stroke: a
+    straight line through ``ril_full`` at full power and ``ril_half`` at half."""
+    p = params
+    slope = (p.ril_half - p.ril_full) / 0.5
+    return jnp.clip(p.ril_full + slope * (1.0 - n), 0.0, 1.0)
 
 
 def flux_tilt(Xe_tilt, Xe_hat, n, eps, params: ReactorParams):
@@ -781,6 +824,13 @@ def compute_next_state(
             below_floor=jnp.where(
                 0.5 * (T_hot + T_cold) < p.T_avg_min, state.below_floor + p.delta_t, 0.0
             ),
+            ao_outside=state.ao_outside
+            + p.delta_t * (jnp.abs(delta_I - new_n * p.ao_ref) > p.ao_band * new_n),
+            ril_outside=jnp.where(
+                rod_in > rod_insertion_limit(new_n, p),
+                state.ril_outside + p.delta_t,
+                0.0,
+            ),
             physics_time=new_physics_time,
         ),
         metrics,
@@ -816,10 +866,19 @@ def get_obs(state: ReactorState, params: ReactorParams):
             T_avg,
             state.T_ref,
             state.delta_I,
-            state.boron,
+            state.boron_meter[-1],
             jnp.maximum(state.ramp_down_at - now, 0.0) / 3600.0,
             jnp.maximum(state.ramp_up_at - now, 0.0) / 3600.0,
+            state.xenon_power,
         ]
+    )
+
+
+def timed_out(state: ReactorState, params: ReactorParams):
+    """A timed limit overrun: Tavg under its floor or the rods past their insertion
+    limit for longer than allowed. The plant goes to hot standby, not a scram."""
+    return (state.below_floor >= params.floor_allowed) | (
+        state.ril_outside >= params.ril_allowed
     )
 
 
@@ -835,8 +894,7 @@ def check_is_terminal(state: ReactorState, params: ReactorParams, xp=jnp):
     # Tavg under the floor is a limit with a time to act, not a trip: it ends the
     # run only once it has lasted ``floor_allowed``.
     T_coolant_out = xp.logical_or(
-        state.below_floor >= params.floor_allowed,
-        state.T_coolant >= params.T_coolant_max,
+        timed_out(state, params), state.T_coolant >= params.T_coolant_max
     )
     terminated = xp.logical_or(xp.logical_or(n_out, T_fuel_out), T_coolant_out)
     # Both in environment steps (see ReactorParams.max_steps_in_episode).
@@ -857,16 +915,21 @@ def compute_reward_terms(
     per_K_s = (
         p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW * 1000.0 / 3600.0
     )  # $ per second per K off program
-    error = state.T_ref - 0.5 * (state.T_coolant + state.T_cold)
+    # Only Tavg below its program loses output (rule 15); above it the limits are
+    # protective and hotter steam gains a little.
+    error = xp.maximum(state.T_ref - 0.5 * (state.T_coolant + state.T_cold), 0.0)
     tracking = (
         per_K_s
         * p.delta_t
         * p.e_floor
         * R.tracking_cost(error, p.e_floor, p.e_tol, p.tracking_exponent, xp)
     )
-    off = xp.abs(state.delta_I - state.n * p.ao_ref)
-    past_band = xp.maximum(off - p.ao_band * state.n, 0.0)
-    tracking = tracking + p.delta_I_price * 100.0 * past_band * p.delta_t / 3600.0
+    # Past the offset's allowed hour, the derate's lost output.
+    per_GW_s = p.P_electric_GW * 1000.0 * p.spot_price_per_MWh / 3600.0
+    derated = xp.where(
+        state.ao_outside >= p.ao_allowed, xp.maximum(state.n - p.derate_to, 0.0), 0.0
+    )
+    tracking = tracking + per_GW_s * derated * p.delta_t
     rod_wear = p.rod_step_price * p.rod_stroke_steps * state.rod_moved
     treatment = p.effluent_price * state.effluent * p.delta_t
     if tripped is None:
@@ -875,7 +938,8 @@ def compute_reward_terms(
         "tracking": tracking,
         "running": rod_wear + treatment,
     }
-    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
+    restart = xp.where(timed_out(state, p), p.standby_steps, p.restart_steps)
+    return R.with_trip(terms, tripped, restart * p.failure_cost, xp)
 
 
 def compute_reward_v1(state: ReactorState, params: ReactorParams, xp=jnp):

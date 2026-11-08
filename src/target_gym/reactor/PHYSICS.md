@@ -193,13 +193,26 @@ comes back, at 2 %/min with a small wobble.
 | 4 | `T_avg` (K) |
 | 5 | `T_ref` (K) |
 | 6 | `delta_I`, top minus bottom, a fraction of rated |
-| 7 | boron in the core (ppm) |
+| 7 | boron in the core (ppm), as the boronmeter read it 20 min ago |
 | 8 | hours until the planned ramp down starts, 0 once it has |
 | 9 | hours until the planned ramp up starts, 0 once it has |
+| 10 | the recent power the starting xenon is balanced with (rule 16: operators know their power history) |
 
 Actions: `[rod demand, boron flow]` in [-1, 1]. Rod demand reads as obs 2. Boron flow
 is -1 for full dilution, +1 for full boration. Xenon, iodine, their tilts, the boron
-on its way and the delay's length are all hidden.
+on its way and the delay's length are hidden; the power history in obs 10 is what an
+operator's xenon tool starts from.
+
+**Limits** (charter rule 14, Amendment 3):
+
+| limit | kind | form | source |
+|---|---|---|---|
+| power, fuel temperature, hot leg | trip | the envelope; a scram, 48 h of lost output | ours, family 24 to 70 h (Doel-3, INIS 1ypr9-dk595; APR1400, KNS 20A-065) |
+| Tavg under 556 C | timed | 900 s allowed, then hot standby, 15 h of lost output | ours, inside the family's 15 to 30 min to restore; 15 h from Doel-3's 6 h down and 18 h reduced |
+| axial offset outside +-0.05 | penalty clock | time outside counts at every power; 1 h in 24 h is free; past it, the lost output of a derate to 50 % | EDF's band (IAEA NP-T-3.23, annex II-4.3); the 1 h in 24 h and the derate from Westinghouse specifications (D.C. Cook, RAOC), pooled in since EDF's was not found |
+| rod insertion limit | timed | a straight line in power, 22 % of the stroke in at full power to 78 % at half; 2 h to restore (STS 3.1.6), then hot standby | KAIST's lead for the points; the family's shape |
+
+The clock starts each day at 0 (ours: the episode is the 24 h window).
 
 ---
 
@@ -219,8 +232,14 @@ out nothing can push power up the core. Xenon tilted to the top can drive delta 
 down and past the band, and only time brings it back. Real plants have more than one
 bank.
 
-**D4: no scored peaking.** Delta I is scored on its band alone, with no link to local
-power or to a trip.
+**D4: no scored peaking.** Delta I is scored on its penalty clock alone, with no link
+to local power or to a trip, and the outer AFD envelope is not modelled.
+
+**D6: an overrun is priced, not flown.** Past the offset's allowed hour the cost is a
+derate's lost output, but the load does not drop: the plant keeps following the plan.
+
+**D7: the boronmeter reads exact.** It is 20 min late (Areva US 8,489,338) but carries
+none of the patent's 7 % noise.
 
 **D5: no decay heat.** A scram removes all heat at once.
 
@@ -231,8 +250,10 @@ power or to a trip.
 The expert is the reference of `scripts/reactor_ladder.py`, EDF's Mode A. The
 published rod program (`rod_control_step`, the NRC's Westinghouse manual) holds Tavg.
 The operator's boron, from the ladder's rung 5, steers the offset through the rods as a
-cascade, fed forward from the plan and led by the line's delay, and takes Tavg while
-the rods sit at their top stop. Every boron gain is SIMC on bump tests at full power and
+cascade, fed forward from the plan and led by the line's delay, fed forward from
+xenon's balance by the operator's xenon tool (textbook iodine and xenon run on the
+observed power from the power history, `xenon_feedforward`, on every rung), and takes
+Tavg while the rods sit at their top stop, handing back bumplessly. Every boron gain is SIMC on bump tests at full power and
 at the half-power hold, keeping the least gain. The owner chose this pairing on
 2026-11-08: the program's nonlinear speed copes with the rods' 7-fold gain swing, which
 the rungs' linear PI could not. Results and room are in
@@ -250,7 +271,7 @@ the rungs' linear PI could not. Results and room are in
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 10 | 61 |
+| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 11 | 105 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -261,7 +282,7 @@ which is what the recorded baselines use.
 
 ## Reward (version 2), in dollars per 30 s control step
 
-`compute_reward = -(tracking + running + failure)`, with Tavg and delta I past its band in `tracking`, and rod travel and effluent in `running`; each physics sub-step charges its 5 s and `step_env` sums the six, see docs/reward-shaping.md.
+`compute_reward = -(tracking + running + failure)`, with Tavg under its program past the dead band and the offset clock's derate in `tracking`, and rod travel and effluent in `running`; each physics sub-step charges its 5 s and `step_env` sums the six, see docs/reward-shaping.md.
 
 | parameter | value | source |
 | --- | --- | --- |
@@ -271,10 +292,12 @@ which is what the recorded baselines use.
 | `imbalance_multiple` | 1.25 x 0.0023 per K of `spot_price_per_MWh` on `P_electric_GW` | **ours.** Off program, steam conditions cost output. The relative Carnot slope at 547 K steam and 305 K condenser is 305 / (547 x 242) = 0.23 %/K. At the one imbalance price of the priced plants, $100/MWh (1.25 x the $80 spot), on `P_electric_GW` = 1.0 GW, a third of the 3 GW thermal, that is 100 x 1000 x 0.0023 = $230/h per K, so **$1.917 per K over a 30 s step**. It prices a hot plant as a cold one, which the slope does not say |
 | `rod_step_price` | $1 per step | **ours,** kept by the owner on 2026-11-07. Rod travel, as the steps the rods actually moved |
 | `ao_band`, `ao_ref` | 0.05, 0 | EDF: during load follow the axial offset stays within 0.05 of its reference (IAEA NP-T-3.23, annex II-4.3). The reference is the offset at full power, xenon balanced, rods out: 0 in this core. In delta I the band is 0.05 times the power |
-| `delta_I_price` | $1000/h per 1 % past the band | **ours.** Past the band a plant must act on its power, so each 1 % is priced as 1 % of 1 GWe derated, at $100/MWh |
+| `ao_allowed`, `derate_to` | 3600 s, 0.5 | the penalty clock: 1 h in 24 h, then a derate to 50 %, priced at spot on `P_electric_GW` (Westinghouse specifications, D.C. Cook and RAOC, pooled in) |
+| `ril_full`, `ril_half`, `ril_allowed` | 0.22, 0.78, 7200 s | the rod insertion limit, a straight line in power (KAIST's lead), 2 h to restore (STS 3.1.6) |
 | `effluent_price` | $0.0628 per kg injected | **ours.** Every kg injected displaces a kg to treat (OAPS). Boiling it off takes 2.26 MJ/kg, 0.628 kWh, at $100/MWh |
-| `failure_cost` | 1708.36 $ per step | twice the dearest step that survives: 40 K off program, $7.67, 36 rod steps, $36, full dilution, $18.84, and all the power in one half, $791.67, per 30 s |
-| `restart_steps` | 5760 (48 h) | restart time priced into a trip, `restart_steps x failure_cost` (a SCRAM's xenon-limited restart; provisional); where a plant engineer would get it: the plant's restart procedure |
+| `failure_cost` | 666.67 $ per step | a step of lost production: 1 GWe at $80/MWh, inside the family's $80 to $100 |
+| `restart_steps` | 5760 (48 h) | a scram's restart, **ours,** family 24 to 70 h: Doel-3 ran 18 h at reduced power after a 6 h scram (INIS 1ypr9-dk595), APR1400's restart windows are 22 to 70 h (KNS 20A-065) |
+| `standby_steps` | 1800 (15 h) | hot standby after a timed limit's overrun, **ours:** Doel-3's 6 h down and 18 h reduced, about 15 h of full output lost |
 
 A step at the floor costs `rho_floor_tracking`, $0.0958: the price per K over the 30
 s step, times `e_floor`.
@@ -300,7 +323,7 @@ old weights are read only by it).
 ## Readings
 
 The observation reports power and the coolant temperatures through their instruments
-(`docs/proposals/measurement-noise.md`). Rod position, the load, Tref and boron stay exact:
+(`docs/proposals/measurement-noise.md`). Rod position, the load and Tref stay exact, and boron reads 20 min late:
 the rods are the controller's own rate-limited command, known by counting steps.
 `sensor_noise_scale = 0` gives the noise-free task. Tavg is the mean of the two RTDs,
 so it scatters by 0.045 K over sqrt(2), and shares a draw with the hot-leg channel.

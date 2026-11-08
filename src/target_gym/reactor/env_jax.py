@@ -19,6 +19,7 @@ from target_gym.base import (
 )
 from target_gym.expert_access import RegistryExperts
 from target_gym.reactor.env import (
+    BORON_METER_STEPS,
     BORON_QUEUE,
     ReactorParams,
     ReactorState,
@@ -34,6 +35,7 @@ from target_gym.reactor.env import (
     steady_state_temperatures,
     steady_state_xenon,
     tavg_program,
+    timed_out,
 )
 from target_gym.reactor.rendering import _render
 from target_gym.video import SavesVideo
@@ -81,7 +83,7 @@ class Reactor(
     )
 
     def __init__(self, integration_method: str = "tr_bdf2_4"):
-        self.obs_shape = (10,)
+        self.obs_shape = (11,)
         self.integration_method = integration_method
 
     @property
@@ -164,8 +166,14 @@ class Reactor(
             length=CONTROL_PERIOD,
         )
         # One environment step has elapsed, whatever the physics clock did.
-        new_state = new_state.replace(time=state.time + 1)
+        new_state = new_state.replace(
+            time=state.time + 1,
+            boron_meter=jnp.concatenate(
+                [new_state.boron[None], new_state.boron_meter[:-1]]
+            ),
+        )
         new_state = remember(self, state, new_state, params)
+        standby = timed_out(new_state, params)
         # A SCRAM is part of the kernel: the step that leaves the envelope is
         # charged the trip cost and the plant restarts at once, or is lost
         # with ``params.continuing = False`` (``base.failure_kernel``). On that step the cost is the trip cost
@@ -173,7 +181,8 @@ class Reactor(
         new_state, tripped, _, terminated = failure_kernel(
             self, key, state, new_state, params
         )
-        trip = R.trip_cost(params)
+        restart = jnp.where(standby, params.standby_steps, params.restart_steps)
+        trip = restart * params.failure_cost
         reward = jnp.where(tripped, -trip, reward)
         measured = jnp.where(tripped, -trip, measured)
         terms = {k: jnp.where(tripped, 0.0, v) for k, v in terms.items()}
@@ -297,6 +306,8 @@ class Reactor(
             boron_delay=delay,
             rod_moved=as_state(0.0),
             effluent=as_state(0.0),
+            xenon_power=as_state(n_recent),
+            boron_meter=jnp.full(BORON_METER_STEPS + 1, boron, dtype),
         )
 
         obs = self.get_obs(state)
