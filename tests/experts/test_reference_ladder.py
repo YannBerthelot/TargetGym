@@ -1,12 +1,18 @@
 """The ladder script on real plants.
 
-Contract, from docs/proposals/task-charter.md rule 3: every rung a task lacks has a
+Contract, from docs/proposals/task-charter.md J1 and J4: every rung a task lacks has a
 written reason, and the bump tests read the plant. ``first_order`` is a lag whose
 datasheet is K = 1 per unit of input and tau = 0.5 s, with the raw action spanning
 2 units, so 2 per raw action (env.py). A loop is tuned at every operating point its
 row names and kept as tuned where the plant is most sensitive, so adding a less
 sensitive point changes nothing, and adding a more sensitive one tunes as if the plant
 sat there alone.
+
+Each task's row lives in its own file, ``scripts/ladder_rows/<task>.py``. A rung's cost
+on a seed is the task's ``J``: each scenario's mean cost per step, weighted by its share
+of operating time. A loop on a zone holds the setpoint ``k = 2`` standard deviations
+inside the zone's cheap edge, never past its centre, the deviation measured with the
+loop at the centre on the bump-test seeds.
 """
 
 import importlib.util
@@ -119,3 +125,81 @@ def test_tuning_follows_the_most_sensitive_operating_point(ladder, points, alone
     many = dataclasses.replace(base, points=points)
     single = dataclasses.replace(base, test={**base.test, **alone})
     assert first_actions(ladder, many) == pytest.approx(first_actions(ladder, single))
+
+
+def test_each_row_lives_in_its_own_file(ladder):
+    rows = ROOT / "scripts" / "ladder_rows"
+    files = {p.stem for p in rows.glob("*.py") if not p.stem.startswith("_")}
+    assert set(ladder.ROWS) == files
+
+
+def test_a_rungs_cost_weighs_each_scenario_by_its_share(ladder):
+    # Weights 3 and 1 are shares 0.75 and 0.25, so a seed's cost run on both
+    # scenarios is 0.75 times its cost on the first alone plus 0.25 times its cost
+    # on the second alone, each a mean per step.
+    import dataclasses
+
+    import numpy as np
+
+    from target_gym.registry import REGISTRY
+    from target_gym.scenarios import Scenario
+
+    base = REGISTRY["first_order"]
+    normal = Scenario("normal", {}, weight=3.0)
+    strong = Scenario("strong", {"K": 2.0}, weight=1.0)
+
+    def on(*suite):
+        return dataclasses.replace(base, scenarios=lambda: suite)
+
+    row = ladder.ROWS["first_order"]()
+    ctrl = ladder.build("first_order", row)["pi"]
+    both = ladder.run_rung("first_order", row, "pi", ctrl, spec=on(normal, strong))
+    first = ladder.run_rung("first_order", row, "pi", ctrl, spec=on(normal))
+    second = ladder.run_rung("first_order", row, "pi", ctrl, spec=on(strong))
+    expected = 0.75 * np.array(first["costs"]) + 0.25 * np.array(second["costs"])
+    np.testing.assert_allclose(both["costs"], expected, rtol=1e-6)
+    assert set(both["scenarios"]) == {"normal", "strong"}
+
+
+def test_a_scenarios_cost_is_per_step_whatever_its_length(ladder):
+    # A plant with no gain, starting at 0, stays at 0 whatever the loop does, so
+    # each step costs the same and a 150-step episode costs per step what a 75-step
+    # one does. An episode's total would double.
+    import dataclasses
+
+    import numpy as np
+
+    from target_gym.registry import REGISTRY
+    from target_gym.scenarios import Scenario
+
+    still = {"K": 0.0, "initial_x_range": (0.0, 0.0)}
+    short = Scenario("short", {**still, "max_steps_in_episode": 75})
+    long = Scenario("long", {**still, "max_steps_in_episode": 150})
+    spec = dataclasses.replace(REGISTRY["first_order"], scenarios=lambda: (short, long))
+    row = ladder.ROWS["first_order"]()
+    ctrl = ladder.build("first_order", row)["pi"]
+    out = ladder.run_rung("first_order", row, "pi", ctrl, spec=spec)["scenarios"]
+    np.testing.assert_allclose(out["short"]["costs"], out["long"]["costs"], rtol=1e-3)
+
+
+def test_a_zone_loop_holds_two_sigma_inside_its_cheap_edge(ladder):
+    # Zone 0.5 to 1.5 on x, cheap side high: the setpoint is 1.5 - 2 sigma, and
+    # never below the centre 1.0. The pi rung then holds x there, whatever target
+    # the observation carries.
+    import dataclasses
+
+    import numpy as np
+
+    base = ladder.ROWS["first_order"]()
+    x = dataclasses.replace(base.loops[0], zone=(0.5, 1.5, "high"))
+    row = dataclasses.replace(base, loops=(x,), balance=None)
+    rungs = ladder.build("first_order", row)
+    sigma, setpoint = row.placed["x on u"]
+    assert sigma > 0
+    assert setpoint == pytest.approx(max(1.5 - 2.0 * sigma, 1.0))
+    held = ladder.cv_traces("first_order", row, rungs["pi"], 0)
+    second_half = np.concatenate([t[len(t) // 2 :] for t in held])
+    assert np.mean(second_half) == pytest.approx(setpoint, abs=sigma)
+    # sigma is x's own spread under the loop: on this linear plant the loop holds x
+    # with the same spread at the setpoint as at the centre (20 %: ten seeds).
+    assert np.std(second_half, ddof=1) == pytest.approx(sigma, rel=0.2)
