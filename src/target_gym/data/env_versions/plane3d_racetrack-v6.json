@@ -1,5 +1,5 @@
 {
-  "fingerprint": "925ad379eac8abf9",
-  "note": "charter Amendment 2 (plane3d/PHYSICS.md): protected limits, air data read, established trimmed start, a Dryden turbulence zone, the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands",
-  "stamped": "2026-11-08T13:49:10+00:00"
+  "fingerprint": "11234c2b20f723d9",
+  "note": "charter Amendment 2 (plane3d/PHYSICS.md): protected limits, air data read, established trimmed start, a Dryden turbulence zone, the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands; re-stamped in place after the established reset took its track from its velocities, as the step does (1 ulp)",
+  "stamped": "2026-11-08T13:55:48+00:00"
 }

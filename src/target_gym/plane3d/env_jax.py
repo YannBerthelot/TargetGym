@@ -259,17 +259,20 @@ class _Airplane3DBase(
             minval=params.zone_duration_range[0],
             maxval=params.zone_duration_range[1],
         )
+        x_dot = speed * jnp.cos(heading) + params.wind_x
+        y_dot = speed * jnp.sin(heading) + params.wind_y
         return dict(
             base_kwargs,
             z=z,
-            x_dot=speed * jnp.cos(heading) + params.wind_x,
-            y_dot=speed * jnp.sin(heading) + params.wind_y,
+            x_dot=x_dot,
+            y_dot=y_dot,
             z_dot=0.0,
             theta=theta,
             theta_dot=0.0,
             phi=0.0,
             phi_dot=0.0,
-            psi=heading,
+            # The track, worked out from the velocities as the step does.
+            psi=jnp.arctan2(y_dot, x_dot),
             alpha=theta,
             gamma=0.0,
             power=power,
