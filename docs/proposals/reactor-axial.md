@@ -1,12 +1,129 @@
 # Reactor rebuild: axial offset, rods and boron
 
-Status: results of the one design attempt, 2026-11-07, on branch
+Status: the EDF rebuild of 2026-11-08 is the current design (next section); the rest of
+the page is the first attempt, 2026-11-07, on branch
 `claude/reactor-axial-dd4617` (from `feat/sensor-noise` at a9c8ea8). Nothing is merged and
 no shared baseline was re-recorded. The plant is described in
 [`src/target_gym/reactor/PHYSICS.md`](../../src/target_gym/reactor/PHYSICS.md). This page
 holds the measurements, under the rules of `task-charter.md`.
 
-## Verdict
+## EDF rebuild, 2026-11-08
+
+This section supersedes the results below it, which describe the first attempt. After
+the plant check (`reactor-plant-check.md`), the owner picked EDF practice and asked for
+items 1 to 4. The coupling finding and the band sources are in `reactor-coupling.md`.
+
+### Design changes, and who decided
+
+| Change | Why | Decided by |
+|---|---|---|
+| The ramp schedule is in the observation: hours to the next ramp down and up | an operator borates ahead of a known plan | owner, item 1 |
+| Tavg below 556 C is a priced limit with 900 s allowed, then a trip | the old floor tripped at once; 900 s is `ours`, after Salem, unconfirmed | owner, item 2 |
+| Offset charged only outside +-0.05 of its reference | IAEA NP-T-3.23 Annex II-4.3, load follow | owner, item 3 |
+| Tavg charged only outside a 1.6 K dead band | IAEA: black rods move past 1.6 C | owner, item 4 |
+| D set so the halves couple at 283 pcm, 4.99 cm against the thesis 0.405 | the thesis core was 12 to 25 times too weakly coupled and unstable at half power; Ringhals-4, Pedersen et al., Table 3 | owner, "Yes, use 283 pcm" |
+| Mode G (grey and black groups plus an R group) tried and reverted | the line-out pinned the offset at -0.99 | owner, "EDF Mode A, one bank" |
+| Reference: the published rod program, plus rung 5's boron | see below | owner, "Yes, adopt it" |
+
+Item 5, rod insertion limits, stays open: no sourced curve was found.
+
+### Properties, with no controller
+
+At 283 pcm the axial mode is damped at every hold: period 32.7 h and decay -0.070 per
+hour at full power, 33.7 h and -0.050 at 75 %, 34.3 h and -0.057 at half power
+(Ringhals-4: 28.3 h). Krsko's half-power offset reads +5.4 % against the published +5 %.
+60 rod steps move delta I by -0.34 at once; the same reactivity in boron moves it by about
+3e-6 and arrives 11 minutes later. The property holds.
+
+### Reference ladder, seeds 100 to 109
+
+Gains come from bump tests at both holds the episode visits, keeping the design that asks
+the least gain (the PR #170 rule); no gain was tuned on costs.
+
+| Row | Mean cost | Seeds tripped | Steps past offset band | Steps past dead band |
+|---|---:|---:|---:|---:|
+| Rung 1, boron PI on offset | $22.8M | 7 | 1645 | 2273 |
+| Rung 2 | $17.9M | 10 | 1397 | 1928 |
+| Rung 3, cascade with plan feedforward | $103,386 | 0 | 863 | 2090 |
+| Rung 4, offset override | $18.0M | 8 | 1824 | 2391 |
+| Rung 5, saturation override | $89,754 | 0 | 858 | 1703 |
+| Rod program + rung 1 boron | $20.9M | 6 | 1655 | 1740 |
+| **Rod program + rung 5 boron (reference)** | **$74,604** | **0** | **817** | **1037** |
+| Null: rods parked, no boron | $161,561 | 0 | 1864 | 2622 |
+
+Steps are out of 2,880 per day. The rod program is Westinghouse's published one (NRC
+HRTD 8.1 and 5.0: a 1.5 F, 0.83 K, dead band, then 8 to 72 steps per minute, with the
+power-mismatch channel). Paired with rung 1's
+boron it trips, because that boron never dilutes for xenon or ahead of the return to
+power. No null wins a seed against the reference.
+
+### Ceiling and room
+
+Two oracles, both with the true model, state and future. Adam plans the whole day by
+gradient from rung 5's actions (3000 iterations on all ten seeds; 6000 and 12000 on seeds
+100 and 101). The interior-point solve (IPOPT, multiple shooting, exact Hessian) runs on
+the four corner seeds, 300 iterations per width rung, and its plan is replayed on the env.
+The ceiling is the cheapest replayed plan; room is the reference cost over it.
+
+| Seed | Reference | Adam 3000 | Adam longer | IPOPT replayed | Last KKT error | Room |
+|---|---:|---:|---:|---:|---:|---:|
+| 100 | 117,111 | 2,480 | 2,424 (6000) | 1,722 | 0.26 | 68.0 |
+| 101 | 109,745 | 2,601 | 2,526 (6000) | | | 43.4 |
+| 102 | 77,256 | 2,414 | | 1,782 | 0.033 | 43.4 |
+| 103 | 40,411 | 2,097 | | | | 19.3 |
+| 104 | 50,694 | 2,311 | | | | 21.9 |
+| 105 | 91,793 | 2,389 | | | | 38.4 |
+| 106 | 87,562 | 2,909 | | | | 30.1 |
+| 107 | 68,918 | 2,276 | | | | 30.3 |
+| 108 | 42,335 | 2,413 | | 1,740 | 9e-6 | 24.3 |
+| 109 | 60,215 | 2,613 | | 1,787 | 0.086 | 33.7 |
+
+Convergence, plainly:
+
+- Adam is not converged. Where IPOPT ran, Adam's 3000-iteration plan is 35 to 46 % above
+  it. 6000 iterations help a little; 12000 did worse than 6000 on both seeds (2,522 and
+  2,605), so a longer cosine schedule is not a fix. On the six Adam-only seeds the room is
+  a lower bound.
+- IPOPT hit its 300-iteration cap on every rung. Only seed 108 reached a KKT error near
+  convergence (9e-6); the other three stopped between 0.03 and 0.26, with constraint
+  violation below 5e-6. The plans are feasible and replay with no trip, so their costs are
+  true costs, but they are local and possibly not optimal.
+
+What the room is made of, replayed on the four corner seeds:
+
+| Seed | Reference tracking | Reference running | IPOPT tracking | IPOPT running | Past offset band, ref / IPOPT | Past dead band, ref / IPOPT |
+|---|---:|---:|---:|---:|---:|---:|
+| 100 | 107,106 | 9,649 | 62 | 1,660 | 1094 / 13 | 1428 / 85 |
+| 102 | 68,664 | 8,511 | 73 | 1,709 | 773 / 20 | 1405 / 76 |
+| 108 | 36,815 | 5,523 | 78 | 1,661 | 782 / 36 | 453 / 191 |
+| 109 | 52,796 | 7,847 | 57 | 1,729 | 781 / 145 | 714 / 131 |
+
+(Local replays on this Mac; the reference differs from the ladder by under 1 %, the known
+run-to-run spread.) The oracle keeps the offset in band almost all day by moving boron
+hours ahead, so its tracking cost is near zero and what it pays is rod wear and effluent.
+The reference loses the band through every ramp and the xenon swing after it. Room of 19
+to 68 says the task has a great deal of headroom over a textbook controller; it does not
+say an agent that sees only the observation can reach the ceiling, and nothing here claims
+it can.
+
+### Open items
+
+- Item 5, rod insertion limits: no sourced curve. A possible lead is KAIST's Bank D limit
+  (22 % at full power to 78 % at half), not yet opened.
+- The dead band: the cost uses IAEA's 1.6 C for the black rods, while the reference's rod
+  program (and EDF's R group) starts moving at about 0.8 C. The two are not reconciled.
+- The rod program is Westinghouse's, inside an EDF Mode A plant. The owner adopted it as
+  the reference; the mix is disclosed here.
+- Unsourced, labelled `ours`: 900 s allowed below the Tavg floor, the feedforward lead of
+  600 s, and the saturation override's form.
+- Rule 4 and a learning check not run. Registry version, null tables and records are
+  stale; nothing was re-recorded.
+- Known failing tests, kept as findings: peak xenon worth (1419 against 1800 pcm) and the
+  two-moves scorer on seeds 100 and 101.
+
+## First attempt, 2026-11-07
+
+### Verdict
 
 The property appeared. With no controller, the plant has a slow axial xenon mode close to
 the published one, rods move the offset hard and at once, and boron moves it almost not at
