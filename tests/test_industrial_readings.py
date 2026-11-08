@@ -56,8 +56,9 @@ SCATTER = {
     "wind_turbine": {
         0: 5.2e-4 * 60.0 / (2.0 * math.pi),  # rad/s to rpm
         1: 0.2,
-        2: 100.0 * 90.0 / 47_400.0,  # torque_max
+        2: 100.0 * 90.0 / 47_402.91,  # torque_max
         3: 1e-3,  # 1 kW in MW
+        6: 0.36,  # the nacelle anemometer, m/s
     },
     "battery": {0: 4.7e-5, 1: 5.5e-5, 2: 0.03, 3: 3.3e-4},
 }
@@ -89,7 +90,11 @@ OUTSIDE = {
         level=jnp.float32(1.0), time_high=jnp.float32(12.0)
     ),
     "cement_kiln": lambda s: s.replace(T_solid=s.T_solid + 1000.0),
-    "wind_turbine": lambda s: s.replace(omega=3.0 * s.omega),
+    # Past the overspeed level the safety system has feathered: the trip
+    # (wind_turbine/env.py, ``feathered``).
+    "wind_turbine": lambda s: s.replace(
+        omega=3.0 * s.omega, feathered=jnp.float32(1.0)
+    ),
 }
 #: Tasks with no trip at all (charter rule 14): battery's limits are priced or
 #: protected (energy/battery/PHYSICS.md, Limits).
@@ -345,14 +350,17 @@ def test_measured_power_is_the_meters(name, sigma_W):
     env, params, state = _setup(name)
     true_MW = float(env.get_obs(state, _quiet(params))[3])
     state = state.replace(target_power=jnp.float32(true_MW * 1e6 + 1e5))
-    per_W = params.imbalance_price / 1e6 * params.delta_t / 3600.0
+    if name == "wind_turbine":  # scored in MWh off the rating (rule 15)
+        term, per_W = "off_rating", 1e-6 * params.delta_t / 3600.0
+    else:
+        term, per_W = "tracking", params.imbalance_price / 1e6 * params.delta_t / 3600.0
 
     def read(t):
         s = state.replace(time=t)
         terms = env.reward_terms(
             measured_state(env, s, params), params, tripped=jnp.bool_(False)
         )
-        return terms["tracking"] / per_W, env.get_obs(s, params)[3]
+        return terms[term] / per_W, env.get_obs(s, params)[3]
 
     error, obs_MW = jax.jit(jax.vmap(read))(jnp.arange(DRAWS))
     power = true_MW * 1e6 + 1e5 - np.asarray(error, np.float64)

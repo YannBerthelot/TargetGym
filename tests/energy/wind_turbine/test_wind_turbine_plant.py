@@ -6,8 +6,6 @@ Contract, from docs/proposals/industrial-fixes.md (PR 6) and these sources:
   5.296610 MW at 12.1 rpm, and its sensitivity. That sensitivity holds the wake
   frozen, so a steady Cp surface reads it shallower.
 * Table 7-2: generator torque moves at most 15,000 N m/s, pitch 8 deg/s.
-* Ours: the dispatch moves every 25 s, each step above 1.10 x rated pays 200
-  floor-widths per unit of speed ratio, and fatigue charges pitch travel.
 """
 
 import jax
@@ -22,8 +20,6 @@ SPEC = REGISTRY["wind_turbine"]
 ENV, P = SPEC.make_env(), SPEC.make_test_params()
 W = float(omega_rated(P))
 KEY = jax.random.PRNGKey(0)
-#: What one floor-width of tracking error costs: $ per W per step times e_floor.
-FLOOR = 100.0 / 1e6 * 0.25 / 3600.0 * 1680.0
 
 
 def _aero(v, theta):
@@ -59,8 +55,7 @@ def test_the_reset_balances_the_rotor(seed):
 
 @pytest.mark.parametrize("command, reached", [(47_400.0, 23_750.0), (0.0, 16_250.0)])
 def test_the_torque_moves_at_most_15_kN_m_per_second(command, reached):
-    """From 20,000 N m, 15,000 N m/s over a 0.25 s step is 3,750 N m. The lag
-    alone would close 92 % of the gap."""
+    """From 20,000 N m, 15,000 N m/s over a 0.25 s step is 3,750 N m."""
     s = _reset().replace(torque=20_000.0)
     new = ENV.step_env(KEY, s, _raw(float(s.pitch), command), P)[1]
     assert float(new.torque) == pytest.approx(reached, rel=1e-4)
@@ -73,40 +68,3 @@ def test_the_applied_action_is_where_the_actuators_went():
     np.testing.assert_allclose(
         info["applied_action"], _raw(new.pitch, new.torque), rtol=1e-5
     )
-
-
-def test_fatigue_charges_the_steps_pitch_travel():
-    """A far command moves 8 deg/s x 0.25 s = 2 deg, 0.05 of ``pitch_max``, and
-    the lag behind the command, about 18 deg here, is free."""
-    s = _reset()
-    new = ENV.step_env(KEY, s, _raw(float(s.pitch) + 20.0, float(s.torque)), P)[1]
-    charged = FLOOR * (0.05 - P.c_hold) / P.c_hold
-    assert float(ENV.reward_terms(new, P)["running"]) == pytest.approx(
-        charged, rel=1e-3
-    )
-
-
-@pytest.mark.parametrize(
-    "ratio, floors", [(0.9, 0.0), (1.0, 0.0), (1.1, 0.0), (1.15, 10.0), (1.2, 20.0)]
-)
-def test_overspeed_is_charged_past_110_percent_of_rated(ratio, floors):
-    s = _reset().replace(omega=ratio * W, pitch_travel=0.0)
-    charged = float(ENV.reward_terms(s, P)["running"])
-    assert charged == pytest.approx(floors * FLOOR, abs=0.02 * FLOOR)
-
-
-@pytest.mark.parametrize(
-    "clock, level",  # each step moves the clock on by one
-    [(0, 0), (98, 0), (99, 1), (199, 2), (299, 3), (1000, 3)],
-)
-def test_the_dispatch_holds_each_level_for_25_s(clock, level):
-    s = _reset().replace(block_clock=clock)
-    hold = _raw(float(s.pitch), float(s.torque))
-    obs, new = ENV.step_env(KEY, s, hold, P.replace(sensor_noise_scale=0.0))[:2]
-    assert float(new.target_power) == float(s.target_levels[level])
-    assert float(obs[4]) == pytest.approx(float(s.target_levels[level]) / 1e6)
-
-
-def test_each_episode_draws_its_own_dispatch_inside_its_range():
-    levels = np.asarray(_reset(100).target_levels)
-    assert np.all((levels >= 3.5e6) & (levels <= 5.0e6)) and len(set(levels)) == 4

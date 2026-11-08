@@ -13,7 +13,6 @@ from target_gym.base import (
     measured_obs,
 )
 from target_gym.energy.wind_turbine.env import (
-    N_TARGET_BLOCKS,
     WindTurbineParams,
     WindTurbineState,
     balance_pitch,
@@ -24,6 +23,9 @@ from target_gym.energy.wind_turbine.env import (
     electrical_power,
     get_obs,
     omega_rated,
+    rotor_thrust,
+    tower_stiffness,
+    turbulence_sigma,
 )
 from target_gym.energy.wind_turbine.rendering import _render
 from target_gym.expert_access import RegistryExperts
@@ -35,9 +37,10 @@ class WindTurbine(
     SavesVideo,
     environment.Environment[WindTurbineState, WindTurbineParams],
 ):
-    """NREL 5 MW reference turbine, collective-pitch power regulation.
+    """NREL 5 MW reference turbine above rated wind, with its tower.
 
-    Observation (5,): [omega_rpm, pitch_deg, torque_pct, P_MW, target_P_MW]
+    Observation (7,): [omega_rpm, pitch_deg, torque_pct, P_MW, rating_P_MW,
+    a_fa_m_s2, v_nacelle_m_s]
     Action      (2,): [pitch_raw, torque_raw] in [-1, 1]
     """
 
@@ -49,20 +52,23 @@ class WindTurbine(
 
     obs_value_index: int = 3  # electrical power (MW)
     tracked_names: tuple = ("electrical power (MW)",)
-    obs_target_index: int = 4  # target power (MW)
+    obs_target_index: int = 4  # the rating's power (MW)
 
     # Speed, pitch and torque sensors and a power meter (PHYSICS.md, Readings).
     # Power has a field of its own because the measured reward tracks it, and a
-    # channel reading stays out of the measured copy.
+    # channel reading stays out of the measured copy. The nacelle anemometer
+    # scatters by its transfer function's residual, 0.36 m/s RMSE [S6]; the
+    # accelerometer's noise is not found, so it reads true.
     readings: tuple = (
         FieldReading("omega", sigma=5.2e-4),
         FieldReading("pitch", sigma=0.2),
         FieldReading("torque", sigma=90.0),
         FieldReading("power", sigma=1e3),
+        FieldReading("v_wind", sigma=0.36),
     )
 
     def __init__(self, integration_method: str = "rk4_2"):
-        self.obs_shape = (5,)
+        self.obs_shape = (7,)
         self.integration_method = integration_method
 
     @property
@@ -128,38 +134,27 @@ class WindTurbine(
         if params is None:
             params = self.default_params
 
-        key, wind_key, target_key, gust_key = jax.random.split(key, 4)
-
+        # Established operation above rated (REALITY.md sec. 5, S1 Sec. 7): a
+        # mean wind from S2's above-rated load cases, the turbulence drawn from
+        # its stationary law, the rotor at rated speed delivering the rating,
+        # the pitch that balances it, the tower at rest under the thrust.
+        key, wind_key, turb_key = jax.random.split(key, 3)
         v_mean = jax.random.uniform(
             wind_key,
             minval=params.v_mean_range[0],
             maxval=params.v_mean_range[1],
         )
-        v_wind = jnp.clip(
-            v_mean + params.turbulence_std * jax.random.normal(gust_key),
-            params.v_min,
-            params.v_max,
-        )
-        target_levels = jax.random.uniform(
-            target_key,
-            (N_TARGET_BLOCKS,),
-            minval=params.target_power_range[0],
-            maxval=params.target_power_range[1],
-        )
-        target_power = target_levels[0]
-
-        # Start at rated speed producing the target power: a turbine in
-        # above-rated wind is already regulating, so starting spun-down would
-        # make every episode begin with a run-up rather than a control problem.
+        v_turb = turbulence_sigma(v_mean, params) * jax.random.normal(turb_key)
+        v_wind = jnp.maximum(v_mean + v_turb, 0.1)
+        target_power = params.rating * params.P_rated
         w0 = jnp.asarray(omega_rated(params))
         torque0 = jnp.clip(
             target_power / (params.eta_gen * params.N_gear * w0),
             0.0,
             params.torque_max,
         )
-        # Pitch that balances the rotor at this wind, from the same steady-state
-        # relation the controller has to find.
         pitch0 = balance_pitch(w0, v_wind, target_power / params.eta_gen, params)
+        x0 = rotor_thrust(w0, v_wind, pitch0, params) / tower_stiffness(params)
 
         state = WindTurbineState(
             time=0,
@@ -168,11 +163,14 @@ class WindTurbine(
             torque=torque0,
             v_wind=v_wind,
             v_mean=v_mean,
-            pitch_cmd=pitch0,
             torque_cmd=torque0,
             target_power=target_power,
             power=electrical_power(w0, torque0, params),
-            target_levels=target_levels,
+            x_tower=x0,
+            v_tower=jnp.zeros_like(x0),
+            a_tower=jnp.zeros_like(x0),
+            v_turb=v_turb,
+            feathered=jnp.zeros_like(x0),
         )
         return self.get_obs(state), state
 

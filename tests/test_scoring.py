@@ -195,13 +195,6 @@ def test_a_reactor_step_sums_its_sub_steps_at_the_ceilings_price():
     assert scoring.ceiling("reactor", params) == pytest.approx(0.09583, rel=1e-3)
 
 
-def test_the_wind_ceiling_is_the_class_01s_meter_at_rated_power():
-    """A class 0.1S meter at 5 MW resolves 1.7 kW, and tracking is linear at
-    $100/MWh over 0.25 s: 1700 W x 100 / 1e6 x 0.25 / 3600 = $1.18e-5."""
-    params = REGISTRY["wind_turbine"].make_test_params()
-    assert scoring.ceiling("wind_turbine", params) == pytest.approx(1.18e-5, rel=2e-3)
-
-
 @pytest.mark.parametrize("name", _VIA_TRACKING_COST)
 def test_the_ceiling_is_the_rewards_tracking_cost_at_one_resolution(name, monkeypatch):
     """Every ``tracking_cost`` the reward calls, at an error one resolution

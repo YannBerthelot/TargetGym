@@ -930,8 +930,7 @@ def test_no_new_write_only_state_fields():
 # Check 4. Tuple unpacks that discard a component. The two dynamics discard
 # position coordinates the equations of motion genuinely do not depend on. The
 # two oracles' steps discard the target from their task data: no plant depends
-# on its target, and the cost reads it from ``task[0]`` itself, with the wind's
-# clock from ``task[1]``, which only times the target. The reactor's
+# on its target, and the cost reads it from ``task[0]`` itself. The reactor's
 # reactivity reads four of its slow states; ``_slow_rates`` takes all six.
 KNOWN_DISCARDED_UNPACKS = {
     ("plane/dynamics.py", "_, z, theta = positions"),
@@ -939,7 +938,7 @@ KNOWN_DISCARDED_UNPACKS = {
     ("plane/oracle.py", "_, z, theta = positions"),
     ("plane3d/dynamics.py", "_, _, z, theta, phi = positions"),
     ("plane3d/env.py", "_, _, z, theta, phi = positions"),
-    ("energy/wind_turbine/oracle.py", "_, _, v_mean, deviation = task"),
+    ("energy/wind_turbine/oracle.py", "_, v_mean, v_turb, now = task"),
     ("glass_furnace/oracle.py", "_, start, lhv, disturbance = task"),
     ("reactor/env.py", "T_f, T_h, T_c, _, _, Xe = slow"),
 }

@@ -234,3 +234,28 @@ All were fetched twice and the cited phrases found both times, except where mark
   (abstract only, simulation). https://strathprints.strath.ac.uk/48223/ (not re-confirmed: one fetch).
 - [S15] French ARIA database, incident 50913, wind turbine collapse, Bouin (Vendee).
   https://www.aria.developpement-durable.gouv.fr/fiche_detaillee/50913_en/?lang=en
+
+### Added by the fix session (fetched once, 2026-11-08)
+
+- [S16] Georg, Mueller, Schulte, Wind turbine model and observer in Takagi-Sugeno model structure,
+  The Science of Making Torque from Wind 2012 (preprint arXiv:1401.8199). https://arxiv.org/pdf/1401.8199
+  Sect. 2.1.1: the tower-top fore-aft motion as a spring-mass-damper, effective mass "mT = mRotor +
+  mNacelle + 0.25 mTower, which has proven a reasonable assumption" (citing Gasch and Twele, Wind
+  Power Plants, 2012); App. B: mT = 436,865 kg, kT = 1.98e6 N/m, Jr = 38,759,227 kg m^2 for the
+  NREL 5 MW; Eq. (1): the thrust FT drives the tower top. Fetched once.
+- [S17] Phadnis and Pao, On the severity of wind turbine generator speed peaks in response to
+  particular gusts, engrXiv preprint 2291 (2021). https://engrxiv.org/preprint/download/2291/4473/3408
+  Sect. I: the shutdown threshold on generator speed is "approximately 20% above the rated speed of
+  the generator" (citing Zalkind, Nicotra and Pao, Wind Energy 2021). Secondary and approximate; no
+  turbine-specific level was found. Fetched once.
+- [S18] ROSCO, Cp_Ct_Cq.NREL5MW.txt at commit b994e4de67 (v2.9.0), the thrust coefficient block beside
+  the power coefficient already used. https://github.com/NatLabRockies/ROSCO/blob/b994e4de67c423ff598a4bb354657b62ff61a50d/Examples/Test_Cases/NREL-5MW/Cp_Ct_Cq.NREL5MW.txt
+  Fetched once.
+- [S19] scientimate documentation, windspectrum: for the IEC 61400-1 Kaimal spectrum, "Lu=8.1*Lambda",
+  Lambda 42 m above 60 m. https://scientimate.readthedocs.io/en/stable/python_functions/wind/windspectrum.html
+  Secondary. Fetched once.
+- S1 re-read for the tower: tower mass 347,460 kg, rotor 110,000 kg, nacelle 240,000 kg (Table 1-1);
+  "a structural-damping ratio of 1% critical in all modes of the isolated tower" (Sec. 6). The NREL
+  5 MW's IEC turbulence class: not found in S1.
+- S5 re-read for the damping loop: a PT3-D-notch transfer function (Eqs. 6 and 7) whose gain KC and
+  notch time constant were "adjusted manually in the GUI" per operating point; no values printed.

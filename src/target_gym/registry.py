@@ -910,12 +910,16 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_wind_turbine_mpc", module="target_gym.energy.wind_turbine.oracle"
         ),
-        # 400 steps = 100 s ~ 7 rotor time constants.
+        # v4 (charter Amendments 1 and 2): the tower's first fore-aft mode on
+        # the rotor's thrust, the safety system's overspeed feather as the one
+        # trip, 10 min of established above-rated operation in IEC normal
+        # turbulence, and a score in MWh off the rating
+        # (energy/wind_turbine/PHYSICS.md).
         tuned_gains_key="wind_turbine",
         oracle_data=_shared_oracle("wind_turbine"),
-        noise_fields=("turbulence_std",),
+        noise_fields=("turbulence_iref",),
         disturbance_fields=("v_wind",),
-        version=3,
+        version=4,
     ),
     EnvSpec(
         name="battery",

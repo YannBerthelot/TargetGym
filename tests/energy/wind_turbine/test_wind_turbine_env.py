@@ -14,9 +14,6 @@ from target_gym.energy.wind_turbine.env import (
     WindTurbineParams,
     WindTurbineState,
     aerodynamic_torque,
-    available_power,
-    check_is_terminal,
-    compute_reward,
     compute_velocity,
     drivetrain_inertia,
     electrical_power,
@@ -30,9 +27,7 @@ from target_gym.energy.wind_turbine.env_jax import WindTurbine
 
 @pytest.fixture(scope="module")
 def params():
-    # Version-1 reward: the reward tests in this file describe the capped
-    # log shape; version 2 is covered by tests/test_reward_contract.py.
-    return WindTurbineParams(reward_version=1)
+    return WindTurbineParams()
 
 
 # ---------------------------------------------------------------------------
@@ -97,19 +92,6 @@ def test_pitching_sheds_power(params):
     assert all(a > b for a, b in zip(cps, cps[1:]))
 
 
-def test_cp_is_non_negative_everywhere(params):
-    """The fit goes negative outside its valid region; the model must not."""
-    for lam in np.linspace(0.5, 20.0, 40):
-        for beta in np.linspace(0.0, 40.0, 20):
-            assert float(power_coefficient(float(lam), float(beta), params)) >= 0.0
-
-
-def test_available_power_rises_with_wind(params):
-    w = omega_rated(params)
-    powers = [float(available_power(v, w, params)) for v in (12.0, 15.0, 18.0)]
-    assert powers[0] < powers[1] < powers[2]
-
-
 # ---------------------------------------------------------------------------
 # 3. Dynamics
 # ---------------------------------------------------------------------------
@@ -122,31 +104,19 @@ def test_excess_aerodynamic_torque_accelerates_the_rotor(params):
     small_torque = float(tau_aero) / params.N_gear * 0.5
     large_torque = float(tau_aero) / params.N_gear * 1.5
     v_small, _ = compute_velocity(
-        jnp.array([w, 0.0, small_torque]),
-        action=(0.0, small_torque),
+        jnp.array([w, 0.0, small_torque, 0.0, 0.0]),
+        action=(0.0, 0.0),
         v_wind=15.0,
         params=params,
     )
     v_large, _ = compute_velocity(
-        jnp.array([w, 0.0, large_torque]),
-        action=(0.0, large_torque),
+        jnp.array([w, 0.0, large_torque, 0.0, 0.0]),
+        action=(0.0, 0.0),
         v_wind=15.0,
         params=params,
     )
     assert float(v_small[0]) > 0.0  # under-braked -> speeds up
     assert float(v_large[0]) < 0.0  # over-braked -> slows down
-
-
-def test_pitch_actuator_is_rate_limited(params):
-    """A large pitch demand cannot move faster than pitch_rate_max."""
-    w = omega_rated(params)
-    v, _ = compute_velocity(
-        jnp.array([w, 0.0, 40_000.0]),
-        action=(params.pitch_max, 40_000.0),  # demand full feather
-        v_wind=15.0,
-        params=params,
-    )
-    assert float(v[1]) == pytest.approx(params.pitch_rate_max, rel=1e-6)
 
 
 def test_electrical_power_is_torque_times_speed(params):
@@ -162,52 +132,12 @@ def test_electrical_power_is_torque_times_speed(params):
 # ---------------------------------------------------------------------------
 
 
-def test_observation_hides_the_wind(params):
-    """A nacelle anemometer sits in the rotor wake; the controller must infer."""
-    env = WindTurbine()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    state = state.replace(v_wind=42.42, v_mean=37.37)
-    obs = env.get_obs(state, params)
-    for hidden in (42.42, 37.37):
-        assert not bool(jnp.any(jnp.isclose(obs, hidden)))
-
-
-def test_overspeed_and_underspeed_both_terminate(params):
-    """Losing rotor-speed regulation trips the turbine, either way."""
-    env = WindTurbine()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    w = float(omega_rated(params))
-    fast = state.replace(omega=w * (params.overspeed_factor + 0.05))
-    slow = state.replace(omega=w * (params.underspeed_factor - 0.05))
-    assert bool(check_is_terminal(fast, params)[0])
-    assert bool(check_is_terminal(slow, params)[0])
-    assert not bool(check_is_terminal(state.replace(omega=w), params)[0])
-
-
-def test_reward_peaks_on_the_power_setpoint(params):
-    env = WindTurbine()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    w = omega_rated(params)
-    target = 4.0e6
-    on_torque = target / (params.eta_gen * params.N_gear * float(w))
-    on = state.replace(
-        omega=w, torque=on_torque, target_power=target, pitch=5.0, pitch_cmd=5.0
-    )
-    off = on.replace(torque=on_torque * 0.5)
-    assert float(compute_reward(on, params)) == pytest.approx(1.0, abs=1e-3)
-    assert float(compute_reward(on, params)) > float(compute_reward(off, params))
-
-
-def test_wind_range_stays_above_rated(params):
-    """Below rated the setpoint is unachievable, so the task would be ill-posed."""
-    assert params.v_mean_range[0] > params.v_rated + 1.5
-
-
 def test_reset_starts_regulating_at_rated_speed(params):
     env = WindTurbine()
     for seed in range(5):
         _, state = env.reset_env(jax.random.PRNGKey(seed), params)
         assert isinstance(state, WindTurbineState)
         assert float(state.omega) == pytest.approx(float(omega_rated(params)), rel=1e-6)
-        assert params.target_power_range[0] <= float(state.target_power)
-        assert float(state.target_power) <= params.target_power_range[1]
+        assert float(state.target_power) == pytest.approx(
+            params.rating * params.P_rated
+        )

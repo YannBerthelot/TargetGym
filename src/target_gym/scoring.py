@@ -209,15 +209,13 @@ def _currency_per_floor(name: str, p, step_seconds: float) -> float:
             p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW * 1000.0
         ) / 3600.0
         return per_unit_s * step_seconds * p.e_floor
-    if name == "wind_turbine":
-        return p.imbalance_price / 1.0e6 * step_seconds / 3600.0 * p.e_floor
     return 1.0
 
 
 #: Tasks scored on the operator's job (charter rule 15): the cost of keeping
 #: inside the plant's limits, with no tracking term. They have no resolution
 #: ceiling or settle band, which are NaN; rule 9's room comes from an oracle.
-JOB_SCORED = frozenset({"battery", "boiler_drum", "hvac"})
+JOB_SCORED = frozenset({"battery", "boiler_drum", "hvac", "wind_turbine"})
 
 
 def _per_step(name: str, params, env, at_resolution: bool) -> float:

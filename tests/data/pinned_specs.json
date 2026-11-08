@@ -805,7 +805,7 @@
   {
     "name": "wind_turbine",
     "group": "energy",
-    "version": 3,
+    "version": 4,
     "display_name": "Wind Turbine",
     "params_cls": [
       "target_gym.energy.wind_turbine.env",
@@ -838,7 +838,7 @@
     "expert_degraded": null,
     "mpc_degraded": null,
     "noise_fields": [
-      "turbulence_std"
+      "turbulence_iref"
     ]
   },
   {
