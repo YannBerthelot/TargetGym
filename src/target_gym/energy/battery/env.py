@@ -103,7 +103,27 @@ class BatteryParams(EnvParams):
     signal_std: float = 0.4  # p.u., ours
     neutrality_tau: float = 1800.0  # s, ours: the pull that keeps it neutral
 
-    # ---- Score (rule 15), in MW h of contracted availability ----
+    # ---- Prices (rule 23), GBP ----
+    #: Day-ahead price of a normal period, and the value of stored energy: the
+    #: GB 2024 mean (Electricity Maps, REALITY.md sec. 7).
+    price_base: float = 74.0  # GBP/MWh
+    #: One price event per block, ``price_event_periods`` periods long (one
+    #: hourly price), its level uniform in this range and its first period
+    #: uniform in ``price_event_first``. The normal block's range is the base
+    #: price itself, so it has no event (scenarios.py).
+    price_event_range: Tuple[float, float] = (74.0, 74.0)  # GBP/MWh
+    price_event_periods: int = 2
+    price_event_first: Tuple[int, int] = (3, 6)  # ours: inside the block
+    #: Dynamic Regulation's availability price, Jan 2024 average (Modo).
+    availability_price: float = 4.36  # GBP/MW/h
+
+    # ---- Long one-way deviation (scenarios.py) ----
+    #: Response, p.u., held one way: DR's answer to a 50 to 100 mHz mean
+    #: deviation (ENTSOE-LER sec. 1, NESO-GUIDE p. 4). 0 in a normal block.
+    bias_pu_range: Tuple[float, float] = (0.0, 0.0)
+    bias_duration_range: Tuple[float, float] = (1800.0, 5400.0)  # s, ours
+
+    # ---- Score (rule 15), in GBP ----
     reward_version: int = 3
     #: No limit of this plant trips (PHYSICS.md, Limits), so a trip costs 0.
     restart_steps: int = 0
@@ -146,9 +166,16 @@ PARAM_UNITS = {
     "signal_tau": "s",
     "signal_std": "-",
     "neutrality_tau": "s",
+    "price_base": "GBP/MWh",
+    "price_event_range": "GBP/MWh",
+    "price_event_periods": "periods",
+    "price_event_first": "period",
+    "availability_price": "GBP/(MW h)",
+    "bias_pu_range": "-",
+    "bias_duration_range": "s",
     "reward_version": "-",
     "restart_steps": "steps",
-    "failure_cost": "MW h",
+    "failure_cost": "GBP",
     "e_floor": "W",
     "precision_floor": "W",
 }
@@ -157,7 +184,7 @@ PARAM_UNITS = {
 @struct.dataclass
 class BatteryState(EnvState):
     soc: float  # true state of charge, E / capacity -- HIDDEN
-    soc_error: float  # BMS estimate minus truth at T_bms_curve -- HIDDEN
+    soc_error: float  # BMS estimate minus truth at reset, at T_bms_curve -- HIDDEN
     soc_drift: float  # the estimate's Ah-counting drift, 1/s -- HIDDEN
     T_cell: float  # degC
     #: The BMS's report, set by the dynamics from the true cell temperature, so
@@ -168,14 +195,20 @@ class BatteryState(EnvState):
     target_power: float  # required now: baseline plus response, W
     regulation: float  # the contracted response now, W
     signal_x: float  # the signal's unclipped value, p.u. -- HIDDEN
-    signal_energy: float  # integral of the signal, p.u. s -- HIDDEN
+    signal_energy: float  # integral of the signal off its mean, p.u. s -- HIDDEN
+    bias_pu: float  # the long deviation's response, p.u. -- HIDDEN
+    bias_start: float  # s -- HIDDEN
+    bias_end: float  # s -- HIDDEN
+    prices: jax.Array  # GBP/MWh per settlement period, day-ahead
     baselines: jax.Array  # W per settlement period, declared
     period_response: float  # response energy this period, J, + = export
     deficit_export: float  # export energy not yet recovered, J
     deficit_import: float  # import energy not yet recovered, J
     short_seconds: float  # seconds this period the unit fell short
     unavailable: float  # 1 once this period is lost
-    lost: float  # MW h of availability lost on the last step
+    availability_cost: float  # GBP of availability lost on the last step
+    losses_cost: float  # GBP of energy lost on the last step
+    trade_cost: float  # GBP the last step's energy cost against the base price
 
     actuator_held: jax.Array = actuator_field(1)
 
@@ -278,11 +311,12 @@ def plant_step(soc, T_cell, required, params: BatteryParams):
     return soc_next, delivered, current, v
 
 
-def reported_soc(soc, soc_error, T_cell, params: BatteryParams):
-    """The BMS's state of charge: truth, its error, and the OCV curve's shift
-    with temperature on the 25 degC curve (ARX-LFP Fig. 5)."""
+def reported_soc(soc, soc_error, T_cell, params: BatteryParams, drifted=0.0):
+    """The BMS's state of charge: truth, its error at reset, what Ah counting
+    has drifted since (``drifted``), and the OCV curve's shift with
+    temperature on the 25 degC curve (ARX-LFP Fig. 5)."""
     shift = params.soc_temp_coeff * (T_cell - params.T_bms_curve)
-    return jnp.clip(soc + soc_error + shift, 0.0, 1.0)
+    return jnp.clip(soc + soc_error + drifted + shift, 0.0, 1.0)
 
 
 def requirements(deficit_export, deficit_import, params: BatteryParams):
@@ -353,11 +387,28 @@ def compute_next_state(
     unavailable = jnp.maximum(state.unavailable, newly_short.astype(jnp.float32))
     response = state.period_response + (delivered - state.baselines[k]) * p.delta_t
 
-    soc_error = state.soc_error + state.soc_drift * p.delta_t
+    # The drift is computed from the clock, not summed step by step, which
+    # float32 would bias by about 1e-4 over a block.
+    t1 = t + 1
+    drifted = state.soc_drift * (t1 * p.delta_t)
+
+    # Energy at the period's price; stored energy valued at the base price.
+    # The trade term is offset by the most any step could win against the base
+    # price, so it is >= 0, and the offset cancels out of the gap (rule 21).
+    price = state.prices[k]
+    to_MWh = p.delta_t / 3.6e9
+    losses_cost = (
+        p.price_base
+        * (1.0 - p.round_trip_efficiency)
+        * jnp.maximum(-delivered, 0.0)
+        * to_MWh
+    )
+    trade_cost = (
+        (p.price_base - price) * delivered + jnp.abs(price - p.price_base) * p.power_max
+    ) * to_MWh
 
     # A new settlement period: the energy accounts roll, and the reported
     # stored energy is checked against the new requirement.
-    t1 = t + 1
     boundary = (t1 % steps_per_period(p)) == 0
     recovery = p.recovery_fraction * response_volume(p)
     d_out = jnp.maximum(state.deficit_export - recovery, 0.0) + jnp.maximum(
@@ -366,7 +417,7 @@ def compute_next_state(
     d_in = jnp.maximum(state.deficit_import - recovery, 0.0) + jnp.maximum(
         -response, 0.0
     )
-    rep = reported_soc(soc, soc_error, state.T_cell, p)
+    rep = reported_soc(soc, state.soc_error, state.T_cell, p, drifted)
     fails = misses_requirement(rep, d_out, d_in, p)
     newly_checked = boundary & fails
     deficit_export = jnp.where(boundary, d_out, state.deficit_export)
@@ -374,21 +425,31 @@ def compute_next_state(
     response = jnp.where(boundary, 0.0, response)
     short_seconds = jnp.where(boundary, 0.0, short_seconds)
     unavailable = jnp.where(boundary, fails.astype(jnp.float32), unavailable)
-    lost = (newly_short.astype(jnp.float32) + newly_checked.astype(jnp.float32)) * (
-        contracted / 1.0e6 * period_s / 3600.0
+    availability_cost = (
+        (newly_short.astype(jnp.float32) + newly_checked.astype(jnp.float32))
+        * (contracted / 1.0e6 * period_s / 3600.0)
+        * p.availability_price
     )
 
     # The regulation signal: an OU process every ``signal_interval``, pulled
     # back onto its own integral so that it stays energy neutral. The draw is
     # folded with the step, so a constant key still gives a fresh one.
-    signal_energy = state.signal_energy + jnp.clip(state.signal_x, -1.0, 1.0) * (
-        p.delta_t
+    now_s = t * p.delta_t
+    mean = jnp.where(
+        (now_s >= state.bias_start) & (now_s < state.bias_end), state.bias_pu, 0.0
+    )
+    signal_energy = state.signal_energy + (
+        jnp.clip(state.signal_x, -1.0, 1.0) - mean
+    ) * (p.delta_t)
+    after = t1 * p.delta_t
+    mean_next = jnp.where(
+        (after >= state.bias_start) & (after < state.bias_end), state.bias_pu, 0.0
     )
     a = jnp.exp(-p.signal_interval / p.signal_tau)
     eps = jax.random.normal(jax.random.fold_in(key, t))
     moved = (
         a * state.signal_x
-        - (1.0 - a) * signal_energy / p.neutrality_tau
+        + (1.0 - a) * (mean_next - signal_energy / p.neutrality_tau)
         + p.signal_std * jnp.sqrt(1.0 - a**2) * eps
     )
     signal_x = jnp.where(t1 % signal_steps(p) == 0, moved, state.signal_x)
@@ -398,7 +459,6 @@ def compute_next_state(
     return (
         state.replace(
             soc=soc,
-            soc_error=soc_error,
             soc_reported=rep,
             v_cell=v,
             power=delivered,
@@ -412,7 +472,9 @@ def compute_next_state(
             deficit_import=deficit_import,
             short_seconds=short_seconds,
             unavailable=unavailable,
-            lost=lost,
+            availability_cost=availability_cost,
+            losses_cost=losses_cost,
+            trade_cost=trade_cost,
             time=t1,
         ),
         None,
@@ -425,9 +487,12 @@ def get_obs(state: BatteryState, params: BatteryParams):
         [reported SoC, V_cell, T_cell, P_MW, required_MW, signal_pu,
          baseline_now_MW, baseline_next_MW, baseline_after_MW,
          export_requirement_MWh, import_requirement_MWh,
-         seconds_to_next_period, period_lost]
+         seconds_to_next_period, period_lost,
+         price_now, price_next, price_after, price_open]   (GBP/MWh)
 
-    The three baselines are the ones past gate closure. The true state of
+    The three baselines are the ones past gate closure; the four prices are
+    the day-ahead prices of this period and the next three, known ahead
+    (rule 16). The true state of
     charge, the estimate's error and the signal's internals are hidden.
     """
     p = params
@@ -437,6 +502,9 @@ def get_obs(state: BatteryState, params: BatteryParams):
     per = steps_per_period(p)
     to_next = (per - state.time % per) * p.delta_t
     ahead = lambda i: state.baselines[jnp.minimum(k + i, N_PERIODS - 1)]  # noqa: E731
+    ahead_price = lambda i: state.prices[
+        jnp.minimum(k + i, N_PERIODS - 1)
+    ]  # noqa: E731
     return jnp.array(
         [
             rep,
@@ -452,6 +520,10 @@ def get_obs(state: BatteryState, params: BatteryParams):
             need_in / 3.6e9,
             to_next,
             state.unavailable,
+            ahead_price(0),
+            ahead_price(1),
+            ahead_price(2),
+            ahead_price(3),
         ]
     )
 
@@ -467,13 +539,18 @@ def check_is_terminal(state: BatteryState, params: BatteryParams, xp=jnp):
 def compute_reward_terms(
     state: BatteryState, params: BatteryParams, xp=jnp, tripped=None
 ):
-    """The score's one term: MW h of contracted availability lost this step.
+    """The score's terms, GBP per step, each >= 0: availability lost, energy
+    lost at the base price, and the energy's cost against the base price.
 
     ``tripped`` overrides the trip check on ``state`` (``base.measured_reward``).
     """
     if tripped is None:
         tripped, _ = check_is_terminal(state, params, xp)
-    terms = {"availability": state.lost}
+    terms = {
+        "availability": state.availability_cost,
+        "losses": state.losses_cost,
+        "trade": state.trade_cost,
+    }
     return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
@@ -486,7 +563,9 @@ def initial_state(key, params: BatteryParams) -> Tuple[BatteryState, jax.Array]:
     the reported energy meets the block's requirement both ways, the earlier
     baselines are declared at zero (ours), and the signal is at its spread."""
     p = params
-    k_rep, k_err, k_sign, k_sig = jax.random.split(key, 4)
+    k_rep, k_err, k_sign, k_sig, k_ev, k_lvl, k_b, k_bt, k_bd, k_bs = jax.random.split(
+        key, 10
+    )
     margin = response_volume(p) / p.energy_capacity
     rep = jax.random.uniform(k_rep, minval=margin, maxval=1.0 - margin)
     error = p.soc_error_std * jax.random.normal(k_err)
@@ -497,6 +576,27 @@ def initial_state(key, params: BatteryParams) -> Tuple[BatteryState, jax.Array]:
     regulation = contracted_power(p) * jnp.clip(signal_x, -1.0, 1.0)
     _, v = cell_current(regulation, soc, p)
     zero = jnp.zeros(())
+
+    # The day-ahead prices: the base, and one event of two periods.
+    lo, hi = p.price_event_range
+    level = jax.random.uniform(k_lvl, minval=lo, maxval=hi)
+    first = jax.random.randint(
+        k_ev, (), p.price_event_first[0], p.price_event_first[1] + 1
+    )
+    periods = jnp.arange(N_PERIODS)
+    in_event = (periods >= first) & (periods < first + p.price_event_periods)
+    prices = jnp.where(in_event, level, p.price_base)
+
+    # The long one-way deviation: its size, sign, length and start.
+    blo, bhi = p.bias_pu_range
+    size = jax.random.uniform(k_b, minval=blo, maxval=bhi)
+    bias = size * jnp.where(jax.random.bernoulli(k_bs), 1.0, -1.0)
+    dlo, dhi = p.bias_duration_range
+    length = jax.random.uniform(k_bd, minval=dlo, maxval=dhi)
+    block = p.max_steps_in_episode * p.delta_t
+    start = jax.random.uniform(
+        k_bt, minval=0.0, maxval=jnp.maximum(block - length, 0.0)
+    )
     return BatteryState(
         time=0,
         soc=soc,
@@ -510,11 +610,17 @@ def initial_state(key, params: BatteryParams) -> Tuple[BatteryState, jax.Array]:
         regulation=regulation,
         signal_x=signal_x,
         signal_energy=zero,
+        bias_pu=bias,
+        bias_start=start,
+        bias_end=start + length,
+        prices=prices,
         baselines=jnp.zeros(N_PERIODS),
         period_response=zero,
         deficit_export=zero,
         deficit_import=zero,
         short_seconds=zero,
         unavailable=zero,
-        lost=zero,
+        availability_cost=zero,
+        losses_cost=zero,
+        trade_cost=zero,
     )

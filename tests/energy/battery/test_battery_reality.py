@@ -145,16 +145,21 @@ def test_05b_heating_the_cells_moves_the_reported_soc():
 
 
 @pytest.mark.medium
-def test_06_ah_counting_drift_does_not_shrink():
-    """ARX-LFP sec. I, MPS-ACCURE: coulomb counting cannot correct an initial
-    error. Over 100 seeds of 4 h on the task's signal, the mean |gap| at the
-    end is no smaller than at the start, and there is a gap to keep."""
+def test_06_ah_counting_never_corrects_the_error_on_any_seed():
+    """ARX-LFP sec. I: coulomb counting "cannot correct initial estimation
+    errors". Restated per seed (Amendment 3; the 100-seed mean was
+    underpowered): on each of 100 seeds of 4 h on the task's signal, the gap
+    at the end is no closer to zero than the start gap less the family's
+    Ah-counting drift over the window, 10 % in 14 days (MPS-ACCURE): 0.10 x
+    4 h / 336 h = 1.19e-3. Written before the rerun, 2026-11-08."""
     steps = int(4 * 3600 / PARAMS.delta_t)
     soc0, obs0, (soc, obs, _, _) = _episode(np.arange(100), steps)
-    start = np.abs(np.asarray(obs0[:, 0]) - np.asarray(soc0))
-    end = np.abs(np.asarray(obs[:, -1, 0]) - np.asarray(soc[:, -1]))
-    assert start.mean() > 0.0
-    assert end.mean() >= start.mean()
+    start = np.abs(np.asarray(obs0[:, 0], np.float64) - np.asarray(soc0))
+    end = np.abs(np.asarray(obs[:, -1, 0], np.float64) - np.asarray(soc[:, -1]))
+    drift = 0.10 * 4.0 / (14.0 * 24.0)
+    float32_slack = 1e-6
+    assert start.min() > 0.0
+    assert np.all(end >= start - drift - float32_slack), (end - start).min()
 
 
 @pytest.mark.medium
@@ -275,3 +280,32 @@ def test_13_a_normal_day_scores_above_pjms_qualification_line():
         np.asarray(power[0]), np.asarray(target[0]), areg, PARAMS.delta_t, skip_s=0.0
     )
     assert score >= 0.75
+
+
+def test_14_a_baseline_reaches_the_meter_60_to_90_min_after_its_decision():
+    """The named property (Amendment 3, the owner's pick): GB gate closure, 60
+    min before a settlement period (NESO-GUIDE p. 36), on 30 min periods, so a
+    baseline decided at any moment first reaches the meter between 60 and 90
+    min later. Decided at 1, 600 and 1799 s into a period, the first step at
+    the new baseline lies within [3600, 5400] s of the decision."""
+    params = PARAMS.replace(signal_std=0.0)
+    limit = float(battery.baseline_limit(params))
+    for at in (1, 600, 1799):
+        _, state = ENV.reset_env(jax.random.PRNGKey(0), params)
+        state = state.replace(
+            soc=jnp.float32(0.5),
+            signal_x=jnp.float32(0.0),
+            regulation=jnp.float32(0.0),
+            target_power=jnp.float32(0.0),
+        )
+
+        def body(s, t):
+            # Held from the decision on: a later zero would resubmit the
+            # same open period.
+            raw = jnp.where(t >= at, 1.0, 0.0)
+            _, s1, _, _, _ = ENV.step_env(jax.random.PRNGKey(1), s, raw[None], params)
+            return s1, s1.target_power
+
+        _, required = jax.lax.scan(body, state, jnp.arange(3 * 3600))
+        first = int(np.argmax(np.asarray(required) > 0.5 * limit)) + 1
+        assert 3600 <= first - at <= 5400, (at, first)

@@ -244,6 +244,27 @@ changes, never under-delivery. [NESO-ST, para. 6.11-6.13; PJM-M12, sec. 4.4.5]
   https://docs.nrel.gov/docs/fy25osti/93281.pdf
 - **Photos or videos of real BESS control screens:** none found to cite.
 
+## 7. Prices (added for Amendment 3, fetched once, 2026-11-08)
+
+- **GB day-ahead prices.** Mean GBP 74.0/MWh in 2024 and GBP 81.2 in 2025. The
+  highest hourly price was GBP 491.0 (12 Dec 2024, 16:00) and GBP 958.5 (22 Jan
+  2025, 17:00); the lowest GBP -28.2 (13 Apr 2024, 13:00) and GBP -30.5 (25 May
+  2025, 11:00). 141 hours were negative in 2024 and 190 in 2025.
+  [EMAPS-GB]
+- **Dynamic Regulation's availability price.** Averaged GBP 4.36/MW/h in
+  January 2024; Dynamic Regulation High fell from GBP -4.19 to -5.87/MW/h in
+  the same month. A vendor's market review. [MODO-JAN24]
+- **Price spike at a named site.** Dogfish's $267/MWh peak (sec. 5,
+  MPS-ACCURE).
+
+Sources for this section:
+
+- **EMAPS-GB:** Electricity Maps, Electricity Grid Review 2025: Great Britain,
+  day-ahead price table. https://www.electricitymaps.com/grid-in-review-2025/great-britain
+- **MODO-JAN24:** Modo Energy, Balancing Mechanism revenues overtake frequency
+  response in January 2024, 4 Jan 2024.
+  https://modoenergy.com/research/battery-energy-storage-revenue-janauary-2024-balancing-mechanism-wholesale-frequency-response-stack-capacity-market-triads
+
 ## Added by the fix session (fetched once, 2026-11-08)
 
 These were read once, by text extraction of the PDFs, and not re-fetched.

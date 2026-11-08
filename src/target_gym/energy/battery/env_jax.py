@@ -32,10 +32,10 @@ class GridBattery(
 ):
     """Grid battery selling Dynamic Regulation, steered by its baseline.
 
-    Observation (13,): [reported_soc, V_cell, T_cell, P_MW, required_MW,
+    Observation (17,): [reported_soc, V_cell, T_cell, P_MW, required_MW,
     signal_pu, baseline_now_MW, baseline_next_MW, baseline_after_MW,
     export_requirement_MWh, import_requirement_MWh, seconds_to_next_period,
-    period_lost]
+    period_lost, price_now, price_next, price_after, price_open (GBP/MWh)]
     Action      (1,): Operational Baseline, raw in [-1, 1] -> +-40 % of the
     contracted power (positive = export), for the first period past gate
     closure
@@ -63,7 +63,7 @@ class GridBattery(
     )
 
     def __init__(self, integration_method: str = "rk4_2"):
-        self.obs_shape = (13,)
+        self.obs_shape = (17,)
         self.integration_method = integration_method
 
     @property

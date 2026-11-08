@@ -376,6 +376,15 @@ def _reactor():
     return Reactor()
 
 
+def _battery_scenarios():
+    # The package lists its suite as plain rows, so it imports nothing outside
+    # its fingerprint; the rows become Scenarios here.
+    from target_gym.energy.battery.scenarios import battery_scenarios
+    from target_gym.scenarios import Scenario
+
+    return tuple(Scenario(**row) for row in battery_scenarios())
+
+
 def _battery():
     from target_gym.energy.battery.env_jax import GridBattery
 
@@ -964,7 +973,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # The regulation signal's innovation, and the BMS error drawn at reset.
         noise_fields=("signal_std", "soc_error_std"),
         disturbance_fields=("regulation",),
-        version=4,
+        # v5 (Amendment 3): the named property is the 60 to 90 min gate-closure
+        # delay; energy priced at the GB wholesale price; six scenarios.
+        scenarios=_battery_scenarios,
+        version=5,
     ),
     # Append new tasks here, never insert: a task's position in REGISTRY is its
     # benchmark seed index, and TargetFoundation derives seeds the same way.

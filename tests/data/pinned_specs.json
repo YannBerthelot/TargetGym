@@ -844,7 +844,7 @@
   {
     "name": "battery",
     "group": "energy",
-    "version": 4,
+    "version": 5,
     "display_name": "Battery",
     "params_cls": [
       "target_gym.energy.battery.env",
