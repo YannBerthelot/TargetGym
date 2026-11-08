@@ -111,7 +111,7 @@ not from this column. Eq. 31's own rounded entries give 36.07 and 146.0.
 | analyser cycle, dead time | 5, 5 | min | cited range: 3 to 30 min in total [D5] |
 | `boilup_price` | 1 | kmol | ours: the unit of the score |
 | `reprocess_price` | 3.206 | kmol/kmol | ours: no price found; off-spec product is run through again, at the nominal V/F |
-| `failure_cost` | 7.677 | kmol | never charged: no trip; above any surviving step |
+| `failure_cost` | 0 | kmol | no trip, so a trip costs nothing (charter B5) |
 | `restart_steps` | 1 | steps | never charged |
 | `e_floor_top`, `e_floor_bottom` | 4e-4 | - | the analysers' scatter (section Readings), for the time-in-band KPI only |
 

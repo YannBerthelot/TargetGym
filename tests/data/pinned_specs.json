@@ -544,7 +544,7 @@
   {
     "name": "four_tank",
     "group": "process",
-    "version": 5,
+    "version": 6,
     "display_name": "Four-tank",
     "params_cls": [
       "target_gym.pc_gym.four_tank.env",
@@ -618,7 +618,7 @@
   {
     "name": "distillation",
     "group": "process",
-    "version": 6,
+    "version": 7,
     "display_name": "Distillation",
     "params_cls": [
       "target_gym.pc_gym.distillation.env",

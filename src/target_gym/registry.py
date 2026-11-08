@@ -880,8 +880,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 4: the levels are read through instruments (PHYSICS.md, Readings).
         # 5 (charter Amendment 2): the Lund rig's P+ constants, no trip, an
         # overflowing rim, and an episode of setpoint steps from the operating
-        # point with an extra upper outlet and a cup.
-        version=5,
+        # point with an extra upper outlet and a cup. 6: failure_cost 0, as
+        # for every plant with no trip (charter B5).
+        version=6,
     ),
     EnvSpec(
         name="ph_neutralization",
@@ -935,8 +936,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 18], the feed flow observed, and a job score in kmol of boilup.
         # The feed steps are drawn at reset, so no step key moves them: no
         # ``disturbance_fields``. v6 (charter Amendment 3): D2's realistic
-        # drums, specs at the family's give-away margin, scenario suite.
-        version=6,
+        # drums, specs at the family's give-away margin, scenario suite. v7:
+        # failure_cost 0, as for every plant with no trip (charter B5).
+        version=7,
         scenarios=_scenarios(
             "distillation_scenarios", module="target_gym.pc_gym.distillation.scenarios"
         ),
